@@ -1,1 +1,1 @@
-from .qm9 import QM9Dataset
+from .dataset import QM9Dataset

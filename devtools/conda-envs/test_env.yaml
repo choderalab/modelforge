@@ -8,13 +8,19 @@ dependencies:
     # Base depends
   - python
   - pip
+  - h5py
+  - requests
+  - tqdm
+  - qcarchive
 
     # Testing
   - pytest
   - pytest-cov
   - codecov
 
+
     # Pip-only installs
-  #- pip:
+  - pip:
+     - pedantic
   #  - codecov
 

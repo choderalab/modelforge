@@ -1,102 +1,93 @@
 import os
 from abc import ABC, abstractmethod
-from typing import List
 
+import qcportal as ptl
 import torch
+from loguru import logger
 
-
-"""
-The Dataset class defines the interface for datasets as a ABC.
-
-
-"""
 
 class Dataset(torch.utils.data.Dataset, ABC):
     """
     Abstract Base Class representing a dataset.
     """
 
-    def __init__(self):
-        pass
-    # Using qcarchive won't necessarily require this
-    # but if we are trying to create a general class
-    # that would load datasets from other formats
-    # it might be useful.
-    def set_cache_dir(self, cache_dir: str) -> None:
-        """
-        Sets directory to cache files.
-
-        Parameters
-        ----------
-        cache_dir: str
-             path to the directory
-
-        """
-        self._cache_dir = cache_dir
+    def __init__(self, dataset_file: str = None, name: str = ""):
+        self.dataset_file = dataset_file
+        self.name = name
+        self.dataset = self.load(dataset_file)
+        (
+            self.molecules,
+            self.records,
+        ) = self.dataset.get_molecules(), self.dataset.get_records(method="b3lyp")
 
     @property
-    def name(self) -> str:
-        """
-        Returns the name of the dataset.
-
-        Returns:
-            str: name of the dataset
-        """
-        return self.name
-
-    # I this this should be an abstract class
-    # because we should include extension checking here
-    # also so that we can update the docstrings to
-    # reflect the expected inputs
     @abstractmethod
-    def set_raw_dataset_file(self, raw_input_file: str):
+    def qcportal_data(self):
         """
-        Defines raw dataset input.
-
-        Parameters
-        ----------
-            raw_input : str
-                file path to the input raw dataset
+        Defines the qcportal data to be downloaded.
         """
-        self._raw_input_file = raw_input_file
+        pass
 
+    def load(self, dataset_file):
+        """
+        Loads the raw dataset from qcarchive.
+
+        If a valid qcarchive generated hdf5 file is not passed to the
+        to the init function, the code will download the
+        raw dataset from qcarchive.
+        """
+        qcp_client = ptl.FractalClient()
+        qcportal_data = self.qcportal_data
+
+        try:
+            dataset = qcp_client.get_collection(
+                qcportal_data["collection"], qcportal_data["dataset"]
+            )
+        except Exception:
+            print(
+                f"Dataset {qcportal_data['dataset']} is not available in collection {qcportal_data['collection']}."
+            )
+
+        if dataset_file and os.path.isfile(dataset_file):
+            if not dataset_file.endswith(".hdf5"):
+                raise ValueError("Input file must be an .hdf5 file.")
+            logger.debug(f"Loading from {dataset_file}")
+            dataset.set_view(dataset_file)  # NOTE: this doesn't work yet
+        else:
+            logger.debug(f"Downloading from qcportal")
+
+            # to get QM9 from qcportal, we need to define which collection and QM9
+            if dataset_file is None:
+                dataset.download()
+            else:
+                dataset.download(dataset_file)
+                dataset.to_file(path=dataset_file, encoding="hdf5")
+        return dataset
+
+    def __len__(self):
+        return self.molecules.shape[0]
+
+    def __getitem__(self, idx):
+        geometry = torch.tensor(self.records.iloc[idx].record["geometry"])
+        energy = torch.tensor(self.records.iloc[idx].record["energy"])
+
+        if self.transform:
+            geometry = self.transform(geometry)
+        if self.target_transform:
+            energy = self.target_transform(energy)
+
+        return geometry, energy
+
+
+class QM9Dataset(Dataset):
+    """
+    QM9 dataset as curated by qcarchive.
+    """
 
     @property
-    def raw_dataset_file(self) -> str:
-        """
-        Returns the path and name of the raw dataset file.
+    def qcportal_data(self):
+        return {"collection": "Dataset", "dataset": "QM9"}
 
-        Returns:
-            str: path dataset
-        """
-        return self._raw_input_file
-
-    # I think calling this cache would avoid confusing
-    # it would the idea of saving the file torch composed file.
-    # For qcarchive, this will just be saving as an hdf5 file
-    # that we could load in via set_raw_dataset_file instead of downloading again.
-    # this is distinct from setting up a cache dir
-    @abstractmethod
-    def save_raw_dataset(self, raw_output_file: str):
-        """
-        Defines the hdf5 file for saving save the raw dataset.
-
-        Loading this file via set_raw_dataset_file will avoid
-        the need to re-download the data.
-
-        Parameters
-        ----------
-            raw_output_file : str
-                file path to save raw dataset
-        """
-        pass
-    @abstractmethod
-    def load(self):
-        """
-        Loads the dataset from the cache.
-        """
-        pass
-
-    @abstractmethod
-    def prepare_dataset(self):
-        pass
+    @property
+    def name(self):
+        return "QM9"

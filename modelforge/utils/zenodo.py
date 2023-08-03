@@ -92,17 +92,29 @@ def hdf5_from_zenodo(record: str)->str:
         This can be either Zenodo DOI or Zenodo record id.
         Either of these can be formatted as a URL, e.g.,
         https://dx.doi.org/{DOI} or https://zenodo.org/record/{record_id}
+        Note: this assumes files on Zenodo are gzipped (i.e., extension hdf5.gz).
+
     Returns
     -------
-    data_urls : list-like object, dtype=str
-        Direct links to files with the given file extension.
+    data_urls : list-like, dtype=str
+        Direct link to gzipped hdf5 files.
     """
-    #if we are provided record url or record_id
-    if 'zenodo.org/record/' in record or not 'zenodo.' in record:
-        data_urls = get_zenodo_datafiles(record, file_extension='hdf5.gz')
-    else: # otherwise we have been given a DOI.
+    record_is_doi = True
+    # first determine if we are dealing with a doi or a record_id
+    if 'zenodo.org/record/' in record:
+        record_is_doi = False
+    elif not 'zenodo.' in record.split('/')[-1]:
+        record_is_doi = False
+
+    if record_is_doi:
         record_id = fetch_record_id_from_doi(record)
         data_urls = get_zenodo_datafiles(record_id, file_extension='hdf5.gz')
+    else:
+        data_urls = get_zenodo_datafiles(record, file_extension='hdf5.gz')
+
+    # Make sure files were found.
+    if len(data_urls) != 0:
+        raise Exception(f"No files with extension hdf5.gz were found.")
 
     return data_urls
 

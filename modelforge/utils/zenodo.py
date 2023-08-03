@@ -3,7 +3,7 @@
 import requests
 from typing import Optional
 
-def fetch_record_id_from_doi(doi: str, timeout: Optional[int]= 10) -> str:
+def fetch_url_from_doi(doi: str, timeout: Optional[int]= 10) -> str:
     """Retrieve URL associated with a DOI.
 
     Parameters
@@ -33,9 +33,7 @@ def fetch_record_id_from_doi(doi: str, timeout: Optional[int]= 10) -> str:
     if not response.ok:
         raise Exception(f'{doi} could not be accessed.')
 
-    # the record id is stored at the end of the url
-    # e.g., https://zenodo.org/record/3588339
-    return response.url.split('/')[-1]
+    return response.url
 
 def get_zenodo_datafiles(record_id: str, file_extension: str, timeout: Optional[int]= 10)-> str:
     """Retrieve link(s) to datafiles on zenodo with a given extension.
@@ -107,13 +105,13 @@ def hdf5_from_zenodo(record: str)->str:
         record_is_doi = False
 
     if record_is_doi:
-        record_id = fetch_record_id_from_doi(record)
+        record_id = fetch_url_from_doi(record)
         data_urls = get_zenodo_datafiles(record_id, file_extension='hdf5.gz')
     else:
         data_urls = get_zenodo_datafiles(record, file_extension='hdf5.gz')
 
     # Make sure files were found.
-    if len(data_urls) != 0:
+    if len(data_urls) == 0:
         raise Exception(f"No files with extension hdf5.gz were found.")
 
     return data_urls

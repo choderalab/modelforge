@@ -43,7 +43,7 @@ def get_zenodo_datafiles(record_id: str, file_extension: str, timeout: Optional[
     Parameters
     ----------
     record_id : str, required
-        zenodo.org record id
+        zenodo.org record id.  Can also provide url to a record.
     file_extension : str, required
         Return file(s) with extensions that match file_extension
     timeout : int, optional, default=10
@@ -56,6 +56,11 @@ def get_zenodo_datafiles(record_id: str, file_extension: str, timeout: Optional[
     """
 
     zenodo_base = 'https://zenodo.org/api/records/'
+
+    #if we are provided the url, santize
+    if record_id.startswith('http'):
+        record_id = record_id.split('/')[-1]
+
     zenodo_api_url = zenodo_base + record_id
 
     try:
@@ -78,19 +83,27 @@ def get_zenodo_datafiles(record_id: str, file_extension: str, timeout: Optional[
 
     return data_urls
 
-def hdf5_from_zenodo_doi(doi: str)->str:
-    """For a given zenodo DOI, return links to all hdf5 files.
+def hdf5_from_zenodo_doi(record: str)->str:
+    """For a given zenodo DOI or record_id, return links to all hdf5 files.
 
     Parameters
     ----------
-    doi : str, required
-        The Zenodo DOI to be considered.  This can be formatted as a URL.
+    record : str, required
+        This can be either Zenodo DOI or Zenodo record id.
+        Either of these can be formatted as a URL, e.g.,
+        https://dx.doi.org/{DOI} or https://zenodo.org/record/{record_id}
     Returns
     -------
     data_urls : list-like object, dtype=str
         Direct links to files with the given file extension.
     """
-    record_id = fetch_record_id_from_doi(doi)
-    data_urls = get_zenodo_datafiles(record_id, file_extension='hdf5.gz')
+    #if we are provided record url or record_id
+    if 'zenodo.org/record/' in record or not 'zenodo.' in record:
+        data_urls = get_zenodo_datafiles(record, file_extension='hdf5.gz')
+    else: # otherwise we have been given a DOI.
+        record_id = fetch_record_id_from_doi(record)
+        data_urls = get_zenodo_datafiles(record_id, file_extension='hdf5.gz')
 
     return data_urls
+
+

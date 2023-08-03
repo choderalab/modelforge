@@ -4,13 +4,22 @@ import modelforge
 from modelforge.utils.zenodo import *
 
 def test_zenodo_fetch():
-    files = hdf5_from_zenodo_doi(doi='10.5281/zenodo.3588339')
+    files = hdf5_from_zenodo_doi(record='10.5281/zenodo.3588339')
     assert len(files) == 1
     assert files[0] == 'https://zenodo.org/api/files/0a55a53a-69c3-4cd8-8ab8-d031ca0d6853/155.hdf5.gz'
 
-    files = hdf5_from_zenodo_doi(doi='https://dx.doi.org/10.5281/zenodo.3588339')
+    files = hdf5_from_zenodo_doi(record='https://dx.doi.org/10.5281/zenodo.3588339')
     assert len(files) == 1
     assert files[0] == 'https://zenodo.org/api/files/0a55a53a-69c3-4cd8-8ab8-d031ca0d6853/155.hdf5.gz'
+
+    files = hdf5_from_zenodo_doi(record='https://zenodo.org/record/3588339')
+    assert len(files) == 1
+    assert files[0] == 'https://zenodo.org/api/files/0a55a53a-69c3-4cd8-8ab8-d031ca0d6853/155.hdf5.gz'
+
+    files = hdf5_from_zenodo_doi(record='3588339')
+    assert len(files) == 1
+    assert files[0] == 'https://zenodo.org/api/files/0a55a53a-69c3-4cd8-8ab8-d031ca0d6853/155.hdf5.gz'
+
 
 def test_fetch_record_id():
 

@@ -83,7 +83,7 @@ def get_zenodo_datafiles(record_id: str, file_extension: str, timeout: Optional[
 
     return data_urls
 
-def hdf5_from_zenodo_doi(record: str)->str:
+def hdf5_from_zenodo(record: str)->str:
     """For a given zenodo DOI or record_id, return links to all hdf5 files.
 
     Parameters

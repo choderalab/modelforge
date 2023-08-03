@@ -13,6 +13,9 @@ dependencies:
   - pytest
   - pytest-cov
   - codecov
+  - qcelemental=0.25.1
+  - qcportal
+  - requests
 
     # Pip-only installs
   #- pip:

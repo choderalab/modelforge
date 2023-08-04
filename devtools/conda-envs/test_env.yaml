@@ -13,7 +13,6 @@ dependencies:
   - tqdm
   - qcelemental=0.25.1
   - qcportal
-  - qcarchive
 
     # Testing
   - pytest

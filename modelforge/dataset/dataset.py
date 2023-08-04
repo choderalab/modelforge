@@ -28,9 +28,9 @@ class Dataset(torch.utils.data.Dataset, ABC):
             program=records_properties["program"],
         )
 
-    @abstractmethod
     @property
-    def _dataset_records(self) -> dict:
+    @abstractmethod
+    def _dataset_records(self):
         """
         Defines the dataset to be downloaded.
         Three keys are required: 'method', 'basis', 'program'.
@@ -71,10 +71,8 @@ class Dataset(torch.utils.data.Dataset, ABC):
             logger.debug(f"Loading from {dataset_file}")
             dataset.set_view(dataset_file)
         else:
-            logger.debug(f"Downloading from qcportal")
-            dataset.download(dataset_file)
-
             # If dataset_file was specified, but does not exist, the file will be downloaded from qcarchive and saved to the file/path specified by dataset_file
+            logger.debug(f"Downloading from qcportal")
             if dataset_file is None:
                 dataset.download()
             else:
@@ -122,7 +120,7 @@ class QM9Dataset(Dataset):
         return "QM9"
 
     @property
-    def _dataset_records():
+    def _dataset_records(self):
         return {
             "method": "b3lyp",
             "basis": "6-31g",

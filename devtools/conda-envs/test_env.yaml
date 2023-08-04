@@ -12,7 +12,7 @@ dependencies:
   - tqdm
   - qcelemental=0.25.1
   - qcportal
-  - torch
+  - pytorch
   - loguru
 
     # Testing

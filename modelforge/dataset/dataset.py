@@ -65,9 +65,8 @@ class Dataset(torch.utils.data.Dataset, ABC):
                 dataset.download()
             else:
                 if not dataset_file.endswith(".hdf5"):
-                      raise ValueError("File must be an .hdf5 file.")
+                    raise ValueError("File must be an .hdf5 file.")
                 dataset.download(dataset_file)
-                dataset.to_file(path=dataset_file, encoding="hdf5")
         return dataset
 
     def __len__(self):

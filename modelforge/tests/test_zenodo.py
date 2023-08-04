@@ -4,6 +4,33 @@ import modelforge
 from modelforge.utils.zenodo import *
 
 
+def test_is_url():
+    assert (
+        is_url(query="https://dx.doi.org/10.5281/zenodo.3588339", hostname="doi.org")
+        == True
+    )
+    assert (
+        is_url(query="https://zenodo.org/record/3588339", hostname="zenodo.org") == True
+    )
+    assert (
+        is_url(query="https://zenodo.org/record/3588339", hostname="choderalab.org")
+        == False
+    )
+
+
+def test_record_id_parse():
+    assert (
+        parse_zenodo_record_id_from_url("https://zenodo.org/record/3588339")
+        == "3588339"
+    )
+    assert (
+        parse_zenodo_record_id_from_url("https://zenodo.org/record/3588339/")
+        == "3588339"
+    )
+    with pytest.raises(Exception):
+        parse_zenodo_record_id_from_url("https://zenodo.org/record/bad/3588339")
+
+
 def test_zenodo_fetch():
     # qm9 dataset
     files = hdf5_from_zenodo(record="10.5281/zenodo.3588339")

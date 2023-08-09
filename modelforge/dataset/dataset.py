@@ -78,7 +78,8 @@ class Dataset(torch.utils.data.Dataset, ABC):
             else:
                 if not dataset_file.endswith(".hdf5"):
                     raise ValueError("File must be an .hdf5 file.")
-                dataset.download(dataset_file)
+                dataset.to_file(path=dataset_file, encoding="hdf5")
+                dataset.set_view(dataset_file)
         return dataset
 
     def __len__(self):
@@ -123,6 +124,6 @@ class QM9Dataset(Dataset):
     def _dataset_records(self):
         return {
             "method": "b3lyp",
-            "basis": "6-31g",
+            "basis": "6-31g*",
             "program": "psi4",
         }

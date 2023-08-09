@@ -45,7 +45,7 @@ class Dataset(torch.utils.data.Dataset, ABC):
         """
         pass
 
-    def load(self, dataset_file):
+    def load(self, dataset_file: str):
         """
         Loads the raw dataset from qcarchive.
 
@@ -78,8 +78,7 @@ class Dataset(torch.utils.data.Dataset, ABC):
             else:
                 if not dataset_file.endswith(".hdf5"):
                     raise ValueError("File must be an .hdf5 file.")
-                dataset.to_file(path=dataset_file, encoding="hdf5")
-                dataset.set_view(dataset_file)
+                dataset.download(local_path=dataset_file)
         return dataset
 
     def __len__(self):

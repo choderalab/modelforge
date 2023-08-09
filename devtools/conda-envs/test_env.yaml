@@ -1,13 +1,19 @@
 name: test
 channels:
-
   - conda-forge
 
   - defaults
 dependencies:
-    # Base depends
+  # Base depends
   - python
   - pip
+  - h5py
+  - requests
+  - tqdm
+  - qcelemental=0.25.1
+  - qcportal
+  - pytorch
+  - loguru
 
     # Testing
   - pytest
@@ -18,6 +24,6 @@ dependencies:
   - requests
 
     # Pip-only installs
-  #- pip:
+  - pip:
+      - pedantic
   #  - codecov
-

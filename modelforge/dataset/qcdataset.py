@@ -16,6 +16,11 @@ class Dataset(torch.utils.data.Dataset, ABC):
         self,
         dataset_file: str = "",
     ):
+        """initialize the Dataset class.
+
+        Args:
+            dataset_file (str, optional): The file location where the dataset is cached. Defaults to "".
+        """
         self.dataset_file = dataset_file
         self.dataset = self.load(dataset_file)
         records_properties = self._dataset_records
@@ -23,9 +28,7 @@ class Dataset(torch.utils.data.Dataset, ABC):
             self.molecules,
             self.records,
         ) = self.dataset.get_molecules(), self.dataset.get_records(
-            method=records_properties["method"],
-            basis=records_properties["basis"],
-            program=records_properties["program"],
+            **records_properties,
         )
 
     @property
@@ -33,7 +36,22 @@ class Dataset(torch.utils.data.Dataset, ABC):
     def _dataset_records(self):
         """
         Defines the dataset to be downloaded.
-        Three keys are required: 'method', 'basis', 'program'.
+        Multiple keys can be defined and provided, e.g.: 'method', 'basis', 'program'.
+        For an exhaustive list see https://docs.qcarchive.molssi.org/projects/QCPortal/en/stable/collection-dataset.html#qcportal.collections.Dataset.get_records
+        """
+        pass
+
+    @abstractmethod
+    def transform_y():
+        """
+        Abstract method to transform the y values. This is necessary if e.g. multiple values are returned by the dataset query.
+        """
+        pass
+    
+    @abstractmethod
+    def transform_x():
+        """
+        Abstract method to transform the x values.
         """
         pass
 
@@ -87,7 +105,8 @@ class Dataset(torch.utils.data.Dataset, ABC):
     def __getitem__(
         self, idx
     ) -> Tuple[torch.Tensor, torch.Tensor]:  # Tuple[0] with dim=3, Tuple[1] with dim=1
-        """pytorch dataset getitem method to return a tuple of geometry and energy
+        """pytorch dataset getitem method to return a tuple of geometry and energy.
+        if a .
 
         Args:
             idx (int): _description_
@@ -98,10 +117,10 @@ class Dataset(torch.utils.data.Dataset, ABC):
         geometry = torch.tensor(self.records.iloc[idx].record["geometry"])
         energy = torch.tensor(self.records.iloc[idx].record["energy"])
 
-        if self.transform:
-            geometry = self.transform(geometry)
-        if self.target_transform:
-            energy = self.target_transform(energy)
+        if self.transform_x:
+            geometry = self.transform_x(geometry)
+        if self.transform_y:
+            energy = self.transform_y(energy)
 
         return geometry, energy
 
@@ -123,6 +142,7 @@ class QM9Dataset(Dataset):
     def _dataset_records(self):
         return {
             "method": "b3lyp",
-            "basis": "6-31g*",
+            "basis": "6-31G*",
+            "driver" : "energy",
             "program": "psi4",
         }

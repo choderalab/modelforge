@@ -1,10 +1,10 @@
 import os
 from abc import ABC, abstractmethod
+from typing import Tuple
 
 import qcportal as ptl
 import torch
 from loguru import logger
-from typing import Tuple
 
 
 class Dataset(torch.utils.data.Dataset, ABC):
@@ -47,7 +47,7 @@ class Dataset(torch.utils.data.Dataset, ABC):
         Abstract method to transform the y values. This is necessary if e.g. multiple values are returned by the dataset query.
         """
         pass
-    
+
     @abstractmethod
     def transform_x():
         """
@@ -142,7 +142,12 @@ class QM9Dataset(Dataset):
     def _dataset_records(self):
         return {
             "method": "b3lyp",
-            "basis": "6-31G*",
-            "driver" : "energy",
+            "basis": "def2-svp",
             "program": "psi4",
         }
+
+    def transform_y(self, energy):
+        return energy
+
+    def transform_x(self, geometry):
+        return geometry

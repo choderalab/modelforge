@@ -7,7 +7,7 @@ import torch
 from loguru import logger
 
 
-class Dataset(torch.utils.data.Dataset, ABC):
+class BaseDataset(torch.utils.data.Dataset, ABC):
     """
     Abstract Base Class representing a dataset.
     """
@@ -55,49 +55,20 @@ class Dataset(torch.utils.data.Dataset, ABC):
         """
         pass
 
-    @property
     @abstractmethod
-    def qcportal_data(self):
+    def load():
         """
-        Defines the qcportal data to be downloaded.
+        Abstract method to load the dataset from a hdf5 file.
         """
         pass
 
-    def load(self, dataset_file: str):
-        """
-        Loads the raw dataset from qcarchive.
+    @abstractmethod
+    def to_cache():
+        pass
 
-        If a valid qcarchive generated hdf5 file is not passed to the
-        to the init function, the code will download the
-        raw dataset from qcarchive.
-        """
-        qcp_client = ptl.FractalClient()
-        qcportal_data = self.qcportal_data
-
-        try:
-            dataset = qcp_client.get_collection(
-                qcportal_data["collection"], qcportal_data["dataset"]
-            )
-        except Exception:
-            print(
-                f"Dataset {qcportal_data['dataset']} is not available in collection {qcportal_data['collection']}."
-            )
-
-        if dataset_file and os.path.isfile(dataset_file):
-            if not dataset_file.endswith(".hdf5"):
-                raise ValueError("Input file must be an .hdf5 file.")
-            logger.debug(f"Loading from {dataset_file}")
-            dataset.set_view(dataset_file)
-        else:
-            # If dataset_file was specified, but does not exist, the file will be downloaded from qcarchive and saved to the file/path specified by dataset_file
-            logger.debug(f"Downloading from qcportal")
-            if dataset_file is None:
-                dataset.download()
-            else:
-                if not dataset_file.endswith(".hdf5"):
-                    raise ValueError("File must be an .hdf5 file.")
-                dataset.download(local_path=dataset_file)
-        return dataset
+    @abstractmethod
+    def from_cache():
+        pass
 
     def __len__(self):
         return self.molecules.shape[0]
@@ -123,31 +94,3 @@ class Dataset(torch.utils.data.Dataset, ABC):
             energy = self.transform_y(energy)
 
         return geometry, energy
-
-
-class QM9Dataset(Dataset):
-    """
-    QM9 dataset as curated by qcarchive.
-    """
-
-    @property
-    def qcportal_data(self):
-        return {"collection": "Dataset", "dataset": "QM9"}
-
-    @property
-    def name(self):
-        return "QM9"
-
-    @property
-    def _dataset_records(self):
-        return {
-            "method": "b3lyp",
-            "basis": "def2-svp",
-            "program": "psi4",
-        }
-
-    def transform_y(self, energy):
-        return energy
-
-    def transform_x(self, geometry):
-        return geometry

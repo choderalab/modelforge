@@ -10,9 +10,15 @@ class QM9Dataset(BaseDataset):
         self.dataset_name = dataset_name
         super().__init__()
 
-    @property
-    def url(self):
-        return "https://www.dropbox.com/scl/fo/e74c3s2obow921uoexie8/h?rlkey=9yn6moonczjlqt1aekoqu0eju&dl=0"
+    def download_hdf_file(self):
+        self._download_from_gdrive()
+
+    def _download_from_gdrive(self):
+        import gdown
+
+        id = "1h3eh-79wQy69_I7Fr-BoYNvHW6wYisPc"
+        url = f"https://drive.google.com/uc?id={id}"
+        gdown.download(url, self.raw_dataset_file, quiet=False)
 
     @property
     def qcportal_data(self):

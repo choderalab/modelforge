@@ -1,10 +1,12 @@
 import os
 from abc import ABC, abstractmethod
 from typing import Tuple
-
+import requests
 import qcportal as ptl
 import torch
 from loguru import logger
+import h5py
+import numpy as np
 
 
 class BaseDataset(torch.utils.data.Dataset, ABC):
@@ -14,22 +16,83 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
 
     def __init__(
         self,
-        dataset_file: str = "",
     ):
         """initialize the Dataset class.
 
         Args:
-            dataset_file (str, optional): The file location where the dataset is cached. Defaults to "".
+            dataset_file: The file location where the dataset is cached. Defaults to "".
         """
-        self.dataset_file = dataset_file
-        self.dataset = self.load(dataset_file)
-        records_properties = self._dataset_records
-        (
-            self.molecules,
-            self.records,
-        ) = self.dataset.get_molecules(), self.dataset.get_records(
-            **records_properties,
-        )
+        raw_dataset_file = self.dataset_name + "_cache.hdf5"
+        self.raw_dataset_file = raw_dataset_file
+        processed_dataset_file = self.dataset_name + "_processed.npy"
+        self.processed_dataset_file = processed_dataset_file
+
+        if os.path.exists(self.processed_dataset_file):
+            logger.info(f"Loading cached dataset_file {raw_dataset_file}")
+            self.dataset = self.load(processed_dataset_file)
+        else:
+            logger.info(f"Downloading hdf5 file ... ")
+            self.download_hdf_file()
+            logger.info(f"Processing hdf5 file ...")
+            self.process()
+            logger.info(f"Caching hdf5 file ...")
+            self.cache()
+            logger.info(f"Loading cached dataset_file {processed_dataset_file}")
+            self.dataset = self.load(processed_dataset_file)
+
+        # records_properties = self._dataset_records
+        # (
+        #     self.molecules,
+        #     self.records,
+        # ) = self.dataset.get_molecules(), self.dataset.get_records(
+        #     **records_properties,
+        # )
+
+    def _parse_hdf(self):
+        with h5py.File(f"{self.raw_dataset_file}", "r") as hf:
+            print("n_entries ", len(hf.keys()))
+
+            mols = [mol for mol in hf.keys()]
+
+            # np.random.shuffle(mols)
+            for mol in mols:
+                print(f"---\n{mol}")
+                for it in hf[mol].keys():
+                    print(f"{it} {hf[mol][it][()]}")
+
+    def _process_hdf_file(self):
+        self._parse_hdf()
+
+    def process(self):
+        """
+        Process the downloaded hdf5 file.
+        """
+        self._process_hdf_file()
+
+    def download_hdf_file(self):
+        """
+        Download the hdf5 file.
+        """
+        # Send a GET request to the URL
+        logger.info(f"Downloading hdf5 file from {self.url}")
+        try:
+            response = requests.get(self.url, stream=True)
+
+            # Check if the request was successful
+            response.raise_for_status()
+
+            # Save the content to the output file
+            logger.debug(f"Saving hdf5 file to {self.raw_dataset_file}")
+            with open(self.raw_dataset_file, "wb") as file:
+                for chunk in response.iter_content(chunk_size=8192):
+                    file.write(chunk)
+            return True
+        except requests.RequestException as e:
+            print(f"Error downloading the file: {e}")
+            return False
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
+            return False
 
     @property
     @abstractmethod
@@ -62,13 +125,18 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
         """
         pass
 
-    @abstractmethod
-    def to_cache():
-        pass
+    @property
+    def cache_file_name(self):
+        return f"{self.dataset_name}_cache.np"
 
-    @abstractmethod
-    def from_cache():
-        pass
+    def to_npy_cache(self):
+        """
+        Save the dataset to a npy file.
+        """
+        np.save(self.cache_file_name, self.dataset)
+
+    def from_cache(self):
+        self._parse_hdf()
 
     def __len__(self):
         return self.molecules.shape[0]

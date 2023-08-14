@@ -13,5 +13,5 @@ def test_dataset_imported():
 # fixture let's you pass different datasets and performs the same download operation on them
 @pytest.mark.parametrize("dataset", [QM9Dataset])
 def test_download_dataset(dataset):
-    print(dataset.name)
+    print(dataset.dataset_name)
     dataset("tmp.hdf5")

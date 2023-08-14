@@ -1,2 +1,2 @@
 # defines the interaction with public datasets
-from .qcdataset import QM9Dataset
+from .qm9 import QM9Dataset

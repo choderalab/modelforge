@@ -7,6 +7,7 @@ import torch
 from loguru import logger
 import h5py
 import numpy as np
+from typing import Tuple, List, Dict, Any, Generator
 
 
 class BaseDataset(torch.utils.data.Dataset, ABC):
@@ -16,33 +17,30 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
 
     def __init__(
         self,
-    ):
-        """initialize the Dataset class.
+    ) -> None:
+        """initialize the Dataset class."""
+        self.raw_dataset_file: str = f"{self.dataset_name}_cache.hdf5"
+        self.processed_dataset_file: str = self.dataset_name + "_processed.npy"
+        self.chunk_size: int = 500
+        self._load_or_process_data()
 
-        Args:
-            dataset_file: The file location where the dataset is cached. Defaults to "".
-        """
-        raw_dataset_file = self.dataset_name + "_cache.hdf5"
-        self.raw_dataset_file = raw_dataset_file
-        processed_dataset_file = self.dataset_name + "_processed.npy"
-        self.processed_dataset_file = processed_dataset_file
-        self.chunk_size = 500
+    def _load_cached_data(self) -> None:
+        """Load data from the cached dataset file."""
+        logger.info(f"Loading cached dataset_file {self.processed_dataset_file}")
+        self.dataset = self.load(self.processed_dataset_file)
 
+    def _load_or_process_data(self) -> None:
+        """Load dataset from cache, or process and cache if not available."""
         if os.path.exists(self.processed_dataset_file):
-            logger.info(f"Loading cached dataset_file {processed_dataset_file}")
-            self.dataset = self.load(processed_dataset_file)
+            self._load_cached_data()
         else:
-            if os.path.exists(self.raw_dataset_file):
-                logger.info(f"Loading raw dataset_file {raw_dataset_file}")
-            else:
-                logger.info(f"Downloading hdf5 file ... ")
+            if not os.path.exists(self.raw_dataset_file):
                 self.download_hdf_file()
             logger.info(f"Processing hdf5 file ...")
             self.process()
             logger.info(f"Caching hdf5 file ...")
             self.cache()
-            logger.info(f"Loading cached dataset_file {processed_dataset_file}")
-            self.dataset = self.load(processed_dataset_file)
+            self._load_cached_data()
 
         # records_properties = self._dataset_records
         # (
@@ -52,7 +50,8 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
         #     **records_properties,
         # )
 
-    def _save_npz(self, r: dict, idx: int):
+    def _save_npz(self, r: Dict[str, Any], idx: int) -> None:
+        """Save data to a numpy file in chunks."""
         np.savez(
             f"dataset_{idx}.npy",
             coordinates=np.array(r["coordinates"], dtype=object),
@@ -61,9 +60,11 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
         )
 
     def _process_hdf_file(self):
+        """Process the raw HDF5 file and convert data into chunks."""
         from collections import defaultdict
 
-        def generate_an_iterator_on_a_junk(buf, chunk):
+        def generate_an_iterator_on_a_junk(buf: List[Any], chunk: int):
+            """Generate chunks from a buffer."""
             for start in range(0, len(buf), chunk):
                 yield buf[start : start + chunk]
 
@@ -96,6 +97,7 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
         """
         # Send a GET request to the URL
         logger.info(f"Downloading hdf5 file from {self.url}")
+
         try:
             response = requests.get(self.url, stream=True)
 
@@ -117,7 +119,7 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
 
     @property
     @abstractmethod
-    def _dataset_records(self):
+    def _dataset_records(self)->Dict[str, Any]::
         """
         Defines the dataset to be downloaded.
         Multiple keys can be defined and provided, e.g.: 'method', 'basis', 'program'.
@@ -126,28 +128,31 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
         pass
 
     @abstractmethod
-    def transform_y():
+    def transform_y(self, y: torch.Tensor) -> torch.Tensor:
+
         """
         Abstract method to transform the y values. This is necessary if e.g. multiple values are returned by the dataset query.
         """
         pass
 
     @abstractmethod
-    def transform_x():
+    def transform_x(self, x: torch.Tensor) -> torch.Tensor:
+
         """
         Abstract method to transform the x values.
         """
         pass
 
     @abstractmethod
-    def load():
+    def load(self, x: torch.Tensor) -> torch.Tensor:
+
         """
         Abstract method to load the dataset from a hdf5 file.
         """
         pass
 
     @property
-    def cache_file_name(self):
+    def cache_file_name(self)->str:
         return f"{self.dataset_name}_cache.np"
 
     def to_npy_cache(self):
@@ -159,7 +164,7 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
     def from_cache(self):
         self._parse_hdf()
 
-    def __len__(self):
+    def __len__(self)->int:
         return self.molecules.shape[0]
 
     def __getitem__(

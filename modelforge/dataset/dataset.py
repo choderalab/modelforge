@@ -52,12 +52,20 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
         #     **records_properties,
         # )
 
+    def _save_npz(self, r: dict, idx: int):
+        np.savez(
+            f"dataset_{idx}.npy",
+            coordinates=np.array(r["coordinates"], dtype=object),
+            atomic_numbers=np.array(r["atomic_numbers"], dtype=object),
+            return_energy=np.array(r["E0"], dtype=object),
+        )
+
     def _process_hdf_file(self):
+        from collections import defaultdict
+
         def generate_an_iterator_on_a_junk(buf, chunk):
             for start in range(0, len(buf), chunk):
                 yield buf[start : start + chunk]
-
-        from collections import defaultdict
 
         with h5py.File(f"{self.raw_dataset_file}", "r") as hf:
             print("n_entries ", len(hf.keys()))
@@ -65,14 +73,16 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
             mols = [mol for mol in hf.keys()]
             iterator = generate_an_iterator_on_a_junk(mols, self.chunk_size)
             r = defaultdict(list)
-            for idx, mol in enumerate(iterator):
-                print(f"---\n{mol}")
-                for prop in self.keywords_for_hdf5_dataset:
-                    print(f"prop: {prop}")
-                    r[prop].append(hf[mol][prop][()])
+            count = 0
 
-            
-            logger.debug(f"Nr of mols: {idx}")
+            for idx, mols in enumerate(iterator):
+                logger.debug(f"Processing chunk {idx} with {len(mols)} mols")
+                for mol in mols:
+                    count += 1
+                    for key, value in self.keywords_for_hdf5_dataset.items():
+                        r[key].append(hf[mol][value][()])
+                self._save_npz(r, idx)
+            logger.debug(f"Nr of mols: {count}")
 
     def process(self):
         """

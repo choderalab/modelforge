@@ -119,7 +119,7 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
 
     @property
     @abstractmethod
-    def _dataset_records(self)->Dict[str, Any]::
+    def _dataset_records(self) -> Dict[str, Any]:
         """
         Defines the dataset to be downloaded.
         Multiple keys can be defined and provided, e.g.: 'method', 'basis', 'program'.
@@ -129,7 +129,6 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
 
     @abstractmethod
     def transform_y(self, y: torch.Tensor) -> torch.Tensor:
-
         """
         Abstract method to transform the y values. This is necessary if e.g. multiple values are returned by the dataset query.
         """
@@ -137,7 +136,6 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
 
     @abstractmethod
     def transform_x(self, x: torch.Tensor) -> torch.Tensor:
-
         """
         Abstract method to transform the x values.
         """
@@ -145,14 +143,13 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
 
     @abstractmethod
     def load(self, x: torch.Tensor) -> torch.Tensor:
-
         """
         Abstract method to load the dataset from a hdf5 file.
         """
         pass
 
     @property
-    def cache_file_name(self)->str:
+    def cache_file_name(self) -> str:
         return f"{self.dataset_name}_cache.np"
 
     def to_npy_cache(self):
@@ -164,7 +161,7 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
     def from_cache(self):
         self._parse_hdf()
 
-    def __len__(self)->int:
+    def __len__(self) -> int:
         return self.molecules.shape[0]
 
     def __getitem__(

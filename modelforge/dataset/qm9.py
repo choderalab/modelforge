@@ -41,5 +41,13 @@ class QM9Dataset(BaseDataset):
     def from_cache(self):
         pass
 
+    @property
+    def keywords_for_hdf5_dataset(self):
+        return {
+            "coordinates": "geometry",
+            "atomic numbers": "atomic_numbers",
+            "E0": "return_energy",
+        }
+
     def load(self):
         pass

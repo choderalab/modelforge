@@ -26,13 +26,17 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
         self.raw_dataset_file = raw_dataset_file
         processed_dataset_file = self.dataset_name + "_processed.npy"
         self.processed_dataset_file = processed_dataset_file
+        self.chunk_size = 500
 
         if os.path.exists(self.processed_dataset_file):
-            logger.info(f"Loading cached dataset_file {raw_dataset_file}")
+            logger.info(f"Loading cached dataset_file {processed_dataset_file}")
             self.dataset = self.load(processed_dataset_file)
         else:
-            logger.info(f"Downloading hdf5 file ... ")
-            self.download_hdf_file()
+            if os.path.exists(self.raw_dataset_file):
+                logger.info(f"Loading raw dataset_file {raw_dataset_file}")
+            else:
+                logger.info(f"Downloading hdf5 file ... ")
+                self.download_hdf_file()
             logger.info(f"Processing hdf5 file ...")
             self.process()
             logger.info(f"Caching hdf5 file ...")
@@ -48,20 +52,27 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
         #     **records_properties,
         # )
 
-    def _parse_hdf(self):
+    def _process_hdf_file(self):
+        def generate_an_iterator_on_a_junk(buf, chunk):
+            for start in range(0, len(buf), chunk):
+                yield buf[start : start + chunk]
+
+        from collections import defaultdict
+
         with h5py.File(f"{self.raw_dataset_file}", "r") as hf:
             print("n_entries ", len(hf.keys()))
 
             mols = [mol for mol in hf.keys()]
-
-            # np.random.shuffle(mols)
-            for mol in mols:
+            iterator = generate_an_iterator_on_a_junk(mols, self.chunk_size)
+            r = defaultdict(list)
+            for idx, mol in enumerate(iterator):
                 print(f"---\n{mol}")
-                for it in hf[mol].keys():
-                    print(f"{it} {hf[mol][it][()]}")
+                for prop in self.keywords_for_hdf5_dataset:
+                    print(f"prop: {prop}")
+                    r[prop].append(hf[mol][prop][()])
 
-    def _process_hdf_file(self):
-        self._parse_hdf()
+            
+            logger.debug(f"Nr of mols: {idx}")
 
     def process(self):
         """

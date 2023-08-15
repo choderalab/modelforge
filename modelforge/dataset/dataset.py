@@ -18,6 +18,7 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
         self.processed_dataset_file = f"{self.dataset_name}_processed.npz"
         self.dataset = None
         self.load_or_process_data()
+        self.nr_of_datapoints = len(self.dataset["coordinates"])
 
     def load_or_process_data(self) -> None:
         """Load dataset from cache, or process and cache if not available."""

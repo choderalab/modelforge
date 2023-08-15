@@ -33,7 +33,7 @@ def test_file_existence_after_initialization(dataset):
 @pytest.mark.parametrize("dataset", [QM9Dataset])
 def test_dataset_length(dataset):
     d = dataset("tmp.hdf5")
-    assert len(d) == len(d.molecules)
+    assert len(d) == d.nr_of_datapoints
 
 
 @pytest.mark.parametrize("dataset", [QM9Dataset])

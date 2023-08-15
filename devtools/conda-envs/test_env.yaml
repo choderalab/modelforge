@@ -11,9 +11,10 @@ dependencies:
   - requests
   - tqdm
   - qcelemental=0.25.1
-  - qcportal 
+  - qcportal
   - pytorch
   - loguru
+  - gdown
 
     # Testing
   - pytest

@@ -78,13 +78,12 @@ class QM9Dataset(BaseDataset):
         self.dataset_name = dataset_name
         self.keywords_for_hdf5_dataset = ["geometry", "atomic_numbers", "return_energy"]
         super().__init__(load_in_memory)
-        logger.debug(f"Nr of mols: {len(self.molecules)}")
 
     def process(self) -> None:
         """Process the downloaded hdf5 file."""
         data = defaultdict(list)
         with h5py.File(self.raw_dataset_file, "r") as hf:
-            for mol in self.molecules:
+            for mol in list(hf.keys()):
                 for value in self.keywords_for_hdf5_dataset:
                     data[value].append(hf[mol][value][()])
         self._save_npz(data)
@@ -131,7 +130,6 @@ class QM9Dataset(BaseDataset):
         Download the hdf5 file.
         """
         # Send a GET request to the URL
-        logger.info(f"Downloading hdf5 file from {self.url}")
         self._download_from_gdrive()
 
     @staticmethod
@@ -144,7 +142,7 @@ class QM9Dataset(BaseDataset):
 
     def __len__(self) -> int:
         """Return the number of molecules."""
-        return len(self.molecules)
+        return len(self.dataset["atomic_numbers"])
 
     def __getitem__(self, idx) -> Tuple[torch.Tensor, torch.Tensor]:
         """Return a tuple of geometry, atomic numbers, and energy for a given index."""

@@ -16,8 +16,6 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
         """Initialize the Dataset class."""
         self.raw_dataset_file = f"{self.dataset_name}_cache.hdf5"
         self.processed_dataset_file = f"{self.dataset_name}_processed.npz"
-        with h5py.File(self.raw_dataset_file, "r") as hdf_fh:
-            self.molecules = list(hdf_fh.keys())
         self.dataset = None
         self.load_or_process_data()
 
@@ -51,3 +49,27 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
     def download_hdf_file(self):
         """Download the hdf5 file."""
         pass
+
+    def process(self):
+        """
+        Process the downloaded hdf5 file.
+        """
+        self._process_hdf_file()
+
+    def _process_hdf_file(self):
+        """Process the raw HDF5 file and convert data into chunks."""
+        from collections import defaultdict
+
+        with h5py.File(f"{self.raw_dataset_file}", "r") as hf:
+            print("n_entries ", len(hf.keys()))
+
+            mols = [mol for mol in hf.keys()]
+            r = defaultdict(list)
+            count = 0
+
+            for mol in mols:
+                count += 1
+                for value in self.keywords_for_hdf5_dataset:
+                    r[value].append(hf[mol][value][()])
+            self._save_npz(r)
+            logger.debug(f"Nr of mols: {count}")

@@ -158,7 +158,7 @@ class QM9Dataset(BaseDataset):
     def _download_from_gdrive(self):
         """Internal method to download the dataset from Google Drive."""
 
-        test_id = "1h3eh-79wQy69_I7Fr-BoYNvHW6wYisPc"
+        test_id = "13ott0kVaCGnlv858q1WQdOwOpL7IX5Q9"
         full_id = "1_bSdQjEvI67Tk_LKYbW0j8nmggnb5MoU"
         if self.test_data:
             logger.debug("Downloading test data")

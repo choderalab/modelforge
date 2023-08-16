@@ -10,7 +10,6 @@ from modelforge.dataset import QM9Dataset
 
 
 @pytest.fixture(
-    scope="function",
     autouse=True,
 )
 def cleanup_files():
@@ -19,6 +18,9 @@ def cleanup_files():
             "tmp.hdf5_cache.hdf5",
             "tmp.hdf5_cache.hdf5.gz",
             "tmp.hdf5_processed.npz",
+            "tmp.hdf5_subset_cache.hdf5",
+            "tmp.hdf5_subset_cache.hdf5.gz",
+            "tmp.hdf5_subset_processed.npz",
         ]
         for f in files:
             try:
@@ -39,23 +41,21 @@ def test_dataset_imported():
     assert "modelforge.dataset" in sys.modules
 
 
-""" @pytest.mark.parametrize("dataset", [QM9Dataset])
-def test_download_dataset(dataset):
-    d = dataset("tmp.hdf5")
-    print(d.dataset_name)
-    assert len(d) == 1_000
- """
-
-
-@pytest.mark.parametrize("dataset", [QM9Dataset])
-def test_download_subset_of_dataset(dataset):
-    d = dataset("tmp.hdf5", test_data=True)
-    print(d.dataset_name)
-    assert len(d) == 1_000
-
-
 @pytest.mark.parametrize("dataset", [QM9Dataset])
 def test_file_existence_after_initialization(dataset):
+    d = dataset("tmp.hdf5", test_data=True)
+    assert os.path.exists(d.raw_dataset_file)
+    assert os.path.exists(d.processed_dataset_file)
+
+
+@pytest.mark.parametrize("dataset", [QM9Dataset])
+def test_different_scenarios_of_file_availability(dataset):
+    d = dataset("tmp.hdf5", test_data=True)
+
+    os.remove(d.raw_dataset_file)
+    d = dataset("tmp.hdf5", test_data=True)
+
+    os.remove(d.processed_dataset_file)
     d = dataset("tmp.hdf5", test_data=True)
     assert os.path.exists(d.raw_dataset_file)
     assert os.path.exists(d.processed_dataset_file)

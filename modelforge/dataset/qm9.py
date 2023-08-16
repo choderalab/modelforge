@@ -1,6 +1,7 @@
 from collections import defaultdict
 from typing import Any, Dict, Generator, List, Tuple
 
+import gdown
 import h5py
 import numpy as np
 import torch
@@ -71,31 +72,44 @@ class PlainQM9Dataset(torch.utils.data.Dataset):
 
 
 class QM9Dataset(BaseDataset):
-    """Dataset class for QM9."""
+    """
+    Dataset class for handling QM9 data.
+
+    Provides utilities for processing and interacting with QM9 data stored in hdf5 format.
+    Also allows for lazy loading of data or caching in memory for faster operations.
+    """
 
     def __init__(self, dataset_name: str = "QM9", load_in_memory: bool = True) -> None:
-        """Initialize the QM9Dataset class."""
+        """
+        Initialize the QM9Dataset class.
+
+        Parameters:
+        -----------
+        dataset_name : str
+            Name of the dataset, default is "QM9".
+        load_in_memory : bool
+            Flag to determine if the dataset should be loaded into memory, default is True.
+        """
         self.dataset_name = dataset_name
         self.keywords_for_hdf5_dataset = ["geometry", "atomic_numbers", "return_energy"]
         super().__init__(load_in_memory)
 
-    def process(self) -> None:
-        """Process the downloaded hdf5 file."""
-        data = defaultdict(list)
-        with h5py.File(self.raw_dataset_file, "r") as hf:
-            for mol in list(hf.keys()):
-                for value in self.keywords_for_hdf5_dataset:
-                    data[value].append(hf[mol][value][()])
-        self._save_npz(data)
+    def to_npz(self, data: Dict[str, Any]) -> None:
+        """
+        Save processed data to a numpy (.npz) file.
 
-    def _save_npz(self, data: Dict[str, Any]) -> None:
-        """Save data to a numpy file in chunks."""
+        Parameters:
+        -----------
+        data : Dict[str, Any]
+            Dictionary containing processed data to be saved.
+        """
         max_len_species = max(len(arr) for arr in data["atomic_numbers"])
 
         padded_coordinates = self._pad_molecules(data["geometry"])
         padded_atomic_numbers = self._pad_to_max_length(
             data["atomic_numbers"], max_len_species
         )
+        logger.debug(f"Writing data cache to {self.processed_dataset_file}")
 
         np.savez(
             self.processed_dataset_file,
@@ -106,7 +120,19 @@ class QM9Dataset(BaseDataset):
 
     @staticmethod
     def _pad_molecules(molecules: List[np.ndarray]) -> List[np.ndarray]:
-        """Pad molecules to have the same number of atoms."""
+        """
+        Pad molecules to ensure each has a consistent number of atoms.
+
+        Parameters:
+        -----------
+        molecules : List[np.ndarray]
+            List of molecules to be padded.
+
+        Returns:
+        --------
+        List[np.ndarray]
+            List of padded molecules.
+        """
         max_atoms = max(mol.shape[0] for mol in molecules)
         return [
             np.pad(
@@ -119,7 +145,7 @@ class QM9Dataset(BaseDataset):
         ]
 
     def _download_from_gdrive(self):
-        import gdown
+        """Internal method to download the dataset from Google Drive."""
 
         id = "1h3eh-79wQy69_I7Fr-BoYNvHW6wYisPc"
         url = f"https://drive.google.com/uc?id={id}"
@@ -127,25 +153,60 @@ class QM9Dataset(BaseDataset):
 
     def download_hdf_file(self):
         """
-        Download the hdf5 file.
+        Download the hdf5 file containing the dataset.
+
+        Fetches the dataset from the specified source (Google Drive in this case)
+        and saves it in hdf5 format.
         """
-        # Send a GET request to the URL
         self._download_from_gdrive()
 
     @staticmethod
     def _pad_to_max_length(data: List[np.ndarray], max_length: int) -> List[np.ndarray]:
-        """Pad each array in the data list to the specified max length with -1."""
+        """
+        Pad each array in the data list to a specified maximum length.
+
+        Parameters:
+        -----------
+        data : List[np.ndarray]
+            List of arrays to be padded.
+        max_length : int
+            Desired length for each array after padding.
+
+        Returns:
+        --------
+        List[np.ndarray]
+            List of padded arrays.
+        """
         return [
             np.pad(arr, (0, max_length - len(arr)), "constant", constant_values=-1)
             for arr in data
         ]
 
     def __len__(self) -> int:
-        """Return the number of molecules."""
+        """
+        Return the number of datapoints in the dataset.
+
+        Returns:
+        --------
+        int
+            Total number of datapoints available in the dataset.
+        """
         return len(self.dataset["atomic_numbers"])
 
     def __getitem__(self, idx) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Return a tuple of geometry, atomic numbers, and energy for a given index."""
+        """
+        Fetch a tuple of geometry, atomic numbers, and energy for a given molecule index.
+
+        Parameters:
+        -----------
+        idx : int
+            Index of the molecule to fetch data for.
+
+        Returns:
+        --------
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+            Tuple containing tensors for geometry, atomic numbers, and energy of the molecule.
+        """
         return (
             torch.tensor(self.dataset["coordinates"][idx]),
             torch.tensor(self.dataset["atomic_numbers"][idx]),

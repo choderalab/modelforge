@@ -1,12 +1,12 @@
-from collections import defaultdict
-from typing import Any, Dict, Generator, List, Tuple
+import os
+from abc import ABC, abstractmethod
+from typing import Any, Dict, List, Tuple
 
 import gdown
 import h5py
 import numpy as np
 import torch
 from loguru import logger
-
 from .dataset import BaseDataset
 
 
@@ -79,7 +79,12 @@ class QM9Dataset(BaseDataset):
     Also allows for lazy loading of data or caching in memory for faster operations.
     """
 
-    def __init__(self, dataset_name: str = "QM9", load_in_memory: bool = True) -> None:
+    def __init__(
+        self,
+        dataset_name: str = "QM9",
+        load_in_memory: bool = True,
+        test_data: bool = False,
+    ) -> None:
         """
         Initialize the QM9Dataset class.
 
@@ -89,9 +94,15 @@ class QM9Dataset(BaseDataset):
             Name of the dataset, default is "QM9".
         load_in_memory : bool
             Flag to determine if the dataset should be loaded into memory, default is True.
+        test_data : bool
+            If set to true it will only load a small fraction of the QM9 dataset.
         """
+
+        if test_data:
+            dataset_name = f"{dataset_name}_subset"
         self.dataset_name = dataset_name
         self.keywords_for_hdf5_dataset = ["geometry", "atomic_numbers", "return_energy"]
+        self.test_data = test_data
         super().__init__(load_in_memory)
 
     def to_npz(self, data: Dict[str, Any]) -> None:
@@ -147,9 +158,24 @@ class QM9Dataset(BaseDataset):
     def _download_from_gdrive(self):
         """Internal method to download the dataset from Google Drive."""
 
-        id = "1h3eh-79wQy69_I7Fr-BoYNvHW6wYisPc"
+        test_id = "1h3eh-79wQy69_I7Fr-BoYNvHW6wYisPc"
+        full_id = "1_bSdQjEvI67Tk_LKYbW0j8nmggnb5MoU"
+        if self.test_data:
+            logger.debug("Downloading test data")
+            id = test_id
+        else:
+            logger.debug("Downloading full dataset")
+
+            id = full_id
         url = f"https://drive.google.com/uc?id={id}"
         gdown.download(url, self.raw_dataset_file, quiet=False)
+
+        if self.is_gzipped(self.raw_dataset_file):
+            logger.debug("Decompressing gzipped file")
+            os.rename(f"{self.raw_dataset_file}", f"{self.raw_dataset_file}.gz")
+            self.decompress_gziped_file(
+                f"{self.raw_dataset_file}.gz", self.raw_dataset_file
+            )
 
     def download_hdf_file(self):
         """

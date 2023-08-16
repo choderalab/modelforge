@@ -15,6 +15,7 @@ dependencies:
   - pytorch
   - loguru
   - gdown
+  - tqdm
 
     # Testing
   - pytest

@@ -6,6 +6,7 @@ from typing import Dict, List, Tuple
 import h5py
 import numpy as np
 import torch
+import tqdm
 from loguru import logger
 from torch.utils.data import DataLoader
 
@@ -44,7 +45,7 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
         logger.debug(f"Processing and extracting data from {self.raw_dataset_file}")
         with h5py.File(self.raw_dataset_file, "r") as hf:
             logger.debug(f"n_entries: {len(hf.keys())}")
-            for mol in list(hf.keys()):
+            for mol in tqdm.tqdm(list(hf.keys())):
                 for value in self.keywords_for_hdf5_dataset:
                     data[value].append(hf[mol][value][()])
         return data
@@ -54,8 +55,9 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
         Loads the dataset from cache if available, otherwise processes and caches the data.
         """
 
-        if not os.path.exists(self.raw_dataset_file):
-            self.download_hdf_file()
+        if not os.path.exists(self.processed_dataset_file):
+            if not os.path.exists(self.raw_dataset_file):
+                self.download_hdf_file()
             data = self.from_hdf5()
             self.to_file_cache(data)
 
@@ -96,4 +98,22 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
             data (Dict[str, List]): Data to be saved to cache.
         """
         logger.info("Caching hdf5 file ...")
-        self.save_npz(data)
+        self.to_npz(data)
+
+    @staticmethod
+    def is_gzipped(filename) -> bool:
+        with open(filename, "rb") as f:
+            # Read the first two bytes of the file
+            file_start = f.read(2)
+
+        return True if file_start == b"\x1f\x8b" else False
+
+    def decompress_gziped_file(
+        self, compressed_file: str, uncompressed_file: str
+    ) -> None:
+        import gzip
+        import shutil
+
+        with gzip.open(f"{compressed_file}", "rb") as f_in:
+            with open(f"{uncompressed_file}", "wb") as f_out:
+                shutil.copyfileobj(f_in, f_out)

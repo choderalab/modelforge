@@ -1,5 +1,4 @@
 import os
-from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Tuple
 
 import gdown
@@ -82,7 +81,6 @@ class QM9Dataset(BaseDataset):
     def __init__(
         self,
         dataset_name: str = "QM9",
-        load_in_memory: bool = True,
         test_data: bool = False,
     ) -> None:
         """
@@ -103,7 +101,21 @@ class QM9Dataset(BaseDataset):
         self.dataset_name = dataset_name
         self.keywords_for_hdf5_dataset = ["geometry", "atomic_numbers", "return_energy"]
         self.test_data = test_data
-        super().__init__(load_in_memory)
+        super().__init__()
+        self.load_or_process_data()
+
+    def load_or_process_data(self) -> None:
+        """
+        Loads the dataset from cache if available, otherwise processes and caches the data.
+        """
+
+        if not os.path.exists(self.processed_dataset_file):
+            if not os.path.exists(self.raw_dataset_file):
+                self.download_hdf_file()
+            data = self.from_hdf5()
+            self.to_file_cache(data)
+
+        self.from_file_cache()
 
     def to_npz(self, data: Dict[str, Any]) -> None:
         """
@@ -116,8 +128,8 @@ class QM9Dataset(BaseDataset):
         """
         max_len_species = max(len(arr) for arr in data["atomic_numbers"])
 
-        padded_coordinates = self._pad_molecules(data["geometry"])
-        padded_atomic_numbers = self._pad_to_max_length(
+        padded_coordinates = BaseDataset.pad_molecules(data["geometry"])
+        padded_atomic_numbers = BaseDataset.pad_to_max_length(
             data["atomic_numbers"], max_len_species
         )
         logger.debug(f"Writing data cache to {self.processed_dataset_file}")
@@ -128,32 +140,6 @@ class QM9Dataset(BaseDataset):
             atomic_numbers=padded_atomic_numbers,
             return_energy=np.array(data["return_energy"]),
         )
-
-    @staticmethod
-    def _pad_molecules(molecules: List[np.ndarray]) -> List[np.ndarray]:
-        """
-        Pad molecules to ensure each has a consistent number of atoms.
-
-        Parameters:
-        -----------
-        molecules : List[np.ndarray]
-            List of molecules to be padded.
-
-        Returns:
-        --------
-        List[np.ndarray]
-            List of padded molecules.
-        """
-        max_atoms = max(mol.shape[0] for mol in molecules)
-        return [
-            np.pad(
-                mol,
-                ((0, max_atoms - mol.shape[0]), (0, 0)),
-                mode="constant",
-                constant_values=(-1, -1),
-            )
-            for mol in molecules
-        ]
 
     def _download_from_gdrive(self):
         """Internal method to download the dataset from Google Drive."""
@@ -185,28 +171,6 @@ class QM9Dataset(BaseDataset):
         and saves it in hdf5 format.
         """
         self._download_from_gdrive()
-
-    @staticmethod
-    def _pad_to_max_length(data: List[np.ndarray], max_length: int) -> List[np.ndarray]:
-        """
-        Pad each array in the data list to a specified maximum length.
-
-        Parameters:
-        -----------
-        data : List[np.ndarray]
-            List of arrays to be padded.
-        max_length : int
-            Desired length for each array after padding.
-
-        Returns:
-        --------
-        List[np.ndarray]
-            List of padded arrays.
-        """
-        return [
-            np.pad(arr, (0, max_length - len(arr)), "constant", constant_values=-1)
-            for arr in data
-        ]
 
     def __len__(self) -> int:
         """

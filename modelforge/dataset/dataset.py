@@ -21,7 +21,9 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
         dataset (np.ndarray or None): Loaded dataset.
     """
 
-    def __init__(self, load_in_memory: bool) -> None:
+    def __init__(
+        self,
+    ) -> None:
         """
         Initializes the Dataset class.
 
@@ -31,7 +33,10 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
         self.raw_dataset_file = f"{self.dataset_name}_cache.hdf5"
         self.processed_dataset_file = f"{self.dataset_name}_processed.npz"
         self.dataset = None
-        self.load_or_process_data()
+
+    @abstractmethod
+    def load_or_process_data():
+        raise NotImplementedError
 
     def from_hdf5(self) -> Dict[str, List]:
         """
@@ -50,18 +55,55 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
                     data[value].append(hf[mol][value][()])
         return data
 
-    def load_or_process_data(self) -> None:
+    @classmethod
+    def pad_to_max_length(
+        cls, data: List[np.ndarray], max_length: int
+    ) -> List[np.ndarray]:
         """
-        Loads the dataset from cache if available, otherwise processes and caches the data.
+        Pad each array in the data list to a specified maximum length.
+
+        Parameters:
+        -----------
+        data : List[np.ndarray]
+            List of arrays to be padded.
+        max_length : int
+            Desired length for each array after padding.
+
+        Returns:
+        --------
+        List[np.ndarray]
+            List of padded arrays.
         """
+        return [
+            np.pad(arr, (0, max_length - len(arr)), "constant", constant_values=-1)
+            for arr in data
+        ]
 
-        if not os.path.exists(self.processed_dataset_file):
-            if not os.path.exists(self.raw_dataset_file):
-                self.download_hdf_file()
-            data = self.from_hdf5()
-            self.to_file_cache(data)
+    @classmethod
+    def pad_molecules(cls, molecules: List[np.ndarray]) -> List[np.ndarray]:
+        """
+        Pad molecules to ensure each has a consistent number of atoms.
 
-        self.from_file_cache()
+        Parameters:
+        -----------
+        molecules : List[np.ndarray]
+            List of molecules to be padded.
+
+        Returns:
+        --------
+        List[np.ndarray]
+            List of padded molecules.
+        """
+        max_atoms = max(mol.shape[0] for mol in molecules)
+        return [
+            np.pad(
+                mol,
+                ((0, max_atoms - mol.shape[0]), (0, 0)),
+                mode="constant",
+                constant_values=(-1, -1),
+            )
+            for mol in molecules
+        ]
 
     def from_file_cache(self) -> None:
         """

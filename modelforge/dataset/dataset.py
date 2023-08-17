@@ -172,19 +172,18 @@ class GenericDataset(BaseDataset):
     ) -> None:
         """
         Initialize the GenericDataset class.
+        The dataset needs to be set as a Dict[str, np.ndarry] and it 
+        must contain the following keys: "coordinates", "atomic_numbers", and "return_energy"
 
         Parameters:
         -----------
         dataset_name : str
-            Name of the dataset, default is "QM9".
+            Name of the dataset.
         """
 
         self.dataset_name = dataset_name
 
         super().__init__()
-
-    def set_dataset(self, dataset: Dict[str, np.ndarray]) -> None:
-        self.dataset = dataset
 
     def __len__(self) -> int:
         """

@@ -11,7 +11,7 @@ from loguru import logger
 from torch.utils.data import DataLoader
 
 
-class BaseDataset(torch.utils.data.Dataset, ABC):
+class BaseDataset(torch.utils.data.Dataset):
     """Abstract base class for a dataset. This class is intended to be extended by
     specific datasets, providing common functionality to load and cache data.
 
@@ -32,9 +32,7 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
         """
         self.raw_dataset_file = f"{self.dataset_name}_cache.hdf5"
         self.processed_dataset_file = f"{self.dataset_name}_processed.npz"
-        self.dataset = None
 
-    @abstractmethod
     def load_or_process_data():
         raise NotImplementedError
 
@@ -121,7 +119,6 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
         """
         return np.load(self.processed_dataset_file)
 
-    @abstractmethod
     def download_hdf_file(self):
         """
         Abstract method to download the hdf5 file. This method should be implemented by
@@ -159,3 +156,63 @@ class BaseDataset(torch.utils.data.Dataset, ABC):
         with gzip.open(f"{compressed_file}", "rb") as f_in:
             with open(f"{uncompressed_file}", "wb") as f_out:
                 shutil.copyfileobj(f_in, f_out)
+
+
+class GenericDataset(BaseDataset):
+    """
+    Dataset class for handling QM9 data.
+
+    Provides utilities for processing and interacting with generaic data passed as np.array.
+    Also allows for lazy loading of data or caching in memory for faster operations.
+    """
+
+    def __init__(
+        self,
+        dataset_name: str,
+    ) -> None:
+        """
+        Initialize the GenericDataset class.
+
+        Parameters:
+        -----------
+        dataset_name : str
+            Name of the dataset, default is "QM9".
+        """
+
+        self.dataset_name = dataset_name
+
+        super().__init__()
+
+    def set_dataset(self, dataset: Dict[str, np.ndarray]) -> None:
+        self.dataset = dataset
+
+    def __len__(self) -> int:
+        """
+        Return the number of datapoints in the dataset.
+
+        Returns:
+        --------
+        int
+            Total number of datapoints available in the dataset.
+        """
+        return len(self.dataset["atomic_numbers"])
+
+    def __getitem__(self, idx) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Fetch a tuple of geometry, atomic numbers, and energy for a given molecule index.
+
+        Parameters:
+        -----------
+        idx : int
+            Index of the molecule to fetch data for.
+
+        Returns:
+        --------
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+            Tuple containing tensors for geometry, atomic numbers, and energy of the molecule.
+        """
+        return (
+            torch.tensor(self.dataset["coordinates"][idx]),
+            torch.tensor(self.dataset["atomic_numbers"][idx]),
+            torch.tensor(self.dataset["return_energy"][idx]),
+        )

@@ -7,6 +7,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from modelforge.dataset import QM9Dataset
+from modelforge.dataset.dataset import GenericDataset
 
 
 @pytest.fixture(
@@ -17,12 +18,12 @@ def cleanup_files():
 
     def _cleanup():
         files = [
-            "tmp.hdf5_cache.hdf5",
-            "tmp.hdf5_cache.hdf5.gz",
-            "tmp.hdf5_processed.npz",
-            "tmp.hdf5_subset_cache.hdf5",
-            "tmp.hdf5_subset_cache.hdf5.gz",
-            "tmp.hdf5_subset_processed.npz",
+            "tmp_cache.hdf5",
+            "tmp_cache.hdf5.gz",
+            "tmp_processed.npz",
+            "tmp_subset_cache.hdf5",
+            "tmp_subset_cache.hdf5.gz",
+            "tmp_subset_processed.npz",
         ]
         for f in files:
             try:
@@ -46,7 +47,11 @@ def test_dataset_imported():
 @pytest.mark.parametrize("dataset", [QM9Dataset])
 def test_file_existence_after_initialization(dataset):
     """Test if files are created after dataset initialization."""
-    d = dataset("tmp.hdf5", test_data=True)
+    d = dataset("tmp", test_data=True)
+    assert not os.path.exists(d.raw_dataset_file)
+    assert not os.path.exists(d.processed_dataset_file)
+
+    d.load_or_process_data()  # call explicitly load_or_process_data to load data
     assert os.path.exists(d.raw_dataset_file)
     assert os.path.exists(d.processed_dataset_file)
 
@@ -54,13 +59,14 @@ def test_file_existence_after_initialization(dataset):
 @pytest.mark.parametrize("dataset", [QM9Dataset])
 def test_different_scenarios_of_file_availability(dataset):
     """Test the behavior when raw and processed dataset files are removed."""
-    d = dataset("tmp.hdf5", test_data=True)
-
+    d = dataset("tmp", test_data=True)
+    d.load_or_process_data()  # call explicitly load_or_process_data to load data
     os.remove(d.raw_dataset_file)
-    d = dataset("tmp.hdf5", test_data=True)
+    d = dataset("tmp", test_data=True)
 
     os.remove(d.processed_dataset_file)
-    d = dataset("tmp.hdf5", test_data=True)
+    d = dataset("tmp", test_data=True)
+    d.load_or_process_data()  # call explicitly load_or_process_data to load data
     assert os.path.exists(d.raw_dataset_file)
     assert os.path.exists(d.processed_dataset_file)
 
@@ -68,7 +74,7 @@ def test_different_scenarios_of_file_availability(dataset):
 @pytest.mark.parametrize("dataset", [QM9Dataset])
 def test_data_item_format(dataset):
     """Test the format of individual data items in the dataset."""
-    d = dataset("tmp.hdf5", test_data=True)
+    d = dataset("tmp", test_data=True)
     data_item = d[0]
     assert isinstance(data_item, tuple)
     assert len(data_item) == 3
@@ -94,23 +100,33 @@ def test_padding():
 @pytest.mark.parametrize("dataset", [QM9Dataset])
 def test_download_dataset(dataset):
     """Test the downloading and batching of the dataset."""
-    d = dataset(dataset_name="tmp.hdf5", test_data=True)
-    print(d.dataset_name)
-    train_dataloader = DataLoader(d, batch_size=64, shuffle=False)
-    for b in train_dataloader:
-        print("batching")
+    d = dataset(dataset_name="tmp", test_data=True)
+    assert d.dataset_name == "tmp_subset"
+    train_dataloader = DataLoader(d, batch_size=64, shuffle=True)
+    all_batches = [b for b in train_dataloader]
+    assert len(all_batches) == 16  # (1_000 / 64 = 15.625)
 
 
-def test_dataset_length():
+@pytest.mark.parametrize("dataset", [QM9Dataset])
+def test_dataset_length(dataset):
     """Test the length method of the dataset."""
-    d = QM9Dataset("tmp.hdf5", test_data=True)
+    d = dataset("tmp", test_data=True)
     assert len(d) == len(d.dataset["atomic_numbers"])
 
 
-def test_getitem_type_and_shape():
+@pytest.mark.parametrize("dataset", [QM9Dataset])
+def test_getitem_type_and_shape(dataset):
     """Test the __getitem__ method for type and shape consistency."""
-    d = QM9Dataset("tmp.hdf5", test_data=True)
+    d = dataset("tmp.hdf5", test_data=True)
     data_item = d[0]
     assert isinstance(data_item, tuple)
     assert data_item[0].shape[1] == 3  # Assuming 3D coordinates
     assert data_item[1].ndim == 1  # Atomic numbers should be 1D
+
+
+def test_GenericDataset():
+    # generate the npz file
+    d = QM9Dataset("tmp.hdf5", test_data=True)
+    d.load_or_process_data()
+    
+    g = GenericDataset("generic")

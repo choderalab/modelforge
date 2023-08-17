@@ -103,8 +103,7 @@ def test_download_dataset(dataset):
     d = dataset(dataset_name="tmp", test_data=True)
     assert d.dataset_name == "tmp_subset"
     train_dataloader = DataLoader(d, batch_size=64, shuffle=True)
-    all_batches = [b for b in train_dataloader]
-    assert len(all_batches) == 16  # (1_000 / 64 = 15.625)
+    assert len([b for b in train_dataloader]) == 16  # (1_000 / 64 = 15.625)
 
 
 @pytest.mark.parametrize("dataset", [QM9Dataset])
@@ -117,7 +116,7 @@ def test_dataset_length(dataset):
 @pytest.mark.parametrize("dataset", [QM9Dataset])
 def test_getitem_type_and_shape(dataset):
     """Test the __getitem__ method for type and shape consistency."""
-    d = dataset("tmp.hdf5", test_data=True)
+    d = dataset("tmp", test_data=True)
     data_item = d[0]
     assert isinstance(data_item, tuple)
     assert data_item[0].shape[1] == 3  # Assuming 3D coordinates
@@ -126,7 +125,10 @@ def test_getitem_type_and_shape(dataset):
 
 def test_GenericDataset():
     # generate the npz file
-    d = QM9Dataset("tmp.hdf5", test_data=True)
-    d.load_or_process_data()
-    
+    QM9Dataset("tmp", test_data=True).load_or_process_data()
+
     g = GenericDataset("generic")
+    dataset = np.load("tmp_subset_processed.npz")
+    g.dataset = dataset
+    train_dataloader = DataLoader(g, batch_size=64, shuffle=True)
+    assert len([b for b in train_dataloader]) == 16  # (1_000 / 64 = 15.625)

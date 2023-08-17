@@ -68,8 +68,8 @@ class QM9Dataset(BaseDataset):
         """
         max_len_species = max(len(arr) for arr in data["atomic_numbers"])
 
-        padded_coordinates = BaseDataset.pad_molecules(data["geometry"])
-        padded_atomic_numbers = BaseDataset.pad_to_max_length(
+        padded_coordinates = BaseDataset._pad_molecules(data["geometry"])
+        padded_atomic_numbers = BaseDataset._pad_to_max_length(
             data["atomic_numbers"], max_len_species
         )
         logger.debug(f"Writing data cache to {self.processed_dataset_file}")

@@ -8,7 +8,6 @@ import numpy as np
 import torch
 import tqdm
 from loguru import logger
-from torch.utils.data import DataLoader
 
 
 class BaseDataset(torch.utils.data.Dataset):
@@ -54,7 +53,7 @@ class BaseDataset(torch.utils.data.Dataset):
         return data
 
     @classmethod
-    def pad_to_max_length(
+    def _pad_to_max_length(
         cls, data: List[np.ndarray], max_length: int
     ) -> List[np.ndarray]:
         """
@@ -78,7 +77,7 @@ class BaseDataset(torch.utils.data.Dataset):
         ]
 
     @classmethod
-    def pad_molecules(cls, molecules: List[np.ndarray]) -> List[np.ndarray]:
+    def _pad_molecules(cls, molecules: List[np.ndarray]) -> List[np.ndarray]:
         """
         Pad molecules to ensure each has a consistent number of atoms.
 
@@ -139,23 +138,67 @@ class BaseDataset(torch.utils.data.Dataset):
         logger.info("Caching hdf5 file ...")
         self.to_npz(data)
 
-    @staticmethod
-    def is_gzipped(filename) -> bool:
+    @classmethod
+    def is_gzipped(cls, filename) -> bool:  # TODO: move to utils
         with open(filename, "rb") as f:
             # Read the first two bytes of the file
             file_start = f.read(2)
 
         return True if file_start == b"\x1f\x8b" else False
 
+    @classmethod
     def decompress_gziped_file(
-        self, compressed_file: str, uncompressed_file: str
-    ) -> None:
+        cls, compressed_file: str, uncompressed_file: str
+    ) -> None:  # TODO: move to utils
         import gzip
         import shutil
 
         with gzip.open(f"{compressed_file}", "rb") as f_in:
             with open(f"{uncompressed_file}", "wb") as f_out:
                 shutil.copyfileobj(f_in, f_out)
+
+    @property
+    def train_dataset(self) -> BaseAtomsData:
+        return self._train_dataset
+
+    @property
+    def val_dataset(self) -> BaseAtomsData:
+        return self._val_dataset
+
+    @property
+    def test_dataset(self) -> BaseAtomsData:
+        return self._test_dataset
+
+    def train_dataloader(self) -> AtomsLoader:
+        if self._train_dataloader is None:
+            self._train_dataloader = AtomsLoader(
+                self.train_dataset,
+                batch_size=self.batch_size,
+                num_workers=self.num_workers,
+                shuffle=True,
+                pin_memory=self._pin_memory,
+            )
+        return self._train_dataloader
+
+    def val_dataloader(self) -> AtomsLoader:
+        if self._val_dataloader is None:
+            self._val_dataloader = AtomsLoader(
+                self.val_dataset,
+                batch_size=self.val_batch_size,
+                num_workers=self.num_val_workers,
+                pin_memory=self._pin_memory,
+            )
+        return self._val_dataloader
+
+    def test_dataloader(self) -> AtomsLoader:
+        if self._test_dataloader is None:
+            self._test_dataloader = AtomsLoader(
+                self.test_dataset,
+                batch_size=self.test_batch_size,
+                num_workers=self.num_test_workers,
+                pin_memory=self._pin_memory,
+            )
+        return self._test_dataloader
 
 
 class GenericDataset(BaseDataset):
@@ -172,7 +215,7 @@ class GenericDataset(BaseDataset):
     ) -> None:
         """
         Initialize the GenericDataset class.
-        The dataset needs to be set as a Dict[str, np.ndarry] and it 
+        The dataset needs to be set as a Dict[str, np.ndarry] and it
         must contain the following keys: "coordinates", "atomic_numbers", and "return_energy"
 
         Parameters:

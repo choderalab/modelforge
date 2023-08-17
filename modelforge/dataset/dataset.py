@@ -1,128 +1,217 @@
 import os
 from abc import ABC, abstractmethod
+from collections import defaultdict
+from typing import Dict, List, Tuple
 
-import qcportal as ptl
+import h5py
+import numpy as np
 import torch
+import tqdm
 from loguru import logger
-from typing import Tuple
+from torch.utils.data import DataLoader
 
 
-class Dataset(torch.utils.data.Dataset, ABC):
-    """
-    Abstract Base Class representing a dataset.
+class BaseDataset(torch.utils.data.Dataset):
+    """Abstract base class for a dataset. This class is intended to be extended by
+    specific datasets, providing common functionality to load and cache data.
+
+    Attributes:
+        raw_dataset_file (str): Path to the raw dataset file (hdf5 format).
+        processed_dataset_file (str): Path to the processed dataset file (npz format).
+        dataset (np.ndarray or None): Loaded dataset.
     """
 
     def __init__(
         self,
-        dataset_file: str = "",
-    ):
-        self.dataset_file = dataset_file
-        self.dataset = self.load(dataset_file)
-        records_properties = self._dataset_records
-        (
-            self.molecules,
-            self.records,
-        ) = self.dataset.get_molecules(), self.dataset.get_records(
-            method=records_properties["method"],
-            basis=records_properties["basis"],
-            program=records_properties["program"],
-        )
-
-    @property
-    @abstractmethod
-    def _dataset_records(self):
+    ) -> None:
         """
-        Defines the dataset to be downloaded.
-        Three keys are required: 'method', 'basis', 'program'.
-        """
-        pass
-
-    @property
-    @abstractmethod
-    def qcportal_data(self):
-        """
-        Defines the qcportal data to be downloaded.
-        """
-        pass
-
-    def load(self, dataset_file):
-        """
-        Loads the raw dataset from qcarchive.
-
-        If a valid qcarchive generated hdf5 file is not passed to the
-        to the init function, the code will download the
-        raw dataset from qcarchive.
-        """
-        qcp_client = ptl.FractalClient()
-        qcportal_data = self.qcportal_data
-
-        try:
-            dataset = qcp_client.get_collection(
-                qcportal_data["collection"], qcportal_data["dataset"]
-            )
-        except Exception:
-            print(
-                f"Dataset {qcportal_data['dataset']} is not available in collection {qcportal_data['collection']}."
-            )
-
-        if dataset_file and os.path.isfile(dataset_file):
-            if not dataset_file.endswith(".hdf5"):
-                raise ValueError("Input file must be an .hdf5 file.")
-            logger.debug(f"Loading from {dataset_file}")
-            dataset.set_view(dataset_file)
-        else:
-            # If dataset_file was specified, but does not exist, the file will be downloaded from qcarchive and saved to the file/path specified by dataset_file
-            logger.debug(f"Downloading from qcportal")
-            if dataset_file is None:
-                dataset.download()
-            else:
-                if not dataset_file.endswith(".hdf5"):
-                    raise ValueError("File must be an .hdf5 file.")
-                dataset.download(dataset_file)
-        return dataset
-
-    def __len__(self):
-        return self.molecules.shape[0]
-
-    def __getitem__(
-        self, idx
-    ) -> Tuple[torch.Tensor, torch.Tensor]:  # Tuple[0] with dim=3, Tuple[1] with dim=1
-        """pytorch dataset getitem method to return a tuple of geometry and energy
+        Initializes the Dataset class.
 
         Args:
-            idx (int): _description_
+            load_in_memory (bool): Whether to load the entire dataset into memory.
+        """
+        self.raw_dataset_file = f"{self.dataset_name}_cache.hdf5"
+        self.processed_dataset_file = f"{self.dataset_name}_processed.npz"
+
+    def load_or_process_data():
+        raise NotImplementedError
+
+    def from_hdf5(self) -> Dict[str, List]:
+        """
+        Processes and extracts data from an hdf5 file.
 
         Returns:
-            Tuple[torch.Tensor, torch.Tensor]: returns a tuple of geometry and energy
+            Dict[str, List]: Processed data from the hdf5 file.
         """
-        geometry = torch.tensor(self.records.iloc[idx].record["geometry"])
-        energy = torch.tensor(self.records.iloc[idx].record["energy"])
+        logger.debug("Reading in and processing hdf5 file ...")
+        data = defaultdict(list)
+        logger.debug(f"Processing and extracting data from {self.raw_dataset_file}")
+        with h5py.File(self.raw_dataset_file, "r") as hf:
+            logger.debug(f"n_entries: {len(hf.keys())}")
+            for mol in tqdm.tqdm(list(hf.keys())):
+                for value in self.keywords_for_hdf5_dataset:
+                    data[value].append(hf[mol][value][()])
+        return data
 
-        if self.transform:
-            geometry = self.transform(geometry)
-        if self.target_transform:
-            energy = self.target_transform(energy)
+    @classmethod
+    def pad_to_max_length(
+        cls, data: List[np.ndarray], max_length: int
+    ) -> List[np.ndarray]:
+        """
+        Pad each array in the data list to a specified maximum length.
 
-        return geometry, energy
+        Parameters:
+        -----------
+        data : List[np.ndarray]
+            List of arrays to be padded.
+        max_length : int
+            Desired length for each array after padding.
+
+        Returns:
+        --------
+        List[np.ndarray]
+            List of padded arrays.
+        """
+        return [
+            np.pad(arr, (0, max_length - len(arr)), "constant", constant_values=-1)
+            for arr in data
+        ]
+
+    @classmethod
+    def pad_molecules(cls, molecules: List[np.ndarray]) -> List[np.ndarray]:
+        """
+        Pad molecules to ensure each has a consistent number of atoms.
+
+        Parameters:
+        -----------
+        molecules : List[np.ndarray]
+            List of molecules to be padded.
+
+        Returns:
+        --------
+        List[np.ndarray]
+            List of padded molecules.
+        """
+        max_atoms = max(mol.shape[0] for mol in molecules)
+        return [
+            np.pad(
+                mol,
+                ((0, max_atoms - mol.shape[0]), (0, 0)),
+                mode="constant",
+                constant_values=(-1, -1),
+            )
+            for mol in molecules
+        ]
+
+    def from_file_cache(self) -> None:
+        """
+        Loads data from the cached dataset file.
+        """
+        logger.info(f"Loading cached dataset_file {self.processed_dataset_file}")
+        self.dataset = self._load()
+
+    def _load(self) -> np.ndarray:
+        """
+        Loads and returns the dataset from the npz file.
+
+        Returns:
+            np.ndarray: Loaded dataset.
+        """
+        return np.load(self.processed_dataset_file)
+
+    def download_hdf_file(self):
+        """
+        Abstract method to download the hdf5 file. This method should be implemented by
+        the child classes.
+
+        Raises:
+            NotImplementedError: If the child class does not implement this method.
+        """
+        raise NotImplementedError
+
+    def to_file_cache(self, data):
+        """
+        Saves the processed data to a file cache in npz format.
+
+        Args:
+            data (Dict[str, List]): Data to be saved to cache.
+        """
+        logger.info("Caching hdf5 file ...")
+        self.to_npz(data)
+
+    @staticmethod
+    def is_gzipped(filename) -> bool:
+        with open(filename, "rb") as f:
+            # Read the first two bytes of the file
+            file_start = f.read(2)
+
+        return True if file_start == b"\x1f\x8b" else False
+
+    def decompress_gziped_file(
+        self, compressed_file: str, uncompressed_file: str
+    ) -> None:
+        import gzip
+        import shutil
+
+        with gzip.open(f"{compressed_file}", "rb") as f_in:
+            with open(f"{uncompressed_file}", "wb") as f_out:
+                shutil.copyfileobj(f_in, f_out)
 
 
-class QM9Dataset(Dataset):
+class GenericDataset(BaseDataset):
     """
-    QM9 dataset as curated by qcarchive.
+    Dataset class for handling QM9 data.
+
+    Provides utilities for processing and interacting with generaic data passed as np.array.
+    Also allows for lazy loading of data or caching in memory for faster operations.
     """
 
-    @property
-    def qcportal_data(self):
-        return {"collection": "Dataset", "dataset": "QM9"}
+    def __init__(
+        self,
+        dataset_name: str,
+    ) -> None:
+        """
+        Initialize the GenericDataset class.
+        The dataset needs to be set as a Dict[str, np.ndarry] and it 
+        must contain the following keys: "coordinates", "atomic_numbers", and "return_energy"
 
-    @property
-    def name(self):
-        return "QM9"
+        Parameters:
+        -----------
+        dataset_name : str
+            Name of the dataset.
+        """
 
-    @property
-    def _dataset_records(self):
-        return {
-            "method": "b3lyp",
-            "basis": "6-31g",
-            "program": "psi4",
-        }
+        self.dataset_name = dataset_name
+
+        super().__init__()
+
+    def __len__(self) -> int:
+        """
+        Return the number of datapoints in the dataset.
+
+        Returns:
+        --------
+        int
+            Total number of datapoints available in the dataset.
+        """
+        return len(self.dataset["atomic_numbers"])
+
+    def __getitem__(self, idx) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Fetch a tuple of geometry, atomic numbers, and energy for a given molecule index.
+
+        Parameters:
+        -----------
+        idx : int
+            Index of the molecule to fetch data for.
+
+        Returns:
+        --------
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+            Tuple containing tensors for geometry, atomic numbers, and energy of the molecule.
+        """
+        return (
+            torch.tensor(self.dataset["coordinates"][idx]),
+            torch.tensor(self.dataset["atomic_numbers"][idx]),
+            torch.tensor(self.dataset["return_energy"][idx]),
+        )

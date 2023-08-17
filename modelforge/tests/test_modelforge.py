@@ -16,11 +16,3 @@ def test_modelforge_imported():
     assert "modelforge" in sys.modules
 
 
-# Assert that a certain exception is raised
-def f():
-    raise SystemExit(1)
-
-
-def test_mytest():
-    with pytest.raises(SystemExit):
-        f()

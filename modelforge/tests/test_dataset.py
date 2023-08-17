@@ -114,6 +114,16 @@ def test_dataset_length(dataset):
 
 
 @pytest.mark.parametrize("dataset", [QM9Dataset])
+def test_dataset_splitting(dataset):
+    """Test random_split on the the dataset."""
+    d = dataset("tmp", test_data=True)
+    training_d, validation_d, test_d = torch.utils.data.random_split(d, [800, 100, 100])
+    assert len(training_d) == 800
+    train_dataloader = DataLoader(training_d, batch_size=10, shuffle=True)
+    assert len([b for b in train_dataloader]) == 80  # (800 / 10 = 80)
+
+
+@pytest.mark.parametrize("dataset", [QM9Dataset])
 def test_getitem_type_and_shape(dataset):
     """Test the __getitem__ method for type and shape consistency."""
     d = dataset("tmp", test_data=True)

@@ -9,67 +9,6 @@ from loguru import logger
 from .dataset import BaseDataset
 
 
-class PlainQM9Dataset(torch.utils.data.Dataset):
-    """
-    Abstract Base Class representing a dataset.
-    load_data: If True, loads all the data immediately into RAM. Use this if
-    the dataset is fits into memory. Otherwise, leave this at false and
-    the data will load lazily.
-
-    """
-
-    def __init__(self, dataset_name: str = "QM9", load_in_memory: bool = False) -> None:
-        """initialize the Dataset class."""
-        self.dataset_name = dataset_name
-        self.raw_dataset_file: str = f"{self.dataset_name}_cache.hdf5"
-        self.processed_dataset_file: str = f"{self.dataset_name}_processed.hdf5"
-        self.chunk_size: int = 500
-        self.hdf_fh = h5py.File(f"{self.raw_dataset_file}", "r")
-        self.molecules = [mol for mol in self.hdf_fh.keys()]
-        self.molecule_cache = {}
-
-        logger.debug(f"Nr of mols: {self.__len__()}")
-        print(f"Nr of mols: {self.__len__()}")
-
-        if load_in_memory:
-            self.cache_in_memory()
-
-    def cache_in_memory(self):
-        """load the dataset into memory."""
-
-        for mol_idx in range(len(self.molecules)):
-            self.molecule_cache[mol_idx] = (
-                self.hdf_fh[self.molecules[mol_idx]]["geometry"][()],
-                self.hdf_fh[self.molecules[mol_idx]]["return_energy"][()],
-                self.hdf_fh[self.molecules[mol_idx]]["atomic_numbers"][()],
-            )
-        self.hdf_fh.close()
-        self.hdf_fh = None
-
-    def __len__(self) -> int:
-        return len(self.molecules)
-
-    def __getitem__(
-        self, idx
-    ) -> Tuple[torch.Tensor, torch.Tensor]:  # Tuple[0] with dim=3, Tuple[1] with dim=1
-        """pytorch dataset getitem method to return a tuple of geometry and energy.
-        if a .
-
-        Args:
-            idx (int): _description_
-
-        Returns:
-            Tuple[torch.Tensor, torch.Tensor]: returns a tuple of geometry and energy
-        """
-        if self.load_in_memory:
-            return self.molecule_cache[idx]
-
-        geometry = torch.tensor(self.hdf_fh[self.molecules[idx]]["geometry"][()])
-        energy = torch.tensor(self.hdf_fh[self.molecules[idx]]["return_energy"][()])
-        species = torch.tensor(self.hdf_fh[self.molecules[idx]]["atomic_numbers"][()])
-        return (species, geometry, energy)
-
-
 class QM9Dataset(BaseDataset):
     """
     Dataset class for handling QM9 data.
@@ -81,6 +20,7 @@ class QM9Dataset(BaseDataset):
     def __init__(
         self,
         dataset_name: str = "QM9",
+        load_in_memory: bool = True,
         test_data: bool = False,
     ) -> None:
         """
@@ -101,8 +41,8 @@ class QM9Dataset(BaseDataset):
         self.dataset_name = dataset_name
         self.keywords_for_hdf5_dataset = ["geometry", "atomic_numbers", "return_energy"]
         self.test_data = test_data
+        self._dataset = None  # private _dataset attribute
         super().__init__()
-        self.load_or_process_data()
 
     def load_or_process_data(self) -> None:
         """
@@ -202,3 +142,16 @@ class QM9Dataset(BaseDataset):
             torch.tensor(self.dataset["atomic_numbers"][idx]),
             torch.tensor(self.dataset["return_energy"][idx]),
         )
+
+    @property
+    def dataset(self) -> Dict[str, np.ndarray]:
+        """Getter for dataset. Loads the dataset if not already loaded."""
+        if self._dataset is None:
+            self.load_or_process_data()
+
+        return self._dataset
+
+    @dataset.setter
+    def dataset(self, value: Dict[str, np.ndarray]):
+        """Setter for dataset. Sets the dataset value."""
+        self._dataset = value

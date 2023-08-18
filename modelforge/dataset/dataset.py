@@ -217,15 +217,6 @@ class HDF5Dataset:
                     data[value].append(hf[mol][value][()])
         return data
 
-    def _load(self) -> np.ndarray:
-        """
-        Loads and returns the dataset from the npz file.
-
-        Returns:
-            np.ndarray: Loaded dataset.
-        """
-        return np.load(self.processed_dataset_file)
-
 
 class DatasetFactory:
     """

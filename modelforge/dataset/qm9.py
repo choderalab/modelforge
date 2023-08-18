@@ -2,20 +2,43 @@ import os
 from typing import Any, Dict, List, Tuple
 
 import gdown
-import h5py
 import numpy as np
-import torch
 from loguru import logger
 from .utils import PadTensors, is_gzipped, decompress_gziped_file
 from .dataset import HDF5Dataset
 
 
+class DatasetDownloader:
+    """
+    Utility class for downloading datasets.
+    """
+
+    @staticmethod
+    def download_from_gdrive(for_testing: bool, raw_dataset_file: str):
+        """
+        Downloads a dataset from Google Drive.
+
+        Args:
+            for_testing (bool): If True, downloads a test subset of the dataset. Otherwise, downloads the full dataset.
+            raw_dataset_file (str): Path to save the downloaded dataset.
+        """
+
+        test_id = "13ott0kVaCGnlv858q1WQdOwOpL7IX5Q9"
+        full_id = "1_bSdQjEvI67Tk_LKYbW0j8nmggnb5MoU"
+        id = test_id if for_testing else full_id
+        url = f"https://drive.google.com/uc?id={id}"
+        gdown.download(url, raw_dataset_file, quiet=False)
+
+        if is_gzipped(raw_dataset_file):
+            logger.debug("Decompressing gzipped file")
+            os.rename(f"{raw_dataset_file}", f"{raw_dataset_file}.gz")
+            decompress_gziped_file(f"{raw_dataset_file}.gz", raw_dataset_file)
+
+
 class QM9Dataset(HDF5Dataset):
     """
-    Dataset class for handling QM9 data.
-
-    Provides utilities for processing and interacting with QM9 data stored in hdf5 format.
-    Also allows for lazy loading of data or caching in memory for faster operations.
+    Dataset class for handling QM9 data. Provides utilities for processing and
+    interacting with QM9 data stored in hdf5 format.
     """
 
     def __init__(
@@ -26,32 +49,25 @@ class QM9Dataset(HDF5Dataset):
         """
         Initialize the QM9Dataset class.
 
-        Parameters:
-        -----------
-        dataset_name : str
-            Name of the dataset, default is "QM9".
-        load_in_memory : bool
-            Flag to determine if the dataset should be loaded into memory, default is True.
-        test_data : bool
-            If set to true it will only load a small fraction of the QM9 dataset.
+        Args:
+            dataset_name (str): Name of the dataset, default is "QM9".
+            for_testing (bool): If set to True, a subset of the dataset is used for testing purposes.
         """
 
         if for_testing:
             dataset_name = f"{dataset_name}_subset"
+
+        super().__init__(f"{dataset_name}_cache.hdf5", f"{dataset_name}_processed.npz")
         self.dataset_name = dataset_name
         self.keywords_for_hdf5_dataset = ["geometry", "atomic_numbers", "return_energy"]
         self.for_testing = for_testing
-        self.raw_dataset_file = f"{dataset_name}_cache.hdf5"
-        self.processed_dataset_file = f"{dataset_name}_processed.npz"
 
     def to_npz(self, data: Dict[str, Any]) -> None:
         """
         Save processed data to a numpy (.npz) file.
 
-        Parameters:
-        -----------
-        data : Dict[str, Any]
-            Dictionary containing processed data to be saved.
+        Args:
+            data (Dict[str, Any]): Dictionary containing processed data to be saved.
         """
         max_len_species = max(len(arr) for arr in data["atomic_numbers"])
 
@@ -68,31 +84,9 @@ class QM9Dataset(HDF5Dataset):
             return_energy=np.array(data["return_energy"]),
         )
 
-    def _download_from_gdrive(self):
-        """Internal method to download the dataset from Google Drive."""
-
-        test_id = "13ott0kVaCGnlv858q1WQdOwOpL7IX5Q9"
-        full_id = "1_bSdQjEvI67Tk_LKYbW0j8nmggnb5MoU"
-        if self.for_testing:
-            logger.debug("Downloading test data")
-            id = test_id
-        else:
-            logger.debug("Downloading full dataset")
-
-            id = full_id
-        url = f"https://drive.google.com/uc?id={id}"
-        gdown.download(url, self.raw_dataset_file, quiet=False)
-
-        if is_gzipped(self.raw_dataset_file):
-            logger.debug("Decompressing gzipped file")
-            os.rename(f"{self.raw_dataset_file}", f"{self.raw_dataset_file}.gz")
-            decompress_gziped_file(f"{self.raw_dataset_file}.gz", self.raw_dataset_file)
-
     def download_hdf_file(self):
         """
-        Download the hdf5 file containing the dataset.
-
-        Fetches the dataset from the specified source (Google Drive in this case)
-        and saves it in hdf5 format.
+        Download the hdf5 file containing the dataset from Google Drive.
         """
-        self._download_from_gdrive()
+
+        DatasetDownloader.download_from_gdrive(self.for_testing, self.raw_dataset_file)

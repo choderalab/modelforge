@@ -6,8 +6,8 @@ import pytest
 import torch
 from torch.utils.data import DataLoader
 
-from modelforge.dataset.dataset import DatasetFactory
-from modelforge.dataset.qm9 import QM9Dataset
+from modelforge.dataset.dataset import DatasetFactory, FileCache
+from modelforge.dataset.qm9 import QM9Dataset, DatasetDownloader
 
 DATASETS = [QM9Dataset]
 
@@ -150,22 +150,52 @@ def test_dataset_splitting(dataset_properties):
     assert len(dataset.train_dataset) == 600
 
 
-# @pytest.mark.parametrize("dataset", [QM9Dataset])
-# def test_getitem_type_and_shape(dataset):
-#     """Test the __getitem__ method for type and shape consistency."""
-#     d = dataset("tmp", test_data=True)
-#     data_item = d[0]
-#     assert isinstance(data_item, tuple)
-#     assert data_item[0].shape[1] == 3  # Assuming 3D coordinates
-#     assert data_item[1].ndim == 1  # Atomic numbers should be 1D
+@pytest.mark.parametrize("dataset_properties", DATASETS)
+def test_file_cache_methods(dataset_properties):
+    """
+    Test the FileCache methods to ensure data is cached and loaded correctly.
+    """
+    prop = dataset_properties(for_testing=True)
+    data = prop.from_hdf5()
+    FileCache.to_file_cache(data, prop.processed_dataset_file)
+    loaded_data = FileCache.from_file_cache(prop.processed_dataset_file)
+
+    for key in data:
+        assert np.array_equal(data[key], loaded_data[key])
 
 
-# def test_GenericDataset():
-#     # generate the npz file
-#     QM9Dataset("tmp", test_data=True).load_or_process_data()
+@pytest.mark.parametrize("dataset_properties", DATASETS)
+def test_dataset_downloader(dataset_properties):
+    """
+    Test the DatasetDownloader functionality.
+    """
+    prop = dataset_properties(for_testing=True)
+    DatasetDownloader.download_from_gdrive(True, prop.raw_dataset_file)
+    assert os.path.exists(prop.raw_dataset_file)
 
-#     g = GenericDataset("generic")
-#     dataset = np.load("tmp_subset_processed.npz")
-#     g.dataset = dataset
-#     train_dataloader = DataLoader(g, batch_size=64, shuffle=True)
-#     assert len([b for b in train_dataloader]) == 16  # (1_000 / 64 = 15.625)
+
+@pytest.mark.parametrize("dataset_properties", DATASETS)
+def test_numpy_dataset_assignment(dataset_properties):
+    """
+    Test if the numpy_dataset attribute is correctly assigned after processing or loading.
+    """
+    factory = DatasetFactory()
+    prop = dataset_properties(for_testing=True)
+    factory._load_or_process_data(prop)
+
+    assert hasattr(prop, "numpy_dataset")
+    assert isinstance(prop.numpy_dataset, np.ndarray)
+
+
+@pytest.mark.parametrize("dataset_properties", DATASETS)
+def test_dataset_dataloaders(dataset_properties):
+    """
+    Test if the data loaders return the expected batch sizes.
+    """
+    factory = DatasetFactory()
+    prop = dataset_properties(for_testing=True)
+    dataset = factory.create_dataset(prop)
+
+    for batch in dataset.train_dataloader:
+        assert len(batch) == 3  # coordinates, atomic_numbers, return_energy
+        assert batch[0].size(0) == 64  # default batch size

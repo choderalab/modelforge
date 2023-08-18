@@ -197,8 +197,10 @@ def test_dataset_dataloaders(dataset_properties):
     """
     factory = DatasetFactory()
     prop = dataset_properties(for_testing=True)
-    dataset = factory.create_dataset(prop)
+    dataset = factory.create_dataset(prop, num_workers=1)
 
     for batch in dataset.train_dataloader:
         assert len(batch) == 3  # coordinates, atomic_numbers, return_energy
-        assert batch[0].size(0) == 64  # default batch size
+        assert (
+            batch[0].size(0) == 64 or batch[0].size(0) == 32
+        )  # default batch size (last batch has sieze 32)

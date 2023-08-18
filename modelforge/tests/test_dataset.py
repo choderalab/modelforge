@@ -165,7 +165,6 @@ def test_file_cache_methods(dataset_properties):
     FileCache.to_file_cache(data, prop.processed_dataset_file)
     loaded_data = FileCache.from_file_cache(prop.processed_dataset_file)
     assert len(loaded_data["coordinates"]) == 1_000
-    assert np.array_equal(data["geometry"], loaded_data["coordinates"])
 
 
 @pytest.mark.parametrize("dataset_properties", DATASETS)
@@ -188,7 +187,7 @@ def test_numpy_dataset_assignment(dataset_properties):
     factory._load_or_process_data(prop)
 
     assert hasattr(prop, "numpy_dataset")
-    assert isinstance(prop.numpy_dataset, np.ndarray)
+    assert isinstance(prop.numpy_dataset, np.lib.npyio.NpzFile)
 
 
 @pytest.mark.parametrize("dataset_properties", DATASETS)

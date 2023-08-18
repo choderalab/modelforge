@@ -1,232 +1,20 @@
 import os
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional, Callable
 
 import h5py
 import numpy as np
 import torch
 import tqdm
 from loguru import logger
+from torch.utils.data import DataLoader
+from .utils import RandomSplittingStrategy, SplittingStrategy
 
 
-class BaseDataset(torch.utils.data.Dataset):
-    """Abstract base class for a dataset. This class is intended to be extended by
-    specific datasets, providing common functionality to load and cache data.
-
-    Attributes:
-        raw_dataset_file (str): Path to the raw dataset file (hdf5 format).
-        processed_dataset_file (str): Path to the processed dataset file (npz format).
-        dataset (np.ndarray or None): Loaded dataset.
-    """
-
-    def __init__(
-        self,
-    ) -> None:
-        """
-        Initializes the Dataset class.
-
-        Args:
-            load_in_memory (bool): Whether to load the entire dataset into memory.
-        """
-        self.raw_dataset_file = f"{self.dataset_name}_cache.hdf5"
-        self.processed_dataset_file = f"{self.dataset_name}_processed.npz"
-
-    def load_or_process_data():
-        raise NotImplementedError
-
-    def from_hdf5(self) -> Dict[str, List]:
-        """
-        Processes and extracts data from an hdf5 file.
-
-        Returns:
-            Dict[str, List]: Processed data from the hdf5 file.
-        """
-        logger.debug("Reading in and processing hdf5 file ...")
-        data = defaultdict(list)
-        logger.debug(f"Processing and extracting data from {self.raw_dataset_file}")
-        with h5py.File(self.raw_dataset_file, "r") as hf:
-            logger.debug(f"n_entries: {len(hf.keys())}")
-            for mol in tqdm.tqdm(list(hf.keys())):
-                for value in self.keywords_for_hdf5_dataset:
-                    data[value].append(hf[mol][value][()])
-        return data
-
-    @classmethod
-    def _pad_to_max_length(
-        cls, data: List[np.ndarray], max_length: int
-    ) -> List[np.ndarray]:
-        """
-        Pad each array in the data list to a specified maximum length.
-
-        Parameters:
-        -----------
-        data : List[np.ndarray]
-            List of arrays to be padded.
-        max_length : int
-            Desired length for each array after padding.
-
-        Returns:
-        --------
-        List[np.ndarray]
-            List of padded arrays.
-        """
-        return [
-            np.pad(arr, (0, max_length - len(arr)), "constant", constant_values=-1)
-            for arr in data
-        ]
-
-    @classmethod
-    def _pad_molecules(cls, molecules: List[np.ndarray]) -> List[np.ndarray]:
-        """
-        Pad molecules to ensure each has a consistent number of atoms.
-
-        Parameters:
-        -----------
-        molecules : List[np.ndarray]
-            List of molecules to be padded.
-
-        Returns:
-        --------
-        List[np.ndarray]
-            List of padded molecules.
-        """
-        max_atoms = max(mol.shape[0] for mol in molecules)
-        return [
-            np.pad(
-                mol,
-                ((0, max_atoms - mol.shape[0]), (0, 0)),
-                mode="constant",
-                constant_values=(-1, -1),
-            )
-            for mol in molecules
-        ]
-
-    def from_file_cache(self) -> None:
-        """
-        Loads data from the cached dataset file.
-        """
-        logger.info(f"Loading cached dataset_file {self.processed_dataset_file}")
-        self.dataset = self._load()
-
-    def _load(self) -> np.ndarray:
-        """
-        Loads and returns the dataset from the npz file.
-
-        Returns:
-            np.ndarray: Loaded dataset.
-        """
-        return np.load(self.processed_dataset_file)
-
-    def download_hdf_file(self):
-        """
-        Abstract method to download the hdf5 file. This method should be implemented by
-        the child classes.
-
-        Raises:
-            NotImplementedError: If the child class does not implement this method.
-        """
-        raise NotImplementedError
-
-    def to_file_cache(self, data):
-        """
-        Saves the processed data to a file cache in npz format.
-
-        Args:
-            data (Dict[str, List]): Data to be saved to cache.
-        """
-        logger.info("Caching hdf5 file ...")
-        self.to_npz(data)
-
-    @classmethod
-    def is_gzipped(cls, filename) -> bool:  # TODO: move to utils
-        with open(filename, "rb") as f:
-            # Read the first two bytes of the file
-            file_start = f.read(2)
-
-        return True if file_start == b"\x1f\x8b" else False
-
-    @classmethod
-    def decompress_gziped_file(
-        cls, compressed_file: str, uncompressed_file: str
-    ) -> None:  # TODO: move to utils
-        import gzip
-        import shutil
-
-        with gzip.open(f"{compressed_file}", "rb") as f_in:
-            with open(f"{uncompressed_file}", "wb") as f_out:
-                shutil.copyfileobj(f_in, f_out)
-
-    @property
-    def train_dataset(self) -> BaseAtomsData:
-        return self._train_dataset
-
-    @property
-    def val_dataset(self) -> BaseAtomsData:
-        return self._val_dataset
-
-    @property
-    def test_dataset(self) -> BaseAtomsData:
-        return self._test_dataset
-
-    def train_dataloader(self) -> AtomsLoader:
-        if self._train_dataloader is None:
-            self._train_dataloader = AtomsLoader(
-                self.train_dataset,
-                batch_size=self.batch_size,
-                num_workers=self.num_workers,
-                shuffle=True,
-                pin_memory=self._pin_memory,
-            )
-        return self._train_dataloader
-
-    def val_dataloader(self) -> AtomsLoader:
-        if self._val_dataloader is None:
-            self._val_dataloader = AtomsLoader(
-                self.val_dataset,
-                batch_size=self.val_batch_size,
-                num_workers=self.num_val_workers,
-                pin_memory=self._pin_memory,
-            )
-        return self._val_dataloader
-
-    def test_dataloader(self) -> AtomsLoader:
-        if self._test_dataloader is None:
-            self._test_dataloader = AtomsLoader(
-                self.test_dataset,
-                batch_size=self.test_batch_size,
-                num_workers=self.num_test_workers,
-                pin_memory=self._pin_memory,
-            )
-        return self._test_dataloader
-
-
-class GenericDataset(BaseDataset):
-    """
-    Dataset class for handling QM9 data.
-
-    Provides utilities for processing and interacting with generaic data passed as np.array.
-    Also allows for lazy loading of data or caching in memory for faster operations.
-    """
-
-    def __init__(
-        self,
-        dataset_name: str,
-    ) -> None:
-        """
-        Initialize the GenericDataset class.
-        The dataset needs to be set as a Dict[str, np.ndarry] and it
-        must contain the following keys: "coordinates", "atomic_numbers", and "return_energy"
-
-        Parameters:
-        -----------
-        dataset_name : str
-            Name of the dataset.
-        """
-
-        self.dataset_name = dataset_name
-
-        super().__init__()
+class TorchDataset(torch.utils.data.Dataset):
+    def __init__(self, dataset: np.ndarray):
+        self.dataset = dataset
 
     def __len__(self) -> int:
         """
@@ -257,4 +45,171 @@ class GenericDataset(BaseDataset):
             torch.tensor(self.dataset["coordinates"][idx]),
             torch.tensor(self.dataset["atomic_numbers"][idx]),
             torch.tensor(self.dataset["return_energy"][idx]),
+        )
+
+
+class Dataset:
+    def __init__(
+        self,
+        dataset: np.ndarray,
+        splitting: Callable,
+        batch_size: int = 64,
+        num_workers: int = 4,
+        pin_memory: bool = True,
+    ):
+        self.dataset = TorchDataset(dataset)
+        self.split = splitting
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self._pin_memory = pin_memory
+        self._train_dataloader = None
+        self._test_dataloader = None
+        self._val_dataloader = None
+        self._train_dataset, self._val_dataset, self._test_dataset = self.split(
+            self.dataset
+        )
+
+    @property
+    def train_dataset(self) -> TorchDataset:
+        return self._train_dataset
+
+    @property
+    def val_dataset(self) -> TorchDataset:
+        return self._val_dataset
+
+    @property
+    def test_dataset(self) -> TorchDataset:
+        return self._test_dataset
+
+    @property
+    def train_dataloader(self) -> DataLoader:
+        if self._train_dataloader is None:
+            self._train_dataloader = DataLoader(
+                self.train_dataset,
+                batch_size=self.batch_size,
+                num_workers=self.num_workers,
+                shuffle=True,
+                pin_memory=self._pin_memory,
+            )
+        return self._train_dataloader
+
+    @property
+    def val_dataloader(self) -> DataLoader:
+        if self._val_dataloader is None:
+            self._val_dataloader = DataLoader(
+                self.val_dataset,
+                batch_size=self.val_batch_size,
+                num_workers=self.num_val_workers,
+                pin_memory=self._pin_memory,
+            )
+        return self._val_dataloader
+
+    @property
+    def test_dataloader(self) -> DataLoader:
+        if self._test_dataloader is None:
+            self._test_dataloader = DataLoader(
+                self.test_dataset,
+                batch_size=self.test_batch_size,
+                num_workers=self.num_test_workers,
+                pin_memory=self._pin_memory,
+            )
+        return self._test_dataloader
+
+
+class HDF5Dataset(ABC):
+    def from_hdf5(self) -> Dict[str, List]:
+        """
+        Processes and extracts data from an hdf5 file.
+
+        Returns:
+            Dict[str, List]: Processed data from the hdf5 file.
+        """
+        logger.debug("Reading in and processing hdf5 file ...")
+        data = defaultdict(list)
+        logger.debug(f"Processing and extracting data from {self.raw_dataset_file}")
+        with h5py.File(self.raw_dataset_file, "r") as hf:
+            logger.debug(f"n_entries: {len(hf.keys())}")
+            for mol in tqdm.tqdm(list(hf.keys())):
+                for value in self.keywords_for_hdf5_dataset:
+                    data[value].append(hf[mol][value][()])
+        return data
+
+    def from_file_cache(self) -> None:
+        """
+        Loads data from the cached dataset file.
+        """
+        logger.info(f"Loading cached dataset_file {self.processed_dataset_file}")
+        self.numpy_dataset = self._load()
+
+    def _load(self) -> np.ndarray:
+        """
+        Loads and returns the dataset from the npz file.
+
+        Returns:
+            np.ndarray: Loaded dataset.
+        """
+        return np.load(self.processed_dataset_file)
+
+    def to_file_cache(self, data):
+        """
+        Saves the processed data to a file cache in npz format.
+
+        Args:
+            data (Dict[str, List]): Data to be saved to cache.
+        """
+        logger.info("Caching hdf5 file ...")
+        self.to_npz(data)
+
+
+class DatasetFactory:
+    """Abstract base class for a dataset. This class is intended to be extended by
+    specific datasets, providing common functionality to load and cache data.
+
+    Attributes:
+        raw_dataset_file (str): Path to the raw dataset file (hdf5 format).
+        processed_dataset_file (str): Path to the processed dataset file (npz format).
+        dataset (np.ndarray or None): Loaded dataset.
+    """
+
+    def __init__(
+        self,
+        # splitter: Optional[BaseSplittingStrategy] = None,
+    ) -> None:
+        """
+        Initializes the Dataset class.
+
+        Args:
+            load_in_memory (bool): Whether to load the entire dataset into memory.
+        """
+        pass
+
+    def load_or_process_data(self, dataset) -> None:
+        """
+        Loads the dataset from cache if available, otherwise processes and caches the data.
+        """
+
+        if not os.path.exists(dataset.processed_dataset_file):
+            if not os.path.exists(dataset.raw_dataset_file):
+                dataset.download_hdf_file()
+            data = dataset.from_hdf5()
+            dataset.to_file_cache(data)
+
+        dataset.from_file_cache()
+
+    def create_dataset(
+        self,
+        dataset: HDF5Dataset,
+        splitting=RandomSplittingStrategy().split,
+        batch_size=64,
+        num_workers=4,
+        pin_memory=False,
+    ) -> Dataset:
+        logger.info(f"Creating {dataset.dataset_name} dataset")
+        self.load_or_process_data(dataset)
+        return Dataset(
+            dataset.numpy_dataset,
+            splitting=splitting,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            pin_memory=pin_memory,
         )

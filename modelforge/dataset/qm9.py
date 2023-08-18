@@ -6,10 +6,11 @@ import h5py
 import numpy as np
 import torch
 from loguru import logger
-from .dataset import BaseDataset
+from .utils import PadTensors, is_gzipped, decompress_gziped_file
+from .dataset import HDF5Dataset
 
 
-class QM9Dataset(BaseDataset):
+class QM9Dataset(HDF5Dataset):
     """
     Dataset class for handling QM9 data.
 
@@ -20,8 +21,7 @@ class QM9Dataset(BaseDataset):
     def __init__(
         self,
         dataset_name: str = "QM9",
-        load_in_memory: bool = True,
-        test_data: bool = False,
+        for_testing: bool = False,
     ) -> None:
         """
         Initialize the QM9Dataset class.
@@ -36,26 +36,13 @@ class QM9Dataset(BaseDataset):
             If set to true it will only load a small fraction of the QM9 dataset.
         """
 
-        if test_data:
+        if for_testing:
             dataset_name = f"{dataset_name}_subset"
         self.dataset_name = dataset_name
         self.keywords_for_hdf5_dataset = ["geometry", "atomic_numbers", "return_energy"]
-        self.test_data = test_data
-        self._dataset = None  # private _dataset attribute
-        super().__init__()
-
-    def load_or_process_data(self) -> None:
-        """
-        Loads the dataset from cache if available, otherwise processes and caches the data.
-        """
-
-        if not os.path.exists(self.processed_dataset_file):
-            if not os.path.exists(self.raw_dataset_file):
-                self.download_hdf_file()
-            data = self.from_hdf5()
-            self.to_file_cache(data)
-
-        self.from_file_cache()
+        self.for_testing = for_testing
+        self.raw_dataset_file = f"{dataset_name}_cache.hdf5"
+        self.processed_dataset_file = f"{dataset_name}_processed.npz"
 
     def to_npz(self, data: Dict[str, Any]) -> None:
         """
@@ -68,8 +55,8 @@ class QM9Dataset(BaseDataset):
         """
         max_len_species = max(len(arr) for arr in data["atomic_numbers"])
 
-        padded_coordinates = BaseDataset._pad_molecules(data["geometry"])
-        padded_atomic_numbers = BaseDataset._pad_to_max_length(
+        padded_coordinates = PadTensors.pad_molecules(data["geometry"])
+        padded_atomic_numbers = PadTensors.pad_to_max_length(
             data["atomic_numbers"], max_len_species
         )
         logger.debug(f"Writing data cache to {self.processed_dataset_file}")
@@ -86,7 +73,7 @@ class QM9Dataset(BaseDataset):
 
         test_id = "13ott0kVaCGnlv858q1WQdOwOpL7IX5Q9"
         full_id = "1_bSdQjEvI67Tk_LKYbW0j8nmggnb5MoU"
-        if self.test_data:
+        if self.for_testing:
             logger.debug("Downloading test data")
             id = test_id
         else:
@@ -96,12 +83,10 @@ class QM9Dataset(BaseDataset):
         url = f"https://drive.google.com/uc?id={id}"
         gdown.download(url, self.raw_dataset_file, quiet=False)
 
-        if self.is_gzipped(self.raw_dataset_file):
+        if is_gzipped(self.raw_dataset_file):
             logger.debug("Decompressing gzipped file")
             os.rename(f"{self.raw_dataset_file}", f"{self.raw_dataset_file}.gz")
-            self.decompress_gziped_file(
-                f"{self.raw_dataset_file}.gz", self.raw_dataset_file
-            )
+            decompress_gziped_file(f"{self.raw_dataset_file}.gz", self.raw_dataset_file)
 
     def download_hdf_file(self):
         """
@@ -111,47 +96,3 @@ class QM9Dataset(BaseDataset):
         and saves it in hdf5 format.
         """
         self._download_from_gdrive()
-
-    def __len__(self) -> int:
-        """
-        Return the number of datapoints in the dataset.
-
-        Returns:
-        --------
-        int
-            Total number of datapoints available in the dataset.
-        """
-        return len(self.dataset["atomic_numbers"])
-
-    def __getitem__(self, idx) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Fetch a tuple of geometry, atomic numbers, and energy for a given molecule index.
-
-        Parameters:
-        -----------
-        idx : int
-            Index of the molecule to fetch data for.
-
-        Returns:
-        --------
-        Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-            Tuple containing tensors for geometry, atomic numbers, and energy of the molecule.
-        """
-        return (
-            torch.tensor(self.dataset["coordinates"][idx]),
-            torch.tensor(self.dataset["atomic_numbers"][idx]),
-            torch.tensor(self.dataset["return_energy"][idx]),
-        )
-
-    @property
-    def dataset(self) -> Dict[str, np.ndarray]:
-        """Getter for dataset. Loads the dataset if not already loaded."""
-        if self._dataset is None:
-            self.load_or_process_data()
-
-        return self._dataset
-
-    @dataset.setter
-    def dataset(self, value: Dict[str, np.ndarray]):
-        """Setter for dataset. Sets the dataset value."""
-        self._dataset = value

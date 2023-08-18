@@ -9,7 +9,7 @@ import torch
 import tqdm
 from loguru import logger
 from torch.utils.data import DataLoader
-from .utils import RandomSplittingStrategy, SplittingStrategy
+from .utils import RandomSplittingStrategy, SplittingStrategy, PadTensors
 
 
 class TorchDataset(torch.utils.data.Dataset):
@@ -163,7 +163,7 @@ class FileCache:
     """
 
     @staticmethod
-    def from_file_cache(processed_dataset_file) -> np.ndarray:
+    def from_file_cache(processed_dataset_file: str) -> np.ndarray:
         """
         Loads the dataset from a cached file.
 
@@ -177,17 +177,28 @@ class FileCache:
         return np.load(processed_dataset_file)
 
     @staticmethod
-    def to_file_cache(hdf_dataset, data):
+    def to_file_cache(data: Dict[str, list], processed_dataset_file: str) -> None:
         """
-        Caches the processed dataset into a file.
+        Save processed data to a numpy (.npz) file.
 
         Args:
-            hdf_dataset :HDFDataset.
-            processed_dataset_file (str): Path to the file to cache the dataset.
+            data (Dict[str, Any]): Dictionary containing processed data to be saved.
+            processed_dataset_file (str): Path to save the processed dataset.
         """
-        logger.info("Caching hdf5 file ...")
-        # This assumes that there exists a 'to_npz' method which saves the data
-        hdf_dataset.to_npz(data)
+        max_len_species = max(len(arr) for arr in data["atomic_numbers"])
+
+        padded_coordinates = PadTensors.pad_molecules(data["geometry"])
+        padded_atomic_numbers = PadTensors.pad_to_max_length(
+            data["atomic_numbers"], max_len_species
+        )
+        logger.debug(f"Writing data cache to {processed_dataset_file}")
+
+        np.savez(
+            processed_dataset_file,
+            coordinates=padded_coordinates,
+            atomic_numbers=padded_atomic_numbers,
+            return_energy=np.array(data["return_energy"]),
+        )
 
 
 class HDF5Dataset:
@@ -245,7 +256,7 @@ class DatasetFactory:
             if not os.path.exists(dataset.raw_dataset_file):
                 dataset.download_hdf_file()
             data = dataset.from_hdf5()
-            FileCache.to_file_cache(dataset, data)
+            FileCache.to_file_cache(data, dataset.processed_dataset_file)
 
         dataset.numpy_dataset = FileCache.from_file_cache(
             dataset.processed_dataset_file

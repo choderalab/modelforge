@@ -62,28 +62,6 @@ class QM9Dataset(HDF5Dataset):
         self.keywords_for_hdf5_dataset = ["geometry", "atomic_numbers", "return_energy"]
         self.for_testing = for_testing
 
-    def to_npz(self, data: Dict[str, Any]) -> None:
-        """
-        Save processed data to a numpy (.npz) file.
-
-        Args:
-            data (Dict[str, Any]): Dictionary containing processed data to be saved.
-        """
-        max_len_species = max(len(arr) for arr in data["atomic_numbers"])
-
-        padded_coordinates = PadTensors.pad_molecules(data["geometry"])
-        padded_atomic_numbers = PadTensors.pad_to_max_length(
-            data["atomic_numbers"], max_len_species
-        )
-        logger.debug(f"Writing data cache to {self.processed_dataset_file}")
-
-        np.savez(
-            self.processed_dataset_file,
-            coordinates=padded_coordinates,
-            atomic_numbers=padded_atomic_numbers,
-            return_energy=np.array(data["return_energy"]),
-        )
-
     def download_hdf_file(self):
         """
         Download the hdf5 file containing the dataset from Google Drive.

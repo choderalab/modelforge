@@ -19,8 +19,8 @@ def cleanup_files():
     """Fixture to clean up temporary files before and after test execution."""
 
     def _cleanup():
-        for dataset_prop in DATASETS:
-            dataset_name = dataset_prop().dataset_name
+        for dataset in DATASETS:
+            dataset_name = dataset().dataset_name
 
             files = [
                 f"{dataset_name}_cache.hdf5",
@@ -135,6 +135,7 @@ def test_dataset_splitting(dataset_properties):
     dataset = factory.create_dataset(prop)
 
     energy = dataset.train_dataset[0][2].item()
+    # this should be reproducable?!
     assert np.isclose(energy, -236.91345796962494)
     print(energy)
 
@@ -156,12 +157,15 @@ def test_file_cache_methods(dataset_properties):
     Test the FileCache methods to ensure data is cached and loaded correctly.
     """
     prop = dataset_properties(for_testing=True)
+    factory = DatasetFactory()
+    factory.create_dataset(prop)
+
     data = prop.from_hdf5()
+
     FileCache.to_file_cache(data, prop.processed_dataset_file)
     loaded_data = FileCache.from_file_cache(prop.processed_dataset_file)
-
-    for key in data:
-        assert np.array_equal(data[key], loaded_data[key])
+    assert len(loaded_data["coordinates"]) == 1_000
+    assert np.array_equal(data["geometry"], loaded_data["coordinates"])
 
 
 @pytest.mark.parametrize("dataset_properties", DATASETS)

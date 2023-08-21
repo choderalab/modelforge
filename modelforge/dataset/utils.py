@@ -1,34 +1,65 @@
-# generates and retrieves hdf5 files from zenodo, defines the interaction with the hdf5 file
-from torch.utils.data import random_split
-import torch
-from typing import List
+from abc import ABC, abstractmethod
+from typing import Dict, List, Optional, Tuple
+
 import numpy as np
+import torch
 from loguru import logger
+from torch.utils.data import random_split
+
+from .dataset import TorchDataset
 
 
-class SplittingStrategy:
+class SplittingStrategy(ABC):
+    """
+    Base class for dataset splitting strategies.
+
+    Attributes
+    ----------
+    seed : int, optional
+        Random seed for reproducibility.
+    generator : torch.Generator, optional
+        Torch random number generator.
+    """
+
     def __init__(
         self,
-        seed: int,
+        seed: Optional[int] = None,
     ):
         self.seed = seed
-        torch.manual_seed(self.seed)
+        if self.seed is not None:
+            self.generator = torch.Generator().manual_seed(self.seed)
 
+    @abstractmethod
     def split():
+        """
+        Split the dataset.
+
+        Returns
+        -------
+        List[List[int]]
+            List of indices for each split.
+        """
+
         raise NotImplementedError
 
 
 class RandomSplittingStrategy(SplittingStrategy):
+    """
+    Strategy to split a dataset randomly.
+
+    Examples
+    --------
+    >>> dataset = [1, 2, 3, 4, 5]
+    >>> strategy = RandomSplittingStrategy(seed=42)
+    >>> train_idx, val_idx, test_idx = strategy.split(dataset)
+    """
+
     def __init__(self, seed: int = 42, split: List[float] = [0.8, 0.1, 0.1]):
         super().__init__(seed)
-        self.train_size = split[0]
-        self.val_size = split[1]
-        self.test_size = split[2]
-        assert np.isclose(sum(split), 1.0)
+        self.train_size, self.val_size, self.test_size = split[0], split[1], split[2]
+        assert np.isclose(sum(split), 1.0), "Splits must sum to 1.0"
 
-    def split(self, dataset) -> List[List[int]]:
-        torch.Generator().manual_seed(self.seed)
-
+    def split(self, dataset: TorchDataset) -> Tuple[List[int], List[int], List[int]]:
         logger.debug(f"Using random splitting strategy with seed {self.seed} ...")
         logger.debug(
             f"Splitting dataset into {self.train_size}, {self.val_size}, {self.test_size} ..."
@@ -37,76 +68,140 @@ class RandomSplittingStrategy(SplittingStrategy):
         train_d, val_d, test_d = random_split(
             dataset,
             lengths=[self.train_size, self.val_size, self.test_size],
+            generator=self.generator,
         )
 
         return (train_d, val_d, test_d)
 
 
-class PadTensors:
-    @classmethod
-    def pad_to_max_length(
-        cls, data: List[np.ndarray], max_length: int
-    ) -> List[np.ndarray]:
+class DataDownloader(ABC):
+    """
+    Utility class for downloading datasets.
+    """
+
+    @staticmethod
+    def _download_from_gdrive(id: str, raw_dataset_file: str):
         """
-        Pad each array in the data list to a specified maximum length.
+        Downloads a dataset from Google Drive.
 
-        Parameters:
-        -----------
-        data : List[np.ndarray]
-            List of arrays to be padded.
-        max_length : int
-            Desired length for each array after padding.
+        Parameters
+        ----------
+        id : str
+            Google Drive ID for the dataset.
+        raw_dataset_file : str
+            Path to save the downloaded dataset.
 
-        Returns:
+        Examples
         --------
-        List[np.ndarray]
-            List of padded arrays.
+        >>> _download_from_gdrive("1v2gV3sG9JhMZ5QZn3gFB9j5ZIs0Xjxz8", "data_file.hdf5")
         """
-        return [
-            np.pad(arr, (0, max_length - len(arr)), "constant", constant_values=-1)
-            for arr in data
-        ]
+        import gdown
 
-    @classmethod
-    def pad_molecules(cls, molecules: List[np.ndarray]) -> List[np.ndarray]:
-        """
-        Pad molecules to ensure each has a consistent number of atoms.
+        url = f"https://drive.google.com/uc?id={id}"
+        gdown.download(url, raw_dataset_file, quiet=False)
 
-        Parameters:
-        -----------
-        molecules : List[np.ndarray]
-            List of molecules to be padded.
-
-        Returns:
-        --------
-        List[np.ndarray]
-            List of padded molecules.
-        """
-        max_atoms = max(mol.shape[0] for mol in molecules)
-        return [
-            np.pad(
-                mol,
-                ((0, max_atoms - mol.shape[0]), (0, 0)),
-                mode="constant",
-                constant_values=(-1, -1),
-            )
-            for mol in molecules
-        ]
+    @abstractmethod
+    def download():
+        raise NotImplementedError
 
 
-def is_gzipped(filename) -> bool:
-    with open(filename, "rb") as f:
-        # Read the first two bytes of the file
-        file_start = f.read(2)
+def from_file_cache(processed_dataset_file: str) -> np.ndarray:
+    """
+    Loads the dataset from a cached file.
 
-    return True if file_start == b"\x1f\x8b" else False
+    Parameters
+    ----------
+    processed_dataset_file : str
+        Path to the cached dataset file.
+
+    Returns
+    -------
+    np.ndarray
+        The loaded dataset.
+
+    Examples
+    --------
+    >>> data = from_file_cache("data_file.npz")
+    """
+    logger.info(f"Loading cached dataset_file {processed_dataset_file}")
+    return np.load(processed_dataset_file)
 
 
-def decompress_gziped_file(compressed_file: str, uncompressed_file: str) -> None:
-    import gzip
-    import shutil
+def to_file_cache(
+    data: Dict[str, List[np.ndarray]], processed_dataset_file: str
+) -> None:
+    """
+    Save processed data to a numpy (.npz) file.
 
-    logger.debug(f"Unzipping {compressed_file} to {uncompressed_file} ")
-    with gzip.open(f"{compressed_file}", "rb") as f_in:
-        with open(f"{uncompressed_file}", "wb") as f_out:
-            shutil.copyfileobj(f_in, f_out)
+    Parameters
+    ----------
+    data : Dict[str, List[np.ndarray]]
+        Dictionary containing processed data to be saved.
+    processed_dataset_file : str
+        Path to save the processed dataset.
+
+    Examples
+    --------
+    >>> data = {"a": [1, 2, 3], "b": [4, 5, 6]}
+    >>> to_file_cache(data, "data_file.npz")
+    """
+    max_len_species = max(len(arr) for arr in data["atomic_numbers"])
+
+    padded_coordinates = pad_molecules(data["geometry"])
+    padded_atomic_numbers = pad_to_max_length(data["atomic_numbers"], max_len_species)
+    logger.debug(f"Writing data cache to {processed_dataset_file}")
+
+    np.savez(
+        processed_dataset_file,
+        coordinates=padded_coordinates,
+        atomic_numbers=padded_atomic_numbers,
+        return_energy=np.array(data["return_energy"]),
+    )
+
+
+def pad_to_max_length(data: List[np.ndarray], max_length: int) -> List[np.ndarray]:
+    """
+    Pad each array in the data list to a specified maximum length.
+
+    Parameters
+    ----------
+    data : List[np.ndarray]
+        List of arrays to be padded.
+    max_length : int
+        Desired length for each array after padding.
+
+    Returns
+    -------
+    List[np.ndarray]
+        List of padded arrays.
+    """
+    return [
+        np.pad(arr, (0, max_length - len(arr)), "constant", constant_values=-1)
+        for arr in data
+    ]
+
+
+def pad_molecules(molecules: List[np.ndarray]) -> List[np.ndarray]:
+    """
+    Pad molecules to ensure each has a consistent number of atoms.
+
+    Parameters:
+    -----------
+    molecules : List[np.ndarray]
+        List of molecules to be padded.
+
+    Returns:
+    --------
+    List[np.ndarray]
+        List of padded molecules.
+    """
+    max_atoms = max(mol.shape[0] for mol in molecules)
+    return [
+        np.pad(
+            mol,
+            ((0, max_atoms - mol.shape[0]), (0, 0)),
+            mode="constant",
+            constant_values=(-1, -1),
+        )
+        for mol in molecules
+    ]

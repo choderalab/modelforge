@@ -105,7 +105,7 @@ class DataDownloader(ABC):
         raise NotImplementedError
 
 
-def from_file_cache(processed_dataset_file: str) -> np.ndarray:
+def _from_file_cache(processed_dataset_file: str) -> np.ndarray:
     """
     Loads the dataset from a cached file.
 
@@ -121,13 +121,13 @@ def from_file_cache(processed_dataset_file: str) -> np.ndarray:
 
     Examples
     --------
-    >>> data = from_file_cache("data_file.npz")
+    >>> data = _from_file_cache("data_file.npz")
     """
     logger.info(f"Loading cached dataset_file {processed_dataset_file}")
     return np.load(processed_dataset_file)
 
 
-def to_file_cache(
+def _to_file_cache(
     data: Dict[str, List[np.ndarray]], processed_dataset_file: str
 ) -> None:
     """
@@ -143,7 +143,7 @@ def to_file_cache(
     Examples
     --------
     >>> data = {"a": [1, 2, 3], "b": [4, 5, 6]}
-    >>> to_file_cache(data, "data_file.npz")
+    >>> _to_file_cache(data, "data_file.npz")
     """
     max_len_species = max(len(arr) for arr in data["atomic_numbers"])
 

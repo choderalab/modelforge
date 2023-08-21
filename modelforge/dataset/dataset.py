@@ -72,14 +72,6 @@ class HDF5Dataset(ABC):
     processed_data_file : str
         Path to the processed data file.
 
-    Examples
-    --------
-    >>> class CustomData(HDF5Data):
-    ...     def _from_hdf5(self) -> Dict[str, List]:
-    ...         # Custom processing logic
-    ...         pass
-    ...
-    >>> data = CustomData("raw_file.hdf5", "processed_file.npz")
     """
 
     def __init__(self, raw_data_file: str, processed_data_file: str):
@@ -140,7 +132,7 @@ class DatasetFactory:
         dataset : HDF5Dataset
             The HDF5 dataset instance to use.
         """
-        from .utils import to_file_cache, from_file_cache
+        from .utils import _to_file_cache, _from_file_cache
 
         # if not cached, download and process
         if not os.path.exists(data.processed_data_file):
@@ -149,9 +141,9 @@ class DatasetFactory:
             # load from hdf5 and process
             numpy_data = data._from_hdf5()
             # save to cache
-            to_file_cache(numpy_data, data.processed_data_file)
+            _to_file_cache(numpy_data, data.processed_data_file)
         # load from cache
-        data.numpy_data = from_file_cache(data.processed_data_file)
+        data.numpy_data = _from_file_cache(data.processed_data_file)
 
     @staticmethod
     def create_dataset(

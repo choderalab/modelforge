@@ -160,7 +160,7 @@ def test_file_cache_methods(dataset):
     """
     Test the FileCache methods to ensure data is cached and loaded correctly.
     """
-    from modelforge.dataset.utils import to_file_cache, from_file_cache
+    from modelforge.dataset.utils import _to_file_cache, _from_file_cache
 
     # generate files to test _from_hdf5()
     _ = generate_dataset(dataset)
@@ -169,8 +169,8 @@ def test_file_cache_methods(dataset):
 
     numpy_data = data._from_hdf5()
 
-    to_file_cache(numpy_data, data.processed_data_file)
-    loaded_data = from_file_cache(data.processed_data_file)
+    _to_file_cache(numpy_data, data.processed_data_file)
+    loaded_data = _from_file_cache(data.processed_data_file)
     assert len(loaded_data["coordinates"]) == 1_000
 
 

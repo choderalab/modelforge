@@ -41,6 +41,11 @@ class QM9Dataset(HDF5Dataset, DataDownloader):
             Name of the dataset, by default "QM9".
         for_testing : bool, optional
             If set to True, a subset of the dataset is used for testing purposes, by default False.
+
+        Examples
+        --------
+        >>> data = QM9Dataset()  # Default dataset
+        >>> test_data = QM9Dataset(for_testing=True)  # Testing subset
         """
 
         if for_testing:
@@ -56,6 +61,12 @@ class QM9Dataset(HDF5Dataset, DataDownloader):
     def download(self) -> None:
         """
         Download the hdf5 file containing the data from Google Drive.
+
+        Examples
+        --------
+        >>> data = QM9Dataset()
+        >>> data.download()  # Downloads the dataset from Google Drive
+
         """
         id = self.test_id if self.for_testing else self.full_id
         self._download_from_gdrive(id, self.raw_data_file)

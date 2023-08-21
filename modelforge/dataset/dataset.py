@@ -71,7 +71,6 @@ class HDF5Dataset(ABC):
         Path to the raw data file.
     processed_data_file : str
         Path to the processed data file.
-
     """
 
     def __init__(self, raw_data_file: str, processed_data_file: str):
@@ -86,6 +85,12 @@ class HDF5Dataset(ABC):
         -------
         Dict[str, List]
             Processed data from the hdf5 file.
+
+        Examples
+        --------
+        >>> hdf5_data = HDF5Dataset("raw_data.hdf5", "processed_data.npz")
+        >>> processed_data = hdf5_data._from_hdf5()
+
         """
         import h5py
         import tqdm

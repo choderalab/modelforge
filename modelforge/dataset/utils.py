@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import torch
 from loguru import logger
-from torch.utils.data import random_split
+from torch.utils.data import random_split, Subset
 
 from .dataset import TorchDataset
 
@@ -55,11 +55,59 @@ class RandomSplittingStrategy(SplittingStrategy):
     """
 
     def __init__(self, seed: int = 42, split: List[float] = [0.8, 0.1, 0.1]):
+        """
+        Initializes the RandomSplittingStrategy with a specified seed and split ratios.
+
+        This strategy splits a dataset randomly based on provided ratios for training, validation,
+        and testing subsets. The sum of split ratios should be 1.0.
+
+        Parameters
+        ----------
+        seed : int, optional
+            Random seed for reproducibility, by default 42.
+        split : List[float], optional
+            List containing three float values representing the ratio of data for
+            training, validation, and testing respectively, by default [0.8, 0.1, 0.1].
+
+        Raises
+        ------
+        AssertionError
+            If the sum of split ratios is not close to 1.0.
+
+        Examples
+        --------
+        >>> random_strategy_default = RandomSplittingStrategy()
+        >>> random_strategy_custom = RandomSplittingStrategy(seed=123, split=[0.7, 0.2, 0.1])
+        """
+
         super().__init__(seed)
         self.train_size, self.val_size, self.test_size = split[0], split[1], split[2]
         assert np.isclose(sum(split), 1.0), "Splits must sum to 1.0"
 
-    def split(self, dataset: TorchDataset) -> Tuple[List[int], List[int], List[int]]:
+    def split(self, dataset: TorchDataset) -> Tuple[Subset, Subset, Subset]:
+        """
+        Splits the provided dataset into training, validation, and testing subsets based on the predefined ratios.
+
+        This method uses the ratios defined during initialization to randomly partition the dataset.
+        The result is a tuple of indices for each subset.
+
+        Parameters
+        ----------
+        dataset : TorchDataset
+            The dataset to be split.
+
+        Returns
+        -------
+        Tuple[Subset, Subset, Subset]
+            A tuple containing three Subsets for training, validation, and testing subsets, respectively.
+
+        Examples
+        --------
+        >>> dataset = TorchDataset(numpy_data)
+        >>> random_strategy = RandomSplittingStrategy(seed=42, split=[0.7, 0.2, 0.1])
+        >>> train_dataset, val_dataset, test_dataset = random_strategy.split(dataset)
+        """
+
         logger.debug(f"Using random splitting strategy with seed {self.seed} ...")
         logger.debug(
             f"Splitting dataset into {self.train_size}, {self.val_size}, {self.test_size} ..."

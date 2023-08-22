@@ -102,7 +102,7 @@ class HDF5Dataset(ABC):
 
         Returns
         -------
-        Dict[str, List]
+        OrderedDict[str, List]
             Processed data from the hdf5 file.
 
         Examples
@@ -114,9 +114,14 @@ class HDF5Dataset(ABC):
         import h5py
         import tqdm
         import gzip
+        from collections import OrderedDict
 
         logger.debug("Reading in and processing hdf5 file ...")
-        data = defaultdict(list)
+        # initialize dict with empty lists
+        data = OrderedDict()
+        for value in self.properties_of_interest:
+            data[value] = []
+
         logger.debug(f"Processing and extracting data from {self.raw_data_file}")
         with gzip.open(self.raw_data_file, "rb") as gz_file, h5py.File(
             gz_file, "r"

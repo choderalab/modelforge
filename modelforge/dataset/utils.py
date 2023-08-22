@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
+from collections import OrderedDict
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
 from loguru import logger
-from torch.utils.data import random_split, Subset
+from torch.utils.data import Subset, random_split
 
 from .dataset import TorchDataset
 
@@ -176,14 +177,14 @@ def _from_file_cache(processed_dataset_file: str) -> np.ndarray:
 
 
 def _to_file_cache(
-    data: Dict[str, List[np.ndarray]], processed_dataset_file: str
+    data: OrderedDict[str, List[np.ndarray]], processed_dataset_file: str
 ) -> None:
     """
     Save processed data to a numpy (.npz) file.
 
     Parameters
     ----------
-    data : Dict[str, List[np.ndarray]]
+    data : OrderedDict[str, List[np.ndarray]]
         Dictionary containing processed data to be saved.
     processed_dataset_file : str
         Path to save the processed dataset.
@@ -193,17 +194,27 @@ def _to_file_cache(
     >>> data = {"a": [1, 2, 3], "b": [4, 5, 6]}
     >>> _to_file_cache(data, "data_file.npz")
     """
-    max_len_species = max(len(arr) for arr in data["atomic_numbers"])
 
-    padded_coordinates = pad_molecules(data["geometry"])
-    padded_atomic_numbers = pad_to_max_length(data["atomic_numbers"], max_len_species)
+    for prop_key in data:
+        if prop_key not in data:
+            raise ValueError(f"Property {prop_key} not found in data")
+        if prop_key == "geometry":  # NOTE: here a 2d tensor is padded
+            logger.debug(prop_key)
+            data[prop_key] = pad_molecules(data[prop_key])
+        else:
+            logger.debug(data[prop_key])
+            logger.debug(prop_key)
+            try:
+                max_len_species = max(len(arr) for arr in data[prop_key])
+            except TypeError:
+                continue
+            data[prop_key] = pad_to_max_length(data[prop_key], max_len_species)
+
     logger.debug(f"Writing data cache to {processed_dataset_file}")
 
     np.savez(
         processed_dataset_file,
-        geometry=padded_coordinates,
-        atomic_numbers=padded_atomic_numbers,
-        return_energy=np.array(data["return_energy"]),
+        **data,
     )
 
 
@@ -253,3 +264,6 @@ def pad_molecules(molecules: List[np.ndarray]) -> List[np.ndarray]:
         )
         for mol in molecules
     ]
+
+
+translate_property_names = {"return_energy": "U0"}

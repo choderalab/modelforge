@@ -57,6 +57,34 @@ def test_dataset_imported():
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
+def test_different_properties_of_interest(dataset):
+    factory = DatasetFactory()
+    data = dataset(for_unit_testing=True)
+    assert data.properties_of_interest == [
+        "geometry",
+        "atomic_numbers",
+        "return_energy",
+    ]
+
+    dataset = factory.create_dataset(data)
+    raw_data_item = dataset[0]
+    assert isinstance(raw_data_item, tuple)
+    assert len(raw_data_item) == 3
+
+    data.properties_of_interest = ["return_energy", "geometry"]
+    assert data.properties_of_interest == [
+        "return_energy",
+        "geometry",
+    ]
+
+    dataset = factory.create_dataset(data)
+    raw_data_item = dataset[0]
+    print(raw_data_item)
+    assert isinstance(raw_data_item, tuple)
+    assert len(raw_data_item) == 2
+
+
+@pytest.mark.parametrize("dataset", DATASETS)
 def test_file_existence_after_initialization(dataset):
     """Test if files are created after dataset initialization."""
     factory = DatasetFactory()

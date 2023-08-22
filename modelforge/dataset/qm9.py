@@ -59,10 +59,75 @@ class QM9Dataset(HDF5Dataset, DataDownloader):
             f"{local_cache_dir}/{dataset_name}_processed.npz",
         )
         self.dataset_name = dataset_name
-        self.keywords_for_hdf5_data = ["geometry", "atomic_numbers", "return_energy"]
+        self._available_properties = [
+            "geometry",
+            "atomic_numbers",
+            "return_energy",
+        ]  # NOTE: Any way to set this automatically?
+        self._properties_of_interest = [
+            "geometry",
+            "atomic_numbers",
+            "return_energy",
+        ]  # NOTE: Default values
         self.for_unit_testing = for_unit_testing
         self.test_id = "17oZ07UOxv2fkEmu-d5mLk6aGIuhV0mJ7"
         self.full_id = "1_bSdQjEvI67Tk_LKYbW0j8nmggnb5MoU"
+
+    @property
+    def properties_of_interest(self) -> List[str]:
+        """
+        Getter for the properties of interest.
+        The order of this list determines also the order provided in the __getitem__ call
+        from the PytorchDataset.
+
+        Returns
+        -------
+        List[str]
+            List of properties of interest.
+
+        """
+        return self._properties_of_interest
+
+    @property
+    def available_properties(self) -> List[str]:
+        """
+        List of available properties in the dataset.
+
+        Returns
+        -------
+        List[str]
+            List of available properties in the dataset.
+
+        Examples
+        --------
+        >>> data = QM9Dataset()
+        >>> data.available_properties
+        ['geometry', 'atomic_numbers', 'return_energy']
+        """
+        return self._available_properties
+
+    @properties_of_interest.setter
+    def properties_of_interest(self, properties_of_interest: List[str]) -> None:
+        """
+        Setter for the properties of interest.
+        The order of this list determines also the order provided in the __getitem__ call
+        from the PytorchDataset
+
+        Parameters
+        ----------
+        properties_of_interest : List[str]
+            List of properties of interest.
+
+        Examples
+        --------
+        >>> data = QM9Dataset()
+        >>> data.properties_of_interest = ["geometry", "atomic_numbers", "return_energy"]
+        """
+        if not set(properties_of_interest).issubset(self._available_properties):
+            raise ValueError(
+                f"Properties of interest must be a subset of {self._available_properties}"
+            )
+        self._properties_of_interest = properties_of_interest
 
     def download(self) -> None:
         """

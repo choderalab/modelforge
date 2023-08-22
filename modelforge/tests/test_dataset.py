@@ -45,7 +45,7 @@ def cleanup_files():
 
 def generate_dataset(dataset) -> TorchDataset:
     factory = DatasetFactory()
-    data = dataset(for_testing=True)
+    data = dataset(for_unit_testing=True)
     return factory.create_dataset(data)
 
 
@@ -60,7 +60,7 @@ def test_dataset_imported():
 def test_file_existence_after_initialization(dataset):
     """Test if files are created after dataset initialization."""
     factory = DatasetFactory()
-    data = dataset(for_testing=True)
+    data = dataset(for_unit_testing=True)
 
     assert not os.path.exists(data.raw_data_file)
     assert not os.path.exists(data.processed_data_file)
@@ -74,7 +74,7 @@ def test_file_existence_after_initialization(dataset):
 def test_different_scenarios_of_file_availability(dataset):
     """Test the behavior when raw and processed dataset files are removed."""
     factory = DatasetFactory()
-    data = dataset(for_testing=True)
+    data = dataset(for_unit_testing=True)
 
     factory.create_dataset(data)
 
@@ -165,7 +165,7 @@ def test_file_cache_methods(dataset):
     # generate files to test _from_hdf5()
     _ = generate_dataset(dataset)
 
-    data = dataset(for_testing=True)
+    data = dataset(for_unit_testing=True)
 
     numpy_data = data._from_hdf5()
 
@@ -179,7 +179,7 @@ def test_dataset_downloader(dataset):
     """
     Test the DatasetDownloader functionality.
     """
-    data = dataset(for_testing=True)
+    data = dataset(for_unit_testing=True)
     data.download()
     assert os.path.exists(data.raw_data_file)
 
@@ -190,7 +190,7 @@ def test_numpy_dataset_assignment(dataset):
     Test if the numpy_dataset attribute is correctly assigned after processing or loading.
     """
     factory = DatasetFactory()
-    data = dataset(for_testing=True)
+    data = dataset(for_unit_testing=True)
     factory._load_or_process_data(data)
 
     assert hasattr(data, "numpy_data")

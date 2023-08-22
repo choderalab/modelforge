@@ -14,7 +14,7 @@ DATASETS = [QM9Dataset]
 
 
 @pytest.fixture(
-    autouse=True,
+    #    autouse=True,
 )
 def cleanup_files():
     """Fixture to clean up temporary files before and after test execution."""

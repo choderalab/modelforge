@@ -201,7 +201,7 @@ def _to_file_cache(
 
     np.savez(
         processed_dataset_file,
-        coordinates=padded_coordinates,
+        geometry=padded_coordinates,
         atomic_numbers=padded_atomic_numbers,
         return_energy=np.array(data["return_energy"]),
     )

@@ -170,7 +170,7 @@ def test_file_cache_methods(dataset):
 
     _to_file_cache(numpy_data, data.processed_data_file)
     loaded_data = _from_file_cache(data.processed_data_file)
-    assert len(loaded_data["coordinates"]) == 100
+    assert len(loaded_data["geometry"]) == 100
 
 
 @pytest.mark.parametrize("dataset", DATASETS)

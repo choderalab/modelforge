@@ -18,8 +18,8 @@ class QM9Dataset(HDF5Dataset, DataDownloader):
     ----------
     dataset_name : str
         Name of the dataset, default is "QM9".
-    for_testing : bool
-        If set to True, a subset of the dataset is used for testing purposes.
+    for_unit_testing : bool
+        If set to True, a subset of the dataset is used for unit testing purposes; by default False.
 
     Examples
     --------
@@ -30,7 +30,8 @@ class QM9Dataset(HDF5Dataset, DataDownloader):
     def __init__(
         self,
         dataset_name: str = "QM9",
-        for_testing: bool = False,
+        for_unit_testing: bool = False,
+        local_cache_dir: str = ".",
     ) -> None:
         """
         Initialize the QM9Data class.
@@ -39,22 +40,27 @@ class QM9Dataset(HDF5Dataset, DataDownloader):
         ----------
         data_name : str, optional
             Name of the dataset, by default "QM9".
-        for_testing : bool, optional
-            If set to True, a subset of the dataset is used for testing purposes, by default False.
+        for_unit_testing : bool, optional
+            If set to True, a subset of the dataset is used for unit testing purposes; by default False.
+        local_cache_dir: str, optional
+            Path to the local cache directory, by default ".".
 
         Examples
         --------
         >>> data = QM9Dataset()  # Default dataset
-        >>> test_data = QM9Dataset(for_testing=True)  # Testing subset
+        >>> test_data = QM9Dataset(for_unit_testing=True)  # Testing subset
         """
 
-        if for_testing:
+        if for_unit_testing:
             dataset_name = f"{dataset_name}_subset"
 
-        super().__init__(f"{dataset_name}_cache.hdf5", f"{dataset_name}_processed.npz")
+        super().__init__(
+            f"{local_cache_dir}/{dataset_name}_cache.hdf5",
+            f"{local_cache_dir}/{dataset_name}_processed.npz",
+        )
         self.dataset_name = dataset_name
         self.keywords_for_hdf5_data = ["geometry", "atomic_numbers", "return_energy"]
-        self.for_testing = for_testing
+        self.for_unit_testing = for_unit_testing
         self.test_id = "13ott0kVaCGnlv858q1WQdOwOpL7IX5Q9"
         self.full_id = "1_bSdQjEvI67Tk_LKYbW0j8nmggnb5MoU"
 
@@ -68,5 +74,5 @@ class QM9Dataset(HDF5Dataset, DataDownloader):
         >>> data.download()  # Downloads the dataset from Google Drive
 
         """
-        id = self.test_id if self.for_testing else self.full_id
+        id = self.test_id if self.for_unit_testing else self.full_id
         self._download_from_gdrive(id, self.raw_data_file)

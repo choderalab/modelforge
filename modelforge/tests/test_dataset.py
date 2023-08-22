@@ -14,7 +14,7 @@ DATASETS = [QM9Dataset]
 
 
 @pytest.fixture(
-    #    autouse=True,
+    autouse=True,
 )
 def cleanup_files():
     """Fixture to clean up temporary files before and after test execution."""
@@ -124,9 +124,9 @@ def test_dataset_generation(dataset):
     dataset = generate_dataset(dataset)
     train_dataset, val_dataset, test_dataset = RandomSplittingStrategy().split(dataset)
 
-    assert len(train_dataset) == 800
-    assert len(test_dataset) == 100
-    assert len(val_dataset) == 100
+    assert len(train_dataset) == 80
+    assert len(test_dataset) == 10
+    assert len(val_dataset) == 10
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
@@ -138,8 +138,7 @@ def test_dataset_splitting(dataset):
     train_dataset, val_dataset, test_dataset = RandomSplittingStrategy().split(dataset)
 
     energy = train_dataset[0][2].item()
-    # this should be reproducable?!
-    assert np.isclose(energy, -236.91345796962494)
+    assert np.isclose(energy, -157.09958704371914)
     print(energy)
 
     try:
@@ -152,7 +151,7 @@ def test_dataset_splitting(dataset):
         split=[0.6, 0.3, 0.1]
     ).split(dataset)
 
-    assert len(train_dataset) == 600
+    assert len(train_dataset) == 60
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
@@ -171,7 +170,7 @@ def test_file_cache_methods(dataset):
 
     _to_file_cache(numpy_data, data.processed_data_file)
     loaded_data = _from_file_cache(data.processed_data_file)
-    assert len(loaded_data["coordinates"]) == 1_000
+    assert len(loaded_data["coordinates"]) == 100
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
@@ -212,5 +211,5 @@ def test_dataset_dataloaders(dataset):
     for batch in train_dataloader:
         assert len(batch) == 3  # coordinates, atomic_numbers, return_energy
         assert (
-            batch[0].size(0) == 64 or batch[0].size(0) == 32
+            batch[0].size(0) == 64 or batch[0].size(0) == 16
         )  # default batch size (last batch has sieze 32)

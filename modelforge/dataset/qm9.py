@@ -61,7 +61,7 @@ class QM9Dataset(HDF5Dataset, DataDownloader):
         self.dataset_name = dataset_name
         self.keywords_for_hdf5_data = ["geometry", "atomic_numbers", "return_energy"]
         self.for_unit_testing = for_unit_testing
-        self.test_id = "13ott0kVaCGnlv858q1WQdOwOpL7IX5Q9"
+        self.test_id = "17oZ07UOxv2fkEmu-d5mLk6aGIuhV0mJ7"
         self.full_id = "1_bSdQjEvI67Tk_LKYbW0j8nmggnb5MoU"
 
     def download(self) -> None:

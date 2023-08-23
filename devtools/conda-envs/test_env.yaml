@@ -16,6 +16,9 @@ dependencies:
   - loguru
   - gdown
   - tqdm
+  - lightning
+  - tensorboard
+  - torchvision
 
     # Testing
   - pytest

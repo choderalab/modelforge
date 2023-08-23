@@ -1,7 +1,7 @@
 import os
-from abc import ABC, abstractmethod
-from collections import defaultdict
-from typing import Dict, List, Tuple
+from abc import ABC
+from collections import OrderedDict
+from typing import Dict, List, Tuple, Optional
 
 import numpy as np
 import torch
@@ -78,7 +78,7 @@ class TorchDataset(torch.utils.data.Dataset):
             )
 
 
-class HDF5Dataset(ABC):
+class HDF5Dataset:
     """
     Base class for data stored in HDF5 format.
 
@@ -95,8 +95,10 @@ class HDF5Dataset(ABC):
     def __init__(self, raw_data_file: str, processed_data_file: str):
         self.raw_data_file = raw_data_file
         self.processed_data_file = processed_data_file
+        self.hdf5data: Optional[Dict[str, List]] = None
+        self.numpy_data: Optional[np.ndarray] = None
 
-    def _from_hdf5(self) -> Dict[str, List]:
+    def _from_hdf5(self) -> None:
         """
         Processes and extracts data from an hdf5 file.
 
@@ -111,10 +113,11 @@ class HDF5Dataset(ABC):
         >>> processed_data = hdf5_data._from_hdf5()
 
         """
-        import h5py
-        import tqdm
         import gzip
         from collections import OrderedDict
+
+        import h5py
+        import tqdm
 
         logger.debug("Reading in and processing hdf5 file ...")
         # initialize dict with empty lists
@@ -130,7 +133,69 @@ class HDF5Dataset(ABC):
             for mol in tqdm.tqdm(list(hf.keys())):
                 for value in self.properties_of_interest:
                     data[value].append(hf[mol][value][()])
-        return data
+        self.hdf5data = data
+
+    def _from_file_cache(self) -> Dict[str, List]:
+        """
+        Loads the processed data from cache.
+
+        Returns
+        -------
+        OrderedDict[str, List]
+            Processed data from the cache file.
+
+        Examples
+        --------
+        >>> hdf5_data = HDF5Dataset("raw_data.hdf5", "processed_data.npz")
+        >>> processed_data = hdf5_data._from_file_cache()
+        """
+        logger.debug(f"Loading processed data from {self.processed_data_file}")
+        self.numpy_data = np.load(self.processed_data_file)
+
+    def _to_file_cache(
+        self,
+    ) -> None:
+        """
+        Save processed data to a numpy (.npz) file.
+        Parameters
+        ----------
+        data : OrderedDict[str, List[np.ndarray]]
+            Dictionary containing processed data to be saved.
+        processed_dataset_file : str
+            Path to save the processed dataset.
+
+        Examples
+        --------
+        >>> hdf5_data = HDF5Dataset("raw_data.hdf5", "processed_data.npz")
+        >>> hdf5_data._to_file_cache()
+        """
+
+        from modelforge.dataset.utils import pad_molecules, pad_to_max_length
+
+        for prop_key in self.hdf5data:
+            if prop_key not in self.hdf5data:
+                raise ValueError(f"Property {prop_key} not found in data")
+            if prop_key == "geometry":  # NOTE: here a 2d tensor is padded
+                logger.debug(prop_key)
+                self.hdf5data[prop_key] = pad_molecules(self.hdf5data[prop_key])
+            else:
+                logger.debug(self.hdf5data[prop_key])
+                logger.debug(prop_key)
+                try:
+                    max_len_species = max(len(arr) for arr in self.hdf5data[prop_key])
+                except TypeError:
+                    continue
+                self.hdf5data[prop_key] = pad_to_max_length(
+                    self.hdf5data[prop_key], max_len_species
+                )
+
+        logger.debug(f"Writing data cache to {self.processed_data_file}")
+
+        np.savez(
+            self.processed_data_file,
+            **self.hdf5data,
+        )
+        del self.hdf5data
 
 
 class DatasetFactory:
@@ -161,18 +226,17 @@ class DatasetFactory:
         dataset : HDF5Dataset
             The HDF5 dataset instance to use.
         """
-        from .utils import _to_file_cache, _from_file_cache
 
         # if not cached, download and process
         if not os.path.exists(data.processed_data_file):
             if not os.path.exists(data.raw_data_file):
-                data.download()
+                data._download()
             # load from hdf5 and process
-            numpy_data = data._from_hdf5()
+            data._from_hdf5()
             # save to cache
-            _to_file_cache(numpy_data, data.processed_data_file)
+            data._to_file_cache()
         # load from cache
-        data.numpy_data = _from_file_cache(data.processed_data_file)
+        data._from_file_cache()
 
     @staticmethod
     def create_dataset(

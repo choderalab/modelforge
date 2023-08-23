@@ -3,11 +3,10 @@ from typing import Any, Dict, List, Tuple
 
 import numpy as np
 from loguru import logger
-from .utils import DataDownloader
 from .dataset import HDF5Dataset
 
 
-class QM9Dataset(HDF5Dataset, DataDownloader):
+class QM9Dataset(HDF5Dataset):
     """
     Data class for handling QM9 data.
 
@@ -129,7 +128,7 @@ class QM9Dataset(HDF5Dataset, DataDownloader):
             )
         self._properties_of_interest = properties_of_interest
 
-    def download(self) -> None:
+    def _download(self) -> None:
         """
         Download the hdf5 file containing the data from Google Drive.
 
@@ -139,5 +138,7 @@ class QM9Dataset(HDF5Dataset, DataDownloader):
         >>> data.download()  # Downloads the dataset from Google Drive
 
         """
+        from modelforge.dataset.utils import _download_from_gdrive
+
         id = self.test_id if self.for_unit_testing else self.full_id
-        self._download_from_gdrive(id, self.raw_data_file)
+        _download_from_gdrive(id, self.raw_data_file)

@@ -8,7 +8,6 @@ from torch.utils.data import DataLoader
 
 from modelforge.dataset.dataset import DatasetFactory, TorchDataset
 from modelforge.dataset.qm9 import QM9Dataset
-from modelforge.dataset.utils import DataDownloader
 
 DATASETS = [QM9Dataset]
 
@@ -187,18 +186,17 @@ def test_file_cache_methods(dataset):
     """
     Test the FileCache methods to ensure data is cached and loaded correctly.
     """
-    from modelforge.dataset.utils import _to_file_cache, _from_file_cache
 
     # generate files to test _from_hdf5()
     _ = generate_dataset(dataset)
 
     data = dataset(for_unit_testing=True)
 
-    numpy_data = data._from_hdf5()
+    data._from_hdf5()
 
-    _to_file_cache(numpy_data, data.processed_data_file)
-    loaded_data = _from_file_cache(data.processed_data_file)
-    assert len(loaded_data["geometry"]) == 100
+    data._to_file_cache()
+    data._from_file_cache()
+    assert len(data.numpy_data["geometry"]) == 100
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
@@ -207,7 +205,7 @@ def test_dataset_downloader(dataset):
     Test the DatasetDownloader functionality.
     """
     data = dataset(for_unit_testing=True)
-    data.download()
+    data._download()
     assert os.path.exists(data.raw_data_file)
 
 

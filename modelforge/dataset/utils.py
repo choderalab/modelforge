@@ -123,57 +123,26 @@ class RandomSplittingStrategy(SplittingStrategy):
         return (train_d, val_d, test_d)
 
 
-class DataDownloader(ABC):
+def _download_from_gdrive(id: str, raw_dataset_file: str):
     """
-    Utility class for downloading datasets.
-    """
-
-    @staticmethod
-    def _download_from_gdrive(id: str, raw_dataset_file: str):
-        """
-        Downloads a dataset from Google Drive.
-
-        Parameters
-        ----------
-        id : str
-            Google Drive ID for the dataset.
-        raw_dataset_file : str
-            Path to save the downloaded dataset.
-
-        Examples
-        --------
-        >>> _download_from_gdrive("1v2gV3sG9JhMZ5QZn3gFB9j5ZIs0Xjxz8", "data_file.hdf5")
-        """
-        import gdown
-
-        url = f"https://drive.google.com/uc?id={id}"
-        gdown.download(url, raw_dataset_file, quiet=False)
-
-    @abstractmethod
-    def download():
-        raise NotImplementedError
-
-
-def _from_file_cache(processed_dataset_file: str) -> np.ndarray:
-    """
-    Loads the dataset from a cached file.
+    Downloads a dataset from Google Drive.
 
     Parameters
     ----------
-    processed_dataset_file : str
-        Path to the cached dataset file.
-
-    Returns
-    -------
-    np.ndarray
-        The loaded dataset.
+    id : str
+        Google Drive ID for the dataset.
+    raw_dataset_file : str
+        Path to save the downloaded dataset.
 
     Examples
     --------
-    >>> data = _from_file_cache("data_file.npz")
+    >>> _download_from_gdrive("1v2gV3sG9JhMZ5QZn3gFB9j5ZIs0Xjxz8", "data_file.hdf5")
     """
-    logger.info(f"Loading cached dataset_file {processed_dataset_file}")
-    return np.load(processed_dataset_file)
+    import gdown
+
+    url = f"https://drive.google.com/uc?id={id}"
+    gdown.download(url, raw_dataset_file, quiet=False)
+
 
 
 def _to_file_cache(

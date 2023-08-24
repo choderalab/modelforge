@@ -1,3 +1,4 @@
+from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from typing import Dict, List, Optional, Tuple
@@ -7,7 +8,11 @@ import torch
 from loguru import logger
 from torch.utils.data import Subset, random_split
 
-from .dataset import TorchDataset
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .dataset import TorchDataset
 
 
 class SplittingStrategy(ABC):
@@ -85,7 +90,7 @@ class RandomSplittingStrategy(SplittingStrategy):
         self.train_size, self.val_size, self.test_size = split[0], split[1], split[2]
         assert np.isclose(sum(split), 1.0), "Splits must sum to 1.0"
 
-    def split(self, dataset: TorchDataset) -> Tuple[Subset, Subset, Subset]:
+    def split(self, dataset: "TorchDataset") -> Tuple[Subset, Subset, Subset]:
         """
         Splits the provided dataset into training, validation, and testing subsets based on the predefined ratios.
 
@@ -144,7 +149,6 @@ def _download_from_gdrive(id: str, raw_dataset_file: str):
     gdown.download(url, raw_dataset_file, quiet=False)
 
 
-
 def _to_file_cache(
     data: OrderedDict[str, List[np.ndarray]], processed_dataset_file: str
 ) -> None:
@@ -187,7 +191,7 @@ def _to_file_cache(
     )
 
 
-def pad_to_max_length(data: List[np.ndarray], max_length: int) -> List[np.ndarray]:
+def pad_to_max_length(data: List[np.ndarray]) -> List[np.ndarray]:
     """
     Pad each array in the data list to a specified maximum length.
 
@@ -195,14 +199,13 @@ def pad_to_max_length(data: List[np.ndarray], max_length: int) -> List[np.ndarra
     ----------
     data : List[np.ndarray]
         List of arrays to be padded.
-    max_length : int
-        Desired length for each array after padding.
-
     Returns
     -------
     List[np.ndarray]
         List of padded arrays.
     """
+    max_length = max(len(arr) for arr in data)
+
     return [
         np.pad(arr, (0, max_length - len(arr)), "constant", constant_values=-1)
         for arr in data

@@ -57,6 +57,8 @@ def test_dataset_imported():
 
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_different_properties_of_interest(dataset):
+    from modelforge.dataset.transformation import default_transformation
+
     factory = DatasetFactory()
     data = dataset(for_unit_testing=True)
     assert data.properties_of_interest == [
@@ -188,13 +190,15 @@ def test_file_cache_methods(dataset):
     """
 
     # generate files to test _from_hdf5()
+    from modelforge.dataset.transformation import default_transformation
+
     _ = generate_dataset(dataset)
 
     data = dataset(for_unit_testing=True)
 
     data._from_hdf5()
 
-    data._to_file_cache()
+    data._to_file_cache(None, default_transformation)
     data._from_file_cache()
     assert len(data.numpy_data["geometry"]) == 100
 
@@ -214,9 +218,11 @@ def test_numpy_dataset_assignment(dataset):
     """
     Test if the numpy_dataset attribute is correctly assigned after processing or loading.
     """
+    from modelforge.dataset.transformation import default_transformation
+
     factory = DatasetFactory()
     data = dataset(for_unit_testing=True)
-    factory._load_or_process_data(data)
+    factory._load_or_process_data(data, None, default_transformation)
 
     assert hasattr(data, "numpy_data")
     assert isinstance(data.numpy_data, np.lib.npyio.NpzFile)

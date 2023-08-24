@@ -1,11 +1,12 @@
 import os
-from abc import ABC
-from collections import OrderedDict
-from typing import Dict, List, Tuple, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
 from loguru import logger
+from lightning import LightningDataModule
+from .transformation import default_transformation
+
 
 
 class TorchDataset(torch.utils.data.Dataset):
@@ -30,7 +31,12 @@ class TorchDataset(torch.utils.data.Dataset):
     >>> data_point = torch_dataset[0]
     """
 
-    def __init__(self, dataset: np.ndarray, prop: List[str], preloaded: bool = False):
+    def __init__(
+        self,
+        dataset: np.ndarray,
+        prop: List[str],
+        preloaded: bool = False,
+    ):
         self.properties_of_interest = [dataset[p] for p in prop]
         self.length = len(dataset[prop[0]])
         self.preloaded = preloaded
@@ -152,8 +158,28 @@ class HDF5Dataset:
         logger.debug(f"Loading processed data from {self.processed_data_file}")
         self.numpy_data = np.load(self.processed_data_file)
 
+    def _perform_transformations(
+        self,
+        label_transform: Optional[Dict[str, Callable]],
+        transforms: Dict[str, Callable],
+    ) -> None:
+        for prop_key in self.hdf5data:
+            if prop_key not in self.hdf5data:
+                raise ValueError(f"Property {prop_key} not found in data")
+            if transforms and prop_key in transforms:
+                logger.debug(f"Transformation applied to : {prop_key}")
+                self.hdf5data[prop_key] = transforms[prop_key](self.hdf5data[prop_key])
+            elif label_transform and prop_key in label_transform:
+                logger.debug(f"Transformation applied to : {prop_key}")
+                self.hdf5data[prop_key] = transforms[prop_key](self.hdf5data[prop_key])
+            else:
+                logger.debug(f"NO Transformation applied to : {prop_key}")
+                self.hdf5data[prop_key] = transforms["all"](self.hdf5data[prop_key])
+
     def _to_file_cache(
         self,
+        label_transform: Optional[Dict[str, Callable]],
+        transforms: Optional[Dict[str, Callable]],
     ) -> None:
         """
         Save processed data to a numpy (.npz) file.
@@ -163,31 +189,20 @@ class HDF5Dataset:
             Dictionary containing processed data to be saved.
         processed_dataset_file : str
             Path to save the processed dataset.
+        label_transform : Optional[Dict[str, Callable]], optional
+            transformations to apply to the labels
+        transforms : Dict[str, Callable], default=default_transformation
+            transformations to apply to the data
 
         Examples
         --------
         >>> hdf5_data = HDF5Dataset("raw_data.hdf5", "processed_data.npz")
         >>> hdf5_data._to_file_cache()
         """
-
-        from modelforge.dataset.utils import pad_molecules, pad_to_max_length
-
-        for prop_key in self.hdf5data:
-            if prop_key not in self.hdf5data:
-                raise ValueError(f"Property {prop_key} not found in data")
-            if prop_key == "geometry":  # NOTE: here a 2d tensor is padded
-                logger.debug(prop_key)
-                self.hdf5data[prop_key] = pad_molecules(self.hdf5data[prop_key])
-            else:
-                logger.debug(self.hdf5data[prop_key])
-                logger.debug(prop_key)
-                try:
-                    max_len_species = max(len(arr) for arr in self.hdf5data[prop_key])
-                except TypeError:
-                    continue
-                self.hdf5data[prop_key] = pad_to_max_length(
-                    self.hdf5data[prop_key], max_len_species
-                )
+        logger.debug(f"Processing data ...")
+        if transforms:
+            logger.debug(f"Applying transforms to {transforms.keys()}...")
+            self._perform_transformations(label_transform, transforms)
 
         logger.debug(f"Writing data cache to {self.processed_data_file}")
 
@@ -217,7 +232,11 @@ class DatasetFactory:
         pass
 
     @staticmethod
-    def _load_or_process_data(data: HDF5Dataset) -> None:
+    def _load_or_process_data(
+        data: HDF5Dataset,
+        label_transform: Optional[Dict[str, Callable]],
+        transform: Optional[Dict[str, Callable]],
+    ) -> None:
         """
         Loads the dataset from cache if available, otherwise processes and caches the data.
 
@@ -234,13 +253,15 @@ class DatasetFactory:
             # load from hdf5 and process
             data._from_hdf5()
             # save to cache
-            data._to_file_cache()
+            data._to_file_cache(label_transform, transform)
         # load from cache
         data._from_file_cache()
 
     @staticmethod
     def create_dataset(
         data: HDF5Dataset,
+        label_transform: Optional[Dict[str, Callable]] = None,
+        transform: Optional[Dict[str, Callable]] = default_transformation,
     ) -> TorchDataset:
         """
         Creates a Dataset instance given an HDF5Dataset.
@@ -249,7 +270,10 @@ class DatasetFactory:
         ----------
         data : HDF5Dataset
             The HDF5 data to use.
-
+        transform : Optional[Dict[str, Callable]], optional
+            Transformation to apply to the data based on the property name, by default None
+        label_transform : Optional[Dict[str, Callable]], optional
+            Transformation to apply to the labels based on the property name, by default default_transformation
         Returns
         -------
         TorchDataset
@@ -257,5 +281,20 @@ class DatasetFactory:
         """
 
         logger.info(f"Creating {data.dataset_name} dataset")
-        DatasetFactory._load_or_process_data(data)
+        DatasetFactory._load_or_process_data(data, label_transform, transform)
         return TorchDataset(data.numpy_data, data.properties_of_interest)
+
+
+import pytorch_lightning as pl
+from torchvision import transforms
+
+
+class QM9DataModule(pl.LightningDataModule):
+    def __init__(self, data_dir: str = "./") -> None:
+        super().__init__()
+        self.data_dir = data_dir
+        self.transformer = transforms.Compose(
+            [
+                transforms.ToTensor(),
+            ]
+        )

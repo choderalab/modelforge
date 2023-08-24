@@ -1,7 +1,6 @@
 import os
 from typing import Any, Dict, List, Tuple
 
-import numpy as np
 from loguru import logger
 from .dataset import HDF5Dataset
 
@@ -26,11 +25,18 @@ class QM9Dataset(HDF5Dataset):
     >>> data._download()
     """
 
+    _available_properties = [
+        "geometry",
+        "atomic_numbers",
+        "return_energy",
+    ]  # NOTE: Any way to set this automatically?
+
     def __init__(
         self,
         dataset_name: str = "QM9",
         for_unit_testing: bool = False,
         local_cache_dir: str = ".",
+        overwrite: bool = False,
     ) -> None:
         """
         Initialize the QM9Data class.
@@ -50,6 +56,13 @@ class QM9Dataset(HDF5Dataset):
         >>> test_data = QM9Dataset(for_unit_testing=True)  # Testing subset
         """
 
+        _default_properties_of_interest = [
+            "geometry",
+            "atomic_numbers",
+            "return_energy",
+        ]  # NOTE: Default values
+
+        self._properties_of_interest = _default_properties_of_interest
         if for_unit_testing:
             dataset_name = f"{dataset_name}_subset"
 
@@ -58,16 +71,6 @@ class QM9Dataset(HDF5Dataset):
             f"{local_cache_dir}/{dataset_name}_processed.npz",
         )
         self.dataset_name = dataset_name
-        self._available_properties = [
-            "geometry",
-            "atomic_numbers",
-            "return_energy",
-        ]  # NOTE: Any way to set this automatically?
-        self._properties_of_interest = [
-            "geometry",
-            "atomic_numbers",
-            "return_energy",
-        ]  # NOTE: Default values
         self.for_unit_testing = for_unit_testing
         self.test_id = "17oZ07UOxv2fkEmu-d5mLk6aGIuhV0mJ7"
         self.full_id = "1_bSdQjEvI67Tk_LKYbW0j8nmggnb5MoU"

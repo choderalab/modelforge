@@ -7,6 +7,30 @@ from loguru import logger
 from lightning import LightningDataModule
 from .transformation import default_transformation
 
+import pytorch_lightning as pl
+from .utils import SplittingStrategy, RandomSplittingStrategy
+
+
+class TorchDataModule(pl.LightningDataModule):
+    def __init__(
+        self,
+        data,
+        SplittingStrategy: SplittingStrategy = RandomSplittingStrategy,
+        batch_size=64,
+    ):
+        super().__init__()
+        self.data = data
+        self.batch_size = batch_size
+        self.SplittingStrategy = SplittingStrategy
+
+    def prepare_data(self) -> None:
+        factory = DatasetFactory()
+        self.dataset = factory.create_dataset(self.data)
+
+    def setup(self, stage: str):
+        # Assign Train/val split(s) for use in Dataloaders
+        if stage == "fit":
+            pass
 
 
 class TorchDataset(torch.utils.data.Dataset):
@@ -283,18 +307,3 @@ class DatasetFactory:
         logger.info(f"Creating {data.dataset_name} dataset")
         DatasetFactory._load_or_process_data(data, label_transform, transform)
         return TorchDataset(data.numpy_data, data.properties_of_interest)
-
-
-import pytorch_lightning as pl
-from torchvision import transforms
-
-
-class QM9DataModule(pl.LightningDataModule):
-    def __init__(self, data_dir: str = "./") -> None:
-        super().__init__()
-        self.data_dir = data_dir
-        self.transformer = transforms.Compose(
-            [
-                transforms.ToTensor(),
-            ]
-        )

@@ -6,8 +6,10 @@ import pytest
 import torch
 from torch.utils.data import DataLoader
 
-from modelforge.dataset import QM9Dataset
-from modelforge.dataset.dataset import GenericDataset
+from modelforge.dataset.dataset import DatasetFactory, TorchDataset
+from modelforge.dataset.qm9 import QM9Dataset
+
+DATASETS = [QM9Dataset]
 
 
 @pytest.fixture(
@@ -17,24 +19,33 @@ def cleanup_files():
     """Fixture to clean up temporary files before and after test execution."""
 
     def _cleanup():
-        files = [
-            "tmp_cache.hdf5",
-            "tmp_cache.hdf5.gz",
-            "tmp_processed.npz",
-            "tmp_subset_cache.hdf5",
-            "tmp_subset_cache.hdf5.gz",
-            "tmp_subset_processed.npz",
-        ]
-        for f in files:
-            try:
-                os.remove(f)
-                print(f"Deleted {f}")
-            except FileNotFoundError:
-                print(f"{f} not found")
+        for dataset in DATASETS:
+            dataset_name = dataset().dataset_name
+
+            files = [
+                f"{dataset_name}_cache.hdf5",
+                f"{dataset_name}_cache.hdf5.gz",
+                f"{dataset_name}_processed.npz",
+                f"{dataset_name}_subset_cache.hdf5",
+                f"{dataset_name}_subset_cache.hdf5.gz",
+                f"{dataset_name}_subset_processed.npz",
+            ]
+            for f in files:
+                try:
+                    os.remove(f)
+                    print(f"Deleted {f}")
+                except FileNotFoundError:
+                    print(f"{f} not found")
 
     _cleanup()
     yield  # This is where the test will execute
     _cleanup()
+
+
+def generate_dataset(dataset) -> TorchDataset:
+    factory = DatasetFactory()
+    data = dataset(for_unit_testing=True)
+    return factory.create_dataset(data)
 
 
 def test_dataset_imported():
@@ -44,52 +55,89 @@ def test_dataset_imported():
     assert "modelforge.dataset" in sys.modules
 
 
-@pytest.mark.parametrize("dataset", [QM9Dataset])
+@pytest.mark.parametrize("dataset", DATASETS)
+def test_different_properties_of_interest(dataset):
+    from modelforge.dataset.transformation import default_transformation
+
+    factory = DatasetFactory()
+    data = dataset(for_unit_testing=True)
+    assert data.properties_of_interest == [
+        "geometry",
+        "atomic_numbers",
+        "return_energy",
+    ]
+
+    dataset = factory.create_dataset(data)
+    raw_data_item = dataset[0]
+    assert isinstance(raw_data_item, tuple)
+    assert len(raw_data_item) == 3
+
+    data.properties_of_interest = ["return_energy", "geometry"]
+    assert data.properties_of_interest == [
+        "return_energy",
+        "geometry",
+    ]
+
+    dataset = factory.create_dataset(data)
+    raw_data_item = dataset[0]
+    print(raw_data_item)
+    assert isinstance(raw_data_item, tuple)
+    assert len(raw_data_item) == 2
+
+
+@pytest.mark.parametrize("dataset", DATASETS)
 def test_file_existence_after_initialization(dataset):
     """Test if files are created after dataset initialization."""
-    d = dataset("tmp", test_data=True)
-    assert not os.path.exists(d.raw_dataset_file)
-    assert not os.path.exists(d.processed_dataset_file)
+    factory = DatasetFactory()
+    data = dataset(for_unit_testing=True)
 
-    d.load_or_process_data()  # call explicitly load_or_process_data to load data
-    assert os.path.exists(d.raw_dataset_file)
-    assert os.path.exists(d.processed_dataset_file)
+    assert not os.path.exists(data.raw_data_file)
+    assert not os.path.exists(data.processed_data_file)
+
+    dataset = factory.create_dataset(data)
+    assert os.path.exists(data.raw_data_file)
+    assert os.path.exists(data.processed_data_file)
 
 
-@pytest.mark.parametrize("dataset", [QM9Dataset])
+@pytest.mark.parametrize("dataset", DATASETS)
 def test_different_scenarios_of_file_availability(dataset):
     """Test the behavior when raw and processed dataset files are removed."""
-    d = dataset("tmp", test_data=True)
-    d.load_or_process_data()  # call explicitly load_or_process_data to load data
-    os.remove(d.raw_dataset_file)
-    d = dataset("tmp", test_data=True)
+    factory = DatasetFactory()
+    data = dataset(for_unit_testing=True)
 
-    os.remove(d.processed_dataset_file)
-    d = dataset("tmp", test_data=True)
-    d.load_or_process_data()  # call explicitly load_or_process_data to load data
-    assert os.path.exists(d.raw_dataset_file)
-    assert os.path.exists(d.processed_dataset_file)
+    factory.create_dataset(data)
+
+    os.remove(data.raw_data_file)
+    factory.create_dataset(data)
+
+    os.remove(data.processed_data_file)
+    factory.create_dataset(data)
+    assert os.path.exists(data.raw_data_file)
+    assert os.path.exists(data.processed_data_file)
 
 
-@pytest.mark.parametrize("dataset", [QM9Dataset])
+@pytest.mark.parametrize("dataset", DATASETS)
 def test_data_item_format(dataset):
     """Test the format of individual data items in the dataset."""
-    d = dataset("tmp", test_data=True)
-    data_item = d[0]
-    assert isinstance(data_item, tuple)
-    assert len(data_item) == 3
-    assert isinstance(data_item[0], torch.Tensor)
-    assert isinstance(data_item[1], torch.Tensor)
-    assert isinstance(data_item[2], torch.Tensor)
+    dataset = generate_dataset(dataset)
+
+    raw_data_item = dataset[0]
+    assert isinstance(raw_data_item, tuple)
+    assert len(raw_data_item) == 3
+    assert isinstance(raw_data_item[0], torch.Tensor)
+    assert isinstance(raw_data_item[1], torch.Tensor)
+    assert isinstance(raw_data_item[2], torch.Tensor)
 
 
 def test_padding():
     """Test the padding function to ensure correct behavior on dummy data."""
+    from modelforge.dataset.utils import pad_molecules, pad_to_max_length
+
     dummy_data = np.array([[0, 0, 0], [0, 0, 0], [0, 0, 0]]), np.array(
         [[0, 0, 0], [0, 0, 0]]
     )
     max_len = max(len(arr) for arr in dummy_data)
-    padded_data = QM9Dataset.pad_molecules(dummy_data)
+    padded_data = pad_molecules(dummy_data)
 
     for data in padded_data:
         assert data.shape[0] == max_len
@@ -97,38 +145,103 @@ def test_padding():
     assert np.array_equal(padded_data[-1][-1], np.array([-1, -1, -1]))
 
 
-@pytest.mark.parametrize("dataset", [QM9Dataset])
-def test_download_dataset(dataset):
-    """Test the downloading and batching of the dataset."""
-    d = dataset(dataset_name="tmp", test_data=True)
-    assert d.dataset_name == "tmp_subset"
-    train_dataloader = DataLoader(d, batch_size=64, shuffle=True)
-    assert len([b for b in train_dataloader]) == 16  # (1_000 / 64 = 15.625)
+@pytest.mark.parametrize("dataset", DATASETS)
+def test_dataset_generation(dataset):
+    """Test the splitting of the dataset."""
+    from modelforge.dataset.utils import RandomSplittingStrategy
+
+    dataset = generate_dataset(dataset)
+    train_dataset, val_dataset, test_dataset = RandomSplittingStrategy().split(dataset)
+
+    assert len(train_dataset) == 80
+    assert len(test_dataset) == 10
+    assert len(val_dataset) == 10
 
 
-@pytest.mark.parametrize("dataset", [QM9Dataset])
-def test_dataset_length(dataset):
-    """Test the length method of the dataset."""
-    d = dataset("tmp", test_data=True)
-    assert len(d) == len(d.dataset["atomic_numbers"])
+@pytest.mark.parametrize("dataset", DATASETS)
+def test_dataset_splitting(dataset):
+    """Test random_split on the the dataset."""
+    from modelforge.dataset.utils import RandomSplittingStrategy
+
+    dataset = generate_dataset(dataset)
+    train_dataset, val_dataset, test_dataset = RandomSplittingStrategy().split(dataset)
+
+    energy = train_dataset[0][2].item()
+    assert np.isclose(energy, -157.09958704371914)
+    print(energy)
+
+    try:
+        RandomSplittingStrategy(split=[0.2, 0.1, 0.1])
+    except AssertionError:
+        print("AssertionError raised")
+        pass
+
+    train_dataset, val_dataset, test_dataset = RandomSplittingStrategy(
+        split=[0.6, 0.3, 0.1]
+    ).split(dataset)
+
+    assert len(train_dataset) == 60
 
 
-@pytest.mark.parametrize("dataset", [QM9Dataset])
-def test_getitem_type_and_shape(dataset):
-    """Test the __getitem__ method for type and shape consistency."""
-    d = dataset("tmp", test_data=True)
-    data_item = d[0]
-    assert isinstance(data_item, tuple)
-    assert data_item[0].shape[1] == 3  # Assuming 3D coordinates
-    assert data_item[1].ndim == 1  # Atomic numbers should be 1D
+@pytest.mark.parametrize("dataset", DATASETS)
+def test_file_cache_methods(dataset):
+    """
+    Test the FileCache methods to ensure data is cached and loaded correctly.
+    """
+
+    # generate files to test _from_hdf5()
+    from modelforge.dataset.transformation import default_transformation
+
+    _ = generate_dataset(dataset)
+
+    data = dataset(for_unit_testing=True)
+
+    data._from_hdf5()
+
+    data._to_file_cache(None, default_transformation)
+    data._from_file_cache()
+    assert len(data.numpy_data["geometry"]) == 100
 
 
-def test_GenericDataset():
-    # generate the npz file
-    QM9Dataset("tmp", test_data=True).load_or_process_data()
+@pytest.mark.parametrize("dataset", DATASETS)
+def test_dataset_downloader(dataset):
+    """
+    Test the DatasetDownloader functionality.
+    """
+    data = dataset(for_unit_testing=True)
+    data._download()
+    assert os.path.exists(data.raw_data_file)
 
-    g = GenericDataset("generic")
-    dataset = np.load("tmp_subset_processed.npz")
-    g.dataset = dataset
-    train_dataloader = DataLoader(g, batch_size=64, shuffle=True)
-    assert len([b for b in train_dataloader]) == 16  # (1_000 / 64 = 15.625)
+
+@pytest.mark.parametrize("dataset", DATASETS)
+def test_numpy_dataset_assignment(dataset):
+    """
+    Test if the numpy_dataset attribute is correctly assigned after processing or loading.
+    """
+    from modelforge.dataset.transformation import default_transformation
+
+    factory = DatasetFactory()
+    data = dataset(for_unit_testing=True)
+    factory._load_or_process_data(data, None, default_transformation)
+
+    assert hasattr(data, "numpy_data")
+    assert isinstance(data.numpy_data, np.lib.npyio.NpzFile)
+
+
+@pytest.mark.parametrize("dataset", DATASETS)
+def test_dataset_dataloaders(dataset):
+    """
+    Test if the data loaders return the expected batch sizes.
+    """
+    from modelforge.dataset.utils import RandomSplittingStrategy
+    from torch.utils.data import DataLoader
+
+    dataset = generate_dataset(dataset)
+    train_dataset, val_dataset, test_dataset = RandomSplittingStrategy().split(dataset)
+    train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+
+    for batch in train_dataloader:
+        assert len(batch) == 3  # coordinates, atomic_numbers, return_energy
+        assert (
+            batch[0].size(0) == 64 or batch[0].size(0) == 16
+        )  # default batch size (last batch has sieze 32)

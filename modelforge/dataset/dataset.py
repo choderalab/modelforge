@@ -2,35 +2,13 @@ import os
 from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
+import pytorch_lightning as pl
 import torch
 from loguru import logger
-from lightning import LightningDataModule
+from torch.utils.data import DataLoader
+
 from .transformation import default_transformation
-
-import pytorch_lightning as pl
-from .utils import SplittingStrategy, RandomSplittingStrategy
-
-
-class TorchDataModule(pl.LightningDataModule):
-    def __init__(
-        self,
-        data,
-        SplittingStrategy: SplittingStrategy = RandomSplittingStrategy,
-        batch_size=64,
-    ):
-        super().__init__()
-        self.data = data
-        self.batch_size = batch_size
-        self.SplittingStrategy = SplittingStrategy
-
-    def prepare_data(self) -> None:
-        factory = DatasetFactory()
-        self.dataset = factory.create_dataset(self.data)
-
-    def setup(self, stage: str):
-        # Assign Train/val split(s) for use in Dataloaders
-        if stage == "fit":
-            pass
+from .utils import RandomSplittingStrategy, SplittingStrategy
 
 
 class TorchDataset(torch.utils.data.Dataset):
@@ -307,3 +285,75 @@ class DatasetFactory:
         logger.info(f"Creating {data.dataset_name} dataset")
         DatasetFactory._load_or_process_data(data, label_transform, transform)
         return TorchDataset(data.numpy_data, data.properties_of_interest)
+
+
+class TorchDataModule(pl.LightningDataModule):
+
+    """
+    A custom data module class to handle data loading and preparation for PyTorch Lightning training.
+
+    Parameters
+    ----------
+    data : HDF5Dataset
+        The underlying dataset.
+    SplittingStrategy : SplittingStrategy, optional
+        Strategy used to split the data into training, validation, and test sets.
+        Default is RandomSplittingStrategy.
+    batch_size : int, optional
+        Batch size for data loading. Default is 64.
+
+    Examples
+    --------
+    >>> data = QM9Dataset()
+    >>> data_module = TorchDataModule(data)
+    >>> data_module.prepare_data()
+    >>> data_module.setup("fit")
+    >>> train_loader = data_module.train_dataloader()
+    """
+
+    def __init__(
+        self,
+        data: HDF5Dataset,
+        SplittingStrategy: SplittingStrategy = RandomSplittingStrategy,
+        batch_size: int = 64,
+    ):
+        super().__init__()
+        self.data = data
+        self.batch_size = batch_size
+        self.SplittingStrategy = SplittingStrategy
+
+    def prepare_data(self) -> None:
+        """
+        Prepares the data by creating a dataset instance.
+        """
+
+        factory = DatasetFactory()
+        self.dataset = factory.create_dataset(self.data)
+
+    def setup(self, stage: str):
+        """
+        Splits the data into training, validation, and test sets based on the stage.
+
+        Parameters
+        ----------
+        stage : str
+            Either "fit" for training/validation split or "test" for test split.
+        """
+        if stage == "fit":
+            train_dataset, val_dataset, _ = self.SplittingStrategy().split(self.dataset)
+            self.train_dataset = train_dataset
+            self.val_dataset = val_dataset
+
+        # Assign test dataset for use in dataloader(s)
+        if stage == "test":
+            _, _, test_dataset = self.SplittingStrategy().split(self.dataset)
+            self.test_dataset = test_dataset
+
+    def train_dataloader(self):
+        return DataLoader(self.train_dataset, batch_size=self.batch_size)
+
+    def val_dataloader(self):
+        return DataLoader(self.val_dataset, batch_size=self.batch_size)
+
+    def test_dataloader(self):
+        return DataLoader(self.test_dataset, batch_size=self.batch_size)

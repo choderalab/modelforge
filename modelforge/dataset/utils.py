@@ -1,15 +1,13 @@
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from typing import Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
 from loguru import logger
 from torch.utils.data import Subset, random_split
-
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .dataset import TorchDataset

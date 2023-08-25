@@ -13,7 +13,7 @@ class PotentialBase(nn.Module):
 
     Parameters
     ----------
-    input_dtype_str : str, optional
+    input_dtype : str, optional
         Data type of real inputs, default is "float32".
 
     Attributes
@@ -26,10 +26,10 @@ class PotentialBase(nn.Module):
 
     def __init__(
         self,
-        input_dtype_str: str = "float32",
+        input_dtype: str = "float32",
     ):
         super().__init__()
-        self.input_dtype_str = input_dtype_str
+        self.input_dtype = input_dtype
         self.required_derivatives: Optional[List[str]] = None
         self.model_outputs: Optional[List[str]] = None
 
@@ -42,7 +42,7 @@ class PotentialBase(nn.Module):
         List[str]
             List of required derivatives.
         """
-        self.required_derivatives = None
+        # self.required_derivatives = None
         required_derivatives = set()
         for m in self.modules():
             if (
@@ -62,7 +62,8 @@ class PotentialBase(nn.Module):
         List[str]
             List of model outputs.
         """
-        self.model_outputs = None
+        # self.model_outputs = None
+        
         model_outputs = set()
         for m in self.modules():
             if hasattr(m, "model_outputs") and m.model_outputs is not None:
@@ -110,7 +111,7 @@ class NeuralNetworkPotential(PotentialBase):
         representation: nn.Module,
         input_modules: List[nn.Module] = None,
         output_modules: List[nn.Module] = None,
-        input_dtype_str: str = "float32",
+        input_dtype: str = "float32",
     ):
         """
         Initialize the NeuralNetworkPotential class.
@@ -123,11 +124,11 @@ class NeuralNetworkPotential(PotentialBase):
             Modules applied before representation, default is None.
         output_modules : List[nn.Module], optional
             Modules that predict output properties from the representation, default is None.
-        input_dtype_str : str, optional
+        input_dtype: str, optional
             The dtype of real inputs, default is "float32".
         """
         super().__init__(
-            input_dtype_str=input_dtype_str,
+            input_dtype=input_dtype,
         )
         self.representation = representation
         self.input_modules = nn.ModuleList(input_modules or [])

@@ -125,13 +125,6 @@ class NeuralNetworkPotential(PotentialBase):
             Modules that predict output properties from the representation, default is None.
         input_dtype_str : str, optional
             The dtype of real inputs, default is "float32".
-
-        Example
-        -------
-        >>> representation = nn.Linear(10, 20)
-        >>> input_modules = [nn.Linear(20, 10)]
-        >>> output_modules = [nn.Linear(10, 1)]
-        >>> potential = NeuralNetworkPotential(representation, input_modules, output_modules)
         """
         super().__init__(
             input_dtype_str=input_dtype_str,

@@ -17,7 +17,7 @@ c.add_transformation(
     "[force] * [length]",
     lambda unit, x: x / unit.avogadro_constant,
 )
-unit.add_context(c)
+unit.add_context(c
 
 
 def dict_to_hdf5(file_name: str, data: list, id_key: str) -> None:

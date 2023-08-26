@@ -188,7 +188,7 @@ class QM9_curation:
         file_name: str, required
             Name of the file to parse
 
-        Returns
+        Return
         -------
             dict:
                 Dict of parsed properties.

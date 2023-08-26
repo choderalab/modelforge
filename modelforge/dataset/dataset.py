@@ -136,6 +136,8 @@ class HDF5Dataset:
             data[value] = []
 
         logger.debug(f"Processing and extracting data from {self.raw_data_file}")
+        # this will create an unzipped file which we can then load in
+        # this is substantially faster than passing gz_file directly to h5py.File()
         with gzip.open(self.raw_data_file, "rb") as gz_file:
             with open(self.raw_data_file.replace(".gz", ""), "wb") as out_file:
                 shutil.copyfileobj(gz_file, out_file)

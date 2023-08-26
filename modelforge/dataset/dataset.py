@@ -1,4 +1,5 @@
 import os
+import shutil
 from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -126,6 +127,7 @@ class HDF5Dataset:
 
         import h5py
         import tqdm
+        import shutil
 
         logger.debug("Reading in and processing hdf5 file ...")
         # initialize dict with empty lists
@@ -134,13 +136,15 @@ class HDF5Dataset:
             data[value] = []
 
         logger.debug(f"Processing and extracting data from {self.raw_data_file}")
-        with gzip.open(self.raw_data_file, "rb") as gz_file, h5py.File(
-            gz_file, "r"
-        ) as hf:
-            logger.debug(f"n_entries: {len(hf.keys())}")
-            for mol in tqdm.tqdm(list(hf.keys())):
-                for value in self.properties_of_interest:
-                    data[value].append(hf[mol][value][()])
+        with gzip.open(self.raw_data_file, "rb") as gz_file:
+            with open(self.raw_data_file.replace(".gz", ""), "wb") as out_file:
+                shutil.copyfileobj(gz_file, out_file)
+                with h5py.File(self.raw_data_file.replace(".gz", ""), "r") as hf:
+                    logger.debug(f"n_entries: {len(hf.keys())}")
+                    for mol in tqdm.tqdm(list(hf.keys())):
+                        for value in self.properties_of_interest:
+                            data[value].append(hf[mol][value][()])
+
         self.hdf5data = data
 
     def _from_file_cache(self) -> Dict[str, List]:

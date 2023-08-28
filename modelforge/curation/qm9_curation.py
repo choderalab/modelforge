@@ -14,7 +14,17 @@ import numpy as np
 
 class QM9_curation:
     """
-    Routines to fetch and process QM9 dataset.
+    Routines to fetch and process the QM9 dataset.
+
+    The QM9 dataset includes 133,885 organic molecules with up to nine heavy atoms (CONF).
+    All properties were calculated at the B3LYP/6-31G(2df,p) level of quantum chemistry.
+
+    Citation: Ramakrishnan, R., Dral, P., Rupp, M. et al.
+                Quantum chemistry structures and properties of 134 kilo molecules.
+                Sci Data 1, 140022 (2014).
+                https://doi.org/10.1038/sdata.2014.22
+
+    DOI of dataset: 10.6084/m9.figshare.c.978904.v5
 
     Parameters
     ----------
@@ -29,7 +39,11 @@ class QM9_curation:
         self.local_cache_dir = local_cache_dir
         self.hdf5_file_name = hdf5_file_name
 
-        # define key pieces of information related to the dataset
+        # define key pieces of information related to the dataset in a dict.
+        # dataset_download_url and dataset_filename are the two
+        # pieces of information used by the code to fetch the data.
+        # all other data is metadata that will be used to generate a README to go along with
+        # the HDF5 dataset.
         self.dataset_description = {
             "publication_doi": "10.1038/sdata.2014.22",
             "collection_doi": "10.6084/m9.figshare.c.978904.v5",
@@ -148,7 +162,8 @@ class QM9_curation:
 
         temp_prop = line.split()
         # list of properties and their units
-        labels_prop_units = [
+        # in the order they appear in the line
+        labels_and_units = [
             ("tag", None),
             ("idx", None),
             ("rotational constant A", unit.gigahertz),
@@ -168,11 +183,11 @@ class QM9_curation:
             ("heat capacity at 298.15K", unit.calorie_per_mole / unit.kelvin),
         ]
 
-        assert len(labels_prop_units) == len(temp_prop)
+        assert len(labels_and_units) == len(temp_prop)
 
         data = {}
-        for prop, label_prop_unit in zip(temp_prop, labels_prop_units):
-            label, prop_unit = label_prop_unit
+        for prop, label_and_unit in zip(temp_prop, labels_and_units):
+            label, prop_unit = label_and_unit
             if prop_unit is None:
                 data[label] = prop
             else:
@@ -188,7 +203,7 @@ class QM9_curation:
         file_name: str, required
             Name of the file to parse
 
-        Return
+        Returns
         -------
             dict:
                 Dict of parsed properties.
@@ -227,6 +242,9 @@ class QM9_curation:
             data["smiles b3lyp"] = smiles[1]
             data["inchi"] = InChI.split("\n")[0]
             data["geometry"] = np.array(geometry) * unit.angstrom
+            # Element symbols are converted to atomic numbers
+            # including an array of strings causes complications
+            # when writing the hdf5 file.
             # data["elements"] = np.array(elements, dtype=str)
             data["atomic numbers"] = np.array(atomic_numbers)
             data["charges"] = np.array(charges) * unit.elementary_charge
@@ -272,7 +290,7 @@ class QM9_curation:
 
     def process(self, force_download: bool = False, unit_testing: bool = False) -> None:
         """
-        Downloads the dataset and extracts relevant information.
+        Downloads the dataset, extracts relevant information, and writes an hdf5 file.
 
         Parameters
         ----------
@@ -291,6 +309,7 @@ class QM9_curation:
         name = self.dataset_description["dataset_filename"]
         url = self.dataset_description["dataset_download_url"]
 
+        # download the dataset
         self._download(
             url=url,
             name=name,
@@ -298,12 +317,16 @@ class QM9_curation:
             force_download=force_download,
         )
 
+        # untar the dataset
         self._extract(
             file_path=f"{self.local_cache_dir}/{name}",
             cache_directory=self.local_cache_dir,
         )
+
+        # list the files in the directory to examine
         files = self._list_files(directory=self.local_cache_dir, extension=".xyz")
 
+        # parse the information in each datat file, saving to a list of dicts, data
         self.data = []
         for i, file in enumerate(tqdm(files, desc="processing", total=len(files))):
             data_temp = self._parse_xyzfile(f"{self.local_cache_dir}/{file}")
@@ -311,4 +334,6 @@ class QM9_curation:
             if unit_testing:
                 if i > 10:
                     break
+
+        # generate the hdf5 file from the list of dicts
         dict_to_hdf5(self.hdf5_file_name, self.data, id_key="name")

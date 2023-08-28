@@ -17,12 +17,14 @@ c.add_transformation(
     "[force] * [length]",
     lambda unit, x: x / unit.avogadro_constant,
 )
-unit.add_context(c
+unit.add_context(c)
 
 
 def dict_to_hdf5(file_name: str, data: list, id_key: str) -> None:
     """
-    Writes hdf5 file from dict.
+    Writes hdf5 file from a list of dicts.
+
+    This will write units, if provided as attributes.
 
     Parameters
     ----------

@@ -139,7 +139,7 @@ def _download_from_gdrive(id: str, raw_dataset_file: str):
 
     Examples
     --------
-    >>> _download_from_gdrive("1v2gV3sG9JhMZ5QZn3gFB9j5ZIs0Xjxz8", "data_file.hdf5")
+    >>> _download_from_gdrive("1v2gV3sG9JhMZ5QZn3gFB9j5ZIs0Xjxz8", "data_file.hdf5.gz")
     """
     import gdown
 

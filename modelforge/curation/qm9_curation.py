@@ -3,12 +3,13 @@ from loguru import logger
 import os
 from tqdm import tqdm
 
+from typing import Optional
 from openff.units import unit, Quantity
 import pint
 import qcelemental as qcel
 
 import tarfile
-from modelforge.curation.utils import dict_to_hdf5
+from modelforge.curation.utils import *
 import numpy as np
 
 
@@ -35,6 +36,9 @@ class QM9_curation:
         Path to write the output hdf5 file.
     local_cache_dir: str, optional, default='./qm9_datafiles'
         Location to save downloaded dataset.
+    convert_units: bool, optional, default=True
+        Convert from [angstrom, hartree] (i.e., source units)
+        to [nanometer, kJ/mol]
 
     Examples
     --------
@@ -46,12 +50,14 @@ class QM9_curation:
     def __init__(
         self,
         hdf5_file_name: str,
-        output_file_path: str = "./",
-        local_cache_dir: str = "./qm9_datafiles",
+        output_file_path: Optional[str] = "./",
+        local_cache_dir: Optional[str] = "./qm9_datafiles",
+        convert_units: Optional[bool] = True,
     ):
         self.local_cache_dir = local_cache_dir
         self.output_file_path = output_file_path
         self.hdf5_file_name = hdf5_file_name
+        self.convert_units = convert_units
 
         # Below, we define key pieces of information related to the dataset in the form of a dict.
         # `dataset_download_url` and `dataset_filename` are used by the code to fetch the data.
@@ -78,6 +84,20 @@ class QM9_curation:
                 QM9 Dataset: Includes 133,885 organic molecules with up to nine heavy atoms (CONF). 
                 ll properties were calculated at the B3LYP/6-31G(2df,p) level of quantum chemistry.
                 """,
+        }
+        # if convert_units is True we will
+        # convert the following units
+        self.unit_output_dict = {
+            "geometry": unit.nanometer,
+            "energy of homo": unit.kilojoule_per_mole,
+            "energy of lumo": unit.kilojoule_per_mole,
+            "gap": unit.kilojoule_per_mole,
+            "zero point vibrational energy": unit.kilojoule_per_mole,
+            "internal energy at 0K": unit.kilojoule_per_mole,
+            "internal energy at 298.15K": unit.kilojoule_per_mole,
+            "enthalpy at 298.15K": unit.kilojoule_per_mole,
+            "free energy at 298.15K": unit.kilojoule_per_mole,
+            "heat capacity at 298.15K": unit.kilojoule_per_mole / unit.kelvin,
         }
 
     def _mkdir(self, path: str) -> None:
@@ -326,6 +346,18 @@ class QM9_curation:
                 hvf.append(self._str_to_float(h))
 
             data["harmonic vibrational frequencies"] = np.array(hvf) / unit.cm
+
+            # if unit outputs were defined perform conversion
+            if self.convert_units:
+                for key in data.keys():
+                    if key in self.unit_output_dict.keys():
+                        try:
+                            data[key] = data[key].to(self.unit_output_dict[key], "chem")
+                        except Exception:
+                            print(
+                                f"could not convert {key} with units {key.u} to {self.unit_output_dict[key]}"
+                            )
+
         return data
 
     def _list_files(self, directory: str, extension: str) -> list:

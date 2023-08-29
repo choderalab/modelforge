@@ -21,6 +21,6 @@ class Inputs:
 
 
 @dataclass
-class AtomicEnergies:
+class SpeciesEnergies:
     species: torch.Tensor
     energies: torch.Tensor

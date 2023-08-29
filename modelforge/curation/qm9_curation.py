@@ -14,8 +14,9 @@ import numpy as np
 
 class QM9_curation:
     """
-    Routines to fetch and process the QM9 dataset.
+    Routines to fetch and process the QM9 dataset into a curated hdf5 file.
 
+    Dataset description:
     The QM9 dataset includes 133,885 organic molecules with up to nine heavy atoms (CONF).
     All properties were calculated at the B3LYP/6-31G(2df,p) level of quantum chemistry.
 
@@ -24,48 +25,73 @@ class QM9_curation:
                 Sci Data 1, 140022 (2014).
                 https://doi.org/10.1038/sdata.2014.22
 
-    DOI of dataset: 10.6084/m9.figshare.c.978904.v5
+    DOI for dataset: 10.6084/m9.figshare.c.978904.v5
 
     Parameters
     ----------
     hdf5_file_name: str, required
-        Name of the hdf5 file that will be generated
-    local_cache_dir: str, required, default=qm9_datafiles
+        Name of the hdf5 file that will be generated.
+    output_file_path: str, optional, default='./'
+        Path to write the output hdf5 file.
+    local_cache_dir: str, optional, default='./qm9_datafiles'
         Location to save downloaded dataset.
+
+    Examples
+    --------
+    >>> qm9_data = QM9_curation(hdf5_file_name='qm9_dataset.hdf5', local_cache_dir='~/datasets/qm9_dataset')
+    >>> qm9_data.process()
 
     """
 
-    def __init__(self, hdf5_file_name: str, local_cache_dir: str = "qm9_datafiles"):
+    def __init__(
+        self,
+        hdf5_file_name: str,
+        output_file_path: str = "./",
+        local_cache_dir: str = "./qm9_datafiles",
+    ):
         self.local_cache_dir = local_cache_dir
+        self.output_file_path = output_file_path
         self.hdf5_file_name = hdf5_file_name
 
-        # define key pieces of information related to the dataset in a dict.
-        # dataset_download_url and dataset_filename are the two
-        # pieces of information used by the code to fetch the data.
-        # all other data is metadata that will be used to generate a README to go along with
+        # Below, we define key pieces of information related to the dataset in the form of a dict.
+        # `dataset_download_url` and `dataset_filename` are used by the code to fetch the data.
+        # All other data is metadata that will be used to generate a README to go along with
         # the HDF5 dataset.
         self.dataset_description = {
             "publication_doi": "10.1038/sdata.2014.22",
-            "collection_doi": "10.6084/m9.figshare.c.978904.v5",
-            "dataset_url": "https://springernature.figshare.com/articles/dataset/Data_for_6095_constitutional_isomers_of_C7H10O2/1057646/2",
+            "figshare_dataset_doi": "10.6084/m9.figshare.c.978904.v5",
+            "figshare_dataset_url": "https://springernature.figshare.com/articles/dataset/Data_for_6095_constitutional_isomers_of_C7H10O2/1057646/2",
             "dataset_download_url": "https://ndownloader.figshare.com/files/3195389",
             "dataset_filename": "dsgdb9nsd.xyz.tar.bz2",
-            "publication_citation": """Ramakrishnan, R., Dral, P., Rupp, M. et al. 
-                                        Quantum chemistry structures and properties of 134 kilo molecules. 
-                                        Sci Data 1, 140022 (2014). 
-                                        https://doi.org/10.1038/sdata.2014.22""",
-            "dataset_citation": """Ramakrishnan, Raghunathan; Dral, Pavlo; Rupp, Matthias; Anatole von Lilienfeld, O. (2014). 
-                                    Quantum chemistry structures and properties of 134 kilo molecules. 
-                                    figshare. Collection. https://doi.org/10.6084/m9.figshare.c.978904.v5""",
-            "description": """QM9 Dataset: Includes 133,885 organic molecules with up to nine heavy atoms (CONF). 
-                                All properties were calculated at the B3LYP/6-31G(2df,p) level of quantum chemistry.""",
+            "publication_citation": """
+                Ramakrishnan, R., Dral, P., Rupp, M. et al. 
+                    Quantum chemistry structures and properties of 134 kilo molecules. 
+                    Sci Data 1, 140022 (2014). 
+                    https://doi.org/10.1038/sdata.2014.22
+                """,
+            "dataset_citation": """
+                    Ramakrishnan, Raghunathan; Dral, Pavlo; Rupp, Matthias; Anatole von Lilienfeld, O. (2014). 
+                    Quantum chemistry structures and properties of 134 kilo molecules. 
+                    figshare. Collection. https://doi.org/10.6084/m9.figshare.c.978904.v5
+                """,
+            "description": """
+                QM9 Dataset: Includes 133,885 organic molecules with up to nine heavy atoms (CONF). 
+                ll properties were calculated at the B3LYP/6-31G(2df,p) level of quantum chemistry.
+                """,
         }
+
+    def _mkdir(self, path: str) -> None:
+        if not os.path.exists(path):
+            try:
+                os.makedirs(path)
+            except Exception:
+                print("Could not create directory {path}.")
 
     def _download(
         self, url: str, name: str, output_path: str, force_download=False
     ) -> None:
         """
-        Downloads the dataset tar file from figshare.
+        Downloads the dataset tar.bz2 file from figshare.
 
         Parameters
         ----------
@@ -84,19 +110,21 @@ class QM9_curation:
         if not os.path.isfile(f"{output_path}/{name}") or force_download:
             logger.debug(f"Downloading datafile from figshare to {output_path}/{name}.")
             chunk_size = 512
+
             # get the head of the request
             head = requests.head(url)
 
-            # because the url is calling a downloader, instead of the direct file
-            # we can extract the file location and then fetch the length from this head
-            # this is only useful for the download bar status
+            # because the url on figshare calls downloader, instead of the direct file,
+            # we need to figure out what the original file is to know how big it is
+            # here we will parse the header info to get the file the downloader links to
+            # and then get the head info from this link to fetch the length
+            # this is not actually necessary, but useful for updating download status bar
             temp_url = head.headers["location"].split("?")[0]
             length = int(requests.head(temp_url).headers["Content-Length"])
 
             r = requests.get(url, stream=True)
 
-            if not os.path.exists(output_path):
-                os.makedirs(output_path)
+            self._mkdir(output_path)
 
             with open(f"{output_path}/{name}", "wb") as fd:
                 for chunk in tqdm(
@@ -106,7 +134,7 @@ class QM9_curation:
                     total=(int(length / chunk_size) + 1),
                 ):
                     fd.write(chunk)
-        else:
+        else:  # if the file exists and we don't set force_download to True, just use the cached version
             logger.debug("Datafile exists, using cached file.")
 
     def _extract(self, file_path: str, cache_directory: str) -> None:
@@ -128,9 +156,9 @@ class QM9_curation:
 
     def _str_to_float(self, x: str) -> float:
         """
-        Converts a string to float, fixing Mathematica style scientific notion.
+        Converts a string to float, changing Mathematica style scientific notion to python style.
 
-        For example converts str(1*^-6) to float(1e-6).
+        For example, this will convert str(1*^-6) to float(1e-6).
 
         Parameters
         ----------
@@ -147,12 +175,13 @@ class QM9_curation:
 
     def _parse_properties(self, line: str) -> dict:
         """
-        Parses the property line in the xyz file.
+        Parses the line in the xyz file that contains property information.
 
         Properties
         ----------
         line: str, required
-            String to parse following the description in the original manuscript (See tables 2 and 3)
+            String to parse that contains property information. The structure of this line
+            following the description in the original manuscript (See tables 2 and 3).
 
         Returns
         -------
@@ -161,8 +190,8 @@ class QM9_curation:
         """
 
         temp_prop = line.split()
-        # list of properties and their units
-        # in the order they appear in the line
+        # list of properties and their units in the order they appear in the file.
+
         labels_and_units = [
             ("tag", None),
             ("idx", None),
@@ -198,6 +227,9 @@ class QM9_curation:
         """
         Parses the file containing information for each molecule.
 
+        Structure of the file (based on tables 2 and 3 of the original manuscript):
+
+
         Parameters
         ----------
         file_name: str, required
@@ -208,7 +240,40 @@ class QM9_curation:
             dict:
                 Dict of parsed properties.
 
+        File format info
+        ----------------
+
+        Line            Content
+        1               Number of atoms, n_a
+        2               Scalar properties (see below)
+        3,...mn_a+2     Element type, coords (x,y,z \AA) Mulliken partial charges (in e)
+        n_a+3           Harmonic vibrational frequencies (3n_a-5 or 3n_a-6 in cm^-1)
+        n_a+4           SMILES strings from GDB-17 and B3LYP relaxation
+        n_a+5           InChI strings for Corina and B3LYP geometries
+
+        Scalar properties:
+
+        #   Unit        Description
+        1   N/A         gdb9 string to facilitate extraction
+        2   N/A         Consecutive, 1-based integer identifier
+        3   GHz         Rotational constant A
+        4   GHz         Rotational constant B
+        5   GHz         Rotational constant C
+        6   D           Dipole moment
+        7   \AA^3       Isotropic polarizability
+        8   Ha          Energy of HOMO
+        9   Ha          Energy of LUMO
+        10  Ha          LUMO-HOMO gap
+        11  \AA^2       Electronic spatial extent
+        12  Ha          Zero point vibrational energy
+        13  Ha          Internal energy at 0K
+        14  Ha          Internal energy at 298.15K
+        15  Ha          Enthalpy at 298.15K
+        16  Ha          Free energy at 298.15K
+        17  cal/mol/K   Heat capacity at 298.15K
+
         """
+
         with open(file_name, "r") as file:
             n_atoms = int(file.readline())
             properties_temp = file.readline()
@@ -240,7 +305,8 @@ class QM9_curation:
             data["name"] = file_name.split("/")[-1].split(".")[0]
             data["smiles gdb-17"] = smiles[0]
             data["smiles b3lyp"] = smiles[1]
-            data["inchi"] = InChI.split("\n")[0]
+            data["inchi Corina"] = InChI.split("\n")[0].split()[0].replace("InChI=", "")
+            data["inchi B3LYP"] = InChI.split("\n")[0].split()[1].replace("InChI=", "")
             data["geometry"] = np.array(geometry) * unit.angstrom
             # Element symbols are converted to atomic numbers
             # including an array of strings causes complications
@@ -286,6 +352,7 @@ class QM9_curation:
         for file in os.listdir(directory):
             if file.endswith(extension):
                 files.append(file)
+        files.sort()
         return files
 
     def process(self, force_download: bool = False, unit_testing: bool = False) -> None:
@@ -300,10 +367,11 @@ class QM9_curation:
         unit_testing: bool, optional, default=False
             If True, only a subset (first 10 records) of the dataset will be used.
             Primarily meant to ensure unit tests can be completed in a reasonable time period.
+
         Examples
         --------
-        > qm9_data = QM9_curation(local_cache_dir='~/datasets/qm9_dataset')
-        > qm9_data.process()
+        >>> qm9_data = QM9_curation(hdf5_file_name='qm9_dataset.hdf5', local_cache_dir='~/datasets/qm9_dataset')
+        >>> qm9_data.process()
 
         """
         name = self.dataset_description["dataset_filename"]
@@ -335,5 +403,10 @@ class QM9_curation:
                 if i > 10:
                     break
 
+        self._mkdir(self.output_file_path)
+
+        full_output_path = f"{self.output_file_path}/{self.hdf5_file_name}"
         # generate the hdf5 file from the list of dicts
-        dict_to_hdf5(self.hdf5_file_name, self.data, id_key="name")
+        logger.debug("Writing HDF5 file.")
+
+        dict_to_hdf5(full_output_path, self.data, id_key="name")

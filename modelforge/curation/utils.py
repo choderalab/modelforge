@@ -22,9 +22,9 @@ unit.add_context(c)
 
 def dict_to_hdf5(file_name: str, data: list, id_key: str) -> None:
     """
-    Writes hdf5 file from a list of dicts.
+    Writes an hdf5 file from a list of dicts.
 
-    This will write units, if provided as attributes.
+    This will include units, if provided as attributes.
 
     Parameters
     ----------
@@ -33,7 +33,7 @@ def dict_to_hdf5(file_name: str, data: list, id_key: str) -> None:
     data: list of dicts, required
         List that contains dictionaries of properties for each molecule to write to file.
     id_key: str, required
-        Name of the key in each dict that uniquely describes each molecule.
+        Name of the key in the dicts that uniquely describes each record.
 
     Examples
     --------
@@ -48,17 +48,18 @@ def dict_to_hdf5(file_name: str, data: list, id_key: str) -> None:
             record_name = datapoint[id_key]
             group = f.create_group(record_name)
             for key, val in datapoint.items():
-                if isinstance(val, pint.Quantity):
-                    val_m = val.m
-                    val_u = str(val.u)
-                else:
-                    val_m = val
-                    val_u = None
-                if isinstance(val_m, str):
-                    group.create_dataset(name=key, data=val_m, dtype=dt)
-                elif isinstance(val_m, (float, int)):
-                    group.create_dataset(name=key, data=val_m)
-                elif isinstance(val_m, np.ndarray):
-                    group.create_dataset(name=key, data=val_m, shape=val_m.shape)
-                if not val_u is None:
-                    group[key].attrs["units"] = val_u
+                if key != id_key:
+                    if isinstance(val, pint.Quantity):
+                        val_m = val.m
+                        val_u = str(val.u)
+                    else:
+                        val_m = val
+                        val_u = None
+                    if isinstance(val_m, str):
+                        group.create_dataset(name=key, data=val_m, dtype=dt)
+                    elif isinstance(val_m, (float, int)):
+                        group.create_dataset(name=key, data=val_m)
+                    elif isinstance(val_m, np.ndarray):
+                        group.create_dataset(name=key, data=val_m, shape=val_m.shape)
+                    if not val_u is None:
+                        group[key].attrs["units"] = val_u

@@ -17,7 +17,6 @@ class QM9_curation:
     """
     Routines to fetch and process the QM9 dataset into a curated hdf5 file.
 
-    Dataset description:
     The QM9 dataset includes 133,885 organic molecules with up to nine heavy atoms (CONF).
     All properties were calculated at the B3LYP/6-31G(2df,p) level of quantum chemistry.
 
@@ -266,7 +265,7 @@ class QM9_curation:
         Line            Content
         1               Number of atoms, n_a
         2               Scalar properties (see below)
-        3,...mn_a+2     Element type, coords (x,y,z \AA) Mulliken partial charges (in e)
+        3,...mn_a+2     Element type, coords (x,y,z Ang) Mulliken partial charges (in e)
         n_a+3           Harmonic vibrational frequencies (3n_a-5 or 3n_a-6 in cm^-1)
         n_a+4           SMILES strings from GDB-17 and B3LYP relaxation
         n_a+5           InChI strings for Corina and B3LYP geometries
@@ -280,11 +279,11 @@ class QM9_curation:
         4   GHz         Rotational constant B
         5   GHz         Rotational constant C
         6   D           Dipole moment
-        7   \AA^3       Isotropic polarizability
+        7   Ang^3       Isotropic polarizability
         8   Ha          Energy of HOMO
         9   Ha          Energy of LUMO
         10  Ha          LUMO-HOMO gap
-        11  \AA^2       Electronic spatial extent
+        11  Ang^2       Electronic spatial extent
         12  Ha          Zero point vibrational energy
         13  Ha          Internal energy at 0K
         14  Ha          Internal energy at 298.15K
@@ -387,6 +386,37 @@ class QM9_curation:
         files.sort()
         return files
 
+    def _process_downloaded(
+        self, local_path_to_tar: str, name: str, unit_testing: bool
+    ):
+        # untar the dataset
+        self._extract(
+            file_path=f"{local_path_to_tar}/{name}",
+            cache_directory=self.local_cache_dir,
+        )
+
+        # list the files in the directory to examine
+        files = self._list_files(directory=self.local_cache_dir, extension=".xyz")
+
+        # parse the information in each datat file, saving to a list of dicts, data
+        self.data = []
+        for i, file in enumerate(tqdm(files, desc="processing", total=len(files))):
+            # first 10 records
+            if unit_testing:
+                if i > 9:
+                    break
+
+            data_temp = self._parse_xyzfile(f"{self.local_cache_dir}/{file}")
+            self.data.append(data_temp)
+
+        self._mkdir(self.output_file_path)
+
+        full_output_path = f"{self.output_file_path}/{self.hdf5_file_name}"
+
+        # generate the hdf5 file from the list of dicts
+        logger.debug("Writing HDF5 file.")
+        dict_to_hdf5(full_output_path, self.data, id_key="name")
+
     def process(self, force_download: bool = False, unit_testing: bool = False) -> None:
         """
         Downloads the dataset, extracts relevant information, and writes an hdf5 file.
@@ -416,29 +446,5 @@ class QM9_curation:
             output_path=self.local_cache_dir,
             force_download=force_download,
         )
-
-        # untar the dataset
-        self._extract(
-            file_path=f"{self.local_cache_dir}/{name}",
-            cache_directory=self.local_cache_dir,
-        )
-
-        # list the files in the directory to examine
-        files = self._list_files(directory=self.local_cache_dir, extension=".xyz")
-
-        # parse the information in each datat file, saving to a list of dicts, data
-        self.data = []
-        for i, file in enumerate(tqdm(files, desc="processing", total=len(files))):
-            data_temp = self._parse_xyzfile(f"{self.local_cache_dir}/{file}")
-            self.data.append(data_temp)
-            if unit_testing:
-                if i > 10:
-                    break
-
-        self._mkdir(self.output_file_path)
-
-        full_output_path = f"{self.output_file_path}/{self.hdf5_file_name}"
-        # generate the hdf5 file from the list of dicts
-        logger.debug("Writing HDF5 file.")
-
-        dict_to_hdf5(full_output_path, self.data, id_key="name")
+        # process the rest of the dataset
+        self._process_downloaded(self.local_cache_dir, name, unit_testing)

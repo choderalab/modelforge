@@ -1,3 +1,9 @@
+import torch
+from typing import Callable, Union
+import torch.nn as nn
+import numpy as np
+
+
 def _scatter_add(
     x: torch.Tensor, idx_i: torch.Tensor, dim_size: int, dim: int = 0
 ) -> torch.Tensor:
@@ -6,6 +12,7 @@ def _scatter_add(
     tmp = torch.zeros(shape, dtype=x.dtype, device=x.device)
     y = tmp.index_add(dim, idx_i, x)
     return y
+
 
 def scatter_add(
     x: torch.Tensor, idx_i: torch.Tensor, dim_size: int, dim: int = 0
@@ -60,7 +67,6 @@ class Dense(nn.Linear):
         self.weight_init(self.weight)
         self.weight = self.weight.double()
 
-
     def forward(self, x: torch.Tensor):
         y = F.linear(x, self.weight)
         y = self.activation(y)
@@ -72,6 +78,7 @@ def gaussian_rbf(inputs: torch.Tensor, offsets: torch.Tensor, widths: torch.Tens
     diff = inputs[..., None] - offsets
     y = torch.exp(coeff * torch.pow(diff, 2))
     return y
+
 
 def cosine_cutoff(input: torch.Tensor, cutoff: torch.Tensor):
     """ Behler-style cosine cutoff.

@@ -2,6 +2,7 @@ import torch
 from typing import Callable, Union
 import torch.nn as nn
 import numpy as np
+import torch.nn.functional as F
 
 
 def _scatter_add(
@@ -46,6 +47,10 @@ class Dense(nn.Linear):
         out_features: int,
         bias: bool = True,
         activation: Union[Callable, nn.Module] = None,
+        dtype: torch.dtype = torch.float32,
+        device: torch.device = torch.device(
+            "cuda" if torch.cuda.is_available() else "cpu"
+        ),
     ):
         """
         Args:
@@ -65,7 +70,7 @@ class Dense(nn.Linear):
         self.weight_init = xavier_uniform_
 
         self.weight_init(self.weight)
-        self.weight = self.weight.double()
+        self.weight = self.weight.to(device, dtype)
 
     def forward(self, x: torch.Tensor):
         y = F.linear(x, self.weight)
@@ -77,7 +82,7 @@ def gaussian_rbf(inputs: torch.Tensor, offsets: torch.Tensor, widths: torch.Tens
     coeff = -0.5 / torch.pow(widths, 2)
     diff = inputs[..., None] - offsets
     y = torch.exp(coeff * torch.pow(diff, 2))
-    return y
+    return y.to(dtype=torch.float32)
 
 
 def cosine_cutoff(input: torch.Tensor, cutoff: torch.Tensor):
@@ -98,7 +103,7 @@ def cosine_cutoff(input: torch.Tensor, cutoff: torch.Tensor):
     # Compute values of cutoff function
     input_cut = 0.5 * (torch.cos(input * np.pi / cutoff) + 1.0)
     # Remove contributions beyond the cutoff radius
-    input_cut *= (input < cutoff).float()
+    input_cut *= input < cutoff
     return input_cut
 
 
@@ -122,7 +127,15 @@ class GaussianRBF(nn.Module):
     r"""Gaussian radial basis functions."""
 
     def __init__(
-        self, n_rbf: int, cutoff: float, start: float = 0.0, trainable: bool = False
+        self,
+        n_rbf: int,
+        cutoff: float,
+        start: float = 0.0,
+        trainable: bool = False,
+        device: torch.device = torch.device(
+            "cuda" if torch.cuda.is_available() else "cpu"
+        ),
+        dtype: torch.dtype = torch.float32,
     ):
         """
         Args:
@@ -136,9 +149,11 @@ class GaussianRBF(nn.Module):
         self.n_rbf = n_rbf
 
         # compute offset and width of Gaussian functions
-        offset = torch.linspace(start, cutoff, n_rbf)
-        widths = torch.FloatTensor(
-            torch.abs(offset[1] - offset[0]) * torch.ones_like(offset)
+        offset = torch.linspace(start, cutoff, n_rbf, dtype=dtype, device=device)
+        widths = torch.tensor(
+            torch.abs(offset[1] - offset[0]) * torch.ones_like(offset),
+            device=device,
+            dtype=dtype,
         )
         if trainable:
             self.widths = nn.Parameter(widths)

@@ -1,6 +1,3 @@
-from modelforge.dataset.qm9 import QM9Dataset
-from modelforge.dataset.dataset import TorchDataModule
-
 from modelforge.utils import Inputs, Properties, SpeciesEnergies
 
 import torch.nn as nn
@@ -12,6 +9,7 @@ from ase import Atoms
 import numpy as np
 from .models import BaseNNP
 from .utils import GaussianRBF, shifted_softplus, cosine_cutoff, Dense, scatter_add
+from torch import dtype
 
 
 class Schnet(BaseNNP):
@@ -20,8 +18,12 @@ class Schnet(BaseNNP):
         n_atom_basis: int,
         n_interactions: int,
         n_filters: int = None,
+        dtype: dtype = torch.float32,
+        device: torch.device = torch.device(
+            "cuda" if torch.cuda.is_available() else "cpu"
+        ),
     ):
-        super().__init__()
+        super().__init__(dtype, device)
         n_rbf = 20
         self.radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=5.0)
         self.cutoff = 5.0
@@ -31,7 +33,7 @@ class Schnet(BaseNNP):
         self.in2f = Dense(n_atom_basis, n_filters, bias=False, activation=None)
         self.f2out = nn.Sequential(
             Dense(n_filters, n_atom_basis, activation=self.activation),
-            Dense(n_atom_basis, n_atom_basis, activation=None),
+            Dense(n_atom_basis, 1, activation=None),
         )
         self.filter_network = nn.Sequential(
             Dense(n_rbf, n_filters, activation=self.activation),
@@ -57,17 +59,18 @@ class Schnet(BaseNNP):
 
     def _interaction_block(self, inputs: Inputs, f_ij, r_ij, idx_i, idx_j, rcut_ij):
         # compute atom and pair features
-        x = self.embedding(inputs.Z.long())
-        idx_i = torch.from_numpy(idx_i)
+        x = self.embedding(inputs.Z)
+        idx_i = torch.from_numpy(idx_i).to(self.device, torch.int32)
         for i in range(self.n_interactions):
             x = self.in2f(x)
+
             Wij = self.filter_network(f_ij)
             Wij = Wij * rcut_ij[:, None]
+            Wij = Wij.to(dtype=self.dtype)
             # continuous-filter convolution
             x_j = x[idx_j]
             x_ij = x_j * Wij
             x = scatter_add(x_ij, idx_i, dim_size=x.shape[0])
-
             v = self.f2out(x)
             x = x + v
 
@@ -76,7 +79,4 @@ class Schnet(BaseNNP):
     def calculate_energies_and_forces(self, inputs: Inputs) -> torch.Tensor:
         f_ij, r_ij, idx_i, idx_j, rcut_ij = self._compute_distances(inputs)
         x = self._interaction_block(inputs, f_ij, r_ij, idx_i, idx_j, rcut_ij)
-        print(x)
         return x
-
-

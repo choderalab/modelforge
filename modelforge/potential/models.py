@@ -1,19 +1,18 @@
 from typing import Dict, List, Optional
 
-import torch
 import torch.nn as nn
+import lightning as pl
+from modelforge.utils import Inputs, PropertyNames, SpeciesEnergies
 
-from modelforge.utils import Inputs, Properties, SpeciesEnergies
 
-
-class BaseNNP(nn.Module):
+class BaseNNP(pl.LightningModule):
     """
     Abstract base class for neural network potentials.
     This class defines the overall structure and ensures that subclasses
     implement the `calculate_energies_and_forces` method.
     """
 
-    def __init__(self, dtype: torch.dtype, device: torch.device):
+    def __init__(self):
         """
         Initialize the NeuralNetworkPotential class.
 
@@ -26,8 +25,6 @@ class BaseNNP(nn.Module):
 
         """
         super().__init__()
-        self.dtype = dtype
-        self.device = device
 
     def forward(
         self,
@@ -63,5 +60,3 @@ class BaseNNP(nn.Module):
 
         """
         raise NotImplementedError("Subclasses must implement this method.")
-
-

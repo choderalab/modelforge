@@ -6,7 +6,7 @@ from modelforge.potential.models import BaseNNP
 from modelforge.potential.schnet import Schnet
 from modelforge.utils import Inputs
 
-from .helper_functinos import default_input_iterator
+from .helper_functinos import initialize_dataset
 
 MODELS_TO_TEST = [Schnet]
 
@@ -23,9 +23,9 @@ def test_forward_pass(model_class):
     from lightning import Trainer
 
     model = setup_simple_model(model_class)
-    inputs = default_input_iterator()
+    dataset = initialize_dataset()
     trainer = Trainer()
-    trainer.fit(model, train_dataloader, val_dataloader)
+    trainer.fit(model, dataset.train_dataloader, dataset.val_dataloader)
 
     # for inp in inputs
     # output = initialized_model.forward(inputs)

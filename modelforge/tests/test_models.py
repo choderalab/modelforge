@@ -1,39 +1,30 @@
-from modelforge.dataset.qm9 import QM9Dataset
-from modelforge.dataset.dataset import TorchDataModule
-from modelforge.potential.schnet import Schnet
-from modelforge.utils import Inputs
+from typing import Optional
+
+import pytest
 import torch
 
+from modelforge.potential.models import BaseNNP
+from modelforge.potential.schnet import Schnet
+from .helper_functinos import default_input
 
-def initialize_dataloader() -> torch.utils.data.DataLoader:
-    data = QM9Dataset(for_unit_testing=True)
-    data_module = TorchDataModule(data)
-    data_module.prepare_data()
-    data_module.setup("fit")
-    return data_module.train_dataloader()
+MODELS_TO_TEST = [Schnet]
 
 
-def setup_simple_model() -> Schnet:
-    return Schnet(n_atom_basis=128, n_interactions=3, n_filters=128)
+def setup_simple_model(model_class) -> Optional[BaseNNP]:
+    if model_class is Schnet:
+        return Schnet(n_atom_basis=128, n_interactions=3, n_filters=64)
+    else:
+        raise NotImplementedError
 
 
-def default_input():
-    train_loader = initialize_dataloader()
-    R, Z, E = train_loader.dataset[0]
-    padded_values = -Z.eq(-1).sum().item()
-    Z_ = Z[:padded_values]
-    R_ = R[:padded_values]
-    return Inputs(Z_, R_, E)
+def test_BaseNNP():
+    nnp = BaseNNP(dtype=torch.float32, device="cpu")
+    assert nnp.dtype == torch.float32
+    assert str(nnp.device) == "cpu"
 
 
-def test_base_class():
-    schnet = setup_simple_model()
+@pytest.mark.parametrize("model_class", MODELS_TO_TEST)
+def test_forward_pass(model_class):
+    initialized_model = setup_simple_model(model_class)
     inputs = default_input()
-    output = schnet.forward(inputs)
-    print(output)
-
-
-def test_forward_pass():
-    model = setup_simple_model()
-    t = torch.tensor([[1.0] * 10])
-    model.forward({"inputs": t})
+    output = initialized_model.forward(inputs)

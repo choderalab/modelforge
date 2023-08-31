@@ -49,12 +49,6 @@ class Schnet(BaseNNP):
 
         super().__init__(dtype, device)
 
-        # generate atom embeddings
-        # atoms are described by a tuple of features
-        # X^{l} = x^{l}_{1},..., x^{l}_{n} with
-        # x^{l}_{i} ∈ R^{F} with the number of feature maps F,
-        # the number of atoms n and the current layer l
-
         # initialize atom embeddings
         max_z: int = 100  # max nuclear charge (i.e. atomic number)
         self.embedding = nn.Embedding(max_z, n_atom_basis, padding_idx=0)
@@ -70,11 +64,10 @@ class Schnet(BaseNNP):
         # initialize dense yalers for atom feature transformation
         # Dense layers are applied consecutively to the initialized atom embeddings x^{l}_{0}
         # to generate x_i^l+1 = W^lx^l_i + b^l
-        logger.debug("in2f")
-        print("in2f")
-        self.in2f = Dense(n_atom_basis, n_filters, bias=False, activation=None)
-        print("f2out")
-        self.f2out = nn.Sequential(
+        self.intput_to_feature = Dense(
+            n_atom_basis, n_filters, bias=False, activation=None
+        )
+        self.feature_to_output = nn.Sequential(
             Dense(n_filters, n_atom_basis, activation=self.activation),
             Dense(n_atom_basis, n_atom_basis, activation=None),
         )
@@ -177,15 +170,17 @@ class Schnet(BaseNNP):
 
         # compute atom and pair features (see Fig1 in 10.1063/1.5019779)
         # initializing x^{l}_{0} as x^l)0 = aZ_i
+        logger.debug("Embedding inputs.Z")
         x_emb = self.embedding(inputs.Z)
-        print("After embedding: x.shape", x_emb.shape)
+        logger.debug("After embedding: x.shape", x_emb.shape)
         idx_i = torch.from_numpy(idx_i).to(self.device, torch.int64)
 
         # interaction blocks
         for _ in range(self.n_interactions):
             # atom wise update of features
-            x = self.in2f(x_emb)
-            print("After in2f: x.shape", x.shape)
+            logger.debug(f"Input to feature: x.shape {x_emb.shape}")
+            x = self.input(x_emb)
+            logger.debug("After input_to_feature call: x.shape {x.shape}")
 
             # Filter generation networks
             Wij = self.filter_network(f_ij)
@@ -195,10 +190,11 @@ class Schnet(BaseNNP):
             # continuous-ﬁlter convolutional layers
             x_j = x[idx_j]
             x_ij = x_j * Wij
+            logger.debug("After x_j * Wij: x_ij.shape {x_ij.shape}")
             x = scatter_add(x_ij, idx_i, dim_size=x.shape[0])
+            logger.debug("After scatter_add: x.shape {x.shape}")
             # Update features
-            x = self.f2out(x)
-
+            x = self.feature_to_output(x)
             x_emb = x_emb + x
 
         return x_emb
@@ -218,7 +214,10 @@ class Schnet(BaseNNP):
             Energies and forces for the given configurations.
 
         """
+        logger.debug("Compute distances ...")
         r_ij, idx_i, idx_j = self._compute_distances(inputs)
+        logger.debug("Convert distances to radial basis ...")
         f_ij, rcut_ij = self._distance_to_radial_basis(r_ij)
+        logger.debug("Compute interaction block ...")
         x = self._interaction_block(inputs, f_ij, idx_i, idx_j, rcut_ij)
         return x

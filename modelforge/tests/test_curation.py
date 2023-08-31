@@ -270,7 +270,7 @@ def test_qm9_local_archive(prep_temp_dir):
 
     fn = resources.files("modelforge").joinpath("tests", "data")
 
-    qm9_data._process_downloaded(str(fn), "first10.tar.bz2", unit_testing=True)
+    qm9_data._process_downloaded(str(fn), "first10.tar.bz2", unit_testing=False)
 
     assert len(qm9_data.data) == 10
 

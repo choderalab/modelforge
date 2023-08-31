@@ -57,7 +57,9 @@ class QM9_curation:
         self.output_file_path = output_file_path
         self.hdf5_file_name = hdf5_file_name
         self.convert_units = convert_units
-
+        self.dataset_download_url = (
+            "https://springernature.figshare.com/ndownloader/files/3195389"
+        )
         # Below, we define key pieces of information related to the dataset in the form of a dict.
         # `dataset_download_url` is only the only variable used by the code to fetch the data.
         # All other data is metadata that will be used to generate a README to go along with
@@ -67,21 +69,9 @@ class QM9_curation:
             "figshare_dataset_doi": "10.6084/m9.figshare.c.978904.v5",
             "figshare_dataset_url": "https://springernature.figshare.com/articles/dataset/Data_for_6095_constitutional_isomers_of_C7H10O2/1057646/2",
             "dataset_download_url": "https://springernature.figshare.com/ndownloader/files/3195389",
-            "publication_citation": """
-                Ramakrishnan, R., Dral, P., Rupp, M. et al. 
-                    Quantum chemistry structures and properties of 134 kilo molecules. 
-                    Sci Data 1, 140022 (2014). 
-                    https://doi.org/10.1038/sdata.2014.22
-                """,
-            "dataset_citation": """
-                    Ramakrishnan, Raghunathan; Dral, Pavlo; Rupp, Matthias; Anatole von Lilienfeld, O. (2014). 
-                    Quantum chemistry structures and properties of 134 kilo molecules. 
-                    figshare. Collection. https://doi.org/10.6084/m9.figshare.c.978904.v5
-                """,
-            "description": """
-                QM9 Dataset: Includes 133,885 organic molecules with up to nine heavy atoms (CONF). 
-                ll properties were calculated at the B3LYP/6-31G(2df,p) level of quantum chemistry.
-                """,
+            "publication_citation": "Ramakrishnan, R., Dral, P., Rupp, M. et al. Quantum chemistry structures and properties of 134 kilo molecules. Sci Data 1, 140022 (2014).",
+            "dataset_citation": "Ramakrishnan, Raghunathan; Dral, Pavlo; Rupp, Matthias; Anatole von Lilienfeld, O. (2014). Quantum chemistry structures and properties of 134 kilo molecules. figshare. Collection. https://doi.org/10.6084/m9.figshare.c.978904.v5",
+            "description": "QM9 Dataset: Includes 133,885 organic molecules with up to nine heavy atoms (CONF). All properties were calculated at the B3LYP/6-31G(2df,p) level of quantum chemistry.",
         }
         # if convert_units is True we will
         # convert the following units
@@ -351,13 +341,48 @@ class QM9_curation:
         >>> qm9_data.process()
 
         """
-        url = self.dataset_description["dataset_download_url"]
+        url = self.dataset_download_url
 
         # download the dataset
-        name = download_from_figshare(
+        self.name = download_from_figshare(
             url=url,
             output_path=self.local_cache_dir,
             force_download=force_download,
         )
         # process the rest of the dataset
-        self._process_downloaded(self.local_cache_dir, name, unit_testing)
+        if self.name is None:
+            raise Exception("Failed to retrieve name of file from figshare.")
+        self._process_downloaded(self.local_cache_dir, self.name, unit_testing)
+
+    def _generate_metadata(self):
+        with open(
+            f"{self.output_file_path}/{self.hdf5_file_name}.metadata", "w"
+        ) as f_md:
+            f_md.write("Dataset Description:\n")
+            f_md.write(self.dataset_description["description"])
+            f_md.write("\n\nPublication Citation:\n")
+            f_md.write(self.dataset_description["publication_citation"])
+            f_md.write("\n\nPublication DOI:\n")
+            f_md.write(self.dataset_description["publication_doi"])
+            f_md.write("\n\nSource dataset DOI:\n")
+            f_md.write(self.dataset_description["figshare_dataset_url"])
+            f_md.write("\n\nSource dataset download URL:\n")
+            f_md.write(self.dataset_description["dataset_download_url"])
+
+            f_md.write("\n\nHDF5 dataset curated by modelforge:\n")
+            f_md.write(
+                "The top level of the HDF5 file contains entries for each record name.\n"
+            )
+            f_md.write(
+                "Each record contains the following data, where units, when appropriate, are stored as attributes.\n"
+            )
+            f_md.write("Unit naming conventions follow the openff-units package.\n\n")
+            f_md.write("property : type : units\n")
+            for key, val in self.data[0].items():
+                if isinstance(val, pint.Quantity):
+                    var_type = str(type(val.m).__name__)
+                    f_md.write(f"{key} : {var_type} : {val.u}\n")
+                else:
+                    var_type = str(type(val).__name__)
+
+                    f_md.write(f"{key} : {var_type} : N/A\n")

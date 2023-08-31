@@ -24,10 +24,6 @@ class Schnet(BaseNNP):
         n_atom_basis: int,  # number of features per atom
         n_interactions: int,  # number of interaction blocks
         n_filters: int = 0,  # number of filters
-        dtype: dtype = torch.float32,
-        device: torch.device = torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu"
-        ),
     ):
         """
         Initialize the SchNet model.
@@ -40,14 +36,9 @@ class Schnet(BaseNNP):
             Number of interaction blocks.
         n_filters : int, optional
             Number of filters, defaults to None.
-        dtype : torch.dtype, optional
-            Data type for PyTorch tensors, defaults to torch.float32.
-        device : torch.device, optional
-            Device ("cpu" or "cuda") on which computations will be performed.
-
         """
 
-        super().__init__(dtype, device)
+        super().__init__()
 
         # initialize atom embeddings
         max_z: int = 100  # max nuclear charge (i.e. atomic number)

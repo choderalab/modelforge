@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 
 from .transformation import default_transformation
 from .utils import RandomSplittingStrategy, SplittingStrategy
+from modelforge.utils.prop import Inputs, PropertyNames
 
 
 class TorchDataset(torch.utils.data.Dataset):
@@ -19,8 +20,8 @@ class TorchDataset(torch.utils.data.Dataset):
     ----------
     dataset : np.ndarray
         The underlying numpy dataset.
-    prop : List[str]
-        List of property names to extract from the dataset.
+    property_name : PropertyNames
+        Property names to extract from the dataset.
     preloaded : bool, optional
         If True, preconverts the properties to PyTorch tensors to save time during item fetching.
         Default is False.
@@ -36,17 +37,17 @@ class TorchDataset(torch.utils.data.Dataset):
     def __init__(
         self,
         dataset: np.ndarray,
-        prop: List[str],
+        property_name: PropertyNames,
         preloaded: bool = False,
     ):
-        self.properties_of_interest = [dataset[p] for p in prop]
-        self.length = len(dataset[prop[0]])
-        self.preloaded = preloaded
+        self.properties_of_interest = {
+            "Z": torch.tensor(dataset[property_name.Z]),
+            "R": torch.tensor(dataset[property_name.R]),
+            "E": torch.tensor(dataset[property_name.E]),
+        }
 
-        if preloaded:
-            self.properties_of_interest = [
-                torch.tensor(p) for p in self.properties_of_interest
-            ]
+        self.length = len(self.properties_of_interest["Z"])
+        self.preloaded = preloaded
 
     def __len__(self) -> int:
         """
@@ -59,7 +60,7 @@ class TorchDataset(torch.utils.data.Dataset):
         """
         return self.length
 
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor]:
+    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         """
         Fetch a tuple of the values for the properties of interest for a given molecule index.
 
@@ -78,12 +79,20 @@ class TorchDataset(torch.utils.data.Dataset):
         >>> data_point = torch_dataset[5]
         >>> geometry, atomic_numbers = data_point
         """
-        if self.preloaded:
-            return tuple(prop[idx] for prop in self.properties_of_interest)
-        else:
-            return tuple(
-                torch.tensor(prop[idx]) for prop in self.properties_of_interest
-            )
+        Z = self.properties_of_interest["Z"][idx]
+        R = self.properties_of_interest["R"][idx]
+        E = self.properties_of_interest["E"][idx]
+
+        return {"Z": Z, "R": R, "E": E}
+
+
+def _remove_padding():
+    padded_values = -Z.eq(-1).sum().item()
+    print(padded_values)
+    Z_ = Z[:padded_values]
+    R_ = R[:padded_values]
+    print(Z_)
+    print(R_)
 
 
 class HDF5Dataset:
@@ -137,8 +146,8 @@ class HDF5Dataset:
         with gzip.open(self.raw_data_file, "rb") as gz_file, h5py.File(
             gz_file, "r"
         ) as hf:
-            logger.debug(f"n_entries: {len(hf.keys())}")
-            for mol in tqdm.tqdm(list(hf.keys())):
+            # logger.debug(f"n_entries: {len(hf.keys())}")
+            for mol in tqdm.tqdm(hf.keys()):
                 for value in self.properties_of_interest:
                     data[value].append(hf[mol][value][()])
         self.hdf5data = data
@@ -284,7 +293,7 @@ class DatasetFactory:
 
         logger.info(f"Creating {data.dataset_name} dataset")
         DatasetFactory._load_or_process_data(data, label_transform, transform)
-        return TorchDataset(data.numpy_data, data.properties_of_interest)
+        return TorchDataset(data.numpy_data, data._property_names)
 
 
 class TorchDataModule(pl.LightningDataModule):

@@ -53,52 +53,93 @@ class Dense(nn.Linear):
         ),
     ):
         """
-        Args:
-            in_features: number of input feature :math:`x`.
-            out_features: umber of output features :math:`y`.
-            bias: If False, the layer will not adapt bias :math:`b`.
-            activation: if None, no activation function is used.
+        Initialize the Dense layer.
+
+        Parameters
+        ----------
+        in_features : int
+            Number of input features.
+        out_features : int
+            Number of output features.
+        bias : bool, optional
+            If False, the layer will not adapt bias.
+        activation : Callable or nn.Module, optional
+            Activation function, default is None (Identity).
+        dtype : torch.dtype, optional
+            Data type for PyTorch tensors.
+        device : torch.device, optional
+            Device ("cpu" or "cuda") on which computations will be performed.
         """
         super().__init__(in_features, out_features, bias)
 
-        self.activation = activation
-        if self.activation is None:
-            self.activation = nn.Identity()
-        from torch.nn.init import xavier_uniform_
-        from torch.nn.init import zeros_
+        # Initialize activation function
+        self.activation = activation if activation is not None else nn.Identity()
 
-        self.weight_init = xavier_uniform_
+        # Initialize weight matrix
+        self.weight = nn.init.xavier_uniform_(self.weight).to(device, dtype)
 
-        self.weight_init(self.weight)
-        self.weight = self.weight.to(device, dtype)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the layer.
 
-    def forward(self, x: torch.Tensor):
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Transformed tensor.
+        """
         y = F.linear(x, self.weight)
         y = self.activation(y)
         return y
 
 
-def gaussian_rbf(inputs: torch.Tensor, offsets: torch.Tensor, widths: torch.Tensor):
+def gaussian_rbf(
+    inputs: torch.Tensor, offsets: torch.Tensor, widths: torch.Tensor
+) -> torch.Tensor:
+    """
+    Gaussian radial basis function (RBF) transformation.
+
+    Parameters
+    ----------
+    inputs : torch.Tensor
+        Input tensor.
+    offsets : torch.Tensor
+        Offsets for Gaussian functions.
+    widths : torch.Tensor
+        Widths for Gaussian functions.
+
+    Returns
+    -------
+    torch.Tensor
+        Transformed tensor.
+    """
+
     coeff = -0.5 / torch.pow(widths, 2)
     diff = inputs[..., None] - offsets
     y = torch.exp(coeff * torch.pow(diff, 2))
     return y.to(dtype=torch.float32)
 
 
-def cosine_cutoff(input: torch.Tensor, cutoff: torch.Tensor):
-    """ Behler-style cosine cutoff.
+def cosine_cutoff(input: torch.Tensor, cutoff: torch.Tensor) -> torch.Tensor:
+    """
+    Behler-style cosine cutoff function.
 
-        .. math::
-        f(r) = \begin{cases}
-        0.5 \times \left[1 + \cos\left(\frac{\pi r}{r_\text{cutoff}}\right)\right]
-        & r < r_\text{cutoff} \\
-        0 & r \geqslant r_\text{cutoff} \\
-        \end{cases}
+    Parameters
+    ----------
+    inputs : torch.Tensor
+        Input tensor.
+    cutoff : torch.Tensor
+        Cutoff radius.
 
-        Args:
-            cutoff (float, optional): cutoff radius.
-
-        """
+    Returns
+    -------
+    torch.Tensor
+        Transformed tensor.
+    """
 
     # Compute values of cutoff function
     input_cut = 0.5 * (torch.cos(input * np.pi / cutoff) + 1.0)
@@ -107,24 +148,27 @@ def cosine_cutoff(input: torch.Tensor, cutoff: torch.Tensor):
     return input_cut
 
 
-def shifted_softplus(x: torch.Tensor):
-    r"""Compute shifted soft-plus activation function.
+def shifted_softplus(x: torch.Tensor) -> torch.Tensor:
+    """
+    Compute shifted soft-plus activation function.
 
-    .. math::
-        y = \ln\left(1 + e^{-x}\right) - \ln(2)
+    Parameters
+    ----------
+    x : torch.Tensor
+        Input tensor.
 
-    Args:
-        x (torch.Tensor): input tensor.
-
-    Returns:
-        torch.Tensor: shifted soft-plus of input.
-
+    Returns
+    -------
+    torch.Tensor
+        Transformed tensor.
     """
     return nn.functional.softplus(x) - np.log(2.0)
 
 
 class GaussianRBF(nn.Module):
-    r"""Gaussian radial basis functions."""
+    """
+    Gaussian radial basis functions (RBF).
+    """
 
     def __init__(
         self,
@@ -138,14 +182,25 @@ class GaussianRBF(nn.Module):
         dtype: torch.dtype = torch.float32,
     ):
         """
-        Args:
-            n_rbf: total number of Gaussian functions, :math:`N_g`.
-            cutoff: center of last Gaussian function, :math:`\mu_{N_g}`
-            start: center of first Gaussian function, :math:`\mu_0`.
-            trainable: If True, widths and offset of Gaussian functions
-                are adjusted during training process.
+        Initialize Gaussian RBF layer.
+
+        Parameters
+        ----------
+        n_rbf : int
+            Number of radial basis functions.
+        cutoff : float
+            Cutoff distance for RBF.
+        start : float, optional
+            Starting distance for RBF, defaults to 0.0.
+        trainable : bool, optional
+            If True, widths and offsets are trainable parameters.
+        device : torch.device, optional
+            Device ("cpu" or "cuda") on which computations will be performed.
+        dtype : torch.dtype, optional
+            Data type for PyTorch tensors.
+
         """
-        super(GaussianRBF, self).__init__()
+        super().__init__()
         self.n_rbf = n_rbf
 
         # compute offset and width of Gaussian functions
@@ -162,5 +217,18 @@ class GaussianRBF(nn.Module):
             self.register_buffer("widths", widths)
             self.register_buffer("offsets", offset)
 
-    def forward(self, inputs: torch.Tensor):
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the layer.
+
+        Parameters
+        ----------
+        inputs : torch.Tensor
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Transformed tensor.
+        """
         return gaussian_rbf(inputs, self.offsets, self.widths)

@@ -1,4 +1,5 @@
 from typing import Tuple
+from loguru import logger
 
 import numpy as np
 import torch
@@ -22,7 +23,7 @@ class Schnet(BaseNNP):
         self,
         n_atom_basis: int,  # number of features per atom
         n_interactions: int,  # number of interaction blocks
-        n_filters: int = None,  # number of filters
+        n_filters: int = 0,  # number of filters
         dtype: dtype = torch.float32,
         device: torch.device = torch.device(
             "cuda" if torch.cuda.is_available() else "cpu"
@@ -55,7 +56,7 @@ class Schnet(BaseNNP):
         # the number of atoms n and the current layer l
 
         # initialize atom embeddings
-        max_z: int = 50  # max nuclear charge (i.e. atomic number)
+        max_z: int = 100  # max nuclear charge (i.e. atomic number)
         self.embedding = nn.Embedding(max_z, n_atom_basis, padding_idx=0)
 
         # initialize radial basis functions and other constants
@@ -64,14 +65,18 @@ class Schnet(BaseNNP):
         self.cutoff = 5.0
         self.activation = shifted_softplus
         self.n_interactions = n_interactions
+        self.n_atom_basis = n_atom_basis
 
         # initialize dense yalers for atom feature transformation
         # Dense layers are applied consecutively to the initialized atom embeddings x^{l}_{0}
         # to generate x_i^l+1 = W^lx^l_i + b^l
+        logger.debug("in2f")
+        print("in2f")
         self.in2f = Dense(n_atom_basis, n_filters, bias=False, activation=None)
+        print("f2out")
         self.f2out = nn.Sequential(
             Dense(n_filters, n_atom_basis, activation=self.activation),
-            Dense(n_atom_basis, 1, activation=None),
+            Dense(n_atom_basis, n_atom_basis, activation=None),
         )
 
         # Initialize filter network
@@ -172,13 +177,15 @@ class Schnet(BaseNNP):
 
         # compute atom and pair features (see Fig1 in 10.1063/1.5019779)
         # initializing x^{l}_{0} as x^l)0 = aZ_i
-        x = self.embedding(inputs.Z)
+        x_emb = self.embedding(inputs.Z)
+        print("After embedding: x.shape", x_emb.shape)
         idx_i = torch.from_numpy(idx_i).to(self.device, torch.int64)
 
         # interaction blocks
         for _ in range(self.n_interactions):
             # atom wise update of features
-            x = self.in2f(x)
+            x = self.in2f(x_emb)
+            print("After in2f: x.shape", x.shape)
 
             # Filter generation networks
             Wij = self.filter_network(f_ij)
@@ -190,10 +197,11 @@ class Schnet(BaseNNP):
             x_ij = x_j * Wij
             x = scatter_add(x_ij, idx_i, dim_size=x.shape[0])
             # Update features
-            v = self.f2out(x)
-            x = x + v
+            x = self.f2out(x)
 
-        return x
+            x_emb = x_emb + x
+
+        return x_emb
 
     def calculate_energies_and_forces(self, inputs: Inputs) -> torch.Tensor:
         """

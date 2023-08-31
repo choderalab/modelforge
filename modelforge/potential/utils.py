@@ -92,7 +92,8 @@ class Dense(nn.Linear):
         torch.Tensor
             Transformed tensor.
         """
-        y = F.linear(x, self.weight)
+
+        y = F.linear(x, self.weight, self.bias)
         y = self.activation(y)
         return y
 

@@ -3,6 +3,8 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import h5py
+
 import pytest
 from openff.units import unit, Quantity
 import pint
@@ -84,12 +86,12 @@ def test_dict_to_hdf5(prep_temp_dir):
                 assert records[i][key] == test_data[i][key]
 
 
-def test_figshare_download(prep_temp_dir):
+def test_download_from_figshare(prep_temp_dir):
     url = "https://figshare.com/ndownloader/files/22247589"
     name = download_from_figshare(
         url=url,
         output_path=str(prep_temp_dir),
-        force_download=False,
+        force_download=True,
     )
 
     file_name_path = str(prep_temp_dir) + f"/{name}"
@@ -120,7 +122,15 @@ def test_mkdir(prep_temp_dir):
     assert status == False
 
 
-def test_qm9_curation_helper_functions(prep_temp_dir):
+def test_list_files(prep_temp_dir):
+    # test.hdf5 was generated in test_dict_to_hdf5
+    files = list_files(str(prep_temp_dir), ".hdf5")
+
+    # check to see if test.hdf5 is in the files
+    assert "test.hdf5" in files
+
+
+def test_qm9_curation_str_to_float(prep_temp_dir):
     qm9_data = QM9_curation(
         hdf5_file_name="qm9_dataset.hdf5",
         output_file_path=str(prep_temp_dir),
@@ -130,12 +140,19 @@ def test_qm9_curation_helper_functions(prep_temp_dir):
     val = qm9_data._str_to_float("1*^6")
     assert val == 1e6
 
-    # check the function to list directory contents
-    # test.hdf5 was generated in test_dict_to_hdf5
-    files = list_files(str(prep_temp_dir), ".hdf5")
 
-    # check to see if test.hdf5 is in the files
-    assert "test.hdf5" in files
+def test_qm9_curation_init_parameters(prep_temp_dir):
+    qm9_data = QM9_curation(
+        hdf5_file_name="qm9_dataset.hdf5",
+        output_file_path=str(prep_temp_dir),
+        local_cache_dir=str(prep_temp_dir),
+        convert_units=False,
+    )
+
+    assert qm9_data.hdf5_file_name == "qm9_dataset.hdf5"
+    assert qm9_data.output_file_path == str(prep_temp_dir)
+    assert qm9_data.local_cache_dir == str(prep_temp_dir)
+    assert qm9_data.convert_units == False
 
 
 def test_qm9_curation_parse_xyz(prep_temp_dir):
@@ -153,25 +170,26 @@ def test_qm9_curation_parse_xyz(prep_temp_dir):
     assert len(temp_dict) == 17
     assert temp_dict["tag"] == "gdb"
     assert temp_dict["idx"] == "1"
-    assert temp_dict["rotational constant A"] == 157.7 * unit.gigahertz
-    assert temp_dict["rotational constant B"] == 157.7 * unit.gigahertz
-    assert temp_dict["rotational constant C"] == 157.7 * unit.gigahertz
-    assert temp_dict["dipole moment"] == 0 * unit.debye
-    assert temp_dict["isotropic polarizability"] == 13.2 * unit.angstrom**3
-    assert temp_dict["energy of homo"] == -0.3 * unit.hartree
-    assert temp_dict["energy of lumo"] == 0.1 * unit.hartree
-    assert temp_dict["gap"] == 0.5 * unit.hartree
-    assert temp_dict["electronic spatial extent"] == 35.3 * unit.angstrom**2
-    assert temp_dict["zero point vibrational energy"] == 0.0 * unit.hartree
-    assert temp_dict["internal energy at 0K"] == -40.4 * unit.hartree
-    assert temp_dict["internal energy at 298.15K"] == -40.4 * unit.hartree
-    assert temp_dict["enthalpy at 298.15K"] == -40.4 * unit.hartree
-    assert temp_dict["free energy at 298.15K"] == -40.4 * unit.hartree
+    assert temp_dict["rotational_constant_A"] == 157.7 * unit.gigahertz
+    assert temp_dict["rotational_constant_B"] == 157.7 * unit.gigahertz
+    assert temp_dict["rotational_constant_C"] == 157.7 * unit.gigahertz
+    assert temp_dict["dipole_moment"] == 0 * unit.debye
+    assert temp_dict["isotropic_polarizability"] == 13.2 * unit.angstrom**3
+    assert temp_dict["energy_of_homo"] == -0.3 * unit.hartree
+    assert temp_dict["energy_of_lumo"] == 0.1 * unit.hartree
+    assert temp_dict["lumo-homo_gap"] == 0.5 * unit.hartree
+    assert temp_dict["electronic_spatial_extent"] == 35.3 * unit.angstrom**2
+    assert temp_dict["zero_point_vibrational_energy"] == 0.0 * unit.hartree
+    assert temp_dict["internal_energy_at_0K"] == -40.4 * unit.hartree
+    assert temp_dict["internal_energy_at_298.15K"] == -40.4 * unit.hartree
+    assert temp_dict["enthalpy_at_298.15K"] == -40.4 * unit.hartree
+    assert temp_dict["free_energy_at_298.15K"] == -40.4 * unit.hartree
     assert (
-        temp_dict["heat capacity at 298.15K"]
+        temp_dict["heat_capacity_at_298.15K"]
         == 6.4 * unit.calorie_per_mole / unit.kelvin
     )
 
+    # test parsing an entire file from our data directory with unit conversions
     fn = resources.files("modelforge").joinpath("tests", "data", "dsgdb9nsd_000001.xyz")
     data_dict_temp = qm9_data._parse_xyzfile(str(fn))
 
@@ -197,51 +215,53 @@ def test_qm9_curation_parse_xyz(prep_temp_dir):
         == np.array([-0.535689, 0.133921, 0.133922, 0.133923, 0.133923])
         * unit.elementary_charge
     )
-    assert data_dict_temp["isotropic polarizability"] == 13.21 * unit.angstroms**3
+    assert data_dict_temp["isotropic_polarizability"] == 13.21 * unit.angstroms**3
     assert (
-        data_dict_temp["energy of homo"]
+        data_dict_temp["energy_of_homo"]
         == -1017.9062102263447 * unit.kilojoule_per_mole
     )
     assert (
-        data_dict_temp["energy of lumo"] == 307.4460077830925 * unit.kilojoule_per_mole
+        data_dict_temp["energy_of_lumo"] == 307.4460077830925 * unit.kilojoule_per_mole
     )
-    assert data_dict_temp["gap"] == 1325.3522180094374 * unit.kilojoule_per_mole
-    assert data_dict_temp["electronic spatial extent"] == 35.3641 * unit.angstrom**2
     assert (
-        data_dict_temp["zero point vibrational energy"]
+        data_dict_temp["lumo-homo_gap"] == 1325.3522180094374 * unit.kilojoule_per_mole
+    )
+    assert data_dict_temp["electronic_spatial_extent"] == 35.3641 * unit.angstrom**2
+    assert (
+        data_dict_temp["zero_point_vibrational_energy"]
         == 117.4884833670846 * unit.kilojoule_per_mole
     )
     assert (
-        data_dict_temp["internal energy at 0K"]
+        data_dict_temp["internal_energy_at_0K"]
         == -106277.4161215308 * unit.kilojoule_per_mole
     )
     assert (
-        data_dict_temp["internal energy at 298.15K"]
+        data_dict_temp["internal_energy_at_298.15K"]
         == -106269.88618856476 * unit.kilojoule_per_mole
     )
     assert (
-        data_dict_temp["enthalpy at 298.15K"]
+        data_dict_temp["enthalpy_at_298.15K"]
         == -106267.40509140545 * unit.kilojoule_per_mole
     )
     assert (
-        data_dict_temp["free energy at 298.15K"]
+        data_dict_temp["free_energy_at_298.15K"]
         == -106329.05182294044 * unit.kilojoule_per_mole
     )
     assert (
-        data_dict_temp["heat capacity at 298.15K"]
+        data_dict_temp["heat_capacity_at_298.15K"]
         == 0.027066296000000004 * unit.kilojoule_per_mole / unit.kelvin
     )
-    assert np.all(data_dict_temp["atomic numbers"] == np.array([6, 1, 1, 1, 1]))
-    assert data_dict_temp["smiles gdb-17"] == "C"
-    assert data_dict_temp["smiles b3lyp"] == "C"
-    assert data_dict_temp["inchi Corina"] == "1S/CH4/h1H4"
-    assert data_dict_temp["inchi B3LYP"] == "1S/CH4/h1H4"
-    assert data_dict_temp["rotational constant A"] == 157.7118 * unit.gigahertz
-    assert data_dict_temp["rotational constant B"] == 157.70997 * unit.gigahertz
-    assert data_dict_temp["rotational constant C"] == 157.70699 * unit.gigahertz
-    assert data_dict_temp["dipole moment"] == 0.0 * unit.debye
+    assert np.all(data_dict_temp["atomic_numbers"] == np.array([6, 1, 1, 1, 1]))
+    assert data_dict_temp["smiles_gdb-17"] == "C"
+    assert data_dict_temp["smiles_b3lyp"] == "C"
+    assert data_dict_temp["inchi_Corina"] == "1S/CH4/h1H4"
+    assert data_dict_temp["inchi_B3LYP"] == "1S/CH4/h1H4"
+    assert data_dict_temp["rotational_constant_A"] == 157.7118 * unit.gigahertz
+    assert data_dict_temp["rotational_constant_B"] == 157.70997 * unit.gigahertz
+    assert data_dict_temp["rotational_constant_C"] == 157.70699 * unit.gigahertz
+    assert data_dict_temp["dipole_moment"] == 0.0 * unit.debye
     assert np.all(
-        data_dict_temp["harmonic vibrational frequencies"]
+        data_dict_temp["harmonic_vibrational_frequencies"]
         == np.array(
             [
                 1341.307,
@@ -260,22 +280,22 @@ def test_qm9_curation_parse_xyz(prep_temp_dir):
 
 
 def test_qm9_local_archive(prep_temp_dir):
-    # test file extraction, parsing, and generation of hdf5 file
-    # from a local archive.
+    # test file extraction, parsing, and generation of hdf5 file from a local archive.
     qm9_data = QM9_curation(
         hdf5_file_name="qm9_test10.hdf5",
         output_file_path=str(prep_temp_dir),
         local_cache_dir=str(prep_temp_dir),
     )
 
-    fn = resources.files("modelforge").joinpath("tests", "data")
+    local_data_path = resources.files("modelforge").joinpath("tests", "data")
+    # make sure the data archive exists
+    file_name_path = str(local_data_path) + "/first10.tar.bz2"
+    assert os.path.isfile(file_name_path)
 
-    qm9_data._process_downloaded(str(fn), "first10.tar.bz2", unit_testing=False)
+    # pass the local file to the process_downloaded function
+    qm9_data._process_downloaded(str(local_data_path), "first10.tar.bz2")
 
     assert len(qm9_data.data) == 10
-
-    file_name_path = str(fn) + "/first10.tar.bz2"
-    assert os.path.isfile(file_name_path)
 
     names = {
         "dsgdb9nsd_000001": -106277.4161215308,
@@ -289,61 +309,19 @@ def test_qm9_local_archive(prep_temp_dir):
         "dsgdb9nsd_000009": -306158.32885940996,
         "dsgdb9nsd_000010": -348451.454977435,
     }
+    # output file
     file_name_path = str(prep_temp_dir) + "/qm9_test10.hdf5"
 
+    assert os.path.isfile(file_name_path)
+
     with h5py.File(file_name_path, "r") as hf:
         for key in hf.keys():
             # check record names
             assert key in list(names.keys())
-            assert np.isclose(hf[key]["internal energy at 0K"][()], names[key])
+            assert np.isclose(hf[key]["internal_energy_at_0K"][()], names[key])
 
-
-"""
-# I refactored the code such that the figshare downloader into a separate function
-# allowing us to test downloading on a smaller, more manageable file
-# Extraction and processing of the qm9 dataset is tested
-# based on .tar.bz2 file that exists in tests/data that contains only 10 
-# I'm going to leave this code in place, but commented out for now
-# as we will eventually want a non-CI testing suite.
-def test_qm9_curation(prep_temp_dir):
-    # this downloads the entire archive and extracts it
-    # but only processes the first 10 records
-    qm9_data = QM9_curation(
-        hdf5_file_name="qm9_dataset.hdf5",
-        output_file_path=str(prep_temp_dir),
-        local_cache_dir=str(prep_temp_dir),
+    qm9_data._process_downloaded(
+        str(local_data_path), "first10.tar.bz2", unit_testing_max_records=5
     )
 
-    # test all the functions will run
-    qm9_data.process(unit_testing=True)
-
-    name = "dsgdb9nsd.xyz.tar.bz2"
-
-    file_name_path = str(prep_temp_dir) + f"/{name}"
-    assert os.path.isfile(file_name_path)
-
-    # ensure we processed 10 records
-    assert len(qm9_data.data) == 10
-
-    file_name_path = str(prep_temp_dir) + "/qm9_dataset.hdf5"
-    assert os.path.isfile(file_name_path)
-
-    names = {
-        "dsgdb9nsd_000001": -106277.4161215308,
-        "dsgdb9nsd_000002": -148408.69593977975,
-        "dsgdb9nsd_000003": -200600.51755556674,
-        "dsgdb9nsd_000004": -202973.24721725564,
-        "dsgdb9nsd_000005": -245252.87826713378,
-        "dsgdb9nsd_000006": -300576.6846578527,
-        "dsgdb9nsd_000007": -209420.75231941737,
-        "dsgdb9nsd_000008": -303715.5298633426,
-        "dsgdb9nsd_000009": -306158.32885940996,
-        "dsgdb9nsd_000010": -348451.454977435,
-    }
-
-    with h5py.File(file_name_path, "r") as hf:
-        for key in hf.keys():
-            # check record names
-            assert key in list(names.keys())
-            assert np.isclose(hf[key]["internal energy at 0K"][()], names[key])
-"""
+    assert len(qm9_data.data) == 5

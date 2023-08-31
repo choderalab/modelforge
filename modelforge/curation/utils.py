@@ -1,8 +1,5 @@
-import h5py
 import pint
 from openff.units import unit, Quantity
-import numpy as np
-from tqdm import tqdm
 import os
 from loguru import logger
 
@@ -39,15 +36,23 @@ def dict_to_hdf5(file_name: str, data: list, id_key: str) -> None:
 
     Examples
     --------
-    > dict_to_hdf5(file_name='qm9.hdf5', data=data, id_key='name')
+    >>> dict_to_hdf5(file_name='qm9.hdf5', data=data, id_key='name')
     """
+
+    import h5py
+    from tqdm import tqdm
+    import numpy as np
+
     assert file_name.endswith(".hdf5")
 
     dt = h5py.special_dtype(vlen=str)
 
     with h5py.File(file_name, "w") as f:
         for datapoint in tqdm(data):
-            record_name = datapoint[id_key]
+            try:
+                record_name = datapoint[id_key]
+            except Exception:
+                print(f"id_key {id_key} not found in the data.")
             group = f.create_group(record_name)
             for key, val in datapoint.items():
                 if key != id_key:
@@ -106,6 +111,7 @@ def download_from_figshare(url: str, output_path: str, force_download=False) -> 
     """
 
     import requests
+    from tqdm import tqdm
 
     chunk_size = 512
 

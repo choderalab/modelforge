@@ -77,15 +77,15 @@ class QM9_curation:
         # convert the following units
         self.unit_output_dict = {
             "geometry": unit.nanometer,
-            "energy of homo": unit.kilojoule_per_mole,
-            "energy of lumo": unit.kilojoule_per_mole,
-            "gap": unit.kilojoule_per_mole,
-            "zero point vibrational energy": unit.kilojoule_per_mole,
-            "internal energy at 0K": unit.kilojoule_per_mole,
-            "internal energy at 298.15K": unit.kilojoule_per_mole,
-            "enthalpy at 298.15K": unit.kilojoule_per_mole,
-            "free energy at 298.15K": unit.kilojoule_per_mole,
-            "heat capacity at 298.15K": unit.kilojoule_per_mole / unit.kelvin,
+            "energy_of_homo": unit.kilojoule_per_mole,
+            "energy_of_lumo": unit.kilojoule_per_mole,
+            "lumo-homo_gap": unit.kilojoule_per_mole,
+            "zero_point_vibrational_energy": unit.kilojoule_per_mole,
+            "internal_energy_at_0K": unit.kilojoule_per_mole,
+            "internal_energy_at_298.15K": unit.kilojoule_per_mole,
+            "enthalpy_at_298.15K": unit.kilojoule_per_mole,
+            "free_energy_at_298.15K": unit.kilojoule_per_mole,
+            "heat_capacity_at_298.15K": unit.kilojoule_per_mole / unit.kelvin,
         }
 
     def _extract(self, file_path: str, cache_directory: str) -> None:
@@ -146,21 +146,21 @@ class QM9_curation:
         labels_and_units = [
             ("tag", None),
             ("idx", None),
-            ("rotational constant A", unit.gigahertz),
-            ("rotational constant B", unit.gigahertz),
-            ("rotational constant C", unit.gigahertz),
-            ("dipole moment", unit.debye),
-            ("isotropic polarizability", unit.angstrom**3),
-            ("energy of homo", unit.hartree),
-            ("energy of lumo", unit.hartree),
-            ("gap", unit.hartree),
-            ("electronic spatial extent", unit.angstrom**2),
-            ("zero point vibrational energy", unit.hartree),
-            ("internal energy at 0K", unit.hartree),
-            ("internal energy at 298.15K", unit.hartree),
-            ("enthalpy at 298.15K", unit.hartree),
-            ("free energy at 298.15K", unit.hartree),
-            ("heat capacity at 298.15K", unit.calorie_per_mole / unit.kelvin),
+            ("rotational_constant_A", unit.gigahertz),
+            ("rotational_constant_B", unit.gigahertz),
+            ("rotational_constant_C", unit.gigahertz),
+            ("dipole_moment", unit.debye),
+            ("isotropic_polarizability", unit.angstrom**3),
+            ("energy_of_homo", unit.hartree),
+            ("energy_of_lumo", unit.hartree),
+            ("lumo-homo_gap", unit.hartree),
+            ("electronic_spatial_extent", unit.angstrom**2),
+            ("zero_point_vibrational_energy", unit.hartree),
+            ("internal_energy_at_0K", unit.hartree),
+            ("internal_energy_at_298.15K", unit.hartree),
+            ("enthalpy_at_298.15K", unit.hartree),
+            ("free_energy_at_298.15K", unit.hartree),
+            ("heat_capacity_at_298.15K", unit.calorie_per_mole / unit.kelvin),
         ]
 
         assert len(labels_and_units) == len(temp_prop)
@@ -254,16 +254,16 @@ class QM9_curation:
 
             data = {}
             data["name"] = file_name.split("/")[-1].split(".")[0]
-            data["smiles gdb-17"] = smiles[0]
-            data["smiles b3lyp"] = smiles[1]
-            data["inchi Corina"] = InChI.split("\n")[0].split()[0].replace("InChI=", "")
-            data["inchi B3LYP"] = InChI.split("\n")[0].split()[1].replace("InChI=", "")
+            data["smiles_gdb-17"] = smiles[0]
+            data["smiles_b3lyp"] = smiles[1]
+            data["inchi_Corina"] = InChI.split("\n")[0].split()[0].replace("InChI=", "")
+            data["inchi_B3LYP"] = InChI.split("\n")[0].split()[1].replace("InChI=", "")
             data["geometry"] = np.array(geometry) * unit.angstrom
             # Element symbols are converted to atomic numbers
             # including an array of strings causes complications
             # when writing the hdf5 file.
             # data["elements"] = np.array(elements, dtype=str)
-            data["atomic numbers"] = np.array(atomic_numbers)
+            data["atomic_numbers"] = np.array(atomic_numbers)
             data["charges"] = np.array(charges) * unit.elementary_charge
 
             # remove the tag because it does not provide any useful information
@@ -276,7 +276,7 @@ class QM9_curation:
             for h in hvf_temp:
                 hvf.append(self._str_to_float(h))
 
-            data["harmonic vibrational frequencies"] = np.array(hvf) / unit.cm
+            data["harmonic_vibrational_frequencies"] = np.array(hvf) / unit.cm
 
             # if unit outputs were defined perform conversion
             if self.convert_units:
@@ -292,8 +292,29 @@ class QM9_curation:
         return data
 
     def _process_downloaded(
-        self, local_path_to_tar: str, name: str, unit_testing: bool
+        self,
+        local_path_to_tar: str,
+        name: str,
+        unit_testing_max_records: Optional[int] = None,
     ):
+        """
+        Processes a downloaded dataset: extracts relevant information and writes an hdf5 file.
+
+        Parameters
+        ----------
+        local_path_to_tar: str, required
+            Path to the tar.bz2 file.
+        name: str, required
+            name of the tar.bz2 file,
+        unit_testing_max_records: int, optional, default=None
+            If set to an integer, 'n', the routine will only process the first 'n' records, useful for unit tests.
+
+        Examples
+        --------
+        >>> qm9_data = QM9_curation(hdf5_file_name='qm9_dataset.hdf5', local_cache_dir='~/datasets/qm9_dataset')
+        >>> qm9_data.process()
+
+        """
         # untar the dataset
         self._extract(
             file_path=f"{local_path_to_tar}/{name}",
@@ -307,8 +328,8 @@ class QM9_curation:
         self.data = []
         for i, file in enumerate(tqdm(files, desc="processing", total=len(files))):
             # first 10 records
-            if unit_testing:
-                if i > 9:
+            if not unit_testing_max_records is None:
+                if i >= unit_testing_max_records:
                     break
 
             data_temp = self._parse_xyzfile(f"{self.local_cache_dir}/{file}")
@@ -322,7 +343,11 @@ class QM9_curation:
         logger.debug("Writing HDF5 file.")
         dict_to_hdf5(full_output_path, self.data, id_key="name")
 
-    def process(self, force_download: bool = False, unit_testing: bool = False) -> None:
+    def process(
+        self,
+        force_download: bool = False,
+        unit_testing_max_records: Optional[int] = None,
+    ) -> None:
         """
         Downloads the dataset, extracts relevant information, and writes an hdf5 file.
 
@@ -331,9 +356,8 @@ class QM9_curation:
         force_download: bool, optional, default=False
             If the raw data_file is present in the local_cache_dir, the local copy will be used.
             If True, this will force the software to download the data again, even if present.
-        unit_testing: bool, optional, default=False
-            If True, only a subset (first 10 records) of the dataset will be used.
-            Primarily meant to ensure unit tests can be completed in a reasonable time period.
+        unit_testing_max_records: int, optional, default=None
+            If set to an integer, 'n', the routine will only process the first 'n' records, useful for unit tests.
 
         Examples
         --------
@@ -352,7 +376,9 @@ class QM9_curation:
         # process the rest of the dataset
         if self.name is None:
             raise Exception("Failed to retrieve name of file from figshare.")
-        self._process_downloaded(self.local_cache_dir, self.name, unit_testing)
+        self._process_downloaded(
+            self.local_cache_dir, self.name, unit_testing_max_records
+        )
 
     def _generate_metadata(self):
         with open(

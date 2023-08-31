@@ -179,7 +179,7 @@ class Schnet(BaseNNP):
         for _ in range(self.n_interactions):
             # atom wise update of features
             logger.debug(f"Input to feature: x.shape {x_emb.shape}")
-            x = self.input(x_emb)
+            x = self.intput_to_feature(x_emb)
             logger.debug("After input_to_feature call: x.shape {x.shape}")
 
             # Filter generation networks

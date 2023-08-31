@@ -59,15 +59,14 @@ class QM9_curation:
         self.convert_units = convert_units
 
         # Below, we define key pieces of information related to the dataset in the form of a dict.
-        # `dataset_download_url` and `dataset_filename` are used by the code to fetch the data.
+        # `dataset_download_url` is only the only variable used by the code to fetch the data.
         # All other data is metadata that will be used to generate a README to go along with
-        # the HDF5 dataset.
+        # the HDF5 dataset and to document the key info within the code.
         self.dataset_description = {
             "publication_doi": "10.1038/sdata.2014.22",
             "figshare_dataset_doi": "10.6084/m9.figshare.c.978904.v5",
             "figshare_dataset_url": "https://springernature.figshare.com/articles/dataset/Data_for_6095_constitutional_isomers_of_C7H10O2/1057646/2",
-            "dataset_download_url": "https://ndownloader.figshare.com/files/3195389",
-            "dataset_filename": "dsgdb9nsd.xyz.tar.bz2",
+            "dataset_download_url": "https://springernature.figshare.com/ndownloader/files/3195389",
             "publication_citation": """
                 Ramakrishnan, R., Dral, P., Rupp, M. et al. 
                     Quantum chemistry structures and properties of 134 kilo molecules. 
@@ -98,63 +97,6 @@ class QM9_curation:
             "free energy at 298.15K": unit.kilojoule_per_mole,
             "heat capacity at 298.15K": unit.kilojoule_per_mole / unit.kelvin,
         }
-
-    def _mkdir(self, path: str) -> None:
-        if not os.path.exists(path):
-            try:
-                os.makedirs(path)
-            except Exception:
-                print("Could not create directory {path}.")
-
-    def _download(
-        self, url: str, name: str, output_path: str, force_download=False
-    ) -> None:
-        """
-        Downloads the dataset tar.bz2 file from figshare.
-
-        Parameters
-        ----------
-        url: str, required
-            Figshare url to the data downloader
-        name: str, required
-            Name of the file downloaded
-        output_path: str, required
-            Location to download the file to.
-        force_download: str, default=False
-            If False, the file is not downloaded if it already exists in the directory.
-            If True, the file will be downloaded even if it exists.
-
-        """
-
-        if not os.path.isfile(f"{output_path}/{name}") or force_download:
-            logger.debug(f"Downloading datafile from figshare to {output_path}/{name}.")
-            chunk_size = 512
-
-            # get the head of the request
-            head = requests.head(url)
-
-            # because the url on figshare calls downloader, instead of the direct file,
-            # we need to figure out what the original file is to know how big it is
-            # here we will parse the header info to get the file the downloader links to
-            # and then get the head info from this link to fetch the length
-            # this is not actually necessary, but useful for updating download status bar
-            temp_url = head.headers["location"].split("?")[0]
-            length = int(requests.head(temp_url).headers["Content-Length"])
-
-            r = requests.get(url, stream=True)
-
-            self._mkdir(output_path)
-
-            with open(f"{output_path}/{name}", "wb") as fd:
-                for chunk in tqdm(
-                    r.iter_content(chunk_size=chunk_size),
-                    ascii=True,
-                    desc="downloading",
-                    total=(int(length / chunk_size) + 1),
-                ):
-                    fd.write(chunk)
-        else:  # if the file exists and we don't set force_download to True, just use the cached version
-            logger.debug("Datafile exists, using cached file.")
 
     def _extract(self, file_path: str, cache_directory: str) -> None:
         """
@@ -359,33 +301,6 @@ class QM9_curation:
 
         return data
 
-    def _list_files(self, directory: str, extension: str) -> list:
-        """
-        Returns a list of files in a directory with a given extension.
-
-        Parameters
-        ----------
-        directory: str, required
-            Directory of interest.
-        extension: str, required
-            Only consider files with this given file extension
-
-        Returns
-        -------
-        list
-            List of files in the given directory with desired extension.
-
-        """
-
-        logger.debug(f"Gathering xyz data files in {directory}.")
-
-        files = []
-        for file in os.listdir(directory):
-            if file.endswith(extension):
-                files.append(file)
-        files.sort()
-        return files
-
     def _process_downloaded(
         self, local_path_to_tar: str, name: str, unit_testing: bool
     ):
@@ -396,7 +311,7 @@ class QM9_curation:
         )
 
         # list the files in the directory to examine
-        files = self._list_files(directory=self.local_cache_dir, extension=".xyz")
+        files = list_files(directory=self.local_cache_dir, extension=".xyz")
 
         # parse the information in each datat file, saving to a list of dicts, data
         self.data = []
@@ -409,7 +324,7 @@ class QM9_curation:
             data_temp = self._parse_xyzfile(f"{self.local_cache_dir}/{file}")
             self.data.append(data_temp)
 
-        self._mkdir(self.output_file_path)
+        mkdir(self.output_file_path)
 
         full_output_path = f"{self.output_file_path}/{self.hdf5_file_name}"
 
@@ -436,13 +351,11 @@ class QM9_curation:
         >>> qm9_data.process()
 
         """
-        name = self.dataset_description["dataset_filename"]
         url = self.dataset_description["dataset_download_url"]
 
         # download the dataset
-        self._download(
+        name = download_from_figshare(
             url=url,
-            name=name,
             output_path=self.local_cache_dir,
             force_download=force_download,
         )

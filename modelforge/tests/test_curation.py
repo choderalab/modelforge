@@ -18,8 +18,6 @@ def prep_temp_dir(tmp_path_factory):
     fn = tmp_path_factory.mktemp("hdf5_data")
     return fn
 
-    # generate test data into a temporary path
-
 
 def test_dict_to_hdf5(prep_temp_dir):
     # generate an hdf5 file from simple test data
@@ -86,6 +84,42 @@ def test_dict_to_hdf5(prep_temp_dir):
                 assert records[i][key] == test_data[i][key]
 
 
+def test_figshare_download(prep_temp_dir):
+    url = "https://figshare.com/ndownloader/files/22247589"
+    name = download_from_figshare(
+        url=url,
+        output_path=str(prep_temp_dir),
+        force_download=False,
+    )
+
+    file_name_path = str(prep_temp_dir) + f"/{name}"
+    assert os.path.isfile(file_name_path)
+
+
+def test_mkdir(prep_temp_dir):
+    # thest the mkdir helper function that checks if a directory
+    # exists before creating
+    # the function returns a status: True if had to create the directory
+    # and False if it did not have to create the directory
+
+    new_dir = str(prep_temp_dir) + "/new_subdir"
+    # first assert the new directory does not exist
+    assert os.path.exists(new_dir) == False
+
+    # make the new directory and assert it now exists
+    status = mkdir(new_dir)
+    # if status == True, it created the directory because it didn't exist
+    assert status == True
+    assert os.path.exists(new_dir) == True
+
+    # try to make the directory even though it exists
+    # it should return False indicating it already existed
+    # and it did not try to create it
+    status = mkdir(new_dir)
+    assert os.path.exists(new_dir) == True
+    assert status == False
+
+
 def test_qm9_curation_helper_functions(prep_temp_dir):
     qm9_data = QM9_curation(
         hdf5_file_name="qm9_dataset.hdf5",
@@ -97,7 +131,8 @@ def test_qm9_curation_helper_functions(prep_temp_dir):
     assert val == 1e6
 
     # check the function to list directory contents
-    files = qm9_data._list_files(str(prep_temp_dir), ".hdf5")
+    # test.hdf5 was generated in test_dict_to_hdf5
+    files = list_files(str(prep_temp_dir), ".hdf5")
 
     # check to see if test.hdf5 is in the files
     assert "test.hdf5" in files
@@ -263,28 +298,14 @@ def test_qm9_local_archive(prep_temp_dir):
             assert np.isclose(hf[key]["internal energy at 0K"][()], names[key])
 
 
-def test_qm9_download(prep_temp_dir):
-    qm9_data = QM9_curation(
-        hdf5_file_name="qm9_test10.hdf5",
-        output_file_path=str(prep_temp_dir),
-        local_cache_dir=str(prep_temp_dir),
-    )
-    name = qm9_data.dataset_description["dataset_filename"]
-    url = qm9_data.dataset_description["dataset_download_url"]
-
-    qm9_data._download(
-        url=url,
-        name=name,
-        output_path=str(prep_temp_dir),
-        force_download=False,
-    )
-
-    file_name_path = str(prep_temp_dir) + f"/{name}"
-    assert os.path.isfile(file_name_path)
-
-
+"""
+# I refactored the code such that the figshare downloader into a separate function
+# allowing us to test downloading on a smaller, more manageable file
+# Extraction and processing of the qm9 dataset is tested
+# based on .tar.bz2 file that exists in tests/data that contains only 10 
+# I'm going to leave this code in place, but commented out for now
+# as we will eventually want a non-CI testing suite.
 def test_qm9_curation(prep_temp_dir):
-    # test file download and extraction
     # this downloads the entire archive and extracts it
     # but only processes the first 10 records
     qm9_data = QM9_curation(
@@ -296,7 +317,7 @@ def test_qm9_curation(prep_temp_dir):
     # test all the functions will run
     qm9_data.process(unit_testing=True)
 
-    name = qm9_data.dataset_description["dataset_filename"]
+    name = "dsgdb9nsd.xyz.tar.bz2"
 
     file_name_path = str(prep_temp_dir) + f"/{name}"
     assert os.path.isfile(file_name_path)
@@ -325,3 +346,4 @@ def test_qm9_curation(prep_temp_dir):
             # check record names
             assert key in list(names.keys())
             assert np.isclose(hf[key]["internal energy at 0K"][()], names[key])
+"""

@@ -1,7 +1,9 @@
 from typing import Dict, List, Optional
 
-import torch.nn as nn
 import lightning as pl
+import torch
+import torch.nn as nn
+from torch.optim import AdamW
 from modelforge.utils import Inputs, PropertyNames, SpeciesEnergies
 
 
@@ -14,15 +16,7 @@ class BaseNNP(pl.LightningModule):
 
     def __init__(self):
         """
-        Initialize the NeuralNetworkPotential class.
-
-        Parameters
-        ----------
-        dtype : torch.dtype
-            Data type for the PyTorch tensors.
-        device : torch.device
-            Device ("cpu" or "cuda") on which computations will be performed.
-
+        Initialize the NNP class.
         """
         super().__init__()
 
@@ -45,10 +39,10 @@ class BaseNNP(pl.LightningModule):
 
         """
 
-        E = self.calculate_energies_and_forces(inputs)
+        E = self.calculate_energy(inputs)
         return SpeciesEnergies(inputs.Z, E)
 
-    def calculate_energies_and_forces(self, inputs: Optional[Inputs] = None):
+    def calculate_energy(self, Inputs) -> torch.Tensor:
         """
         Placeholder for the method that should calculate energies and forces.
         This method should be implemented in subclasses.
@@ -60,3 +54,22 @@ class BaseNNP(pl.LightningModule):
 
         """
         raise NotImplementedError("Subclasses must implement this method.")
+
+    def training_step(self, batch, batch_idx):
+        # training_step defines the train loop.
+
+        vals = batch
+        E_hat = self.forward(vals)
+        loss = nn.functional.mse_loss(E_hat.energies, vals["E"])
+        # Logging to TensorBoard (if installed) by default
+        self.log("train_loss", loss)
+        return loss
+
+    def configure_optimizers(self):
+        optimizer = AdamW(self.parameters(), lr=1e-3)
+        return optimizer
+
+
+def wrap_vals_from_dataloader(vals):
+    Z, R, E = vals["Z"], vals["R"], vals["E"]
+    return Inputs(Z, R, E)

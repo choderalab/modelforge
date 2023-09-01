@@ -149,6 +149,18 @@ def cosine_cutoff(input: torch.Tensor, cutoff: torch.Tensor) -> torch.Tensor:
     return input_cut
 
 
+class EnergyReadout(nn.Module):
+    def __init__(self, n_atom_basis, n_output=1):
+        super().__init__()
+        self.energy_layer = nn.Linear(n_atom_basis, n_output)
+
+    def forward(self, x):
+        # x is of shape [n_atoms, n_atom_basis]
+        x = self.energy_layer(x)
+        total_energy = x.sum(dim=0)  # Sum over all atoms
+        return total_energy
+
+
 class ShiftedSoftplus(nn.Module):
     """
     Compute shifted soft-plus activation function.

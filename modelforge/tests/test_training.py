@@ -25,7 +25,7 @@ def test_forward_pass(model_class):
     model = setup_simple_model(model_class)
     dataset = initialize_dataset()
     trainer = Trainer()
-    trainer.fit(model, dataset.train_dataloader, dataset.val_dataloader)
+    trainer.fit(model, dataset.train_dataloader(), dataset.val_dataloader())
 
     # for inp in inputs
     # output = initialized_model.forward(inputs)

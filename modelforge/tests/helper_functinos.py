@@ -7,7 +7,9 @@ from modelforge.utils import Inputs
 
 def single_default_input():
     train_loader = initialize_dataset()
-    R, Z, E = train_loader.dataset[0]
+    v = train_loader.dataset[0]
+    print(v)
+    Z, R, E = v["Z"], v["R"], v["E"]
     padded_values = -Z.eq(-1).sum().item()
     Z_ = Z[:padded_values]
     R_ = R[:padded_values]
@@ -31,12 +33,16 @@ def initialize_dataset() -> TorchDataModule:
     return data_module
 
 
-methane_coordinates = torch.tensor(
-    [
-        [0.0, 0.0, 0.0],
-        [0.63918859, 0.63918859, 0.63918859],
-        [-0.63918859, -0.63918859, 0.63918859],
-        [-0.63918859, 0.63918859, -0.63918859],
-        [0.63918859, -0.63918859, -0.63918859],
-    ]
-)
+def methane_input():
+    Z = torch.tensor([6, 1, 1, 1, 1], dtype=torch.int64)
+    R = torch.tensor(
+        [
+            [0.0, 0.0, 0.0],
+            [0.63918859, 0.63918859, 0.63918859],
+            [-0.63918859, -0.63918859, 0.63918859],
+            [-0.63918859, 0.63918859, -0.63918859],
+            [0.63918859, -0.63918859, -0.63918859],
+        ]
+    )
+    E = torch.tensor([0.0])
+    return Inputs(Z, R, E)

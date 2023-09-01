@@ -18,9 +18,7 @@ def setup_simple_model(model_class) -> Optional[BaseNNP]:
 
 
 def test_BaseNNP():
-    nnp = BaseNNP(dtype=torch.float32, device="cpu")
-    assert nnp.dtype == torch.float32
-    assert str(nnp.device) == "cpu"
+    nnp = BaseNNP()
 
 
 @pytest.mark.parametrize("model_class", MODELS_TO_TEST)

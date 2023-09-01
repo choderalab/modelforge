@@ -149,7 +149,7 @@ def cosine_cutoff(input: torch.Tensor, cutoff: torch.Tensor) -> torch.Tensor:
     return input_cut
 
 
-def shifted_softplus(x: torch.Tensor) -> torch.Tensor:
+class ShiftedSoftplus(nn.Module):
     """
     Compute shifted soft-plus activation function.
 
@@ -163,7 +163,12 @@ def shifted_softplus(x: torch.Tensor) -> torch.Tensor:
     torch.Tensor
         Transformed tensor.
     """
-    return nn.functional.softplus(x) - np.log(2.0)
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return nn.functional.softplus(x) - np.log(2.0)
 
 
 class GaussianRBF(nn.Module):

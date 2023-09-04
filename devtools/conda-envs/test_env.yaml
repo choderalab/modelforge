@@ -19,6 +19,7 @@ dependencies:
   - lightning
   - tensorboard
   - torchvision
+  - ase
 
     # Testing
   - pytest

@@ -81,7 +81,7 @@ class TorchDataset(torch.utils.data.Dataset):
         >>> data_point = torch_dataset[5]
         >>> geometry, atomic_numbers = data_point
         """
-        Z = torch.tensor(self.properties_of_interest["Z"][idx])
+        Z = torch.tensor(self.properties_of_interest["Z"][idx], dtype=torch.int64)
         R = torch.tensor(self.properties_of_interest["R"][idx])
         E = torch.tensor(self.properties_of_interest["E"][idx])
         # mask_dim = -Z.eq(-1).sum().item()

@@ -44,7 +44,10 @@ class SchNetInteractionBlock(nn.Module):
 
     def forward(self, x, f_ij, idx_i, idx_j, rcut_ij):
         # atom wise update of features
-        logger.debug(f"Input to feature: x.shape {x.shape}")
+        logger.debug(f"Input to feature: {x.shape=}")
+        logger.debug(f"Input to feature: {f_ij.shape=}")
+        logger.debug(f"Input to feature: {idx_i.shape=}")
+        logger.debug(f"Input to feature: {rcut_ij.shape=}")
         x = self.intput_to_feature(x)
         logger.debug("After input_to_feature call: x.shape {x.shape}")
 
@@ -115,9 +118,13 @@ class SchNetRepresentation(nn.Module):
 
     def forward(self, inputs):
         logger.debug("Compute distances ...")
-        mask = inputs["Z"] == -1
-        atom_index12 = self.calculate_neighbors(mask, inputs["R"], self.cutoff)
-        d_ij = self.compute_distance(atom_index12, inputs["R"])
+        Z = inputs["Z"]
+        R = inputs["R"]
+        mask = Z == -1
+
+        atom_index12 = self.calculate_neighbors(mask, R, self.cutoff)
+        d_ij = self.compute_distance(atom_index12, R)
+        logger.debug(f"{d_ij.shape=}")
         logger.debug("Convert distances to radial basis ...")
         f_ij, rcut_ij = self._distance_to_radial_basis(d_ij)
         logger.debug("Compute interaction block ...")
@@ -125,9 +132,9 @@ class SchNetRepresentation(nn.Module):
         # compute atom and pair features (see Fig1 in 10.1063/1.5019779)
         # initializing x^{l}_{0} as x^l)0 = aZ_i
         logger.debug("Embedding inputs.Z")
-        Z = inputs["Z"]
         logger.debug(f"{Z.shape=}")
         x = self.embedding(Z)
+        
         logger.debug(f"After embedding: {x.shape=}")
         idx_i = atom_index12[0]
         idx_j = atom_index12[1]

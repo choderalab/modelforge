@@ -5,14 +5,12 @@ import pytest
 from modelforge.potential.models import BaseNNP
 from modelforge.potential.schnet import Schnet
 
-from .helper_functinos import DATASETS, MODELS_TO_TEST, single_default_input
-
-
-def setup_simple_model(model_class) -> Optional[BaseNNP]:
-    if model_class is Schnet:
-        return Schnet(n_atom_basis=128, n_interactions=3, n_filters=64)
-    else:
-        raise NotImplementedError
+from .helper_functinos import (
+    DATASETS,
+    MODELS_TO_TEST,
+    setup_simple_model,
+    single_default_input,
+)
 
 
 def test_BaseNNP():

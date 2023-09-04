@@ -22,7 +22,6 @@ def setup_simple_model(model_class) -> Optional[BaseNNP]:
 def single_default_input(dataset, mode):
     train_loader = initialize_dataset(dataset, mode)
     v = train_loader.dataset[0]
-    print(v)
     Z, R, E = v["Z"], v["R"], v["E"]
     padded_values = -Z.eq(-1).sum().item()
     Z_ = Z[:padded_values]

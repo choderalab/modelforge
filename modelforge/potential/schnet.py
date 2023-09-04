@@ -1,22 +1,14 @@
-from typing import Tuple
-from loguru import logger
-
 import numpy as np
-import torch
 import torch.nn as nn
-from ase import Atoms
-from ase.neighborlist import neighbor_list
-from torch import dtype
-
-from modelforge.utils import Inputs
+from loguru import logger
 
 from .models import BaseNNP
 from .utils import (
-    GaussianRBF,
-    cosine_cutoff,
-    ShiftedSoftplus,
-    scatter_add,
     EnergyReadout,
+    GaussianRBF,
+    ShiftedSoftplus,
+    cosine_cutoff,
+    scatter_add,
 )
 
 
@@ -60,13 +52,16 @@ class SchNetInteractionBlock(nn.Module):
         Wij = self.filter_network(f_ij)
         Wij = Wij * rcut_ij[:, None]
         Wij = Wij.to(dtype=x.dtype)
+        logger.debug(f"Wij {Wij.shape=}")
 
         # continuous-ﬁlter convolutional layers
+        logger.debug(f"Before x[idx_j]: x.shape {x.shape=}")
+        logger.debug(f"idx_j.shape {idx_j.shape=}")
         x_j = x[idx_j]
         x_ij = x_j * Wij
-        logger.debug("After x_j * Wij: x_ij.shape {x_ij.shape}")
+        logger.debug(f"After x_j * Wij: x_ij.shape {x_ij.shape=}")
         x = scatter_add(x_ij, idx_i, dim_size=x.shape[0])
-        logger.debug("After scatter_add: x.shape {x.shape}")
+        logger.debug(f"After scatter_add: x.shape {x.shape=}")
         # Update features
         x = self.feature_to_output(x)
         return x
@@ -77,7 +72,7 @@ class SchNetRepresentation(nn.Module):
         super().__init__()
         from .utils import neighbor_pairs_nopbc
 
-        self.embedding = nn.Embedding(100, n_atom_basis, padding_idx=0)
+        self.embedding = nn.Embedding(100, n_atom_basis, padding_idx=-1)
         self.interactions = nn.ModuleList(
             [
                 SchNetInteractionBlock(n_atom_basis, n_filters)
@@ -88,54 +83,7 @@ class SchNetRepresentation(nn.Module):
         self.radial_basis = GaussianRBF(n_rbf=20, cutoff=self.cutoff)
         self.calculate_neighbors = neighbor_pairs_nopbc
 
-    def _setup_ase_system(self, inputs: Inputs) -> Atoms:
-        """
-        Transform inputs to an ASE Atoms object.
-
-        Parameters
-        ----------
-        inputs : Inputs
-            Input features including atomic numbers and positions.
-
-        Returns
-        -------
-        ase.Atoms
-            Transformed ASE Atoms object.
-
-        """
-        _atomic_numbers = torch.clone(inputs.Z)
-        print(_atomic_numbers)
-        atomic_numbers = list(_atomic_numbers.detach().cpu().numpy())
-        positions = list(inputs.R.detach().cpu().numpy())
-        ase_atoms = Atoms(numbers=atomic_numbers, positions=positions)
-        return ase_atoms
-
-    def _compute_distances_with_ase(
-        self, inputs: Inputs
-    ) -> Tuple[torch.Tensor, np.ndarray, np.ndarray]:
-        """
-        Compute atomic distances using ASE's neighbor list.
-
-        Parameters
-        ----------
-        inputs : Inputs
-            Input features including atomic numbers and positions.
-
-        Returns
-        -------
-        torch.Tensor, np.ndarray, np.ndarray
-            Pairwise distances, index of atom i, and index of atom j.
-
-        """
-
-        ase_atoms = self._setup_ase_system(inputs)
-        idx_i, idx_j, _, r_ij = neighbor_list(
-            "ijSD", ase_atoms, 5.0, self_interaction=False
-        )
-        r_ij = torch.from_numpy(r_ij)
-        return r_ij, idx_i, idx_j
-
-    def _distance_to_radial_basis(self, r_ij):
+    def _distance_to_radial_basis(self, d_ij):
         """
         Transform distances to radial basis functions.
 
@@ -150,13 +98,12 @@ class SchNetRepresentation(nn.Module):
             Radial basis functions and cutoff values.
 
         """
-        d_ij = torch.norm(r_ij, dim=1)  # calculate pairwise distances
         f_ij = self.radial_basis(d_ij)
         rcut_ij = cosine_cutoff(d_ij, self.cutoff)
         return f_ij, rcut_ij
 
-    def compute_distance(self, atom_index12, inputs.R):
-        coordinates = inputs.R
+    def compute_distance(self, atom_index12, R):
+        coordinates = R
         coordinates_ = coordinates
         coordinates = coordinates_.flatten(0, 1)
 
@@ -168,20 +115,22 @@ class SchNetRepresentation(nn.Module):
 
     def forward(self, inputs):
         logger.debug("Compute distances ...")
-        mask = inputs.Z == -1
-        atom_index12 = self.calculate_neighbors(mask, inputs.R, 5.0)
-        d_ij = self.compute_distance(atom_index12, inputs.R)
-        r_ij, idx_i, idx_j = self._compute_distances_with_ase(inputs)
+        mask = inputs["Z"] == -1
+        atom_index12 = self.calculate_neighbors(mask, inputs["R"], self.cutoff)
+        d_ij = self.compute_distance(atom_index12, inputs["R"])
         logger.debug("Convert distances to radial basis ...")
-        f_ij, rcut_ij = self._distance_to_radial_basis(r_ij)
+        f_ij, rcut_ij = self._distance_to_radial_basis(d_ij)
         logger.debug("Compute interaction block ...")
 
         # compute atom and pair features (see Fig1 in 10.1063/1.5019779)
         # initializing x^{l}_{0} as x^l)0 = aZ_i
         logger.debug("Embedding inputs.Z")
-        x = self.embedding(inputs.Z)
+        Z = inputs["Z"]
+        logger.debug(f"{Z.shape=}")
+        x = self.embedding(Z)
         logger.debug(f"After embedding: {x.shape=}")
-        idx_i = torch.from_numpy(idx_i).to(torch.int64)
+        idx_i = atom_index12[0]
+        idx_j = atom_index12[1]
         for interaction in self.interactions:
             v = interaction(x, f_ij, idx_i, idx_j, rcut_ij)
             x = x + v

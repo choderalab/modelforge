@@ -38,7 +38,6 @@ class BaseNNP(pl.LightningModule):
             An instance of the SpeciesEnergies data class containing species and calculated energies.
 
         """
-        print(inputs)
         E = self.calculate_energy(inputs)
         return SpeciesEnergies(inputs.Z, E)
 

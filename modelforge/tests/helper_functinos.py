@@ -2,11 +2,25 @@ import torch
 
 from modelforge.dataset.dataset import TorchDataModule
 from modelforge.dataset.qm9 import QM9Dataset
+from modelforge.potential.schnet import Schnet
 from modelforge.utils import Inputs
+from modelforge.potential.models import BaseNNP
+
+from typing import Optional
+
+MODELS_TO_TEST = [Schnet]
+DATASETS = [QM9Dataset]
 
 
-def single_default_input():
-    train_loader = initialize_dataset()
+def setup_simple_model(model_class) -> Optional[BaseNNP]:
+    if model_class is Schnet:
+        return Schnet(n_atom_basis=128, n_interactions=3, n_filters=64)
+    else:
+        raise NotImplementedError
+
+
+def single_default_input(dataset, mode):
+    train_loader = initialize_dataset(dataset, mode)
     v = train_loader.dataset[0]
     print(v)
     Z, R, E = v["Z"], v["R"], v["E"]
@@ -25,11 +39,11 @@ def default_input_iterator():
         yield Inputs(Z_, R_, E)
 
 
-def initialize_dataset() -> TorchDataModule:
-    data = QM9Dataset(for_unit_testing=True)
+def initialize_dataset(dataset, mode: str) -> TorchDataModule:
+    data = dataset(for_unit_testing=True)
     data_module = TorchDataModule(data)
     data_module.prepare_data()
-    data_module.setup("fit")
+    data_module.setup(mode)
     return data_module
 
 

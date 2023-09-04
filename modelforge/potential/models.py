@@ -38,7 +38,7 @@ class BaseNNP(pl.LightningModule):
             An instance of the SpeciesEnergies data class containing species and calculated energies.
 
         """
-
+        print(inputs)
         E = self.calculate_energy(inputs)
         return SpeciesEnergies(inputs.Z, E)
 
@@ -58,8 +58,7 @@ class BaseNNP(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         # training_step defines the train loop.
 
-        vals = batch
-        E_hat = self.forward(vals)
+        E_hat = self.forward(wrap_vals_from_dataloader(batch))
         loss = nn.functional.mse_loss(E_hat.energies, vals["E"])
         # Logging to TensorBoard (if installed) by default
         self.log("train_loss", loss)

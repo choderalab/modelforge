@@ -5,11 +5,13 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 from loguru import logger
+from torch.masked import masked_tensor
 from torch.utils.data import DataLoader
+
+from modelforge.utils.prop import Inputs, PropertyNames
 
 from .transformation import default_transformation
 from .utils import RandomSplittingStrategy, SplittingStrategy
-from modelforge.utils.prop import Inputs, PropertyNames
 
 
 class TorchDataset(torch.utils.data.Dataset):
@@ -41,9 +43,9 @@ class TorchDataset(torch.utils.data.Dataset):
         preloaded: bool = False,
     ):
         self.properties_of_interest = {
-            "Z": torch.tensor(dataset[property_name.Z]),
-            "R": torch.tensor(dataset[property_name.R]),
-            "E": torch.tensor(dataset[property_name.E]),
+            "Z": dataset[property_name.Z],
+            "R": dataset[property_name.R],
+            "E": dataset[property_name.E],
         }
 
         self.length = len(self.properties_of_interest["Z"])
@@ -79,20 +81,27 @@ class TorchDataset(torch.utils.data.Dataset):
         >>> data_point = torch_dataset[5]
         >>> geometry, atomic_numbers = data_point
         """
-        Z = self.properties_of_interest["Z"][idx]
-        R = self.properties_of_interest["R"][idx]
-        E = self.properties_of_interest["E"][idx]
-
+        Z = torch.tensor(self.properties_of_interest["Z"][idx])
+        R = torch.tensor(self.properties_of_interest["R"][idx])
+        E = torch.tensor(self.properties_of_interest["E"][idx])
+        # mask_dim = -Z.eq(-1).sum().item()
+        # Z = _mask_Z(Z)
+        # R = _mask_R(R, mask_dim)
         return {"Z": Z, "R": R, "E": E}
 
 
-def _remove_padding():
-    padded_values = -Z.eq(-1).sum().item()
-    print(padded_values)
-    Z_ = Z[:padded_values]
-    R_ = R[:padded_values]
-    print(Z_)
-    print(R_)
+def _mask_Z(Z):
+    mask = torch.ones_like(Z, dtype=torch.bool)
+    mask[torch.where(Z == -1)] = False
+    return masked_tensor(
+        Z, mask
+    )  # NOTE: FIXME: This is still a prototype feature and not available
+
+
+def _mask_R(R, dim):
+    mask = torch.zeros_like(R, dtype=torch.bool)
+    mask[:dim, :] = True
+    return masked_tensor(R, mask)
 
 
 class HDF5Dataset:

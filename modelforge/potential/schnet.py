@@ -75,6 +75,7 @@ class SchNetInteractionBlock(nn.Module):
 class SchNetRepresentation(nn.Module):
     def __init__(self, n_atom_basis, n_filters, n_interactions):
         super().__init__()
+        from .utils import neighbor_pairs_nopbc
 
         self.embedding = nn.Embedding(100, n_atom_basis, padding_idx=0)
         self.interactions = nn.ModuleList(
@@ -85,6 +86,7 @@ class SchNetRepresentation(nn.Module):
         )
         self.cutoff = 5.0
         self.radial_basis = GaussianRBF(n_rbf=20, cutoff=self.cutoff)
+        self.calculate_neighbors = neighbor_pairs_nopbc
 
     def _setup_ase_system(self, inputs: Inputs) -> Atoms:
         """
@@ -102,12 +104,13 @@ class SchNetRepresentation(nn.Module):
 
         """
         _atomic_numbers = torch.clone(inputs.Z)
+        print(_atomic_numbers)
         atomic_numbers = list(_atomic_numbers.detach().cpu().numpy())
         positions = list(inputs.R.detach().cpu().numpy())
         ase_atoms = Atoms(numbers=atomic_numbers, positions=positions)
         return ase_atoms
 
-    def _compute_distances(
+    def _compute_distances_with_ase(
         self, inputs: Inputs
     ) -> Tuple[torch.Tensor, np.ndarray, np.ndarray]:
         """
@@ -152,9 +155,23 @@ class SchNetRepresentation(nn.Module):
         rcut_ij = cosine_cutoff(d_ij, self.cutoff)
         return f_ij, rcut_ij
 
+    def compute_distance(self, atom_index12, inputs.R):
+        coordinates = inputs.R
+        coordinates_ = coordinates
+        coordinates = coordinates_.flatten(0, 1)
+
+        selected_coordinates = coordinates.index_select(0, atom_index12.view(-1)).view(
+            2, -1, 3
+        )
+        vec = selected_coordinates[0] - selected_coordinates[1]
+        return vec.norm(2, -1)
+
     def forward(self, inputs):
         logger.debug("Compute distances ...")
-        r_ij, idx_i, idx_j = self._compute_distances(inputs)
+        mask = inputs.Z == -1
+        atom_index12 = self.calculate_neighbors(mask, inputs.R, 5.0)
+        d_ij = self.compute_distance(atom_index12, inputs.R)
+        r_ij, idx_i, idx_j = self._compute_distances_with_ase(inputs)
         logger.debug("Convert distances to radial basis ...")
         f_ij, rcut_ij = self._distance_to_radial_basis(r_ij)
         logger.debug("Compute interaction block ...")

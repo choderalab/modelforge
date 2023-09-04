@@ -6,10 +6,10 @@ import pytest
 import torch
 from torch.utils.data import DataLoader
 
-from modelforge.dataset.dataset import DatasetFactory, TorchDataset
+from modelforge.dataset.dataset import DatasetFactory, TorchDataModule, TorchDataset
 from modelforge.dataset.qm9 import QM9Dataset
 
-DATASETS = [QM9Dataset]
+from .helper_functinos import initialize_dataset, DATASETS
 
 
 @pytest.fixture(
@@ -42,7 +42,7 @@ def cleanup_files():
     _cleanup()
 
 
-def generate_dataset(dataset) -> TorchDataset:
+def generate_torch_dataset(dataset) -> TorchDataset:
     factory = DatasetFactory()
     data = dataset(for_unit_testing=True)
     return factory.create_dataset(data)
@@ -121,9 +121,9 @@ def test_data_item_format(dataset):
     """Test the format of individual data items in the dataset."""
     from typing import Dict
 
-    dataset = generate_dataset(dataset)
+    dataset = initialize_dataset(dataset, mode="fit")
 
-    raw_data_item = dataset[0]
+    raw_data_item = dataset.dataset[0]
     assert isinstance(raw_data_item, Dict)
     assert isinstance(raw_data_item["Z"], torch.Tensor)
     assert isinstance(raw_data_item["R"], torch.Tensor)
@@ -154,12 +154,23 @@ def test_dataset_generation(dataset):
     """Test the splitting of the dataset."""
     from modelforge.dataset.utils import RandomSplittingStrategy
 
-    dataset = generate_dataset(dataset)
-    train_dataset, val_dataset, test_dataset = RandomSplittingStrategy().split(dataset)
+    dataset = initialize_dataset(dataset, mode="fit")
+    train_dataloader = dataset.train_dataloader()
+    val_dataloader = dataset.val_dataloader()
 
-    assert len(train_dataset) == 80
-    assert len(test_dataset) == 10
-    assert len(val_dataset) == 10
+    try:
+        dataset.test_dataloader()
+    except AttributeError:
+        # this isn't set when dataset is in 'fit' mode
+        pass
+
+    # the dataloader automatically splits and batches the dataset
+    # for the trianing set it batches the 80 datapoints in
+    # a batch of 64 and a batch of 16 samples
+    assert len(train_dataloader) == 2  # nr of batches
+    v = [v_ for v_ in train_dataloader]
+    assert len(v[0]["Z"]) == 64
+    assert len(v[1]["Z"]) == 16
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
@@ -167,7 +178,7 @@ def test_dataset_splitting(dataset):
     """Test random_split on the the dataset."""
     from modelforge.dataset.utils import RandomSplittingStrategy
 
-    dataset = generate_dataset(dataset)
+    dataset = generate_torch_dataset(dataset)
     train_dataset, val_dataset, test_dataset = RandomSplittingStrategy().split(dataset)
 
     energy = train_dataset[0]["E"].item()
@@ -196,7 +207,7 @@ def test_file_cache_methods(dataset):
     # generate files to test _from_hdf5()
     from modelforge.dataset.transformation import default_transformation
 
-    _ = generate_dataset(dataset)
+    _ = initialize_dataset(dataset, mode="str")
 
     data = dataset(for_unit_testing=True)
 
@@ -230,19 +241,3 @@ def test_numpy_dataset_assignment(dataset):
 
     assert hasattr(data, "numpy_data")
     assert isinstance(data.numpy_data, np.lib.npyio.NpzFile)
-
-
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_dataset_dataloaders(dataset):
-    """
-    Test if the data loaders return the expected batch sizes.
-    """
-    from modelforge.dataset.utils import RandomSplittingStrategy
-    from torch.utils.data import DataLoader
-
-    dataset = generate_dataset(dataset)
-    train_dataset, val_dataset, test_dataset = RandomSplittingStrategy().split(dataset)
-    train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-
-    for batch in train_dataloader:
-        assert len(batch) == 3  # coordinates, atomic_numbers, return_energy

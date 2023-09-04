@@ -1,13 +1,11 @@
 from typing import Optional
 
 import pytest
-import torch
 
 from modelforge.potential.models import BaseNNP
 from modelforge.potential.schnet import Schnet
-from .helper_functinos import single_default_input
 
-MODELS_TO_TEST = [Schnet]
+from .helper_functinos import DATASETS, MODELS_TO_TEST, single_default_input
 
 
 def setup_simple_model(model_class) -> Optional[BaseNNP]:
@@ -22,7 +20,8 @@ def test_BaseNNP():
 
 
 @pytest.mark.parametrize("model_class", MODELS_TO_TEST)
-def test_forward_pass(model_class):
+@pytest.mark.parametrize("dataset", DATASETS)
+def test_forward_pass(model_class, dataset):
     initialized_model = setup_simple_model(model_class)
-    inputs = single_default_input()
-    output = initialized_model.forward(inputs)
+    inputs = single_default_input(dataset, mode="fit")
+    output = initialized_model(inputs)

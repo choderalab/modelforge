@@ -1,14 +1,10 @@
-import requests
 from loguru import logger
 import os
-from tqdm import tqdm
 
 from typing import Optional
 from openff.units import unit, Quantity
 import pint
-import qcelemental as qcel
 
-import tarfile
 from modelforge.curation.utils import *
 import numpy as np
 
@@ -99,6 +95,9 @@ class QM9_curation:
         cache_directory: str, required
             Location to save the contents from the tar.bz2 file
         """
+
+        import tarfile
+
         logger.debug(f"Extracting tar {file_path}.")
 
         tar = tarfile.open(f"{file_path}", "r:bz2")
@@ -224,6 +223,7 @@ class QM9_curation:
         17  cal/mol/K   Heat capacity at 298.15K
 
         """
+        import qcelemental as qcel
 
         with open(file_name, "r") as file:
             n_atoms = int(file.readline())
@@ -315,6 +315,8 @@ class QM9_curation:
         >>> qm9_data.process()
 
         """
+        from tqdm import tqdm
+
         # untar the dataset
         self._extract(
             file_path=f"{local_path_to_tar}/{name}",

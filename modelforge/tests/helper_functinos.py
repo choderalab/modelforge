@@ -19,23 +19,10 @@ def setup_simple_model(model_class) -> Optional[BaseNNP]:
         raise NotImplementedError
 
 
-def single_default_input(dataset, mode):
+def return_single_batch(dataset, mode: str):
     train_loader = initialize_dataset(dataset, mode)
-    v = train_loader.dataset[0]
-    Z, R, E = v["Z"], v["R"], v["E"]
-    padded_values = -Z.eq(-1).sum().item()
-    Z_ = Z[:padded_values]
-    R_ = R[:padded_values]
-    return Inputs(Z_, R_, E)
-
-
-def default_input_iterator():
-    train_loader = initialize_dataset()
-    for R, Z, E in train_loader:
-        padded_values = -Z.eq(-1).sum().item()
-        Z_ = Z[:padded_values]
-        R_ = R[:padded_values]
-        yield Inputs(Z_, R_, E)
+    for batch in train_loader.train_dataloader():
+        return batch
 
 
 def initialize_dataset(dataset, mode: str) -> TorchDataModule:
@@ -47,15 +34,17 @@ def initialize_dataset(dataset, mode: str) -> TorchDataModule:
 
 
 def methane_input():
-    Z = torch.tensor([6, 1, 1, 1, 1], dtype=torch.int64)
+    Z = torch.tensor([[6, 1, 1, 1, 1]], dtype=torch.int64)
     R = torch.tensor(
         [
-            [0.0, 0.0, 0.0],
-            [0.63918859, 0.63918859, 0.63918859],
-            [-0.63918859, -0.63918859, 0.63918859],
-            [-0.63918859, 0.63918859, -0.63918859],
-            [0.63918859, -0.63918859, -0.63918859],
+            [
+                [0.0, 0.0, 0.0],
+                [0.63918859, 0.63918859, 0.63918859],
+                [-0.63918859, -0.63918859, 0.63918859],
+                [-0.63918859, 0.63918859, -0.63918859],
+                [0.63918859, -0.63918859, -0.63918859],
+            ]
         ]
     )
     E = torch.tensor([0.0])
-    return Inputs(Z, R, E)
+    return {"Z": Z, "R": R, "E": E}

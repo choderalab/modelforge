@@ -4,7 +4,7 @@ import lightning as pl
 import torch
 import torch.nn as nn
 from torch.optim import AdamW
-from modelforge.utils import Inputs, PropertyNames, SpeciesEnergies
+from modelforge.utils import Inputs, SpeciesEnergies
 
 
 class BaseNNP(pl.LightningModule):
@@ -22,7 +22,7 @@ class BaseNNP(pl.LightningModule):
 
     def forward(
         self,
-        inputs: Inputs,
+        inputs: dict,
     ) -> SpeciesEnergies:
         """
         Forward pass for the neural network potential.
@@ -38,10 +38,11 @@ class BaseNNP(pl.LightningModule):
             An instance of the SpeciesEnergies data class containing species and calculated energies.
 
         """
+        assert isinstance(inputs, dict)  #
         E = self.calculate_energy(inputs)
         return SpeciesEnergies(inputs["Z"], E)
 
-    def calculate_energy(self, Inputs) -> torch.Tensor:
+    def calculate_energy(self, inputs: dict) -> torch.Tensor:
         """
         Placeholder for the method that should calculate energies and forces.
         This method should be implemented in subclasses.

@@ -1,6 +1,7 @@
 import numpy as np
 import torch.nn as nn
 from loguru import logger
+from modelforge.utils import Inputs
 
 from .models import BaseNNP
 from .utils import (
@@ -20,7 +21,7 @@ class Schnet(BaseNNP):
         )
         self.readout = EnergyReadout(n_atom_basis)
 
-    def calculate_energy(self, inputs):
+    def calculate_energy(self, inputs: dict):
         x = self.representation(inputs)
         # pool average over atoms
         return self.readout(x)
@@ -44,7 +45,6 @@ class SchNetInteractionBlock(nn.Module):
 
     def forward(self, x, f_ij, idx_i, idx_j, rcut_ij):
         # atom wise update of features
-        print(x.shape)
         batch_size, nr_of_atoms = x.shape[0], x.shape[1]
 
         logger.debug(f"Input to feature: {x.shape=}")
@@ -124,7 +124,7 @@ class SchNetRepresentation(nn.Module):
         vec = selected_coordinates[0] - selected_coordinates[1]
         return vec.norm(2, -1)
 
-    def forward(self, inputs):
+    def forward(self, inputs: dict):
         logger.debug("Compute distances ...")
         Z = inputs["Z"]
         R = inputs["R"]

@@ -44,12 +44,17 @@ class SchNetInteractionBlock(nn.Module):
 
     def forward(self, x, f_ij, idx_i, idx_j, rcut_ij):
         # atom wise update of features
+        print(x.shape)
+        batch_size, nr_of_atoms = x.shape[0], x.shape[1]
+
         logger.debug(f"Input to feature: {x.shape=}")
         logger.debug(f"Input to feature: {f_ij.shape=}")
         logger.debug(f"Input to feature: {idx_i.shape=}")
         logger.debug(f"Input to feature: {rcut_ij.shape=}")
         x = self.intput_to_feature(x)
-        logger.debug("After input_to_feature call: x.shape {x.shape}")
+        logger.debug(f"After input_to_feature call: {x.shape=}")
+        x = x.flatten(0, 1)
+        logger.debug(f"Flatten x: {x.shape=}")
 
         # Filter generation networks
         Wij = self.filter_network(f_ij)
@@ -67,6 +72,8 @@ class SchNetInteractionBlock(nn.Module):
         logger.debug(f"After scatter_add: x.shape {x.shape=}")
         # Update features
         x = self.feature_to_output(x)
+        logger.debug(f"After feature_to_output: x.shape {x.shape=}")
+        x = x.reshape(batch_size, nr_of_atoms, 128)
         return x
 
 
@@ -106,13 +113,14 @@ class SchNetRepresentation(nn.Module):
         return f_ij, rcut_ij
 
     def compute_distance(self, atom_index12, R):
-        coordinates = R
-        coordinates_ = coordinates
-        coordinates = coordinates_.flatten(0, 1)
-
+        logger.debug(f"{atom_index12.shape=}")
+        logger.debug(f"{R.shape=}")
+        coordinates = R.flatten(0, 1)
+        logger.debug(f"{coordinates.shape=}")
         selected_coordinates = coordinates.index_select(0, atom_index12.view(-1)).view(
             2, -1, 3
         )
+        logger.debug(f"{selected_coordinates.shape=}")
         vec = selected_coordinates[0] - selected_coordinates[1]
         return vec.norm(2, -1)
 
@@ -134,7 +142,7 @@ class SchNetRepresentation(nn.Module):
         logger.debug("Embedding inputs.Z")
         logger.debug(f"{Z.shape=}")
         x = self.embedding(Z)
-        
+
         logger.debug(f"After embedding: {x.shape=}")
         idx_i = atom_index12[0]
         idx_j = atom_index12[1]
@@ -143,70 +151,3 @@ class SchNetRepresentation(nn.Module):
             x = x + v
 
         return x
-
-
-# class SchNetPotential(BaseNNP):
-#     def __init__(
-#         self,
-#         n_atom_basis: int,  # number of features per atom
-#         n_interactions: int,  # number of interaction blocks
-#         n_filters: int = 0,  # number of filters
-#     )
-#         super().__init__()
-#         representation = SchNetRepresentation(
-#             n_atom_basis, n_filters, n_gaussians, n_interactions
-#         )
-#         input_modules = [SchNetInputModule()]  # Optional
-#         output_modules = [SchNetOutputModule()]  # Optional
-#         super().__init__(representation, input_modules, output_modules)
-
-
-# class SchNetInteractionBlock(nn.Module):
-#     def __init__(
-#         self, n_atom_basis: int, n_filters: int, n_gaussians: int, n_interactions: int
-#     ):
-#         super().__init__()
-#         self.dense1 = nn.Linear(n_atom_basis, n_filters)
-#         self.dense2 = nn.Linear(n_filters, n_atom_basis)
-#         self.activation = nn.ReLU()
-#         self.distance_expansion = nn.Linear(n_gaussians, n_filters, bias=False)
-
-#     def forward(self, x, r, neighbors):
-#         # Distance expansion
-#         r_expanded = self.distance_expansion(r)
-
-#         # Interaction with neighbors
-#         for i, neighbors_i in enumerate(neighbors):
-#             x_neighbors = x[neighbors_i]
-#             r_neighbors = r_expanded[neighbors_i]
-#             messages = self.activation(self.dense1(x_neighbors))
-#             messages = self.dense2(messages * r_neighbors)
-#             x[i] += messages.sum(dim=0)
-
-#         return x
-
-
-# class SchNetRepresentation(nn.Module):
-#     def __init__(self, n_atom_basis, n_filters, n_gaussians, n_interactions):
-#         super().__init__()
-#         self.embedding = nn.Embedding(n_atom_basis, n_atom_basis)
-#         self.interactions = nn.ModuleList(
-#             [
-#                 SchNetInteractionBlock(n_atom_basis, n_filters, n_gaussians)
-#                 for _ in range(n_interactions)
-#             ]
-#         )
-
-#     def forward(self, species, coordinates, neighbor_list):
-#         # Embedding layer
-#         x = self.embedding(species)
-
-#         # Compute pairwise distances and neighbor list
-#         r = torch.pdist(coordinates)
-#         neighbors = neighbor_list  # Assuming neighbor_list is precomputed
-
-#         # Interaction blocks
-#         for interaction in self.interactions:
-#             x = interaction(x, r, neighbors)
-
-#         return x

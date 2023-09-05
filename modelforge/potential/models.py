@@ -39,7 +39,7 @@ class BaseNNP(pl.LightningModule):
 
         """
         E = self.calculate_energy(inputs)
-        return SpeciesEnergies(inputs.Z, E)
+        return SpeciesEnergies(inputs["Z"], E)
 
     def calculate_energy(self, Inputs) -> torch.Tensor:
         """

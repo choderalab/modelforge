@@ -19,6 +19,8 @@ dependencies:
   - lightning
   - tensorboard
   - torchvision
+  - openff-units
+  - pint
   - ase
 
     # Testing

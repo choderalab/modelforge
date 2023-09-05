@@ -21,6 +21,7 @@ dependencies:
   - torchvision
   - openff-units
   - pint
+  - ase
 
     # Testing
   - pytest

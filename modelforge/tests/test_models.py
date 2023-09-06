@@ -1,4 +1,3 @@
-
 import pytest
 
 from modelforge.potential.models import BaseNNP

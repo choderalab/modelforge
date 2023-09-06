@@ -65,6 +65,7 @@ class BaseNNP(pl.LightningModule):
         torch.Tensor
             The calculated energy tensor.
 
+
         Raises
         ------
         NotImplementedError

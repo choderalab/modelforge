@@ -53,6 +53,7 @@ def scatter_add(
     return _scatter_add(x, idx_i, dim_size, dim)
 
 
+
 def gaussian_rbf(
     inputs: torch.Tensor, offsets: torch.Tensor, widths: torch.Tensor
 ) -> torch.Tensor:

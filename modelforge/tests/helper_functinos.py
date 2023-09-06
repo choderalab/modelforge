@@ -48,3 +48,4 @@ def methane_input():
     )
     E = torch.tensor([0.0])
     return {"Z": Z, "R": R, "E": E}
+

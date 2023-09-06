@@ -20,6 +20,7 @@ class Schnet(BaseNNP):
         """
         Initialize the Schnet class.
 
+
         Parameters
         ----------
         n_atom_basis : int
@@ -286,5 +287,6 @@ class SchNetRepresentation(nn.Module):
         for interaction in self.interactions:
             v = interaction(x, f_ij, idx_i, idx_j, rcut_ij)
             x = x + v
+
 
         return x

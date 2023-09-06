@@ -75,7 +75,7 @@ class QM9Dataset(HDF5Dataset):
             dataset_name = f"{dataset_name}_subset"
 
         super().__init__(
-            f"{local_cache_dir}/{dataset_name}_cache.hdf5",
+            f"{local_cache_dir}/{dataset_name}_cache.hdf5.gz",
             f"{local_cache_dir}/{dataset_name}_processed.npz",
         )
         self.dataset_name = dataset_name

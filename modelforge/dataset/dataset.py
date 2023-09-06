@@ -5,10 +5,9 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 from loguru import logger
-from torch.masked import masked_tensor
 from torch.utils.data import DataLoader
 
-from modelforge.utils.prop import Inputs, PropertyNames
+from modelforge.utils.prop import PropertyNames
 
 from .transformation import default_transformation
 from .utils import RandomSplittingStrategy, SplittingStrategy
@@ -28,12 +27,6 @@ class TorchDataset(torch.utils.data.Dataset):
         If True, preconverts the properties to PyTorch tensors to save time during item fetching.
         Default is False.
 
-    Examples
-    --------
-    >>> numpy_data = np.load("data_file.npz")
-    >>> properties = ["geometry", "atomic_numbers"]
-    >>> torch_dataset = TorchDataset(numpy_data, properties)
-    >>> data_point = torch_dataset[0]
     """
 
     def __init__(
@@ -73,13 +66,14 @@ class TorchDataset(torch.utils.data.Dataset):
 
         Returns
         -------
-        Tuple[torch.Tensor]
-            Tuple containing tensors for properties of interest of the molecule.
+        dict, contains:
+            - 'Z': torch.Tensor, shape [n_atoms]
+                Atomic numbers for each atom in the molecule.
+            - 'R': torch.Tensor, shape [n_atoms, 3]
+                Coordinates for each atom in the molecule.
+            - 'E': torch.Tensor, shape []
+                Scalar energy value for the molecule.
 
-        Examples
-        --------
-        >>> data_point = torch_dataset[5]
-        >>> geometry, atomic_numbers = data_point
         """
         Z = torch.tensor(self.properties_of_interest["Z"][idx], dtype=torch.int64)
         R = torch.tensor(self.properties_of_interest["R"][idx], dtype=torch.float32)
@@ -289,7 +283,6 @@ class DatasetFactory:
 
 
 class TorchDataModule(pl.LightningDataModule):
-
     """
     A custom data module class to handle data loading and preparation for PyTorch Lightning training.
 
@@ -331,7 +324,7 @@ class TorchDataModule(pl.LightningDataModule):
         factory = DatasetFactory()
         self.dataset = factory.create_dataset(self.data)
 
-    def setup(self, stage: str):
+    def setup(self, stage: str) -> None:
         """
         Splits the data into training, validation, and test sets based on the stage.
 
@@ -350,11 +343,35 @@ class TorchDataModule(pl.LightningDataModule):
             _, _, test_dataset = self.SplittingStrategy().split(self.dataset)
             self.test_dataset = test_dataset
 
-    def train_dataloader(self):
+    def train_dataloader(self) -> DataLoader:
+        """
+        Create a DataLoader for the training dataset.
+
+        Returns
+        -------
+        DataLoader
+            DataLoader containing the training dataset.
+        """
         return DataLoader(self.train_dataset, batch_size=self.batch_size)
 
-    def val_dataloader(self):
+    def val_dataloader(self) -> DataLoader:
+        """
+        Create a DataLoader for the validation dataset.
+
+        Returns
+        -------
+        DataLoader
+            DataLoader containing the validation dataset.
+        """
         return DataLoader(self.val_dataset, batch_size=self.batch_size)
 
-    def test_dataloader(self):
+    def test_dataloader(self) -> DataLoader:
+        """
+        Create a DataLoader for the test dataset.
+
+        Returns
+        -------
+        DataLoader
+            DataLoader containing the test dataset.
+        """
         return DataLoader(self.test_dataset, batch_size=self.batch_size)

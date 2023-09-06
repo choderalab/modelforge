@@ -1,15 +1,13 @@
-from typing import Optional
 
 import pytest
 
 from modelforge.potential.models import BaseNNP
-from modelforge.potential.schnet import Schnet
 
 from .helper_functinos import (
     DATASETS,
     MODELS_TO_TEST,
-    setup_simple_model,
     return_single_batch,
+    setup_simple_model,
 )
 
 

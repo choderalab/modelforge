@@ -1,7 +1,6 @@
-import numpy as np
 import torch.nn as nn
 from loguru import logger
-from modelforge.utils import Inputs
+from typing import Dict, Tuple
 
 from .models import BaseNNP
 from .utils import (
@@ -11,24 +10,74 @@ from .utils import (
     cosine_cutoff,
     scatter_add,
 )
+import torch
 
 
 class Schnet(BaseNNP):
-    def __init__(self, n_atom_basis, n_interactions, n_filters=0):
+    def __init__(
+        self, n_atom_basis: int, n_interactions: int, n_filters: int = 0
+    ) -> None:
+        """
+        Initialize the Schnet class.
+
+        Parameters
+        ----------
+        n_atom_basis : int
+            Number of atom basis, defines the dimensionality of the output features.
+        n_interactions : int
+            Number of interaction blocks in the architecture.
+        n_filters : int, optional
+            Number of filters, defines the dimensionality of the intermediate features.
+            Default is 0.
+
+        """
+
         super().__init__()
         self.representation = SchNetRepresentation(
             n_atom_basis, n_filters, n_interactions
         )
         self.readout = EnergyReadout(n_atom_basis)
 
-    def calculate_energy(self, inputs: dict):
+    def calculate_energy(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
+        """
+        Calculate the energy for a given input batch.
+
+        Parameters
+        ----------
+        inputs : dict, contains
+            - 'Z': torch.Tensor, shape [batch_size, n_atoms]
+                Atomic numbers for each atom in each molecule in the batch.
+            - 'R': torch.Tensor, shape [batch_size, n_atoms, 3]
+                Coordinates for each atom in each molecule in the batch.
+
+        Returns
+        -------
+        torch.Tensor, shape [batch_size]
+            Calculated energies for each molecule in the batch.
+
+        """
         x = self.representation(inputs)
         logger.debug(f"{x.shape=}")
         # pool average over atoms
         return self.readout(x)
 
 
-def sequential_block(in_features, out_features):
+def sequential_block(in_features: int, out_features: int):
+    """
+    Create a sequential block for the neural network.
+
+    Parameters
+    ----------
+    in_features : int
+        Number of input features.
+    out_features : int
+        Number of output features.
+
+    Returns
+    -------
+    nn.Sequential
+        Sequential layer block.
+    """
     return nn.Sequential(
         nn.Linear(in_features, out_features),
         ShiftedSoftplus(),
@@ -37,15 +86,53 @@ def sequential_block(in_features, out_features):
 
 
 class SchNetInteractionBlock(nn.Module):
-    def __init__(self, n_atom_basis, n_filters):
+    def __init__(self, n_atom_basis: int, n_filters: int):
+        """
+        Initialize the SchNet interaction block.
+
+        Parameters
+        ----------
+        n_atom_basis : int
+            Number of atom basis, defines the dimensionality of the output features.
+        n_filters : int
+            Number of filters, defines the dimensionality of the intermediate features.
+
+        """
         super().__init__()
         n_rbf = 20
         self.intput_to_feature = nn.Linear(n_atom_basis, n_filters)
         self.feature_to_output = sequential_block(n_filters, n_atom_basis)
         self.filter_network = sequential_block(n_rbf, n_filters)
 
-    def forward(self, x, f_ij, idx_i, idx_j, rcut_ij):
-        # atom wise update of features
+    def forward(
+        self,
+        x: torch.Tensor,
+        f_ij: torch.Tensor,
+        idx_i: torch.Tensor,
+        idx_j: torch.Tensor,
+        rcut_ij: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Forward pass for the interaction block.
+
+        Parameters
+        ----------
+        x : torch.Tensor, shape [batch_size, n_atoms, n_atom_basis]
+            Input feature tensor for atoms.
+        f_ij : torch.Tensor, shape [n_pairs, n_rbf]
+            Radial basis functions for pairs of atoms.
+        idx_i : torch.Tensor, shape [n_pairs]
+            Indices for the first atom in each pair.
+        idx_j : torch.Tensor, shape [n_pairs]
+            Indices for the second atom in each pair.
+        rcut_ij : torch.Tensor, shape [n_pairs]
+            Cutoff values for each pair.
+
+        Returns
+        -------
+        torch.Tensor, shape [batch_size, n_atoms, n_atom_basis]
+            Updated feature tensor after interaction block.
+        """
         batch_size, nr_of_atoms = x.shape[0], x.shape[1]
 
         logger.debug(f"Input to feature: {x.shape=}")
@@ -80,7 +167,19 @@ class SchNetInteractionBlock(nn.Module):
 
 
 class SchNetRepresentation(nn.Module):
-    def __init__(self, n_atom_basis, n_filters, n_interactions):
+    def __init__(self, n_atom_basis: int, n_filters: int, n_interactions: int):
+        """
+        Initialize the SchNet representation layer.
+
+        Parameters
+        ----------
+        n_atom_basis : int
+            Number of atom basis.
+        n_filters : int
+            Number of filters.
+        n_interactions : int
+            Number of interaction layers.
+        """
         super().__init__()
         from .utils import neighbor_pairs_nopbc
 
@@ -95,26 +194,46 @@ class SchNetRepresentation(nn.Module):
         self.radial_basis = GaussianRBF(n_rbf=20, cutoff=self.cutoff)
         self.calculate_neighbors = neighbor_pairs_nopbc
 
-    def _distance_to_radial_basis(self, d_ij):
+    def _distance_to_radial_basis(
+        self, d_ij: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Transform distances to radial basis functions.
+        Convert distances to radial basis functions.
 
         Parameters
         ----------
-        r_ij : torch.Tensor
+        d_ij : torch.Tensor, shape [n_pairs]
             Pairwise distances between atoms.
 
         Returns
         -------
-        torch.Tensor, torch.Tensor
-            Radial basis functions and cutoff values.
-
+        Tuple[torch.Tensor, torch.Tensor]
+            - Radial basis functions, shape [n_pairs, n_rbf]
+            - cutoff values, shape [n_pairs]
         """
         f_ij = self.radial_basis(d_ij)
         rcut_ij = cosine_cutoff(d_ij, self.cutoff)
         return f_ij, rcut_ij
 
-    def compute_distance(self, atom_index12, R):
+    def compute_distance(
+        self, atom_index12: torch.Tensor, R: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Compute distances based on atom indices and coordinates.
+
+        Parameters
+        ----------
+        atom_index12 : torch.Tensor, shape [n_pairs, 2]
+            Atom indices for pairs of atoms
+        R : torch.Tensor, shape [batch_size, n_atoms, n_dims]
+            Atom coordinates.
+
+        Returns
+        -------
+        torch.Tensor, shape [n_pairs]
+            Computed distances.
+        """
+
         logger.debug(f"{atom_index12.shape=}")
         logger.debug(f"{R.shape=}")
         coordinates = R.flatten(0, 1)
@@ -126,7 +245,23 @@ class SchNetRepresentation(nn.Module):
         vec = selected_coordinates[0] - selected_coordinates[1]
         return vec.norm(2, -1)
 
-    def forward(self, inputs: dict):
+    def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
+        """
+        Forward pass for the representation layer.
+
+        Parameters
+        ----------
+        inputs : Dict[str, torch.Tensor]
+            Dictionary containing input tensors, specifically atomic numbers and coordinates.
+            - 'Z': Atomic numbers, shape [batch_size, n_atoms]
+            - 'R': Atom coordinates, shape [batch_size, n_atoms, 3]
+
+
+        Returns
+        -------
+        torch.Tensor, shape [batch_size, n_atoms, n_atom_basis]
+            Output tensor after forward pass.
+        """
         logger.debug("Compute distances ...")
         Z = inputs["Z"]
         R = inputs["R"]

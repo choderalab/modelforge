@@ -7,12 +7,30 @@ from loguru import logger
 
 
 def _scatter_add(
-    x: torch.Tensor, idx_i: torch.Tensor, dim_size: int, dim: int = 0
+    src: torch.Tensor, index: torch.Tensor, dim_size: int, dim: int
 ) -> torch.Tensor:
-    shape = list(x.shape)
+    """
+    Performs a scatter addition operation.
+
+    Parameters
+    ----------
+    src : torch.Tensor
+        Source tensor.
+    index : torch.Tensor
+        Index tensor.
+    dim_size : int
+        Dimension size.
+    dim : int
+
+    Returns
+    -------
+    torch.Tensor
+        The result of the scatter addition.
+    """
+    shape = list(src.shape)
     shape[dim] = dim_size
-    tmp = torch.zeros(shape, dtype=x.dtype, device=x.device)
-    y = tmp.index_add(dim, idx_i, x)
+    tmp = torch.zeros(shape, dtype=src.dtype, device=src.device)
+    y = tmp.index_add(dim, index, src)
     return y
 
 
@@ -33,70 +51,6 @@ def scatter_add(
 
     """
     return _scatter_add(x, idx_i, dim_size, dim)
-
-
-class Dense(nn.Linear):
-    r"""Fully connected linear layer with activation function.
-
-    .. math::
-        y = activation(x W^T + b)
-    """
-
-    def __init__(
-        self,
-        in_features: int,
-        out_features: int,
-        bias: bool = True,
-        activation: Union[Callable, nn.Module] = None,
-        dtype: torch.dtype = torch.float32,
-        device: torch.device = torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu"
-        ),
-    ):
-        """
-        Initialize the Dense layer.
-
-        Parameters
-        ----------
-        in_features : int
-            Number of input features.
-        out_features : int
-            Number of output features.
-        bias : bool, optional
-            If False, the layer will not adapt bias.
-        activation : Callable or nn.Module, optional
-            Activation function, default is None (Identity).
-        dtype : torch.dtype, optional
-            Data type for PyTorch tensors.
-        device : torch.device, optional
-            Device ("cpu" or "cuda") on which computations will be performed.
-        """
-        super().__init__(in_features, out_features, bias)
-
-        # Initialize activation function
-        self.activation = activation if activation is not None else nn.Identity()
-
-        # Initialize weight matrix
-        self.weight = nn.init.xavier_uniform_(self.weight).to(device, dtype)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass through the layer.
-
-        Parameters
-        ----------
-        x : torch.Tensor
-            Input tensor.
-
-        Returns
-        -------
-        torch.Tensor
-            Transformed tensor.
-        """
-
-        y = F.linear(x, self.weight, self.bias)
-        y = self.activation(y)
-        return y
 
 
 def gaussian_rbf(
@@ -126,44 +80,69 @@ def gaussian_rbf(
     return y.to(dtype=torch.float32)
 
 
-def cosine_cutoff(input: torch.Tensor, cutoff: torch.Tensor) -> torch.Tensor:
+def cosine_cutoff(d_ij: torch.Tensor, cutoff: float) -> torch.Tensor:
     """
-    Behler-style cosine cutoff function.
+    Compute the cosine cutoff for a distance tensor.
 
     Parameters
     ----------
-    inputs : torch.Tensor
-        Input tensor.
-    cutoff : torch.Tensor
-        Cutoff radius.
-
+    d_ij : torch.Tensor
+        Pairwise distance tensor.
+    cutoff : float
+        Cutoff distance.
     Returns
     -------
     torch.Tensor
-        Transformed tensor.
+        The cosine cutoff tensor.
     """
 
     # Compute values of cutoff function
-    input_cut = 0.5 * (torch.cos(input * np.pi / cutoff) + 1.0)
+    input_cut = 0.5 * (torch.cos(d_ij * np.pi / cutoff) + 1.0)
     # Remove contributions beyond the cutoff radius
-    input_cut *= input < cutoff
+    input_cut *= d_ij < cutoff
     return input_cut
 
 
 class EnergyReadout(nn.Module):
-    def __init__(self, n_atom_basis, n_output=1):
-        super().__init__()
-        self.energy_layer = nn.Linear(n_atom_basis, n_output)
+    """
+    Defines the energy readout module.
 
-    def forward(self, x):
-        logger.debug(f"{x.shape=}")
-        # x with shape [batch, n_atoms, n_atom_basis]
-        x = self.energy_layer(x)
-        logger.debug(f"{x.shape=}")
-        # x with shape [batch, n_atoms, 1]
-        total_energy = x.sum(dim=1)  # Sum over all atoms
-        # total_energy with shape [batch, 1]
-        logger.debug(f"{total_energy.shape=}")
+    Methods
+    -------
+    forward(x: torch.Tensor) -> torch.Tensor:
+        Forward pass for the energy readout.
+    """
+
+    def __init__(self, n_atom_basis: int):
+        """
+        Initialize the EnergyReadout class.
+
+        Parameters
+        ----------
+        n_atom_basis : int
+            Number of atom basis.
+        """
+        super().__init__()
+        self.energy_layer = nn.Linear(n_atom_basis, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass for the energy readout.
+
+        Parameters
+        ----------
+        x : torch.Tensor, shape [batch, n_atoms, n_atom_basis]
+            Input tensor for the forward pass.
+
+        Returns
+        -------
+        torch.Tensor
+            The output tensor.
+        """
+        x = self.energy_layer(
+            x
+        )  # in [batch, n_atoms, n_atom_basis], out [batch, n_atoms, 1]
+        total_energy = x.sum(dim=1)  # in [batch, n_atoms, 1], out [batch, 1]
         return total_energy
 
 
@@ -191,101 +170,98 @@ class ShiftedSoftplus(nn.Module):
 
 class GaussianRBF(nn.Module):
     """
-    Gaussian radial basis functions (RBF).
+    Gaussian Radial Basis Function module.
+
+    Methods
+    -------
+    forward(x: torch.Tensor) -> torch.Tensor:
+        Forward pass for the GaussianRBF.
     """
 
     def __init__(
         self,
         n_rbf: int,
         cutoff: float,
-        start: float = 0.0,
-        trainable: bool = False,
-        device: torch.device = torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu"
-        ),
-        dtype: torch.dtype = torch.float32,
     ):
         """
-        Initialize Gaussian RBF layer.
+        Initialize the GaussianRBF class.
 
         Parameters
         ----------
         n_rbf : int
             Number of radial basis functions.
         cutoff : float
-            Cutoff distance for RBF.
-        start : float, optional
-            Starting distance for RBF, defaults to 0.0.
-        trainable : bool, optional
-            If True, widths and offsets are trainable parameters.
-        device : torch.device, optional
-            Device ("cpu" or "cuda") on which computations will be performed.
-        dtype : torch.dtype, optional
-            Data type for PyTorch tensors.
-
+            The cutoff distance.
         """
         super().__init__()
         self.n_rbf = n_rbf
 
         # compute offset and width of Gaussian functions
-        offset = torch.linspace(start, cutoff, n_rbf, dtype=dtype, device=device)
+        offset = torch.linspace(0, cutoff, n_rbf)
         widths = torch.tensor(
             torch.abs(offset[1] - offset[0]) * torch.ones_like(offset),
-            device=device,
-            dtype=dtype,
         )
-        if trainable:
-            self.widths = nn.Parameter(widths)
-            self.offsets = nn.Parameter(offset)
-        else:
-            self.register_buffer("widths", widths)
-            self.register_buffer("offsets", offset)
+        self.register_buffer("widths", widths)
+        self.register_buffer("offsets", offset)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass through the layer.
+        Forward pass for the GaussianRBF.
 
         Parameters
         ----------
-        inputs : torch.Tensor
-            Input tensor.
+        x : torch.Tensor
+            Input tensor for the forward pass.
 
         Returns
         -------
         torch.Tensor
-            Transformed tensor.
+            The output tensor.
         """
         return gaussian_rbf(inputs, self.offsets, self.widths)
 
 
 # taken from torchani repository: https://github.com/aiqm/torchani
 def neighbor_pairs_nopbc(
-    padding_mask: torch.Tensor, coordinates: torch.Tensor, cutoff: float
+    mask: torch.Tensor, R: torch.Tensor, cutoff: float
 ) -> torch.Tensor:
-    """Compute pairs of atoms that are neighbors (doesn't use PBC)
+    """
+    Calculate neighbor pairs without periodic boundary conditions.
+    Parameters
+    ----------
+    mask : torch.Tensor
+        Mask tensor to indicate invalid atoms, shape (batch_size, n_atoms).
+    R : torch.Tensor
+        Coordinates tensor, shape (batch_size, n_atoms, 3).
+    cutoff : float
+        Cutoff distance for neighbors.
 
-    This function bypasses the calculation of shifts and duplication
-    of atoms in order to make calculations faster
+    Returns
+    -------
+    torch.Tensor
+        Tensor containing indices of neighbor pairs, shape (n_pairs, 2).
 
-    Arguments:
-        padding_mask (:class:`torch.Tensor`): boolean tensor of shape
-            (molecules, atoms) for padding mask. 1 == is padding.
-        coordinates (:class:`torch.Tensor`): tensor of shape
-            (molecules, atoms, 3) for atom coordinates.
-        cutoff (float): the cutoff inside which atoms are considered pairs
+    Notes
+    -----
+    This function assumes no periodic boundary conditions and calculates neighbor pairs based solely on the cutoff distance.
+
+    Examples
+    --------
+    >>> mask = torch.tensor([[0, 0, 1], [1, 0, 0]])
+    >>> R = torch.tensor([[[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]],[[3.0, 3.0, 3.0], [4.0, 4.0, 4.0], [5.0, 5.0, 5.0]]])
+    >>> cutoff = 1.5
+    >>> neighbor_pairs_nopbc(mask, R, cutoff)
     """
     import math
 
-    coordinates = coordinates.detach().masked_fill(padding_mask.unsqueeze(-1), math.nan)
-    current_device = coordinates.device
-    num_atoms = padding_mask.shape[1]
-    num_mols = padding_mask.shape[0]
+    R = R.detach().masked_fill(mask.unsqueeze(-1), math.nan)
+    current_device = R.device
+    num_atoms = mask.shape[1]
+    num_mols = mask.shape[0]
     p12_all = torch.triu_indices(num_atoms, num_atoms, 1, device=current_device)
     p12_all_flattened = p12_all.view(-1)
 
-    pair_coordinates = coordinates.index_select(1, p12_all_flattened).view(
-        num_mols, 2, -1, 3
-    )
+    pair_coordinates = R.index_select(1, p12_all_flattened).view(num_mols, 2, -1, 3)
     distances = (pair_coordinates[:, 0, ...] - pair_coordinates[:, 1, ...]).norm(2, -1)
     in_cutoff = (distances <= cutoff).nonzero()
     molecule_index, pair_index = in_cutoff.unbind(1)

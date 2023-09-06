@@ -82,26 +82,9 @@ class TorchDataset(torch.utils.data.Dataset):
         >>> geometry, atomic_numbers = data_point
         """
         Z = torch.tensor(self.properties_of_interest["Z"][idx], dtype=torch.int64)
-        R = torch.tensor(self.properties_of_interest["R"][idx])
-        E = torch.tensor(self.properties_of_interest["E"][idx])
-        # mask_dim = -Z.eq(-1).sum().item()
-        # Z = _mask_Z(Z)
-        # R = _mask_R(R, mask_dim)
+        R = torch.tensor(self.properties_of_interest["R"][idx], dtype=torch.float32)
+        E = torch.tensor(self.properties_of_interest["E"][idx], dtype=torch.float32)
         return {"Z": Z, "R": R, "E": E}
-
-
-def _mask_Z(Z):
-    mask = torch.ones_like(Z, dtype=torch.bool)
-    mask[torch.where(Z == -1)] = False
-    return masked_tensor(
-        Z, mask
-    )  # NOTE: FIXME: This is still a prototype feature and not available
-
-
-def _mask_R(R, dim):
-    mask = torch.zeros_like(R, dtype=torch.bool)
-    mask[:dim, :] = True
-    return masked_tensor(R, mask)
 
 
 class HDF5Dataset:

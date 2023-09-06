@@ -1,6 +1,7 @@
-import torch
+from loguru import logger
+
 from modelforge.potential.schnet import Schnet
-from modelforge.utils import Inputs
+
 from .helper_functinos import methane_input
 
 

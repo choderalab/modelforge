@@ -17,8 +17,10 @@ from .helper_functinos import (
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_forward_pass(dataset, model_class):
     from lightning import Trainer
+    import torch
 
     model = setup_simple_model(model_class)
     dataset = initialize_dataset(dataset, mode="fit")
-    trainer = Trainer()
+    trainer = Trainer(max_epochs=2)
+    model = model.to(torch.float32)
     trainer.fit(model, dataset.train_dataloader(), dataset.val_dataloader())

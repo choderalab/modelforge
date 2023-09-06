@@ -58,8 +58,8 @@ class BaseNNP(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         # training_step defines the train loop.
 
-        E_hat = self.forward(wrap_vals_from_dataloader(batch))
-        loss = nn.functional.mse_loss(E_hat.energies, vals["E"])
+        E_hat = self.forward(batch)  # wrap_vals_from_dataloader(batch))
+        loss = nn.functional.mse_loss(E_hat.energies, batch["E"])
         # Logging to TensorBoard (if installed) by default
         self.log("train_loss", loss)
         return loss

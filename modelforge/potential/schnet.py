@@ -23,6 +23,7 @@ class Schnet(BaseNNP):
 
     def calculate_energy(self, inputs: dict):
         x = self.representation(inputs)
+        logger.debug(f"{x.shape=}")
         # pool average over atoms
         return self.readout(x)
 
@@ -74,6 +75,7 @@ class SchNetInteractionBlock(nn.Module):
         x = self.feature_to_output(x)
         logger.debug(f"After feature_to_output: x.shape {x.shape=}")
         x = x.reshape(batch_size, nr_of_atoms, 128)
+        logger.debug(f"After reshape: x.shape {x.shape=}")
         return x
 
 

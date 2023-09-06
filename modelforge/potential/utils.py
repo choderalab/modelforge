@@ -3,6 +3,7 @@ from typing import Callable, Union
 import torch.nn as nn
 import numpy as np
 import torch.nn.functional as F
+from loguru import logger
 
 
 def _scatter_add(
@@ -155,9 +156,14 @@ class EnergyReadout(nn.Module):
         self.energy_layer = nn.Linear(n_atom_basis, n_output)
 
     def forward(self, x):
-        # x is of shape [n_atoms, n_atom_basis]
+        logger.debug(f"{x.shape=}")
+        # x with shape [batch, n_atoms, n_atom_basis]
         x = self.energy_layer(x)
-        total_energy = x.sum(dim=0)  # Sum over all atoms
+        logger.debug(f"{x.shape=}")
+        # x with shape [batch, n_atoms, 1]
+        total_energy = x.sum(dim=1)  # Sum over all atoms
+        # total_energy with shape [batch, 1]
+        logger.debug(f"{total_energy.shape=}")
         return total_energy
 
 

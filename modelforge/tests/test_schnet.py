@@ -16,4 +16,5 @@ def test_calculate_energies_and_forces():
     schnet = Schnet(128, 6, 64)
     methane_inputs = methane_input()
     result = schnet.calculate_energy(methane_inputs)
+    logger.debug(result)
     assert result.shape[0] == 1  # Assuming only one molecule

@@ -5,9 +5,10 @@ from loguru import logger
 
 
 @dataclass
-class Properties:
-    Z: str = "atomic_numbers"
-    R: str = "positions"
+class PropertyNames:
+    Z: str
+    R: str
+    E: str
 
 
 @dataclass

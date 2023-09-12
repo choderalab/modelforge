@@ -144,8 +144,14 @@ class HDF5Dataset:
                 with h5py.File(self.raw_data_file.replace(".gz", ""), "r") as hf:
                     logger.debug(f"n_entries: {len(hf.keys())}")
                     for mol in tqdm.tqdm(list(hf.keys())):
-                        for value in self.properties_of_interest:
-                            data[value].append(hf[mol][value][()])
+                        n_configs = hf[mol]["n_configs"][()]
+                        for i in range(n_configs):
+                            for value in self.properties_of_interest:
+                                # if we have a series, we will index into it
+                                if hf[mol][value].attrs["series"]:
+                                    data[value].append(hf[mol][value][i])
+                                else:  # if we do not have a series, just append the value
+                                    data[value].append(hf[mol][value][()])
 
         self.hdf5data = data
 

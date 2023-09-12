@@ -1,6 +1,7 @@
 import os
 import sys
 from pathlib import Path
+from loguru import logger
 
 import numpy as np
 import h5py
@@ -14,6 +15,8 @@ from modelforge.curation.utils import *
 
 from modelforge.curation.qm9_curation import *
 
+from modelforge.curation.ani1_curation import *
+
 
 @pytest.fixture(scope="session")
 def prep_temp_dir(tmp_path_factory):
@@ -25,20 +28,33 @@ def test_dict_to_hdf5(prep_temp_dir):
     # generate an hdf5 file from simple test data
     # then read it in and see that we can reconstruct the same data
     file_path = str(prep_temp_dir)
+    record_entries_series = {
+        "name": "single",
+        "n_configs": "single",
+        "energy": "single",
+        "geometry": "single",
+    }
     test_data = [
         {
             "name": "test1",
+            "n_configs": 1,
             "energy": 123 * unit.hartree,
             "geometry": np.array([[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]]) * unit.angstrom,
         },
         {
             "name": "test2",
+            "n_configs": 1,
             "energy": 456 * unit.hartree,
             "geometry": np.array([[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]) * unit.angstrom,
         },
     ]
     file_name_path = file_path + "/test.hdf5"
-    dict_to_hdf5(file_name=file_name_path, data=test_data, id_key="name")
+    dict_to_hdf5(
+        file_name=file_name_path,
+        data=test_data,
+        series_info=record_entries_series,
+        id_key="name",
+    )
 
     # check we wrote the file
     assert os.path.isfile(file_name_path)
@@ -58,15 +74,101 @@ def test_dict_to_hdf5(prep_temp_dir):
 
             for property in properties:
                 # validate properties name
-                assert property in ["energy", "geometry"]
-                if "units" in hf[name][property].attrs:
-                    u = hf[name][property].attrs["units"]
+                assert property in ["n_configs", "energy", "geometry"]
+
+                if "u" in hf[name][property].attrs:
+                    u = hf[name][property].attrs["u"]
                     temp_record[property] = hf[name][property][
                         ()
                     ] * unit.parse_expression(u)
-
                 else:
                     temp_record[property] = hf[name][property][()]
+
+            records.append(temp_record)
+
+    # loop over reconstructed list of dictionaries and compare contents
+    for i in range(len(records)):
+        for key in test_data[i].keys():
+            if isinstance(records[i][key], pint.Quantity):
+                record_m = records[i][key].m
+                test_data_m = test_data[i][key].m
+
+                if isinstance(record_m, np.ndarray):
+                    print(record_m, test_data_m)
+                    assert np.all(record_m == test_data_m)
+                else:
+                    assert record_m == test_data_m
+            else:
+                assert records[i][key] == test_data[i][key]
+
+
+def test_series_dict_to_hdf5(prep_temp_dir):
+    # generate an hdf5 file from simple test data
+    # then read it in and see that we can reconstruct the same data
+    # here this will test defining if an attribute is part of a series
+
+    file_path = str(prep_temp_dir)
+    record_entries_series = {
+        "name": "single",
+        "n_configs": "single",
+        "energy": "series",
+        "geometry": "series",
+    }
+    test_data = [
+        {
+            "name": "test1",
+            "n_configs": 2,
+            "energy": np.array([123, 234]) * unit.hartree,
+            "geometry": np.array(
+                [[[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]], [[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]]
+            )
+            * unit.angstrom,
+        },
+    ]
+    file_name_path = file_path + "/test_series.hdf5"
+    dict_to_hdf5(
+        file_name=file_name_path,
+        data=test_data,
+        series_info=record_entries_series,
+        id_key="name",
+    )
+
+    # check we wrote the file
+    assert os.path.isfile(file_name_path)
+
+    # read in the hdf5 file
+    records = []
+    with h5py.File(file_name_path, "r") as hf:
+        test_names = list(hf.keys())
+
+        # validate names
+        assert test_names == ["test1"]
+
+        for name in test_names:
+            temp_record = {}
+            temp_record["name"] = name
+            properties = list(hf[name].keys())
+
+            for property in properties:
+                # validate properties name
+                assert property in ["n_configs", "energy", "geometry"]
+
+            n_configs = hf[name]["n_configs"][()]
+            temp_record["n_configs"] = n_configs
+
+            for property in ["energy", "geometry"]:
+                if hf[name][property].attrs["series"]:
+                    temp = []
+                    for i in range(n_configs):
+                        temp.append(hf[name][property][i])
+
+                    if "u" in hf[name][property].attrs:
+                        u = hf[name][property].attrs["u"]
+                        temp_record[property] = np.array(temp) * unit.parse_expression(
+                            u
+                        )
+                    else:
+                        temp_record[property] = np.array(temp)
 
             records.append(temp_record)
 
@@ -133,24 +235,27 @@ def test_list_files(prep_temp_dir):
 def test_qm9_curation_str_to_float(prep_temp_dir):
     qm9_data = QM9_curation(
         hdf5_file_name="qm9_dataset.hdf5",
-        output_file_path=str(prep_temp_dir),
+        output_file_dir=str(prep_temp_dir),
         local_cache_dir=str(prep_temp_dir),
     )
 
     val = qm9_data._str_to_float("1*^6")
     assert val == 1e6
 
+    val = qm9_data._str_to_float("100")
+    assert val == 100
+
 
 def test_qm9_curation_init_parameters(prep_temp_dir):
     qm9_data = QM9_curation(
         hdf5_file_name="qm9_dataset.hdf5",
-        output_file_path=str(prep_temp_dir),
+        output_file_dir=str(prep_temp_dir),
         local_cache_dir=str(prep_temp_dir),
         convert_units=False,
     )
 
     assert qm9_data.hdf5_file_name == "qm9_dataset.hdf5"
-    assert qm9_data.output_file_path == str(prep_temp_dir)
+    assert qm9_data.output_file_dir == str(prep_temp_dir)
     assert qm9_data.local_cache_dir == str(prep_temp_dir)
     assert qm9_data.convert_units == False
 
@@ -158,7 +263,7 @@ def test_qm9_curation_init_parameters(prep_temp_dir):
 def test_qm9_curation_parse_xyz(prep_temp_dir):
     qm9_data = QM9_curation(
         hdf5_file_name="qm9_dataset.hdf5",
-        output_file_path=str(prep_temp_dir),
+        output_file_dir=str(prep_temp_dir),
         local_cache_dir=str(prep_temp_dir),
     )
 
@@ -254,8 +359,8 @@ def test_qm9_curation_parse_xyz(prep_temp_dir):
     assert np.all(data_dict_temp["atomic_numbers"] == np.array([6, 1, 1, 1, 1]))
     assert data_dict_temp["smiles_gdb-17"] == "C"
     assert data_dict_temp["smiles_b3lyp"] == "C"
-    assert data_dict_temp["inchi_Corina"] == "1S/CH4/h1H4"
-    assert data_dict_temp["inchi_B3LYP"] == "1S/CH4/h1H4"
+    assert data_dict_temp["inchi_corina"] == "1S/CH4/h1H4"
+    assert data_dict_temp["inchi_b3lyp"] == "1S/CH4/h1H4"
     assert data_dict_temp["rotational_constant_A"] == 157.7118 * unit.gigahertz
     assert data_dict_temp["rotational_constant_B"] == 157.70997 * unit.gigahertz
     assert data_dict_temp["rotational_constant_C"] == 157.70699 * unit.gigahertz
@@ -283,7 +388,7 @@ def test_qm9_local_archive(prep_temp_dir):
     # test file extraction, parsing, and generation of hdf5 file from a local archive.
     qm9_data = QM9_curation(
         hdf5_file_name="qm9_test10.hdf5",
-        output_file_path=str(prep_temp_dir),
+        output_file_dir=str(prep_temp_dir),
         local_cache_dir=str(prep_temp_dir),
     )
 
@@ -311,6 +416,7 @@ def test_qm9_local_archive(prep_temp_dir):
     }
     # output file
     file_name_path = str(prep_temp_dir) + "/qm9_test10.hdf5"
+    qm9_data._generate_hdf5()
 
     assert os.path.isfile(file_name_path)
 
@@ -320,8 +426,26 @@ def test_qm9_local_archive(prep_temp_dir):
             assert key in list(names.keys())
             assert np.isclose(hf[key]["internal_energy_at_0K"][()], names[key])
 
+    # clear out the
+    qm9_data._clear_data()
+    assert len(qm9_data.data) == 0
+
     qm9_data._process_downloaded(
         str(local_data_path), "first10.tar.bz2", unit_testing_max_records=5
     )
 
     assert len(qm9_data.data) == 5
+
+
+def test_ani1_curation_init_parameters(prep_temp_dir):
+    ani1_data = ANI1_curation(
+        hdf5_file_name="ani1x_dataset.hdf5",
+        output_file_dir=str(prep_temp_dir),
+        local_cache_dir=str(prep_temp_dir),
+        convert_units=False,
+    )
+
+    assert ani1_data.hdf5_file_name == "ani1x_dataset.hdf5"
+    assert ani1_data.output_file_dir == str(prep_temp_dir)
+    assert ani1_data.local_cache_dir == str(prep_temp_dir)
+    assert ani1_data.convert_units == False

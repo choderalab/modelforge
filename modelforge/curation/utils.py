@@ -16,10 +16,33 @@ c.add_transformation(
     "[force] * [length]",
     lambda unit, x: x / unit.avogadro_constant,
 )
+c.add_transformation(
+    "[force] * [length]/[length]",
+    "[force] * [length]/[substance]/[length]",
+    lambda unit, x: x * unit.avogadro_constant,
+)
+c.add_transformation(
+    "[force] * [length]/[substance]/[length]",
+    "[force] * [length]/[length]",
+    lambda unit, x: x / unit.avogadro_constant,
+)
+
+c.add_transformation(
+    "[force] * [length]/[length]/[length]",
+    "[force] * [length]/[substance]/[length]/[length]",
+    lambda unit, x: x * unit.avogadro_constant,
+)
+c.add_transformation(
+    "[force] * [length]/[substance]/[length]/[length]",
+    "[force] * [length]/[length]/[length]",
+    lambda unit, x: x / unit.avogadro_constant,
+)
+
+
 unit.add_context(c)
 
 
-def dict_to_hdf5(file_name: str, data: list, id_key: str) -> None:
+def dict_to_hdf5(file_name: str, data: list, series_info: dict, id_key: str) -> None:
     """
     Writes an hdf5 file from a list of dicts.
 
@@ -36,7 +59,7 @@ def dict_to_hdf5(file_name: str, data: list, id_key: str) -> None:
 
     Examples
     --------
-    >>> dict_to_hdf5(file_name='qm9.hdf5', data=data, id_key='name')
+    >>> dict_to_hdf5(file_name='qm9.hdf5', data=data, series_info=series, id_key='name')
     """
 
     import h5py
@@ -69,7 +92,11 @@ def dict_to_hdf5(file_name: str, data: list, id_key: str) -> None:
                     elif isinstance(val_m, np.ndarray):
                         group.create_dataset(name=key, data=val_m, shape=val_m.shape)
                     if not val_u is None:
-                        group[key].attrs["units"] = val_u
+                        group[key].attrs["u"] = val_u
+                    if series_info[key] == "series":
+                        group[key].attrs["series"] = True
+                    else:
+                        group[key].attrs["series"] = False
 
 
 def mkdir(path: str) -> bool:

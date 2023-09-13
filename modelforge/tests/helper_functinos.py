@@ -2,32 +2,50 @@ import torch
 
 from modelforge.dataset.dataset import TorchDataModule
 from modelforge.dataset.qm9 import QM9Dataset
+from modelforge.potential.schnet import Schnet
 from modelforge.utils import Inputs
+from modelforge.potential.models import BaseNNP
+
+from typing import Optional
+
+MODELS_TO_TEST = [Schnet]
+DATASETS = [QM9Dataset]
 
 
-def default_input():
-    train_loader = initialize_dataloader()
-    R, Z, E = train_loader.dataset[0]
-    padded_values = -Z.eq(-1).sum().item()
-    Z_ = Z[:padded_values]
-    R_ = R[:padded_values]
-    return Inputs(Z_, R_, E)
+def setup_simple_model(model_class) -> Optional[BaseNNP]:
+    if model_class is Schnet:
+        return Schnet(n_atom_basis=128, n_interactions=3, n_filters=64)
+    else:
+        raise NotImplementedError
 
 
-def initialize_dataloader() -> torch.utils.data.DataLoader:
-    data = QM9Dataset(for_unit_testing=True)
+def return_single_batch(dataset, mode: str):
+    train_loader = initialize_dataset(dataset, mode)
+    for batch in train_loader.train_dataloader():
+        return batch
+
+
+def initialize_dataset(dataset, mode: str) -> TorchDataModule:
+    data = dataset(for_unit_testing=True)
     data_module = TorchDataModule(data)
     data_module.prepare_data()
-    data_module.setup("fit")
-    return data_module.train_dataloader()
+    data_module.setup(mode)
+    return data_module
 
 
-methane_coordinates = torch.tensor(
-    [
-        [0.0, 0.0, 0.0],
-        [0.63918859, 0.63918859, 0.63918859],
-        [-0.63918859, -0.63918859, 0.63918859],
-        [-0.63918859, 0.63918859, -0.63918859],
-        [0.63918859, -0.63918859, -0.63918859],
-    ]
-)
+def methane_input():
+    Z = torch.tensor([[6, 1, 1, 1, 1]], dtype=torch.int64)
+    R = torch.tensor(
+        [
+            [
+                [0.0, 0.0, 0.0],
+                [0.63918859, 0.63918859, 0.63918859],
+                [-0.63918859, -0.63918859, 0.63918859],
+                [-0.63918859, 0.63918859, -0.63918859],
+                [0.63918859, -0.63918859, -0.63918859],
+            ]
+        ]
+    )
+    E = torch.tensor([0.0])
+    return {"Z": Z, "R": R, "E": E}
+

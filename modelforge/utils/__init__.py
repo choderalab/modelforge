@@ -1,3 +1,3 @@
 """modelforge utilities."""
 
-from .prop import Properties, Inputs, SpeciesEnergies
+from .prop import PropertyNames, Inputs, SpeciesEnergies

@@ -8,6 +8,8 @@ import torch
 from loguru import logger
 from torch.utils.data import DataLoader
 
+from modelforge.utils.prop import PropertyNames
+
 from .transformation import default_transformation
 from .utils import RandomSplittingStrategy, SplittingStrategy
 
@@ -20,34 +22,28 @@ class TorchDataset(torch.utils.data.Dataset):
     ----------
     dataset : np.ndarray
         The underlying numpy dataset.
-    prop : List[str]
-        List of property names to extract from the dataset.
+    property_name : PropertyNames
+        Property names to extract from the dataset.
     preloaded : bool, optional
         If True, preconverts the properties to PyTorch tensors to save time during item fetching.
         Default is False.
 
-    Examples
-    --------
-    >>> numpy_data = np.load("data_file.npz")
-    >>> properties = ["geometry", "atomic_numbers"]
-    >>> torch_dataset = TorchDataset(numpy_data, properties)
-    >>> data_point = torch_dataset[0]
     """
 
     def __init__(
         self,
         dataset: np.ndarray,
-        prop: List[str],
+        property_name: PropertyNames,
         preloaded: bool = False,
     ):
-        self.properties_of_interest = [dataset[p] for p in prop]
-        self.length = len(dataset[prop[0]])
-        self.preloaded = preloaded
+        self.properties_of_interest = {
+            "Z": dataset[property_name.Z],
+            "R": dataset[property_name.R],
+            "E": dataset[property_name.E],
+        }
 
-        if preloaded:
-            self.properties_of_interest = [
-                torch.tensor(p) for p in self.properties_of_interest
-            ]
+        self.length = len(self.properties_of_interest["Z"])
+        self.preloaded = preloaded
 
     def __len__(self) -> int:
         """
@@ -60,7 +56,7 @@ class TorchDataset(torch.utils.data.Dataset):
         """
         return self.length
 
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor]:
+    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         """
         Fetch a tuple of the values for the properties of interest for a given molecule index.
 
@@ -71,20 +67,20 @@ class TorchDataset(torch.utils.data.Dataset):
 
         Returns
         -------
-        Tuple[torch.Tensor]
-            Tuple containing tensors for properties of interest of the molecule.
-
-        Examples
-        --------
-        >>> data_point = torch_dataset[5]
-        >>> geometry, atomic_numbers = data_point
+        dict, contains:
+            - 'Z': torch.Tensor, shape [n_atoms]
+                Atomic numbers for each atom in the molecule.
+            - 'R': torch.Tensor, shape [n_atoms, 3]
+                Coordinates for each atom in the molecule.
+            - 'E': torch.Tensor, shape []
+                Scalar energy value for the molecule.
+            - 'idx': int
+                Index of the molecule in the dataset.
         """
-        if self.preloaded:
-            return tuple(prop[idx] for prop in self.properties_of_interest)
-        else:
-            return tuple(
-                torch.tensor(prop[idx]) for prop in self.properties_of_interest
-            )
+        Z = torch.tensor(self.properties_of_interest["Z"][idx], dtype=torch.int64)
+        R = torch.tensor(self.properties_of_interest["R"][idx], dtype=torch.float32)
+        E = torch.tensor(self.properties_of_interest["E"][idx], dtype=torch.float32)
+        return {"Z": Z, "R": R, "E": E, "idx": idx}
 
 
 class HDF5Dataset:
@@ -296,11 +292,10 @@ class DatasetFactory:
 
         logger.info(f"Creating {data.dataset_name} dataset")
         DatasetFactory._load_or_process_data(data, label_transform, transform)
-        return TorchDataset(data.numpy_data, data.properties_of_interest)
+        return TorchDataset(data.numpy_data, data._property_names)
 
 
 class TorchDataModule(pl.LightningDataModule):
-
     """
     A custom data module class to handle data loading and preparation for PyTorch Lightning training.
 
@@ -342,7 +337,7 @@ class TorchDataModule(pl.LightningDataModule):
         factory = DatasetFactory()
         self.dataset = factory.create_dataset(self.data)
 
-    def setup(self, stage: str):
+    def setup(self, stage: str) -> None:
         """
         Splits the data into training, validation, and test sets based on the stage.
 
@@ -361,11 +356,35 @@ class TorchDataModule(pl.LightningDataModule):
             _, _, test_dataset = self.SplittingStrategy().split(self.dataset)
             self.test_dataset = test_dataset
 
-    def train_dataloader(self):
+    def train_dataloader(self) -> DataLoader:
+        """
+        Create a DataLoader for the training dataset.
+
+        Returns
+        -------
+        DataLoader
+            DataLoader containing the training dataset.
+        """
         return DataLoader(self.train_dataset, batch_size=self.batch_size)
 
-    def val_dataloader(self):
+    def val_dataloader(self) -> DataLoader:
+        """
+        Create a DataLoader for the validation dataset.
+
+        Returns
+        -------
+        DataLoader
+            DataLoader containing the validation dataset.
+        """
         return DataLoader(self.val_dataset, batch_size=self.batch_size)
 
-    def test_dataloader(self):
+    def test_dataloader(self) -> DataLoader:
+        """
+        Create a DataLoader for the test dataset.
+
+        Returns
+        -------
+        DataLoader
+            DataLoader containing the test dataset.
+        """
         return DataLoader(self.test_dataset, batch_size=self.batch_size)

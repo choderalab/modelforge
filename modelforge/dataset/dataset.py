@@ -74,12 +74,13 @@ class TorchDataset(torch.utils.data.Dataset):
                 Coordinates for each atom in the molecule.
             - 'E': torch.Tensor, shape []
                 Scalar energy value for the molecule.
-
+            - 'idx': int
+                Index of the molecule in the dataset.
         """
         Z = torch.tensor(self.properties_of_interest["Z"][idx], dtype=torch.int64)
         R = torch.tensor(self.properties_of_interest["R"][idx], dtype=torch.float32)
         E = torch.tensor(self.properties_of_interest["E"][idx], dtype=torch.float32)
-        return {"Z": Z, "R": R, "E": E}
+        return {"Z": Z, "R": R, "E": E, "idx": idx}
 
 
 class HDF5Dataset:

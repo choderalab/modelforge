@@ -70,7 +70,7 @@ def test_different_properties_of_interest(dataset):
     dataset = factory.create_dataset(data)
     raw_data_item = dataset[0]
     assert isinstance(raw_data_item, dict)
-    assert len(raw_data_item) == 3
+    assert len(raw_data_item) == 4
 
     data.properties_of_interest = ["return_energy", "geometry"]
     assert data.properties_of_interest == [
@@ -82,7 +82,7 @@ def test_different_properties_of_interest(dataset):
     raw_data_item = dataset[0]
     print(raw_data_item)
     assert isinstance(raw_data_item, dict)
-    assert len(raw_data_item) != 2  # NOTE: FIXME: This should be 2
+    assert len(raw_data_item) != 3  
 
 
 @pytest.mark.parametrize("dataset", DATASETS)

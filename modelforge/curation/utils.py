@@ -1,45 +1,5 @@
-import pint
-from openff.units import unit, Quantity
 import os
 from loguru import logger
-
-# define new context for converting energy to energy/mol
-
-c = unit.Context("chem")
-c.add_transformation(
-    "[force] * [length]",
-    "[force] * [length]/[substance]",
-    lambda unit, x: x * unit.avogadro_constant,
-)
-c.add_transformation(
-    "[force] * [length]/[substance]",
-    "[force] * [length]",
-    lambda unit, x: x / unit.avogadro_constant,
-)
-c.add_transformation(
-    "[force] * [length]/[length]",
-    "[force] * [length]/[substance]/[length]",
-    lambda unit, x: x * unit.avogadro_constant,
-)
-c.add_transformation(
-    "[force] * [length]/[substance]/[length]",
-    "[force] * [length]/[length]",
-    lambda unit, x: x / unit.avogadro_constant,
-)
-
-c.add_transformation(
-    "[force] * [length]/[length]/[length]",
-    "[force] * [length]/[substance]/[length]/[length]",
-    lambda unit, x: x * unit.avogadro_constant,
-)
-c.add_transformation(
-    "[force] * [length]/[substance]/[length]/[length]",
-    "[force] * [length]/[length]/[length]",
-    lambda unit, x: x / unit.avogadro_constant,
-)
-
-
-unit.add_context(c)
 
 
 def dict_to_hdf5(file_name: str, data: list, series_info: dict, id_key: str) -> None:
@@ -65,6 +25,8 @@ def dict_to_hdf5(file_name: str, data: list, series_info: dict, id_key: str) -> 
     import h5py
     from tqdm import tqdm
     import numpy as np
+    import pint
+    from openff.units import unit, Quantity
 
     assert file_name.endswith(".hdf5")
 
@@ -209,3 +171,23 @@ def list_files(directory: str, extension: str) -> list:
             files.append(file)
     files.sort()
     return files
+
+
+def str_to_float(x: str) -> float:
+    """
+    Converts a string to a float, changing Mathematica style scientific notion to python style.
+
+    For example, this will convert str(1*^-6) to float(1e-6).
+
+    Parameters
+    ----------
+    x : str, required
+        String to process.
+
+    Returns
+    -------
+    float
+        Float value of the string.
+    """
+    xf = float(x.replace("*^", "e"))
+    return xf

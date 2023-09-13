@@ -8,8 +8,10 @@ import pint
 from modelforge.curation.utils import *
 import numpy as np
 
+from modelforge.curation.curation_baseclass import *
 
-class QM9_curation:
+
+class QM9_curation(dataset_curation):
     """
     Routines to fetch and process the QM9 dataset into a curated hdf5 file.
 
@@ -42,18 +44,10 @@ class QM9_curation:
 
     """
 
-    def __init__(
-        self,
-        hdf5_file_name: str,
-        output_file_dir: Optional[str] = "./",
-        local_cache_dir: Optional[str] = "./qm9_datafiles",
-        convert_units: Optional[bool] = True,
-    ):
-        self.local_cache_dir = local_cache_dir
-        self.output_file_dir = output_file_dir
-        self.hdf5_file_name = hdf5_file_name
-        self.convert_units = convert_units
-
+    def _init_dataset_parameters(self) -> None:
+        """
+        Define the key parameters for the QM9 dataset.
+        """
         self.dataset_download_url = (
             "https://springernature.figshare.com/ndownloader/files/3195389"
         )
@@ -83,13 +77,14 @@ class QM9_curation:
             unit.gigahertz: unit.gigahertz,
         }
 
+    def _init_record_entries_series(self):
         # The keys in this dictionary correspond to the label of the entries in each record.
         # In this dictionary, the value indicates if the entry contains series data or just a single datapoint.
         # If the entry has a value of "series", the "series" attribute in hdf5 file will be set to True (false if single)
         # This information will be used by the code to read in the datafile to know how to parse underlying records.
         # While we could create separate records for every configuration, this vastly increases the time for generating
         # and reading hdf5 files.
-        self.record_entries_series = {
+        self._record_entries_series = {
             "name": "single",
             "n_configs": "single",
             "smiles_gdb-17": "single",
@@ -118,9 +113,6 @@ class QM9_curation:
             "harmonic_vibrational_frequencies": "single",
         }
 
-        # Overall data list that will contain a dictionary for each record
-        self.data = []
-
     def _extract(self, file_path: str, cache_directory: str) -> None:
         """
         Extract the contents of a tar.bz2 file.
@@ -140,25 +132,6 @@ class QM9_curation:
         tar = tarfile.open(f"{file_path}", "r:bz2")
         tar.extractall(cache_directory)
         tar.close()
-
-    def _str_to_float(self, x: str) -> float:
-        """
-        Converts a string to a float, changing Mathematica style scientific notion to python style.
-
-        For example, this will convert str(1*^-6) to float(1e-6).
-
-        Parameters
-        ----------
-        x : str, required
-            String to process.
-
-        Returns
-        -------
-        float
-            Float value of the string.
-        """
-        xf = float(x.replace("*^", "e"))
-        return xf
 
     def _parse_properties(self, line: str) -> dict:
         """
@@ -208,7 +181,7 @@ class QM9_curation:
             if prop_unit is None:
                 data_temp[label] = prop
             else:
-                data_temp[label] = self._str_to_float(prop) * prop_unit
+                data_temp[label] = str_to_float(prop) * prop_unit
         return data_temp
 
     def _parse_xyzfile(self, file_name: str) -> dict:
@@ -287,12 +260,12 @@ class QM9_curation:
                 elements.append(element)
                 atomic_numbers.append(qcel.periodictable.to_atomic_number(element))
                 temp = [
-                    self._str_to_float(x),
-                    self._str_to_float(y),
-                    self._str_to_float(z),
+                    str_to_float(x),
+                    str_to_float(y),
+                    str_to_float(z),
                 ]
                 geometry.append(temp)
-                charges.append(self._str_to_float(q))
+                charges.append(str_to_float(q))
 
             hvf_temp = file.readline().split()
 
@@ -325,7 +298,7 @@ class QM9_curation:
                 data_temp[property] = val
 
             for h in hvf_temp:
-                hvf.append(self._str_to_float(h))
+                hvf.append(str_to_float(h))
 
             data_temp["harmonic_vibrational_frequencies"] = np.array(hvf) / unit.cm
 
@@ -397,31 +370,6 @@ class QM9_curation:
         # so this line is likely name necessary unless we were to do asynchronous processing
         # self.data = sorted(self.data, key=lambda x: x["name"])
 
-    def _generate_hdf5(self) -> None:
-        """
-        Creates an HDF5 file of the data at the path specified by output_file_path.
-
-        """
-        mkdir(self.output_file_dir)
-
-        full_output_path = f"{self.output_file_dir}/{self.hdf5_file_name}"
-
-        # generate the hdf5 file from the list of dicts
-        logger.debug("Writing HDF5 file.")
-        dict_to_hdf5(
-            full_output_path,
-            self.data,
-            series_info=self.record_entries_series,
-            id_key="name",
-        )
-
-    def _clear_data(self) -> None:
-        """
-        Clears the processed data from the list.
-
-        """
-        self.data = []
-
     def process(
         self,
         force_download: bool = False,
@@ -458,6 +406,7 @@ class QM9_curation:
         # process the rest of the dataset
         if self.name is None:
             raise Exception("Failed to retrieve name of file from figshare.")
+
         self._process_downloaded(
             self.local_cache_dir,
             self.name,

@@ -1,18 +1,14 @@
 from loguru import logger
-import os
 
 from typing import Optional
 from openff.units import unit, Quantity
 import pint
-import h5py
-from tqdm import tqdm
-
-from modelforge.curation.utils import *
-import numpy as np
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
-class ANI1_curation:
+from modelforge.curation.curation_baseclass import *
+
+
+class ANI1_curation(dataset_curation):
     """
     Routines to fetch and process the ANI-1x dataset into a curated hdf5 file.
 
@@ -36,18 +32,7 @@ class ANI1_curation:
 
     """
 
-    def __init__(
-        self,
-        hdf5_file_name: str,
-        output_file_dir: Optional[str] = "./",
-        local_cache_dir: Optional[str] = "./AN1_dataset",
-        convert_units: Optional[bool] = True,
-    ):
-        self.hdf5_file_name = hdf5_file_name
-        self.output_file_dir = output_file_dir
-        self.local_cache_dir = local_cache_dir
-        self.convert_units = convert_units
-
+    def _init_dataset_parameters(self):
         self.dataset_download_url = (
             "https://springernature.figshare.com/ndownloader/files/18112775"
         )
@@ -56,40 +41,6 @@ class ANI1_curation:
         self.input_file_name = (
             "/Users/cri/Documents/Projects-msk/datasets/ani1x_raw/ani1x-release.h5"
         )
-
-        # list of data
-        self.data = []
-
-        self.record_entries_series = {
-            "name": "single",
-            "atomic_numbers": "single",
-            "n_configs": "single",
-            "geometry": "series",
-            "wb97x_dz.energy": "series",
-            "wb97x_tz.energy": "series",
-            "ccsd(t)_cbs.energy": "series",
-            "hf_dz.energy": "series",
-            "hf_tz.energy": "series",
-            "hf_qz.energy": "series",
-            "npno_ccsd(t)_dz.corr_energy": "series",
-            "npno_ccsd(t)_tz.corr_energy": "series",
-            "tpno_ccsd(t)_dz.corr_energy": "series",
-            "mp2_dz.corr_energy": "series",
-            "mp2_tz.corr_energy": "series",
-            "mp2_qz.corr_energy": "series",
-            "wb97x_dz.forces": "series",
-            "wb97x_tz.forces": "series",
-            "wb97x_dz.dipole": "series",
-            "wb97x_tz.dipole": "series",
-            "wb97x_dz.quadrupole": "series",
-            "wb97x_dz.cm5_charges": "series",
-            "wb97x_dz.hirshfeld_charges": "series",
-            "wb97x_tz.mbis_charges": "series",
-            "wb97x_tz.mbis_dipoles": "series",
-            "wb97x_tz.mbis_quadrupoles": "series",
-            "wb97x_tz.mbis_octupoles": "series",
-            "wb97x_tz.mbis_volumes": "series",
-        }
 
         self.qm_parameters = {
             "coordinates": {
@@ -194,26 +145,37 @@ class ANI1_curation:
             },
         }
 
-    def _clear_data(self) -> None:
-        """ "
-        Clears out all processed data.
-        """
-        self.data = []
-
-    def _generate_hdf5(self) -> None:
-        """
-        Creates an HDF5 file of the data at the path specified by output_file_dir.
-
-        """
-        mkdir(self.output_file_dir)
-
-        full_output_path = f"{self.output_file_dir}/{self.hdf5_file_name}"
-
-        # generate the hdf5 file from the list of dicts
-        logger.debug("Writing HDF5 file.")
-        dict_to_hdf5(
-            full_output_path, self.data, self.record_entries_series, id_key="name"
-        )
+    def _init_record_entries_series(self):
+        self._record_entries_series = {
+            "name": "single",
+            "atomic_numbers": "single",
+            "n_configs": "single",
+            "geometry": "series",
+            "wb97x_dz.energy": "series",
+            "wb97x_tz.energy": "series",
+            "ccsd(t)_cbs.energy": "series",
+            "hf_dz.energy": "series",
+            "hf_tz.energy": "series",
+            "hf_qz.energy": "series",
+            "npno_ccsd(t)_dz.corr_energy": "series",
+            "npno_ccsd(t)_tz.corr_energy": "series",
+            "tpno_ccsd(t)_dz.corr_energy": "series",
+            "mp2_dz.corr_energy": "series",
+            "mp2_tz.corr_energy": "series",
+            "mp2_qz.corr_energy": "series",
+            "wb97x_dz.forces": "series",
+            "wb97x_tz.forces": "series",
+            "wb97x_dz.dipole": "series",
+            "wb97x_tz.dipole": "series",
+            "wb97x_dz.quadrupole": "series",
+            "wb97x_dz.cm5_charges": "series",
+            "wb97x_dz.hirshfeld_charges": "series",
+            "wb97x_tz.mbis_charges": "series",
+            "wb97x_tz.mbis_dipoles": "series",
+            "wb97x_tz.mbis_quadrupoles": "series",
+            "wb97x_tz.mbis_octupoles": "series",
+            "wb97x_tz.mbis_volumes": "series",
+        }
 
     def _process_downloaded(
         self,
@@ -236,6 +198,9 @@ class ANI1_curation:
         Examples
         --------
         """
+        import h5py
+        from tqdm import tqdm
+
         input_file_name = f"{local_path_dir}/{name}"
 
         with h5py.File(input_file_name, "r") as hf:
@@ -245,7 +210,7 @@ class ANI1_curation:
             else:
                 n_max = unit_testing_max_records
 
-            for i, name in enumerate(names[0:n_max]):
+            for i, name in tqdm(enumerate(names[0:n_max])):
                 # Extract the total number of configurations for a given molecule
                 n_configs = hf[name]["coordinates"].shape[0]
 
@@ -318,6 +283,8 @@ class ANI1_curation:
         >>> ani1_data.process()
 
         """
+        from modelforge.curation.utils import download_from_figshare
+
         url = self.dataset_download_url
 
         # download the dataset

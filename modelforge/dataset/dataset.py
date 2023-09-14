@@ -146,11 +146,15 @@ class HDF5Dataset:
                     for mol in tqdm.tqdm(list(hf.keys())):
                         n_configs = hf[mol]["n_configs"][()]
                         for i in range(n_configs):
+                            temp_data = {}
+                            contains_nan = False
                             for value in self.properties_of_interest:
                                 # if we have a series, we will index into it
                                 if hf[mol][value].attrs["series"]:
-                                    data[value].append(hf[mol][value][i])
+                                    temp_data[value] = hf[mol][value][i]
+                                    if
                                 else:  # if we do not have a series, just append the value
+                                    temp_data[value] = hf[mol][value][()]
                                     data[value].append(hf[mol][value][()])
 
         self.hdf5data = data

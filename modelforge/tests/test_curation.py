@@ -451,6 +451,19 @@ def test_an1_process_download_short(prep_temp_dir):
     ani1_data._process_downloaded(str(local_data_path), hdf5_file)
 
     # ani1_n5.hdf5 datafile includes entries [843, 861, 872, 930, 932] from the full datafile
+    # Example code snippet used to generate this file
+    #
+    # input_file_name = "ani1x-release.h5"
+    #
+    # with h5py.File(input_file_name, "r") as hf_in:
+    #     with h5py.File('ani1_n5.hdf5', "w") as hf_out:
+    #         test_names = list(hf_in.keys())
+    #         test_names2 = []
+    #         for i in [843, 861, 872, 930, 932]:
+    #             test_names2.append(test_names[i])
+    #         for test_name in test_names2:
+    #             hf_in.copy(hf_in[test_name], hf_out)
+
     assert len(ani1_data.data) == 5
 
     assert ani1_data.data[0]["name"] == "C1H4N4O4"

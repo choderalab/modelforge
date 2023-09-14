@@ -100,6 +100,14 @@ def test_dict_to_hdf5(prep_temp_dir):
             else:
                 assert records[i][key] == test_data[i][key]
 
+    with pytest.raises(Exception):
+        dict_to_hdf5(
+            file_name=file_name_path,
+            data=test_data,
+            series_info=record_entries_series,
+            id_key="name_should_fail",
+        )
+
 
 def test_series_dict_to_hdf5(prep_temp_dir):
     # generate an hdf5 file from simple test data
@@ -229,6 +237,9 @@ def test_list_files(prep_temp_dir):
 
     # check to see if test.hdf5 is in the files
     assert "test.hdf5" in files
+
+    with pytest.raises(Exception):
+        list_files("/path/that/should/not/exist/", ".hdf5")
 
 
 def test_str_to_float(prep_temp_dir):

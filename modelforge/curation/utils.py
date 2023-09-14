@@ -63,11 +63,8 @@ def dict_to_hdf5(file_name: str, data: list, series_info: dict, id_key: str) -> 
 
 def mkdir(path: str) -> bool:
     if not os.path.exists(path):
-        try:
-            os.makedirs(path)
-            return True
-        except Exception:
-            print("Could not create directory {path}.")
+        os.makedirs(path)
+        return True
     else:
         return False
 
@@ -135,7 +132,7 @@ def download_from_figshare(url: str, output_path: str, force_download=False) -> 
     else:  # if the file exists and we don't set force_download to True, just use the cached version
         logger.debug(f"Datafile {name} already exists in {output_path}.")
         logger.debug(
-            "Using already downloaded file; use force_download=True to re-download."
+            "Using already downloaded file; set force_download=True to re-download."
         )
 
     return name
@@ -163,6 +160,9 @@ def list_files(directory: str, extension: str) -> list:
     >>> files = list_files('test_directory', '.xyz')
     """
 
+    if not os.path.exists(directory):
+        raise Exception(f"{directory} not found")
+
     logger.debug(f"Gathering {extension} files in {directory}.")
 
     files = []
@@ -189,5 +189,6 @@ def str_to_float(x: str) -> float:
     float
         Float value of the string.
     """
+
     xf = float(x.replace("*^", "e"))
     return xf

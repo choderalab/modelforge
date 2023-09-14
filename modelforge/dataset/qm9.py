@@ -25,6 +25,14 @@ class QM9Dataset(HDF5Dataset):
     >>> data._download()
     """
 
+    from modelforge.utils import PropertyNames
+
+    _property_names = PropertyNames(
+        "atomic_numbers",
+        "geometry",
+        "return_energy",
+    )
+
     _available_properties = [
         "geometry",
         "atomic_numbers",

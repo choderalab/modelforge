@@ -1,223 +1,258 @@
-from typing import Tuple
-from loguru import logger
-
-import numpy as np
-import torch
 import torch.nn as nn
-from ase import Atoms
-from ase.neighborlist import neighbor_list
-from torch import dtype
-
-from modelforge.utils import Inputs
+from loguru import logger
+from typing import Dict, Tuple, List
 
 from .models import BaseNNP
-from .utils import Dense, GaussianRBF, cosine_cutoff, shifted_softplus, scatter_add
+from .utils import (
+    EnergyReadout,
+    GaussianRBF,
+    ShiftedSoftplus,
+    cosine_cutoff,
+    scatter_add,
+)
+import torch
 
 
 class Schnet(BaseNNP):
-    """
-    Implementation of the SchNet architecture for quantum mechanical property prediction.
-    """
-
     def __init__(
         self,
-        n_atom_basis: int,  # number of features per atom
-        n_interactions: int,  # number of interaction blocks
-        n_filters: int = 0,  # number of filters
-        dtype: dtype = torch.float32,
-        device: torch.device = torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu"
-        ),
-    ):
+        n_atom_basis: int,
+        n_interactions: int,
+        n_filters: int = 0,
+        cutoff: float = 5.0,
+    ) -> None:
         """
-        Initialize the SchNet model.
+        Initialize the Schnet class.
+
 
         Parameters
         ----------
         n_atom_basis : int
-            Number of features per atom.
+            Number of atom basis, defines the dimensionality of the output features.
         n_interactions : int
-            Number of interaction blocks.
+            Number of interaction blocks in the architecture.
         n_filters : int, optional
-            Number of filters, defaults to None.
-        dtype : torch.dtype, optional
-            Data type for PyTorch tensors, defaults to torch.float32.
-        device : torch.device, optional
-            Device ("cpu" or "cuda") on which computations will be performed.
+            Number of filters, defines the dimensionality of the intermediate features.
+            Default is 0.
+        cutoff : float, optional
+            Cutoff value for the pairlist. Default is 5.0.
+        """
+        from .models import PairList
+
+        super().__init__()
+
+        self.calculate_distances_and_pairlist = PairList(cutoff)
+
+        self.representation = SchNetRepresentation(
+            n_atom_basis, n_filters, n_interactions
+        )
+        self.readout = EnergyReadout(n_atom_basis)
+        self.embedding = nn.Embedding(100, n_atom_basis, padding_idx=-1)
+
+    def calculate_energy(
+        self, inputs: Dict[str, torch.Tensor], cached_pairlist: bool = False
+    ) -> torch.Tensor:
+        """
+        Calculate the energy for a given input batch.
+
+        Parameters
+        ----------
+        inputs : dict, contains
+            - 'Z': torch.Tensor, shape [batch_size, n_atoms]
+                Atomic numbers for each atom in each molecule in the batch.
+            - 'R': torch.Tensor, shape [batch_size, n_atoms, 3]
+                Coordinates for each atom in each molecule in the batch.
+        cached_pairlist : bool, optional
+            Whether to use a cached pairlist. Default is False. NOTE: is this really needed?
+        Returns
+        -------
+        torch.Tensor, shape [batch_size]
+            Calculated energies for each molecule in the batch.
 
         """
+        # compute atom and pair features (see Fig1 in 10.1063/1.5019779)
+        # initializing x^{l}_{0} as x^l)0 = aZ_i
+        Z = inputs["Z"]
+        x = self.embedding(Z)
+        mask = Z == -1
+        pairlist = self.calculate_distances_and_pairlist(mask, inputs["R"])
 
-        super().__init__(dtype, device)
+        x = self.representation(x, pairlist)
+        # pool average over atoms
+        return self.readout(x)
 
-        # initialize atom embeddings
-        max_z: int = 100  # max nuclear charge (i.e. atomic number)
-        self.embedding = nn.Embedding(max_z, n_atom_basis, padding_idx=0)
 
-        # initialize radial basis functions and other constants
+def sequential_block(in_features: int, out_features: int):
+    """
+    Create a sequential block for the neural network.
+
+    Parameters
+    ----------
+    in_features : int
+        Number of input features.
+    out_features : int
+        Number of output features.
+
+    Returns
+    -------
+    nn.Sequential
+        Sequential layer block.
+    """
+    return nn.Sequential(
+        nn.Linear(in_features, out_features),
+        ShiftedSoftplus(),
+        nn.Linear(out_features, out_features),
+    )
+
+
+class SchNetInteractionBlock(nn.Module):
+    def __init__(self, n_atom_basis: int, n_filters: int):
+        """
+        Initialize the SchNet interaction block.
+
+        Parameters
+        ----------
+        n_atom_basis : int
+            Number of atom basis, defines the dimensionality of the output features.
+        n_filters : int
+            Number of filters, defines the dimensionality of the intermediate features.
+
+        """
+        super().__init__()
         n_rbf = 20
-        self.radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=5.0)
+        self.intput_to_feature = nn.Linear(n_atom_basis, n_filters)
+        self.feature_to_output = sequential_block(n_filters, n_atom_basis)
+        self.filter_network = sequential_block(n_rbf, n_filters)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        f_ij: torch.Tensor,
+        idx_i: torch.Tensor,
+        idx_j: torch.Tensor,
+        rcut_ij: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Forward pass for the interaction block.
+
+        Parameters
+        ----------
+        x : torch.Tensor, shape [batch_size, n_atoms, n_atom_basis]
+            Input feature tensor for atoms.
+        f_ij : torch.Tensor, shape [n_pairs, n_rbf]
+            Radial basis functions for pairs of atoms.
+        idx_i : torch.Tensor, shape [n_pairs]
+            Indices for the first atom in each pair.
+        idx_j : torch.Tensor, shape [n_pairs]
+            Indices for the second atom in each pair.
+        rcut_ij : torch.Tensor, shape [n_pairs]
+            Cutoff values for each pair.
+
+        Returns
+        -------
+        torch.Tensor, shape [batch_size, n_atoms, n_atom_basis]
+            Updated feature tensor after interaction block.
+        """
+        batch_size, nr_of_atoms = x.shape[0], x.shape[1]
+
+        x = self.intput_to_feature(x)
+        x = x.flatten(0, 1)
+
+        # Filter generation networks
+        Wij = self.filter_network(f_ij)
+        Wij = Wij * rcut_ij[:, None]
+        Wij = Wij.to(dtype=x.dtype)
+
+        # continuous-ﬁlter convolutional layers
+        x_j = x[idx_j]
+        x_ij = x_j * Wij
+        x = scatter_add(x_ij, idx_i, dim_size=x.shape[0])
+        # Update features
+        x = self.feature_to_output(x)
+        x = x.reshape(batch_size, nr_of_atoms, 128)
+        return x
+
+
+class SchNetRepresentation(nn.Module):
+    def __init__(
+        self,
+        n_atom_basis: int,
+        n_filters: int,
+        n_interactions: int,
+    ):
+        """
+        Initialize the SchNet representation layer.
+
+        Parameters
+        ----------
+        n_atom_basis : int
+            Number of atom basis.
+        n_filters : int
+            Number of filters.
+        n_interactions : int
+            Number of interaction layers.
+        """
+        super().__init__()
+
+        self.interactions = nn.ModuleList(
+            [
+                SchNetInteractionBlock(n_atom_basis, n_filters)
+                for _ in range(n_interactions)
+            ]
+        )
         self.cutoff = 5.0
-        self.activation = shifted_softplus
-        self.n_interactions = n_interactions
-        self.n_atom_basis = n_atom_basis
+        self.radial_basis = GaussianRBF(n_rbf=20, cutoff=self.cutoff)
 
-        # initialize dense yalers for atom feature transformation
-        # Dense layers are applied consecutively to the initialized atom embeddings x^{l}_{0}
-        # to generate x_i^l+1 = W^lx^l_i + b^l
-        self.intput_to_feature = Dense(
-            n_atom_basis, n_filters, bias=False, activation=None
-        )
-        self.feature_to_output = nn.Sequential(
-            Dense(n_filters, n_atom_basis, activation=self.activation),
-            Dense(n_atom_basis, n_atom_basis, activation=None),
-        )
-
-        # Initialize filter network
-        self.filter_network = nn.Sequential(
-            Dense(n_rbf, n_filters, activation=self.activation),
-            Dense(n_filters, n_filters),
-        )
-
-    def _setup_ase_system(self, inputs: Inputs) -> Atoms:
+    def _distance_to_radial_basis(
+        self, d_ij: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Transform inputs to an ASE Atoms object.
+        Convert distances to radial basis functions.
 
         Parameters
         ----------
-        inputs : Inputs
-            Input features including atomic numbers and positions.
-
-        Returns
-        -------
-        ase.Atoms
-            Transformed ASE Atoms object.
-
-        """
-        _atomic_numbers = torch.clone(inputs.Z)
-        atomic_numbers = list(_atomic_numbers.detach().cpu().numpy())
-        positions = list(inputs.R.detach().cpu().numpy())
-        ase_atoms = Atoms(numbers=atomic_numbers, positions=positions)
-        return ase_atoms
-
-    def _compute_distances(
-        self, inputs: Inputs
-    ) -> Tuple[torch.Tensor, np.ndarray, np.ndarray]:
-        """
-        Compute atomic distances using ASE's neighbor list.
-
-        Parameters
-        ----------
-        inputs : Inputs
-            Input features including atomic numbers and positions.
-
-        Returns
-        -------
-        torch.Tensor, np.ndarray, np.ndarray
-            Pairwise distances, index of atom i, and index of atom j.
-
-        """
-
-        ase_atoms = self._setup_ase_system(inputs)
-        idx_i, idx_j, _, r_ij = neighbor_list(
-            "ijSD", ase_atoms, 5.0, self_interaction=False
-        )
-        r_ij = torch.from_numpy(r_ij)
-        return r_ij, idx_i, idx_j
-
-    def _distance_to_radial_basis(self, r_ij):
-        """
-        Transform distances to radial basis functions.
-
-        Parameters
-        ----------
-        r_ij : torch.Tensor
+        d_ij : torch.Tensor, shape [n_pairs]
             Pairwise distances between atoms.
 
         Returns
         -------
-        torch.Tensor, torch.Tensor
-            Radial basis functions and cutoff values.
-
+        Tuple[torch.Tensor, torch.Tensor]
+            - Radial basis functions, shape [n_pairs, n_rbf]
+            - cutoff values, shape [n_pairs]
         """
-        d_ij = torch.norm(r_ij, dim=1)  # calculate pairwise distances
         f_ij = self.radial_basis(d_ij)
         rcut_ij = cosine_cutoff(d_ij, self.cutoff)
         return f_ij, rcut_ij
 
-    def _interaction_block(self, inputs: Inputs, f_ij, idx_i, idx_j, rcut_ij):
+    def forward(
+        self, x: torch.Tensor, pairlist: Dict[str, torch.Tensor]
+    ) -> torch.Tensor:
         """
-        Compute the interaction block which updates atom features.
+        Forward pass for the representation layer.
 
         Parameters
         ----------
-        inputs : Inputs
-            Input features including atomic numbers and positions.
-        f_ij : torch.Tensor
-            Radial basis functions.
-        idx_i : np.ndarray
-            Indices of center atoms.
-        idx_j : np.ndarray
-            Indices of neighboring atoms.
-        rcut_ij : torch.Tensor
-            Cutoff values for each pair of atoms.
-
+        x : torch.Tensor, shape [batch_size, n_atoms, n_atom_basis]
+            Input feature tensor for atoms.
+        pairlist: Dict[str, torch.Tensor]
+            Pairlist dictionary containing the following keys:
+            - 'atom_index12': torch.Tensor, shape [n_pairs, 2]
+                Atom indices for pairs of atoms
+            - 'd_ij': torch.Tensor, shape [n_pairs]
+                Pairwise distances between atoms.
         Returns
         -------
-        torch.Tensor
-            Updated atom features.
-
+        torch.Tensor, shape [batch_size, n_atoms, n_atom_basis]
+            Output tensor after forward pass.
         """
+        atom_index12 = pairlist["atom_index12"]
+        d_ij = pairlist["d_ij"]
 
-        # compute atom and pair features (see Fig1 in 10.1063/1.5019779)
-        # initializing x^{l}_{0} as x^l)0 = aZ_i
-        logger.debug("Embedding inputs.Z")
-        x_emb = self.embedding(inputs.Z)
-        logger.debug("After embedding: x.shape", x_emb.shape)
-        idx_i = torch.from_numpy(idx_i).to(self.device, torch.int64)
+        f_ij, rcut_ij = self._distance_to_radial_basis(d_ij)
 
-        # interaction blocks
-        for _ in range(self.n_interactions):
-            # atom wise update of features
-            logger.debug(f"Input to feature: x.shape {x_emb.shape}")
-            x = self.intput_to_feature(x_emb)
-            logger.debug("After input_to_feature call: x.shape {x.shape}")
+        idx_i, idx_j = atom_index12[0], atom_index12[1]
+        for interaction in self.interactions:
+            v = interaction(x, f_ij, idx_i, idx_j, rcut_ij)
+            x = x + v
 
-            # Filter generation networks
-            Wij = self.filter_network(f_ij)
-            Wij = Wij * rcut_ij[:, None]
-            Wij = Wij.to(dtype=self.dtype)
-
-            # continuous-ﬁlter convolutional layers
-            x_j = x[idx_j]
-            x_ij = x_j * Wij
-            logger.debug("After x_j * Wij: x_ij.shape {x_ij.shape}")
-            x = scatter_add(x_ij, idx_i, dim_size=x.shape[0])
-            logger.debug("After scatter_add: x.shape {x.shape}")
-            # Update features
-            x = self.feature_to_output(x)
-            x_emb = x_emb + x
-
-        return x_emb
-
-    def calculate_energies_and_forces(self, inputs: Inputs) -> torch.Tensor:
-        """
-        Compute energies and forces for given atomic configurations.
-
-        Parameters
-        ----------
-        inputs : Inputs
-            Input features including atomic numbers and positions.
-
-        Returns
-        -------
-        torch.Tensor
-            Energies and forces for the given configurations.
-
-        """
-        logger.debug("Compute distances ...")
-        r_ij, idx_i, idx_j = self._compute_distances(inputs)
-        logger.debug("Convert distances to radial basis ...")
-        f_ij, rcut_ij = self._distance_to_radial_basis(r_ij)
-        logger.debug("Compute interaction block ...")
-        x = self._interaction_block(inputs, f_ij, idx_i, idx_j, rcut_ij)
         return x

@@ -1,8 +1,6 @@
 name: test
 channels:
   - conda-forge
-
-  - defaults
 dependencies:
   # Base depends
   - python
@@ -22,7 +20,7 @@ dependencies:
   - openff-units
   - pint
 
-    # Testing
+  # Testing
   - pytest
   - pytest-cov
   - codecov
@@ -30,7 +28,5 @@ dependencies:
   - qcportal
   - requests
 
-    # Pip-only installs
   - pip:
       - pedantic
-  #  - codecov

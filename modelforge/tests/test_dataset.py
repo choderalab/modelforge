@@ -4,10 +4,8 @@ import sys
 import numpy as np
 import pytest
 import torch
-from torch.utils.data import DataLoader
 
-from modelforge.dataset.dataset import DatasetFactory, TorchDataModule, TorchDataset
-from modelforge.dataset.qm9 import QM9Dataset
+from modelforge.dataset.dataset import DatasetFactory, TorchDataset
 
 from .helper_functinos import initialize_dataset, DATASETS
 
@@ -50,15 +48,12 @@ def generate_torch_dataset(dataset) -> TorchDataset:
 
 def test_dataset_imported():
     """Sample test, will always pass so long as import statement worked."""
-    import modelforge.dataset
 
     assert "modelforge.dataset" in sys.modules
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_different_properties_of_interest(dataset):
-    from modelforge.dataset.transformation import default_transformation
-
     factory = DatasetFactory()
     data = dataset(for_unit_testing=True)
     assert data.properties_of_interest == [
@@ -135,7 +130,7 @@ def test_data_item_format(dataset):
 
 def test_padding():
     """Test the padding function to ensure correct behavior on dummy data."""
-    from modelforge.dataset.utils import pad_molecules, pad_to_max_length
+    from modelforge.dataset.utils import pad_molecules
 
     dummy_data = np.array([[0, 0, 0], [0, 0, 0], [0, 0, 0]]), np.array(
         [[0, 0, 0], [0, 0, 0]]
@@ -152,7 +147,6 @@ def test_padding():
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_dataset_generation(dataset):
     """Test the splitting of the dataset."""
-    from modelforge.dataset.utils import RandomSplittingStrategy
 
     dataset = initialize_dataset(dataset, mode="fit")
     train_dataloader = dataset.train_dataloader()

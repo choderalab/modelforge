@@ -1,6 +1,4 @@
-from typing import Any, Dict, List, Tuple
-
-from loguru import logger
+from typing import List
 
 from .dataset import HDF5Dataset
 
@@ -38,7 +36,22 @@ class QM9Dataset(HDF5Dataset):
         "geometry",
         "atomic_numbers",
         "internal_energy_at_0K",
-    ]  # NOTE: Any way to set this automatically?
+        "internal_energy_at_298.15K",
+        "enthalpy_at_298.15K",
+        "free_energy_at_298.15K",
+        "heat_capacity_at_298.15K",
+        "zero_point_vibrational_energy",
+        "electronic_spatial_extent",
+        "lumo-homo_gap",
+        "energy_of_homo",
+        "energy_of_lumo",
+        "rotational_constant_A",
+        "rotational_constant_B",
+        "rotational_constant_C",
+        "dipole_moment",
+        "isotropic_polarizability",
+        "charges",
+    ]  # All properties within the datafile, aside from SMILES/inchi.
 
     def __init__(
         self,

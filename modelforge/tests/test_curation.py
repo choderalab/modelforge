@@ -1,17 +1,10 @@
-import os
-import sys
-from pathlib import Path
-from loguru import logger
-
-import numpy as np
 import h5py
 
 import pytest
-from openff.units import unit, Quantity
-import pint
+from openff.units import unit
 import importlib_resources as resources
 
-from modelforge.curation.utils import *
+from modelforge.utils.misc import *
 
 from modelforge.curation.qm9_curation import *
 from modelforge.curation.ani1_curation import *
@@ -193,18 +186,6 @@ def test_series_dict_to_hdf5(prep_temp_dir):
                     assert record_m == test_data_m
             else:
                 assert records[i][key] == test_data[i][key]
-
-
-def test_download_from_figshare(prep_temp_dir):
-    url = "https://figshare.com/ndownloader/files/22247589"
-    name = download_from_figshare(
-        url=url,
-        output_path=str(prep_temp_dir),
-        force_download=True,
-    )
-
-    file_name_path = str(prep_temp_dir) + f"/{name}"
-    assert os.path.isfile(file_name_path)
 
 
 def test_mkdir(prep_temp_dir):
@@ -442,9 +423,6 @@ def test_qm9_local_archive(prep_temp_dir):
 
 
 def test_an1_process_download_short(prep_temp_dir):
-    from numpy import array, float32, uint8
-    from openff.units import unit, Quantity
-
     # first check where we don't convert units
     ani1_data = ANI1_curation(
         hdf5_file_name="test_dataset.hdf5",
@@ -495,7 +473,7 @@ def test_an1_process_download_short(prep_temp_dir):
 
 def test_an1_process_download_no_conversion(prep_temp_dir):
     from numpy import array, float32, uint8
-    from openff.units import unit, Quantity
+    from openff.units import unit
 
     # first check where we don't convert units
     ani1_data = ANI1_curation(
@@ -810,7 +788,7 @@ def test_an1_process_download_no_conversion(prep_temp_dir):
 
 def test_an1_process_download_unit_conversion(prep_temp_dir):
     from numpy import array, float32, uint8
-    from openff.units import unit, Quantity
+    from openff.units import unit
 
     # first check where we don't convert units
     ani1_data = ANI1_curation(

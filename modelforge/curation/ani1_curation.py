@@ -1,9 +1,4 @@
-from loguru import logger
-
-from typing import Optional
-from openff.units import unit, Quantity
-import pint
-
+from modelforge.utils.units import *
 
 from modelforge.curation.curation_baseclass import *
 
@@ -146,35 +141,43 @@ class ANI1_curation(dataset_curation):
         }
 
     def _init_record_entries_series(self):
+        # For data efficiency, information for different conformers will be grouped together
+        # To make it clear to the dataset loader which pieces of information are common to all
+        # conformers, or which pieces encode the series, we will label each value.
+        # The keys in this dictionary correspond to the label of the entries in each record.
+        # The value indicates if the entry contains series data (True) or a single common entry (False).
+        # If the entry has a value of True, the "series" attribute in hdf5 file will be set to True; False, if False.
+        # This information will be used by the code to read in the datafile to know how to parse underlying records.
+
         self._record_entries_series = {
-            "name": "single",
-            "atomic_numbers": "single",
-            "n_configs": "single",
-            "geometry": "series",
-            "wb97x_dz.energy": "series",
-            "wb97x_tz.energy": "series",
-            "ccsd(t)_cbs.energy": "series",
-            "hf_dz.energy": "series",
-            "hf_tz.energy": "series",
-            "hf_qz.energy": "series",
-            "npno_ccsd(t)_dz.corr_energy": "series",
-            "npno_ccsd(t)_tz.corr_energy": "series",
-            "tpno_ccsd(t)_dz.corr_energy": "series",
-            "mp2_dz.corr_energy": "series",
-            "mp2_tz.corr_energy": "series",
-            "mp2_qz.corr_energy": "series",
-            "wb97x_dz.forces": "series",
-            "wb97x_tz.forces": "series",
-            "wb97x_dz.dipole": "series",
-            "wb97x_tz.dipole": "series",
-            "wb97x_dz.quadrupole": "series",
-            "wb97x_dz.cm5_charges": "series",
-            "wb97x_dz.hirshfeld_charges": "series",
-            "wb97x_tz.mbis_charges": "series",
-            "wb97x_tz.mbis_dipoles": "series",
-            "wb97x_tz.mbis_quadrupoles": "series",
-            "wb97x_tz.mbis_octupoles": "series",
-            "wb97x_tz.mbis_volumes": "series",
+            "name": False,
+            "atomic_numbers": False,
+            "n_configs": False,
+            "geometry": True,
+            "wb97x_dz.energy": True,
+            "wb97x_tz.energy": True,
+            "ccsd(t)_cbs.energy": True,
+            "hf_dz.energy": True,
+            "hf_tz.energy": True,
+            "hf_qz.energy": True,
+            "npno_ccsd(t)_dz.corr_energy": True,
+            "npno_ccsd(t)_tz.corr_energy": True,
+            "tpno_ccsd(t)_dz.corr_energy": True,
+            "mp2_dz.corr_energy": True,
+            "mp2_tz.corr_energy": True,
+            "mp2_qz.corr_energy": True,
+            "wb97x_dz.forces": True,
+            "wb97x_tz.forces": True,
+            "wb97x_dz.dipole": True,
+            "wb97x_tz.dipole": True,
+            "wb97x_dz.quadrupole": True,
+            "wb97x_dz.cm5_charges": True,
+            "wb97x_dz.hirshfeld_charges": True,
+            "wb97x_tz.mbis_charges": True,
+            "wb97x_tz.mbis_dipoles": True,
+            "wb97x_tz.mbis_quadrupoles": True,
+            "wb97x_tz.mbis_octupoles": True,
+            "wb97x_tz.mbis_volumes": True,
         }
 
     def _process_downloaded(
@@ -283,7 +286,7 @@ class ANI1_curation(dataset_curation):
         >>> ani1_data.process()
 
         """
-        from modelforge.curation.utils import download_from_figshare
+        from modelforge.utils.misc import download_from_figshare
 
         url = self.dataset_download_url
 

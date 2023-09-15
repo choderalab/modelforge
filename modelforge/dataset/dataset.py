@@ -1,6 +1,5 @@
 import os
-import shutil
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional
 
 import numpy as np
 import pytorch_lightning as pl
@@ -11,7 +10,7 @@ from torch.utils.data import DataLoader
 from modelforge.utils.prop import PropertyNames
 
 from .transformation import default_transformation
-from .utils import RandomSplittingStrategy, SplittingStrategy
+from modelforge.dataset.utils import RandomSplittingStrategy, SplittingStrategy
 
 
 class TorchDataset(torch.utils.data.Dataset):
@@ -140,6 +139,7 @@ class HDF5Dataset:
         # this will create an unzipped file which we can then load in
         # this is substantially faster than passing gz_file directly to h5py.File()
         # and should not run afoul with any chunking of the data.
+
         temp_hdf5_file = f"{self.local_cache_dir}/temp_unzipped.hdf5"
         with gzip.open(self.raw_data_file, "rb") as gz_file:
             with open(temp_hdf5_file, "wb") as out_file:

@@ -1,11 +1,6 @@
-from loguru import logger
-import os
+from modelforge.utils.units import *
 
-from typing import Optional
-from openff.units import unit, Quantity
-import pint
 
-from modelforge.curation.utils import *
 import numpy as np
 
 from modelforge.curation.curation_baseclass import *
@@ -78,39 +73,41 @@ class QM9_curation(dataset_curation):
         }
 
     def _init_record_entries_series(self):
+        # For data efficiency, information for different conformers will be grouped together
+        # To make it clear to the dataset loader which pieces of information are common to all
+        # conformers, or which pieces encode the series, we will label each value.
         # The keys in this dictionary correspond to the label of the entries in each record.
-        # In this dictionary, the value indicates if the entry contains series data or just a single datapoint.
-        # If the entry has a value of "series", the "series" attribute in hdf5 file will be set to True (false if single)
+        # The value indicates if the entry contains series data (True) or a single common entry (False).
+        # If the entry has a value of True, the "series" attribute in hdf5 file will be set to True; False, if False.
         # This information will be used by the code to read in the datafile to know how to parse underlying records.
-        # While we could create separate records for every configuration, this vastly increases the time for generating
-        # and reading hdf5 files.
+
         self._record_entries_series = {
-            "name": "single",
-            "n_configs": "single",
-            "smiles_gdb-17": "single",
-            "smiles_b3lyp": "single",
-            "inchi_corina": "single",
-            "inchi_b3lyp": "single",
-            "geometry": "single",
-            "atomic_numbers": "single",
-            "charges": "single",
-            "idx": "single",
-            "rotational_constant_A": "single",
-            "rotational_constant_B": "single",
-            "rotational_constant_C": "single",
-            "dipole_moment": "single",
-            "isotropic_polarizability": "single",
-            "energy_of_homo": "single",
-            "energy_of_lumo": "single",
-            "lumo-homo_gap": "single",
-            "electronic_spatial_extent": "single",
-            "zero_point_vibrational_energy": "single",
-            "internal_energy_at_0K": "single",
-            "internal_energy_at_298.15K": "single",
-            "enthalpy_at_298.15K": "single",
-            "free_energy_at_298.15K": "single",
-            "heat_capacity_at_298.15K": "single",
-            "harmonic_vibrational_frequencies": "single",
+            "name": False,
+            "n_configs": False,
+            "smiles_gdb-17": False,
+            "smiles_b3lyp": False,
+            "inchi_corina": False,
+            "inchi_b3lyp": False,
+            "geometry": False,
+            "atomic_numbers": False,
+            "charges": False,
+            "idx": False,
+            "rotational_constant_A": False,
+            "rotational_constant_B": False,
+            "rotational_constant_C": False,
+            "dipole_moment": False,
+            "isotropic_polarizability": False,
+            "energy_of_homo": False,
+            "energy_of_lumo": False,
+            "lumo-homo_gap": False,
+            "electronic_spatial_extent": False,
+            "zero_point_vibrational_energy": False,
+            "internal_energy_at_0K": False,
+            "internal_energy_at_298.15K": False,
+            "enthalpy_at_298.15K": False,
+            "free_energy_at_298.15K": False,
+            "heat_capacity_at_298.15K": False,
+            "harmonic_vibrational_frequencies": False,
         }
 
     def _extract(self, file_path: str, cache_directory: str) -> None:
@@ -148,6 +145,7 @@ class QM9_curation(dataset_curation):
         dict
             Dictionary of properties, with units added when appropriate.
         """
+        from modelforge.utils.misc import str_to_float
 
         temp_prop = line.split()
 
@@ -235,6 +233,7 @@ class QM9_curation(dataset_curation):
 
         """
         import qcelemental as qcel
+        from modelforge.utils.misc import str_to_float
 
         with open(file_name, "r") as file:
             # read the first line that provides the number of atoms
@@ -346,6 +345,7 @@ class QM9_curation(dataset_curation):
 
         """
         from tqdm import tqdm
+        from modelforge.utils.misc import list_files
 
         # untar the dataset
         self._extract(

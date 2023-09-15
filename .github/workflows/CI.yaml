@@ -60,7 +60,7 @@ jobs:
       - name: Run tests
         # conda setup requires this special shell
         run: |
-          pytest -v --cov=modelforge --cov-report=xml --color=yes modelforge/tests/
+          pytest -v --cov=modelforge --cov-report=xml --color=yes --durations=10 modelforge/tests/
 
       - name: CodeCov
         uses: codecov/codecov-action@v3

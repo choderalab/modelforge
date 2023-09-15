@@ -16,7 +16,7 @@ dependencies:
   - loguru
   - gdown
   - tqdm
-  - lightning
+  - lightning=2.0.8
   - tensorboard
   - torchvision
   - openff-units

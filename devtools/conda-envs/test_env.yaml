@@ -1,8 +1,6 @@
 name: test
 channels:
   - conda-forge
-
-  - defaults
 dependencies:
   # Base depends
   - python
@@ -16,13 +14,13 @@ dependencies:
   - loguru
   - gdown
   - tqdm
-  - lightning
+  - lightning=2.0.8
   - tensorboard
   - torchvision
   - openff-units
   - pint
 
-    # Testing
+  # Testing
   - pytest
   - pytest-cov
   - codecov
@@ -30,7 +28,5 @@ dependencies:
   - qcportal
   - requests
 
-    # Pip-only installs
   - pip:
       - pedantic
-  #  - codecov

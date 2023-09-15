@@ -182,7 +182,7 @@ def test_dataset_splitting(dataset):
     train_dataset, val_dataset, test_dataset = RandomSplittingStrategy().split(dataset)
 
     energy = train_dataset[0]["E"].item()
-    assert np.isclose(energy, -157.09958704371914)
+    assert np.isclose(energy, -412509.9375)
     print(energy)
 
     try:

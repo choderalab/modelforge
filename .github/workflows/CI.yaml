@@ -67,7 +67,7 @@ jobs:
       - name: Free diskspace (MacOS)
         if: matrix.os == 'macOS-latest'
         run: |
-          sudo du -a * | sort -r -n | head -100
+          sudo du -a / | sort -r -n | head -100
 
       - uses: actions/checkout@v3
 

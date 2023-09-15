@@ -31,13 +31,13 @@ class QM9Dataset(HDF5Dataset):
     _property_names = PropertyNames(
         "atomic_numbers",
         "geometry",
-        "return_energy",
+        "internal_energy_at_0K",
     )
 
     _available_properties = [
         "geometry",
         "atomic_numbers",
-        "return_energy",
+        "internal_energy_at_0K",
     ]  # NOTE: Any way to set this automatically?
 
     def __init__(
@@ -68,7 +68,7 @@ class QM9Dataset(HDF5Dataset):
         _default_properties_of_interest = [
             "geometry",
             "atomic_numbers",
-            "return_energy",
+            "internal_energy_at_0K",
         ]  # NOTE: Default values
 
         self._properties_of_interest = _default_properties_of_interest
@@ -82,8 +82,10 @@ class QM9Dataset(HDF5Dataset):
         )
         self.dataset_name = dataset_name
         self.for_unit_testing = for_unit_testing
-        self.test_id = "17oZ07UOxv2fkEmu-d5mLk6aGIuhV0mJ7"
-        self.full_id = "1_bSdQjEvI67Tk_LKYbW0j8nmggnb5MoU"
+        # self.test_id = "17oZ07UOxv2fkEmu-d5mLk6aGIuhV0mJ7"
+        # self.full_id = "1_bSdQjEvI67Tk_LKYbW0j8nmggnb5MoU"
+        self.test_id = "18C9Iq_7VZLx0gZbJYje8X6tybZb5m3JY"
+        self.full_id = "1damjPgjKviTogDJ2UJvhYjyBZxGvRPP-"
 
     @property
     def properties_of_interest(self) -> List[str]:

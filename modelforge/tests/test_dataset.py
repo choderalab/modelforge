@@ -64,7 +64,7 @@ def test_different_properties_of_interest(dataset):
     assert data.properties_of_interest == [
         "geometry",
         "atomic_numbers",
-        "return_energy",
+        "internal_energy_at_0K",
     ]
 
     dataset = factory.create_dataset(data)
@@ -72,9 +72,9 @@ def test_different_properties_of_interest(dataset):
     assert isinstance(raw_data_item, dict)
     assert len(raw_data_item) == 4
 
-    data.properties_of_interest = ["return_energy", "geometry"]
+    data.properties_of_interest = ["internal_energy_at_0K", "geometry"]
     assert data.properties_of_interest == [
-        "return_energy",
+        "internal_energy_at_0K",
         "geometry",
     ]
 
@@ -82,7 +82,7 @@ def test_different_properties_of_interest(dataset):
     raw_data_item = dataset[0]
     print(raw_data_item)
     assert isinstance(raw_data_item, dict)
-    assert len(raw_data_item) != 3  
+    assert len(raw_data_item) != 3
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
@@ -165,7 +165,7 @@ def test_dataset_generation(dataset):
         pass
 
     # the dataloader automatically splits and batches the dataset
-    # for the trianing set it batches the 80 datapoints in
+    # for the training set it batches the 80 datapoints in
     # a batch of 64 and a batch of 16 samples
     assert len(train_dataloader) == 2  # nr of batches
     v = [v_ for v_ in train_dataloader]

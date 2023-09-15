@@ -18,7 +18,8 @@ class QM9Dataset(HDF5Dataset):
         Name of the dataset, default is "QM9".
     for_unit_testing : bool
         If set to True, a subset of the dataset is used for unit testing purposes; by default False.
-
+    local_cache_dir: str, optional
+            Path to the local cache directory, by default ".".
     Examples
     --------
     >>> data = QM9Dataset()
@@ -77,6 +78,7 @@ class QM9Dataset(HDF5Dataset):
         super().__init__(
             f"{local_cache_dir}/{dataset_name}_cache.hdf5.gz",
             f"{local_cache_dir}/{dataset_name}_processed.npz",
+            local_cache_dir=local_cache_dir,
         )
         self.dataset_name = dataset_name
         self.for_unit_testing = for_unit_testing

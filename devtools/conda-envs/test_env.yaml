@@ -23,6 +23,7 @@ dependencies:
   # Testing
   - pytest
   - pytest-cov
+  - pytest-xdist
   - codecov
   - qcelemental=0.25.1
   - qcportal

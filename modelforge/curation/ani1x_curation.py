@@ -3,7 +3,7 @@ from modelforge.utils.units import *
 from modelforge.curation.curation_baseclass import *
 
 
-class ANI1_curation(dataset_curation):
+class ANI1x_curation(dataset_curation):
     """
     Routines to fetch and process the ANI-1x dataset into a curated hdf5 file.
 
@@ -21,7 +21,7 @@ class ANI1_curation(dataset_curation):
 
     Examples
     --------
-    >>> ani1_data = ANI1_curation(hdf5_file_name='ani1x_dataset.hdf5',
+    >>> ani1_data = ANI1x_curation(hdf5_file_name='ani1x_dataset.hdf5',
     >>>                             local_cache_dir='~/datasets/ani1x_dataset')
     >>> ani1_data.process()
 
@@ -30,11 +30,6 @@ class ANI1_curation(dataset_curation):
     def _init_dataset_parameters(self):
         self.dataset_download_url = (
             "https://springernature.figshare.com/ndownloader/files/18112775"
-        )
-
-        # temporary for initial development and testing
-        self.input_file_name = (
-            "/Users/cri/Documents/Projects-msk/datasets/ani1x_raw/ani1x-release.h5"
         )
 
         self.qm_parameters = {
@@ -213,7 +208,7 @@ class ANI1_curation(dataset_curation):
             else:
                 n_max = unit_testing_max_records
 
-            for i, name in tqdm(enumerate(names[0:n_max])):
+            for i, name in tqdm(enumerate(names[0:n_max]), total=n_max):
                 # Extract the total number of configurations for a given molecule
                 n_configs = hf[name]["coordinates"].shape[0]
 
@@ -281,12 +276,12 @@ class ANI1_curation(dataset_curation):
 
         Examples
         --------
-        >>> ani1_data = ANI1_curation(hdf5_file_name='ani1x_dataset.hdf5',
+        >>> ani1_data = ANI1x_curation(hdf5_file_name='ani1x_dataset.hdf5',
         >>>                             local_cache_dir='~/datasets/ani1x_dataset')
         >>> ani1_data.process()
 
         """
-        from modelforge.utils.misc import download_from_figshare
+        from modelforge.utils.remote import download_from_figshare
 
         url = self.dataset_download_url
 

@@ -7,7 +7,7 @@ import importlib_resources as resources
 from modelforge.utils.misc import *
 
 from modelforge.curation.qm9_curation import *
-from modelforge.curation.ani1_curation import *
+from modelforge.curation.ani1x_curation import *
 
 
 @pytest.fixture(scope="session")
@@ -424,7 +424,7 @@ def test_qm9_local_archive(prep_temp_dir):
 
 def test_an1_process_download_short(prep_temp_dir):
     # first check where we don't convert units
-    ani1_data = ANI1_curation(
+    ani1_data = ANI1x_curation(
         hdf5_file_name="test_dataset.hdf5",
         output_file_dir=str(prep_temp_dir),
         local_cache_dir=str(prep_temp_dir),
@@ -476,7 +476,7 @@ def test_an1_process_download_no_conversion(prep_temp_dir):
     from openff.units import unit
 
     # first check where we don't convert units
-    ani1_data = ANI1_curation(
+    ani1_data = ANI1x_curation(
         hdf5_file_name="test_dataset.hdf5",
         output_file_dir=str(prep_temp_dir),
         local_cache_dir=str(prep_temp_dir),
@@ -791,7 +791,7 @@ def test_an1_process_download_unit_conversion(prep_temp_dir):
     from openff.units import unit
 
     # first check where we don't convert units
-    ani1_data = ANI1_curation(
+    ani1_data = ANI1x_curation(
         hdf5_file_name="test_dataset.hdf5",
         output_file_dir=str(prep_temp_dir),
         local_cache_dir=str(prep_temp_dir),
@@ -1007,5 +1007,354 @@ def test_an1_process_download_unit_conversion(prep_temp_dir):
                 dtype=float32,
             )
             * unit.parse_expression("elementary_charge"),
+        )
+    )
+
+
+def spice114_process_download_short(prep_temp_dir):
+    # first check where we don't convert units
+    spice_data = SPICE_1_1_4_curation(
+        hdf5_file_name="test_dataset.hdf5",
+        output_file_dir=str(prep_temp_dir),
+        local_cache_dir=str(prep_temp_dir),
+        convert_units=True,
+    )
+
+    local_data_path = resources.files("modelforge").joinpath("tests", "data")
+    # make sure the data archive exists
+    hdf5_file = "SPICE-1.1.4_n2.hdf5"
+    file_name_path = str(local_data_path) + "/" + hdf5_file
+    assert os.path.isfile(file_name_path)
+
+    spice_data._process_downloaded(str(local_data_path), hdf5_file)
+
+    # SPICE-1.1.4_n2.hdf5 datafile includes entries [0, 14643] from the full datafile
+    # 14643 does not include mbis calculations; allowing us to check that
+    # Example code snippet used to generate this file
+    #
+    # input_file_name = "SPICE-1.1.4.hdf5"
+    #
+    # with h5py.File(input_file_name, "r") as hf_in:
+    #     with h5py.File("SPICE-1.1.4_n2.hdf5", "w") as hf_out:
+    #         test_names = list(hf_in.keys())
+    #         test_names2 = []
+    #         for i in [0, 14643]:
+    #             test_names2.append(test_names[i])
+    #         for test_name in test_names2:
+    #             hf_in.copy(hf_in[test_name], hf_out)
+
+    assert len(spice_data.data) == 2
+
+    assert spice_data.data[0]["name"] == "103147721"
+    assert spice_data.data[1]["name"] == "C#C.[Na+]"
+
+    spice_data._clear_data()
+    assert len(spice_data.data) == 0
+
+    # test max records exclusion
+    spice_data._process_downloaded(
+        str(local_data_path), hdf5_file, unit_testing_max_records=1
+    )
+    assert len(spice_data.data) == 1
+
+
+def spice114_process_download_no_conversion(prep_temp_dir):
+    from numpy import array, float32, uint8
+    from openff.units import unit
+
+    # first check where we don't convert units
+    spice_data = SPICE_1_1_4_curation(
+        hdf5_file_name="test_dataset.hdf5",
+        output_file_dir=str(prep_temp_dir),
+        local_cache_dir=str(prep_temp_dir),
+        convert_units=False,
+    )
+
+    local_data_path = resources.files("modelforge").joinpath("tests", "data")
+    # make sure the data archive exists
+    hdf5_file = "SPICE-1.1.4_n2.hdf5"
+    file_name_path = str(local_data_path) + "/" + hdf5_file
+    assert os.path.isfile(file_name_path)
+
+    spice_data._process_downloaded(
+        str(local_data_path), hdf5_file, unit_testing_max_records=1
+    )
+
+    #
+
+    assert spice_data.data[0]["name"] == "103147721"
+    assert np.all(
+        spice_data.data[0]["atomic_numbers"]
+        == array(
+            [
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                7,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+            ],
+            dtype=int16,
+        )
+    )
+    assert spice_data.data[0]["n_configs"] == 50
+
+    assert np.all(
+        np.isclose(
+            spice_data.data[0]["geometry"][0][0],
+            array([1.3423489, 4.156236, -3.2724566], dtype=float32)
+            * unit.parse_expression("bohr"),
+        )
+    )
+    assert spice_data.data[0]["formation_energy"][
+        0
+    ] == -4.271002275159901 * unit.parse_expression("hartree")
+    assert spice_data.data[0]["dft_total_energy"][
+        0
+    ] == -370.43397424571714 * unit.parse_expression("hartree")
+    assert np.all(
+        np.isclose(
+            spice_data.data[0]["dft_total_gradient"][0][0],
+            array([-0.00179922, 0.03140596, -0.01925333], dtype=float32)
+            * unit.parse_expression("hartree / bohr"),
+        )
+    )
+    assert np.all(
+        np.isclose(
+            spice_data.data[0]["mbis_charges"][0][0],
+            array([-0.22982304], dtype=float32)
+            * unit.parse_expression("elementary_charge"),
+        )
+    )
+    assert np.all(
+        np.isclose(
+            spice_data.data[0]["mbis_dipoles"][0][0],
+            array([0.00291166, -0.03312059, 0.06175293], dtype=float32)
+            * unit.parse_expression("bohr * elementary_charge"),
+        )
+    )
+    assert np.all(
+        np.isclose(
+            spice_data.data[0]["mbis_quadrupoles"][0][0],
+            array(
+                [
+                    [-4.712843, 0.02795503, -0.01111934],
+                    [0.02795503, -4.703707, -0.02350861],
+                    [-0.01111934, -0.02350861, -4.731845],
+                ],
+                dtype=float32,
+            )
+            * unit.parse_expression("bohr ** 2 * elementary_charge"),
+        )
+    )
+    assert np.all(
+        np.isclose(
+            spice_data.data[0]["mbis_octupoles"][0][0],
+            array(
+                [
+                    [
+                        [-0.00367656, 0.1068773, 0.05573696],
+                        [0.1068773, -0.19440877, 0.16380504],
+                        [0.05573696, 0.16380504, 0.21165511],
+                    ],
+                    [
+                        [0.1068773, -0.19440877, 0.16380504],
+                        [-0.19440877, -0.03464365, 0.08447122],
+                        [0.16380504, 0.08447122, -0.1936863],
+                    ],
+                    [
+                        [0.05573696, 0.16380504, 0.21165511],
+                        [0.16380504, 0.08447122, -0.1936863],
+                        [0.21165511, -0.1936863, 0.10259467],
+                    ],
+                ],
+                dtype=float32,
+            )
+            * unit.parse_expression("bohr ** 3 * elementary_charge"),
+        )
+    )
+    assert np.all(
+        np.isclose(
+            spice_data.data[0]["scf_dipole"][0][0],
+            1.4204609 * unit.parse_expression("bohr * elementary_charge"),
+        )
+    )
+    assert np.all(
+        np.isclose(
+            spice_data.data[0]["scf_quadrupole"][0][0],
+            array([-37.290867, -4.6239295, 3.8637419], dtype=float32)
+            * unit.parse_expression("bohr ** 2 * elementary_charge"),
+        )
+    )
+
+
+def spice114_process_download_conversion(prep_temp_dir):
+    from numpy import array, float32, uint8
+    from openff.units import unit
+
+    # first check where we don't convert units
+    spice_data = SPICE_1_1_4_curation(
+        hdf5_file_name="test_dataset.hdf5",
+        output_file_dir=str(prep_temp_dir),
+        local_cache_dir=str(prep_temp_dir),
+        convert_units=True,
+    )
+
+    local_data_path = resources.files("modelforge").joinpath("tests", "data")
+    # make sure the data archive exists
+    hdf5_file = "SPICE-1.1.4_n2.hdf5"
+    file_name_path = str(local_data_path) + "/" + hdf5_file
+    assert os.path.isfile(file_name_path)
+
+    spice_data._process_downloaded(
+        str(local_data_path), hdf5_file, unit_testing_max_records=1
+    )
+
+    #
+
+    assert spice_data.data[0]["name"] == "103147721"
+    assert np.all(
+        spice_data.data[0]["atomic_numbers"]
+        == array(
+            [
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                7,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+            ],
+            dtype=int16,
+        )
+    )
+    assert spice_data.data[0]["n_configs"] == 50
+
+    assert np.all(
+        np.isclose(
+            spice_data.data[0]["geometry"][0][0],
+            array([0.07103405, 0.21993855, -0.17317095], dtype=float32)
+            * unit.parse_expression("nanometer"),
+        )
+    )
+    assert spice_data.data[0]["formation_energy"][
+        0
+    ] == -11213.514933650016 * unit.parse_expression("kilojoule_per_mole")
+    assert spice_data.data[0]["dft_total_energy"][
+        0
+    ] == -972574.265833225 * unit.parse_expression("kilojoule_per_mole")
+    assert np.all(
+        np.isclose(
+            spice_data.data[0]["dft_total_gradient"][0][0],
+            array([-8.926773, 155.8199, -95.524925], dtype=float32)
+            * unit.parse_expression("kilojoule_per_mole / angstrom"),
+        )
+    )
+    assert np.all(
+        np.isclose(
+            spice_data.data[0]["mbis_charges"][0][0],
+            array([-0.22982304], dtype=float32)
+            * unit.parse_expression("elementary_charge"),
+        )
+    )
+    assert np.all(
+        np.isclose(
+            spice_data.data[0]["mbis_dipoles"][0][0],
+            array([0.00015408, -0.00175267, 0.00326782], dtype=float32)
+            * unit.parse_expression("elementary_charge * nanometer"),
+        )
+    )
+    assert np.all(
+        np.isclose(
+            spice_data.data[0]["mbis_quadrupoles"][0][0],
+            array(
+                [
+                    [-1.3197304e-02, 7.8282050e-05, -3.1137311e-05],
+                    [7.8282050e-05, -1.3171721e-02, -6.5830805e-05],
+                    [-3.1137311e-05, -6.5830805e-05, -1.3250515e-02],
+                ],
+                dtype=float32,
+            )
+            * unit.parse_expression("elementary_charge * nanometer ** 2"),
+        )
+    )
+    assert np.all(
+        np.isclose(
+            spice_data.data[0]["mbis_octupoles"][0][0],
+            array(
+                [
+                    [
+                        [-5.44809382e-07, 1.58375824e-05, 8.25936604e-06],
+                        [1.58375824e-05, -2.88084084e-05, 2.42734022e-05],
+                        [8.25936604e-06, 2.42734022e-05, 3.13640521e-05],
+                    ],
+                    [
+                        [1.58375824e-05, -2.88084084e-05, 2.42734022e-05],
+                        [-2.88084084e-05, -5.13365876e-06, 1.25173437e-05],
+                        [2.42734022e-05, 1.25173437e-05, -2.87013499e-05],
+                    ],
+                    [
+                        [8.25936604e-06, 2.42734022e-05, 3.13640521e-05],
+                        [2.42734022e-05, 1.25173437e-05, -2.87013499e-05],
+                        [3.13640521e-05, -2.87013499e-05, 1.52029625e-05],
+                    ],
+                ],
+                dtype=float32,
+            )
+            * unit.parse_expression("elementary_charge * nanometer ** 3"),
+        )
+    )
+    assert np.all(
+        np.isclose(
+            spice_data.data[0]["scf_dipole"][0][0],
+            0.07516756 * unit.parse_expression("elementary_charge * nanometer"),
+        )
+    )
+    assert np.all(
+        np.isclose(
+            spice_data.data[0]["scf_quadrupole"][0][0],
+            array([-0.10442506, -0.01294832, 0.01081958], dtype=float32)
+            * unit.parse_expression("elementary_charge * nanometer ** 2"),
         )
     )

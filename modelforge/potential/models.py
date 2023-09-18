@@ -5,8 +5,6 @@ import torch
 import torch.nn as nn
 from torch.optim import AdamW
 
-from modelforge.utils import SpeciesEnergies
-
 
 class PairList(nn.Module):
     def __init__(self, cutoff: float = 5.0):
@@ -51,7 +49,49 @@ class PairList(nn.Module):
         return {"atom_index12": atom_index12, "d_ij": d_ij}
 
 
-class BaseNNP(pl.LightningModule):
+class LighningModuleMixin(pl.LightningModule):
+    def training_step(
+        self, batch: Dict[str, torch.Tensor], batch_idx: int
+    ) -> torch.Tensor:
+        """
+        Defines the training loop.
+
+        Parameters
+        ----------
+        batch : dict
+            Batch data.
+        batch_idx : int
+            Batch index.
+
+        Returns
+        -------
+        torch.Tensor
+            The loss tensor.
+        """
+
+        E_hat = self.forward(batch)
+        loss = self.loss_function(E_hat.energies, batch["E"])
+        # Logging to TensorBoard (if installed) by default
+        self.log("train_loss", loss)
+        # NOTE: let's pass a callable
+
+        return loss
+
+    def configure_optimizers(self) -> AdamW:
+        """
+        Configures the optimizer for training.
+
+        Returns
+        -------
+        AdamW
+            The AdamW optimizer.
+        """
+
+        optimizer = self.optimizer()
+        return optimizer
+
+
+class BaseNNP(nn.Module):
     """
     Abstract base class for neural network potentials.
     This class defines the overall structure and ensures that subclasses
@@ -75,7 +115,7 @@ class BaseNNP(pl.LightningModule):
         """
         super().__init__()
 
-    def forward(self, inputs: Dict[str, torch.Tensor]) -> SpeciesEnergies:
+    def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
         Forward pass for the neural network potential.
 
@@ -86,70 +126,8 @@ class BaseNNP(pl.LightningModule):
 
         Returns
         -------
-        SpeciesEnergies
-            An instance of the SpeciesEnergies data class containing species and calculated energies.
-        """
-        assert isinstance(inputs, Dict)  #
-        E = self.calculate_energy(inputs)
-        return SpeciesEnergies(inputs["Z"], E)
-
-    def calculate_energy(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
-        """
-        Placeholder for the method that should calculate energies and forces.
-        This method should be implemented in subclasses.
-
-        Parameters
-        ----------
-        inputs : dict
-            A dictionary containing atomic numbers, positions, etc.
-
-        Returns
-        -------
-        torch.Tensor
-            The calculated energy tensor.
-
-
-        Raises
-        ------
-        NotImplementedError
-            If the method is not overridden in the subclass.
-        """
-        raise NotImplementedError("Subclasses must implement this method.")
-
-    def training_step(
-        self, batch: Dict[str, torch.Tensor], batch_idx: int
-    ) -> torch.Tensor:
-        """
-        Defines the training loop.
-
-        Parameters
-        ----------
-        batch : dict
-            Batch data.
-        batch_idx : int
-            Batch index.
-
-        Returns
-        -------
-        torch.Tensor
-            The loss tensor.
+        output: torch.Tensor
+            energies.
         """
 
-        E_hat = self.forward(batch)  # wrap_vals_from_dataloader(batch))
-        loss = nn.functional.mse_loss(E_hat.energies, batch["E"])
-        # Logging to TensorBoard (if installed) by default
-        self.log("train_loss", loss)
-        return loss
-
-    def configure_optimizers(self) -> AdamW:
-        """
-        Configures the optimizer for training.
-
-        Returns
-        -------
-        AdamW
-            The AdamW optimizer.
-        """
-
-        optimizer = AdamW(self.parameters(), lr=1e-3)
-        return optimizer
+        raise NotImplementedError

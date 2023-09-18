@@ -6,6 +6,34 @@ import torch.nn.functional as F
 from loguru import logger
 
 
+def sequential_block(
+    in_features: int,
+    out_features: int,
+    activation_fct: callable = nn.Identity(),
+    bias: bool = True,
+):
+    """
+    Create a sequential block for the neural network.
+
+    Parameters
+    ----------
+    in_features : int
+        Number of input features.
+    out_features : int
+        Number of output features.
+
+    Returns
+    -------
+    nn.Sequential
+        Sequential layer block.
+    """
+    return nn.Sequential(
+        nn.Linear(in_features, out_features),
+        activation_fct,
+        nn.Linear(out_features, out_features),
+    )
+
+
 def _scatter_add(
     src: torch.Tensor, index: torch.Tensor, dim_size: int, dim: int
 ) -> torch.Tensor:
@@ -33,7 +61,7 @@ def _scatter_add(
     y = tmp.index_add(dim, index, src)
     return y
 
-
+# NOTE: change the scatter_add to the native pytorch function
 def scatter_add(
     x: torch.Tensor, idx_i: torch.Tensor, dim_size: int, dim: int = 0
 ) -> torch.Tensor:
@@ -51,7 +79,6 @@ def scatter_add(
 
     """
     return _scatter_add(x, idx_i, dim_size, dim)
-
 
 
 def gaussian_rbf(
@@ -100,7 +127,7 @@ def cosine_cutoff(d_ij: torch.Tensor, cutoff: float) -> torch.Tensor:
     # Compute values of cutoff function
     input_cut = 0.5 * (torch.cos(d_ij * np.pi / cutoff) + 1.0)
     # Remove contributions beyond the cutoff radius
-    input_cut *= d_ij < cutoff
+    input_cut = input_cut * (d_ij < cutoff) 
     return input_cut
 
 

@@ -9,6 +9,7 @@ from .utils import (
     ShiftedSoftplus,
     cosine_cutoff,
     scatter_add,
+    sequential_block,
 )
 import torch
 
@@ -49,7 +50,7 @@ class Schnet(BaseNNP):
         self.readout = EnergyReadout(n_atom_basis)
         self.embedding = nn.Embedding(100, n_atom_basis, padding_idx=-1)
 
-    def calculate_energy(
+    def forward(
         self, inputs: Dict[str, torch.Tensor], cached_pairlist: bool = False
     ) -> torch.Tensor:
         """
@@ -82,31 +83,8 @@ class Schnet(BaseNNP):
         return self.readout(x)
 
 
-def sequential_block(in_features: int, out_features: int):
-    """
-    Create a sequential block for the neural network.
-
-    Parameters
-    ----------
-    in_features : int
-        Number of input features.
-    out_features : int
-        Number of output features.
-
-    Returns
-    -------
-    nn.Sequential
-        Sequential layer block.
-    """
-    return nn.Sequential(
-        nn.Linear(in_features, out_features),
-        ShiftedSoftplus(),
-        nn.Linear(out_features, out_features),
-    )
-
-
 class SchNetInteractionBlock(nn.Module):
-    def __init__(self, n_atom_basis: int, n_filters: int):
+    def __init__(self, nr_atom_basis: int, nr_filters: int, nr_rbf: int = 20):
         """
         Initialize the SchNet interaction block.
 
@@ -116,13 +94,16 @@ class SchNetInteractionBlock(nn.Module):
             Number of atom basis, defines the dimensionality of the output features.
         n_filters : int
             Number of filters, defines the dimensionality of the intermediate features.
-
+        n_rbf : int, optional
+            Number of radial basis functions. Default is 20.
         """
         super().__init__()
-        n_rbf = 20
-        self.intput_to_feature = nn.Linear(n_atom_basis, n_filters)
-        self.feature_to_output = sequential_block(n_filters, n_atom_basis)
-        self.filter_network = sequential_block(n_rbf, n_filters)
+        nr_rbf = 20
+        self.intput_to_feature = nn.Linear(nr_atom_basis, nr_filters)
+        self.feature_to_output = sequential_block(
+            nr_filters, nr_atom_basis, ShiftedSoftplus()
+        )
+        self.filter_network = sequential_block(nr_rbf, nr_filters, ShiftedSoftplus())
 
     def forward(
         self,
@@ -179,6 +160,7 @@ class SchNetRepresentation(nn.Module):
         n_atom_basis: int,
         n_filters: int,
         n_interactions: int,
+        cutoff: float = 5.0,
     ):
         """
         Initialize the SchNet representation layer.
@@ -191,6 +173,8 @@ class SchNetRepresentation(nn.Module):
             Number of filters.
         n_interactions : int
             Number of interaction layers.
+        cutoff: float, optional
+            Cutoff value for the pairlist. Default is 5.0.
         """
         super().__init__()
 
@@ -200,7 +184,7 @@ class SchNetRepresentation(nn.Module):
                 for _ in range(n_interactions)
             ]
         )
-        self.cutoff = 5.0
+        self.cutoff = cutoff
         self.radial_basis = GaussianRBF(n_rbf=20, cutoff=self.cutoff)
 
     def _distance_to_radial_basis(

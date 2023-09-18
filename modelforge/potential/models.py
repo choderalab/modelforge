@@ -69,8 +69,11 @@ class LighningModuleMixin(pl.LightningModule):
             The loss tensor.
         """
 
-        E_hat = self.forward(batch)
-        loss = self.loss_function(E_hat.energies, batch["E"])
+        E_hat = self.forward(batch).flatten()
+        print(E_hat)
+        print(E_hat.shape)
+        print(batch["E"].shape)
+        loss = self.loss_function(E_hat, batch["E"])
         # Logging to TensorBoard (if installed) by default
         self.log("train_loss", loss)
         # NOTE: let's pass a callable
@@ -87,7 +90,7 @@ class LighningModuleMixin(pl.LightningModule):
             The AdamW optimizer.
         """
 
-        optimizer = self.optimizer()
+        optimizer = self.optimizer(self.parameters(), lr=self.learning_rate)
         return optimizer
 
 

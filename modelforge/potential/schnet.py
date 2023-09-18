@@ -2,7 +2,7 @@ import torch.nn as nn
 from loguru import logger
 from typing import Dict, Tuple, List
 
-from .models import BaseNNP
+from .models import BaseNNP, LighningModuleMixin
 from .utils import (
     EnergyReadout,
     GaussianRBF,
@@ -240,3 +240,43 @@ class SchNetRepresentation(nn.Module):
             x = x + v
 
         return x
+
+
+class LighningSchnet(Schnet, LighningModuleMixin):
+    def __init__(
+        self,
+        n_atom_basis: int,
+        n_interactions: int,
+        n_filters: int = 0,
+        cutoff: float = 5.0,
+        loss: nn.Module = nn.MSELoss(),
+        optimzier: torch.optim.Optimizer = torch.optim.Adam,
+        lr: float = 1e-3,
+    ) -> None:
+        """
+        Initialize the Schnet class.
+
+
+        Parameters
+        ----------
+        n_atom_basis : int
+            Number of atom basis, defines the dimensionality of the output features.
+        n_interactions : int
+            Number of interaction blocks in the architecture.
+        n_filters : int, optional
+            Number of filters, defines the dimensionality of the intermediate features.
+            Default is 0.
+        cutoff : float, optional
+            Cutoff value for the pairlist. Default is 5.0.
+        loss_function: nn.Module, optional
+            Loss function. Default is nn.MSELoss.
+        optimzier: torch.optim.Optimizer, optional
+            Optimizer. Default is torch.optim.Adam.
+        lr: float, optional
+            Learning rate. Default is 1e-3.
+        """
+
+        super().__init__(n_atom_basis, n_interactions, n_filters, cutoff)
+        self.loss_function = loss
+        self.optimizer = optimzier
+        self.learning_rate = lr

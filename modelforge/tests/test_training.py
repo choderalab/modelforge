@@ -19,7 +19,7 @@ def test_forward_pass(dataset, model_class):
     from lightning import Trainer
     import torch
 
-    model = setup_simple_model(model_class)
+    model = setup_simple_model(model_class, lightning=True)
     dataset = initialize_dataset(dataset, mode="fit")
     trainer = Trainer(max_epochs=2)
     model = model.to(torch.float32)

@@ -20,6 +20,6 @@ def test_forward_pass(model_class, dataset):
     initialized_model = setup_simple_model(model_class)
     inputs = return_single_batch(dataset, mode="fit")
     output = initialized_model(inputs)
-    print(output.energies.shape)
-    assert output.species.shape[0] == inputs["Z"].shape[0]
-    assert output.energies.shape[0] == inputs["Z"].shape[0]
+    print(output.shape)
+    assert output.shape[0] == 64
+    assert output.shape[1] == 1

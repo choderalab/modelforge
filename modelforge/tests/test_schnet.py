@@ -2,7 +2,7 @@ from loguru import logger
 
 from modelforge.potential.schnet import Schnet
 
-from .helper_functinos import methane_input
+from .helper_functinos import generate_methane_input
 import torch
 
 
@@ -19,7 +19,7 @@ def test_schnet_forward():
             [[[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]], [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]]
         ),
     }
-    energy = model.calculate_energy(inputs)
+    energy = model(inputs)
     assert energy.shape == (
         2,
         1,
@@ -32,7 +32,11 @@ def test_calculate_energies_and_forces():
     # energy and force calculatino on Methane
 
     schnet = Schnet(128, 6, 64)
-    methane_inputs = methane_input()
-    result = schnet.calculate_energy(methane_inputs)
-    logger.debug(result)
-    assert result.shape[0] == 1  # Assuming only one molecule
+    methane_inputs = generate_methane_input()
+    result = schnet(methane_inputs)
+    forces = -torch.autograd.grad(
+        result, methane_inputs["R"], create_graph=True, retain_graph=True
+    )[0]
+
+    assert result.shape == (1, 1)  #  only one molecule
+    assert forces.shape == (1, 5, 3)  #  only one molecule

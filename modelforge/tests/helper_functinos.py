@@ -34,7 +34,7 @@ def initialize_dataset(dataset, mode: str) -> TorchDataModule:
     return data_module
 
 
-def prepare_pairlist_for_single_batch() -> Dict[str, torch.Tensor]:
+def prepare_pairlist_for_single_batch(batch) -> Dict[str, torch.Tensor]:
     """returns pairlist with keys 'atom_index12', 'd_ij',  'r_ij'
 
     Returns:
@@ -44,7 +44,6 @@ def prepare_pairlist_for_single_batch() -> Dict[str, torch.Tensor]:
 
     from modelforge.potential.models import PairList
 
-    batch = return_single_batch(QM9Dataset, "fit")
     R = batch["R"]
     mask = batch["Z"] == 0
     pairlist = PairList(cutoff=5.0)

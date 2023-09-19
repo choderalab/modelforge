@@ -40,3 +40,37 @@ def test_calculate_energies_and_forces():
 
     assert result.shape == (1, 1)  #  only one molecule
     assert forces.shape == (1, 5, 3)  #  only one molecule
+
+
+def get_input_for_interaction_block(nr_atom_basis: int, nr_embeddings: int):
+    from .helper_functinos import prepare_pairlist_for_single_batch, return_single_batch
+    from modelforge.potential.schnet import SchNetInteractionBlock, SchNetRepresentation
+    from modelforge.dataset.qm9 import QM9Dataset
+    import torch.nn as nn
+
+    embedding = nn.Embedding(nr_embeddings, nr_atom_basis, padding_idx=0)
+    batch = return_single_batch(QM9Dataset, "fit")
+    pairlist = prepare_pairlist_for_single_batch(batch)
+    representation = SchNetRepresentation(nr_atom_basis, 4, 3)
+    atom_index12 = pairlist["atom_index12"]
+    d_ij = pairlist["d_ij"]
+    f_ij, rcut_ij = representation._distance_to_radial_basis(d_ij)
+    return {
+        "x": embedding(batch["Z"]),
+        "f_ij": f_ij,
+        "idx_i": atom_index12[0],
+        "idx_j": atom_index12[1],
+        "rcut_ij": rcut_ij,
+    }
+
+
+def test_schnet_interaction_layer():
+    from modelforge.potential.schnet import SchNetInteractionBlock, SchNetRepresentation
+
+    nr_atom_basis = 128
+    nr_embeddings = 100
+    r = get_input_for_interaction_block(nr_atom_basis, nr_embeddings)
+    assert r["x"].shape == (64, 17, nr_atom_basis)
+    interaction = SchNetInteractionBlock(nr_atom_basis, 4)
+    v = interaction(r["x"], r["f_ij"], r["idx_i"], r["idx_j"], r["rcut_ij"])
+    assert v.shape == (64, 17, nr_atom_basis)

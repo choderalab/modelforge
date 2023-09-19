@@ -1,6 +1,6 @@
 import pytest
 
-from modelforge.potential.models import BaseNNP, PairList
+from modelforge.potential.models import BaseNNP
 import numpy as np
 
 from .helper_functinos import (
@@ -26,7 +26,7 @@ def test_forward_pass(model_class, dataset):
     assert output.shape[1] == 1
 
 
-def test_pairlist():
+def test_pairlist_simple_data():
     from modelforge.potential.models import PairList
     import torch
 
@@ -49,6 +49,22 @@ def test_pairlist():
     assert np.isclose(r["d_ij"].tolist()[-1], 1.7320507764816284)
 
     assert r["r_ij"].shape == (4, 3)
+
+
+@pytest.mark.parametrize("dataset", DATASETS)
+def test_pairlist_on_dataset(dataset):
+    from modelforge.dataset.dataset import TorchDataModule
+    from modelforge.potential.models import PairList
+
+    data = dataset(for_unit_testing=True)
+    data_module = TorchDataModule(data)
+    data_module.prepare_data()
+    data_module.setup("fit")
+    for b in data_module.train_dataloader():
+        R = b["R"]
+        mask = b["Z"] == 0
+        pairlist = PairList(cutoff=5.0)
+        pairlist(mask, R)
 
 
 def test_pairlist_nopbc():

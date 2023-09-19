@@ -3,10 +3,9 @@ import torch
 from modelforge.dataset.dataset import TorchDataModule
 from modelforge.dataset.qm9 import QM9Dataset
 from modelforge.potential.schnet import Schnet, LighningSchnet
-from modelforge.utils import Inputs
 from modelforge.potential.models import BaseNNP
 
-from typing import Optional
+from typing import Optional, Dict
 
 MODELS_TO_TEST = [Schnet]
 DATASETS = [QM9Dataset]
@@ -33,6 +32,23 @@ def initialize_dataset(dataset, mode: str) -> TorchDataModule:
     data_module.prepare_data()
     data_module.setup(mode)
     return data_module
+
+
+def prepare_pairlist_for_single_batch() -> Dict[str, torch.Tensor]:
+    """returns pairlist with keys 'atom_index12', 'd_ij',  'r_ij'
+
+    Returns:
+        Dict[str, torch.Tensor]: pairlist
+            keys: 'atom_index12', 'd_ij',  'r_ij'
+    """
+
+    from modelforge.potential.models import PairList
+
+    batch = return_single_batch(QM9Dataset, "fit")
+    R = batch["R"]
+    mask = batch["Z"] == 0
+    pairlist = PairList(cutoff=5.0)
+    return pairlist(mask, R)
 
 
 def generate_methane_input():

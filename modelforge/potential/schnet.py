@@ -48,7 +48,7 @@ class Schnet(BaseNNP):
             n_atom_basis, n_filters, n_interactions
         )
         self.readout = EnergyReadout(n_atom_basis)
-        self.embedding = nn.Embedding(100, n_atom_basis, padding_idx=-1)
+        self.embedding = nn.Embedding(100, n_atom_basis, padding_idx=0)
 
     def forward(
         self, inputs: Dict[str, torch.Tensor], cached_pairlist: bool = False
@@ -75,7 +75,7 @@ class Schnet(BaseNNP):
         # initializing x^{l}_{0} as x^l)0 = aZ_i
         Z = inputs["Z"]
         x = self.embedding(Z)
-        mask = Z == -1
+        mask = Z == 0
         pairlist = self.calculate_distances_and_pairlist(mask, inputs["R"])
 
         x = self.representation(x, pairlist)
@@ -147,9 +147,24 @@ class SchNetInteractionBlock(nn.Module):
         # continuous-ﬁlter convolutional layers
         x_j = x[idx_j]
         x_ij = x_j * Wij
-        x = scatter_add(x_ij, idx_i, dim_size=x.shape[0])
+
+        # Using custom scatter_add
+        x_custom = scatter_add(x_ij, idx_i, dim_size=x.shape[0])
+
+        # Using native scatter_add
+        shape = list(x.shape)  # note that we're using x.shape, not x_ij.shape
+        x_native = torch.zeros(shape, dtype=x.dtype)
+
+        # Extend the dimensionality of idx_i to match that of x_native
+        idx_i_expanded = idx_i.unsqueeze(1).expand_as(x_ij)
+
+        # Perform the scatter_add operation
+        x_native.scatter_add_(0, idx_i_expanded, x_ij)
+
+        assert torch.equal(x_native, x_custom)
+
         # Update features
-        x = self.feature_to_output(x)
+        x = self.feature_to_output(x_native)
         x = x.reshape(batch_size, nr_of_atoms, 128)
         return x
 

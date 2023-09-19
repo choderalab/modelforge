@@ -61,6 +61,7 @@ def _scatter_add(
     y = tmp.index_add(dim, index, src)
     return y
 
+
 # NOTE: change the scatter_add to the native pytorch function
 def scatter_add(
     x: torch.Tensor, idx_i: torch.Tensor, dim_size: int, dim: int = 0
@@ -82,15 +83,15 @@ def scatter_add(
 
 
 def gaussian_rbf(
-    inputs: torch.Tensor, offsets: torch.Tensor, widths: torch.Tensor
+    d_ij: torch.Tensor, offsets: torch.Tensor, widths: torch.Tensor
 ) -> torch.Tensor:
     """
     Gaussian radial basis function (RBF) transformation.
 
     Parameters
     ----------
-    inputs : torch.Tensor
-        Input tensor.
+    d_ij : torch.Tensor
+        coordinates.
     offsets : torch.Tensor
         Offsets for Gaussian functions.
     widths : torch.Tensor
@@ -103,7 +104,7 @@ def gaussian_rbf(
     """
 
     coeff = -0.5 / torch.pow(widths, 2)
-    diff = inputs[..., None] - offsets
+    diff = d_ij[..., None] - offsets
     y = torch.exp(coeff * torch.pow(diff, 2))
     return y.to(dtype=torch.float32)
 
@@ -127,7 +128,7 @@ def cosine_cutoff(d_ij: torch.Tensor, cutoff: float) -> torch.Tensor:
     # Compute values of cutoff function
     input_cut = 0.5 * (torch.cos(d_ij * np.pi / cutoff) + 1.0)
     # Remove contributions beyond the cutoff radius
-    input_cut = input_cut * (d_ij < cutoff) 
+    input_cut = input_cut * (d_ij < cutoff)
     return input_cut
 
 
@@ -232,21 +233,21 @@ class GaussianRBF(nn.Module):
         self.register_buffer("widths", widths)
         self.register_buffer("offsets", offset)
 
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+    def forward(self, d_ij: torch.Tensor) -> torch.Tensor:
         """
         Forward pass for the GaussianRBF.
 
         Parameters
         ----------
-        x : torch.Tensor
-            Input tensor for the forward pass.
+        d_ij : torch.Tensor
+            Pairwise distances for the forward pass.
 
         Returns
         -------
         torch.Tensor
             The output tensor.
         """
-        return gaussian_rbf(inputs, self.offsets, self.widths)
+        return gaussian_rbf(d_ij, self.offsets, self.widths)
 
 
 # taken from torchani repository: https://github.com/aiqm/torchani
@@ -259,6 +260,7 @@ def neighbor_pairs_nopbc(
     ----------
     mask : torch.Tensor
         Mask tensor to indicate invalid atoms, shape (batch_size, n_atoms).
+        1 == is padding.
     R : torch.Tensor
         Coordinates tensor, shape (batch_size, n_atoms, 3).
     cutoff : float
@@ -288,7 +290,6 @@ def neighbor_pairs_nopbc(
     num_mols = mask.shape[0]
     p12_all = torch.triu_indices(num_atoms, num_atoms, 1, device=current_device)
     p12_all_flattened = p12_all.view(-1)
-
     pair_coordinates = R.index_select(1, p12_all_flattened).view(num_mols, 2, -1, 3)
     distances = (pair_coordinates[:, 0, ...] - pair_coordinates[:, 1, ...]).norm(2, -1)
     in_cutoff = (distances <= cutoff).nonzero()

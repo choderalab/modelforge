@@ -16,12 +16,11 @@ class PairList(nn.Module):
 
         self.calculate_neighbors = neighbor_pairs_nopbc
         self.cutoff = cutoff
+        self.vec = None
 
-    def compute_distance(
-        self, atom_index12: torch.Tensor, R: torch.Tensor
-    ) -> torch.Tensor:
+    def compute_r_ij(self, atom_index12: torch.Tensor, R: torch.Tensor) -> torch.Tensor:
         """
-        Compute distances based on atom indices and coordinates.
+        Compute displacement vector based on atom indices and coordinates.
 
         Parameters
         ----------
@@ -33,20 +32,18 @@ class PairList(nn.Module):
         Returns
         -------
         torch.Tensor, shape [n_pairs]
-            Computed distances.
+            r_ij.
         """
-
         coordinates = R.flatten(0, 1)
         selected_coordinates = coordinates.index_select(0, atom_index12.view(-1)).view(
             2, -1, 3
         )
-        vec = selected_coordinates[0] - selected_coordinates[1]
-        return vec.norm(2, -1)
+        return selected_coordinates[0] - selected_coordinates[1]
 
     def forward(self, mask, R) -> Dict[str, torch.Tensor]:
         atom_index12 = self.calculate_neighbors(mask, R, self.cutoff)
-        d_ij = self.compute_distance(atom_index12, R)
-        return {"atom_index12": atom_index12, "d_ij": d_ij}
+        r_ij = self.compute_r_ij(atom_index12, R)
+        return {"atom_index12": atom_index12, "d_ij": r_ij.norm(2, -1), "r_ij": r_ij}
 
 
 class LighningModuleMixin(pl.LightningModule):

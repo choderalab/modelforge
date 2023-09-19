@@ -152,33 +152,43 @@ class HDF5Dataset:
                 temp_data = {}
                 is_series = {}
 
+                # There may be cases where a specific property of interest
+                # has not been computed for a given molecule
+                # in that case, we'll want to just skip over that entry
+                property_found = True
+                property_keys = list(hf[mol].keys())
                 for value in self.properties_of_interest:
-                    # First grab all the data of interest;
-                    # indexing into a local np array is much faster
-                    # than indexing into the array in the hdf5 file
-                    temp_data[value] = hf[mol][value][()]
-                    is_series[value] = hf[mol][value].attrs["series"]
+                    if not value in property_keys:
+                        property_found = False
 
-                for n in range(n_configs):
-                    not_nan = True
-                    temp_data_cut = {}
+                if property_found:
                     for value in self.properties_of_interest:
-                        if is_series[value]:
-                            temp_data_cut[value] = temp_data[value][n]
-                            if np.any(np.isnan(temp_data_cut[value])):
-                                not_nan = False
-                                break
-                        else:
-                            temp_data_cut[value] = temp_data[value]
-                            if np.any(np.isnan(temp_data_cut[value])):
-                                not_nan = False
-                                break
-                    if not_nan:
+                        # First grab all the data of interest;
+                        # indexing into a local np array is much faster
+                        # than indexing into the array in the hdf5 file
+                        temp_data[value] = hf[mol][value][()]
+                        is_series[value] = hf[mol][value].attrs["series"]
+
+                    for n in range(n_configs):
+                        not_nan = True
+                        temp_data_cut = {}
                         for value in self.properties_of_interest:
-                            data[value].append(temp_data_cut[value])
-                        # keep track of the name of the molecule and configuration number
-                        # may be needed for splitting
-                        data["name"].append(f"{mol}_{n}")
+                            if is_series[value]:
+                                temp_data_cut[value] = temp_data[value][n]
+                                if np.any(np.isnan(temp_data_cut[value])):
+                                    not_nan = False
+                                    break
+                            else:
+                                temp_data_cut[value] = temp_data[value]
+                                if np.any(np.isnan(temp_data_cut[value])):
+                                    not_nan = False
+                                    break
+                        if not_nan:
+                            for value in self.properties_of_interest:
+                                data[value].append(temp_data_cut[value])
+                            # keep track of the name of the molecule and configuration number
+                            # may be needed for splitting
+                            data["name"].append(f"{mol}_{n}")
 
         self.hdf5data = data
 

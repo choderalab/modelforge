@@ -1,6 +1,6 @@
 import torch.nn as nn
 from loguru import logger
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple, List, Type
 
 from .models import BaseNNP, LighningModuleMixin
 from .utils import (
@@ -17,38 +17,38 @@ import torch
 class Schnet(BaseNNP):
     def __init__(
         self,
-        n_atom_basis: int,
-        n_interactions: int,
-        n_filters: int = 0,
+        nr_atom_basis: int,
+        nr_interactions: int,
+        nr_filters: int = 0,
         cutoff: float = 5.0,
+        nr_of_embeddings: int = 100,
     ) -> None:
         """
         Initialize the Schnet class.
 
-
         Parameters
         ----------
         n_atom_basis : int
-            Number of atom basis, defines the dimensionality of the output features.
+            Number of atom basis; defines the dimensionality of the output features.
         n_interactions : int
             Number of interaction blocks in the architecture.
         n_filters : int, optional
-            Number of filters, defines the dimensionality of the intermediate features.
-            Default is 0.
+            Number of filters; defines the dimensionality of the intermediate features (default is 0).
         cutoff : float, optional
-            Cutoff value for the pairlist. Default is 5.0.
+            Cutoff value for the pairlist (default is 5.0).
+        nr_of_embeddings: int, optional
+            Number of embeddings (default is 100).
         """
-        from .models import PairList
+        from .models import PairList  # Local import to avoid circular dependencies
 
         super().__init__()
 
         self.calculate_distances_and_pairlist = PairList(cutoff)
-
         self.representation = SchNetRepresentation(
-            n_atom_basis, n_filters, n_interactions
+            nr_atom_basis, nr_filters, nr_interactions
         )
-        self.readout = EnergyReadout(n_atom_basis)
-        self.embedding = nn.Embedding(100, n_atom_basis, padding_idx=0)
+        self.readout = EnergyReadout(nr_atom_basis)
+        self.embedding = nn.Embedding(nr_of_embeddings, nr_atom_basis, padding_idx=0)
 
     def forward(
         self, inputs: Dict[str, torch.Tensor], cached_pairlist: bool = False
@@ -58,29 +58,29 @@ class Schnet(BaseNNP):
 
         Parameters
         ----------
-        inputs : dict, contains
-            - 'Z': torch.Tensor, shape [batch_size, n_atoms]
-                Atomic numbers for each atom in each molecule in the batch.
-            - 'R': torch.Tensor, shape [batch_size, n_atoms, 3]
-                Coordinates for each atom in each molecule in the batch.
+        inputs : Dict[str, torch.Tensor]
+            Inputs containing atomic numbers ('Z') and coordinates ('R').
+            - 'Z': shape (batch_size, n_atoms)
+            - 'R': shape (batch_size, n_atoms, 3)
         cached_pairlist : bool, optional
-            Whether to use a cached pairlist. Default is False. NOTE: is this really needed?
+            Whether to use a cached pairlist (default is False).
+
         Returns
         -------
-        torch.Tensor, shape [batch_size]
-            Calculated energies for each molecule in the batch.
-
+        torch.Tensor
+            Calculated energies; shape (batch_size,).
         """
-        # compute atom and pair features (see Fig1 in 10.1063/1.5019779)
         # initializing x^{l}_{0} as x^l)0 = aZ_i
         Z = inputs["Z"]
-        x = self.embedding(Z)
+        x = self.embedding(Z)  # shape (batch_size, n_atoms, n_atom_basis)
         mask = Z == 0
         pairlist = self.calculate_distances_and_pairlist(mask, inputs["R"])
 
-        x = self.representation(x, pairlist)
+        x = self.representation(
+            x, pairlist
+        )  # shape (batch_size, n_atoms, n_atom_basis)
         # pool average over atoms
-        return self.readout(x)
+        return self.readout(x)  # shape (batch_size,)
 
 
 class SchNetInteractionBlock(nn.Module):
@@ -264,13 +264,11 @@ class LighningSchnet(Schnet, LighningModuleMixin):
         n_interactions: int,
         n_filters: int = 0,
         cutoff: float = 5.0,
-        loss: nn.Module = nn.MSELoss(),
-        optimzier: torch.optim.Optimizer = torch.optim.Adam,
+        loss: Type[nn.Module] = nn.MSELoss(),
+        optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
         lr: float = 1e-3,
     ) -> None:
-        """
-        Initialize the Schnet class.
-
+        """PyTorch Lightning version of the SchNet model.
 
         Parameters
         ----------
@@ -283,15 +281,15 @@ class LighningSchnet(Schnet, LighningModuleMixin):
             Default is 0.
         cutoff : float, optional
             Cutoff value for the pairlist. Default is 5.0.
-        loss_function: nn.Module, optional
-            Loss function. Default is nn.MSELoss.
-        optimzier: torch.optim.Optimizer, optional
-            Optimizer. Default is torch.optim.Adam.
-        lr: float, optional
+        loss : nn.Module, optional
+            Loss function to use. Default is nn.MSELoss.
+        optimizer : torch.optim.Optimizer, optional
+            Optimizer to use. Default is torch.optim.Adam.
+        lr : float, optional
             Learning rate. Default is 1e-3.
         """
 
         super().__init__(n_atom_basis, n_interactions, n_filters, cutoff)
         self.loss_function = loss
-        self.optimizer = optimzier
+        self.optimizer = optimizer
         self.learning_rate = lr

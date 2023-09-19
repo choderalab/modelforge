@@ -12,21 +12,69 @@ DATASETS = [QM9Dataset]
 
 
 def setup_simple_model(model_class, lightning: bool = False) -> Optional[BaseNNP]:
+    """
+    Setup a simple model based on the given model_class.
+
+    Parameters
+    ----------
+    model_class : class
+        Class of the model to be set up.
+    lightning : bool, optional
+        Flag to indicate if the Lightning variant should be returned.
+
+    Returns
+    -------
+    Optional[BaseNNP]
+        Initialized model.
+    """
+
     if model_class is Schnet:
         if lightning:
             return LighningSchnet(n_atom_basis=128, n_interactions=3, n_filters=64)
-        return Schnet(n_atom_basis=128, n_interactions=3, n_filters=64)
+        return Schnet(nr_atom_basis=128, nr_interactions=3, nr_filters=64)
     else:
         raise NotImplementedError
 
 
-def return_single_batch(dataset, mode: str):
+def return_single_batch(dataset, mode: str) -> Dict[str, torch.Tensor]:
+    """
+    Return a single batch from a dataset.
+
+    Parameters
+    ----------
+    dataset : class
+        Dataset class.
+    mode : str
+        Mode to setup the dataset ('train', 'val', or 'test').
+
+    Returns
+    -------
+    Dict[str, Tensor]
+        A single batch from the dataset.
+    """
+
     train_loader = initialize_dataset(dataset, mode)
     for batch in train_loader.train_dataloader():
         return batch
 
 
 def initialize_dataset(dataset, mode: str) -> TorchDataModule:
+    """
+    Initialize a dataset for a given mode.
+
+    Parameters
+    ----------
+    dataset : class
+        Dataset class.
+    mode : str
+        Mode to setup the dataset ('train', 'val', or 'test').
+
+    Returns
+    -------
+    TorchDataModule
+        Initialized TorchDataModule.
+    """
+
     data = dataset(for_unit_testing=True)
     data_module = TorchDataModule(data)
     data_module.prepare_data()
@@ -34,12 +82,21 @@ def initialize_dataset(dataset, mode: str) -> TorchDataModule:
     return data_module
 
 
-def prepare_pairlist_for_single_batch(batch) -> Dict[str, torch.Tensor]:
-    """returns pairlist with keys 'atom_index12', 'd_ij',  'r_ij'
+def prepare_pairlist_for_single_batch(
+    batch: Dict[str, torch.Tensor]
+) -> Dict[str, torch.Tensor]:
+    """
+    Prepare pairlist for a single batch.
 
-    Returns:
-        Dict[str, torch.Tensor]: pairlist
-            keys: 'atom_index12', 'd_ij',  'r_ij'
+    Parameters
+    ----------
+    batch : Dict[str, Tensor]
+        Batch with keys like 'R', 'Z', etc.
+
+    Returns
+    -------
+    Dict[str, Tensor]
+        Pairlist with keys 'atom_index12', 'd_ij', 'r_ij'.
     """
 
     from modelforge.potential.models import PairList
@@ -50,7 +107,16 @@ def prepare_pairlist_for_single_batch(batch) -> Dict[str, torch.Tensor]:
     return pairlist(mask, R)
 
 
-def generate_methane_input():
+def generate_methane_input() -> Dict[str, torch.Tensor]:
+    """
+    Generate a methane molecule input for testing.
+
+    Returns
+    -------
+    Dict[str, Tensor]
+        Dictionary with keys 'Z', 'R', 'E'.
+    """
+
     Z = torch.tensor([[6, 1, 1, 1, 1]], dtype=torch.int64)
     R = torch.tensor(
         [

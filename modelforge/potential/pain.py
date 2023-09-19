@@ -1,6 +1,6 @@
 import torch.nn as nn
 from loguru import logger
-from typing import Dict, Tuple, Callable
+from typing import Dict, Tuple, Callable, Optional
 
 from .models import BaseNNP, PairList
 from .utils import (
@@ -15,7 +15,14 @@ import torch
 
 
 class PaiNN(BaseNNP):
-    def __init__(self, n_atom_basis: int, n_interactions: int, n_filters: int = 0):
+    def __init__(
+        self,
+        n_atom_basis: int,
+        n_interactions: int,
+        activation: Optional[Callable] = F.silu,
+        n_filters: int = 0,
+        cutoff: float = 5.0,
+    ):
         super().__init__()
 
         self.max_z = 100
@@ -23,7 +30,32 @@ class PaiNN(BaseNNP):
 
         self.embedding = nn.Embedding(self.max_z, n_atom_basis, padding_idx=0)
         self.filter_net = sequential_block(self.n_rbf, 3 * n_atom_basis)
-        nn.ModuleList
+
+        self.interactions = nn.ModuleList(
+            PaiNNInteraction(n_atom_basis, None) for _ in range(n_interactions)
+        )
+        from .models import PairList
+
+        self.calculate_distances_and_pairlist = PairList(cutoff)
+
+    def forward(self, inputs: Dict[str, torch.Tensor]):
+        """
+        Compute atomic representations/embeddings.
+
+        Args:
+            inputs (dict of torch.Tensor): SchNetPack dictionary of input tensors.
+
+        Returns:
+            torch.Tensor: atom-wise representation.
+            list of torch.Tensor: intermediate atom-wise representations, if
+            return_intermediate=True was used.
+        """
+        # get tensors from input dictionary
+        Z = inputs["Z"]
+        mask = Z == -1
+        pairlist = self.calculate_distances_and_pairlist(mask, inputs["R"])
+
+
 
 
 class PaiNNInteraction(nn.Module):

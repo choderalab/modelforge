@@ -9,9 +9,9 @@ from loguru import logger
 def sequential_block(
     in_features: int,
     out_features: int,
-    activation_fct: callable = nn.Identity(),
+    activation_fct: Callable = nn.Identity(),
     bias: bool = True,
-):
+) -> nn.Sequential:
     """
     Create a sequential block for the neural network.
 
@@ -21,6 +21,10 @@ def sequential_block(
         Number of input features.
     out_features : int
         Number of output features.
+    activation_fct : Callable, optional
+        Activation function, default is nn.Identity.
+    bias : bool, optional
+        Whether to use bias in Linear layers, default is True.
 
     Returns
     -------
@@ -100,7 +104,7 @@ def gaussian_rbf(
     Returns
     -------
     torch.Tensor
-        Transformed tensor.
+        Transformed tensor with Gaussian RBF applied
     """
 
     coeff = -0.5 / torch.pow(widths, 2)
@@ -115,14 +119,15 @@ def cosine_cutoff(d_ij: torch.Tensor, cutoff: float) -> torch.Tensor:
 
     Parameters
     ----------
-    d_ij : torch.Tensor
-        Pairwise distance tensor.
+    d_ij : Tensor
+        Pairwise distance tensor. Shape: [..., N]
     cutoff : float
-        Cutoff distance.
+        The cutoff distance.
+
     Returns
     -------
-    torch.Tensor
-        The cosine cutoff tensor.
+    Tensor
+        The cosine cutoff tensor. Shape: [..., N]
     """
 
     # Compute values of cutoff function
@@ -160,13 +165,13 @@ class EnergyReadout(nn.Module):
 
         Parameters
         ----------
-        x : torch.Tensor, shape [batch, n_atoms, n_atom_basis]
+        x : Tensor, shape [batch, n_atoms, n_atom_basis]
             Input tensor for the forward pass.
 
         Returns
         -------
-        torch.Tensor
-            The output tensor.
+        Tensor, shape [batch, 1]
+            The total energy tensor.
         """
         x = self.energy_layer(
             x

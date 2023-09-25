@@ -36,12 +36,12 @@ class PairList(nn.Module):
         ----------
         atom_index12 : torch.Tensor, shape [n_pairs, 2]
             Atom indices for pairs of atoms
-        R : torch.Tensor, shape [batch_size, n_atoms, n_dims]
+        R : torch.Tensor, shape [batch_size, n_atoms, 3]
             Atom coordinates.
 
         Returns
         -------
-        torch.Tensor, shape [n_pairs, n_dims]
+        torch.Tensor, shape [n_pairs, 3]
             Displacement vector between atom pairs.
         """
         coordinates = R.flatten(0, 1)

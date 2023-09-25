@@ -43,9 +43,7 @@ class Schnet(BaseNNP):
 
         self.calculate_distances_and_pairlist = PairList(cutoff)
 
-        self.representation = SchNetRepresentation(
-            n_atom_basis, n_filters, n_interactions
-        )
+        self.representation = SchNetRepresentation()
         self.readout = EnergyReadout(n_atom_basis)
         self.embedding = nn.Embedding(100, n_atom_basis, padding_idx=-1)
 
@@ -84,9 +82,10 @@ class Schnet(BaseNNP):
         mask = Z == -1
         pairlist = self.calculate_distances_and_pairlist(mask, inputs["R"])
 
-        representation = self.representation(x, pairlist)
+        representation = self.representation(pairlist)
         for interaction in self.interactions:
             v = interaction(
+                x,
                 representation["f_ij"],
                 representation["idx_i"],
                 representation["idx_j"],
@@ -194,21 +193,9 @@ class SchNetInteractionBlock(nn.Module):
 class SchNetRepresentation(nn.Module):
     def __init__(
         self,
-        n_atom_basis: int,
-        n_filters: int,
-        n_interactions: int,
     ):
         """
         Initialize the SchNet representation layer.
-
-        Parameters
-        ----------
-        n_atom_basis : int
-            Number of atom basis.
-        n_filters : int
-            Number of filters.
-        n_interactions : int
-            Number of interaction layers.
         """
         super().__init__()
 

@@ -12,6 +12,9 @@ from .utils import (
     sequential_block,
 )
 import torch
+import torch.nn.functional as F
+from .models import PairList
+from modelforge.potential.utils import _distance_to_radial_basis, GaussianRBF
 
 
 class PaiNN(BaseNNP):
@@ -19,24 +22,41 @@ class PaiNN(BaseNNP):
         self,
         n_atom_basis: int,
         n_interactions: int,
+        n_rbf: int,
+        cutoff_fn: Optional[Callable] = None,
         activation: Optional[Callable] = F.silu,
-        n_filters: int = 0,
-        cutoff: float = 5.0,
+        max_z: int = 100,
+        shared_interactions: bool = False,
+        shared_filters: bool = False,
+        epsilon: float = 1e-8,
     ):
         super().__init__()
 
-        self.max_z = 100
-        self.n_rbf = 20
+        self.n_atom_basis = n_atom_basis
+        self.n_interactions = n_interactions
+        self.cutoff_fn = cutoff_fn
+        self.cutoff = cutoff_fn.cutoff
 
-        self.embedding = nn.Embedding(self.max_z, n_atom_basis, padding_idx=0)
-        self.filter_net = sequential_block(self.n_rbf, 3 * n_atom_basis)
+        self.embedding = nn.Embedding(max_z, n_atom_basis, padding_idx=0)
+        if shared_filters:
+            self.filter_net = sequential_block(self.n_rbf, 3 * n_atom_basis)
+        else:
+            self.filter_net = sequential_block(
+                n_rbf, self.n_interactions * 3 * n_atom_basis
+            )
 
         self.interactions = nn.ModuleList(
-            PaiNNInteraction(n_atom_basis, None) for _ in range(n_interactions)
+            PaiNNInteraction(n_atom_basis, activation=activation)
+            for _ in range(n_interactions)
         )
-        from .models import PairList
 
-        self.calculate_distances_and_pairlist = PairList(cutoff)
+        self.interactions = nn.ModuleList(
+            PaiNNMixing(n_atom_basis, activation=activation, epsilon=epsilon)
+            for _ in range(n_interactions)
+        )
+
+        self.calculate_distances_and_pairlist = PairList(self.cutoff)
+        self.radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=self.cutoff)
 
     def forward(self, inputs: Dict[str, torch.Tensor]):
         """
@@ -54,8 +74,37 @@ class PaiNN(BaseNNP):
         Z = inputs["Z"]
         mask = Z == -1
         pairlist = self.calculate_distances_and_pairlist(mask, inputs["R"])
+        d_ij = pairlist["d_ij"]
+        f_ij, rcut_ij = _distance_to_radial_basis(d_ij, self.radial_basis)
+        fcut = self.cutoff_fn(d_ij)
 
+        filters = self.filter_net(f_ij) * fcut[..., None]
+        if self.share_filters:
+            filter_list = [filters] * self.n_interactions
+        else:
+            filter_list = torch.split(filters, 3 * self.n_atom_basis, dim=-1)
 
+        q = self.embedding(Z)[:, None]
+        qs = q.shape
+        mu = torch.zeros((qs[0], 3, qs[2]), device=q.device)
+
+        for i, (interaction, mixing) in enumerate(zip(self.interactions, self.mixing)):
+            q, mu = interaction(
+                q,
+                mu,
+                filter_list[i],
+                pairlist["r_ij"] / pairlist["d_ij"],
+                pairlist["idx_i"],
+                pairlist["idx_j"],
+                Z.shape[0],
+            )
+            q, mu = mixing(q, mu)
+
+        q = q.squeeze(1)
+
+        inputs["scalar_representation"] = q
+        inputs["vector_representation"] = mu
+        return inputs
 
 
 class PaiNNInteraction(nn.Module):
@@ -72,7 +121,7 @@ class PaiNNInteraction(nn.Module):
         self.n_atom_basis = n_atom_basis
 
         self.intra_atomic_net = nn.Sequential(
-            sequential_block(n_atom_basis, n_atom_basis, activation=activation),
+            sequential_block(n_atom_basis, n_atom_basis, activation_fct=activation),
             sequential_block(n_atom_basis, 3 * n_atom_basis),
         )
 

@@ -7,9 +7,10 @@ from .utils import (
     EnergyReadout,
     GaussianRBF,
     ShiftedSoftplus,
-    cosine_cutoff,
+    CosineCutoff,
     scatter_add,
     sequential_block,
+    _distance_to_radial_basis,
 )
 import torch
 
@@ -199,29 +200,7 @@ class SchNetRepresentation(nn.Module):
                 for _ in range(n_interactions)
             ]
         )
-        self.cutoff = cutoff
-        self.radial_basis = GaussianRBF(n_rbf=20, cutoff=self.cutoff)
-
-    def _distance_to_radial_basis(
-        self, d_ij: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Convert distances to radial basis functions.
-
-        Parameters
-        ----------
-        d_ij : torch.Tensor, shape [n_pairs]
-            Pairwise distances between atoms.
-
-        Returns
-        -------
-        Tuple[torch.Tensor, torch.Tensor]
-            - Radial basis functions, shape [n_pairs, n_rbf]
-            - cutoff values, shape [n_pairs]
-        """
-        f_ij = self.radial_basis(d_ij)
-        rcut_ij = cosine_cutoff(d_ij, self.cutoff)
-        return f_ij, rcut_ij
+        self.radial_basis = GaussianRBF(n_rbf=20, cutoff=cutoff)
 
     def forward(
         self, x: torch.Tensor, pairlist: Dict[str, torch.Tensor]
@@ -247,7 +226,7 @@ class SchNetRepresentation(nn.Module):
         atom_index12 = pairlist["atom_index12"]
         d_ij = pairlist["d_ij"]
 
-        f_ij, rcut_ij = self._distance_to_radial_basis(d_ij)
+        f_ij, rcut_ij = _distance_to_radial_basis(d_ij, self.radial_basis)
 
         idx_i, idx_j = atom_index12[0], atom_index12[1]
         for interaction in self.interactions:

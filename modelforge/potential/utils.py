@@ -1,5 +1,5 @@
 import torch
-from typing import Callable, Union
+from typing import Callable, Union, Tuple
 import torch.nn as nn
 import numpy as np
 import torch.nn.functional as F
@@ -113,6 +113,25 @@ def gaussian_rbf(
     return y.to(dtype=torch.float32)
 
 
+class CosineCutoff(nn.Module):
+    def __init__(self, cutoff: float):
+        r"""
+        Behler-style cosine cutoff module.
+
+        Args:
+            cutoff (float): The cutoff distance.
+
+        Attributes:
+            cutoff (torch.Tensor): The cutoff distance as a tensor.
+
+        """
+        super().__init__()
+        self.register_buffer("cutoff", torch.FloatTensor([cutoff]))
+
+    def forward(self, input: torch.Tensor):
+        return cosine_cutoff(input, self.cutoff)
+
+
 def cosine_cutoff(d_ij: torch.Tensor, cutoff: float) -> torch.Tensor:
     """
     Compute the cosine cutoff for a distance tensor.
@@ -213,9 +232,7 @@ class GaussianRBF(nn.Module):
     """
 
     def __init__(
-        self,
-        n_rbf: int,
-        cutoff: float,
+        self, n_rbf: int, cutoff: float, start: float = 0.0, trainable: bool = False
     ):
         """
         Initialize the GaussianRBF class.
@@ -226,17 +243,26 @@ class GaussianRBF(nn.Module):
             Number of radial basis functions.
         cutoff : float
             The cutoff distance.
+        start: float
+            center of first Gaussian function.
+        trainable: boolean
+        If True, widths and offset of Gaussian functions are adjusted during training process.
+
         """
         super().__init__()
         self.n_rbf = n_rbf
-
+        self.cutoff = cutoff
         # compute offset and width of Gaussian functions
-        offset = torch.linspace(0, cutoff, n_rbf)
+        offset = torch.linspace(start, cutoff, n_rbf)
         widths = torch.tensor(
             torch.abs(offset[1] - offset[0]) * torch.ones_like(offset),
         )
-        self.register_buffer("widths", widths)
-        self.register_buffer("offsets", offset)
+        if trainable:
+            self.widths = nn.Parameter(widths)
+            self.offsets = nn.Parameter(offset)
+        else:
+            self.register_buffer("widths", widths)
+            self.register_buffer("offsets", offset)
 
     def forward(self, d_ij: torch.Tensor) -> torch.Tensor:
         """
@@ -253,6 +279,28 @@ class GaussianRBF(nn.Module):
             The output tensor.
         """
         return gaussian_rbf(d_ij, self.offsets, self.widths)
+
+
+def _distance_to_radial_basis(
+    d_ij: torch.Tensor, radial_basis: Callable
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Convert distances to radial basis functions.
+
+    Parameters
+    ----------
+    d_ij : torch.Tensor, shape [n_pairs]
+        Pairwise distances between atoms.
+
+    Returns
+    -------
+    Tuple[torch.Tensor, torch.Tensor]
+        - Radial basis functions, shape [n_pairs, n_rbf]
+        - cutoff values, shape [n_pairs]
+    """
+    f_ij = radial_basis(d_ij)
+    rcut_ij = cosine_cutoff(d_ij, radial_basis.cutoff)
+    return f_ij, rcut_ij
 
 
 # taken from torchani repository: https://github.com/aiqm/torchani

@@ -1,9 +1,10 @@
-from loguru import logger
+from typing import Dict
+
+import torch
 
 from modelforge.potential.schnet import Schnet
-from typing import Dict
+
 from .helper_functinos import generate_methane_input
-import torch
 
 
 def test_Schnet_init():
@@ -66,18 +67,21 @@ def get_input_for_interaction_block(
         Dictionary containing tensors for the interaction block test.
     """
 
-    from .helper_functinos import prepare_pairlist_for_single_batch, return_single_batch
-    from modelforge.potential.schnet import SchNetInteractionBlock, SchNetRepresentation
-    from modelforge.dataset.qm9 import QM9Dataset
     import torch.nn as nn
+
+    from modelforge.dataset.qm9 import QM9Dataset
+    from modelforge.potential.utils import GaussianRBF, _distance_to_radial_basis
+
+    from .helper_functinos import prepare_pairlist_for_single_batch, return_single_batch
 
     embedding = nn.Embedding(nr_embeddings, nr_atom_basis, padding_idx=0)
     batch = return_single_batch(QM9Dataset, "fit")
     pairlist = prepare_pairlist_for_single_batch(batch)
-    representation = SchNetRepresentation(nr_atom_basis, 4, 3)
+    radial_basis = GaussianRBF(n_rbf=20, cutoff=5.0)
+
     atom_index12 = pairlist["atom_index12"]
     d_ij = pairlist["d_ij"]
-    f_ij, rcut_ij = representation._distance_to_radial_basis(d_ij)
+    f_ij, rcut_ij = _distance_to_radial_basis(d_ij, radial_basis)
     return {
         "x": embedding(batch["Z"]),
         "f_ij": f_ij,
@@ -91,7 +95,7 @@ def test_schnet_interaction_layer():
     """
     Test the SchNet interaction layer.
     """
-    from modelforge.potential.schnet import SchNetInteractionBlock, SchNetRepresentation
+    from modelforge.potential.schnet import SchNetInteractionBlock
 
     nr_atom_basis = 128
     nr_embeddings = 100

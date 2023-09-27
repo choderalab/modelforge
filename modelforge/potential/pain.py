@@ -50,7 +50,7 @@ class PaiNN(BaseNNP):
             for _ in range(n_interactions)
         )
 
-        self.interactions = nn.ModuleList(
+        self.mixing = nn.ModuleList(
             PaiNNMixing(n_atom_basis, activation=activation, epsilon=epsilon)
             for _ in range(n_interactions)
         )

@@ -15,6 +15,7 @@ import torch
 import torch.nn.functional as F
 from .models import PairList
 from modelforge.potential.utils import _distance_to_radial_basis, GaussianRBF
+from torch.nn import Linear, ReLU, SiLU
 
 
 class PaiNN(BaseNNP):
@@ -24,7 +25,7 @@ class PaiNN(BaseNNP):
         n_interactions: int,
         n_rbf: int,
         cutoff_fn: Optional[Callable] = None,
-        activation: Optional[Callable] = F.silu,
+        activation: Optional[Callable] = SiLU,
         max_z: int = 100,
         shared_interactions: bool = False,
         shared_filters: bool = False,
@@ -178,7 +179,7 @@ class PaiNNMixing(nn.Module):
         self.n_atom_basis = n_atom_basis
 
         self.intra_atomic_net = nn.Sequential(
-            sequential_block(2 * n_atom_basis, n_atom_basis, activation=activation),
+            sequential_block(2 * n_atom_basis, n_atom_basis, activation_fct=activation),
             sequential_block(n_atom_basis, 3 * n_atom_basis),
         )
         self.mu_channel_mix = sequential_block(

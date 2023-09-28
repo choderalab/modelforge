@@ -9,7 +9,7 @@ from loguru import logger
 def sequential_block(
     in_features: int,
     out_features: int,
-    activation_fct: Callable = nn.Identity(),
+    activation_fct: Callable = nn.Identity,
     bias: bool = True,
 ) -> nn.Sequential:
     """
@@ -33,7 +33,7 @@ def sequential_block(
     """
     return nn.Sequential(
         nn.Linear(in_features, out_features),
-        activation_fct,
+        activation_fct(),
         nn.Linear(out_features, out_features),
     )
 

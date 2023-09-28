@@ -57,7 +57,7 @@ class PaiNN(BaseNNP):
         )
 
         self.calculate_distances_and_pairlist = PairList(self.cutoff)
-        self.radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=self.cutoff)
+        self.radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=float(self.cutoff))
 
     def forward(self, inputs: Dict[str, torch.Tensor]):
         """

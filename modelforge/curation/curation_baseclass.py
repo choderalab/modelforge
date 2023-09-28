@@ -94,10 +94,14 @@ class dataset_curation(ABC):
             to output units [nanometer, kJ/mol]
         """
 
+        from modelforge.utils.misc import mkdir
+
         self.hdf5_file_name = hdf5_file_name
         self.output_file_dir = output_file_dir
         self.local_cache_dir = local_cache_dir
         self.convert_units = convert_units
+
+        mkdir(self.local_cache_dir)
 
         # Overall list that will contain a dictionary for each record
         self.data = []

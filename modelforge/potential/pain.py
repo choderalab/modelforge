@@ -1,8 +1,8 @@
 import torch.nn as nn
 from loguru import logger
-from typing import Dict, Tuple, Callable, Optional
+from typing import Dict, Type, Tuple, Callable, Optional
 
-from .models import BaseNNP, PairList
+from .models import BaseNNP, PairList, LighningModuleMixin
 from .utils import (
     EnergyReadout,
     GaussianRBF,
@@ -15,7 +15,7 @@ import torch
 import torch.nn.functional as F
 from .models import PairList
 from modelforge.potential.utils import _distance_to_radial_basis, GaussianRBF
-from torch.nn import Linear, ReLU, SiLU
+from torch.nn import SiLU
 
 
 class PaiNN(BaseNNP):
@@ -37,7 +37,7 @@ class PaiNN(BaseNNP):
         self.n_interactions = n_interactions
         self.cutoff_fn = cutoff_fn
         self.cutoff = cutoff_fn.cutoff
-
+        self.share_filters = shared_filters
         self.embedding = nn.Embedding(max_z, n_atom_basis, padding_idx=0)
         if shared_filters:
             self.filter_net = sequential_block(self.n_rbf, 3 * n_atom_basis)
@@ -89,12 +89,14 @@ class PaiNN(BaseNNP):
         qs = q.shape
         mu = torch.zeros((qs[0], 3, qs[2]), device=q.device)
 
+        
+
         for i, (interaction, mixing) in enumerate(zip(self.interactions, self.mixing)):
             q, mu = interaction(
                 q,
                 mu,
                 filter_list[i],
-                pairlist["r_ij"] / pairlist["d_ij"],
+                pairlist["r_ij"] / d_ij,
                 pairlist["idx_i"],
                 pairlist["idx_j"],
                 Z.shape[0],
@@ -213,3 +215,37 @@ class PaiNNMixing(nn.Module):
         q = q + dq_intra + dqmu_intra
         mu = mu + dmu_intra
         return q, mu
+
+
+class LighningPaiNN(PaiNN, LighningModuleMixin):
+    def __init__(
+        self,
+        n_atom_basis: int,
+        n_interactions: int,
+        n_rbf: int,
+        cutoff_fn: Optional[Callable] = None,
+        activation: Optional[Callable] = SiLU,
+        max_z: int = 100,
+        shared_interactions: bool = False,
+        shared_filters: bool = False,
+        epsilon: float = 1e-8,
+        loss: Type[nn.Module] = nn.MSELoss(),
+        optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
+        lr: float = 1e-3,
+    ) -> None:
+        """PyTorch Lightning version of the PaiNN model."""
+
+        super().__init__(
+            n_atom_basis,
+            n_interactions,
+            n_rbf,
+            cutoff_fn,
+            activation,
+            max_z,
+            shared_interactions,
+            shared_filters,
+            epsilon,
+        )
+        self.loss_function = loss
+        self.optimizer = optimizer
+        self.learning_rate = lr

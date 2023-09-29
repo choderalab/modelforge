@@ -3,11 +3,12 @@ import torch
 from modelforge.dataset.dataset import TorchDataModule
 from modelforge.dataset.qm9 import QM9Dataset
 from modelforge.potential.schnet import Schnet, LighningSchnet
+from modelforge.potential.pain import PaiNN, LighningPaiNN
 from modelforge.potential.models import BaseNNP
 
 from typing import Optional, Dict
 
-MODELS_TO_TEST = [Schnet]
+MODELS_TO_TEST = [Schnet, PaiNN]
 DATASETS = [QM9Dataset]
 
 
@@ -27,11 +28,23 @@ def setup_simple_model(model_class, lightning: bool = False) -> Optional[BaseNNP
     Optional[BaseNNP]
         Initialized model.
     """
+    from modelforge.potential.utils import CosineCutoff
 
     if model_class is Schnet:
         if lightning:
             return LighningSchnet(n_atom_basis=128, n_interactions=3, n_filters=64)
         return Schnet(nr_atom_basis=128, nr_interactions=3, nr_filters=64)
+    elif model_class is PaiNN:
+        if lightning:
+            return LighningPaiNN(
+                n_atom_basis=128,
+                n_interactions=3,
+                n_rbf=16,
+                cutoff_fn=CosineCutoff(5.0),
+            )
+        return PaiNN(
+            nr_atom_basis=128, nr_interactions=3, n_rbf=16, cutoff_fn=CosineCutoff(5.0)
+        )
     else:
         raise NotImplementedError
 

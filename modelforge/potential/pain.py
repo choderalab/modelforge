@@ -19,6 +19,14 @@ from torch.nn import SiLU
 
 
 class PaiNN(BaseNNP):
+    """PaiNN - polarizable interaction neural network
+
+    References:
+       Equivariant message passing for the prediction of tensorial properties and molecular spectra.
+       ICML 2021, http://proceedings.mlr.press/v139/schutt21a.html
+
+    """
+
     def __init__(
         self,
         n_atom_basis: int,
@@ -31,6 +39,21 @@ class PaiNN(BaseNNP):
         shared_filters: bool = False,
         epsilon: float = 1e-8,
     ):
+        """
+        Args:
+            n_atom_basis: number of features to describe atomic environments.
+                This determines the size of each embedding vector; i.e. embeddings_dim.
+            n_interactions: number of interaction blocks.
+            radial_basis: layer for expanding interatomic distances in a basis set
+            cutoff_fn: cutoff function
+            activation: activation function
+            shared_interactions: if True, share the weights across
+                interaction blocks.
+            shared_interactions: if True, share the weights across
+                filter-generating networks.
+            epsilon: stability constant added in norm to prevent numerical instabilities
+        """
+
         super().__init__()
 
         self.n_atom_basis = n_atom_basis
@@ -39,8 +62,9 @@ class PaiNN(BaseNNP):
         self.cutoff = cutoff_fn.cutoff
         self.share_filters = shared_filters
         self.embedding = nn.Embedding(max_z, n_atom_basis, padding_idx=0)
+
         if shared_filters:
-            self.filter_net = sequential_block(self.n_rbf, 3 * n_atom_basis)
+            self.filter_net = sequential_block(n_rbf, 3 * n_atom_basis)
         else:
             self.filter_net = sequential_block(
                 n_rbf, self.n_interactions * 3 * n_atom_basis
@@ -71,11 +95,21 @@ class PaiNN(BaseNNP):
             list of torch.Tensor: intermediate atom-wise representations, if
             return_intermediate=True was used.
         """
-        # get tensors from input dictionary
+        # calculate pairlist
         Z = inputs["Z"]
         mask = Z == -1
         pairlist = self.calculate_distances_and_pairlist(mask, inputs["R"])
+
+        # extract properties from pairlist
         d_ij = pairlist["d_ij"]
+        r_ij = pairlist["r_ij"]
+        idx_i, idx_j = pairlist["atom_index12"][0], pairlist["atom_index12"][1]
+        n_atoms = Z.shape[0]
+
+        # compute atom and pair features
+        d_ij = torch.norm(r_ij, dim=1, keepdim=True)
+        dir_ij = r_ij / d_ij
+
         f_ij, rcut_ij = _distance_to_radial_basis(d_ij, self.radial_basis)
         fcut = self.cutoff_fn(d_ij)
 
@@ -89,16 +123,14 @@ class PaiNN(BaseNNP):
         qs = q.shape
         mu = torch.zeros((qs[0], 3, qs[2]), device=q.device)
 
-        
-
         for i, (interaction, mixing) in enumerate(zip(self.interactions, self.mixing)):
             q, mu = interaction(
                 q,
                 mu,
                 filter_list[i],
-                pairlist["r_ij"] / d_ij,
-                pairlist["idx_i"],
-                pairlist["idx_j"],
+                dir_ij,
+                idx_i,
+                idx_j,
                 Z.shape[0],
             )
             q, mu = mixing(q, mu)

@@ -102,9 +102,9 @@ class SchNetInteractionBlock(nn.Module):
         nr_rbf = 20
         self.intput_to_feature = nn.Linear(nr_atom_basis, nr_filters)
         self.feature_to_output = sequential_block(
-            nr_filters, nr_atom_basis, ShiftedSoftplus()
+            nr_filters, nr_atom_basis, ShiftedSoftplus
         )
-        self.filter_network = sequential_block(nr_rbf, nr_filters, ShiftedSoftplus())
+        self.filter_network = sequential_block(nr_rbf, nr_filters, ShiftedSoftplus)
 
     def forward(
         self,

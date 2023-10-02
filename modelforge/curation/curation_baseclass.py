@@ -99,6 +99,10 @@ class dataset_curation(ABC):
         self.local_cache_dir = local_cache_dir
         self.convert_units = convert_units
 
+        from modelforge.utils.misc import mkdir
+
+        # if the local cache dir does not exist, create it
+        mkdir(local_cache_dir)
         # Overall list that will contain a dictionary for each record
         self.data = []
 

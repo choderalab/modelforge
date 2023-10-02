@@ -22,7 +22,7 @@ def test_forward_pass(model_class, dataset):
         initialized_model = setup_simple_model(model_class, lightning)
         inputs = return_single_batch(dataset, mode="fit")
         output = initialized_model(inputs)
-        print(output.shape)
+        print(output)
         assert output.shape[0] == 64
         assert output.shape[1] == 1
 

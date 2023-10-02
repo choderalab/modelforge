@@ -99,6 +99,7 @@ class PaiNN(BaseNNP):
         Z = inputs["Z"]
         mask = Z == -1
         pairlist = self.calculate_distances_and_pairlist(mask, inputs["R"])
+        Z = inputs["Z"].flatten()
 
         # extract properties from pairlist
         d_ij = pairlist["d_ij"]
@@ -112,6 +113,8 @@ class PaiNN(BaseNNP):
 
         f_ij, rcut_ij = _distance_to_radial_basis(d_ij, self.radial_basis)
         fcut = self.cutoff_fn(d_ij)
+        print(f"{d_ij.shape=}")
+        print(f"{dir_ij.shape=}")
 
         filters = self.filter_net(f_ij) * fcut[..., None]
         if self.share_filters:
@@ -122,7 +125,7 @@ class PaiNN(BaseNNP):
         q = self.embedding(Z)[:, None]
         qs = q.shape
         mu = torch.zeros((qs[0], 3, qs[2]), device=q.device)
-
+        
         for i, (interaction, mixing) in enumerate(zip(self.interactions, self.mixing)):
             q, mu = interaction(
                 q,
@@ -184,6 +187,10 @@ class PaiNNInteraction(nn.Module):
         """
         # inter-atomic
         x = self.intra_atomic_net(q)
+        print(x.shape)
+        print(idx_i.shape)
+        print(idx_j.shape)
+
         xj = x[idx_j]
         muj = mu[idx_j]
         x = Wij * xj

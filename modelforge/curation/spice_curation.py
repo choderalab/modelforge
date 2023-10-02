@@ -3,7 +3,7 @@ from modelforge.utils.units import *
 from modelforge.curation.curation_baseclass import *
 
 
-class SPICE_1_1_4_curation(dataset_curation):
+class SPICE_1_1_4_curation(DatasetCuration):
     """
     Routines to fetch and process the spice 1.1.4 dataset into a curated hdf5 file.
 

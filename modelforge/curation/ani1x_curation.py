@@ -3,7 +3,7 @@ from modelforge.utils.units import *
 from modelforge.curation.curation_baseclass import *
 
 
-class ANI1x_curation(dataset_curation):
+class ANI1x_curation(DatasetCuration):
     """
     Routines to fetch and process the ANI-1x dataset into a curated hdf5 file.
 
@@ -241,7 +241,7 @@ class ANI1x_curation(dataset_curation):
                                     param_unit_out, "chem"
                                 )
 
-                            except Exception:
+                            except PintError:
                                 print(
                                     f"Could not convert {param_unit} to {param_unit_out} for {param_in}."
                                 )

@@ -1,5 +1,5 @@
 import h5py
-
+import os
 import pytest
 from openff.units import unit
 import importlib_resources as resources
@@ -186,30 +186,6 @@ def test_series_dict_to_hdf5(prep_temp_dir):
                     assert record_m == test_data_m
             else:
                 assert records[i][key] == test_data[i][key]
-
-
-def test_mkdir(prep_temp_dir):
-    # thest the mkdir helper function that checks if a directory
-    # exists before creating
-    # the function returns a status: True if had to create the directory
-    # and False if it did not have to create the directory
-
-    new_dir = str(prep_temp_dir) + "/new_subdir"
-    # first assert the new directory does not exist
-    assert os.path.exists(new_dir) == False
-
-    # make the new directory and assert it now exists
-    status = mkdir(new_dir)
-    # if status == True, it created the directory because it didn't exist
-    assert status == True
-    assert os.path.exists(new_dir) == True
-
-    # try to make the directory even though it exists
-    # it should return False indicating it already existed
-    # and it did not try to create it
-    status = mkdir(new_dir)
-    assert os.path.exists(new_dir) == True
-    assert status == False
 
 
 def test_list_files(prep_temp_dir):

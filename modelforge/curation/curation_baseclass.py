@@ -1,9 +1,7 @@
-from typing import Optional
-from loguru import logger
-
 from abc import ABC, abstractmethod
 
-from typing import Dict, List
+from typing import Dict, List, Optional
+from loguru import logger
 
 
 def dict_to_hdf5(

@@ -1,9 +1,10 @@
+from modelforge.curation.curation_baseclass import DatasetCuration
 from modelforge.utils.units import *
+from typing import Optional
+from loguru import logger
 
-from modelforge.curation.curation_baseclass import *
 
-
-class ANI1x_curation(DatasetCuration):
+class ANI1xCuration(DatasetCuration):
     """
     Routines to fetch and process the ANI-1x dataset into a curated hdf5 file.
 
@@ -21,7 +22,7 @@ class ANI1x_curation(DatasetCuration):
 
     Examples
     --------
-    >>> ani1_data = ANI1x_curation(hdf5_file_name='ani1x_dataset.hdf5',
+    >>> ani1_data = ANI1xCuration(hdf5_file_name='ani1x_dataset.hdf5',
     >>>                             local_cache_dir='~/datasets/ani1x_dataset')
     >>> ani1_data.process()
 
@@ -276,7 +277,7 @@ class ANI1x_curation(DatasetCuration):
 
         Examples
         --------
-        >>> ani1_data = ANI1x_curation(hdf5_file_name='ani1x_dataset.hdf5',
+        >>> ani1_data = ANI1xCuration(hdf5_file_name='ani1x_dataset.hdf5',
         >>>                             local_cache_dir='~/datasets/ani1x_dataset')
         >>> ani1_data.process()
 

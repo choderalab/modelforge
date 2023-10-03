@@ -1,12 +1,12 @@
+from modelforge.curation.curation_baseclass import DatasetCuration
 from modelforge.utils.units import *
-
-
 import numpy as np
 
-from modelforge.curation.curation_baseclass import *
+from typing import Optional
+from loguru import logger
 
 
-class QM9_curation(DatasetCuration):
+class QM9Curation(DatasetCuration):
     """
     Routines to fetch and process the QM9 dataset into a curated hdf5 file.
 
@@ -34,7 +34,7 @@ class QM9_curation(DatasetCuration):
 
     Examples
     --------
-    >>> qm9_data = QM9_curation(hdf5_file_name='qm9_dataset.hdf5', local_cache_dir='~/datasets/qm9_dataset')
+    >>> qm9_data = QM9Curation(hdf5_file_name='qm9_dataset.hdf5', local_cache_dir='~/datasets/qm9_dataset')
     >>> qm9_data.process()
 
     """
@@ -388,7 +388,7 @@ class QM9_curation(DatasetCuration):
 
         Examples
         --------
-        >>> qm9_data = QM9_curation(hdf5_file_name='qm9_dataset.hdf5', local_cache_dir='~/datasets/qm9_dataset')
+        >>> qm9_data = QM9Curation(hdf5_file_name='qm9_dataset.hdf5', local_cache_dir='~/datasets/qm9_dataset')
         >>> qm9_data.process()
 
         """
@@ -419,6 +419,8 @@ class QM9_curation(DatasetCuration):
         self._generate_hdf5()
 
     def _generate_metadata(self):
+        import pint
+
         with open(
             f"{self.output_file_dir}/{self.hdf5_file_name}.metadata", "w"
         ) as f_md:

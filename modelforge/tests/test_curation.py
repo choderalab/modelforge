@@ -3,11 +3,15 @@ import os
 import pytest
 from openff.units import unit
 import importlib_resources as resources
-
+import numpy as np
 from modelforge.utils.misc import *
+import pint
 
-from modelforge.curation.qm9_curation import *
-from modelforge.curation.ani1x_curation import *
+from modelforge.curation.qm9_curation import QM9Curation
+from modelforge.curation.ani1x_curation import ANI1xCuration
+from modelforge.curation.spice_curation import SPICE114Curation
+
+from modelforge.curation.curation_baseclass import dict_to_hdf5
 
 
 @pytest.fixture(scope="session")
@@ -208,7 +212,7 @@ def test_str_to_float(prep_temp_dir):
 
 
 def test_qm9_curation_init_parameters(prep_temp_dir):
-    qm9_data = QM9_curation(
+    qm9_data = QM9Curation(
         hdf5_file_name="qm9_dataset.hdf5",
         output_file_dir=str(prep_temp_dir),
         local_cache_dir=str(prep_temp_dir),
@@ -222,7 +226,7 @@ def test_qm9_curation_init_parameters(prep_temp_dir):
 
 
 def test_qm9_curation_parse_xyz(prep_temp_dir):
-    qm9_data = QM9_curation(
+    qm9_data = QM9Curation(
         hdf5_file_name="qm9_dataset.hdf5",
         output_file_dir=str(prep_temp_dir),
         local_cache_dir=str(prep_temp_dir),
@@ -347,7 +351,7 @@ def test_qm9_curation_parse_xyz(prep_temp_dir):
 
 def test_qm9_local_archive(prep_temp_dir):
     # test file extraction, parsing, and generation of hdf5 file from a local archive.
-    qm9_data = QM9_curation(
+    qm9_data = QM9Curation(
         hdf5_file_name="qm9_test10.hdf5",
         output_file_dir=str(prep_temp_dir),
         local_cache_dir=str(prep_temp_dir),
@@ -400,7 +404,7 @@ def test_qm9_local_archive(prep_temp_dir):
 
 def test_an1_process_download_short(prep_temp_dir):
     # first check where we don't convert units
-    ani1_data = ANI1x_curation(
+    ani1_data = ANI1xCuration(
         hdf5_file_name="test_dataset.hdf5",
         output_file_dir=str(prep_temp_dir),
         local_cache_dir=str(prep_temp_dir),
@@ -452,7 +456,7 @@ def test_an1_process_download_no_conversion(prep_temp_dir):
     from openff.units import unit
 
     # first check where we don't convert units
-    ani1_data = ANI1x_curation(
+    ani1_data = ANI1xCuration(
         hdf5_file_name="test_dataset.hdf5",
         output_file_dir=str(prep_temp_dir),
         local_cache_dir=str(prep_temp_dir),
@@ -767,7 +771,7 @@ def test_an1_process_download_unit_conversion(prep_temp_dir):
     from openff.units import unit
 
     # first check where we don't convert units
-    ani1_data = ANI1x_curation(
+    ani1_data = ANI1xCuration(
         hdf5_file_name="test_dataset.hdf5",
         output_file_dir=str(prep_temp_dir),
         local_cache_dir=str(prep_temp_dir),
@@ -989,7 +993,7 @@ def test_an1_process_download_unit_conversion(prep_temp_dir):
 
 def spice114_process_download_short(prep_temp_dir):
     # first check where we don't convert units
-    spice_data = SPICE_1_1_4_curation(
+    spice_data = SPICE114Curation(
         hdf5_file_name="test_dataset.hdf5",
         output_file_dir=str(prep_temp_dir),
         local_cache_dir=str(prep_temp_dir),
@@ -1039,7 +1043,7 @@ def spice114_process_download_no_conversion(prep_temp_dir):
     from openff.units import unit
 
     # first check where we don't convert units
-    spice_data = SPICE_1_1_4_curation(
+    spice_data = SPICE114Curation(
         hdf5_file_name="test_dataset.hdf5",
         output_file_dir=str(prep_temp_dir),
         local_cache_dir=str(prep_temp_dir),
@@ -1190,7 +1194,7 @@ def spice114_process_download_conversion(prep_temp_dir):
     from openff.units import unit
 
     # first check where we don't convert units
-    spice_data = SPICE_1_1_4_curation(
+    spice_data = SPICE114Curation(
         hdf5_file_name="test_dataset.hdf5",
         output_file_dir=str(prep_temp_dir),
         local_cache_dir=str(prep_temp_dir),

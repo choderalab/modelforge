@@ -45,11 +45,15 @@ class Schnet(BaseNNP):
         super().__init__()
 
         self.calculate_distances_and_pairlist = PairList(cutoff)
-        self.representation = SchNetRepresentation(
-            nr_atom_basis, nr_filters, nr_interactions
-        )
+        self.representation = SchNetRepresentation(cutoff)
         self.readout = EnergyReadout(nr_atom_basis)
         self.embedding = nn.Embedding(nr_of_embeddings, nr_atom_basis, padding_idx=0)
+        self.interactions = nn.ModuleList(
+            [
+                SchNetInteractionBlock(nr_atom_basis, nr_filters)
+                for _ in range(nr_interactions)
+            ]
+        )
 
     def forward(
         self, inputs: Dict[str, torch.Tensor], cached_pairlist: bool = False
@@ -76,10 +80,20 @@ class Schnet(BaseNNP):
         x = self.embedding(Z)  # shape (batch_size, n_atoms, n_atom_basis)
         mask = Z == 0
         pairlist = self.calculate_distances_and_pairlist(mask, inputs["R"])
-
-        x = self.representation(
-            x, pairlist
+        representation = self.representation(
+            pairlist
         )  # shape (batch_size, n_atoms, n_atom_basis)
+
+        for interaction in self.interactions:
+            v = interaction(
+                x,
+                representation["f_ij"],
+                representation["idx_i"],
+                representation["idx_j"],
+                representation["rcut_ij"],
+            )
+            x = x + v
+
         # pool average over atoms
         return self.readout(x)  # shape (batch_size,)
 
@@ -173,9 +187,6 @@ class SchNetInteractionBlock(nn.Module):
 class SchNetRepresentation(nn.Module):
     def __init__(
         self,
-        n_atom_basis: int,
-        n_filters: int,
-        n_interactions: int,
         cutoff: float = 5.0,
     ):
         """
@@ -194,12 +205,6 @@ class SchNetRepresentation(nn.Module):
         """
         super().__init__()
 
-        self.interactions = nn.ModuleList(
-            [
-                SchNetInteractionBlock(n_atom_basis, n_filters)
-                for _ in range(n_interactions)
-            ]
-        )
         self.radial_basis = GaussianRBF(n_rbf=20, cutoff=cutoff)
 
     def forward(self, pairlist: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
@@ -237,7 +242,7 @@ class SchNetRepresentation(nn.Module):
 
         idx_i, idx_j = atom_index12[0], atom_index12[1]
 
-        return x
+        return {"f_ij": f_ij, "idx_i": idx_i, "idx_j": idx_j, "rcut_ij": rcut_ij}
 
 
 class LighningSchnet(Schnet, LighningModuleMixin):

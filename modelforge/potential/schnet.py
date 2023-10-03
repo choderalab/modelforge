@@ -202,9 +202,7 @@ class SchNetRepresentation(nn.Module):
         )
         self.radial_basis = GaussianRBF(n_rbf=20, cutoff=cutoff)
 
-    def forward(
-        self, x: torch.Tensor, pairlist: Dict[str, torch.Tensor]
-    ) -> torch.Tensor:
+    def forward(self, pairlist: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
         Forward pass for the representation layer.
 
@@ -220,18 +218,24 @@ class SchNetRepresentation(nn.Module):
                 Pairwise distances between atoms.
         Returns
         -------
-        torch.Tensor, shape [batch_size, n_atoms, n_atom_basis]
-            Output tensor after forward pass.
+        Dict[str, torch.Tensor]
+            Dictionary containing the following keys:
+            - 'f_ij': torch.Tensor, shape [n_pairs, n_rbf]
+                Radial basis functions for pairs of atoms.
+            - 'idx_i': torch.Tensor, shape [n_pairs]
+                Indices for the first atom in each pair.
+            - 'idx_j': torch.Tensor, shape [n_pairs]
+                Indices for the second atom in each pair.
+            - 'rcut_ij': torch.Tensor, shape [n_pairs]
+                Cutoff values for each pair.
         """
+
         atom_index12 = pairlist["atom_index12"]
         d_ij = pairlist["d_ij"]
 
         f_ij, rcut_ij = _distance_to_radial_basis(d_ij, self.radial_basis)
 
         idx_i, idx_j = atom_index12[0], atom_index12[1]
-        for interaction in self.interactions:
-            v = interaction(x, f_ij, idx_i, idx_j, rcut_ij)
-            x = x + v
 
         return x
 

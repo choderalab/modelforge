@@ -48,5 +48,31 @@ def train(
     model : torch.nn.Module
         Trained model.
     """
+    # initialize optimizer
+    optimizer = optimizer(
+        model.parameters(), 
+        lr=learning_rate, 
+        weight_decay=weight_decay
+    )
+
+    # initialize scheduler
+    if scheduler is not None:
+        scheduler = scheduler(optimizer, **scheduler_kwargs)
+
+    # train model
+    for idx_epoch in range(num_epochs):
+        for idx_batch, (inputs, targets) in enumerate(data):
+            # zero the parameter gradients
+            optimizer.zero_grad()
+
+            # forward + backward + optimize
+            outputs = model(inputs)
+            loss = loss_function(outputs, targets)
+            loss.backward()
+            optimizer.step()
+
+            # update learning rate
+            if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                scheduler.step(loss)
 
     return model

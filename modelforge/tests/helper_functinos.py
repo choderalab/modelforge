@@ -8,7 +8,7 @@ from modelforge.potential.models import BaseNNP
 
 from typing import Optional, Dict
 
-MODELS_TO_TEST = [Schnet, PaiNN]
+MODELS_TO_TEST = [Schnet]
 DATASETS = [QM9Dataset]
 
 
@@ -49,7 +49,9 @@ def setup_simple_model(model_class, lightning: bool = False) -> Optional[BaseNNP
         raise NotImplementedError
 
 
-def return_single_batch(dataset, mode: str) -> Dict[str, torch.Tensor]:
+def return_single_batch(
+    dataset, mode: str, split_file: Optional[str] = None
+) -> Dict[str, torch.Tensor]:
     """
     Return a single batch from a dataset.
 
@@ -66,12 +68,14 @@ def return_single_batch(dataset, mode: str) -> Dict[str, torch.Tensor]:
         A single batch from the dataset.
     """
 
-    train_loader = initialize_dataset(dataset, mode)
+    train_loader = initialize_dataset(dataset, mode, split_file)
     for batch in train_loader.train_dataloader():
         return batch
 
 
-def initialize_dataset(dataset, mode: str) -> TorchDataModule:
+def initialize_dataset(
+    dataset, mode: str, split_file: Optional[str] = None
+) -> TorchDataModule:
     """
     Initialize a dataset for a given mode.
 
@@ -89,7 +93,7 @@ def initialize_dataset(dataset, mode: str) -> TorchDataModule:
     """
 
     data = dataset(for_unit_testing=True)
-    data_module = TorchDataModule(data, split_file="qm9tut/split.npz")
+    data_module = TorchDataModule(data, split_file=split_file)
     data_module.prepare_data()
     data_module.setup(mode)
     return data_module

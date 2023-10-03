@@ -112,3 +112,8 @@ def test_schnet_interaction_layer():
         17,
         nr_atom_basis,
     ), "Output shape mismatch for v tensor."
+
+
+# def test_schnet_reimplementation_against_original_implementation():
+#    import numpy as np
+#    np.load('tests/qm9tut/split.npz')['train_idx']

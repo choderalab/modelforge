@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from modelforge.utils.prop import PropertyNames
 
 from .transformation import default_transformation
-from .utils import FirstComeFirstServeSplittingStrategy, SplittingStrategy
+from .utils import RandomSplittingStrategy, SplittingStrategy
 
 
 class TorchDataset(torch.utils.data.Dataset):
@@ -315,24 +315,22 @@ class TorchDataModule(pl.LightningDataModule):
     def __init__(
         self,
         data: HDF5Dataset,
-        SplittingStrategy: Optional[SplittingStrategy] = None,
+        split: SplittingStrategy = RandomSplittingStrategy(),
         batch_size: int = 64,
         split_file: Optional[str] = None,
     ):
         super().__init__()
         self.data = data
         self.batch_size = batch_size
+        self.split_idxs: Optional[str] = None
         if split_file:
             import numpy as np
 
-            split = np.load("./qm9tut/split.npz")
-            self.train_idx, self.val_idx, self.test_idx = (
-                split["train_idx"],
-                split["val_idx"],
-                split["test_idx"],
-            )
+            logger.debug(f"Loading split indices from {split_file}")
+            self.split_idxs = np.load(split_file)
         else:
-            self.SplittingStrategy = SplittingStrategy
+            logger.debug(f"Using splitting strategy {split}")
+            self.split = split
 
     def prepare_data(self) -> None:
         """
@@ -351,21 +349,26 @@ class TorchDataModule(pl.LightningDataModule):
         stage : str
             Either "fit" for training/validation split or "test" for test split.
         """
+        from torch.utils.data import Subset
+
         if stage == "fit":
-            if self.train_idx and self.val_idx:
-                self.train_dataset = Subset(self.dataset, self.train_idx)
-                self.val_dataset = Subset(self.dataset, self.val_idx)
-            else:
-                train_dataset, val_dataset, _ = self.SplittingStrategy().split(
-                    self.dataset
+            if self.split_idxs:
+                train_idx, val_idx = (
+                    self.split_idxs["train_idx"],
+                    self.split_idxs["val_idx"],
                 )
+                self.train_dataset = Subset(self.dataset, train_idx)
+                self.val_dataset = Subset(self.dataset, val_idx)
+            else:
+                train_dataset, val_dataset, _ = self.split.split(self.dataset)
                 self.train_dataset = train_dataset
                 self.val_dataset = val_dataset
 
         # Assign test dataset for use in dataloader(s)
         if stage == "test":
-            if self.test_idx:
-                self.test_dataset = Subset(self.dataset, self.test_idx)
+            if self.split_idxs:
+                test_idx = self.split_idxs["test_idx"]
+                self.test_dataset = Subset(self.dataset, test_idx)
             else:
                 _, _, test_dataset = self.SplittingStrategy().split(self.dataset)
                 self.test_dataset = test_dataset

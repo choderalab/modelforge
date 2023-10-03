@@ -6,7 +6,7 @@ import numpy as np
 from modelforge.curation.curation_baseclass import *
 
 
-class QM9_curation(dataset_curation):
+class QM9Curation(dataset_curation):
     """
     Routines to fetch and process the QM9 dataset into a curated hdf5 file.
 
@@ -34,7 +34,7 @@ class QM9_curation(dataset_curation):
 
     Examples
     --------
-    >>> qm9_data = QM9_curation(hdf5_file_name='qm9_dataset.hdf5', local_cache_dir='~/datasets/qm9_dataset')
+    >>> qm9_data = QM9Curation(hdf5_file_name='qm9_dataset.hdf5', local_cache_dir='~/datasets/qm9_dataset')
     >>> qm9_data.process()
 
     """
@@ -388,7 +388,7 @@ class QM9_curation(dataset_curation):
 
         Examples
         --------
-        >>> qm9_data = QM9_curation(hdf5_file_name='qm9_dataset.hdf5', local_cache_dir='~/datasets/qm9_dataset')
+        >>> qm9_data = QM9Curation(hdf5_file_name='qm9_dataset.hdf5', local_cache_dir='~/datasets/qm9_dataset')
         >>> qm9_data.process()
 
         """

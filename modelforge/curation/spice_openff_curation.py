@@ -128,20 +128,6 @@ class SPICE_pubchem_1_2_openff_curation(dataset_curation):
         }
 
     @retry(delay=1, jitter=1, backoff=2, tries=50, logger=logger, max_delay=10)
-    def _fetch_number_of_records(
-        self,
-        dataset_type: str,
-        dataset_name: str,
-        unit_testing_max_records: Optional[int] = None,
-    ):
-        ds = self.client.get_dataset(
-            dataset_type=dataset_type, dataset_name=dataset_name
-        )
-
-        entry_names = ds.entry_names
-        return len(entry_names)
-
-    @retry(delay=1, jitter=1, backoff=2, tries=50, logger=logger, max_delay=10)
     def _fetch_singlepoint_from_qcarchive(
         self,
         dataset_type: str,
@@ -170,9 +156,13 @@ class SPICE_pubchem_1_2_openff_curation(dataset_curation):
             # searching to see if a key exists
             db_keys = set(spice_db.keys())
             to_fetch = []
-            for name in entry_names[0:unit_testing_max_records]:
-                if name not in db_keys:
+            if force_download:
+                for name in entry_names[0:unit_testing_max_records]:
                     to_fetch.append(name)
+            else:
+                for name in entry_names[0:unit_testing_max_records]:
+                    if name not in db_keys:
+                        to_fetch.append(name)
             pbar.total = pbar.total + len(to_fetch)
             pbar.refresh()
 
@@ -282,16 +272,15 @@ class SPICE_pubchem_1_2_openff_curation(dataset_curation):
         #         )
         threads = []
         completed = 0
+        local_database_names = []
 
         with tqdm() as pbar:
             pbar.total = 0
             with ThreadPoolExecutor(max_workers=n_threads) as e:
                 for i, dataset_name in enumerate(dataset_names):
+                    local_database_name = f"spice_pubchem{i+1}_12.sqlite"
+                    local_database_names.append(local_database_name)
                     for specification_name in specification_names:
-                        local_database_name = (
-                            f"spice_pubchem{i+1}_12_{specification_name}.sqlite"
-                        )
-
                         threads.append(
                             e.submit(
                                 self._fetch_singlepoint_from_qcarchive,

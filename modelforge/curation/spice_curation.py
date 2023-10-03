@@ -3,7 +3,7 @@ from modelforge.utils.units import *
 from modelforge.curation.curation_baseclass import *
 
 
-class SPICE_1_1_4_curation(dataset_curation):
+class SPICE114Curation(dataset_curation):
     """
     Routines to fetch and process the spice 1.1.4 dataset into a curated hdf5 file.
 
@@ -36,7 +36,7 @@ class SPICE_1_1_4_curation(dataset_curation):
 
     Examples
     --------
-    >>> spice114_data = SPICE_1_1_4_curation(hdf5_file_name='spice114_dataset.hdf5',
+    >>> spice114_data = SPICE114Curation(hdf5_file_name='spice114_dataset.hdf5',
     >>>                             local_cache_dir='~/datasets/spice114_dataset')
     >>> spice114_data.process()
 
@@ -228,7 +228,7 @@ class SPICE_1_1_4_curation(dataset_curation):
 
         Examples
         --------
-        >>> spice114_data = SPICE_1_1_4_curation(hdf5_file_name='spice114_dataset.hdf5',
+        >>> spice114_data = SPICE114Curation(hdf5_file_name='spice114_dataset.hdf5',
         >>>                             local_cache_dir='~/datasets/spice114_dataset')
         >>> spice114_data.process()
 

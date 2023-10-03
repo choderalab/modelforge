@@ -82,7 +82,7 @@ def test_different_properties_of_interest(dataset):
     raw_data_item = dataset[0]
     print(raw_data_item)
     assert isinstance(raw_data_item, dict)
-    assert len(raw_data_item) != 3
+    assert len(raw_data_item) != 3  
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
@@ -121,9 +121,7 @@ def test_data_item_format(dataset):
     """Test the format of individual data items in the dataset."""
     from typing import Dict
 
-    dataset = initialize_dataset(
-        dataset, mode="fit", split_file="modelforge/tests/qm9tut/split.npz"
-    )
+    dataset = initialize_dataset(dataset, mode="fit")
 
     raw_data_item = dataset.dataset[0]
     assert isinstance(raw_data_item, Dict)

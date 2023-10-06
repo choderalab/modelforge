@@ -5,16 +5,10 @@ from retry import retry
 from tqdm import tqdm
 
 
-class SPICE_pubchem_1_2_openff_curation(dataset_curation):
+class SPICE12OpenFFCuration(dataset_curation):
     """
-    Routines to fetch and process the spice 1.1.4 dataset into a curated hdf5 file.
+    Routines to fetch and process the SPICE pubchem 1.2 dataset into a curated hdf5 file.
 
-    Small-molecule/Protein Interaction Chemical Energies (SPICE).
-    The SPICE dataset contains 1.1 million conformations for a diverse set of small molecules,
-    dimers, dipeptides, and solvated amino acids. It includes 15 elements, charged and
-    uncharged molecules, and a wide range of covalent and non-covalent interactions.
-    It provides both forces and energies calculated at the ωB97M-D3(BJ)/def2-TZVPPD level of theory,
-    using Psi4 1.4.1 along with other useful quantities such as multipole moments and bond orders.
 
     Reference:
     Eastman, P., Behara, P.K., Dotson, D.L. et al. SPICE,
@@ -48,15 +42,15 @@ class SPICE_pubchem_1_2_openff_curation(dataset_curation):
         self.qcarchive_server = "ml.qcarchive.molssi.org"
 
         self.qm_parameters = {
-            "conformations": {
+            "geometry": {
                 "u_in": unit.bohr,
                 "u_out": unit.nanometer,
             },
-            "formation_energy": {
+            "dft_total_energy": {
                 "u_in": unit.hartree,
                 "u_out": unit.kilojoule_per_mole,
             },
-            "dft_total_energy": {
+            "dispersion_corrected_dft_total_energy": {
                 "u_in": unit.hartree,
                 "u_out": unit.kilojoule_per_mole,
             },
@@ -64,37 +58,29 @@ class SPICE_pubchem_1_2_openff_curation(dataset_curation):
                 "u_in": unit.hartree / unit.bohr,
                 "u_out": unit.kilojoule_per_mole / unit.angstrom,
             },
+            "dispersion_corrected_dft_total_gradient": {
+                "u_in": unit.hartree / unit.bohr,
+                "u_out": unit.kilojoule_per_mole / unit.angstrom,
+            },
             "mbis_charges": {
                 "u_in": unit.elementary_charge,
                 "u_out": unit.elementary_charge,
-            },
-            "mbis_dipoles": {
-                "u_in": unit.elementary_charge * unit.bohr,
-                "u_out": unit.elementary_charge * unit.nanometer,
-            },
-            "mbis_quadrupoles": {
-                "u_in": unit.elementary_charge * unit.bohr**2,
-                "u_out": unit.elementary_charge * unit.nanometer**2,
-            },
-            "mbis_octupoles": {
-                "u_in": unit.elementary_charge * unit.bohr**3,
-                "u_out": unit.elementary_charge * unit.nanometer**3,
             },
             "scf_dipole": {
                 "u_in": unit.elementary_charge * unit.bohr,
                 "u_out": unit.elementary_charge * unit.nanometer,
             },
-            "scf_quadrupole": {
-                "u_in": unit.elementary_charge * unit.bohr**2,
-                "u_out": unit.elementary_charge * unit.nanometer**2,
+            "dispersion_correction_energy": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
             },
-            "mayer_indices": {
-                "u_in": None,
-                "u_out": None,
+            "dispersion_correction_gradient": {
+                "u_in": unit.hartree / unit.bohr,
+                "u_out": unit.kilojoule_per_mole / unit.angstrom,
             },
-            "wiberg_lowdin_indices": {
-                "u_in": None,
-                "u_out": None,
+            "reference_energy": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
             },
         }
 
@@ -111,20 +97,18 @@ class SPICE_pubchem_1_2_openff_curation(dataset_curation):
             "name": False,
             "atomic_numbers": False,
             "n_configs": False,
-            "smiles": False,
-            "subset": False,
+            "reference_energy": False,
             "geometry": True,
             "dft_total_energy": True,
             "dft_total_gradient": True,
-            "formation_energy": True,
-            "mayer_indices": True,
             "mbis_charges": True,
-            "mbis_dipoles": True,
-            "mbis_octupoles": True,
-            "mbis_quadrupoles": True,
             "scf_dipole": True,
-            "scf_quadrupole": True,
-            "wiberg_lowdin_indices": True,
+            "dispersion_correction_energy": True,
+            "dispersion_correction_gradient": True,
+            "dispersion_corrected_dft_total_gradient": True,
+            "dispersion_corrected_dft_total_energy": True,
+            "canonical_isomeric_explicit_hydrogen_mapped_smiles": False,
+            "molecular_formula": False,
         }
 
     @retry(delay=1, jitter=1, backoff=2, tries=50, logger=logger, max_delay=10)
@@ -190,10 +174,64 @@ class SPICE_pubchem_1_2_openff_curation(dataset_curation):
                         spice_db[record[0]] = record[2]
                         pbar.update(1)
 
+    def _calculate_reference_energy(self, smiles: str) -> float:
+        from rdkit import Chem
+
+        atom_energy = {
+            "Br": {-1: -2574.2451510945853, 0: -2574.1167240829964},
+            "C": {-1: -37.91424135791358, 0: -37.87264507233593, 1: -37.45349214963933},
+            "Ca": {2: -676.9528465198214},
+            "Cl": {-1: -460.3350243496703, 0: -460.1988762285739},
+            "F": {-1: -99.91298732343974, 0: -99.78611622985483},
+            "H": {-1: -0.5027370838721259, 0: -0.4987605100487531, 1: 0.0},
+            "I": {-1: -297.8813829975981, 0: -297.76228914445625},
+            "K": {1: -599.8025677513111},
+            "Li": {1: -7.285254714046546},
+            "Mg": {2: -199.2688420040449},
+            "N": {
+                -1: -54.602291095426494,
+                0: -54.62327513368922,
+                1: -54.08594142587869,
+            },
+            "Na": {1: -162.11366478783253},
+            "O": {-1: -75.17101657391741, 0: -75.11317840410095, 1: -74.60241514396725},
+            "P": {0: -341.3059197024934, 1: -340.9258392474849},
+            "S": {-1: -398.2405387031612, 0: -398.1599636677874, 1: -397.7746615977658},
+        }
+        default_charge = {}
+        for symbol in atom_energy:
+            energies = [
+                (energy, charge) for charge, energy in atom_energy[symbol].items()
+            ]
+            default_charge[symbol] = sorted(energies)[0][1]
+
+        rdmol = Chem.MolFromSmiles(smiles, sanitize=False)
+        total_charge = sum(atom.GetFormalCharge() for atom in rdmol.GetAtoms())
+        symbol = [atom.GetSymbol() for atom in rdmol.GetAtoms()]
+        charge = [default_charge[s] for s in symbol]
+        delta = np.sign(total_charge - sum(charge))
+        while delta != 0:
+            best_index = -1
+            best_energy = None
+            for i in range(len(symbol)):
+                s = symbol[i]
+                e = atom_energy[s]
+                new_charge = charge[i] + delta
+
+                if new_charge in e:
+                    if best_index == -1 or e[new_charge] - e[charge[i]] < best_energy:
+                        best_index = i
+                        best_energy = e[new_charge] - e[charge[i]]
+
+            charge[best_index] += delta
+            delta = np.sign(total_charge - sum(charge))
+
+        return sum(atom_energy[s][c] for s, c in zip(symbol, charge))
+
     def _process_downloaded(
         self,
         local_path_dir: str,
-        name: str,
+        filename: str,
         unit_testing_max_records: Optional[int] = None,
     ):
         """
@@ -203,7 +241,7 @@ class SPICE_pubchem_1_2_openff_curation(dataset_curation):
         ----------
         local_path_dir: str, required
             Path to the directory that contains the raw hdf5 datafile
-        name: str, required
+        filename: str, required
             Name of the raw hdf5 file,
         unit_testing_max_records: int, optional, default=None
             If set to an integer ('n') the routine will only process the first 'n' records; useful for unit tests.
@@ -212,14 +250,240 @@ class SPICE_pubchem_1_2_openff_curation(dataset_curation):
         --------
         """
         from tqdm import tqdm
+        import numpy as np
+        from sqlitedict import SqliteDict
+        from loguru import logger
 
-        input_file_name = f"{local_path_dir}/{name}"
+        input_file_name = f"{local_path_dir}/{filename}"
 
-        # From documentation: By default, objects inside group are iterated in alphanumeric order.
-        # However, if group is created with track_order=True, the insertion order for the group is remembered (tracked)
-        # in HDF5 file, and group contents are iterated in that order.
-        # As such, we shouldn't need to do sort the objects to ensure reproducibility.
-        # self.data = sorted(self.data, key=lambda x: x["name"])
+        non_error_keys = []
+
+        # identify the set of molecules that do not have errors
+        with SqliteDict(
+            input_file_name, tablename="spec_2", autocommit=False
+        ) as spice_db_spec2:
+            spec2_keys = list(spice_db_spec2.keys())
+
+            with SqliteDict(
+                input_file_name, tablename="spec_6", autocommit=False
+            ) as spice_db_spec6:
+                spec6_keys = list(spice_db_spec6.keys())
+                # let us make sure that we do have the same keys
+                assert np.all(spec2_keys == spec6_keys)
+
+                for key in spec2_keys:
+                    if (
+                        spice_db_spec_2[key].status.value == "complete"
+                        and spice_db_spec_6[key].status.value == "complete"
+                    ):
+                        non_error_keys.append(key)
+
+        # sort the keys such that conformers are listed in numerical order
+        # this is not strickly necessary, but will help to better retain
+        # connection to the original QCArchive data
+        sorted_keys = []
+
+        # names of the pubchem molecules are of form  {numerical_id}-{conformer_number}
+        # first sort by numerical_id
+        pre_sort = sorted(non_error_keys, key=lambda x: int(x.split("-")[0]))
+
+        # then sort each molecule by conformer_number
+        current_val = pre_sort[0].split("-")[0]
+        temp_list = []
+
+        for val in pre_sort:
+            name = val.split("-")[0]
+            if name == current_val:
+                temp_list.append(val)
+            else:
+                sorted_keys += sorted(temp_list, key=lambda x: int(x.split("-")[-1]))
+                temp_list = []
+                current_val = name
+                temp_list.append(val)
+
+        # dict to store the molecule name and an associated mol_id
+        molecule_names = {}
+        mol_id = 0
+
+        # first read in molecules from entry
+        with SqliteDict(
+            input_file_name, tablename="entry", autocommit=False
+        ) as spice_db:
+            logger.debug(f"Processing {filename} entries.")
+            for key in tqdm(sorted_keys):
+                val = spice_db[key].dict()
+                name = val["name"].split("-")[0]
+                if not name in molecule_names.keys():
+                    molecule_names[name] = mol_id
+                    mol_id += 1
+
+                    data_temp = {}
+                    data_temp["name"] = name
+                    atomic_numbers = []
+                    for element in val["molecule"]["symbols"]:
+                        atomic_numbers.append(
+                            qcel.periodictable.to_atomic_number(element)
+                        )
+                    data_temp["atomic_numbers"] = atomic_numbers
+                    data_temp["molecular_formula"] = val["molecule"]["identifiers"][
+                        "molecular_formula"
+                    ]
+                    data_temp[
+                        "canonical_isomeric_explicit_hydrogen_mapped_smiles"
+                    ] = val["molecule"]["extras"][
+                        "canonical_isomeric_explicit_hydrogen_mapped_smiles"
+                    ]
+                    data_temp["n_configs"] = 1
+                    data_temp["geometry"] = val["molecule"]["geometry"].reshape(
+                        1, -1, 3
+                    )
+                    data_temp["reference_energy"] = self._calculate_reference_energy(
+                        data_temp["canonical_isomeric_explicit_hydrogen_mapped_smiles"]
+                    )
+                    self.data.append(data_temp)
+                else:
+                    index = molecule_names[name]
+                    self.data[index]["n_configs"] += 1
+                    self.data[index]["geometry"] = np.vstack(
+                        (
+                            self.data[index]["geometry"],
+                            val["molecule"]["geometry"].reshape(1, -1, 3),
+                        )
+                    )
+            # add units to the geometry
+            for datapoint in data:
+                datapoint["geometry"] = (
+                    datapoint["geometry"] * self.qm_parameters["geometry"]["u_in"]
+                )
+
+        with SqliteDict(
+            input_file_name, tablename="spec_2", autocommit=False
+        ) as spice_db:
+            logger.debug(f"Processing {filename} spec_2.")
+
+            for key in tqdm(sorted_keys):
+                name = key.split("-")[0]
+                val = spice_db[key].dict()
+
+                index = molecule_names[name]
+
+                quantity = "dft total energy"
+                quanity_o = "dft_total_energy"
+                if not quanity_o in data[index].keys():
+                    data[index][quanity_o] = val["properties"][quantity]
+                else:
+                    data[index][quanity_o] = np.vstack(
+                        (data[index][quanity_o], val["properties"][quantity])
+                    )
+
+                quantity = "dft total gradient"
+                quantity_o = "dft_total_gradient"
+                if not quantity_o in data[index].keys():
+                    data[index][quantity_o] = np.array(
+                        val["properties"][quantity]
+                    ).reshape(1, -1, 3)
+                else:
+                    data[index][quantity_o] = np.vstack(
+                        (
+                            data[index][quantity_o],
+                            np.array(val["properties"][quantity]).reshape(1, -1, 3),
+                        )
+                    )
+
+                quantity = "mbis charges"
+                quantity_o = "mbis_charges"
+                if not quantity_o in data[index].keys():
+                    data[index][quantity_o] = np.array(
+                        val["properties"][quantity]
+                    ).reshape(1, -1)
+                else:
+                    data[index][quantity_o] = np.vstack(
+                        (
+                            data[index][quantity_o],
+                            np.array(val["properties"][quantity]).reshape(1, -1),
+                        )
+                    )
+
+                quantity = "scf dipole"
+                quantity_o = "scf_dipole"
+                if not quantity_o in data[index].keys():
+                    data[index][quantity_o] = np.array(
+                        val["properties"][quantity]
+                    ).reshape(1, 3)
+                else:
+                    data[index][quantity_o] = np.vstack(
+                        (
+                            data[index][quantity_o],
+                            np.array(val["properties"][quantity]).reshape(1, 3),
+                        )
+                    )
+
+        with SqliteDict(
+            input_file_name, tablename="spec_6", autocommit=False
+        ) as spice_db:
+            logger.debug(f"Processing {filename} spec_6.")
+
+            for key in tqdm(sorted_keys):
+                name = key.split("-")[0]
+                val = spice_db[key].dict()
+                index = molecule_names[name]
+
+                # typecasting issue in there
+
+                quantity = "dispersion correction energy"
+                quantity_o = "dispersion_correction_energy"
+                if not quantity_o in data[index].keys():
+                    data[index][quantity_o] = float(val["properties"][quantity])
+                else:
+                    data[index][quantity_o] = np.append(
+                        data[index][quantity_o], float(val["properties"][quantity])
+                    )
+                quantity = "dispersion correction gradient"
+                quantity_o = "dispersion_correction_gradient"
+                if not quantity_o in data[index].keys():
+                    data[index][quantity_o] = np.array(
+                        val["properties"][quantity]
+                    ).reshape(1, -1, 3)
+                else:
+                    data[index][quantity_o] = np.vstack(
+                        (
+                            data[index][quantity_o],
+                            np.array(val["properties"][quantity]).reshape(1, -1, 3),
+                        )
+                    )
+        # assign units
+        for datapoint in data:
+            for key in datapoint.keys():
+                if key in self.qm_parameters:
+                    datapoint[key] = datapoint[key] * self.qm_parameters[key]["u_in"]
+
+            datapoint["dispersion_corrected_dft_total_energy"] = (
+                datapoint["dft_total_energy"]
+                + datapoint["dispersion_correction_energy"]
+            )
+            datapoint["dispersion_corrected_dft_total_gradient"] = (
+                datapoint["dft_total_gradient"]
+                + datapoint["dispersion_correction_gradient"]
+            )
+
+        if self.convert_units:
+            for datapoint in data:
+                for key, val in datapoint.items():
+                    if isinstance(val, pint.Quantity):
+                        try:
+                            datapoint[key] = val.to(
+                                self.qm_parameters[key]["u_out"], "chem"
+                            )
+                        except Exception:
+                            try:
+                                # if the unit conversion can't be done
+                                print(
+                                    f"could not convert {key} with unit {val.u} to {self.qm_parameters[key]['u_out']}"
+                                )
+                            except Exception:
+                                print(
+                                    f"could not convert {key} with unit {val.u}. {val.u} not in the defined unit conversions."
+                                )
 
     def process(
         self,
@@ -295,11 +559,10 @@ class SPICE_pubchem_1_2_openff_curation(dataset_curation):
                             )
                         )
 
-        # self._clear_data()
+        self._clear_data()
+        for local_database_name in local_database_names:
+            self._process_downloaded(
+                self.local_cache_dir, local_database_name, unit_testing_max_records
+            )
 
-        # process the rest of the dataset
-        # self._process_downloaded(
-        #    self.local_cache_dir, local_database_name, unit_testing_max_records
-        # )
-
-        # self._generate_hdf5()
+        self._generate_hdf5()

@@ -163,9 +163,6 @@ class SchNetInteractionBlock(nn.Module):
         x_j = x[idx_j]
         x_ij = x_j * Wij
 
-        # Using custom scatter_add
-        x_custom = scatter_add(x_ij, idx_i, dim_size=x.shape[0])
-
         # Using native scatter_add
         shape = list(x.shape)  # note that we're using x.shape, not x_ij.shape
         x_native = torch.zeros(shape, dtype=x.dtype)
@@ -175,8 +172,6 @@ class SchNetInteractionBlock(nn.Module):
 
         # Perform the scatter_add operation
         x_native.scatter_add_(0, idx_i_expanded, x_ij)
-
-        assert torch.equal(x_native, x_custom)
 
         # Update features
         x = self.feature_to_output(x_native)

@@ -1,11 +1,12 @@
 from modelforge.utils.units import *
+from typing import List
 
 from modelforge.curation.curation_baseclass import *
 from retry import retry
 from tqdm import tqdm
 
 
-class SPICE12OpenFFCuration(dataset_curation):
+class SPICE12PubChemOpenFFCuration(dataset_curation):
     """
     Routines to fetch and process the SPICE pubchem 1.2 dataset into a curated hdf5 file.
 
@@ -32,7 +33,7 @@ class SPICE12OpenFFCuration(dataset_curation):
 
     Examples
     --------
-    >>> spice_openff_data = SPICE_pubchem_1_2_openff_curation(hdf5_file_name='spice_pubchem_12_openff_dataset.hdf5',
+    >>> spice_openff_data = SPICE12PubChemOpenFFCuration(hdf5_file_name='spice_pubchem_12_openff_dataset.hdf5',
     >>>                             local_cache_dir='~/datasets/spice12_openff_dataset')
     >>> spice_openff_data.process()
 
@@ -41,6 +42,7 @@ class SPICE12OpenFFCuration(dataset_curation):
     def _init_dataset_parameters(self):
         self.qcarchive_server = "ml.qcarchive.molssi.org"
 
+        self.molecule_names = {}
         self.qm_parameters = {
             "geometry": {
                 "u_in": unit.bohr,
@@ -95,6 +97,7 @@ class SPICE12OpenFFCuration(dataset_curation):
 
         self._record_entries_series = {
             "name": False,
+            "dataset_name": False,
             "atomic_numbers": False,
             "n_configs": False,
             "reference_energy": False,
@@ -164,7 +167,7 @@ class SPICE12OpenFFCuration(dataset_curation):
 
                 else:
                     logger.debug(
-                        f"Fetching {len(to_fetch)} records for specification {specification_name} from dataset {dataset_name}."
+                        f"Fetching {len(to_fetch)} records for {specification_name} from dataset {dataset_name}."
                     )
                     for record in ds.iterate_records(
                         to_fetch,
@@ -176,6 +179,7 @@ class SPICE12OpenFFCuration(dataset_curation):
 
     def _calculate_reference_energy(self, smiles: str) -> float:
         from rdkit import Chem
+        import numpy as np
 
         atom_energy = {
             "Br": {-1: -2574.2451510945853, 0: -2574.1167240829964},
@@ -231,7 +235,8 @@ class SPICE12OpenFFCuration(dataset_curation):
     def _process_downloaded(
         self,
         local_path_dir: str,
-        filename: str,
+        filenames: List[str],
+        dataset_names: List[str],
         unit_testing_max_records: Optional[int] = None,
     ):
         """
@@ -241,8 +246,8 @@ class SPICE12OpenFFCuration(dataset_curation):
         ----------
         local_path_dir: str, required
             Path to the directory that contains the raw hdf5 datafile
-        filename: str, required
-            Name of the raw hdf5 file,
+        filenames: List[str], required
+            Names of the raw sqlite files to process,
         unit_testing_max_records: int, optional, default=None
             If set to an integer ('n') the routine will only process the first 'n' records; useful for unit tests.
 
@@ -253,206 +258,206 @@ class SPICE12OpenFFCuration(dataset_curation):
         import numpy as np
         from sqlitedict import SqliteDict
         from loguru import logger
+        import qcelemental as qcel
 
-        input_file_name = f"{local_path_dir}/{filename}"
+        for filename, dataset_name in zip(filenames, dataset_names):
+            input_file_name = f"{local_path_dir}/{filename}"
 
-        non_error_keys = []
+            non_error_keys = []
 
-        # identify the set of molecules that do not have errors
-        with SqliteDict(
-            input_file_name, tablename="spec_2", autocommit=False
-        ) as spice_db_spec2:
-            spec2_keys = list(spice_db_spec2.keys())
+            # identify the set of molecules that do not have errors
+            with SqliteDict(
+                input_file_name, tablename="spec_2", autocommit=False
+            ) as spice_db_spec2:
+                spec2_keys = list(spice_db_spec2.keys())
+
+                with SqliteDict(
+                    input_file_name, tablename="spec_6", autocommit=False
+                ) as spice_db_spec6:
+                    for key in spec2_keys:
+                        if (
+                            spice_db_spec2[key].status.value == "complete"
+                            and spice_db_spec6[key].status.value == "complete"
+                        ):
+                            non_error_keys.append(key)
+
+            # sort the keys such that conformers are listed in numerical order
+            # this is not strickly necessary, but will help to better retain
+            # connection to the original QCArchive data
+            sorted_keys = []
+
+            # names of the pubchem molecules are of form  {numerical_id}-{conformer_number}
+            # first sort by numerical_id
+            pre_sort = sorted(non_error_keys, key=lambda x: int(x.split("-")[0]))
+
+            # then sort each molecule by conformer_number
+            current_val = pre_sort[0].split("-")[0]
+            temp_list = []
+
+            for val in pre_sort:
+                name = val.split("-")[0]
+                if name == current_val:
+                    temp_list.append(val)
+                else:
+                    sorted_keys += sorted(
+                        temp_list, key=lambda x: int(x.split("-")[-1])
+                    )
+                    temp_list = []
+                    current_val = name
+                    temp_list.append(val)
+
+            # dict to store the molecule name and an associated mol_id
+
+            # first read in molecules from entry
+            with SqliteDict(
+                input_file_name, tablename="entry", autocommit=False
+            ) as spice_db:
+                logger.debug(f"Processing {filename} entries.")
+                for key in tqdm(sorted_keys):
+                    val = spice_db[key].dict()
+                    name = val["name"].split("-")[0]
+                    if name not in self.molecule_names.keys():
+                        self.molecule_names[name] = len(self.data)
+
+                        data_temp = {}
+                        data_temp["name"] = name
+                        atomic_numbers = []
+                        for element in val["molecule"]["symbols"]:
+                            atomic_numbers.append(
+                                qcel.periodictable.to_atomic_number(element)
+                            )
+                        data_temp["atomic_numbers"] = np.array(atomic_numbers)
+                        data_temp["molecular_formula"] = val["molecule"]["identifiers"][
+                            "molecular_formula"
+                        ]
+                        data_temp[
+                            "canonical_isomeric_explicit_hydrogen_mapped_smiles"
+                        ] = val["molecule"]["extras"][
+                            "canonical_isomeric_explicit_hydrogen_mapped_smiles"
+                        ]
+                        data_temp["n_configs"] = 1
+                        data_temp["geometry"] = val["molecule"]["geometry"].reshape(
+                            1, -1, 3
+                        )
+                        data_temp[
+                            "reference_energy"
+                        ] = self._calculate_reference_energy(
+                            data_temp[
+                                "canonical_isomeric_explicit_hydrogen_mapped_smiles"
+                            ]
+                        )
+                        data_temp["dataset_name"] = dataset_name
+                        self.data.append(data_temp)
+                    else:
+                        index = self.molecule_names[name]
+                        self.data[index]["n_configs"] += 1
+                        self.data[index]["geometry"] = np.vstack(
+                            (
+                                self.data[index]["geometry"],
+                                val["molecule"]["geometry"].reshape(1, -1, 3),
+                            )
+                        )
+
+            with SqliteDict(
+                input_file_name, tablename="spec_2", autocommit=False
+            ) as spice_db:
+                logger.debug(f"Processing {filename} spec_2.")
+
+                for key in tqdm(sorted_keys):
+                    name = key.split("-")[0]
+                    val = spice_db[key].dict()
+
+                    index = self.molecule_names[name]
+
+                    quantity = "dft total energy"
+                    quantity_o = "dft_total_energy"
+                    if quantity_o not in self.data[index].keys():
+                        self.data[index][quantity_o] = val["properties"][quantity]
+                    else:
+                        self.data[index][quantity_o] = np.vstack(
+                            (self.data[index][quantity_o], val["properties"][quantity])
+                        )
+
+                    quantity = "dft total gradient"
+                    quantity_o = "dft_total_gradient"
+                    if quantity_o not in self.data[index].keys():
+                        self.data[index][quantity_o] = np.array(
+                            val["properties"][quantity]
+                        ).reshape(1, -1, 3)
+                    else:
+                        self.data[index][quantity_o] = np.vstack(
+                            (
+                                self.data[index][quantity_o],
+                                np.array(val["properties"][quantity]).reshape(1, -1, 3),
+                            )
+                        )
+
+                    quantity = "mbis charges"
+                    quantity_o = "mbis_charges"
+                    if quantity_o not in self.data[index].keys():
+                        self.data[index][quantity_o] = np.array(
+                            val["properties"][quantity]
+                        ).reshape(1, -1)
+                    else:
+                        self.data[index][quantity_o] = np.vstack(
+                            (
+                                self.data[index][quantity_o],
+                                np.array(val["properties"][quantity]).reshape(1, -1),
+                            )
+                        )
+
+                    quantity = "scf dipole"
+                    quantity_o = "scf_dipole"
+                    if quantity_o not in self.data[index].keys():
+                        self.data[index][quantity_o] = np.array(
+                            val["properties"][quantity]
+                        ).reshape(1, 3)
+                    else:
+                        self.data[index][quantity_o] = np.vstack(
+                            (
+                                self.data[index][quantity_o],
+                                np.array(val["properties"][quantity]).reshape(1, 3),
+                            )
+                        )
 
             with SqliteDict(
                 input_file_name, tablename="spec_6", autocommit=False
-            ) as spice_db_spec6:
-                spec6_keys = list(spice_db_spec6.keys())
-                # let us make sure that we do have the same keys
-                assert np.all(spec2_keys == spec6_keys)
+            ) as spice_db:
+                logger.debug(f"Processing {filename} spec_6.")
 
-                for key in spec2_keys:
-                    if (
-                        spice_db_spec_2[key].status.value == "complete"
-                        and spice_db_spec_6[key].status.value == "complete"
-                    ):
-                        non_error_keys.append(key)
+                for key in tqdm(sorted_keys):
+                    name = key.split("-")[0]
+                    val = spice_db[key].dict()
+                    index = self.molecule_names[name]
 
-        # sort the keys such that conformers are listed in numerical order
-        # this is not strickly necessary, but will help to better retain
-        # connection to the original QCArchive data
-        sorted_keys = []
+                    # typecasting issue in there
 
-        # names of the pubchem molecules are of form  {numerical_id}-{conformer_number}
-        # first sort by numerical_id
-        pre_sort = sorted(non_error_keys, key=lambda x: int(x.split("-")[0]))
-
-        # then sort each molecule by conformer_number
-        current_val = pre_sort[0].split("-")[0]
-        temp_list = []
-
-        for val in pre_sort:
-            name = val.split("-")[0]
-            if name == current_val:
-                temp_list.append(val)
-            else:
-                sorted_keys += sorted(temp_list, key=lambda x: int(x.split("-")[-1]))
-                temp_list = []
-                current_val = name
-                temp_list.append(val)
-
-        # dict to store the molecule name and an associated mol_id
-        molecule_names = {}
-        mol_id = 0
-
-        # first read in molecules from entry
-        with SqliteDict(
-            input_file_name, tablename="entry", autocommit=False
-        ) as spice_db:
-            logger.debug(f"Processing {filename} entries.")
-            for key in tqdm(sorted_keys):
-                val = spice_db[key].dict()
-                name = val["name"].split("-")[0]
-                if not name in molecule_names.keys():
-                    molecule_names[name] = mol_id
-                    mol_id += 1
-
-                    data_temp = {}
-                    data_temp["name"] = name
-                    atomic_numbers = []
-                    for element in val["molecule"]["symbols"]:
-                        atomic_numbers.append(
-                            qcel.periodictable.to_atomic_number(element)
+                    quantity = "dispersion correction energy"
+                    quantity_o = "dispersion_correction_energy"
+                    if quantity_o not in self.data[index].keys():
+                        self.data[index][quantity_o] = float(
+                            val["properties"][quantity]
                         )
-                    data_temp["atomic_numbers"] = atomic_numbers
-                    data_temp["molecular_formula"] = val["molecule"]["identifiers"][
-                        "molecular_formula"
-                    ]
-                    data_temp[
-                        "canonical_isomeric_explicit_hydrogen_mapped_smiles"
-                    ] = val["molecule"]["extras"][
-                        "canonical_isomeric_explicit_hydrogen_mapped_smiles"
-                    ]
-                    data_temp["n_configs"] = 1
-                    data_temp["geometry"] = val["molecule"]["geometry"].reshape(
-                        1, -1, 3
-                    )
-                    data_temp["reference_energy"] = self._calculate_reference_energy(
-                        data_temp["canonical_isomeric_explicit_hydrogen_mapped_smiles"]
-                    )
-                    self.data.append(data_temp)
-                else:
-                    index = molecule_names[name]
-                    self.data[index]["n_configs"] += 1
-                    self.data[index]["geometry"] = np.vstack(
-                        (
-                            self.data[index]["geometry"],
-                            val["molecule"]["geometry"].reshape(1, -1, 3),
+                    else:
+                        self.data[index][quantity_o] = np.append(
+                            self.data[index][quantity_o],
+                            float(val["properties"][quantity]),
                         )
-                    )
-            # add units to the geometry
-            for datapoint in data:
-                datapoint["geometry"] = (
-                    datapoint["geometry"] * self.qm_parameters["geometry"]["u_in"]
-                )
-
-        with SqliteDict(
-            input_file_name, tablename="spec_2", autocommit=False
-        ) as spice_db:
-            logger.debug(f"Processing {filename} spec_2.")
-
-            for key in tqdm(sorted_keys):
-                name = key.split("-")[0]
-                val = spice_db[key].dict()
-
-                index = molecule_names[name]
-
-                quantity = "dft total energy"
-                quanity_o = "dft_total_energy"
-                if not quanity_o in data[index].keys():
-                    data[index][quanity_o] = val["properties"][quantity]
-                else:
-                    data[index][quanity_o] = np.vstack(
-                        (data[index][quanity_o], val["properties"][quantity])
-                    )
-
-                quantity = "dft total gradient"
-                quantity_o = "dft_total_gradient"
-                if not quantity_o in data[index].keys():
-                    data[index][quantity_o] = np.array(
-                        val["properties"][quantity]
-                    ).reshape(1, -1, 3)
-                else:
-                    data[index][quantity_o] = np.vstack(
-                        (
-                            data[index][quantity_o],
-                            np.array(val["properties"][quantity]).reshape(1, -1, 3),
+                    quantity = "dispersion correction gradient"
+                    quantity_o = "dispersion_correction_gradient"
+                    if quantity_o not in self.data[index].keys():
+                        self.data[index][quantity_o] = np.array(
+                            val["properties"][quantity]
+                        ).reshape(1, -1, 3)
+                    else:
+                        self.data[index][quantity_o] = np.vstack(
+                            (
+                                self.data[index][quantity_o],
+                                np.array(val["properties"][quantity]).reshape(1, -1, 3),
+                            )
                         )
-                    )
-
-                quantity = "mbis charges"
-                quantity_o = "mbis_charges"
-                if not quantity_o in data[index].keys():
-                    data[index][quantity_o] = np.array(
-                        val["properties"][quantity]
-                    ).reshape(1, -1)
-                else:
-                    data[index][quantity_o] = np.vstack(
-                        (
-                            data[index][quantity_o],
-                            np.array(val["properties"][quantity]).reshape(1, -1),
-                        )
-                    )
-
-                quantity = "scf dipole"
-                quantity_o = "scf_dipole"
-                if not quantity_o in data[index].keys():
-                    data[index][quantity_o] = np.array(
-                        val["properties"][quantity]
-                    ).reshape(1, 3)
-                else:
-                    data[index][quantity_o] = np.vstack(
-                        (
-                            data[index][quantity_o],
-                            np.array(val["properties"][quantity]).reshape(1, 3),
-                        )
-                    )
-
-        with SqliteDict(
-            input_file_name, tablename="spec_6", autocommit=False
-        ) as spice_db:
-            logger.debug(f"Processing {filename} spec_6.")
-
-            for key in tqdm(sorted_keys):
-                name = key.split("-")[0]
-                val = spice_db[key].dict()
-                index = molecule_names[name]
-
-                # typecasting issue in there
-
-                quantity = "dispersion correction energy"
-                quantity_o = "dispersion_correction_energy"
-                if not quantity_o in data[index].keys():
-                    data[index][quantity_o] = float(val["properties"][quantity])
-                else:
-                    data[index][quantity_o] = np.append(
-                        data[index][quantity_o], float(val["properties"][quantity])
-                    )
-                quantity = "dispersion correction gradient"
-                quantity_o = "dispersion_correction_gradient"
-                if not quantity_o in data[index].keys():
-                    data[index][quantity_o] = np.array(
-                        val["properties"][quantity]
-                    ).reshape(1, -1, 3)
-                else:
-                    data[index][quantity_o] = np.vstack(
-                        (
-                            data[index][quantity_o],
-                            np.array(val["properties"][quantity]).reshape(1, -1, 3),
-                        )
-                    )
         # assign units
-        for datapoint in data:
+        for datapoint in self.data:
             for key in datapoint.keys():
                 if key in self.qm_parameters:
                     datapoint[key] = datapoint[key] * self.qm_parameters[key]["u_in"]
@@ -467,22 +472,22 @@ class SPICE12OpenFFCuration(dataset_curation):
             )
 
         if self.convert_units:
-            for datapoint in data:
+            for datapoint in self.data:
                 for key, val in datapoint.items():
                     if isinstance(val, pint.Quantity):
                         try:
                             datapoint[key] = val.to(
                                 self.qm_parameters[key]["u_out"], "chem"
                             )
-                        except Exception:
+                        except pint.errors.PintError:
                             try:
                                 # if the unit conversion can't be done
                                 print(
                                     f"could not convert {key} with unit {val.u} to {self.qm_parameters[key]['u_out']}"
                                 )
-                            except Exception:
+                            except pint.errors.PintError:
                                 print(
-                                    f"could not convert {key} with unit {val.u}. {val.u} not in the defined unit conversions."
+                                    f"could not convert {key} with unit {val.u}. {val.u} not in the defined."
                                 )
 
     def process(
@@ -501,10 +506,11 @@ class SPICE12OpenFFCuration(dataset_curation):
             If True, this will force the software to download the data again, even if present.
         unit_testing_max_records: int, optional, default=None
             If set to an integer, 'n', the routine will only process the first 'n' records, useful for unit tests.
-
+        n_threads, int, default=6
+            Number of concurrent threads for retrieving data from QCArchive
         Examples
         --------
-        >>> spice_openff_data = SPICE_pubchem_1_2_openff_curation(hdf5_file_name='spice_pubchem_12_openff_dataset.hdf5',
+        >>> spice_openff_data = SPICE12PubChemOpenFFCuration(hdf5_file_name='spice_pubchem_12_openff_dataset.hdf5',
         >>>                             local_cache_dir='~/datasets/spice12_openff_dataset')
         >>> spice_openff_data.process()
 
@@ -524,18 +530,7 @@ class SPICE12OpenFFCuration(dataset_curation):
         specification_names = ["spec_2", "spec_6", "entry"]
         self.client = PortalClient(self.qcarchive_server)
 
-        # for dataset_name in dataset_names:
-        #     for specification_name in specification_names:
-        #         self._fetch_singlepoint_from_qcarchive(
-        #             dataset_type=dataset_type,
-        #             dataset_name=dataset_name,
-        #             specification_name=specification_name,
-        #             local_database_name=local_database_name,
-        #             local_path_dir=self.local_cache_dir,
-        #             unit_testing_max_records=unit_testing_max_records,
-        #         )
         threads = []
-        completed = 0
         local_database_names = []
 
         with tqdm() as pbar:
@@ -558,11 +553,16 @@ class SPICE12OpenFFCuration(dataset_curation):
                                 unit_testing_max_records=unit_testing_max_records,
                             )
                         )
-
+        logger.debug(f"Data fetched.")
         self._clear_data()
-        for local_database_name in local_database_names:
-            self._process_downloaded(
-                self.local_cache_dir, local_database_name, unit_testing_max_records
-            )
+        self.molecule_names.clear()
+        logger.debug(f"Processing downloaded dataset.")
+
+        self._process_downloaded(
+            self.local_cache_dir,
+            local_database_names,
+            dataset_names,
+            unit_testing_max_records,
+        )
 
         self._generate_hdf5()

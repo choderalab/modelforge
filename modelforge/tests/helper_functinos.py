@@ -50,7 +50,7 @@ def setup_simple_model(model_class, lightning: bool = False) -> Optional[BaseNNP
 
 
 def return_single_batch(
-    dataset, mode: str, split_file: Optional[str] = None
+    dataset, mode: str, split_file: Optional[str] = None, for_unit_testing: bool = True
 ) -> Dict[str, torch.Tensor]:
     """
     Return a single batch from a dataset.
@@ -68,13 +68,13 @@ def return_single_batch(
         A single batch from the dataset.
     """
 
-    train_loader = initialize_dataset(dataset, mode, split_file)
+    train_loader = initialize_dataset(dataset, mode, split_file, for_unit_testing)
     for batch in train_loader.train_dataloader():
         return batch
 
 
 def initialize_dataset(
-    dataset, mode: str, split_file: Optional[str] = None
+    dataset, mode: str, split_file: Optional[str] = None, for_unit_testing: bool = True
 ) -> TorchDataModule:
     """
     Initialize a dataset for a given mode.
@@ -92,7 +92,7 @@ def initialize_dataset(
         Initialized TorchDataModule.
     """
 
-    data = dataset(for_unit_testing=True)
+    data = dataset(for_unit_testing=False)
     data_module = TorchDataModule(data, split_file=split_file)
     data_module.prepare_data()
     data_module.setup(mode)

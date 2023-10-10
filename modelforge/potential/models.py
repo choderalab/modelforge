@@ -50,7 +50,7 @@ class PairList(nn.Module):
         )
         return selected_coordinates[0] - selected_coordinates[1]
 
-    def forward(self, mask: torch.Tensor, R: torch.Tensor) -> Dict[str, torch.Tensor]:
+    def forward(self, R: torch.Tensor) -> Dict[str, torch.Tensor]:
         """Forward pass for PairList.
 
         Parameters
@@ -65,7 +65,7 @@ class PairList(nn.Module):
         dict
             Dictionary containing atom index pairs, distances, and displacement vectors.
         """
-        atom_index12 = self.calculate_neighbors(mask, R, self.cutoff)
+        atom_index12 = self.calculate_neighbors(R, self.cutoff)
         r_ij = self.compute_r_ij(atom_index12, R)
         return {"atom_index12": atom_index12, "d_ij": r_ij.norm(2, -1), "r_ij": r_ij}
 
@@ -117,6 +117,7 @@ class BaseNNP(nn.Module):
         Initialize the NNP class.
         """
         super().__init__()
+        # NOTE: let's add a debug mode to the NNP class
 
     def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         """

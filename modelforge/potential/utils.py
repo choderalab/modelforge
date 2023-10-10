@@ -304,16 +304,11 @@ def _distance_to_radial_basis(
 
 
 # taken from torchani repository: https://github.com/aiqm/torchani
-def neighbor_pairs_nopbc(
-    mask: torch.Tensor, R: torch.Tensor, cutoff: float
-) -> torch.Tensor:
+def neighbor_pairs_nopbc(R: torch.Tensor, cutoff: float) -> torch.Tensor:
     """
     Calculate neighbor pairs without periodic boundary conditions.
     Parameters
     ----------
-    mask : torch.Tensor
-        Mask tensor to indicate invalid atoms, shape (batch_size, n_atoms).
-        1 == is padding.
     R : torch.Tensor
         Coordinates tensor, shape (batch_size, n_atoms, 3).
     cutoff : float
@@ -330,23 +325,19 @@ def neighbor_pairs_nopbc(
 
     Examples
     --------
-    >>> mask = torch.tensor([[0, 0, 1], [1, 0, 0]])
     >>> R = torch.tensor([[[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]],[[3.0, 3.0, 3.0], [4.0, 4.0, 4.0], [5.0, 5.0, 5.0]]])
     >>> cutoff = 1.5
-    >>> neighbor_pairs_nopbc(mask, R, cutoff)
+    >>> neighbor_pairs_nopbc(R, cutoff)
     """
     import math
 
-    R = R.detach().masked_fill(mask.unsqueeze(-1), math.nan)
     current_device = R.device
-    num_atoms = mask.shape[1]
-    num_mols = mask.shape[0]
+    num_atoms = R.shape[0]
     p12_all = torch.triu_indices(num_atoms, num_atoms, 1, device=current_device)
     p12_all_flattened = p12_all.view(-1)
-    pair_coordinates = R.index_select(1, p12_all_flattened).view(num_mols, 2, -1, 3)
+    pair_coordinates = R.index_select(0, p12_all_flattened).view(2, -1, 3)
     distances = (pair_coordinates[:, 0, ...] - pair_coordinates[:, 1, ...]).norm(2, -1)
     in_cutoff = (distances <= cutoff).nonzero()
-    molecule_index, pair_index = in_cutoff.unbind(1)
-    molecule_index *= num_atoms
-    atom_index12 = p12_all[:, pair_index] + molecule_index
+    pair_index = in_cutoff.unbind()
+    atom_index12 = p12_all[pair_index]
     return atom_index12

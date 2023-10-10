@@ -4,7 +4,7 @@ import torch
 
 from modelforge.potential.schnet import Schnet
 
-from .helper_functinos import generate_methane_input
+from .helper_functinos import generate_methane_input, return_single_batch
 
 
 def test_Schnet_init():
@@ -114,6 +114,16 @@ def test_schnet_interaction_layer():
     ), "Output shape mismatch for v tensor."
 
 
-# def test_schnet_reimplementation_against_original_implementation():
-#    import numpy as np
-#    np.load('tests/qm9tut/split.npz')['train_idx']
+def test_schnet_reimplementation_against_original_implementation():
+    from modelforge.dataset import QM9Dataset
+    from .helper_functinos import setup_simple_model
+    import pytest
+
+    data = return_single_batch(
+        QM9Dataset, "fit", "modelforge/tests/qm9tut/split.npz", for_unit_testing=False
+    )
+    model = setup_simple_model(Schnet, lightning=False)
+    if model is None:
+        pytest.fail("Failed to set up the model.")
+
+    model(data)

@@ -336,8 +336,10 @@ def neighbor_pairs_nopbc(R: torch.Tensor, cutoff: float) -> torch.Tensor:
     p12_all = torch.triu_indices(num_atoms, num_atoms, 1, device=current_device)
     p12_all_flattened = p12_all.view(-1)
     pair_coordinates = R.index_select(0, p12_all_flattened).view(2, -1, 3)
-    distances = (pair_coordinates[:, 0, ...] - pair_coordinates[:, 1, ...]).norm(2, -1)
-    in_cutoff = (distances <= cutoff).nonzero()
-    pair_index = in_cutoff.unbind()
-    atom_index12 = p12_all[pair_index]
+    distances = (pair_coordinates[0, ...] - pair_coordinates[1, ...]).norm(2, -1)
+    # in_cutoff = (distances <= cutoff).nonzero()
+    # pair_index = in_cutoff.unbind()
+    # atom_index12 = p12_all[pair_index]
+    in_cutoff = (distances <= cutoff).nonzero(as_tuple=True)[0]
+    atom_index12 = p12_all[:, in_cutoff]
     return atom_index12

@@ -44,10 +44,7 @@ class PairList(nn.Module):
         torch.Tensor, shape [n_pairs, 3]
             Displacement vector between atom pairs.
         """
-        coordinates = R.flatten(0, 1)
-        selected_coordinates = coordinates.index_select(0, atom_index12.view(-1)).view(
-            2, -1, 3
-        )
+        selected_coordinates = R.index_select(0, atom_index12.view(-1)).view(2, -1, 3)
         return selected_coordinates[0] - selected_coordinates[1]
 
     def forward(self, R: torch.Tensor) -> Dict[str, torch.Tensor]:

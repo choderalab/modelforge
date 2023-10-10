@@ -10,7 +10,7 @@ from loguru import logger
 from torch.utils.data import Subset, random_split
 
 if TYPE_CHECKING:
-    from .dataset import TorchDataset
+    from modelforge.dataset.dataset import TorchDataset
 
 
 class SplittingStrategy(ABC):

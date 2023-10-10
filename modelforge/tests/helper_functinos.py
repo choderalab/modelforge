@@ -92,7 +92,7 @@ def initialize_dataset(
         Initialized TorchDataModule.
     """
 
-    data = dataset(for_unit_testing=False)
+    data = dataset(for_unit_testing=for_unit_testing)
     data_module = TorchDataModule(data, split_file=split_file)
     data_module.prepare_data()
     data_module.setup(mode)

@@ -1,10 +1,12 @@
-from typing import Optional
-from loguru import logger
-
 from abc import ABC, abstractmethod
 
+from typing import Dict, List, Optional
+from loguru import logger
 
-def dict_to_hdf5(file_name: str, data: list, series_info: dict, id_key: str) -> None:
+
+def dict_to_hdf5(
+    file_name: str, data: List[dict], series_info: Dict[str, str], id_key: str
+) -> None:
     """
     Writes an hdf5 file from a list of dicts.
 
@@ -41,7 +43,7 @@ def dict_to_hdf5(file_name: str, data: list, series_info: dict, id_key: str) -> 
         for datapoint in tqdm(data):
             try:
                 record_name = datapoint[id_key]
-            except Exception:
+            except KeyError:
                 print(f"id_key {id_key} not found in the data.")
             group = f.create_group(record_name)
             for key, val in datapoint.items():
@@ -66,7 +68,7 @@ def dict_to_hdf5(file_name: str, data: list, series_info: dict, id_key: str) -> 
                         group[key].attrs["series"] = False
 
 
-class dataset_curation(ABC):
+class DatasetCuration(ABC):
     """
     Abstract base class with routines to fetch and process a dataset into a curated hdf5 file.
     """
@@ -93,16 +95,15 @@ class dataset_curation(ABC):
             Convert from e.g., source units [angstrom, hartree]
             to output units [nanometer, kJ/mol]
         """
+        import os
 
         self.hdf5_file_name = hdf5_file_name
         self.output_file_dir = output_file_dir
         self.local_cache_dir = local_cache_dir
         self.convert_units = convert_units
 
-        from modelforge.utils.misc import mkdir
+        os.makedirs(self.local_cache_dir, exist_ok=True)
 
-        # if the local cache dir does not exist, create it
-        mkdir(local_cache_dir)
         # Overall list that will contain a dictionary for each record
         self.data = []
 
@@ -115,16 +116,16 @@ class dataset_curation(ABC):
         Clears the processed data from the list.
 
         """
-        self.data = []
+        self.data.clear()
 
     def _generate_hdf5(self) -> None:
         """
         Creates an HDF5 file of the data at the path specified by output_file_path.
 
         """
-        from modelforge.utils.misc import mkdir
+        import os
 
-        mkdir(self.output_file_dir)
+        os.makedirs(self.output_file_dir, exist_ok=True)
 
         full_output_path = f"{self.output_file_dir}/{self.hdf5_file_name}"
 

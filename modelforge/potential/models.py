@@ -5,13 +5,23 @@ import torch
 import torch.nn as nn
 from torch.optim import AdamW
 
-from modelforge.utils import SpeciesEnergies
-
 
 class PairList(nn.Module):
+    """A module to handle pair list calculations.
+
+    Attributes
+    ----------
+    cutoff : float
+        The cutoff distance for neighbor calculations.
+    """
+
     def __init__(self, cutoff: float = 5.0):
-        """
-        Initialize the PairList class.
+        """Initialize PairList.
+
+        Parameters
+        ----------
+        cutoff : float, optional
+            Cutoff distance for neighbor calculations, default is 5.0.
         """
         super().__init__()
         from .utils import neighbor_pairs_nopbc
@@ -19,125 +29,70 @@ class PairList(nn.Module):
         self.calculate_neighbors = neighbor_pairs_nopbc
         self.cutoff = cutoff
 
-    def compute_distance(
-        self, atom_index12: torch.Tensor, R: torch.Tensor
-    ) -> torch.Tensor:
-        """
-        Compute distances based on atom indices and coordinates.
+    def compute_r_ij(self, atom_index12: torch.Tensor, R: torch.Tensor) -> torch.Tensor:
+        """Compute displacement vector between atom pairs.
 
         Parameters
         ----------
         atom_index12 : torch.Tensor, shape [n_pairs, 2]
             Atom indices for pairs of atoms
-        R : torch.Tensor, shape [batch_size, n_atoms, n_dims]
+        R : torch.Tensor, shape [batch_size, n_atoms, 3]
             Atom coordinates.
 
         Returns
         -------
-        torch.Tensor, shape [n_pairs]
-            Computed distances.
+        torch.Tensor, shape [n_pairs, 3]
+            Displacement vector between atom pairs.
         """
-
         coordinates = R.flatten(0, 1)
         selected_coordinates = coordinates.index_select(0, atom_index12.view(-1)).view(
             2, -1, 3
         )
-        vec = selected_coordinates[0] - selected_coordinates[1]
-        return vec.norm(2, -1)
+        return selected_coordinates[0] - selected_coordinates[1]
 
-    def forward(self, mask, R) -> Dict[str, torch.Tensor]:
+    def forward(self, mask: torch.Tensor, R: torch.Tensor) -> Dict[str, torch.Tensor]:
+        """Forward pass for PairList.
+
+        Parameters
+        ----------
+        mask : torch.Tensor, shape [batch_size, n_atoms]
+            Mask tensor.
+        R : torch.Tensor, shape [batch_size, n_atoms, n_dims]
+            Position tensor.
+
+        Returns
+        -------
+        dict
+            Dictionary containing atom index pairs, distances, and displacement vectors.
+        """
         atom_index12 = self.calculate_neighbors(mask, R, self.cutoff)
-        d_ij = self.compute_distance(atom_index12, R)
-        return {"atom_index12": atom_index12, "d_ij": d_ij}
+        r_ij = self.compute_r_ij(atom_index12, R)
+        return {"atom_index12": atom_index12, "d_ij": r_ij.norm(2, -1), "r_ij": r_ij}
 
 
-class BaseNNP(pl.LightningModule):
-    """
-    Abstract base class for neural network potentials.
-    This class defines the overall structure and ensures that subclasses
-    implement the `calculate_energies_and_forces` method.
-
-    Methods
-    -------
-    forward(inputs: dict) -> SpeciesEnergies:
-        Forward pass for the neural network potential.
-    calculate_energy(inputs: dict) -> torch.Tensor:
-        Placeholder for the method that should calculate energies and forces.
-    training_step(batch, batch_idx) -> torch.Tensor:
-        Defines the train loop.
-    configure_optimizers() -> AdamW:
-        Configures the optimizer.
-    """
-
-    def __init__(self):
-        """
-        Initialize the NNP class.
-        """
-        super().__init__()
-
-    def forward(self, inputs: Dict[str, torch.Tensor]) -> SpeciesEnergies:
-        """
-        Forward pass for the neural network potential.
-
-        Parameters
-        ----------
-        inputs : dict
-            A dictionary containing atomic numbers, positions, etc.
-
-        Returns
-        -------
-        SpeciesEnergies
-            An instance of the SpeciesEnergies data class containing species and calculated energies.
-        """
-        assert isinstance(inputs, Dict)  #
-        E = self.calculate_energy(inputs)
-        return SpeciesEnergies(inputs["Z"], E)
-
-    def calculate_energy(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
-        """
-        Placeholder for the method that should calculate energies and forces.
-        This method should be implemented in subclasses.
-
-        Parameters
-        ----------
-        inputs : dict
-            A dictionary containing atomic numbers, positions, etc.
-
-        Returns
-        -------
-        torch.Tensor
-            The calculated energy tensor.
-
-
-        Raises
-        ------
-        NotImplementedError
-            If the method is not overridden in the subclass.
-        """
-        raise NotImplementedError("Subclasses must implement this method.")
+class LighningModuleMixin(pl.LightningModule):
+    """A mixin for PyTorch Lightning training."""
 
     def training_step(
         self, batch: Dict[str, torch.Tensor], batch_idx: int
     ) -> torch.Tensor:
-        """
-        Defines the training loop.
+        """Perform a single training step.
 
         Parameters
         ----------
-        batch : dict
-            Batch data.
+        batch : Dict[str, torch.Tensor]
+            Batch data. Expected to include 'E', a tensor with shape [batch_size, 1].
         batch_idx : int
             Batch index.
 
         Returns
         -------
-        torch.Tensor
-            The loss tensor.
+        torch.Tensor, shape [batch_size, 1]
+            Loss tensor.
         """
 
-        E_hat = self.forward(batch)  # wrap_vals_from_dataloader(batch))
-        loss = nn.functional.mse_loss(E_hat.energies, batch["E"])
-        # Logging to TensorBoard (if installed) by default
+        E_hat = self.forward(batch).flatten()
+        loss = self.loss_function(E_hat, batch["E"])
         self.log("train_loss", loss)
         return loss
 
@@ -151,5 +106,36 @@ class BaseNNP(pl.LightningModule):
             The AdamW optimizer.
         """
 
-        optimizer = AdamW(self.parameters(), lr=1e-3)
-        return optimizer
+        return self.optimizer(self.parameters(), lr=self.learning_rate)
+
+
+class BaseNNP(nn.Module):
+    """Abstract base class for neural network potentials."""
+
+    def __init__(self):
+        """
+        Initialize the NNP class.
+        """
+        super().__init__()
+
+    def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
+        """
+        Abstract method for forward pass in neural network potentials.
+
+        Parameters
+        ----------
+        inputs : dict
+            Dictionary of input tensors, shapes are context-dependent.
+
+        Returns
+        -------
+        torch.Tensor, shape [...]
+            Output tensor.
+
+        Raises
+        ------
+        NotImplementedError
+            This method needs to be implemented by subclasses.
+        """
+
+        raise NotImplementedError

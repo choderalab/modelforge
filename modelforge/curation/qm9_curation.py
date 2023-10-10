@@ -1,12 +1,12 @@
+from modelforge.curation.curation_baseclass import DatasetCuration
 from modelforge.utils.units import *
-
-
 import numpy as np
 
-from modelforge.curation.curation_baseclass import *
+from typing import Optional
+from loguru import logger
 
 
-class QM9Curation(dataset_curation):
+class QM9Curation(DatasetCuration):
     """
     Routines to fetch and process the QM9 dataset into a curated hdf5 file.
 
@@ -392,6 +392,8 @@ class QM9Curation(dataset_curation):
         >>> qm9_data.process()
 
         """
+        from modelforge.utils.remote import download_from_figshare
+
         url = self.dataset_download_url
 
         # download the dataset
@@ -417,6 +419,8 @@ class QM9Curation(dataset_curation):
         self._generate_hdf5()
 
     def _generate_metadata(self):
+        import pint
+
         with open(
             f"{self.output_file_dir}/{self.hdf5_file_name}.metadata", "w"
         ) as f_md:

@@ -1,9 +1,10 @@
+from modelforge.curation.curation_baseclass import DatasetCuration
 from modelforge.utils.units import *
+from typing import Optional
+from loguru import logger
 
-from modelforge.curation.curation_baseclass import *
 
-
-class ANI1xCuration(dataset_curation):
+class ANI1xCuration(DatasetCuration):
     """
     Routines to fetch and process the ANI-1x dataset into a curated hdf5 file.
 
@@ -241,7 +242,7 @@ class ANI1xCuration(dataset_curation):
                                     param_unit_out, "chem"
                                 )
 
-                            except Exception:
+                            except PintError:
                                 print(
                                     f"Could not convert {param_unit} to {param_unit_out} for {param_in}."
                                 )

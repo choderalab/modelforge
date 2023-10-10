@@ -108,7 +108,6 @@ def download_from_figshare(url: str, output_path: str, force_download=False) -> 
     import requests
     import os
     from tqdm import tqdm
-    from modelforge.utils.misc import mkdir
 
     chunk_size = 512
     # check to make sure the url we are given is hosted by figshare.com
@@ -134,7 +133,7 @@ def download_from_figshare(url: str, output_path: str, force_download=False) -> 
 
         r = requests.get(url, stream=True)
 
-        mkdir(output_path)
+        os.makedirs(output_path, exist_ok=True)
 
         with open(f"{output_path}/{name}", "wb") as fd:
             for chunk in tqdm(
@@ -324,7 +323,6 @@ def download_from_zenodo(url: str, output_path: str, force_download=False) -> st
     import requests
     import os
     from tqdm import tqdm
-    from modelforge.utils.misc import mkdir
 
     chunk_size = 512
     # check to make sure the url we are given is hosted by figshare.com
@@ -349,7 +347,7 @@ def download_from_zenodo(url: str, output_path: str, force_download=False) -> st
 
         r = requests.get(url, stream=True)
 
-        mkdir(output_path)
+        os.makedirs(output_path, exist_ok=True)
 
         with open(f"{output_path}/{name}", "wb") as fd:
             for chunk in tqdm(

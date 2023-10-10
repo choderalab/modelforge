@@ -1,9 +1,10 @@
+from modelforge.curation.curation_baseclass import DatasetCuration
 from modelforge.utils.units import *
+from typing import Optional
+from loguru import logger
 
-from modelforge.curation.curation_baseclass import *
 
-
-class SPICE114Curation(dataset_curation):
+class SPICE114Curation(DatasetCuration):
     """
     Routines to fetch and process the spice 1.1.4 dataset into a curated hdf5 file.
 

@@ -133,12 +133,14 @@ class HDF5Dataset:
         for value in self.properties_of_interest:
             data[value] = []
 
-        data["name"] = []
+        # molecule_id will contain an integer that is unique to molecules
+        # i.e., conformers of the same molecule will have the same id.
+        data["molecule_id"] = []
         logger.debug(f"Processing and extracting data from {self.raw_data_file}")
 
         # this will create an unzipped file which we can then load in
         # this is substantially faster than passing gz_file directly to h5py.File()
-        # and should not run afoul with any chunking of the data.
+        # by avoiding data chunking issues.
 
         temp_hdf5_file = f"{self.local_cache_dir}/temp_unzipped.hdf5"
         with gzip.open(self.raw_data_file, "rb") as gz_file:
@@ -147,6 +149,7 @@ class HDF5Dataset:
 
         with h5py.File(temp_hdf5_file, "r") as hf:
             logger.debug(f"n_entries: {len(hf.keys())}")
+            molecule_id = 0
             for mol in tqdm.tqdm(list(hf.keys())):
                 n_configs = hf[mol]["n_configs"][()]
                 temp_data = {}
@@ -188,7 +191,8 @@ class HDF5Dataset:
                                 data[value].append(temp_data_cut[value])
                             # keep track of the name of the molecule and configuration number
                             # may be needed for splitting
-                            data["name"].append(f"{mol}_{n}")
+                            data["molecule_id"].append(molecule_id)
+                    molecule_id += 1
 
         self.hdf5data = data
 
@@ -362,13 +366,22 @@ class TorchDataModule(pl.LightningDataModule):
     def __init__(
         self,
         data: HDF5Dataset,
-        SplittingStrategy: SplittingStrategy = RandomSplittingStrategy,
+        split: SplittingStrategy = RandomSplittingStrategy(),
         batch_size: int = 64,
+        split_file: Optional[str] = None,
     ):
         super().__init__()
         self.data = data
         self.batch_size = batch_size
-        self.SplittingStrategy = SplittingStrategy
+        self.split_idxs: Optional[str] = None
+        if split_file:
+            import numpy as np
+
+            logger.debug(f"Loading split indices from {split_file}")
+            self.split_idxs = np.load(split_file)
+        else:
+            logger.debug(f"Using splitting strategy {split}")
+            self.split = split
 
     def prepare_data(self) -> None:
         """
@@ -387,15 +400,29 @@ class TorchDataModule(pl.LightningDataModule):
         stage : str
             Either "fit" for training/validation split or "test" for test split.
         """
+        from torch.utils.data import Subset
+
         if stage == "fit":
-            train_dataset, val_dataset, _ = self.SplittingStrategy().split(self.dataset)
-            self.train_dataset = train_dataset
-            self.val_dataset = val_dataset
+            if self.split_idxs:
+                train_idx, val_idx = (
+                    self.split_idxs["train_idx"],
+                    self.split_idxs["val_idx"],
+                )
+                self.train_dataset = Subset(self.dataset, train_idx)
+                self.val_dataset = Subset(self.dataset, val_idx)
+            else:
+                train_dataset, val_dataset, _ = self.split.split(self.dataset)
+                self.train_dataset = train_dataset
+                self.val_dataset = val_dataset
 
         # Assign test dataset for use in dataloader(s)
         if stage == "test":
-            _, _, test_dataset = self.SplittingStrategy().split(self.dataset)
-            self.test_dataset = test_dataset
+            if self.split_idxs:
+                test_idx = self.split_idxs["test_idx"]
+                self.test_dataset = Subset(self.dataset, test_idx)
+            else:
+                _, _, test_dataset = self.SplittingStrategy().split(self.dataset)
+                self.test_dataset = test_dataset
 
     def train_dataloader(self) -> DataLoader:
         """

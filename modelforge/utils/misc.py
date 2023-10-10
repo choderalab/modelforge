@@ -1,31 +1,4 @@
-import os
 from loguru import logger
-
-
-def mkdir(path: str) -> bool:
-    """
-    Will create a specified directory if it does not exist.
-
-    This calls os.makedirs which will recursively create the entire path,
-    constructing any missing subdirectories while creating the leaf in the hierarchy.
-
-    Parameters
-    ----------
-    path: str, required
-        Path to directory to create
-
-    Returns
-    -------
-        bool,
-            Return status: True if the directory needed to be created, False if it exists.
-    Examples:
-    >>> status = mkdir('/path/to/file')
-    """
-    if not os.path.exists(path):
-        os.makedirs(path)
-        return True
-    else:
-        return False
 
 
 def list_files(directory: str, extension: str) -> list:
@@ -49,6 +22,7 @@ def list_files(directory: str, extension: str) -> list:
     List only the xyz files in a test_directory
     >>> files = list_files('test_directory', '.xyz')
     """
+    import os
 
     if not os.path.exists(directory):
         raise Exception(f"{directory} not found")

@@ -116,7 +116,9 @@ def test_data_item_format(dataset):
     """Test the format of individual data items in the dataset."""
     from typing import Dict
 
-    dataset = initialize_dataset(dataset, mode="fit")
+    dataset = initialize_dataset(
+        dataset, mode="fit", split_file="modelforge/tests/qm9tut/split.npz"
+    )
 
     raw_data_item = dataset.dataset[0]
     assert isinstance(raw_data_item, Dict)

@@ -77,13 +77,18 @@ class Schnet(BaseNNP):
         """
         # initializing x^{l}_{0} as x^l)0 = aZ_i
         Z = inputs["Z"]
-        x = self.embedding(Z)  # shape (batch_size, n_atoms, n_atom_basis)
-        mask = Z == 0
+        mask = Z != 0
         pairlist = self.calculate_distances_and_pairlist(mask, inputs["R"])
+
+        # unpad Z
+        # Z = Z_[mask].flatten()
+        x = self.embedding(Z)  # shape (batch_size * n_atoms, n_atom_basis)
 
         representation = self.representation(
             pairlist
         )  # shape (batch_size, n_atoms, n_atom_basis)
+
+        # unpad
 
         for interaction in self.interactions:
             v = interaction(
@@ -176,7 +181,7 @@ class SchNetInteractionBlock(nn.Module):
 
         # Update features
         x = self.feature_to_output(x_native)
-        x = x.reshape(batch_size, nr_of_atoms, 128)
+        x = x.reshape(batch_size, nr_of_atoms, 32)
         return x
 
 

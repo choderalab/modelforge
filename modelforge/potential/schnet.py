@@ -120,6 +120,7 @@ class SchNetInteractionBlock(nn.Module):
         """
         super().__init__()
         nr_rbf = 20
+        self.nr_atom_basis = nr_atom_basis
         self.intput_to_feature = nn.Linear(nr_atom_basis, nr_filters)
         self.feature_to_output = sequential_block(
             nr_filters, nr_atom_basis, ShiftedSoftplus
@@ -181,7 +182,7 @@ class SchNetInteractionBlock(nn.Module):
 
         # Update features
         x = self.feature_to_output(x_native)
-        x = x.reshape(batch_size, nr_of_atoms, 32)
+        x = x.reshape(batch_size, nr_of_atoms, self.nr_atom_basis)
         return x
 
 

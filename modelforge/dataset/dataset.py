@@ -274,7 +274,7 @@ class HDF5Dataset:
             else:
                 data_arrays[value] = np.array(self.hdf5data[value])
 
-        n_atoms = n_atoms_by_property[0]
+        n_atoms = next(iter(n_atoms_by_property.values()))
         if not all(np.array_equal(n_atoms_other, n_atoms) for n_atoms_other in n_atoms_by_property.values()):
             raise ValueError("Number of atoms per molecule not consistent across series properties")
 

@@ -269,10 +269,10 @@ class HDF5Dataset:
         n_atoms_by_property = OrderedDict()
         for value in self.properties_of_interest:
             if self.is_series[value]:
-                data_arrays[value] = np.concatenate(data[value], axis=0)
+                data_arrays[value] = np.concatenate(self.hdf5data[value], axis=0)
                 n_atoms_by_property[value] = np.array([len(mol) for mol in self.hdf5data[value]])
             else:
-                data_arrays[value] = np.array(data[value])
+                data_arrays[value] = np.array(self.hdf5data[value])
 
         n_atoms = n_atoms_by_property[0]
         if not all(np.array_equal(n_atoms_other, n_atoms) for n_atoms_other in n_atoms_by_property.values()):
@@ -281,7 +281,7 @@ class HDF5Dataset:
         np.savez(
             self.processed_data_file,
             n_atoms,
-            **self.hdf5data,
+            **data_arrays
         )
         del self.hdf5data
 

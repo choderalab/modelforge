@@ -1,5 +1,6 @@
 import os
 from typing import Callable, Dict, List, Optional
+from collections import OrderedDict
 
 import numpy as np
 import pytorch_lightning as pl
@@ -77,8 +78,6 @@ class TorchDataset(torch.utils.data.Dataset):
             - 'idx': int
                 Index of the molecule in the dataset.
         """
-
-
         start_idx = self.mol_start_idxs[idx]
         end_idx = self.mol_start_idxs[idx + 1]
         Z = torch.tensor(self.properties_of_interest["Z"][start_idx:end_idx], dtype=torch.int64)
@@ -127,7 +126,6 @@ class HDF5Dataset:
 
         """
         import gzip
-        from collections import OrderedDict
 
         import h5py
         import tqdm
@@ -199,8 +197,6 @@ class HDF5Dataset:
                             # may be needed for splitting
                             data["molecule_id"].append(molecule_id)
                     molecule_id += 1
-
-
 
         self.hdf5data = data
 
@@ -285,7 +281,6 @@ class HDF5Dataset:
         np.savez(
             self.processed_data_file,
             n_atoms,
-            self.is_series,
             **self.hdf5data,
         )
         del self.hdf5data

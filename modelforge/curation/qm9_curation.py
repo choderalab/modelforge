@@ -71,6 +71,77 @@ class QM9Curation(DatasetCuration):
             unit.cm**-1: unit.cm**-1,
             unit.gigahertz: unit.gigahertz,
         }
+        self.qm_parameters = {
+            "geometry": {
+                "u_in": unit.angstrom,
+                "u_out": unit.nanometer,
+            },
+            "isotropic_polarizability": {
+                "u_in": unit.angstrom**3,
+                "u_out": unit.angstrom**3,
+            },
+            "rotational_constant_A": {
+                "u_in": unit.gigahertz,
+                "u_out": unit.gigahertz,
+            },
+            "rotational_constant_B": {
+                "u_in": unit.gigahertz,
+                "u_out": unit.gigahertz,
+            },
+            "rotational_constant_C": {
+                "u_in": unit.gigahertz,
+                "u_out": unit.gigahertz,
+            },
+            "charges": {
+                "u_in": unit.elementary_charge,
+                "u_out": unit.elementary_charge,
+            },
+            "energy_of_homo": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
+            "energy_of_lumo": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
+            "lumo-homo_gap": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
+            "zero_point_vibrational_energy": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
+            "internal_energy_at_0K": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
+            "internal_energy_at_298.15K": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
+            "enthalpy_at_298.15K": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
+            "free_energy_at_298.15K": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
+            "electronic_spatial_extent": {
+                "u_in": unit.angstrom**2,
+                "u_out": unit.angstrom**2,
+            },
+            "dipole_moment": {"u_in": unit.debye, "u_out": unit.debye},
+            "heat_capacity_at_298.15K": {
+                "u_in": unit.calorie_per_mole / unit.kelvin,
+                "u_out": unit.kilojoule_per_mole / unit.kelvin,
+            },
+            "harmonic_vibrational_frequencies": {
+                "u_in": unit.cm**-1,
+                "u_out": unit.cm**-1,
+            },
+        }
 
     def _init_record_entries_series(self):
         # For data efficiency, information for different conformers will be grouped together
@@ -149,26 +220,26 @@ class QM9Curation(DatasetCuration):
 
         temp_prop = line.split()
 
-        # List of properties and their units in the order they appear in the file.
+        # List of properties in the order they appear in the file and if they have units
         # This is used in parsing the properties line in the .xyz file
         labels_and_units = [
-            ("tag", None),
-            ("idx", None),
-            ("rotational_constant_A", unit.gigahertz),
-            ("rotational_constant_B", unit.gigahertz),
-            ("rotational_constant_C", unit.gigahertz),
-            ("dipole_moment", unit.debye),
-            ("isotropic_polarizability", unit.angstrom**3),
-            ("energy_of_homo", unit.hartree),
-            ("energy_of_lumo", unit.hartree),
-            ("lumo-homo_gap", unit.hartree),
-            ("electronic_spatial_extent", unit.angstrom**2),
-            ("zero_point_vibrational_energy", unit.hartree),
-            ("internal_energy_at_0K", unit.hartree),
-            ("internal_energy_at_298.15K", unit.hartree),
-            ("enthalpy_at_298.15K", unit.hartree),
-            ("free_energy_at_298.15K", unit.hartree),
-            ("heat_capacity_at_298.15K", unit.calorie_per_mole / unit.kelvin),
+            ("tag", False),
+            ("idx", False),
+            ("rotational_constant_A", True),
+            ("rotational_constant_B", True),
+            ("rotational_constant_C", True),
+            ("dipole_moment", True),
+            ("isotropic_polarizability", True),
+            ("energy_of_homo", True),
+            ("energy_of_lumo", True),
+            ("lumo-homo_gap", True),
+            ("electronic_spatial_extent", True),
+            ("zero_point_vibrational_energy", True),
+            ("internal_energy_at_0K", True),
+            ("internal_energy_at_298.15K", True),
+            ("enthalpy_at_298.15K", True),
+            ("free_energy_at_298.15K", True),
+            ("heat_capacity_at_298.15K", True),
         ]
 
         assert len(labels_and_units) == len(temp_prop)
@@ -176,10 +247,13 @@ class QM9Curation(DatasetCuration):
         data_temp = {}
         for prop, label_and_unit in zip(temp_prop, labels_and_units):
             label, prop_unit = label_and_unit
-            if prop_unit is None:
-                data_temp[label] = prop
+            if prop_unit:
+                data_temp[label] = (
+                    str_to_float(prop) * self.qm_parameters[label]["u_in"]
+                )
             else:
-                data_temp[label] = str_to_float(prop) * prop_unit
+                data_temp[label] = prop
+
         return data_temp
 
     def _parse_xyzfile(self, file_name: str) -> dict:
@@ -282,12 +356,16 @@ class QM9Curation(DatasetCuration):
             data_temp["inchi_b3lyp"] = (
                 InChI.split("\n")[0].split()[1].replace("InChI=", "")
             )
-            data_temp["geometry"] = np.array(geometry) * unit.angstrom
+            data_temp["geometry"] = (
+                np.array(geometry) * self.qm_parameters["geometry"]["u_in"]
+            )
             # Element symbols are converted to atomic numbers
             # Including an array of strings adds complications when writing the hdf5 file.
             # data["elements"] = np.array(elements, dtype=str)
             data_temp["atomic_numbers"] = np.array(atomic_numbers)
-            data_temp["charges"] = np.array(charges) * unit.elementary_charge
+            data_temp["charges"] = (
+                np.array(charges) * self.qm_parameters["charges"]["u_in"]
+            )
 
             # remove the tag because it does not provide any useful information
             properties.pop("tag")
@@ -299,26 +377,10 @@ class QM9Curation(DatasetCuration):
             for h in hvf_temp:
                 hvf.append(str_to_float(h))
 
-            data_temp["harmonic_vibrational_frequencies"] = np.array(hvf) / unit.cm
-
-            # if unit outputs were defined perform conversion
-            if self.convert_units:
-                for key, val in data_temp.items():
-                    if isinstance(val, pint.Quantity):
-                        try:
-                            data_temp[key] = val.to(
-                                self.unit_output_dict[val.u], "chem"
-                            )
-                        except Exception:
-                            try:
-                                # if the unit conversion can't be done
-                                print(
-                                    f"could not convert {key} with unit {val.u} to {self.unit_output_dict[val.u]}"
-                                )
-                            except Exception:
-                                print(
-                                    f"could not convert {key} with unit {val.u}. {val.u} not in the defined unit conversions."
-                                )
+            data_temp["harmonic_vibrational_frequencies"] = (
+                np.array(hvf)
+                * self.qm_parameters["harmonic_vibrational_frequencies"]["u_in"]
+            )
 
         return data_temp
 
@@ -366,8 +428,13 @@ class QM9Curation(DatasetCuration):
             data_temp = self._parse_xyzfile(f"{self.local_cache_dir}/{file}")
             self.data.append(data_temp)
 
+        # if unit outputs were defined perform conversion
+        if self.convert_units:
+            self._convert_units()
+
         # When reading in the list of xyz files from the directory, we sort by name
-        # so this line is likely name necessary unless we were to do asynchronous processing
+        # so further sorting, like in the commented out below,
+        # is likely not necessary unless we were to do asynchronous processing
         # self.data = sorted(self.data, key=lambda x: x["name"])
 
     def process(

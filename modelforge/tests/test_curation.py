@@ -10,6 +10,7 @@ import pint
 from modelforge.curation.qm9_curation import QM9Curation
 from modelforge.curation.ani1x_curation import ANI1xCuration
 from modelforge.curation.spice_curation import SPICE114Curation
+from modelforge.curation.spice_openff_curation import SPICE12PubChemOpenFFCuration
 
 from modelforge.curation.curation_baseclass import dict_to_hdf5
 
@@ -230,6 +231,7 @@ def test_qm9_curation_parse_xyz(prep_temp_dir):
         hdf5_file_name="qm9_dataset.hdf5",
         output_file_dir=str(prep_temp_dir),
         local_cache_dir=str(prep_temp_dir),
+        convert_units=True,
     )
 
     # check to ensure we can parse the properties line correctly
@@ -286,40 +288,18 @@ def test_qm9_curation_parse_xyz(prep_temp_dir):
         * unit.elementary_charge
     )
     assert data_dict_temp["isotropic_polarizability"] == 13.21 * unit.angstroms**3
-    assert (
-        data_dict_temp["energy_of_homo"]
-        == -1017.9062102263447 * unit.kilojoule_per_mole
-    )
-    assert (
-        data_dict_temp["energy_of_lumo"] == 307.4460077830925 * unit.kilojoule_per_mole
-    )
-    assert (
-        data_dict_temp["lumo-homo_gap"] == 1325.3522180094374 * unit.kilojoule_per_mole
-    )
+    assert data_dict_temp["energy_of_homo"] == -0.3877 * unit.hartree
+    assert data_dict_temp["energy_of_lumo"] == 0.1171 * unit.hartree
+    assert data_dict_temp["lumo-homo_gap"] == 0.5048 * unit.hartree
     assert data_dict_temp["electronic_spatial_extent"] == 35.3641 * unit.angstrom**2
-    assert (
-        data_dict_temp["zero_point_vibrational_energy"]
-        == 117.4884833670846 * unit.kilojoule_per_mole
-    )
-    assert (
-        data_dict_temp["internal_energy_at_0K"]
-        == -106277.4161215308 * unit.kilojoule_per_mole
-    )
-    assert (
-        data_dict_temp["internal_energy_at_298.15K"]
-        == -106269.88618856476 * unit.kilojoule_per_mole
-    )
-    assert (
-        data_dict_temp["enthalpy_at_298.15K"]
-        == -106267.40509140545 * unit.kilojoule_per_mole
-    )
-    assert (
-        data_dict_temp["free_energy_at_298.15K"]
-        == -106329.05182294044 * unit.kilojoule_per_mole
-    )
+    assert data_dict_temp["zero_point_vibrational_energy"] == 0.044749 * unit.hartree
+    assert data_dict_temp["internal_energy_at_0K"] == -40.47893 * unit.hartree
+    assert data_dict_temp["internal_energy_at_298.15K"] == -40.476062 * unit.hartree
+    assert data_dict_temp["enthalpy_at_298.15K"] == -40.475117 * unit.hartree
+    assert data_dict_temp["free_energy_at_298.15K"] == -40.498597 * unit.hartree
     assert (
         data_dict_temp["heat_capacity_at_298.15K"]
-        == 0.027066296000000004 * unit.kilojoule_per_mole / unit.kelvin
+        == 6.469 * unit.calorie_per_mole / unit.kelvin
     )
     assert np.all(data_dict_temp["atomic_numbers"] == np.array([6, 1, 1, 1, 1]))
     assert data_dict_temp["smiles_gdb-17"] == "C"
@@ -366,7 +346,7 @@ def test_qm9_local_archive(prep_temp_dir):
     qm9_data._process_downloaded(str(local_data_path), "first10.tar.bz2")
 
     assert len(qm9_data.data) == 10
-
+    # internal_energy_at_0K in kj/mol
     names = {
         "dsgdb9nsd_000001": -106277.4161215308,
         "dsgdb9nsd_000002": -148408.69593977975,
@@ -1038,7 +1018,47 @@ def spice114_process_download_short(prep_temp_dir):
     assert len(spice_data.data) == 1
 
 
-def spice114_process_download_no_conversion(prep_temp_dir):
+def test_baseclass_unit_conversion(prep_temp_dir):
+    spice_data = SPICE114Curation(
+        hdf5_file_name="test_dataset.hdf5",
+        output_file_dir=str(prep_temp_dir),
+        local_cache_dir=str(prep_temp_dir),
+        convert_units=False,
+    )
+
+    local_data_path = resources.files("modelforge").joinpath("tests", "data")
+    # make sure the data archive exists
+    hdf5_file = "SPICE-1.1.4_n2.hdf5"
+    file_name_path = str(local_data_path) + "/" + hdf5_file
+    assert os.path.isfile(file_name_path)
+
+    spice_data._process_downloaded(str(local_data_path), hdf5_file)
+
+    assert spice_data.data[0]["geometry"].u == unit.bohr
+    assert (
+        spice_data.data[0]["dft_total_energy"][0] == -370.43397424571714 * unit.hartree
+    )
+
+    spice_data._convert_units()
+    assert spice_data.data[0]["geometry"].u == unit.nanometer
+    assert (
+        spice_data.data[0]["dft_total_energy"][0]
+        == -972574.265833225 * unit.kilojoule_per_mole
+    )
+    spice_data.qm_parameters["geometry"] = {"u_in": unit.bohr, "u_out": unit.hartree}
+
+    with pytest.raises(Exception):
+        spice_data._convert_units()
+
+    spice_data.qm_parameters["geometry"] = {
+        "u_in": unit.angstrom,
+        "u_out": unit.nanometer,
+    }
+    with pytest.raises(AssertionError):
+        spice_data._process_downloaded(str(local_data_path), hdf5_file)
+
+
+def test_spice114_process_download_no_conversion(prep_temp_dir):
     from numpy import array, float32, uint8
     from openff.units import unit
 
@@ -1095,7 +1115,6 @@ def spice114_process_download_no_conversion(prep_temp_dir):
                 1,
                 1,
             ],
-            dtype=int16,
         )
     )
     assert spice_data.data[0]["n_configs"] == 50
@@ -1189,7 +1208,7 @@ def spice114_process_download_no_conversion(prep_temp_dir):
     )
 
 
-def spice114_process_download_conversion(prep_temp_dir):
+def test_spice114_process_download_conversion(prep_temp_dir):
     from numpy import array, float32, uint8
     from openff.units import unit
 
@@ -1246,7 +1265,6 @@ def spice114_process_download_conversion(prep_temp_dir):
                 1,
                 1,
             ],
-            dtype=int16,
         )
     )
     assert spice_data.data[0]["n_configs"] == 50
@@ -1338,3 +1356,190 @@ def spice114_process_download_conversion(prep_temp_dir):
             * unit.parse_expression("elementary_charge * nanometer ** 2"),
         )
     )
+
+
+def test_spice12_openff_test_fetching(prep_temp_dir):
+    from tqdm import tqdm
+    from sqlitedict import SqliteDict
+
+    local_path_dir = str(prep_temp_dir)
+    local_database_name = "test.sqlite"
+    specification_name = "entry"
+
+    spice_openff_data = SPICE12PubChemOpenFFCuration(
+        hdf5_file_name="test_dataset.hdf5",
+        output_file_dir=local_path_dir,
+        local_cache_dir=local_path_dir,
+        convert_units=True,
+    )
+
+    # test downloading two new records and saving to the sqlite db
+    spice_openff_data._fetch_singlepoint_from_qcarchive(
+        dataset_name="SPICE PubChem Set 1 Single Points Dataset v1.2",
+        specification_name=specification_name,
+        local_database_name=local_database_name,
+        local_path_dir=local_path_dir,
+        force_download=True,
+        unit_testing_max_records=2,
+    )
+
+    with SqliteDict(
+        f"{local_path_dir}/{local_database_name}",
+        tablename=specification_name,
+        autocommit=True,
+    ) as spice_db:
+        keys = list(spice_db.keys())
+
+        assert len(keys) == 2
+        assert np.all(keys == ["160862784-0", "163359334-30"])
+
+    # same test as above, but we will pass pbar
+    # pbar.total gets updated by the number of records
+    # we need to fetch. Since force_download=True
+    # we should fetch the 2 records again
+    pbar = tqdm()
+    pbar.total = 0
+
+    spice_openff_data._fetch_singlepoint_from_qcarchive(
+        dataset_name="SPICE PubChem Set 1 Single Points Dataset v1.2",
+        specification_name=specification_name,
+        local_database_name=local_database_name,
+        local_path_dir=local_path_dir,
+        force_download=True,
+        unit_testing_max_records=2,
+        pbar=pbar,
+    )
+
+    assert pbar.total == 2
+
+    with SqliteDict(
+        f"{local_path_dir}/{local_database_name}",
+        tablename=specification_name,
+        autocommit=True,
+    ) as spice_db:
+        keys = list(spice_db.keys())
+
+        assert len(keys) == 2
+        assert np.all(keys == ["160862784-0", "163359334-30"])
+
+    # test using sqlite db, by setting force_download=False
+    pbar = tqdm()
+    pbar.total = 0
+
+    spice_openff_data._fetch_singlepoint_from_qcarchive(
+        dataset_name="SPICE PubChem Set 1 Single Points Dataset v1.2",
+        specification_name=specification_name,
+        local_database_name=local_database_name,
+        local_path_dir=local_path_dir,
+        force_download=False,
+        unit_testing_max_records=2,
+    )
+
+    assert pbar.total == 0
+
+    with SqliteDict(
+        f"{local_path_dir}/{local_database_name}",
+        tablename=specification_name,
+        autocommit=True,
+    ) as spice_db:
+        keys = list(spice_db.keys())
+
+        assert len(keys) == 2
+        assert np.all(keys == ["160862784-0", "163359334-30"])
+
+    # test fetching additional records
+    # we already have 2 and thus should only need to
+    # fetch 8
+
+    pbar = tqdm()
+    pbar.total = 0
+
+    spice_openff_data._fetch_singlepoint_from_qcarchive(
+        dataset_name="SPICE PubChem Set 1 Single Points Dataset v1.2",
+        specification_name=specification_name,
+        local_database_name=local_database_name,
+        local_path_dir=local_path_dir,
+        force_download=False,
+        unit_testing_max_records=10,
+        pbar=pbar,
+    )
+
+    assert pbar.total == 8
+    with SqliteDict(
+        f"{local_path_dir}/{local_database_name}",
+        tablename=specification_name,
+        autocommit=True,
+    ) as spice_db:
+        keys = list(spice_db.keys())
+
+        assert len(keys) == 10
+        assert np.all(
+            keys
+            == [
+                "160862784-0",
+                "163359334-30",
+                "186526043-36",
+                "242053812-3",
+                "252627293-25",
+                "252627293-26",
+                "252627293-27",
+                "252627293-28",
+                "252627293-29",
+                "252627293-30",
+            ]
+        )
+
+
+def test_spice12_openff_test_process_downloaded(prep_temp_dir):
+    from tqdm import tqdm
+    from sqlitedict import SqliteDict
+
+    local_path_dir = str(prep_temp_dir)
+    local_database_name = "test.sqlite"
+    specification_names = ["entry", "spec_2", "spec_6"]
+    dataset_name = "SPICE PubChem Set 1 Single Points Dataset v1.2"
+
+    spice_openff_data = SPICE12PubChemOpenFFCuration(
+        hdf5_file_name="test_dataset.hdf5",
+        output_file_dir=local_path_dir,
+        local_cache_dir=local_path_dir,
+        convert_units=True,
+    )
+
+    for specification_name in specification_names:
+        # test downloading two new records and saving to the sqlite db
+        spice_openff_data._fetch_singlepoint_from_qcarchive(
+            dataset_name=dataset_name,
+            specification_name=specification_name,
+            local_database_name=local_database_name,
+            local_path_dir=local_path_dir,
+            force_download=True,
+            unit_testing_max_records=2,
+        )
+
+    spice_openff_data._process_downloaded(
+        local_path_dir, [local_database_name], [dataset_name]
+    )
+
+
+def test_spice12_openff_process_datasets(prep_temp_dir):
+    local_path_dir = str(prep_temp_dir)
+    hdf5_file_name = "test_dataset.hdf5"
+
+    spice_openff_data = SPICE12PubChemOpenFFCuration(
+        hdf5_file_name=hdf5_file_name,
+        output_file_dir=local_path_dir,
+        local_cache_dir=local_path_dir,
+        convert_units=False,
+    )
+
+    spice_openff_data.process(
+        force_download=False, unit_testing_max_records=10, n_threads=3
+    )
+
+    assert len(spice_openff_data.data) == 5
+    assert spice_openff_data.data[0]["n_configs"] == 1
+    assert spice_openff_data.data[1]["n_configs"] == 1
+    assert spice_openff_data.data[2]["n_configs"] == 1
+    assert spice_openff_data.data[3]["n_configs"] == 1
+    assert spice_openff_data.data[4]["n_configs"] == 6

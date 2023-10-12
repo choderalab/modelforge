@@ -34,7 +34,7 @@ class ANI1xCuration(DatasetCuration):
         )
 
         self.qm_parameters = {
-            "coordinates": {
+            "geometry": {
                 "u_in": unit.angstrom,
                 "u_out": unit.nanometer,
             },
@@ -224,35 +224,22 @@ class ANI1xCuration(DatasetCuration):
 
                 # param_in is the name of the entry, param_data contains input (u_in) and output (u_out) units
                 for param_in, param_data in self.qm_parameters.items():
+                    param_out = param_in
+                    # we always want the particle positions to be called geometry to make life easier
+                    if param_out == "geometry":
+                        param_in = "coordinates"
+
                     temp = hf[name][param_in][()]
 
-                    # if not np.isnan(temp).any():
-
-                    param_out = param_in
-                    # we always want the particle positions to be called geometry
-                    if param_in == "coordinates":
-                        param_out = "geometry"
-
                     param_unit = param_data["u_in"]
-                    if not param_unit is None:
-                        if self.convert_units:
-                            param_unit_out = param_data["u_out"]
-                            try:
-                                ani1x_temp[param_out] = (temp * param_unit).to(
-                                    param_unit_out, "chem"
-                                )
-
-                            except PintError:
-                                print(
-                                    f"Could not convert {param_unit} to {param_unit_out} for {param_in}."
-                                )
-                        else:
-                            ani1x_temp[param_out] = temp * param_unit
+                    if param_unit is not None:
+                        ani1x_temp[param_out] = temp * param_unit
                     else:
                         ani1x_temp[param_out] = temp
 
                 self.data.append(ani1x_temp)
-
+        if self.convert_units:
+            self._convert_units()
         # From documentation: By default, objects inside group are iterated in alphanumeric order.
         # However, if group is created with track_order=True, the insertion order for the group is remembered (tracked)
         # in HDF5 file, and group contents are iterated in that order.

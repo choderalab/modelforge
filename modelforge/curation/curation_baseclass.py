@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 
 from typing import Dict, List, Optional
 from loguru import logger
+from modelforge.utils.units import *
 
 
 def dict_to_hdf5(
@@ -137,6 +138,24 @@ class DatasetCuration(ABC):
             series_info=self._record_entries_series,
             id_key="name",
         )
+
+    def _convert_units(self):
+        """
+        Converts the units of properties in self.data to desired output values.
+
+        """
+        for datapoint in self.data:
+            for key, val in datapoint.items():
+                if isinstance(val, pint.Quantity):
+                    try:
+                        datapoint[key] = val.to(
+                            self.qm_parameters[key]["u_out"], "chem"
+                        )
+                    except:
+                        # if the unit conversion can't be done
+                        raise Exception(
+                            f"could not convert {key} with unit {val.u} to {self.qm_parameters[key]['u_out']}"
+                        )
 
     @abstractmethod
     def process(

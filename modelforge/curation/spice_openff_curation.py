@@ -1,4 +1,3 @@
-from modelforge.utils.units import *
 from typing import List
 
 from modelforge.curation.curation_baseclass import *
@@ -6,18 +5,21 @@ from retry import retry
 from tqdm import tqdm
 
 
-class SPICE12PubChemOpenFFCuration(dataset_curation):
+class SPICE12PubChemOpenFFCuration(DatasetCuration):
     """
-    Routines to fetch and process the SPICE pubchem 1.2 dataset into a curated hdf5 file.
+    Fetches the SPICE pubchem 1.2 dataset from MOLSSI QCarchive and processes it into a curated hdf5 file.
+
+    All QM datapoints retrieved wer generated using B3LYP-D3BJ/DZVP level of theory.
+    This is the default theory used for force field development by the Open Force Field Initiative.
+    This data appears as two separate records in QCArchive: ('spec_2'  and 'spec_6'),
+    where 'spec_6' provides the dispersion corrections for energy and gradient.
 
 
-    Reference:
+    Reference to original SPICE publication:
     Eastman, P., Behara, P.K., Dotson, D.L. et al. SPICE,
     A Dataset of Drug-like Molecules and Peptides for Training Machine Learning Potentials.
     Sci Data 10, 11 (2023). https://doi.org/10.1038/s41597-022-01882-6
 
-    Dataset DOI:
-    https://doi.org/10.5281/zenodo.8222043
 
     Parameters
     ----------
@@ -43,6 +45,9 @@ class SPICE12PubChemOpenFFCuration(dataset_curation):
         self.qcarchive_server = "ml.qcarchive.molssi.org"
 
         self.molecule_names = {}
+
+        # dictionary of properties and their input units (i.e., those from QCArchive)
+        # and desired output units; unit conversion is performed if convert_units = True
         self.qm_parameters = {
             "geometry": {
                 "u_in": unit.bohr,
@@ -84,12 +89,16 @@ class SPICE12PubChemOpenFFCuration(dataset_curation):
                 "u_in": unit.hartree,
                 "u_out": unit.kilojoule_per_mole,
             },
+            "formation_energy": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
         }
 
     def _init_record_entries_series(self):
         # For data efficiency, information for different conformers will be grouped together
         # To make it clear to the dataset loader which pieces of information are common to all
-        # conformers, or which pieces encode the series, we will label each value.
+        # conformers, or which pieces encode a series, we will label each value.
         # The keys in this dictionary correspond to the label of the entries in each record.
         # The value indicates if the entry contains series data (True) or a single common entry (False).
         # If the entry has a value of True, the "series" attribute in hdf5 file will be set to True; False, if False.
@@ -101,9 +110,11 @@ class SPICE12PubChemOpenFFCuration(dataset_curation):
             "atomic_numbers": False,
             "n_configs": False,
             "reference_energy": False,
+            "molecular_formula": False,
             "geometry": True,
             "dft_total_energy": True,
             "dft_total_gradient": True,
+            "formation_energy": True,
             "mbis_charges": True,
             "scf_dipole": True,
             "dispersion_correction_energy": True,
@@ -111,27 +122,28 @@ class SPICE12PubChemOpenFFCuration(dataset_curation):
             "dispersion_corrected_dft_total_gradient": True,
             "dispersion_corrected_dft_total_energy": True,
             "canonical_isomeric_explicit_hydrogen_mapped_smiles": False,
-            "molecular_formula": False,
         }
 
+    # we will use the retry package to allow us to resume download if we lose connection to the server
     @retry(delay=1, jitter=1, backoff=2, tries=50, logger=logger, max_delay=10)
     def _fetch_singlepoint_from_qcarchive(
         self,
-        dataset_type: str,
         dataset_name: str,
         specification_name: str,
         local_database_name: str,
         local_path_dir: str,
-        pbar: tqdm,
         force_download: bool,
         unit_testing_max_records: Optional[int] = None,
+        pbar: Optional[tqdm] = None,
     ):
         from sqlitedict import SqliteDict
         from loguru import logger
+        from qcportal import PortalClient
 
-        ds = self.client.get_dataset(
-            dataset_type=dataset_type, dataset_name=dataset_name
-        )
+        dataset_type = "singlepoint"
+        client = PortalClient(self.qcarchive_server)
+
+        ds = client.get_dataset(dataset_type=dataset_type, dataset_name=dataset_name)
 
         entry_names = ds.entry_names
         with SqliteDict(
@@ -150,8 +162,9 @@ class SPICE12PubChemOpenFFCuration(dataset_curation):
                 for name in entry_names[0:unit_testing_max_records]:
                     if name not in db_keys:
                         to_fetch.append(name)
-            pbar.total = pbar.total + len(to_fetch)
-            pbar.refresh()
+            if pbar is not None:
+                pbar.total = pbar.total + len(to_fetch)
+                pbar.refresh()
 
             # We need a different routine to fetch entries vs records with a give specification
             if len(to_fetch) > 0:
@@ -163,7 +176,8 @@ class SPICE12PubChemOpenFFCuration(dataset_curation):
                         to_fetch, force_refetch=force_download
                     ):
                         spice_db[entry.dict()["name"]] = entry
-                        pbar.update(1)
+                        if pbar is not None:
+                            pbar.update(1)
 
                 else:
                     logger.debug(
@@ -175,11 +189,31 @@ class SPICE12PubChemOpenFFCuration(dataset_curation):
                         force_refetch=force_download,
                     ):
                         spice_db[record[0]] = record[2]
-                        pbar.update(1)
+                        if pbar is not None:
+                            pbar.update(1)
 
     def _calculate_reference_energy(self, smiles: str) -> float:
+        """
+        Calculate the reference energy for a given molecule, as defined by the SMILES string.
+
+        This routine is taken from
+        https://github.com/openmm/spice-dataset/blob/df7f5a2c8bf1ce0db225715a81f32897cc3a8988/downloader/downloader-openff-default.py
+        Reference energies for individual atoms are computed with Psi4 1.5 wB97M-D3BJ/def2-TZVPPD.
+
+        Parameters
+        ----------
+        smiles: str, required
+            SMILES string describing the molecule of interest.
+
+        Returns
+        -------
+        Returns the reference energy of for the atoms in the molecule (in hartrees)
+        """
+
         from rdkit import Chem
         import numpy as np
+
+        # Reference energies, in hartrees, computed with Psi4 1.5 wB97M-D3BJ/def2-TZVPPD.
 
         atom_energy = {
             "Br": {-1: -2574.2451510945853, 0: -2574.1167240829964},
@@ -237,7 +271,6 @@ class SPICE12PubChemOpenFFCuration(dataset_curation):
         local_path_dir: str,
         filenames: List[str],
         dataset_names: List[str],
-        unit_testing_max_records: Optional[int] = None,
     ):
         """
         Processes a downloaded dataset: extracts relevant information.
@@ -306,8 +339,7 @@ class SPICE12PubChemOpenFFCuration(dataset_curation):
                     current_val = name
                     temp_list.append(val)
 
-            # dict to store the molecule name and an associated mol_id
-
+            sorted_keys += sorted(temp_list, key=lambda x: int(x.split("-")[-1]))
             # first read in molecules from entry
             with SqliteDict(
                 input_file_name, tablename="entry", autocommit=False
@@ -369,6 +401,8 @@ class SPICE12PubChemOpenFFCuration(dataset_curation):
 
                     index = self.molecule_names[name]
 
+                    # note, we will use the convention of names being lowercase
+                    # and spaces denoted by underscore
                     quantity = "dft total energy"
                     quantity_o = "dft_total_energy"
                     if quantity_o not in self.data[index].keys():
@@ -434,6 +468,8 @@ class SPICE12PubChemOpenFFCuration(dataset_curation):
 
                     quantity = "dispersion correction energy"
                     quantity_o = "dispersion_correction_energy"
+                    # Note need to typecast here because of a bug in the
+                    # qcarchive entry: see issue: https://github.com/MolSSI/QCFractal/issues/766
                     if quantity_o not in self.data[index].keys():
                         self.data[index][quantity_o] = float(
                             val["properties"][quantity]
@@ -461,34 +497,28 @@ class SPICE12PubChemOpenFFCuration(dataset_curation):
             for key in datapoint.keys():
                 if key in self.qm_parameters:
                     datapoint[key] = datapoint[key] * self.qm_parameters[key]["u_in"]
+            # add in the formation energy defined as:
+            # dft_total_energy + dispersion_correction_energy - reference_energy
 
-            datapoint["dispersion_corrected_dft_total_energy"] = (
+            datapoint["formation_energy"] = (
                 datapoint["dft_total_energy"]
                 + datapoint["dispersion_correction_energy"]
-            )
-            datapoint["dispersion_corrected_dft_total_gradient"] = (
-                datapoint["dft_total_gradient"]
-                + datapoint["dispersion_correction_gradient"]
+                - np.array(datapoint["reference_energy"].m * datapoint["n_configs"])
+                * datapoint["reference_energy"].u
             )
 
+            # the dispersion corrected energy and gradient can be calculated from the raw data
+            # datapoint["dispersion_corrected_dft_total_energy"] = (
+            #     datapoint["dft_total_energy"]
+            #     + datapoint["dispersion_correction_energy"]
+            # )
+            # datapoint["dispersion_corrected_dft_total_gradient"] = (
+            #     datapoint["dft_total_gradient"]
+            #     + datapoint["dispersion_correction_gradient"]
+            # )
+
         if self.convert_units:
-            for datapoint in self.data:
-                for key, val in datapoint.items():
-                    if isinstance(val, pint.Quantity):
-                        try:
-                            datapoint[key] = val.to(
-                                self.qm_parameters[key]["u_out"], "chem"
-                            )
-                        except pint.errors.PintError:
-                            try:
-                                # if the unit conversion can't be done
-                                print(
-                                    f"could not convert {key} with unit {val.u} to {self.qm_parameters[key]['u_out']}"
-                                )
-                            except pint.errors.PintError:
-                                print(
-                                    f"could not convert {key} with unit {val.u}. {val.u} not in the defined."
-                                )
+            self._convert_units()
 
     def process(
         self,
@@ -515,10 +545,8 @@ class SPICE12PubChemOpenFFCuration(dataset_curation):
         >>> spice_openff_data.process()
 
         """
-        from qcportal import PortalClient
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
-        dataset_type = "singlepoint"
         dataset_names = [
             "SPICE PubChem Set 1 Single Points Dataset v1.2",
             "SPICE PubChem Set 2 Single Points Dataset v1.2",
@@ -528,8 +556,11 @@ class SPICE12PubChemOpenFFCuration(dataset_curation):
             "SPICE PubChem Set 6 Single Points Dataset v1.2",
         ]
         specification_names = ["spec_2", "spec_6", "entry"]
-        self.client = PortalClient(self.qcarchive_server)
 
+        # if we specify the number of records, restrict to only the first subset
+        # so we don't do this 6 times.
+        if unit_testing_max_records is not None:
+            dataset_names = ["SPICE PubChem Set 1 Single Points Dataset v1.2"]
         threads = []
         local_database_names = []
 
@@ -543,14 +574,13 @@ class SPICE12PubChemOpenFFCuration(dataset_curation):
                         threads.append(
                             e.submit(
                                 self._fetch_singlepoint_from_qcarchive,
-                                dataset_type=dataset_type,
                                 dataset_name=dataset_name,
                                 specification_name=specification_name,
                                 local_database_name=local_database_name,
                                 local_path_dir=self.local_cache_dir,
-                                pbar=pbar,
                                 force_download=force_download,
                                 unit_testing_max_records=unit_testing_max_records,
+                                pbar=pbar,
                             )
                         )
         logger.debug(f"Data fetched.")
@@ -562,7 +592,6 @@ class SPICE12PubChemOpenFFCuration(dataset_curation):
             self.local_cache_dir,
             local_database_names,
             dataset_names,
-            unit_testing_max_records,
         )
 
         self._generate_hdf5()

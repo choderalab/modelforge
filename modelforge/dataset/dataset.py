@@ -19,7 +19,7 @@ class TorchDataset(torch.utils.data.Dataset):
 
     Parameters
     ----------
-    dataset : np.ndarray
+    dataset : np.lib.npyio.NpzFile
         The underlying numpy dataset.
     property_name : PropertyNames
         Property names to extract from the dataset.
@@ -31,7 +31,7 @@ class TorchDataset(torch.utils.data.Dataset):
 
     def __init__(
         self,
-        dataset: np.ndarray,
+        dataset: np.lib.npyio.NpzFile,
         property_name: PropertyNames,
         preloaded: bool = False,
     ):
@@ -41,7 +41,8 @@ class TorchDataset(torch.utils.data.Dataset):
             "E": dataset[property_name.E],
         }
 
-        self.length = len(self.properties_of_interest["Z"])
+        self.mol_start_idxs = np.concatenate([[0], np.cumsum(dataset["n_atoms"])])
+        self.length = len(dataset["n_atoms"])
         self.preloaded = preloaded
 
     def __len__(self) -> int:
@@ -76,9 +77,14 @@ class TorchDataset(torch.utils.data.Dataset):
             - 'idx': int
                 Index of the molecule in the dataset.
         """
-        Z = torch.tensor(self.properties_of_interest["Z"][idx], dtype=torch.int64)
-        R = torch.tensor(self.properties_of_interest["R"][idx], dtype=torch.float32)
-        E = torch.tensor(self.properties_of_interest["E"][idx], dtype=torch.float32)
+
+
+        start_idx = self.mol_start_idxs[idx]
+        end_idx = self.mol_start_idxs[idx + 1]
+        Z = torch.tensor(self.properties_of_interest["Z"][start_idx:end_idx], dtype=torch.int64)
+        R = torch.tensor(self.properties_of_interest["R"][start_idx:end_idx], dtype=torch.float32)
+        E = torch.tensor(self.properties_of_interest["E"][start_idx:end_idx], dtype=torch.float32)
+
         return {"Z": Z, "R": R, "E": E, "idx": idx}
 
 
@@ -153,7 +159,7 @@ class HDF5Dataset:
             for mol in tqdm.tqdm(list(hf.keys())):
                 n_configs = hf[mol]["n_configs"][()]
                 temp_data = {}
-                is_series = {}
+                self.is_series = {}
 
                 # There may be cases where a specific property of interest
                 # has not been computed for a given molecule
@@ -170,13 +176,13 @@ class HDF5Dataset:
                         # indexing into a local np array is much faster
                         # than indexing into the array in the hdf5 file
                         temp_data[value] = hf[mol][value][()]
-                        is_series[value] = hf[mol][value].attrs["series"]
+                        self.is_series[value] = hf[mol][value].attrs["series"]
 
                     for n in range(n_configs):
                         not_nan = True
                         temp_data_cut = {}
                         for value in self.properties_of_interest:
-                            if is_series[value]:
+                            if self.is_series[value]:
                                 temp_data_cut[value] = temp_data[value][n]
                                 if np.any(np.isnan(temp_data_cut[value])):
                                     not_nan = False
@@ -193,6 +199,8 @@ class HDF5Dataset:
                             # may be needed for splitting
                             data["molecule_id"].append(molecule_id)
                     molecule_id += 1
+
+
 
         self.hdf5data = data
 
@@ -261,8 +269,23 @@ class HDF5Dataset:
 
         logger.debug(f"Writing data cache to {self.processed_data_file}")
 
+        data_arrays = OrderedDict()
+        n_atoms_by_property = OrderedDict()
+        for value in self.properties_of_interest:
+            if self.is_series[value]:
+                data_arrays[value] = np.concatenate(data[value], axis=0)
+                n_atoms_by_property[value] = np.array([len(mol) for mol in self.hdf5data[value]])
+            else:
+                data_arrays[value] = np.array(data[value])
+
+        n_atoms = n_atoms_by_property[0]
+        if not all(np.array_equal(n_atoms_other, n_atoms) for n_atoms_other in n_atoms_by_property.values()):
+            raise ValueError("Number of atoms per molecule not consistent across series properties")
+
         np.savez(
             self.processed_data_file,
+            n_atoms,
+            self.is_series,
             **self.hdf5data,
         )
         del self.hdf5data

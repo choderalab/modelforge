@@ -4,7 +4,7 @@ import torch
 
 from modelforge.potential.schnet import SchNET
 
-from .helper_functinos import generate_methane_input
+from .helper_functions import generate_methane_input
 
 
 def test_Schnet_init():
@@ -72,7 +72,7 @@ def get_input_for_interaction_block(
     from modelforge.dataset.qm9 import QM9Dataset
     from modelforge.potential.utils import GaussianRBF, _distance_to_radial_basis
 
-    from .helper_functinos import prepare_pairlist_for_single_batch, return_single_batch
+    from .helper_functions import prepare_pairlist_for_single_batch, return_single_batch
 
     embedding = nn.Embedding(nr_embeddings, nr_atom_basis, padding_idx=0)
     batch = return_single_batch(QM9Dataset, "fit")

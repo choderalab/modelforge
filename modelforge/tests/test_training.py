@@ -5,7 +5,7 @@ import pytest
 from modelforge.potential.models import BaseNNP
 from modelforge.potential.schnet import SchNET
 
-from .helper_functinos import (
+from .helper_functions import (
     MODELS_TO_TEST,
     DATASETS,
     initialize_dataset,

@@ -1063,6 +1063,20 @@ def spice114_process_download_short(prep_temp_dir):
     )
     assert len(spice_data.data) == 1
 
+    assert spice_data.data[0]["atomic_numbers"].shape == (27, 1)
+    assert spice_data.data[0]["geometry"].shape == (50, 27, 3)
+    assert spice_data.data[0]["formation_energy"].shape == (50, 1)
+    assert spice_data.data[0]["dft_total_energy"].shape == (50, 1)
+    assert spice_data.data[0]["dft_total_gradient"].shape == (50, 27, 3)
+    assert spice_data.data[0]["mbis_charges"].shape == (50, 27, 1)
+    assert spice_data.data[0]["mbis_dipoles"].shape == (50, 27, 3)
+    assert spice_data.data[0]["mbis_quadrupoles"].shape == (50, 27, 3, 3)
+    assert spice_data.data[0]["mbis_octupoles"].shape == (50, 27, 3, 3, 3)
+    assert spice_data.data[0]["scf_dipole"].shape == (50, 3)
+    assert spice_data.data[0]["scf_quadrupole"].shape == (50, 3, 3)
+    assert spice_data.data[0]["mayer_indices"].shape == (50, 27, 27)
+    assert spice_data.data[0]["wiberg_lowdin_indices"].shape == (50, 27, 27)
+
 
 def test_baseclass_unit_conversion(prep_temp_dir):
     spice_data = SPICE114Curation(
@@ -1161,7 +1175,7 @@ def test_spice114_process_download_no_conversion(prep_temp_dir):
                 1,
                 1,
             ],
-        )
+        ).reshape(-1, 1)
     )
     assert spice_data.data[0]["n_configs"] == 50
 
@@ -1311,7 +1325,7 @@ def test_spice114_process_download_conversion(prep_temp_dir):
                 1,
                 1,
             ],
-        )
+        ).reshape(-1, 1)
     )
     assert spice_data.data[0]["n_configs"] == 50
 
@@ -1606,4 +1620,15 @@ def test_spice12_openff_process_datasets(prep_temp_dir):
             array([2.06074536, -6.33012589, 4.43769815], dtype=float32)
             * unit.parse_expression("bohr"),
         )
+    )
+
+    assert spice_openff_data.data[0]["atomic_numbers"].shape == (47, 1)
+    assert spice_openff_data.data[0]["geometry"].shape == (1, 47, 3)
+    assert spice_openff_data.data[0]["dft_total_gradient"].shape == (1, 47, 3)
+    assert spice_openff_data.data[0]["mbis_charges"].shape == (1, 47, 1)
+    assert spice_openff_data.data[0]["scf_dipole"].shape == (1, 3)
+    assert spice_openff_data.data[0]["dispersion_correction_gradient"].shape == (
+        1,
+        47,
+        3,
     )

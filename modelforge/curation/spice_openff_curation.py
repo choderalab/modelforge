@@ -292,6 +292,7 @@ class SPICE12PubChemOpenFFCuration(DatasetCuration):
         from sqlitedict import SqliteDict
         from loguru import logger
         import qcelemental as qcel
+        from numpy import newaxis
 
         for filename, dataset_name in zip(filenames, dataset_names):
             input_file_name = f"{local_path_dir}/{filename}"
@@ -358,7 +359,9 @@ class SPICE12PubChemOpenFFCuration(DatasetCuration):
                             atomic_numbers.append(
                                 qcel.periodictable.to_atomic_number(element)
                             )
-                        data_temp["atomic_numbers"] = np.array(atomic_numbers)
+                        data_temp["atomic_numbers"] = np.array(atomic_numbers).reshape(
+                            -1, 1
+                        )
                         data_temp["molecular_formula"] = val["molecule"]["identifiers"][
                             "molecular_formula"
                         ]
@@ -431,12 +434,15 @@ class SPICE12PubChemOpenFFCuration(DatasetCuration):
                     if quantity_o not in self.data[index].keys():
                         self.data[index][quantity_o] = np.array(
                             val["properties"][quantity]
-                        ).reshape(1, -1)
+                        ).reshape(1, -1)[..., newaxis]
+
                     else:
                         self.data[index][quantity_o] = np.vstack(
                             (
                                 self.data[index][quantity_o],
-                                np.array(val["properties"][quantity]).reshape(1, -1),
+                                np.array(val["properties"][quantity]).reshape(1, -1)[
+                                    ..., newaxis
+                                ],
                             )
                         )
 
@@ -500,7 +506,7 @@ class SPICE12PubChemOpenFFCuration(DatasetCuration):
             # add in the formation energy defined as:
             # dft_total_energy + dispersion_correction_energy - reference_energy
 
-            datapoint["formation_energy"] = (
+            datapoint["formation_energy"] = np.array(
                 datapoint["dft_total_energy"]
                 + datapoint["dispersion_correction_energy"]
                 - np.array(datapoint["reference_energy"].m * datapoint["n_configs"])

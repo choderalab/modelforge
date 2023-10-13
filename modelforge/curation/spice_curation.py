@@ -155,6 +155,7 @@ class SPICE114Curation(DatasetCuration):
 
         input_file_name = f"{local_path_dir}/{name}"
 
+        need_to_reshape = {"formation_energy": True, "dft_total_energy": True}
         with h5py.File(input_file_name, "r") as hf:
             names = list(hf.keys())
             if unit_testing_max_records is None:
@@ -172,7 +173,9 @@ class SPICE114Curation(DatasetCuration):
                 ds_temp = {}
 
                 ds_temp["name"] = f"{name}"
-                ds_temp["atomic_numbers"] = hf[name]["atomic_numbers"][()]
+                ds_temp["atomic_numbers"] = hf[name]["atomic_numbers"][()].reshape(
+                    -1, 1
+                )
                 ds_temp["n_configs"] = n_configs
 
                 # param_in is the name of the entry, param_data contains input (u_in) and output (u_out) units
@@ -184,6 +187,8 @@ class SPICE114Curation(DatasetCuration):
 
                     if param_in in keys_list:
                         temp = hf[name][param_in][()]
+                        if param_in in need_to_reshape:
+                            temp = temp.reshape(-1, 1)
 
                         param_unit = param_data["u_in"]
                         if param_unit is not None:

@@ -45,8 +45,9 @@ class SPICE114Curation(DatasetCuration):
 
     def _init_dataset_parameters(self):
         self.dataset_download_url = (
-            "https://zenodo.org/record/8222043/files/SPICE-1.1.4.hdf5"
+            "https://zenodo.org/records/8222043/files/SPICE-1.1.4.hdf5"
         )
+        self.dataset_md5_checksum = "f27d4c81da0e37d6547276bf6b4ae6a1"
         # the spice dataset includes openff compatible unit definitions in the hdf5 file
         # these values were used to generate this dictionary
         self.qm_parameters = {
@@ -248,6 +249,7 @@ class SPICE114Curation(DatasetCuration):
         # download the dataset
         self.name = download_from_zenodo(
             url=url,
+            zenodo_md5_checksum=self.dataset_md5_checksum,
             output_path=self.local_cache_dir,
             force_download=force_download,
         )

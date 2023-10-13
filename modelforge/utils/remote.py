@@ -1,6 +1,6 @@
 """Module for querying and fetching datafiles from remote sources"""
 
-from typing import Optional, List
+from typing import Optional, List, Dict
 from loguru import logger
 
 
@@ -77,6 +77,17 @@ def fetch_url_from_doi(doi: str, timeout: Optional[int] = 10) -> str:
     return response.url
 
 
+def calculate_md5_checksum(file_name: str, file_path: str) -> str:
+    import hashlib
+
+    with open(f"{file_path}/{file_name}", "rb") as f:
+        file_hash = hashlib.md5()
+        while chunk := f.read(8192):
+            file_hash.update(chunk)
+
+    return file_hash.hexdigest()
+
+
 # Figshare helper functions
 def download_from_figshare(url: str, output_path: str, force_download=False) -> str:
     """
@@ -129,8 +140,9 @@ def download_from_figshare(url: str, output_path: str, force_download=False) -> 
     logger.debug(f"Downloading datafile from figshare to {output_path}/{name}.")
 
     if not os.path.isfile(f"{output_path}/{name}") or force_download:
-        length = int(requests.head(temp_url).headers["Content-Length"])
-
+        temp_url_headers = requests.head(temp_url)
+        length = int(temp_url_headers.headers["Content-Length"])
+        figshare_md5_checksum = temp_url_headers.headers["ETag"].strip('"')
         r = requests.get(url, stream=True)
 
         os.makedirs(output_path, exist_ok=True)
@@ -143,6 +155,14 @@ def download_from_figshare(url: str, output_path: str, force_download=False) -> 
                 total=(int(length / chunk_size) + 1),
             ):
                 fd.write(chunk)
+
+        calculated_checksum = calculate_md5_checksum(
+            file_name=name, file_path=output_path
+        )
+        if calculated_checksum != figshare_md5_checksum:
+            raise Exception(
+                "Checksum of downloaded file does not match expected checksum"
+            )
     else:  # if the file exists and we don't set force_download to True, just use the cached version
         logger.debug(f"Datafile {name} already exists in {output_path}.")
         logger.debug(
@@ -152,146 +172,9 @@ def download_from_figshare(url: str, output_path: str, force_download=False) -> 
     return name
 
 
-# Zenodo specific helper functions
-def parse_zenodo_record_id_from_url(url: str) -> str:
-    """Return the record id from a zenodo.org record URL.
-
-    This function will raise an exception if the URL
-    is malformed. Expected format:
-    https://zenodo.org/record/{RECORD_ID}
-
-    Parameters
-    ----------
-    url : str, required
-        The url to parse.
-    Returns
-    -------
-    record_id : str
-        Zenodo record id.
-
-    Examples
-    --------
-    >>> parse_zenodo_record_id_from_url(url = "https://zenodo.org/record/3588339")
-    """
-    from urllib.parse import urlparse
-
-    # parse the url using urllib parsing function
-    parsed = urlparse(url)
-
-    parsed_path = list(filter(None, parsed.path.split("/")))
-
-    # make sure that we only have two elements in the path
-    # part of the url, namely ['record', f'{record_id}']
-    if len(parsed_path) != 2:
-        raise Exception(f"Malformed zenodo.org record URL: {url}.")
-    record_id = parsed_path[-1]
-
-    return record_id
-
-
-def get_zenodo_datafiles(
-    record_id: str, file_extension: str, timeout: Optional[int] = 10
-) -> List[str]:
-    """Retrieve link(s) to datafiles on zenodo with a given extension.
-
-    Parameters
-    ----------
-    record_id : str, required
-        zenodo.org record id.  Can also provide url to a record.
-    file_extension : str, required
-        Return file(s) with extensions that match file_extension
-    timeout : int, optional, default=10
-        The number of seconds to wait to establish a connection
-
-    Returns
-    -------
-    data_urls : list object, dtype=str
-        Each entry in the list links to files with the given file extension.
-
-    Examples
-    --------
-    >>> files = get_zenodo_datafiles(record_id="3588339", file_extension=".hdf5.gz")
-    >>> files = get_zenodo_datafiles(
-        record_id="https://zenodo.org/record/3588339", file_extension=".hdf5.gz"
-    )
-    """
-    import requests
-
-    zenodo_base = "https://zenodo.org/api/records/"
-
-    # if we are provided the url, santize
-    if is_url(record_id, "zenodo.org"):
-        record_id = parse_zenodo_record_id_from_url(record_id)
-
-    zenodo_api_url = zenodo_base + record_id
-
-    try:
-        data_request = requests.get(zenodo_api_url, timeout=timeout)
-    except requests.exceptions.ConnectTimeout:
-        raise Exception("Attempt to access Zenodo timed out")
-
-    if not data_request.ok:
-        raise Exception(f"Record id {record_id} could not be accessed.")
-
-    # grab the data from zenodo
-    json_content = data_request.json()
-    files = json_content["files"]
-
-    # search through the list of files to find those with desired extension
-    data_urls = []
-    for file in files:
-        if file["links"]["self"].endswith(file_extension):
-            data_urls.append(file["links"]["self"])
-
-    return data_urls
-
-
-def datafiles_from_zenodo(record: str, file_extension: str) -> List[str]:
-    """For a given zenodo DOI or record_id, return links to all gzipped hdf5 files.
-
-    Parameters
-    ----------
-    record : str, required
-        This can be either Zenodo DOI or Zenodo record id.
-        Either of these can be formatted as a URL, e.g.,
-        https://dx.doi.org/{DOI} or https://zenodo.org/record/{record_id}
-    file_extension: str, required
-        File extension for filtering results
-    Returns
-    -------
-    data_urls : list object, dtype=str
-        Each entry contains the direct link to all hdf5.gz files.
-
-    Examples
-    --------
-    >>> files = hdf5_from_zenodo(record="10.5281/zenodo.3588339")
-    >>> files = hdf5_from_zenodo(record="https://dx.doi.org/10.5281/zenodo.3588339")
-    >>> files = hdf5_from_zenodo(record="https://zenodo.org/record/3588339")
-    >>> files = hdf5_from_zenodo(record="3588339")
-    """
-    record_is_doi = True
-    # first determine if we are dealing with a doi or a record_id
-    if is_url(record, hostname="zenodo.org"):
-        record_is_doi = False
-    elif is_url(record, hostname="doi.org"):
-        record_is_doi = True
-    elif not "zenodo." in record.split("/")[-1]:
-        record_is_doi = False
-
-    if record_is_doi:
-        record_id = fetch_url_from_doi(record)
-        data_urls = get_zenodo_datafiles(record_id, file_extension=file_extension)
-    else:
-        data_urls = get_zenodo_datafiles(record, file_extension=file_extension)
-
-    # Make sure files were found.
-    if len(data_urls) == 0:
-        raise Exception(f"No files with extension {file_extension} were found.")
-
-    return data_urls
-
-
-def download_from_zenodo(url: str, output_path: str, force_download=False) -> str:
+def download_from_zenodo(
+    url: str, zenodo_md5_checksum: str, output_path: str, force_download=False
+) -> str:
     """
     Downloads a dataset from zenodo for a given url.
 
@@ -314,7 +197,7 @@ def download_from_zenodo(url: str, output_path: str, force_download=False) -> st
 
     Examples
     --------
-    >>> url = "https://zenodo.org/record/3401581/files/PTC-CMC/atools_ml-v0.1.zip"
+    >>> url = "https://zenodo.org/records/3401581/files/PTC-CMC/atools_ml-v0.1.zip"
     >>> output_path = '/path/to/directory'
     >>> downloaded_file_name = download_from_zenodo(url, output_path)
 
@@ -357,6 +240,14 @@ def download_from_zenodo(url: str, output_path: str, force_download=False) -> st
                 total=(int(length / chunk_size) + 1),
             ):
                 fd.write(chunk)
+        calculated_checksum = calculate_md5_checksum(
+            file_name=name, file_path=output_path
+        )
+        if calculated_checksum != zenodo_md5_checksum:
+            raise Exception(
+                "Checksum of downloaded file does not match expected checksum"
+            )
+
     else:  # if the file exists and we don't set force_download to True, just use the cached version
         logger.debug(f"Datafile {name} already exists in {output_path}.")
         logger.debug(

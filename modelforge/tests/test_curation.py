@@ -239,90 +239,104 @@ def test_qm9_curation_parse_xyz(prep_temp_dir):
     temp_line = "gdb 1  157.7  157.7  157.7  0.  13.2  -0.3  0.1  0.5  35.3  0.0  -40.4  -40.4  -40.4  -40.4  6.4"
     temp_dict = qm9_data._parse_properties(temp_line)
 
+    # units are applied in _parse_properties
     assert len(temp_dict) == 17
     assert temp_dict["tag"] == "gdb"
     assert temp_dict["idx"] == "1"
-    assert temp_dict["rotational_constant_A"] == 157.7 * unit.gigahertz
-    assert temp_dict["rotational_constant_B"] == 157.7 * unit.gigahertz
-    assert temp_dict["rotational_constant_C"] == 157.7 * unit.gigahertz
-    assert temp_dict["dipole_moment"] == 0 * unit.debye
-    assert temp_dict["isotropic_polarizability"] == 13.2 * unit.angstrom**3
-    assert temp_dict["energy_of_homo"] == -0.3 * unit.hartree
-    assert temp_dict["energy_of_lumo"] == 0.1 * unit.hartree
-    assert temp_dict["lumo-homo_gap"] == 0.5 * unit.hartree
-    assert temp_dict["electronic_spatial_extent"] == 35.3 * unit.angstrom**2
-    assert temp_dict["zero_point_vibrational_energy"] == 0.0 * unit.hartree
-    assert temp_dict["internal_energy_at_0K"] == -40.4 * unit.hartree
-    assert temp_dict["internal_energy_at_298.15K"] == -40.4 * unit.hartree
-    assert temp_dict["enthalpy_at_298.15K"] == -40.4 * unit.hartree
-    assert temp_dict["free_energy_at_298.15K"] == -40.4 * unit.hartree
-    assert (
-        temp_dict["heat_capacity_at_298.15K"]
-        == 6.4 * unit.calorie_per_mole / unit.kelvin
-    )
+    assert temp_dict["rotational_constant_A"] == 157.7
+    assert temp_dict["rotational_constant_B"] == 157.7
+    assert temp_dict["rotational_constant_C"] == 157.7
+    assert temp_dict["dipole_moment"] == 0
+    assert temp_dict["isotropic_polarizability"] == 13.2
+    assert temp_dict["energy_of_homo"] == -0.3
+    assert temp_dict["energy_of_lumo"] == 0.1
+    assert temp_dict["lumo-homo_gap"] == 0.5
+    assert temp_dict["electronic_spatial_extent"] == 35.3
+    assert temp_dict["zero_point_vibrational_energy"] == 0.0
+    assert temp_dict["internal_energy_at_0K"] == -40.4
+    assert temp_dict["internal_energy_at_298.15K"] == -40.4
+    assert temp_dict["enthalpy_at_298.15K"] == -40.4
+    assert temp_dict["free_energy_at_298.15K"] == -40.4
+    assert temp_dict["heat_capacity_at_298.15K"] == 6.4
 
     # test parsing an entire file from our data directory with unit conversions
     fn = resources.files("modelforge").joinpath("tests", "data", "dsgdb9nsd_000001.xyz")
     data_dict_temp = qm9_data._parse_xyzfile(str(fn))
 
     # spot check values
+    # geometry is a per atom property so will be of shape [m,n,3]
+    # where for qm9, the number of conformers, m = 1
     assert np.all(
         np.isclose(
             data_dict_temp["geometry"],
             np.array(
                 [
-                    [-1.26981359e-03, 1.08580416e-01, 8.00099580e-04],
-                    [2.15041600e-04, -6.03131760e-04, 1.97612040e-04],
-                    [1.01173084e-01, 1.46375116e-01, 2.76574800e-05],
-                    [-5.40815069e-02, 1.44752661e-01, -8.76643715e-02],
-                    [-5.23813634e-02, 1.43793264e-01, 9.06397294e-02],
+                    [
+                        [-1.26981359e-03, 1.08580416e-01, 8.00099580e-04],
+                        [2.15041600e-04, -6.03131760e-04, 1.97612040e-04],
+                        [1.01173084e-01, 1.46375116e-01, 2.76574800e-05],
+                        [-5.40815069e-02, 1.44752661e-01, -8.76643715e-02],
+                        [-5.23813634e-02, 1.43793264e-01, 9.06397294e-02],
+                    ]
                 ]
             )
             * unit.nanometer,
         )
     )
-
+    # [m, n, 1] shape
     assert np.all(
         data_dict_temp["charges"]
-        == np.array([-0.535689, 0.133921, 0.133922, 0.133923, 0.133923])
+        == np.array([[[-0.535689], [0.133921], [0.133922], [0.133923], [0.133923]]])
         * unit.elementary_charge
     )
-    assert data_dict_temp["isotropic_polarizability"] == 13.21 * unit.angstroms**3
-    assert data_dict_temp["energy_of_homo"] == -0.3877 * unit.hartree
-    assert data_dict_temp["energy_of_lumo"] == 0.1171 * unit.hartree
-    assert data_dict_temp["lumo-homo_gap"] == 0.5048 * unit.hartree
-    assert data_dict_temp["electronic_spatial_extent"] == 35.3641 * unit.angstrom**2
-    assert data_dict_temp["zero_point_vibrational_energy"] == 0.044749 * unit.hartree
-    assert data_dict_temp["internal_energy_at_0K"] == -40.47893 * unit.hartree
-    assert data_dict_temp["internal_energy_at_298.15K"] == -40.476062 * unit.hartree
-    assert data_dict_temp["enthalpy_at_298.15K"] == -40.475117 * unit.hartree
-    assert data_dict_temp["free_energy_at_298.15K"] == -40.498597 * unit.hartree
+    assert data_dict_temp["isotropic_polarizability"] == [[13.21]] * unit.angstroms**3
+    assert data_dict_temp["energy_of_homo"] == [[-0.3877]] * unit.hartree
+    assert data_dict_temp["energy_of_lumo"] == [[0.1171]] * unit.hartree
+    assert data_dict_temp["lumo-homo_gap"] == [[0.5048]] * unit.hartree
+    assert (
+        data_dict_temp["electronic_spatial_extent"] == [[35.3641]] * unit.angstrom**2
+    )
+    assert (
+        data_dict_temp["zero_point_vibrational_energy"] == [[0.044749]] * unit.hartree
+    )
+    assert data_dict_temp["internal_energy_at_0K"] == [[-40.47893]] * unit.hartree
+    assert data_dict_temp["internal_energy_at_298.15K"] == [[-40.476062]] * unit.hartree
+    assert data_dict_temp["enthalpy_at_298.15K"] == [[-40.475117]] * unit.hartree
+    assert data_dict_temp["free_energy_at_298.15K"] == [[-40.498597]] * unit.hartree
     assert (
         data_dict_temp["heat_capacity_at_298.15K"]
-        == 6.469 * unit.calorie_per_mole / unit.kelvin
+        == [[6.469]] * unit.calorie_per_mole / unit.kelvin
     )
-    assert np.all(data_dict_temp["atomic_numbers"] == np.array([6, 1, 1, 1, 1]))
+    # atomic_numbers do not change with conformers, so it is defined as [n,1]
+    assert np.all(
+        data_dict_temp["atomic_numbers"] == np.array([[6], [1], [1], [1], [1]])
+    )
     assert data_dict_temp["smiles_gdb-17"] == "C"
     assert data_dict_temp["smiles_b3lyp"] == "C"
     assert data_dict_temp["inchi_corina"] == "1S/CH4/h1H4"
     assert data_dict_temp["inchi_b3lyp"] == "1S/CH4/h1H4"
-    assert data_dict_temp["rotational_constant_A"] == 157.7118 * unit.gigahertz
-    assert data_dict_temp["rotational_constant_B"] == 157.70997 * unit.gigahertz
-    assert data_dict_temp["rotational_constant_C"] == 157.70699 * unit.gigahertz
-    assert data_dict_temp["dipole_moment"] == 0.0 * unit.debye
+    # per molecule property, shape [m,3]
+    assert np.all(
+        data_dict_temp["rotational_constants"]
+        == np.array([[157.7118, 157.70997, 157.70699]]) * unit.gigahertz
+    )
+
+    assert data_dict_temp["dipole_moment"] == [[0.0]] * unit.debye
     assert np.all(
         data_dict_temp["harmonic_vibrational_frequencies"]
         == np.array(
             [
-                1341.307,
-                1341.3284,
-                1341.365,
-                1562.6731,
-                1562.7453,
-                3038.3205,
-                3151.6034,
-                3151.6788,
-                3151.7078,
+                [
+                    1341.307,
+                    1341.3284,
+                    1341.365,
+                    1562.6731,
+                    1562.7453,
+                    3038.3205,
+                    3151.6034,
+                    3151.6788,
+                    3151.7078,
+                ]
             ]
         )
         / unit.centimeter
@@ -348,17 +362,18 @@ def test_qm9_local_archive(prep_temp_dir):
     assert len(qm9_data.data) == 10
     # internal_energy_at_0K in kj/mol
     names = {
-        "dsgdb9nsd_000001": -106277.4161215308,
-        "dsgdb9nsd_000002": -148408.69593977975,
-        "dsgdb9nsd_000003": -200600.51755556674,
-        "dsgdb9nsd_000004": -202973.24721725564,
-        "dsgdb9nsd_000005": -245252.87826713378,
-        "dsgdb9nsd_000006": -300576.6846578527,
-        "dsgdb9nsd_000007": -209420.75231941737,
-        "dsgdb9nsd_000008": -303715.5298633426,
-        "dsgdb9nsd_000009": -306158.32885940996,
-        "dsgdb9nsd_000010": -348451.454977435,
+        "dsgdb9nsd_000001": np.array([[-106277.4161215308]]),
+        "dsgdb9nsd_000002": np.array([[-148408.69593977975]]),
+        "dsgdb9nsd_000003": np.array([[-200600.51755556674]]),
+        "dsgdb9nsd_000004": np.array([[-202973.24721725564]]),
+        "dsgdb9nsd_000005": np.array([[-245252.87826713378]]),
+        "dsgdb9nsd_000006": np.array([[-300576.6846578527]]),
+        "dsgdb9nsd_000007": np.array([[-209420.75231941737]]),
+        "dsgdb9nsd_000008": np.array([[-303715.5298633426]]),
+        "dsgdb9nsd_000009": np.array([[-306158.32885940996]]),
+        "dsgdb9nsd_000010": np.array([[-348451.454977435]]),
     }
+    #
     # output file
     file_name_path = str(prep_temp_dir) + "/qm9_test10.hdf5"
     qm9_data._generate_hdf5()
@@ -370,6 +385,9 @@ def test_qm9_local_archive(prep_temp_dir):
             # check record names
             assert key in list(names.keys())
             assert np.isclose(hf[key]["internal_energy_at_0K"][()], names[key])
+            assert np.all(
+                hf[key]["internal_energy_at_0K"][()].shape == names[key].shape
+            )
 
     # clear out the
     qm9_data._clear_data()
@@ -1523,6 +1541,8 @@ def test_spice12_openff_test_process_downloaded(prep_temp_dir):
 
 
 def test_spice12_openff_process_datasets(prep_temp_dir):
+    from numpy import array, float32
+
     local_path_dir = str(prep_temp_dir)
     hdf5_file_name = "test_dataset.hdf5"
 
@@ -1543,3 +1563,19 @@ def test_spice12_openff_process_datasets(prep_temp_dir):
     assert spice_openff_data.data[2]["n_configs"] == 1
     assert spice_openff_data.data[3]["n_configs"] == 1
     assert spice_openff_data.data[4]["n_configs"] == 6
+
+    assert np.all(
+        np.isclose(
+            spice_openff_data.data[0]["geometry"][0][0],
+            array([3.95964426, 8.33708863, 2.95160792], dtype=float32)
+            * unit.parse_expression("bohr"),
+        )
+    )
+    # look at the first atom in last configuration in the array
+    assert np.all(
+        np.isclose(
+            spice_openff_data.data[4]["geometry"][-1][0],
+            array([2.06074536, -6.33012589, 4.43769815], dtype=float32)
+            * unit.parse_expression("bohr"),
+        )
+    )

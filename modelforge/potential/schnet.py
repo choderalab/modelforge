@@ -2,7 +2,7 @@ import torch.nn as nn
 from loguru import logger
 from typing import Dict, Tuple, List, Type
 
-from .models import BaseNNP, LighningModuleMixin
+from .models import BaseNNP, LightningModuleMixin
 from .utils import (
     EnergyReadout,
     GaussianRBF,
@@ -15,7 +15,7 @@ from .utils import (
 import torch
 
 
-class Schnet(BaseNNP):
+class SchNET(BaseNNP):
     def __init__(
         self,
         nr_atom_basis: int,
@@ -45,12 +45,12 @@ class Schnet(BaseNNP):
         super().__init__()
 
         self.calculate_distances_and_pairlist = PairList(cutoff)
-        self.representation = SchNetRepresentation(cutoff)
+        self.representation = SchNETRepresentation(cutoff)
         self.readout = EnergyReadout(nr_atom_basis)
         self.embedding = nn.Embedding(nr_of_embeddings, nr_atom_basis, padding_idx=0)
         self.interactions = nn.ModuleList(
             [
-                SchNetInteractionBlock(nr_atom_basis, nr_filters)
+                SchNETInteractionBlock(nr_atom_basis, nr_filters)
                 for _ in range(nr_interactions)
             ]
         )
@@ -104,7 +104,7 @@ class Schnet(BaseNNP):
         return self.readout(x)  # shape (batch_size,)
 
 
-class SchNetInteractionBlock(nn.Module):
+class SchNETInteractionBlock(nn.Module):
     def __init__(self, nr_atom_basis: int, nr_filters: int, nr_rbf: int = 20):
         """
         Initialize the SchNet interaction block.
@@ -186,7 +186,7 @@ class SchNetInteractionBlock(nn.Module):
         return x
 
 
-class SchNetRepresentation(nn.Module):
+class SchNETRepresentation(nn.Module):
     def __init__(
         self,
         cutoff: float = 5.0,
@@ -247,7 +247,7 @@ class SchNetRepresentation(nn.Module):
         return {"f_ij": f_ij, "idx_i": idx_i, "idx_j": idx_j, "rcut_ij": rcut_ij}
 
 
-class LighningSchnet(Schnet, LighningModuleMixin):
+class LightningSchNET(SchNET, LightningModuleMixin):
     def __init__(
         self,
         n_atom_basis: int,

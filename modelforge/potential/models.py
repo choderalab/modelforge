@@ -70,7 +70,7 @@ class PairList(nn.Module):
         return {"atom_index12": atom_index12, "d_ij": r_ij.norm(2, -1), "r_ij": r_ij}
 
 
-class LighningModuleMixin(pl.LightningModule):
+class LightningModuleMixin(pl.LightningModule):
     """A mixin for PyTorch Lightning training."""
 
     def training_step(

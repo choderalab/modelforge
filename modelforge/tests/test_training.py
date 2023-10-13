@@ -3,7 +3,7 @@ from typing import Optional, Type
 import pytest
 
 from modelforge.potential.models import BaseNNP
-from modelforge.potential.schnet import Schnet
+from modelforge.potential.schnet import SchNET
 
 from .helper_functinos import (
     MODELS_TO_TEST,

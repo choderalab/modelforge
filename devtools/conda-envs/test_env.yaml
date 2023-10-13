@@ -21,6 +21,7 @@ dependencies:
   - pint
   - pedantic
   - rdkit
+  - retry
 
   # Testing
   - pytest

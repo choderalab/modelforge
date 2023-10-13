@@ -477,13 +477,17 @@ class SPICE12PubChemOpenFFCuration(DatasetCuration):
                     # Note need to typecast here because of a bug in the
                     # qcarchive entry: see issue: https://github.com/MolSSI/QCFractal/issues/766
                     if quantity_o not in self.data[index].keys():
-                        self.data[index][quantity_o] = float(
-                            val["properties"][quantity]
-                        )
+                        self.data[index][quantity_o] = np.array(
+                            float(val["properties"][quantity])
+                        ).reshape(1, 1)
                     else:
-                        self.data[index][quantity_o] = np.append(
-                            self.data[index][quantity_o],
-                            float(val["properties"][quantity]),
+                        self.data[index][quantity_o] = np.vstack(
+                            (
+                                self.data[index][quantity_o],
+                                np.array(float(val["properties"][quantity])).reshape(
+                                    1, 1
+                                ),
+                            ),
                         )
                     quantity = "dispersion correction gradient"
                     quantity_o = "dispersion_correction_gradient"
@@ -506,7 +510,7 @@ class SPICE12PubChemOpenFFCuration(DatasetCuration):
             # add in the formation energy defined as:
             # dft_total_energy + dispersion_correction_energy - reference_energy
 
-            datapoint["formation_energy"] = np.array(
+            datapoint["formation_energy"] = (
                 datapoint["dft_total_energy"]
                 + datapoint["dispersion_correction_energy"]
                 - np.array(datapoint["reference_energy"].m * datapoint["n_configs"])

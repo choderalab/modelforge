@@ -1621,14 +1621,31 @@ def test_spice12_openff_process_datasets(prep_temp_dir):
             * unit.parse_expression("bohr"),
         )
     )
-
+    # check the shape of a molecule with only a single conformer in the test set
     assert spice_openff_data.data[0]["atomic_numbers"].shape == (47, 1)
     assert spice_openff_data.data[0]["geometry"].shape == (1, 47, 3)
     assert spice_openff_data.data[0]["dft_total_gradient"].shape == (1, 47, 3)
     assert spice_openff_data.data[0]["mbis_charges"].shape == (1, 47, 1)
     assert spice_openff_data.data[0]["scf_dipole"].shape == (1, 3)
+    assert spice_openff_data.data[0]["dispersion_correction_energy"].shape == (1, 1)
     assert spice_openff_data.data[0]["dispersion_correction_gradient"].shape == (
         1,
         47,
         3,
     )
+    assert spice_openff_data.data[0]["formation_energy"].shape == (1, 1)
+
+    # check the shape of a molecule with multiple conformers in the test set
+    assert spice_openff_data.data[4]["atomic_numbers"].shape == (16, 1)
+    assert spice_openff_data.data[4]["geometry"].shape == (6, 16, 3)
+    assert spice_openff_data.data[4]["dft_total_energy"].shape == (6, 1)
+    assert spice_openff_data.data[4]["dft_total_gradient"].shape == (6, 16, 3)
+    assert spice_openff_data.data[4]["mbis_charges"].shape == (6, 16, 1)
+    assert spice_openff_data.data[4]["scf_dipole"].shape == (6, 3)
+    assert spice_openff_data.data[4]["dispersion_correction_energy"].shape == (6, 1)
+    assert spice_openff_data.data[4]["dispersion_correction_gradient"].shape == (
+        6,
+        16,
+        3,
+    )
+    assert spice_openff_data.data[4]["formation_energy"].shape == (6, 1)

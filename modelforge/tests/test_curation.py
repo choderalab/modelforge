@@ -476,7 +476,7 @@ def test_an1_process_download_no_conversion(prep_temp_dir):
     assert ani1_data.data[0]["name"] == "C1H4N4O4"
     assert np.all(
         ani1_data.data[0]["atomic_numbers"]
-        == array([6, 1, 1, 1, 1, 7, 7, 7, 7, 8, 8, 8, 8], dtype=uint8)
+        == array([6, 1, 1, 1, 1, 7, 7, 7, 7, 8, 8, 8, 8], dtype=uint8).reshape(-1, 1)
     )
     assert ani1_data.data[0]["n_configs"] == 2
 
@@ -618,7 +618,7 @@ def test_an1_process_download_no_conversion(prep_temp_dir):
                     -0.374352,
                 ],
                 dtype=float32,
-            )
+            ).reshape(-1, 1)
             * unit.parse_expression("elementary_charge"),
         )
     )
@@ -642,7 +642,7 @@ def test_an1_process_download_no_conversion(prep_temp_dir):
                     -0.338735,
                 ],
                 dtype=float32,
-            )
+            ).reshape(-1, 1)
             * unit.parse_expression("elementary_charge"),
         )
     )
@@ -666,7 +666,7 @@ def test_an1_process_download_no_conversion(prep_temp_dir):
                     -0.6540033,
                 ],
                 dtype=float32,
-            )
+            ).reshape(-1, 1)
             * unit.parse_expression("elementary_charge"),
         )
     )
@@ -690,7 +690,7 @@ def test_an1_process_download_no_conversion(prep_temp_dir):
                     0.1239773,
                 ],
                 dtype=float32,
-            ),
+            ).reshape(-1, 1),
         )
     )
     assert np.all(
@@ -713,7 +713,7 @@ def test_an1_process_download_no_conversion(prep_temp_dir):
                     0.13592605,
                 ],
                 dtype=float32,
-            ),
+            ).reshape(-1, 1),
         )
     )
     assert np.all(
@@ -736,7 +736,7 @@ def test_an1_process_download_no_conversion(prep_temp_dir):
                     0.58347076,
                 ],
                 dtype=float32,
-            ),
+            ).reshape(-1, 1),
         )
     )
     assert np.all(
@@ -759,9 +759,37 @@ def test_an1_process_download_no_conversion(prep_temp_dir):
                     26.948938,
                 ],
                 dtype=float32,
-            ),
+            ).reshape(-1, 1),
         )
     )
+
+    # check that the shape of the arrays are what we expect
+    assert ani1_data.data[0]["atomic_numbers"].shape == (13, 1)
+    assert ani1_data.data[0]["geometry"].shape == (2, 13, 3)
+    assert ani1_data.data[0]["wb97x_dz.energy"].shape == (2, 1)
+    assert ani1_data.data[0]["wb97x_tz.energy"].shape == (2, 1)
+    assert ani1_data.data[0]["ccsd(t)_cbs.energy"].shape == (2, 1)
+    assert ani1_data.data[0]["hf_dz.energy"].shape == (2, 1)
+    assert ani1_data.data[0]["hf_tz.energy"].shape == (2, 1)
+    assert ani1_data.data[0]["hf_qz.energy"].shape == (2, 1)
+    assert ani1_data.data[0]["npno_ccsd(t)_dz.corr_energy"].shape == (2, 1)
+    assert ani1_data.data[0]["npno_ccsd(t)_tz.corr_energy"].shape == (2, 1)
+    assert ani1_data.data[0]["tpno_ccsd(t)_dz.corr_energy"].shape == (2, 1)
+    assert ani1_data.data[0]["mp2_dz.corr_energy"].shape == (2, 1)
+    assert ani1_data.data[0]["mp2_tz.corr_energy"].shape == (2, 1)
+    assert ani1_data.data[0]["mp2_qz.corr_energy"].shape == (2, 1)
+    assert ani1_data.data[0]["wb97x_dz.forces"].shape == (2, 13, 3)
+    assert ani1_data.data[0]["wb97x_tz.forces"].shape == (2, 13, 3)
+    assert ani1_data.data[0]["wb97x_dz.dipole"].shape == (2, 3)
+    assert ani1_data.data[0]["wb97x_tz.dipole"].shape == (2, 3)
+    assert ani1_data.data[0]["wb97x_dz.quadrupole"].shape == (2, 6)
+    assert ani1_data.data[0]["wb97x_dz.cm5_charges"].shape == (2, 13, 1)
+    assert ani1_data.data[0]["wb97x_dz.hirshfeld_charges"].shape == (2, 13, 1)
+    assert ani1_data.data[0]["wb97x_tz.mbis_charges"].shape == (2, 13, 1)
+    assert ani1_data.data[0]["wb97x_tz.mbis_dipoles"].shape == (2, 13, 1)
+    assert ani1_data.data[0]["wb97x_tz.mbis_quadrupoles"].shape == (2, 13, 1)
+    assert ani1_data.data[0]["wb97x_tz.mbis_octupoles"].shape == (2, 13, 1)
+    assert ani1_data.data[0]["wb97x_tz.mbis_volumes"].shape == (2, 13, 1)
 
 
 def test_an1_process_download_unit_conversion(prep_temp_dir):
@@ -791,7 +819,7 @@ def test_an1_process_download_unit_conversion(prep_temp_dir):
     assert ani1_data.data[0]["name"] == "C1H4N4O4"
     assert np.all(
         ani1_data.data[0]["atomic_numbers"]
-        == array([6, 1, 1, 1, 1, 7, 7, 7, 7, 8, 8, 8, 8], dtype=uint8)
+        == array([6, 1, 1, 1, 1, 7, 7, 7, 7, 8, 8, 8, 8], dtype=uint8).reshape(-1, 1)
     )
     assert ani1_data.data[0]["n_configs"] == 2
 
@@ -935,7 +963,7 @@ def test_an1_process_download_unit_conversion(prep_temp_dir):
                     -0.374352,
                 ],
                 dtype=float32,
-            )
+            ).reshape(-1, 1)
             * unit.parse_expression("elementary_charge"),
         )
     )
@@ -959,7 +987,7 @@ def test_an1_process_download_unit_conversion(prep_temp_dir):
                     -0.338735,
                 ],
                 dtype=float32,
-            )
+            ).reshape(-1, 1)
             * unit.parse_expression("elementary_charge"),
         )
     )
@@ -983,7 +1011,7 @@ def test_an1_process_download_unit_conversion(prep_temp_dir):
                     -0.6540033,
                 ],
                 dtype=float32,
-            )
+            ).reshape(-1, 1)
             * unit.parse_expression("elementary_charge"),
         )
     )

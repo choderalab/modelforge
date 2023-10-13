@@ -199,9 +199,31 @@ class ANI1xCuration(DatasetCuration):
         """
         import h5py
         from tqdm import tqdm
+        from numpy import newaxis
 
         input_file_name = f"{local_path_dir}/{name}"
 
+        add_new_axis = {
+            "wb97x_dz.energy": True,
+            "wb97x_tz.energy": True,
+            "ccsd(t)_cbs.energy": True,
+            "hf_dz.energy": True,
+            "hf_tz.energy": True,
+            "hf_qz.energy": True,
+            "npno_ccsd(t)_dz.corr_energy": True,
+            "npno_ccsd(t)_tz.corr_energy": True,
+            "tpno_ccsd(t)_dz.corr_energy": True,
+            "mp2_dz.corr_energy": True,
+            "mp2_tz.corr_energy": True,
+            "mp2_qz.corr_energy": True,
+            "wb97x_dz.cm5_charges": True,
+            "wb97x_dz.hirshfeld_charges": True,
+            "wb97x_tz.mbis_charges": True,
+            "wb97x_tz.mbis_dipoles": True,
+            "wb97x_tz.mbis_quadrupoles": True,
+            "wb97x_tz.mbis_octupoles": True,
+            "wb97x_tz.mbis_volumes": True,
+        }
         with h5py.File(input_file_name, "r") as hf:
             names = list(hf.keys())
             if unit_testing_max_records is None:
@@ -219,7 +241,9 @@ class ANI1xCuration(DatasetCuration):
                 ani1x_temp = {}
 
                 ani1x_temp["name"] = f"{name}"
-                ani1x_temp["atomic_numbers"] = hf[name]["atomic_numbers"][()]
+                ani1x_temp["atomic_numbers"] = hf[name]["atomic_numbers"][()].reshape(
+                    -1, 1
+                )
                 ani1x_temp["n_configs"] = n_configs
 
                 # param_in is the name of the entry, param_data contains input (u_in) and output (u_out) units
@@ -230,6 +254,8 @@ class ANI1xCuration(DatasetCuration):
                         param_in = "coordinates"
 
                     temp = hf[name][param_in][()]
+                    if param_in in add_new_axis:
+                        temp = temp[..., newaxis]
 
                     param_unit = param_data["u_in"]
                     if param_unit is not None:

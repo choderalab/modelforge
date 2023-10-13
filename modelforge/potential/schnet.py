@@ -1,9 +1,11 @@
+from typing import Dict, Type
+
+import torch
 import torch.nn as nn
 from loguru import logger
-from typing import Dict, Tuple, List, Type
 
 from .models import BaseNNP, LightningModuleMixin
-import torch
+from .utils import _distance_to_radial_basis
 
 
 class SchNET(BaseNNP):
@@ -111,7 +113,7 @@ class SchNETInteractionBlock(nn.Module):
             Number of radial basis functions. Default is 20.
         """
         super().__init__()
-        from .utils import sequential_block, ShiftedSoftplus
+        from .utils import ShiftedSoftplus, sequential_block
 
         # Initialize parameters
         self.nr_atom_basis = nr_atom_basis
@@ -193,7 +195,7 @@ class SchNETRepresentation(nn.Module):
         cutoff: float, optional
             Cutoff value for the pairlist. Default is 5.0.
         """
-        from .utils import GaussianRBF, _distance_to_radial_basis
+        from .utils import GaussianRBF
 
         super().__init__()
 

@@ -22,6 +22,7 @@ dependencies:
   - pedantic
   - rdkit
   - retry
+  - sqlitedict
 
   # Testing
   - pytest

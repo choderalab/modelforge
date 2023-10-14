@@ -170,13 +170,13 @@ class HDF5Dataset:
                         # indexing into a local np array is much faster
                         # than indexing into the array in the hdf5 file
                         temp_data[value] = hf[mol][value][()]
-                        is_series[value] = hf[mol][value].attrs["series"]
+                        is_series[value] = hf[mol][value].attrs["format"].split("_")[0]
 
                     for n in range(n_configs):
                         not_nan = True
                         temp_data_cut = {}
                         for value in self.properties_of_interest:
-                            if is_series[value]:
+                            if is_series[value] == "series":
                                 temp_data_cut[value] = temp_data[value][n]
                                 if np.any(np.isnan(temp_data_cut[value])):
                                     not_nan = False

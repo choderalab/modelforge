@@ -105,23 +105,19 @@ class SPICE12PubChemOpenFFCuration(DatasetCuration):
         # This information will be used by the code to read in the datafile to know how to parse underlying records.
 
         self._record_entries_series = {
-            "name": False,
-            "dataset_name": False,
-            "atomic_numbers": False,
-            "n_configs": False,
-            "reference_energy": False,
-            "molecular_formula": False,
-            "geometry": True,
-            "dft_total_energy": True,
-            "dft_total_gradient": True,
-            "formation_energy": True,
-            "mbis_charges": True,
-            "scf_dipole": True,
-            "dispersion_correction_energy": True,
-            "dispersion_correction_gradient": True,
-            "dispersion_corrected_dft_total_gradient": True,
-            "dispersion_corrected_dft_total_energy": True,
-            "canonical_isomeric_explicit_hydrogen_mapped_smiles": False,
+            "name": "single_rec",
+            "dataset_name": "single_rec",
+            "atomic_numbers": "single_atom",
+            "n_configs": "single_rec",
+            "reference_energy": "single_rec",
+            "molecular_formula": "single_rec",
+            "canonical_isomeric_explicit_hydrogen_mapped_smiles": "single_rec",
+            "geometry": "series_atom",
+            "dft_total_energy": "series_mol",
+            "dft_total_gradient": "series_atom",
+            "formation_energy": "series_mol",
+            "mbis_charges": "series_atom",
+            "scf_dipole": "series_atom",
         }
 
     # we will use the retry package to allow us to resume download if we lose connection to the server
@@ -510,22 +506,26 @@ class SPICE12PubChemOpenFFCuration(DatasetCuration):
             # add in the formation energy defined as:
             # dft_total_energy + dispersion_correction_energy - reference_energy
 
-            datapoint["formation_energy"] = (
+            # the dispersion corrected energy and gradient can be calculated from the raw data
+            datapoint["dft_total_energy"] = (
                 datapoint["dft_total_energy"]
                 + datapoint["dispersion_correction_energy"]
+            )
+            # we only want to write the dispersion corrected energy to the file to avoid confusion
+            datapoint.pop("dispersion_correction_energy")
+
+            datapoint["dft_total_gradient"] = (
+                datapoint["dft_total_gradient"]
+                + datapoint["dispersion_correction_gradient"]
+            )
+            # we only want to write the dispersion corrected gradient to the file to avoid confusion
+            datapoint.pop("dispersion_correction_gradient")
+
+            datapoint["formation_energy"] = (
+                datapoint["dft_total_energy"]
                 - np.array(datapoint["reference_energy"].m * datapoint["n_configs"])
                 * datapoint["reference_energy"].u
             )
-
-            # the dispersion corrected energy and gradient can be calculated from the raw data
-            # datapoint["dispersion_corrected_dft_total_energy"] = (
-            #     datapoint["dft_total_energy"]
-            #     + datapoint["dispersion_correction_energy"]
-            # )
-            # datapoint["dispersion_corrected_dft_total_gradient"] = (
-            #     datapoint["dft_total_gradient"]
-            #     + datapoint["dispersion_correction_gradient"]
-            # )
 
         if self.convert_units:
             self._convert_units()

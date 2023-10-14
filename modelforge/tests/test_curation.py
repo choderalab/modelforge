@@ -114,16 +114,16 @@ def test_series_dict_to_hdf5(prep_temp_dir):
 
     file_path = str(prep_temp_dir)
     record_entries_series = {
-        "name": "single",
-        "n_configs": "single",
-        "energy": "series",
-        "geometry": "series",
+        "name": "single_rec",
+        "n_configs": "single_rec",
+        "energy": "series_mol",
+        "geometry": "series_atom",
     }
     test_data = [
         {
             "name": "test1",
             "n_configs": 2,
-            "energy": np.array([123, 234]) * unit.hartree,
+            "energy": np.array([123, 234]).reshape(2, 1) * unit.hartree,
             "geometry": np.array(
                 [[[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]], [[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]]
             )
@@ -162,7 +162,8 @@ def test_series_dict_to_hdf5(prep_temp_dir):
             temp_record["n_configs"] = n_configs
 
             for property in ["energy", "geometry"]:
-                if hf[name][property].attrs["series"]:
+                format = hf[name][property].attrs["format"]
+                if format.split("_")[0] == "series":
                     temp = []
                     for i in range(n_configs):
                         temp.append(hf[name][property][i])
@@ -1621,18 +1622,24 @@ def test_spice12_openff_process_datasets(prep_temp_dir):
             * unit.parse_expression("bohr"),
         )
     )
+    # spot check energy
+    assert (
+        spice_openff_data.data[0]["dft_total_energy"][0][0]
+        == -1168.2328704724725 * unit.hartree
+    )
+    assert (
+        spice_openff_data.data[4]["dft_total_energy"][0][0]
+        == -2011.874682644447 * unit.hartree
+    )
+
     # check the shape of a molecule with only a single conformer in the test set
     assert spice_openff_data.data[0]["atomic_numbers"].shape == (47, 1)
     assert spice_openff_data.data[0]["geometry"].shape == (1, 47, 3)
+    assert spice_openff_data.data[0]["dft_total_energy"].shape == (1, 1)
     assert spice_openff_data.data[0]["dft_total_gradient"].shape == (1, 47, 3)
     assert spice_openff_data.data[0]["mbis_charges"].shape == (1, 47, 1)
     assert spice_openff_data.data[0]["scf_dipole"].shape == (1, 3)
-    assert spice_openff_data.data[0]["dispersion_correction_energy"].shape == (1, 1)
-    assert spice_openff_data.data[0]["dispersion_correction_gradient"].shape == (
-        1,
-        47,
-        3,
-    )
+    assert spice_openff_data.data[0]["formation_energy"].shape == (1, 1)
     assert spice_openff_data.data[0]["formation_energy"].shape == (1, 1)
 
     # check the shape of a molecule with multiple conformers in the test set
@@ -1642,10 +1649,4 @@ def test_spice12_openff_process_datasets(prep_temp_dir):
     assert spice_openff_data.data[4]["dft_total_gradient"].shape == (6, 16, 3)
     assert spice_openff_data.data[4]["mbis_charges"].shape == (6, 16, 1)
     assert spice_openff_data.data[4]["scf_dipole"].shape == (6, 3)
-    assert spice_openff_data.data[4]["dispersion_correction_energy"].shape == (6, 1)
-    assert spice_openff_data.data[4]["dispersion_correction_gradient"].shape == (
-        6,
-        16,
-        3,
-    )
     assert spice_openff_data.data[4]["formation_energy"].shape == (6, 1)

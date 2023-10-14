@@ -63,10 +63,8 @@ def dict_to_hdf5(
                         group.create_dataset(name=key, data=val_m, shape=val_m.shape)
                     if not val_u is None:
                         group[key].attrs["u"] = val_u
-                    if series_info[key]:
-                        group[key].attrs["series"] = True
-                    else:
-                        group[key].attrs["series"] = False
+
+                    group[key].attrs["format"] = series_info[key]
 
 
 class DatasetCuration(ABC):

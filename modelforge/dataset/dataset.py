@@ -334,7 +334,7 @@ class DatasetFactory:
     def create_dataset(
         data: HDF5Dataset,
         label_transform: Optional[Dict[str, Callable]] = None,
-        transform: Optional[Dict[str, Callable]] = default_transformation,
+        transform: Optional[Dict[str, Callable]] = None,
     ) -> TorchDataset:
         """
         Creates a Dataset instance given an HDF5Dataset.

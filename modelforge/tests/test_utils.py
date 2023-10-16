@@ -9,7 +9,7 @@ def test_rbf():
     """
     from modelforge.potential.utils import GaussianRBF
     from modelforge.dataset import QM9Dataset
-    from .helper_functinos import prepare_pairlist_for_single_batch, return_single_batch
+    from .helper_functions import prepare_pairlist_for_single_batch, return_single_batch
 
     batch = return_single_batch(QM9Dataset, mode="fit")
     pairlist = prepare_pairlist_for_single_batch(batch)

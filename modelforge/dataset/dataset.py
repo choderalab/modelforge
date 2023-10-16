@@ -10,7 +10,6 @@ from torch.utils.data import DataLoader
 
 from modelforge.utils.prop import PropertyNames
 
-from .transformation import default_transformation
 from modelforge.dataset.utils import RandomSplittingStrategy, SplittingStrategy
 
 
@@ -106,18 +105,13 @@ class HDF5Dataset:
     ):
         self.raw_data_file = raw_data_file
         self.processed_data_file = processed_data_file
-        self.hdf5data: Optional[Dict[str, List]] = None
+        self.hdf5data: Optional[Dict[str, List[np.ndarray]]] = None
         self.numpy_data: Optional[np.ndarray] = None
         self.local_cache_dir = local_cache_dir
 
     def _from_hdf5(self) -> None:
         """
         Processes and extracts data from an hdf5 file.
-
-        Returns
-        -------
-        OrderedDict[str, List]
-            Processed data from the hdf5 file.
 
         Examples
         --------
@@ -140,6 +134,7 @@ class HDF5Dataset:
         # molecule_id will contain an integer that is unique to molecules
         # i.e., conformers of the same molecule will have the same id.
         data["molecule_id"] = []
+        self.formats = {"molecule_id": "single_rec"}
         logger.debug(f"Processing and extracting data from {self.raw_data_file}")
 
         # this will create an unzipped file which we can then load in
@@ -152,12 +147,15 @@ class HDF5Dataset:
                 shutil.copyfileobj(gz_file, out_file)
 
         with h5py.File(temp_hdf5_file, "r") as hf:
+
+            for value in self.properties_of_interest:
+                self.formats[value] = hf[next(iter(hf.keys()))][value].attrs["format"]
+
             logger.debug(f"n_entries: {len(hf.keys())}")
             molecule_id = 0
             for mol in tqdm.tqdm(list(hf.keys())):
                 n_configs = hf[mol]["n_configs"][()]
                 temp_data = {}
-                self.is_series = {}
 
                 # There may be cases where a specific property of interest
                 # has not been computed for a given molecule
@@ -174,13 +172,15 @@ class HDF5Dataset:
                         # indexing into a local np array is much faster
                         # than indexing into the array in the hdf5 file
                         temp_data[value] = hf[mol][value][()]
-                        self.is_series[value] = hf[mol][value].attrs["series"]
 
                     for n in range(n_configs):
                         not_nan = True
                         temp_data_cut = {}
                         for value in self.properties_of_interest:
-                            if self.is_series[value]:
+                            dim_format = self.formats[value]
+                            if dim_format != hf[mol][value].attrs["format"]:
+                                raise ValueError("Format mismatch across molecules for value {value}")
+                            if dim_format == "series_atom" or dim_format == "series_mol":
                                 temp_data_cut[value] = temp_data[value][n]
                                 if np.any(np.isnan(temp_data_cut[value])):
                                     not_nan = False
@@ -200,14 +200,9 @@ class HDF5Dataset:
 
         self.hdf5data = data
 
-    def _from_file_cache(self) -> Dict[str, List]:
+    def _from_file_cache(self) -> None:
         """
         Loads the processed data from cache.
-
-        Returns
-        -------
-        OrderedDict[str, List]
-            Processed data from the cache file.
 
         Examples
         --------
@@ -244,15 +239,11 @@ class HDF5Dataset:
         Save processed data to a numpy (.npz) file.
         Parameters
         ----------
-        data : OrderedDict[str, List[np.ndarray]]
-            Dictionary containing processed data to be saved.
-        processed_dataset_file : str
-            Path to save the processed dataset.
         label_transform : Optional[Dict[str, Callable]], optional
             transformations to apply to the labels
         transforms : Dict[str, Callable], default=default_transformation
             transformations to apply to the data
-
+)
         Examples
         --------
         >>> hdf5_data = HDF5Dataset("raw_data.hdf5", "processed_data.npz")
@@ -268,7 +259,8 @@ class HDF5Dataset:
         data_arrays = OrderedDict()
         n_atoms_by_property = OrderedDict()
         for value in self.properties_of_interest:
-            if self.is_series[value]:
+            dim_format = self.formats[value]
+            if dim_format == "series_atom" or dim_format == "single_atom":
                 data_arrays[value] = np.concatenate(self.hdf5data[value], axis=0)
                 n_atoms_by_property[value] = np.array([len(mol) for mol in self.hdf5data[value]])
             else:
@@ -276,7 +268,7 @@ class HDF5Dataset:
 
         n_atoms = next(iter(n_atoms_by_property.values()))
         if not all(np.array_equal(n_atoms_other, n_atoms) for n_atoms_other in n_atoms_by_property.values()):
-            raise ValueError("Number of atoms per molecule not consistent across series properties")
+            raise ValueError("Number of atoms per conformer not consistent across properties: {n_atoms_by_property}")
 
         np.savez(
             self.processed_data_file,
@@ -315,7 +307,7 @@ class DatasetFactory:
 
         Parameters
         ----------
-        dataset : HDF5Dataset
+        data : HDF5Dataset
             The HDF5 dataset instance to use.
         """
 

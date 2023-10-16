@@ -2,13 +2,13 @@ import torch
 
 from modelforge.dataset.dataset import TorchDataModule
 from modelforge.dataset.qm9 import QM9Dataset
-from modelforge.potential.schnet import Schnet, LighningSchnet
+from modelforge.potential.schnet import SchNET, LightningSchNET
 from modelforge.potential.pain import PaiNN, LighningPaiNN
 from modelforge.potential.models import BaseNNP
 
 from typing import Optional, Dict
 
-MODELS_TO_TEST = [Schnet]
+MODELS_TO_TEST = [SchNET]
 DATASETS = [QM9Dataset]
 
 
@@ -30,10 +30,10 @@ def setup_simple_model(model_class, lightning: bool = False) -> Optional[BaseNNP
     """
     from modelforge.potential.utils import CosineCutoff
 
-    if model_class is Schnet:
+    if model_class is SchNET:
         if lightning:
-            return LighningSchnet(n_atom_basis=32, n_interactions=3, n_filters=64)
-        return Schnet(nr_atom_basis=32, nr_interactions=3, nr_filters=64)
+            return LightningSchNET(n_atom_basis=32, n_interactions=3, n_filters=64)
+        return SchNET(nr_atom_basis=32, nr_interactions=3, nr_filters=64)
     elif model_class is PaiNN:
         if lightning:
             return LighningPaiNN(
@@ -50,7 +50,7 @@ def setup_simple_model(model_class, lightning: bool = False) -> Optional[BaseNNP
 
 
 def return_single_batch(
-    dataset, mode: str, split_file: Optional[str] = None
+    dataset, mode: str, split_file: Optional[str] = None, for_unit_testing: bool = True
 ) -> Dict[str, torch.Tensor]:
     """
     Return a single batch from a dataset.
@@ -68,13 +68,13 @@ def return_single_batch(
         A single batch from the dataset.
     """
 
-    train_loader = initialize_dataset(dataset, mode, split_file)
+    train_loader = initialize_dataset(dataset, mode, split_file, for_unit_testing)
     for batch in train_loader.train_dataloader():
         return batch
 
 
 def initialize_dataset(
-    dataset, mode: str, split_file: Optional[str] = None
+    dataset, mode: str, split_file: Optional[str] = None, for_unit_testing: bool = True
 ) -> TorchDataModule:
     """
     Initialize a dataset for a given mode.
@@ -92,7 +92,7 @@ def initialize_dataset(
         Initialized TorchDataModule.
     """
 
-    data = dataset(for_unit_testing=True)
+    data = dataset(for_unit_testing=for_unit_testing)
     data_module = TorchDataModule(data, split_file=split_file)
     data_module.prepare_data()
     data_module.setup(mode)

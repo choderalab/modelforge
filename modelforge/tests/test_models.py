@@ -3,7 +3,7 @@ import pytest
 from modelforge.potential.models import BaseNNP
 import numpy as np
 
-from .helper_functinos import (
+from .helper_functions import (
     DATASETS,
     MODELS_TO_TEST,
     return_single_batch,

@@ -1,9 +1,8 @@
-import torch
-from typing import Callable, Union, Tuple
-import torch.nn as nn
+from typing import Callable, Tuple, Union
+
 import numpy as np
-import torch.nn.functional as F
-from loguru import logger
+import torch
+import torch.nn as nn
 
 
 def sequential_block(

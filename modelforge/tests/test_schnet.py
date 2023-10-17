@@ -2,14 +2,14 @@ from typing import Dict
 
 import torch
 
-from modelforge.potential.schnet import Schnet
+from modelforge.potential.schnet import SchNET
 
-from .helper_functinos import generate_methane_input
+from .helper_functions import generate_methane_input
 
 
 def test_Schnet_init():
     """Test initialization of the Schnet model."""
-    schnet = Schnet(128, 6, 2)
+    schnet = SchNET(128, 6, 2)
     assert schnet is not None, "Schnet model should be initialized."
 
 
@@ -17,7 +17,7 @@ def test_schnet_forward():
     """
     Test the forward pass of the Schnet model.
     """
-    model = Schnet(128, 3)
+    model = SchNET(128, 3)
     inputs = {
         "Z": torch.tensor([[1, 2], [2, 3]]),
         "R": torch.tensor(
@@ -37,7 +37,7 @@ def test_calculate_energies_and_forces():
     This test will be adapted once we have a trained model.
     """
 
-    schnet = Schnet(128, 6, 64)
+    schnet = SchNET(128, 6, 64)
     methane_inputs = generate_methane_input()
     result = schnet(methane_inputs)
     forces = -torch.autograd.grad(
@@ -72,7 +72,7 @@ def get_input_for_interaction_block(
     from modelforge.dataset.qm9 import QM9Dataset
     from modelforge.potential.utils import GaussianRBF, _distance_to_radial_basis
 
-    from .helper_functinos import prepare_pairlist_for_single_batch, return_single_batch
+    from .helper_functions import prepare_pairlist_for_single_batch, return_single_batch
 
     embedding = nn.Embedding(nr_embeddings, nr_atom_basis, padding_idx=0)
     batch = return_single_batch(QM9Dataset, "fit")
@@ -95,7 +95,7 @@ def test_schnet_interaction_layer():
     """
     Test the SchNet interaction layer.
     """
-    from modelforge.potential.schnet import SchNetInteractionBlock
+    from modelforge.potential.schnet import SchNETInteractionBlock
 
     nr_atom_basis = 128
     nr_embeddings = 100
@@ -105,7 +105,7 @@ def test_schnet_interaction_layer():
         17,
         nr_atom_basis,
     ), "Input shape mismatch for x tensor."
-    interaction = SchNetInteractionBlock(nr_atom_basis, 4)
+    interaction = SchNETInteractionBlock(nr_atom_basis, 4)
     v = interaction(r["x"], r["f_ij"], r["idx_i"], r["idx_j"], r["rcut_ij"])
     assert v.shape == (
         64,

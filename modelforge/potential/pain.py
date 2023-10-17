@@ -2,7 +2,7 @@ import torch.nn as nn
 from loguru import logger
 from typing import Dict, Type, Tuple, Callable, Optional
 
-from .models import BaseNNP, PairList, LighningModuleMixin
+from .models import BaseNNP, PairList, LightningModuleMixin
 from .utils import (
     EnergyReadout,
     GaussianRBF,
@@ -125,7 +125,7 @@ class PaiNN(BaseNNP):
         q = self.embedding(Z)[:, None]
         qs = q.shape
         mu = torch.zeros((qs[0], 3, qs[2]), device=q.device)
-        
+
         for i, (interaction, mixing) in enumerate(zip(self.interactions, self.mixing)):
             q, mu = interaction(
                 q,
@@ -256,7 +256,7 @@ class PaiNNMixing(nn.Module):
         return q, mu
 
 
-class LighningPaiNN(PaiNN, LighningModuleMixin):
+class LighningPaiNN(PaiNN, LightningModuleMixin):
     def __init__(
         self,
         n_atom_basis: int,

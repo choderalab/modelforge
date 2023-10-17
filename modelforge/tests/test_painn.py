@@ -1,6 +1,6 @@
 from modelforge.potential.pain import PaiNN
 
-from .helper_functinos import generate_methane_input
+from .helper_functions import generate_methane_input
 
 from modelforge.potential.utils import CosineCutoff
 

@@ -7,7 +7,7 @@ import torch
 
 from modelforge.dataset.dataset import DatasetFactory, TorchDataset
 
-from .helper_functinos import initialize_dataset, DATASETS
+from .helper_functions import initialize_dataset, DATASETS
 
 
 @pytest.fixture(

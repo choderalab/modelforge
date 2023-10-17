@@ -70,7 +70,7 @@ class SchNET(BaseNNP):
 
         # Initialize the feature representation using atomic numbers
         Z = inputs["Z"]
-        mask = Z != 0
+        mask = Z == 0
         pairlist = self.calculate_distances_and_pairlist(mask, inputs["R"])
         x = self.embedding(Z)  # shape (batch_size, n_atoms, n_atom_basis)
 

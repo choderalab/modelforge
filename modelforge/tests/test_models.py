@@ -73,7 +73,9 @@ def test_pairlist_nopbc():
     import torch
     from modelforge.potential.utils import neighbor_pairs_nopbc
 
-    mask = torch.tensor([[0, 0, 1], [1, 0, 0]])  # masking [0][0] and [1][2]
+    mask = torch.tensor(
+        [[False, False, True], [True, False, False]]
+    )  # masking [0][0] and [1][2]
     R = torch.tensor(
         [
             [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]],

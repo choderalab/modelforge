@@ -94,7 +94,7 @@ class PaiNN(BaseNNP):
         """
         # calculate pairlist
         Z = inputs["Z"]
-        mask = Z != 0
+        mask = Z == 0
         pairlist = self.calculate_distances_and_pairlist(mask, inputs["R"])
 
         # extract properties from pairlist

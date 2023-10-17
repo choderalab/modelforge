@@ -142,7 +142,7 @@ class SPICE12PubChemOpenFFCuration(DatasetCuration):
         ds = client.get_dataset(dataset_type=dataset_type, dataset_name=dataset_name)
 
         entry_names = ds.entry_names
-        if unit_testing_max_records is none:
+        if unit_testing_max_records is None:
             unit_testing_max_records = len(entry_names)
         with SqliteDict(
             f"{local_path_dir}/{local_database_name}",

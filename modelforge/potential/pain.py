@@ -4,10 +4,7 @@ from typing import Dict, Type, Tuple, Callable, Optional
 
 from .models import BaseNNP, PairList, LightningModuleMixin
 from .utils import (
-    EnergyReadout,
     GaussianRBF,
-    ShiftedSoftplus,
-    cosine_cutoff,
     scatter_add,
     sequential_block,
 )
@@ -97,9 +94,8 @@ class PaiNN(BaseNNP):
         """
         # calculate pairlist
         Z = inputs["Z"]
-        mask = Z == -1
+        mask = Z != 0
         pairlist = self.calculate_distances_and_pairlist(mask, inputs["R"])
-        Z = inputs["Z"].flatten()
 
         # extract properties from pairlist
         d_ij = pairlist["d_ij"]

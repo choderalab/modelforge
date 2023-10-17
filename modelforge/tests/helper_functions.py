@@ -8,7 +8,7 @@ from modelforge.potential.models import BaseNNP
 
 from typing import Optional, Dict
 
-MODELS_TO_TEST = [SchNET]
+MODELS_TO_TEST = [SchNET, PaiNN]
 DATASETS = [QM9Dataset]
 
 

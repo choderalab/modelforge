@@ -49,9 +49,7 @@ class SchNET(BaseNNP):
             ]
         )
 
-    def forward(
-        self, inputs: Dict[str, torch.Tensor], cached_pairlist: bool = False
-    ) -> torch.Tensor:
+    def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
         Calculate the energy for a given input batch.
 
@@ -80,8 +78,6 @@ class SchNET(BaseNNP):
         representation = self.representation(
             pairlist
         )  # shape (batch_size, n_atoms, n_atom_basis)
-
-        # unpad
 
         # Iterate over interaction blocks to update features
         for interaction in self.interactions:

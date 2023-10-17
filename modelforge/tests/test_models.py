@@ -1,6 +1,5 @@
 import pytest
 
-from modelforge.potential.models import BaseNNP
 import numpy as np
 
 from .helper_functions import (
@@ -12,6 +11,8 @@ from .helper_functions import (
 
 
 def test_BaseNNP():
+    from modelforge.potential.models import BaseNNP
+
     nnp = BaseNNP()
 
 

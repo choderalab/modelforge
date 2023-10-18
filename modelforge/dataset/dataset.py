@@ -189,7 +189,9 @@ class HDF5Dataset:
                                     not_nan = False
                                     break
                             else:
-                                temp_data_cut[value] = temp_data[value].reshape(1,-1)
+                                #I don't like this, it is not general, but necessary at this point to
+                                # put atomic_numbers into the current expected format.
+                                temp_data_cut[value] = temp_data[value].reshape(1,-1)[0].tolist()
                                 if np.any(np.isnan(temp_data_cut[value])):
                                     not_nan = False
                                     break

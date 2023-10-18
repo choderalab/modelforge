@@ -237,10 +237,10 @@ def pad_to_max_length(data: List[np.ndarray]) -> List[np.ndarray]:
     List[np.ndarray]
         List of padded arrays.
     """
-    max_length = max(len(arr) for arr in data)
+    max_length = max(arr.shape[0] for arr in data)
 
     return [
-        np.pad(arr, (0, max_length - len(arr)), "constant", constant_values=0)
+        np.pad(arr, (0, max_length - mol.shape[0]), "constant", constant_values=0)
         for arr in data
     ]
 

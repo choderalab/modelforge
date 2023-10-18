@@ -154,6 +154,7 @@ class HDF5Dataset:
                 n_configs = hf[mol]["n_configs"][()]
                 temp_data = {}
                 is_series = {}
+                is_atom_mol = {}
 
                 # There may be cases where a specific property of interest
                 # has not been computed for a given molecule
@@ -171,13 +172,19 @@ class HDF5Dataset:
                         # than indexing into the array in the hdf5 file
                         temp_data[value] = hf[mol][value][()]
                         is_series[value] = hf[mol][value].attrs["format"].split("_")[0]
+                        is_atom_mol[value] = hf[mol][value].attrs["format"].split("_")[1]
 
                     for n in range(n_configs):
                         not_nan = True
                         temp_data_cut = {}
                         for value in self.properties_of_interest:
                             if is_series[value] == "series":
-                                temp_data_cut[value] = temp_data[value][n]
+                                # Note: this doesn't treat per atom or per molecules quantities differently
+                                # Buy I've put the logic to differentiate here anyway as an example
+                                if is_atom_mol[value] == "mol":
+                                    temp_data_cut[value] = temp_data[value][n]
+                                if is_atom_mol[value] == "atom":
+                                    temp_data_cut[value] = temp_data[value][n]
                                 if np.any(np.isnan(temp_data_cut[value])):
                                     not_nan = False
                                     break
@@ -188,7 +195,10 @@ class HDF5Dataset:
                                     break
                         if not_nan:
                             for value in self.properties_of_interest:
-                                data[value].append(temp_data_cut[value])
+                                if isinstance(data[value], list):
+                                    data[value] = temp_data_cut[value]
+                                else:
+                                    data[value] = np.append( data[value], temp_data_cut[value])
                             # keep track of the name of the molecule and configuration number
                             # may be needed for splitting
                             data["molecule_id"].append(molecule_id)

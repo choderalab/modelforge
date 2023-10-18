@@ -25,7 +25,6 @@ def test_is_url():
         == False
     )
 
-
 def test_download_from_figshare(prep_temp_dir):
     url = "https://figshare.com/ndownloader/files/22247589"
     name = download_from_figshare(

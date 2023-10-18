@@ -13,7 +13,6 @@ dependencies:
   - pytorch
   - loguru
   - gdown
-  - tqdm
   - lightning=2.0.8
   - tensorboard
   - torchvision

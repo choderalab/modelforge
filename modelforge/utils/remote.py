@@ -37,7 +37,6 @@ def is_url(query: str, hostname: str) -> bool:
         return False
     return True
 
-
 def fetch_url_from_doi(doi: str, timeout: Optional[int] = 10) -> str:
     """Retrieve URL associated with a DOI.
 
@@ -58,6 +57,9 @@ def fetch_url_from_doi(doi: str, timeout: Optional[int] = 10) -> str:
     >>> fetch_url_from_doi(doi="10.5281/zenodo.3588339")
     """
     import requests
+
+    # force to use ipv4; my ubuntu machine is timing out when it first tries ipv6
+    #requests.packages.urllib3.util.connection.HAS_IPV6 = False
 
     doi_org_url = "https://dx.doi.org/"
 
@@ -119,6 +121,9 @@ def download_from_figshare(url: str, output_path: str, force_download=False) -> 
     import requests
     import os
     from tqdm import tqdm
+
+    # force to use ipv4; my ubuntu machine is timing out when it first tries ipv6
+    #requests.packages.urllib3.util.connection.HAS_IPV6 = False
 
     chunk_size = 512
     # check to make sure the url we are given is hosted by figshare.com
@@ -206,6 +211,9 @@ def download_from_zenodo(
     import requests
     import os
     from tqdm import tqdm
+
+    # force to use ipv4; my ubuntu machine is timing out when it first tries ipv6
+    #requests.packages.urllib3.util.connection.HAS_IPV6 = False
 
     chunk_size = 512
     # check to make sure the url we are given is hosted by figshare.com

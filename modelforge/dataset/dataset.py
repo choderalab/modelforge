@@ -182,23 +182,21 @@ class HDF5Dataset:
                                 # Note: this doesn't treat per atom or per molecules quantities differently
                                 # Buy I've put the logic to differentiate here anyway as an example
                                 if is_atom_mol[value] == "mol":
-                                    temp_data_cut[value] = temp_data[value][n]
+                                    temp_data_cut[value] = temp_data[value][n][0]
                                 if is_atom_mol[value] == "atom":
                                     temp_data_cut[value] = temp_data[value][n]
                                 if np.any(np.isnan(temp_data_cut[value])):
                                     not_nan = False
                                     break
                             else:
-                                temp_data_cut[value] = temp_data[value]
+                                temp_data_cut[value] = temp_data[value].reshape(1,-1)
                                 if np.any(np.isnan(temp_data_cut[value])):
                                     not_nan = False
                                     break
                         if not_nan:
                             for value in self.properties_of_interest:
-                                if isinstance(data[value], list):
-                                    data[value] = temp_data_cut[value]
-                                else:
-                                    data[value] = np.append( data[value], temp_data_cut[value])
+                                data[value].append(temp_data_cut[value])
+
                             # keep track of the name of the molecule and configuration number
                             # may be needed for splitting
                             data["molecule_id"].append(molecule_id)

@@ -260,6 +260,7 @@ def pad_molecules(molecules: List[np.ndarray]) -> List[np.ndarray]:
         List of padded molecules.
     """
     max_atoms = max(mol.shape[0] for mol in molecules)
+    # I don't think this is quite right.  As this is going to create a 2D array. why are we padding
     return [
         np.pad(
             mol,
@@ -269,6 +270,7 @@ def pad_molecules(molecules: List[np.ndarray]) -> List[np.ndarray]:
         )
         for mol in molecules
     ]
+
 
 
 translate_property_names = {"return_energy": "U0"}

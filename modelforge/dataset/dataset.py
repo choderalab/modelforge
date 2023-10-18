@@ -182,7 +182,7 @@ class HDF5Dataset:
                                 # Note: this doesn't treat per atom or per molecules quantities differently
                                 # Buy I've put the logic to differentiate here anyway as an example
                                 if is_atom_mol[value] == "mol":
-                                    temp_data_cut[value] = temp_data[value][n][0]
+                                    temp_data_cut[value] = temp_data[value][n]
                                 if is_atom_mol[value] == "atom":
                                     temp_data_cut[value] = temp_data[value][n]
                                 if np.any(np.isnan(temp_data_cut[value])):

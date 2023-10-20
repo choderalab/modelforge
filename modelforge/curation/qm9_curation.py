@@ -98,7 +98,23 @@ class QM9Curation(DatasetCuration):
                 "u_in": unit.hartree,
                 "u_out": unit.kilojoule_per_mole,
             },
+            "formation_energy_at_0K": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
+            "reference_energy_at_0K": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
             "internal_energy_at_298.15K": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
+            "formation_energy_at_298.15K": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
+            "reference_energy_at_298.15K": {
                 "u_in": unit.hartree,
                 "u_out": unit.kilojoule_per_mole,
             },
@@ -128,7 +144,7 @@ class QM9Curation(DatasetCuration):
         self.thermochemical_references = {
             "H": {
                 "ZPVE": 0.000000 * unit.hartree,
-                "U_OK": -0.500273 * unit.hartree,
+                "U_0K": -0.500273 * unit.hartree,
                 "U_298.15K": -0.498857 * unit.hartree,
                 "H_298.15K": -0.497912 * unit.hartree,
                 "G_298.15K": -0.510927 * unit.hartree,
@@ -136,7 +152,7 @@ class QM9Curation(DatasetCuration):
             },
             "C": {
                 "ZPVE": 0.000000 * unit.hartree,
-                "U_OK": -37.846772 * unit.hartree,
+                "U_0K": -37.846772 * unit.hartree,
                 "U_298.15K": -37.845355 * unit.hartree,
                 "H_298.15K": -37.844411 * unit.hartree,
                 "G_298.15K": -37.861317 * unit.hartree,
@@ -144,7 +160,7 @@ class QM9Curation(DatasetCuration):
             },
             "N": {
                 "ZPVE": 0.000000 * unit.hartree,
-                "U_OK": -54.583861 * unit.hartree,
+                "U_0K": -54.583861 * unit.hartree,
                 "U_298.15K": -54.582445 * unit.hartree,
                 "H_298.15K": -54.581501 * unit.hartree,
                 "G_298.15K": -54.598897 * unit.hartree,
@@ -152,7 +168,7 @@ class QM9Curation(DatasetCuration):
             },
             "O": {
                 "ZPVE": 0.000000 * unit.hartree,
-                "U_OK": -75.064579 * unit.hartree,
+                "U_0K": -75.064579 * unit.hartree,
                 "U_298.15K": -75.063163 * unit.hartree,
                 "H_298.15K": -75.062219 * unit.hartree,
                 "G_298.15K": -75.079532 * unit.hartree,
@@ -160,7 +176,7 @@ class QM9Curation(DatasetCuration):
             },
             "F": {
                 "ZPVE": 0.000000 * unit.hartree,
-                "U_OK": -99.718730 * unit.hartree,
+                "U_0K": -99.718730 * unit.hartree,
                 "U_298.15K": -99.717314 * unit.hartree,
                 "H_298.15K": -99.716370 * unit.hartree,
                 "G_298.15K": -99.733544 * unit.hartree,
@@ -197,7 +213,11 @@ class QM9Curation(DatasetCuration):
             "electronic_spatial_extent": "series_mol",
             "zero_point_vibrational_energy": "series_mol",
             "internal_energy_at_0K": "series_mol",
+            "formation_energy_at_0K": "series_mol",
+            "reference_energy_at_0K": "series_mol",
             "internal_energy_at_298.15K": "series_mol",
+            "formation_energy_at_298.15K": "series_mol",
+            "reference_energy_at_298.15K": "series_mol",
             "enthalpy_at_298.15K": "series_mol",
             "free_energy_at_298.15K": "series_mol",
             "heat_capacity_at_298.15K": "series_mol",
@@ -207,11 +227,11 @@ class QM9Curation(DatasetCuration):
     def _calculate_reference_thermochemistry(
         self, molecule: List[str], thermo_key: str
     ):
-        energies = []
+        sum_of_energy = 0
         for atom in molecule:
-            energies.append(self.thermochemical_references[atom][thermo_key])
+            sum_of_energy += self.thermochemical_references[atom][thermo_key]
 
-        return np.sum(energies)
+        return sum_of_energy
 
     def _extract(self, file_path: str, cache_directory: str) -> None:
         """
@@ -435,6 +455,25 @@ class QM9Curation(DatasetCuration):
                 data_temp[property] = self.qm_parameters[property]["u_in"] * np.array(
                     val
                 ).reshape(1, 1)
+
+            # calculate the reference energy at 0K and 298.15K
+            # this is done by summing the reference energies of the atoms
+            # note this has units already attached
+            U_ref_0K = self._calculate_reference_thermochemistry(elements, "U_0K")
+            U_ref_298K = self._calculate_reference_thermochemistry(
+                elements, "U_298.15K"
+            )
+
+            data_temp["reference_energy_at_0K"] = U_ref_0K
+            data_temp["reference_energy_at_298.15K"] = U_ref_298K
+
+            data_temp["formation_energy_at_0K"] = (
+                data_temp["internal_energy_at_0K"] - data_temp["reference_energy_at_0K"]
+            )
+            data_temp["formation_energy_at_298.15K"] = (
+                data_temp["internal_energy_at_298.15K"]
+                - data_temp["reference_energy_at_298.15K"]
+            )
 
             for h in hvf_temp:
                 hvf.append(str_to_float(h))

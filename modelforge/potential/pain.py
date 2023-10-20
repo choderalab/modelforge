@@ -101,7 +101,6 @@ class PaiNN(BaseNNP):
         d_ij = pairlist["d_ij"]
         r_ij = pairlist["r_ij"]
         idx_i, idx_j = pairlist["atom_index12"][0], pairlist["atom_index12"][1]
-        n_atoms = Z.shape[0]
 
         # compute atom and pair features
         d_ij = torch.norm(r_ij, dim=1, keepdim=True)
@@ -109,8 +108,6 @@ class PaiNN(BaseNNP):
 
         f_ij, rcut_ij = _distance_to_radial_basis(d_ij, self.radial_basis)
         fcut = self.cutoff_fn(d_ij)
-        print(f"{d_ij.shape=}")
-        print(f"{dir_ij.shape=}")
 
         filters = self.filter_net(f_ij) * fcut[..., None]
         if self.share_filters:
@@ -118,7 +115,7 @@ class PaiNN(BaseNNP):
         else:
             filter_list = torch.split(filters, 3 * self.n_atom_basis, dim=-1)
 
-        q = self.embedding(Z)[:, None]
+        q = self.embedding(Z)  # [:, None]
         qs = q.shape
         mu = torch.zeros((qs[0], 3, qs[2]), device=q.device)
 
@@ -130,7 +127,7 @@ class PaiNN(BaseNNP):
                 dir_ij,
                 idx_i,
                 idx_j,
-                Z.shape[0],
+                Z.shape[1],
             )
             q, mu = mixing(q, mu)
 
@@ -161,13 +158,13 @@ class PaiNNInteraction(nn.Module):
 
     def forward(
         self,
-        q: torch.Tensor,
-        mu: torch.Tensor,
-        Wij: torch.Tensor,
+        q: torch.Tensor,  # shape [n_mols, n_atoms, n_atom_basis] [64,17,32]
+        mu: torch.Tensor,  # shape [n_mols, n_interactions, n_atom_basis] [64,3,32]
+        Wij: torch.Tensor,  # shape [3189]
         dir_ij: torch.Tensor,
-        idx_i: torch.Tensor,
-        idx_j: torch.Tensor,
-        n_atoms: int,
+        idx_i: torch.Tensor,  # [3189]
+        idx_j: torch.Tensor,  # [3189]
+        n_atoms: int,  # 64
     ):
         """Compute interaction output.
 
@@ -183,14 +180,12 @@ class PaiNNInteraction(nn.Module):
         """
         # inter-atomic
         x = self.intra_atomic_net(q)
-        print(x.shape)
-        print(idx_i.shape)
-        print(idx_j.shape)
-
+        n, m, k = x.shape  # [64,17,96]
+        x = x.reshape(-1)  #
         xj = x[idx_j]
+        mu = mu.reshape(-1)  # [64*3*32] [6144]
         muj = mu[idx_j]
-        x = Wij * xj
-
+        x = Wij * xj  
         dq, dmuR, dmumu = torch.split(x, self.n_atom_basis, dim=-1)
         dq = scatter_add(dq, idx_i, dim_size=n_atoms)
         dmu = dmuR * dir_ij[..., None] + dmumu * muj

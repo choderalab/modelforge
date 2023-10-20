@@ -21,7 +21,9 @@ def test_BaseNNP():
 def test_forward_pass(model_class, dataset):
     for lightning in [True, False]:
         initialized_model = setup_simple_model(model_class, lightning)
-        inputs = return_single_batch(dataset, mode="fit")
+        inputs = return_single_batch(
+            dataset, mode="fit", split_file="tests/qm9tut/split.npz"
+        )
         output = initialized_model(inputs)
         print(output)
         assert output.shape[0] == 64

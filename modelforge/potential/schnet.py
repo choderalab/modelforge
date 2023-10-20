@@ -34,9 +34,9 @@ class SchNET(BaseNNP):
             Number of embeddings (default is 100).
         """
         from .models import PairList  # Local import to avoid circular dependencies
+        from .utils import EnergyReadout
 
         super().__init__()
-        from .utils import EnergyReadout
 
         self.calculate_distances_and_pairlist = PairList(cutoff)
         self.representation = SchNETRepresentation(cutoff)
@@ -49,18 +49,19 @@ class SchNET(BaseNNP):
             ]
         )
 
-    def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
+    def _forward(
+        self, pairlist: Dict[str, torch.Tensor], atomic_numbers_embedding: torch.Tensor
+    ) -> torch.Tensor:
         """
         Calculate the energy for a given input batch.
 
         Parameters
         ----------
-        inputs : Dict[str, torch.Tensor]
-            Inputs containing atomic numbers ('Z') and coordinates ('R').
-            - 'Z': shape (batch_size, n_atoms)
-            - 'R': shape (batch_size, n_atoms, 3)
-        cached_pairlist : bool, optional
-            Whether to use a cached pairlist (default is False).
+        atomic_numbers_embedding: int; shape (n_systems, n_atoms, n_atom_basis)
+        parilist : Dict[str, torch.Tensor], contains
+          - pairlist:int; (n_paris,2),
+          - r_ij:float; (n_pairs, 1)
+          - d_ij: float; (n_pairs, 3)
 
         Returns
         -------
@@ -69,10 +70,6 @@ class SchNET(BaseNNP):
         """
 
         # Initialize the feature representation using atomic numbers
-        Z = inputs["Z"]
-        mask = Z == 0
-        pairlist = self.calculate_distances_and_pairlist(mask, inputs["R"])
-        x = self.embedding(Z)  # shape (batch_size, n_atoms, n_atom_basis)
 
         # Compute the representation for each atom
         representation = self.representation(
@@ -82,16 +79,46 @@ class SchNET(BaseNNP):
         # Iterate over interaction blocks to update features
         for interaction in self.interactions:
             v = interaction(
-                x,
+                atomic_numbers_embedding,
                 representation["f_ij"],
                 representation["idx_i"],
                 representation["idx_j"],
                 representation["rcut_ij"],
             )
-            x = x + v
+            atomic_numbers_embedding = atomic_numbers_embedding + v
 
         # Pool over atoms to get molecular energies
-        return self.readout(x)  # shape (batch_size,)
+        return self.readout(atomic_numbers_embedding)  # shape (batch_size,)
+
+    def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
+        """
+        Abstract method for forward pass in neural network potentials.
+
+        Parameters
+        ----------
+        inputs : Dict[str, torch.Tensor]
+            Inputs containing atomic numbers ('atomic_numbers'), coordinates ('positions') and pairlist ('pairlist').
+            - 'atomic_numbers': int; shape (n_systems, n_atoms), 0 indicates non-interacting atoms that will be masked
+            - 'total_charge' : int; shape (n_system:int)
+            - 'positions': float; shape (n_systems, n_atoms, 3)
+            - 'pairlist': Dict[str, torch.Tensor], contains pairlist :int; (n_paris,2),
+                r_ij:float; (n_pairs, 1) , d_ij: float; (n_pairs, 3), 'atomic_subsystem_index':int; (n_atoms)
+
+        Returns
+        -------
+        torch.Tensor
+            Calculated energies; float; shape (n_systems).
+
+        """
+        atomic_numbers = inputs["atomic_numbers"]  # shape (n_systems, n_atoms, 3)
+        positions = inputs["positions"]  # shape (n_systems, n_atoms, 3)
+        mask_padding = atomic_numbers == 0
+
+        pairlist = self.calculate_distances_and_pairlist(mask_padding, positions)
+        atomic_numbers_embedding = self.embedding(
+            atomic_numbers
+        )  # shape (batch_size, n_atoms, n_atom_basis)
+        self._forward(pairlist, atomic_numbers_embedding)
 
 
 class SchNETInteractionBlock(nn.Module):
@@ -230,9 +257,9 @@ class SchNETRepresentation(nn.Module):
         f_ij, rcut_ij = _distance_to_radial_basis(d_ij, self.radial_basis)
 
         # Separate indices for atoms in each pair
-        idx_i, idx_j = atom_index12[0], atom_index12[1]
+        # idx_i, idx_j = atom_index12[0], atom_index12[1]
 
-        return {"f_ij": f_ij, "idx_i": idx_i, "idx_j": idx_j, "rcut_ij": rcut_ij}
+        return {"f_ij": f_ij, "rcut_ij": rcut_ij}
 
 
 class LightningSchNET(SchNET, LightningModuleMixin):

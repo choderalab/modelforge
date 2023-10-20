@@ -1,14 +1,35 @@
 import numpy as np
-from modelforge.potential.utils import scatter_add
 import torch
+
+from modelforge.potential.utils import CosineCutoff, cosine_cutoff, scatter_add
+
+
+def test_cosine_cutoff():
+    # Test cosine_cutoff function
+    d_ij = torch.tensor([1.0, 2.0, 3.0])
+    cutoff = 2.0
+    expected_output = torch.tensor([0.5, 0.0, 0.0])
+    output = cosine_cutoff(d_ij, cutoff)
+    assert torch.allclose(output, expected_output, rtol=1e-3)
+
+
+def test_cosine_cutoff_module():
+    # Test CosineCutoff module
+    d_ij = torch.tensor([1.0, 2.0, 3.0])
+    cutoff = 2.0
+    expected_output = torch.tensor([0.5, 0.0, 0.0])
+    cosine_cutoff_module = CosineCutoff(cutoff)
+    output = cosine_cutoff_module(d_ij)
+    assert torch.allclose(output, expected_output, rtol=1e-3)
 
 
 def test_rbf():
     """
     Test the Gaussian Radial Basis Function (RBF) implementation.
     """
-    from modelforge.potential.utils import GaussianRBF
     from modelforge.dataset import QM9Dataset
+    from modelforge.potential.utils import GaussianRBF
+
     from .helper_functions import prepare_pairlist_for_single_batch, return_single_batch
 
     batch = return_single_batch(QM9Dataset, mode="fit")
@@ -19,6 +40,32 @@ def test_rbf():
     # Add assertion to check the shape of the output
     assert output.shape[1] == 20  # n_rbf dimension
 
+from modelforge.potential.utils import GaussianRBF
+
+
+def test_gaussian_rbf():
+    n_rbf = 5
+    cutoff = 10.0
+    start = 0.0
+    trainable = False
+    gaussian_rbf = GaussianRBF(n_rbf, cutoff, start, trainable)
+
+    # Test that the number of radial basis functions is correct
+    assert gaussian_rbf.n_rbf == n_rbf
+
+    # Test that the cutoff distance is correct
+    assert gaussian_rbf.cutoff == cutoff
+
+    # Test that the widths and offsets are correct
+    expected_offsets = torch.linspace(start, cutoff, n_rbf)
+    expected_widths = torch.abs(expected_offsets[1] - expected_offsets[0]) * torch.ones_like(expected_offsets)
+    assert torch.allclose(gaussian_rbf.offsets, expected_offsets)
+    assert torch.allclose(gaussian_rbf.widths, expected_widths)
+
+    # Test that the forward pass returns the expected output
+    d_ij = torch.tensor([1.0, 2.0, 3.0])
+    expected_output = gaussian_rbf(d_ij)
+    assert expected_output.shape == (3, n_rbf)
 
 def test_scatter_add():
     """

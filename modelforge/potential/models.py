@@ -50,24 +50,33 @@ class PairList(nn.Module):
         )
         return selected_coordinates[0] - selected_coordinates[1]
 
-    def forward(self, mask: torch.Tensor, R: torch.Tensor) -> Dict[str, torch.Tensor]:
+    def forward(
+        self, mask_padding: torch.Tensor, positions: torch.Tensor
+    ) -> Dict[str, torch.Tensor]:
         """Forward pass for PairList.
 
         Parameters
         ----------
         mask : torch.Tensor, shape [batch_size, n_atoms]
             Mask tensor.
-        R : torch.Tensor, shape [batch_size, n_atoms, n_dims]
+        positions : torch.Tensor, shape [batch_size, n_atoms, n_dims]
             Position tensor.
 
         Returns
         -------
-        dict
-            Dictionary containing atom index pairs, distances, and displacement vectors.
+        dict : Dictionary containing atom index pairs, distances, and displacement vectors.
+            - 'pairlist': Dict[str, torch.Tensor], contains pairlist :int; (n_paris,2),
+                r_ij:float; (n_pairs, 1) , d_ij: float; (n_pairs, 3)
+
         """
-        atom_index12 = self.calculate_neighbors(mask, R, self.cutoff)
-        r_ij = self.compute_r_ij(atom_index12, R)
-        return {"atom_index12": atom_index12, "d_ij": r_ij.norm(2, -1), "r_ij": r_ij}
+        pairlist = self.calculate_neighbors(mask_padding, positions, self.cutoff)
+        r_ij = self.compute_r_ij(pairlist, positions)
+
+        return {
+            "pairlist": pairlist,
+            "d_ij": r_ij.norm(2, -1),
+            "r_ij": r_ij,
+        }
 
 
 class LightningModuleMixin(pl.LightningModule):
@@ -112,11 +121,12 @@ class LightningModuleMixin(pl.LightningModule):
 class BaseNNP(nn.Module):
     """Abstract base class for neural network potentials."""
 
-    def __init__(self):
+    def __init__(self, cutoff: float = 0.5):
         """
         Initialize the NNP class.
         """
         super().__init__()
+        self.cutoff = cutoff  # in nanometer
 
     def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
@@ -124,13 +134,18 @@ class BaseNNP(nn.Module):
 
         Parameters
         ----------
-        inputs : dict
-            Dictionary of input tensors, shapes are context-dependent.
+        inputs : Dict[str, torch.Tensor]
+            Inputs containing atomic numbers ('atomic_numbers'), coordinates ('positions') and pairlist ('pairlist').
+            - 'atomic_numbers': int; shape (n_systems, n_atoms), 0 indicates non-interacting atoms that will be masked
+            - 'total_charge' : int; shape (n_system:int)
+            - 'positions': float; shape (n_systems, n_atoms, 3)
+            - 'pairlist': Dict[str, torch.Tensor], contains pairlist :int; (n_paris,2),
+                r_ij:float; (n_pairs, 1) , d_ij: float; (n_pairs, 3), 'atomic_subsystem_index':int; (n_atoms)
 
         Returns
         -------
-        torch.Tensor, shape [...]
-            Output tensor.
+        torch.Tensor
+            Calculated energies; float; shape (n_systems).
 
         Raises
         ------
@@ -138,4 +153,32 @@ class BaseNNP(nn.Module):
             This method needs to be implemented by subclasses.
         """
 
+        raise NotImplementedError
+
+
+class SingleTopologyAlchemicalBaseNNPModel(BaseNNP):
+    def forward(inputs: Dict[str, torch.Tensor]):
+        """
+        Calculate the alchemical energy for a given input batch.
+
+        Parameters
+        ----------
+        inputs : Dict[str, torch.Tensor]
+            Inputs containing atomic numbers ('atomic_numbers'), coordinates ('positions') and pairlist ('pairlist').
+            - 'atomic_numbers': shape (n_systems:int, n_atoms:int), 0 indicates non-interacting atoms that will be masked
+            - 'total_charge' : shape (n_system:int)
+            - (only for alchemical transformation) 'alchemical_atomic_number': shape (n_atoms:int)
+            - (only for alchemical transformation) 'lamb': float
+            - 'positions': shape (n_atoms, 3)
+            - 'pairlist': Dict[str, torch.Tensor], contains pairlist (n_paris,2),
+                r_ij (n_pairs, 1) , d_ij (n_pairs, 3), 'atomic_subsystem_index' (n_atoms)
+
+        Returns
+        -------
+        torch.Tensor
+            Calculated energies; shape (n_systems,).
+        """
+
+        # emb = nn.Embedding(1,200)
+        # lamb_emb = (1 - lamb) * emb(input['Z1']) + lamb * emb(input['Z2'])	def __init__():
         raise NotImplementedError

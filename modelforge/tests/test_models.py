@@ -22,8 +22,10 @@ def test_forward_pass(model_class, dataset):
     for lightning in [True, False]:
         initialized_model = setup_simple_model(model_class, lightning)
         inputs = return_single_batch(
-            dataset, mode="fit", split_file="tests/qm9tut/split.npz"
-        )
+            dataset,
+            mode="fit",
+        )  # split_file="modelforge/tests/qm9tut/split.npz")
+        print(inputs)
         output = initialized_model(inputs)
         print(output)
         assert output.shape[0] == 64
@@ -77,7 +79,7 @@ def test_pairlist_nopbc():
 
     mask = torch.tensor(
         [[False, False, True], [True, False, False]]
-    )  # masking [0][0] and [1][2]
+    )  # masking [0][2] and [1][0]
     R = torch.tensor(
         [
             [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]],

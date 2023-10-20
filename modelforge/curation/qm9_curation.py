@@ -110,10 +110,6 @@ class QM9Curation(DatasetCuration):
                 "u_in": unit.hartree,
                 "u_out": unit.kilojoule_per_mole,
             },
-            "formation_energy_at_298.15K": {
-                "u_in": unit.hartree,
-                "u_out": unit.kilojoule_per_mole,
-            },
             "reference_energy_at_298.15K": {
                 "u_in": unit.hartree,
                 "u_out": unit.kilojoule_per_mole,
@@ -122,7 +118,15 @@ class QM9Curation(DatasetCuration):
                 "u_in": unit.hartree,
                 "u_out": unit.kilojoule_per_mole,
             },
+            "reference_enthalpy_at_298.15K": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
             "free_energy_at_298.15K": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
+            "reference_free_energy_at_298.15K": {
                 "u_in": unit.hartree,
                 "u_out": unit.kilojoule_per_mole,
             },
@@ -140,7 +144,8 @@ class QM9Curation(DatasetCuration):
                 "u_out": unit.cm**-1,
             },
         }
-
+        # reference thermochemical data for each atom as provided in the atomref.txt file  provided in the publication
+        # Direct link to the atomref.txt datafile: https://ndownloader.figstatic.com/files/3195395
         self.thermochemical_references = {
             "H": {
                 "ZPVE": 0.000000 * unit.hartree,
@@ -216,10 +221,11 @@ class QM9Curation(DatasetCuration):
             "formation_energy_at_0K": "series_mol",
             "reference_energy_at_0K": "series_mol",
             "internal_energy_at_298.15K": "series_mol",
-            "formation_energy_at_298.15K": "series_mol",
             "reference_energy_at_298.15K": "series_mol",
             "enthalpy_at_298.15K": "series_mol",
+            "reference_enthalpy_at_298.15K": "series_mol",
             "free_energy_at_298.15K": "series_mol",
+            "reference_free_energy_at_298.15K": "series_mol",
             "heat_capacity_at_298.15K": "series_mol",
             "harmonic_vibrational_frequencies": "series_mol",
         }
@@ -463,16 +469,29 @@ class QM9Curation(DatasetCuration):
             U_ref_298K = self._calculate_reference_thermochemistry(
                 elements, "U_298.15K"
             )
+            H_ref_298K = self._calculate_reference_thermochemistry(
+                elements, "H_298.15K"
+            )
+            G_ref_298K = self._calculate_reference_thermochemistry(
+                elements, "G_298.15K"
+            )
 
-            data_temp["reference_energy_at_0K"] = U_ref_0K
-            data_temp["reference_energy_at_298.15K"] = U_ref_298K
+            data_temp["reference_energy_at_0K"] = (
+                np.array(U_ref_0K.m).reshape(1, 1) * U_ref_0K.u
+            )
+            data_temp["reference_energy_at_298.15K"] = (
+                np.array(U_ref_298K.m).reshape(1, 1) * U_ref_298K.u
+            )
+            data_temp["reference_enthalpy_at_298.15K"] = (
+                np.array(H_ref_298K.m).reshape(1, 1) * H_ref_298K.u
+            )
+
+            data_temp["reference_free_energy_at_298.15K"] = (
+                np.array(G_ref_298K.m).reshape(1, 1) * G_ref_298K.u
+            )
 
             data_temp["formation_energy_at_0K"] = (
                 data_temp["internal_energy_at_0K"] - data_temp["reference_energy_at_0K"]
-            )
-            data_temp["formation_energy_at_298.15K"] = (
-                data_temp["internal_energy_at_298.15K"]
-                - data_temp["reference_energy_at_298.15K"]
             )
 
             for h in hvf_temp:

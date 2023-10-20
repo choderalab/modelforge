@@ -355,10 +355,26 @@ def test_qm9_curation_parse_xyz(prep_temp_dir):
         )
         / unit.centimeter
     )
-    assert data_dict_temp["reference_energy_at_0K"] == -39.847864 * unit.hartree
-    assert data_dict_temp["formation_energy_at_0K"] == -0.631066 * unit.hartree
-    assert data_dict_temp["reference_energy_at_298.15K"] == -39.840783 * unit.hartree
-    assert data_dict_temp["formation_energy_at_298.15K"] == -0.635279 * unit.hartree
+    assert np.allclose(
+        data_dict_temp["reference_energy_at_0K"],
+        np.array([-39.847864]).reshape(1, 1) * unit.hartree,
+    )
+    assert np.allclose(
+        data_dict_temp["formation_energy_at_0K"],
+        np.array([-0.631066]).reshape(1, 1) * unit.hartree,
+    )
+    assert np.allclose(
+        data_dict_temp["reference_energy_at_298.15K"],
+        np.array([-39.840783]).reshape(1, 1) * unit.hartree,
+    )
+    assert np.allclose(
+        data_dict_temp["reference_enthalpy_at_298.15K"],
+        np.array([-39.836059]).reshape(1, 1) * unit.hartree,
+    )
+    assert np.allclose(
+        data_dict_temp["reference_free_energy_at_298.15K"],
+        np.array([-39.905025]).reshape(1, 1) * unit.hartree,
+    )
 
 
 def test_qm9_local_archive(prep_temp_dir):

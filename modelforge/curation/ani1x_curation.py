@@ -34,7 +34,7 @@ class ANI1xCuration(DatasetCuration):
         )
 
         self.qm_parameters = {
-            "coordinates": {
+            "geometry": {
                 "u_in": unit.angstrom,
                 "u_out": unit.nanometer,
             },
@@ -146,34 +146,34 @@ class ANI1xCuration(DatasetCuration):
         # This information will be used by the code to read in the datafile to know how to parse underlying records.
 
         self._record_entries_series = {
-            "name": False,
-            "atomic_numbers": False,
-            "n_configs": False,
-            "geometry": True,
-            "wb97x_dz.energy": True,
-            "wb97x_tz.energy": True,
-            "ccsd(t)_cbs.energy": True,
-            "hf_dz.energy": True,
-            "hf_tz.energy": True,
-            "hf_qz.energy": True,
-            "npno_ccsd(t)_dz.corr_energy": True,
-            "npno_ccsd(t)_tz.corr_energy": True,
-            "tpno_ccsd(t)_dz.corr_energy": True,
-            "mp2_dz.corr_energy": True,
-            "mp2_tz.corr_energy": True,
-            "mp2_qz.corr_energy": True,
-            "wb97x_dz.forces": True,
-            "wb97x_tz.forces": True,
-            "wb97x_dz.dipole": True,
-            "wb97x_tz.dipole": True,
-            "wb97x_dz.quadrupole": True,
-            "wb97x_dz.cm5_charges": True,
-            "wb97x_dz.hirshfeld_charges": True,
-            "wb97x_tz.mbis_charges": True,
-            "wb97x_tz.mbis_dipoles": True,
-            "wb97x_tz.mbis_quadrupoles": True,
-            "wb97x_tz.mbis_octupoles": True,
-            "wb97x_tz.mbis_volumes": True,
+            "name": "single_rec",
+            "atomic_numbers": "single_atom",
+            "n_configs": "single_rec",
+            "geometry": "series_atom",
+            "wb97x_dz.energy": "series_mol",
+            "wb97x_tz.energy": "series_mol",
+            "ccsd(t)_cbs.energy": "series_mol",
+            "hf_dz.energy": "series_mol",
+            "hf_tz.energy": "series_mol",
+            "hf_qz.energy": "series_mol",
+            "npno_ccsd(t)_dz.corr_energy": "series_mol",
+            "npno_ccsd(t)_tz.corr_energy": "series_mol",
+            "tpno_ccsd(t)_dz.corr_energy": "series_mol",
+            "mp2_dz.corr_energy": "series_mol",
+            "mp2_tz.corr_energy": "series_mol",
+            "mp2_qz.corr_energy": "series_mol",
+            "wb97x_dz.forces": "series_atom",
+            "wb97x_tz.forces": "series_atom",
+            "wb97x_dz.dipole": "series_mol",
+            "wb97x_tz.dipole": "series_mol",
+            "wb97x_dz.quadrupole": "series_mol",
+            "wb97x_dz.cm5_charges": "series_atom",
+            "wb97x_dz.hirshfeld_charges": "series_atom",
+            "wb97x_tz.mbis_charges": "series_atom",
+            "wb97x_tz.mbis_dipoles": "series_atom",
+            "wb97x_tz.mbis_quadrupoles": "series_atom",
+            "wb97x_tz.mbis_octupoles": "series_atom",
+            "wb97x_tz.mbis_volumes": "series_atom",
         }
 
     def _process_downloaded(
@@ -199,9 +199,31 @@ class ANI1xCuration(DatasetCuration):
         """
         import h5py
         from tqdm import tqdm
+        from numpy import newaxis
 
         input_file_name = f"{local_path_dir}/{name}"
 
+        add_new_axis = {
+            "wb97x_dz.energy": True,
+            "wb97x_tz.energy": True,
+            "ccsd(t)_cbs.energy": True,
+            "hf_dz.energy": True,
+            "hf_tz.energy": True,
+            "hf_qz.energy": True,
+            "npno_ccsd(t)_dz.corr_energy": True,
+            "npno_ccsd(t)_tz.corr_energy": True,
+            "tpno_ccsd(t)_dz.corr_energy": True,
+            "mp2_dz.corr_energy": True,
+            "mp2_tz.corr_energy": True,
+            "mp2_qz.corr_energy": True,
+            "wb97x_dz.cm5_charges": True,
+            "wb97x_dz.hirshfeld_charges": True,
+            "wb97x_tz.mbis_charges": True,
+            "wb97x_tz.mbis_dipoles": True,
+            "wb97x_tz.mbis_quadrupoles": True,
+            "wb97x_tz.mbis_octupoles": True,
+            "wb97x_tz.mbis_volumes": True,
+        }
         with h5py.File(input_file_name, "r") as hf:
             names = list(hf.keys())
             if unit_testing_max_records is None:
@@ -219,40 +241,31 @@ class ANI1xCuration(DatasetCuration):
                 ani1x_temp = {}
 
                 ani1x_temp["name"] = f"{name}"
-                ani1x_temp["atomic_numbers"] = hf[name]["atomic_numbers"][()]
+                ani1x_temp["atomic_numbers"] = hf[name]["atomic_numbers"][()].reshape(
+                    -1, 1
+                )
                 ani1x_temp["n_configs"] = n_configs
 
                 # param_in is the name of the entry, param_data contains input (u_in) and output (u_out) units
                 for param_in, param_data in self.qm_parameters.items():
-                    temp = hf[name][param_in][()]
-
-                    # if not np.isnan(temp).any():
-
                     param_out = param_in
-                    # we always want the particle positions to be called geometry
-                    if param_in == "coordinates":
-                        param_out = "geometry"
+                    # we always want the particle positions to be called geometry to make life easier
+                    if param_out == "geometry":
+                        param_in = "coordinates"
+
+                    temp = hf[name][param_in][()]
+                    if param_in in add_new_axis:
+                        temp = temp[..., newaxis]
 
                     param_unit = param_data["u_in"]
-                    if not param_unit is None:
-                        if self.convert_units:
-                            param_unit_out = param_data["u_out"]
-                            try:
-                                ani1x_temp[param_out] = (temp * param_unit).to(
-                                    param_unit_out, "chem"
-                                )
-
-                            except PintError:
-                                print(
-                                    f"Could not convert {param_unit} to {param_unit_out} for {param_in}."
-                                )
-                        else:
-                            ani1x_temp[param_out] = temp * param_unit
+                    if param_unit is not None:
+                        ani1x_temp[param_out] = temp * param_unit
                     else:
                         ani1x_temp[param_out] = temp
 
                 self.data.append(ani1x_temp)
-
+        if self.convert_units:
+            self._convert_units()
         # From documentation: By default, objects inside group are iterated in alphanumeric order.
         # However, if group is created with track_order=True, the insertion order for the group is remembered (tracked)
         # in HDF5 file, and group contents are iterated in that order.

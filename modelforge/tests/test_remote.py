@@ -5,8 +5,6 @@ import os
 
 from modelforge.utils.remote import *
 
-IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
-
 
 @pytest.fixture(scope="session")
 def prep_temp_dir(tmp_path_factory):
@@ -26,7 +24,6 @@ def test_is_url():
         is_url(query="https://zenodo.org/record/3588339", hostname="choderalab.org")
         == False
     )
-
 
 def test_download_from_figshare(prep_temp_dir):
     url = "https://figshare.com/ndownloader/files/22247589"
@@ -48,71 +45,9 @@ def test_download_from_figshare(prep_temp_dir):
         )
 
 
-def test_record_id_parse():
-    assert (
-        parse_zenodo_record_id_from_url("https://zenodo.org/record/3588339")
-        == "3588339"
-    )
-    assert (
-        parse_zenodo_record_id_from_url("https://zenodo.org/record/3588339/")
-        == "3588339"
-    )
-    with pytest.raises(Exception):
-        parse_zenodo_record_id_from_url("https://zenodo.org/record/bad/3588339")
-
-@pytest.mark.skipif(IN_GITHUB_ACTIONS, reason="Change to Zenodo; tests fixed in different branch")
-
-def test_zenodo_fetch():
-    # qm9 dataset
-    files = datafiles_from_zenodo(
-        record="10.5281/zenodo.3588339", file_extension="hdf5.gz"
-    )
-    assert len(files) == 1
-    assert (
-        files[0]
-        == "https://zenodo.org/api/files/0a55a53a-69c3-4cd8-8ab8-d031ca0d6853/155.hdf5.gz"
-    )
-
-    files = datafiles_from_zenodo(
-        record="https://dx.doi.org/10.5281/zenodo.3588339", file_extension="hdf5.gz"
-    )
-    assert len(files) == 1
-    assert (
-        files[0]
-        == "https://zenodo.org/api/files/0a55a53a-69c3-4cd8-8ab8-d031ca0d6853/155.hdf5.gz"
-    )
-
-    files = datafiles_from_zenodo(
-        record="https://zenodo.org/record/3588339", file_extension="hdf5.gz"
-    )
-    assert len(files) == 1
-    assert (
-        files[0]
-        == "https://zenodo.org/api/files/0a55a53a-69c3-4cd8-8ab8-d031ca0d6853/155.hdf5.gz"
-    )
-
-    files = datafiles_from_zenodo(record="3588339", file_extension="hdf5.gz")
-    assert len(files) == 1
-    assert (
-        files[0]
-        == "https://zenodo.org/api/files/0a55a53a-69c3-4cd8-8ab8-d031ca0d6853/155.hdf5.gz"
-    )
-
-    # comp6 dataset
-    files = datafiles_from_zenodo("10.5281/zenodo.3588368", file_extension="hdf5.gz")
-    assert len(files) == 6
-    assert any("205.hdf5.gz" in file for file in files)
-    assert any("207.hdf5.gz" in file for file in files)
-    assert any("208.hdf5.gz" in file for file in files)
-    assert any("209.hdf5.gz" in file for file in files)
-    assert any("210.hdf5.gz" in file for file in files)
-    assert any("211.hdf5.gz" in file for file in files)
-
-@pytest.mark.skipif(IN_GITHUB_ACTIONS, reason="Change to Zenodo; tests fixed in different branch")
-
 def test_fetch_record_id():
     record = fetch_url_from_doi(doi="10.5281/zenodo.3588339")
-    assert record == "https://zenodo.org/record/3588339"
+    assert record == "https://zenodo.org/records/3588339"
 
     with pytest.raises(Exception):
         fetch_url_from_doi(doi="10.5281/zenodo.fake.3588339")
@@ -120,47 +55,13 @@ def test_fetch_record_id():
     with pytest.raises(Exception):
         fetch_url_from_doi(doi="10.5281/zenodo.3588339", timeout=0.0000000000001)
 
-@pytest.mark.skipif(IN_GITHUB_ACTIONS, reason="Change to Zenodo; tests fixed in different branch.")
-
-def test_fetch_datafiles():
-    files = get_zenodo_datafiles(
-        record_id="https://zenodo.org/record/3588339", file_extension=".hdf5.gz"
-    )
-
-    assert len(files) == 1
-    assert (
-        files[0]
-        == "https://zenodo.org/api/files/0a55a53a-69c3-4cd8-8ab8-d031ca0d6853/155.hdf5.gz"
-    )
-
-    files = get_zenodo_datafiles(record_id="3588339", file_extension=".gz")
-    assert len(files) == 2
-    assert (
-        files[0]
-        == "https://zenodo.org/api/files/0a55a53a-69c3-4cd8-8ab8-d031ca0d6853/155.hdf5.gz"
-    )
-    assert (
-        files[1]
-        == "https://zenodo.org/api/files/0a55a53a-69c3-4cd8-8ab8-d031ca0d6853/155.tar.gz"
-    )
-
-    files = get_zenodo_datafiles(record_id="3588339", file_extension=".txt")
-    assert len(files) == 0
-
-    with pytest.raises(Exception):
-        get_zenodo_datafiles(record_id="3588339bad", file_extension=".txt")
-
-    with pytest.raises(Exception):
-        get_zenodo_datafiles(
-            record_id="3588339", timeout=0.000000000001, file_extension=".hdf5.gz"
-        )
-
-@pytest.mark.skipif(IN_GITHUB_ACTIONS, reason="Change to Zenodo; tests fixed in different branch.")
 
 def test_download_from_zenodo(prep_temp_dir):
-    url = "https://zenodo.org/record/3401581/files/PTC-CMC/atools_ml-v0.1.zip"
+    url = "https://zenodo.org/records/3401581/files/PTC-CMC/atools_ml-v0.1.zip"
+    zenodo_checksum = "194cde222565dca8657d8521e5df1fd8"
     name = download_from_zenodo(
         url=url,
+        zenodo_md5_checksum=zenodo_checksum,
         output_path=str(prep_temp_dir),
         force_download=True,
     )
@@ -172,6 +73,35 @@ def test_download_from_zenodo(prep_temp_dir):
         url = "https://choderalab.com/22247589"
         name = download_from_zenodo(
             url=url,
+            zenodo_md5_checksum=zenodo_checksum,
+            output_path=str(prep_temp_dir),
+            force_download=True,
+        )
+
+
+def test_md5_calculation(prep_temp_dir):
+    url = "https://zenodo.org/records/3401581/files/PTC-CMC/atools_ml-v0.1.zip"
+    zenodo_checksum = "194cde222565dca8657d8521e5df1fd8"
+
+    name = download_from_zenodo(
+        url=url,
+        zenodo_md5_checksum=zenodo_checksum,
+        output_path=str(prep_temp_dir),
+        force_download=True,
+    )
+
+    # explicit direct check of the function, even though included in download_from_zenodo
+    calculated_checksum = calculate_md5_checksum(
+        file_name=name, file_path=str(prep_temp_dir)
+    )
+
+    assert zenodo_checksum == calculated_checksum
+
+    with pytest.raises(Exception):
+        bad_checksum = "294badmd5checksumthatwontwork9de"
+        name = download_from_zenodo(
+            url=url,
+            zenodo_md5_checksum=bad_checksum,
             output_path=str(prep_temp_dir),
             force_download=True,
         )

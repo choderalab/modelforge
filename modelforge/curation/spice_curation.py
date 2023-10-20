@@ -45,12 +45,13 @@ class SPICE114Curation(DatasetCuration):
 
     def _init_dataset_parameters(self):
         self.dataset_download_url = (
-            "https://zenodo.org/record/8222043/files/SPICE-1.1.4.hdf5"
+            "https://zenodo.org/records/8222043/files/SPICE-1.1.4.hdf5"
         )
+        self.dataset_md5_checksum = "f27d4c81da0e37d6547276bf6b4ae6a1"
         # the spice dataset includes openff compatible unit definitions in the hdf5 file
-        # we need only define output units
+        # these values were used to generate this dictionary
         self.qm_parameters = {
-            "conformations": {
+            "geometry": {
                 "u_in": unit.bohr,
                 "u_out": unit.nanometer,
             },
@@ -110,23 +111,23 @@ class SPICE114Curation(DatasetCuration):
         # This information will be used by the code to read in the datafile to know how to parse underlying records.
 
         self._record_entries_series = {
-            "name": False,
-            "atomic_numbers": False,
-            "n_configs": False,
-            "smiles": False,
-            "subset": False,
-            "geometry": True,
-            "dft_total_energy": True,
-            "dft_total_gradient": True,
-            "formation_energy": True,
-            "mayer_indices": True,
-            "mbis_charges": True,
-            "mbis_dipoles": True,
-            "mbis_octupoles": True,
-            "mbis_quadrupoles": True,
-            "scf_dipole": True,
-            "scf_quadrupole": True,
-            "wiberg_lowdin_indices": True,
+            "name": "single_rec",
+            "atomic_numbers": "single_atom",
+            "n_configs": "single_rec",
+            "smiles": "single_rec",
+            "subset": "single_rec",
+            "geometry": "series_atom",
+            "dft_total_energy": "series_mol",
+            "dft_total_gradient": "series_atom",
+            "formation_energy": "series_mol",
+            "mayer_indices": "series_atom",
+            "mbis_charges": "series_atom",
+            "mbis_dipoles": "series_atom",
+            "mbis_octupoles": "series_atom",
+            "mbis_quadrupoles": "series_atom",
+            "scf_dipole": "series_mol",
+            "scf_quadrupole": "series_mol",
+            "wiberg_lowdin_indices": "series_atom",
         }
 
     def _process_downloaded(
@@ -155,6 +156,7 @@ class SPICE114Curation(DatasetCuration):
 
         input_file_name = f"{local_path_dir}/{name}"
 
+        need_to_reshape = {"formation_energy": True, "dft_total_energy": True}
         with h5py.File(input_file_name, "r") as hf:
             names = list(hf.keys())
             if unit_testing_max_records is None:
@@ -172,38 +174,44 @@ class SPICE114Curation(DatasetCuration):
                 ds_temp = {}
 
                 ds_temp["name"] = f"{name}"
-                ds_temp["atomic_numbers"] = hf[name]["atomic_numbers"][()]
+                ds_temp["atomic_numbers"] = hf[name]["atomic_numbers"][()].reshape(
+                    -1, 1
+                )
                 ds_temp["n_configs"] = n_configs
 
                 # param_in is the name of the entry, param_data contains input (u_in) and output (u_out) units
                 for param_in, param_data in self.qm_parameters.items():
+                    # for consistency between datasets, we will all the particle positions "geometry"
+                    param_out = param_in
+                    if param_in == "geometry":
+                        param_in = "conformations"
+
                     if param_in in keys_list:
                         temp = hf[name][param_in][()]
-
-                        param_out = param_in
-                        # we always want the particle positions to be called geometry
-                        if param_in == "conformations":
-                            param_out = "geometry"
+                        if param_in in need_to_reshape:
+                            temp = temp.reshape(-1, 1)
 
                         param_unit = param_data["u_in"]
-                        if not param_unit is None:
-                            if self.convert_units:
-                                param_unit_out = param_data["u_out"]
-                                try:
-                                    ds_temp[param_out] = (temp * param_unit).to(
-                                        param_unit_out, "chem"
-                                    )
+                        if param_unit is not None:
+                            # check that units in the hdf5 file match those we have defined in self.qm_parameters
+                            try:
+                                assert (
+                                    hf[name][param_in].attrs["units"]
+                                    == param_data["u_in"]
+                                )
+                            except:
+                                msg1 = f'unit mismatch: units in hdf5 file: {hf[name][param_in].attrs["units"]},'
+                                msg2 = f'units defined in curation class: {param_data["u_in"]}.'
 
-                                except Exception:
-                                    print(
-                                        f"Could not convert {param_unit} to {param_unit_out} for {param_in}."
-                                    )
-                            else:
-                                ds_temp[param_out] = temp * param_unit
+                                raise AssertionError(f"{msg1} {msg2}")
+
+                            ds_temp[param_out] = temp * param_unit
                         else:
                             ds_temp[param_out] = temp
 
                 self.data.append(ds_temp)
+        if self.convert_units:
+            self._convert_units()
 
         # From documentation: By default, objects inside group are iterated in alphanumeric order.
         # However, if group is created with track_order=True, the insertion order for the group is remembered (tracked)
@@ -241,6 +249,7 @@ class SPICE114Curation(DatasetCuration):
         # download the dataset
         self.name = download_from_zenodo(
             url=url,
+            zenodo_md5_checksum=self.dataset_md5_checksum,
             output_path=self.local_cache_dir,
             force_download=force_download,
         )

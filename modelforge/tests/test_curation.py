@@ -10,6 +10,7 @@ import pint
 from modelforge.curation.qm9_curation import QM9Curation
 from modelforge.curation.ani1x_curation import ANI1xCuration
 from modelforge.curation.spice_curation import SPICE114Curation
+from modelforge.curation.spice_openff_curation import SPICE12PubChemOpenFFCuration
 
 from modelforge.curation.curation_baseclass import dict_to_hdf5
 
@@ -113,16 +114,16 @@ def test_series_dict_to_hdf5(prep_temp_dir):
 
     file_path = str(prep_temp_dir)
     record_entries_series = {
-        "name": "single",
-        "n_configs": "single",
-        "energy": "series",
-        "geometry": "series",
+        "name": "single_rec",
+        "n_configs": "single_rec",
+        "energy": "series_mol",
+        "geometry": "series_atom",
     }
     test_data = [
         {
             "name": "test1",
             "n_configs": 2,
-            "energy": np.array([123, 234]) * unit.hartree,
+            "energy": np.array([123, 234]).reshape(2, 1) * unit.hartree,
             "geometry": np.array(
                 [[[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]], [[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]]
             )
@@ -161,7 +162,8 @@ def test_series_dict_to_hdf5(prep_temp_dir):
             temp_record["n_configs"] = n_configs
 
             for property in ["energy", "geometry"]:
-                if hf[name][property].attrs["series"]:
+                format = hf[name][property].attrs["format"]
+                if format.split("_")[0] == "series":
                     temp = []
                     for i in range(n_configs):
                         temp.append(hf[name][property][i])
@@ -230,6 +232,7 @@ def test_qm9_curation_parse_xyz(prep_temp_dir):
         hdf5_file_name="qm9_dataset.hdf5",
         output_file_dir=str(prep_temp_dir),
         local_cache_dir=str(prep_temp_dir),
+        convert_units=True,
     )
 
     # check to ensure we can parse the properties line correctly
@@ -237,112 +240,104 @@ def test_qm9_curation_parse_xyz(prep_temp_dir):
     temp_line = "gdb 1  157.7  157.7  157.7  0.  13.2  -0.3  0.1  0.5  35.3  0.0  -40.4  -40.4  -40.4  -40.4  6.4"
     temp_dict = qm9_data._parse_properties(temp_line)
 
+    # units are applied in _parse_properties
     assert len(temp_dict) == 17
     assert temp_dict["tag"] == "gdb"
     assert temp_dict["idx"] == "1"
-    assert temp_dict["rotational_constant_A"] == 157.7 * unit.gigahertz
-    assert temp_dict["rotational_constant_B"] == 157.7 * unit.gigahertz
-    assert temp_dict["rotational_constant_C"] == 157.7 * unit.gigahertz
-    assert temp_dict["dipole_moment"] == 0 * unit.debye
-    assert temp_dict["isotropic_polarizability"] == 13.2 * unit.angstrom**3
-    assert temp_dict["energy_of_homo"] == -0.3 * unit.hartree
-    assert temp_dict["energy_of_lumo"] == 0.1 * unit.hartree
-    assert temp_dict["lumo-homo_gap"] == 0.5 * unit.hartree
-    assert temp_dict["electronic_spatial_extent"] == 35.3 * unit.angstrom**2
-    assert temp_dict["zero_point_vibrational_energy"] == 0.0 * unit.hartree
-    assert temp_dict["internal_energy_at_0K"] == -40.4 * unit.hartree
-    assert temp_dict["internal_energy_at_298.15K"] == -40.4 * unit.hartree
-    assert temp_dict["enthalpy_at_298.15K"] == -40.4 * unit.hartree
-    assert temp_dict["free_energy_at_298.15K"] == -40.4 * unit.hartree
-    assert (
-        temp_dict["heat_capacity_at_298.15K"]
-        == 6.4 * unit.calorie_per_mole / unit.kelvin
-    )
+    assert temp_dict["rotational_constant_A"] == 157.7
+    assert temp_dict["rotational_constant_B"] == 157.7
+    assert temp_dict["rotational_constant_C"] == 157.7
+    assert temp_dict["dipole_moment"] == 0
+    assert temp_dict["isotropic_polarizability"] == 13.2
+    assert temp_dict["energy_of_homo"] == -0.3
+    assert temp_dict["energy_of_lumo"] == 0.1
+    assert temp_dict["lumo-homo_gap"] == 0.5
+    assert temp_dict["electronic_spatial_extent"] == 35.3
+    assert temp_dict["zero_point_vibrational_energy"] == 0.0
+    assert temp_dict["internal_energy_at_0K"] == -40.4
+    assert temp_dict["internal_energy_at_298.15K"] == -40.4
+    assert temp_dict["enthalpy_at_298.15K"] == -40.4
+    assert temp_dict["free_energy_at_298.15K"] == -40.4
+    assert temp_dict["heat_capacity_at_298.15K"] == 6.4
 
     # test parsing an entire file from our data directory with unit conversions
     fn = resources.files("modelforge").joinpath("tests", "data", "dsgdb9nsd_000001.xyz")
     data_dict_temp = qm9_data._parse_xyzfile(str(fn))
 
     # spot check values
+    # geometry is a per atom property so will be of shape [m,n,3]
+    # where for qm9, the number of conformers, m = 1
     assert np.all(
         np.isclose(
             data_dict_temp["geometry"],
             np.array(
                 [
-                    [-1.26981359e-03, 1.08580416e-01, 8.00099580e-04],
-                    [2.15041600e-04, -6.03131760e-04, 1.97612040e-04],
-                    [1.01173084e-01, 1.46375116e-01, 2.76574800e-05],
-                    [-5.40815069e-02, 1.44752661e-01, -8.76643715e-02],
-                    [-5.23813634e-02, 1.43793264e-01, 9.06397294e-02],
+                    [
+                        [-1.26981359e-03, 1.08580416e-01, 8.00099580e-04],
+                        [2.15041600e-04, -6.03131760e-04, 1.97612040e-04],
+                        [1.01173084e-01, 1.46375116e-01, 2.76574800e-05],
+                        [-5.40815069e-02, 1.44752661e-01, -8.76643715e-02],
+                        [-5.23813634e-02, 1.43793264e-01, 9.06397294e-02],
+                    ]
                 ]
             )
             * unit.nanometer,
         )
     )
-
+    # [m, n, 1] shape
     assert np.all(
         data_dict_temp["charges"]
-        == np.array([-0.535689, 0.133921, 0.133922, 0.133923, 0.133923])
+        == np.array([[[-0.535689], [0.133921], [0.133922], [0.133923], [0.133923]]])
         * unit.elementary_charge
     )
-    assert data_dict_temp["isotropic_polarizability"] == 13.21 * unit.angstroms**3
+    assert data_dict_temp["isotropic_polarizability"] == [[13.21]] * unit.angstroms**3
+    assert data_dict_temp["energy_of_homo"] == [[-0.3877]] * unit.hartree
+    assert data_dict_temp["energy_of_lumo"] == [[0.1171]] * unit.hartree
+    assert data_dict_temp["lumo-homo_gap"] == [[0.5048]] * unit.hartree
     assert (
-        data_dict_temp["energy_of_homo"]
-        == -1017.9062102263447 * unit.kilojoule_per_mole
+        data_dict_temp["electronic_spatial_extent"] == [[35.3641]] * unit.angstrom**2
     )
     assert (
-        data_dict_temp["energy_of_lumo"] == 307.4460077830925 * unit.kilojoule_per_mole
+        data_dict_temp["zero_point_vibrational_energy"] == [[0.044749]] * unit.hartree
     )
-    assert (
-        data_dict_temp["lumo-homo_gap"] == 1325.3522180094374 * unit.kilojoule_per_mole
-    )
-    assert data_dict_temp["electronic_spatial_extent"] == 35.3641 * unit.angstrom**2
-    assert (
-        data_dict_temp["zero_point_vibrational_energy"]
-        == 117.4884833670846 * unit.kilojoule_per_mole
-    )
-    assert (
-        data_dict_temp["internal_energy_at_0K"]
-        == -106277.4161215308 * unit.kilojoule_per_mole
-    )
-    assert (
-        data_dict_temp["internal_energy_at_298.15K"]
-        == -106269.88618856476 * unit.kilojoule_per_mole
-    )
-    assert (
-        data_dict_temp["enthalpy_at_298.15K"]
-        == -106267.40509140545 * unit.kilojoule_per_mole
-    )
-    assert (
-        data_dict_temp["free_energy_at_298.15K"]
-        == -106329.05182294044 * unit.kilojoule_per_mole
-    )
+    assert data_dict_temp["internal_energy_at_0K"] == [[-40.47893]] * unit.hartree
+    assert data_dict_temp["internal_energy_at_298.15K"] == [[-40.476062]] * unit.hartree
+    assert data_dict_temp["enthalpy_at_298.15K"] == [[-40.475117]] * unit.hartree
+    assert data_dict_temp["free_energy_at_298.15K"] == [[-40.498597]] * unit.hartree
     assert (
         data_dict_temp["heat_capacity_at_298.15K"]
-        == 0.027066296000000004 * unit.kilojoule_per_mole / unit.kelvin
+        == [[6.469]] * unit.calorie_per_mole / unit.kelvin
     )
-    assert np.all(data_dict_temp["atomic_numbers"] == np.array([6, 1, 1, 1, 1]))
+    # atomic_numbers do not change with conformers, so it is defined as [n,1]
+    assert np.all(
+        data_dict_temp["atomic_numbers"] == np.array([[6], [1], [1], [1], [1]])
+    )
     assert data_dict_temp["smiles_gdb-17"] == "C"
     assert data_dict_temp["smiles_b3lyp"] == "C"
     assert data_dict_temp["inchi_corina"] == "1S/CH4/h1H4"
     assert data_dict_temp["inchi_b3lyp"] == "1S/CH4/h1H4"
-    assert data_dict_temp["rotational_constant_A"] == 157.7118 * unit.gigahertz
-    assert data_dict_temp["rotational_constant_B"] == 157.70997 * unit.gigahertz
-    assert data_dict_temp["rotational_constant_C"] == 157.70699 * unit.gigahertz
-    assert data_dict_temp["dipole_moment"] == 0.0 * unit.debye
+    # per molecule property, shape [m,3]
+    assert np.all(
+        data_dict_temp["rotational_constants"]
+        == np.array([[157.7118, 157.70997, 157.70699]]) * unit.gigahertz
+    )
+
+    assert data_dict_temp["dipole_moment"] == [[0.0]] * unit.debye
     assert np.all(
         data_dict_temp["harmonic_vibrational_frequencies"]
         == np.array(
             [
-                1341.307,
-                1341.3284,
-                1341.365,
-                1562.6731,
-                1562.7453,
-                3038.3205,
-                3151.6034,
-                3151.6788,
-                3151.7078,
+                [
+                    1341.307,
+                    1341.3284,
+                    1341.365,
+                    1562.6731,
+                    1562.7453,
+                    3038.3205,
+                    3151.6034,
+                    3151.6788,
+                    3151.7078,
+                ]
             ]
         )
         / unit.centimeter
@@ -366,19 +361,20 @@ def test_qm9_local_archive(prep_temp_dir):
     qm9_data._process_downloaded(str(local_data_path), "first10.tar.bz2")
 
     assert len(qm9_data.data) == 10
-
+    # internal_energy_at_0K in kj/mol
     names = {
-        "dsgdb9nsd_000001": -106277.4161215308,
-        "dsgdb9nsd_000002": -148408.69593977975,
-        "dsgdb9nsd_000003": -200600.51755556674,
-        "dsgdb9nsd_000004": -202973.24721725564,
-        "dsgdb9nsd_000005": -245252.87826713378,
-        "dsgdb9nsd_000006": -300576.6846578527,
-        "dsgdb9nsd_000007": -209420.75231941737,
-        "dsgdb9nsd_000008": -303715.5298633426,
-        "dsgdb9nsd_000009": -306158.32885940996,
-        "dsgdb9nsd_000010": -348451.454977435,
+        "dsgdb9nsd_000001": np.array([[-106277.4161215308]]),
+        "dsgdb9nsd_000002": np.array([[-148408.69593977975]]),
+        "dsgdb9nsd_000003": np.array([[-200600.51755556674]]),
+        "dsgdb9nsd_000004": np.array([[-202973.24721725564]]),
+        "dsgdb9nsd_000005": np.array([[-245252.87826713378]]),
+        "dsgdb9nsd_000006": np.array([[-300576.6846578527]]),
+        "dsgdb9nsd_000007": np.array([[-209420.75231941737]]),
+        "dsgdb9nsd_000008": np.array([[-303715.5298633426]]),
+        "dsgdb9nsd_000009": np.array([[-306158.32885940996]]),
+        "dsgdb9nsd_000010": np.array([[-348451.454977435]]),
     }
+    #
     # output file
     file_name_path = str(prep_temp_dir) + "/qm9_test10.hdf5"
     qm9_data._generate_hdf5()
@@ -390,6 +386,9 @@ def test_qm9_local_archive(prep_temp_dir):
             # check record names
             assert key in list(names.keys())
             assert np.isclose(hf[key]["internal_energy_at_0K"][()], names[key])
+            assert np.all(
+                hf[key]["internal_energy_at_0K"][()].shape == names[key].shape
+            )
 
     # clear out the
     qm9_data._clear_data()
@@ -478,7 +477,7 @@ def test_an1_process_download_no_conversion(prep_temp_dir):
     assert ani1_data.data[0]["name"] == "C1H4N4O4"
     assert np.all(
         ani1_data.data[0]["atomic_numbers"]
-        == array([6, 1, 1, 1, 1, 7, 7, 7, 7, 8, 8, 8, 8], dtype=uint8)
+        == array([6, 1, 1, 1, 1, 7, 7, 7, 7, 8, 8, 8, 8], dtype=uint8).reshape(-1, 1)
     )
     assert ani1_data.data[0]["n_configs"] == 2
 
@@ -620,7 +619,7 @@ def test_an1_process_download_no_conversion(prep_temp_dir):
                     -0.374352,
                 ],
                 dtype=float32,
-            )
+            ).reshape(-1, 1)
             * unit.parse_expression("elementary_charge"),
         )
     )
@@ -644,7 +643,7 @@ def test_an1_process_download_no_conversion(prep_temp_dir):
                     -0.338735,
                 ],
                 dtype=float32,
-            )
+            ).reshape(-1, 1)
             * unit.parse_expression("elementary_charge"),
         )
     )
@@ -668,7 +667,7 @@ def test_an1_process_download_no_conversion(prep_temp_dir):
                     -0.6540033,
                 ],
                 dtype=float32,
-            )
+            ).reshape(-1, 1)
             * unit.parse_expression("elementary_charge"),
         )
     )
@@ -692,7 +691,7 @@ def test_an1_process_download_no_conversion(prep_temp_dir):
                     0.1239773,
                 ],
                 dtype=float32,
-            ),
+            ).reshape(-1, 1),
         )
     )
     assert np.all(
@@ -715,7 +714,7 @@ def test_an1_process_download_no_conversion(prep_temp_dir):
                     0.13592605,
                 ],
                 dtype=float32,
-            ),
+            ).reshape(-1, 1),
         )
     )
     assert np.all(
@@ -738,7 +737,7 @@ def test_an1_process_download_no_conversion(prep_temp_dir):
                     0.58347076,
                 ],
                 dtype=float32,
-            ),
+            ).reshape(-1, 1),
         )
     )
     assert np.all(
@@ -761,9 +760,37 @@ def test_an1_process_download_no_conversion(prep_temp_dir):
                     26.948938,
                 ],
                 dtype=float32,
-            ),
+            ).reshape(-1, 1),
         )
     )
+
+    # check that the shape of the arrays are what we expect
+    assert ani1_data.data[0]["atomic_numbers"].shape == (13, 1)
+    assert ani1_data.data[0]["geometry"].shape == (2, 13, 3)
+    assert ani1_data.data[0]["wb97x_dz.energy"].shape == (2, 1)
+    assert ani1_data.data[0]["wb97x_tz.energy"].shape == (2, 1)
+    assert ani1_data.data[0]["ccsd(t)_cbs.energy"].shape == (2, 1)
+    assert ani1_data.data[0]["hf_dz.energy"].shape == (2, 1)
+    assert ani1_data.data[0]["hf_tz.energy"].shape == (2, 1)
+    assert ani1_data.data[0]["hf_qz.energy"].shape == (2, 1)
+    assert ani1_data.data[0]["npno_ccsd(t)_dz.corr_energy"].shape == (2, 1)
+    assert ani1_data.data[0]["npno_ccsd(t)_tz.corr_energy"].shape == (2, 1)
+    assert ani1_data.data[0]["tpno_ccsd(t)_dz.corr_energy"].shape == (2, 1)
+    assert ani1_data.data[0]["mp2_dz.corr_energy"].shape == (2, 1)
+    assert ani1_data.data[0]["mp2_tz.corr_energy"].shape == (2, 1)
+    assert ani1_data.data[0]["mp2_qz.corr_energy"].shape == (2, 1)
+    assert ani1_data.data[0]["wb97x_dz.forces"].shape == (2, 13, 3)
+    assert ani1_data.data[0]["wb97x_tz.forces"].shape == (2, 13, 3)
+    assert ani1_data.data[0]["wb97x_dz.dipole"].shape == (2, 3)
+    assert ani1_data.data[0]["wb97x_tz.dipole"].shape == (2, 3)
+    assert ani1_data.data[0]["wb97x_dz.quadrupole"].shape == (2, 6)
+    assert ani1_data.data[0]["wb97x_dz.cm5_charges"].shape == (2, 13, 1)
+    assert ani1_data.data[0]["wb97x_dz.hirshfeld_charges"].shape == (2, 13, 1)
+    assert ani1_data.data[0]["wb97x_tz.mbis_charges"].shape == (2, 13, 1)
+    assert ani1_data.data[0]["wb97x_tz.mbis_dipoles"].shape == (2, 13, 1)
+    assert ani1_data.data[0]["wb97x_tz.mbis_quadrupoles"].shape == (2, 13, 1)
+    assert ani1_data.data[0]["wb97x_tz.mbis_octupoles"].shape == (2, 13, 1)
+    assert ani1_data.data[0]["wb97x_tz.mbis_volumes"].shape == (2, 13, 1)
 
 
 def test_an1_process_download_unit_conversion(prep_temp_dir):
@@ -793,7 +820,7 @@ def test_an1_process_download_unit_conversion(prep_temp_dir):
     assert ani1_data.data[0]["name"] == "C1H4N4O4"
     assert np.all(
         ani1_data.data[0]["atomic_numbers"]
-        == array([6, 1, 1, 1, 1, 7, 7, 7, 7, 8, 8, 8, 8], dtype=uint8)
+        == array([6, 1, 1, 1, 1, 7, 7, 7, 7, 8, 8, 8, 8], dtype=uint8).reshape(-1, 1)
     )
     assert ani1_data.data[0]["n_configs"] == 2
 
@@ -937,7 +964,7 @@ def test_an1_process_download_unit_conversion(prep_temp_dir):
                     -0.374352,
                 ],
                 dtype=float32,
-            )
+            ).reshape(-1, 1)
             * unit.parse_expression("elementary_charge"),
         )
     )
@@ -961,7 +988,7 @@ def test_an1_process_download_unit_conversion(prep_temp_dir):
                     -0.338735,
                 ],
                 dtype=float32,
-            )
+            ).reshape(-1, 1)
             * unit.parse_expression("elementary_charge"),
         )
     )
@@ -985,7 +1012,7 @@ def test_an1_process_download_unit_conversion(prep_temp_dir):
                     -0.6540033,
                 ],
                 dtype=float32,
-            )
+            ).reshape(-1, 1)
             * unit.parse_expression("elementary_charge"),
         )
     )
@@ -1037,8 +1064,62 @@ def spice114_process_download_short(prep_temp_dir):
     )
     assert len(spice_data.data) == 1
 
+    assert spice_data.data[0]["atomic_numbers"].shape == (27, 1)
+    assert spice_data.data[0]["geometry"].shape == (50, 27, 3)
+    assert spice_data.data[0]["formation_energy"].shape == (50, 1)
+    assert spice_data.data[0]["dft_total_energy"].shape == (50, 1)
+    assert spice_data.data[0]["dft_total_gradient"].shape == (50, 27, 3)
+    assert spice_data.data[0]["mbis_charges"].shape == (50, 27, 1)
+    assert spice_data.data[0]["mbis_dipoles"].shape == (50, 27, 3)
+    assert spice_data.data[0]["mbis_quadrupoles"].shape == (50, 27, 3, 3)
+    assert spice_data.data[0]["mbis_octupoles"].shape == (50, 27, 3, 3, 3)
+    assert spice_data.data[0]["scf_dipole"].shape == (50, 3)
+    assert spice_data.data[0]["scf_quadrupole"].shape == (50, 3, 3)
+    assert spice_data.data[0]["mayer_indices"].shape == (50, 27, 27)
+    assert spice_data.data[0]["wiberg_lowdin_indices"].shape == (50, 27, 27)
 
-def spice114_process_download_no_conversion(prep_temp_dir):
+
+def test_baseclass_unit_conversion(prep_temp_dir):
+    spice_data = SPICE114Curation(
+        hdf5_file_name="test_dataset.hdf5",
+        output_file_dir=str(prep_temp_dir),
+        local_cache_dir=str(prep_temp_dir),
+        convert_units=False,
+    )
+
+    local_data_path = resources.files("modelforge").joinpath("tests", "data")
+    # make sure the data archive exists
+    hdf5_file = "SPICE-1.1.4_n2.hdf5"
+    file_name_path = str(local_data_path) + "/" + hdf5_file
+    assert os.path.isfile(file_name_path)
+
+    spice_data._process_downloaded(str(local_data_path), hdf5_file)
+
+    assert spice_data.data[0]["geometry"].u == unit.bohr
+    assert (
+        spice_data.data[0]["dft_total_energy"][0] == -370.43397424571714 * unit.hartree
+    )
+
+    spice_data._convert_units()
+    assert spice_data.data[0]["geometry"].u == unit.nanometer
+    assert (
+        spice_data.data[0]["dft_total_energy"][0]
+        == -972574.265833225 * unit.kilojoule_per_mole
+    )
+    spice_data.qm_parameters["geometry"] = {"u_in": unit.bohr, "u_out": unit.hartree}
+
+    with pytest.raises(Exception):
+        spice_data._convert_units()
+
+    spice_data.qm_parameters["geometry"] = {
+        "u_in": unit.angstrom,
+        "u_out": unit.nanometer,
+    }
+    with pytest.raises(AssertionError):
+        spice_data._process_downloaded(str(local_data_path), hdf5_file)
+
+
+def test_spice114_process_download_no_conversion(prep_temp_dir):
     from numpy import array, float32, uint8
     from openff.units import unit
 
@@ -1095,8 +1176,7 @@ def spice114_process_download_no_conversion(prep_temp_dir):
                 1,
                 1,
             ],
-            dtype=int16,
-        )
+        ).reshape(-1, 1)
     )
     assert spice_data.data[0]["n_configs"] == 50
 
@@ -1189,7 +1269,7 @@ def spice114_process_download_no_conversion(prep_temp_dir):
     )
 
 
-def spice114_process_download_conversion(prep_temp_dir):
+def test_spice114_process_download_conversion(prep_temp_dir):
     from numpy import array, float32, uint8
     from openff.units import unit
 
@@ -1246,8 +1326,7 @@ def spice114_process_download_conversion(prep_temp_dir):
                 1,
                 1,
             ],
-            dtype=int16,
-        )
+        ).reshape(-1, 1)
     )
     assert spice_data.data[0]["n_configs"] == 50
 
@@ -1338,3 +1417,236 @@ def spice114_process_download_conversion(prep_temp_dir):
             * unit.parse_expression("elementary_charge * nanometer ** 2"),
         )
     )
+
+
+def test_spice12_openff_test_fetching(prep_temp_dir):
+    from tqdm import tqdm
+    from sqlitedict import SqliteDict
+
+    local_path_dir = str(prep_temp_dir)
+    local_database_name = "test.sqlite"
+    specification_name = "entry"
+
+    spice_openff_data = SPICE12PubChemOpenFFCuration(
+        hdf5_file_name="test_dataset.hdf5",
+        output_file_dir=local_path_dir,
+        local_cache_dir=local_path_dir,
+        convert_units=True,
+    )
+
+    # test downloading two new records and saving to the sqlite db
+    spice_openff_data._fetch_singlepoint_from_qcarchive(
+        dataset_name="SPICE PubChem Set 1 Single Points Dataset v1.2",
+        specification_name=specification_name,
+        local_database_name=local_database_name,
+        local_path_dir=local_path_dir,
+        force_download=True,
+        unit_testing_max_records=2,
+    )
+
+    with SqliteDict(
+        f"{local_path_dir}/{local_database_name}",
+        tablename=specification_name,
+        autocommit=True,
+    ) as spice_db:
+        keys = list(spice_db.keys())
+
+        assert len(keys) == 2
+        assert np.all(keys == ["160862784-0", "163359334-30"])
+
+    # same test as above, but we will pass pbar
+    # pbar.total gets updated by the number of records
+    # we need to fetch. Since force_download=True
+    # we should fetch the 2 records again
+    pbar = tqdm()
+    pbar.total = 0
+
+    spice_openff_data._fetch_singlepoint_from_qcarchive(
+        dataset_name="SPICE PubChem Set 1 Single Points Dataset v1.2",
+        specification_name=specification_name,
+        local_database_name=local_database_name,
+        local_path_dir=local_path_dir,
+        force_download=True,
+        unit_testing_max_records=2,
+        pbar=pbar,
+    )
+
+    assert pbar.total == 2
+
+    with SqliteDict(
+        f"{local_path_dir}/{local_database_name}",
+        tablename=specification_name,
+        autocommit=True,
+    ) as spice_db:
+        keys = list(spice_db.keys())
+
+        assert len(keys) == 2
+        assert np.all(keys == ["160862784-0", "163359334-30"])
+
+    # test using sqlite db, by setting force_download=False
+    pbar = tqdm()
+    pbar.total = 0
+
+    spice_openff_data._fetch_singlepoint_from_qcarchive(
+        dataset_name="SPICE PubChem Set 1 Single Points Dataset v1.2",
+        specification_name=specification_name,
+        local_database_name=local_database_name,
+        local_path_dir=local_path_dir,
+        force_download=False,
+        unit_testing_max_records=2,
+    )
+
+    assert pbar.total == 0
+
+    with SqliteDict(
+        f"{local_path_dir}/{local_database_name}",
+        tablename=specification_name,
+        autocommit=True,
+    ) as spice_db:
+        keys = list(spice_db.keys())
+
+        assert len(keys) == 2
+        assert np.all(keys == ["160862784-0", "163359334-30"])
+
+    # test fetching additional records
+    # we already have 2 and thus should only need to
+    # fetch 8
+
+    pbar = tqdm()
+    pbar.total = 0
+
+    spice_openff_data._fetch_singlepoint_from_qcarchive(
+        dataset_name="SPICE PubChem Set 1 Single Points Dataset v1.2",
+        specification_name=specification_name,
+        local_database_name=local_database_name,
+        local_path_dir=local_path_dir,
+        force_download=False,
+        unit_testing_max_records=10,
+        pbar=pbar,
+    )
+
+    assert pbar.total == 8
+    with SqliteDict(
+        f"{local_path_dir}/{local_database_name}",
+        tablename=specification_name,
+        autocommit=True,
+    ) as spice_db:
+        keys = list(spice_db.keys())
+
+        assert len(keys) == 10
+        assert np.all(
+            keys
+            == [
+                "160862784-0",
+                "163359334-30",
+                "186526043-36",
+                "242053812-3",
+                "252627293-25",
+                "252627293-26",
+                "252627293-27",
+                "252627293-28",
+                "252627293-29",
+                "252627293-30",
+            ]
+        )
+
+
+def test_spice12_openff_test_process_downloaded(prep_temp_dir):
+    from tqdm import tqdm
+    from sqlitedict import SqliteDict
+
+    local_path_dir = str(prep_temp_dir)
+    local_database_name = "test.sqlite"
+    specification_names = ["entry", "spec_2", "spec_6"]
+    dataset_name = "SPICE PubChem Set 1 Single Points Dataset v1.2"
+
+    spice_openff_data = SPICE12PubChemOpenFFCuration(
+        hdf5_file_name="test_dataset.hdf5",
+        output_file_dir=local_path_dir,
+        local_cache_dir=local_path_dir,
+        convert_units=True,
+    )
+
+    for specification_name in specification_names:
+        # test downloading two new records and saving to the sqlite db
+        spice_openff_data._fetch_singlepoint_from_qcarchive(
+            dataset_name=dataset_name,
+            specification_name=specification_name,
+            local_database_name=local_database_name,
+            local_path_dir=local_path_dir,
+            force_download=True,
+            unit_testing_max_records=2,
+        )
+
+    spice_openff_data._process_downloaded(
+        local_path_dir, [local_database_name], [dataset_name]
+    )
+
+
+def test_spice12_openff_process_datasets(prep_temp_dir):
+    from numpy import array, float32
+
+    local_path_dir = str(prep_temp_dir)
+    hdf5_file_name = "test_dataset.hdf5"
+
+    spice_openff_data = SPICE12PubChemOpenFFCuration(
+        hdf5_file_name=hdf5_file_name,
+        output_file_dir=local_path_dir,
+        local_cache_dir=local_path_dir,
+        convert_units=False,
+    )
+
+    spice_openff_data.process(
+        force_download=False, unit_testing_max_records=10, n_threads=3
+    )
+
+    assert len(spice_openff_data.data) == 5
+    assert spice_openff_data.data[0]["n_configs"] == 1
+    assert spice_openff_data.data[1]["n_configs"] == 1
+    assert spice_openff_data.data[2]["n_configs"] == 1
+    assert spice_openff_data.data[3]["n_configs"] == 1
+    assert spice_openff_data.data[4]["n_configs"] == 6
+
+    assert np.all(
+        np.isclose(
+            spice_openff_data.data[0]["geometry"][0][0],
+            array([3.95964426, 8.33708863, 2.95160792], dtype=float32)
+            * unit.parse_expression("bohr"),
+        )
+    )
+    # look at the first atom in last configuration in the array
+    assert np.all(
+        np.isclose(
+            spice_openff_data.data[4]["geometry"][-1][0],
+            array([2.06074536, -6.33012589, 4.43769815], dtype=float32)
+            * unit.parse_expression("bohr"),
+        )
+    )
+    # spot check energy
+    assert (
+        spice_openff_data.data[0]["dft_total_energy"][0][0]
+        == -1168.2328704724725 * unit.hartree
+    )
+    assert (
+        spice_openff_data.data[4]["dft_total_energy"][0][0]
+        == -2011.874682644447 * unit.hartree
+    )
+
+    # check the shape of a molecule with only a single conformer in the test set
+    assert spice_openff_data.data[0]["atomic_numbers"].shape == (47, 1)
+    assert spice_openff_data.data[0]["geometry"].shape == (1, 47, 3)
+    assert spice_openff_data.data[0]["dft_total_energy"].shape == (1, 1)
+    assert spice_openff_data.data[0]["dft_total_gradient"].shape == (1, 47, 3)
+    assert spice_openff_data.data[0]["mbis_charges"].shape == (1, 47, 1)
+    assert spice_openff_data.data[0]["scf_dipole"].shape == (1, 3)
+    assert spice_openff_data.data[0]["formation_energy"].shape == (1, 1)
+    assert spice_openff_data.data[0]["formation_energy"].shape == (1, 1)
+
+    # check the shape of a molecule with multiple conformers in the test set
+    assert spice_openff_data.data[4]["atomic_numbers"].shape == (16, 1)
+    assert spice_openff_data.data[4]["geometry"].shape == (6, 16, 3)
+    assert spice_openff_data.data[4]["dft_total_energy"].shape == (6, 1)
+    assert spice_openff_data.data[4]["dft_total_gradient"].shape == (6, 16, 3)
+    assert spice_openff_data.data[4]["mbis_charges"].shape == (6, 16, 1)
+    assert spice_openff_data.data[4]["scf_dipole"].shape == (6, 3)
+    assert spice_openff_data.data[4]["formation_energy"].shape == (6, 1)

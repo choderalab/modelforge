@@ -1,6 +1,5 @@
 import os
 from typing import Callable, Dict, List, Optional
-from collections import OrderedDict
 
 import numpy as np
 import pytorch_lightning as pl
@@ -120,7 +119,7 @@ class HDF5Dataset:
 
         """
         import gzip
-
+        from collections import OrderedDict
         import h5py
         import tqdm
         import shutil

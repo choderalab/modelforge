@@ -125,16 +125,6 @@ class HDF5Dataset:
         import tqdm
         import shutil
 
-        logger.debug("Reading in and processing hdf5 file ...")
-        # initialize dict with empty lists
-        data = OrderedDict()
-        for value in self.properties_of_interest:
-            data[value] = []
-
-        # molecule_id will contain an integer that is unique to molecules
-        # i.e., conformers of the same molecule will have the same id.
-        data["molecule_id"] = []
-        self.formats = {"molecule_id": "single_rec"}
         logger.debug(f"Processing and extracting data from {self.raw_data_file}")
 
         # this will create an unzipped file which we can then load in
@@ -146,57 +136,108 @@ class HDF5Dataset:
             with open(temp_hdf5_file, "wb") as out_file:
                 shutil.copyfileobj(gz_file, out_file)
 
+        logger.debug("Reading in and processing hdf5 file ...")
+
         with h5py.File(temp_hdf5_file, "r") as hf:
 
+            # create dicts to store data for each format type
+            single_rec_data: Dict[str, List[np.ndarray]] = OrderedDict()
+            # value shapes: (*)
+            single_atom_data: Dict[str, List[np.ndarray]] = OrderedDict()
+            # value shapes: (n_atoms, *)
+            series_mol_data: Dict[str, List[np.ndarray]] = OrderedDict()
+            # value shapes: (n_confs, *)
+            series_atom_data: Dict[str, List[np.ndarray]] = OrderedDict()
+            # value shapes: (n_confs, n_atoms, *)
+
+
+            # intialize each relevant value in data dicts to empty list
             for value in self.properties_of_interest:
-                self.formats[value] = hf[next(iter(hf.keys()))][value].attrs["format"]
+                value_format = hf[next(iter(hf.keys()))][value].attrs["format"]
+                if value_format == "single_rec":
+                    single_rec_data[value] = []
+                elif value_format == "single_atom":
+                    single_atom_data[value] = []
+                elif value_format == "series_mol":
+                    series_mol_data[value] = []
+                elif value_format == "series_atom":
+                    series_atom_data[value] = []
+                else:
+                    raise ValueError(
+                        f"Unknown format type {value_format} for property {value}"
+                    )
+
+            self.n_atoms = [] # number of atoms in each record. length = n_records
+            self.n_atoms_series = [] # number of atoms in each conformer (duplicated within record) length = n_confs
+            self.n_confs = [] # number of conformers in each record. length = n_records
+
+            # loop over all records in the hdf5 file and add property arrays to the appropriate dict
 
             logger.debug(f"n_entries: {len(hf.keys())}")
-            molecule_id = 0
-            for mol in tqdm.tqdm(list(hf.keys())):
-                n_configs = hf[mol]["n_configs"][()]
-                temp_data = {}
+
+            for record in tqdm.tqdm(list(hf.keys())):
 
                 # There may be cases where a specific property of interest
-                # has not been computed for a given molecule
+                # has not been computed for a given record
                 # in that case, we'll want to just skip over that entry
-                property_found = True
-                property_keys = list(hf[mol].keys())
-                for value in self.properties_of_interest:
-                    if not value in property_keys:
-                        property_found = False
+                property_found = [value in hf[record].keys() for value in self.properties_of_interest]
 
-                if property_found:
-                    for value in self.properties_of_interest:
-                        # First grab all the data of interest;
-                        # indexing into a local np array is much faster
-                        # than indexing into the array in the hdf5 file
-                        temp_data[value] = hf[mol][value][()]
+                if all(property_found):
 
-                    for n in range(n_configs):
-                        not_nan = True
-                        temp_data_cut = {}
-                        for value in self.properties_of_interest:
-                            dim_format = self.formats[value]
-                            if dim_format != hf[mol][value].attrs["format"]:
-                                raise ValueError("Format mismatch across molecules for value {value}")
-                            if dim_format == "series_atom" or dim_format == "series_mol":
-                                temp_data_cut[value] = temp_data[value][n]
-                                if np.any(np.isnan(temp_data_cut[value])):
-                                    not_nan = False
-                                    break
-                            else:
-                                temp_data_cut[value] = temp_data[value]
-                                if np.any(np.isnan(temp_data_cut[value])):
-                                    not_nan = False
-                                    break
-                        if not_nan:
-                            for value in self.properties_of_interest:
-                                data[value].append(temp_data_cut[value])
-                            # keep track of the name of the molecule and configuration number
-                            # may be needed for splitting
-                            data["molecule_id"].append(molecule_id)
-                    molecule_id += 1
+                    # we want to exclude conformers with NaN values for any property of interest
+                    configs_nan_by_prop: Dict[str, np.ndarray] = OrderedDict() # values are boolean arrays of size (n_configs, )
+                    for value in list(series_mol_data.keys()) + list(series_atom_data.keys()):
+                        record_array = hf[record][value][()]
+                        configs_nan_by_prop[value] = np.isnan(record_array).any(axis=0)
+                    print(configs_nan_by_prop)
+                    configs_nan = np.logical_or.reduce(list(configs_nan_by_prop.values())) # boolean array of size (n_configs, )
+                    n_confs_rec = sum(~configs_nan)
+
+
+                    n_atoms_rec = hf[record][next(iter(single_atom_data.keys()))].shape[0]
+
+                    self.n_confs.append(n_confs_rec)
+                    self.n_atoms.append(n_atoms_rec)
+                    self.n_atoms_series.extend(n_confs_rec * [n_atoms_rec])
+
+                    for value in single_atom_data.keys():
+                        record_array = hf[record][value][()]
+                        if record_array.shape[0] != n_atoms_rec:
+                            raise ValueError(
+                                f"Number of atoms for property {value} is inconsistent with other properties for record {record}"
+                            )
+                        else:
+                            single_atom_data[value].append(record_array)
+                    
+                    for value in series_atom_data.keys():
+                        record_array = hf[record][value][()][~configs_nan]
+                        if hf[record][value].shape[1] != n_atoms_rec:
+                            raise ValueError(
+                                f"Number of atoms for property {value} is inconsistent with other properties for record {record}"
+                            )
+                        else:
+                            series_atom_data[value].append(record_array.reshape(n_confs_rec * n_atoms_rec, -1))
+
+
+                    for value in series_mol_data.keys():
+                        record_array = hf[record][value][()][~configs_nan]
+                        series_mol_data[value].append(record_array)
+
+                    for value in single_rec_data.keys():
+                        record_array = hf[record][value][()]
+                        single_rec_data[value].append(record_array)
+
+            # convert lists of arrays to single arrays
+
+            data = OrderedDict()
+            for value in single_atom_data.keys():
+                data[value] = np.concatenate(single_atom_data[value], axis=0)
+            for value in series_mol_data.keys():
+                data[value] = np.concatenate(series_mol_data[value], axis=0)
+            for value in series_atom_data.keys():
+                data[value] = np.concatenate(series_atom_data[value], axis=0)
+            for value in single_rec_data.keys():
+                data[value] = np.stack(single_rec_data[value], axis=0)
 
         self.hdf5data = data
 
@@ -212,68 +253,29 @@ class HDF5Dataset:
         logger.debug(f"Loading processed data from {self.processed_data_file}")
         self.numpy_data = np.load(self.processed_data_file)
 
-    def _perform_transformations(
-        self,
-        label_transform: Optional[Dict[str, Callable]],
-        transforms: Dict[str, Callable],
-    ) -> None:
-        for prop_key in self.hdf5data:
-            if prop_key not in self.hdf5data:
-                raise ValueError(f"Property {prop_key} not found in data")
-            if transforms and prop_key in transforms:
-                logger.debug(f"Transformation applied to : {prop_key}")
-                self.hdf5data[prop_key] = transforms[prop_key](self.hdf5data[prop_key])
-            elif label_transform and prop_key in label_transform:
-                logger.debug(f"Transformation applied to : {prop_key}")
-                self.hdf5data[prop_key] = transforms[prop_key](self.hdf5data[prop_key])
-            else:
-                logger.debug(f"NO Transformation applied to : {prop_key}")
-                self.hdf5data[prop_key] = transforms["all"](self.hdf5data[prop_key])
 
     def _to_file_cache(
         self,
-        label_transform: Optional[Dict[str, Callable]],
-        transforms: Optional[Dict[str, Callable]],
     ) -> None:
         """
         Save processed data to a numpy (.npz) file.
         Parameters
         ----------
-        label_transform : Optional[Dict[str, Callable]], optional
-            transformations to apply to the labels
-        transforms : Dict[str, Callable], default=default_transformation
-            transformations to apply to the data
 )
         Examples
         --------
         >>> hdf5_data = HDF5Dataset("raw_data.hdf5", "processed_data.npz")
         >>> hdf5_data._to_file_cache()
         """
-        logger.debug(f"Processing data ...")
-        if transforms:
-            logger.debug(f"Applying transforms to {transforms.keys()}...")
-            self._perform_transformations(label_transform, transforms)
-
         logger.debug(f"Writing data cache to {self.processed_data_file}")
 
-        data_arrays = OrderedDict()
-        n_atoms_by_property = OrderedDict()
-        for value in self.properties_of_interest:
-            dim_format = self.formats[value]
-            if dim_format == "series_atom" or dim_format == "single_atom":
-                data_arrays[value] = np.concatenate(self.hdf5data[value], axis=0)
-                n_atoms_by_property[value] = np.array([len(mol) for mol in self.hdf5data[value]])
-            else:
-                data_arrays[value] = np.array(self.hdf5data[value])
-
-        n_atoms = next(iter(n_atoms_by_property.values()))
-        if not all(np.array_equal(n_atoms_other, n_atoms) for n_atoms_other in n_atoms_by_property.values()):
-            raise ValueError("Number of atoms per conformer not consistent across properties: {n_atoms_by_property}")
 
         np.savez(
             self.processed_data_file,
-            n_atoms,
-            **data_arrays
+            n_atoms=self.n_atoms,
+            n_atoms_series=self.n_atoms_series,
+            n_confs=self.n_confs,
+            **self.hdf5data
         )
         del self.hdf5data
 
@@ -318,7 +320,7 @@ class DatasetFactory:
             # load from hdf5 and process
             data._from_hdf5()
             # save to cache
-            data._to_file_cache(label_transform, transform)
+            data._to_file_cache()
         # load from cache
         data._from_file_cache()
 

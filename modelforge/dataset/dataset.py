@@ -187,8 +187,7 @@ class HDF5Dataset:
                     configs_nan_by_prop: Dict[str, np.ndarray] = OrderedDict() # values are boolean arrays of size (n_configs, )
                     for value in list(series_mol_data.keys()) + list(series_atom_data.keys()):
                         record_array = hf[record][value][()]
-                        configs_nan_by_prop[value] = np.isnan(record_array).any(axis=0)
-                    print(configs_nan_by_prop)
+                        configs_nan_by_prop[value] = np.isnan(record_array).any(axis=tuple(range(1, record_array.ndim)))
                     configs_nan = np.logical_or.reduce(list(configs_nan_by_prop.values())) # boolean array of size (n_configs, )
                     n_confs_rec = sum(~configs_nan)
 

@@ -5,8 +5,6 @@ import os
 
 from modelforge.utils.remote import *
 
-IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
-
 
 @pytest.fixture(scope="session")
 def prep_temp_dir(tmp_path_factory):
@@ -26,7 +24,6 @@ def test_is_url():
         is_url(query="https://zenodo.org/record/3588339", hostname="choderalab.org")
         == False
     )
-
 
 def test_download_from_figshare(prep_temp_dir):
     url = "https://figshare.com/ndownloader/files/22247589"
@@ -58,7 +55,6 @@ def test_fetch_record_id():
     with pytest.raises(Exception):
         fetch_url_from_doi(doi="10.5281/zenodo.3588339", timeout=0.0000000000001)
 
-@pytest.mark.skipif(IN_GITHUB_ACTIONS, reason="Change to Zenodo; tests fixed in different branch.")
 
 def test_download_from_zenodo(prep_temp_dir):
     url = "https://zenodo.org/records/3401581/files/PTC-CMC/atools_ml-v0.1.zip"

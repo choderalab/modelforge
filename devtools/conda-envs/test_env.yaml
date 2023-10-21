@@ -13,7 +13,6 @@ dependencies:
   - pytorch
   - loguru
   - gdown
-  - tqdm
   - lightning=2.0.8
   - tensorboard
   - torchvision
@@ -29,5 +28,5 @@ dependencies:
   - pytest-cov
   - codecov
   - qcelemental=0.25.1
-  - qcportal
+  - qcportal>=0.50
   - requests

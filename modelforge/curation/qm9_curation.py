@@ -2,7 +2,7 @@ from modelforge.curation.curation_baseclass import DatasetCuration
 from modelforge.utils.units import *
 import numpy as np
 
-from typing import Optional
+from typing import Optional, List
 from loguru import logger
 
 
@@ -125,6 +125,49 @@ class QM9Curation(DatasetCuration):
             },
         }
 
+        self.thermochemical_references = {
+            "H": {
+                "ZPVE": 0.000000 * unit.hartree,
+                "U_OK": -0.500273 * unit.hartree,
+                "U_298.15K": -0.498857 * unit.hartree,
+                "H_298.15K": -0.497912 * unit.hartree,
+                "G_298.15K": -0.510927 * unit.hartree,
+                "Cv": 2.981 * unit.calorie_per_mole / unit.kelvin,
+            },
+            "C": {
+                "ZPVE": 0.000000 * unit.hartree,
+                "U_OK": -37.846772 * unit.hartree,
+                "U_298.15K": -37.845355 * unit.hartree,
+                "H_298.15K": -37.844411 * unit.hartree,
+                "G_298.15K": -37.861317 * unit.hartree,
+                "Cv": 2.981 * unit.calorie_per_mole / unit.kelvin,
+            },
+            "N": {
+                "ZPVE": 0.000000 * unit.hartree,
+                "U_OK": -54.583861 * unit.hartree,
+                "U_298.15K": -54.582445 * unit.hartree,
+                "H_298.15K": -54.581501 * unit.hartree,
+                "G_298.15K": -54.598897 * unit.hartree,
+                "Cv": 2.981 * unit.calorie_per_mole / unit.kelvin,
+            },
+            "O": {
+                "ZPVE": 0.000000 * unit.hartree,
+                "U_OK": -75.064579 * unit.hartree,
+                "U_298.15K": -75.063163 * unit.hartree,
+                "H_298.15K": -75.062219 * unit.hartree,
+                "G_298.15K": -75.079532 * unit.hartree,
+                "Cv": 2.981 * unit.calorie_per_mole / unit.kelvin,
+            },
+            "F": {
+                "ZPVE": 0.000000 * unit.hartree,
+                "U_OK": -99.718730 * unit.hartree,
+                "U_298.15K": -99.717314 * unit.hartree,
+                "H_298.15K": -99.716370 * unit.hartree,
+                "G_298.15K": -99.733544 * unit.hartree,
+                "Cv": 2.981 * unit.calorie_per_mole / unit.kelvin,
+            },
+        }
+
     def _init_record_entries_series(self):
         # For data efficiency, information for different conformers will be grouped together
         # To make it clear to the dataset loader which pieces of information are common to all
@@ -160,6 +203,15 @@ class QM9Curation(DatasetCuration):
             "heat_capacity_at_298.15K": "series_mol",
             "harmonic_vibrational_frequencies": "series_mol",
         }
+
+    def _calculate_reference_thermochemistry(
+        self, molecule: List[str], thermo_key: str
+    ):
+        energies = []
+        for atom in molecule:
+            energies.append(self.thermochemical_references[atom][thermo_key])
+
+        return np.sum(energies)
 
     def _extract(self, file_path: str, cache_directory: str) -> None:
         """

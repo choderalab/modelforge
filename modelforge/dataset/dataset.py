@@ -442,7 +442,7 @@ class TorchDataModule(pl.LightningDataModule):
                 test_idx = self.split_idxs["test_idx"]
                 self.test_dataset = Subset(self.dataset, test_idx)
             else:
-                _, _, test_dataset = self.SplittingStrategy().split(self.dataset)
+                _, _, test_dataset = self.split.split(self.dataset)
                 self.test_dataset = test_dataset
 
     def train_dataloader(self) -> DataLoader:

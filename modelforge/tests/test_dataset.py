@@ -165,8 +165,8 @@ def test_dataset_generation(dataset):
     # a batch of 64 and a batch of 16 samples
     assert len(train_dataloader) == 2  # nr of batches
     v = [v_ for v_ in train_dataloader]
-    assert len(v[0]["Z"]) == 64
-    assert len(v[1]["Z"]) == 16
+    assert len(v[0]["n_atoms"]) == 64
+    assert len(v[1]["n_atoms"]) == 16
 
 
 @pytest.mark.parametrize("dataset", DATASETS)

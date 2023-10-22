@@ -28,6 +28,8 @@ class TorchDataset(torch.utils.data.Dataset):
 
     """
 
+    # TODO: add support for general properties with given formats
+
     def __init__(
             self,
             dataset: np.lib.npyio.NpzFile,
@@ -76,20 +78,21 @@ class TorchDataset(torch.utils.data.Dataset):
                 Atomic numbers for each atom in the conformer.
             - 'R': torch.Tensor, shape [n_atoms, 3]
                 Coordinates for each atom in the conformer.
-            - 'E': torch.Tensor, shape []
+            - 'E': torch.Tensor, shape [[1, 1]]
                 Scalar energy value for the conformer.
-            - 'idx': int
-                Index of the conformer in the dataset.
+            - 'n_atoms': List[int]
+                Number of atoms in the conformer. Length one if __getitem__ is called with a single index, length batch_size if collate_conformers is used with DataLoader
         """
         series_atom_start_idx = self.series_atom_start_idxs[idx]
         series_atom_end_idx = self.series_atom_start_idxs[idx + 1]
         single_atom_start_idx = self.single_atom_start_idxs[idx]
         single_atom_end_idx = self.single_atom_start_idxs[idx + 1]
         Z = torch.tensor(self.properties_of_interest["Z"][single_atom_start_idx:single_atom_end_idx], dtype=torch.int64)
-        R = torch.tensor(self.properties_of_interest["R"][series_atom_start_idx:series_atom_end_idx], dtype=torch.float32)
+        R = torch.tensor(self.properties_of_interest["R"][series_atom_start_idx:series_atom_end_idx],
+                         dtype=torch.float32)
         E = torch.tensor(self.properties_of_interest["E"][idx], dtype=torch.float32)
 
-        return {"Z": Z, "R": R, "E": E, "idx": idx}
+        return {"Z": Z, "R": R, "E": E, "n_atoms": [Z.shape[0]]}
 
 
 class HDF5Dataset:
@@ -194,7 +197,7 @@ class HDF5Dataset:
                         record_array = hf[record][value][()]
                         configs_nan_by_prop[value] = np.isnan(record_array).any(axis=tuple(range(1, record_array.ndim)))
                     # check that all values have the same number of conformers
-                    
+
                     if len(set([value.shape for value in configs_nan_by_prop.values()])) != 1:
                         raise ValueError(
                             f"Number of conformers is inconsistent across properties for record {record}"
@@ -451,7 +454,7 @@ class TorchDataModule(pl.LightningDataModule):
         DataLoader
             DataLoader containing the training dataset.
         """
-        return DataLoader(self.train_dataset, batch_size=self.batch_size)
+        return DataLoader(self.train_dataset, batch_size=self.batch_size, collate_fn=collate_conformers)
 
     def val_dataloader(self) -> DataLoader:
         """
@@ -462,7 +465,7 @@ class TorchDataModule(pl.LightningDataModule):
         DataLoader
             DataLoader containing the validation dataset.
         """
-        return DataLoader(self.val_dataset, batch_size=self.batch_size)
+        return DataLoader(self.val_dataset, batch_size=self.batch_size, collate_fn=collate_conformers)
 
     def test_dataloader(self) -> DataLoader:
         """
@@ -473,4 +476,22 @@ class TorchDataModule(pl.LightningDataModule):
         DataLoader
             DataLoader containing the test dataset.
         """
-        return DataLoader(self.test_dataset, batch_size=self.batch_size)
+        return DataLoader(self.test_dataset, batch_size=self.batch_size, collate_fn=collate_conformers)
+
+
+def collate_conformers(conf_list: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
+    # TODO: once TorchDataset is reimplemented for general properties, reimplement this function using formats too.
+    """Concatenate the Z, R, and E tensors from a list of molecules into a single tensor each, and return a new dictionary with the concatenated tensors."""
+    Z_list = []
+    R_list = []
+    E_list = []
+    n_atoms = []
+    for conf in conf_list:
+        Z_list.append(conf['Z'])
+        R_list.append(conf['R'])
+        E_list.append(conf['E'])
+        n_atoms.extend(conf['n_atoms'])
+    Z_cat = torch.cat(Z_list)
+    R_cat = torch.cat(R_list)
+    E_cat = torch.cat(E_list)
+    return {"Z": Z_cat, "R": R_cat, "E": E_cat, "n_atoms": n_atoms}

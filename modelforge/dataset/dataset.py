@@ -41,11 +41,12 @@ class TorchDataset(torch.utils.data.Dataset):
         }
 
         self.single_atom_start_idxs = np.concatenate([[0], np.cumsum(dataset["n_atoms"])])
-        self.series_mol_start_idxs = np.concatenate([[0], np.cumsum(dataset["n_confs"])])
+        # length: n_records + 1
         self.series_atom_start_idxs = np.concatenate(
             [[0], np.cumsum(np.repeat(dataset["n_atoms"], dataset["n_confs"]))]
         )
-        self.length = len(dataset["n_atoms"])
+        # length: n_conformers + 1
+        self.length = len(self.series_atom_start_idxs) - 1
         self.preloaded = preloaded
 
     def __len__(self) -> int:
@@ -61,7 +62,7 @@ class TorchDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         """
-        Fetch a tuple of the values for the properties of interest for a given molecule index.
+        Fetch a tuple of the values for the properties of interest for a given conformer index.
 
         Parameters
         ----------
@@ -72,23 +73,21 @@ class TorchDataset(torch.utils.data.Dataset):
         -------
         dict, contains:
             - 'Z': torch.Tensor, shape [n_atoms]
-                Atomic numbers for each atom in the molecule.
+                Atomic numbers for each atom in the conformer.
             - 'R': torch.Tensor, shape [n_atoms, 3]
-                Coordinates for each atom in the molecule.
+                Coordinates for each atom in the conformer.
             - 'E': torch.Tensor, shape []
-                Scalar energy value for the molecule.
+                Scalar energy value for the conformer.
             - 'idx': int
-                Index of the molecule in the dataset.
+                Index of the conformer in the dataset.
         """
-        single_atom_start_idx = self.single_atom_start_idxs[idx]
-        single_atom_end_idx = self.single_atom_start_idxs[idx + 1]
-        series_mol_start_idx = self.series_mol_start_idxs[idx]
-        series_mol_end_idx = self.series_mol_start_idxs[idx + 1]
         series_atom_start_idx = self.series_atom_start_idxs[idx]
         series_atom_end_idx = self.series_atom_start_idxs[idx + 1]
+        single_atom_start_idx = self.single_atom_start_idxs[idx]
+        single_atom_end_idx = self.single_atom_start_idxs[idx + 1]
         Z = torch.tensor(self.properties_of_interest["Z"][single_atom_start_idx:single_atom_end_idx], dtype=torch.int64)
         R = torch.tensor(self.properties_of_interest["R"][series_atom_start_idx:series_atom_end_idx], dtype=torch.float32)
-        E = torch.tensor(self.properties_of_interest["E"][series_mol_start_idx:series_mol_end_idx], dtype=torch.float32)
+        E = torch.tensor(self.properties_of_interest["E"][idx], dtype=torch.float32)
 
         return {"Z": Z, "R": R, "E": E, "idx": idx}
 
@@ -194,11 +193,19 @@ class HDF5Dataset:
                     for value in list(series_mol_data.keys()) + list(series_atom_data.keys()):
                         record_array = hf[record][value][()]
                         configs_nan_by_prop[value] = np.isnan(record_array).any(axis=tuple(range(1, record_array.ndim)))
+                    # check that all values have the same number of conformers
+                    
+                    if len(set([value.shape for value in configs_nan_by_prop.values()])) != 1:
+                        raise ValueError(
+                            f"Number of conformers is inconsistent across properties for record {record}"
+                        )
+
                     configs_nan = np.logical_or.reduce(
                         list(configs_nan_by_prop.values()))  # boolean array of size (n_configs, )
                     n_confs_rec = sum(~configs_nan)
 
                     n_atoms_rec = hf[record][next(iter(single_atom_data.keys()))].shape[0]
+                    # all single and series atom properties should have the same number of atoms as the first property
 
                     self.n_confs.append(n_confs_rec)
                     self.n_atoms.append(n_atoms_rec)
@@ -214,7 +221,7 @@ class HDF5Dataset:
 
                     for value in series_atom_data.keys():
                         record_array = hf[record][value][()][~configs_nan]
-                        if hf[record][value].shape[1] != n_atoms_rec:
+                        if record_array.shape[1] != n_atoms_rec:
                             raise ValueError(
                                 f"Number of atoms for property {value} is inconsistent with other properties for record {record}"
                             )

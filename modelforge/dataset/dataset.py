@@ -42,13 +42,24 @@ class TorchDataset(torch.utils.data.Dataset):
             "E": dataset[property_name.E],
         }
 
-        self.single_atom_start_idxs = np.concatenate([[0], np.cumsum(dataset["n_atoms"])])
+        n_records = len(dataset["n_atoms"])
+        single_atom_start_idxs_by_rec = np.concatenate([[0], np.cumsum(dataset["n_atoms"])])
         # length: n_records + 1
+
+        self.single_atom_start_idxs = np.repeat(
+                single_atom_start_idxs_by_rec[:n_records], dataset["n_confs"]
+        )
+        self.single_atom_end_idxs = np.repeat(
+                single_atom_start_idxs_by_rec[1:n_records + 1], dataset["n_confs"]
+        )
+        # length: n_conformers
+
         self.series_atom_start_idxs = np.concatenate(
             [[0], np.cumsum(np.repeat(dataset["n_atoms"], dataset["n_confs"]))]
         )
         # length: n_conformers + 1
-        self.length = len(self.series_atom_start_idxs) - 1
+
+        self.length = len(self.single_atom_start_idxs)
         self.preloaded = preloaded
 
     def __len__(self) -> int:
@@ -86,7 +97,7 @@ class TorchDataset(torch.utils.data.Dataset):
         series_atom_start_idx = self.series_atom_start_idxs[idx]
         series_atom_end_idx = self.series_atom_start_idxs[idx + 1]
         single_atom_start_idx = self.single_atom_start_idxs[idx]
-        single_atom_end_idx = self.single_atom_start_idxs[idx + 1]
+        single_atom_end_idx = self.single_atom_end_idxs[idx]
         Z = torch.tensor(self.properties_of_interest["Z"][single_atom_start_idx:single_atom_end_idx], dtype=torch.int64)
         R = torch.tensor(self.properties_of_interest["R"][series_atom_start_idx:series_atom_end_idx],
                          dtype=torch.float32)
@@ -175,8 +186,8 @@ class HDF5Dataset:
                         f"Unknown format type {value_format} for property {value}"
                     )
 
-            self.n_atoms = []  # number of atoms in each record. length = n_records
-            self.n_confs = []  # number of conformers in each record. length = n_records
+            self.n_atoms = []  # number of atoms in each record
+            self.n_confs = []  # number of conformers in each record
 
             # loop over all records in the hdf5 file and add property arrays to the appropriate dict
 

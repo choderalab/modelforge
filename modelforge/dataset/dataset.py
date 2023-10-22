@@ -29,10 +29,10 @@ class TorchDataset(torch.utils.data.Dataset):
     """
 
     def __init__(
-        self,
-        dataset: np.lib.npyio.NpzFile,
-        property_name: PropertyNames,
-        preloaded: bool = False,
+            self,
+            dataset: np.lib.npyio.NpzFile,
+            property_name: PropertyNames,
+            preloaded: bool = False,
     ):
         self.properties_of_interest = {
             "Z": dataset[property_name.Z],
@@ -40,7 +40,11 @@ class TorchDataset(torch.utils.data.Dataset):
             "E": dataset[property_name.E],
         }
 
-        self.mol_start_idxs = np.concatenate([[0], np.cumsum(dataset["n_atoms"])])
+        self.single_atom_start_idxs = np.concatenate([[0], np.cumsum(dataset["n_atoms"])])
+        self.series_mol_start_idxs = np.concatenate([[0], np.cumsum(dataset["n_confs"])])
+        self.series_atom_start_idxs = np.concatenate(
+            [[0], np.cumsum(np.repeat(dataset["n_atoms"], dataset["n_confs"]))]
+        )
         self.length = len(dataset["n_atoms"])
         self.preloaded = preloaded
 
@@ -76,11 +80,15 @@ class TorchDataset(torch.utils.data.Dataset):
             - 'idx': int
                 Index of the molecule in the dataset.
         """
-        start_idx = self.mol_start_idxs[idx]
-        end_idx = self.mol_start_idxs[idx + 1]
-        Z = torch.tensor(self.properties_of_interest["Z"][start_idx:end_idx], dtype=torch.int64)
-        R = torch.tensor(self.properties_of_interest["R"][start_idx:end_idx], dtype=torch.float32)
-        E = torch.tensor(self.properties_of_interest["E"][start_idx:end_idx], dtype=torch.float32)
+        single_atom_start_idx = self.single_atom_start_idxs[idx]
+        single_atom_end_idx = self.single_atom_start_idxs[idx + 1]
+        series_mol_start_idx = self.series_mol_start_idxs[idx]
+        series_mol_end_idx = self.series_mol_start_idxs[idx + 1]
+        series_atom_start_idx = self.series_atom_start_idxs[idx]
+        series_atom_end_idx = self.series_atom_start_idxs[idx + 1]
+        Z = torch.tensor(self.properties_of_interest["Z"][single_atom_start_idx:single_atom_end_idx], dtype=torch.int64)
+        R = torch.tensor(self.properties_of_interest["R"][series_atom_start_idx:series_atom_end_idx], dtype=torch.float32)
+        E = torch.tensor(self.properties_of_interest["E"][series_mol_start_idx:series_mol_end_idx], dtype=torch.float32)
 
         return {"Z": Z, "R": R, "E": E, "idx": idx}
 
@@ -100,7 +108,7 @@ class HDF5Dataset:
     """
 
     def __init__(
-        self, raw_data_file: str, processed_data_file: str, local_cache_dir: str
+            self, raw_data_file: str, processed_data_file: str, local_cache_dir: str
     ):
         self.raw_data_file = raw_data_file
         self.processed_data_file = processed_data_file
@@ -149,7 +157,6 @@ class HDF5Dataset:
             series_atom_data: Dict[str, List[np.ndarray]] = OrderedDict()
             # value shapes: (n_confs, n_atoms, *)
 
-
             # intialize each relevant value in data dicts to empty list
             for value in self.properties_of_interest:
                 value_format = hf[next(iter(hf.keys()))][value].attrs["format"]
@@ -166,9 +173,8 @@ class HDF5Dataset:
                         f"Unknown format type {value_format} for property {value}"
                     )
 
-            self.n_atoms = [] # number of atoms in each record. length = n_records
-            self.n_atoms_series = [] # number of atoms in each conformer (duplicated within record) length = n_confs
-            self.n_confs = [] # number of conformers in each record. length = n_records
+            self.n_atoms = []  # number of atoms in each record. length = n_records
+            self.n_confs = []  # number of conformers in each record. length = n_records
 
             # loop over all records in the hdf5 file and add property arrays to the appropriate dict
 
@@ -184,19 +190,18 @@ class HDF5Dataset:
                 if all(property_found):
 
                     # we want to exclude conformers with NaN values for any property of interest
-                    configs_nan_by_prop: Dict[str, np.ndarray] = OrderedDict() # values are boolean arrays of size (n_configs, )
+                    configs_nan_by_prop: Dict[str, np.ndarray] = OrderedDict()  # ndarray.size (n_configs, )
                     for value in list(series_mol_data.keys()) + list(series_atom_data.keys()):
                         record_array = hf[record][value][()]
                         configs_nan_by_prop[value] = np.isnan(record_array).any(axis=tuple(range(1, record_array.ndim)))
-                    configs_nan = np.logical_or.reduce(list(configs_nan_by_prop.values())) # boolean array of size (n_configs, )
+                    configs_nan = np.logical_or.reduce(
+                        list(configs_nan_by_prop.values()))  # boolean array of size (n_configs, )
                     n_confs_rec = sum(~configs_nan)
-
 
                     n_atoms_rec = hf[record][next(iter(single_atom_data.keys()))].shape[0]
 
                     self.n_confs.append(n_confs_rec)
                     self.n_atoms.append(n_atoms_rec)
-                    self.n_atoms_series.extend(n_confs_rec * [n_atoms_rec])
 
                     for value in single_atom_data.keys():
                         record_array = hf[record][value][()]
@@ -206,7 +211,7 @@ class HDF5Dataset:
                             )
                         else:
                             single_atom_data[value].append(record_array)
-                    
+
                     for value in series_atom_data.keys():
                         record_array = hf[record][value][()][~configs_nan]
                         if hf[record][value].shape[1] != n_atoms_rec:
@@ -215,7 +220,6 @@ class HDF5Dataset:
                             )
                         else:
                             series_atom_data[value].append(record_array.reshape(n_confs_rec * n_atoms_rec, -1))
-
 
                     for value in series_mol_data.keys():
                         record_array = hf[record][value][()][~configs_nan]
@@ -251,9 +255,8 @@ class HDF5Dataset:
         logger.debug(f"Loading processed data from {self.processed_data_file}")
         self.numpy_data = np.load(self.processed_data_file)
 
-
     def _to_file_cache(
-        self,
+            self,
     ) -> None:
         """
         Save processed data to a numpy (.npz) file.
@@ -267,11 +270,9 @@ class HDF5Dataset:
         """
         logger.debug(f"Writing data cache to {self.processed_data_file}")
 
-
         np.savez(
             self.processed_data_file,
             n_atoms=self.n_atoms,
-            n_atoms_series=self.n_atoms_series,
             n_confs=self.n_confs,
             **self.hdf5data
         )
@@ -292,15 +293,15 @@ class DatasetFactory:
     """
 
     def __init__(
-        self,
+            self,
     ) -> None:
         pass
 
     @staticmethod
     def _load_or_process_data(
-        data: HDF5Dataset,
-        label_transform: Optional[Dict[str, Callable]],
-        transform: Optional[Dict[str, Callable]],
+            data: HDF5Dataset,
+            label_transform: Optional[Dict[str, Callable]],
+            transform: Optional[Dict[str, Callable]],
     ) -> None:
         """
         Loads the dataset from cache if available, otherwise processes and caches the data.
@@ -324,9 +325,9 @@ class DatasetFactory:
 
     @staticmethod
     def create_dataset(
-        data: HDF5Dataset,
-        label_transform: Optional[Dict[str, Callable]] = None,
-        transform: Optional[Dict[str, Callable]] = None,
+            data: HDF5Dataset,
+            label_transform: Optional[Dict[str, Callable]] = None,
+            transform: Optional[Dict[str, Callable]] = None,
     ) -> TorchDataset:
         """
         Creates a Dataset instance given an HDF5Dataset.
@@ -374,11 +375,11 @@ class TorchDataModule(pl.LightningDataModule):
     """
 
     def __init__(
-        self,
-        data: HDF5Dataset,
-        split: SplittingStrategy = RandomSplittingStrategy(),
-        batch_size: int = 64,
-        split_file: Optional[str] = None,
+            self,
+            data: HDF5Dataset,
+            split: SplittingStrategy = RandomSplittingStrategy(),
+            batch_size: int = 64,
+            split_file: Optional[str] = None,
     ):
         super().__init__()
         self.data = data

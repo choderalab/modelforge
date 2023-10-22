@@ -201,7 +201,6 @@ def test_file_cache_methods(dataset):
     """
 
     # generate files to test _from_hdf5()
-    from modelforge.dataset.transformation import default_transformation
 
     _ = initialize_dataset(dataset, mode="str")
 
@@ -209,9 +208,9 @@ def test_file_cache_methods(dataset):
 
     data._from_hdf5()
 
-    data._to_file_cache(None, default_transformation)
+    data._to_file_cache()
     data._from_file_cache()
-    assert len(data.numpy_data["geometry"]) == 100
+    assert len(data.numpy_data["n_atoms"]) == 100
 
 
 @pytest.mark.parametrize("dataset", DATASETS)

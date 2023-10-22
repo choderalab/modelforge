@@ -78,8 +78,6 @@ def test_download_from_zenodo(prep_temp_dir):
             force_download=True,
         )
 
-@pytest.mark.skipif(IN_GITHUB_ACTIONS, reason="Change to Zenodo; tests fixed in different branch.")
-
 def test_md5_calculation(prep_temp_dir):
     url = "https://zenodo.org/records/3401581/files/PTC-CMC/atools_ml-v0.1.zip"
     zenodo_checksum = "194cde222565dca8657d8521e5df1fd8"

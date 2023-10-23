@@ -121,12 +121,21 @@ class LightningModuleMixin(pl.LightningModule):
 class BaseNNP(nn.Module):
     """Abstract base class for neural network potentials."""
 
-    def __init__(self, cutoff: float = 0.5):
+    def __init__(
+        self,
+        nr_of_embeddings: int,
+        nr_atom_basis,
+        cutoff: float = 5.0,
+    ):  # angstrom
         """
         Initialize the NNP class.
         """
+        from .models import PairList  # Local import to avoid circular dependencies
+
         super().__init__()
-        self.cutoff = cutoff  # in nanometer
+        self.calculate_distances_and_pairlist = PairList(cutoff)
+        self.embedding = nn.Embedding(nr_of_embeddings, nr_atom_basis, padding_idx=0)
+        self.calculate_distances_and_pairlist = PairList(cutoff)
 
     def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
@@ -147,13 +156,18 @@ class BaseNNP(nn.Module):
         torch.Tensor
             Calculated energies; float; shape (n_systems).
 
-        Raises
-        ------
-        NotImplementedError
-            This method needs to be implemented by subclasses.
         """
+        assert "atomic_numbers" in list(inputs.keys())
+        assert "positions" in list(inputs.keys())
+        atomic_numbers = inputs["atomic_numbers"]  # shape (n_systems, n_atoms, 3)
+        positions = inputs["positions"]  # shape (n_systems, n_atoms, 3)
+        mask_padding = atomic_numbers == 0
 
-        raise NotImplementedError
+        pairlist = self.calculate_distances_and_pairlist(mask_padding, positions)
+        atomic_numbers_embedding = self.embedding(
+            atomic_numbers
+        )  # shape (batch_size, n_atoms, n_atom_basis)
+        return self._forward(pairlist, atomic_numbers_embedding)
 
 
 class SingleTopologyAlchemicalBaseNNPModel(BaseNNP):

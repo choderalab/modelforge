@@ -148,4 +148,4 @@ def generate_methane_input() -> Dict[str, torch.Tensor]:
         requires_grad=True,
     )
     E = torch.tensor([0.0], requires_grad=True)
-    return {"Z": Z, "R": R, "E": E}
+    return {"atomic_numbers": Z, "positions": R, "E_labels": E}

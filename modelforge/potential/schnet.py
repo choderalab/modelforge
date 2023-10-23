@@ -33,15 +33,12 @@ class SchNET(BaseNNP):
         nr_of_embeddings: int, optional
             Number of embeddings (default is 100).
         """
-        from .models import PairList  # Local import to avoid circular dependencies
         from .utils import EnergyReadout
 
-        super().__init__()
+        super().__init__(nr_of_embeddings, nr_atom_basis, cutoff)
 
-        self.calculate_distances_and_pairlist = PairList(cutoff)
         self.representation = SchNETRepresentation(cutoff)
         self.readout = EnergyReadout(nr_atom_basis)
-        self.embedding = nn.Embedding(nr_of_embeddings, nr_atom_basis, padding_idx=0)
         self.interactions = nn.ModuleList(
             [
                 SchNETInteractionBlock(nr_atom_basis, nr_filters)
@@ -72,53 +69,20 @@ class SchNET(BaseNNP):
         # Initialize the feature representation using atomic numbers
 
         # Compute the representation for each atom
-        representation = self.representation(
-            pairlist
-        )  # shape (n_pairs, n_atom_basis)
+        representation = self.representation(pairlist)  # shape (n_pairs, n_atom_basis)
 
         # Iterate over interaction blocks to update features
         for interaction in self.interactions:
             v = interaction(
                 atomic_numbers_embedding,
+                pairlist["pairlist"],
                 representation["f_ij"],
-                representation["idx_i"],
-                representation["idx_j"],
                 representation["rcut_ij"],
             )
             atomic_numbers_embedding = atomic_numbers_embedding + v
 
         # Pool over atoms to get molecular energies
         return self.readout(atomic_numbers_embedding)  # shape (batch_size,)
-
-    def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
-        """
-        Abstract method for forward pass in neural network potentials.
-
-        Parameters
-        ----------
-        inputs : Dict[str, torch.Tensor]
-            Inputs containing atomic numbers ('atomic_numbers'), coordinates ('positions') and pairlist ('pairlist').
-            - 'atomic_numbers': int; shape (n_systems, n_atoms), 0 indicates non-interacting atoms that will be masked
-            - 'total_charge' : int; shape (n_system:int)
-            - 'positions': float; shape (n_systems, n_atoms, 3)
-            - 'pairlist': Dict[str, torch.Tensor], contains pairlist :int; (n_paris,2),
-                r_ij:float; (n_pairs, 1) , d_ij: float; (n_pairs, 3), 'atomic_subsystem_index':int; (n_atoms)
-
-        Returns
-        -------
-        torch.Tensor
-            Calculated energies; float; shape (n_systems).
-
-        """
-        atomic_numbers = inputs["atomic_numbers"]  # shape (n_systems, n_atoms, 3)
-        positions = inputs["positions"]  # shape (n_systems, n_atoms, 3)
-        mask_padding = atomic_numbers == 0
-
-        pairlist = self.calculate_distances_and_pairlist(mask_padding, positions)
-        atomic_numbers_embedding = self.embedding(
-            atomic_numbers
-        )  # shape (batch_size, n_atoms, n_atom_basis)
-        self._forward(pairlist, atomic_numbers_embedding)
 
 
 class SchNETInteractionBlock(nn.Module):
@@ -151,9 +115,8 @@ class SchNETInteractionBlock(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
+        pairlist: torch.Tensor,  # shape [n_pairs, 2]
         f_ij: torch.Tensor,
-        idx_i: torch.Tensor,
-        idx_j: torch.Tensor,
         rcut_ij: torch.Tensor,
     ) -> torch.Tensor:
         """
@@ -187,6 +150,8 @@ class SchNETInteractionBlock(nn.Module):
         Wij = self.filter_network(f_ij)
         Wij = Wij * rcut_ij[:, None]  # Apply the cutoff
         Wij = Wij.to(dtype=x.dtype)
+
+        idx_i, idx_j = pairlist[0], pairlist[1]
 
         # Perform continuous-filter convolution
         x_j = x[idx_j]  # Gather features of second atoms in each pair

@@ -19,8 +19,8 @@ def test_schnet_forward():
     """
     model = SchNET(128, 3)
     inputs = {
-        "Z": torch.tensor([[1, 2], [2, 3]]),
-        "R": torch.tensor(
+        "atomic_numbers": torch.tensor([[1, 2], [2, 3]]),
+        "positions": torch.tensor(
             [[[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]], [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]]
         ),
     }
@@ -41,7 +41,7 @@ def test_calculate_energies_and_forces():
     methane_inputs = generate_methane_input()
     result = schnet(methane_inputs)
     forces = -torch.autograd.grad(
-        result, methane_inputs["R"], create_graph=True, retain_graph=True
+        result, methane_inputs["positions"], create_graph=True, retain_graph=True
     )[0]
 
     assert result.shape == (1, 1)  #  only one molecule
@@ -106,7 +106,7 @@ def test_schnet_interaction_layer():
         nr_atom_basis,
     ), "Input shape mismatch for x tensor."
     interaction = SchNETInteractionBlock(nr_atom_basis, 4)
-    v = interaction(r["x"], r["f_ij"], r["idx_i"], r["idx_j"], r["rcut_ij"])
+    v = interaction(r["x"], r["f_ij"], r["pairlist"], r["rcut_ij"])
     assert v.shape == (
         64,
         17,

@@ -13,7 +13,7 @@ from .helper_functions import (
 def test_BaseNNP():
     from modelforge.potential.models import BaseNNP
 
-    nnp = BaseNNP()
+    nnp = BaseNNP(100, 20)
 
 
 @pytest.mark.parametrize("model_class", MODELS_TO_TEST)
@@ -45,7 +45,7 @@ def test_pairlist_simple_data():
     cutoff = 3.0
     pairlist = PairList(cutoff)
     r = pairlist(mask, R)
-    atom_index12 = r["atom_index12"].tolist()
+    atom_index12 = r["pairlist"].tolist()
     assert (atom_index12[0][0], atom_index12[1][0]) == (0, 1)
     assert (atom_index12[0][-1], atom_index12[1][-1]) == (4, 5)
 
@@ -66,10 +66,17 @@ def test_pairlist_on_dataset(dataset):
     data_module.prepare_data()
     data_module.setup("fit")
     for b in data_module.train_dataloader():
-        R = b["R"]
-        mask = b["Z"] == 0
+        print(b.keys())
+        R = b["positions"]
+        mask = b["atomic_numbers"] == 0
         pairlist = PairList(cutoff=5.0)
-        pairlist(mask, R)
+        l = pairlist(mask, R)
+        print(l)
+        shape_pairlist = l["pairlist"].shape
+        shape_distance = l["d_ij"].shape
+
+        assert shape_pairlist[1] == shape_distance[0]
+        assert shape_pairlist[0] == 2
 
 
 def test_pairlist_nopbc():

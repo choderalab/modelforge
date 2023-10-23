@@ -101,7 +101,7 @@ class LightningModuleMixin(pl.LightningModule):
         """
 
         E_hat = self.forward(batch).flatten()
-        loss = self.loss_function(E_hat, batch["E"])
+        loss = self.loss_function(E_hat, batch["E_label"])
         self.log("train_loss", loss)
         return loss
 

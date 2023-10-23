@@ -79,14 +79,12 @@ def get_input_for_interaction_block(
     pairlist = prepare_pairlist_for_single_batch(batch)
     radial_basis = GaussianRBF(n_rbf=20, cutoff=5.0)
 
-    atom_index12 = pairlist["atom_index12"]
     d_ij = pairlist["d_ij"]
     f_ij, rcut_ij = _distance_to_radial_basis(d_ij, radial_basis)
     return {
-        "x": embedding(batch["Z"]),
+        "x": embedding(batch["atomic_numbers"]),
         "f_ij": f_ij,
-        "idx_i": atom_index12[0],
-        "idx_j": atom_index12[1],
+        "pairlist": pairlist["pairlist"],
         "rcut_ij": rcut_ij,
     }
 
@@ -106,7 +104,7 @@ def test_schnet_interaction_layer():
         nr_atom_basis,
     ), "Input shape mismatch for x tensor."
     interaction = SchNETInteractionBlock(nr_atom_basis, 4)
-    v = interaction(r["x"], r["f_ij"], r["pairlist"], r["rcut_ij"])
+    v = interaction(r["x"], r["pairlist"], r["f_ij"], r["rcut_ij"])
     assert v.shape == (
         64,
         17,

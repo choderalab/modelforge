@@ -118,8 +118,8 @@ def prepare_pairlist_for_single_batch(
 
     from modelforge.potential.models import PairList
 
-    R = batch["R"]
-    mask = batch["Z"] == 0
+    R = batch["positions"]
+    mask = batch["atomic_numbers"] == 0
     pairlist = PairList(cutoff=5.0)
     return pairlist(mask, R)
 

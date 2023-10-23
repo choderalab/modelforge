@@ -1,8 +1,8 @@
 import torch.nn as nn
 from loguru import logger
-from typing import Dict, Type, Tuple, Callable, Optional
+from typing import Dict, Type, Callable, Optional
 
-from .models import BaseNNP, PairList, LightningModuleMixin
+from .models import BaseNNP, LightningModuleMixin
 from .utils import (
     GaussianRBF,
     scatter_add,
@@ -10,8 +10,7 @@ from .utils import (
 )
 import torch
 import torch.nn.functional as F
-from .models import PairList
-from modelforge.potential.utils import _distance_to_radial_basis, GaussianRBF
+from modelforge.potential.utils import _distance_to_radial_basis
 from torch.nn import SiLU
 
 
@@ -31,7 +30,7 @@ class PaiNN(BaseNNP):
         n_rbf: int,
         cutoff_fn: Optional[Callable] = None,
         activation: Optional[Callable] = SiLU,
-        max_z: int = 100,
+        nr_of_embeddings: int = 100,
         shared_interactions: bool = False,
         shared_filters: bool = False,
         epsilon: float = 1e-8,
@@ -51,14 +50,15 @@ class PaiNN(BaseNNP):
             epsilon: stability constant added in norm to prevent numerical instabilities
         """
 
-        super().__init__()
+        from .utils import GaussianRBF
+
+        super().__init__(nr_of_embeddings, n_atom_basis)
 
         self.n_atom_basis = n_atom_basis
         self.n_interactions = n_interactions
         self.cutoff_fn = cutoff_fn
         self.cutoff = cutoff_fn.cutoff
         self.share_filters = shared_filters
-        self.embedding = nn.Embedding(max_z, n_atom_basis, padding_idx=0)
 
         if shared_filters:
             self.filter_net = sequential_block(n_rbf, 3 * n_atom_basis)
@@ -77,10 +77,11 @@ class PaiNN(BaseNNP):
             for _ in range(n_interactions)
         )
 
-        self.calculate_distances_and_pairlist = PairList(self.cutoff)
         self.radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=float(self.cutoff))
 
-    def forward(self, inputs: Dict[str, torch.Tensor]):
+    def _forward(
+        self, pairlist: Dict[str, torch.Tensor], atomic_numbers_embedding: torch.Tensor
+    ):
         """
         Compute atomic representations/embeddings.
 
@@ -92,21 +93,14 @@ class PaiNN(BaseNNP):
             list of torch.Tensor: intermediate atom-wise representations, if
             return_intermediate=True was used.
         """
-        # calculate pairlist
-        Z = inputs["Z"]
-        mask = Z == 0
-        pairlist = self.calculate_distances_and_pairlist(mask, inputs["R"])
-
         # extract properties from pairlist
         d_ij = pairlist["d_ij"]
         r_ij = pairlist["r_ij"]
-        idx_i, idx_j = pairlist["atom_index12"][0], pairlist["atom_index12"][1]
 
         # compute atom and pair features
-        d_ij = torch.norm(r_ij, dim=1, keepdim=True)
         dir_ij = r_ij / d_ij
 
-        f_ij, rcut_ij = _distance_to_radial_basis(d_ij, self.radial_basis)
+        f_ij, _ = _distance_to_radial_basis(d_ij, self.radial_basis)
         fcut = self.cutoff_fn(d_ij)
 
         filters = self.filter_net(f_ij) * fcut[..., None]
@@ -115,8 +109,7 @@ class PaiNN(BaseNNP):
         else:
             filter_list = torch.split(filters, 3 * self.n_atom_basis, dim=-1)
 
-        q = self.embedding(Z)  # [:, None]
-        qs = q.shape
+        qs = atomic_numbers_embedding.shape
         mu = torch.zeros((qs[0], 3, qs[2]), device=q.device)
 
         for i, (interaction, mixing) in enumerate(zip(self.interactions, self.mixing)):
@@ -125,17 +118,12 @@ class PaiNN(BaseNNP):
                 mu,
                 filter_list[i],
                 dir_ij,
-                idx_i,
-                idx_j,
-                Z.shape[1],
+                atomic_numbers_embedding.shape[1],
             )
             q, mu = mixing(q, mu)
 
         q = q.squeeze(1)
-
-        inputs["scalar_representation"] = q
-        inputs["vector_representation"] = mu
-        return inputs
+        return {"scalar_representation": q, "vector_representation": mu}
 
 
 class PaiNNInteraction(nn.Module):
@@ -185,7 +173,7 @@ class PaiNNInteraction(nn.Module):
         xj = x[idx_j]
         mu = mu.reshape(-1)  # [64*3*32] [6144]
         muj = mu[idx_j]
-        x = Wij * xj  
+        x = Wij * xj
         dq, dmuR, dmumu = torch.split(x, self.n_atom_basis, dim=-1)
         dq = scatter_add(dq, idx_i, dim_size=n_atoms)
         dmu = dmuR * dir_ij[..., None] + dmumu * muj

@@ -37,9 +37,9 @@ class TorchDataset(torch.utils.data.Dataset):
             preloaded: bool = False,
     ):
         self.properties_of_interest = {
-            "Z": dataset[property_name.Z],
-            "R": dataset[property_name.R],
-            "E": dataset[property_name.E],
+            "Z": torch.from_numpy(dataset[property_name.Z]),
+            "R": torch.from_numpy(dataset[property_name.R]),
+            "E": torch.from_numpy(dataset[property_name.E]),
         }
 
         n_records = len(dataset["n_atoms"])

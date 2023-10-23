@@ -504,5 +504,5 @@ def collate_conformers(conf_list: List[Dict[str, torch.Tensor]]) -> Dict[str, to
         n_atoms.extend(conf['n_atoms'])
     Z_cat = torch.cat(Z_list)
     R_cat = torch.cat(R_list)
-    E_cat = torch.cat(E_list)
-    return {"Z": Z_cat, "R": R_cat, "E": E_cat, "n_atoms": n_atoms}
+    E_stack = torch.stack(E_list)
+    return {"Z": Z_cat, "R": R_cat, "E": E_stack, "n_atoms": n_atoms}

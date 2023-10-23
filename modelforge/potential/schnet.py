@@ -74,7 +74,7 @@ class SchNET(BaseNNP):
         # Compute the representation for each atom
         representation = self.representation(
             pairlist
-        )  # shape (batch_size, n_atoms, n_atom_basis)
+        )  # shape (n_pairs, n_atom_basis)
 
         # Iterate over interaction blocks to update features
         for interaction in self.interactions:
@@ -250,14 +250,8 @@ class SchNETRepresentation(nn.Module):
                 Cutoff values for each pair.
         """
 
-        atom_index12 = pairlist["atom_index12"]
-        d_ij = pairlist["d_ij"]
-
         # Convert distances to radial basis functions
-        f_ij, rcut_ij = _distance_to_radial_basis(d_ij, self.radial_basis)
-
-        # Separate indices for atoms in each pair
-        # idx_i, idx_j = atom_index12[0], atom_index12[1]
+        f_ij, rcut_ij = _distance_to_radial_basis(pairlist["d_ij"], self.radial_basis)
 
         return {"f_ij": f_ij, "rcut_ij": rcut_ij}
 

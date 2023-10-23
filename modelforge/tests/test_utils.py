@@ -5,6 +5,23 @@ from modelforge.potential.utils import CosineCutoff, cosine_cutoff, scatter_add
 
 
 def test_cosine_cutoff():
+    """
+    Test the cosine cutoff implementation.
+    """
+    # Define inputs
+    x = np.array([1, 2, 3])
+    y = np.array([4, 5, 6])
+    cutoff = 2.5
+
+    # Calculate expected output
+    r = np.linalg.norm(x - y)
+    expected_output = 0.5 * (np.cos(np.pi * r / cutoff) + 1) if r <= cutoff else 0
+
+    # Calculate actual output
+    actual_output = cosine_cutoff(x, y, cutoff)
+
+    # Check if the results are equal
+    assert np.isclose(actual_output, expected_output)
     # Test cosine_cutoff function
     d_ij = torch.tensor([1.0, 2.0, 3.0])
     cutoff = 2.0
@@ -40,6 +57,7 @@ def test_rbf():
     # Add assertion to check the shape of the output
     assert output.shape[1] == 20  # n_rbf dimension
 
+
 from modelforge.potential.utils import GaussianRBF
 
 
@@ -58,7 +76,9 @@ def test_gaussian_rbf():
 
     # Test that the widths and offsets are correct
     expected_offsets = torch.linspace(start, cutoff, n_rbf)
-    expected_widths = torch.abs(expected_offsets[1] - expected_offsets[0]) * torch.ones_like(expected_offsets)
+    expected_widths = torch.abs(
+        expected_offsets[1] - expected_offsets[0]
+    ) * torch.ones_like(expected_offsets)
     assert torch.allclose(gaussian_rbf.offsets, expected_offsets)
     assert torch.allclose(gaussian_rbf.widths, expected_widths)
 
@@ -66,6 +86,7 @@ def test_gaussian_rbf():
     d_ij = torch.tensor([1.0, 2.0, 3.0])
     expected_output = gaussian_rbf(d_ij)
     assert expected_output.shape == (3, n_rbf)
+
 
 def test_scatter_add():
     """

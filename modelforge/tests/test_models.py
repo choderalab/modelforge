@@ -25,7 +25,6 @@ def test_forward_pass(model_class, dataset):
             dataset,
             mode="fit",
         )  # split_file="modelforge/tests/qm9tut/split.npz")
-        print(inputs)
         output = initialized_model(inputs)
         print(output)
         assert output.shape[0] == 64

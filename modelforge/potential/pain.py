@@ -79,7 +79,10 @@ class PaiNN(BaseNNP):
         self.radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=float(self.cutoff))
 
     def _forward(
-        self, pairlist: Dict[str, torch.Tensor], atomic_numbers_embedding: torch.Tensor
+        self,
+        pairlist: Dict[str, torch.Tensor],
+        atomic_numbers_embedding: torch.Tensor,
+        n_atoms: int,
     ):
         """
         Compute atomic representations/embeddings.
@@ -109,7 +112,7 @@ class PaiNN(BaseNNP):
 
         qs = atomic_numbers_embedding.shape
         mu = torch.zeros(
-            (qs[0], 3, qs[2]), device=atomic_numbers_embedding.device
+            (qs[0] * qs[1], 3, qs[2]), device=atomic_numbers_embedding.device
         )  # nr_systems, 3, n_atom_basis
 
         for i, (interaction, mixing) in enumerate(zip(self.interactions, self.mixing)):
@@ -119,7 +122,7 @@ class PaiNN(BaseNNP):
                 filter_list[i],
                 dir_ij,
                 pairlist,
-                atomic_numbers_embedding.shape[1],
+                n_atoms,
             )
             atomic_numbers_embedding, mu = mixing(atomic_numbers_embedding, mu)
 
@@ -155,7 +158,7 @@ class PaiNNInteraction(nn.Module):
         Wij: torch.Tensor,  # shape [n_interactions]
         dir_ij: torch.Tensor,
         pairlist: Dict[str, torch.Tensor],
-        n_atoms: int,  # 64
+        n_atoms: int,  # nr of unmasked atoms
     ):
         """Compute interaction output.
 
@@ -167,17 +170,38 @@ class PaiNNInteraction(nn.Module):
         Returns:
             atom features after interaction
         """
+        import schnetpack.nn as snn
+
         # inter-atomic
         idx_i, idx_j = pairlist["pairlist"][0], pairlist["pairlist"][1]
         x = self.intra_atomic_net(atomic_numbers_embedding)
         n, m, k = atomic_numbers_embedding.shape  # [nr_systems,n_atoms,96]
-        x = x.reshape(-1)  # in: [nr_systems,n_atoms,96]; out:
+        x = x.reshape(n * m, 1, 96)  # in: [nr_systems,n_atoms,96]; out:
 
         xj = x[idx_j]
-        mu = mu.reshape(0)  # [nr_systems*3*32] [6144]
+        mu = mu  # [nr_systems*3*32] [6144]
         muj = mu[idx_j]
         x = Wij * xj
         dq, dmuR, dmumu = torch.split(x, self.n_atom_basis, dim=-1)
+
+        ##############
+        # Preparing for native scatter_add_
+        # Expand the dimensions of idx_i to match that of dq
+        expanded_idx_i = idx_i.view(-1, 1, 1).expand_as(dq)
+
+        # Create a zero tensor with appropriate shape
+        result_native = torch.zeros(n*m, 1, 32, dtype=dq.dtype, device=dq.device)
+
+        # Use scatter_add_
+        result_native.scatter_add_(0, expanded_idx_i, dq)
+
+        result_custom = snn.scatter_add(dq, idx_i, dim_size=n_atoms)
+        print(f"Result using custom scatter_add: {result_custom}")
+        print(f"Result using native scatter_add_: {result_native}")
+
+        # The outputs should be the same
+        assert torch.allclose(result_custom, result_native)
+
         dq = scatter_add(dq, idx_i, dim_size=n_atoms)
         dmu = dmuR * dir_ij[..., None] + dmumu * muj
         dmu = scatter_add(dmu, idx_i, dim_size=n_atoms)

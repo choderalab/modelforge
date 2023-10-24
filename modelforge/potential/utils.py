@@ -33,7 +33,6 @@ def sequential_block(
     return nn.Sequential(
         nn.Linear(in_features, out_features),
         activation_fct(),
-        nn.Linear(out_features, out_features),
     )
 
 

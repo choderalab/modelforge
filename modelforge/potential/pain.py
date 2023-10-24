@@ -61,22 +61,21 @@ class PaiNN(BaseNNP):
         self.share_filters = shared_filters
 
         if shared_filters:
-            self.filter_net = sequential_block(n_rbf, 3 * n_atom_basis)
-        else:
-            self.filter_net = sequential_block(
-                n_rbf, self.n_interactions * 3 * n_atom_basis
+            self.filter_net = nn.Sequential(
+                nn.Linear(n_rbf, 3 * n_atom_basis), nn.Identity()
             )
-
+        else:
+            self.filter_net = nn.Sequential(
+                nn.Linear(n_rbf, self.n_interactions * 3 * n_atom_basis), nn.Identity()
+            )
         self.interactions = nn.ModuleList(
             PaiNNInteraction(n_atom_basis, activation=activation)
             for _ in range(n_interactions)
         )
-
         self.mixing = nn.ModuleList(
             PaiNNMixing(n_atom_basis, activation=activation, epsilon=epsilon)
             for _ in range(n_interactions)
         )
-
         self.radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=float(self.cutoff))
 
     def _forward(
@@ -94,14 +93,13 @@ class PaiNN(BaseNNP):
             return_intermediate=True was used.
         """
         # extract properties from pairlist
-        d_ij = pairlist["d_ij"]
+        d_ij = pairlist["d_ij"].unsqueeze(-1)  # n_pairs, 1
         r_ij = pairlist["r_ij"]
-
         # compute atom and pair features
         dir_ij = r_ij / d_ij
 
         f_ij, _ = _distance_to_radial_basis(d_ij, self.radial_basis)
-        fcut = self.cutoff_fn(d_ij)
+        fcut = self.cutoff_fn(d_ij)  # n_pairs, 1
 
         filters = self.filter_net(f_ij) * fcut[..., None]
         if self.share_filters:
@@ -110,20 +108,26 @@ class PaiNN(BaseNNP):
             filter_list = torch.split(filters, 3 * self.n_atom_basis, dim=-1)
 
         qs = atomic_numbers_embedding.shape
-        mu = torch.zeros((qs[0], 3, qs[2]), device=q.device)
+        mu = torch.zeros(
+            (qs[0], 3, qs[2]), device=atomic_numbers_embedding.device
+        )  # nr_systems, 3, n_atom_basis
 
         for i, (interaction, mixing) in enumerate(zip(self.interactions, self.mixing)):
-            q, mu = interaction(
-                q,
+            atomic_numbers_embedding, mu = interaction(
+                atomic_numbers_embedding,
                 mu,
                 filter_list[i],
                 dir_ij,
+                pairlist,
                 atomic_numbers_embedding.shape[1],
             )
-            q, mu = mixing(q, mu)
+            atomic_numbers_embedding, mu = mixing(atomic_numbers_embedding, mu)
 
-        q = q.squeeze(1)
-        return {"scalar_representation": q, "vector_representation": mu}
+        atomic_numbers_embedding = atomic_numbers_embedding.squeeze(1)
+        return {
+            "scalar_representation": atomic_numbers_embedding,
+            "vector_representation": mu,
+        }
 
 
 class PaiNNInteraction(nn.Module):
@@ -140,18 +144,17 @@ class PaiNNInteraction(nn.Module):
         self.n_atom_basis = n_atom_basis
 
         self.intra_atomic_net = nn.Sequential(
-            sequential_block(n_atom_basis, n_atom_basis, activation_fct=activation),
+            sequential_block(n_atom_basis, n_atom_basis, activation),
             sequential_block(n_atom_basis, 3 * n_atom_basis),
         )
 
     def forward(
         self,
-        q: torch.Tensor,  # shape [n_mols, n_atoms, n_atom_basis] [64,17,32]
-        mu: torch.Tensor,  # shape [n_mols, n_interactions, n_atom_basis] [64,3,32]
-        Wij: torch.Tensor,  # shape [3189]
+        atomic_numbers_embedding: torch.Tensor,  # shape [n_mols, n_atoms, n_atom_basis]
+        mu: torch.Tensor,  # shape [n_mols, n_interactions, n_atom_basis]
+        Wij: torch.Tensor,  # shape [n_interactions]
         dir_ij: torch.Tensor,
-        idx_i: torch.Tensor,  # [3189]
-        idx_j: torch.Tensor,  # [3189]
+        pairlist: Dict[str, torch.Tensor],
         n_atoms: int,  # 64
     ):
         """Compute interaction output.
@@ -160,18 +163,18 @@ class PaiNNInteraction(nn.Module):
             q: scalar input values
             mu: vector input values
             Wij: filter
-            idx_i: index of center atom i
-            idx_j: index of neighbors j
 
         Returns:
             atom features after interaction
         """
         # inter-atomic
-        x = self.intra_atomic_net(q)
-        n, m, k = x.shape  # [64,17,96]
-        x = x.reshape(-1)  #
+        idx_i, idx_j = pairlist["pairlist"][0], pairlist["pairlist"][1]
+        x = self.intra_atomic_net(atomic_numbers_embedding)
+        n, m, k = atomic_numbers_embedding.shape  # [nr_systems,n_atoms,96]
+        x = x.reshape(-1)  # in: [nr_systems,n_atoms,96]; out:
+
         xj = x[idx_j]
-        mu = mu.reshape(-1)  # [64*3*32] [6144]
+        mu = mu.reshape(0)  # [nr_systems*3*32] [6144]
         muj = mu[idx_j]
         x = Wij * xj
         dq, dmuR, dmumu = torch.split(x, self.n_atom_basis, dim=-1)

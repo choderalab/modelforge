@@ -175,8 +175,7 @@ class PaiNN(nn.Module):
                 self.radial_basis.n_rbf,
                 self.n_interactions * n_atom_basis * 3,
                 activation=None,
-            )
-
+            )  # n_atom_basis = 32, n_interactions = 3
         self.interactions = snn.replicate_module(
             lambda: PaiNNInteraction(
                 n_atom_basis=self.n_atom_basis, activation=activation
@@ -193,6 +192,7 @@ class PaiNN(nn.Module):
             self.n_interactions,
             shared_interactions,
         )
+
 
     def forward(self, inputs: Dict[str, torch.Tensor]):
         """

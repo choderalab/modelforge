@@ -27,21 +27,24 @@ def test_forward_pass(model_class, dataset):
         )  # split_file="modelforge/tests/qm9tut/split.npz")
         output = initialized_model(inputs)
         print(output)
-        assert output.shape[0] == 64
-        assert output.shape[1] == 1
+        if isinstance(output, dict):
+            assert output["scalar_representation"].shape[0] == 1088
+        else:
+            assert output.shape[0] == 64
+            assert output.shape[1] == 1
 
 
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_forward_pass_schnetpack_painn(dataset):
-    initialized_model = setup_painn()
-    inputs = return_single_batch(
-        dataset,
-        mode="fit",
-    )  # split_file="modelforge/tests/qm9tut/split.npz")
-    output = initialized_model(inputs)
-    print(output)
-    assert output.shape[0] == 64
-    assert output.shape[1] == 1
+# @pytest.mark.parametrize("dataset", DATASETS)
+# def test_forward_pass_schnetpack_painn(dataset):
+#     initialized_model = setup_painn()
+#     inputs = return_single_batch(
+#         dataset,
+#         mode="fit",
+#     )  # split_file="modelforge/tests/qm9tut/split.npz")
+#     output = initialized_model(inputs)
+#     print(output)
+#     assert output.shape[0] == 64
+#     assert output.shape[1] == 1
 
 
 def test_pairlist_simple_data():

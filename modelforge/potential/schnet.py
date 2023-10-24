@@ -224,9 +224,9 @@ class SchNETRepresentation(nn.Module):
 class LightningSchNET(SchNET, LightningModuleMixin):
     def __init__(
         self,
-        n_atom_basis: int,
-        n_interactions: int,
-        n_filters: int = 0,
+        nr_atom_basis: int,
+        nr_interactions: int,
+        nr_filters: int = 0,
         cutoff: float = 5.0,
         loss: Type[nn.Module] = nn.MSELoss(),
         optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
@@ -253,7 +253,7 @@ class LightningSchNET(SchNET, LightningModuleMixin):
             Learning rate. Default is 1e-3.
         """
 
-        super().__init__(n_atom_basis, n_interactions, n_filters, cutoff)
+        super().__init__(nr_atom_basis, nr_interactions, nr_filters, cutoff)
         self.loss_function = loss
         self.optimizer = optimizer
         self.learning_rate = lr

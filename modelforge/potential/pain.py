@@ -25,8 +25,8 @@ class PaiNN(BaseNNP):
 
     def __init__(
         self,
-        n_atom_basis: int,
-        n_interactions: int,
+        nr_atom_basis: int,
+        nr_interactions: int,
         n_rbf: int,
         cutoff_fn: Optional[Callable] = None,
         activation: Optional[Callable] = SiLU,
@@ -52,29 +52,29 @@ class PaiNN(BaseNNP):
 
         from .utils import GaussianRBF
 
-        super().__init__(nr_of_embeddings, n_atom_basis)
+        super().__init__(nr_of_embeddings, nr_atom_basis)
 
-        self.n_atom_basis = n_atom_basis
-        self.n_interactions = n_interactions
+        self.n_atom_basis = nr_atom_basis
+        self.n_interactions = nr_interactions
         self.cutoff_fn = cutoff_fn
         self.cutoff = cutoff_fn.cutoff
         self.share_filters = shared_filters
 
         if shared_filters:
             self.filter_net = nn.Sequential(
-                nn.Linear(n_rbf, 3 * n_atom_basis), nn.Identity()
+                nn.Linear(n_rbf, 3 * nr_atom_basis), nn.Identity()
             )
         else:
             self.filter_net = nn.Sequential(
-                nn.Linear(n_rbf, self.n_interactions * 3 * n_atom_basis), nn.Identity()
+                nn.Linear(n_rbf, self.n_interactions * 3 * nr_atom_basis), nn.Identity()
             )
         self.interactions = nn.ModuleList(
-            PaiNNInteraction(n_atom_basis, activation=activation)
-            for _ in range(n_interactions)
+            PaiNNInteraction(nr_atom_basis, activation=activation)
+            for _ in range(nr_interactions)
         )
         self.mixing = nn.ModuleList(
-            PaiNNMixing(n_atom_basis, activation=activation, epsilon=epsilon)
-            for _ in range(n_interactions)
+            PaiNNMixing(nr_atom_basis, activation=activation, epsilon=epsilon)
+            for _ in range(nr_interactions)
         )
         self.radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=float(self.cutoff))
 
@@ -82,7 +82,6 @@ class PaiNN(BaseNNP):
         self,
         pairlist: Dict[str, torch.Tensor],
         atomic_numbers_embedding: torch.Tensor,
-        n_atoms: int,
     ):
         """
         Compute atomic representations/embeddings.
@@ -98,9 +97,12 @@ class PaiNN(BaseNNP):
         # extract properties from pairlist
         d_ij = pairlist["d_ij"].unsqueeze(-1)  # n_pairs, 1
         r_ij = pairlist["r_ij"]
+        qs = atomic_numbers_embedding.shape
+
+        q = atomic_numbers_embedding.reshape(qs[0] * qs[1], 1, qs[2])
         # compute atom and pair features
         dir_ij = r_ij / d_ij
-
+        # torch.Size([1150, 1, 32])
         f_ij, _ = _distance_to_radial_basis(d_ij, self.radial_basis)
         fcut = self.cutoff_fn(d_ij)  # n_pairs, 1
 
@@ -110,25 +112,23 @@ class PaiNN(BaseNNP):
         else:
             filter_list = torch.split(filters, 3 * self.n_atom_basis, dim=-1)
 
-        qs = atomic_numbers_embedding.shape
         mu = torch.zeros(
-            (qs[0] * qs[1], 3, qs[2]), device=atomic_numbers_embedding.device
-        )  # nr_systems, 3, n_atom_basis
+            (qs[0] * qs[1], 3, qs[2]), device=q.device
+        )  # nr_of_systems * nr_of_atoms, 3, n_atom_basis
 
         for i, (interaction, mixing) in enumerate(zip(self.interactions, self.mixing)):
-            atomic_numbers_embedding, mu = interaction(
-                atomic_numbers_embedding,
+            q, mu = interaction(
+                q,
                 mu,
                 filter_list[i],
                 dir_ij,
                 pairlist,
-                n_atoms,
             )
-            atomic_numbers_embedding, mu = mixing(atomic_numbers_embedding, mu)
+            q, mu = mixing(q, mu)
 
         atomic_numbers_embedding = atomic_numbers_embedding.squeeze(1)
         return {
-            "scalar_representation": atomic_numbers_embedding,
+            "scalar_representation": q,
             "vector_representation": mu,
         }
 
@@ -153,12 +153,11 @@ class PaiNNInteraction(nn.Module):
 
     def forward(
         self,
-        atomic_numbers_embedding: torch.Tensor,  # shape [n_mols, n_atoms, n_atom_basis]
+        q: torch.Tensor,  # shape [n_mols, n_atoms, n_atom_basis]
         mu: torch.Tensor,  # shape [n_mols, n_interactions, n_atom_basis]
         Wij: torch.Tensor,  # shape [n_interactions]
         dir_ij: torch.Tensor,
         pairlist: Dict[str, torch.Tensor],
-        n_atoms: int,  # nr of unmasked atoms
     ):
         """Compute interaction output.
 
@@ -175,9 +174,11 @@ class PaiNNInteraction(nn.Module):
         # inter-atomic
         idx_i, idx_j = pairlist["pairlist"][0], pairlist["pairlist"][1]
 
-        x = self.intra_atomic_net(atomic_numbers_embedding)
-        n, m, k = atomic_numbers_embedding.shape  # [nr_systems,n_atoms,96]
-        x = x.reshape(n * m, 1, 96)  # in: [nr_systems,n_atoms,96]; out:
+        x = self.intra_atomic_net(q)
+        nr_of_atoms_in_all_systems, _, _ = q.shape  # [nr_systems,n_atoms,96]
+        x = x.reshape(
+            nr_of_atoms_in_all_systems, 1, 3 * self.n_atom_basis
+        )  # in: [nr_of_atoms_in_all_systems,96]; out:
 
         xj = x[idx_j]
         mu = mu  # [nr_systems*3*32] [6144]
@@ -191,25 +192,39 @@ class PaiNNInteraction(nn.Module):
         expanded_idx_i = idx_i.view(-1, 1, 1).expand_as(dq)
 
         # Create a zero tensor with appropriate shape
-        dq_result_native = torch.zeros(n * m, 1, 32, dtype=dq.dtype, device=dq.device)
+        dq_result_native = torch.zeros(
+            nr_of_atoms_in_all_systems,
+            1,
+            self.n_atom_basis,
+            dtype=dq.dtype,
+            device=dq.device,
+        )
 
         # Use scatter_add_
         dq_result_native.scatter_add_(0, expanded_idx_i, dq)
-        dq_result_custom = snn.scatter_add(dq, idx_i, dim_size=n * m)
+        dq_result_custom = snn.scatter_add(
+            dq, idx_i, dim_size=nr_of_atoms_in_all_systems
+        )
 
         # The outputs should be the same
         assert torch.allclose(dq_result_custom, dq_result_native)
 
         dmu = dmuR * dir_ij[..., None] + dmumu * muj
         dmu_result_native = torch.zeros(
-            n * m, 3, 32, dtype=dmu.dtype, device=dmu.device
+            nr_of_atoms_in_all_systems,
+            3,
+            self.n_atom_basis,
+            dtype=dmu.dtype,
+            device=dmu.device,
         )
         expanded_idx_i_dmu = idx_i.view(-1, 1, 1).expand_as(dmu)
         dmu_result_native.scatter_add_(0, expanded_idx_i_dmu, dmu)
-        dmu_results_custom = snn.scatter_add(dmu, idx_i, dim_size=n * m)
+        dmu_results_custom = snn.scatter_add(
+            dmu, idx_i, dim_size=nr_of_atoms_in_all_systems
+        )
         assert torch.allclose(dmu_results_custom, dmu_result_native)
 
-        q = x + dq_result_native.view(n, m)
+        q = q + dq_result_native  # .view(nr_of_atoms_in_all_systems)
         mu = mu + dmu_result_native
 
         return q, mu
@@ -268,9 +283,9 @@ class PaiNNMixing(nn.Module):
 class LighningPaiNN(PaiNN, LightningModuleMixin):
     def __init__(
         self,
-        n_atom_basis: int,
-        n_interactions: int,
-        n_rbf: int,
+        nr_atom_basis: int,
+        nr_interactions: int,
+        nr_rbf: int,
         cutoff_fn: Optional[Callable] = None,
         activation: Optional[Callable] = SiLU,
         max_z: int = 100,
@@ -284,9 +299,9 @@ class LighningPaiNN(PaiNN, LightningModuleMixin):
         """PyTorch Lightning version of the PaiNN model."""
 
         super().__init__(
-            n_atom_basis,
-            n_interactions,
-            n_rbf,
+            nr_atom_basis,
+            nr_interactions,
+            nr_rbf,
             cutoff_fn,
             activation,
             max_z,

@@ -193,7 +193,6 @@ class PaiNN(nn.Module):
             shared_interactions,
         )
 
-
     def forward(self, inputs: Dict[str, torch.Tensor]):
         """
         Compute atomic representations/embeddings.

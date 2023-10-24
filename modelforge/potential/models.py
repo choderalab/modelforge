@@ -167,9 +167,7 @@ class BaseNNP(nn.Module):
         atomic_numbers_embedding = self.embedding(
             atomic_numbers
         )  # shape (batch_size, n_atoms, n_atom_basis)
-        return self._forward(
-            pairlist, atomic_numbers_embedding, len(torch.nonzero(atomic_numbers))
-        )
+        return self._forward(pairlist, atomic_numbers_embedding)
 
 
 class SingleTopologyAlchemicalBaseNNPModel(BaseNNP):

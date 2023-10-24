@@ -174,6 +174,7 @@ class PaiNNInteraction(nn.Module):
 
         # inter-atomic
         idx_i, idx_j = pairlist["pairlist"][0], pairlist["pairlist"][1]
+
         x = self.intra_atomic_net(atomic_numbers_embedding)
         n, m, k = atomic_numbers_embedding.shape  # [nr_systems,n_atoms,96]
         x = x.reshape(n * m, 1, 96)  # in: [nr_systems,n_atoms,96]; out:
@@ -190,24 +191,26 @@ class PaiNNInteraction(nn.Module):
         expanded_idx_i = idx_i.view(-1, 1, 1).expand_as(dq)
 
         # Create a zero tensor with appropriate shape
-        result_native = torch.zeros(n*m, 1, 32, dtype=dq.dtype, device=dq.device)
+        dq_result_native = torch.zeros(n * m, 1, 32, dtype=dq.dtype, device=dq.device)
 
         # Use scatter_add_
-        result_native.scatter_add_(0, expanded_idx_i, dq)
-
-        result_custom = snn.scatter_add(dq, idx_i, dim_size=n_atoms)
-        print(f"Result using custom scatter_add: {result_custom}")
-        print(f"Result using native scatter_add_: {result_native}")
+        dq_result_native.scatter_add_(0, expanded_idx_i, dq)
+        dq_result_custom = snn.scatter_add(dq, idx_i, dim_size=n * m)
 
         # The outputs should be the same
-        assert torch.allclose(result_custom, result_native)
+        assert torch.allclose(dq_result_custom, dq_result_native)
 
-        dq = scatter_add(dq, idx_i, dim_size=n_atoms)
         dmu = dmuR * dir_ij[..., None] + dmumu * muj
-        dmu = scatter_add(dmu, idx_i, dim_size=n_atoms)
+        dmu_result_native = torch.zeros(
+            n * m, 3, 32, dtype=dmu.dtype, device=dmu.device
+        )
+        expanded_idx_i_dmu = idx_i.view(-1, 1, 1).expand_as(dmu)
+        dmu_result_native.scatter_add_(0, expanded_idx_i_dmu, dmu)
+        dmu_results_custom = snn.scatter_add(dmu, idx_i, dim_size=n * m)
+        assert torch.allclose(dmu_results_custom, dmu_result_native)
 
-        q = q + dq
-        mu = mu + dmu
+        q = x + dq_result_native.view(n, m)
+        mu = mu + dmu_result_native
 
         return q, mu
 

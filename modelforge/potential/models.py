@@ -164,18 +164,38 @@ class AbstractBaseNNP(nn.Module, ABC):
     @abstractmethod
     def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
-        Abstract method for forward pass in neural network potentials.
+        Abstract method for neighborlist calculation and forward pass in neural network potentials.
 
         Parameters
         ----------
         inputs : Dict[str, torch.Tensor]
-            Inputs containing necessary data for the forward pass.
-            The exact keys and shapes are implementation-dependent.
+            - 'atomic_numbers', shape (nr_systems, nr_atoms), 0 indicates non-interacting atoms that will be masked
+            - 'total_charge', shape (nr_systems, 1)
+            - 'positions', shape (n_atoms, 3)
+            - 'boxvectors', shape (3, 3)
 
         Returns
         -------
         torch.Tensor
             Calculated output; shape is implementation-dependent.
+
+        """
+        pass
+
+    @abstractmethod
+    def _forward(self, inputs: Dict[str, torch.Tensor]):
+        """
+        Abstract method for forward pass in neural network potentials.
+        This method is called by `forward`.
+
+        Parameters
+        ----------
+        inputs: Dict[str, torch.Tensor]
+            - 'pairlist': Dict[str, torch.Tensor], contains:
+                - pairlist, shape (n_paris,2)
+                - r_ij, shape (n_pairs, 1)
+                - d_ij, shape (n_pairs, 3)
+                - 'atomic_subsystem_index' (optional), shape n_atoms
 
         """
         pass
@@ -292,7 +312,7 @@ class SingleTopologyAlchemicalBaseNNPModel(AbstractBaseNNP):
         Calculate the alchemical energy for a given input batch.
     """
 
-    def forward(inputs: Dict[str, torch.Tensor]):
+    def forward(self, inputs: Dict[str, torch.Tensor]):
         """
         Calculate the alchemical energy for a given input batch.
 

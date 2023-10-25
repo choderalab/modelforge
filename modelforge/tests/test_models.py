@@ -10,12 +10,6 @@ from .helper_functions import (
 )
 
 
-def test_BaseNNP():
-    from modelforge.potential.models import BaseNNP
-
-    nnp = BaseNNP(100, 20)
-
-
 @pytest.mark.parametrize("model_class", MODELS_TO_TEST)
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_forward_pass(model_class, dataset):

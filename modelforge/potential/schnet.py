@@ -80,7 +80,9 @@ class SchNET(BaseNNP):
                 representation["f_ij"],
                 representation["rcut_ij"],
             )
-            atomic_numbers_embedding += v  # Update atomic features
+            atomic_numbers_embedding = (
+                atomic_numbers_embedding + v
+            )  # Update atomic features
 
         # Pool over atoms to get molecular energies
         return self.readout(atomic_numbers_embedding)  # shape (batch_size,)

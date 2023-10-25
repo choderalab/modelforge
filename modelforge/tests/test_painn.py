@@ -1,8 +1,13 @@
+import os
+
+import pytest
+
 from modelforge.potential.pain import PaiNN
+from modelforge.potential.utils import CosineCutoff
 
 from .helper_functions import generate_methane_input
 
-from modelforge.potential.utils import CosineCutoff
+IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 
 
 def test_PaiNN_init():
@@ -11,13 +16,18 @@ def test_PaiNN_init():
     assert painn is not None, "PaiNN model should be initialized."
 
 
+@pytest.mark.skipif(
+    IN_GITHUB_ACTIONS,
+    reason="This test is not intended to be performed regularly.",
+)
 def test_schnetpack_PaiNN():
-    import schnetpack as spk
     import os
 
-    from .schnetpack_pain_implementation import setup_painn
-    from schnetpack.datasets import QM9
+    import schnetpack as spk
     import schnetpack.transform as trn
+    from schnetpack.datasets import QM9
+
+    from .schnetpack_pain_implementation import setup_painn
 
     qm9tut = "./qm9tut"
     if not os.path.exists("qm9tut"):
@@ -43,7 +53,8 @@ def test_schnetpack_PaiNN():
     qm9data.setup()
 
     nnpot = setup_painn()
-    import torch, torchmetrics
+    import torch
+    import torchmetrics
 
     output_U0 = spk.task.ModelOutput(
         name=QM9.U0,

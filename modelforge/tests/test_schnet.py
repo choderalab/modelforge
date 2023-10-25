@@ -36,7 +36,6 @@ def test_calculate_energies_and_forces():
     Test the calculation of energies and forces for a molecule.
     This test will be adapted once we have a trained model.
     """
-
     schnet = SchNET(128, 6, 64)
     methane_inputs = generate_methane_input()
     result = schnet(methane_inputs)

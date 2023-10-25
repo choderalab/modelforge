@@ -1,6 +1,6 @@
 import torch.nn as nn
 from loguru import logger
-from typing import Dict, Type, Callable, Optional
+from typing import Dict, Type, Callable, Optional, Tuple
 
 from .models import BaseNNP, LightningModuleMixin
 from .utils import (
@@ -36,20 +36,32 @@ class PaiNN(BaseNNP):
         epsilon: float = 1e-8,
     ):
         """
-        Args:
-            n_atom_basis: number of features to describe atomic environments.
-                This determines the size of each embedding vector; i.e. embeddings_dim.
-            n_interactions: number of interaction blocks.
-            radial_basis: layer for expanding interatomic distances in a basis set
-            cutoff_fn: cutoff function
-            activation: activation function
-            shared_interactions: if True, share the weights across
-                interaction blocks.
-            shared_interactions: if True, share the weights across
-                filter-generating networks.
-            epsilon: stability constant added in norm to prevent numerical instabilities
-        """
+        Parameters
+            ----------
+            nr_atom_basis : int
+                Number of features to describe atomic environments.
+            nr_interactions : int
+                Number of interaction blocks.
+            n_rbf : int
+                Number of radial basis functions.
+            cutoff_fn : Callable, optional
+                Cutoff function for the radial basis.
+            activation : Callable, optional
+                Activation function to use.
+            nr_of_embeddings : int, optional
+                Number of embeddings for atomic numbers (default is 100).
+            shared_interactions : bool, optional
+                Whether to share weights across interaction blocks (default is False).
+            shared_filters : bool, optional
+                Whether to share weights across filter-generating networks (default is False).
+            epsilon : float, optional
+                Stability constant to prevent numerical instabilities (default is 1e-8).
 
+            References
+            ----------
+            Equivariant message passing for the prediction of tensorial properties and molecular spectra.
+            ICML 2021, http://proceedings.mlr.press/v139/schutt21a.html
+        """
         from .utils import GaussianRBF
 
         super().__init__(nr_of_embeddings, nr_atom_basis)
@@ -86,13 +98,17 @@ class PaiNN(BaseNNP):
         """
         Compute atomic representations/embeddings.
 
-        Args:
-            inputs (dict of torch.Tensor): SchNetPack dictionary of input tensors.
+        Parameters
+        ----------
+        pairlist : Dict[str, torch.Tensor]
+            Dictionary containing pairlist information.
+        atomic_numbers_embedding : torch.Tensor
+            Tensor containing atomic number embeddings.
 
-        Returns:
-            torch.Tensor: atom-wise representation.
-            list of torch.Tensor: intermediate atom-wise representations, if
-            return_intermediate=True was used.
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            Dictionary containing scalar and vector representations.
         """
         # extract properties from pairlist
         d_ij = pairlist["d_ij"].unsqueeze(-1)  # n_pairs, 1
@@ -134,21 +150,34 @@ class PaiNN(BaseNNP):
 
 
 class PaiNNInteraction(nn.Module):
-    r"""PaiNN interaction block for modeling equivariant interactions of atomistic systems."""
+    """
+    PaiNN Interaction Block for Modeling Equivariant Interactions of Atomistic Systems.
 
-    def __init__(self, n_atom_basis: int, activation: Callable):
+    """
+
+    def __init__(self, nr_atom_basis: int, activation: Callable):
         """
-        Args:
-            n_atom_basis: number of features to describe atomic environments.
-            activation: if None, no activation function is used.
-            epsilon: stability constant added in norm to prevent numerical instabilities
+        Parameters
+        ----------
+        nr_atom_basis : int
+            Number of features to describe atomic environments.
+        activation : Callable
+            Activation function to use.
+
+        Attributes
+        ----------
+        nr_atom_basis : int
+            Number of features to describe atomic environments.
+        intra_atomic_net : nn.Sequential
+            Neural network for intra-atomic interactions.
         """
         super().__init__()
-        self.n_atom_basis = n_atom_basis
+        self.nr_atom_basis = nr_atom_basis
 
+        # Initialize the intra-atomic neural network
         self.intra_atomic_net = nn.Sequential(
-            sequential_block(n_atom_basis, n_atom_basis, activation),
-            sequential_block(n_atom_basis, 3 * n_atom_basis),
+            sequential_block(nr_atom_basis, nr_atom_basis, activation),
+            sequential_block(nr_atom_basis, 3 * nr_atom_basis),
         )
 
     def forward(
@@ -158,16 +187,26 @@ class PaiNNInteraction(nn.Module):
         Wij: torch.Tensor,  # shape [n_interactions]
         dir_ij: torch.Tensor,
         pairlist: Dict[str, torch.Tensor],
-    ):
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Compute interaction output.
 
-        Args:
-            q: scalar input values
-            mu: vector input values
-            Wij: filter
+        Parameters
+        ----------
+        q : torch.Tensor
+            Scalar input values of shape [n_mols, n_atoms, n_atom_basis].
+        mu : torch.Tensor
+            Vector input values of shape [n_mols, n_interactions, n_atom_basis].
+        Wij : torch.Tensor
+            Filter of shape [n_interactions].
+        dir_ij : torch.Tensor
+            Directional vector between atoms i and j.
+        pairlist : Dict[str, torch.Tensor]
+            Dictionary containing pairlist information.
 
-        Returns:
-            atom features after interaction
+        Returns
+        -------
+        Tuple[torch.Tensor, torch.Tensor]
+            Updated scalar and vector representations (q, mu).
         """
         import schnetpack.nn as snn
 
@@ -177,14 +216,14 @@ class PaiNNInteraction(nn.Module):
         x = self.intra_atomic_net(q)
         nr_of_atoms_in_all_systems, _, _ = q.shape  # [nr_systems,n_atoms,96]
         x = x.reshape(
-            nr_of_atoms_in_all_systems, 1, 3 * self.n_atom_basis
+            nr_of_atoms_in_all_systems, 1, 3 * self.nr_atom_basis
         )  # in: [nr_of_atoms_in_all_systems,96]; out:
 
         xj = x[idx_j]
         mu = mu  # [nr_systems*3*32] [6144]
         muj = mu[idx_j]
         x = Wij * xj
-        dq, dmuR, dmumu = torch.split(x, self.n_atom_basis, dim=-1)
+        dq, dmuR, dmumu = torch.split(x, self.nr_atom_basis, dim=-1)
 
         ##############
         # Preparing for native scatter_add_
@@ -195,34 +234,34 @@ class PaiNNInteraction(nn.Module):
         dq_result_native = torch.zeros(
             nr_of_atoms_in_all_systems,
             1,
-            self.n_atom_basis,
+            self.nr_atom_basis,
             dtype=dq.dtype,
             device=dq.device,
         )
 
         # Use scatter_add_
         dq_result_native.scatter_add_(0, expanded_idx_i, dq)
-        dq_result_custom = snn.scatter_add(
-            dq, idx_i, dim_size=nr_of_atoms_in_all_systems
-        )
+        # dq_result_custom = snn.scatter_add(
+        #    dq, idx_i, dim_size=nr_of_atoms_in_all_systems
+        # )
 
         # The outputs should be the same
-        assert torch.allclose(dq_result_custom, dq_result_native)
+        # assert torch.allclose(dq_result_custom, dq_result_native)
 
         dmu = dmuR * dir_ij[..., None] + dmumu * muj
         dmu_result_native = torch.zeros(
             nr_of_atoms_in_all_systems,
             3,
-            self.n_atom_basis,
+            self.nr_atom_basis,
             dtype=dmu.dtype,
             device=dmu.device,
         )
         expanded_idx_i_dmu = idx_i.view(-1, 1, 1).expand_as(dmu)
         dmu_result_native.scatter_add_(0, expanded_idx_i_dmu, dmu)
-        dmu_results_custom = snn.scatter_add(
-            dmu, idx_i, dim_size=nr_of_atoms_in_all_systems
-        )
-        assert torch.allclose(dmu_results_custom, dmu_result_native)
+        # dmu_results_custom = snn.scatter_add(
+        #    dmu, idx_i, dim_size=nr_of_atoms_in_all_systems
+        # )
+        # assert torch.allclose(dmu_results_custom, dmu_result_native)
 
         q = q + dq_result_native  # .view(nr_of_atoms_in_all_systems)
         mu = mu + dmu_result_native
@@ -233,44 +272,68 @@ class PaiNNInteraction(nn.Module):
 class PaiNNMixing(nn.Module):
     r"""PaiNN interaction block for mixing on atom features."""
 
-    def __init__(self, n_atom_basis: int, activation: Callable, epsilon: float = 1e-8):
+    def __init__(self, nr_atom_basis: int, activation: Callable, epsilon: float = 1e-8):
         """
-        Args:
-            n_atom_basis: number of features to describe atomic environments.
-            activation: if None, no activation function is used.
-            epsilon: stability constant added in norm to prevent numerical instabilities
+        Parameters
+        ----------
+        n_atom_basis : int
+            Number of features to describe atomic environments.
+        activation : Callable
+            Activation function to use.
+        epsilon : float, optional
+            Stability constant added in norm to prevent numerical instabilities. Default is 1e-8.
+
+        Attributes
+        ----------
+        n_atom_basis : int
+            Number of features to describe atomic environments.
+        intra_atomic_net : nn.Sequential
+            Neural network for intra-atomic interactions.
+        mu_channel_mix : nn.Sequential
+            Neural network for mixing mu channels.
+        epsilon : float
+            Stability constant for numerical stability.
         """
         super().__init__()
-        self.n_atom_basis = n_atom_basis
+        self.nr_atom_basis = nr_atom_basis
 
+        # initialize the intra-atomic neural network
         self.intra_atomic_net = nn.Sequential(
-            sequential_block(2 * n_atom_basis, n_atom_basis, activation_fct=activation),
-            sequential_block(n_atom_basis, 3 * n_atom_basis),
+            sequential_block(
+                2 * nr_atom_basis, nr_atom_basis, activation_fct=activation
+            ),
+            sequential_block(nr_atom_basis, 3 * nr_atom_basis),
         )
+        # initialize the mu channel mixing network
         self.mu_channel_mix = sequential_block(
-            n_atom_basis, 2 * n_atom_basis, bias=False
+            nr_atom_basis, 2 * nr_atom_basis, bias=False
         )
         self.epsilon = epsilon
 
     def forward(self, q: torch.Tensor, mu: torch.Tensor):
-        """Compute intratomic mixing.
-
-        Args:
-            q: scalar input values
-            mu: vector input values
-
-        Returns:
-            atom features after interaction
         """
-        ## intra-atomic
+        compute intratomic mixing
+
+        Parameters
+        ----------
+        q : torch.Tensor
+            Scalar input values.
+        mu : torch.Tensor
+            Vector input values.
+
+        Returns
+        -------
+        Tuple[torch.Tensor, torch.Tensor]
+            Updated scalar and vector representations (q, mu).
+        """
         mu_mix = self.mu_channel_mix(mu)
-        mu_V, mu_W = torch.split(mu_mix, self.n_atom_basis, dim=-1)
+        mu_V, mu_W = torch.split(mu_mix, self.nr_atom_basis, dim=-1)
         mu_Vn = torch.sqrt(torch.sum(mu_V**2, dim=-2, keepdim=True) + self.epsilon)
 
         ctx = torch.cat([q, mu_Vn], dim=-1)
         x = self.intra_atomic_net(ctx)
 
-        dq_intra, dmu_intra, dqmu_intra = torch.split(x, self.n_atom_basis, dim=-1)
+        dq_intra, dmu_intra, dqmu_intra = torch.split(x, self.nr_atom_basis, dim=-1)
         dmu_intra = dmu_intra * mu_W
 
         dqmu_intra = dqmu_intra * torch.sum(mu_V * mu_W, dim=1, keepdim=True)

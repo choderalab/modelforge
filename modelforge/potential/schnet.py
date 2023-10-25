@@ -37,6 +37,7 @@ class SchNET(BaseNNP):
 
         super().__init__(nr_of_embeddings, nr_atom_basis, cutoff)
 
+        # Initialize representation, readout, and interaction layers
         self.representation = SchNETRepresentation(cutoff)
         self.readout = EnergyReadout(nr_atom_basis)
         self.interactions = nn.ModuleList(
@@ -54,19 +55,19 @@ class SchNET(BaseNNP):
 
         Parameters
         ----------
-        atomic_numbers_embedding: int; shape (n_systems, n_atoms, n_atom_basis)
-        parilist : Dict[str, torch.Tensor], contains
-          - pairlist:int; (n_paris,2),
-          - r_ij:float; (n_pairs, 1)
-          - d_ij: float; (n_pairs, 3)
+        atomic_numbers_embedding : torch.Tensor
+            Atomic numbers embedding; shape (nr_systems, n_atoms, n_atom_basis).
+        pairlist : Dict[str, torch.Tensor]
+            Pairlist dictionary containing:
+            - pairlist: int; shape (n_pairs, 2)
+            - r_ij: float; shape (n_pairs, 1)
+            - d_ij: float; shape (n_pairs, 3)
 
         Returns
         -------
         torch.Tensor
-            Calculated energies; shape (batch_size,).
+            Calculated energies; shape (nr_systems,).
         """
-
-        # Initialize the feature representation using atomic numbers
 
         # Compute the representation for each atom
         representation = self.representation(pairlist)  # shape (n_pairs, n_atom_basis)
@@ -79,7 +80,7 @@ class SchNET(BaseNNP):
                 representation["f_ij"],
                 representation["rcut_ij"],
             )
-            atomic_numbers_embedding = atomic_numbers_embedding + v
+            atomic_numbers_embedding += v  # Update atomic features
 
         # Pool over atoms to get molecular energies
         return self.readout(atomic_numbers_embedding)  # shape (batch_size,)
@@ -102,9 +103,7 @@ class SchNETInteractionBlock(nn.Module):
         super().__init__()
         from .utils import ShiftedSoftplus, sequential_block
 
-        # Initialize parameters
-        self.nr_atom_basis = nr_atom_basis
-        # Initialize layers
+        self.nr_atom_basis = nr_atom_basis  # Initialize parameters
         self.intput_to_feature = nn.Linear(nr_atom_basis, nr_filters)
         self.feature_to_output = sequential_block(
             nr_filters, nr_atom_basis, ShiftedSoftplus
@@ -124,7 +123,7 @@ class SchNETInteractionBlock(nn.Module):
 
         Parameters
         ----------
-        x : torch.Tensor, shape [batch_size, n_atoms, n_atom_basis]
+        x : torch.Tensor, shape [nr_systems, nr_atoms, nr_atom_basis]
             Input feature tensor for atoms.
         f_ij : torch.Tensor, shape [n_pairs, n_rbf]
             Radial basis functions for pairs of atoms.
@@ -195,24 +194,17 @@ class SchNETRepresentation(nn.Module):
 
         Parameters
         ----------
-        pairlist: Dict[str, torch.Tensor]
-            Pairlist dictionary containing the following keys:
-            - 'atom_index12': torch.Tensor, shape [n_pairs, 2]
-                Atom indices for pairs of atoms
-            - 'd_ij': torch.Tensor, shape [n_pairs]
-                Pairwise distances between atoms.
+        pairlist : Dict[str, torch.Tensor]
+            Pairlist dictionary containing:
+            - 'pairlist': Atom indices for pairs of atoms; shape [n_pairs, 2]
+            - 'd_ij': Pairwise distances between atoms; shape [n_pairs]
+
         Returns
         -------
         Dict[str, torch.Tensor]
-            Dictionary containing the following keys:
-            - 'f_ij': torch.Tensor, shape [n_pairs, n_rbf]
-                Radial basis functions for pairs of atoms.
-            - 'idx_i': torch.Tensor, shape [n_pairs]
-                Indices for the first atom in each pair.
-            - 'idx_j': torch.Tensor, shape [n_pairs]
-                Indices for the second atom in each pair.
-            - 'rcut_ij': torch.Tensor, shape [n_pairs]
-                Cutoff values for each pair.
+            Dictionary containing:
+            - 'f_ij': Radial basis functions for pairs of atoms; shape [n_pairs, n_rbf]
+            - 'rcut_ij': Cutoff values for each pair; shape [n_pairs]
         """
 
         # Convert distances to radial basis functions
@@ -232,25 +224,25 @@ class LightningSchNET(SchNET, LightningModuleMixin):
         optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
         lr: float = 1e-3,
     ) -> None:
-        """PyTorch Lightning version of the SchNet model.
+        """
+        PyTorch Lightning version of the SchNet model.
 
         Parameters
         ----------
-        n_atom_basis : int
-            Number of atom basis, defines the dimensionality of the output features.
-        n_interactions : int
+        nr_atom_basis : int
+            Dimensionality of the output features.
+        nr_interactions : int
             Number of interaction blocks in the architecture.
-        n_filters : int, optional
-            Number of filters, defines the dimensionality of the intermediate features.
-            Default is 0.
+        nr_filters : int, optional
+            Dimensionality of the intermediate features (default is 0).
         cutoff : float, optional
-            Cutoff value for the pairlist. Default is 5.0.
-        loss : nn.Module, optional
-            Loss function to use. Default is nn.MSELoss.
-        optimizer : torch.optim.Optimizer, optional
-            Optimizer to use. Default is torch.optim.Adam.
+            Cutoff value for the pairlist (default is 5.0).
+        loss : Type[nn.Module], optional
+            Loss function to use (default is nn.MSELoss).
+        optimizer : Type[torch.optim.Optimizer], optional
+            Optimizer to use (default is torch.optim.Adam).
         lr : float, optional
-            Learning rate. Default is 1e-3.
+            Learning rate (default is 1e-3).
         """
 
         super().__init__(nr_atom_basis, nr_interactions, nr_filters, cutoff)

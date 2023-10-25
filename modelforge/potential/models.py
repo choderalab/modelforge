@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from typing import Dict
 
 import lightning as pl
@@ -7,16 +8,25 @@ from torch.optim import AdamW
 
 
 class PairList(nn.Module):
-    """A module to handle pair list calculations.
+    """
+    A module to handle pair list calculations for neighbor atoms.
 
     Attributes
     ----------
     cutoff : float
         The cutoff distance for neighbor calculations.
+
+    Methods
+    -------
+    compute_r_ij(atom_pairs: torch.Tensor, positions: torch.Tensor) -> torch.Tensor
+        Compute the displacement vector between atom pairs.
+    forward(mask: torch.Tensor, positions: torch.Tensor) -> Dict[str, torch.Tensor]
+        Forward pass for PairList.
     """
 
     def __init__(self, cutoff: float = 5.0):
-        """Initialize PairList.
+        """
+        Initialize PairList.
 
         Parameters
         ----------
@@ -29,14 +39,16 @@ class PairList(nn.Module):
         self.calculate_neighbors = neighbor_pairs_nopbc
         self.cutoff = cutoff
 
-    def compute_r_ij(self, atom_index12: torch.Tensor, R: torch.Tensor) -> torch.Tensor:
+    def compute_r_ij(
+        self, atom_pairs: torch.Tensor, positions: torch.Tensor
+    ) -> torch.Tensor:
         """Compute displacement vector between atom pairs.
 
         Parameters
         ----------
-        atom_index12 : torch.Tensor, shape [n_pairs, 2]
+        atom_pairs : torch.Tensor, shape [n_pairs, 2]
             Atom indices for pairs of atoms
-        R : torch.Tensor, shape [batch_size, n_atoms, 3]
+        positions : torch.Tensor, shape [batch_size, n_atoms, 3]
             Atom coordinates.
 
         Returns
@@ -44,8 +56,8 @@ class PairList(nn.Module):
         torch.Tensor, shape [n_pairs, 3]
             Displacement vector between atom pairs.
         """
-        coordinates = R.flatten(0, 1)
-        selected_coordinates = coordinates.index_select(0, atom_index12.view(-1)).view(
+        coordinates = positions.flatten(0, 1)
+        selected_coordinates = coordinates.index_select(0, atom_pairs.view(-1)).view(
             2, -1, 3
         )
         return selected_coordinates[0] - selected_coordinates[1]
@@ -53,7 +65,8 @@ class PairList(nn.Module):
     def forward(
         self, mask_padding: torch.Tensor, positions: torch.Tensor
     ) -> Dict[str, torch.Tensor]:
-        """Forward pass for PairList.
+        """
+        Forward pass for PairList.
 
         Parameters
         ----------
@@ -64,9 +77,10 @@ class PairList(nn.Module):
 
         Returns
         -------
-        dict : Dictionary containing atom index pairs, distances, and displacement vectors.
-            - 'pairlist': Dict[str, torch.Tensor], contains pairlist :int; (n_paris,2),
-                r_ij:float; (n_pairs, 1) , d_ij: float; (n_pairs, 3)
+        dict : Dict[str, torch.Tensor], containing atom index pairs, distances, and displacement vectors.
+            - 'pairlist': torch.Tensor, shape (n_paris,2)
+            - 'r_ij' : torch.Tensor, shape (n_pairs, 1) ,
+            - 'd_ij' : torch.Tenso, shape (n_pairs, 3)
 
         """
         pairlist = self.calculate_neighbors(mask_padding, positions, self.cutoff)
@@ -80,12 +94,22 @@ class PairList(nn.Module):
 
 
 class LightningModuleMixin(pl.LightningModule):
-    """A mixin for PyTorch Lightning training."""
+    """
+    A mixin for PyTorch Lightning training.
+
+    Methods
+    -------
+    training_step(batch: Dict[str, torch.Tensor], batch_idx: int) -> torch.Tensor
+        Perform a single training step.
+    configure_optimizers() -> AdamW
+        Configures the optimizer for training.
+    """
 
     def training_step(
         self, batch: Dict[str, torch.Tensor], batch_idx: int
     ) -> torch.Tensor:
-        """Perform a single training step.
+        """
+        Perform a single training step.
 
         Parameters
         ----------
@@ -118,24 +142,115 @@ class LightningModuleMixin(pl.LightningModule):
         return self.optimizer(self.parameters(), lr=self.learning_rate)
 
 
-class BaseNNP(nn.Module):
-    """Abstract base class for neural network potentials."""
+# Abstract Base Class
+class AbstractBaseNNP(nn.Module, ABC):
+    """
+    Abstract base class for neural network potentials.
+
+    Methods
+    -------
+    forward(inputs: Dict[str, torch.Tensor]) -> torch.Tensor
+        Abstract method for forward pass in neural network potentials.
+    input_checks(inputs: Dict[str, torch.Tensor])
+        Perform input checks to validate the input dictionary.
+    """
+
+    def __init__(self):
+        """
+        Initialize the AbstractBaseNNP class.
+        """
+        super().__init__()
+
+    @abstractmethod
+    def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
+        """
+        Abstract method for forward pass in neural network potentials.
+
+        Parameters
+        ----------
+        inputs : Dict[str, torch.Tensor]
+            Inputs containing necessary data for the forward pass.
+            The exact keys and shapes are implementation-dependent.
+
+        Returns
+        -------
+        torch.Tensor
+            Calculated output; shape is implementation-dependent.
+
+        """
+        pass
+
+    def input_checks(self, inputs: Dict[str, torch.Tensor]):
+        """
+        Perform input checks to validate the input dictionary.
+
+        Parameters
+        ----------
+        inputs : Dict[str, torch.Tensor]
+            Inputs containing necessary data for the forward pass.
+            The exact keys and shapes are implementation-dependent.
+
+        Raises
+        ------
+        ValueError
+            If the input dictionary is missing required keys or has invalid shapes.
+
+        """
+        required_keys = ["atomic_numbers", "positions"]
+        for key in required_keys:
+            if key not in inputs:
+                raise ValueError(f"Missing required key: {key}")
+
+        if inputs["atomic_numbers"].dim() != 2:
+            raise ValueError("Shape mismatch: 'atomic_numbers' should be a 2D tensor.")
+
+        if inputs["positions"].dim() != 3:
+            raise ValueError("Shape mismatch: 'positions' should be a 3D tensor.")
+
+
+class BaseNNP(AbstractBaseNNP):
+    """
+    Abstract base class for neural network potentials.
+
+    Attributes
+    ----------
+    nr_of_embeddings : int
+        Number of embeddings.
+    nr_atom_basis : int
+        Number of atom basis.
+    cutoff : float
+        Cutoff distance for neighbor calculations.
+
+    Methods
+    -------
+    forward(inputs: Dict[str, torch.Tensor]) -> torch.Tensor
+        Abstract method for forward pass in neural network potentials.
+    """
 
     def __init__(
         self,
         nr_of_embeddings: int,
-        nr_atom_basis,
+        nr_atom_basis: int,
         cutoff: float = 5.0,
-    ):  # angstrom
+    ):
         """
         Initialize the NNP class.
+
+        Parameters
+        ----------
+        nr_of_embeddings : int
+            Number of embeddings.
+        nr_atom_basis : int
+            Number of atom basis.
+        cutoff : float, optional
+            Cutoff distance (in Angstrom) for neighbor calculations, default is 5.0.
         """
-        from .models import PairList  # Local import to avoid circular dependencies
+        from .models import PairList
 
         super().__init__()
         self.calculate_distances_and_pairlist = PairList(cutoff)
         self.embedding = nn.Embedding(nr_of_embeddings, nr_atom_basis, padding_idx=0)
-        self.calculate_distances_and_pairlist = PairList(cutoff)
+        self.nr_of_embeddings = nr_of_embeddings
 
     def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
@@ -146,10 +261,8 @@ class BaseNNP(nn.Module):
         inputs : Dict[str, torch.Tensor]
             Inputs containing atomic numbers ('atomic_numbers'), coordinates ('positions') and pairlist ('pairlist').
             - 'atomic_numbers': int; shape (n_systems, n_atoms), 0 indicates non-interacting atoms that will be masked
-            - 'total_charge' : int; shape (n_system:int)
+            - 'total_charge' : int; shape (n_system)
             - 'positions': float; shape (n_systems, n_atoms, 3)
-            - 'pairlist': Dict[str, torch.Tensor], contains pairlist :int; (n_paris,2),
-                r_ij:float; (n_pairs, 1) , d_ij: float; (n_pairs, 3), 'atomic_subsystem_index':int; (n_atoms)
 
         Returns
         -------
@@ -157,8 +270,7 @@ class BaseNNP(nn.Module):
             Calculated energies; float; shape (n_systems).
 
         """
-        assert "atomic_numbers" in list(inputs.keys())
-        assert "positions" in list(inputs.keys())
+        self.input_checks(inputs)
         atomic_numbers = inputs["atomic_numbers"]  # shape (n_systems, n_atoms, 3)
         positions = inputs["positions"]  # shape (n_systems, n_atoms, 3)
         mask_padding = atomic_numbers == 0
@@ -170,7 +282,16 @@ class BaseNNP(nn.Module):
         return self._forward(pairlist, atomic_numbers_embedding)
 
 
-class SingleTopologyAlchemicalBaseNNPModel(BaseNNP):
+class SingleTopologyAlchemicalBaseNNPModel(AbstractBaseNNP):
+    """
+    Subclass for handling alchemical energy calculations.
+
+    Methods
+    -------
+    forward(inputs: Dict[str, torch.Tensor]) -> torch.Tensor
+        Calculate the alchemical energy for a given input batch.
+    """
+
     def forward(inputs: Dict[str, torch.Tensor]):
         """
         Calculate the alchemical energy for a given input batch.
@@ -184,8 +305,6 @@ class SingleTopologyAlchemicalBaseNNPModel(BaseNNP):
             - (only for alchemical transformation) 'alchemical_atomic_number': shape (n_atoms:int)
             - (only for alchemical transformation) 'lamb': float
             - 'positions': shape (n_atoms, 3)
-            - 'pairlist': Dict[str, torch.Tensor], contains pairlist (n_paris,2),
-                r_ij (n_pairs, 1) , d_ij (n_pairs, 3), 'atomic_subsystem_index' (n_atoms)
 
         Returns
         -------
@@ -195,4 +314,5 @@ class SingleTopologyAlchemicalBaseNNPModel(BaseNNP):
 
         # emb = nn.Embedding(1,200)
         # lamb_emb = (1 - lamb) * emb(input['Z1']) + lamb * emb(input['Z2'])	def __init__():
+        self.input_checks(inputs)
         raise NotImplementedError

@@ -6,7 +6,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import schnetpack.properties as properties
 import schnetpack.nn as snn
 
 
@@ -206,10 +205,12 @@ class PaiNN(nn.Module):
             return_intermediate=True was used.
         """
         # get tensors from input dictionary
-        atomic_numbers = inputs[properties.Z]
-        r_ij = inputs[properties.Rij]
-        idx_i = inputs[properties.idx_i]
-        idx_j = inputs[properties.idx_j]
+
+        print("#######################################")
+        atomic_numbers = inputs["_atomic_numbers"]
+        r_ij = inputs["_Rij"]
+        idx_i = inputs["_idx_i"]
+        idx_j = inputs["_idx_j"]
         n_atoms = atomic_numbers.shape[0]
 
         # compute atom and pair features
@@ -236,7 +237,6 @@ class PaiNN(nn.Module):
 
         inputs["scalar_representation"] = q
         inputs["vector_representation"] = mu
-        print(inputs)
         # assert False
         return inputs
 

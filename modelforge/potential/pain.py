@@ -4,8 +4,6 @@ from typing import Dict, Type, Callable, Optional, Tuple
 
 from .models import BaseNNP, LightningModuleMixin
 from .utils import (
-    GaussianRBF,
-    scatter_add,
     sequential_block,
 )
 import torch

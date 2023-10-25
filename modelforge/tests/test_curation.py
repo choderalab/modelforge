@@ -227,6 +227,19 @@ def test_qm9_curation_init_parameters(prep_temp_dir):
     assert qm9_data.convert_units == False
 
 
+def test_qm9_reference_energy(prep_temp_dir):
+    qm9_data = QM9Curation(
+        hdf5_file_name="qm9_dataset.hdf5",
+        output_file_dir=str(prep_temp_dir),
+        local_cache_dir=str(prep_temp_dir),
+        convert_units=True,
+    )
+    assert (
+        qm9_data._calculate_reference_thermochemistry(["C", "H", "H", "H", "H"], "U_0K")
+        == -39.847864 * unit.hartree
+    )
+
+
 def test_qm9_curation_parse_xyz(prep_temp_dir):
     qm9_data = QM9Curation(
         hdf5_file_name="qm9_dataset.hdf5",
@@ -341,6 +354,26 @@ def test_qm9_curation_parse_xyz(prep_temp_dir):
             ]
         )
         / unit.centimeter
+    )
+    assert np.allclose(
+        data_dict_temp["reference_energy_at_0K"],
+        np.array([-39.847864]).reshape(1, 1) * unit.hartree,
+    )
+    assert np.allclose(
+        data_dict_temp["formation_energy_at_0K"],
+        np.array([-0.631066]).reshape(1, 1) * unit.hartree,
+    )
+    assert np.allclose(
+        data_dict_temp["reference_energy_at_298.15K"],
+        np.array([-39.840783]).reshape(1, 1) * unit.hartree,
+    )
+    assert np.allclose(
+        data_dict_temp["reference_enthalpy_at_298.15K"],
+        np.array([-39.836059]).reshape(1, 1) * unit.hartree,
+    )
+    assert np.allclose(
+        data_dict_temp["reference_free_energy_at_298.15K"],
+        np.array([-39.905025]).reshape(1, 1) * unit.hartree,
     )
 
 

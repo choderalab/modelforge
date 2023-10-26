@@ -90,15 +90,14 @@ class PaiNN(BaseNNP):
 
     def _forward(
         self,
-        pairlist: Dict[str, torch.Tensor],
-        atomic_numbers_embedding: torch.Tensor,
+        inputs: Dict[str, torch.Tensor],
     ):
         """
         Compute atomic representations/embeddings.
 
         Parameters
         ----------
-        pairlist : Dict[str, torch.Tensor]
+        input : Dict[str, torch.Tensor]
             Dictionary containing pairlist information.
         atomic_numbers_embedding : torch.Tensor
             Tensor containing atomic number embeddings.
@@ -109,8 +108,9 @@ class PaiNN(BaseNNP):
             Dictionary containing scalar and vector representations.
         """
         # extract properties from pairlist
-        d_ij = pairlist["d_ij"].unsqueeze(-1)  # n_pairs, 1
-        r_ij = pairlist["r_ij"]
+        d_ij = inputs["d_ij"].unsqueeze(-1)  # n_pairs, 1
+        r_ij = inputs["r_ij"]
+        atomic_numbers_embedding = inputs["atomic_numbers_embedding"]
         qs = atomic_numbers_embedding.shape
 
         q = atomic_numbers_embedding.reshape(qs[0] * qs[1], 1, qs[2])
@@ -136,7 +136,7 @@ class PaiNN(BaseNNP):
                 mu,
                 filter_list[i],
                 dir_ij,
-                pairlist,
+                inputs["pairlist"],
             )
             q, mu = mixing(q, mu)
 
@@ -184,7 +184,7 @@ class PaiNNInteraction(nn.Module):
         mu: torch.Tensor,  # shape [n_mols, n_interactions, n_atom_basis]
         Wij: torch.Tensor,  # shape [n_interactions]
         dir_ij: torch.Tensor,
-        pairlist: Dict[str, torch.Tensor],
+        pairlist: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Compute interaction output.
 
@@ -198,18 +198,15 @@ class PaiNNInteraction(nn.Module):
             Filter of shape [n_interactions].
         dir_ij : torch.Tensor
             Directional vector between atoms i and j.
-        pairlist : Dict[str, torch.Tensor]
-            Dictionary containing pairlist information.
+        pairlist : torch.Tensor, shape (2, n_pairs)
 
         Returns
         -------
         Tuple[torch.Tensor, torch.Tensor]
             Updated scalar and vector representations (q, mu).
         """
-        import schnetpack.nn as snn
-
         # inter-atomic
-        idx_i, idx_j = pairlist["pairlist"][0], pairlist["pairlist"][1]
+        idx_i, idx_j = pairlist[0], pairlist[1]
 
         x = self.intra_atomic_net(q)
         nr_of_atoms_in_all_systems, _, _ = q.shape  # [nr_systems,n_atoms,96]

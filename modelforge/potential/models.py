@@ -191,11 +191,11 @@ class AbstractBaseNNP(nn.Module, ABC):
         Parameters
         ----------
         inputs: Dict[str, torch.Tensor]
-            - 'pairlist': Dict[str, torch.Tensor], contains:
-                - pairlist, shape (n_paris,2)
-                - r_ij, shape (n_pairs, 1)
-                - d_ij, shape (n_pairs, 3)
-                - 'atomic_subsystem_index' (optional), shape n_atoms
+            - pairlist, shape (n_paris,2)
+            - r_ij, shape (n_pairs, 1)
+            - d_ij, shape (n_pairs, 3)
+            - 'atomic_subsystem_index' (optional), shape n_atoms
+            - positions, shape (n_systems, n_atoms, 3)
 
         """
         pass
@@ -299,7 +299,15 @@ class BaseNNP(AbstractBaseNNP):
         atomic_numbers_embedding = self.embedding(
             atomic_numbers
         )  # shape (batch_size, n_atoms, n_atom_basis)
-        return self._forward(pairlist, atomic_numbers_embedding)
+        inputs = {
+            "pairlist": pairlist["pairlist"],
+            "d_ij": pairlist["d_ij"],
+            "r_ij": pairlist["r_ij"],
+            "atomic_numbers_embedding": atomic_numbers_embedding,
+            "positions": positions,
+            "atomic_numbers": atomic_numbers,
+        }
+        return self._forward(inputs)
 
 
 class SingleTopologyAlchemicalBaseNNPModel(AbstractBaseNNP):

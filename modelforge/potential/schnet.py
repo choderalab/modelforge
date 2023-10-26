@@ -47,9 +47,7 @@ class SchNET(BaseNNP):
             ]
         )
 
-    def _forward(
-        self, pairlist: Dict[str, torch.Tensor], atomic_numbers_embedding: torch.Tensor
-    ) -> torch.Tensor:
+    def _forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
         Calculate the energy for a given input batch.
 
@@ -57,11 +55,13 @@ class SchNET(BaseNNP):
         ----------
         atomic_numbers_embedding : torch.Tensor
             Atomic numbers embedding; shape (nr_systems, n_atoms, n_atom_basis).
-        pairlist : Dict[str, torch.Tensor]
-            Pairlist dictionary containing:
-            - pairlist: int; shape (n_pairs, 2)
-            - r_ij: float; shape (n_pairs, 1)
-            - d_ij: float; shape (n_pairs, 3)
+        inputs : Dict[str, torch.Tensor]
+        - pairlist:  shape (n_pairs, 2)
+        - r_ij:  shape (n_pairs, 1)
+        - d_ij:  shape (n_pairs, 3)
+        - positions:  shape (nr_systems, n_atoms, 3)
+        - atomic_numbers_embedding:  shape (nr_systems, n_atoms, n_atom_basis)
+
 
         Returns
         -------
@@ -70,22 +70,23 @@ class SchNET(BaseNNP):
         """
 
         # Compute the representation for each atom
-        representation = self.representation(pairlist)  # shape (n_pairs, n_atom_basis)
+        representation = self.representation(
+            inputs["d_ij"]
+        )  # shape (n_pairs, n_atom_basis)
 
+        x = inputs["atomic_numbers_embedding"]
         # Iterate over interaction blocks to update features
         for interaction in self.interactions:
             v = interaction(
-                atomic_numbers_embedding,
-                pairlist["pairlist"],
+                x,
+                inputs["pairlist"],
                 representation["f_ij"],
                 representation["rcut_ij"],
             )
-            atomic_numbers_embedding = (
-                atomic_numbers_embedding + v
-            )  # Update atomic features
+            x = x + v  # Update atomic features
 
         # Pool over atoms to get molecular energies
-        return self.readout(atomic_numbers_embedding)  # shape (batch_size,)
+        return self.readout(x)  # shape (batch_size,)
 
 
 class SchNETInteractionBlock(nn.Module):
@@ -190,16 +191,13 @@ class SchNETRepresentation(nn.Module):
 
         self.radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
 
-    def forward(self, pairlist: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def forward(self, d_ij: torch.Tensor) -> Dict[str, torch.Tensor]:
         """
         Forward pass for the representation layer.
 
         Parameters
         ----------
-        pairlist : Dict[str, torch.Tensor]
-            Pairlist dictionary containing:
-            - 'pairlist': Atom indices for pairs of atoms; shape [n_pairs, 2]
-            - 'd_ij': Pairwise distances between atoms; shape [n_pairs]
+        d_ij : Dict[str, torch.Tensor], Pairwise distances between atoms; shape [n_pairs]
 
         Returns
         -------
@@ -210,7 +208,7 @@ class SchNETRepresentation(nn.Module):
         """
 
         # Convert distances to radial basis functions
-        f_ij, rcut_ij = _distance_to_radial_basis(pairlist["d_ij"], self.radial_basis)
+        f_ij, rcut_ij = _distance_to_radial_basis(d_ij, self.radial_basis)
 
         return {"f_ij": f_ij, "rcut_ij": rcut_ij}
 

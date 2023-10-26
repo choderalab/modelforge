@@ -5,8 +5,6 @@ import pytest
 from modelforge.potential.pain import PaiNN
 from modelforge.potential.utils import CosineCutoff
 
-from .helper_functions import generate_methane_input
-
 IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 
 

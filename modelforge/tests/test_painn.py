@@ -19,6 +19,8 @@ def test_PaiNN_init():
     reason="This test is not intended to be performed regularly.",
 )
 def test_schnetpack_PaiNN():
+    # NOTE: this test sets up the schnetpack Painn implementation and trains a model
+    # units are not cnnsistent with the modelforge implementation yet
     import os
 
     import schnetpack as spk

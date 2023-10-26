@@ -49,7 +49,7 @@ class PairList(nn.Module):
         atom_pairs : torch.Tensor, shape [2, n_pairs]
             Atom indices for pairs of atoms
         positions : torch.Tensor, shape [nr_systems, nr_atoms, 3]
-            Atom coordinates.
+            Atom positions.
 
         Returns
         -------
@@ -57,10 +57,10 @@ class PairList(nn.Module):
             Displacement vector between atom pairs.
         """
         flattened_positions = positions.flatten(0, 1)
-        selected_coordinates = flattened_positions.index_select(
+        selected_positions = flattened_positions.index_select(
             0, atom_pairs.view(-1)
         ).view(2, -1, 3)
-        return selected_coordinates[0] - selected_coordinates[1]
+        return selected_positions[0] - selected_positions[1]
 
     def forward(
         self, mask_padding: torch.Tensor, positions: torch.Tensor

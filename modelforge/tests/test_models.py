@@ -71,9 +71,9 @@ def test_pairlist():
         r["r_ij"],
         torch.tensor(
             [
-                [-1.0, -1.0, -1.0],
-                [-2.0, -2.0, -2.0],
-                [-1.0, -1.0, -1.0],
+                [-1.0, -1.0, -1.0],  # pair1, [0.0, 0.0, 0.0] - [1.0, 1.0, 1.0]
+                [-2.0, -2.0, -2.0],  # pair2, [0.0, 0.0, 0.0] - [2.0, 2.0, 2.0]
+                [-1.0, -1.0, -1.0],  # pair3, [0.0, 0.0, 0.0] - [3.0, 3.0, 3.0]
                 [-1.0, -1.0, -1.0],
                 [-2.0, -2.0, -2.0],
                 [-1.0, -1.0, -1.0],
@@ -88,6 +88,7 @@ def test_pairlist():
     pairlist = r["pairlist"]
 
     torch.allclose(pairlist, torch.tensor([[0, 1, 3, 4], [1, 2, 4, 5]]))
+    # pairs that are excluded through cutoff: (0,2) and (3,5)
     torch.allclose(
         r["r_ij"],
         torch.tensor(
@@ -101,7 +102,9 @@ def test_pairlist():
     )
 
     # use masking
-    mask = torch.tensor([[1, 0, 0], [0, 1, 0]])
+    mask = torch.tensor(
+        [[1, 0, 0], [0, 1, 0]]
+    )  # entries with 1 are masked, that means idx_i = 0 and idx_j = 1 (these values can't be present below)
     positions = torch.tensor(
         [
             [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]],

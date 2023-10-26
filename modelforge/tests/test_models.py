@@ -58,6 +58,11 @@ def test_pairlist():
     r = pairlist(mask, positions)
     pairlist = r["pairlist"]
 
+    # pairlist describes the pairs of interacting atoms within a batch
+    # that means for the pairlist provided below:
+    # pair1: pairlist[0][0] and pairlist[1][0], i.e. (0,1)
+    # pair2: pairlist[0][1] and pairlist[1][1], i.e. (0,2)
+    # pair3: pairlist[0][2] and pairlist[1][2], i.e. (1,2)
     assert torch.allclose(
         pairlist, torch.tensor([[0, 0, 1, 3, 3, 4], [1, 2, 2, 4, 5, 5]])
     )

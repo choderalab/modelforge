@@ -36,12 +36,12 @@ class TorchDataset(torch.utils.data.Dataset):
         preloaded: bool = False,
     ):
         self.properties_of_interest = {
-            "Z": dataset[property_name.Z],
-            "R": dataset[property_name.R],
-            "E": dataset[property_name.E],
+            "atomic_numbers": dataset[property_name.Z],
+            "positions": dataset[property_name.R],
+            "E_label": dataset[property_name.E],
         }
 
-        self.length = len(self.properties_of_interest["Z"])
+        self.length = len(self.properties_of_interest["atomic_numbers"])
         self.preloaded = preloaded
 
     def __len__(self) -> int:
@@ -67,19 +67,30 @@ class TorchDataset(torch.utils.data.Dataset):
         Returns
         -------
         dict, contains:
-            - 'Z': torch.Tensor, shape [n_atoms]
+            - 'atomic_numbers': torch.Tensor, shape [n_atoms]
                 Atomic numbers for each atom in the molecule.
-            - 'R': torch.Tensor, shape [n_atoms, 3]
+            - 'positions': torch.Tensor, shape [n_atoms, 3]
                 Coordinates for each atom in the molecule.
-            - 'E': torch.Tensor, shape []
+            - 'E_label': torch.Tensor, shape []
                 Scalar energy value for the molecule.
             - 'idx': int
                 Index of the molecule in the dataset.
         """
-        Z = torch.tensor(self.properties_of_interest["Z"][idx], dtype=torch.int64)
-        R = torch.tensor(self.properties_of_interest["R"][idx], dtype=torch.float32)
-        E = torch.tensor(self.properties_of_interest["E"][idx], dtype=torch.float32)
-        return {"Z": Z, "R": R, "E": E, "idx": idx}
+        atomic_numbers = torch.tensor(
+            self.properties_of_interest["atomic_numbers"][idx], dtype=torch.int64
+        )
+        positions = torch.tensor(
+            self.properties_of_interest["positions"][idx], dtype=torch.float32
+        )
+        E_label = torch.tensor(
+            self.properties_of_interest["E_label"][idx], dtype=torch.float32
+        )
+        return {
+            "atomic_numbers": atomic_numbers,
+            "positions": positions,
+            "E_label": E_label,
+            "idx": idx,
+        }
 
 
 class HDF5Dataset:
@@ -172,7 +183,9 @@ class HDF5Dataset:
                         # than indexing into the array in the hdf5 file
                         temp_data[value] = hf[mol][value][()]
                         is_series[value] = hf[mol][value].attrs["format"].split("_")[0]
-                        is_atom_mol[value] = hf[mol][value].attrs["format"].split("_")[1]
+                        is_atom_mol[value] = (
+                            hf[mol][value].attrs["format"].split("_")[1]
+                        )
 
                     for n in range(n_configs):
                         not_nan = True
@@ -189,12 +202,10 @@ class HDF5Dataset:
                                     not_nan = False
                                     break
                             else:
-                                #I don't like this, it is not general, but necessary at this point to
-                                # put atomic_numbers into the current expected format.
                                 if value == "atomic_numbers":
                                     temp_data_cut[value] = temp_data[value].reshape(-1)
                                 else:
-                                    temp_data_cut[value]= temp_data[value]
+                                    temp_data_cut[value] = temp_data[value]
                                 if np.any(np.isnan(temp_data_cut[value])):
                                     not_nan = False
                                     break

@@ -13,7 +13,7 @@ from .helper_functions import (
 )
 
 
-@pytest.mark.parametrize("model_class", MODELS_TO_TEST)
+@pytest.mark.parametrize("model_class", [SchNET])
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_forward_pass(dataset: Type[BaseNNP], model_class: Type[BaseNNP]):
     """

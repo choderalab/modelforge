@@ -33,7 +33,6 @@ def sequential_block(
     return nn.Sequential(
         nn.Linear(in_features, out_features),
         activation_fct(),
-        nn.Linear(out_features, out_features),
     )
 
 
@@ -304,45 +303,32 @@ def _distance_to_radial_basis(
 
 # taken from torchani repository: https://github.com/aiqm/torchani
 def neighbor_pairs_nopbc(
-    mask: torch.Tensor, R: torch.Tensor, cutoff: float
+    padding_mask: torch.Tensor, coordinates: torch.Tensor, cutoff: float
 ) -> torch.Tensor:
-    """
-    Calculate neighbor pairs without periodic boundary conditions.
-    Parameters
-    ----------
-    mask : torch.Tensor
-        Mask tensor to indicate invalid atoms, shape (batch_size, n_atoms).
-        1 == is padding.
-    R : torch.Tensor
-        Coordinates tensor, shape (batch_size, n_atoms, 3).
-    cutoff : float
-        Cutoff distance for neighbors.
+    """Compute pairs of atoms that are neighbors (doesn't use PBC)
 
-    Returns
-    -------
-    torch.Tensor
-        Tensor containing indices of neighbor pairs, shape (n_pairs, 2).
+    This function bypasses the calculation of shifts and duplication
+    of atoms in order to make calculations faster
 
-    Notes
-    -----
-    This function assumes no periodic boundary conditions and calculates neighbor pairs based solely on the cutoff distance.
-
-    Examples
-    --------
-    >>> mask = torch.tensor([[0, 0, 1], [1, 0, 0]])
-    >>> R = torch.tensor([[[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]],[[3.0, 3.0, 3.0], [4.0, 4.0, 4.0], [5.0, 5.0, 5.0]]])
-    >>> cutoff = 1.5
-    >>> neighbor_pairs_nopbc(mask, R, cutoff)
+    Arguments:
+        padding_mask (:class:`torch.Tensor`): boolean tensor of shape
+            (molecules, atoms) for padding mask. 1 == is padding.
+        coordinates (:class:`torch.Tensor`): tensor of shape
+            (molecules, atoms, 3) for atom coordinates.
+        cutoff (float): the cutoff inside which atoms are considered pairs
     """
     import math
 
-    R = R.detach().masked_fill(mask.unsqueeze(-1), math.nan)
-    current_device = R.device
-    num_atoms = mask.shape[1]
-    num_mols = mask.shape[0]
+    coordinates = coordinates.detach().masked_fill(padding_mask.unsqueeze(-1), math.nan)
+    current_device = coordinates.device
+    num_atoms = padding_mask.shape[1]
+    num_mols = padding_mask.shape[0]
     p12_all = torch.triu_indices(num_atoms, num_atoms, 1, device=current_device)
     p12_all_flattened = p12_all.view(-1)
-    pair_coordinates = R.index_select(1, p12_all_flattened).view(num_mols, 2, -1, 3)
+
+    pair_coordinates = coordinates.index_select(1, p12_all_flattened).view(
+        num_mols, 2, -1, 3
+    )
     distances = (pair_coordinates[:, 0, ...] - pair_coordinates[:, 1, ...]).norm(2, -1)
     in_cutoff = (distances <= cutoff).nonzero()
     molecule_index, pair_index = in_cutoff.unbind(1)

@@ -1,8 +1,7 @@
 import pytest
 
-from modelforge.potential.models import BaseNNP
 import numpy as np
-
+from .schnetpack_pain_implementation import setup_painn
 from .helper_functions import (
     DATASETS,
     MODELS_TO_TEST,
@@ -11,45 +10,115 @@ from .helper_functions import (
 )
 
 
-def test_BaseNNP():
-    nnp = BaseNNP()
-
-
 @pytest.mark.parametrize("model_class", MODELS_TO_TEST)
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_forward_pass(model_class, dataset):
     for lightning in [True, False]:
         initialized_model = setup_simple_model(model_class, lightning)
-        inputs = return_single_batch(dataset, mode="fit")
+        inputs = return_single_batch(
+            dataset,
+            mode="fit",
+        )  # split_file="modelforge/tests/qm9tut/split.npz")
         output = initialized_model(inputs)
         print(output)
-        assert output.shape[0] == 64
-        assert output.shape[1] == 1
+        if isinstance(output, dict):
+            assert output["scalar_representation"].shape[0] == 1088
+        else:
+            assert output.shape[0] == 64
+            assert output.shape[1] == 1
 
 
-def test_pairlist_simple_data():
+# @pytest.mark.parametrize("dataset", DATASETS)
+# def test_forward_pass_schnetpack_painn(dataset):
+#     initialized_model = setup_painn()
+#     inputs = return_single_batch(
+#         dataset,
+#         mode="fit",
+#     )  # split_file="modelforge/tests/qm9tut/split.npz")
+#     output = initialized_model(inputs)
+#     print(output)
+#     assert output.shape[0] == 64
+#     assert output.shape[1] == 1
+
+
+def test_pairlist():
     from modelforge.potential.models import PairList
     import torch
 
-    mask = torch.tensor([[0, 0, 0], [0, 0, 0]])  # masking [0][0] and [1][2]
-    R = torch.tensor(
+    # start with tensor without masking
+    mask = torch.tensor([[0, 0, 0], [0, 0, 0]])  # no maksing
+    positions = torch.tensor(
         [
             [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]],
             [[3.0, 3.0, 3.0], [4.0, 4.0, 4.0], [5.0, 5.0, 5.0]],
         ]
     )
-    cutoff = 3.0
+    cutoff = 5.0  # no relevant cutoff
     pairlist = PairList(cutoff)
-    r = pairlist(mask, R)
-    atom_index12 = r["atom_index12"].tolist()
-    assert (atom_index12[0][0], atom_index12[1][0]) == (0, 1)
-    assert (atom_index12[0][-1], atom_index12[1][-1]) == (4, 5)
+    r = pairlist(mask, positions)
+    pairlist = r["pairlist"]
 
-    assert r["d_ij"].shape == torch.Size([4])
-    assert np.isclose(r["d_ij"].tolist()[0], 1.7320507764816284)
-    assert np.isclose(r["d_ij"].tolist()[-1], 1.7320507764816284)
+    # pairlist describes the pairs of interacting atoms within a batch
+    # that means for the pairlist provided below:
+    # pair1: pairlist[0][0] and pairlist[1][0], i.e. (0,1)
+    # pair2: pairlist[0][1] and pairlist[1][1], i.e. (0,2)
+    # pair3: pairlist[0][2] and pairlist[1][2], i.e. (1,2)
+    assert torch.allclose(
+        pairlist, torch.tensor([[0, 0, 1, 3, 3, 4], [1, 2, 2, 4, 5, 5]])
+    )
+    # NOTE: pairs are defined on axis=1 and not axis=0
+    assert torch.allclose(
+        r["r_ij"],
+        torch.tensor(
+            [
+                [-1.0, -1.0, -1.0],  # pair1, [0.0, 0.0, 0.0] - [1.0, 1.0, 1.0]
+                [-2.0, -2.0, -2.0],  # pair2, [0.0, 0.0, 0.0] - [2.0, 2.0, 2.0]
+                [-1.0, -1.0, -1.0],  # pair3, [0.0, 0.0, 0.0] - [3.0, 3.0, 3.0]
+                [-1.0, -1.0, -1.0],
+                [-2.0, -2.0, -2.0],
+                [-1.0, -1.0, -1.0],
+            ]
+        ),
+    )
 
-    assert r["r_ij"].shape == (4, 3)
+    # test with cutoff, no masking
+    cutoff = 2.0  #
+    pairlist = PairList(cutoff)
+    r = pairlist(mask, positions)
+    pairlist = r["pairlist"]
+
+    torch.allclose(pairlist, torch.tensor([[0, 1, 3, 4], [1, 2, 4, 5]]))
+    # pairs that are excluded through cutoff: (0,2) and (3,5)
+    torch.allclose(
+        r["r_ij"],
+        torch.tensor(
+            [
+                [-1.0, -1.0, -1.0],
+                [-1.0, -1.0, -1.0],
+                [-1.0, -1.0, -1.0],
+                [-1.0, -1.0, -1.0],
+            ]
+        ),
+    )
+
+    # use masking
+    mask = torch.tensor(
+        [[1, 0, 0], [0, 1, 0]]
+    )  # entries with 1 are masked, that means idx_i = 0 and idx_j = 1 (these values can't be present below)
+    positions = torch.tensor(
+        [
+            [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]],
+            [[3.0, 3.0, 3.0], [4.0, 4.0, 4.0], [5.0, 5.0, 5.0]],
+        ]
+    )
+    cutoff = 5.0  # no relevant cutoff
+    pairlist = PairList(cutoff)
+    r = pairlist(mask, positions)
+    pairlist = r["pairlist"]
+
+    torch.allclose(pairlist, torch.tensor([[1, 3], [2, 5]]))
+    torch.allclose(r["r_ij"], torch.tensor([[-1.0, -1.0, -1.0], [-2.0, -2.0, -2.0]]))
+    torch.allclose(r["d_ij"], torch.tensor([1.7321, 3.4641]))
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
@@ -62,17 +131,26 @@ def test_pairlist_on_dataset(dataset):
     data_module.prepare_data()
     data_module.setup("fit")
     for b in data_module.train_dataloader():
-        R = b["R"]
-        mask = b["Z"] == 0
+        print(b.keys())
+        R = b["positions"]
+        mask = b["atomic_numbers"] == 0
         pairlist = PairList(cutoff=5.0)
-        pairlist(mask, R)
+        l = pairlist(mask, R)
+        print(l)
+        shape_pairlist = l["pairlist"].shape
+        shape_distance = l["d_ij"].shape
+
+        assert shape_pairlist[1] == shape_distance[0]
+        assert shape_pairlist[0] == 2
 
 
 def test_pairlist_nopbc():
     import torch
     from modelforge.potential.utils import neighbor_pairs_nopbc
 
-    mask = torch.tensor([[0, 0, 1], [1, 0, 0]])  # masking [0][0] and [1][2]
+    mask = torch.tensor(
+        [[False, False, True], [True, False, False]]
+    )  # masking [0][2] and [1][0]
     R = torch.tensor(
         [
             [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]],

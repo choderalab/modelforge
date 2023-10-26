@@ -46,9 +46,9 @@ class PairList(nn.Module):
 
         Parameters
         ----------
-        atom_pairs : torch.Tensor, shape [n_pairs, 2]
+        atom_pairs : torch.Tensor, shape [2, n_pairs]
             Atom indices for pairs of atoms
-        positions : torch.Tensor, shape [batch_size, n_atoms, 3]
+        positions : torch.Tensor, shape [nr_systems, nr_atoms, 3]
             Atom coordinates.
 
         Returns
@@ -56,10 +56,10 @@ class PairList(nn.Module):
         torch.Tensor, shape [n_pairs, 3]
             Displacement vector between atom pairs.
         """
-        coordinates = positions.flatten(0, 1)
-        selected_coordinates = coordinates.index_select(0, atom_pairs.view(-1)).view(
-            2, -1, 3
-        )
+        flattened_positions = positions.flatten(0, 1)
+        selected_coordinates = flattened_positions.index_select(
+            0, atom_pairs.view(-1)
+        ).view(2, -1, 3)
         return selected_coordinates[0] - selected_coordinates[1]
 
     def forward(
@@ -70,17 +70,17 @@ class PairList(nn.Module):
 
         Parameters
         ----------
-        mask : torch.Tensor, shape [batch_size, n_atoms]
+        mask : torch.Tensor, shape [nr_systems, nr_atoms]
             Mask tensor.
-        positions : torch.Tensor, shape [batch_size, n_atoms, n_dims]
+        positions : torch.Tensor, shape [nr_systems, nr_atoms, 3]
             Position tensor.
 
         Returns
         -------
         dict : Dict[str, torch.Tensor], containing atom index pairs, distances, and displacement vectors.
-            - 'pairlist': torch.Tensor, shape (n_paris,2)
-            - 'r_ij' : torch.Tensor, shape (n_pairs, 1) ,
-            - 'd_ij' : torch.Tenso, shape (n_pairs, 3)
+            - 'pairlist': torch.Tensor, shape (2, n_pairs)
+            - 'r_ij' : torch.Tensor, shape (1, n_pairs)
+            - 'd_ij' : torch.Tenso, shape (3, n_pairs)
 
         """
         pairlist = self.calculate_neighbors(mask_padding, positions, self.cutoff)

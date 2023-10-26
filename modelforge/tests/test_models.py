@@ -41,29 +41,76 @@ def test_forward_pass(model_class, dataset):
 #     assert output.shape[1] == 1
 
 
-def test_pairlist_simple_data():
+def test_pairlist():
     from modelforge.potential.models import PairList
     import torch
 
-    mask = torch.tensor([[0, 0, 0], [0, 0, 0]])  # masking [0][0] and [1][2]
-    R = torch.tensor(
+    # start with tensor without masking
+    mask = torch.tensor([[0, 0, 0], [0, 0, 0]])  # no maksing
+    positions = torch.tensor(
         [
             [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]],
             [[3.0, 3.0, 3.0], [4.0, 4.0, 4.0], [5.0, 5.0, 5.0]],
         ]
     )
-    cutoff = 3.0
+    cutoff = 5.0  # no relevant cutoff
     pairlist = PairList(cutoff)
-    r = pairlist(mask, R)
-    atom_index12 = r["pairlist"].tolist()
-    assert (atom_index12[0][0], atom_index12[1][0]) == (0, 1)
-    assert (atom_index12[0][-1], atom_index12[1][-1]) == (4, 5)
+    r = pairlist(mask, positions)
+    pairlist = r["pairlist"]
 
-    assert r["d_ij"].shape == torch.Size([4])
-    assert np.isclose(r["d_ij"].tolist()[0], 1.7320507764816284)
-    assert np.isclose(r["d_ij"].tolist()[-1], 1.7320507764816284)
+    assert torch.allclose(
+        pairlist, torch.tensor([[0, 0, 1, 3, 3, 4], [1, 2, 2, 4, 5, 5]])
+    )
+    # NOTE: pairs are defined on axis=1 and not axis=0
+    assert torch.allclose(
+        r["r_ij"],
+        torch.tensor(
+            [
+                [-1.0, -1.0, -1.0],
+                [-2.0, -2.0, -2.0],
+                [-1.0, -1.0, -1.0],
+                [-1.0, -1.0, -1.0],
+                [-2.0, -2.0, -2.0],
+                [-1.0, -1.0, -1.0],
+            ]
+        ),
+    )
 
-    assert r["r_ij"].shape == (4, 3)
+    # test with cutoff, no masking
+    cutoff = 2.0  #
+    pairlist = PairList(cutoff)
+    r = pairlist(mask, positions)
+    pairlist = r["pairlist"]
+
+    torch.allclose(pairlist, torch.tensor([[0, 1, 3, 4], [1, 2, 4, 5]]))
+    torch.allclose(
+        r["r_ij"],
+        torch.tensor(
+            [
+                [-1.0, -1.0, -1.0],
+                [-1.0, -1.0, -1.0],
+                [-1.0, -1.0, -1.0],
+                [-1.0, -1.0, -1.0],
+            ]
+        ),
+    )
+
+    # use masking
+    mask = torch.tensor([[1, 0, 0], [0, 1, 0]])
+    positions = torch.tensor(
+        [
+            [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]],
+            [[3.0, 3.0, 3.0], [4.0, 4.0, 4.0], [5.0, 5.0, 5.0]],
+        ]
+    )
+    cutoff = 5.0  # no relevant cutoff
+    pairlist = PairList(cutoff)
+    r = pairlist(mask, positions)
+    pairlist = r["pairlist"]
+
+    torch.allclose(pairlist, torch.tensor([[1, 3], [2, 5]]))
+    torch.allclose(r["r_ij"], torch.tensor([[-1.0, -1.0, -1.0], [-2.0, -2.0, -2.0]]))
+    torch.allclose(r["d_ij"], torch.tensor([1.7321, 3.4641]))
 
 
 @pytest.mark.parametrize("dataset", DATASETS)

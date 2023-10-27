@@ -178,7 +178,7 @@ class HDF5Dataset:
     """
 
     def __init__(
-            self, raw_data_file: str, processed_data_file: str, local_cache_dir: str
+        self, raw_data_file: str, processed_data_file: str, local_cache_dir: str
     ):
         self.raw_data_file = raw_data_file
         self.processed_data_file = processed_data_file
@@ -388,15 +388,15 @@ class DatasetFactory:
     """
 
     def __init__(
-            self,
+        self,
     ) -> None:
         pass
 
     @staticmethod
     def _load_or_process_data(
-            data: HDF5Dataset,
-            label_transform: Optional[Dict[str, Callable]],
-            transform: Optional[Dict[str, Callable]],
+        data: HDF5Dataset,
+        label_transform: Optional[Dict[str, Callable]],
+        transform: Optional[Dict[str, Callable]],
     ) -> None:
         """
         Loads the dataset from cache if available, otherwise processes and caches the data.

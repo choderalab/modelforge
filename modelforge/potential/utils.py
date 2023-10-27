@@ -486,7 +486,7 @@ def neighbor_pairs_nopbc(
     # generate index grid
     n = len(atomic_subsystem_indices)
     i_indices, j_indices = torch.triu_indices(n, n, 1)
-
+    print(atomic_subsystem_indices[i_indices])
     # filter pairs to only keep those belonging to the same molecule
     same_molecule_mask = (
         atomic_subsystem_indices[i_indices] == atomic_subsystem_indices[j_indices]
@@ -511,6 +511,7 @@ def neighbor_pairs_nopbc(
     # Find pairs within the cutoff
     in_cutoff = (distances <= cutoff).nonzero(as_tuple=False).squeeze()
 
+    # Get the atom indices within the cutoff
     pair_indices_within_cutoff = pair_indices[:, in_cutoff]
 
     return pair_indices_within_cutoff

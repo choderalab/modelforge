@@ -589,31 +589,12 @@ def collate_conformers(
     positions_list = []
     E_list = []
     atomic_subsystem_counts = []
-    atomic_subsystem_indices = []
-    atomic_subsystem_indices_referencing_dataset = []
-    for idx, conf in enumerate(conf_list):
-        atomic_numbers_list.append(conf["atomic_numbers"])
-        positions_list.append(conf["positions"])
-        E_list.append(conf["E_label"])
-        atomic_subsystem_counts.extend(conf["atomic_subsystem_counts"])
-        atomic_subsystem_indices.extend([idx] * conf["atomic_subsystem_counts"][0])
-        atomic_subsystem_indices_referencing_dataset.extend(
-            [conf["idx"]] * conf["atomic_subsystem_counts"][0]
-        )
+    for conf in conf_list:
+        atomic_numbers_list.append(conf['atomic_numbers'])
+        positions_list.append(conf['positions'])
+        E_list.append(conf['E_label'])
+        atomic_subsystem_counts.extend(conf['atomic_subsystem_counts'])
     atomic_numbers_cat = torch.cat(atomic_numbers_list)
-    positions_cat = torch.cat(positions_list).requires_grad_(True)
+    positions_cat = torch.cat(positions_list)
     E_stack = torch.stack(E_list)
-    return {
-        "atomic_numbers": atomic_numbers_cat,
-        "positions": positions_cat,
-        "E_label": E_stack,
-        "atomic_subsystem_counts": torch.tensor(
-            atomic_subsystem_counts, dtype=torch.int32
-        ),
-        "atomic_subsystem_indices": torch.tensor(
-            atomic_subsystem_indices, dtype=torch.int32
-        ),
-        "atomic_subsystem_indices_referencing_dataset": torch.tensor(
-            atomic_subsystem_indices_referencing_dataset, dtype=torch.int32
-        ),
-    }
+    return {"atomic_numbers'": atomic_numbers_cat, "positions": positions_cat, "E_label": E_stack, "atomic_subsystem_counts": atomic_subsystem_counts}

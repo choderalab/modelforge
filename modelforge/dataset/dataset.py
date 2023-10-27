@@ -496,15 +496,15 @@ def collate_conformers(conf_list: List[Dict[str, torch.Tensor]]) -> Dict[str, to
     # TODO: once TorchDataset is reimplemented for general properties, reimplement this function using formats too.
     """Concatenate the Z, R, and E tensors from a list of molecules into a single tensor each, and return a new dictionary with the concatenated tensors."""
     atomic_numbers_list = []
-    R_list = []
+    positions_list = []
     E_list = []
     atomic_subsystem_counts = []
     for conf in conf_list:
         atomic_numbers_list.append(conf['atomic_numbers'])
-        R_list.append(conf['R'])
-        E_list.append(conf['E'])
+        positions_list.append(conf['positions'])
+        E_list.append(conf['E_label'])
         atomic_subsystem_counts.extend(conf['atomic_subsystem_counts'])
     atomic_numbers_cat = torch.cat(atomic_numbers_list)
-    R_cat = torch.cat(R_list)
+    positions_cat = torch.cat(positions_list)
     E_stack = torch.stack(E_list)
-    return {"atomic_numbers'": atomic_numbers_cat, "R": R_cat, "E_label": E_stack, "atomic_subsystem_counts": atomic_subsystem_counts}
+    return {"atomic_numbers'": atomic_numbers_cat, "positions": positions_cat, "E_label": E_stack, "atomic_subsystem_counts": atomic_subsystem_counts}

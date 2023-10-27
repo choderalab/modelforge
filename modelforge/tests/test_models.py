@@ -52,20 +52,14 @@ def test_pairlist_logic():
 
     # generate index grid
     n = len(molecule_indices)
-    i_indices, j_indices = torch.meshgrid(torch.arange(n), torch.arange(n))
-    # create and apply upper triangular mask to only include pairs (i, j) where i < j
-    upper_triangle_mask = i_indices < j_indices
-    i_upper_triangle = i_indices[upper_triangle_mask]
-    j_upper_triangle = j_indices[upper_triangle_mask]
+    i_indices, j_indices = torch.triu_indices(n, n, 1)
 
     # filter pairs to only keep those belonging to the same molecule
-    same_molecule_mask = (
-        molecule_indices[i_upper_triangle] == molecule_indices[j_upper_triangle]
-    )
+    same_molecule_mask = molecule_indices[i_indices] == molecule_indices[j_indices]
 
     # Apply mask to get final pair indices
-    i_final_pairs = i_upper_triangle[same_molecule_mask]
-    j_final_pairs = j_upper_triangle[same_molecule_mask]
+    i_final_pairs = i_indices[same_molecule_mask]
+    j_final_pairs = j_indices[same_molecule_mask]
 
     # Concatenate to form final (2, n_pairs) tensor
     final_pair_indices = torch.stack((i_final_pairs, j_final_pairs))

@@ -1,4 +1,4 @@
-from typing import Callable, Tuple, Union
+from typing import Callable, Tuple, Union, List, Optional
 
 import numpy as np
 import torch
@@ -85,6 +85,68 @@ def scatter_add(
     return _scatter_add(x, idx_i, dim_size, dim)
 
 
+def broadcast(src: torch.Tensor, other: torch.Tensor, dim: int):
+    if dim < 0:
+        dim = other.dim() + dim
+    if src.dim() == 1:
+        for _ in range(0, dim):
+            src = src.unsqueeze(0)
+    for _ in range(src.dim(), other.dim()):
+        src = src.unsqueeze(-1)
+    src = src.expand(other.size())
+    return src
+def scatter_softmax(
+    src: torch.Tensor, index: torch.Tensor, dim: int = -1, dim_size: Optional[int] = None
+) -> torch.Tensor:
+    """
+    Softmax operation over all values in :attr:`src` tensor that share indices
+    specified in the :attr:`index` tensor along a given axis :attr:`dim`.
+
+    For one-dimensional tensors, the operation computes
+
+    .. math::
+        \mathrm{out}_i = {\textrm{softmax}(\mathrm{src})}_i =
+        \frac{\exp(\mathrm{src}_i)}{\sum_j \exp(\mathrm{src}_j)}
+
+    where :math:`\sum_j` is over :math:`j` such that
+    :math:`\mathrm{index}_j = i`.
+
+    Args:
+        src (Tensor): The source tensor.
+        index (LongTensor): The indices of elements to scatter.
+        dim (int, optional): The axis along which to index.
+            (default: :obj:`-1`)
+        dim_size: The number of classes, i.e. the number of unique indices in `index`.
+
+    :rtype: :class:`Tensor`
+
+    Adapted from: https://github.com/rusty1s/pytorch_scatter/blob/c31915e1c4ceb27b2e7248d21576f685dc45dd01/torch_scatter/composite/softmax.py 
+    """
+    if not torch.is_floating_point(src):
+        raise ValueError('`scatter_softmax` can only be computed over tensors '
+                         'with floating point data types.')
+
+    out_shape = [
+        other_dim_size
+        if (other_dim != dim)
+        else dim_size
+        for (other_dim, other_dim_size)
+        in enumerate(src.shape)
+    ]
+
+    index = broadcast(index, src, dim)
+    max_value_per_index = torch.zeros(out_shape).scatter_reduce(dim, index, src, "amax", include_self=False)
+    max_per_src_element = max_value_per_index.gather(dim, index)
+
+    recentered_scores = src - max_per_src_element
+    recentered_scores_exp = recentered_scores.exp()
+
+    sum_per_index = torch.zeros(out_shape).scatter_add(dim, index, recentered_scores_exp)
+    normalizing_constants = sum_per_index.gather(dim, index)
+
+    return recentered_scores_exp.div(normalizing_constants)
+
+
 def gaussian_rbf(
     d_ij: torch.Tensor, offsets: torch.Tensor, widths: torch.Tensor
 ) -> torch.Tensor:
@@ -165,36 +227,41 @@ class EnergyReadout(nn.Module):
         Forward pass for the energy readout.
     """
 
-    def __init__(self, n_atom_basis: int):
+    def __init__(self, n_filters: int):
         """
         Initialize the EnergyReadout class.
 
         Parameters
         ----------
-        n_atom_basis : int
-            Number of atom basis.
+        n_filters : int
+            Number of filters after the last message passing layer.
         """
         super().__init__()
-        self.energy_layer = nn.Linear(n_atom_basis, 1)
+        self.energy_layer = nn.Linear(n_filters, 1)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, atomic_subsystem_counts: List[int]) -> torch.Tensor:
         """
         Forward pass for the energy readout.
 
         Parameters
         ----------
-        x : Tensor, shape [batch, n_atoms, n_atom_basis]
+        x : Tensor, shape [n_atoms, n_filters]
             Input tensor for the forward pass.
+        atomic_subsystem_counts : List[int], length [n_confs]
+            Number of atoms in each subsystem.
 
         Returns
         -------
-        Tensor, shape [batch, 1]
+        Tensor, shape [n_confs, 1]
             The total energy tensor.
         """
         x = self.energy_layer(
             x
-        )  # in [batch, n_atoms, n_atom_basis], out [batch, n_atoms, 1]
-        total_energy = x.sum(dim=1)  # in [batch, n_atoms, 1], out [batch, 1]
+        )  # in [n_atoms, n_atom_basis], out [n_atoms, 1]
+        atomic_subsystem_index = torch.repeat_interleave(torch.arange(len(atomic_subsystem_counts)), atomic_subsystem_counts).unsqueeze(-1)
+        print("atomic_subsystem_counts", atomic_subsystem_counts)
+        total_energy = torch.zeros(len(atomic_subsystem_counts), 1).scatter_add(0, atomic_subsystem_index, x) # in [batch, n_atoms, 1], out [batch, 1]
+
         return total_energy
 
 
@@ -349,3 +416,4 @@ def neighbor_pairs_nopbc(
     molecule_index *= num_atoms
     atom_index12 = p12_all[:, pair_index] + molecule_index
     return atom_index12
+

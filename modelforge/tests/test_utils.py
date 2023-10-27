@@ -58,3 +58,13 @@ def test_GaussianRBF():
 
     # Add assertion to check the shape of the output
     assert y.shape == (dim_of_x, n_rbf)
+
+def test_scatter_softmax():
+    from modelforge.potential.utils import scatter_softmax
+
+    index = torch.tensor([0, 0, 1, 1, 2])
+    src = 1.1 ** torch.arange(10).reshape(2, 5)
+    util_out = scatter_softmax(src, index, dim=1, dim_size=3)
+    correct_out = torch.tensor([[0.4750208259, 0.5249791741, 0.4697868228, 0.5302131772, 1.0000000000],
+        [0.4598240554, 0.5401759744, 0.4514355958, 0.5485643744, 1.0000000000]])
+    assert(torch.allclose(util_out, correct_out))

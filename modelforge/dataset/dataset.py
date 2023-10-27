@@ -507,4 +507,4 @@ def collate_conformers(conf_list: List[Dict[str, torch.Tensor]]) -> Dict[str, to
     atomic_numbers_cat = torch.cat(atomic_numbers_list)
     positions_cat = torch.cat(positions_list)
     E_stack = torch.stack(E_list)
-    return {"atomic_numbers'": atomic_numbers_cat, "positions": positions_cat, "E_label": E_stack, "atomic_subsystem_counts": atomic_subsystem_counts}
+    return {"atomic_numbers": atomic_numbers_cat, "positions": positions_cat, "E_label": E_stack, "atomic_subsystem_counts": atomic_subsystem_counts}

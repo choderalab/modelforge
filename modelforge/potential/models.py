@@ -216,7 +216,7 @@ class AbstractBaseNNP(nn.Module, ABC):
             If the input dictionary is missing required keys or has invalid shapes.
 
         """
-        required_keys = ["atomic_numbers", "positions"]
+        required_keys = ["atomic_numbers", "positions", "atomic_subsystem_indices"]
         for key in required_keys:
             if key not in inputs:
                 raise ValueError(f"Missing required key: {key}")
@@ -224,8 +224,8 @@ class AbstractBaseNNP(nn.Module, ABC):
         if inputs["atomic_numbers"].dim() != 2:
             raise ValueError("Shape mismatch: 'atomic_numbers' should be a 2D tensor.")
 
-        if inputs["positions"].dim() != 3:
-            raise ValueError("Shape mismatch: 'positions' should be a 3D tensor.")
+        if inputs["positions"].dim() != 2:
+            raise ValueError("Shape mismatch: 'positions' should be a 2D tensor.")
 
 
 class BaseNNP(AbstractBaseNNP):
@@ -293,16 +293,16 @@ class BaseNNP(AbstractBaseNNP):
         self.input_checks(inputs)
         atomic_numbers = inputs["atomic_numbers"]  # shape (n_systems, n_atoms, 3)
         positions = inputs["positions"]  # shape (n_systems, n_atoms, 3)
-        mask_padding = atomic_numbers == 0
+        atomic_subsystem_index = inputs["atomic_subsystem_indices"]
 
-        pairlist = self.calculate_distances_and_pairlist(mask_padding, positions)
+        r = self.calculate_distances_and_pairlist(positions, atomic_subsystem_index)
         atomic_numbers_embedding = self.embedding(
             atomic_numbers
         )  # shape (batch_size, n_atoms, n_atom_basis)
         inputs = {
-            "pairlist": pairlist["pairlist"],
-            "d_ij": pairlist["d_ij"],
-            "r_ij": pairlist["r_ij"],
+            "pair_indices": r["pair_indices"],
+            "d_ij": r["d_ij"],
+            "r_ij": r["r_ij"],
             "atomic_numbers_embedding": atomic_numbers_embedding,
             "positions": positions,
             "atomic_numbers": atomic_numbers,

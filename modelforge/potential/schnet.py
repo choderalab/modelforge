@@ -79,7 +79,7 @@ class SchNET(BaseNNP):
         for interaction in self.interactions:
             v = interaction(
                 x,
-                inputs["pairlist"],
+                inputs["pair_indices"],
                 representation["f_ij"],
                 representation["rcut_ij"],
             )

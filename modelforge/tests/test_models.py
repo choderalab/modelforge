@@ -19,6 +19,7 @@ def test_forward_pass(model_class, dataset):
             dataset,
             mode="fit",
         )  # split_file="modelforge/tests/qm9tut/split.npz")
+        print(inputs.keys())
         output = initialized_model(inputs)
         print(output)
         if isinstance(output, dict):

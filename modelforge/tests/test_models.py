@@ -45,7 +45,20 @@ def test_pairlist_logic():
     import torch
 
     # dummy data for illustration
-    positions = torch.rand((10, 3))  # 10 atoms with 3D coordinates
+    positions = torch.tensor(
+        [
+            [0.4933, 0.4460, 0.5762],
+            [0.2340, 0.2053, 0.5025],
+            [0.6566, 0.1263, 0.8792],
+            [0.1656, 0.0338, 0.6708],
+            [0.5696, 0.4790, 0.9622],
+            [0.3499, 0.4241, 0.8818],
+            [0.8400, 0.9389, 0.1888],
+            [0.4983, 0.0793, 0.8639],
+            [0.6605, 0.7567, 0.1938],
+            [0.7725, 0.9758, 0.7063],
+        ]
+    )
     molecule_indices = torch.tensor(
         [0, 0, 0, 1, 1, 2, 2, 2, 3, 3]
     )  # molecule index for each atom
@@ -67,6 +80,32 @@ def test_pairlist_logic():
     torch.allclose(
         final_pair_indices,
         torch.tensor([[0, 0, 1, 3, 5, 5, 6, 8], [1, 2, 2, 4, 6, 7, 7, 9]]),
+    )
+
+    # Create pair_coordinates tensor
+    pair_coordinates = positions[final_pair_indices.T]
+    pair_coordinates = pair_coordinates.view(-1, 2, 3)
+
+    # Calculate distances
+    distances = (pair_coordinates[:, 0, :] - pair_coordinates[:, 1, :]).norm(
+        p=2, dim=-1
+    )
+    # Calculate distances
+    distances = (pair_coordinates[:, 0, :] - pair_coordinates[:, 1, :]).norm(
+        p=2, dim=-1
+    )
+
+    # Define a cutoff (replace with your value)
+    cutoff = 1.0
+
+    # Find pairs within the cutoff
+    in_cutoff = (distances <= cutoff).nonzero(as_tuple=False).squeeze()
+
+    # Get the atom indices within the cutoff
+    atom_pairs_withing_cutoff = final_pair_indices[:, in_cutoff]
+    assert torch.allclose(
+        atom_pairs_withing_cutoff,
+        torch.tensor([[0, 0, 1, 3, 5, 5, 8], [1, 2, 2, 4, 6, 7, 9]]),
     )
 
 

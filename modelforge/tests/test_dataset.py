@@ -122,12 +122,14 @@ def test_data_item_format(dataset):
 
     raw_data_item = dataset.dataset[0]
     assert isinstance(raw_data_item, Dict)
-    assert isinstance(raw_data_item["Z"], torch.Tensor)
-    assert isinstance(raw_data_item["R"], torch.Tensor)
-    assert isinstance(raw_data_item["E"], torch.Tensor)
+    assert isinstance(raw_data_item["atomic_numbers"], torch.Tensor)
+    assert isinstance(raw_data_item["positions"], torch.Tensor)
+    assert isinstance(raw_data_item["E_label"], torch.Tensor)
     print(raw_data_item)
 
-    assert raw_data_item["Z"].shape[0] == raw_data_item["R"].shape[0]
+    assert (
+        raw_data_item["atomic_numbers"].shape[0] == raw_data_item["positions"].shape[0]
+    )
 
 
 def test_padding():
@@ -165,9 +167,8 @@ def test_dataset_generation(dataset):
     # a batch of 64 and a batch of 16 samples
     assert len(train_dataloader) == 2  # nr of batches
     v = [v_ for v_ in train_dataloader]
-    assert len(v[0]["n_atoms"]) == 64
-    assert len(v[1]["n_atoms"]) == 16
-
+    assert len(v[0]["atomic_subsystem_counts"]) == 64
+    assert len(v[1]["atomic_subsystem_counts"]) == 16
 
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_dataset_splitting(dataset):
@@ -177,7 +178,7 @@ def test_dataset_splitting(dataset):
     dataset = generate_torch_dataset(dataset)
     train_dataset, val_dataset, test_dataset = RandomSplittingStrategy().split(dataset)
 
-    energy = train_dataset[0]["E"].item()
+    energy = train_dataset[0]["E_label"].item()
     assert np.isclose(energy, -412509.9375)
     print(energy)
 
@@ -210,7 +211,7 @@ def test_file_cache_methods(dataset):
 
     data._to_file_cache()
     data._from_file_cache()
-    assert len(data.numpy_data["n_atoms"]) == 100
+    assert len(data.numpy_data["atomic_subsystem_counts"]) == 100
 
 
 @pytest.mark.parametrize("dataset", DATASETS)

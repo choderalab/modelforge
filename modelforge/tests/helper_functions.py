@@ -8,7 +8,7 @@ from modelforge.potential.models import BaseNNP
 
 from typing import Optional, Dict
 
-MODELS_TO_TEST = [SchNET]
+MODELS_TO_TEST = [SchNET, PaiNN]
 DATASETS = [QM9Dataset]
 
 
@@ -32,14 +32,14 @@ def setup_simple_model(model_class, lightning: bool = False) -> Optional[BaseNNP
 
     if model_class is SchNET:
         if lightning:
-            return LightningSchNET(n_atom_basis=32, n_interactions=3, n_filters=64)
+            return LightningSchNET(nr_atom_basis=32, nr_interactions=3, nr_filters=64)
         return SchNET(nr_atom_basis=32, nr_interactions=3, nr_filters=64)
     elif model_class is PaiNN:
         if lightning:
             return LighningPaiNN(
-                n_atom_basis=32,
-                n_interactions=3,
-                n_rbf=16,
+                nr_atom_basis=32,
+                nr_interactions=3,
+                nr_rbf=16,
                 cutoff_fn=CosineCutoff(5.0),
             )
         return PaiNN(
@@ -118,8 +118,8 @@ def prepare_pairlist_for_single_batch(
 
     from modelforge.potential.models import PairList
 
-    R = batch["R"]
-    mask = batch["Z"] == 0
+    R = batch["positions"]
+    mask = batch["atomic_numbers"] == 0
     pairlist = PairList(cutoff=5.0)
     return pairlist(mask, R)
 
@@ -148,4 +148,4 @@ def generate_methane_input() -> Dict[str, torch.Tensor]:
         requires_grad=True,
     )
     E = torch.tensor([0.0], requires_grad=True)
-    return {"Z": Z, "R": R, "E": E}
+    return {"atomic_numbers": Z, "positions": R, "E_labels": E}

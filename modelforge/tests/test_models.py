@@ -113,18 +113,21 @@ def test_pairlist():
     from modelforge.potential.models import PairList
     import torch
 
-    # start with tensor without masking
-    mask = torch.tensor([[0, 0, 0], [0, 0, 0]])  # no maksing
+    atomic_subsystem_indices = torch.tensor([80, 80, 80, 11, 11, 11])
     positions = torch.tensor(
         [
-            [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]],
-            [[3.0, 3.0, 3.0], [4.0, 4.0, 4.0], [5.0, 5.0, 5.0]],
+            [0.0, 0.0, 0.0],
+            [1.0, 1.0, 1.0],
+            [2.0, 2.0, 2.0],
+            [3.0, 3.0, 3.0],
+            [4.0, 4.0, 4.0],
+            [5.0, 5.0, 5.0],
         ]
     )
     cutoff = 5.0  # no relevant cutoff
     pairlist = PairList(cutoff)
-    r = pairlist(mask, positions)
-    pairlist = r["pairlist"]
+    r = pairlist(positions, atomic_subsystem_indices)
+    pair_indices = r["pair_indices"]
 
     # pairlist describes the pairs of interacting atoms within a batch
     # that means for the pairlist provided below:
@@ -132,7 +135,7 @@ def test_pairlist():
     # pair2: pairlist[0][1] and pairlist[1][1], i.e. (0,2)
     # pair3: pairlist[0][2] and pairlist[1][2], i.e. (1,2)
     assert torch.allclose(
-        pairlist, torch.tensor([[0, 0, 1, 3, 3, 4], [1, 2, 2, 4, 5, 5]])
+        pair_indices, torch.tensor([[0, 0, 1, 3, 3, 4], [1, 2, 2, 4, 5, 5]])
     )
     # NOTE: pairs are defined on axis=1 and not axis=0
     assert torch.allclose(
@@ -149,13 +152,13 @@ def test_pairlist():
         ),
     )
 
-    # test with cutoff, no masking
+    # test with cutoff
     cutoff = 2.0  #
     pairlist = PairList(cutoff)
-    r = pairlist(mask, positions)
-    pairlist = r["pairlist"]
+    r = pairlist(positions, atomic_subsystem_indices)
+    pair_indices = r["pair_indices"]
 
-    torch.allclose(pairlist, torch.tensor([[0, 1, 3, 4], [1, 2, 4, 5]]))
+    torch.allclose(pair_indices, torch.tensor([[0, 1, 3, 4], [1, 2, 4, 5]]))
     # pairs that are excluded through cutoff: (0,2) and (3,5)
     torch.allclose(
         r["r_ij"],
@@ -169,24 +172,7 @@ def test_pairlist():
         ),
     )
 
-    # use masking
-    mask = torch.tensor(
-        [[1, 0, 0], [0, 1, 0]]
-    )  # entries with 1 are masked, that means idx_i = 0 and idx_j = 1 (these values can't be present below)
-    positions = torch.tensor(
-        [
-            [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]],
-            [[3.0, 3.0, 3.0], [4.0, 4.0, 4.0], [5.0, 5.0, 5.0]],
-        ]
-    )
-    cutoff = 5.0  # no relevant cutoff
-    pairlist = PairList(cutoff)
-    r = pairlist(mask, positions)
-    pairlist = r["pairlist"]
-
-    torch.allclose(pairlist, torch.tensor([[1, 3], [2, 5]]))
-    torch.allclose(r["r_ij"], torch.tensor([[-1.0, -1.0, -1.0], [-2.0, -2.0, -2.0]]))
-    torch.allclose(r["d_ij"], torch.tensor([1.7321, 3.4641]))
+    torch.allclose(r["d_ij"], torch.tensor([1.7321, 1.7321, 1.7321, 1.7321]))
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
@@ -198,15 +184,15 @@ def test_pairlist_on_dataset(dataset):
     data_module = TorchDataModule(data)
     data_module.prepare_data()
     data_module.setup("fit")
-    for b in data_module.train_dataloader():
-        print(b.keys())
-        R = b["positions"]
-        mask = b["atomic_numbers"] == 0
+    for data in data_module.train_dataloader():
+        positions = data["positions"]
+        atomic_subsystem_indices = data["atomic_subsystem_indices"]
+        print(atomic_subsystem_indices)
         pairlist = PairList(cutoff=5.0)
-        l = pairlist(mask, R)
-        print(l)
-        shape_pairlist = l["pairlist"].shape
-        shape_distance = l["d_ij"].shape
+        r = pairlist(positions, atomic_subsystem_indices)
+        print(r)
+        shape_pairlist = r["pair_indices"].shape
+        shape_distance = r["d_ij"].shape
 
         assert shape_pairlist[1] == shape_distance[0]
         assert shape_pairlist[0] == 2

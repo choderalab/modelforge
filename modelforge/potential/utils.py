@@ -301,30 +301,27 @@ def _distance_to_radial_basis(
     return f_ij, rcut_ij
 
 
-# taken from torchani repository: https://github.com/aiqm/torchani
 def neighbor_pairs_nopbc(
-    coordinates: torch.Tensor, atomic_subsystem_index: torch.Tensor, cutoff: float
+    coordinates: torch.Tensor, atomic_subsystem_indices: torch.Tensor, cutoff: float
 ) -> torch.Tensor:
     """Compute pairs of atoms that are neighbors (doesn't use PBC)
 
-    This function bypasses the calculation of shifts and duplication
-    of atoms in order to make calculations faster
-
-    Arguments:
-        coordinates : torch.Tensor; (nr_atoms_per_systems, 3) for atom coordinates.
-        atomic_subsystem_index : torch.Tensor; (nr_atoms_per_systems) for atom indices.
-        cutoff : float; the cutoff inside which atoms are considered pairs
+    Parameters
+    ----------
+    coordinates : torch.Tensor, shape (nr_atoms_per_systems, 3)
+    atomic_subsystem_indices : torch.Tensor, shape (nr_atoms_per_systems)
+        Atom indices to indicate which atoms belong to which molecule
+    cutoff : float
+        the cutoff inside which atoms are considered pairs
     """
     positions = coordinates.detach()
-    current_device = coordinates.device
-
     # generate index grid
-    n = len(atomic_subsystem_index)
+    n = len(atomic_subsystem_indices)
     i_indices, j_indices = torch.triu_indices(n, n, 1)
-
+    print(atomic_subsystem_indices[i_indices])
     # filter pairs to only keep those belonging to the same molecule
     same_molecule_mask = (
-        atomic_subsystem_index[i_indices] == atomic_subsystem_index[j_indices]
+        atomic_subsystem_indices[i_indices] == atomic_subsystem_indices[j_indices]
     )
 
     # Apply mask to get final pair indices
@@ -335,7 +332,7 @@ def neighbor_pairs_nopbc(
     pair_indices = torch.stack((i_final_pairs, j_final_pairs))
 
     # create pair_coordinates tensor
-    pair_coordinates = positions[final_pair_indices.T]
+    pair_coordinates = positions[pair_indices.T]
     pair_coordinates = pair_coordinates.view(-1, 2, 3)
 
     # Calculate distances
@@ -351,6 +348,6 @@ def neighbor_pairs_nopbc(
     in_cutoff = (distances <= cutoff).nonzero(as_tuple=False).squeeze()
 
     # Get the atom indices within the cutoff
-    atom_pairs_withing_cutoff = final_pair_indices[:, in_cutoff]
+    pair_indices_within_cutoff = pair_indices[:, in_cutoff]
 
-    return atom_pairs_withing_cutoff
+    return pair_indices_within_cutoff

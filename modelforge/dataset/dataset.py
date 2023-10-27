@@ -42,8 +42,8 @@ class TorchDataset(torch.utils.data.Dataset):
             "E_label": torch.from_numpy(dataset[property_name.E]),
         }
 
-        n_records = len(dataset["n_atoms"])
-        single_atom_start_idxs_by_rec = np.concatenate([[0], np.cumsum(dataset["n_atoms"])])
+        n_records = len(dataset["atomic_subsystem_counts"])
+        single_atom_start_idxs_by_rec = np.concatenate([[0], np.cumsum(dataset["atomic_subsystem_counts"])])
         # length: n_records + 1
 
         self.single_atom_start_idxs = np.repeat(

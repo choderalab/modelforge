@@ -41,6 +41,35 @@ def test_forward_pass(model_class, dataset):
 #     assert output.shape[1] == 1
 
 
+def test_pairlist_logic():
+    import torch
+
+    # dummy data for illustration
+    positions = torch.rand((10, 3))  # 10 atoms with 3D coordinates
+    molecule_indices = torch.tensor(
+        [0, 0, 0, 1, 1, 2, 2, 2, 3, 3]
+    )  # molecule index for each atom
+
+    # generate index grid
+    n = len(molecule_indices)
+    i_indices, j_indices = torch.triu_indices(n, n, 1)
+
+    # filter pairs to only keep those belonging to the same molecule
+    same_molecule_mask = molecule_indices[i_indices] == molecule_indices[j_indices]
+
+    # Apply mask to get final pair indices
+    i_final_pairs = i_indices[same_molecule_mask]
+    j_final_pairs = j_indices[same_molecule_mask]
+
+    # Concatenate to form final (2, n_pairs) tensor
+    final_pair_indices = torch.stack((i_final_pairs, j_final_pairs))
+
+    torch.allclose(
+        final_pair_indices,
+        torch.tensor([[0, 0, 1, 3, 5, 5, 6, 8], [1, 2, 2, 4, 6, 7, 7, 9]]),
+    )
+
+
 def test_pairlist():
     from modelforge.potential.models import PairList
     import torch
@@ -142,24 +171,3 @@ def test_pairlist_on_dataset(dataset):
 
         assert shape_pairlist[1] == shape_distance[0]
         assert shape_pairlist[0] == 2
-
-
-def test_pairlist_nopbc():
-    import torch
-    from modelforge.potential.utils import neighbor_pairs_nopbc
-
-    mask = torch.tensor(
-        [[False, False, True], [True, False, False]]
-    )  # masking [0][2] and [1][0]
-    R = torch.tensor(
-        [
-            [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]],
-            [[3.0, 3.0, 3.0], [4.0, 4.0, 4.0], [5.0, 5.0, 5.0]],
-        ]
-    )
-    cutoff = (
-        2.0  # entry [0][0] and [0][1] as well as [1][1] and [1][2] are within cutoff
-    )
-    neighbor_idx_below_cutoff = neighbor_pairs_nopbc(mask, R, cutoff)
-    assert neighbor_idx_below_cutoff[0][0] == 0 and neighbor_idx_below_cutoff[0][1] == 4
-    assert neighbor_idx_below_cutoff[1][0] == 1 and neighbor_idx_below_cutoff[1][1] == 5

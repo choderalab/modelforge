@@ -113,7 +113,7 @@ def test_pairlist_logic():
         p=2, dim=-1
     )
 
-    # Define a cutoff
+    # Define a cutoff (replace with your value)
     cutoff = 1.0
 
     # Find pairs within the cutoff

@@ -108,12 +108,8 @@ def test_pairlist_logic():
     distances = (pair_coordinates[:, 0, :] - pair_coordinates[:, 1, :]).norm(
         p=2, dim=-1
     )
-    # Calculate distances
-    distances = (pair_coordinates[:, 0, :] - pair_coordinates[:, 1, :]).norm(
-        p=2, dim=-1
-    )
 
-    # Define a cutoff (replace with your value)
+    # Define a cutoff
     cutoff = 1.0
 
     # Find pairs within the cutoff

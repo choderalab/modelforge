@@ -511,7 +511,6 @@ def neighbor_pairs_nopbc(
     # Find pairs within the cutoff
     in_cutoff = (distances <= cutoff).nonzero(as_tuple=False).squeeze()
 
-    # Get the atom indices within the cutoff
     pair_indices_within_cutoff = pair_indices[:, in_cutoff]
 
     return pair_indices_within_cutoff

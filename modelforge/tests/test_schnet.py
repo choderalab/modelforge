@@ -53,8 +53,9 @@ def test_calculate_energies_and_forces(input_data):
     nr_of_atoms_per_batch = input_data["atomic_subsystem_indices"].shape[0]
     schnet = SchNET(128, 6, 64)
     result = schnet(input_data)
+    print(result.sum())
     forces = -torch.autograd.grad(
-        result, input_data["positions"], create_graph=True, retain_graph=True
+        result.sum(), input_data["positions"], create_graph=True, retain_graph=True
     )[0]
 
     assert result.shape == (nr_of_mols, 1)  #  only one molecule

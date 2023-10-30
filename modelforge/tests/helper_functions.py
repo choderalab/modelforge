@@ -84,7 +84,8 @@ def initialize_dataset(
     dataset : class
         Dataset class.
     mode : str
-        Mode to setup the dataset ('train', 'val', or 'test').
+        Mode to setup the dataset. Either "fit" for training/validation split 
+        or "test" for test split.
 
     Returns
     -------
@@ -95,7 +96,7 @@ def initialize_dataset(
     data = dataset(for_unit_testing=for_unit_testing)
     data_module = TorchDataModule(data, split_file=split_file)
     data_module.prepare_data()
-    data_module.setup(mode)
+    data_module.setup(stage=mode)
     return data_module
 
 
@@ -159,14 +160,15 @@ def generate_mock_data():
     return {
         "atomic_numbers": torch.tensor([[1], [2], [2], [3]]),
         "positions": torch.tensor(
-            [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]
+            [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [0.0, 0.0, 0.0], [1.0, 1.0, 1.0]],
+            requires_grad=True,
         ),
         "atomic_subsystem_indices": torch.tensor([0, 0, 1, 1]),
     }
 
 
 def generate_batch_data():
-    return return_single_batch(QM9Dataset, "fit")
+    return return_single_batch(QM9Dataset, mode="train")
 
 
 def generate_interaction_block_data(

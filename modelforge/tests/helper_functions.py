@@ -146,7 +146,7 @@ def generate_methane_input() -> Dict[str, torch.Tensor]:
         requires_grad=True,
     )
     E_labels = torch.tensor([0.0], requires_grad=True)
-    atomic_subsystem_indices = [0, 0, 0, 0, 0]
+    atomic_subsystem_indices = torch.tensor([0, 0, 0, 0, 0], dtype=torch.int32)
     return {
         "atomic_numbers": atomic_numbers,
         "positions": positions,

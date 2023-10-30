@@ -45,7 +45,7 @@ def test_calculate_energies_and_forces():
     )[0]
 
     assert result.shape == (1, 1)  #  only one molecule
-    assert forces.shape == (1, 5, 3)  #  only one molecule
+    assert forces.shape == (5, 3)  #  only one molecule
 
 
 def get_input_for_interaction_block(
@@ -76,15 +76,15 @@ def get_input_for_interaction_block(
 
     embedding = nn.Embedding(nr_embeddings, nr_atom_basis, padding_idx=0)
     batch = return_single_batch(QM9Dataset, "fit")
-    pairlist = prepare_pairlist_for_single_batch(batch)
+    r = prepare_pairlist_for_single_batch(batch)
     radial_basis = GaussianRBF(n_rbf=20, cutoff=5.0)
 
-    d_ij = pairlist["d_ij"]
+    d_ij = r["d_ij"]
     f_ij, rcut_ij = _distance_to_radial_basis(d_ij, radial_basis)
     return {
         "x": embedding(batch["atomic_numbers"]),
         "f_ij": f_ij,
-        "pairlist": pairlist["pairlist"],
+        "pair_indices": r["pair_indices"],
         "rcut_ij": rcut_ij,
     }
 
@@ -99,15 +99,15 @@ def test_schnet_interaction_layer():
     nr_embeddings = 100
     r = get_input_for_interaction_block(nr_atom_basis, nr_embeddings)
     assert r["x"].shape == (
-        64,
-        17,
+        642,
+        1,
         nr_atom_basis,
     ), "Input shape mismatch for x tensor."
     interaction = SchNETInteractionBlock(nr_atom_basis, 4)
-    v = interaction(r["x"], r["pairlist"], r["f_ij"], r["rcut_ij"])
+    v = interaction(r["x"], r["pair_indices"], r["f_ij"], r["rcut_ij"])
     assert v.shape == (
-        64,
-        17,
+        642,
+        1,
         nr_atom_basis,
     ), "Output shape mismatch for v tensor."
 

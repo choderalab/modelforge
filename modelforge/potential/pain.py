@@ -60,7 +60,7 @@ class PaiNN(BaseNNP):
             Equivariant message passing for the prediction of tensorial properties and molecular spectra.
             ICML 2021, http://proceedings.mlr.press/v139/schutt21a.html
         """
-        from .utils import GaussianRBF
+        from .utils import GaussianRBF, EnergyReadout
 
         super().__init__(nr_of_embeddings, nr_atom_basis)
 
@@ -69,6 +69,7 @@ class PaiNN(BaseNNP):
         self.cutoff_fn = cutoff_fn
         self.cutoff = cutoff_fn.cutoff
         self.share_filters = shared_filters
+        self.readout = EnergyReadout(nr_atom_basis)
 
         if shared_filters:
             self.filter_net = nn.Sequential(
@@ -141,10 +142,13 @@ class PaiNN(BaseNNP):
             q, mu = mixing(q, mu)
 
         atomic_numbers_embedding = atomic_numbers_embedding.squeeze(1)
-        return {
+        _r = {
             "scalar_representation": q,
             "vector_representation": mu,
         }
+        return self.readout(
+            _r["scalar_representation"], inputs["atomic_subsystem_indices"]
+        )
 
 
 class PaiNNInteraction(nn.Module):

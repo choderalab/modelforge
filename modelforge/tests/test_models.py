@@ -23,11 +23,14 @@ def test_forward_pass(model_class, dataset):
         )  # split_file="modelforge/tests/qm9tut/split.npz")
         print(inputs.keys())
         nr_of_mols = inputs["atomic_subsystem_indices"].unique().shape[0]
+        nr_of_atoms_per_batch = inputs["atomic_subsystem_indices"].shape[0]
         print(f"nr_of_mols: {nr_of_mols}")
         output = initialized_model(inputs)
         print(output)
         if isinstance(output, dict):
-            assert output["scalar_representation"].shape[0] == 1088
+            assert (
+                output["scalar_representation"].shape[0] == nr_of_atoms_per_batch
+            )  # 642
         else:
             assert output.shape[0] == nr_of_mols
             assert output.shape[1] == 1

@@ -113,7 +113,7 @@ class PaiNN(BaseNNP):
         atomic_numbers_embedding = inputs["atomic_numbers_embedding"]
         qs = atomic_numbers_embedding.shape
 
-        q = atomic_numbers_embedding.reshape(qs[0] * qs[1], 1, qs[2])
+        q = atomic_numbers_embedding.reshape(qs[0], 1, qs[1])
         # compute atom and pair features
         dir_ij = r_ij / d_ij
         # torch.Size([1150, 1, 32])
@@ -127,7 +127,7 @@ class PaiNN(BaseNNP):
             filter_list = torch.split(filters, 3 * self.n_atom_basis, dim=-1)
 
         mu = torch.zeros(
-            (qs[0] * qs[1], 3, qs[2]), device=q.device
+            (qs[0], 3, qs[1]), device=q.device
         )  # nr_of_systems * nr_of_atoms, 3, n_atom_basis
 
         for i, (interaction, mixing) in enumerate(zip(self.interactions, self.mixing)):
@@ -136,7 +136,7 @@ class PaiNN(BaseNNP):
                 mu,
                 filter_list[i],
                 dir_ij,
-                inputs["pairlist"],
+                inputs["pair_indices"],
             )
             q, mu = mixing(q, mu)
 

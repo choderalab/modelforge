@@ -445,10 +445,16 @@ class TorchDataModule(pl.LightningDataModule):
         batch_size: int = 64,
         split_file: Optional[str] = None,
     ):
+        from torch.utils.data import Subset
+
         super().__init__()
         self.data = data
         self.batch_size = batch_size
         self.split_idxs: Optional[str] = None
+        self.train_dataset = Optional[TorchDataset]
+        self.test_dataset = Optional[TorchDataset]
+        self.val_dataset = Optional[TorchDataset]
+
         if split_file:
             import numpy as np
 
@@ -491,13 +497,16 @@ class TorchDataModule(pl.LightningDataModule):
                 self.val_dataset = val_dataset
 
         # Assign test dataset for use in dataloader(s)
-        if stage == "test":
+        elif stage == "test":
             if self.split_idxs:
                 test_idx = self.split_idxs["test_idx"]
                 self.test_dataset = Subset(self.dataset, test_idx)
             else:
                 _, _, test_dataset = self.split.split(self.dataset)
                 self.test_dataset = test_dataset
+
+        else:
+            raise ValueError(f"Unknown stage {stage}")
 
     def train_dataloader(self) -> DataLoader:
         """

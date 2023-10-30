@@ -204,7 +204,7 @@ def test_file_cache_methods(dataset):
 
     # generate files to test _from_hdf5()
 
-    _ = initialize_dataset(dataset, mode="str")
+    _ = initialize_dataset(dataset, mode="fit")
 
     data = dataset(for_unit_testing=True)
 

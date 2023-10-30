@@ -60,7 +60,7 @@ def return_single_batch(
     dataset : class
         Dataset class.
     mode : str
-        Mode to setup the dataset ('train', 'val', or 'test').
+        Mode to setup the dataset ('fit', or 'test').
 
     Returns
     -------
@@ -84,7 +84,7 @@ def initialize_dataset(
     dataset : class
         Dataset class.
     mode : str
-        Mode to setup the dataset. Either "fit" for training/validation split 
+        Mode to setup the dataset. Either "fit" for training/validation split
         or "test" for test split.
 
     Returns
@@ -168,7 +168,7 @@ def generate_mock_data():
 
 
 def generate_batch_data():
-    return return_single_batch(QM9Dataset, mode="train")
+    return return_single_batch(QM9Dataset, mode="fit")
 
 
 def generate_interaction_block_data(

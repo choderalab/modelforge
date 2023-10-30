@@ -280,9 +280,9 @@ class BaseNNP(AbstractBaseNNP):
         ----------
         inputs : Dict[str, torch.Tensor]
             Inputs containing atomic numbers ('atomic_numbers'), coordinates ('positions') and pairlist ('pairlist').
-            - 'atomic_numbers': int; shape (n_systems, n_atoms), 0 indicates non-interacting atoms that will be masked
+            - 'atomic_numbers': int; shape (nr_of_atoms_in_batch, 1), 0 indicates non-interacting atoms that will be masked
             - 'total_charge' : int; shape (n_system)
-            - 'positions': float; shape (n_systems, n_atoms, 3)
+            - 'positions': float; shape (nr_of_atoms_in_batch, 3)
 
         Returns
         -------
@@ -293,14 +293,14 @@ class BaseNNP(AbstractBaseNNP):
         self.input_checks(inputs)
         atomic_numbers = inputs[
             "atomic_numbers"
-        ].flatten()  # shape (nr_atoms_for_each_system, 3)
-        positions = inputs["positions"]  # shape (nr_atoms_for_each_system, 3)
-        atomic_subsystem_index = inputs["atomic_subsystem_indices"]
+        ].flatten()  # shape (nr_of_atoms_in_batch, 3)
+        positions = inputs["positions"]  # shape (nr_of_atoms_in_batch, 3)
+        atomic_subsystem_indices = inputs["atomic_subsystem_indices"]
 
-        r = self.calculate_distances_and_pairlist(positions, atomic_subsystem_index)
+        r = self.calculate_distances_and_pairlist(positions, atomic_subsystem_indices)
         atomic_numbers_embedding = self.embedding(
             atomic_numbers
-        )  # shape (nr_atoms_for_each_system, n_atom_basis)
+        )  # shape (nr_of_atoms_in_batch, n_atom_basis)
         inputs = {
             "pair_indices": r["pair_indices"],
             "d_ij": r["d_ij"],
@@ -308,6 +308,7 @@ class BaseNNP(AbstractBaseNNP):
             "atomic_numbers_embedding": atomic_numbers_embedding,
             "positions": positions,
             "atomic_numbers": atomic_numbers,
+            "atomic_subsystem_indices": atomic_subsystem_indices,
         }
         return self._forward(inputs)
 

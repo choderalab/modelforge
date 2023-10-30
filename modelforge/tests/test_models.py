@@ -13,6 +13,8 @@ from .helper_functions import (
 @pytest.mark.parametrize("model_class", MODELS_TO_TEST)
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_forward_pass(model_class, dataset):
+    import torch
+
     for lightning in [True, False]:
         initialized_model = setup_simple_model(model_class, lightning)
         inputs = return_single_batch(
@@ -20,12 +22,14 @@ def test_forward_pass(model_class, dataset):
             mode="fit",
         )  # split_file="modelforge/tests/qm9tut/split.npz")
         print(inputs.keys())
+        nr_of_mols = torch.max(inputs["atomic_subsystem_indices"].unique()).item() + 1
+        print(f"nr_of_mols: {nr_of_mols}")
         output = initialized_model(inputs)
         print(output)
         if isinstance(output, dict):
             assert output["scalar_representation"].shape[0] == 1088
         else:
-            assert output.shape[0] == 64
+            assert output.shape[0] == nr_of_mols
             assert output.shape[1] == 1
 
 

@@ -176,25 +176,35 @@ class EnergyReadout(nn.Module):
         super().__init__()
         self.energy_layer = nn.Linear(n_atom_basis, 1)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, atomic_subsystem_indices: torch.Tensor
+    ) -> torch.Tensor:
         """
         Forward pass for the energy readout.
 
         Parameters
         ----------
-        x : Tensor, shape [batch, n_atoms, n_atom_basis]
+        x : Tensor, shape [nr_of_atoms_in_batch, n_atom_basis]
             Input tensor for the forward pass.
 
         Returns
         -------
-        Tensor, shape [batch, 1]
+        Tensor, shape [nr_of_moleculs_in_batch, 1]
             The total energy tensor.
         """
-        x = self.energy_layer(
-            x
-        )  # in [batch, n_atoms, n_atom_basis], out [batch, n_atoms, 1]
-        total_energy = x.sum(dim=1)  # in [batch, n_atoms, 1], out [batch, 1]
-        return total_energy
+        import torch_scatter
+
+        x = self.energy_layer(x)
+
+        # Perform scatter add operation
+        result = torch_scatter.scatter_add(
+            x.t(), atomic_subsystem_indices.to(torch.int64), dim=1
+        ).t()
+
+        # Sum across feature dimension to get final tensor of shape (num_molecules, 1)
+        total_energy_per_molecule = result.sum(dim=1, keepdim=True)
+
+        return total_energy_per_molecule
 
 
 class ShiftedSoftplus(nn.Module):

@@ -86,7 +86,9 @@ class SchNET(BaseNNP):
             x = x + v  # Update atomic features
 
         # Pool over atoms to get molecular energies
-        return self.readout(x)  # shape (batch_size,)
+        return self.readout(
+            x, inputs["atomic_subsystem_indices"]
+        )  # shape (batch_size,)
 
 
 class SchNETInteractionBlock(nn.Module):

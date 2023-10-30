@@ -142,11 +142,10 @@ class SchNETInteractionBlock(nn.Module):
         torch.Tensor, shape [batch_size, n_atoms, n_atom_basis]
             Updated feature tensor after interaction block.
         """
-        batch_size, nr_of_atoms = x.shape[0], x.shape[1]
 
         # Map input features to the filter space
         x = self.intput_to_feature(x)
-        x = x.flatten(0, 1)  # shape (batch_size * n_atoms, nr_filters)
+        # x = x.flatten(0, 1)  # shape (batch_size * n_atoms, nr_filters)
 
         # Generate interaction filters based on radial basis functions
         Wij = self.filter_network(f_ij)
@@ -171,7 +170,6 @@ class SchNETInteractionBlock(nn.Module):
 
         # Map back to the original feature space and reshape
         x = self.feature_to_output(x_native)
-        x = x.reshape(batch_size, nr_of_atoms, self.nr_atom_basis)
         return x
 
 

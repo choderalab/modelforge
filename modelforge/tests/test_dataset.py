@@ -65,7 +65,7 @@ def test_different_properties_of_interest(dataset):
     dataset = factory.create_dataset(data)
     raw_data_item = dataset[0]
     assert isinstance(raw_data_item, dict)
-    assert len(raw_data_item) == 4
+    assert len(raw_data_item) == 5
 
     data.properties_of_interest = ["internal_energy_at_0K", "geometry"]
     assert data.properties_of_interest == [
@@ -169,6 +169,7 @@ def test_dataset_generation(dataset):
     v = [v_ for v_ in train_dataloader]
     assert len(v[0]["atomic_subsystem_counts"]) == 64
     assert len(v[1]["atomic_subsystem_counts"]) == 16
+
 
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_dataset_splitting(dataset):

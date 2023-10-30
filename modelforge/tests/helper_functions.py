@@ -118,10 +118,10 @@ def prepare_pairlist_for_single_batch(
 
     from modelforge.potential.models import PairList
 
-    R = batch["positions"]
-    mask = batch["atomic_numbers"] == 0
+    positions = batch["positions"]
+    atomic_subsystem_indices = batch["atomic_subsystem_indices"]
     pairlist = PairList(cutoff=5.0)
-    return pairlist(mask, R)
+    return pairlist(positions, atomic_subsystem_indices)
 
 
 def generate_methane_input() -> Dict[str, torch.Tensor]:

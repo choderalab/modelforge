@@ -2,22 +2,13 @@ import torch
 
 from modelforge.potential.schnet import SchNET
 
-from .helper_functions import (
-    generate_methane_input,
-    generate_mock_data,
-    generate_batch_data,
-    generate_interaction_block_data,
-)
 import pytest
+from .helper_functions import (
+    SIMPLIFIED_INPUT_DATA,
+)
 
 nr_atom_basis = 128
 nr_embeddings = 100
-
-SIMPLIFIED_INPUT_DATA = [
-    generate_methane_input(),
-    generate_mock_data(),
-    generate_batch_data(),
-]
 
 
 def test_Schnet_init():
@@ -39,25 +30,6 @@ def test_schnet_forward(input_data):
         nr_of_mols,
         1,
     )  # Assuming energy is calculated per sample in the batch
-
-
-@pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
-def test_calculate_energies_and_forces(input_data):
-    """
-    Test the calculation of energies and forces for a molecule.
-    This test will be adapted once we have a trained model.
-    """
-    nr_of_mols = input_data["atomic_subsystem_indices"].unique().shape[0]
-    nr_of_atoms_per_batch = input_data["atomic_subsystem_indices"].shape[0]
-    schnet = SchNET(128, 6, 64)
-    result = schnet(input_data)
-    print(result.sum())
-    forces = -torch.autograd.grad(
-        result.sum(), input_data["positions"], create_graph=True, retain_graph=True
-    )[0]
-
-    assert result.shape == (nr_of_mols, 1)  #  only one molecule
-    assert forces.shape == (nr_of_atoms_per_batch, 3)  #  only one molecule
 
 
 def test_schnet_interaction_layer():

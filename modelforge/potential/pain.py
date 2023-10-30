@@ -1,5 +1,5 @@
 import torch.nn as nn
-from loguru import logger
+from loguru import logger as log
 from typing import Dict, Type, Callable, Optional, Tuple
 
 from .models import BaseNNP, LightningModuleMixin
@@ -7,9 +7,8 @@ from .utils import (
     sequential_block,
 )
 import torch
-import torch.nn.functional as F
-from modelforge.potential.utils import _distance_to_radial_basis
 from torch.nn import SiLU
+from modelforge.potential.utils import CosineCutoff
 
 
 class PaiNN(BaseNNP):
@@ -26,7 +25,7 @@ class PaiNN(BaseNNP):
         nr_atom_basis: int,
         nr_interactions: int,
         n_rbf: int,
-        cutoff_fn: Optional[Callable] = None,
+        cutoff_fn: Optional[Callable] = CosineCutoff(5.0),
         activation: Optional[Callable] = SiLU,
         nr_of_embeddings: int = 100,
         shared_interactions: bool = False,
@@ -108,6 +107,8 @@ class PaiNN(BaseNNP):
         Dict[str, torch.Tensor]
             Dictionary containing scalar and vector representations.
         """
+        from modelforge.potential.utils import _distance_to_radial_basis
+
         # extract properties from pairlist
         d_ij = inputs["d_ij"].unsqueeze(-1)  # n_pairs, 1
         r_ij = inputs["r_ij"]
@@ -142,8 +143,12 @@ class PaiNN(BaseNNP):
             q, mu = mixing(q, mu)
 
         atomic_numbers_embedding = atomic_numbers_embedding.squeeze(1)
+
+        # Use squeeze to remove dimensions of size 1
+        q_ = q.squeeze(dim=1)
+
         _r = {
-            "scalar_representation": q,
+            "scalar_representation": q_,
             "vector_representation": mu,
         }
         return self.readout(

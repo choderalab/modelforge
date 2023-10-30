@@ -1,10 +1,10 @@
 import pytest
 
 import numpy as np
-from .schnetpack_pain_implementation import setup_painn
 from .helper_functions import (
     DATASETS,
     MODELS_TO_TEST,
+    SIMPLIFIED_INPUT_DATA,
     return_single_batch,
     setup_simple_model,
 )
@@ -21,7 +21,6 @@ def test_forward_pass(model_class, dataset):
             dataset,
             mode="fit",
         )  # split_file="modelforge/tests/qm9tut/split.npz")
-        print(inputs.keys())
         nr_of_mols = inputs["atomic_subsystem_indices"].unique().shape[0]
         nr_of_atoms_per_batch = inputs["atomic_subsystem_indices"].shape[0]
         print(f"nr_of_mols: {nr_of_mols}")
@@ -36,17 +35,26 @@ def test_forward_pass(model_class, dataset):
             assert output.shape[1] == 1
 
 
-# @pytest.mark.parametrize("dataset", DATASETS)
-# def test_forward_pass_schnetpack_painn(dataset):
-#     initialized_model = setup_painn()
-#     inputs = return_single_batch(
-#         dataset,
-#         mode="fit",
-#     )  # split_file="modelforge/tests/qm9tut/split.npz")
-#     output = initialized_model(inputs)
-#     print(output)
-#     assert output.shape[0] == 64
-#     assert output.shape[1] == 1
+@pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
+@pytest.mark.parametrize("model_class", MODELS_TO_TEST)
+def test_calculate_energies_and_forces(input_data, model_class):
+    """
+    Test the calculation of energies and forces for a molecule.
+    This test will be adapted once we have a trained model.
+    """
+    import torch
+
+    nr_of_mols = input_data["atomic_subsystem_indices"].unique().shape[0]
+    nr_of_atoms_per_batch = input_data["atomic_subsystem_indices"].shape[0]
+    model = model_class(128, 6, 64)
+    result = model(input_data)
+    print(result.sum())
+    forces = -torch.autograd.grad(
+        result.sum(), input_data["positions"], create_graph=True, retain_graph=True
+    )[0]
+
+    assert result.shape == (nr_of_mols, 1)  #  only one molecule
+    assert forces.shape == (nr_of_atoms_per_batch, 3)  #  only one molecule
 
 
 def test_pairlist_logic():

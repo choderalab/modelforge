@@ -211,3 +211,10 @@ def generate_interaction_block_data(
         "rcut_ij": rcut_ij,
         "atomic_subsystem_indices": batch["atomic_subsystem_indices"],
     }
+
+
+SIMPLIFIED_INPUT_DATA = [
+    generate_methane_input(),
+    generate_mock_data(),
+    generate_batch_data(),
+]

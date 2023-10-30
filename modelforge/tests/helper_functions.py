@@ -134,18 +134,22 @@ def generate_methane_input() -> Dict[str, torch.Tensor]:
         Dictionary with keys 'Z', 'R', 'E'.
     """
 
-    Z = torch.tensor([[6, 1, 1, 1, 1]], dtype=torch.int64)
-    R = torch.tensor(
+    atomic_numbers = torch.tensor([[6], [1], [1], [1], [1]], dtype=torch.int64)
+    positions = torch.tensor(
         [
-            [
-                [0.0, 0.0, 0.0],
-                [0.63918859, 0.63918859, 0.63918859],
-                [-0.63918859, -0.63918859, 0.63918859],
-                [-0.63918859, 0.63918859, -0.63918859],
-                [0.63918859, -0.63918859, -0.63918859],
-            ]
+            [0.0, 0.0, 0.0],
+            [0.63918859, 0.63918859, 0.63918859],
+            [-0.63918859, -0.63918859, 0.63918859],
+            [-0.63918859, 0.63918859, -0.63918859],
+            [0.63918859, -0.63918859, -0.63918859],
         ],
         requires_grad=True,
     )
-    E = torch.tensor([0.0], requires_grad=True)
-    return {"atomic_numbers": Z, "positions": R, "E_labels": E}
+    E_labels = torch.tensor([0.0], requires_grad=True)
+    atomic_subsystem_indices = [0, 0, 0, 0, 0]
+    return {
+        "atomic_numbers": atomic_numbers,
+        "positions": positions,
+        "E_labels": E_labels,
+        "atomic_subsystem_indices": atomic_subsystem_indices,
+    }

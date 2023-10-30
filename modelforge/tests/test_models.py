@@ -22,7 +22,7 @@ def test_forward_pass(model_class, dataset):
             mode="fit",
         )  # split_file="modelforge/tests/qm9tut/split.npz")
         print(inputs.keys())
-        nr_of_mols = torch.max(inputs["atomic_subsystem_indices"].unique()).item() + 1
+        nr_of_mols = inputs["atomic_subsystem_indices"].unique().shape[0]
         print(f"nr_of_mols: {nr_of_mols}")
         output = initialized_model(inputs)
         print(output)

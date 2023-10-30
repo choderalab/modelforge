@@ -551,12 +551,14 @@ def collate_conformers(
     E_list = []
     atomic_subsystem_counts = []
     atomic_subsystem_indices = []
-    for conf in conf_list:
+    atomic_subsystem_indices_referencing_dataset = []
+    for idx, conf in enumerate(conf_list):
         atomic_numbers_list.append(conf["atomic_numbers"])
         positions_list.append(conf["positions"])
         E_list.append(conf["E_label"])
         atomic_subsystem_counts.extend(conf["atomic_subsystem_counts"])
-        atomic_subsystem_indices.extend(
+        atomic_subsystem_indices.extend([idx] * conf["atomic_subsystem_counts"][0])
+        atomic_subsystem_indices_referencing_dataset.extend(
             [conf["idx"]] * conf["atomic_subsystem_counts"][0]
         )
     atomic_numbers_cat = torch.cat(atomic_numbers_list)
@@ -569,5 +571,8 @@ def collate_conformers(
         "atomic_subsystem_counts": atomic_subsystem_counts,
         "atomic_subsystem_indices": torch.tensor(
             atomic_subsystem_indices, dtype=torch.int32
+        ),
+        "atomic_subsystem_indices_referencing_dataset": torch.tensor(
+            atomic_subsystem_indices_referencing_dataset, dtype=torch.int32
         ),
     }

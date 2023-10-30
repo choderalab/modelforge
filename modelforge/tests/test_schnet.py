@@ -19,10 +19,11 @@ def test_schnet_forward():
     """
     model = SchNET(128, 3)
     inputs = {
-        "atomic_numbers": torch.tensor([[1, 2], [2, 3]]),
+        "atomic_numbers": torch.tensor([[1], [2], [2], [3]]),
         "positions": torch.tensor(
-            [[[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]], [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]]
+            [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]
         ),
+        "atomic_subsystem_indices": torch.tensor([0, 0, 1, 1]),
     }
     energy = model(inputs)
     assert energy.shape == (

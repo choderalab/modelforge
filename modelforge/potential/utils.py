@@ -36,54 +36,6 @@ def sequential_block(
     )
 
 
-def _scatter_add(
-    src: torch.Tensor, index: torch.Tensor, dim_size: int, dim: int
-) -> torch.Tensor:
-    """
-    Performs a scatter addition operation.
-
-    Parameters
-    ----------
-    src : torch.Tensor
-        Source tensor.
-    index : torch.Tensor
-        Index tensor.
-    dim_size : int
-        Dimension size.
-    dim : int
-
-    Returns
-    -------
-    torch.Tensor
-        The result of the scatter addition.
-    """
-    shape = list(src.shape)
-    shape[dim] = dim_size
-    tmp = torch.zeros(shape, dtype=src.dtype, device=src.device)
-    y = tmp.index_add(dim, index, src)
-    return y
-
-
-# NOTE: change the scatter_add to the native pytorch function
-def scatter_add(
-    x: torch.Tensor, idx_i: torch.Tensor, dim_size: int, dim: int = 0
-) -> torch.Tensor:
-    """
-    Sum over values with the same indices.
-
-    Args:
-        x: input values
-        idx_i: index of center atom i
-        dim_size: size of the dimension after reduction
-        dim: the dimension to reduce
-
-    Returns:
-        reduced input
-
-    """
-    return _scatter_add(x, idx_i, dim_size, dim)
-
-
 def gaussian_rbf(
     d_ij: torch.Tensor, offsets: torch.Tensor, widths: torch.Tensor
 ) -> torch.Tensor:
@@ -164,7 +116,7 @@ class EnergyReadout(nn.Module):
         Forward pass for the energy readout.
     """
 
-    def __init__(self, n_atom_basis: int):
+    def __init__(self, n_atom_basis: int, nr_of_layers: int = 1):
         """
         Initialize the EnergyReadout class.
 
@@ -174,7 +126,19 @@ class EnergyReadout(nn.Module):
             Number of atom basis.
         """
         super().__init__()
-        self.energy_layer = nn.Linear(n_atom_basis, 1)
+        if nr_of_layers == 1:
+            self.energy_layer = nn.Linear(n_atom_basis, 1)
+        else:
+            activation_fct = nn.ReLU()
+            energy_layer_start = nn.Linear(n_atom_basis, n_atom_basis)
+            energy_layer_end = nn.Linear(n_atom_basis, 1)
+            energy_layer_intermediate = [
+                (nn.Linear(n_atom_basis, n_atom_basis), activation_fct)
+                for _ in range(nr_of_layers - 2)
+            ]
+            self.energy_layer = nn.Sequential(
+                energy_layer_end, *energy_layer_intermediate, energy_layer_start
+            )
 
     def forward(
         self, x: torch.Tensor, atomic_subsystem_indices: torch.Tensor
@@ -197,7 +161,9 @@ class EnergyReadout(nn.Module):
 
         # Perform scatter add operation
         indices = atomic_subsystem_indices.to(torch.int64).unsqueeze(1)
-        result = torch.zeros(len(atomic_subsystem_indices.unique()), 1).scatter_add(0, indices, x)
+        result = torch.zeros(len(atomic_subsystem_indices.unique()), 1).scatter_add(
+            0, indices, x
+        )
 
         # Sum across feature dimension to get final tensor of shape (num_molecules, 1)
         total_energy_per_molecule = result.sum(dim=1, keepdim=True)

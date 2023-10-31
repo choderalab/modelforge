@@ -172,7 +172,7 @@ def generate_batch_data():
 
 
 def generate_interaction_block_data(
-    nr_atom_basis: int, nr_embeddings: int
+    nr_atom_basis: int, nr_embeddings: int, nr_rbf: int
 ) -> Dict[str, torch.Tensor]:
     """
     Prepare inputs for testing the SchNet interaction block.
@@ -195,12 +195,11 @@ def generate_interaction_block_data(
     from modelforge.dataset.qm9 import QM9Dataset
     from modelforge.potential.utils import GaussianRBF, _distance_to_radial_basis
 
-    from .helper_functions import prepare_pairlist_for_single_batch, return_single_batch
-
     embedding = nn.Embedding(nr_embeddings, nr_atom_basis, padding_idx=0)
     batch = return_single_batch(QM9Dataset, "fit")
+    print("batch", batch)
     r = prepare_pairlist_for_single_batch(batch)
-    radial_basis = GaussianRBF(n_rbf=20, cutoff=5.0)
+    radial_basis = GaussianRBF(n_rbf=nr_rbf, cutoff=5.0)
 
     d_ij = r["d_ij"]
     f_ij, rcut_ij = _distance_to_radial_basis(d_ij, radial_basis)

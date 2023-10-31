@@ -5,6 +5,7 @@ from modelforge.potential.schnet import SchNET
 import pytest
 from .helper_functions import (
     SIMPLIFIED_INPUT_DATA,
+    generate_interaction_block_data
 )
 
 nr_atom_basis = 128
@@ -38,10 +39,11 @@ def test_schnet_interaction_layer():
     """
     from modelforge.potential.schnet import SchNETInteractionBlock
 
-    nr_atom_basis = 128
-    nr_embeddings = 100
+    nr_atom_basis = 127
+    nr_embeddings = 97
+    nr_rbf = 19
 
-    interaction_data = generate_interaction_block_data(nr_atom_basis, nr_embeddings)
+    interaction_data = generate_interaction_block_data(nr_atom_basis, nr_embeddings, nr_rbf)
     nr_of_atoms_per_batch = interaction_data["atomic_subsystem_indices"].shape[0]
 
     assert interaction_data["x"].shape == (
@@ -49,7 +51,7 @@ def test_schnet_interaction_layer():
         1,
         nr_atom_basis,
     ), "Input shape mismatch for x tensor."
-    interaction = SchNETInteractionBlock(nr_atom_basis, 4)
+    interaction = SchNETInteractionBlock(nr_atom_basis=nr_atom_basis, nr_filters=3, nr_rbf=nr_rbf)
     v = interaction(
         interaction_data["x"],
         interaction_data["pair_indices"],

@@ -22,12 +22,11 @@ class PaiNN(BaseNNP):
 
     def __init__(
         self,
-        nr_atom_basis: int,
+        embedding: nn.Module,
         nr_interactions: int,
         n_rbf: int,
         cutoff_fn: Optional[Callable] = CosineCutoff(5.0),
         activation: Optional[Callable] = SiLU,
-        nr_of_embeddings: int = 100,
         shared_interactions: bool = False,
         shared_filters: bool = False,
         epsilon: float = 1e-8,
@@ -35,8 +34,7 @@ class PaiNN(BaseNNP):
         """
         Parameters
             ----------
-            nr_atom_basis : int
-                Number of features to describe atomic environments.
+            embedding : torch.Module
             nr_interactions : int
                 Number of interaction blocks.
             n_rbf : int
@@ -45,8 +43,6 @@ class PaiNN(BaseNNP):
                 Cutoff function for the radial basis.
             activation : Callable, optional
                 Activation function to use.
-            nr_of_embeddings : int, optional
-                Number of embeddings for atomic numbers (default is 100).
             shared_interactions : bool, optional
                 Whether to share weights across interaction blocks (default is False).
             shared_filters : bool, optional
@@ -61,29 +57,30 @@ class PaiNN(BaseNNP):
         """
         from .utils import GaussianRBF, EnergyReadout
 
-        super().__init__(nr_of_embeddings, nr_atom_basis)
+        super().__init__(embedding)
 
-        self.n_atom_basis = nr_atom_basis
+        self.n_atom_basis = embedding.embedding_dim
         self.n_interactions = nr_interactions
         self.cutoff_fn = cutoff_fn
         self.cutoff = cutoff_fn.cutoff
         self.share_filters = shared_filters
-        self.readout = EnergyReadout(nr_atom_basis)
+        self.readout = EnergyReadout(self.n_atom_basis)
 
         if shared_filters:
             self.filter_net = nn.Sequential(
-                nn.Linear(n_rbf, 3 * nr_atom_basis), nn.Identity()
+                nn.Linear(n_rbf, 3 * self.n_atom_basis), nn.Identity()
             )
         else:
             self.filter_net = nn.Sequential(
-                nn.Linear(n_rbf, self.n_interactions * 3 * nr_atom_basis), nn.Identity()
+                nn.Linear(n_rbf, self.n_interactions * 3 * self.n_atom_basis),
+                nn.Identity(),
             )
         self.interactions = nn.ModuleList(
-            PaiNNInteraction(nr_atom_basis, activation=activation)
+            PaiNNInteraction(self.n_atom_basis, activation=activation)
             for _ in range(nr_interactions)
         )
         self.mixing = nn.ModuleList(
-            PaiNNMixing(nr_atom_basis, activation=activation, epsilon=epsilon)
+            PaiNNMixing(self.n_atom_basis, activation=activation, epsilon=epsilon)
             for _ in range(nr_interactions)
         )
         self.radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=float(self.cutoff))
@@ -350,7 +347,7 @@ class PaiNNMixing(nn.Module):
 class LighningPaiNN(PaiNN, LightningModuleMixin):
     def __init__(
         self,
-        nr_atom_basis: int,
+        embedding: nn.Module,
         nr_interactions: int,
         nr_rbf: int,
         cutoff_fn: Optional[Callable] = None,
@@ -366,15 +363,14 @@ class LighningPaiNN(PaiNN, LightningModuleMixin):
         """PyTorch Lightning version of the PaiNN model."""
 
         super().__init__(
-            nr_atom_basis,
-            nr_interactions,
-            nr_rbf,
-            cutoff_fn,
-            activation,
-            max_z,
-            shared_interactions,
-            shared_filters,
-            epsilon,
+            embedding=embedding,
+            nr_interactions=nr_interactions,
+            n_rbf=nr_rbf,
+            cutoff_fn=cutoff_fn,
+            activation=activation,
+            shared_interactions=shared_interactions,
+            shared_filters=shared_filters,
+            epsilon=epsilon,
         )
         self.loss_function = loss
         self.optimizer = optimizer

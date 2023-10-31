@@ -234,10 +234,7 @@ class BaseNNP(AbstractBaseNNP):
 
     Attributes
     ----------
-    nr_of_embeddings : int
-        Number of embeddings.
-    nr_atom_basis : int
-        Number of atom basis.
+    embedding : nn.Module
     cutoff : float
         Cutoff distance for neighbor calculations.
 
@@ -249,8 +246,7 @@ class BaseNNP(AbstractBaseNNP):
 
     def __init__(
         self,
-        nr_of_embeddings: int,
-        nr_atom_basis: int,
+        embedding: nn.Module,
         cutoff: float = 5.0,
     ):
         """
@@ -258,10 +254,6 @@ class BaseNNP(AbstractBaseNNP):
 
         Parameters
         ----------
-        nr_of_embeddings : int
-            Number of embeddings.
-        nr_atom_basis : int
-            Number of atom basis.
         cutoff : float, optional
             Cutoff distance (in Angstrom) for neighbor calculations, default is 5.0.
         """
@@ -269,8 +261,8 @@ class BaseNNP(AbstractBaseNNP):
 
         super().__init__()
         self.calculate_distances_and_pairlist = PairList(cutoff)
-        self.embedding = nn.Embedding(nr_of_embeddings, nr_atom_basis)
-        self.nr_of_embeddings = nr_of_embeddings
+        self.embedding = embedding  # nn.Embedding(nr_of_embeddings, nr_atom_basis)
+        self.nr_atom_basis = embedding.embedding_dim
 
     def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         """

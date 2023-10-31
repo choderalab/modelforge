@@ -30,20 +30,35 @@ def setup_simple_model(model_class, lightning: bool = False) -> Optional[BaseNNP
     """
     from modelforge.potential.utils import CosineCutoff
 
+    nr_atom_basis = 32
+    nr_embeddings = 100
+    embedding = torch.nn.Embedding(nr_embeddings, nr_atom_basis)
+
     if model_class is SchNET:
         if lightning:
-            return LightningSchNET(nr_atom_basis=32, nr_interactions=3, nr_filters=64)
-        return SchNET(nr_atom_basis=32, nr_interactions=3, nr_filters=64)
+            return LightningSchNET(
+                embedding=embedding,
+                nr_interactions=3,
+                nr_filters=64,
+            )
+        return SchNET(
+            embedding=embedding,
+            nr_interactions=3,
+            nr_filters=64,
+        )
     elif model_class is PaiNN:
         if lightning:
             return LighningPaiNN(
-                nr_atom_basis=32,
+                embedding=embedding,
                 nr_interactions=3,
                 nr_rbf=16,
                 cutoff_fn=CosineCutoff(5.0),
             )
         return PaiNN(
-            nr_atom_basis=32, nr_interactions=3, n_rbf=16, cutoff_fn=CosineCutoff(5.0)
+            embedding=embedding,
+            nr_interactions=3,
+            n_rbf=16,
+            cutoff_fn=CosineCutoff(5.0),
         )
     else:
         raise NotImplementedError

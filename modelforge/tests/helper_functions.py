@@ -197,14 +197,13 @@ def generate_interaction_block_data(
 
     embedding = nn.Embedding(nr_embeddings, nr_atom_basis, padding_idx=0)
     batch = return_single_batch(QM9Dataset, "fit")
-    print("batch", batch)
     r = prepare_pairlist_for_single_batch(batch)
     radial_basis = GaussianRBF(n_rbf=nr_rbf, cutoff=5.0)
 
     d_ij = r["d_ij"]
     f_ij, rcut_ij = _distance_to_radial_basis(d_ij, radial_basis)
     return {
-        "x": embedding(batch["atomic_numbers"]),
+        "x": embedding(batch["atomic_numbers"].squeeze(dim=1)),
         "f_ij": f_ij,
         "pair_indices": r["pair_indices"],
         "rcut_ij": rcut_ij,

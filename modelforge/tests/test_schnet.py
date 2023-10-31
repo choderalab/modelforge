@@ -48,7 +48,6 @@ def test_schnet_interaction_layer():
 
     assert interaction_data["x"].shape == (
         nr_of_atoms_per_batch,
-        1,
         nr_atom_basis,
     ), "Input shape mismatch for x tensor."
     interaction = SchNETInteractionBlock(nr_atom_basis=nr_atom_basis, nr_filters=3, nr_rbf=nr_rbf)
@@ -60,7 +59,6 @@ def test_schnet_interaction_layer():
     )
     assert v.shape == (
         nr_of_atoms_per_batch,
-        1,
         nr_atom_basis,
     ), "Output shape mismatch for v tensor."
 

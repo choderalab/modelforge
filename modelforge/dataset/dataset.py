@@ -100,7 +100,7 @@ class TorchDataset(torch.utils.data.Dataset):
                 Scalar energy value for the molecule.
             - 'idx': int
                 Index of the conformer in the dataset.
-            - 'atomic_subsystem_counts': List[int]
+            - 'atomic_subsystem_counts': torch.Tensor, shape [1]
                 Number of atoms in the conformer. Length one if __getitem__ is called with a single index, length batch_size if collate_conformers is used with DataLoader
         """
         series_atom_start_idx = self.series_atom_start_idxs[idx]
@@ -127,7 +127,7 @@ class TorchDataset(torch.utils.data.Dataset):
             "atomic_numbers": atomic_numbers,
             "positions": positions,
             "E_label": E_label,
-            "atomic_subsystem_counts": [atomic_numbers.shape[0]],
+            "atomic_subsystem_counts": torch.tensor([atomic_numbers.shape[0]]),
             "idx": idx,
         }
 
@@ -571,13 +571,15 @@ def collate_conformers(
             [conf["idx"]] * conf["atomic_subsystem_counts"][0]
         )
     atomic_numbers_cat = torch.cat(atomic_numbers_list)
-    positions_cat = torch.cat(positions_list)
+    positions_cat = torch.cat(positions_list).requires_grad_(True)
     E_stack = torch.stack(E_list)
     return {
         "atomic_numbers": atomic_numbers_cat,
         "positions": positions_cat,
         "E_label": E_stack,
-        "atomic_subsystem_counts": atomic_subsystem_counts,
+        "atomic_subsystem_counts": torch.tensor(
+            atomic_subsystem_counts, dtype=torch.int32
+        ),
         "atomic_subsystem_indices": torch.tensor(
             atomic_subsystem_indices, dtype=torch.int32
         ),

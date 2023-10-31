@@ -25,7 +25,6 @@ dependencies:
   - retry
   - sqlitedict
   - schnetpack
-  - pytorch-scatter
 
   # Testing
   - pytest>=2.1

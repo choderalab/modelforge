@@ -192,14 +192,12 @@ class EnergyReadout(nn.Module):
         Tensor, shape [nr_of_moleculs_in_batch, 1]
             The total energy tensor.
         """
-        import torch_scatter
 
         x = self.energy_layer(x)
 
         # Perform scatter add operation
-        result = torch_scatter.scatter_add(
-            x.t(), atomic_subsystem_indices.to(torch.int64), dim=1
-        ).t()
+        indices = atomic_subsystem_indices.to(torch.int64).unsqueeze(1)
+        result = torch.zeros(len(atomic_subsystem_indices.unique()), 1).scatter_add(0, indices, x)
 
         # Sum across feature dimension to get final tensor of shape (num_molecules, 1)
         total_energy_per_molecule = result.sum(dim=1, keepdim=True)

@@ -176,25 +176,33 @@ class EnergyReadout(nn.Module):
         super().__init__()
         self.energy_layer = nn.Linear(n_atom_basis, 1)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, atomic_subsystem_indices: torch.Tensor
+    ) -> torch.Tensor:
         """
         Forward pass for the energy readout.
 
         Parameters
         ----------
-        x : Tensor, shape [batch, n_atoms, n_atom_basis]
+        x : Tensor, shape [nr_of_atoms_in_batch, n_atom_basis]
             Input tensor for the forward pass.
 
         Returns
         -------
-        Tensor, shape [batch, 1]
+        Tensor, shape [nr_of_moleculs_in_batch, 1]
             The total energy tensor.
         """
-        x = self.energy_layer(
-            x
-        )  # in [batch, n_atoms, n_atom_basis], out [batch, n_atoms, 1]
-        total_energy = x.sum(dim=1)  # in [batch, n_atoms, 1], out [batch, 1]
-        return total_energy
+
+        x = self.energy_layer(x)
+
+        # Perform scatter add operation
+        indices = atomic_subsystem_indices.to(torch.int64).unsqueeze(1)
+        result = torch.zeros(len(atomic_subsystem_indices.unique()), 1).scatter_add(0, indices, x)
+
+        # Sum across feature dimension to get final tensor of shape (num_molecules, 1)
+        total_energy_per_molecule = result.sum(dim=1, keepdim=True)
+
+        return total_energy_per_molecule
 
 
 class ShiftedSoftplus(nn.Module):
@@ -301,37 +309,53 @@ def _distance_to_radial_basis(
     return f_ij, rcut_ij
 
 
-# taken from torchani repository: https://github.com/aiqm/torchani
 def neighbor_pairs_nopbc(
-    padding_mask: torch.Tensor, coordinates: torch.Tensor, cutoff: float
+    coordinates: torch.Tensor, atomic_subsystem_indices: torch.Tensor, cutoff: float
 ) -> torch.Tensor:
     """Compute pairs of atoms that are neighbors (doesn't use PBC)
 
-    This function bypasses the calculation of shifts and duplication
-    of atoms in order to make calculations faster
-
-    Arguments:
-        padding_mask (:class:`torch.Tensor`): boolean tensor of shape
-            (molecules, atoms) for padding mask. 1 == is padding.
-        coordinates (:class:`torch.Tensor`): tensor of shape
-            (molecules, atoms, 3) for atom coordinates.
-        cutoff (float): the cutoff inside which atoms are considered pairs
+    Parameters
+    ----------
+    coordinates : torch.Tensor, shape (nr_atoms_per_systems, 3)
+    atomic_subsystem_indices : torch.Tensor, shape (nr_atoms_per_systems)
+        Atom indices to indicate which atoms belong to which molecule
+    cutoff : float
+        the cutoff inside which atoms are considered pairs
     """
-    import math
-
-    coordinates = coordinates.detach().masked_fill(padding_mask.unsqueeze(-1), math.nan)
-    current_device = coordinates.device
-    num_atoms = padding_mask.shape[1]
-    num_mols = padding_mask.shape[0]
-    p12_all = torch.triu_indices(num_atoms, num_atoms, 1, device=current_device)
-    p12_all_flattened = p12_all.view(-1)
-
-    pair_coordinates = coordinates.index_select(1, p12_all_flattened).view(
-        num_mols, 2, -1, 3
+    positions = coordinates.detach()
+    # generate index grid
+    n = len(atomic_subsystem_indices)
+    i_indices, j_indices = torch.triu_indices(n, n, 1)
+    print(atomic_subsystem_indices[i_indices])
+    # filter pairs to only keep those belonging to the same molecule
+    same_molecule_mask = (
+        atomic_subsystem_indices[i_indices] == atomic_subsystem_indices[j_indices]
     )
-    distances = (pair_coordinates[:, 0, ...] - pair_coordinates[:, 1, ...]).norm(2, -1)
-    in_cutoff = (distances <= cutoff).nonzero()
-    molecule_index, pair_index = in_cutoff.unbind(1)
-    molecule_index *= num_atoms
-    atom_index12 = p12_all[:, pair_index] + molecule_index
-    return atom_index12
+
+    # Apply mask to get final pair indices
+    i_final_pairs = i_indices[same_molecule_mask]
+    j_final_pairs = j_indices[same_molecule_mask]
+
+    # concatenate to form final (2, n_pairs) tensor
+    pair_indices = torch.stack((i_final_pairs, j_final_pairs))
+
+    # create pair_coordinates tensor
+    pair_coordinates = positions[pair_indices.T]
+    pair_coordinates = pair_coordinates.view(-1, 2, 3)
+
+    # Calculate distances
+    distances = (pair_coordinates[:, 0, :] - pair_coordinates[:, 1, :]).norm(
+        p=2, dim=-1
+    )
+    # Calculate distances
+    distances = (pair_coordinates[:, 0, :] - pair_coordinates[:, 1, :]).norm(
+        p=2, dim=-1
+    )
+
+    # Find pairs within the cutoff
+    in_cutoff = (distances <= cutoff).nonzero(as_tuple=False).squeeze()
+
+    # Get the atom indices within the cutoff
+    pair_indices_within_cutoff = pair_indices[:, in_cutoff]
+
+    return pair_indices_within_cutoff

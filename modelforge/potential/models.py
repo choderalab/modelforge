@@ -40,13 +40,13 @@ class PairList(nn.Module):
         self.cutoff = cutoff
 
     def compute_r_ij(
-        self, atom_pairs: torch.Tensor, positions: torch.Tensor
+        self, pair_indices: torch.Tensor, positions: torch.Tensor
     ) -> torch.Tensor:
         """Compute displacement vector between atom pairs.
 
         Parameters
         ----------
-        atom_pairs : torch.Tensor, shape [2, n_pairs]
+        pair_indices : torch.Tensor, shape [2, n_pairs]
             Atom indices for pairs of atoms
         positions : torch.Tensor, shape [nr_systems, nr_atoms, 3]
             Atom positions.
@@ -56,38 +56,38 @@ class PairList(nn.Module):
         torch.Tensor, shape [n_pairs, 3]
             Displacement vector between atom pairs.
         """
-        flattened_positions = positions.flatten(0, 1)
-        selected_positions = flattened_positions.index_select(
-            0, atom_pairs.view(-1)
-        ).view(2, -1, 3)
+        # Select the pairs of atom coordinates from the positions
+        selected_positions = positions.index_select(0, pair_indices.view(-1)).view(
+            2, -1, 3
+        )
         return selected_positions[0] - selected_positions[1]
 
     def forward(
-        self, mask_padding: torch.Tensor, positions: torch.Tensor
+        self, positions: torch.Tensor, atomic_subsystem_indices: torch.Tensor
     ) -> Dict[str, torch.Tensor]:
         """
         Forward pass for PairList.
 
         Parameters
         ----------
-        mask : torch.Tensor, shape [nr_systems, nr_atoms]
-            Mask tensor.
         positions : torch.Tensor, shape [nr_systems, nr_atoms, 3]
             Position tensor.
-
+        atomic_subsystem_indices : torch.Tensor, shape [nr_atoms]
         Returns
         -------
         dict : Dict[str, torch.Tensor], containing atom index pairs, distances, and displacement vectors.
-            - 'pairlist': torch.Tensor, shape (2, n_pairs)
+            - 'pair_indices': torch.Tensor, shape (2, n_pairs)
             - 'r_ij' : torch.Tensor, shape (1, n_pairs)
             - 'd_ij' : torch.Tenso, shape (3, n_pairs)
 
         """
-        pairlist = self.calculate_neighbors(mask_padding, positions, self.cutoff)
-        r_ij = self.compute_r_ij(pairlist, positions)
+        pair_indices = self.calculate_neighbors(
+            positions, atomic_subsystem_indices, self.cutoff
+        )
+        r_ij = self.compute_r_ij(pair_indices, positions)
 
         return {
-            "pairlist": pairlist,
+            "pair_indices": pair_indices,
             "d_ij": r_ij.norm(2, -1),
             "r_ij": r_ij,
         }
@@ -194,7 +194,7 @@ class AbstractBaseNNP(nn.Module, ABC):
             - pairlist, shape (n_paris,2)
             - r_ij, shape (n_pairs, 1)
             - d_ij, shape (n_pairs, 3)
-            - 'atomic_subsystem_index' (optional), shape n_atoms
+            - 'atomic_subsystem_indices' (optional), shape n_atoms
             - positions, shape (n_systems, n_atoms, 3)
 
         """
@@ -216,7 +216,7 @@ class AbstractBaseNNP(nn.Module, ABC):
             If the input dictionary is missing required keys or has invalid shapes.
 
         """
-        required_keys = ["atomic_numbers", "positions"]
+        required_keys = ["atomic_numbers", "positions", "atomic_subsystem_indices"]
         for key in required_keys:
             if key not in inputs:
                 raise ValueError(f"Missing required key: {key}")
@@ -224,8 +224,8 @@ class AbstractBaseNNP(nn.Module, ABC):
         if inputs["atomic_numbers"].dim() != 2:
             raise ValueError("Shape mismatch: 'atomic_numbers' should be a 2D tensor.")
 
-        if inputs["positions"].dim() != 3:
-            raise ValueError("Shape mismatch: 'positions' should be a 3D tensor.")
+        if inputs["positions"].dim() != 2:
+            raise ValueError("Shape mismatch: 'positions' should be a 2D tensor.")
 
 
 class BaseNNP(AbstractBaseNNP):
@@ -269,7 +269,7 @@ class BaseNNP(AbstractBaseNNP):
 
         super().__init__()
         self.calculate_distances_and_pairlist = PairList(cutoff)
-        self.embedding = nn.Embedding(nr_of_embeddings, nr_atom_basis, padding_idx=0)
+        self.embedding = nn.Embedding(nr_of_embeddings, nr_atom_basis)
         self.nr_of_embeddings = nr_of_embeddings
 
     def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
@@ -280,9 +280,9 @@ class BaseNNP(AbstractBaseNNP):
         ----------
         inputs : Dict[str, torch.Tensor]
             Inputs containing atomic numbers ('atomic_numbers'), coordinates ('positions') and pairlist ('pairlist').
-            - 'atomic_numbers': int; shape (n_systems, n_atoms), 0 indicates non-interacting atoms that will be masked
+            - 'atomic_numbers': int; shape (nr_of_atoms_in_batch, 1), 0 indicates non-interacting atoms that will be masked
             - 'total_charge' : int; shape (n_system)
-            - 'positions': float; shape (n_systems, n_atoms, 3)
+            - 'positions': float; shape (nr_of_atoms_in_batch, 3)
 
         Returns
         -------
@@ -291,21 +291,24 @@ class BaseNNP(AbstractBaseNNP):
 
         """
         self.input_checks(inputs)
-        atomic_numbers = inputs["atomic_numbers"]  # shape (n_systems, n_atoms, 3)
-        positions = inputs["positions"]  # shape (n_systems, n_atoms, 3)
-        mask_padding = atomic_numbers == 0
+        atomic_numbers = inputs["atomic_numbers"].squeeze(
+            dim=1
+        )  # shape (nr_of_atoms_in_batch, 3)
+        positions = inputs["positions"]  # shape (nr_of_atoms_in_batch, 3)
+        atomic_subsystem_indices = inputs["atomic_subsystem_indices"]
 
-        pairlist = self.calculate_distances_and_pairlist(mask_padding, positions)
+        r = self.calculate_distances_and_pairlist(positions, atomic_subsystem_indices)
         atomic_numbers_embedding = self.embedding(
             atomic_numbers
-        )  # shape (batch_size, n_atoms, n_atom_basis)
+        )  # shape (nr_of_atoms_in_batch, n_atom_basis)
         inputs = {
-            "pairlist": pairlist["pairlist"],
-            "d_ij": pairlist["d_ij"],
-            "r_ij": pairlist["r_ij"],
+            "pair_indices": r["pair_indices"],
+            "d_ij": r["d_ij"],
+            "r_ij": r["r_ij"],
             "atomic_numbers_embedding": atomic_numbers_embedding,
             "positions": positions,
             "atomic_numbers": atomic_numbers,
+            "atomic_subsystem_indices": atomic_subsystem_indices,
         }
         return self._forward(inputs)
 

@@ -65,7 +65,7 @@ def test_different_properties_of_interest(dataset):
     dataset = factory.create_dataset(data)
     raw_data_item = dataset[0]
     assert isinstance(raw_data_item, dict)
-    assert len(raw_data_item) == 4
+    assert len(raw_data_item) == 5
 
     data.properties_of_interest = ["internal_energy_at_0K", "geometry"]
     assert data.properties_of_interest == [
@@ -167,8 +167,8 @@ def test_dataset_generation(dataset):
     # a batch of 64 and a batch of 16 samples
     assert len(train_dataloader) == 2  # nr of batches
     v = [v_ for v_ in train_dataloader]
-    assert len(v[0]["atomic_numbers"]) == 64
-    assert len(v[1]["atomic_numbers"]) == 16
+    assert len(v[0]["atomic_subsystem_counts"]) == 64
+    assert len(v[1]["atomic_subsystem_counts"]) == 16
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
@@ -203,17 +203,16 @@ def test_file_cache_methods(dataset):
     """
 
     # generate files to test _from_hdf5()
-    from modelforge.dataset.transformation import default_transformation
 
-    _ = initialize_dataset(dataset, mode="str")
+    _ = initialize_dataset(dataset, mode="fit")
 
     data = dataset(for_unit_testing=True)
 
     data._from_hdf5()
 
-    data._to_file_cache(None, default_transformation)
+    data._to_file_cache()
     data._from_file_cache()
-    assert len(data.numpy_data["geometry"]) == 100
+    assert len(data.numpy_data["atomic_subsystem_counts"]) == 100
 
 
 @pytest.mark.parametrize("dataset", DATASETS)

@@ -1,5 +1,5 @@
 import torch.nn as nn
-from loguru import logger
+from loguru import logger as log
 from typing import Dict, Type, Callable, Optional, Tuple
 
 from .models import BaseNNP, LightningModuleMixin
@@ -7,9 +7,8 @@ from .utils import (
     sequential_block,
 )
 import torch
-import torch.nn.functional as F
-from modelforge.potential.utils import _distance_to_radial_basis
 from torch.nn import SiLU
+from modelforge.potential.utils import CosineCutoff
 
 
 class PaiNN(BaseNNP):
@@ -26,7 +25,7 @@ class PaiNN(BaseNNP):
         nr_atom_basis: int,
         nr_interactions: int,
         n_rbf: int,
-        cutoff_fn: Optional[Callable] = None,
+        cutoff_fn: Optional[Callable] = CosineCutoff(5.0),
         activation: Optional[Callable] = SiLU,
         nr_of_embeddings: int = 100,
         shared_interactions: bool = False,
@@ -60,7 +59,7 @@ class PaiNN(BaseNNP):
             Equivariant message passing for the prediction of tensorial properties and molecular spectra.
             ICML 2021, http://proceedings.mlr.press/v139/schutt21a.html
         """
-        from .utils import GaussianRBF
+        from .utils import GaussianRBF, EnergyReadout
 
         super().__init__(nr_of_embeddings, nr_atom_basis)
 
@@ -69,6 +68,7 @@ class PaiNN(BaseNNP):
         self.cutoff_fn = cutoff_fn
         self.cutoff = cutoff_fn.cutoff
         self.share_filters = shared_filters
+        self.readout = EnergyReadout(nr_atom_basis)
 
         if shared_filters:
             self.filter_net = nn.Sequential(
@@ -107,13 +107,15 @@ class PaiNN(BaseNNP):
         Dict[str, torch.Tensor]
             Dictionary containing scalar and vector representations.
         """
+        from modelforge.potential.utils import _distance_to_radial_basis
+
         # extract properties from pairlist
         d_ij = inputs["d_ij"].unsqueeze(-1)  # n_pairs, 1
         r_ij = inputs["r_ij"]
         atomic_numbers_embedding = inputs["atomic_numbers_embedding"]
         qs = atomic_numbers_embedding.shape
 
-        q = atomic_numbers_embedding.reshape(qs[0] * qs[1], 1, qs[2])
+        q = atomic_numbers_embedding.reshape(qs[0], 1, qs[1])
         # compute atom and pair features
         dir_ij = r_ij / d_ij
         # torch.Size([1150, 1, 32])
@@ -127,7 +129,7 @@ class PaiNN(BaseNNP):
             filter_list = torch.split(filters, 3 * self.n_atom_basis, dim=-1)
 
         mu = torch.zeros(
-            (qs[0] * qs[1], 3, qs[2]), device=q.device
+            (qs[0], 3, qs[1]), device=q.device
         )  # nr_of_systems * nr_of_atoms, 3, n_atom_basis
 
         for i, (interaction, mixing) in enumerate(zip(self.interactions, self.mixing)):
@@ -136,15 +138,22 @@ class PaiNN(BaseNNP):
                 mu,
                 filter_list[i],
                 dir_ij,
-                inputs["pairlist"],
+                inputs["pair_indices"],
             )
             q, mu = mixing(q, mu)
 
         atomic_numbers_embedding = atomic_numbers_embedding.squeeze(1)
-        return {
-            "scalar_representation": q,
+
+        # Use squeeze to remove dimensions of size 1
+        q_ = q.squeeze(dim=1)
+
+        _r = {
+            "scalar_representation": q_,
             "vector_representation": mu,
         }
+        return self.readout(
+            _r["scalar_representation"], inputs["atomic_subsystem_indices"]
+        )
 
 
 class PaiNNInteraction(nn.Module):

@@ -60,7 +60,7 @@ def return_single_batch(
     dataset : class
         Dataset class.
     mode : str
-        Mode to setup the dataset ('train', 'val', or 'test').
+        Mode to setup the dataset ('fit', or 'test').
 
     Returns
     -------
@@ -84,7 +84,8 @@ def initialize_dataset(
     dataset : class
         Dataset class.
     mode : str
-        Mode to setup the dataset ('train', 'val', or 'test').
+        Mode to setup the dataset. Either "fit" for training/validation split
+        or "test" for test split.
 
     Returns
     -------
@@ -95,7 +96,7 @@ def initialize_dataset(
     data = dataset(for_unit_testing=for_unit_testing)
     data_module = TorchDataModule(data, split_file=split_file)
     data_module.prepare_data()
-    data_module.setup(mode)
+    data_module.setup(stage=mode)
     return data_module
 
 
@@ -118,10 +119,10 @@ def prepare_pairlist_for_single_batch(
 
     from modelforge.potential.models import PairList
 
-    R = batch["positions"]
-    mask = batch["atomic_numbers"] == 0
+    positions = batch["positions"]
+    atomic_subsystem_indices = batch["atomic_subsystem_indices"]
     pairlist = PairList(cutoff=5.0)
-    return pairlist(mask, R)
+    return pairlist(positions, atomic_subsystem_indices)
 
 
 def generate_methane_input() -> Dict[str, torch.Tensor]:
@@ -134,18 +135,84 @@ def generate_methane_input() -> Dict[str, torch.Tensor]:
         Dictionary with keys 'Z', 'R', 'E'.
     """
 
-    Z = torch.tensor([[6, 1, 1, 1, 1]], dtype=torch.int64)
-    R = torch.tensor(
+    atomic_numbers = torch.tensor([[6], [1], [1], [1], [1]], dtype=torch.int64)
+    positions = torch.tensor(
         [
-            [
-                [0.0, 0.0, 0.0],
-                [0.63918859, 0.63918859, 0.63918859],
-                [-0.63918859, -0.63918859, 0.63918859],
-                [-0.63918859, 0.63918859, -0.63918859],
-                [0.63918859, -0.63918859, -0.63918859],
-            ]
+            [0.0, 0.0, 0.0],
+            [0.63918859, 0.63918859, 0.63918859],
+            [-0.63918859, -0.63918859, 0.63918859],
+            [-0.63918859, 0.63918859, -0.63918859],
+            [0.63918859, -0.63918859, -0.63918859],
         ],
         requires_grad=True,
     )
-    E = torch.tensor([0.0], requires_grad=True)
-    return {"atomic_numbers": Z, "positions": R, "E_labels": E}
+    E_labels = torch.tensor([0.0], requires_grad=True)
+    atomic_subsystem_indices = torch.tensor([0, 0, 0, 0, 0], dtype=torch.int32)
+    return {
+        "atomic_numbers": atomic_numbers,
+        "positions": positions,
+        "E_labels": E_labels,
+        "atomic_subsystem_indices": atomic_subsystem_indices,
+    }
+
+
+def generate_mock_data():
+    return {
+        "atomic_numbers": torch.tensor([[1], [2], [2], [3]]),
+        "positions": torch.tensor(
+            [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [0.0, 0.0, 0.0], [1.0, 1.0, 1.0]],
+            requires_grad=True,
+        ),
+        "atomic_subsystem_indices": torch.tensor([0, 0, 1, 1]),
+    }
+
+
+def generate_batch_data():
+    return return_single_batch(QM9Dataset, mode="fit")
+
+
+def generate_interaction_block_data(
+    nr_atom_basis: int, nr_embeddings: int, nr_rbf: int
+) -> Dict[str, torch.Tensor]:
+    """
+    Prepare inputs for testing the SchNet interaction block.
+
+    Parameters
+    ----------
+    nr_atom_basis : int
+        Number of atom basis.
+    nr_embeddings : int
+        Number of embeddings.
+
+    Returns
+    -------
+    Dict[str, torch.Tensor]
+        Dictionary containing tensors for the interaction block test.
+    """
+
+    import torch.nn as nn
+
+    from modelforge.dataset.qm9 import QM9Dataset
+    from modelforge.potential.utils import GaussianRBF, _distance_to_radial_basis
+
+    embedding = nn.Embedding(nr_embeddings, nr_atom_basis, padding_idx=0)
+    batch = return_single_batch(QM9Dataset, "fit")
+    r = prepare_pairlist_for_single_batch(batch)
+    radial_basis = GaussianRBF(n_rbf=nr_rbf, cutoff=5.0)
+
+    d_ij = r["d_ij"]
+    f_ij, rcut_ij = _distance_to_radial_basis(d_ij, radial_basis)
+    return {
+        "x": embedding(batch["atomic_numbers"].squeeze(dim=1)),
+        "f_ij": f_ij,
+        "pair_indices": r["pair_indices"],
+        "rcut_ij": rcut_ij,
+        "atomic_subsystem_indices": batch["atomic_subsystem_indices"],
+    }
+
+
+SIMPLIFIED_INPUT_DATA = [
+    generate_methane_input(),
+    generate_mock_data(),
+    generate_batch_data(),
+]

@@ -6,12 +6,30 @@ from modelforge.potential.pain import PaiNN
 from modelforge.potential.utils import CosineCutoff
 
 IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
+from .helper_functions import (
+    SIMPLIFIED_INPUT_DATA,
+)
 
 
 def test_PaiNN_init():
     """Test initialization of the PaiNN neural network potential."""
     painn = PaiNN(128, 6, 10, cutoff_fn=CosineCutoff(5.0))
     assert painn is not None, "PaiNN model should be initialized."
+
+
+@pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
+def test_painn_forward(input_data):
+    """
+    Test the forward pass of the Schnet model.
+    """
+    model = PaiNN(128, 6, 10, cutoff_fn=CosineCutoff(5.0))
+    energy = model(input_data)
+    nr_of_mols = input_data["atomic_subsystem_indices"].unique().shape[0]
+
+    assert energy.shape == (
+        nr_of_mols,
+        1,
+    )  # Assuming energy is calculated per sample in the batch
 
 
 @pytest.mark.skipif(

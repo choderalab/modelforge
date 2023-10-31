@@ -1,8 +1,8 @@
-from typing import Dict, Type
+from typing import Dict, Type, Optional
 
 import torch
+from loguru import logger as log
 import torch.nn as nn
-from loguru import logger
 
 from .models import BaseNNP, LightningModuleMixin
 from .utils import _distance_to_radial_basis
@@ -11,31 +11,34 @@ from .utils import _distance_to_radial_basis
 class SchNET(BaseNNP):
     def __init__(
         self,
-        nr_atom_basis: int,
+        embedding: nn.Module,
         nr_interactions: int,
         nr_filters: int = 0,
         cutoff: float = 5.0,
-        nr_of_embeddings: int = 100,
     ) -> None:
         """
         Initialize the SchNet class.
 
         Parameters
         ----------
-        nr_atom_basis : int
-            Number of atom basis; defines the dimensionality of the output features.
+        embedding : nn.Module
         nr_interactions : int
             Number of interaction blocks in the architecture.
         nr_filters : int, optional
             Number of filters; defines the dimensionality of the intermediate features (default is 0).
         cutoff : float, optional
             Cutoff value for the pairlist (default is 5.0 Angstrom).
-        nr_of_embeddings: int, optional
-            Number of embeddings (default is 100).
         """
         from .utils import EnergyReadout
 
-        super().__init__(nr_of_embeddings, nr_atom_basis, cutoff)
+        nr_atom_basis = embedding.embedding_dim
+        log.debug("Initializing SchNet model.")
+        log.debug(
+            f"Passed parameters to constructor: {nr_atom_basis=}, {nr_interactions=}, {nr_filters=}, {cutoff=}"
+        )
+        log.debug(f"Initialized embedding: {embedding=}")
+
+        super().__init__(embedding, cutoff)
 
         # Initialize representation, readout, and interaction layers
         self.representation = SchNETRepresentation(cutoff)
@@ -146,7 +149,7 @@ class SchNETInteractionBlock(nn.Module):
         """
 
         # Map input features to the filter space
-        x = self.intput_to_feature(x)   
+        x = self.intput_to_feature(x)
 
         # Generate interaction filters based on radial basis functions
         Wij = self.filter_network(f_ij)
@@ -215,7 +218,7 @@ class SchNETRepresentation(nn.Module):
 class LightningSchNET(SchNET, LightningModuleMixin):
     def __init__(
         self,
-        nr_atom_basis: int,
+        embedding: nn.Module,
         nr_interactions: int,
         nr_filters: int = 0,
         cutoff: float = 5.0,
@@ -228,8 +231,6 @@ class LightningSchNET(SchNET, LightningModuleMixin):
 
         Parameters
         ----------
-        nr_atom_basis : int
-            Dimensionality of the output features.
         nr_interactions : int
             Number of interaction blocks in the architecture.
         nr_filters : int, optional
@@ -244,7 +245,7 @@ class LightningSchNET(SchNET, LightningModuleMixin):
             Learning rate (default is 1e-3).
         """
 
-        super().__init__(nr_atom_basis, nr_interactions, nr_filters, cutoff)
+        super().__init__(embedding, nr_interactions, nr_filters, cutoff)
         self.loss_function = loss
         self.optimizer = optimizer
         self.learning_rate = lr

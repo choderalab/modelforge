@@ -4,12 +4,10 @@ import sys
 import numpy as np
 import pytest
 import torch
-from torch.utils.data import DataLoader
 
-from modelforge.dataset.dataset import DatasetFactory, TorchDataModule, TorchDataset
-from modelforge.dataset.qm9 import QM9Dataset
+from modelforge.dataset.dataset import DatasetFactory, TorchDataset
 
-from .helper_functinos import initialize_dataset, DATASETS
+from .helper_functions import initialize_dataset, DATASETS
 
 
 @pytest.fixture(
@@ -50,31 +48,28 @@ def generate_torch_dataset(dataset) -> TorchDataset:
 
 def test_dataset_imported():
     """Sample test, will always pass so long as import statement worked."""
-    import modelforge.dataset
 
     assert "modelforge.dataset" in sys.modules
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_different_properties_of_interest(dataset):
-    from modelforge.dataset.transformation import default_transformation
-
     factory = DatasetFactory()
     data = dataset(for_unit_testing=True)
     assert data.properties_of_interest == [
         "geometry",
         "atomic_numbers",
-        "return_energy",
+        "internal_energy_at_0K",
     ]
 
     dataset = factory.create_dataset(data)
     raw_data_item = dataset[0]
     assert isinstance(raw_data_item, dict)
-    assert len(raw_data_item) == 4
+    assert len(raw_data_item) == 5
 
-    data.properties_of_interest = ["return_energy", "geometry"]
+    data.properties_of_interest = ["internal_energy_at_0K", "geometry"]
     assert data.properties_of_interest == [
-        "return_energy",
+        "internal_energy_at_0K",
         "geometry",
     ]
 
@@ -82,7 +77,7 @@ def test_different_properties_of_interest(dataset):
     raw_data_item = dataset[0]
     print(raw_data_item)
     assert isinstance(raw_data_item, dict)
-    assert len(raw_data_item) != 3  
+    assert len(raw_data_item) != 3
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
@@ -121,21 +116,25 @@ def test_data_item_format(dataset):
     """Test the format of individual data items in the dataset."""
     from typing import Dict
 
-    dataset = initialize_dataset(dataset, mode="fit")
+    dataset = initialize_dataset(
+        dataset, mode="fit", split_file="modelforge/tests/qm9tut/split.npz"
+    )
 
     raw_data_item = dataset.dataset[0]
     assert isinstance(raw_data_item, Dict)
-    assert isinstance(raw_data_item["Z"], torch.Tensor)
-    assert isinstance(raw_data_item["R"], torch.Tensor)
-    assert isinstance(raw_data_item["E"], torch.Tensor)
+    assert isinstance(raw_data_item["atomic_numbers"], torch.Tensor)
+    assert isinstance(raw_data_item["positions"], torch.Tensor)
+    assert isinstance(raw_data_item["E_label"], torch.Tensor)
     print(raw_data_item)
 
-    assert raw_data_item["Z"].shape[0] == raw_data_item["R"].shape[0]
+    assert (
+        raw_data_item["atomic_numbers"].shape[0] == raw_data_item["positions"].shape[0]
+    )
 
 
 def test_padding():
     """Test the padding function to ensure correct behavior on dummy data."""
-    from modelforge.dataset.utils import pad_molecules, pad_to_max_length
+    from modelforge.dataset.utils import pad_molecules
 
     dummy_data = np.array([[0, 0, 0], [0, 0, 0], [0, 0, 0]]), np.array(
         [[0, 0, 0], [0, 0, 0]]
@@ -152,7 +151,6 @@ def test_padding():
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_dataset_generation(dataset):
     """Test the splitting of the dataset."""
-    from modelforge.dataset.utils import RandomSplittingStrategy
 
     dataset = initialize_dataset(dataset, mode="fit")
     train_dataloader = dataset.train_dataloader()
@@ -165,12 +163,12 @@ def test_dataset_generation(dataset):
         pass
 
     # the dataloader automatically splits and batches the dataset
-    # for the trianing set it batches the 80 datapoints in
+    # for the training set it batches the 80 datapoints in
     # a batch of 64 and a batch of 16 samples
     assert len(train_dataloader) == 2  # nr of batches
     v = [v_ for v_ in train_dataloader]
-    assert len(v[0]["Z"]) == 64
-    assert len(v[1]["Z"]) == 16
+    assert len(v[0]["atomic_subsystem_counts"]) == 64
+    assert len(v[1]["atomic_subsystem_counts"]) == 16
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
@@ -181,8 +179,8 @@ def test_dataset_splitting(dataset):
     dataset = generate_torch_dataset(dataset)
     train_dataset, val_dataset, test_dataset = RandomSplittingStrategy().split(dataset)
 
-    energy = train_dataset[0]["E"].item()
-    assert np.isclose(energy, -157.09958704371914)
+    energy = train_dataset[0]["E_label"].item()
+    assert np.isclose(energy, -412509.9375)
     print(energy)
 
     try:
@@ -205,17 +203,16 @@ def test_file_cache_methods(dataset):
     """
 
     # generate files to test _from_hdf5()
-    from modelforge.dataset.transformation import default_transformation
 
-    _ = initialize_dataset(dataset, mode="str")
+    _ = initialize_dataset(dataset, mode="fit")
 
     data = dataset(for_unit_testing=True)
 
     data._from_hdf5()
 
-    data._to_file_cache(None, default_transformation)
+    data._to_file_cache()
     data._from_file_cache()
-    assert len(data.numpy_data["geometry"]) == 100
+    assert len(data.numpy_data["atomic_subsystem_counts"]) == 100
 
 
 @pytest.mark.parametrize("dataset", DATASETS)

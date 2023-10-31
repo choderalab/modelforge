@@ -1,38 +1,68 @@
-from loguru import logger
-
-from modelforge.potential.schnet import Schnet
-
-from .helper_functinos import methane_input
 import torch
+
+from modelforge.potential.schnet import SchNET
+
+import pytest
+from .helper_functions import (
+    SIMPLIFIED_INPUT_DATA,
+    generate_interaction_block_data
+)
+
+nr_atom_basis = 128
+nr_embeddings = 100
 
 
 def test_Schnet_init():
-    schnet = Schnet(128, 6, 2)
-    assert schnet is not None
+    """Test initialization of the Schnet model."""
+    schnet = SchNET(128, 6, 2)
+    assert schnet is not None, "Schnet model should be initialized."
 
 
-def test_schnet_forward():
-    model = Schnet(128, 3)
-    inputs = {
-        "Z": torch.tensor([[1, 2], [2, 3]]),
-        "R": torch.tensor(
-            [[[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]], [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]]
-        ),
-    }
-    energy = model.calculate_energy(inputs)
+@pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
+def test_schnet_forward(input_data):
+    """
+    Test the forward pass of the Schnet model.
+    """
+    model = SchNET(128, 3)
+    energy = model(input_data)
+    nr_of_mols = input_data["atomic_subsystem_indices"].unique().shape[0]
+
     assert energy.shape == (
-        2,
+        nr_of_mols,
         1,
     )  # Assuming energy is calculated per sample in the batch
 
 
-def test_calculate_energies_and_forces():
-    # this test will be adopted as soon as we have a
-    # trained model. Here we want to test the
-    # energy and force calculatino on Methane
+def test_schnet_interaction_layer():
+    """
+    Test the SchNet interaction layer.
+    """
+    from modelforge.potential.schnet import SchNETInteractionBlock
 
-    schnet = Schnet(128, 6, 64)
-    methane_inputs = methane_input()
-    result = schnet.calculate_energy(methane_inputs)
-    logger.debug(result)
-    assert result.shape[0] == 1  # Assuming only one molecule
+    nr_atom_basis = 127
+    nr_embeddings = 97
+    nr_rbf = 19
+
+    interaction_data = generate_interaction_block_data(nr_atom_basis, nr_embeddings, nr_rbf)
+    nr_of_atoms_per_batch = interaction_data["atomic_subsystem_indices"].shape[0]
+
+    assert interaction_data["x"].shape == (
+        nr_of_atoms_per_batch,
+        nr_atom_basis,
+    ), "Input shape mismatch for x tensor."
+    interaction = SchNETInteractionBlock(nr_atom_basis=nr_atom_basis, nr_filters=3, nr_rbf=nr_rbf)
+    v = interaction(
+        interaction_data["x"],
+        interaction_data["pair_indices"],
+        interaction_data["f_ij"],
+        interaction_data["rcut_ij"],
+    )
+    assert v.shape == (
+        nr_of_atoms_per_batch,
+        nr_atom_basis,
+    ), "Output shape mismatch for v tensor."
+
+
+# def test_schnet_reimplementation_against_original_implementation():
+#    import numpy as np
+#    np.load('tests/qm9tut/split.npz')['train_idx']

@@ -1,19 +1,12 @@
-import requests
-from loguru import logger
-import os
-from tqdm import tqdm
-
-from typing import Optional
-from openff.units import unit, Quantity
-import pint
-import qcelemental as qcel
-
-import tarfile
-from modelforge.curation.utils import *
+from modelforge.curation.curation_baseclass import DatasetCuration
+from modelforge.utils.units import *
 import numpy as np
 
+from typing import Optional, List
+from loguru import logger
 
-class QM9_curation:
+
+class QM9Curation(DatasetCuration):
     """
     Routines to fetch and process the QM9 dataset into a curated hdf5 file.
 
@@ -31,39 +24,31 @@ class QM9_curation:
     ----------
     hdf5_file_name: str, required
         Name of the hdf5 file that will be generated.
-    output_file_path: str, optional, default='./'
-        Path to write the output hdf5 file.
+    output_file_dir: str, optional, default='./'
+        Location to write the output hdf5 file.
     local_cache_dir: str, optional, default='./qm9_datafiles'
         Location to save downloaded dataset.
     convert_units: bool, optional, default=True
-        Convert from [angstrom, hartree] (i.e., source units)
-        to [nanometer, kJ/mol]
+        Convert from e.g., source units [angstrom, hartree]
+        to output units [nanometer, kJ/mol]
 
     Examples
     --------
-    >>> qm9_data = QM9_curation(hdf5_file_name='qm9_dataset.hdf5', local_cache_dir='~/datasets/qm9_dataset')
+    >>> qm9_data = QM9Curation(hdf5_file_name='qm9_dataset.hdf5', local_cache_dir='~/datasets/qm9_dataset')
     >>> qm9_data.process()
 
     """
 
-    def __init__(
-        self,
-        hdf5_file_name: str,
-        output_file_path: Optional[str] = "./",
-        local_cache_dir: Optional[str] = "./qm9_datafiles",
-        convert_units: Optional[bool] = True,
-    ):
-        self.local_cache_dir = local_cache_dir
-        self.output_file_path = output_file_path
-        self.hdf5_file_name = hdf5_file_name
-        self.convert_units = convert_units
+    def _init_dataset_parameters(self) -> None:
+        """
+        Define the key parameters for the QM9 dataset.
+        """
         self.dataset_download_url = (
             "https://springernature.figshare.com/ndownloader/files/3195389"
         )
+
         # Below, we define key pieces of information related to the dataset in the form of a dict.
-        # `dataset_download_url` is only the only variable used by the code to fetch the data.
-        # All other data is metadata that will be used to generate a README to go along with
-        # the HDF5 dataset and to document the key info within the code.
+        # Metadata will be used to generate a README to go along with the HDF5 dataset.
         self.dataset_description = {
             "publication_doi": "10.1038/sdata.2014.22",
             "figshare_dataset_doi": "10.6084/m9.figshare.c.978904.v5",
@@ -73,20 +58,186 @@ class QM9_curation:
             "dataset_citation": "Ramakrishnan, Raghunathan; Dral, Pavlo; Rupp, Matthias; Anatole von Lilienfeld, O. (2014). Quantum chemistry structures and properties of 134 kilo molecules. figshare. Collection. https://doi.org/10.6084/m9.figshare.c.978904.v5",
             "description": "QM9 Dataset: Includes 133,885 organic molecules with up to nine heavy atoms (CONF). All properties were calculated at the B3LYP/6-31G(2df,p) level of quantum chemistry.",
         }
-        # if convert_units is True we will
-        # convert the following units
-        self.unit_output_dict = {
-            "geometry": unit.nanometer,
-            "energy_of_homo": unit.kilojoule_per_mole,
-            "energy_of_lumo": unit.kilojoule_per_mole,
-            "lumo-homo_gap": unit.kilojoule_per_mole,
-            "zero_point_vibrational_energy": unit.kilojoule_per_mole,
-            "internal_energy_at_0K": unit.kilojoule_per_mole,
-            "internal_energy_at_298.15K": unit.kilojoule_per_mole,
-            "enthalpy_at_298.15K": unit.kilojoule_per_mole,
-            "free_energy_at_298.15K": unit.kilojoule_per_mole,
-            "heat_capacity_at_298.15K": unit.kilojoule_per_mole / unit.kelvin,
+
+        # if convert_units is True, we will convert each input unit (key) to the following output units (val)
+
+        self.qm_parameters = {
+            "geometry": {
+                "u_in": unit.angstrom,
+                "u_out": unit.nanometer,
+            },
+            "isotropic_polarizability": {
+                "u_in": unit.angstrom**3,
+                "u_out": unit.angstrom**3,
+            },
+            "rotational_constants": {
+                "u_in": unit.gigahertz,
+                "u_out": unit.gigahertz,
+            },
+            "charges": {
+                "u_in": unit.elementary_charge,
+                "u_out": unit.elementary_charge,
+            },
+            "energy_of_homo": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
+            "energy_of_lumo": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
+            "lumo-homo_gap": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
+            "zero_point_vibrational_energy": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
+            "internal_energy_at_0K": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
+            "formation_energy_at_0K": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
+            "reference_energy_at_0K": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
+            "internal_energy_at_298.15K": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
+            "reference_energy_at_298.15K": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
+            "enthalpy_at_298.15K": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
+            "reference_enthalpy_at_298.15K": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
+            "free_energy_at_298.15K": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
+            "reference_free_energy_at_298.15K": {
+                "u_in": unit.hartree,
+                "u_out": unit.kilojoule_per_mole,
+            },
+            "electronic_spatial_extent": {
+                "u_in": unit.angstrom**2,
+                "u_out": unit.angstrom**2,
+            },
+            "dipole_moment": {"u_in": unit.debye, "u_out": unit.debye},
+            "heat_capacity_at_298.15K": {
+                "u_in": unit.calorie_per_mole / unit.kelvin,
+                "u_out": unit.kilojoule_per_mole / unit.kelvin,
+            },
+            "harmonic_vibrational_frequencies": {
+                "u_in": unit.cm**-1,
+                "u_out": unit.cm**-1,
+            },
         }
+        # reference thermochemical data for each atom as provided in the atomref.txt file  provided in the publication
+        # Direct link to the atomref.txt datafile: https://ndownloader.figstatic.com/files/3195395
+        self.thermochemical_references = {
+            "H": {
+                "ZPVE": 0.000000 * unit.hartree,
+                "U_0K": -0.500273 * unit.hartree,
+                "U_298.15K": -0.498857 * unit.hartree,
+                "H_298.15K": -0.497912 * unit.hartree,
+                "G_298.15K": -0.510927 * unit.hartree,
+                "Cv": 2.981 * unit.calorie_per_mole / unit.kelvin,
+            },
+            "C": {
+                "ZPVE": 0.000000 * unit.hartree,
+                "U_0K": -37.846772 * unit.hartree,
+                "U_298.15K": -37.845355 * unit.hartree,
+                "H_298.15K": -37.844411 * unit.hartree,
+                "G_298.15K": -37.861317 * unit.hartree,
+                "Cv": 2.981 * unit.calorie_per_mole / unit.kelvin,
+            },
+            "N": {
+                "ZPVE": 0.000000 * unit.hartree,
+                "U_0K": -54.583861 * unit.hartree,
+                "U_298.15K": -54.582445 * unit.hartree,
+                "H_298.15K": -54.581501 * unit.hartree,
+                "G_298.15K": -54.598897 * unit.hartree,
+                "Cv": 2.981 * unit.calorie_per_mole / unit.kelvin,
+            },
+            "O": {
+                "ZPVE": 0.000000 * unit.hartree,
+                "U_0K": -75.064579 * unit.hartree,
+                "U_298.15K": -75.063163 * unit.hartree,
+                "H_298.15K": -75.062219 * unit.hartree,
+                "G_298.15K": -75.079532 * unit.hartree,
+                "Cv": 2.981 * unit.calorie_per_mole / unit.kelvin,
+            },
+            "F": {
+                "ZPVE": 0.000000 * unit.hartree,
+                "U_0K": -99.718730 * unit.hartree,
+                "U_298.15K": -99.717314 * unit.hartree,
+                "H_298.15K": -99.716370 * unit.hartree,
+                "G_298.15K": -99.733544 * unit.hartree,
+                "Cv": 2.981 * unit.calorie_per_mole / unit.kelvin,
+            },
+        }
+
+    def _init_record_entries_series(self):
+        # For data efficiency, information for different conformers will be grouped together
+        # To make it clear to the dataset loader which pieces of information are common to all
+        # conformers, or which pieces encode the series, we will label each value.
+        # The keys in this dictionary correspond to the label of the entries in each record.
+        # The value indicates if the entry contains series data (True) or a single common entry (False).
+        # If the entry has a value of True, the "series" attribute in hdf5 file will be set to True; False, if False.
+        # This information will be used by the code to read in the datafile to know how to parse underlying records.
+
+        self._record_entries_series = {
+            "name": "single_rec",
+            "n_configs": "single_rec",
+            "smiles_gdb-17": "single_rec",
+            "smiles_b3lyp": "single_rec",
+            "inchi_corina": "single_rec",
+            "inchi_b3lyp": "single_rec",
+            "geometry": "series_atom",
+            "atomic_numbers": "single_atom",
+            "charges": "series_atom",
+            "idx": "single_rec",
+            "rotational_constants": "series_mol",
+            "dipole_moment": "series_mol",
+            "isotropic_polarizability": "series_mol",
+            "energy_of_homo": "series_mol",
+            "energy_of_lumo": "series_mol",
+            "lumo-homo_gap": "series_mol",
+            "electronic_spatial_extent": "series_mol",
+            "zero_point_vibrational_energy": "series_mol",
+            "internal_energy_at_0K": "series_mol",
+            "formation_energy_at_0K": "series_mol",
+            "reference_energy_at_0K": "series_mol",
+            "internal_energy_at_298.15K": "series_mol",
+            "reference_energy_at_298.15K": "series_mol",
+            "enthalpy_at_298.15K": "series_mol",
+            "reference_enthalpy_at_298.15K": "series_mol",
+            "free_energy_at_298.15K": "series_mol",
+            "reference_free_energy_at_298.15K": "series_mol",
+            "heat_capacity_at_298.15K": "series_mol",
+            "harmonic_vibrational_frequencies": "series_mol",
+        }
+
+    def _calculate_reference_thermochemistry(
+        self, molecule: List[str], thermo_key: str
+    ):
+        sum_of_energy = 0
+        for atom in molecule:
+            sum_of_energy += self.thermochemical_references[atom][thermo_key]
+
+        return sum_of_energy
 
     def _extract(self, file_path: str, cache_directory: str) -> None:
         """
@@ -99,30 +250,14 @@ class QM9_curation:
         cache_directory: str, required
             Location to save the contents from the tar.bz2 file
         """
+
+        import tarfile
+
         logger.debug(f"Extracting tar {file_path}.")
 
         tar = tarfile.open(f"{file_path}", "r:bz2")
         tar.extractall(cache_directory)
         tar.close()
-
-    def _str_to_float(self, x: str) -> float:
-        """
-        Converts a string to float, changing Mathematica style scientific notion to python style.
-
-        For example, this will convert str(1*^-6) to float(1e-6).
-
-        Parameters
-        ----------
-        x : str, required
-            String to process.
-
-        Returns
-        -------
-        float
-            Float value of the string.
-        """
-        xf = float(x.replace("*^", "e"))
-        return xf
 
     def _parse_properties(self, line: str) -> dict:
         """
@@ -139,47 +274,50 @@ class QM9_curation:
         dict
             Dictionary of properties, with units added when appropriate.
         """
+        from modelforge.utils.misc import str_to_float
+        from modelforge.utils.misc import str_to_float
 
         temp_prop = line.split()
-        # list of properties and their units in the order they appear in the file.
 
-        labels_and_units = [
-            ("tag", None),
-            ("idx", None),
-            ("rotational_constant_A", unit.gigahertz),
-            ("rotational_constant_B", unit.gigahertz),
-            ("rotational_constant_C", unit.gigahertz),
-            ("dipole_moment", unit.debye),
-            ("isotropic_polarizability", unit.angstrom**3),
-            ("energy_of_homo", unit.hartree),
-            ("energy_of_lumo", unit.hartree),
-            ("lumo-homo_gap", unit.hartree),
-            ("electronic_spatial_extent", unit.angstrom**2),
-            ("zero_point_vibrational_energy", unit.hartree),
-            ("internal_energy_at_0K", unit.hartree),
-            ("internal_energy_at_298.15K", unit.hartree),
-            ("enthalpy_at_298.15K", unit.hartree),
-            ("free_energy_at_298.15K", unit.hartree),
-            ("heat_capacity_at_298.15K", unit.calorie_per_mole / unit.kelvin),
+        # List of properties in the order they appear in the file and if they have units
+        # This is used in parsing the properties line in the .xyz file
+        labels = [
+            "tag",
+            "idx",
+            "rotational_constant_A",
+            "rotational_constant_B",
+            "rotational_constant_C",
+            "dipole_moment",
+            "isotropic_polarizability",
+            "energy_of_homo",
+            "energy_of_lumo",
+            "lumo-homo_gap",
+            "electronic_spatial_extent",
+            "zero_point_vibrational_energy",
+            "internal_energy_at_0K",
+            "internal_energy_at_298.15K",
+            "enthalpy_at_298.15K",
+            "free_energy_at_298.15K",
+            "heat_capacity_at_298.15K",
         ]
 
-        assert len(labels_and_units) == len(temp_prop)
+        assert len(labels) == len(temp_prop)
 
-        data = {}
-        for prop, label_and_unit in zip(temp_prop, labels_and_units):
-            label, prop_unit = label_and_unit
-            if prop_unit is None:
-                data[label] = prop
+        data_temp = {}
+        for prop, label in zip(temp_prop, labels):
+            if label == "tag" or label == "idx":
+                data_temp[label] = prop
             else:
-                data[label] = self._str_to_float(prop) * prop_unit
-        return data
+                data_temp[label] = str_to_float(prop)
+
+        return data_temp
 
     def _parse_xyzfile(self, file_name: str) -> dict:
         """
         Parses the file containing information for each molecule.
 
-        Structure of the file (based on tables 2 and 3 of the original manuscript):
-
+        Structure of the file (based on tables 2 and 3 of the original manuscript)
+        is included below.
 
         Parameters
         ----------
@@ -224,86 +362,161 @@ class QM9_curation:
         17  cal/mol/K   Heat capacity at 298.15K
 
         """
+        import qcelemental as qcel
+        from modelforge.utils.misc import str_to_float
 
         with open(file_name, "r") as file:
+            # temporary dictionary to store data for each file
+            data_temp = {}
+
+            # line 1: provides the number of atoms
             n_atoms = int(file.readline())
+
+            # line 2: provides properties that we will parse into a dict
             properties_temp = file.readline()
             properties = self._parse_properties(properties_temp)
+
+            # temporary lists
             elements = []
             atomic_numbers = []
             geometry = []
             charges = []
             hvf = []
+
+            # Lines 3 to 3+n: loop over the atoms to get coordinates and charges
             for i in range(n_atoms):
                 line = file.readline()
                 element, x, y, z, q = line.split()
                 elements.append(element)
                 atomic_numbers.append(qcel.periodictable.to_atomic_number(element))
                 temp = [
-                    self._str_to_float(x),
-                    self._str_to_float(y),
-                    self._str_to_float(z),
+                    str_to_float(x),
+                    str_to_float(y),
+                    str_to_float(z),
                 ]
                 geometry.append(temp)
-                charges.append(self._str_to_float(q))
+                charges.append([str_to_float(q)])
 
+            # line 3+n+1: read harmonic_vibrational_frequencies
             hvf_temp = file.readline().split()
 
+            # line 3+n+2: SMILES string
             smiles = file.readline().split()
+
+            # line 3+n+3: inchi string
             InChI = file.readline()
 
-            data = {}
-            data["name"] = file_name.split("/")[-1].split(".")[0]
-            data["smiles_gdb-17"] = smiles[0]
-            data["smiles_b3lyp"] = smiles[1]
-            data["inchi_Corina"] = InChI.split("\n")[0].split()[0].replace("InChI=", "")
-            data["inchi_B3LYP"] = InChI.split("\n")[0].split()[1].replace("InChI=", "")
-            data["geometry"] = np.array(geometry) * unit.angstrom
-            # Element symbols are converted to atomic numbers
-            # including an array of strings causes complications
-            # when writing the hdf5 file.
-            # data["elements"] = np.array(elements, dtype=str)
-            data["atomic_numbers"] = np.array(atomic_numbers)
-            data["charges"] = np.array(charges) * unit.elementary_charge
+            # end of file, now parse the inputs
+
+            data_temp["name"] = file_name.split("/")[-1].split(".")[0]
+            data_temp["n_configs"] = 1
+            data_temp["smiles_gdb-17"] = smiles[0]
+            data_temp["smiles_b3lyp"] = smiles[1]
+            data_temp["inchi_corina"] = (
+                InChI.split("\n")[0].split()[0].replace("InChI=", "")
+            )
+            data_temp["inchi_b3lyp"] = (
+                InChI.split("\n")[0].split()[1].replace("InChI=", "")
+            )
+            data_temp["idx"] = properties["idx"]
+            # even though we do not have multiple conformers, let us still define
+            # geometry as [m,n,3], where number of conformers, m=1
+            data_temp["geometry"] = (
+                np.array(geometry).reshape(1, -1, 3)
+                * self.qm_parameters["geometry"]["u_in"]
+            )
+            # atomic_numbers are written as an [n,1] array
+            data_temp["atomic_numbers"] = np.array(atomic_numbers).reshape(-1, 1)
+            # charges are written as an [m,n,1] array; note m =1 in this case
+            data_temp["charges"] = (
+                np.array(charges).reshape(1, -1, 1)
+                * self.qm_parameters["charges"]["u_in"]
+            )
 
             # remove the tag because it does not provide any useful information
+            # also remove idx as we've already added it
             properties.pop("tag")
+            properties.pop("idx")
+
+            # merge rotational constants into a single energy
+            data_temp["rotational_constants"] = self.qm_parameters[
+                "rotational_constants"
+            ]["u_in"] * np.array(
+                [
+                    properties["rotational_constant_A"],
+                    properties["rotational_constant_B"],
+                    properties["rotational_constant_C"],
+                ]
+            ).reshape(
+                1, 3
+            )
+
+            properties.pop("rotational_constant_A")
+            properties.pop("rotational_constant_B")
+            properties.pop("rotational_constant_C")
 
             # loop over remaining properties and add to the dict
+            # all properties are per-molecule, so array size will be [m,1], with m=1
             for property, val in properties.items():
-                data[property] = val
+                data_temp[property] = self.qm_parameters[property]["u_in"] * np.array(
+                    val
+                ).reshape(1, 1)
+
+            # calculate the reference energy at 0K and 298.15K
+            # this is done by summing the reference energies of the atoms
+            # note this has units already attached
+            U_ref_0K = self._calculate_reference_thermochemistry(elements, "U_0K")
+            U_ref_298K = self._calculate_reference_thermochemistry(
+                elements, "U_298.15K"
+            )
+            H_ref_298K = self._calculate_reference_thermochemistry(
+                elements, "H_298.15K"
+            )
+            G_ref_298K = self._calculate_reference_thermochemistry(
+                elements, "G_298.15K"
+            )
+
+            data_temp["reference_energy_at_0K"] = (
+                np.array(U_ref_0K.m).reshape(1, 1) * U_ref_0K.u
+            )
+            data_temp["reference_energy_at_298.15K"] = (
+                np.array(U_ref_298K.m).reshape(1, 1) * U_ref_298K.u
+            )
+            data_temp["reference_enthalpy_at_298.15K"] = (
+                np.array(H_ref_298K.m).reshape(1, 1) * H_ref_298K.u
+            )
+
+            data_temp["reference_free_energy_at_298.15K"] = (
+                np.array(G_ref_298K.m).reshape(1, 1) * G_ref_298K.u
+            )
+
+            data_temp["formation_energy_at_0K"] = (
+                data_temp["internal_energy_at_0K"] - data_temp["reference_energy_at_0K"]
+            )
 
             for h in hvf_temp:
-                hvf.append(self._str_to_float(h))
+                hvf.append(str_to_float(h))
 
-            data["harmonic_vibrational_frequencies"] = np.array(hvf) / unit.cm
+            data_temp["harmonic_vibrational_frequencies"] = (
+                np.array(hvf).reshape(1, -1)
+                * self.qm_parameters["harmonic_vibrational_frequencies"]["u_in"]
+            )
 
-            # if unit outputs were defined perform conversion
-            if self.convert_units:
-                for key in data.keys():
-                    if key in self.unit_output_dict.keys():
-                        try:
-                            data[key] = data[key].to(self.unit_output_dict[key], "chem")
-                        except Exception:
-                            print(
-                                f"could not convert {key} with units {key.u} to {self.unit_output_dict[key]}"
-                            )
-
-        return data
+        return data_temp
 
     def _process_downloaded(
         self,
-        local_path_to_tar: str,
+        local_path_dir: str,
         name: str,
         unit_testing_max_records: Optional[int] = None,
     ):
         """
-        Processes a downloaded dataset: extracts relevant information and writes an hdf5 file.
+        Processes a downloaded dataset: extracts relevant information.
 
         Parameters
         ----------
-        local_path_to_tar: str, required
-            Path to the tar.bz2 file.
+        local_path_dir: str, required
+            Path to the directory that contains the tar.bz2 file.
         name: str, required
             name of the tar.bz2 file,
         unit_testing_max_records: int, optional, default=None
@@ -311,37 +524,38 @@ class QM9_curation:
 
         Examples
         --------
-        >>> qm9_data = QM9_curation(hdf5_file_name='qm9_dataset.hdf5', local_cache_dir='~/datasets/qm9_dataset')
-        >>> qm9_data.process()
 
         """
+        from tqdm import tqdm
+        from modelforge.utils.misc import list_files
+
         # untar the dataset
         self._extract(
-            file_path=f"{local_path_to_tar}/{name}",
+            file_path=f"{local_path_dir}/{name}",
             cache_directory=self.local_cache_dir,
         )
 
         # list the files in the directory to examine
         files = list_files(directory=self.local_cache_dir, extension=".xyz")
+        if unit_testing_max_records is None:
+            n_max = len(files)
+        else:
+            n_max = unit_testing_max_records
 
-        # parse the information in each datat file, saving to a list of dicts, data
-        self.data = []
-        for i, file in enumerate(tqdm(files, desc="processing", total=len(files))):
-            # first 10 records
-            if not unit_testing_max_records is None:
-                if i >= unit_testing_max_records:
-                    break
-
+        for i, file in enumerate(
+            tqdm(files[0:n_max], desc="processing", total=len(files))
+        ):
             data_temp = self._parse_xyzfile(f"{self.local_cache_dir}/{file}")
             self.data.append(data_temp)
 
-        mkdir(self.output_file_path)
+        # if unit outputs were defined perform conversion
+        if self.convert_units:
+            self._convert_units()
 
-        full_output_path = f"{self.output_file_path}/{self.hdf5_file_name}"
-
-        # generate the hdf5 file from the list of dicts
-        logger.debug("Writing HDF5 file.")
-        dict_to_hdf5(full_output_path, self.data, id_key="name")
+        # When reading in the list of xyz files from the directory, we sort by name
+        # so further sorting, like in the commented out below,
+        # is likely not necessary unless we were to do asynchronous processing
+        # self.data = sorted(self.data, key=lambda x: x["name"])
 
     def process(
         self,
@@ -361,10 +575,12 @@ class QM9_curation:
 
         Examples
         --------
-        >>> qm9_data = QM9_curation(hdf5_file_name='qm9_dataset.hdf5', local_cache_dir='~/datasets/qm9_dataset')
+        >>> qm9_data = QM9Curation(hdf5_file_name='qm9_dataset.hdf5', local_cache_dir='~/datasets/qm9_dataset')
         >>> qm9_data.process()
 
         """
+        from modelforge.utils.remote import download_from_figshare
+
         url = self.dataset_download_url
 
         # download the dataset
@@ -373,16 +589,27 @@ class QM9_curation:
             output_path=self.local_cache_dir,
             force_download=force_download,
         )
+        # clear out the data array before we process
+        self._clear_data()
+
         # process the rest of the dataset
         if self.name is None:
             raise Exception("Failed to retrieve name of file from figshare.")
+
         self._process_downloaded(
-            self.local_cache_dir, self.name, unit_testing_max_records
+            self.local_cache_dir,
+            self.name,
+            unit_testing_max_records,
         )
 
+        # generate the hdf5 file
+        self._generate_hdf5()
+
     def _generate_metadata(self):
+        import pint
+
         with open(
-            f"{self.output_file_path}/{self.hdf5_file_name}.metadata", "w"
+            f"{self.output_file_dir}/{self.hdf5_file_name}.metadata", "w"
         ) as f_md:
             f_md.write("Dataset Description:\n")
             f_md.write(self.dataset_description["description"])

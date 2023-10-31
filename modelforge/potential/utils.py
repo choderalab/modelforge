@@ -1,9 +1,39 @@
-import torch
-from typing import Callable, Union
-import torch.nn as nn
+from typing import Callable, Tuple, Union
+
 import numpy as np
-import torch.nn.functional as F
-from loguru import logger
+import torch
+import torch.nn as nn
+
+
+def sequential_block(
+    in_features: int,
+    out_features: int,
+    activation_fct: Callable = nn.Identity,
+    bias: bool = True,
+) -> nn.Sequential:
+    """
+    Create a sequential block for the neural network.
+
+    Parameters
+    ----------
+    in_features : int
+        Number of input features.
+    out_features : int
+        Number of output features.
+    activation_fct : Callable, optional
+        Activation function, default is nn.Identity.
+    bias : bool, optional
+        Whether to use bias in Linear layers, default is True.
+
+    Returns
+    -------
+    nn.Sequential
+        Sequential layer block.
+    """
+    return nn.Sequential(
+        nn.Linear(in_features, out_features),
+        activation_fct(),
+    )
 
 
 def _scatter_add(
@@ -34,6 +64,7 @@ def _scatter_add(
     return y
 
 
+# NOTE: change the scatter_add to the native pytorch function
 def scatter_add(
     x: torch.Tensor, idx_i: torch.Tensor, dim_size: int, dim: int = 0
 ) -> torch.Tensor:
@@ -53,17 +84,16 @@ def scatter_add(
     return _scatter_add(x, idx_i, dim_size, dim)
 
 
-
 def gaussian_rbf(
-    inputs: torch.Tensor, offsets: torch.Tensor, widths: torch.Tensor
+    d_ij: torch.Tensor, offsets: torch.Tensor, widths: torch.Tensor
 ) -> torch.Tensor:
     """
     Gaussian radial basis function (RBF) transformation.
 
     Parameters
     ----------
-    inputs : torch.Tensor
-        Input tensor.
+    d_ij : torch.Tensor
+        coordinates.
     offsets : torch.Tensor
         Offsets for Gaussian functions.
     widths : torch.Tensor
@@ -72,13 +102,32 @@ def gaussian_rbf(
     Returns
     -------
     torch.Tensor
-        Transformed tensor.
+        Transformed tensor with Gaussian RBF applied
     """
 
     coeff = -0.5 / torch.pow(widths, 2)
-    diff = inputs[..., None] - offsets
+    diff = d_ij[..., None] - offsets
     y = torch.exp(coeff * torch.pow(diff, 2))
     return y.to(dtype=torch.float32)
+
+
+class CosineCutoff(nn.Module):
+    def __init__(self, cutoff: float):
+        r"""
+        Behler-style cosine cutoff module.
+
+        Args:
+            cutoff (float): The cutoff distance.
+
+        Attributes:
+            cutoff (torch.Tensor): The cutoff distance as a tensor.
+
+        """
+        super().__init__()
+        self.register_buffer("cutoff", torch.FloatTensor([cutoff]))
+
+    def forward(self, input: torch.Tensor):
+        return cosine_cutoff(input, self.cutoff)
 
 
 def cosine_cutoff(d_ij: torch.Tensor, cutoff: float) -> torch.Tensor:
@@ -87,20 +136,21 @@ def cosine_cutoff(d_ij: torch.Tensor, cutoff: float) -> torch.Tensor:
 
     Parameters
     ----------
-    d_ij : torch.Tensor
-        Pairwise distance tensor.
+    d_ij : Tensor
+        Pairwise distance tensor. Shape: [..., N]
     cutoff : float
-        Cutoff distance.
+        The cutoff distance.
+
     Returns
     -------
-    torch.Tensor
-        The cosine cutoff tensor.
+    Tensor
+        The cosine cutoff tensor. Shape: [..., N]
     """
 
     # Compute values of cutoff function
     input_cut = 0.5 * (torch.cos(d_ij * np.pi / cutoff) + 1.0)
     # Remove contributions beyond the cutoff radius
-    input_cut *= d_ij < cutoff
+    input_cut = input_cut * (d_ij < cutoff)
     return input_cut
 
 
@@ -126,25 +176,33 @@ class EnergyReadout(nn.Module):
         super().__init__()
         self.energy_layer = nn.Linear(n_atom_basis, 1)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, atomic_subsystem_indices: torch.Tensor
+    ) -> torch.Tensor:
         """
         Forward pass for the energy readout.
 
         Parameters
         ----------
-        x : torch.Tensor, shape [batch, n_atoms, n_atom_basis]
+        x : Tensor, shape [nr_of_atoms_in_batch, n_atom_basis]
             Input tensor for the forward pass.
 
         Returns
         -------
-        torch.Tensor
-            The output tensor.
+        Tensor, shape [nr_of_moleculs_in_batch, 1]
+            The total energy tensor.
         """
-        x = self.energy_layer(
-            x
-        )  # in [batch, n_atoms, n_atom_basis], out [batch, n_atoms, 1]
-        total_energy = x.sum(dim=1)  # in [batch, n_atoms, 1], out [batch, 1]
-        return total_energy
+
+        x = self.energy_layer(x)
+
+        # Perform scatter add operation
+        indices = atomic_subsystem_indices.to(torch.int64).unsqueeze(1)
+        result = torch.zeros(len(atomic_subsystem_indices.unique()), 1).scatter_add(0, indices, x)
+
+        # Sum across feature dimension to get final tensor of shape (num_molecules, 1)
+        total_energy_per_molecule = result.sum(dim=1, keepdim=True)
+
+        return total_energy_per_molecule
 
 
 class ShiftedSoftplus(nn.Module):
@@ -180,9 +238,7 @@ class GaussianRBF(nn.Module):
     """
 
     def __init__(
-        self,
-        n_rbf: int,
-        cutoff: float,
+        self, n_rbf: int, cutoff: float, start: float = 0.0, trainable: bool = False
     ):
         """
         Initialize the GaussianRBF class.
@@ -193,79 +249,113 @@ class GaussianRBF(nn.Module):
             Number of radial basis functions.
         cutoff : float
             The cutoff distance.
+        start: float
+            center of first Gaussian function.
+        trainable: boolean
+        If True, widths and offset of Gaussian functions are adjusted during training process.
+
         """
         super().__init__()
         self.n_rbf = n_rbf
-
+        self.cutoff = cutoff
         # compute offset and width of Gaussian functions
-        offset = torch.linspace(0, cutoff, n_rbf)
+        offset = torch.linspace(start, cutoff, n_rbf)
         widths = torch.tensor(
             torch.abs(offset[1] - offset[0]) * torch.ones_like(offset),
         )
-        self.register_buffer("widths", widths)
-        self.register_buffer("offsets", offset)
+        if trainable:
+            self.widths = nn.Parameter(widths)
+            self.offsets = nn.Parameter(offset)
+        else:
+            self.register_buffer("widths", widths)
+            self.register_buffer("offsets", offset)
 
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+    def forward(self, d_ij: torch.Tensor) -> torch.Tensor:
         """
         Forward pass for the GaussianRBF.
 
         Parameters
         ----------
-        x : torch.Tensor
-            Input tensor for the forward pass.
+        d_ij : torch.Tensor
+            Pairwise distances for the forward pass.
 
         Returns
         -------
         torch.Tensor
             The output tensor.
         """
-        return gaussian_rbf(inputs, self.offsets, self.widths)
+        return gaussian_rbf(d_ij, self.offsets, self.widths)
 
 
-# taken from torchani repository: https://github.com/aiqm/torchani
-def neighbor_pairs_nopbc(
-    mask: torch.Tensor, R: torch.Tensor, cutoff: float
-) -> torch.Tensor:
+def _distance_to_radial_basis(
+    d_ij: torch.Tensor, radial_basis: Callable
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
-    Calculate neighbor pairs without periodic boundary conditions.
+    Convert distances to radial basis functions.
+
     Parameters
     ----------
-    mask : torch.Tensor
-        Mask tensor to indicate invalid atoms, shape (batch_size, n_atoms).
-    R : torch.Tensor
-        Coordinates tensor, shape (batch_size, n_atoms, 3).
-    cutoff : float
-        Cutoff distance for neighbors.
+    d_ij : torch.Tensor, shape [n_pairs]
+        Pairwise distances between atoms.
 
     Returns
     -------
-    torch.Tensor
-        Tensor containing indices of neighbor pairs, shape (n_pairs, 2).
-
-    Notes
-    -----
-    This function assumes no periodic boundary conditions and calculates neighbor pairs based solely on the cutoff distance.
-
-    Examples
-    --------
-    >>> mask = torch.tensor([[0, 0, 1], [1, 0, 0]])
-    >>> R = torch.tensor([[[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]],[[3.0, 3.0, 3.0], [4.0, 4.0, 4.0], [5.0, 5.0, 5.0]]])
-    >>> cutoff = 1.5
-    >>> neighbor_pairs_nopbc(mask, R, cutoff)
+    Tuple[torch.Tensor, torch.Tensor]
+        - Radial basis functions, shape [n_pairs, n_rbf]
+        - cutoff values, shape [n_pairs]
     """
-    import math
+    f_ij = radial_basis(d_ij)
+    rcut_ij = cosine_cutoff(d_ij, radial_basis.cutoff)
+    return f_ij, rcut_ij
 
-    R = R.detach().masked_fill(mask.unsqueeze(-1), math.nan)
-    current_device = R.device
-    num_atoms = mask.shape[1]
-    num_mols = mask.shape[0]
-    p12_all = torch.triu_indices(num_atoms, num_atoms, 1, device=current_device)
-    p12_all_flattened = p12_all.view(-1)
 
-    pair_coordinates = R.index_select(1, p12_all_flattened).view(num_mols, 2, -1, 3)
-    distances = (pair_coordinates[:, 0, ...] - pair_coordinates[:, 1, ...]).norm(2, -1)
-    in_cutoff = (distances <= cutoff).nonzero()
-    molecule_index, pair_index = in_cutoff.unbind(1)
-    molecule_index *= num_atoms
-    atom_index12 = p12_all[:, pair_index] + molecule_index
-    return atom_index12
+def neighbor_pairs_nopbc(
+    coordinates: torch.Tensor, atomic_subsystem_indices: torch.Tensor, cutoff: float
+) -> torch.Tensor:
+    """Compute pairs of atoms that are neighbors (doesn't use PBC)
+
+    Parameters
+    ----------
+    coordinates : torch.Tensor, shape (nr_atoms_per_systems, 3)
+    atomic_subsystem_indices : torch.Tensor, shape (nr_atoms_per_systems)
+        Atom indices to indicate which atoms belong to which molecule
+    cutoff : float
+        the cutoff inside which atoms are considered pairs
+    """
+    positions = coordinates.detach()
+    # generate index grid
+    n = len(atomic_subsystem_indices)
+    i_indices, j_indices = torch.triu_indices(n, n, 1)
+    print(atomic_subsystem_indices[i_indices])
+    # filter pairs to only keep those belonging to the same molecule
+    same_molecule_mask = (
+        atomic_subsystem_indices[i_indices] == atomic_subsystem_indices[j_indices]
+    )
+
+    # Apply mask to get final pair indices
+    i_final_pairs = i_indices[same_molecule_mask]
+    j_final_pairs = j_indices[same_molecule_mask]
+
+    # concatenate to form final (2, n_pairs) tensor
+    pair_indices = torch.stack((i_final_pairs, j_final_pairs))
+
+    # create pair_coordinates tensor
+    pair_coordinates = positions[pair_indices.T]
+    pair_coordinates = pair_coordinates.view(-1, 2, 3)
+
+    # Calculate distances
+    distances = (pair_coordinates[:, 0, :] - pair_coordinates[:, 1, :]).norm(
+        p=2, dim=-1
+    )
+    # Calculate distances
+    distances = (pair_coordinates[:, 0, :] - pair_coordinates[:, 1, :]).norm(
+        p=2, dim=-1
+    )
+
+    # Find pairs within the cutoff
+    in_cutoff = (distances <= cutoff).nonzero(as_tuple=False).squeeze()
+
+    # Get the atom indices within the cutoff
+    pair_indices_within_cutoff = pair_indices[:, in_cutoff]
+
+    return pair_indices_within_cutoff

@@ -1,6 +1,4 @@
-from typing import Any, Dict, List, Tuple
-
-from loguru import logger
+from typing import List
 
 from .dataset import HDF5Dataset
 
@@ -18,7 +16,8 @@ class QM9Dataset(HDF5Dataset):
         Name of the dataset, default is "QM9".
     for_unit_testing : bool
         If set to True, a subset of the dataset is used for unit testing purposes; by default False.
-
+    local_cache_dir: str, optional
+            Path to the local cache directory, by default ".".
     Examples
     --------
     >>> data = QM9Dataset()
@@ -30,14 +29,29 @@ class QM9Dataset(HDF5Dataset):
     _property_names = PropertyNames(
         "atomic_numbers",
         "geometry",
-        "return_energy",
+        "internal_energy_at_0K",
     )
 
     _available_properties = [
         "geometry",
         "atomic_numbers",
-        "return_energy",
-    ]  # NOTE: Any way to set this automatically?
+        "internal_energy_at_0K",
+        "internal_energy_at_298.15K",
+        "enthalpy_at_298.15K",
+        "free_energy_at_298.15K",
+        "heat_capacity_at_298.15K",
+        "zero_point_vibrational_energy",
+        "electronic_spatial_extent",
+        "lumo-homo_gap",
+        "energy_of_homo",
+        "energy_of_lumo",
+        "rotational_constant_A",
+        "rotational_constant_B",
+        "rotational_constant_C",
+        "dipole_moment",
+        "isotropic_polarizability",
+        "charges",
+    ]  # All properties within the datafile, aside from SMILES/inchi.
 
     def __init__(
         self,
@@ -67,7 +81,7 @@ class QM9Dataset(HDF5Dataset):
         _default_properties_of_interest = [
             "geometry",
             "atomic_numbers",
-            "return_energy",
+            "internal_energy_at_0K",
         ]  # NOTE: Default values
 
         self._properties_of_interest = _default_properties_of_interest
@@ -77,11 +91,15 @@ class QM9Dataset(HDF5Dataset):
         super().__init__(
             f"{local_cache_dir}/{dataset_name}_cache.hdf5.gz",
             f"{local_cache_dir}/{dataset_name}_processed.npz",
+            local_cache_dir=local_cache_dir,
         )
         self.dataset_name = dataset_name
         self.for_unit_testing = for_unit_testing
-        self.test_id = "17oZ07UOxv2fkEmu-d5mLk6aGIuhV0mJ7"
-        self.full_id = "1_bSdQjEvI67Tk_LKYbW0j8nmggnb5MoU"
+        # self.test_id = "17oZ07UOxv2fkEmu-d5mLk6aGIuhV0mJ7"
+        # self.full_id = "1_bSdQjEvI67Tk_LKYbW0j8nmggnb5MoU"
+        # updated tests.
+        self.test_id = "18C9Iq_7VZLx0gZbJYje8X6tybZb5m3JY"
+        self.full_id = "1damjPgjKviTogDJ2UJvhYjyBZxGvRPP-"
 
     @property
     def properties_of_interest(self) -> List[str]:

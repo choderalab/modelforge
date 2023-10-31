@@ -1,6 +1,8 @@
 name: test
 channels:
   - conda-forge
+  - pytorch
+  - pyg
 dependencies:
   # Base depends
   - python
@@ -9,22 +11,29 @@ dependencies:
   - requests
   - tqdm
   - qcelemental=0.25.1
-  - qcportal
-  - pytorch
+  - qcportal>=0.50
+  - pytorch>=2.1
   - loguru
   - gdown
-  - tqdm
   - lightning=2.0.8
   - tensorboard
   - torchvision
   - openff-units
   - pint
   - pedantic
+  - rdkit
+  - retry
+  - sqlitedict
+  - schnetpack
 
   # Testing
-  - pytest
+  - pytest>=2.1
   - pytest-cov
   - codecov
   - qcelemental=0.25.1
-  - qcportal
+  - qcportal>=0.50
   - requests
+
+  # pip installs
+  - pip:
+      - schnetpack

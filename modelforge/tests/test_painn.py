@@ -3,7 +3,6 @@ import os
 import pytest
 
 from modelforge.potential.pain import PaiNN
-from modelforge.potential.utils import CosineCutoff
 from .helper_functions import (
     setup_simple_model,
     SIMPLIFIED_INPUT_DATA,
@@ -31,12 +30,24 @@ def test_painn_forward(lightning, input_data, model_parameter):
     """
     Test the forward pass of the Schnet model.
     """
-    import torch
-
-    embedding = torch.nn.Embedding(100, 128)
-
-    model = PaiNN(embedding, 6, 10, cutoff_fn=CosineCutoff(5.0))
-    energy = model(input_data)
+    print(f"model_parameter: {model_parameter}")
+    (
+        nr_atom_basis,
+        max_atomic_number,
+        n_rbf,
+        cutoff,
+        nr_interaction_blocks,
+    ) = model_parameter
+    painn = setup_simple_model(
+        PaiNN,
+        lightning=lightning,
+        nr_atom_basis=nr_atom_basis,
+        max_atomic_number=max_atomic_number,
+        n_rbf=n_rbf,
+        cutoff=cutoff,
+        nr_interaction_blocks=nr_interaction_blocks,
+    )
+    energy = painn(input_data)
     nr_of_mols = input_data["atomic_subsystem_indices"].unique().shape[0]
 
     assert energy.shape == (

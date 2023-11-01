@@ -64,15 +64,15 @@ def setup_simple_model(
         if lightning:
             return LighningPaiNN(
                 embedding=embedding,
-                nr_interactions=3,
-                nr_rbf=16,
-                cutoff_fn=CosineCutoff(5.0),
+                nr_interaction_blocks=nr_interaction_blocks,
+                radial_basis=rbf,
+                cutoff=cutoff,
             )
         return PaiNN(
             embedding=embedding,
-            nr_interactions=3,
-            n_rbf=16,
-            cutoff_fn=CosineCutoff(5.0),
+            nr_interaction_blocks=nr_interaction_blocks,
+            radial_basis=rbf,
+            cutoff=cutoff,
         )
     else:
         raise NotImplementedError

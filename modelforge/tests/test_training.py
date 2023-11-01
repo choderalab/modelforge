@@ -13,9 +13,9 @@ from .helper_functions import (
 )
 
 
-@pytest.mark.parametrize("model_class", [SchNET])
+@pytest.mark.parametrize("model_class", MODELS_TO_TEST)
 @pytest.mark.parametrize("dataset", DATASETS)
-def test_forward_pass(dataset: Type[BaseNNP], model_class: Type[BaseNNP]):
+def test_train_with_lightning(dataset: Type[BaseNNP], model_class: Type[BaseNNP]):
     """
     Test the forward pass for a given model and dataset.
 

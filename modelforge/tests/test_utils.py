@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from modelforge.potential.utils import CosineCutoff, cosine_cutoff, scatter_add
+from modelforge.potential.utils import CosineCutoff, cosine_cutoff
 
 
 def test_cosine_cutoff():

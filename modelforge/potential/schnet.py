@@ -5,16 +5,19 @@ from loguru import logger as log
 import torch.nn as nn
 
 from .models import BaseNNP, LightningModuleMixin
-from .utils import _distance_to_radial_basis
+from .utils import _distance_to_radial_basis, ShiftedSoftplus
 
 
 class SchNET(BaseNNP):
     def __init__(
         self,
         embedding: nn.Module,
-        nr_interactions: int,
+        nr_interaction_blocks: int,
+        radial_basis: nn.Module,
+        cutoff: nn.Module,
         nr_filters: int = 0,
-        cutoff: float = 5.0,
+        shared_interactions: bool = False,
+        activation: nn.Module = ShiftedSoftplus,
     ) -> None:
         """
         Initialize the SchNet class.
@@ -26,27 +29,30 @@ class SchNET(BaseNNP):
             Number of interaction blocks in the architecture.
         nr_filters : int, optional
             Number of filters; defines the dimensionality of the intermediate features (default is 0).
-        cutoff : float, optional
-            Cutoff value for the pairlist (default is 5.0 Angstrom).
         """
         from .utils import EnergyReadout
 
-        nr_atom_basis = embedding.embedding_dim
+        super().__init__(embedding)
+        self.nr_atom_basis = embedding.embedding_dim
+
         log.debug("Initializing SchNet model.")
         log.debug(
-            f"Passed parameters to constructor: {nr_atom_basis=}, {nr_interactions=}, {nr_filters=}, {cutoff=}"
+            f"Passed parameters to constructor: {self.nr_atom_basis=}, {nr_interaction_blocks=}, {nr_filters=}, {cutoff=}"
         )
         log.debug(f"Initialized embedding: {embedding=}")
 
-        super().__init__(embedding, cutoff)
+        self.radial_basis = radial_basis
+        self.cutoff = cutoff
 
         # Initialize representation, readout, and interaction layers
         self.representation = SchNETRepresentation(cutoff)
-        self.readout = EnergyReadout(nr_atom_basis)
+        self.readout = EnergyReadout(self.nr_atom_basis)
         self.interactions = nn.ModuleList(
             [
-                SchNETInteractionBlock(nr_atom_basis, nr_filters)
-                for _ in range(nr_interactions)
+                SchNETInteractionBlock(
+                    self.nr_atom_basis, nr_filters, self.radial_basis.n_rbf
+                )
+                for _ in range(nr_interaction_blocks)
             ]
         )
 
@@ -95,7 +101,7 @@ class SchNET(BaseNNP):
 
 
 class SchNETInteractionBlock(nn.Module):
-    def __init__(self, nr_atom_basis: int, nr_filters: int, nr_rbf: int = 20) -> None:
+    def __init__(self, nr_atom_basis: int, nr_filters: int, nr_rbf: int) -> None:
         """
         Initialize the SchNet interaction block.
 
@@ -105,19 +111,22 @@ class SchNETInteractionBlock(nn.Module):
             Number of atom basis, defines the dimensionality of the output features.
         nr_filters : int
             Number of filters, defines the dimensionality of the intermediate features.
-        nr_rbf : int, optional
-            Number of radial basis functions. Default is 20.
+        nr_rbf : int
+            Number of radial basis functions.
         """
         super().__init__()
         from .utils import ShiftedSoftplus, sequential_block
 
         self.nr_atom_basis = nr_atom_basis  # Initialize parameters
         self.intput_to_feature = nn.Linear(nr_atom_basis, nr_filters)
-        self.feature_to_output = sequential_block(
-            nr_filters, nr_atom_basis, ShiftedSoftplus
+        self.feature_to_output = nn.Sequential(
+            sequential_block(nr_filters, nr_atom_basis, ShiftedSoftplus),
+            sequential_block(nr_atom_basis, nr_atom_basis),
         )
-        self.filter_network = sequential_block(nr_rbf, nr_filters, ShiftedSoftplus)
-        self.nr_rbf = nr_rbf
+        self.filter_network = nn.Sequential(
+            sequential_block(nr_rbf, nr_filters, ShiftedSoftplus),
+            sequential_block(nr_filters, nr_filters),
+        )
 
     def forward(
         self,
@@ -178,20 +187,17 @@ class SchNETInteractionBlock(nn.Module):
 
 
 class SchNETRepresentation(nn.Module):
-    def __init__(self, cutoff: float = 5.0, n_rbf: int = 20):
+    def __init__(self, rbf: nn.Module):
         """
         Initialize the SchNet representation layer.
 
         Parameters
         ----------
-        cutoff: float, optional
-            Cutoff value for the pairlist. Default is 5.0.
+        Radial Basis Function Module
         """
-        from .utils import GaussianRBF
-
         super().__init__()
 
-        self.radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
+        self.radial_basis = rbf
 
     def forward(self, d_ij: torch.Tensor) -> Dict[str, torch.Tensor]:
         """
@@ -220,8 +226,11 @@ class LightningSchNET(SchNET, LightningModuleMixin):
         self,
         embedding: nn.Module,
         nr_interactions: int,
+        radial_basis: nn.Module,
+        cutoff: nn.Module,
         nr_filters: int = 0,
-        cutoff: float = 5.0,
+        shared_interactions: bool = False,
+        activation: nn.Module = ShiftedSoftplus,
         loss: Type[nn.Module] = nn.MSELoss(),
         optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
         lr: float = 1e-3,

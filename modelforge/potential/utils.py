@@ -214,7 +214,7 @@ class GaussianRBF(nn.Module):
         n_rbf : int
             Number of radial basis functions.
         cutoff : float
-            The cutoff distance.
+            The cutoff distance. NOTE: IN ANGSTROM #FIXME
         start: float
             center of first Gaussian function.
         trainable: boolean

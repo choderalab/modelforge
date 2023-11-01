@@ -12,7 +12,16 @@ MODELS_TO_TEST = [SchNET, PaiNN]
 DATASETS = [QM9Dataset]
 
 
-def setup_simple_model(model_class, lightning: bool = False) -> Optional[BaseNNP]:
+def setup_simple_model(
+    model_class,
+    lightning: bool = False,
+    nr_atom_basis: int = 128,
+    max_atomic_number: int = 100,
+    n_rbf: int = 20,
+    cutoff: float = 5.0,
+    nr_interaction_blocks: int = 2,
+    nr_filters: int = 2,
+) -> Optional[BaseNNP]:
     """
     Setup a simple model based on the given model_class.
 
@@ -28,24 +37,30 @@ def setup_simple_model(model_class, lightning: bool = False) -> Optional[BaseNNP
     Optional[BaseNNP]
         Initialized model.
     """
-    from modelforge.potential.utils import CosineCutoff
+    from modelforge.potential.utils import CosineCutoff, GaussianRBF
 
-    nr_atom_basis = 32
-    nr_embeddings = 100
-    embedding = torch.nn.Embedding(nr_embeddings, nr_atom_basis)
+    embedding = torch.nn.Embedding(max_atomic_number, nr_atom_basis)
+
+    rbf = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
+    cutoff = CosineCutoff(cutoff)
 
     if model_class is SchNET:
         if lightning:
             return LightningSchNET(
                 embedding=embedding,
-                nr_interactions=3,
-                nr_filters=64,
+                nr_interaction_blocks=nr_interaction_blocks,
+                radial_basis=rbf,
+                cutoff=cutoff,
+                nr_filters=nr_filters,
             )
         return SchNET(
             embedding=embedding,
-            nr_interactions=3,
-            nr_filters=64,
+            nr_interaction_blocks=nr_interaction_blocks,
+            radial_basis=rbf,
+            cutoff=cutoff,
+            nr_filters=nr_filters,
         )
+
     elif model_class is PaiNN:
         if lightning:
             return LighningPaiNN(

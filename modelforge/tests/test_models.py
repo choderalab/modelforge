@@ -47,7 +47,6 @@ def test_calculate_energies_and_forces(input_data, model_class):
 
     nr_of_mols = input_data["atomic_subsystem_indices"].unique().shape[0]
     nr_of_atoms_per_batch = input_data["atomic_subsystem_indices"].shape[0]
-    embedding = nn.Embedding(100, 128)
     for lightning in [True, False]:
         model = setup_simple_model(model_class, lightning)
 

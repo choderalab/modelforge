@@ -45,7 +45,7 @@ class SchNET(BaseNNP):
         self.cutoff = cutoff
 
         # Initialize representation, readout, and interaction layers
-        self.representation = SchNETRepresentation(cutoff)
+        self.representation = SchNETRepresentation(self.radial_basis)
         self.readout = EnergyReadout(self.nr_atom_basis)
         self.interactions = nn.ModuleList(
             [
@@ -225,7 +225,7 @@ class LightningSchNET(SchNET, LightningModuleMixin):
     def __init__(
         self,
         embedding: nn.Module,
-        nr_interactions: int,
+        nr_interaction_blocks: int,
         radial_basis: nn.Module,
         cutoff: nn.Module,
         nr_filters: int = 0,
@@ -254,7 +254,9 @@ class LightningSchNET(SchNET, LightningModuleMixin):
             Learning rate (default is 1e-3).
         """
 
-        super().__init__(embedding, nr_interactions, nr_filters, cutoff)
+        super().__init__(
+            embedding, nr_interaction_blocks, radial_basis, cutoff, nr_filters
+        )
         self.loss_function = loss
         self.optimizer = optimizer
         self.learning_rate = lr

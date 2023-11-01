@@ -1,5 +1,3 @@
-import torch
-
 from modelforge.potential.schnet import SchNET
 
 import pytest
@@ -8,9 +6,6 @@ from .helper_functions import (
     SIMPLIFIED_INPUT_DATA,
     generate_interaction_block_data,
 )
-
-nr_atom_basis = 128
-nr_embeddings = 100
 
 
 @pytest.mark.parametrize("lightning", [True, False])
@@ -30,6 +25,7 @@ def test_schnet_forward(lightning, input_data, model_parameter):
     """
     Test the forward pass of the Schnet model.
     """
+    print(f'model_parameter: {model_parameter}')
     (
         nr_atom_basis,
         max_atomic_number,

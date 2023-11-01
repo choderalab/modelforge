@@ -40,7 +40,6 @@ def setup_simple_model(
     from modelforge.potential.utils import CosineCutoff, GaussianRBF
 
     embedding = torch.nn.Embedding(max_atomic_number, nr_atom_basis)
-
     rbf = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
     cutoff = CosineCutoff(cutoff)
 

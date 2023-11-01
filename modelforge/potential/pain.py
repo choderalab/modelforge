@@ -8,7 +8,6 @@ from .utils import (
 )
 import torch
 from torch.nn import SiLU
-from modelforge.potential.utils import CosineCutoff
 
 
 class PaiNN(BaseNNP):
@@ -35,11 +34,11 @@ class PaiNN(BaseNNP):
         Parameters
             ----------
             embedding : torch.Module
-            nr_interactions : int
+            nr_interaction_blocks : int
                 Number of interaction blocks.
-            n_rbf : int
-                Number of radial basis functions.
-            cutoff_fn : Callable, optional
+            rbf : torch.Module
+                radial basis functions.
+            cutoff : torch.Module
                 Cutoff function for the radial basis.
             activation : Callable, optional
                 Activation function to use.
@@ -200,7 +199,7 @@ class PaiNNInteraction(nn.Module):
         Parameters
         ----------
         q : torch.Tensor
-            Scalar input values of shape [n_mols, n_atoms, n_atom_basis].
+            Scalar input values of shape [nr_of_atoms_in_systems, n_atom_basis].
         mu : torch.Tensor
             Vector input values of shape [n_mols, n_interactions, n_atom_basis].
         Wij : torch.Tensor

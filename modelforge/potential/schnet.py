@@ -15,7 +15,7 @@ class SchNET(BaseNNP):
         nr_interaction_blocks: int,
         radial_basis: nn.Module,
         cutoff: nn.Module,
-        nr_filters: int = 0,
+        nr_filters: int = 2,
         shared_interactions: bool = False,
         activation: nn.Module = ShiftedSoftplus,
     ) -> None:
@@ -25,8 +25,10 @@ class SchNET(BaseNNP):
         Parameters
         ----------
         embedding : nn.Module
-        nr_interactions : int
+        nr_interaction_blocks : int
             Number of interaction blocks in the architecture.
+        radial_basis : nn.Module
+        cutoff : nn.Module
         nr_filters : int, optional
             Number of filters; defines the dimensionality of the intermediate features (default is 0).
         """
@@ -63,13 +65,13 @@ class SchNET(BaseNNP):
         Parameters
         ----------
         atomic_numbers_embedding : torch.Tensor
-            Atomic numbers embedding; shape (nr_systems, n_atoms, n_atom_basis).
+            Atomic numbers embedding; shape (nr_of_atoms_in_systems, n_atom_basis).
         inputs : Dict[str, torch.Tensor]
         - pairlist:  shape (n_pairs, 2)
         - r_ij:  shape (n_pairs, 1)
         - d_ij:  shape (n_pairs, 3)
-        - positions:  shape (nr_systems, n_atoms, 3)
-        - atomic_numbers_embedding:  shape (nr_systems, n_atoms, n_atom_basis)
+        - positions:  shape (nr_of_atoms_per_molecules, 3)
+        - atomic_numbers_embedding:  shape (nr_of_atoms_in_systems, n_atom_basis)
 
 
         Returns
@@ -140,7 +142,7 @@ class SchNETInteractionBlock(nn.Module):
 
         Parameters
         ----------
-        x : torch.Tensor, shape [nr_systems, nr_atoms, nr_atom_basis]
+        x : torch.Tensor, shape [nr_of_atoms_in_systems, nr_atom_basis]
             Input feature tensor for atoms.
         f_ij : torch.Tensor, shape [n_pairs, n_rbf]
             Radial basis functions for pairs of atoms.
@@ -153,7 +155,7 @@ class SchNETInteractionBlock(nn.Module):
 
         Returns
         -------
-        torch.Tensor, shape [batch_size, n_atoms, n_atom_basis]
+        torch.Tensor, shape [nr_of_atoms_in_systems, n_atom_basis]
             Updated feature tensor after interaction block.
         """
 

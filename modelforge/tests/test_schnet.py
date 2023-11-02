@@ -3,10 +3,7 @@ import torch
 from modelforge.potential.schnet import SchNET
 
 import pytest
-from .helper_functions import (
-    SIMPLIFIED_INPUT_DATA,
-    generate_interaction_block_data
-)
+from .helper_functions import SIMPLIFIED_INPUT_DATA, generate_interaction_block_data
 
 nr_atom_basis = 128
 nr_embeddings = 100
@@ -14,7 +11,10 @@ nr_embeddings = 100
 
 def test_Schnet_init():
     """Test initialization of the Schnet model."""
-    schnet = SchNET(128, 6, 2)
+    import torch
+
+    embedding = torch.nn.Embedding(100, 128)
+    schnet = SchNET(embedding, 6, 2)
     assert schnet is not None, "Schnet model should be initialized."
 
 
@@ -23,7 +23,11 @@ def test_schnet_forward(input_data):
     """
     Test the forward pass of the Schnet model.
     """
-    model = SchNET(128, 3)
+    import torch
+
+    embedding = torch.nn.Embedding(100, 128)
+
+    model = SchNET(embedding, 3, 2)
     energy = model(input_data)
     nr_of_mols = input_data["atomic_subsystem_indices"].unique().shape[0]
 
@@ -43,14 +47,18 @@ def test_schnet_interaction_layer():
     nr_embeddings = 97
     nr_rbf = 19
 
-    interaction_data = generate_interaction_block_data(nr_atom_basis, nr_embeddings, nr_rbf)
+    interaction_data = generate_interaction_block_data(
+        nr_atom_basis, nr_embeddings, nr_rbf
+    )
     nr_of_atoms_per_batch = interaction_data["atomic_subsystem_indices"].shape[0]
 
     assert interaction_data["x"].shape == (
         nr_of_atoms_per_batch,
         nr_atom_basis,
     ), "Input shape mismatch for x tensor."
-    interaction = SchNETInteractionBlock(nr_atom_basis=nr_atom_basis, nr_filters=3, nr_rbf=nr_rbf)
+    interaction = SchNETInteractionBlock(
+        nr_atom_basis=nr_atom_basis, nr_filters=3, nr_rbf=nr_rbf
+    )
     v = interaction(
         interaction_data["x"],
         interaction_data["pair_indices"],

@@ -13,7 +13,10 @@ from .helper_functions import (
 
 def test_PaiNN_init():
     """Test initialization of the PaiNN neural network potential."""
-    painn = PaiNN(128, 6, 10, cutoff_fn=CosineCutoff(5.0))
+    import torch
+
+    embedding = torch.nn.Embedding(100, 128)
+    painn = PaiNN(embedding, 6, 10, cutoff_fn=CosineCutoff(5.0))
     assert painn is not None, "PaiNN model should be initialized."
 
 
@@ -22,7 +25,11 @@ def test_painn_forward(input_data):
     """
     Test the forward pass of the Schnet model.
     """
-    model = PaiNN(128, 6, 10, cutoff_fn=CosineCutoff(5.0))
+    import torch
+
+    embedding = torch.nn.Embedding(100, 128)
+
+    model = PaiNN(embedding, 6, 10, cutoff_fn=CosineCutoff(5.0))
     energy = model(input_data)
     nr_of_mols = input_data["atomic_subsystem_indices"].unique().shape[0]
 

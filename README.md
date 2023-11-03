@@ -1,7 +1,7 @@
 modelforge
 ==============================
 [//]: # (Badges)
-[![GitHub Actions Build Status](https://github.com/choderalab/modelforge/workflows/CI/badge.svg)](https://github.com/choderalab/modelforge/actions?query=workflow%3ACI)
+[![GitHub Actions Build Status]([https://github.com/choderalab/modelforge/workflows/CI/badge.svg)](https://github.com/choderalab/modelforge/actions?query=workflow%3ACI](https://github.com/choderalab/modelforge/actions/workflows/CI.yaml/badge.svg)
 [![codecov](https://codecov.io/gh/choderalab/modelforge/branch/main/graph/badge.svg)](https://codecov.io/gh/choderalab/modelforge/branch/main)
 [![Github release](https://badgen.net/github/release/choderalab/modelforge)](https://github.com/choderalab/modelforge/)
 [![GitHub license](https://img.shields.io/github/license/choderalab/modelforge?color=green)](https://github.com/choderalab/modelforge/blob/main/LICENSE)
@@ -12,7 +12,7 @@ Infrastructure to implement and train NNPs
 
 ### Copyright
 
-Copyright (c) 2023, Marcus Wieder
+Copyright (c) 2023, Choderalab
 
 
 #### Acknowledgements

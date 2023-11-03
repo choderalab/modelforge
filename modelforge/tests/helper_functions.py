@@ -3,7 +3,7 @@ import torch
 from modelforge.dataset.dataset import TorchDataModule
 from modelforge.dataset.qm9 import QM9Dataset
 from modelforge.potential.schnet import SchNET, LightningSchNET
-from modelforge.potential.pain import PaiNN, LighningPaiNN
+from modelforge.potential.painn import PaiNN, LighningPaiNN
 from modelforge.potential.models import BaseNNP
 
 from typing import Optional, Dict

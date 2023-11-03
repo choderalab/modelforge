@@ -33,7 +33,8 @@ class PaiNN(BaseNNP):
         """
         Parameters
             ----------
-            embedding : torch.Module
+            embedding : torch.Module, contains atomic species embedding. 
+                Embedding dimensions also define self.n_atom_basis.
             nr_interaction_blocks : int
                 Number of interaction blocks.
             rbf : torch.Module

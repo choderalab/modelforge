@@ -19,7 +19,7 @@ def test_Schnet_init(lightning):
 @pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
 @pytest.mark.parametrize(
     "model_parameter",
-    ([64, 50, 2, 5.0, 2], [32, 60, 10, 7.0, 1], [128, 120, 5, 5.0, 3]),
+    ([64, 50, 20, 5.0, 2], [32, 60, 10, 7.0, 1], [128, 120, 64, 5.0, 3]),
 )
 def test_schnet_forward(lightning, input_data, model_parameter):
     """

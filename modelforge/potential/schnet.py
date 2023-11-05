@@ -119,10 +119,10 @@ class SchNETInteractionBlock(nn.Module):
         super().__init__()
         from .utils import ShiftedSoftplus, sequential_block
 
-        assert nr_rbf > 10, "Number of radial basis functions must be larger than 10."
+        assert nr_rbf > 4, "Number of radial basis functions must be larger than 10."
         assert nr_filters > 0, "Number of filters must be larger than 0."
         assert nr_atom_basis > 10, "Number of atom basis must be larger than 10."
-        
+
         self.nr_atom_basis = nr_atom_basis  # Initialize parameters
         self.intput_to_feature = nn.Linear(nr_atom_basis, nr_filters)
         self.feature_to_output = nn.Sequential(

@@ -1,6 +1,5 @@
 import pytest
 
-import numpy as np
 from .helper_functions import (
     DATASETS,
     MODELS_TO_TEST,

@@ -1,4 +1,4 @@
-from modelforge.potential.utils import GaussianRBF
+from modelforge.potential import GaussianRBF
 import torch
 
 

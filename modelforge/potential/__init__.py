@@ -1,2 +1,3 @@
 from .schnet import SchNET
-from .utils import GaussianRBF, cosine_cutoff, shifted_softplus
+from .painn import PaiNN
+from .utils import GaussianRBF, CosineCutoff, ShiftedSoftplus

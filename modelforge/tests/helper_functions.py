@@ -37,7 +37,7 @@ def setup_simple_model(
     Optional[BaseNNP]
         Initialized model.
     """
-    from modelforge.potential.utils import CosineCutoff, GaussianRBF
+    from modelforge.potential import CosineCutoff, GaussianRBF
 
     embedding = torch.nn.Embedding(max_atomic_number, nr_atom_basis)
     rbf = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
@@ -222,7 +222,8 @@ def generate_interaction_block_data(
     import torch.nn as nn
 
     from modelforge.dataset.qm9 import QM9Dataset
-    from modelforge.potential.utils import GaussianRBF, _distance_to_radial_basis
+    from modelforge.potential import GaussianRBF
+    from modelforge.potential.utils import _distance_to_radial_basis
 
     embedding = nn.Embedding(nr_embeddings, nr_atom_basis, padding_idx=0)
     batch = return_single_batch(QM9Dataset, "fit")

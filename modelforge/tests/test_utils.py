@@ -45,7 +45,7 @@ def test_rbf():
     Test the Gaussian Radial Basis Function (RBF) implementation.
     """
     from modelforge.dataset import QM9Dataset
-    from modelforge.potential.utils import GaussianRBF
+    from modelforge.potential import GaussianRBF
 
     from .helper_functions import prepare_pairlist_for_single_batch, return_single_batch
 
@@ -58,7 +58,7 @@ def test_rbf():
     assert output.shape[1] == 20  # n_rbf dimension
 
 
-from modelforge.potential.utils import GaussianRBF
+from modelforge.potential import GaussianRBF
 
 
 def test_gaussian_rbf():
@@ -109,7 +109,7 @@ def test_GaussianRBF():
     Test the GaussianRBF layer.
     """
 
-    from modelforge.potential.utils import GaussianRBF
+    from modelforge.potential import GaussianRBF
 
     n_rbf = 10
     dim_of_x = 3

@@ -174,22 +174,22 @@ def test_dataset_generation(dataset):
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_dataset_splitting(dataset):
     """Test random_split on the the dataset."""
-    from modelforge.dataset.utils import RandomSplittingStrategy
+    from modelforge.dataset.utils import RandomRecordSplittingStrategy
 
     dataset = generate_torch_dataset(dataset)
-    train_dataset, val_dataset, test_dataset = RandomSplittingStrategy().split(dataset)
+    train_dataset, val_dataset, test_dataset = RandomRecordSplittingStrategy().split(dataset)
 
     energy = train_dataset[0]["E_label"].item()
     assert np.isclose(energy, -412509.9375)
     print(energy)
 
     try:
-        RandomSplittingStrategy(split=[0.2, 0.1, 0.1])
+        RandomRecordSplittingStrategy(split=[0.2, 0.1, 0.1])
     except AssertionError:
         print("AssertionError raised")
         pass
 
-    train_dataset, val_dataset, test_dataset = RandomSplittingStrategy(
+    train_dataset, val_dataset, test_dataset = RandomRecordSplittingStrategy(
         split=[0.6, 0.3, 0.1]
     ).split(dataset)
 

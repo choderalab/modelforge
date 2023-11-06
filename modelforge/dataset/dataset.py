@@ -53,6 +53,12 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         )
         # length: n_records + 1
 
+        if len(single_atom_start_idxs_by_rec) != len(self.series_mol_start_idxs_by_rec):
+            raise ValueError(
+                "Number of records in `atomic_subsystem_counts` and `n_confs` do not match."
+                )
+
+
         self.single_atom_start_idxs_by_conf = np.repeat(
             single_atom_start_idxs_by_rec[:self.n_records], dataset["n_confs"]
         )

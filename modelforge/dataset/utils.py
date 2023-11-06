@@ -275,6 +275,9 @@ def random_record_split(
             indices.extend(dataset.get_series_mol_idxs(record_idx))
         indices_by_split.append(indices)
 
+    if sum([len(indices) for indices in indices_by_split]) != len(dataset):
+        raise ValueError("Sum of all split lengths does not equal the length of the input dataset!")
+
     return [Subset(dataset, indices_by_split[split_idx]) for split_idx in range(len(lengths))]
 
 

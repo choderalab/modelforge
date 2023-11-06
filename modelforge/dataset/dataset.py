@@ -9,10 +9,10 @@ from torch.utils.data import DataLoader
 
 from modelforge.utils.prop import PropertyNames
 
-from modelforge.dataset.utils import RandomSplittingStrategy, SplittingStrategy
+from modelforge.dataset.utils import RandomRecordSplittingStrategy, SplittingStrategy
 
 
-class TorchDataset(torch.utils.data.Dataset):
+class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
     """
     A custom dataset class to wrap numpy datasets for PyTorch.
 
@@ -42,21 +42,27 @@ class TorchDataset(torch.utils.data.Dataset):
             "E_label": torch.from_numpy(dataset[property_name.E]),
         }
 
-        n_records = len(dataset["atomic_subsystem_counts"])
+        self.n_records = len(dataset["atomic_subsystem_counts"])
         single_atom_start_idxs_by_rec = np.concatenate(
             [[0], np.cumsum(dataset["atomic_subsystem_counts"])]
         )
         # length: n_records + 1
 
-        self.single_atom_start_idxs = np.repeat(
-            single_atom_start_idxs_by_rec[:n_records], dataset["n_confs"]
+        self.series_mol_start_idxs_by_rec = np.concatenate(
+            [[0], np.cumsum(dataset["n_confs"])]
         )
-        self.single_atom_end_idxs = np.repeat(
-            single_atom_start_idxs_by_rec[1 : n_records + 1], dataset["n_confs"]
+        # length: n_records + 1
+
+        self.single_atom_start_idxs_by_conf = np.repeat(
+            single_atom_start_idxs_by_rec[:self.n_records], dataset["n_confs"]
+        )
+        self.single_atom_end_idxs_by_conf = np.repeat(
+            single_atom_start_idxs_by_rec[1 : self.n_records + 1], dataset["n_confs"]
         )
         # length: n_conformers
 
-        self.series_atom_start_idxs = np.concatenate(
+
+        self.series_atom_start_idxs_by_conf = np.concatenate(
             [
                 [0],
                 np.cumsum(
@@ -66,19 +72,38 @@ class TorchDataset(torch.utils.data.Dataset):
         )
         # length: n_conformers + 1
 
-        self.length = len(self.single_atom_start_idxs)
+        self.length = len(self.single_atom_start_idxs_by_conf)
         self.preloaded = preloaded
 
     def __len__(self) -> int:
         """
-        Return the number of datapoints in the dataset.
+        Return the number of conformers in the dataset.
 
         Returns:
         --------
         int
-            Total number of datapoints available in the dataset.
+            Total number of conformers available in the dataset.
         """
         return self.length
+
+    def record_len(self) -> int:
+        """
+        Return the number of records in the TorchDataset.
+        """
+        return self.n_records
+
+    def get_series_mol_idxs(self, record_idx: int) -> List[int]:
+        """
+        Return the indices of the conformers for a given record.
+        """
+        return list(
+            range(
+                self.series_mol_start_idxs_by_rec[record_idx],
+                self.series_mol_start_idxs_by_rec[record_idx + 1],
+            )
+        )
+
+
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         """
@@ -103,10 +128,10 @@ class TorchDataset(torch.utils.data.Dataset):
             - 'atomic_subsystem_counts': torch.Tensor, shape [1]
                 Number of atoms in the conformer. Length one if __getitem__ is called with a single index, length batch_size if collate_conformers is used with DataLoader
         """
-        series_atom_start_idx = self.series_atom_start_idxs[idx]
-        series_atom_end_idx = self.series_atom_start_idxs[idx + 1]
-        single_atom_start_idx = self.single_atom_start_idxs[idx]
-        single_atom_end_idx = self.single_atom_end_idxs[idx]
+        series_atom_start_idx = self.series_atom_start_idxs_by_conf[idx]
+        series_atom_end_idx = self.series_atom_start_idxs_by_conf[idx + 1]
+        single_atom_start_idx = self.single_atom_start_idxs_by_conf[idx]
+        single_atom_end_idx = self.single_atom_end_idxs_by_conf[idx]
         atomic_numbers = torch.tensor(
             self.properties_of_interest["atomic_numbers"][
                 single_atom_start_idx:single_atom_end_idx
@@ -441,7 +466,7 @@ class TorchDataModule(pl.LightningDataModule):
     def __init__(
         self,
         data: HDF5Dataset,
-        split: SplittingStrategy = RandomSplittingStrategy(),
+        split: SplittingStrategy = RandomRecordSplittingStrategy(),
         batch_size: int = 64,
         split_file: Optional[str] = None,
     ):

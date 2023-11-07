@@ -8,7 +8,6 @@ from .utils import (
 )
 import torch
 from torch.nn import SiLU
-from modelforge.potential.utils import CosineCutoff
 
 
 class PaiNN(BaseNNP):
@@ -23,9 +22,9 @@ class PaiNN(BaseNNP):
     def __init__(
         self,
         embedding: nn.Module,
-        nr_interactions: int,
-        n_rbf: int,
-        cutoff_fn: Optional[Callable] = CosineCutoff(5.0),
+        nr_interaction_blocks: int,
+        radial_basis: nn.Module,
+        cutoff: nn.Module,
         activation: Optional[Callable] = SiLU,
         shared_interactions: bool = False,
         shared_filters: bool = False,
@@ -34,12 +33,13 @@ class PaiNN(BaseNNP):
         """
         Parameters
             ----------
-            embedding : torch.Module
-            nr_interactions : int
+            embedding : torch.Module, contains atomic species embedding. 
+                Embedding dimensions also define self.n_atom_basis.
+            nr_interaction_blocks : int
                 Number of interaction blocks.
-            n_rbf : int
-                Number of radial basis functions.
-            cutoff_fn : Callable, optional
+            rbf : torch.Module
+                radial basis functions.
+            cutoff : torch.Module
                 Cutoff function for the radial basis.
             activation : Callable, optional
                 Activation function to use.
@@ -55,35 +55,38 @@ class PaiNN(BaseNNP):
             Equivariant message passing for the prediction of tensorial properties and molecular spectra.
             ICML 2021, http://proceedings.mlr.press/v139/schutt21a.html
         """
-        from .utils import GaussianRBF, EnergyReadout
+        from .utils import EnergyReadout
 
         super().__init__(embedding)
 
         self.n_atom_basis = embedding.embedding_dim
-        self.n_interactions = nr_interactions
-        self.cutoff_fn = cutoff_fn
-        self.cutoff = cutoff_fn.cutoff
+        self.nr_interaction_blocks = nr_interaction_blocks
+        self.radial_basis = radial_basis
+        self.cutoff = cutoff
         self.share_filters = shared_filters
         self.readout = EnergyReadout(self.n_atom_basis)
 
         if shared_filters:
             self.filter_net = nn.Sequential(
-                nn.Linear(n_rbf, 3 * self.n_atom_basis), nn.Identity()
+                nn.Linear(self.radial_basis.n_rbf, 3 * self.n_atom_basis), nn.Identity()
             )
         else:
             self.filter_net = nn.Sequential(
-                nn.Linear(n_rbf, self.n_interactions * 3 * self.n_atom_basis),
+                nn.Linear(
+                    self.radial_basis.n_rbf,
+                    self.nr_interaction_blocks * 3 * self.n_atom_basis,
+                ),
                 nn.Identity(),
             )
         self.interactions = nn.ModuleList(
             PaiNNInteraction(self.n_atom_basis, activation=activation)
-            for _ in range(nr_interactions)
+            for _ in range(self.nr_interaction_blocks)
         )
         self.mixing = nn.ModuleList(
             PaiNNMixing(self.n_atom_basis, activation=activation, epsilon=epsilon)
-            for _ in range(nr_interactions)
+            for _ in range(self.nr_interaction_blocks)
         )
-        self.radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=float(self.cutoff))
+        self.radial_basis = radial_basis
 
     def _forward(
         self,
@@ -117,11 +120,11 @@ class PaiNN(BaseNNP):
         dir_ij = r_ij / d_ij
         # torch.Size([1150, 1, 32])
         f_ij, _ = _distance_to_radial_basis(d_ij, self.radial_basis)
-        fcut = self.cutoff_fn(d_ij)  # n_pairs, 1
+        fcut = self.cutoff(d_ij)  # n_pairs, 1
 
         filters = self.filter_net(f_ij) * fcut[..., None]
         if self.share_filters:
-            filter_list = [filters] * self.n_interactions
+            filter_list = [filters] * self.nr_interaction_blocks
         else:
             filter_list = torch.split(filters, 3 * self.n_atom_basis, dim=-1)
 
@@ -197,7 +200,7 @@ class PaiNNInteraction(nn.Module):
         Parameters
         ----------
         q : torch.Tensor
-            Scalar input values of shape [n_mols, n_atoms, n_atom_basis].
+            Scalar input values of shape [nr_of_atoms_in_systems, n_atom_basis].
         mu : torch.Tensor
             Vector input values of shape [n_mols, n_interactions, n_atom_basis].
         Wij : torch.Tensor
@@ -348,11 +351,10 @@ class LighningPaiNN(PaiNN, LightningModuleMixin):
     def __init__(
         self,
         embedding: nn.Module,
-        nr_interactions: int,
-        nr_rbf: int,
-        cutoff_fn: Optional[Callable] = None,
+        nr_interaction_blocks: int,
+        radial_basis: nn.Module,
+        cutoff: nn.Module,
         activation: Optional[Callable] = SiLU,
-        max_z: int = 100,
         shared_interactions: bool = False,
         shared_filters: bool = False,
         epsilon: float = 1e-8,
@@ -364,9 +366,9 @@ class LighningPaiNN(PaiNN, LightningModuleMixin):
 
         super().__init__(
             embedding=embedding,
-            nr_interactions=nr_interactions,
-            n_rbf=nr_rbf,
-            cutoff_fn=cutoff_fn,
+            nr_interaction_blocks=nr_interaction_blocks,
+            radial_basis=radial_basis,
+            cutoff=cutoff,
             activation=activation,
             shared_interactions=shared_interactions,
             shared_filters=shared_filters,

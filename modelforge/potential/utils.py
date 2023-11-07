@@ -292,7 +292,7 @@ def neighbor_pairs_nopbc(
     # generate index grid
     n = len(atomic_subsystem_indices)
     i_indices, j_indices = torch.triu_indices(n, n, 1)
-    print(atomic_subsystem_indices[i_indices])
+
     # filter pairs to only keep those belonging to the same molecule
     same_molecule_mask = (
         atomic_subsystem_indices[i_indices] == atomic_subsystem_indices[j_indices]

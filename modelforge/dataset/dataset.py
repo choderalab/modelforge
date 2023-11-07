@@ -118,19 +118,12 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         idx : int
             Index of the molecule to fetch data for.
 
-        Returns
-        -------
-        dict, contains:
-            - 'atomic_numbers': torch.Tensor, shape [n_atoms]
-                Atomic numbers for each atom in the molecule.
-            - 'positions': torch.Tensor, shape [n_atoms, 3]
-                Coordinates for each atom in the molecule.
-            - 'E_label': torch.Tensor, shape []
-                Scalar energy value for the molecule.
-            - 'idx': int
-                Index of the conformer in the dataset.
-            - 'atomic_subsystem_counts': torch.Tensor, shape [1]
-                Number of atoms in the conformer. Length one if __getitem__ is called with a single index, length batch_size if collate_conformers is used with DataLoader
+        Returns ------- dict, contains: - 'atomic_numbers': torch.Tensor, shape [n_atoms] Atomic numbers for each
+        atom in the molecule. - 'positions': torch.Tensor, shape [n_atoms, 3] Coordinates for each atom in the
+        molecule. - 'E_label': torch.Tensor, shape [] Scalar energy value for the molecule. - 'idx': int Index of the
+        conformer in the dataset. - 'atomic_subsystem_counts': torch.Tensor, shape [1] Number of atoms in the
+        conformer. Length one if __getitem__ is called with a single index, length batch_size if collate_conformers
+        is used with DataLoader
         """
         series_atom_start_idx = self.series_atom_start_idxs_by_conf[idx]
         series_atom_end_idx = self.series_atom_start_idxs_by_conf[idx + 1]
@@ -546,13 +539,20 @@ class TorchDataModule(pl.LightningDataModule):
         DataLoader
             DataLoader containing the training dataset.
         """
-        one_conf_loader = DataLoader(self.train_dataset)
+        return DataLoader(self.train_dataset, batch_size=self.batch_size, collate_fn=collate_conformers)
 
-        def get_batch_sampler(
-                one_conf_loader: DataLoader,
-                cutoff: float,
-                max_batch_edges: int
-        ) -> Generator[List[int], None, None]:
+    def train_dataloader_edge(self, cutoff, max_batch_edges) -> DataLoader:
+        """
+        Create a DataLoader for the training dataset.
+
+        Returns
+        -------
+        DataLoader
+            DataLoader containing the training dataset.
+        """
+        one_conf_loader = DataLoader(self.train_dataset, batch_size=1, collate_fn=collate_conformers)
+
+        def get_batch_sampler() -> Generator[List[int], None, None]:
             """Return a generator for a DataLoader that yields one molecule at a time. The generator yields a list of
             indices of molecules in the DataLoader such that the total number of edges in the batch is less than
             max_batch_edges."""
@@ -561,17 +561,21 @@ class TorchDataModule(pl.LightningDataModule):
             added_edges = 0
 
             for conf in one_conf_loader:
-                num_edges = len(
-                    neighbor_pairs_nopbc(conf['positions'], torch.ones(len(conf['positions'])), cutoff=cutoff))
+                pairlist = neighbor_pairs_nopbc(conf['positions'], conf['atomic_subsystem_indices'], cutoff=cutoff)
+                num_edges = pairlist.shape[1]
                 if added_edges + num_edges > max_batch_edges:
                     yield added_idxs
                     added_idxs = []
                     added_edges = 0
-                added_idxs.append(conf['idx'])
+                added_idxs.extend(conf['subsystem_indices_referencing_dataset'])
                 added_edges += num_edges
 
-        batch_sampler = get_batch_sampler(one_conf_loader=one_conf_loader, cutoff=5.0, max_batch_edges=4000)
-        # TODO: make cutoff and max_batch_edges parameters?
+        # TODO: remove
+        batch_sampler = get_batch_sampler()
+        next_idxs = list(batch_sampler)
+        print("batch_idxs", next_idxs)
+
+        batch_sampler = get_batch_sampler()
         return DataLoader(self.train_dataset, batch_sampler=batch_sampler, collate_fn=collate_conformers)
 
     def val_dataloader(self) -> DataLoader:
@@ -605,36 +609,32 @@ def collate_conformers(
         conf_list: List[Dict[str, torch.Tensor]]
 ) -> Dict[str, torch.Tensor]:
     # TODO: once TorchDataset is reimplemented for general properties, reimplement this function using formats too.
-    """Concatenate the Z, R, and E tensors from a list of molecules into a single tensor each, and return a new dictionary with the concatenated tensors."""
+    """Concatenate the atomic_numbers, positions, and E_label tensors from a list of molecules into a single tensor
+    each, and return a new dictionary with the concatenated tensors."""
     atomic_numbers_list = []
     positions_list = []
     E_list = []
     atomic_subsystem_counts = []
-    atomic_subsystem_indices = []
-    atomic_subsystem_indices_referencing_dataset = []
+    subsystem_indices_referencing_dataset = []
     for idx, conf in enumerate(conf_list):
         atomic_numbers_list.append(conf["atomic_numbers"])
         positions_list.append(conf["positions"])
         E_list.append(conf["E_label"])
         atomic_subsystem_counts.extend(conf["atomic_subsystem_counts"])
-        atomic_subsystem_indices.extend([idx] * conf["atomic_subsystem_counts"][0])
-        atomic_subsystem_indices_referencing_dataset.extend(
-            [conf["idx"]] * conf["atomic_subsystem_counts"][0]
-        )
+        subsystem_indices_referencing_dataset.append(conf["idx"])
     atomic_numbers_cat = torch.cat(atomic_numbers_list)
     positions_cat = torch.cat(positions_list).requires_grad_(True)
     E_stack = torch.stack(E_list)
+    atomic_subsystem_counts = torch.tensor(atomic_subsystem_counts, dtype=torch.int32)
+    subsystem_indices_referencing_dataset = torch.tensor(subsystem_indices_referencing_dataset, dtype=torch.int32)
+    atomic_subsystem_indices = torch.repeat_interleave(atomic_subsystem_counts)
+    atomic_subsystem_indices_referencing_dataset = subsystem_indices_referencing_dataset[atomic_subsystem_indices]
     return {
         "atomic_numbers": atomic_numbers_cat,
         "positions": positions_cat,
         "E_label": E_stack,
-        "atomic_subsystem_counts": torch.tensor(
-            atomic_subsystem_counts, dtype=torch.int32
-        ),
-        "atomic_subsystem_indices": torch.tensor(
-            atomic_subsystem_indices, dtype=torch.int32
-        ),
-        "atomic_subsystem_indices_referencing_dataset": torch.tensor(
-            atomic_subsystem_indices_referencing_dataset, dtype=torch.int32
-        ),
+        "atomic_subsystem_counts": atomic_subsystem_counts,
+        "atomic_subsystem_indices": atomic_subsystem_indices,
+        "subsystem_indices_referencing_dataset": subsystem_indices_referencing_dataset,
+        "atomic_subsystem_indices_referencing_dataset": atomic_subsystem_indices_referencing_dataset
     }

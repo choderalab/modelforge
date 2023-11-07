@@ -249,36 +249,41 @@ SIMPLIFIED_INPUT_DATA = [
 
 
 
-@pytest.fixture
-def _equivariance_test_utils():
-    h0 = jax.random.normal(
-        key=jax.random.PRNGKey(0),
-        shape=(5, 7),
+def equivariance_test_utils(
+        number_of_atoms: int = 5,
+        hidden_features: int = 7,
+):
+
+    h0 = torch.randn(
+        size=(
+            number_of_atoms,
+            hidden_features,
+        ),
     )
 
-    x0 = jax.random.normal(
-        key=jax.random.PRNGKey(1),
-        shape=(5, 3),
+    x0 = torch.randn(
+        size=(
+            number_of_atoms,
+            3,
+        ),
     )
 
-    x_translation = jax.random.normal(
-        key=jax.random.PRNGKey(2),
-        shape=(1, 3),
+    x_translation = torch.randn(
+        size=(1, 3),
     )
 
-    v0 = jax.random.normal(
-        key=jax.random.PRNGKey(3),
-        shape=(5, 3),
+    v0 = torch.randn(
+        size=(5, 3),
     )
 
     translation = lambda x: x + x_translation
 
     import math
-    alpha = onp.random.uniform(-math.pi, math.pi)
-    beta = onp.random.uniform(-math.pi, math.pi)
-    gamma = onp.random.uniform(-math.pi, math.pi)
+    alpha = torch.tensor(torch.random.uniform(-math.pi, math.pi))
+    beta = torch.tensor(torch.random.uniform(-math.pi, math.pi))
+    gamma = torch.tensor(torch.random.uniform(-math.pi, math.pi))
 
-    rz = jnp.array(
+    rz = torch.tensor(
         [
             [math.cos(alpha), -math.sin(alpha), 0],
             [math.sin(alpha),  math.cos(alpha), 0],
@@ -286,7 +291,7 @@ def _equivariance_test_utils():
         ]
     )
 
-    ry = jnp.array(
+    ry = torch.tensor(
         [
             [math.cos(beta),   0,               math.sin(beta)],
             [0,                1,               0],
@@ -294,7 +299,7 @@ def _equivariance_test_utils():
         ]
     )
 
-    rx = jnp.array(
+    rx = torch.tensor(
         [
             [1,                0,               0],
             [0,                math.cos(gamma), -math.sin(gamma)],
@@ -304,13 +309,13 @@ def _equivariance_test_utils():
 
     rotation = lambda x: x @ rz @ ry @ rx
 
-    alpha = onp.random.uniform(-math.pi, math.pi)
-    beta = onp.random.uniform(-math.pi, math.pi)
-    gamma = onp.random.uniform(-math.pi, math.pi)
-    v = jnp.array([[alpha, beta, gamma]])
+    alpha = torch.tensor(torch.random.uniform(-math.pi, math.pi))
+    beta = torch.tensor(torch.random.uniform(-math.pi, math.pi))
+    gamma = torch.tensor(torch.random.uniform(-math.pi, math.pi))
+    v = torch.tensor([[alpha, beta, gamma]])
     v /= (v ** 2).sum() ** 0.5
 
-    p = jnp.eye(3) - 2 * v.T @ v
+    p = torch.eye(3) - 2 * v.T @ v
 
     reflection = lambda x: x @ p
 

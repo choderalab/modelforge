@@ -1,5 +1,6 @@
 import os
-from typing import Callable, Dict, List, Optional
+from collections.abc import Generator
+from typing import Callable, Dict, List, Optional, Union
 
 import numpy as np
 import pytorch_lightning as pl
@@ -8,6 +9,7 @@ from loguru import logger
 from torch.utils.data import DataLoader
 
 from modelforge.utils.prop import PropertyNames
+from modelforge.potential.utils import neighbor_pairs_nopbc
 
 from modelforge.dataset.utils import RandomRecordSplittingStrategy, SplittingStrategy
 
@@ -31,10 +33,10 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
     # TODO: add support for general properties with given formats
 
     def __init__(
-        self,
-        dataset: np.lib.npyio.NpzFile,
-        property_name: PropertyNames,
-        preloaded: bool = False,
+            self,
+            dataset: Union[np.lib.npyio.NpzFile, Dict[str, np.ndarray]],
+            property_name: PropertyNames,
+            preloaded: bool = False,
     ):
         self.properties_of_interest = {
             "atomic_numbers": torch.from_numpy(dataset[property_name.Z]),
@@ -56,17 +58,15 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         if len(single_atom_start_idxs_by_rec) != len(self.series_mol_start_idxs_by_rec):
             raise ValueError(
                 "Number of records in `atomic_subsystem_counts` and `n_confs` do not match."
-                )
-
+            )
 
         self.single_atom_start_idxs_by_conf = np.repeat(
             single_atom_start_idxs_by_rec[:self.n_records], dataset["n_confs"]
         )
         self.single_atom_end_idxs_by_conf = np.repeat(
-            single_atom_start_idxs_by_rec[1 : self.n_records + 1], dataset["n_confs"]
+            single_atom_start_idxs_by_rec[1: self.n_records + 1], dataset["n_confs"]
         )
         # length: n_conformers
-
 
         self.series_atom_start_idxs_by_conf = np.concatenate(
             [
@@ -109,8 +109,6 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             )
         )
 
-
-
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         """
         Fetch a tuple of the values for the properties of interest for a given conformer index.
@@ -140,13 +138,13 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         single_atom_end_idx = self.single_atom_end_idxs_by_conf[idx]
         atomic_numbers = torch.tensor(
             self.properties_of_interest["atomic_numbers"][
-                single_atom_start_idx:single_atom_end_idx
+            single_atom_start_idx:single_atom_end_idx
             ],
             dtype=torch.int64,
         )
         positions = torch.tensor(
             self.properties_of_interest["positions"][
-                series_atom_start_idx:series_atom_end_idx
+            series_atom_start_idx:series_atom_end_idx
             ],
             dtype=torch.float32,
         )
@@ -178,7 +176,7 @@ class HDF5Dataset:
     """
 
     def __init__(
-        self, raw_data_file: str, processed_data_file: str, local_cache_dir: str
+            self, raw_data_file: str, processed_data_file: str, local_cache_dir: str
     ):
         self.raw_data_file = raw_data_file
         self.processed_data_file = processed_data_file
@@ -263,7 +261,7 @@ class HDF5Dataset:
                         str, np.ndarray
                     ] = OrderedDict()  # ndarray.size (n_configs, )
                     for value in list(series_mol_data.keys()) + list(
-                        series_atom_data.keys()
+                            series_atom_data.keys()
                     ):
                         record_array = hf[record][value][()]
                         configs_nan_by_prop[value] = np.isnan(record_array).any(
@@ -272,10 +270,10 @@ class HDF5Dataset:
                     # check that all values have the same number of conformers
 
                     if (
-                        len(
-                            set([value.shape for value in configs_nan_by_prop.values()])
-                        )
-                        != 1
+                            len(
+                                set([value.shape for value in configs_nan_by_prop.values()])
+                            )
+                            != 1
                     ):
                         raise ValueError(
                             f"Number of conformers is inconsistent across properties for record {record}"
@@ -351,7 +349,7 @@ class HDF5Dataset:
         self.numpy_data = np.load(self.processed_data_file)
 
     def _to_file_cache(
-        self,
+            self,
     ) -> None:
         """
                 Save processed data to a numpy (.npz) file.
@@ -388,15 +386,15 @@ class DatasetFactory:
     """
 
     def __init__(
-        self,
+            self,
     ) -> None:
         pass
 
     @staticmethod
     def _load_or_process_data(
-        data: HDF5Dataset,
-        label_transform: Optional[Dict[str, Callable]],
-        transform: Optional[Dict[str, Callable]],
+            data: HDF5Dataset,
+            label_transform: Optional[Dict[str, Callable]],
+            transform: Optional[Dict[str, Callable]],
     ) -> None:
         """
         Loads the dataset from cache if available, otherwise processes and caches the data.
@@ -420,9 +418,9 @@ class DatasetFactory:
 
     @staticmethod
     def create_dataset(
-        data: HDF5Dataset,
-        label_transform: Optional[Dict[str, Callable]] = None,
-        transform: Optional[Dict[str, Callable]] = None,
+            data: HDF5Dataset,
+            label_transform: Optional[Dict[str, Callable]] = None,
+            transform: Optional[Dict[str, Callable]] = None,
     ) -> TorchDataset:
         """
         Creates a Dataset instance given an HDF5Dataset.
@@ -470,11 +468,11 @@ class TorchDataModule(pl.LightningDataModule):
     """
 
     def __init__(
-        self,
-        data: HDF5Dataset,
-        split: SplittingStrategy = RandomRecordSplittingStrategy(),
-        batch_size: int = 64,
-        split_file: Optional[str] = None,
+            self,
+            data: HDF5Dataset,
+            split: SplittingStrategy = RandomRecordSplittingStrategy(),
+            batch_size: int = 64,
+            split_file: Optional[str] = None,
     ):
         from torch.utils.data import Subset
 
@@ -548,11 +546,33 @@ class TorchDataModule(pl.LightningDataModule):
         DataLoader
             DataLoader containing the training dataset.
         """
-        return DataLoader(
-            self.train_dataset,
-            batch_size=self.batch_size,
-            collate_fn=collate_conformers,
-        )
+        one_conf_loader = DataLoader(self.train_dataset)
+
+        def get_batch_sampler(
+                one_conf_loader: DataLoader,
+                cutoff: float,
+                max_batch_edges: int
+        ) -> Generator[List[int], None, None]:
+            """Return a generator for a DataLoader that yields one molecule at a time. The generator yields a list of
+            indices of molecules in the DataLoader such that the total number of edges in the batch is less than
+            max_batch_edges."""
+
+            added_idxs = []
+            added_edges = 0
+
+            for conf in one_conf_loader:
+                num_edges = len(
+                    neighbor_pairs_nopbc(conf['positions'], torch.ones(len(conf['positions'])), cutoff=cutoff))
+                if added_edges + num_edges > max_batch_edges:
+                    yield added_idxs
+                    added_idxs = []
+                    added_edges = 0
+                added_idxs.append(conf['idx'])
+                added_edges += num_edges
+
+        batch_sampler = get_batch_sampler(one_conf_loader=one_conf_loader, cutoff=5.0, max_batch_edges=4000)
+        # TODO: make cutoff and max_batch_edges parameters?
+        return DataLoader(self.train_dataset, batch_sampler=batch_sampler, collate_fn=collate_conformers)
 
     def val_dataloader(self) -> DataLoader:
         """
@@ -582,7 +602,7 @@ class TorchDataModule(pl.LightningDataModule):
 
 
 def collate_conformers(
-    conf_list: List[Dict[str, torch.Tensor]]
+        conf_list: List[Dict[str, torch.Tensor]]
 ) -> Dict[str, torch.Tensor]:
     # TODO: once TorchDataset is reimplemented for general properties, reimplement this function using formats too.
     """Concatenate the Z, R, and E tensors from a list of molecules into a single tensor each, and return a new dictionary with the concatenated tensors."""

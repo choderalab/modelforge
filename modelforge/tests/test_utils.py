@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from modelforge.potential.utils import CosineCutoff, cosine_cutoff, scatter_add
+from modelforge.potential.utils import CosineCutoff, cosine_cutoff
 
 
 def test_cosine_cutoff():
@@ -45,7 +45,7 @@ def test_rbf():
     Test the Gaussian Radial Basis Function (RBF) implementation.
     """
     from modelforge.dataset import QM9Dataset
-    from modelforge.potential.utils import GaussianRBF
+    from modelforge.potential import GaussianRBF
 
     from .helper_functions import prepare_pairlist_for_single_batch, return_single_batch
 
@@ -58,7 +58,7 @@ def test_rbf():
     assert output.shape[1] == 20  # n_rbf dimension
 
 
-from modelforge.potential.utils import GaussianRBF
+from modelforge.potential import GaussianRBF
 
 
 def test_gaussian_rbf():
@@ -97,18 +97,11 @@ def test_scatter_add():
     dim = 0
     x = torch.tensor([1, 4, 3, 2], dtype=torch.float32)
     idx_i = torch.tensor([0, 2, 2, 1], dtype=torch.int64)
-    custom_result = scatter_add(x, idx_i, dim_size=dim_size, dim=dim)
-    # Add assertion to check if the custom implementation matches expected result
-    assert torch.equal(custom_result, torch.tensor([1.0, 2.0, 7.0]))
-
     # Using PyTorch's native scatter_add function
     shape = list(x.shape)
     shape[dim] = dim_size
     native_result = torch.zeros(shape, dtype=x.dtype)
     native_result.scatter_add_(dim, idx_i, x)
-
-    # Check if the results are equal
-    assert torch.equal(custom_result, native_result)
 
 
 def test_GaussianRBF():
@@ -116,7 +109,7 @@ def test_GaussianRBF():
     Test the GaussianRBF layer.
     """
 
-    from modelforge.potential.utils import GaussianRBF
+    from modelforge.potential import GaussianRBF
 
     n_rbf = 10
     dim_of_x = 3

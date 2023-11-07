@@ -2,35 +2,52 @@ import os
 
 import pytest
 
-from modelforge.potential.pain import PaiNN
-from modelforge.potential.utils import CosineCutoff
-
-IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
+from modelforge.potential.painn import PaiNN
 from .helper_functions import (
+    setup_simple_model,
     SIMPLIFIED_INPUT_DATA,
 )
 
 
-def test_PaiNN_init():
-    """Test initialization of the PaiNN neural network potential."""
-    import torch
+IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 
-    embedding = torch.nn.Embedding(100, 128)
-    painn = PaiNN(embedding, 6, 10, cutoff_fn=CosineCutoff(5.0))
+
+@pytest.mark.parametrize("lightning", [True, False])
+def test_PaiNN_init(lightning):
+    """Test initialization of the PaiNN neural network potential."""
+
+    painn = setup_simple_model(PaiNN, lightning=lightning)
     assert painn is not None, "PaiNN model should be initialized."
 
 
+@pytest.mark.parametrize("lightning", [True, False])
 @pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
-def test_painn_forward(input_data):
+@pytest.mark.parametrize(
+    "model_parameter",
+    ([64, 50, 2, 5.0, 2], [32, 60, 10, 7.0, 1], [128, 120, 5, 5.0, 3]),
+)
+def test_painn_forward(lightning, input_data, model_parameter):
     """
     Test the forward pass of the Schnet model.
     """
-    import torch
-
-    embedding = torch.nn.Embedding(100, 128)
-
-    model = PaiNN(embedding, 6, 10, cutoff_fn=CosineCutoff(5.0))
-    energy = model(input_data)
+    print(f"model_parameter: {model_parameter}")
+    (
+        nr_atom_basis,
+        max_atomic_number,
+        n_rbf,
+        cutoff,
+        nr_interaction_blocks,
+    ) = model_parameter
+    painn = setup_simple_model(
+        PaiNN,
+        lightning=lightning,
+        nr_atom_basis=nr_atom_basis,
+        max_atomic_number=max_atomic_number,
+        n_rbf=n_rbf,
+        cutoff=cutoff,
+        nr_interaction_blocks=nr_interaction_blocks,
+    )
+    energy = painn(input_data)
     nr_of_mols = input_data["atomic_subsystem_indices"].unique().shape[0]
 
     assert energy.shape == (

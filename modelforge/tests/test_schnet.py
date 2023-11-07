@@ -1,34 +1,48 @@
-import torch
-
 from modelforge.potential.schnet import SchNET
 
 import pytest
-from .helper_functions import SIMPLIFIED_INPUT_DATA, generate_interaction_block_data
+from .helper_functions import (
+    setup_simple_model,
+    SIMPLIFIED_INPUT_DATA,
+    generate_interaction_block_data,
+)
 
-nr_atom_basis = 128
-nr_embeddings = 100
 
-
-def test_Schnet_init():
+@pytest.mark.parametrize("lightning", [True, False])
+def test_Schnet_init(lightning):
     """Test initialization of the Schnet model."""
-    import torch
-
-    embedding = torch.nn.Embedding(100, 128)
-    schnet = SchNET(embedding, 6, 2)
+    schnet = setup_simple_model(SchNET, lightning=lightning)
     assert schnet is not None, "Schnet model should be initialized."
 
 
+@pytest.mark.parametrize("lightning", [True, False])
 @pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
-def test_schnet_forward(input_data):
+@pytest.mark.parametrize(
+    "model_parameter",
+    ([64, 50, 20, 5.0, 2], [32, 60, 10, 7.0, 1], [128, 120, 64, 5.0, 3]),
+)
+def test_schnet_forward(lightning, input_data, model_parameter):
     """
     Test the forward pass of the Schnet model.
     """
-    import torch
-
-    embedding = torch.nn.Embedding(100, 128)
-
-    model = SchNET(embedding, 3, 2)
-    energy = model(input_data)
+    print(f'model_parameter: {model_parameter}')
+    (
+        nr_atom_basis,
+        max_atomic_number,
+        n_rbf,
+        cutoff,
+        nr_interaction_blocks,
+    ) = model_parameter
+    schnet = setup_simple_model(
+        SchNET,
+        lightning=lightning,
+        nr_atom_basis=nr_atom_basis,
+        max_atomic_number=max_atomic_number,
+        n_rbf=n_rbf,
+        cutoff=cutoff,
+        nr_interaction_blocks=nr_interaction_blocks,
+    )
+    energy = schnet(input_data)
     nr_of_mols = input_data["atomic_subsystem_indices"].unique().shape[0]
 
     assert energy.shape == (

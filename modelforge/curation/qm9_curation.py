@@ -190,13 +190,25 @@ class QM9Curation(DatasetCuration):
         }
 
     def _init_record_entries_series(self):
-        # For data efficiency, information for different conformers will be grouped together
-        # To make it clear to the dataset loader which pieces of information are common to all
-        # conformers, or which pieces encode the series, we will label each value.
-        # The keys in this dictionary correspond to the label of the entries in each record.
-        # The value indicates if the entry contains series data (True) or a single common entry (False).
-        # If the entry has a value of True, the "series" attribute in hdf5 file will be set to True; False, if False.
-        # This information will be used by the code to read in the datafile to know how to parse underlying records.
+        """
+        Init the dictionary that defines the format of the data.
+
+        For data efficiency, information for different conformers will be grouped together
+        To make it clear to the dataset loader which pieces of information are common to all
+        conformers or which quantities are series (i.e., have different values for each conformer).
+        These labels will also allow us to define whether a given entry is per-atom, per-molecule,
+        or is a scalar/string that applies to the entire record.
+        Options include:
+        single_rec, e.g., name, n_configs, smiles
+        single_atom, e.g., atomic_numbers (these are the same for all conformers)
+        series_atom, e.g., charges
+        series_mol, e.g., dft energy, dipole moment, etc.
+        These ultimately appear under the "format" attribute in the hdf5 file.
+
+        Examples
+        >>> series = {'name': 'single_rec', 'atomic_numbers': 'single_atom',
+                      ... 'n_configs': 'single_rec', 'geometry': 'series_atom', 'energy': 'series_mol'}
+        """
 
         self._record_entries_series = {
             "name": "single_rec",
@@ -219,13 +231,13 @@ class QM9Curation(DatasetCuration):
             "zero_point_vibrational_energy": "series_mol",
             "internal_energy_at_0K": "series_mol",
             "formation_energy_at_0K": "series_mol",
-            "reference_energy_at_0K": "series_mol",
+            "reference_energy_at_0K": "single_rec",
             "internal_energy_at_298.15K": "series_mol",
-            "reference_energy_at_298.15K": "series_mol",
+            "reference_energy_at_298.15K": "single_rec",
             "enthalpy_at_298.15K": "series_mol",
-            "reference_enthalpy_at_298.15K": "series_mol",
+            "reference_enthalpy_at_298.15K": "single_rec",
             "free_energy_at_298.15K": "series_mol",
-            "reference_free_energy_at_298.15K": "series_mol",
+            "reference_free_energy_at_298.15K": "single_rec",
             "heat_capacity_at_298.15K": "series_mol",
             "harmonic_vibrational_frequencies": "series_mol",
         }
@@ -274,7 +286,7 @@ class QM9Curation(DatasetCuration):
         dict
             Dictionary of properties, with units added when appropriate.
         """
-        from modelforge.utils.misc import str_to_float
+
         from modelforge.utils.misc import str_to_float
 
         temp_prop = line.split()
@@ -511,7 +523,7 @@ class QM9Curation(DatasetCuration):
         unit_testing_max_records: Optional[int] = None,
     ):
         """
-        Processes a downloaded dataset: extracts relevant information.
+        Processes a downloaded dataset: extracts relevant information into a list of dicts.
 
         Parameters
         ----------
@@ -606,6 +618,11 @@ class QM9Curation(DatasetCuration):
         self._generate_hdf5()
 
     def _generate_metadata(self):
+        """
+        Generates a metadata file to go along with the HDF5 dataset.
+
+
+        """
         import pint
 
         with open(

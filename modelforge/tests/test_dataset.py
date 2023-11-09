@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 import torch
 
-from modelforge.dataset.dataset import DatasetFactory, TorchDataset
+from modelforge.dataset.dataset import DatasetFactory, TorchDataset, collate_conformers, TorchDataModule
 from loguru import logger
 
 from .helper_functions import initialize_dataset, DATASETS

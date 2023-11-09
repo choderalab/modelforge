@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 class SPICE12PubChemOpenFFCuration(DatasetCuration):
     """
-    Fetches the SPICE pubchem 1.2 dataset from MOLSSI QCarchive and processes it into a curated hdf5 file.
+    Fetches the SPICE pubchem 1.2 dataset from MOLSSI QCArchive and processes it into a curated hdf5 file.
 
     All QM datapoints retrieved wer generated using B3LYP-D3BJ/DZVP level of theory.
     This is the default theory used for force field development by the Open Force Field Initiative.
@@ -96,13 +96,26 @@ class SPICE12PubChemOpenFFCuration(DatasetCuration):
         }
 
     def _init_record_entries_series(self):
-        # For data efficiency, information for different conformers will be grouped together
-        # To make it clear to the dataset loader which pieces of information are common to all
-        # conformers, or which pieces encode a series, we will label each value.
-        # The keys in this dictionary correspond to the label of the entries in each record.
-        # The value indicates if the entry contains series data (True) or a single common entry (False).
-        # If the entry has a value of True, the "series" attribute in hdf5 file will be set to True; False, if False.
-        # This information will be used by the code to read in the datafile to know how to parse underlying records.
+        """
+        Init the dictionary that defines the format of the data.
+
+        For data efficiency, information for different conformers will be grouped together
+        To make it clear to the dataset loader which pieces of information are common to all
+        conformers or which quantities are series (i.e., have different values for each conformer).
+        These labels will also allow us to define whether a given entry is per-atom, per-molecule,
+        or is a scalar/string that applies to the entire record.
+        Options include:
+        single_rec, e.g., name, n_configs, smiles
+        single_atom, e.g., atomic_numbers (these are the same for all conformers)
+        single_mol, e.g., reference energy
+        series_atom, e.g., charges
+        series_mol, e.g., dft energy, dipole moment, etc.
+        These ultimately appear under the "format" attribute in the hdf5 file.
+
+        Examples
+        >>> series = {'name': 'single_rec', 'atomic_numbers': 'single_atom',
+                      ... 'n_configs': 'single_rec', 'geometry': 'series_atom', 'energy': 'series_mol'}
+        """
 
         self._record_entries_series = {
             "name": "single_rec",

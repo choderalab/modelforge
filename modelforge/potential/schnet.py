@@ -83,7 +83,7 @@ class SchNET(BaseNNP):
         # Compute the representation for each atom
         representation = self.representation(
             inputs["d_ij"]
-        )  # shape (n_pairs, n_atom_basis)
+        )  # shape (n_pairs, 1, n_atom_basis)
 
         x = inputs["atomic_numbers_embedding"]
         # Iterate over interaction blocks to update features
@@ -174,7 +174,9 @@ class SchNETInteractionBlock(nn.Module):
         idx_i, idx_j = pairlist[0], pairlist[1]
 
         # Perform continuous-filter convolution
-        x_j = x[idx_j]  # Gather features of second atoms in each pair
+        x_j = torch.index_select(
+            x, 0, idx_j
+        )  # Gather features of second atoms in each pair
         x_ij = x_j * Wij  # shape (n_pairs, nr_filters)
 
         # Initialize a tensor to gather the results
@@ -182,10 +184,11 @@ class SchNETInteractionBlock(nn.Module):
         x_native = torch.zeros(shape, dtype=x.dtype)
 
         # Prepare indices for scatter_add operation
-        idx_i_expanded = idx_i.unsqueeze(1).expand_as(x_ij)
+        # idx_i_expanded = idx_i.unsqueeze(1).expand_as(x_ij)
 
         # Sum contributions to update atom features
-        x_native.scatter_add_(0, idx_i_expanded, x_ij)
+        
+        x_native.scatter_add_(0, idx_i, x_ij)
 
         # Map back to the original feature space and reshape
         x = self.feature_to_output(x_native)

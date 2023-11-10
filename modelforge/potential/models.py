@@ -283,9 +283,7 @@ class BaseNNP(AbstractBaseNNP):
 
         """
         self.input_checks(inputs)
-        atomic_numbers = inputs["atomic_numbers"].squeeze(
-            dim=1
-        )  # shape (nr_of_atoms_in_batch, 3)
+        atomic_numbers = inputs["atomic_numbers"]  # shape (nr_of_atoms_in_batch, 3)
         positions = inputs["positions"]  # shape (nr_of_atoms_in_batch, 3)
         atomic_subsystem_indices = inputs["atomic_subsystem_indices"]
 

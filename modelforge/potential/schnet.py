@@ -30,7 +30,7 @@ class SchNET(BaseNNP):
         radial_basis : nn.Module
         cutoff : nn.Module
         nr_filters : int, optional
-            Number of filters; defines the dimensionality of the intermediate features (default is 0).
+            Number of filters; defines the dimensionality of the intermediate features (default is 2).
         """
         from .utils import EnergyReadout
 
@@ -47,7 +47,7 @@ class SchNET(BaseNNP):
         self.cutoff = cutoff
 
         # Initialize representation, readout, and interaction layers
-        self.representation = SchNETRepresentation(self.radial_basis)
+        self.schnet_representation = SchNETRepresentation(self.radial_basis)
         self.readout = EnergyReadout(self.nr_atom_basis)
         self.interactions = nn.ModuleList(
             [
@@ -65,7 +65,7 @@ class SchNET(BaseNNP):
         Parameters
         ----------
         atomic_numbers_embedding : torch.Tensor
-            Atomic numbers embedding; shape (nr_of_atoms_in_systems, n_atom_basis).
+            Atomic numbers embedding; shape (nr_of_atoms_in_systems, 1, n_atom_basis).
         inputs : Dict[str, torch.Tensor]
         - pairlist:  shape (n_pairs, 2)
         - r_ij:  shape (n_pairs, 1)
@@ -81,11 +81,11 @@ class SchNET(BaseNNP):
         """
 
         # Compute the representation for each atom
-        representation = self.representation(
+        representation = self.schnet_representation(
             inputs["d_ij"]
-        )  # shape (n_pairs, 1, n_atom_basis)
-
-        x = inputs["atomic_numbers_embedding"]
+        )  
+        nr_of_atoms_in_batch = inputs["atomic_numbers_embedding"].shape[0]
+        x = inputs["atomic_numbers_embedding"].view(nr_of_atoms_in_batch, -1) # shape (nr_of_atoms_in_batch)
         # Iterate over interaction blocks to update features
         for interaction in self.interactions:
             v = interaction(
@@ -120,7 +120,7 @@ class SchNETInteractionBlock(nn.Module):
         from .utils import ShiftedSoftplus, sequential_block
 
         assert nr_rbf > 4, "Number of radial basis functions must be larger than 10."
-        assert nr_filters > 0, "Number of filters must be larger than 0."
+        assert nr_filters > 1, "Number of filters must be larger than 1."
         assert nr_atom_basis > 10, "Number of atom basis must be larger than 10."
 
         self.nr_atom_basis = nr_atom_basis  # Initialize parameters
@@ -184,11 +184,11 @@ class SchNETInteractionBlock(nn.Module):
         x_native = torch.zeros(shape, dtype=x.dtype)
 
         # Prepare indices for scatter_add operation
-        # idx_i_expanded = idx_i.unsqueeze(1).expand_as(x_ij)
+        idx_i_expanded = idx_i.unsqueeze(1).expand_as(x_ij)
 
         # Sum contributions to update atom features
-        
-        x_native.scatter_add_(0, idx_i, x_ij)
+
+        x_native.scatter_add_(0, idx_i_expanded, x_ij)
 
         # Map back to the original feature space and reshape
         x = self.feature_to_output(x_native)
@@ -237,7 +237,7 @@ class LightningSchNET(SchNET, LightningModuleMixin):
         nr_interaction_blocks: int,
         radial_basis: nn.Module,
         cutoff: nn.Module,
-        nr_filters: int = 0,
+        nr_filters: int = 2,
         shared_interactions: bool = False,
         activation: nn.Module = ShiftedSoftplus,
         loss: Type[nn.Module] = nn.MSELoss(),
@@ -252,7 +252,7 @@ class LightningSchNET(SchNET, LightningModuleMixin):
         nr_interactions : int
             Number of interaction blocks in the architecture.
         nr_filters : int, optional
-            Dimensionality of the intermediate features (default is 0).
+            Dimensionality of the intermediate features (default is 2).
         cutoff : float, optional
             Cutoff value for the pairlist (default is 5.0).
         loss : Type[nn.Module], optional

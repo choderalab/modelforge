@@ -33,7 +33,7 @@ class PaiNN(BaseNNP):
         """
         Parameters
             ----------
-            embedding : torch.Module, contains atomic species embedding. 
+            embedding : torch.Module, contains atomic species embedding.
                 Embedding dimensions also define self.n_atom_basis.
             nr_interaction_blocks : int
                 Number of interaction blocks.
@@ -60,6 +60,13 @@ class PaiNN(BaseNNP):
         super().__init__(embedding)
 
         self.n_atom_basis = embedding.embedding_dim
+
+        log.debug("Initializing PaiNN model.")
+        log.debug(
+            f"Passed parameters to constructor: {self.nr_atom_basis=}, {nr_interaction_blocks=}, {cutoff=}"
+        )
+        log.debug(f"Initialized embedding: {embedding=}")
+
         self.nr_interaction_blocks = nr_interaction_blocks
         self.radial_basis = radial_basis
         self.cutoff = cutoff
@@ -111,8 +118,11 @@ class PaiNN(BaseNNP):
 
         # extract properties from pairlist
         d_ij = inputs["d_ij"].unsqueeze(-1)  # n_pairs, 1
+        nr_of_atoms_in_batch = inputs["atomic_numbers_embedding"].shape[0]
         r_ij = inputs["r_ij"]
-        atomic_numbers_embedding = inputs["atomic_numbers_embedding"]
+        atomic_numbers_embedding = inputs["atomic_numbers_embedding"].view(
+            nr_of_atoms_in_batch, -1
+        )
         qs = atomic_numbers_embedding.shape
 
         q = atomic_numbers_embedding.reshape(qs[0], 1, qs[1])

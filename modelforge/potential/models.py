@@ -262,6 +262,10 @@ class BaseNNP(AbstractBaseNNP):
         super().__init__()
         self.calculate_distances_and_pairlist = PairList(cutoff)
         self.embedding = embedding  # nn.Embedding(nr_of_embeddings, nr_atom_basis)
+        assert isinstance(
+            self.embedding, nn.Embedding
+        ), "embedding must be nn.Embedding"
+        assert embedding.embedding_dim > 0, "embedding_dim must be > 0"
         self.nr_atom_basis = embedding.embedding_dim
 
     def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
@@ -283,7 +287,8 @@ class BaseNNP(AbstractBaseNNP):
 
         """
         self.input_checks(inputs)
-        atomic_numbers = inputs["atomic_numbers"]  # shape (nr_of_atoms_in_batch, 3)
+        nr_of_atoms_in_batch = inputs["atomic_numbers"].shape[0]
+        atomic_numbers = inputs["atomic_numbers"]  # shape (nr_of_atoms_in_batch, 1)
         positions = inputs["positions"]  # shape (nr_of_atoms_in_batch, 3)
         atomic_subsystem_indices = inputs["atomic_subsystem_indices"]
 
@@ -291,6 +296,12 @@ class BaseNNP(AbstractBaseNNP):
         atomic_numbers_embedding = self.embedding(
             atomic_numbers
         )  # shape (nr_of_atoms_in_batch, n_atom_basis)
+        assert atomic_numbers_embedding.shape == (
+            nr_of_atoms_in_batch,
+            1,
+            self.nr_atom_basis,
+        )
+
         inputs = {
             "pair_indices": r["pair_indices"],
             "d_ij": r["d_ij"],

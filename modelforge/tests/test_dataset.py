@@ -5,12 +5,6 @@ import numpy as np
 import pytest
 import torch
 
-# TODO: remove
-from torch.utils.data import DataLoader
-from collections.abc import Generator
-from typing import List
-from modelforge.potential.utils import neighbor_pairs_nopbc
-
 from modelforge.dataset.dataset import DatasetFactory, TorchDataset, collate_conformers, TorchDataModule
 from loguru import logger
 

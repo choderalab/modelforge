@@ -279,9 +279,9 @@ def equivariance_test_utils(
     translation = lambda x: x + x_translation
 
     import math
-    alpha = torch.tensor(torch.random.uniform(-math.pi, math.pi))
-    beta = torch.tensor(torch.random.uniform(-math.pi, math.pi))
-    gamma = torch.tensor(torch.random.uniform(-math.pi, math.pi))
+    alpha = torch.distributions.Uniform(-math.pi, math.pi).sample()
+    beta = torch.distributions.Uniform(-math.pi, math.pi).sample()
+    gamma = torch.distributions.Uniform(-math.pi, math.pi).sample()
 
     rz = torch.tensor(
         [
@@ -309,9 +309,9 @@ def equivariance_test_utils(
 
     rotation = lambda x: x @ rz @ ry @ rx
 
-    alpha = torch.tensor(torch.random.uniform(-math.pi, math.pi))
-    beta = torch.tensor(torch.random.uniform(-math.pi, math.pi))
-    gamma = torch.tensor(torch.random.uniform(-math.pi, math.pi))
+    alpha = torch.distributions.Uniform(-math.pi, math.pi).sample()
+    beta = torch.distributions.Uniform(-math.pi, math.pi).sample()
+    gamma = torch.distributions.Uniform(-math.pi, math.pi).sample()
     v = torch.tensor([[alpha, beta, gamma]])
     v /= (v ** 2).sum() ** 0.5
 

@@ -119,3 +119,5 @@ def test_GaussianRBF():
 
     # Add assertion to check the shape of the output
     assert y.shape == (dim_of_x, n_rbf)
+
+

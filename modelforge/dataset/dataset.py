@@ -117,13 +117,22 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         ----------
         idx : int
             Index of the molecule to fetch data for.
+        Returns
+        -------
+        dict, contains:
+            - 'atomic_numbers': torch.Tensor, shape [n_atoms]
+                Atomic numbers for each atom in the molecule.
+            - 'positions': torch.Tensor, shape [n_atoms, 3]
+                Coordinates for each atom in the molecule.
+            - 'E_label': torch.Tensor, shape []
+                Scalar energy value for the molecule.
+            - 'idx': int
+                Index of the conformer in the dataset.
+            - 'atomic_subsystem_counts': torch.Tensor, shape [1]
+                Number of atoms in the conformer. Length one if __getitem__ is called with a single index, length
+                batch_size if collate_conformers is used with DataLoader
+        """
 
-        Returns ------- dict, contains: - 'atomic_numbers': torch.Tensor, shape [n_atoms] Atomic numbers for each
-        atom in the molecule. - 'positions': torch.Tensor, shape [n_atoms, 3] Coordinates for each atom in the
-        molecule. - 'E_label': torch.Tensor, shape [] Scalar energy value for the molecule. - 'idx': int Index of the
-        conformer in the dataset. - 'atomic_subsystem_counts': torch.Tensor, shape [1] Number of atoms in the
-        conformer. Length one if __getitem__ is called with a single index, length batch_size if collate_conformers
-        is used with DataLoader
         """
         series_atom_start_idx = self.series_atom_start_idxs_by_conf[idx]
         series_atom_end_idx = self.series_atom_start_idxs_by_conf[idx + 1]

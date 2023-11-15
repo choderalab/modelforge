@@ -249,11 +249,33 @@ SIMPLIFIED_INPUT_DATA = [
 
 
 
+import torch
+import math
+
 def equivariance_test_utils(
         number_of_atoms: int = 5,
         hidden_features: int = 7,
 ):
+    """
+    Generates random tensors for testing equivariance of a neural network.
 
+    Args:
+        number_of_atoms (int): 
+        Number of atoms in the molecule. Default is 5.
+        hidden_features (int): 
+        Number of hidden features in the neural network. Default is 7.
+
+    Returns:
+        Tuple of tensors:
+        - h0 (torch.Tensor): Random tensor of shape (number_of_atoms, hidden_features).
+        - x0 (torch.Tensor): Random tensor of shape (number_of_atoms, 3).
+        - v0 (torch.Tensor): Random tensor of shape (5, 3).
+        - translation (function): Function that translates a tensor by a random 3D vector.
+        - rotation (function): Function that rotates a tensor by a random 3D rotation matrix.
+        - reflection (function): Function that reflects a tensor across a random 3D plane.
+    """
+
+    # Generate random tensors
     h0 = torch.randn(
         size=(
             number_of_atoms,
@@ -268,17 +290,17 @@ def equivariance_test_utils(
         ),
     )
 
-    x_translation = torch.randn(
-        size=(1, 3),
-    )
-
     v0 = torch.randn(
         size=(5, 3),
     )
 
+    # Define translation function
+    x_translation = torch.randn(
+        size=(1, 3),
+    )
     translation = lambda x: x + x_translation
 
-    import math
+    # Define rotation function
     alpha = torch.distributions.Uniform(-math.pi, math.pi).sample()
     beta = torch.distributions.Uniform(-math.pi, math.pi).sample()
     gamma = torch.distributions.Uniform(-math.pi, math.pi).sample()
@@ -309,6 +331,7 @@ def equivariance_test_utils(
 
     rotation = lambda x: x @ rz @ ry @ rx
 
+    # Define reflection function
     alpha = torch.distributions.Uniform(-math.pi, math.pi).sample()
     beta = torch.distributions.Uniform(-math.pi, math.pi).sample()
     gamma = torch.distributions.Uniform(-math.pi, math.pi).sample()

@@ -214,3 +214,31 @@ def test_pairlist_on_dataset(dataset):
 
         assert shape_pairlist[1] == shape_distance[0]
         assert shape_pairlist[0] == 2
+
+
+@pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
+@pytest.mark.parametrize("model_class", MODELS_TO_TEST)
+def test_equivariant_energies_and_forces(input_data, model_class):
+    """
+    Test the calculation of energies and forces for a molecule.
+    This test will be adapted once we have a trained model.
+    """
+    import torch
+    import torch.nn as nn
+
+    nr_of_mols = input_data["atomic_subsystem_indices"].unique().shape[0]
+    nr_of_atoms_per_batch = input_data["atomic_subsystem_indices"].shape[0]
+    for lightning in [True, False]:
+        model = setup_simple_model(model_class, lightning)
+
+
+        old_position = input_data["positions"]
+
+        result = model(input_data)
+        # print(result.sum())
+        forces = -torch.autograd.grad(
+            result.sum(), input_data["positions"], create_graph=True, retain_graph=True
+        )[0]
+
+        assert result.shape == (nr_of_mols, 1)  #  only one molecule
+        assert forces.shape == (nr_of_atoms_per_batch, 3)  #  only one molecule

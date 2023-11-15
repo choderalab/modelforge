@@ -132,7 +132,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
                 Number of atoms in the conformer. Length one if __getitem__ is called with a single index, length
                 batch_size if collate_conformers is used with DataLoader
         """
-        
+
         series_atom_start_idx = self.series_atom_start_idxs_by_conf[idx]
         series_atom_end_idx = self.series_atom_start_idxs_by_conf[idx + 1]
         single_atom_start_idx = self.single_atom_start_idxs_by_conf[idx]

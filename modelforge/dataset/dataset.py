@@ -541,20 +541,32 @@ class TorchDataModule(pl.LightningDataModule):
         """
         return DataLoader(self.train_dataset, batch_size=self.batch_size, collate_fn=collate_conformers)
 
-    def train_dataloader_edge(self, cutoff, max_batch_edges) -> DataLoader:
+    def dataloader_edge(self, mode, cutoff, max_batch_edges) -> DataLoader:
         """
         Create a DataLoader for the training dataset.
 
         Returns
         -------
         DataLoader
-            DataLoader containing the training dataset.
+            DataLoader that yields batches of conformers with a maximum number of edges. The split from which the data
+            is drawn depends on the mode argument.
         """
-        one_conf_loader = DataLoader(self.train_dataset, batch_size=1, collate_fn=collate_conformers)
+        if mode == 'train':
+            dataset = self.train_dataset
+        elif mode == 'val':
+            dataset = self.val_dataset
+        elif mode == 'test':
+            dataset = self.test_dataset
+        elif mode == 'all':
+            dataset = self.dataset
+        else:
+            raise ValueError(f"Unknown mode {mode}")
+
+        one_conf_loader = DataLoader(dataset, batch_size=1, collate_fn=collate_conformers)
 
         def get_batch_sampler() -> Generator[List[int], None, None]:
             """Return a generator for a DataLoader that yields one molecule at a time. The generator yields a list of
-            indices of molecules in the DataLoader such that the total number of edges in the batch is less than
+            indices of conformers in the DataLoader such that the total number of edges in the batch is less than
             max_batch_edges."""
 
             added_idxs = []
@@ -563,20 +575,19 @@ class TorchDataModule(pl.LightningDataModule):
             for conf in one_conf_loader:
                 pairlist = neighbor_pairs_nopbc(conf['positions'], conf['atomic_subsystem_indices'], cutoff=cutoff)
                 num_edges = pairlist.shape[1]
+                if num_edges > max_batch_edges:
+                    raise ValueError(f"Conformer with {num_edges} edges exceeds max_batch_edges {max_batch_edges}")
                 if added_edges + num_edges > max_batch_edges:
                     yield added_idxs
                     added_idxs = []
                     added_edges = 0
-                added_idxs.extend(conf['subsystem_indices_referencing_dataset'])
+                added_idxs.extend(conf['subsystem_indices_referencing_dataset'])  # reference full dataset, not split
                 added_edges += num_edges
 
-        # TODO: remove
-        batch_sampler = get_batch_sampler()
-        next_idxs = list(batch_sampler)
-        print("batch_idxs", next_idxs)
+            yield added_idxs
 
         batch_sampler = get_batch_sampler()
-        return DataLoader(self.train_dataset, batch_sampler=batch_sampler, collate_fn=collate_conformers)
+        return DataLoader(self.dataset, batch_sampler=batch_sampler, collate_fn=collate_conformers)
 
     def val_dataloader(self) -> DataLoader:
         """

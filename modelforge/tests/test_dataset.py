@@ -5,6 +5,12 @@ import numpy as np
 import pytest
 import torch
 
+# TODO: remove
+from torch.utils.data import DataLoader
+from collections.abc import Generator
+from typing import List
+from modelforge.potential.utils import neighbor_pairs_nopbc
+
 from modelforge.dataset.dataset import DatasetFactory, TorchDataset, collate_conformers, TorchDataModule
 from loguru import logger
 
@@ -126,16 +132,72 @@ def test_one_conf_dataloader(dataset):
     assert conf["positions"].shape[0] == conf["atomic_numbers"].shape[0]
     assert conf["E_label"].shape == (1, 1)
 
+def test_train_dataloader_edge_simple():
+    atomic_subsystem_counts = np.array([3, 4])
+    n_confs = np.array([2, 1])
+    total_atoms_series = (atomic_subsystem_counts * n_confs).sum()
+    total_atoms_single = atomic_subsystem_counts.sum()
+    total_confs = n_confs.sum()
+    total_records = len(atomic_subsystem_counts)
+    geom_shape = (total_atoms_series, 3)
+    atomic_numbers_shape = (total_atoms_single, 1)
+    internal_energy_shape = (total_confs, 1)
+    input_data = {"geometry": np.arange(geom_shape[0] * geom_shape[1]).reshape(geom_shape),
+                  "atomic_numbers": np.arange(atomic_numbers_shape[0]).reshape(atomic_numbers_shape),
+                  "internal_energy_at_0K": np.arange(internal_energy_shape[0]).reshape(internal_energy_shape),
+
+                  "atomic_subsystem_counts": atomic_subsystem_counts,
+                  "n_confs": n_confs}
+    print(input_data)
+
+    property_names = PropertyNames(
+        "atomic_numbers",
+        "geometry",
+        "internal_energy_at_0K",
+    )
+    dataset = TorchDataset(input_data, property_names)
+    cutoff = float("inf")
+    max_batch_edges = 6
+    one_conf_loader = DataLoader(dataset, batch_size=1, sampler=(1, 2, 0), collate_fn=collate_conformers)
+
+    def get_batch_sampler() -> Generator[List[int], None, None]:
+        """Return a generator for a DataLoader that yields one molecule at a time. The generator yields a list of
+        indices of molecules in the DataLoader such that the total number of edges in the batch is less than
+        max_batch_edges."""
+
+        added_idxs = []
+        added_edges = 0
+
+        for conf in one_conf_loader:
+            pairlist = neighbor_pairs_nopbc(conf['positions'], conf['atomic_subsystem_indices'], cutoff=cutoff)
+            num_edges = pairlist.shape[1]
+            if num_edges > max_batch_edges:
+                raise ValueError(f"Conformer with {num_edges} edges exceeds max_batch_edges {max_batch_edges}")
+            if added_edges + num_edges > max_batch_edges:
+                yield added_idxs
+                added_idxs = []
+                added_edges = 0
+            added_idxs.extend(conf['subsystem_indices_referencing_dataset'])
+            added_edges += num_edges
+
+        yield added_idxs
+
+    batch_sampler = get_batch_sampler()
+    dataloader = DataLoader(dataset, batch_sampler=batch_sampler, collate_fn=collate_conformers)
+    dataloader_list = list(dataloader)
+    assert(len(dataloader_list) == 3)
+
 
 @pytest.mark.parametrize("dataset", DATASETS)
-def test_train_dataloader_edge(dataset):
+def test_dataloader_edge(dataset):
     data = dataset(for_unit_testing=True)
     data_module = TorchDataModule(data)
     data_module.prepare_data()
     data_module.setup("fit")
-    dataloader = data_module.train_dataloader_edge(cutoff=float('inf'), max_batch_edges=float('inf'))
-    dataloader_list = list(dataloader)
-    assert len(dataloader_list) == 1
+    for mode in ['train', 'val', 'all']:
+        dataloader = data_module.dataloader_edge(mode, cutoff=float('inf'), max_batch_edges=float('inf'))
+        dataloader_list = list(dataloader)
+        assert len(dataloader_list) == 1
 
 
 @pytest.mark.parametrize("dataset", DATASETS)

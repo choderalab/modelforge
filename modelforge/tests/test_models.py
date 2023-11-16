@@ -6,6 +6,7 @@ from .helper_functions import (
     SIMPLIFIED_INPUT_DATA,
     return_single_batch,
     setup_simple_model,
+    equivariance_test_utils
 )
 
 
@@ -226,11 +227,12 @@ def test_equivariant_energies_and_forces(input_data, model_class):
     import torch
     import torch.nn as nn
 
+    translation, rotation, reflection = equivariance_test_utils()
+
     nr_of_mols = input_data["atomic_subsystem_indices"].unique().shape[0]
     nr_of_atoms_per_batch = input_data["atomic_subsystem_indices"].shape[0]
     for lightning in [True, False]:
         model = setup_simple_model(model_class, lightning)
-
 
         old_position = input_data["positions"]
 
@@ -240,5 +242,72 @@ def test_equivariant_energies_and_forces(input_data, model_class):
             result.sum(), input_data["positions"], create_graph=True, retain_graph=True
         )[0]
 
-        assert result.shape == (nr_of_mols, 1)  #  only one molecule
-        assert forces.shape == (nr_of_atoms_per_batch, 3)  #  only one molecule
+
+        # translation test
+        translation_input_data = input_data.copy()
+        translation_input_data["positions"] = translation(translation_input_data["positions"])
+        translation_result = model(translation_input_data)
+        translation_forces = -torch.autograd.grad(
+            translation_result.sum(),
+            translation_input_data["positions"],
+            create_graph=True,
+            retain_graph=True,
+        )[0]
+
+        assert torch.allclose(
+            translation_result,
+            result,
+            atol=1e-5,
+        )
+
+        assert torch.allclose(
+            translation_forces,
+            forces,
+            atol=1e-5,
+        )
+
+        # rotation test
+        rotation_input_data = input_data.copy()
+        rotation_input_data["positions"] = rotation(rotation_input_data["positions"])
+        rotation_result = model(rotation_input_data)
+        rotation_forces = -torch.autograd.grad(
+            rotation_result.sum(),
+            rotation_input_data["positions"],
+            create_graph=True,
+            retain_graph=True,
+        )[0]
+
+        assert torch.allclose(
+            rotation_result,
+            result,
+            atol=1e-5,
+        )
+
+        assert torch.allclose(
+            rotation_forces,
+            rotation(forces),
+            atol=1e-5,
+        )
+
+        # reflection test
+        reflection_input_data = input_data.copy()
+        reflection_input_data["positions"] = reflection(reflection_input_data["positions"])
+        reflection_result = model(reflection_input_data)
+        reflection_forces = -torch.autograd.grad(
+            reflection_result.sum(),
+            reflection_input_data["positions"],
+            create_graph=True,
+            retain_graph=True,
+        )[0]
+
+        assert torch.allclose(
+            reflection_result,
+            result,
+            atol=1e-5,
+        )
+
+        assert torch.allclose(
+            reflection_forces,
+            reflection(forces),
+            atol=1e-5,
+        )

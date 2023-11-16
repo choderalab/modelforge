@@ -274,26 +274,7 @@ def equivariance_test_utils(
         - rotation (function): Function that rotates a tensor by a random 3D rotation matrix.
         - reflection (function): Function that reflects a tensor across a random 3D plane.
     """
-
-    # Generate random tensors
-    h0 = torch.randn(
-        size=(
-            number_of_atoms,
-            hidden_features,
-        ),
-    )
-
-    x0 = torch.randn(
-        size=(
-            number_of_atoms,
-            3,
-        ),
-    )
-
-    v0 = torch.randn(
-        size=(5, 3),
-    )
-
+    
     # Define translation function
     x_translation = torch.randn(
         size=(1, 3),
@@ -342,4 +323,4 @@ def equivariance_test_utils(
 
     reflection = lambda x: x @ p
 
-    return h0, x0, v0, translation, rotation, reflection
+    return translation, rotation, reflection

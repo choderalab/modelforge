@@ -169,9 +169,9 @@ class AbstractBaseNNP(nn.Module, ABC):
         Parameters
         ----------
         inputs : Dict[str, torch.Tensor]
-            - 'atomic_numbers', shape (nr_systems, nr_atoms), 0 indicates non-interacting atoms that will be masked
-            - 'total_charge', shape (nr_systems, 1)
-            - 'positions', shape (n_atoms, 3)
+            - 'atomic_numbers', shape (nr_of_atoms_in_batch, *, *), 0 indicates non-interacting atoms that will be masked
+            - 'total_charge', shape (nr_of_atoms_in_batch, 1)
+            - 'positions', shape (nr_of_atoms_in_batch, 3)
             - 'boxvectors', shape (3, 3)
 
         Returns
@@ -194,8 +194,8 @@ class AbstractBaseNNP(nn.Module, ABC):
             - pairlist, shape (n_paris,2)
             - r_ij, shape (n_pairs, 1)
             - d_ij, shape (n_pairs, 3)
-            - 'atomic_subsystem_indices' (optional), shape n_atoms
-            - positions, shape (n_systems, n_atoms, 3)
+            - 'atomic_subsystem_indices' (optional), shape nr_of_atoms_in_batch
+            - positions, shape (nr_of_atoms_in_batch, 3)
 
         """
         pass
@@ -277,7 +277,7 @@ class BaseNNP(AbstractBaseNNP):
         ----------
         inputs : Dict[str, torch.Tensor]
             Inputs containing atomic numbers ('atomic_numbers'), coordinates ('positions') and pairlist ('pairlist').
-            - 'atomic_numbers': int; shape (nr_of_atoms_in_batch, 1), 0 indicates non-interacting atoms that will be masked
+            - 'atomic_numbers': int; shape (nr_of_atoms_in_batch, *,*), 0 indicates non-interacting atoms that will be masked
             - 'total_charge' : int; shape (n_system)
             - 'positions': float; shape (nr_of_atoms_in_batch, 3)
 
@@ -289,8 +289,8 @@ class BaseNNP(AbstractBaseNNP):
         """
         self.input_checks(inputs)
         nr_of_atoms_in_batch = inputs["atomic_numbers"].shape[0]
-        atomic_numbers = inputs["atomic_numbers"]  # shape (nr_of_atoms_in_batch, *,*)
-        positions = inputs["positions"]  # shape (nr_of_atoms_in_batch, 3)
+        atomic_numbers = inputs["atomic_numbers"]
+        positions = inputs["positions"]
         atomic_subsystem_indices = inputs["atomic_subsystem_indices"]
 
         r = self.calculate_distances_and_pairlist(positions, atomic_subsystem_indices)
@@ -330,11 +330,11 @@ class SingleTopologyAlchemicalBaseNNPModel(AbstractBaseNNP):
         ----------
         inputs : Dict[str, torch.Tensor]
             Inputs containing atomic numbers ('atomic_numbers'), coordinates ('positions') and pairlist ('pairlist').
-            - 'atomic_numbers': shape (n_systems:int, n_atoms:int), 0 indicates non-interacting atoms that will be masked
-            - 'total_charge' : shape (n_system:int)
-            - (only for alchemical transformation) 'alchemical_atomic_number': shape (n_atoms:int)
+            - 'atomic_numbers': shape (nr_of_atoms_in_batch, *, *), 0 indicates non-interacting atoms that will be masked
+            - 'total_charge' : shape (nr_of_atoms_in_batch)
+            - (only for alchemical transformation) 'alchemical_atomic_number': shape (nr_of_atoms_in_batch)
             - (only for alchemical transformation) 'lamb': float
-            - 'positions': shape (n_atoms, 3)
+            - 'positions': shape (nr_of_atoms_in_batch, 3)
 
         Returns
         -------

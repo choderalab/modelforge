@@ -42,6 +42,7 @@ class SlicedEmbedding(nn.Module):
             The output tensor.
         """
         selected_tensor = x[:, self.sliced_dim, ...]
+        
 
         return self.embedding(selected_tensor)
 

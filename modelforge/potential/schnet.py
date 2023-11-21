@@ -84,8 +84,7 @@ class SchNET(BaseNNP):
         representation = self.schnet_representation(
             inputs["d_ij"]
         )  
-        nr_of_atoms_in_batch = inputs["atomic_numbers_embedding"].shape[0]
-        x = inputs["atomic_numbers_embedding"].view(nr_of_atoms_in_batch, -1) # shape (nr_of_atoms_in_batch)
+        x = inputs["atomic_numbers_embedding"]
         # Iterate over interaction blocks to update features
         for interaction in self.interactions:
             v = interaction(

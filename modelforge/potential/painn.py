@@ -118,11 +118,8 @@ class PaiNN(BaseNNP):
 
         # extract properties from pairlist
         d_ij = inputs["d_ij"].unsqueeze(-1)  # n_pairs, 1
-        nr_of_atoms_in_batch = inputs["atomic_numbers_embedding"].shape[0]
         r_ij = inputs["r_ij"]
-        atomic_numbers_embedding = inputs["atomic_numbers_embedding"].view(
-            nr_of_atoms_in_batch, -1
-        )
+        atomic_numbers_embedding = inputs["atomic_numbers_embedding"]
         qs = atomic_numbers_embedding.shape
 
         q = atomic_numbers_embedding.reshape(qs[0], 1, qs[1])

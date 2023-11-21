@@ -258,13 +258,14 @@ class BaseNNP(AbstractBaseNNP):
             Cutoff distance (in Angstrom) for neighbor calculations, default is 5.0.
         """
         from .models import PairList
+        from .utils import SlicedEmbedding
 
         super().__init__()
         self.calculate_distances_and_pairlist = PairList(cutoff)
         self.embedding = embedding  # nn.Embedding(nr_of_embeddings, nr_atom_basis)
         assert isinstance(
-            self.embedding, nn.Embedding
-        ), "embedding must be nn.Embedding"
+            self.embedding, SlicedEmbedding
+        ), "embedding must be SlicedEmbedding"
         assert embedding.embedding_dim > 0, "embedding_dim must be > 0"
         self.nr_atom_basis = embedding.embedding_dim
 
@@ -288,17 +289,14 @@ class BaseNNP(AbstractBaseNNP):
         """
         self.input_checks(inputs)
         nr_of_atoms_in_batch = inputs["atomic_numbers"].shape[0]
-        atomic_numbers = inputs["atomic_numbers"]  # shape (nr_of_atoms_in_batch, 1)
+        atomic_numbers = inputs["atomic_numbers"]  # shape (nr_of_atoms_in_batch, *,*)
         positions = inputs["positions"]  # shape (nr_of_atoms_in_batch, 3)
         atomic_subsystem_indices = inputs["atomic_subsystem_indices"]
 
         r = self.calculate_distances_and_pairlist(positions, atomic_subsystem_indices)
-        atomic_numbers_embedding = self.embedding(
-            atomic_numbers
-        )  # shape (nr_of_atoms_in_batch, n_atom_basis)
+        atomic_numbers_embedding = self.embedding(atomic_numbers)
         assert atomic_numbers_embedding.shape == (
             nr_of_atoms_in_batch,
-            1,
             self.nr_atom_basis,
         )
 

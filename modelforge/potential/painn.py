@@ -272,10 +272,6 @@ class PaiNNInteraction(nn.Module):
         )
         expanded_idx_i_dmu = idx_i.view(-1, 1, 1).expand_as(dmu)
         dmu_result_native.scatter_add_(0, expanded_idx_i_dmu, dmu)
-        # dmu_results_custom = snn.scatter_add(
-        #    dmu, idx_i, dim_size=nr_of_atoms_in_all_systems
-        # )
-        # assert torch.allclose(dmu_results_custom, dmu_result_native)
 
         q = q + dq_result_native  # .view(nr_of_atoms_in_all_systems)
         mu = mu + dmu_result_native

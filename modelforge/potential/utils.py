@@ -5,6 +5,47 @@ import torch
 import torch.nn as nn
 
 
+class SlicedEmbedding(nn.Module):
+    def __init__(
+        self, numbers_of_atoms_in_batch: int, embedding_dim: int, sliced_dim: int = 1
+    ):
+        """
+        Initialize the Embedding class.
+
+        Parameters
+        ----------
+        numbers_of_atoms_in_batch : int
+            Number of atom types.
+        embedding_dim : int
+            Dimensionality of the embedding.
+        """
+        super().__init__()
+        self.embedding = nn.Embedding(numbers_of_atoms_in_batch, embedding_dim)
+        self.sliced_dim = sliced_dim
+
+    @property
+    def embedding_dim(self):
+        return self.embedding.embedding_dim
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass for the Embedding.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor for the forward pass.
+
+        Returns
+        -------
+        torch.Tensor
+            The output tensor.
+        """
+        selected_tensor = x[:, self.sliced_dim, ...]
+
+        return self.embedding(selected_tensor)
+
+
 def sequential_block(
     in_features: int,
     out_features: int,

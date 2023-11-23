@@ -262,7 +262,7 @@ class BaseNNP(AbstractBaseNNP):
 
         super().__init__()
         self.calculate_distances_and_pairlist = PairList(cutoff)
-        self.embedding = embedding  # nn.Embedding(nr_of_embeddings, nr_atom_basis)
+        self.embedding = embedding 
         assert isinstance(
             self.embedding, SlicedEmbedding
         ), "embedding must be SlicedEmbedding"

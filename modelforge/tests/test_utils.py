@@ -1,7 +1,8 @@
 import numpy as np
 import torch
+import pytest
 
-from modelforge.potential.utils import CosineCutoff, cosine_cutoff
+from modelforge.potential.utils import CosineCutoff, cosine_cutoff, GaussianRBF
 
 
 def test_cosine_cutoff():
@@ -40,33 +41,33 @@ def test_cosine_cutoff_module():
     assert torch.allclose(output, expected_output, rtol=1e-3)
 
 
-def test_rbf():
+@pytest.mark.parametrize("RBF", [GaussianRBF])
+def test_rbf(RBF):
     """
     Test the Gaussian Radial Basis Function (RBF) implementation.
     """
     from modelforge.dataset import QM9Dataset
-    from modelforge.potential import GaussianRBF
 
     from .helper_functions import prepare_pairlist_for_single_batch, return_single_batch
 
     batch = return_single_batch(QM9Dataset, mode="fit")
     pairlist = prepare_pairlist_for_single_batch(batch)
 
-    radial_basis = GaussianRBF(n_rbf=20, cutoff=5.0)
+    radial_basis = RBF(n_rbf=20, cutoff=5.0)
     output = radial_basis(pairlist["d_ij"])  # Shape: [n_pairs, n_rbf]
     # Add assertion to check the shape of the output
-    assert output.shape[1] == 20  # n_rbf dimension
+    assert output.shape[2] == 20  # n_rbf dimension
 
 
-from modelforge.potential import GaussianRBF
-
-
-def test_gaussian_rbf():
+@pytest.mark.parametrize("RBF", [GaussianRBF])
+def test_gaussian_rbf(RBF):
+    # Check dimensions of output and output
     n_rbf = 5
     cutoff = 10.0
     start = 0.0
     trainable = False
-    gaussian_rbf = GaussianRBF(n_rbf, cutoff, start, trainable)
+
+    gaussian_rbf = RBF(n_rbf=n_rbf, cutoff=cutoff, start=start, trainable=trainable)
 
     # Test that the number of radial basis functions is correct
     assert gaussian_rbf.n_rbf == n_rbf
@@ -88,6 +89,37 @@ def test_gaussian_rbf():
     assert expected_output.shape == (3, n_rbf)
 
 
+@pytest.mark.parametrize("RBF", [GaussianRBF])
+def test_rbf_invariance(RBF):
+    # Define a set of coordinates
+    coordinates = torch.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]])
+
+    # Initialize RBF
+    rbf = RBF(n_rbf=10, cutoff=5.0)
+
+    # Calculate pairwise distances for the original coordinates
+    original_d_ij = torch.cdist(coordinates, coordinates)
+
+    # Apply RBF
+    original_output = rbf(original_d_ij)
+
+    # Apply a rotation and reflection to the coordinates
+    rotation_matrix = torch.tensor(
+        [[0, -1, 0], [1, 0, 0], [0, 0, 1]], dtype=torch.float32
+    )  # 90-degree rotation
+    reflected_coordinates = torch.mm(coordinates, rotation_matrix)
+    reflected_coordinates[:, 0] *= -1  # Reflect across the x-axis
+
+    # Recalculate pairwise distances
+    transformed_d_ij = torch.cdist(reflected_coordinates, reflected_coordinates)
+
+    # Apply Gaussian RBF to transformed coordinates
+    transformed_output = rbf(transformed_d_ij)
+
+    # Assert that the outputs are the same
+    assert torch.allclose(original_output, transformed_output, atol=1e-6)
+
+
 def test_scatter_add():
     """
     Test the scatter_add utility function.
@@ -102,22 +134,3 @@ def test_scatter_add():
     shape[dim] = dim_size
     native_result = torch.zeros(shape, dtype=x.dtype)
     native_result.scatter_add_(dim, idx_i, x)
-
-
-def test_GaussianRBF():
-    """
-    Test the GaussianRBF layer.
-    """
-
-    from modelforge.potential import GaussianRBF
-
-    n_rbf = 10
-    dim_of_x = 3
-    layer = GaussianRBF(10, 5.0)
-    x = torch.tensor([1.0, 2.0, 3.0], dtype=torch.float32)
-    y = layer(x)  # Shape: [dim_of_x, n_rbf]
-
-    # Add assertion to check the shape of the output
-    assert y.shape == (dim_of_x, n_rbf)
-
-

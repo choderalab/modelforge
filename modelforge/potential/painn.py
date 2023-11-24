@@ -141,8 +141,6 @@ class PaiNN(BaseNNP):
             )
             q, mu = mixing(q, mu)
 
-        atomic_numbers_embedding = atomic_numbers_embedding.squeeze(1)
-
         # Use squeeze to remove dimensions of size 1
         q_ = q.squeeze(dim=1)
 
@@ -188,7 +186,7 @@ class PaiNNInteraction(nn.Module):
 
     def forward(
         self,
-        q: torch.Tensor,  # shape [n_mols, n_atoms, n_atom_basis]
+        q: torch.Tensor,  # shape [nr_of_atoms_in_batch, n_atom_basis]
         mu: torch.Tensor,  # shape [n_mols, n_interactions, n_atom_basis]
         Wij: torch.Tensor,  # shape [n_interactions]
         dir_ij: torch.Tensor,
@@ -244,12 +242,6 @@ class PaiNNInteraction(nn.Module):
 
         # Use scatter_add_
         dq_result_native.scatter_add_(0, expanded_idx_i, dq)
-        # dq_result_custom = snn.scatter_add(
-        #    dq, idx_i, dim_size=nr_of_atoms_in_all_systems
-        # )
-
-        # The outputs should be the same
-        # assert torch.allclose(dq_result_custom, dq_result_native)
 
         dmu = dmuR * dir_ij[..., None] + dmumu * muj
         dmu_result_native = torch.zeros(
@@ -261,10 +253,6 @@ class PaiNNInteraction(nn.Module):
         )
         expanded_idx_i_dmu = idx_i.view(-1, 1, 1).expand_as(dmu)
         dmu_result_native.scatter_add_(0, expanded_idx_i_dmu, dmu)
-        # dmu_results_custom = snn.scatter_add(
-        #    dmu, idx_i, dim_size=nr_of_atoms_in_all_systems
-        # )
-        # assert torch.allclose(dmu_results_custom, dmu_result_native)
 
         q = q + dq_result_native  # .view(nr_of_atoms_in_all_systems)
         mu = mu + dmu_result_native

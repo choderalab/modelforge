@@ -268,25 +268,7 @@ class BaseNNP(AbstractBaseNNP):
         self.embedding = embedding  # nn.Embedding(nr_of_embeddings, nr_atom_basis)
         self.nr_atom_basis = embedding.embedding_dim
 
-    def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
-        """
-        Abstract method for forward pass in neural network potentials.
-
-        Parameters
-        ----------
-        inputs : Dict[str, torch.Tensor]
-            Inputs containing atomic numbers ('atomic_numbers'), coordinates ('positions') and pairlist ('pairlist').
-            - 'atomic_numbers': int; shape (nr_of_atoms_in_batch, 1), 0 indicates non-interacting atoms that will be masked
-            - 'total_charge' : int; shape (n_system)
-            - 'positions': float; shape (nr_of_atoms_in_batch, 3)
-
-        Returns
-        -------
-        torch.Tensor
-            Calculated energies; float; shape (n_systems).
-
-        """
-        self.input_checks(inputs)
+    def _prepare_input(self, inputs: Dict[str, torch.Tensor]):
         atomic_numbers = inputs["atomic_numbers"].squeeze(
             dim=1
         )  # shape (nr_of_atoms_in_batch, 3)
@@ -306,6 +288,28 @@ class BaseNNP(AbstractBaseNNP):
             "atomic_numbers": atomic_numbers,
             "atomic_subsystem_indices": atomic_subsystem_indices,
         }
+        return inputs
+
+    def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
+        """
+        Abstract method for forward pass in neural network potentials.
+
+        Parameters
+        ----------
+        inputs : Dict[str, torch.Tensor]
+            Inputs containing atomic numbers ('atomic_numbers'), coordinates ('positions') and pairlist ('pairlist').
+            - 'atomic_numbers': int; shape (nr_of_atoms_in_batch, 1), 0 indicates non-interacting atoms that will be masked
+            - 'total_charge' : int; shape (n_system)
+            - 'positions': float; shape (nr_of_atoms_in_batch, 3)
+
+        Returns
+        -------
+        torch.Tensor
+            Calculated energies; float; shape (n_systems).
+
+        """
+        self.input_checks(inputs)
+        inputs = self._prepare_input(inputs)
         return self._forward(inputs)
 
 

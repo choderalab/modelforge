@@ -33,7 +33,7 @@ class PaiNN(BaseNNP):
         """
         Parameters
             ----------
-            embedding : torch.Module, contains atomic species embedding. 
+            embedding : torch.Module, contains atomic species embedding.
                 Embedding dimensions also define self.n_atom_basis.
             nr_interaction_blocks : int
                 Number of interaction blocks.
@@ -110,7 +110,7 @@ class PaiNN(BaseNNP):
         from modelforge.potential.utils import _distance_to_radial_basis
 
         # extract properties from pairlist
-        d_ij = inputs["d_ij"].unsqueeze(-1)  # n_pairs, 1
+        d_ij = inputs["d_ij"]  # (n_pairs, 1, distance)
         r_ij = inputs["r_ij"]
         atomic_numbers_embedding = inputs["atomic_numbers_embedding"]
         qs = atomic_numbers_embedding.shape
@@ -118,7 +118,6 @@ class PaiNN(BaseNNP):
         q = atomic_numbers_embedding.reshape(qs[0], 1, qs[1])
         # compute atom and pair features
         dir_ij = r_ij / d_ij
-        # torch.Size([1150, 1, 32])
         f_ij, _ = _distance_to_radial_basis(d_ij, self.radial_basis)
         fcut = self.cutoff(d_ij)  # n_pairs, 1
 

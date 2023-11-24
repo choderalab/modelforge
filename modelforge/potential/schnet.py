@@ -164,10 +164,10 @@ class SchNETInteractionBlock(nn.Module):
         """
 
         # Map input features to the filter space
-        x = self.intput_to_feature(x)
+        x = self.intput_to_feature(x)  # (n_pairs, n_filters)
 
         # Generate interaction filters based on radial basis functions
-        Wij = self.filter_network(f_ij)
+        Wij = self.filter_network(f_ij)  # (n_pairs, n_filters)
         Wij = Wij * rcut_ij[:, None]  # Apply the cutoff
         Wij = Wij.to(dtype=x.dtype)
 
@@ -181,7 +181,6 @@ class SchNETInteractionBlock(nn.Module):
         shape = list(x.shape)  # note that we're using x.shape, not x_ij.shape
         x_native = torch.zeros(shape, dtype=x.dtype)
 
-        # Prepare indices for scatter_add operation
         idx_i_expanded = idx_i.unsqueeze(1).expand_as(x_ij)
 
         # Sum contributions to update atom features
@@ -211,7 +210,7 @@ class SchNETRepresentation(nn.Module):
 
         Parameters
         ----------
-        d_ij : Dict[str, torch.Tensor], Pairwise distances between atoms; shape [n_pairs]
+        d_ij : Dict[str, torch.Tensor], Pairwise distances between atoms; shape [n_pairs, 1]
 
         Returns
         -------
@@ -223,8 +222,11 @@ class SchNETRepresentation(nn.Module):
 
         # Convert distances to radial basis functions
         f_ij, rcut_ij = _distance_to_radial_basis(d_ij, self.radial_basis)
-
-        return {"f_ij": f_ij, "rcut_ij": rcut_ij}
+        f_ij_ = f_ij.squeeze(1)
+        rcut_ij_ = rcut_ij.squeeze(1)
+        assert f_ij_.dim() == 2, f"Expected 2D tensor, got {f_ij_.dim()}"
+        assert rcut_ij_.dim() == 1, f"Expected 1D tensor, got {rcut_ij_.dim()}"
+        return {"f_ij": f_ij_, "rcut_ij": rcut_ij_}
 
 
 class LightningSchNET(SchNET, LightningModuleMixin):

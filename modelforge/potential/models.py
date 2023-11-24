@@ -39,7 +39,7 @@ class PairList(nn.Module):
         self.calculate_neighbors = neighbor_pairs_nopbc
         self.cutoff = cutoff
 
-    def compute_r_ij(
+    def calculate_r_ij(
         self, pair_indices: torch.Tensor, positions: torch.Tensor
     ) -> torch.Tensor:
         """Compute displacement vector between atom pairs.
@@ -61,6 +61,10 @@ class PairList(nn.Module):
             2, -1, 3
         )
         return selected_positions[0] - selected_positions[1]
+
+    def calculate_d_ij(self, r_ij):
+        # Calculate the euclidian distance between the atoms in the pair
+        return r_ij.norm(2, -1).unsqueeze(-1)
 
     def forward(
         self, positions: torch.Tensor, atomic_subsystem_indices: torch.Tensor
@@ -84,11 +88,11 @@ class PairList(nn.Module):
         pair_indices = self.calculate_neighbors(
             positions, atomic_subsystem_indices, self.cutoff
         )
-        r_ij = self.compute_r_ij(pair_indices, positions)
+        r_ij = self.calculate_r_ij(pair_indices, positions)
 
         return {
             "pair_indices": pair_indices,
-            "d_ij": r_ij.norm(2, -1),
+            "d_ij": self.calculate_d_ij(r_ij),
             "r_ij": r_ij,
         }
 

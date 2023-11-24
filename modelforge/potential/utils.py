@@ -89,7 +89,7 @@ def cosine_cutoff(d_ij: torch.Tensor, cutoff: float) -> torch.Tensor:
     Parameters
     ----------
     d_ij : Tensor
-        Pairwise distance tensor. Shape: [..., N]
+        Pairwise distance tensor. Shape: [n_pairs, distance]
     cutoff : float
         The cutoff distance.
 
@@ -98,7 +98,6 @@ def cosine_cutoff(d_ij: torch.Tensor, cutoff: float) -> torch.Tensor:
     Tensor
         The cosine cutoff tensor. Shape: [..., N]
     """
-
     # Compute values of cutoff function
     input_cut = 0.5 * (torch.cos(d_ij * np.pi / cutoff) + 1.0)
     # Remove contributions beyond the cutoff radius
@@ -261,7 +260,7 @@ def _distance_to_radial_basis(
 
     Parameters
     ----------
-    d_ij : torch.Tensor, shape [n_pairs]
+    d_ij : torch.Tensor, shape [n_pairs,1 ]
         Pairwise distances between atoms.
 
     Returns
@@ -270,6 +269,7 @@ def _distance_to_radial_basis(
         - Radial basis functions, shape [n_pairs, n_rbf]
         - cutoff values, shape [n_pairs]
     """
+    assert d_ij.dim() == 2
     f_ij = radial_basis(d_ij)
     rcut_ij = cosine_cutoff(d_ij, radial_basis.cutoff)
     return f_ij, rcut_ij

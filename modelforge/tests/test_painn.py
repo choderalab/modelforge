@@ -56,76 +56,41 @@ def test_painn_forward(lightning, input_data, model_parameter):
     )  # Assuming energy is calculated per sample in the batch
 
 
-@pytest.mark.skipif(
-    IN_GITHUB_ACTIONS,
-    reason="This test is not intended to be performed regularly.",
-)
-def test_schnetpack_PaiNN():
-    # NOTE: this test sets up the schnetpack Painn implementation and trains a model
-    # units are not cnnsistent with the modelforge implementation yet
-    import os
-
-    import schnetpack as spk
-    import schnetpack.transform as trn
-    from schnetpack.datasets import QM9
-
-    from .schnetpack_pain_implementation import setup_painn
-
-    qm9tut = "./qm9tut"
-    if not os.path.exists("qm9tut"):
-        os.makedirs(qm9tut)
-
-    qm9data = QM9(
-        "./qm9.db",
-        batch_size=64,
-        num_train=1000,
-        num_val=1000,
-        transforms=[
-            trn.ASENeighborList(cutoff=5.0),
-            trn.RemoveOffsets(QM9.U0, remove_mean=True, remove_atomrefs=True),
-            trn.CastTo32(),
-        ],
-        property_units={QM9.U0: "eV"},
-        num_workers=1,
-        split_file=os.path.join(qm9tut, "split.npz"),
-        pin_memory=False,  # set to false, when not using a GPU
-        load_properties=[QM9.U0],  # only load U0 property
-    )
-    qm9data.prepare_data()
-    qm9data.setup()
-
-    nnpot = setup_painn()
+def test_painn_interaction_invariance():
     import torch
-    import torchmetrics
+    from modelforge.potential.painn import PaiNNInteraction
+    from torch import nn
+    from .helper_functions import generate_methane_input, setup_simple_model
+    from modelforge.potential.painn import PaiNN
+    from modelforge.potential.utils import _distance_to_radial_basis
 
-    output_U0 = spk.task.ModelOutput(
-        name=QM9.U0,
-        loss_fn=torch.nn.MSELoss(),
-        loss_weight=1.0,
-        metrics={"MAE": torchmetrics.MeanAbsoluteError()},
+    # define a rotation matrix in 3D that rotates by 90 degrees around the z-axis
+    # (clockwise when looking along the z-axis towards the origin)
+    rotation_matrix = torch.tensor([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
+
+    painn = setup_simple_model(PaiNN)
+    methane_input = generate_methane_input()
+    perturbed_methane_input = methane_input.copy()
+    perturbed_methane_input["positions"] = torch.matmul(
+        methane_input["positions"], rotation_matrix
     )
-    task = spk.task.AtomisticTask(
-        model=nnpot,
-        outputs=[output_U0],
-        optimizer_cls=torch.optim.AdamW,
-        optimizer_args={"lr": 1e-4},
-    )
 
-    import pytorch_lightning as pl
+    prepared_input = painn._prepare_input(methane_input)
+    reference_d_ij = prepared_input["d_ij"]
+    reference_r_ij = prepared_input["r_ij"]
+    atomic_numbers_embedding = prepared_input["atomic_numbers_embedding"]
+    reference_dir_ij = reference_r_ij / reference_d_ij
+    reference_f_ij, _ = _distance_to_radial_basis(reference_d_ij, painn.radial_basis)
 
-    logger = pl.loggers.TensorBoardLogger(save_dir=qm9tut)
-    callbacks = [
-        spk.train.ModelCheckpoint(
-            model_path=os.path.join(qm9tut, "best_inference_model"),
-            save_top_k=1,
-            monitor="val_loss",
-        )
-    ]
+    perturbed_prepared_input = painn._prepare_input(perturbed_methane_input)
+    perturbed_d_ij = perturbed_prepared_input["d_ij"]
+    perturbed_r_ij = perturbed_prepared_input["r_ij"]
+    perturbed_dir_ij = perturbed_r_ij / perturbed_d_ij
+    perturbed_f_ij, _ = _distance_to_radial_basis(perturbed_d_ij, painn.radial_basis)
 
-    trainer = pl.Trainer(
-        callbacks=callbacks,
-        logger=logger,
-        default_root_dir=qm9tut,
-        max_epochs=3,  # for testing, we restrict the number of epochs
-    )
-    trainer.fit(task, datamodule=qm9data)
+    assert torch.allclose(reference_d_ij, perturbed_d_ij)
+    assert torch.allclose(reference_f_ij, perturbed_f_ij)
+    # Test that the interaction block is invariant to the order of the atoms
+
+
+    

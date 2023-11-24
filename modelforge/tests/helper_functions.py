@@ -161,7 +161,7 @@ def generate_methane_input() -> Dict[str, torch.Tensor]:
     Returns
     -------
     Dict[str, Tensor]
-        Dictionary with keys 'Z', 'R', 'E'.
+        Dictionary with keys 'atomic_numbers', 'positions', 'atomic_subsystem_indices', 'E_labels'.
     """
 
     atomic_numbers = torch.tensor([[6], [1], [1], [1], [1]], dtype=torch.int64)
@@ -248,21 +248,21 @@ SIMPLIFIED_INPUT_DATA = [
 ]
 
 
-
 import torch
 import math
 
+
 def equivariance_test_utils(
-        number_of_atoms: int = 5,
-        hidden_features: int = 7,
+    number_of_atoms: int = 5,
+    hidden_features: int = 7,
 ):
     """
     Generates random tensors for testing equivariance of a neural network.
 
     Args:
-        number_of_atoms (int): 
+        number_of_atoms (int):
         Number of atoms in the molecule. Default is 5.
-        hidden_features (int): 
+        hidden_features (int):
         Number of hidden features in the neural network. Default is 7.
 
     Returns:
@@ -274,7 +274,7 @@ def equivariance_test_utils(
         - rotation (function): Function that rotates a tensor by a random 3D rotation matrix.
         - reflection (function): Function that reflects a tensor across a random 3D plane.
     """
-    
+
     # Define translation function
     x_translation = torch.randn(
         size=(1, 3),
@@ -289,24 +289,24 @@ def equivariance_test_utils(
     rz = torch.tensor(
         [
             [math.cos(alpha), -math.sin(alpha), 0],
-            [math.sin(alpha),  math.cos(alpha), 0],
-            [0,                0,               1],
+            [math.sin(alpha), math.cos(alpha), 0],
+            [0, 0, 1],
         ]
     )
 
     ry = torch.tensor(
         [
-            [math.cos(beta),   0,               math.sin(beta)],
-            [0,                1,               0],
-            [-math.sin(beta),  0,               math.cos(beta)],
+            [math.cos(beta), 0, math.sin(beta)],
+            [0, 1, 0],
+            [-math.sin(beta), 0, math.cos(beta)],
         ]
     )
 
     rx = torch.tensor(
         [
-            [1,                0,               0],
-            [0,                math.cos(gamma), -math.sin(gamma)],
-            [0,                math.sin(gamma), math.cos(gamma)],
+            [1, 0, 0],
+            [0, math.cos(gamma), -math.sin(gamma)],
+            [0, math.sin(gamma), math.cos(gamma)],
         ]
     )
 
@@ -317,7 +317,7 @@ def equivariance_test_utils(
     beta = torch.distributions.Uniform(-math.pi, math.pi).sample()
     gamma = torch.distributions.Uniform(-math.pi, math.pi).sample()
     v = torch.tensor([[alpha, beta, gamma]])
-    v /= (v ** 2).sum() ** 0.5
+    v /= (v**2).sum() ** 0.5
 
     p = torch.eye(3) - 2 * v.T @ v
 

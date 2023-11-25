@@ -56,7 +56,7 @@ def test_painn_forward(lightning, input_data, model_parameter):
     )  # Assuming energy is calculated per sample in the batch
 
 
-def test_painn_interaction_invariance():
+def test_painn_interaction_equivariance():
     import torch
     from modelforge.potential.painn import PaiNNInteraction
     from torch import nn
@@ -90,6 +90,11 @@ def test_painn_interaction_invariance():
 
     assert torch.allclose(reference_d_ij, perturbed_d_ij)
     assert torch.allclose(reference_f_ij, perturbed_f_ij)
+    # Rotate the original directional vectors
+    rotated_reference_dir_ij = torch.matmul(reference_dir_ij, rotation_matrix)
+
+    # Compare the rotated original dir_ij with the dir_ij from rotated positions
+    assert torch.allclose(rotated_reference_dir_ij, perturbed_dir_ij)
     # Test that the interaction block is invariant to the order of the atoms
 
 

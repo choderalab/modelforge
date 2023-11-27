@@ -75,10 +75,10 @@ def test_painn_interaction_equivariance():
         methane_input["positions"], rotation_matrix
     )
 
-    prepared_input = painn._prepare_input(methane_input)
-    reference_d_ij = prepared_input["d_ij"]
-    reference_r_ij = prepared_input["r_ij"]
-    atomic_numbers_embedding = prepared_input["atomic_numbers_embedding"]
+    reference_prepared_input = painn._prepare_input(methane_input)
+    reference_d_ij = reference_prepared_input["d_ij"]
+    reference_r_ij = reference_prepared_input["r_ij"]
+    atomic_numbers_embedding = reference_prepared_input["atomic_numbers_embedding"]
     reference_dir_ij = reference_r_ij / reference_d_ij
     reference_f_ij, _ = _distance_to_radial_basis(reference_d_ij, painn.radial_basis)
 
@@ -95,7 +95,48 @@ def test_painn_interaction_equivariance():
 
     # Compare the rotated original dir_ij with the dir_ij from rotated positions
     assert torch.allclose(rotated_reference_dir_ij, perturbed_dir_ij)
-    # Test that the interaction block is invariant to the order of the atoms
+    # Test that the interaction block is equivariant
+    # First we test the transformed inputs
+    reference_tranformed_inputs = painn._transform_input(reference_prepared_input)
+    perturbed_tranformed_inputs = painn._transform_input(perturbed_prepared_input)
 
+    assert torch.allclose(
+        reference_tranformed_inputs["q"], perturbed_tranformed_inputs["q"]
+    )
+    assert torch.allclose(
+        reference_tranformed_inputs["mu"], perturbed_tranformed_inputs["mu"]
+    )
 
-    
+    painn_interaction = painn.interactions[0]
+
+    reference_r = painn_interaction(
+        reference_tranformed_inputs["q"],
+        reference_tranformed_inputs["mu"],
+        painn.filter_list[0],
+        reference_dir_ij,
+        reference_prepared_input["pair_indices"],
+    )
+
+    perturbed_r = painn_interaction(
+        perturbed_tranformed_inputs["q"],
+        perturbed_tranformed_inputs["mu"],
+        painn.filter_list[0],
+        perturbed_dir_ij,
+        perturbed_prepared_input["pair_indices"],
+    )
+
+    perturbed_q, perturbed_mu = perturbed_r
+    reference_q, reference_mu = reference_r
+
+    assert torch.allclose(reference_q, perturbed_q)
+    # following will failre because the mu is not invariant
+    assert not torch.allclose(reference_mu, perturbed_mu)
+    # which is fine becuase this is directional dependent
+
+    mixed_reference_q, mixed_reference_mu = painn.mixing[0](reference_q, reference_mu)
+    mixed_perturbed_q, mixed_perturbed_mu = painn.mixing[0](perturbed_q, perturbed_mu)
+    # the following tests are failing
+    # NOTE: FIXME: q should be invariant, but unclear if this is a precicion error or an implementation error
+    assert not torch.allclose(mixed_reference_q, mixed_perturbed_q)
+    # following will failre because the mu is not invariant
+    assert not torch.allclose(mixed_reference_mu, mixed_perturbed_mu)

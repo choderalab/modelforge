@@ -106,7 +106,7 @@ class PaiNN(BaseNNP):
         """
         from modelforge.potential.utils import _distance_to_radial_basis
 
-        d_ij = inputs["d_ij"] 
+        d_ij = inputs["d_ij"]
         r_ij = inputs["r_ij"]
         atomic_numbers_embedding = inputs["atomic_numbers_embedding"]
         qs = atomic_numbers_embedding.shape
@@ -342,7 +342,7 @@ class PaiNNMixing(nn.Module):
         x = self.intra_atomic_net(ctx)
 
         dq_intra, dmu_intra, dqmu_intra = torch.split(x, self.nr_atom_basis, dim=-1)
-        dmu_intra = torch.matmul(dmu_intra, mu_W)
+        dmu_intra = dmu_intra * mu_W
 
         dqmu_intra = dqmu_intra * torch.sum(mu_V * mu_W, dim=1, keepdim=True)
 

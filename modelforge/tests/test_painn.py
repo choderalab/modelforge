@@ -135,8 +135,7 @@ def test_painn_interaction_equivariance():
 
     mixed_reference_q, mixed_reference_mu = painn.mixing[0](reference_q, reference_mu)
     mixed_perturbed_q, mixed_perturbed_mu = painn.mixing[0](perturbed_q, perturbed_mu)
-    # the following tests are failing
-    # NOTE: FIXME: q should be invariant, but unclear if this is a precicion error or an implementation error
-    assert not torch.allclose(mixed_reference_q, mixed_perturbed_q)
+    # NOTE: q should be invariant
+    assert torch.allclose(mixed_reference_q, mixed_perturbed_q, atol=1e-2)
     # following will failre because the mu is not invariant
     assert not torch.allclose(mixed_reference_mu, mixed_perturbed_mu)

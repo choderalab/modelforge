@@ -39,7 +39,7 @@ class PairList(nn.Module):
         self.calculate_neighbors = neighbor_pairs_nopbc
         self.cutoff = cutoff
 
-    def compute_r_ij(
+    def calculate_r_ij(
         self, pair_indices: torch.Tensor, positions: torch.Tensor
     ) -> torch.Tensor:
         """Compute displacement vector between atom pairs.
@@ -61,6 +61,10 @@ class PairList(nn.Module):
             2, -1, 3
         )
         return selected_positions[0] - selected_positions[1]
+
+    def calculate_d_ij(self, r_ij):
+        # Calculate the euclidian distance between the atoms in the pair
+        return r_ij.norm(2, -1).unsqueeze(-1)
 
     def forward(
         self, positions: torch.Tensor, atomic_subsystem_indices: torch.Tensor
@@ -84,11 +88,11 @@ class PairList(nn.Module):
         pair_indices = self.calculate_neighbors(
             positions, atomic_subsystem_indices, self.cutoff
         )
-        r_ij = self.compute_r_ij(pair_indices, positions)
+        r_ij = self.calculate_r_ij(pair_indices, positions)
 
         return {
             "pair_indices": pair_indices,
-            "d_ij": r_ij.norm(2, -1),
+            "d_ij": self.calculate_d_ij(r_ij),
             "r_ij": r_ij,
         }
 
@@ -269,6 +273,12 @@ class BaseNNP(AbstractBaseNNP):
         assert embedding.embedding_dim > 0, "embedding_dim must be > 0"
         self.nr_atom_basis = embedding.embedding_dim
 
+    def _prepare_input(self, inputs: Dict[str, torch.Tensor]):
+        atomic_numbers = inputs["atomic_numbers"].squeeze(
+            dim=1
+        )  # shape (nr_of_atoms_in_batch, 3)
+        positions = inputs["positions"]  # shape (nr_of_atoms_in_batch, 3)
+
     def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
         Abstract method for forward pass in neural network potentials.
@@ -309,6 +319,28 @@ class BaseNNP(AbstractBaseNNP):
             "atomic_numbers": atomic_numbers,
             "atomic_subsystem_indices": atomic_subsystem_indices,
         }
+        return inputs
+
+    def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
+        """
+        Abstract method for forward pass in neural network potentials.
+
+        Parameters
+        ----------
+        inputs : Dict[str, torch.Tensor]
+            Inputs containing atomic numbers ('atomic_numbers'), coordinates ('positions') and pairlist ('pairlist').
+            - 'atomic_numbers': int; shape (nr_of_atoms_in_batch, 1), 0 indicates non-interacting atoms that will be masked
+            - 'total_charge' : int; shape (n_system)
+            - 'positions': float; shape (nr_of_atoms_in_batch, 3)
+
+        Returns
+        -------
+        torch.Tensor
+            Calculated energies; float; shape (n_systems).
+
+        """
+        self.input_checks(inputs)
+        inputs = self._prepare_input(inputs)
         return self._forward(inputs)
 
 

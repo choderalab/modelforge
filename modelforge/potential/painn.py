@@ -95,6 +95,46 @@ class PaiNN(BaseNNP):
         )
         self.radial_basis = radial_basis
 
+    def _transform_input(self, inputs: Dict[str, torch.Tensor]):
+        """
+        Transforms the input data for the PAInn potential model.
+
+        Args:
+            inputs (Dict[str, torch.Tensor]): A dictionary containing the input tensors.
+                - "d_ij" (torch.Tensor): Pairwise distances between atoms. Shape: (n_pairs, 1, distance).
+                - "r_ij" (torch.Tensor): Displacement vector between atoms. Shape: (n_pairs, 1, 3).
+                - "atomic_numbers_embedding" (torch.Tensor): Embeddings of atomic numbers. Shape: (n_atoms, embedding_dim).
+
+        Returns:
+            Dict[str, torch.Tensor]: A dictionary containing the transformed input tensors.
+                - "mu" (torch.Tensor): Zero-initialized tensor for atom features. Shape: (n_atoms, 3, n_atom_basis).
+                - "dir_ij" (torch.Tensor): Direction vectors between atoms. Shape: (n_pairs, 1, distance).
+                - "q" (torch.Tensor): Reshaped atomic number embeddings. Shape: (n_atoms, 1, embedding_dim).
+        """
+        from modelforge.potential.utils import _distance_to_radial_basis
+
+        d_ij = inputs["d_ij"]
+        r_ij = inputs["r_ij"]
+        atomic_numbers_embedding = inputs["atomic_numbers_embedding"]
+        qs = atomic_numbers_embedding.shape
+
+        q = atomic_numbers_embedding.reshape(qs[0], 1, qs[1])
+        # compute atom and pair features
+        dir_ij = r_ij / d_ij
+        f_ij, _ = _distance_to_radial_basis(d_ij, self.radial_basis)
+        fcut = self.cutoff(d_ij)  # n_pairs, 1
+
+        filters = self.filter_net(f_ij) * fcut[..., None]
+        if self.share_filters:
+            self.filter_list = [filters] * self.nr_interaction_blocks
+        else:
+            self.filter_list = torch.split(filters, 3 * self.n_atom_basis, dim=-1)
+
+        mu = torch.zeros(
+            (qs[0], 3, qs[1]), device=q.device
+        )  # nr_of_systems * nr_of_atoms, 3, n_atom_basis
+        return {"mu": mu, "dir_ij": dir_ij, "q": q}
+
     def _forward(
         self,
         inputs: Dict[str, torch.Tensor],
@@ -114,42 +154,19 @@ class PaiNN(BaseNNP):
         Dict[str, torch.Tensor]
             Dictionary containing scalar and vector representations.
         """
-        from modelforge.potential.utils import _distance_to_radial_basis
 
         # extract properties from pairlist
-        d_ij = inputs["d_ij"].unsqueeze(-1)  # n_pairs, 1
-        r_ij = inputs["r_ij"]
-        atomic_numbers_embedding = inputs["atomic_numbers_embedding"]
-        qs = atomic_numbers_embedding.shape
-
-        q = atomic_numbers_embedding.reshape(qs[0], 1, qs[1])
-        # compute atom and pair features
-        dir_ij = r_ij / d_ij
-        # torch.Size([1150, 1, 32])
-        f_ij, _ = _distance_to_radial_basis(d_ij, self.radial_basis)
-        fcut = self.cutoff(d_ij)  # n_pairs, 1
-
-        filters = self.filter_net(f_ij) * fcut[..., None]
-        if self.share_filters:
-            filter_list = [filters] * self.nr_interaction_blocks
-        else:
-            filter_list = torch.split(filters, 3 * self.n_atom_basis, dim=-1)
-
-        mu = torch.zeros(
-            (qs[0], 3, qs[1]), device=q.device
-        )  # nr_of_systems * nr_of_atoms, 3, n_atom_basis
+        transformed_input = self._transform_input(inputs)
 
         for i, (interaction, mixing) in enumerate(zip(self.interactions, self.mixing)):
             q, mu = interaction(
-                q,
-                mu,
-                filter_list[i],
-                dir_ij,
+                transformed_input["q"],
+                transformed_input["mu"],
+                self.filter_list[i],
+                transformed_input["dir_ij"],
                 inputs["pair_indices"],
             )
             q, mu = mixing(q, mu)
-
-        atomic_numbers_embedding = atomic_numbers_embedding.squeeze(1)
 
         # Use squeeze to remove dimensions of size 1
         q_ = q.squeeze(dim=1)
@@ -196,7 +213,7 @@ class PaiNNInteraction(nn.Module):
 
     def forward(
         self,
-        q: torch.Tensor,  # shape [n_mols, n_atoms, n_atom_basis]
+        q: torch.Tensor,  # shape [nr_of_atoms_in_batch, n_atom_basis]
         mu: torch.Tensor,  # shape [n_mols, n_interactions, n_atom_basis]
         Wij: torch.Tensor,  # shape [n_interactions]
         dir_ij: torch.Tensor,
@@ -226,18 +243,15 @@ class PaiNNInteraction(nn.Module):
 
         x = self.intra_atomic_net(q)
         nr_of_atoms_in_all_systems, _, _ = q.shape  # [nr_systems,n_atoms,96]
-        x = x.reshape(
-            nr_of_atoms_in_all_systems, 1, 3 * self.nr_atom_basis
-        )  # in: [nr_of_atoms_in_all_systems,96]; out:
+        x = x.reshape(nr_of_atoms_in_all_systems, 1, 3 * self.nr_atom_basis)
 
         xj = x[idx_j]
-        mu = mu  # [nr_systems*3*32] [6144]
         muj = mu[idx_j]
         x = Wij * xj
+
         dq, dmuR, dmumu = torch.split(x, self.nr_atom_basis, dim=-1)
 
         ##############
-        # Preparing for native scatter_add_
         # Expand the dimensions of idx_i to match that of dq
         expanded_idx_i = idx_i.view(-1, 1, 1).expand_as(dq)
 
@@ -252,12 +266,6 @@ class PaiNNInteraction(nn.Module):
 
         # Use scatter_add_
         dq_result_native.scatter_add_(0, expanded_idx_i, dq)
-        # dq_result_custom = snn.scatter_add(
-        #    dq, idx_i, dim_size=nr_of_atoms_in_all_systems
-        # )
-
-        # The outputs should be the same
-        # assert torch.allclose(dq_result_custom, dq_result_native)
 
         dmu = dmuR * dir_ij[..., None] + dmumu * muj
         dmu_result_native = torch.zeros(

@@ -6,6 +6,7 @@ from .helper_functions import (
     SIMPLIFIED_INPUT_DATA,
     return_single_batch,
     setup_simple_model,
+    equivariance_test_utils,
 )
 
 
@@ -214,3 +215,134 @@ def test_pairlist_on_dataset(dataset):
 
         assert shape_pairlist[1] == shape_distance[0]
         assert shape_pairlist[0] == 2
+
+
+@pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
+@pytest.mark.parametrize("model_class", MODELS_TO_TEST)
+def test_equivariant_energies_and_forces(input_data, model_class):
+    """
+    Test the calculation of energies and forces for a molecule.
+    This test will be adapted once we have a trained model.
+    """
+    import torch
+    import torch.nn as nn
+
+    translation, rotation, reflection = equivariance_test_utils()
+
+    for lightning in [True, False]:
+        model = setup_simple_model(model_class, lightning)
+
+        # reference values
+        reference_result = model(input_data)
+        reference_forces = -torch.autograd.grad(
+            reference_result.sum(),
+            input_data["positions"],
+            create_graph=True,
+            retain_graph=True,
+        )[0]
+
+        # translation test
+        translation_input_data = input_data.copy()
+        translation_input_data["positions"] = translation(
+            translation_input_data["positions"]
+        )
+        translation_result = model(translation_input_data)
+        translation_forces = -torch.autograd.grad(
+            translation_result.sum(),
+            translation_input_data["positions"],
+            create_graph=True,
+            retain_graph=True,
+        )[0]
+
+        assert torch.allclose(
+            translation_result,
+            reference_result,
+            atol=1e-5,
+        )
+
+        assert torch.allclose(
+            translation_forces,
+            reference_forces,
+            atol=1e-5,
+        )
+
+        # rotation test
+        rotation_input_data = input_data.copy()
+        rotation_input_data["positions"] = rotation(rotation_input_data["positions"])
+        rotation_result = model(rotation_input_data)
+        rotation_forces = -torch.autograd.grad(
+            rotation_result.sum(),
+            rotation_input_data["positions"],
+            create_graph=True,
+            retain_graph=True,
+        )[0]
+
+        assert torch.allclose(
+            rotation_result,
+            reference_result,
+            atol=1e-1,
+        )
+
+        assert torch.allclose(
+            rotation_forces,
+            rotation(reference_forces),
+            atol=1e-1,
+        )
+
+        # reflection test
+        reflection_input_data = input_data.copy()
+        reflection_input_data["positions"] = reflection(
+            reflection_input_data["positions"]
+        )
+        reflection_result = model(reflection_input_data)
+        reflection_forces = -torch.autograd.grad(
+            reflection_result.sum(),
+            reflection_input_data["positions"],
+            create_graph=True,
+            retain_graph=True,
+        )[0]
+
+        assert torch.allclose(
+            reflection_result,
+            reference_result,
+            atol=1e-1,
+        )
+
+        assert torch.allclose(
+            reflection_forces,
+            reflection(reference_forces),
+            atol=1e-1,
+        )
+
+
+def test_pairlist_calculate_r_ij_and_d_ij():
+    # Define inputs
+    from modelforge.potential.models import PairList
+    import torch
+
+    positions = torch.tensor(
+        [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 0.0]]
+    )
+    atomic_subsystem_indices = torch.tensor([0, 0, 1, 1])
+    cutoff = 3.0
+
+    # Create Pairlist instance
+    pairlist = PairList(cutoff)
+    pair_indices = pairlist.calculate_neighbors(
+        positions, atomic_subsystem_indices, pairlist.cutoff
+    )
+
+    # Calculate r_ij and d_ij
+    r_ij = pairlist.calculate_r_ij(pair_indices, positions)
+    d_ij = pairlist.calculate_d_ij(r_ij)
+
+    # Check if the calculated r_ij and d_ij are correct
+    expected_r_ij = torch.tensor([[-2.0, 0.0, 0.0], [0.0, 2.0, 0.0]])
+    expected_d_ij = torch.tensor([[2.0], [2.0]])
+
+    assert torch.allclose(r_ij, expected_r_ij)
+    assert torch.allclose(d_ij, expected_d_ij)
+
+    normalized_r_ij = r_ij / d_ij
+    expected_normalized_r_ij = torch.tensor([[-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+    assert torch.allclose(expected_normalized_r_ij, normalized_r_ij)

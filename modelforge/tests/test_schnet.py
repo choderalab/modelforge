@@ -25,7 +25,7 @@ def test_schnet_forward(lightning, input_data, model_parameter):
     """
     Test the forward pass of the Schnet model.
     """
-    print(f'model_parameter: {model_parameter}')
+    print(f"model_parameter: {model_parameter}")
     (
         nr_atom_basis,
         max_atomic_number,
@@ -76,15 +76,10 @@ def test_schnet_interaction_layer():
     v = interaction(
         interaction_data["x"],
         interaction_data["pair_indices"],
-        interaction_data["f_ij"],
-        interaction_data["rcut_ij"],
+        interaction_data["f_ij"].squeeze(1),
+        interaction_data["rcut_ij"].squeeze(1),
     )
     assert v.shape == (
         nr_of_atoms_per_batch,
         nr_atom_basis,
     ), "Output shape mismatch for v tensor."
-
-
-# def test_schnet_reimplementation_against_original_implementation():
-#    import numpy as np
-#    np.load('tests/qm9tut/split.npz')['train_idx']

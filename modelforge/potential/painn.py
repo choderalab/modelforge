@@ -60,6 +60,13 @@ class PaiNN(BaseNNP):
         super().__init__(embedding)
 
         self.n_atom_basis = embedding.embedding_dim
+
+        log.debug("Initializing PaiNN model.")
+        log.debug(
+            f"Passed parameters to constructor: {self.nr_atom_basis=}, {nr_interaction_blocks=}, {cutoff=}"
+        )
+        log.debug(f"Initialized embedding: {embedding=}")
+
         self.nr_interaction_blocks = nr_interaction_blocks
         self.radial_basis = radial_basis
         self.cutoff = cutoff

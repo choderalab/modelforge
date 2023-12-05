@@ -134,3 +134,48 @@ def test_scatter_add():
     shape[dim] = dim_size
     native_result = torch.zeros(shape, dtype=x.dtype)
     native_result.scatter_add_(dim, idx_i, x)
+
+
+def test_GaussianRBF():
+    """
+    Test the GaussianRBF layer.
+    """
+
+    from modelforge.potential import GaussianRBF
+
+    n_rbf = 10
+    dim_of_x = 3
+    layer = GaussianRBF(10, 5.0)
+    x = torch.tensor([1.0, 2.0, 3.0], dtype=torch.float32)
+    y = layer(x)  # Shape: [dim_of_x, n_rbf]
+
+    # Add assertion to check the shape of the output
+    assert y.shape == (dim_of_x, n_rbf)
+
+
+def test_sliced_embedding():
+    """
+    Test the SlicedEmbedding module.
+    """
+    from modelforge.potential.utils import SlicedEmbedding
+    from torch.nn import Embedding
+
+    max_Z = 100
+    embedding_dim = 7
+    sliced_dim = 0
+
+    # Create SlicedEmbedding instance
+    sliced_embedding = SlicedEmbedding(max_Z, embedding_dim, sliced_dim)
+    normal_embedding = Embedding(max_Z, embedding_dim)
+
+    # Test embedding_dim property
+    assert sliced_embedding.embedding_dim == embedding_dim
+
+    # Test forward pass
+    input_tensor = torch.randint(0, 99, (5, 1))
+
+    sliced_output = sliced_embedding(input_tensor)
+    normal_output = normal_embedding(input_tensor)
+
+    assert sliced_output.shape == (5, embedding_dim)
+    assert normal_output.shape == (5, 1, embedding_dim)

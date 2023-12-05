@@ -5,6 +5,88 @@ import torch
 import torch.nn as nn
 
 
+class SlicedEmbedding(nn.Module):
+    """
+    A module that performs embedding on a selected slice of input tensor.
+
+    Parameters
+    ----------
+    max_Z : int
+        Highest atomic number to embed, this will define the upper bound of the vocabulary that is used for embedding.
+    embedding_dim : int
+        Size of the embedding.
+    sliced_dim : int, optional
+        The dimension along which to slice the input tensor (default is 0).
+        This is relevant since the input dimensions are (n_atoms_in_batch, nr_of_properties, property_size), but we want to embed a specific
+        property.
+
+    Attributes
+    ----------
+    embedding : nn.Embedding
+        The embedding layer.
+    sliced_dim : int
+        The dimension along which the input tensor is sliced.
+
+    Methods
+    -------
+    forward(x)
+        Forward pass for the Embedding.
+
+    Properties
+    ----------
+    embedding_dim : int
+        The dimensionality of the embedding.
+
+    """
+
+    def __init__(self, max_Z: int, embedding_dim: int, sliced_dim: int = 0):
+        """
+        Initialize the Embedding class.
+
+        Parameters
+        ----------
+        max_Z : int
+            Highest atomic numbers.
+        embedding_dim : int
+            Dimensionality of the embedding.
+        sliced_dim : int, optional
+            The dimension along which to slice the input tensor (default is 0).
+        """
+        super().__init__()
+        self.embedding = nn.Embedding(max_Z, embedding_dim)
+        self.sliced_dim = sliced_dim
+
+    @property
+    def embedding_dim(self):
+        """
+        Get the dimensionality of the embedding.
+
+        Returns
+        -------
+        int
+            The dimensionality of the embedding.
+        """
+        return self.embedding.embedding_dim
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass for the Embedding.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor for the forward pass.
+
+        Returns
+        -------
+        torch.Tensor
+            The output tensor.
+        """
+        selected_tensor = x[:, self.sliced_dim, ...]
+
+        return self.embedding(selected_tensor)
+
+
 def sequential_block(
     in_features: int,
     out_features: int,
@@ -292,7 +374,7 @@ def neighbor_pairs_nopbc(
     # generate index grid
     n = len(atomic_subsystem_indices)
     i_indices, j_indices = torch.triu_indices(n, n, 1)
-    print(atomic_subsystem_indices[i_indices])
+
     # filter pairs to only keep those belonging to the same molecule
     same_molecule_mask = (
         atomic_subsystem_indices[i_indices] == atomic_subsystem_indices[j_indices]
@@ -309,10 +391,6 @@ def neighbor_pairs_nopbc(
     pair_coordinates = positions[pair_indices.T]
     pair_coordinates = pair_coordinates.view(-1, 2, 3)
 
-    # Calculate distances
-    distances = (pair_coordinates[:, 0, :] - pair_coordinates[:, 1, :]).norm(
-        p=2, dim=-1
-    )
     # Calculate distances
     distances = (pair_coordinates[:, 0, :] - pair_coordinates[:, 1, :]).norm(
         p=2, dim=-1

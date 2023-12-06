@@ -119,3 +119,31 @@ def test_GaussianRBF():
 
     # Add assertion to check the shape of the output
     assert y.shape == (dim_of_x, n_rbf)
+
+
+def test_sliced_embedding():
+    """
+    Test the SlicedEmbedding module.
+    """
+    from modelforge.potential.utils import SlicedEmbedding
+    from torch.nn import Embedding
+
+    max_Z = 100
+    embedding_dim = 7
+    sliced_dim = 0
+
+    # Create SlicedEmbedding instance
+    sliced_embedding = SlicedEmbedding(max_Z, embedding_dim, sliced_dim)
+    normal_embedding = Embedding(max_Z, embedding_dim)
+
+    # Test embedding_dim property
+    assert sliced_embedding.embedding_dim == embedding_dim
+
+    # Test forward pass
+    input_tensor = torch.randint(0, 99, (5, 1))
+
+    sliced_output = sliced_embedding(input_tensor)
+    normal_output = normal_embedding(input_tensor)
+
+    assert sliced_output.shape == (5, embedding_dim)
+    assert normal_output.shape == (5, 1, embedding_dim)

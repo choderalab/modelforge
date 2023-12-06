@@ -169,9 +169,9 @@ class AbstractBaseNNP(nn.Module, ABC):
         Parameters
         ----------
         inputs : Dict[str, torch.Tensor]
-            - 'atomic_numbers', shape (nr_systems, nr_atoms), 0 indicates non-interacting atoms that will be masked
-            - 'total_charge', shape (nr_systems, 1)
-            - 'positions', shape (n_atoms, 3)
+            - 'atomic_numbers', shape (nr_of_atoms_in_batch, *, *), 0 indicates non-interacting atoms that will be masked
+            - 'total_charge', shape (nr_of_atoms_in_batch, 1)
+            - 'positions', shape (nr_of_atoms_in_batch, 3)
             - 'boxvectors', shape (3, 3)
 
         Returns
@@ -194,8 +194,8 @@ class AbstractBaseNNP(nn.Module, ABC):
             - pairlist, shape (n_paris,2)
             - r_ij, shape (n_pairs, 1)
             - d_ij, shape (n_pairs, 3)
-            - 'atomic_subsystem_indices' (optional), shape n_atoms
-            - positions, shape (n_systems, n_atoms, 3)
+            - 'atomic_subsystem_indices' (optional), shape nr_of_atoms_in_batch
+            - positions, shape (nr_of_atoms_in_batch, 3)
 
         """
         pass
@@ -258,10 +258,15 @@ class BaseNNP(AbstractBaseNNP):
             Cutoff distance (in Angstrom) for neighbor calculations, default is 5.0.
         """
         from .models import PairList
+        from .utils import SlicedEmbedding
 
         super().__init__()
         self.calculate_distances_and_pairlist = PairList(cutoff)
-        self.embedding = embedding  # nn.Embedding(nr_of_embeddings, nr_atom_basis)
+        self.embedding = embedding 
+        assert isinstance(
+            self.embedding, SlicedEmbedding
+        ), "embedding must be SlicedEmbedding"
+        assert embedding.embedding_dim > 0, "embedding_dim must be > 0"
         self.nr_atom_basis = embedding.embedding_dim
 
     def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
@@ -272,7 +277,7 @@ class BaseNNP(AbstractBaseNNP):
         ----------
         inputs : Dict[str, torch.Tensor]
             Inputs containing atomic numbers ('atomic_numbers'), coordinates ('positions') and pairlist ('pairlist').
-            - 'atomic_numbers': int; shape (nr_of_atoms_in_batch, 1), 0 indicates non-interacting atoms that will be masked
+            - 'atomic_numbers': int; shape (nr_of_atoms_in_batch, *,*), 0 indicates non-interacting atoms that will be masked
             - 'total_charge' : int; shape (n_system)
             - 'positions': float; shape (nr_of_atoms_in_batch, 3)
 
@@ -283,16 +288,18 @@ class BaseNNP(AbstractBaseNNP):
 
         """
         self.input_checks(inputs)
-        atomic_numbers = inputs["atomic_numbers"].squeeze(
-            dim=1
-        )  # shape (nr_of_atoms_in_batch, 3)
-        positions = inputs["positions"]  # shape (nr_of_atoms_in_batch, 3)
+        nr_of_atoms_in_batch = inputs["atomic_numbers"].shape[0]
+        atomic_numbers = inputs["atomic_numbers"]
+        positions = inputs["positions"]
         atomic_subsystem_indices = inputs["atomic_subsystem_indices"]
 
         r = self.calculate_distances_and_pairlist(positions, atomic_subsystem_indices)
-        atomic_numbers_embedding = self.embedding(
-            atomic_numbers
-        )  # shape (nr_of_atoms_in_batch, n_atom_basis)
+        atomic_numbers_embedding = self.embedding(atomic_numbers)
+        assert atomic_numbers_embedding.shape == (
+            nr_of_atoms_in_batch,
+            self.nr_atom_basis,
+        )
+
         inputs = {
             "pair_indices": r["pair_indices"],
             "d_ij": r["d_ij"],
@@ -323,11 +330,11 @@ class SingleTopologyAlchemicalBaseNNPModel(AbstractBaseNNP):
         ----------
         inputs : Dict[str, torch.Tensor]
             Inputs containing atomic numbers ('atomic_numbers'), coordinates ('positions') and pairlist ('pairlist').
-            - 'atomic_numbers': shape (n_systems:int, n_atoms:int), 0 indicates non-interacting atoms that will be masked
-            - 'total_charge' : shape (n_system:int)
-            - (only for alchemical transformation) 'alchemical_atomic_number': shape (n_atoms:int)
+            - 'atomic_numbers': shape (nr_of_atoms_in_batch, *, *), 0 indicates non-interacting atoms that will be masked
+            - 'total_charge' : shape (nr_of_atoms_in_batch)
+            - (only for alchemical transformation) 'alchemical_atomic_number': shape (nr_of_atoms_in_batch)
             - (only for alchemical transformation) 'lamb': float
-            - 'positions': shape (n_atoms, 3)
+            - 'positions': shape (nr_of_atoms_in_batch, 3)
 
         Returns
         -------

@@ -129,3 +129,31 @@ def test_scatter_softmax():
     correct_out = torch.tensor([[0.4750208259, 0.5249791741, 0.4697868228, 0.5302131772, 1.0000000000],
         [0.4598240554, 0.5401759744, 0.4514355958, 0.5485643744, 1.0000000000]])
     assert(torch.allclose(util_out, correct_out))
+
+def test_sliced_embedding():
+    """
+    Test the SlicedEmbedding module.
+    """
+    from modelforge.potential.utils import SlicedEmbedding
+    from torch.nn import Embedding
+
+    max_Z = 100
+    embedding_dim = 7
+    sliced_dim = 0
+
+    # Create SlicedEmbedding instance
+    sliced_embedding = SlicedEmbedding(max_Z, embedding_dim, sliced_dim)
+    normal_embedding = Embedding(max_Z, embedding_dim)
+
+    # Test embedding_dim property
+    assert sliced_embedding.embedding_dim == embedding_dim
+
+    # Test forward pass
+    input_tensor = torch.randint(0, 99, (5, 1))
+
+    sliced_output = sliced_embedding(input_tensor)
+    normal_output = normal_embedding(input_tensor)
+
+    assert sliced_output.shape == (5, embedding_dim)
+    assert normal_output.shape == (5, 1, embedding_dim)
+    

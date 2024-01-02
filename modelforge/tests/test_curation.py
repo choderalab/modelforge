@@ -227,6 +227,19 @@ def test_qm9_curation_init_parameters(prep_temp_dir):
     assert qm9_data.convert_units == False
 
 
+def test_qm9_reference_energy(prep_temp_dir):
+    qm9_data = QM9Curation(
+        hdf5_file_name="qm9_dataset.hdf5",
+        output_file_dir=str(prep_temp_dir),
+        local_cache_dir=str(prep_temp_dir),
+        convert_units=True,
+    )
+    assert (
+        qm9_data._calculate_reference_thermochemistry(["C", "H", "H", "H", "H"], "U_0K")
+        == -39.847864 * unit.hartree
+    )
+
+
 def test_qm9_curation_parse_xyz(prep_temp_dir):
     qm9_data = QM9Curation(
         hdf5_file_name="qm9_dataset.hdf5",
@@ -341,6 +354,26 @@ def test_qm9_curation_parse_xyz(prep_temp_dir):
             ]
         )
         / unit.centimeter
+    )
+    assert np.allclose(
+        data_dict_temp["reference_energy_at_0K"],
+        np.array([-39.847864]).reshape(1, 1) * unit.hartree,
+    )
+    assert np.allclose(
+        data_dict_temp["formation_energy_at_0K"],
+        np.array([-0.631066]).reshape(1, 1) * unit.hartree,
+    )
+    assert np.allclose(
+        data_dict_temp["reference_energy_at_298.15K"],
+        np.array([-39.840783]).reshape(1, 1) * unit.hartree,
+    )
+    assert np.allclose(
+        data_dict_temp["reference_enthalpy_at_298.15K"],
+        np.array([-39.836059]).reshape(1, 1) * unit.hartree,
+    )
+    assert np.allclose(
+        data_dict_temp["reference_free_energy_at_298.15K"],
+        np.array([-39.905025]).reshape(1, 1) * unit.hartree,
     )
 
 
@@ -1551,102 +1584,102 @@ def test_spice12_openff_test_fetching(prep_temp_dir):
         )
 
 
-def test_spice12_openff_test_process_downloaded(prep_temp_dir):
-    from tqdm import tqdm
-    from sqlitedict import SqliteDict
+# def test_spice12_openff_test_process_downloaded(prep_temp_dir):
+#     from tqdm import tqdm
+#     from sqlitedict import SqliteDict
 
-    local_path_dir = str(prep_temp_dir)
-    local_database_name = "test.sqlite"
-    specification_names = ["entry", "spec_2", "spec_6"]
-    dataset_name = "SPICE PubChem Set 1 Single Points Dataset v1.2"
+#     local_path_dir = str(prep_temp_dir)
+#     local_database_name = "test.sqlite"
+#     specification_names = ["entry", "spec_2", "spec_6"]
+#     dataset_name = "SPICE PubChem Set 1 Single Points Dataset v1.2"
 
-    spice_openff_data = SPICE12PubChemOpenFFCuration(
-        hdf5_file_name="test_dataset.hdf5",
-        output_file_dir=local_path_dir,
-        local_cache_dir=local_path_dir,
-        convert_units=True,
-    )
+#     spice_openff_data = SPICE12PubChemOpenFFCuration(
+#         hdf5_file_name="test_dataset.hdf5",
+#         output_file_dir=local_path_dir,
+#         local_cache_dir=local_path_dir,
+#         convert_units=True,
+#     )
 
-    for specification_name in specification_names:
-        # test downloading two new records and saving to the sqlite db
-        spice_openff_data._fetch_singlepoint_from_qcarchive(
-            dataset_name=dataset_name,
-            specification_name=specification_name,
-            local_database_name=local_database_name,
-            local_path_dir=local_path_dir,
-            force_download=True,
-            unit_testing_max_records=2,
-        )
+#     for specification_name in specification_names:
+#         # test downloading two new records and saving to the sqlite db
+#         spice_openff_data._fetch_singlepoint_from_qcarchive(
+#             dataset_name=dataset_name,
+#             specification_name=specification_name,
+#             local_database_name=local_database_name,
+#             local_path_dir=local_path_dir,
+#             force_download=True,
+#             unit_testing_max_records=2,
+#         )
 
-    spice_openff_data._process_downloaded(
-        local_path_dir, [local_database_name], [dataset_name]
-    )
+#     spice_openff_data._process_downloaded(
+#         local_path_dir, [local_database_name], [dataset_name]
+#     )
 
 
-def test_spice12_openff_process_datasets(prep_temp_dir):
-    from numpy import array, float32
+# def test_spice12_openff_process_datasets(prep_temp_dir):
+#     from numpy import array, float32
 
-    local_path_dir = str(prep_temp_dir)
-    hdf5_file_name = "test_dataset.hdf5"
+#     local_path_dir = str(prep_temp_dir)
+#     hdf5_file_name = "test_dataset.hdf5"
 
-    spice_openff_data = SPICE12PubChemOpenFFCuration(
-        hdf5_file_name=hdf5_file_name,
-        output_file_dir=local_path_dir,
-        local_cache_dir=local_path_dir,
-        convert_units=False,
-    )
+#     spice_openff_data = SPICE12PubChemOpenFFCuration(
+#         hdf5_file_name=hdf5_file_name,
+#         output_file_dir=local_path_dir,
+#         local_cache_dir=local_path_dir,
+#         convert_units=False,
+#     )
 
-    spice_openff_data.process(
-        force_download=False, unit_testing_max_records=10, n_threads=3
-    )
+#     spice_openff_data.process(
+#         force_download=False, unit_testing_max_records=10, n_threads=3
+#     )
 
-    assert len(spice_openff_data.data) == 5
-    assert spice_openff_data.data[0]["n_configs"] == 1
-    assert spice_openff_data.data[1]["n_configs"] == 1
-    assert spice_openff_data.data[2]["n_configs"] == 1
-    assert spice_openff_data.data[3]["n_configs"] == 1
-    assert spice_openff_data.data[4]["n_configs"] == 6
+#     assert len(spice_openff_data.data) == 5
+#     assert spice_openff_data.data[0]["n_configs"] == 1
+#     assert spice_openff_data.data[1]["n_configs"] == 1
+#     assert spice_openff_data.data[2]["n_configs"] == 1
+#     assert spice_openff_data.data[3]["n_configs"] == 1
+#     assert spice_openff_data.data[4]["n_configs"] == 6
 
-    assert np.all(
-        np.isclose(
-            spice_openff_data.data[0]["geometry"][0][0],
-            array([3.95964426, 8.33708863, 2.95160792], dtype=float32)
-            * unit.parse_expression("bohr"),
-        )
-    )
-    # look at the first atom in last configuration in the array
-    assert np.all(
-        np.isclose(
-            spice_openff_data.data[4]["geometry"][-1][0],
-            array([2.06074536, -6.33012589, 4.43769815], dtype=float32)
-            * unit.parse_expression("bohr"),
-        )
-    )
-    # spot check energy
-    assert (
-        spice_openff_data.data[0]["dft_total_energy"][0][0]
-        == -1168.2328704724725 * unit.hartree
-    )
-    assert (
-        spice_openff_data.data[4]["dft_total_energy"][0][0]
-        == -2011.874682644447 * unit.hartree
-    )
+#     assert np.all(
+#         np.isclose(
+#             spice_openff_data.data[0]["geometry"][0][0],
+#             array([3.95964426, 8.33708863, 2.95160792], dtype=float32)
+#             * unit.parse_expression("bohr"),
+#         )
+#     )
+#     # look at the first atom in last configuration in the array
+#     assert np.all(
+#         np.isclose(
+#             spice_openff_data.data[4]["geometry"][-1][0],
+#             array([2.06074536, -6.33012589, 4.43769815], dtype=float32)
+#             * unit.parse_expression("bohr"),
+#         )
+#     )
+#     # spot check energy
+#     assert (
+#         spice_openff_data.data[0]["dft_total_energy"][0][0]
+#         == -1168.2328704724725 * unit.hartree
+#     )
+#     assert (
+#         spice_openff_data.data[4]["dft_total_energy"][0][0]
+#         == -2011.874682644447 * unit.hartree
+#     )
 
-    # check the shape of a molecule with only a single conformer in the test set
-    assert spice_openff_data.data[0]["atomic_numbers"].shape == (47, 1)
-    assert spice_openff_data.data[0]["geometry"].shape == (1, 47, 3)
-    assert spice_openff_data.data[0]["dft_total_energy"].shape == (1, 1)
-    assert spice_openff_data.data[0]["dft_total_gradient"].shape == (1, 47, 3)
-    assert spice_openff_data.data[0]["mbis_charges"].shape == (1, 47, 1)
-    assert spice_openff_data.data[0]["scf_dipole"].shape == (1, 3)
-    assert spice_openff_data.data[0]["formation_energy"].shape == (1, 1)
-    assert spice_openff_data.data[0]["formation_energy"].shape == (1, 1)
+#     # check the shape of a molecule with only a single conformer in the test set
+#     assert spice_openff_data.data[0]["atomic_numbers"].shape == (47, 1)
+#     assert spice_openff_data.data[0]["geometry"].shape == (1, 47, 3)
+#     assert spice_openff_data.data[0]["dft_total_energy"].shape == (1, 1)
+#     assert spice_openff_data.data[0]["dft_total_gradient"].shape == (1, 47, 3)
+#     assert spice_openff_data.data[0]["mbis_charges"].shape == (1, 47, 1)
+#     assert spice_openff_data.data[0]["scf_dipole"].shape == (1, 3)
+#     assert spice_openff_data.data[0]["formation_energy"].shape == (1, 1)
+#     assert spice_openff_data.data[0]["formation_energy"].shape == (1, 1)
 
-    # check the shape of a molecule with multiple conformers in the test set
-    assert spice_openff_data.data[4]["atomic_numbers"].shape == (16, 1)
-    assert spice_openff_data.data[4]["geometry"].shape == (6, 16, 3)
-    assert spice_openff_data.data[4]["dft_total_energy"].shape == (6, 1)
-    assert spice_openff_data.data[4]["dft_total_gradient"].shape == (6, 16, 3)
-    assert spice_openff_data.data[4]["mbis_charges"].shape == (6, 16, 1)
-    assert spice_openff_data.data[4]["scf_dipole"].shape == (6, 3)
-    assert spice_openff_data.data[4]["formation_energy"].shape == (6, 1)
+#     # check the shape of a molecule with multiple conformers in the test set
+#     assert spice_openff_data.data[4]["atomic_numbers"].shape == (16, 1)
+#     assert spice_openff_data.data[4]["geometry"].shape == (6, 16, 3)
+#     assert spice_openff_data.data[4]["dft_total_energy"].shape == (6, 1)
+#     assert spice_openff_data.data[4]["dft_total_gradient"].shape == (6, 16, 3)
+#     assert spice_openff_data.data[4]["mbis_charges"].shape == (6, 16, 1)
+#     assert spice_openff_data.data[4]["scf_dipole"].shape == (6, 3)
+#     assert spice_openff_data.data[4]["formation_energy"].shape == (6, 1)

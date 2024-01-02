@@ -6,8 +6,10 @@ import pytest
 import torch
 
 from modelforge.dataset.dataset import DatasetFactory, TorchDataset
+from loguru import logger
 
 from .helper_functions import initialize_dataset, DATASETS
+from ..utils import PropertyNames
 
 
 @pytest.fixture(
@@ -52,6 +54,62 @@ def test_dataset_imported():
     assert "modelforge.dataset" in sys.modules
 
 
+def test_dataset_basic_operations():
+    atomic_subsystem_counts = np.array([3, 4])
+    n_confs = np.array([2, 1])
+    total_atoms_series = (atomic_subsystem_counts * n_confs).sum()
+    total_atoms_single = atomic_subsystem_counts.sum()
+    total_confs = n_confs.sum()
+    total_records = len(atomic_subsystem_counts)
+    geom_shape = (total_atoms_series, 3)
+    atomic_numbers_shape = (total_atoms_single, 1)
+    internal_energy_shape = (total_confs, 1)
+    input_data = {"geometry": np.arange(geom_shape[0] * geom_shape[1]).reshape(geom_shape),
+                  "atomic_numbers": np.arange(atomic_numbers_shape[0]).reshape(atomic_numbers_shape),
+                  "internal_energy_at_0K": np.arange(internal_energy_shape[0]).reshape(internal_energy_shape),
+                  "atomic_subsystem_counts": atomic_subsystem_counts,
+                  "n_confs": n_confs}
+
+    property_names = PropertyNames(
+        "atomic_numbers",
+        "geometry",
+        "internal_energy_at_0K",
+    )
+    dataset = TorchDataset(input_data, property_names)
+    assert len(dataset) == total_confs
+    assert (dataset.record_len() == total_records)
+
+    atomic_numbers_true = []
+    geom_true = []
+    energy_true = []
+    series_mol_idxs = []
+    atom_start_idx_series = 0
+    atom_start_idx_single = 0
+    conf_idx = 0
+    for rec in range(total_records):
+        series_mol_idxs_for_rec = []
+        atom_end_idx_single = atom_start_idx_single + atomic_subsystem_counts[rec]
+        for conf in range(n_confs[rec]):
+            atom_end_idx_series = atom_start_idx_series + atomic_subsystem_counts[rec]
+            energy_true.append(input_data["internal_energy_at_0K"][conf_idx])
+            geom_true.append(input_data["geometry"][atom_start_idx_series:atom_end_idx_series])
+            atomic_numbers_true.append(input_data["atomic_numbers"][atom_start_idx_single:atom_end_idx_single])
+            series_mol_idxs_for_rec.append(conf_idx)
+            atom_start_idx_series = atom_end_idx_series
+            conf_idx += 1
+        atom_start_idx_single = atom_end_idx_single
+        series_mol_idxs.append(series_mol_idxs_for_rec)
+
+    for conf_idx in range(len(dataset)):
+        conf_data = dataset[conf_idx]
+        assert(np.array_equal(conf_data["positions"], geom_true[conf_idx]))
+        assert(np.array_equal(conf_data["atomic_numbers"], atomic_numbers_true[conf_idx]))
+        assert(np.array_equal(conf_data["E_label"], energy_true[conf_idx]))
+
+    for rec_idx in range(dataset.record_len()):
+        assert(np.array_equal(dataset.get_series_mol_idxs(rec_idx), series_mol_idxs[rec_idx]))
+
+
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_different_properties_of_interest(dataset):
     factory = DatasetFactory()
@@ -65,7 +123,7 @@ def test_different_properties_of_interest(dataset):
     dataset = factory.create_dataset(data)
     raw_data_item = dataset[0]
     assert isinstance(raw_data_item, dict)
-    assert len(raw_data_item) == 4
+    assert len(raw_data_item) == 5
 
     data.properties_of_interest = ["internal_energy_at_0K", "geometry"]
     assert data.properties_of_interest == [
@@ -122,12 +180,14 @@ def test_data_item_format(dataset):
 
     raw_data_item = dataset.dataset[0]
     assert isinstance(raw_data_item, Dict)
-    assert isinstance(raw_data_item["Z"], torch.Tensor)
-    assert isinstance(raw_data_item["R"], torch.Tensor)
-    assert isinstance(raw_data_item["E"], torch.Tensor)
+    assert isinstance(raw_data_item["atomic_numbers"], torch.Tensor)
+    assert isinstance(raw_data_item["positions"], torch.Tensor)
+    assert isinstance(raw_data_item["E_label"], torch.Tensor)
     print(raw_data_item)
 
-    assert raw_data_item["Z"].shape[0] == raw_data_item["R"].shape[0]
+    assert (
+            raw_data_item["atomic_numbers"].shape[0] == raw_data_item["positions"].shape[0]
+    )
 
 
 def test_padding():
@@ -165,29 +225,29 @@ def test_dataset_generation(dataset):
     # a batch of 64 and a batch of 16 samples
     assert len(train_dataloader) == 2  # nr of batches
     v = [v_ for v_ in train_dataloader]
-    assert len(v[0]["n_atoms"]) == 64
-    assert len(v[1]["n_atoms"]) == 16
+    assert len(v[0]["atomic_subsystem_counts"]) == 64
+    assert len(v[1]["atomic_subsystem_counts"]) == 16
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_dataset_splitting(dataset):
     """Test random_split on the the dataset."""
-    from modelforge.dataset.utils import RandomSplittingStrategy
+    from modelforge.dataset.utils import RandomRecordSplittingStrategy
 
     dataset = generate_torch_dataset(dataset)
-    train_dataset, val_dataset, test_dataset = RandomSplittingStrategy().split(dataset)
+    train_dataset, val_dataset, test_dataset = RandomRecordSplittingStrategy().split(dataset)
 
-    energy = train_dataset[0]["E"].item()
+    energy = train_dataset[0]["E_label"].item()
     assert np.isclose(energy, -412509.9375)
     print(energy)
 
     try:
-        RandomSplittingStrategy(split=[0.2, 0.1, 0.1])
-    except AssertionError:
-        print("AssertionError raised")
-        pass
-
-    train_dataset, val_dataset, test_dataset = RandomSplittingStrategy(
+        RandomRecordSplittingStrategy(split=[0.2, 0.1, 0.1])
+    except AssertionError as e:
+        print(f'AssertionError raised: {e}')
+        logger.debug(e)
+    
+    train_dataset, val_dataset, test_dataset = RandomRecordSplittingStrategy(
         split=[0.6, 0.3, 0.1]
     ).split(dataset)
 
@@ -202,7 +262,7 @@ def test_file_cache_methods(dataset):
 
     # generate files to test _from_hdf5()
 
-    _ = initialize_dataset(dataset, mode="str")
+    _ = initialize_dataset(dataset, mode="fit")
 
     data = dataset(for_unit_testing=True)
 
@@ -210,7 +270,7 @@ def test_file_cache_methods(dataset):
 
     data._to_file_cache()
     data._from_file_cache()
-    assert len(data.numpy_data["n_atoms"]) == 100
+    assert len(data.numpy_data["atomic_subsystem_counts"]) == 100
 
 
 @pytest.mark.parametrize("dataset", DATASETS)

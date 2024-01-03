@@ -10,9 +10,6 @@ from .helper_functions import (
 
 
 IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
-from .helper_functions import (
-    SIMPLIFIED_INPUT_DATA,
-)
 
 
 @pytest.mark.parametrize("lightning", [True, False])

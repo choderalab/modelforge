@@ -1,5 +1,3 @@
-import torch
-
 from modelforge.potential.schnet import SchNET
 
 import pytest
@@ -8,9 +6,6 @@ from .helper_functions import (
     SIMPLIFIED_INPUT_DATA,
     generate_interaction_block_data,
 )
-
-nr_atom_basis = 128
-nr_embeddings = 100
 
 
 @pytest.mark.parametrize("lightning", [True, False])

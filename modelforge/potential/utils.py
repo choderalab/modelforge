@@ -232,8 +232,8 @@ class EnergyReadout(nn.Module):
 
         Parameters
         ----------
-        n_filters : int
-            Number of filters after the last message passing layer.
+        n_atom_basis : int
+            Number of atom basis.
         """
         super().__init__()
         if nr_of_layers == 1:

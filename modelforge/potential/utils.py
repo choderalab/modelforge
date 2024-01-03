@@ -94,6 +94,7 @@ def broadcast(src: torch.Tensor, other: torch.Tensor, dim: int):
         src = src.unsqueeze(-1)
     src = src.expand(other.size())
     return src
+
 def scatter_softmax(
     src: torch.Tensor, index: torch.Tensor, dim: int = -1, dim_size: Optional[int] = None
 ) -> torch.Tensor:
@@ -260,12 +261,12 @@ class EnergyReadout(nn.Module):
         ----------
         x : Tensor, shape [nr_of_atoms_in_batch, n_atom_basis]
             Input tensor for the forward pass.
-        atomic_subsystem_counts : List[int], length [n_confs]
-            Number of atoms in each subsystem.
+        atomic_subsystem_indices : shape [nr_of_atoms_in_batch]
+            Index of the subsystem to which each atom belongs.
 
         Returns
         -------
-        Tensor, shape [nr_of_moleculs_in_batch, 1]
+        Tensor, shape [nr_of_molecules_in_batch, 1]
             The total energy tensor.
         """
 

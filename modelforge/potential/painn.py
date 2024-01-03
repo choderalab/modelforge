@@ -8,7 +8,6 @@ from .utils import (
 )
 import torch
 from torch.nn import SiLU
-from modelforge.potential.utils import CosineCutoff
 
 
 class PaiNN(BaseNNP):

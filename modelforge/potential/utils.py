@@ -142,7 +142,7 @@ def gaussian_rbf(
     coeff = -0.5 / torch.pow(widths, 2)
     diff = d_ij[..., None] - offsets
     y = torch.exp(coeff * torch.pow(diff, 2))
-    return y.to(dtype=torch.float32)
+    return y
 
 
 class CosineCutoff(nn.Module):
@@ -241,10 +241,10 @@ class EnergyReadout(nn.Module):
         x = self.energy_layer(x)
 
         # Perform scatter add operation
-        indices = atomic_subsystem_indices.to(torch.int64).unsqueeze(1)
-        result = torch.zeros(len(atomic_subsystem_indices.unique()), 1).scatter_add(
-            0, indices, x
-        )
+        indices = atomic_subsystem_indices.unsqueeze(1).to(torch.int64)
+        result = torch.zeros(
+            len(atomic_subsystem_indices.unique()), 1, dtype=x.dtype
+        ).scatter_add(0, indices, x)
 
         # Sum across feature dimension to get final tensor of shape (num_molecules, 1)
         total_energy_per_molecule = result.sum(dim=1, keepdim=True)
@@ -274,6 +274,9 @@ class ShiftedSoftplus(nn.Module):
         return nn.functional.softplus(x) - np.log(2.0)
 
 
+from typing import Optional
+
+
 class GaussianRBF(nn.Module):
     """
     Gaussian Radial Basis Function module.
@@ -285,7 +288,12 @@ class GaussianRBF(nn.Module):
     """
 
     def __init__(
-        self, n_rbf: int, cutoff: float, start: float = 0.0, trainable: bool = False
+        self,
+        n_rbf: int,
+        cutoff: float,
+        start: float = 0.0,
+        trainable: bool = False,
+        dtype: Optional[torch.dtype] = None,
     ):
         """
         Initialize the GaussianRBF class.
@@ -306,9 +314,9 @@ class GaussianRBF(nn.Module):
         self.n_rbf = n_rbf
         self.cutoff = cutoff
         # compute offset and width of Gaussian functions
-        offset = torch.linspace(start, cutoff, n_rbf)
+        offset = torch.linspace(start, cutoff, n_rbf, dtype=dtype)
         widths = torch.tensor(
-            torch.abs(offset[1] - offset[0]) * torch.ones_like(offset),
+            torch.abs(offset[1] - offset[0]) * torch.ones_like(offset), dtype=dtype
         )
         if trainable:
             self.widths = nn.Parameter(widths)

@@ -230,7 +230,7 @@ def generate_interaction_block_data(
     embedding = nn.Embedding(nr_embeddings, nr_atom_basis, padding_idx=0)
     batch = return_single_batch(QM9Dataset, "fit")
     r = prepare_pairlist_for_single_batch(batch)
-    radial_basis = GaussianRBF(n_rbf=nr_rbf, cutoff=5.0)
+    radial_basis = GaussianRBF(n_rbf=nr_rbf, cutoff=5.0, dtype=batch["positions"].dtype)
 
     d_ij = r["d_ij"]
     f_ij, rcut_ij = _distance_to_radial_basis(d_ij, radial_basis)
@@ -254,18 +254,9 @@ import torch
 import math
 
 
-def equivariance_test_utils(
-    number_of_atoms: int = 5,
-    hidden_features: int = 7,
-):
+def equivariance_test_utils():
     """
     Generates random tensors for testing equivariance of a neural network.
-
-    Args:
-        number_of_atoms (int):
-        Number of atoms in the molecule. Default is 5.
-        hidden_features (int):
-        Number of hidden features in the neural network. Default is 7.
 
     Returns:
         Tuple of tensors:

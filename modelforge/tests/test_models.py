@@ -43,13 +43,11 @@ def test_calculate_energies_and_forces(input_data, model_class):
     This test will be adapted once we have a trained model.
     """
     import torch
-    import torch.nn as nn
 
     nr_of_mols = input_data["atomic_subsystem_indices"].unique().shape[0]
     nr_of_atoms_per_batch = input_data["atomic_subsystem_indices"].shape[0]
     for lightning in [True, False]:
-        model = setup_simple_model(model_class, lightning)
-
+        model = setup_simple_model(model_class, lightning)  # .double()
         result = model(input_data)
         print(result.sum())
         forces = -torch.autograd.grad(
@@ -230,10 +228,11 @@ def test_equivariant_energies_and_forces(input_data, model_class):
     translation, rotation, reflection = equivariance_test_utils()
 
     for lightning in [True, False]:
-        model = setup_simple_model(model_class, lightning)
-
+        # increase precision to 64 bit
+        model = setup_simple_model(model_class, lightning).double()
+        input_data["positions"] = input_data["positions"]
         # reference values
-        reference_result = model(input_data)
+        reference_result = model(input_data).double()
         reference_forces = -torch.autograd.grad(
             reference_result.sum(),
             input_data["positions"],
@@ -247,18 +246,18 @@ def test_equivariant_energies_and_forces(input_data, model_class):
             translation_input_data["positions"]
         )
         translation_result = model(translation_input_data)
+        assert torch.allclose(
+            translation_result,
+            reference_result,
+            atol=1e-5,
+        )
+
         translation_forces = -torch.autograd.grad(
             translation_result.sum(),
             translation_input_data["positions"],
             create_graph=True,
             retain_graph=True,
         )[0]
-
-        assert torch.allclose(
-            translation_result,
-            reference_result,
-            atol=1e-5,
-        )
 
         assert torch.allclose(
             translation_forces,
@@ -268,8 +267,20 @@ def test_equivariant_energies_and_forces(input_data, model_class):
 
         # rotation test
         rotation_input_data = input_data.copy()
-        rotation_input_data["positions"] = rotation(rotation_input_data["positions"])
+        rotation_input_data["positions"] = rotation(
+            rotation_input_data["positions"].to(torch.float32)
+        ).double()
         rotation_result = model(rotation_input_data)
+
+        print(rotation_result)
+        print(reference_result, flush=True)
+
+        assert torch.allclose(
+            rotation_result,
+            reference_result,
+            atol=1e-3,
+        )
+
         rotation_forces = -torch.autograd.grad(
             rotation_result.sum(),
             rotation_input_data["positions"],
@@ -277,23 +288,18 @@ def test_equivariant_energies_and_forces(input_data, model_class):
             retain_graph=True,
         )[0]
 
-        assert torch.allclose(
-            rotation_result,
-            reference_result,
-            atol=1e-1,
-        )
-
+        rotate_reference = rotation(reference_forces.to(torch.float32)).double()
         assert torch.allclose(
             rotation_forces,
-            rotation(reference_forces),
-            atol=1e-1,
+            rotate_reference,
+            atol=1e-3,
         )
 
         # reflection test
         reflection_input_data = input_data.copy()
         reflection_input_data["positions"] = reflection(
-            reflection_input_data["positions"]
-        )
+            reflection_input_data["positions"].to(torch.float32)
+        ).double()
         reflection_result = model(reflection_input_data)
         reflection_forces = -torch.autograd.grad(
             reflection_result.sum(),
@@ -305,13 +311,13 @@ def test_equivariant_energies_and_forces(input_data, model_class):
         assert torch.allclose(
             reflection_result,
             reference_result,
-            atol=1e-1,
+            atol=1e-3,
         )
 
         assert torch.allclose(
             reflection_forces,
-            reflection(reference_forces),
-            atol=1e-1,
+            reflection(reference_forces.to(torch.float32)).double(),
+            atol=1e-3,
         )
 
 

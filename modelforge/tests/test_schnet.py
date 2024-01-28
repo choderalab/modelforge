@@ -73,6 +73,7 @@ def test_schnet_interaction_layer():
     interaction = SchNETInteractionBlock(
         nr_atom_basis=nr_atom_basis, nr_filters=3, nr_rbf=nr_rbf
     )
+    
     v = interaction(
         interaction_data["x"],
         interaction_data["pair_indices"],

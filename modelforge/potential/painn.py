@@ -75,13 +75,17 @@ class PaiNN(BaseNNP):
 
         if shared_filters:
             self.filter_net = nn.Sequential(
-                nn.Linear(self.radial_basis.n_rbf, 3 * self.n_atom_basis), nn.Identity()
+                nn.Linear(
+                    self.radial_basis.n_rbf, 3 * self.n_atom_basis, dtype=self._dtype
+                ),
+                nn.Identity(),
             )
         else:
             self.filter_net = nn.Sequential(
                 nn.Linear(
                     self.radial_basis.n_rbf,
                     self.nr_interaction_blocks * 3 * self.n_atom_basis,
+                    dtype=self._dtype,
                 ),
                 nn.Identity(),
             )
@@ -256,7 +260,7 @@ class PaiNNInteraction(nn.Module):
         expanded_idx_i = idx_i.view(-1, 1, 1).expand_as(dq)
 
         # Create a zero tensor with appropriate shape
-        dq_result_native = torch.zeros(
+        zeros = torch.zeros(
             nr_of_atoms_in_all_systems,
             1,
             self.nr_atom_basis,
@@ -264,11 +268,10 @@ class PaiNNInteraction(nn.Module):
             device=dq.device,
         )
 
-        # Use scatter_add_
-        dq_result_native.scatter_add_(0, expanded_idx_i, dq)
-
+        dq = zeros.scatter_add(0, expanded_idx_i, dq)
+        ##########
         dmu = dmuR * dir_ij[..., None] + dmumu * muj
-        dmu_result_native = torch.zeros(
+        zeros = torch.zeros(
             nr_of_atoms_in_all_systems,
             3,
             self.nr_atom_basis,
@@ -276,10 +279,10 @@ class PaiNNInteraction(nn.Module):
             device=dmu.device,
         )
         expanded_idx_i_dmu = idx_i.view(-1, 1, 1).expand_as(dmu)
-        dmu_result_native.scatter_add_(0, expanded_idx_i_dmu, dmu)
+        dmu = zeros.scatter_add(0, expanded_idx_i_dmu, dmu)
 
-        q = q + dq_result_native  # .view(nr_of_atoms_in_all_systems)
-        mu = mu + dmu_result_native
+        q = q + dq  # .view(nr_of_atoms_in_all_systems)
+        mu = mu + dmu
 
         return q, mu
 
@@ -349,6 +352,10 @@ class PaiNNMixing(nn.Module):
         x = self.intra_atomic_net(ctx)
 
         dq_intra, dmu_intra, dqmu_intra = torch.split(x, self.nr_atom_basis, dim=-1)
+        log.debug(dmu_intra)
+
+        log.debug(mu_W)
+
         dmu_intra = dmu_intra * mu_W
 
         dqmu_intra = dqmu_intra * torch.sum(mu_V * mu_W, dim=1, keepdim=True)

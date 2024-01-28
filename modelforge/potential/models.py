@@ -6,6 +6,8 @@ import torch
 import torch.nn as nn
 from torch.optim import AdamW
 
+from loguru import logger as log
+
 
 class PairList(nn.Module):
     """
@@ -204,7 +206,7 @@ class AbstractBaseNNP(nn.Module, ABC):
         """
         pass
 
-    def input_checks(self, inputs: Dict[str, torch.Tensor]):
+    def input_checks(self, inputs: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
         Perform input checks to validate the input dictionary.
 
@@ -230,6 +232,15 @@ class AbstractBaseNNP(nn.Module, ABC):
 
         if inputs["positions"].dim() != 2:
             raise ValueError("Shape mismatch: 'positions' should be a 2D tensor.")
+
+        if inputs["positions"].dtype != self._dtype:
+            log.debug(
+                f"Precision mismatch: dtype of positions tensor is {inputs['positions'].dtype}, "
+                f"but dtype of model parameters is {self._dtype}. "
+                f"Setting dtype of positions tensor to {self._dtype}."
+            )
+            inputs["positions"] = inputs["positions"].to(self._dtype)
+        return inputs
 
 
 class BaseNNP(AbstractBaseNNP):
@@ -266,42 +277,22 @@ class BaseNNP(AbstractBaseNNP):
 
         super().__init__()
         self.calculate_distances_and_pairlist = PairList(cutoff)
-        self.embedding = embedding 
+        self.embedding = embedding
         assert isinstance(
             self.embedding, SlicedEmbedding
         ), "embedding must be SlicedEmbedding"
         assert embedding.embedding_dim > 0, "embedding_dim must be > 0"
         self.nr_atom_basis = embedding.embedding_dim
+        self._dtype = None  # set at runtime
 
     def _prepare_input(self, inputs: Dict[str, torch.Tensor]):
-        atomic_numbers = inputs["atomic_numbers"].squeeze(
-            dim=1
-        )  # shape (nr_of_atoms_in_batch, 3)
-        positions = inputs["positions"]  # shape (nr_of_atoms_in_batch, 3)
-
-    def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
-        """
-        Abstract method for forward pass in neural network potentials.
-
-        Parameters
-        ----------
-        inputs : Dict[str, torch.Tensor]
-            Inputs containing atomic numbers ('atomic_numbers'), coordinates ('positions') and pairlist ('pairlist').
-            - 'atomic_numbers': int; shape (nr_of_atoms_in_batch, *,*), 0 indicates non-interacting atoms that will be masked
-            - 'total_charge' : int; shape (n_system)
-            - 'positions': float; shape (nr_of_atoms_in_batch, 3)
-
-        Returns
-        -------
-        torch.Tensor
-            Calculated energies; float; shape (n_systems).
-
-        """
-        self.input_checks(inputs)
-        nr_of_atoms_in_batch = inputs["atomic_numbers"].shape[0]
         atomic_numbers = inputs["atomic_numbers"]
-        positions = inputs["positions"]
+        # .squeeze(
+        #    dim=1
+        # )  # shape (nr_of_atoms_in_batch, 3)
+        positions = inputs["positions"]  # shape (nr_of_atoms_in_batch, 3)
         atomic_subsystem_indices = inputs["atomic_subsystem_indices"]
+        nr_of_atoms_in_batch = inputs["atomic_numbers"].shape[0]
 
         r = self.calculate_distances_and_pairlist(positions, atomic_subsystem_indices)
         atomic_numbers_embedding = self.embedding(atomic_numbers)
@@ -339,7 +330,12 @@ class BaseNNP(AbstractBaseNNP):
             Calculated energies; float; shape (n_systems).
 
         """
-        self.input_checks(inputs)
+        dtypes = list({p.dtype for p in self.parameters()})
+        assert len(dtypes) == 1
+        self._dtype = dtypes[0]
+        log.debug(f"Setting dtype to {self._dtype}.")
+
+        inputs = self.input_checks(inputs)
         inputs = self._prepare_input(inputs)
         return self._forward(inputs)
 

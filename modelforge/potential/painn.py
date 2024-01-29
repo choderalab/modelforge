@@ -49,11 +49,6 @@ class PaiNN(BaseNNP):
                 Whether to share weights across filter-generating networks (default is False).
             epsilon : float, optional
                 Stability constant to prevent numerical instabilities (default is 1e-8).
-
-            References
-            ----------
-            Equivariant message passing for the prediction of tensorial properties and molecular spectra.
-            ICML 2021, http://proceedings.mlr.press/v139/schutt21a.html
         """
         from .utils import EnergyReadout
 
@@ -75,9 +70,7 @@ class PaiNN(BaseNNP):
 
         if shared_filters:
             self.filter_net = nn.Sequential(
-                nn.Linear(
-                    self.radial_basis.n_rbf, 3 * self.n_atom_basis, dtype=self._dtype
-                ),
+                nn.Linear(self.radial_basis.n_rbf, 3 * self.n_atom_basis),
                 nn.Identity(),
             )
         else:
@@ -85,7 +78,6 @@ class PaiNN(BaseNNP):
                 nn.Linear(
                     self.radial_basis.n_rbf,
                     self.nr_interaction_blocks * 3 * self.n_atom_basis,
-                    dtype=self._dtype,
                 ),
                 nn.Identity(),
             )
@@ -99,7 +91,7 @@ class PaiNN(BaseNNP):
         )
         self.radial_basis = radial_basis
 
-    def _transform_input(self, inputs: Dict[str, torch.Tensor]):
+    def _generate_representation(self, inputs: Dict[str, torch.Tensor]):
         """
         Transforms the input data for the PAInn potential model.
 
@@ -160,7 +152,7 @@ class PaiNN(BaseNNP):
         """
 
         # extract properties from pairlist
-        transformed_input = self._transform_input(inputs)
+        transformed_input = self._generate_representation(inputs)
 
         for i, (interaction, mixing) in enumerate(zip(self.interactions, self.mixing)):
             q, mu = interaction(

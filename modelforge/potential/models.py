@@ -312,6 +312,12 @@ class BaseNNP(AbstractBaseNNP):
         }
         return inputs
 
+    def _set_dtype(self):
+        dtypes = list({p.dtype for p in self.parameters()})
+        assert len(dtypes) == 1
+        self._dtype = dtypes[0]
+        log.debug(f"Setting dtype to {self._dtype}.")
+
     def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
         Abstract method for forward pass in neural network potentials.
@@ -330,11 +336,7 @@ class BaseNNP(AbstractBaseNNP):
             Calculated energies; float; shape (n_systems).
 
         """
-        dtypes = list({p.dtype for p in self.parameters()})
-        assert len(dtypes) == 1
-        self._dtype = dtypes[0]
-        log.debug(f"Setting dtype to {self._dtype}.")
-
+        self._set_dtype()
         inputs = self.input_checks(inputs)
         inputs = self._prepare_input(inputs)
         return self._forward(inputs)

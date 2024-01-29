@@ -339,7 +339,8 @@ class BaseNNP(AbstractBaseNNP):
         self._set_dtype()
         inputs = self.input_checks(inputs)
         inputs = self._prepare_input(inputs)
-        return self._forward(inputs)
+        output = self._forward(inputs)
+        return self.readout(output)
 
 
 class SingleTopologyAlchemicalBaseNNPModel(AbstractBaseNNP):

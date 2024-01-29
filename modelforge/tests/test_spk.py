@@ -180,8 +180,6 @@ def setup_modelforge_painn_representation(cutoff, n_atom_basis, n_rbf):
 def test_painn_representation_implementation():
     # test the implementation of the representation part of the PaiNN model
 
-    from modelforge.potential.painn import PaiNN as modelforge_PaiNN
-
     cutoff = 5.0
     n_atom_basis = 8
     n_rbf = 5
@@ -204,10 +202,26 @@ def test_painn_representation_implementation():
     modelforge_input_1 = modelforge_painn.input_checks(modelforge_input)
     modelforge_input_2 = modelforge_painn._prepare_input(modelforge_input_1)
 
+    # test neighborlist and distance
     assert torch.allclose(spk_input["_Rij"], modelforge_input_2["r_ij"], atol=1e-4)
     assert torch.allclose(spk_input["_idx_i"], modelforge_input_2["pair_indices"][0])
     assert torch.allclose(spk_input["_idx_j"], modelforge_input_2["pair_indices"][1])
 
-    modelforge_results = modelforge_painn(modelforge_results)
+    # test rbf
+    r_ij = spk_input["_Rij"]
+    d_ij = torch.norm(r_ij, dim=1, keepdim=True)
+    dir_ij = r_ij / d_ij
+    schnetpack_phi_ij = schnetpack_painn.radial_basis(d_ij)
+    modelforge_phi_ij = modelforge_painn.radial_basis(d_ij)
+    assert torch.allclose(schnetpack_phi_ij, modelforge_phi_ij)
+    phi_ij = schnetpack_phi_ij
+    # test cutoff
+    spk_fcut = schnetpack_painn.cutoff_fn(d_ij)
+    mf_fcut = modelforge_painn.cutoff(d_ij)
+    assert torch.allclose(spk_fcut, mf_fcut)
 
-    a = 7
+    # test filter
+    spk_filters = schnetpack_painn.filter_net(phi_ij) * spk_fcut[..., None]
+    mf_filters = schnetpack_painn.filter_net(phi_ij) * mf_fcut[..., None]
+    assert torch.allclose(spk_filters, mf_filters)
+

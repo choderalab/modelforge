@@ -165,15 +165,13 @@ class PaiNN(BaseNNP):
             q, mu = mixing(q, mu)
 
         # Use squeeze to remove dimensions of size 1
-        q_ = q.squeeze(dim=1)
+        q = q.squeeze(dim=1)
 
-        _r = {
-            "scalar_representation": q_,
+        return {
+            "scalar_representation": q,
             "vector_representation": mu,
+            "atomic_subsystem_indices": inputs["atomic_subsystem_indices"],
         }
-        return self.readout(
-            _r["scalar_representation"], inputs["atomic_subsystem_indices"]
-        )
 
 
 class PaiNNInteraction(nn.Module):

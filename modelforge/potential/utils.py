@@ -95,35 +95,54 @@ class SlicedEmbedding(nn.Module):
         return self.embedding(selected_tensor)
 
 
-def sequential_block(
-    in_features: int,
-    out_features: int,
-    activation_fct: Callable = nn.Identity,
-    bias: bool = True,
-) -> nn.Sequential:
-    """
-    Create a sequential block for the neural network.
+from torch.nn.init import xavier_uniform_
 
-    Parameters
-    ----------
-    in_features : int
-        Number of input features.
-    out_features : int
-        Number of output features.
-    activation_fct : Callable, optional
-        Activation function, default is nn.Identity.
-    bias : bool, optional
-        Whether to use bias in Linear layers, default is True.
+from torch.nn.init import zeros_
+import torch.nn.functional as F
 
-    Returns
-    -------
-    nn.Sequential
-        Sequential layer block.
+
+class Dense(nn.Linear):
+    r"""Fully connected linear layer with activation function.
+
+    .. math::
+       y = activation(x W^T + b)
     """
-    return nn.Sequential(
-        nn.Linear(in_features, out_features),
-        activation_fct(),
-    )
+
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        bias: bool = True,
+        activation: Union[Callable, nn.Module] = None,
+        weight_init: Callable = xavier_uniform_,
+        bias_init: Callable = zeros_,
+    ):
+        """
+        Args:
+            in_features: number of input feature :math:`x`.
+            out_features: umber of output features :math:`y`.
+            bias: If False, the layer will not adapt bias :math:`b`.
+            activation: if None, no activation function is used.
+            weight_init: weight initializer from current weight.
+            bias_init: bias initializer from current bias.
+        """
+        self.weight_init = weight_init
+        self.bias_init = bias_init
+        super(Dense, self).__init__(in_features, out_features, bias)
+
+        self.activation = activation
+        if self.activation is None:
+            self.activation = nn.Identity()
+
+    def reset_parameters(self):
+        self.weight_init(self.weight)
+        if self.bias is not None:
+            self.bias_init(self.bias)
+
+    def forward(self, input: torch.Tensor):
+        y = F.linear(input, self.weight, self.bias)
+        y = self.activation(y)
+        return y
 
 
 def gaussian_rbf(

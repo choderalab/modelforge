@@ -81,9 +81,7 @@ class SchNET(BaseNNP):
         """
 
         # Compute the representation for each atom
-        representation = self.schnet_representation(
-            inputs["d_ij"]
-        )  
+        representation = self.schnet_representation(inputs["d_ij"])
         x = inputs["atomic_numbers_embedding"]
         # Iterate over interaction blocks to update features
         for interaction in self.interactions:
@@ -116,7 +114,7 @@ class SchNETInteractionBlock(nn.Module):
             Number of radial basis functions.
         """
         super().__init__()
-        from .utils import ShiftedSoftplus, sequential_block
+        from .utils import ShiftedSoftplus, Dense
 
         assert nr_rbf > 4, "Number of radial basis functions must be larger than 10."
         assert nr_filters > 1, "Number of filters must be larger than 1."
@@ -125,12 +123,12 @@ class SchNETInteractionBlock(nn.Module):
         self.nr_atom_basis = nr_atom_basis  # Initialize parameters
         self.intput_to_feature = nn.Linear(nr_atom_basis, nr_filters)
         self.feature_to_output = nn.Sequential(
-            sequential_block(nr_filters, nr_atom_basis, ShiftedSoftplus),
-            sequential_block(nr_atom_basis, nr_atom_basis),
+            Dense(nr_filters, nr_atom_basis, activation=ShiftedSoftplus),
+            Dense(nr_atom_basis, nr_atom_basis, activation=None),
         )
         self.filter_network = nn.Sequential(
-            sequential_block(nr_rbf, nr_filters, ShiftedSoftplus),
-            sequential_block(nr_filters, nr_filters),
+            Dense(nr_rbf, nr_filters, activation=ShiftedSoftplus),
+            Dense(nr_filters, nr_filters, activation=None),
         )
 
     def forward(

@@ -3,11 +3,9 @@ from loguru import logger as log
 from typing import Dict, Type, Callable, Optional, Tuple
 
 from .models import BaseNNP, LightningModuleMixin
-from .utils import (
-    sequential_block,
-)
+from .utils import Dense
 import torch
-from torch.nn import SiLU
+import torch.nn.functional as F
 
 
 class PaiNN(BaseNNP):
@@ -25,7 +23,7 @@ class PaiNN(BaseNNP):
         nr_interaction_blocks: int,
         radial_basis: nn.Module,
         cutoff: nn.Module,
-        activation: Optional[Callable] = SiLU,
+        activation: Optional[Callable] = F.silu,
         shared_interactions: bool = False,
         shared_filters: bool = False,
         epsilon: float = 1e-8,
@@ -115,6 +113,10 @@ class PaiNN(BaseNNP):
         qs = atomic_numbers_embedding.shape
 
         q = atomic_numbers_embedding.reshape(qs[0], 1, qs[1])
+        mu = torch.zeros(
+            (qs[0], 3, qs[1]), device=q.device
+        )  # nr_of_systems * nr_of_atoms, 3, n_atom_basis
+
         # compute atom and pair features
         dir_ij = r_ij / d_ij
         f_ij, _ = _distance_to_radial_basis(d_ij, self.radial_basis)
@@ -126,9 +128,6 @@ class PaiNN(BaseNNP):
         else:
             self.filter_list = torch.split(filters, 3 * self.n_atom_basis, dim=-1)
 
-        mu = torch.zeros(
-            (qs[0], 3, qs[1]), device=q.device
-        )  # nr_of_systems * nr_of_atoms, 3, n_atom_basis
         return {"mu": mu, "dir_ij": dir_ij, "q": q}
 
     def _forward(
@@ -201,8 +200,8 @@ class PaiNNInteraction(nn.Module):
 
         # Initialize the intra-atomic neural network
         self.intra_atomic_net = nn.Sequential(
-            sequential_block(nr_atom_basis, nr_atom_basis, activation),
-            sequential_block(nr_atom_basis, 3 * nr_atom_basis),
+            Dense(nr_atom_basis, nr_atom_basis, activation=activation),
+            Dense(nr_atom_basis, 3 * nr_atom_basis, activation=None),
         )
 
     def forward(
@@ -307,15 +306,11 @@ class PaiNNMixing(nn.Module):
 
         # initialize the intra-atomic neural network
         self.intra_atomic_net = nn.Sequential(
-            sequential_block(
-                2 * nr_atom_basis, nr_atom_basis, activation_fct=activation
-            ),
-            sequential_block(nr_atom_basis, 3 * nr_atom_basis),
+            Dense(2 * nr_atom_basis, nr_atom_basis, activation=activation),
+            Dense(nr_atom_basis, 3 * nr_atom_basis, activation=None),
         )
         # initialize the mu channel mixing network
-        self.mu_channel_mix = sequential_block(
-            nr_atom_basis, 2 * nr_atom_basis, bias=False
-        )
+        self.mu_channel_mix = Dense(nr_atom_basis, 2 * nr_atom_basis, bias=False)
         self.epsilon = epsilon
 
     def forward(self, q: torch.Tensor, mu: torch.Tensor):
@@ -362,7 +357,7 @@ class LighningPaiNN(PaiNN, LightningModuleMixin):
         nr_interaction_blocks: int,
         radial_basis: nn.Module,
         cutoff: nn.Module,
-        activation: Optional[Callable] = SiLU,
+        activation: Optional[Callable] = F.silu,
         shared_interactions: bool = False,
         shared_filters: bool = False,
         epsilon: float = 1e-8,

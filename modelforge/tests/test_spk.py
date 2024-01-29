@@ -204,10 +204,10 @@ def test_painn_representation_implementation():
     modelforge_input_1 = modelforge_painn.input_checks(modelforge_input)
     modelforge_input_2 = modelforge_painn._prepare_input(modelforge_input_1)
 
-    modelforge_results_3 = modelforge_painn._generate_representation(modelforge_input_2)
-    print(spk_input["_Rij"])
-    print(modelforge_input_2["r_ij"])
-
     assert torch.allclose(spk_input["_Rij"], modelforge_input_2["r_ij"], atol=1e-4)
+    assert torch.allclose(spk_input["_idx_i"], modelforge_input_2["pair_indices"][0])
+    assert torch.allclose(spk_input["_idx_j"], modelforge_input_2["pair_indices"][1])
+
+    modelforge_results = modelforge_painn(modelforge_results)
 
     a = 7

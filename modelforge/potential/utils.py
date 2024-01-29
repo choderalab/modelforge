@@ -57,6 +57,14 @@ class SlicedEmbedding(nn.Module):
         self.sliced_dim = sliced_dim
 
     @property
+    def data(self):
+        return self.embedding.weight.data
+
+    @data.setter
+    def data(self, data):
+        self.embedding.weight.data = data
+
+    @property
     def embedding_dim(self):
         """
         Get the dimensionality of the embedding.

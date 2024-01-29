@@ -1,10 +1,4 @@
-from typing import Callable, Dict, Optional
-
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
-import schnetpack.nn as snn
 
 
 def test_gaussian_rbf_implementation():
@@ -206,6 +200,8 @@ def test_painn_representation_implementation():
     assert torch.allclose(spk_input["_Rij"], modelforge_input_2["r_ij"], atol=1e-4)
     assert torch.allclose(spk_input["_idx_i"], modelforge_input_2["pair_indices"][0])
     assert torch.allclose(spk_input["_idx_j"], modelforge_input_2["pair_indices"][1])
+    idx_i = spk_input["_idx_i"]
+    idx_j = spk_input["_idx_j"]
 
     # test rbf
     r_ij = spk_input["_Rij"]
@@ -225,3 +221,47 @@ def test_painn_representation_implementation():
     mf_filters = schnetpack_painn.filter_net(phi_ij) * mf_fcut[..., None]
     assert torch.allclose(spk_filters, mf_filters)
 
+    # test embedding
+    import schnetpack.properties as properties
+
+    assert torch.allclose(
+        spk_input[properties.Z], modelforge_input["atomic_numbers"].squeeze()
+    )
+    spk_embedding = schnetpack_painn.embedding(spk_input[properties.Z])
+    weight = schnetpack_painn.embedding.weight.data
+    modelforge_painn.embedding.data = weight
+    mf_embedding = modelforge_painn.embedding(modelforge_input["atomic_numbers"])
+    assert torch.allclose(spk_embedding, mf_embedding)
+
+    # test interaction
+    q = spk_embedding
+    mu = torch.zeros((q.shape[0], 3, q.shape[2]))
+    filter_list = torch.split(spk_filters, 3 * schnetpack_painn.n_atom_basis, dim=-1)
+    n_atoms = spk_input[properties.Z].shape[0]
+    spl_q, spk_mu = schnetpack_painn.interactions(
+        q, mu, schnetpack_painn.filter_list[0], dir_ij, idx_i, idx_j, n_atoms
+    )
+
+    mf_q, mf_mu = modelforge_painn.interactions(
+        modelforge_input_2["q"],
+        modelforge_input_2["mu"],
+        modelforge_painn.filter_list[0],
+        modelforge_input_2["dir_ij"],
+        modelforge_input_2["pair_indices"],
+    )
+
+    a = 7
+
+    modelforge_results = modelforge_painn._forward(modelforge_input_2)
+
+    assert torch.allclose(
+        schnetpack_results["scalar_representation"],
+        modelforge_results["scalar_representation"],
+    )
+
+    assert torch.allclose(
+        schnetpack_results["vector_representation"],
+        modelforge_results["vector_representation"],
+    )
+
+    a = 7

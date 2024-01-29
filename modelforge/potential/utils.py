@@ -366,7 +366,10 @@ def _distance_to_radial_basis(
 
 
 def neighbor_pairs_nopbc(
-    coordinates: torch.Tensor, atomic_subsystem_indices: torch.Tensor, cutoff: float
+    coordinates: torch.Tensor,
+    atomic_subsystem_indices: torch.Tensor,
+    cutoff: float,
+    only_unique_pairs: bool = False,
 ) -> torch.Tensor:
     """Compute pairs of atoms that are neighbors (doesn't use PBC)
 
@@ -381,8 +384,22 @@ def neighbor_pairs_nopbc(
     positions = coordinates.detach()
     # generate index grid
     n = len(atomic_subsystem_indices)
-    i_indices, j_indices = torch.triu_indices(n, n, 1)
 
+    if only_unique_pairs:
+        i_indices, j_indices = torch.triu_indices(n, n, 1)
+    else:
+        # meshgrid, but remove the diagonal
+        i_indices, j_indices = torch.meshgrid(
+            torch.arange(start=0, end=n, dtype=torch.int64),
+            torch.arange(start=0, end=n, dtype=torch.int64),
+        )
+        # remove indices for which i_indices == j_indices
+        mask = i_indices != j_indices
+        i_indices = i_indices[mask]
+        j_indices = j_indices[mask]
+
+        i_indices = i_indices.reshape(-1)
+        j_indices = j_indices.reshape(-1)
     # filter pairs to only keep those belonging to the same molecule
     same_molecule_mask = (
         atomic_subsystem_indices[i_indices] == atomic_subsystem_indices[j_indices]
@@ -393,7 +410,7 @@ def neighbor_pairs_nopbc(
     j_final_pairs = j_indices[same_molecule_mask]
 
     # concatenate to form final (2, n_pairs) tensor
-    pair_indices = torch.stack((i_final_pairs, j_final_pairs))
+    pair_indices = torch.stack((j_final_pairs, i_final_pairs))
 
     # create pair_coordinates tensor
     pair_coordinates = positions[pair_indices.T]

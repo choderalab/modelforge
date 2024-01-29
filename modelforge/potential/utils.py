@@ -214,6 +214,9 @@ def cosine_cutoff(d_ij: torch.Tensor, cutoff: float) -> torch.Tensor:
     return input_cut
 
 
+from typing import Dict
+
+
 class EnergyReadout(nn.Module):
     """
     Defines the energy readout module.
@@ -248,24 +251,22 @@ class EnergyReadout(nn.Module):
                 energy_layer_end, *energy_layer_intermediate, energy_layer_start
             )
 
-    def forward(
-        self, x: torch.Tensor, atomic_subsystem_indices: torch.Tensor
-    ) -> torch.Tensor:
+    def forward(self, input: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
         Forward pass for the energy readout.
 
         Parameters
         ----------
-        x : Tensor, shape [nr_of_atoms_in_batch, n_atom_basis]
-            Input tensor for the forward pass.
-
+        input : Dict[str, torch.Tensor],
+            "scalar_representation", shape [nr_of_atoms_in_batch, n_atom_basis]
+            "atomic_subsystem_indices", shape [nr_of_atoms_in_batch]
         Returns
         -------
         Tensor, shape [nr_of_moleculs_in_batch, 1]
             The total energy tensor.
         """
-
-        x = self.energy_layer(x)
+        x = self.energy_layer(input["scalar_representation"])
+        atomic_subsystem_indices = input["atomic_subsystem_indices"]
 
         # Perform scatter add operation
         indices = atomic_subsystem_indices.unsqueeze(1).to(torch.int64)
@@ -279,26 +280,23 @@ class EnergyReadout(nn.Module):
         return total_energy_per_molecule
 
 
-class ShiftedSoftplus(nn.Module):
+def shifted_softplus(x: torch.Tensor):
+    r"""Compute shifted soft-plus activation function.
+
+    .. math::
+       y = \ln\left(1 + e^{-x}\right) - \ln(2)
+
+    Args:
+        x (torch.Tensor): input tensor.
+
+    Returns:
+        torch.Tensor: shifted soft-plus of input.
+
     """
-    Compute shifted soft-plus activation function.
+    from torch.nn import functional
+    import math
 
-    Parameters
-    ----------
-    x : torch.Tensor
-        Input tensor.
-
-    Returns
-    -------
-    torch.Tensor
-        Transformed tensor.
-    """
-
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x):
-        return nn.functional.softplus(x) - np.log(2.0)
+    return functional.softplus(x) - math.log(2.0)
 
 
 from typing import Optional
@@ -425,8 +423,9 @@ def neighbor_pairs_nopbc(
         i_indices = i_indices[mask]
         j_indices = j_indices[mask]
 
-        i_indices = i_indices.reshape(-1)
-        j_indices = j_indices.reshape(-1)
+        # i_indices = i_indices.reshape(-1)
+        # j_indices = j_indices.reshape(-1)
+    
     # filter pairs to only keep those belonging to the same molecule
     same_molecule_mask = (
         atomic_subsystem_indices[i_indices] == atomic_subsystem_indices[j_indices]

@@ -142,7 +142,7 @@ def test_pairlist():
         ]
     )
     cutoff = 5.0  # no relevant cutoff
-    pairlist = PairList(cutoff)
+    pairlist = PairList(cutoff, only_unique_pairs=True)
     r = pairlist(positions, atomic_subsystem_indices)
     pair_indices = r["pair_indices"]
 
@@ -151,6 +151,7 @@ def test_pairlist():
     # pair1: pairlist[0][0] and pairlist[1][0], i.e. (0,1)
     # pair2: pairlist[0][1] and pairlist[1][1], i.e. (0,2)
     # pair3: pairlist[0][2] and pairlist[1][2], i.e. (1,2)
+
     assert torch.allclose(
         pair_indices, torch.tensor([[0, 0, 1, 3, 3, 4], [1, 2, 2, 4, 5, 5]])
     )
@@ -159,19 +160,19 @@ def test_pairlist():
         r["r_ij"],
         torch.tensor(
             [
-                [-1.0, -1.0, -1.0],  # pair1, [0.0, 0.0, 0.0] - [1.0, 1.0, 1.0]
-                [-2.0, -2.0, -2.0],  # pair2, [0.0, 0.0, 0.0] - [2.0, 2.0, 2.0]
-                [-1.0, -1.0, -1.0],  # pair3, [0.0, 0.0, 0.0] - [3.0, 3.0, 3.0]
-                [-1.0, -1.0, -1.0],
-                [-2.0, -2.0, -2.0],
-                [-1.0, -1.0, -1.0],
+                [1.0, 1.0, 1.0],  # pair1, [1.0, 1.0, 1.0] - [0.0, 0.0, 0.0]
+                [2.0, 2.0, 2.0],  # pair2, [2.0, 2.0, 2.0] - [0.0, 0.0, 0.0]
+                [1.0, 1.0, 1.0],  # pair3, [3.0, 3.0, 3.0] - [0.0, 0.0, 0.0]
+                [1.0, 1.0, 1.0],
+                [2.0, 2.0, 2.0],
+                [1.0, 1.0, 1.0],
             ]
         ),
     )
 
     # test with cutoff
     cutoff = 2.0  #
-    pairlist = PairList(cutoff)
+    pairlist = PairList(cutoff, only_unique_pairs=True)
     r = pairlist(positions, atomic_subsystem_indices)
     pair_indices = r["pair_indices"]
 
@@ -181,15 +182,26 @@ def test_pairlist():
         r["r_ij"],
         torch.tensor(
             [
-                [-1.0, -1.0, -1.0],
-                [-1.0, -1.0, -1.0],
-                [-1.0, -1.0, -1.0],
-                [-1.0, -1.0, -1.0],
+                [1.0, 1.0, 1.0],
+                [1.0, 1.0, 1.0],
+                [1.0, 1.0, 1.0],
+                [1.0, 1.0, 1.0],
             ]
         ),
     )
 
     torch.allclose(r["d_ij"], torch.tensor([1.7321, 1.7321, 1.7321, 1.7321]))
+
+    # test with complete pairlist
+    cutoff = 2.0  #
+    pairlist = PairList(cutoff, only_unique_pairs=False)
+    r = pairlist(positions, atomic_subsystem_indices)
+    pair_indices = r["pair_indices"]
+
+    print(pair_indices, flush=True)
+    torch.allclose(
+        pair_indices, torch.tensor([[0, 1, 1, 2, 3, 4, 4, 5], [1, 0, 2, 1, 4, 3, 5, 4]])
+    )
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
@@ -278,7 +290,7 @@ def test_equivariant_energies_and_forces(input_data, model_class):
         assert torch.allclose(
             rotation_result,
             reference_result,
-            atol=1e-3,
+            atol=1e-4,
         )
 
         rotation_forces = -torch.autograd.grad(
@@ -292,7 +304,7 @@ def test_equivariant_energies_and_forces(input_data, model_class):
         assert torch.allclose(
             rotation_forces,
             rotate_reference,
-            atol=1e-3,
+            atol=1e-4,
         )
 
         # reflection test
@@ -311,13 +323,13 @@ def test_equivariant_energies_and_forces(input_data, model_class):
         assert torch.allclose(
             reflection_result,
             reference_result,
-            atol=1e-3,
+            atol=1e-4,
         )
 
         assert torch.allclose(
             reflection_forces,
             reflection(reference_forces.to(torch.float32)).double(),
-            atol=1e-3,
+            atol=1e-4,
         )
 
 
@@ -327,15 +339,17 @@ def test_pairlist_calculate_r_ij_and_d_ij():
     import torch
 
     positions = torch.tensor(
-        [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 0.0]]
+        [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 4.0, 1.0]]
     )
     atomic_subsystem_indices = torch.tensor([0, 0, 1, 1])
     cutoff = 3.0
 
     # Create Pairlist instance
-    pairlist = PairList(cutoff)
+    # --------------------------- #
+    # Only unique pairs
+    pairlist = PairList(cutoff, only_unique_pairs=True)
     pair_indices = pairlist.calculate_neighbors(
-        positions, atomic_subsystem_indices, pairlist.cutoff
+        positions, atomic_subsystem_indices, pairlist.cutoff, only_unique_pairs=True
     )
 
     # Calculate r_ij and d_ij
@@ -343,12 +357,34 @@ def test_pairlist_calculate_r_ij_and_d_ij():
     d_ij = pairlist.calculate_d_ij(r_ij)
 
     # Check if the calculated r_ij and d_ij are correct
-    expected_r_ij = torch.tensor([[-2.0, 0.0, 0.0], [0.0, 2.0, 0.0]])
-    expected_d_ij = torch.tensor([[2.0], [2.0]])
+    expected_r_ij = torch.tensor([[2.0, 0.0, 0.0], [0.0, 2.0, 1.0]])
+    expected_d_ij = torch.tensor([[2.0000], [2.2361]])
 
-    assert torch.allclose(r_ij, expected_r_ij)
-    assert torch.allclose(d_ij, expected_d_ij)
+    assert torch.allclose(r_ij, expected_r_ij, atol=1e-3)
+    assert torch.allclose(d_ij, expected_d_ij, atol=1e-3)
 
     normalized_r_ij = r_ij / d_ij
-    expected_normalized_r_ij = torch.tensor([[-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
-    assert torch.allclose(expected_normalized_r_ij, normalized_r_ij)
+    expected_normalized_r_ij = torch.tensor(
+        [[1.0000, 0.0000, 0.0000], [0.0000, 0.8944, 0.4472]]
+    )
+    assert torch.allclose(expected_normalized_r_ij, normalized_r_ij, atol=1e-3)
+
+    # --------------------------- #
+    # ALL pairs
+    pairlist = PairList(cutoff, only_unique_pairs=False)
+    pair_indices = pairlist.calculate_neighbors(
+        positions, atomic_subsystem_indices, pairlist.cutoff, only_unique_pairs=False
+    )
+
+    # Calculate r_ij and d_ij
+    r_ij = pairlist.calculate_r_ij(pair_indices, positions)
+    d_ij = pairlist.calculate_d_ij(r_ij)
+
+    # Check if the calculated r_ij and d_ij are correct
+    expected_r_ij = torch.tensor(
+        [[2.0, 0.0, 0.0], [-2.0, 0.0, 0.0], [0.0, 2.0, 1.0], [0.0, -2.0, -1.0]]
+    )
+    expected_d_ij = torch.tensor([[2.0000], [2.0000], [2.2361], [2.2361]])
+
+    assert torch.allclose(r_ij, expected_r_ij, atol=1e-3)
+    assert torch.allclose(d_ij, expected_d_ij, atol=1e-3)

@@ -58,7 +58,6 @@ def test_painn_forward(lightning, input_data, model_parameter):
 
 def test_painn_interaction_equivariance():
     import torch
-    from modelforge.potential.painn import PaiNNInteraction
     from torch import nn
     from .helper_functions import generate_methane_input, setup_simple_model
     from modelforge.potential.painn import PaiNN
@@ -97,8 +96,12 @@ def test_painn_interaction_equivariance():
     assert torch.allclose(rotated_reference_dir_ij, perturbed_dir_ij)
     # Test that the interaction block is equivariant
     # First we test the transformed inputs
-    reference_tranformed_inputs = painn._transform_input(reference_prepared_input)
-    perturbed_tranformed_inputs = painn._transform_input(perturbed_prepared_input)
+    reference_tranformed_inputs = painn._generate_representation(
+        reference_prepared_input
+    )
+    perturbed_tranformed_inputs = painn._generate_representation(
+        perturbed_prepared_input
+    )
 
     assert torch.allclose(
         reference_tranformed_inputs["q"], perturbed_tranformed_inputs["q"]

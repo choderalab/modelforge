@@ -107,19 +107,12 @@ class PaiNN(BaseNNP):
         """
         from modelforge.potential.utils import _distance_to_radial_basis
 
+        # compute pairwise distances
         d_ij = inputs["d_ij"]
         r_ij = inputs["r_ij"]
-        atomic_numbers_embedding = inputs["atomic_numbers_embedding"]
-        qs = atomic_numbers_embedding.shape
-
-        q = atomic_numbers_embedding.reshape(qs[0], 1, qs[1])
-        mu = torch.zeros(
-            (qs[0], 3, qs[1]), device=q.device
-        )  # nr_of_systems * nr_of_atoms, 3, n_atom_basis
-
-        # compute atom and pair features
         dir_ij = r_ij / d_ij
         f_ij, _ = _distance_to_radial_basis(d_ij, self.radial_basis)
+
         fcut = self.cutoff(d_ij)  # n_pairs, 1
 
         filters = self.filter_net(f_ij) * fcut[..., None]
@@ -127,7 +120,16 @@ class PaiNN(BaseNNP):
             self.filter_list = [filters] * self.nr_interaction_blocks
         else:
             self.filter_list = torch.split(filters, 3 * self.n_atom_basis, dim=-1)
+        
+        # generate q and mu
+        atomic_numbers_embedding = inputs["atomic_numbers_embedding"]
+        qs = atomic_numbers_embedding.shape
 
+        q = atomic_numbers_embedding[:, None]
+        qs = q.shape
+        mu = torch.zeros(
+            (qs[0], 3, qs[2]), device=q.device
+        )  # nr_of_systems * nr_of_atoms, 3, n_atom_basis
         return {"mu": mu, "dir_ij": dir_ij, "q": q}
 
     def _forward(
@@ -337,10 +339,6 @@ class PaiNNMixing(nn.Module):
         x = self.intra_atomic_net(ctx)
 
         dq_intra, dmu_intra, dqmu_intra = torch.split(x, self.nr_atom_basis, dim=-1)
-        log.debug(dmu_intra)
-
-        log.debug(mu_W)
-
         dmu_intra = dmu_intra * mu_W
 
         dqmu_intra = dqmu_intra * torch.sum(mu_V * mu_W, dim=1, keepdim=True)

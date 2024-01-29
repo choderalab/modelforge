@@ -26,7 +26,7 @@ class PairList(nn.Module):
         Forward pass for PairList.
     """
 
-    def __init__(self, cutoff: float = 5.0):
+    def __init__(self, cutoff: float = 5.0, only_unique_pairs: bool = False):
         """
         Initialize PairList.
 
@@ -34,12 +34,15 @@ class PairList(nn.Module):
         ----------
         cutoff : float, optional
             Cutoff distance for neighbor calculations, default is 5.0.
+        only_unique_pairs : bool, optional
+            If set to True, only unique pairs of atoms are considered, default is False.
         """
         super().__init__()
         from .utils import neighbor_pairs_nopbc
 
         self.calculate_neighbors = neighbor_pairs_nopbc
         self.cutoff = cutoff
+        self.only_unique_pairs = only_unique_pairs
 
     def calculate_r_ij(
         self, pair_indices: torch.Tensor, positions: torch.Tensor
@@ -88,7 +91,10 @@ class PairList(nn.Module):
 
         """
         pair_indices = self.calculate_neighbors(
-            positions, atomic_subsystem_indices, self.cutoff
+            positions,
+            atomic_subsystem_indices,
+            self.cutoff,
+            only_unique_pairs=self.only_unique_pairs,
         )
         r_ij = self.calculate_r_ij(pair_indices, positions)
 

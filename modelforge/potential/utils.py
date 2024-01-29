@@ -410,14 +410,14 @@ def neighbor_pairs_nopbc(
     j_final_pairs = j_indices[same_molecule_mask]
 
     # concatenate to form final (2, n_pairs) tensor
-    pair_indices = torch.stack((j_final_pairs, i_final_pairs))
+    pair_indices = torch.stack((i_final_pairs, j_final_pairs))
 
     # create pair_coordinates tensor
     pair_coordinates = positions[pair_indices.T]
     pair_coordinates = pair_coordinates.view(-1, 2, 3)
 
     # Calculate distances
-    distances = (pair_coordinates[:, 0, :] - pair_coordinates[:, 1, :]).norm(
+    distances = (pair_coordinates[:, 1, :] - pair_coordinates[:, 0, :]).norm(
         p=2, dim=-1
     )
 

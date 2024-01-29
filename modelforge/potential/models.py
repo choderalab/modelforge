@@ -62,7 +62,7 @@ class PairList(nn.Module):
         selected_positions = positions.index_select(0, pair_indices.view(-1)).view(
             2, -1, 3
         )
-        return selected_positions[0] - selected_positions[1]
+        return selected_positions[1] - selected_positions[0]
 
     def calculate_d_ij(self, r_ij):
         # Calculate the euclidian distance between the atoms in the pair

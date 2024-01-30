@@ -68,6 +68,11 @@ class SchNET(BaseNNP):
         # Compute the energy for each system
         return self.readout_module(inputs)
 
+    def prepare_inputs(self, inputs: Dict[str, torch.Tensor]):
+        inputs = self._prepare_inputs(inputs)
+        inputs = self._model_specific_input_preparation(inputs)
+        return inputs
+
     def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
         # Perform atomic embedding
         from modelforge.potential.utils import embed_atom_features
@@ -85,13 +90,13 @@ class SchNET(BaseNNP):
         Parameters
         ----------
         atomic_embedding : torch.Tensor
-            Atomic numbers embedding; shape (nr_of_atoms_in_systems, 1, n_atom_basis).
+            Atomic numbers embedding; shape (nr_of_atoms_in_systems, 1, nr_atom_basis).
         inputs : Dict[str, torch.Tensor]
         - pairlist:  shape (n_pairs, 2)
         - r_ij:  shape (n_pairs, 1)
         - d_ij:  shape (n_pairs, 3)
         - positions:  shape (nr_of_atoms_per_molecules, 3)
-        - atomic_embedding:  shape (nr_of_atoms_in_systems, n_atom_basis)
+        - atomic_embedding:  shape (nr_of_atoms_in_systems, nr_atom_basis)
 
 
         Returns
@@ -176,7 +181,7 @@ class SchNETInteractionBlock(nn.Module):
 
         Returns
         -------
-        torch.Tensor, shape [nr_of_atoms_in_systems, n_atom_basis]
+        torch.Tensor, shape [nr_of_atoms_in_systems, nr_atom_basis]
             Updated feature tensor after interaction block.
         """
 

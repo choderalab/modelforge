@@ -240,7 +240,7 @@ def embed_atom_features(
 
     atomic_embedding = embedding(
         atomic_numbers
-    )  # shape (nr_of_atoms_in_batch, n_atom_basis)
+    )  # shape (nr_of_atoms_in_batch, nr_atom_basis)
     return atomic_embedding
 
 
@@ -257,24 +257,24 @@ class EnergyReadout(nn.Module):
         Forward pass for the energy readout.
     """
 
-    def __init__(self, n_atom_basis: int, nr_of_layers: int = 1):
+    def __init__(self, nr_atom_basis: int, nr_of_layers: int = 1):
         """
         Initialize the EnergyReadout class.
 
         Parameters
         ----------
-        n_atom_basis : int
+        nr_atom_basis : int
             Number of atom basis.
         """
         super().__init__()
         if nr_of_layers == 1:
-            self.energy_layer = nn.Linear(n_atom_basis, 1)
+            self.energy_layer = nn.Linear(nr_atom_basis, 1)
         else:
             activation_fct = nn.ReLU()
-            energy_layer_start = nn.Linear(n_atom_basis, n_atom_basis)
-            energy_layer_end = nn.Linear(n_atom_basis, 1)
+            energy_layer_start = nn.Linear(nr_atom_basis, nr_atom_basis)
+            energy_layer_end = nn.Linear(nr_atom_basis, 1)
             energy_layer_intermediate = [
-                (nn.Linear(n_atom_basis, n_atom_basis), activation_fct)
+                (nn.Linear(nr_atom_basis, nr_atom_basis), activation_fct)
                 for _ in range(nr_of_layers - 2)
             ]
             self.energy_layer = nn.Sequential(
@@ -288,7 +288,7 @@ class EnergyReadout(nn.Module):
         Parameters
         ----------
         input : Dict[str, torch.Tensor],
-            "scalar_representation", shape [nr_of_atoms_in_batch, n_atom_basis]
+            "scalar_representation", shape [nr_of_atoms_in_batch, nr_atom_basis]
             "atomic_subsystem_indices", shape [nr_of_atoms_in_batch]
         Returns
         -------

@@ -87,7 +87,7 @@ class PaiNN(BaseNNP):
             PaiNNInteraction(self.nr_atom_basis, activation=activation)
             for _ in range(self.nr_interaction_blocks)
         )
-        self.mixing_module = nn.ModuleList(
+        self.mixing_modules = nn.ModuleList(
             PaiNNMixing(self.nr_atom_basis, activation=activation, epsilon=epsilon)
             for _ in range(self.nr_interaction_blocks)
         )
@@ -96,6 +96,10 @@ class PaiNN(BaseNNP):
 
     def _readout(self, input: Dict[str, Tensor]):
         return self.readout_module(input)
+
+    def prepare_inputs(self, inputs: Dict[str, torch.Tensor]):
+        inputs = self._prepare_inputs(inputs)
+        return self._model_specific_input_preparation(inputs)
 
     def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
         # Perform atomic embedding
@@ -119,7 +123,7 @@ class PaiNN(BaseNNP):
 
         Returns:
             Dict[str, torch.Tensor]: A dictionary containing the transformed input tensors.
-                - "mu" (torch.Tensor): Zero-initialized tensor for atom features. Shape: (n_atoms, 3, n_atom_basis).
+                - "mu" (torch.Tensor): Zero-initialized tensor for atom features. Shape: (n_atoms, 3, nr_atom_basis).
                 - "dir_ij" (torch.Tensor): Direction vectors between atoms. Shape: (n_pairs, 1, distance).
                 - "q" (torch.Tensor): Reshaped atomic number embeddings. Shape: (n_atoms, 1, embedding_dim).
         """
@@ -147,7 +151,7 @@ class PaiNN(BaseNNP):
         qs = q.shape
         mu = torch.zeros(
             (qs[0], 3, qs[2]), device=q.device
-        )  # nr_of_systems * nr_of_atoms, 3, n_atom_basis
+        )  # nr_of_systems * nr_of_atoms, 3, nr_atom_basis
         return {"mu": mu, "dir_ij": dir_ij, "q": q}
 
     def _forward(
@@ -173,17 +177,17 @@ class PaiNN(BaseNNP):
         # extract properties from pairlist
         transformed_input = self._generate_representation(inputs)
 
-        for i, (interaction, mixing) in enumerate(
-            zip(self.interaction_modules, self.mixing_module)
+        for i, (interaction_mod, mixing_mod) in enumerate(
+            zip(self.interaction_modules, self.mixing_modules)
         ):
-            q, mu = interaction(
+            q, mu = interaction_mod(
                 transformed_input["q"],
                 transformed_input["mu"],
                 self.filter_list[i],
                 transformed_input["dir_ij"],
                 inputs["pair_indices"],
             )
-            q, mu = mixing(q, mu)
+            q, mu = mixing_mod(q, mu)
 
         # Use squeeze to remove dimensions of size 1
         q = q.squeeze(dim=1)
@@ -228,8 +232,8 @@ class PaiNNInteraction(nn.Module):
 
     def forward(
         self,
-        q: torch.Tensor,  # shape [nr_of_atoms_in_batch, n_atom_basis]
-        mu: torch.Tensor,  # shape [n_mols, n_interactions, n_atom_basis]
+        q: torch.Tensor,  # shape [nr_of_atoms_in_batch, nr_atom_basis]
+        mu: torch.Tensor,  # shape [n_mols, n_interactions, nr_atom_basis]
         Wij: torch.Tensor,  # shape [n_interactions]
         dir_ij: torch.Tensor,
         pairlist: torch.Tensor,
@@ -239,9 +243,9 @@ class PaiNNInteraction(nn.Module):
         Parameters
         ----------
         q : torch.Tensor
-            Scalar input values of shape [nr_of_atoms_in_systems, n_atom_basis].
+            Scalar input values of shape [nr_of_atoms_in_systems, nr_atom_basis].
         mu : torch.Tensor
-            Vector input values of shape [n_mols, n_interactions, n_atom_basis].
+            Vector input values of shape [n_mols, n_interactions, nr_atom_basis].
         Wij : torch.Tensor
             Filter of shape [n_interactions].
         dir_ij : torch.Tensor
@@ -305,7 +309,7 @@ class PaiNNMixing(nn.Module):
         """
         Parameters
         ----------
-        n_atom_basis : int
+        nr_atom_basis : int
             Number of features to describe atomic environments.
         activation : Callable
             Activation function to use.
@@ -314,7 +318,7 @@ class PaiNNMixing(nn.Module):
 
         Attributes
         ----------
-        n_atom_basis : int
+        nr_atom_basis : int
             Number of features to describe atomic environments.
         intra_atomic_net : nn.Sequential
             Neural network for intra-atomic interactions.

@@ -390,7 +390,7 @@ def _distance_to_radial_basis(
     return f_ij, rcut_ij
 
 
-def neighbor_pairs_nopbc(
+def pair_list(
     coordinates: torch.Tensor,
     atomic_subsystem_indices: torch.Tensor,
     cutoff: float,
@@ -425,7 +425,7 @@ def neighbor_pairs_nopbc(
 
         # i_indices = i_indices.reshape(-1)
         # j_indices = j_indices.reshape(-1)
-    
+
     # filter pairs to only keep those belonging to the same molecule
     same_molecule_mask = (
         atomic_subsystem_indices[i_indices] == atomic_subsystem_indices[j_indices]

@@ -97,7 +97,7 @@ class PaiNN(BaseNNP):
             inputs (Dict[str, torch.Tensor]): A dictionary containing the input tensors.
                 - "d_ij" (torch.Tensor): Pairwise distances between atoms. Shape: (n_pairs, 1, distance).
                 - "r_ij" (torch.Tensor): Displacement vector between atoms. Shape: (n_pairs, 1, 3).
-                - "atomic_numbers_embedding" (torch.Tensor): Embeddings of atomic numbers. Shape: (n_atoms, embedding_dim).
+                - "atomic_embedding" (torch.Tensor): Embeddings of atomic numbers. Shape: (n_atoms, embedding_dim).
 
         Returns:
             Dict[str, torch.Tensor]: A dictionary containing the transformed input tensors.
@@ -120,12 +120,12 @@ class PaiNN(BaseNNP):
             self.filter_list = [filters] * self.nr_interaction_blocks
         else:
             self.filter_list = torch.split(filters, 3 * self.n_atom_basis, dim=-1)
-        
-        # generate q and mu
-        atomic_numbers_embedding = inputs["atomic_numbers_embedding"]
-        qs = atomic_numbers_embedding.shape
 
-        q = atomic_numbers_embedding[:, None]
+        # generate q and mu
+        atomic_embedding = inputs["atomic_embedding"]
+        qs = atomic_embedding.shape
+
+        q = atomic_embedding[:, None]
         qs = q.shape
         mu = torch.zeros(
             (qs[0], 3, qs[2]), device=q.device
@@ -143,7 +143,7 @@ class PaiNN(BaseNNP):
         ----------
         input : Dict[str, torch.Tensor]
             Dictionary containing pairlist information.
-        atomic_numbers_embedding : torch.Tensor
+        atomic_embedding : torch.Tensor
             Tensor containing atomic number embeddings.
 
         Returns

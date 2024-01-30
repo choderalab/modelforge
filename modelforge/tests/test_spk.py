@@ -196,7 +196,7 @@ def test_painn_representation_implementation():
 
     schnetpack_results = schnetpack_painn(spk_input)
     modelforge_painn._set_dtype()
-    modelforge_input_1 = modelforge_painn.input_checks(modelforge_input)
+    modelforge_input_1 = modelforge_painn._input_checks(modelforge_input)
     modelforge_input_2 = modelforge_painn._prepare_input(modelforge_input_1)
 
     # ---------------------------------------- #

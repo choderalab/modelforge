@@ -77,7 +77,7 @@ def test_painn_interaction_equivariance():
     reference_prepared_input = painn._prepare_input(methane_input)
     reference_d_ij = reference_prepared_input["d_ij"]
     reference_r_ij = reference_prepared_input["r_ij"]
-    atomic_numbers_embedding = reference_prepared_input["atomic_numbers_embedding"]
+    atomic_embedding = reference_prepared_input["atomic_embedding"]
     reference_dir_ij = reference_r_ij / reference_d_ij
     reference_f_ij, _ = _distance_to_radial_basis(reference_d_ij, painn.radial_basis)
 

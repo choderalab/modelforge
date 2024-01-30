@@ -57,6 +57,14 @@ class SlicedEmbedding(nn.Module):
         self.sliced_dim = sliced_dim
 
     @property
+    def data(self):
+        return self.embedding.weight.data
+
+    @data.setter
+    def data(self, data):
+        self.embedding.weight.data = data
+
+    @property
     def embedding_dim(self):
         """
         Get the dimensionality of the embedding.
@@ -87,35 +95,54 @@ class SlicedEmbedding(nn.Module):
         return self.embedding(selected_tensor)
 
 
-def sequential_block(
-    in_features: int,
-    out_features: int,
-    activation_fct: Callable = nn.Identity,
-    bias: bool = True,
-) -> nn.Sequential:
-    """
-    Create a sequential block for the neural network.
+from torch.nn.init import xavier_uniform_
 
-    Parameters
-    ----------
-    in_features : int
-        Number of input features.
-    out_features : int
-        Number of output features.
-    activation_fct : Callable, optional
-        Activation function, default is nn.Identity.
-    bias : bool, optional
-        Whether to use bias in Linear layers, default is True.
+from torch.nn.init import zeros_
+import torch.nn.functional as F
 
-    Returns
-    -------
-    nn.Sequential
-        Sequential layer block.
+
+class Dense(nn.Linear):
+    r"""Fully connected linear layer with activation function.
+
+    .. math::
+       y = activation(x W^T + b)
     """
-    return nn.Sequential(
-        nn.Linear(in_features, out_features),
-        activation_fct(),
-    )
+
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        bias: bool = True,
+        activation: Union[Callable, nn.Module] = None,
+        weight_init: Callable = xavier_uniform_,
+        bias_init: Callable = zeros_,
+    ):
+        """
+        Args:
+            in_features: number of input feature :math:`x`.
+            out_features: umber of output features :math:`y`.
+            bias: If False, the layer will not adapt bias :math:`b`.
+            activation: if None, no activation function is used.
+            weight_init: weight initializer from current weight.
+            bias_init: bias initializer from current bias.
+        """
+        self.weight_init = weight_init
+        self.bias_init = bias_init
+        super(Dense, self).__init__(in_features, out_features, bias)
+
+        self.activation = activation
+        if self.activation is None:
+            self.activation = nn.Identity()
+
+    def reset_parameters(self):
+        self.weight_init(self.weight)
+        if self.bias is not None:
+            self.bias_init(self.bias)
+
+    def forward(self, input: torch.Tensor):
+        y = F.linear(input, self.weight, self.bias)
+        y = self.activation(y)
+        return y
 
 
 def gaussian_rbf(
@@ -142,7 +169,7 @@ def gaussian_rbf(
     coeff = -0.5 / torch.pow(widths, 2)
     diff = d_ij[..., None] - offsets
     y = torch.exp(coeff * torch.pow(diff, 2))
-    return y.to(dtype=torch.float32)
+    return y
 
 
 class CosineCutoff(nn.Module):
@@ -171,7 +198,7 @@ def cosine_cutoff(d_ij: torch.Tensor, cutoff: float) -> torch.Tensor:
     Parameters
     ----------
     d_ij : Tensor
-        Pairwise distance tensor. Shape: [..., N]
+        Pairwise distance tensor. Shape: [n_pairs, distance]
     cutoff : float
         The cutoff distance.
 
@@ -180,12 +207,44 @@ def cosine_cutoff(d_ij: torch.Tensor, cutoff: float) -> torch.Tensor:
     Tensor
         The cosine cutoff tensor. Shape: [..., N]
     """
-
     # Compute values of cutoff function
     input_cut = 0.5 * (torch.cos(d_ij * np.pi / cutoff) + 1.0)
     # Remove contributions beyond the cutoff radius
     input_cut = input_cut * (d_ij < cutoff)
     return input_cut
+
+
+def embed_atom_features(
+    atomic_numbers: torch.Tensor, embedding: nn.Embedding
+) -> torch.Tensor:
+    """
+    Embed atomic numbers to atom features.
+
+    Parameters
+    ----------
+    atomic_numbers : torch.Tensor
+        Atomic numbers of the atoms.
+    embedding : nn.Embedding
+        The embedding layer.
+
+    Returns
+    -------
+    torch.Tensor
+        The atom features.
+    """
+    # Perform atomic embedding
+    from .utils import SlicedEmbedding
+
+    assert isinstance(embedding, SlicedEmbedding), "embedding must be SlicedEmbedding"
+    assert embedding.embedding_dim > 0, "embedding_dim must be > 0"
+
+    atomic_embedding = embedding(
+        atomic_numbers
+    )  # shape (nr_of_atoms_in_batch, nr_atom_basis)
+    return atomic_embedding
+
+
+from typing import Dict
 
 
 class EnergyReadout(nn.Module):
@@ -198,54 +257,52 @@ class EnergyReadout(nn.Module):
         Forward pass for the energy readout.
     """
 
-    def __init__(self, n_atom_basis: int, nr_of_layers: int = 1):
+    def __init__(self, nr_atom_basis: int, nr_of_layers: int = 1):
         """
         Initialize the EnergyReadout class.
 
         Parameters
         ----------
-        n_atom_basis : int
+        nr_atom_basis : int
             Number of atom basis.
         """
         super().__init__()
         if nr_of_layers == 1:
-            self.energy_layer = nn.Linear(n_atom_basis, 1)
+            self.energy_layer = nn.Linear(nr_atom_basis, 1)
         else:
             activation_fct = nn.ReLU()
-            energy_layer_start = nn.Linear(n_atom_basis, n_atom_basis)
-            energy_layer_end = nn.Linear(n_atom_basis, 1)
+            energy_layer_start = nn.Linear(nr_atom_basis, nr_atom_basis)
+            energy_layer_end = nn.Linear(nr_atom_basis, 1)
             energy_layer_intermediate = [
-                (nn.Linear(n_atom_basis, n_atom_basis), activation_fct)
+                (nn.Linear(nr_atom_basis, nr_atom_basis), activation_fct)
                 for _ in range(nr_of_layers - 2)
             ]
             self.energy_layer = nn.Sequential(
                 energy_layer_end, *energy_layer_intermediate, energy_layer_start
             )
 
-    def forward(
-        self, x: torch.Tensor, atomic_subsystem_indices: torch.Tensor
-    ) -> torch.Tensor:
+    def forward(self, input: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
         Forward pass for the energy readout.
 
         Parameters
         ----------
-        x : Tensor, shape [nr_of_atoms_in_batch, n_atom_basis]
-            Input tensor for the forward pass.
-
+        input : Dict[str, torch.Tensor],
+            "scalar_representation", shape [nr_of_atoms_in_batch, nr_atom_basis]
+            "atomic_subsystem_indices", shape [nr_of_atoms_in_batch]
         Returns
         -------
         Tensor, shape [nr_of_moleculs_in_batch, 1]
             The total energy tensor.
         """
-
-        x = self.energy_layer(x)
+        x = self.energy_layer(input["scalar_representation"])
+        atomic_subsystem_indices = input["atomic_subsystem_indices"]
 
         # Perform scatter add operation
-        indices = atomic_subsystem_indices.to(torch.int64).unsqueeze(1)
-        result = torch.zeros(len(atomic_subsystem_indices.unique()), 1).scatter_add(
-            0, indices, x
-        )
+        indices = atomic_subsystem_indices.unsqueeze(1).to(torch.int64)
+        result = torch.zeros(
+            len(atomic_subsystem_indices.unique()), 1, dtype=x.dtype
+        ).scatter_add(0, indices, x)
 
         # Sum across feature dimension to get final tensor of shape (num_molecules, 1)
         total_energy_per_molecule = result.sum(dim=1, keepdim=True)
@@ -253,26 +310,26 @@ class EnergyReadout(nn.Module):
         return total_energy_per_molecule
 
 
-class ShiftedSoftplus(nn.Module):
+def shifted_softplus(x: torch.Tensor):
+    r"""Compute shifted soft-plus activation function.
+
+    .. math::
+       y = \ln\left(1 + e^{-x}\right) - \ln(2)
+
+    Args:
+        x (torch.Tensor): input tensor.
+
+    Returns:
+        torch.Tensor: shifted soft-plus of input.
+
     """
-    Compute shifted soft-plus activation function.
+    from torch.nn import functional
+    import math
 
-    Parameters
-    ----------
-    x : torch.Tensor
-        Input tensor.
+    return functional.softplus(x) - math.log(2.0)
 
-    Returns
-    -------
-    torch.Tensor
-        Transformed tensor.
-    """
 
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x):
-        return nn.functional.softplus(x) - np.log(2.0)
+from typing import Optional
 
 
 class GaussianRBF(nn.Module):
@@ -286,7 +343,12 @@ class GaussianRBF(nn.Module):
     """
 
     def __init__(
-        self, n_rbf: int, cutoff: float, start: float = 0.0, trainable: bool = False
+        self,
+        n_rbf: int,
+        cutoff: float,
+        start: float = 0.0,
+        trainable: bool = False,
+        dtype: Optional[torch.dtype] = None,
     ):
         """
         Initialize the GaussianRBF class.
@@ -307,9 +369,9 @@ class GaussianRBF(nn.Module):
         self.n_rbf = n_rbf
         self.cutoff = cutoff
         # compute offset and width of Gaussian functions
-        offset = torch.linspace(start, cutoff, n_rbf)
+        offset = torch.linspace(start, cutoff, n_rbf, dtype=dtype)
         widths = torch.tensor(
-            torch.abs(offset[1] - offset[0]) * torch.ones_like(offset),
+            torch.abs(offset[1] - offset[0]) * torch.ones_like(offset), dtype=dtype
         )
         if trainable:
             self.widths = nn.Parameter(widths)
@@ -343,7 +405,7 @@ def _distance_to_radial_basis(
 
     Parameters
     ----------
-    d_ij : torch.Tensor, shape [n_pairs]
+    d_ij : torch.Tensor, shape [n_pairs,1 ]
         Pairwise distances between atoms.
 
     Returns
@@ -352,13 +414,17 @@ def _distance_to_radial_basis(
         - Radial basis functions, shape [n_pairs, n_rbf]
         - cutoff values, shape [n_pairs]
     """
+    assert d_ij.dim() == 2
     f_ij = radial_basis(d_ij)
     rcut_ij = cosine_cutoff(d_ij, radial_basis.cutoff)
     return f_ij, rcut_ij
 
 
-def neighbor_pairs_nopbc(
-    coordinates: torch.Tensor, atomic_subsystem_indices: torch.Tensor, cutoff: float
+def pair_list(
+    coordinates: torch.Tensor,
+    atomic_subsystem_indices: torch.Tensor,
+    cutoff: float,
+    only_unique_pairs: bool = False,
 ) -> torch.Tensor:
     """Compute pairs of atoms that are neighbors (doesn't use PBC)
 
@@ -373,7 +439,22 @@ def neighbor_pairs_nopbc(
     positions = coordinates.detach()
     # generate index grid
     n = len(atomic_subsystem_indices)
-    i_indices, j_indices = torch.triu_indices(n, n, 1)
+
+    if only_unique_pairs:
+        i_indices, j_indices = torch.triu_indices(n, n, 1)
+    else:
+        # meshgrid, but remove the diagonal
+        i_indices, j_indices = torch.meshgrid(
+            torch.arange(start=0, end=n, dtype=torch.int64),
+            torch.arange(start=0, end=n, dtype=torch.int64),
+        )
+        # remove indices for which i_indices == j_indices
+        mask = i_indices != j_indices
+        i_indices = i_indices[mask]
+        j_indices = j_indices[mask]
+
+        # i_indices = i_indices.reshape(-1)
+        # j_indices = j_indices.reshape(-1)
 
     # filter pairs to only keep those belonging to the same molecule
     same_molecule_mask = (
@@ -392,7 +473,7 @@ def neighbor_pairs_nopbc(
     pair_coordinates = pair_coordinates.view(-1, 2, 3)
 
     # Calculate distances
-    distances = (pair_coordinates[:, 0, :] - pair_coordinates[:, 1, :]).norm(
+    distances = (pair_coordinates[:, 1, :] - pair_coordinates[:, 0, :]).norm(
         p=2, dim=-1
     )
 

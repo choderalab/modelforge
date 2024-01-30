@@ -35,4 +35,4 @@ dependencies:
 
   # pip installs
   - pip:
-      - schnetpack
+      - schnetpack>=2.0.0

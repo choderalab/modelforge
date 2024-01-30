@@ -450,9 +450,6 @@ def pair_list(
         i_indices = i_indices[mask]
         j_indices = j_indices[mask]
 
-        # i_indices = i_indices.reshape(-1)
-        # j_indices = j_indices.reshape(-1)
-
     # filter pairs to only keep those belonging to the same molecule
     same_molecule_mask = (
         atomic_subsystem_indices[i_indices] == atomic_subsystem_indices[j_indices]

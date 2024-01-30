@@ -152,7 +152,7 @@ def prepare_pairlist_for_single_batch(
 
     positions = batch["positions"]
     atomic_subsystem_indices = batch["atomic_subsystem_indices"]
-    pairlist = PairList(cutoff=5.0)
+    pairlist = PairList()
     return pairlist(positions, atomic_subsystem_indices)
 
 

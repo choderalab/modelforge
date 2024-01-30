@@ -97,6 +97,58 @@ class PairList(nn.Module):
         }
 
 
+class NeighbourList(PairList):
+    def __init__(self, cutoff: float, only_unique_pairs: bool = False):
+        """
+        Initialize PairList.
+
+        Parameters
+        ----------
+        cutoff : float
+            Cutoff distance for neighbor calculations.
+        only_unique_pairs : bool, optional
+            If set to True, only unique pairs of atoms are considered, default is False.
+        """
+        super().__init__(only_unique_pairs=only_unique_pairs)
+        from .utils import neighbor_list_with_cutoff
+
+        self.calculate_pairs = neighbor_list_with_cutoff
+        self.cutoff = cutoff
+
+    def forward(
+        self, positions: torch.Tensor, atomic_subsystem_indices: torch.Tensor
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Forward pass for PairList.
+
+        Parameters
+        ----------
+        positions : torch.Tensor, shape [nr_systems, nr_atoms, 3]
+            Position tensor.
+        atomic_subsystem_indices : torch.Tensor, shape [nr_atoms]
+        Returns
+        -------
+        dict : Dict[str, torch.Tensor], containing atom index pairs, distances, and displacement vectors.
+            - 'pair_indices': torch.Tensor, shape (2, n_pairs)
+            - 'r_ij' : torch.Tensor, shape (1, n_pairs)
+            - 'd_ij' : torch.Tenso, shape (3, n_pairs)
+
+        """
+        pair_indices = self.calculate_pairs(
+            positions,
+            atomic_subsystem_indices,
+            cutoff=self.cutoff,
+            only_unique_pairs=self.only_unique_pairs,
+        )
+        r_ij = self.calculate_r_ij(pair_indices, positions)
+
+        return {
+            "pair_indices": pair_indices,
+            "d_ij": self.calculate_d_ij(r_ij),
+            "r_ij": r_ij,
+        }
+
+
 class LightningModuleMixin(pl.LightningModule):
     """
     A mixin for PyTorch Lightning training.
@@ -167,7 +219,7 @@ class BaseNNP(nn.Module):
 
         super().__init__()
         self._cutoff = cutoff
-        self.calculate_distances_and_pairlist = PairList(cutoff)
+        self.calculate_distances_and_pairlist = PairList()
         self._dtype = None  # set at runtime
 
     def preate_input(self, inputs: Dict[str, torch.Tensor]):

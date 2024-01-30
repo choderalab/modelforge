@@ -214,6 +214,36 @@ def cosine_cutoff(d_ij: torch.Tensor, cutoff: float) -> torch.Tensor:
     return input_cut
 
 
+def embed_atom_features(
+    atomic_numbers: torch.Tensor, embedding: nn.Embedding
+) -> torch.Tensor:
+    """
+    Embed atomic numbers to atom features.
+
+    Parameters
+    ----------
+    atomic_numbers : torch.Tensor
+        Atomic numbers of the atoms.
+    embedding : nn.Embedding
+        The embedding layer.
+
+    Returns
+    -------
+    torch.Tensor
+        The atom features.
+    """
+    # Perform atomic embedding
+    from .utils import SlicedEmbedding
+
+    assert isinstance(embedding, SlicedEmbedding), "embedding must be SlicedEmbedding"
+    assert embedding.embedding_dim > 0, "embedding_dim must be > 0"
+
+    atomic_embedding = embedding(
+        atomic_numbers
+    )  # shape (nr_of_atoms_in_batch, nr_atom_basis)
+    return atomic_embedding
+
+
 from typing import Dict
 
 
@@ -227,24 +257,24 @@ class EnergyReadout(nn.Module):
         Forward pass for the energy readout.
     """
 
-    def __init__(self, n_atom_basis: int, nr_of_layers: int = 1):
+    def __init__(self, nr_atom_basis: int, nr_of_layers: int = 1):
         """
         Initialize the EnergyReadout class.
 
         Parameters
         ----------
-        n_atom_basis : int
+        nr_atom_basis : int
             Number of atom basis.
         """
         super().__init__()
         if nr_of_layers == 1:
-            self.energy_layer = nn.Linear(n_atom_basis, 1)
+            self.energy_layer = nn.Linear(nr_atom_basis, 1)
         else:
             activation_fct = nn.ReLU()
-            energy_layer_start = nn.Linear(n_atom_basis, n_atom_basis)
-            energy_layer_end = nn.Linear(n_atom_basis, 1)
+            energy_layer_start = nn.Linear(nr_atom_basis, nr_atom_basis)
+            energy_layer_end = nn.Linear(nr_atom_basis, 1)
             energy_layer_intermediate = [
-                (nn.Linear(n_atom_basis, n_atom_basis), activation_fct)
+                (nn.Linear(nr_atom_basis, nr_atom_basis), activation_fct)
                 for _ in range(nr_of_layers - 2)
             ]
             self.energy_layer = nn.Sequential(
@@ -258,7 +288,7 @@ class EnergyReadout(nn.Module):
         Parameters
         ----------
         input : Dict[str, torch.Tensor],
-            "scalar_representation", shape [nr_of_atoms_in_batch, n_atom_basis]
+            "scalar_representation", shape [nr_of_atoms_in_batch, nr_atom_basis]
             "atomic_subsystem_indices", shape [nr_of_atoms_in_batch]
         Returns
         -------
@@ -390,7 +420,7 @@ def _distance_to_radial_basis(
     return f_ij, rcut_ij
 
 
-def neighbor_pairs_nopbc(
+def pair_list(
     coordinates: torch.Tensor,
     atomic_subsystem_indices: torch.Tensor,
     cutoff: float,
@@ -425,7 +455,7 @@ def neighbor_pairs_nopbc(
 
         # i_indices = i_indices.reshape(-1)
         # j_indices = j_indices.reshape(-1)
-    
+
     # filter pairs to only keep those belonging to the same molecule
     same_molecule_mask = (
         atomic_subsystem_indices[i_indices] == atomic_subsystem_indices[j_indices]

@@ -214,6 +214,36 @@ def cosine_cutoff(d_ij: torch.Tensor, cutoff: float) -> torch.Tensor:
     return input_cut
 
 
+def embed_atom_features(
+    atomic_numbers: torch.Tensor, embedding: nn.Embedding
+) -> torch.Tensor:
+    """
+    Embed atomic numbers to atom features.
+
+    Parameters
+    ----------
+    atomic_numbers : torch.Tensor
+        Atomic numbers of the atoms.
+    embedding : nn.Embedding
+        The embedding layer.
+
+    Returns
+    -------
+    torch.Tensor
+        The atom features.
+    """
+    # Perform atomic embedding
+    from .utils import SlicedEmbedding
+
+    assert isinstance(embedding, SlicedEmbedding), "embedding must be SlicedEmbedding"
+    assert embedding.embedding_dim > 0, "embedding_dim must be > 0"
+
+    atomic_embedding = embedding(
+        atomic_numbers
+    )  # shape (nr_of_atoms_in_batch, n_atom_basis)
+    return atomic_embedding
+
+
 from typing import Dict
 
 

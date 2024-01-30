@@ -67,23 +67,10 @@ class SchNET(BaseNNP):
         return self.readout(inputs)
 
     def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
-        # Perform input
-        from .utils import SlicedEmbedding
+        # Perform atomic embedding
+        from modelforge.potential.utils import embed_atom_features
 
-        embedding = self.embedding
-
-        assert isinstance(
-            embedding, SlicedEmbedding
-        ), "embedding must be SlicedEmbedding"
-        assert embedding.embedding_dim > 0, "embedding_dim must be > 0"
-
-        atomic_embedding = embedding(inputs["atomic_numbers"])
-        # shape (nr_of_atoms_in_batch, n_atom_basis)
-        assert atomic_embedding.shape == (
-            inputs["nr_of_atoms_in_batch"],
-            self.nr_atom_basis,
-        )
-        # update inputs with atomic embedding
+        atomic_embedding = embed_atom_features(inputs["atomic_numbers"], self.embedding)
         inputs["atomic_embedding"] = atomic_embedding
         return inputs
 

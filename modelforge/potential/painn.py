@@ -1,3 +1,4 @@
+from torch._tensor import Tensor
 import torch.nn as nn
 from loguru import logger as log
 from typing import Dict, Type, Callable, Optional, Tuple
@@ -19,10 +20,10 @@ class PaiNN(BaseNNP):
 
     def __init__(
         self,
-        embedding: nn.Module,
+        embedding_module: nn.Module,
         nr_interaction_blocks: int,
-        radial_basis: nn.Module,
-        cutoff: nn.Module,
+        radial_basis_module: nn.Module,
+        cutoff_module: nn.Module,
         activation: Optional[Callable] = F.silu,
         shared_interactions: bool = False,
         shared_filters: bool = False,
@@ -32,7 +33,7 @@ class PaiNN(BaseNNP):
         Parameters
             ----------
             embedding : torch.Module, contains atomic species embedding.
-                Embedding dimensions also define self.n_atom_basis.
+                Embedding dimensions also define self.nr_atom_basis.
             nr_interaction_blocks : int
                 Number of interaction blocks.
             rbf : torch.Module
@@ -50,44 +51,61 @@ class PaiNN(BaseNNP):
         """
         from .utils import EnergyReadout
 
-        super().__init__(embedding)
-
-        self.n_atom_basis = embedding.embedding_dim
-
         log.debug("Initializing PaiNN model.")
-        log.debug(
-            f"Passed parameters to constructor: {self.nr_atom_basis=}, {nr_interaction_blocks=}, {cutoff=}"
-        )
-        log.debug(f"Initialized embedding: {embedding=}")
-
+        super().__init__(cutoff=cutoff_module.cutoff)
         self.nr_interaction_blocks = nr_interaction_blocks
-        self.radial_basis = radial_basis
-        self.cutoff = cutoff
+        self.cutoff_module = cutoff_module
         self.share_filters = shared_filters
-        self.readout = EnergyReadout(self.n_atom_basis)
+        self.radial_basis_module = radial_basis_module
 
+        # initialize the energy readout
+        self.nr_atom_basis = embedding_module.embedding_dim
+        self.readout_module = EnergyReadout(self.nr_atom_basis)
+
+        log.debug(
+            f"Passed parameters to constructor: {self.nr_atom_basis=}, {nr_interaction_blocks=}, {cutoff_module=}"
+        )
+        log.debug(f"Initialized embedding: {embedding_module=}")
+
+        # initialize the filter network
         if shared_filters:
             self.filter_net = nn.Sequential(
-                nn.Linear(self.radial_basis.n_rbf, 3 * self.n_atom_basis),
+                nn.Linear(self.radial_basis_module.n_rbf, 3 * self.nr_atom_basis),
                 nn.Identity(),
             )
         else:
             self.filter_net = nn.Sequential(
                 nn.Linear(
-                    self.radial_basis.n_rbf,
-                    self.nr_interaction_blocks * 3 * self.n_atom_basis,
+                    self.radial_basis_module.n_rbf,
+                    self.nr_interaction_blocks * 3 * self.nr_atom_basis,
                 ),
                 nn.Identity(),
             )
-        self.interactions = nn.ModuleList(
-            PaiNNInteraction(self.n_atom_basis, activation=activation)
+
+        # initialize the interaction and mixing networks
+        self.interaction_modules = nn.ModuleList(
+            PaiNNInteraction(self.nr_atom_basis, activation=activation)
             for _ in range(self.nr_interaction_blocks)
         )
-        self.mixing = nn.ModuleList(
-            PaiNNMixing(self.n_atom_basis, activation=activation, epsilon=epsilon)
+        self.mixing_module = nn.ModuleList(
+            PaiNNMixing(self.nr_atom_basis, activation=activation, epsilon=epsilon)
             for _ in range(self.nr_interaction_blocks)
         )
-        self.radial_basis = radial_basis
+        # save the embedding
+        self.embedding_module = embedding_module
+
+    def _readout(self, input: Dict[str, Tensor]):
+        return self.readout_module(input)
+
+    def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
+        # Perform atomic embedding
+        from modelforge.potential.utils import embed_atom_features
+
+        atomic_embedding = embed_atom_features(
+            inputs["atomic_numbers"], self.embedding_module
+        )
+        inputs["atomic_embedding"] = atomic_embedding
+        return inputs
 
     def _generate_representation(self, inputs: Dict[str, torch.Tensor]):
         """
@@ -111,15 +129,15 @@ class PaiNN(BaseNNP):
         d_ij = inputs["d_ij"]
         r_ij = inputs["r_ij"]
         dir_ij = r_ij / d_ij
-        f_ij, _ = _distance_to_radial_basis(d_ij, self.radial_basis)
+        f_ij, _ = _distance_to_radial_basis(d_ij, self.radial_basis_module)
 
-        fcut = self.cutoff(d_ij)  # n_pairs, 1
+        fcut = self.cutoff_module(d_ij)  # n_pairs, 1
 
         filters = self.filter_net(f_ij) * fcut[..., None]
         if self.share_filters:
             self.filter_list = [filters] * self.nr_interaction_blocks
         else:
-            self.filter_list = torch.split(filters, 3 * self.n_atom_basis, dim=-1)
+            self.filter_list = torch.split(filters, 3 * self.nr_atom_basis, dim=-1)
 
         # generate q and mu
         atomic_embedding = inputs["atomic_embedding"]
@@ -155,7 +173,9 @@ class PaiNN(BaseNNP):
         # extract properties from pairlist
         transformed_input = self._generate_representation(inputs)
 
-        for i, (interaction, mixing) in enumerate(zip(self.interactions, self.mixing)):
+        for i, (interaction, mixing) in enumerate(
+            zip(self.interaction_modules, self.mixing_module)
+        ):
             q, mu = interaction(
                 transformed_input["q"],
                 transformed_input["mu"],
@@ -366,10 +386,10 @@ class LighningPaiNN(PaiNN, LightningModuleMixin):
         """PyTorch Lightning version of the PaiNN model."""
 
         super().__init__(
-            embedding=embedding,
+            embedding_module=embedding,
             nr_interaction_blocks=nr_interaction_blocks,
-            radial_basis=radial_basis,
-            cutoff=cutoff,
+            radial_basis_module=radial_basis,
+            cutoff_module=cutoff,
             activation=activation,
             shared_interactions=shared_interactions,
             shared_filters=shared_filters,

@@ -172,7 +172,6 @@ class BaseNNP(nn.Module):
             Cutoff distance (in Angstrom) for neighbor calculations, default is 5.0.
         """
         from .models import PairList
-        from .utils import SlicedEmbedding
 
         super().__init__()
         self._cutoff = cutoff

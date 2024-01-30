@@ -55,10 +55,10 @@ def setup_simple_model(
                 nr_filters=nr_filters,
             )
         return SchNET(
-            embedding=embedding,
+            embedding_module=embedding,
             nr_interaction_blocks=nr_interaction_blocks,
-            radial_basis=rbf,
-            cutoff=cutoff,
+            radial_basis_module=rbf,
+            cutoff_module=cutoff,
             nr_filters=nr_filters,
         )
 
@@ -71,10 +71,10 @@ def setup_simple_model(
                 cutoff=cutoff,
             )
         return PaiNN(
-            embedding=embedding,
+            embedding_module=embedding,
             nr_interaction_blocks=nr_interaction_blocks,
-            radial_basis=rbf,
-            cutoff=cutoff,
+            radial_basis_module=rbf,
+            cutoff_module=cutoff,
         )
     else:
         raise NotImplementedError

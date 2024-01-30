@@ -23,7 +23,7 @@ dependencies:
   - rdkit
   - retry
   - sqlitedict
-  - schnetpack
+  - schnetpack>=2.0.0
 
   # Testing
   - pytest>=2.1
@@ -34,5 +34,5 @@ dependencies:
   - requests
 
   # pip installs
-  - pip:
-      - schnetpack>=2.0.0
+  #- pip:
+  #    - schnetpack>=2.0.0

@@ -14,13 +14,12 @@ dependencies:
   - qcportal>=0.50
   - pytorch>=2.1
   - loguru
-  - gdown
+  - gdown>=5.0.0
   - lightning=2.0.8
   - tensorboard
   - torchvision
   - openff-units
   - pint
-  - pedantic
   - rdkit
   - retry
   - sqlitedict

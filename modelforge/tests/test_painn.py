@@ -74,18 +74,22 @@ def test_painn_interaction_equivariance():
         methane_input["positions"], rotation_matrix
     )
 
-    reference_prepared_input = painn._prepare_input(methane_input)
+    reference_prepared_input = painn.prepare_inputs(methane_input)
     reference_d_ij = reference_prepared_input["d_ij"]
     reference_r_ij = reference_prepared_input["r_ij"]
     atomic_embedding = reference_prepared_input["atomic_embedding"]
     reference_dir_ij = reference_r_ij / reference_d_ij
-    reference_f_ij, _ = _distance_to_radial_basis(reference_d_ij, painn.radial_basis)
+    reference_f_ij, _ = _distance_to_radial_basis(
+        reference_d_ij, painn.radial_basis_module
+    )
 
-    perturbed_prepared_input = painn._prepare_input(perturbed_methane_input)
+    perturbed_prepared_input = painn.prepare_inputs(perturbed_methane_input)
     perturbed_d_ij = perturbed_prepared_input["d_ij"]
     perturbed_r_ij = perturbed_prepared_input["r_ij"]
     perturbed_dir_ij = perturbed_r_ij / perturbed_d_ij
-    perturbed_f_ij, _ = _distance_to_radial_basis(perturbed_d_ij, painn.radial_basis)
+    perturbed_f_ij, _ = _distance_to_radial_basis(
+        perturbed_d_ij, painn.radial_basis_module
+    )
 
     assert torch.allclose(reference_d_ij, perturbed_d_ij)
     assert torch.allclose(reference_f_ij, perturbed_f_ij)
@@ -110,7 +114,7 @@ def test_painn_interaction_equivariance():
         reference_tranformed_inputs["mu"], perturbed_tranformed_inputs["mu"]
     )
 
-    painn_interaction = painn.interactions[0]
+    painn_interaction = painn.interaction_modules[0]
 
     reference_r = painn_interaction(
         reference_tranformed_inputs["q"],
@@ -136,8 +140,12 @@ def test_painn_interaction_equivariance():
     assert not torch.allclose(reference_mu, perturbed_mu)
     # which is fine becuase this is directional dependent
 
-    mixed_reference_q, mixed_reference_mu = painn.mixing[0](reference_q, reference_mu)
-    mixed_perturbed_q, mixed_perturbed_mu = painn.mixing[0](perturbed_q, perturbed_mu)
+    mixed_reference_q, mixed_reference_mu = painn.mixing_modules[0](
+        reference_q, reference_mu
+    )
+    mixed_perturbed_q, mixed_perturbed_mu = painn.mixing_modules[0](
+        perturbed_q, perturbed_mu
+    )
     # NOTE: q should be invariant
     assert torch.allclose(mixed_reference_q, mixed_perturbed_q, atol=1e-2)
     # following will failre because the mu is not invariant

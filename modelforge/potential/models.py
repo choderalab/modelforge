@@ -178,7 +178,7 @@ class BaseNNP(nn.Module):
         self.calculate_distances_and_pairlist = PairList(cutoff)
         self._dtype = None  # set at runtime
 
-    def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
+    def preate_input(self, inputs: Dict[str, torch.Tensor]):
         # needs to be implemented by the subclass
         # if subclass needs any additional input preparation (e.g. embedding),
         # it should be done here
@@ -194,7 +194,7 @@ class BaseNNP(nn.Module):
         # perform the readout operation implemented in the subclass
         raise NotImplementedError
 
-    def _prepare_input(self, inputs: Dict[str, torch.Tensor]):
+    def _prepare_inputs(self, inputs: Dict[str, torch.Tensor]):
         atomic_numbers = inputs["atomic_numbers"]  # shape (nr_of_atoms_in_batch, 1)
         positions = inputs["positions"]  # shape (nr_of_atoms_in_batch, 3)
         atomic_subsystem_indices = inputs["atomic_subsystem_indices"]
@@ -277,10 +277,7 @@ class BaseNNP(nn.Module):
         # perform input checks
         inputs = self._input_checks(inputs)
         # prepare the input for the forward pass
-        inputs = self._prepare_input(inputs)
-        # if the subclass needs to perform addintalal input preparation (e.g. embedding),
-        # it can be done here
-        inputs = self._model_specific_input_preparation(inputs)
+        inputs = self.prepare_inputs(inputs)
         # perform the forward pass implemented in the subclass
         output = self._forward(inputs)
 

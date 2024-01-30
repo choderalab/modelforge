@@ -134,7 +134,7 @@ def setup_input():
     }
 
 
-def setup_spk_painn_representation(cutoff, n_atom_basis, n_rbf):
+def setup_spk_painn_representation(cutoff, nr_atom_basis, n_rbf):
     # ------------------------------------ #
     # set up the schnetpack Painn representation model
     from schnetpack.nn import GaussianRBF, CosineCutoff
@@ -143,14 +143,14 @@ def setup_spk_painn_representation(cutoff, n_atom_basis, n_rbf):
 
     radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
     return schnetpack_PaiNN(
-        n_atom_basis=n_atom_basis,
+        n_atom_basis=nr_atom_basis,
         n_interactions=3,
         radial_basis=radial_basis,
         cutoff_fn=CosineCutoff(cutoff),
     )
 
 
-def setup_modelforge_painn_representation(cutoff, n_atom_basis, n_rbf):
+def setup_modelforge_painn_representation(cutoff, nr_atom_basis, n_rbf):
     # ------------------------------------ #
     # set up the modelforge Painn representation model
     # which means that we only want to call the
@@ -159,15 +159,15 @@ def setup_modelforge_painn_representation(cutoff, n_atom_basis, n_rbf):
     from modelforge.potential.utils import SlicedEmbedding
     from modelforge.potential.painn import PaiNN
 
-    embedding = SlicedEmbedding(max_Z=100, embedding_dim=n_atom_basis, sliced_dim=0)
+    embedding = SlicedEmbedding(max_Z=100, embedding_dim=nr_atom_basis, sliced_dim=0)
     radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
     cutoff = CosineCutoff(cutoff)
 
     return PaiNN(
-        embedding=embedding,
+        embedding_module=embedding,
         nr_interaction_blocks=3,
-        radial_basis=radial_basis,
-        cutoff=cutoff,
+        radial_basis_module=radial_basis,
+        cutoff_module=cutoff,
     )
 
 
@@ -177,15 +177,15 @@ def test_painn_representation_implementation():
     # ---------------------------------------- #
 
     cutoff = 5.0
-    n_atom_basis = 8
+    nr_atom_basis = 8
     n_rbf = 5
     torch.manual_seed(1234)
     schnetpack_painn = setup_spk_painn_representation(
-        cutoff, n_atom_basis, n_rbf
+        cutoff, nr_atom_basis, n_rbf
     ).double()
     torch.manual_seed(1234)
     modelforge_painn = setup_modelforge_painn_representation(
-        cutoff, n_atom_basis, n_rbf
+        cutoff, nr_atom_basis, n_rbf
     ).double()
 
     # ------------------------------------ #
@@ -197,7 +197,7 @@ def test_painn_representation_implementation():
     schnetpack_results = schnetpack_painn(spk_input)
     modelforge_painn._set_dtype()
     modelforge_input_1 = modelforge_painn._input_checks(modelforge_input)
-    modelforge_input_2 = modelforge_painn._prepare_input(modelforge_input_1)
+    modelforge_input_2 = modelforge_painn.prepare_inputs(modelforge_input_1)
 
     # ---------------------------------------- #
     # test neighborlist and distance
@@ -215,14 +215,14 @@ def test_painn_representation_implementation():
     d_ij = torch.norm(r_ij, dim=1, keepdim=True)
     dir_ij = r_ij / d_ij
     schnetpack_phi_ij = schnetpack_painn.radial_basis(d_ij)
-    modelforge_phi_ij = modelforge_painn.radial_basis(d_ij)
+    modelforge_phi_ij = modelforge_painn.radial_basis_module(d_ij)
     assert torch.allclose(schnetpack_phi_ij, modelforge_phi_ij)
     phi_ij = schnetpack_phi_ij
     # ---------------------------------------- #
     # test cutoff
     # ---------------------------------------- #
     spk_fcut = schnetpack_painn.cutoff_fn(d_ij)
-    mf_fcut = modelforge_painn.cutoff(d_ij)
+    mf_fcut = modelforge_painn.cutoff_module(d_ij)
     assert torch.allclose(spk_fcut, mf_fcut)
 
     # ---------------------------------------- #
@@ -241,7 +241,7 @@ def test_painn_representation_implementation():
         spk_input[properties.Z], modelforge_input["atomic_numbers"].squeeze()
     )
     spk_embedding = schnetpack_painn.embedding(spk_input[properties.Z])
-    mf_embedding = modelforge_painn.embedding(modelforge_input["atomic_numbers"])
+    mf_embedding = modelforge_painn.embedding_module(modelforge_input["atomic_numbers"])
     assert torch.allclose(spk_embedding, mf_embedding)
 
     # ---------------------------------------- #
@@ -261,7 +261,7 @@ def test_painn_representation_implementation():
 
     # set up the filter and interaction, pass the input and compare the results
     # ---------------------------------------- #
-    mf_intra_net = modelforge_painn.interactions[0].intra_atomic_net
+    mf_intra_net = modelforge_painn.interaction_modules[0].intra_atomic_net
     spk_intra_net = schnetpack_painn.interactions[0].interatomic_context_net
     assert torch.allclose(mf_q, spk_q)
     # reset parameters
@@ -283,10 +283,10 @@ def test_painn_representation_implementation():
     )
     torch.manual_seed(1234)
     pair_indices = modelforge_input_2["pair_indices"]
-    filter_list = torch.split(mf_filters, 3 * modelforge_painn.n_atom_basis, dim=-1)
+    filter_list = torch.split(mf_filters, 3 * modelforge_painn.nr_atom_basis, dim=-1)
 
     # test intra-atomic NNP
-    mf_q, mf_mu = modelforge_painn.interactions[0](
+    mf_q, mf_mu = modelforge_painn.interaction_modules[0](
         mf_q,
         mf_mu,
         filter_list[0],
@@ -304,8 +304,11 @@ def test_painn_representation_implementation():
     # ---------------------------------------- #
     # reset parameters
     torch.manual_seed(1234)
-    [dense.reset_parameters() for dense in modelforge_painn.mixing[0].intra_atomic_net]
-    modelforge_painn.mixing[0].mu_channel_mix.reset_parameters()
+    [
+        dense.reset_parameters()
+        for dense in modelforge_painn.mixing_modules[0].intra_atomic_net
+    ]
+    modelforge_painn.mixing_modules[0].mu_channel_mix.reset_parameters()
     torch.manual_seed(1234)
     [
         dense.reset_parameters()
@@ -314,7 +317,7 @@ def test_painn_representation_implementation():
     schnetpack_painn.mixing[0].mu_channel_mix.reset_parameters()
 
     mixed_spk_q, mixed_spk_mu = schnetpack_painn.mixing[0](spk_q, spk_mu)
-    mixed_mf_q, mixed_mf_mu = modelforge_painn.mixing[0](mf_q, mf_mu)
+    mixed_mf_q, mixed_mf_mu = modelforge_painn.mixing_modules[0](mf_q, mf_mu)
     assert torch.allclose(mixed_mf_q, mixed_spk_q)
     assert torch.allclose(mixed_mf_mu, mixed_spk_mu)
 

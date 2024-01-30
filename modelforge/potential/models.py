@@ -11,12 +11,9 @@ from loguru import logger as log
 
 class PairList(nn.Module):
     """
-    A module to handle pair list calculations for neighbor atoms.
+    A module to handle pair list calculations for atoms.
+    This returns a pair list of atom indices and the displacement vectors between them.
 
-    Attributes
-    ----------
-    cutoff : float
-        The cutoff distance for neighbor calculations.
 
     Methods
     -------
@@ -26,22 +23,19 @@ class PairList(nn.Module):
         Forward pass for PairList.
     """
 
-    def __init__(self, cutoff: float = 5.0, only_unique_pairs: bool = False):
+    def __init__(self, only_unique_pairs: bool = False):
         """
         Initialize PairList.
 
         Parameters
         ----------
-        cutoff : float, optional
-            Cutoff distance for neighbor calculations, default is 5.0.
         only_unique_pairs : bool, optional
             If set to True, only unique pairs of atoms are considered, default is False.
         """
         super().__init__()
         from .utils import pair_list
 
-        self.calculate_neighbors = pair_list
-        self.cutoff = cutoff
+        self.calculate_pairs = pair_list
         self.only_unique_pairs = only_unique_pairs
 
     def calculate_r_ij(
@@ -90,10 +84,8 @@ class PairList(nn.Module):
             - 'd_ij' : torch.Tenso, shape (3, n_pairs)
 
         """
-        pair_indices = self.calculate_neighbors(
-            positions,
+        pair_indices = self.calculate_pairs(
             atomic_subsystem_indices,
-            self.cutoff,
             only_unique_pairs=self.only_unique_pairs,
         )
         r_ij = self.calculate_r_ij(pair_indices, positions)

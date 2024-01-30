@@ -32,23 +32,25 @@ class SchNET(BaseNNP):
         nr_filters : int, optional
             Number of filters; defines the dimensionality of the intermediate features (default is 2).
         """
-        from .utils import EnergyReadout
-
-        super().__init__(embedding)
-        self.nr_atom_basis = embedding.embedding_dim
 
         log.debug("Initializing SchNet model.")
-        log.debug(
-            f"Passed parameters to constructor: {self.nr_atom_basis=}, {nr_interaction_blocks=}, {nr_filters=}, {cutoff=}"
-        )
-        log.debug(f"Initialized embedding: {embedding=}")
-
+        super().__init__()
         self.radial_basis = radial_basis
         self.cutoff = cutoff
 
-        # Initialize representation, readout, and interaction layers
-        self.schnet_representation = SchNETRepresentation(self.radial_basis)
+        # initialize the energy readout
+        from .utils import EnergyReadout
+
+        self.nr_atom_basis = embedding.embedding_dim
         self.readout = EnergyReadout(self.nr_atom_basis)
+
+        log.debug(
+            f"Passed parameters to constructor: {self.nr_atom_basis=}, {nr_interaction_blocks=}, {nr_filters=}, {cutoff=}"
+        )
+
+        # Initialize representation block
+        self.schnet_representation = SchNETRepresentation(self.radial_basis)
+        # Intialize interaction blocks
         self.interactions = nn.ModuleList(
             [
                 SchNETInteractionBlock(
@@ -57,6 +59,33 @@ class SchNET(BaseNNP):
                 for _ in range(nr_interaction_blocks)
             ]
         )
+        # save the embedding
+        self.embedding = embedding
+
+    def _readout(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
+        # Compute the energy for each system
+        return self.readout(inputs)
+
+    def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
+        # Perform input
+        from .utils import SlicedEmbedding
+
+        embedding = self.embedding
+
+        assert isinstance(
+            embedding, SlicedEmbedding
+        ), "embedding must be SlicedEmbedding"
+        assert embedding.embedding_dim > 0, "embedding_dim must be > 0"
+
+        atomic_embedding = embedding(inputs["atomic_numbers"])
+        # shape (nr_of_atoms_in_batch, n_atom_basis)
+        assert atomic_embedding.shape == (
+            inputs["nr_of_atoms_in_batch"],
+            self.nr_atom_basis,
+        )
+        # update inputs with atomic embedding
+        inputs["atomic_embedding"] = atomic_embedding
+        return inputs
 
     def _forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
@@ -64,14 +93,14 @@ class SchNET(BaseNNP):
 
         Parameters
         ----------
-        atomic_numbers_embedding : torch.Tensor
+        atomic_embedding : torch.Tensor
             Atomic numbers embedding; shape (nr_of_atoms_in_systems, 1, n_atom_basis).
         inputs : Dict[str, torch.Tensor]
         - pairlist:  shape (n_pairs, 2)
         - r_ij:  shape (n_pairs, 1)
         - d_ij:  shape (n_pairs, 3)
         - positions:  shape (nr_of_atoms_per_molecules, 3)
-        - atomic_numbers_embedding:  shape (nr_of_atoms_in_systems, n_atom_basis)
+        - atomic_embedding:  shape (nr_of_atoms_in_systems, n_atom_basis)
 
 
         Returns
@@ -82,7 +111,7 @@ class SchNET(BaseNNP):
 
         # Compute the representation for each atom
         representation = self.schnet_representation(inputs["d_ij"])
-        x = inputs["atomic_numbers_embedding"]
+        x = inputs["atomic_embedding"]
         # Iterate over interaction blocks to update features
         for interaction in self.interactions:
             v = interaction(

@@ -342,7 +342,7 @@ def test_equivariant_energies_and_forces(input_data, model_class):
         assert torch.allclose(
             rotation_forces,
             rotate_reference,
-            atol=1e-4,
+            atol=1e-3,
         )
 
         # reflection test

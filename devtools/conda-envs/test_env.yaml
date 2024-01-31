@@ -10,6 +10,7 @@ dependencies:
   - h5py
   - requests
   - tqdm
+  - openmm
   - qcelemental=0.25.1
   - qcportal>=0.50
   - pytorch>=2.1

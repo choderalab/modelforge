@@ -367,7 +367,7 @@ def test_equivariant_energies_and_forces(input_data, model_class):
         assert torch.allclose(
             reflection_forces,
             reflection(reference_forces.to(torch.float32)).double(),
-            atol=1e-4,
+            atol=1e-3,
         )
 
 

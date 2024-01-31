@@ -5,7 +5,7 @@ from loguru import logger as log
 import torch.nn as nn
 
 from .models import BaseNNP, LightningModuleMixin
-from .utils import _distance_to_radial_basis, shifted_softplus
+from .utils import _distance_to_radial_basis, _shifted_softplus
 
 
 class SchNET(BaseNNP):
@@ -17,7 +17,7 @@ class SchNET(BaseNNP):
         cutoff_module: nn.Module,
         nr_filters: int = 2,
         shared_interactions: bool = False,
-        activation: nn.Module = shifted_softplus,
+        activation: nn.Module = _shifted_softplus,
     ) -> None:
         """
         Initialize the SchNet class.
@@ -139,7 +139,7 @@ class SchNETInteractionBlock(nn.Module):
             Number of radial basis functions.
         """
         super().__init__()
-        from .utils import shifted_softplus, Dense
+        from .utils import _shifted_softplus, Dense
 
         assert nr_rbf > 4, "Number of radial basis functions must be larger than 10."
         assert nr_filters > 1, "Number of filters must be larger than 1."
@@ -148,11 +148,11 @@ class SchNETInteractionBlock(nn.Module):
         self.nr_atom_basis = nr_atom_basis  # Initialize parameters
         self.intput_to_feature = nn.Linear(nr_atom_basis, nr_filters)
         self.feature_to_output = nn.Sequential(
-            Dense(nr_filters, nr_atom_basis, activation=shifted_softplus),
+            Dense(nr_filters, nr_atom_basis, activation=_shifted_softplus),
             Dense(nr_atom_basis, nr_atom_basis, activation=None),
         )
         self.filter_network = nn.Sequential(
-            Dense(nr_rbf, nr_filters, activation=shifted_softplus),
+            Dense(nr_rbf, nr_filters, activation=_shifted_softplus),
             Dense(nr_filters, nr_filters, activation=None),
         )
 
@@ -263,7 +263,7 @@ class LightningSchNET(SchNET, LightningModuleMixin):
         cutoff: nn.Module,
         nr_filters: int = 2,
         shared_interactions: bool = False,
-        activation: nn.Module = shifted_softplus,
+        activation: nn.Module = _shifted_softplus,
         loss: Type[nn.Module] = nn.MSELoss(),
         optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
         lr: float = 1e-3,

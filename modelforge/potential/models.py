@@ -9,11 +9,10 @@ from torch.optim import AdamW
 from loguru import logger as log
 
 
-class PairList(nn.Module):
+class _PairList(nn.Module):
     """
-    A module to handle pair list calculations for atoms.
+    A private module to handle pair list calculations for atoms.
     This returns a pair list of atom indices and the displacement vectors between them.
-
 
     Methods
     -------
@@ -33,12 +32,12 @@ class PairList(nn.Module):
             If set to True, only unique pairs of atoms are considered, default is False.
         """
         super().__init__()
-        from .utils import pair_list
+        from .utils import _pair_list
 
-        self.calculate_pairs = pair_list
+        self.calculate_pairs = _pair_list
         self.only_unique_pairs = only_unique_pairs
 
-    def calculate_r_ij(
+    def _calculate_r_ij(
         self, pair_indices: torch.Tensor, positions: torch.Tensor
     ) -> torch.Tensor:
         """Compute displacement vector between atom pairs.
@@ -61,7 +60,7 @@ class PairList(nn.Module):
         )
         return selected_positions[1] - selected_positions[0]
 
-    def calculate_d_ij(self, r_ij):
+    def _calculate_d_ij(self, r_ij):
         # Calculate the euclidian distance between the atoms in the pair
         return r_ij.norm(2, -1).unsqueeze(-1)
 
@@ -88,16 +87,16 @@ class PairList(nn.Module):
             atomic_subsystem_indices,
             only_unique_pairs=self.only_unique_pairs,
         )
-        r_ij = self.calculate_r_ij(pair_indices, positions)
+        r_ij = self._calculate_r_ij(pair_indices, positions)
 
         return {
             "pair_indices": pair_indices,
-            "d_ij": self.calculate_d_ij(r_ij),
+            "d_ij": self._calculate_d_ij(r_ij),
             "r_ij": r_ij,
         }
 
 
-class NeighbourList(PairList):
+class _NeighbourList(_PairList):
     def __init__(self, cutoff: float, only_unique_pairs: bool = False):
         """
         Initialize PairList.
@@ -110,9 +109,9 @@ class NeighbourList(PairList):
             If set to True, only unique pairs of atoms are considered, default is False.
         """
         super().__init__(only_unique_pairs=only_unique_pairs)
-        from .utils import neighbor_list_with_cutoff
+        from .utils import _neighbor_list_with_cutoff
 
-        self.calculate_pairs = neighbor_list_with_cutoff
+        self.calculate_pairs = _neighbor_list_with_cutoff
         self.cutoff = cutoff
 
     def forward(
@@ -140,11 +139,11 @@ class NeighbourList(PairList):
             cutoff=self.cutoff,
             only_unique_pairs=self.only_unique_pairs,
         )
-        r_ij = self.calculate_r_ij(pair_indices, positions)
+        r_ij = self._calculate_r_ij(pair_indices, positions)
 
         return {
             "pair_indices": pair_indices,
-            "d_ij": self.calculate_d_ij(r_ij),
+            "d_ij": self._calculate_d_ij(r_ij),
             "r_ij": r_ij,
         }
 
@@ -198,28 +197,28 @@ class LightningModuleMixin(pl.LightningModule):
         return self.optimizer(self.parameters(), lr=self.learning_rate)
 
 
+from openmm import unit
+
+
 class BaseNNP(nn.Module):
     """
     Base class for neural network potentials.
     """
 
-    def __init__(
-        self,
-        cutoff: float = 5.0,
-    ):
+    def __init__(self, cutoff: unit.Quantity = unit.Quantity(0.5, unit.nanometer)):
         """
         Initialize the NNP class.
 
         Parameters
         ----------
-        cutoff : float, optional
-            Cutoff distance (in Angstrom) for neighbor calculations, default is 5.0.
+        cutoff : unit.Quantity, optional
+            Cutoff distance for atom centered interactions, default is 0.5 nanometer.
         """
-        from .models import PairList
+        from .models import _PairList
 
         super().__init__()
-        self._cutoff = cutoff
-        self.calculate_distances_and_pairlist = PairList()
+        self._cutoff = cutoff.value_in_unit_system(unit.md_unit_system)
+        self.calculate_distances_and_pairlist = _PairList()
         self._dtype = None  # set at runtime
 
     def preate_input(self, inputs: Dict[str, torch.Tensor]):
@@ -268,7 +267,7 @@ class BaseNNP(nn.Module):
 
         Parameters
         ----------
-        inputs : Dict[str, torch.Tensor]
+        inputs : Dict[str, torch.Tensor], with distance units attached
             Inputs containing necessary data for the forward pass.
             The exact keys and shapes are implementation-dependent.
 
@@ -278,6 +277,8 @@ class BaseNNP(nn.Module):
             If the input dictionary is missing required keys or has invalid shapes.
 
         """
+        from openmm import unit
+
         required_keys = ["atomic_numbers", "positions", "atomic_subsystem_indices"]
         for key in required_keys:
             if key not in inputs:
@@ -296,6 +297,16 @@ class BaseNNP(nn.Module):
                 f"Setting dtype of positions tensor to {self._dtype}."
             )
             inputs["positions"] = inputs["positions"].to(self._dtype)
+
+        try:
+            inputs["positions"] = inputs["positions"].value_in_unit_system(
+                unit.md_unit_system
+            )
+        except AttributeError:
+            log.warning(
+                "Could not convert positions to nanometer. Assuming positions are already in nanometer."
+            )
+
         return inputs
 
     def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
@@ -308,7 +319,7 @@ class BaseNNP(nn.Module):
             Inputs containing atomic numbers ('atomic_numbers'), coordinates ('positions') and pairlist ('pairlist').
             - 'atomic_numbers': int; shape (nr_of_atoms_in_batch, 1), 0 indicates non-interacting atoms that will be masked
             - 'total_charge' : int; shape (n_system)
-            - 'positions': float; shape (nr_of_atoms_in_batch, 3)
+            - 'positions': float; shape (nr_of_atoms_in_batch, 3), with openmm units attached
 
         Returns
         -------

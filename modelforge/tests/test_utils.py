@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import pytest
 
-from modelforge.potential.utils import CosineCutoff, cosine_cutoff, GaussianRBF
+from modelforge.potential.utils import CosineCutoff, _cosine_cutoff, _GaussianRBF
 
 
 def test_cosine_cutoff():
@@ -19,7 +19,7 @@ def test_cosine_cutoff():
     expected_output = 0.5 * (np.cos(np.pi * d_ij / cutoff) + 1) if d_ij <= cutoff else 0
 
     # Calculate actual output
-    actual_output = cosine_cutoff(d_ij, cutoff)
+    actual_output = _cosine_cutoff(d_ij, cutoff)
 
     # Check if the results are equal
     assert np.isclose(actual_output, expected_output)
@@ -27,7 +27,7 @@ def test_cosine_cutoff():
     d_ij = torch.tensor([1.0, 2.0, 3.0])
     cutoff = 2.0
     expected_output = torch.tensor([0.5, 0.0, 0.0])
-    output = cosine_cutoff(d_ij, cutoff)
+    output = _cosine_cutoff(d_ij, cutoff)
     assert torch.allclose(output, expected_output, rtol=1e-3)
 
 
@@ -41,7 +41,7 @@ def test_cosine_cutoff_module():
     assert torch.allclose(output, expected_output, rtol=1e-3)
 
 
-@pytest.mark.parametrize("RBF", [GaussianRBF])
+@pytest.mark.parametrize("RBF", [_GaussianRBF])
 def test_rbf(RBF):
     """
     Test the Gaussian Radial Basis Function (RBF) implementation.
@@ -59,7 +59,7 @@ def test_rbf(RBF):
     assert output.shape[2] == 20  # n_rbf dimension
 
 
-@pytest.mark.parametrize("RBF", [GaussianRBF])
+@pytest.mark.parametrize("RBF", [_GaussianRBF])
 def test_gaussian_rbf(RBF):
     # Check dimensions of output and output
     n_rbf = 5
@@ -89,7 +89,7 @@ def test_gaussian_rbf(RBF):
     assert expected_output.shape == (3, n_rbf)
 
 
-@pytest.mark.parametrize("RBF", [GaussianRBF])
+@pytest.mark.parametrize("RBF", [_GaussianRBF])
 def test_rbf_invariance(RBF):
     # Define a set of coordinates
     coordinates = torch.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]])
@@ -141,11 +141,11 @@ def test_GaussianRBF():
     Test the GaussianRBF layer.
     """
 
-    from modelforge.potential import GaussianRBF
+    from modelforge.potential import _GaussianRBF
 
     n_rbf = 10
     dim_of_x = 3
-    layer = GaussianRBF(10, 5.0)
+    layer = _GaussianRBF(10, 5.0)
     x = torch.tensor([1.0, 2.0, 3.0], dtype=torch.float32)
     y = layer(x)  # Shape: [dim_of_x, n_rbf]
 

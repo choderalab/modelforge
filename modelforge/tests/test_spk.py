@@ -3,13 +3,13 @@ import torch
 
 def test_gaussian_rbf_implementation():
     # compare schnetpack GaussianRBF with modelforge GaussianRBF
-    from modelforge.potential.utils import GaussianRBF
+    from modelforge.potential.utils import _GaussianRBF
     from schnetpack.nn import GaussianRBF as schnetpack_GaussianRBF
 
     n_rbf = 2
     cutoff = 5.0
     schnetpack_rbf = schnetpack_GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
-    rbf = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
+    rbf = _GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
 
     r = torch.rand(5, 3)
     schnetpack_rbf(r)
@@ -155,12 +155,12 @@ def setup_modelforge_painn_representation(cutoff, nr_atom_basis, n_rbf):
     # set up the modelforge Painn representation model
     # which means that we only want to call the
     # _transform_input() method
-    from modelforge.potential import CosineCutoff, GaussianRBF
+    from modelforge.potential import CosineCutoff, _GaussianRBF
     from modelforge.potential.utils import SlicedEmbedding
     from modelforge.potential.painn import PaiNN
 
     embedding = SlicedEmbedding(max_Z=100, embedding_dim=nr_atom_basis, sliced_dim=0)
-    radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
+    radial_basis = _GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
     cutoff = CosineCutoff(cutoff)
 
     return PaiNN(

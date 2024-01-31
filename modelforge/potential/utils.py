@@ -188,12 +188,12 @@ class CosineCutoff(nn.Module):
         self.register_buffer("cutoff", torch.FloatTensor([cutoff]))
 
     def forward(self, input: torch.Tensor):
-        return cosine_cutoff(input, self.cutoff)
+        return _cosine_cutoff(input, self.cutoff)
 
 
-def cosine_cutoff(d_ij: torch.Tensor, cutoff: float) -> torch.Tensor:
+def _cosine_cutoff(d_ij: torch.Tensor, cutoff: float) -> torch.Tensor:
     """
-    Compute the cosine cutoff for a distance tensor.
+    Compute the cosine cutoff for a distance tensor. All distances are in nanometer
 
     Parameters
     ----------
@@ -310,7 +310,7 @@ class EnergyReadout(nn.Module):
         return total_energy_per_molecule
 
 
-def shifted_softplus(x: torch.Tensor):
+def _shifted_softplus(x: torch.Tensor):
     r"""Compute shifted soft-plus activation function.
 
     .. math::
@@ -326,13 +326,13 @@ def shifted_softplus(x: torch.Tensor):
     from torch.nn import functional
     import math
 
-    return functional.softplus(x) - math.log(2.0)
+    return functional.softplus(x) - math.log(0.2)
 
 
 from typing import Optional
 
 
-class GaussianRBF(nn.Module):
+class _GaussianRBF(nn.Module):
     """
     Gaussian Radial Basis Function module.
 
@@ -345,7 +345,7 @@ class GaussianRBF(nn.Module):
     def __init__(
         self,
         n_rbf: int,
-        cutoff: float,
+        cutoff: float,  # in nanometer
         start: float = 0.0,
         trainable: bool = False,
         dtype: Optional[torch.dtype] = None,
@@ -416,11 +416,11 @@ def _distance_to_radial_basis(
     """
     assert d_ij.dim() == 2
     f_ij = radial_basis(d_ij)
-    rcut_ij = cosine_cutoff(d_ij, radial_basis.cutoff)
+    rcut_ij = _cosine_cutoff(d_ij, radial_basis.cutoff)
     return f_ij, rcut_ij
 
 
-def pair_list(
+def _pair_list(
     atomic_subsystem_indices: torch.Tensor,
     only_unique_pairs: bool = False,
 ) -> torch.Tensor:
@@ -431,7 +431,7 @@ def pair_list(
     atomic_subsystem_indices : torch.Tensor, shape (nr_atoms_per_systems)
         Atom indices to indicate which atoms belong to which molecule
     only_unique_pairs : bool, optional
-        If True, only unique pairs are returned (default is False). 
+        If True, only unique pairs are returned (default is False).
         Otherwise, all pairs are returned.
     """
     # generate index grid
@@ -465,24 +465,27 @@ def pair_list(
     return pair_indices
 
 
-def neighbor_list_with_cutoff(
-    coordinates: torch.Tensor,
+from openmm import unit
+
+
+def _neighbor_list_with_cutoff(
+    coordinates: torch.Tensor,  # in nanometer
     atomic_subsystem_indices: torch.Tensor,
-    cutoff: float,
+    cutoff: unit.Quantity,
     only_unique_pairs: bool = False,
 ) -> torch.Tensor:
     """Compute all pairs of atoms and their distances.
 
     Parameters
     ----------
-    coordinates : torch.Tensor, shape (nr_atoms_per_systems, 3)
+    coordinates : torch.Tensor, shape (nr_atoms_per_systems, 3), in nanometer
     atomic_subsystem_indices : torch.Tensor, shape (nr_atoms_per_systems)
         Atom indices to indicate which atoms belong to which molecule
-    cutoff : float
+    cutoff : unit.Quantity
         The cutoff distance.
     """
     positions = coordinates.detach()
-    pair_indices = pair_list(
+    pair_indices = _pair_list(
         atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
     )
 

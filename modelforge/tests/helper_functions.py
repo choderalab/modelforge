@@ -37,12 +37,12 @@ def setup_simple_model(
     Optional[BaseNNP]
         Initialized model.
     """
-    from modelforge.potential import CosineCutoff, GaussianRBF
+    from modelforge.potential import CosineCutoff, _GaussianRBF
     from modelforge.potential.utils import SlicedEmbedding
 
     embedding = SlicedEmbedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
     assert embedding.embedding_dim == nr_atom_basis
-    rbf = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
+    rbf = _GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
     cutoff = CosineCutoff(cutoff)
 
     if model_class is SchNET:
@@ -148,11 +148,11 @@ def prepare_pairlist_for_single_batch(
         Pairlist with keys 'atom_index12', 'd_ij', 'r_ij'.
     """
 
-    from modelforge.potential.models import PairList
+    from modelforge.potential.models import _PairList
 
     positions = batch["positions"]
     atomic_subsystem_indices = batch["atomic_subsystem_indices"]
-    pairlist = PairList()
+    pairlist = _PairList()
     return pairlist(positions, atomic_subsystem_indices)
 
 
@@ -224,13 +224,15 @@ def generate_interaction_block_data(
     import torch.nn as nn
 
     from modelforge.dataset.qm9 import QM9Dataset
-    from modelforge.potential import GaussianRBF
+    from modelforge.potential import _GaussianRBF
     from modelforge.potential.utils import _distance_to_radial_basis
 
     embedding = nn.Embedding(nr_embeddings, nr_atom_basis, padding_idx=0)
     batch = return_single_batch(QM9Dataset, "fit")
     r = prepare_pairlist_for_single_batch(batch)
-    radial_basis = GaussianRBF(n_rbf=nr_rbf, cutoff=5.0, dtype=batch["positions"].dtype)
+    radial_basis = _GaussianRBF(
+        n_rbf=nr_rbf, cutoff=5.0, dtype=batch["positions"].dtype
+    )
 
     d_ij = r["d_ij"]
     f_ij, rcut_ij = _distance_to_radial_basis(d_ij, radial_basis)

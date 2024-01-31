@@ -205,19 +205,19 @@ class BaseNNP(nn.Module):
     Base class for neural network potentials.
     """
 
-    def __init__(self, cutoff: unit.Quantity = unit.Quantity(0.5, unit.nanometer)):
+    def __init__(self, cutoff: float):
         """
         Initialize the NNP class.
 
         Parameters
         ----------
-        cutoff : unit.Quantity, optional
-            Cutoff distance for atom centered interactions, default is 0.5 nanometer.
+        cutoff : float
+            Cutoff distance for atom centered interactions, in nanometer.
         """
         from .models import _PairList
 
         super().__init__()
-        self._cutoff = cutoff.value_in_unit_system(unit.md_unit_system)
+        self._cutoff = cutoff
         self.calculate_distances_and_pairlist = _PairList()
         self._dtype = None  # set at runtime
 

@@ -43,7 +43,9 @@ def setup_simple_model(
     embedding = SlicedEmbedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
     assert embedding.embedding_dim == nr_atom_basis
     rbf = _GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
-    cutoff = CosineCutoff(cutoff)
+    from openmm import unit
+
+    cutoff = CosineCutoff(unit.Quantity(cutoff, unit.angstrom))
 
     if model_class is SchNET:
         if lightning:

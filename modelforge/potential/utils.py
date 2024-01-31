@@ -172,19 +172,22 @@ def gaussian_rbf(
     return y
 
 
+from openmm import unit
+
+
 class CosineCutoff(nn.Module):
-    def __init__(self, cutoff: float):
-        r"""
+    def __init__(self, cutoff: unit.Quantity):
+        """
         Behler-style cosine cutoff module.
 
-        Args:
-            cutoff (float): The cutoff distance.
-
-        Attributes:
-            cutoff (torch.Tensor): The cutoff distance as a tensor.
+        Parameters:
+        ----------
+        cutoff: unit.Quantity
+            The cutoff distance.
 
         """
         super().__init__()
+        cutoff = cutoff.value_in_unit_system(unit.md_unit_system)
         self.register_buffer("cutoff", torch.FloatTensor([cutoff]))
 
     def forward(self, input: torch.Tensor):

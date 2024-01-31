@@ -34,7 +34,7 @@ class SchNET(BaseNNP):
         """
 
         log.debug("Initializing SchNet model.")
-        super().__init__(cutoff=cutoff_module.cutoff)
+        super().__init__(cutoff=float(cutoff_module.cutoff))
         self.radial_basis_module = radial_basis_module
         self.cutoff_module = cutoff_module
 

@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 import torch
 
-from modelforge.dataset.dataset import DatasetFactory, TorchDataset
+from modelforge.dataset.dataset import DatasetFactory, TorchDataset, collate_conformers, TorchDataModule
 from loguru import logger
 
 from .helper_functions import initialize_dataset, DATASETS
@@ -67,6 +67,7 @@ def test_dataset_basic_operations():
     input_data = {"geometry": np.arange(geom_shape[0] * geom_shape[1]).reshape(geom_shape),
                   "atomic_numbers": np.arange(atomic_numbers_shape[0]).reshape(atomic_numbers_shape),
                   "internal_energy_at_0K": np.arange(internal_energy_shape[0]).reshape(internal_energy_shape),
+
                   "atomic_subsystem_counts": atomic_subsystem_counts,
                   "n_confs": n_confs}
 
@@ -102,12 +103,39 @@ def test_dataset_basic_operations():
 
     for conf_idx in range(len(dataset)):
         conf_data = dataset[conf_idx]
-        assert(np.array_equal(conf_data["positions"], geom_true[conf_idx]))
-        assert(np.array_equal(conf_data["atomic_numbers"], atomic_numbers_true[conf_idx]))
-        assert(np.array_equal(conf_data["E_label"], energy_true[conf_idx]))
+        assert (np.array_equal(conf_data["positions"], geom_true[conf_idx]))
+        assert (np.array_equal(conf_data["atomic_numbers"], atomic_numbers_true[conf_idx]))
+        assert (np.array_equal(conf_data["E_label"], energy_true[conf_idx]))
 
     for rec_idx in range(dataset.record_len()):
-        assert(np.array_equal(dataset.get_series_mol_idxs(rec_idx), series_mol_idxs[rec_idx]))
+        assert (np.array_equal(dataset.get_series_mol_idxs(rec_idx), series_mol_idxs[rec_idx]))
+
+
+@pytest.mark.parametrize("dataset", DATASETS)
+def test_one_conf_dataloader(dataset):
+    factory = DatasetFactory()
+    data = dataset(for_unit_testing=True)
+    dataset = factory.create_dataset(data)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, collate_fn=collate_conformers)
+    dataloader_iter = iter(dataloader)
+    conf = next(dataloader_iter)
+    assert conf["positions"].ndim == 2
+    assert conf["positions"].shape[1] == 3
+    assert conf["atomic_numbers"].ndim == 2
+    assert conf["atomic_numbers"].shape[1] == 1
+    assert conf["positions"].shape[0] == conf["atomic_numbers"].shape[0]
+    assert conf["E_label"].shape == (1, 1)
+
+@pytest.mark.parametrize("dataset", DATASETS)
+def test_dataloader_edge(dataset):
+    data = dataset(for_unit_testing=True)
+    data_module = TorchDataModule(data)
+    data_module.prepare_data()
+    data_module.setup("fit")
+    for mode in ['train', 'val', 'all']:
+        dataloader = data_module.dataloader_edge(mode, cutoff=float('inf'), max_batch_edges=float('inf'))
+        dataloader_list = list(dataloader)
+        assert len(dataloader_list) == 1
 
 
 @pytest.mark.parametrize("dataset", DATASETS)

@@ -5,16 +5,19 @@ def test_gaussian_rbf_implementation():
     # compare schnetpack GaussianRBF with modelforge GaussianRBF
     from modelforge.potential.utils import _GaussianRBF
     from schnetpack.nn import GaussianRBF as schnetpack_GaussianRBF
+    from openmm import unit
 
     n_rbf = 2
-    cutoff = 5.0
-    schnetpack_rbf = schnetpack_GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
+    cutoff = unit.Quantity(5.0, unit.angstrom)
+    schnetpack_rbf = schnetpack_GaussianRBF(
+        n_rbf=n_rbf, cutoff=cutoff.value_in_unit(unit.angstrom)
+    )
     rbf = _GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
 
     r = torch.rand(5, 3)
-    schnetpack_rbf(r)
-    rbf(r)
-    assert torch.allclose(schnetpack_rbf(r), rbf(r))
+    print(schnetpack_rbf(r))
+    print(rbf(r / 10))
+    assert torch.allclose(schnetpack_rbf(r), rbf(r / 10), atol=1e-8)
     assert schnetpack_rbf.n_rbf == rbf.n_rbf
 
 

@@ -20,11 +20,18 @@ def test_PaiNN_init(lightning):
     assert painn is not None, "PaiNN model should be initialized."
 
 
+from openmm import unit
+
+
 @pytest.mark.parametrize("lightning", [True, False])
 @pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
 @pytest.mark.parametrize(
     "model_parameter",
-    ([64, 50, 2, 5.0, 2], [32, 60, 10, 7.0, 1], [128, 120, 5, 5.0, 3]),
+    (
+        [64, 50, 2, unit.Quantity(5.0, unit.angstrom), 2],
+        [32, 60, 10, unit.Quantity(7.0, unit.angstrom), 1],
+        [128, 120, 5, unit.Quantity(5.0, unit.angstrom), 3],
+    ),
 )
 def test_painn_forward(lightning, input_data, model_parameter):
     """

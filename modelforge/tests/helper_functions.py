@@ -232,12 +232,15 @@ def generate_interaction_block_data(
     from modelforge.dataset.qm9 import QM9Dataset
     from modelforge.potential import _GaussianRBF
     from modelforge.potential.utils import _distance_to_radial_basis
+    from openmm import unit
 
     embedding = nn.Embedding(nr_embeddings, nr_atom_basis, padding_idx=0)
     batch = return_single_batch(QM9Dataset, "fit")
     r = prepare_pairlist_for_single_batch(batch)
     radial_basis = _GaussianRBF(
-        n_rbf=nr_rbf, cutoff=5.0, dtype=batch["positions"].dtype
+        n_rbf=nr_rbf,
+        cutoff=unit.Quantity(5.0, unit.angstrom),
+        dtype=batch["positions"].dtype,
     )
 
     d_ij = r["d_ij"]

@@ -55,8 +55,9 @@ def test_rbf(RBF):
 
     batch = return_single_batch(QM9Dataset, mode="fit")
     pairlist = prepare_pairlist_for_single_batch(batch)
+    from openmm import unit
 
-    radial_basis = RBF(n_rbf=20, cutoff=5.0)
+    radial_basis = RBF(n_rbf=20, cutoff=unit.Quantity(5.0, unit.angstrom))
     output = radial_basis(pairlist["d_ij"])  # Shape: [n_pairs, n_rbf]
     # Add assertion to check the shape of the output
     assert output.shape[2] == 20  # n_rbf dimension
@@ -65,8 +66,10 @@ def test_rbf(RBF):
 @pytest.mark.parametrize("RBF", [_GaussianRBF])
 def test_gaussian_rbf(RBF):
     # Check dimensions of output and output
+    from openmm import unit
+
     n_rbf = 5
-    cutoff = 10.0
+    cutoff = unit.Quantity(10.0, unit.angstrom)
     start = 0.0
     trainable = False
 
@@ -76,10 +79,12 @@ def test_gaussian_rbf(RBF):
     assert gaussian_rbf.n_rbf == n_rbf
 
     # Test that the cutoff distance is correct
-    assert gaussian_rbf.cutoff == cutoff
+    assert gaussian_rbf.cutoff == cutoff.value_in_unit_system(unit.md_unit_system)
 
     # Test that the widths and offsets are correct
-    expected_offsets = torch.linspace(start, cutoff, n_rbf)
+    expected_offsets = torch.linspace(
+        start, cutoff.value_in_unit(unit.nanometer), n_rbf
+    )
     expected_widths = torch.abs(
         expected_offsets[1] - expected_offsets[0]
     ) * torch.ones_like(expected_offsets)
@@ -95,10 +100,12 @@ def test_gaussian_rbf(RBF):
 @pytest.mark.parametrize("RBF", [_GaussianRBF])
 def test_rbf_invariance(RBF):
     # Define a set of coordinates
-    coordinates = torch.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]])
+    from openmm import unit
+
+    coordinates = torch.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]]) / 10
 
     # Initialize RBF
-    rbf = RBF(n_rbf=10, cutoff=5.0)
+    rbf = RBF(n_rbf=10, cutoff=unit.Quantity(5.0, unit.angstrom))
 
     # Calculate pairwise distances for the original coordinates
     original_d_ij = torch.cdist(coordinates, coordinates)
@@ -145,10 +152,12 @@ def test_GaussianRBF():
     """
 
     from modelforge.potential import _GaussianRBF
+    from openmm import unit
 
     n_rbf = 10
     dim_of_x = 3
-    layer = _GaussianRBF(10, 5.0)
+    cutoff = unit.Quantity(5.0, unit.angstrom)
+    layer = _GaussianRBF(10, cutoff)
     x = torch.tensor([1.0, 2.0, 3.0], dtype=torch.float32)
     y = layer(x)  # Shape: [dim_of_x, n_rbf]
 

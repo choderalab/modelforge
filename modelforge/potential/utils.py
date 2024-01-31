@@ -175,7 +175,7 @@ def gaussian_rbf(
 from openmm import unit
 
 
-class CosineCutoff(nn.Module):
+class _CosineCutoff(nn.Module):
     def __init__(self, cutoff: unit.Quantity):
         """
         Behler-style cosine cutoff module.
@@ -196,7 +196,8 @@ class CosineCutoff(nn.Module):
 
 def _cosine_cutoff(d_ij: torch.Tensor, cutoff: float) -> torch.Tensor:
     """
-    Compute the cosine cutoff for a distance tensor. All distances are in nanometer
+    Compute the cosine cutoff for a distance tensor.
+    NOTE: the cutoff function doesn't care about units as long as they are consisten,
 
     Parameters
     ----------
@@ -213,7 +214,7 @@ def _cosine_cutoff(d_ij: torch.Tensor, cutoff: float) -> torch.Tensor:
     # Compute values of cutoff function
     input_cut = 0.5 * (torch.cos(d_ij * np.pi / cutoff) + 1.0)
     # Remove contributions beyond the cutoff radius
-    input_cut = input_cut * (d_ij < cutoff)
+    input_cut *= (d_ij < cutoff).float()
     return input_cut
 
 
@@ -348,7 +349,7 @@ class _GaussianRBF(nn.Module):
     def __init__(
         self,
         n_rbf: int,
-        cutoff: float,  # in nanometer
+        cutoff: unit.Quantity,
         start: float = 0.0,
         trainable: bool = False,
         dtype: Optional[torch.dtype] = None,
@@ -370,6 +371,7 @@ class _GaussianRBF(nn.Module):
         """
         super().__init__()
         self.n_rbf = n_rbf
+        cutoff = cutoff.value_in_unit(unit.nanometer)
         self.cutoff = cutoff
         # compute offset and width of Gaussian functions
         offset = torch.linspace(start, cutoff, n_rbf, dtype=dtype)

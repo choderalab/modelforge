@@ -11,6 +11,8 @@ from typing import Optional, Dict
 MODELS_TO_TEST = [SchNET, PaiNN]
 DATASETS = [QM9Dataset]
 
+from openmm import unit
+
 
 def setup_simple_model(
     model_class,
@@ -18,7 +20,7 @@ def setup_simple_model(
     nr_atom_basis: int = 128,
     max_atomic_number: int = 100,
     n_rbf: int = 20,
-    cutoff: float = 5.0,
+    cutoff: unit.Quantity = unit.Quantity(5.0, unit.angstrom),
     nr_interaction_blocks: int = 2,
     nr_filters: int = 2,
 ) -> Optional[BaseNNP]:
@@ -37,15 +39,14 @@ def setup_simple_model(
     Optional[BaseNNP]
         Initialized model.
     """
-    from modelforge.potential import CosineCutoff, _GaussianRBF
+    from modelforge.potential import _CosineCutoff, _GaussianRBF
     from modelforge.potential.utils import SlicedEmbedding
 
     embedding = SlicedEmbedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
     assert embedding.embedding_dim == nr_atom_basis
     rbf = _GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
-    from openmm import unit
 
-    cutoff = CosineCutoff(unit.Quantity(cutoff, unit.angstrom))
+    cutoff = _CosineCutoff(cutoff=cutoff)
 
     if model_class is SchNET:
         if lightning:
@@ -169,15 +170,18 @@ def generate_methane_input() -> Dict[str, torch.Tensor]:
     """
 
     atomic_numbers = torch.tensor([[6], [1], [1], [1], [1]], dtype=torch.int64)
-    positions = torch.tensor(
-        [
-            [0.0, 0.0, 0.0],
-            [0.63918859, 0.63918859, 0.63918859],
-            [-0.63918859, -0.63918859, 0.63918859],
-            [-0.63918859, 0.63918859, -0.63918859],
-            [0.63918859, -0.63918859, -0.63918859],
-        ],
-        requires_grad=True,
+    positions = (
+        torch.tensor(
+            [
+                [0.0, 0.0, 0.0],
+                [0.63918859, 0.63918859, 0.63918859],
+                [-0.63918859, -0.63918859, 0.63918859],
+                [-0.63918859, 0.63918859, -0.63918859],
+                [0.63918859, -0.63918859, -0.63918859],
+            ],
+            requires_grad=True,
+        )
+        / 10  # NOTE: converting to nanometer
     )
     E_labels = torch.tensor([0.0], requires_grad=True)
     atomic_subsystem_indices = torch.tensor([0, 0, 0, 0, 0], dtype=torch.int32)

@@ -135,7 +135,7 @@ class PaiNN(BaseNNP):
         dir_ij = r_ij / d_ij
         f_ij, _ = _distance_to_radial_basis(d_ij, self.radial_basis_module)
 
-        fcut = self.cutoff_module(d_ij)  # n_pairs, 1
+        fcut = self.cutoff_module(d_ij) 
 
         filters = self.filter_net(f_ij) * fcut[..., None]
         if self.share_filters:
@@ -151,7 +151,7 @@ class PaiNN(BaseNNP):
         qs = q.shape
         mu = torch.zeros(
             (qs[0], 3, qs[2]), device=q.device
-        )  # nr_of_systems * nr_of_atoms, 3, nr_atom_basis
+        )  # total_number_of_atoms_in_the_batch, 3, nr_atom_basis
         return {"mu": mu, "dir_ij": dir_ij, "q": q}
 
     def _forward(
@@ -296,7 +296,7 @@ class PaiNNInteraction(nn.Module):
         expanded_idx_i_dmu = idx_i.view(-1, 1, 1).expand_as(dmu)
         dmu = zeros.scatter_add(0, expanded_idx_i_dmu, dmu)
 
-        q = q + dq  # .view(nr_of_atoms_in_all_systems)
+        q = q + dq 
         mu = mu + dmu
 
         return q, mu

@@ -74,10 +74,10 @@ def test_painn_interaction_equivariance():
         methane_input["positions"], rotation_matrix
     )
 
+    # prepare reference and perturbed inputs
     reference_prepared_input = painn.prepare_inputs(methane_input)
     reference_d_ij = reference_prepared_input["d_ij"]
     reference_r_ij = reference_prepared_input["r_ij"]
-    atomic_embedding = reference_prepared_input["atomic_embedding"]
     reference_dir_ij = reference_r_ij / reference_d_ij
     reference_f_ij, _ = _distance_to_radial_basis(
         reference_d_ij, painn.radial_basis_module
@@ -91,13 +91,21 @@ def test_painn_interaction_equivariance():
         perturbed_d_ij, painn.radial_basis_module
     )
 
+    # check that the invariant properties are preserved
+    # d_ij is the distance between atom i and j
+    # f_ij is the radial basis function of d_ij
     assert torch.allclose(reference_d_ij, perturbed_d_ij)
     assert torch.allclose(reference_f_ij, perturbed_f_ij)
-    # Rotate the original directional vectors
-    rotated_reference_dir_ij = torch.matmul(reference_dir_ij, rotation_matrix)
 
+    # what shoudl not be invariant is the direction
+    assert not torch.allclose(reference_dir_ij, perturbed_dir_ij)
+
+    # Check for equivariance
+    # rotate the reference dir_ij
+    rotated_reference_dir_ij = torch.matmul(reference_dir_ij, rotation_matrix)
     # Compare the rotated original dir_ij with the dir_ij from rotated positions
     assert torch.allclose(rotated_reference_dir_ij, perturbed_dir_ij)
+
     # Test that the interaction block is equivariant
     # First we test the transformed inputs
     reference_tranformed_inputs = painn._generate_representation(
@@ -135,10 +143,9 @@ def test_painn_interaction_equivariance():
     perturbed_q, perturbed_mu = perturbed_r
     reference_q, reference_mu = reference_r
 
+    # mu is different, q is invariant
     assert torch.allclose(reference_q, perturbed_q)
-    # following will failre because the mu is not invariant
     assert not torch.allclose(reference_mu, perturbed_mu)
-    # which is fine becuase this is directional dependent
 
     mixed_reference_q, mixed_reference_mu = painn.mixing_modules[0](
         reference_q, reference_mu
@@ -146,7 +153,8 @@ def test_painn_interaction_equivariance():
     mixed_perturbed_q, mixed_perturbed_mu = painn.mixing_modules[0](
         perturbed_q, perturbed_mu
     )
-    # NOTE: q should be invariant
+
+    # q is a scalar property and invariant
     assert torch.allclose(mixed_reference_q, mixed_perturbed_q, atol=1e-2)
-    # following will failre because the mu is not invariant
+    # mu is a vector property and should not be invariant
     assert not torch.allclose(mixed_reference_mu, mixed_perturbed_mu)

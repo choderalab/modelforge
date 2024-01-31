@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import pytest
 
-from modelforge.potential.utils import CosineCutoff, _cosine_cutoff, _GaussianRBF
+from modelforge.potential.utils import _CosineCutoff, _cosine_cutoff, _GaussianRBF
 
 
 def test_cosine_cutoff():
@@ -12,32 +12,35 @@ def test_cosine_cutoff():
     # Define inputs
     x = torch.Tensor([1, 2, 3])
     y = torch.Tensor([4, 5, 6])
-    cutoff = 2.5
+    cutoff = 6
 
     # Calculate expected output
     d_ij = torch.linalg.norm(x - y)
-    expected_output = 0.5 * (np.cos(np.pi * d_ij / cutoff) + 1) if d_ij <= cutoff else 0
+    expected_output = 0.5 * (torch.cos(d_ij * np.pi / cutoff) + 1.0)
 
     # Calculate actual output
-    actual_output = _cosine_cutoff(d_ij, cutoff)
+    actual_output = _cosine_cutoff(d_ij / 10, cutoff / 10)
 
     # Check if the results are equal
+    # NOTE: Cutoff function doesn't care about the units as long as they are the same
     assert np.isclose(actual_output, expected_output)
-    # Test cosine_cutoff function
-    d_ij = torch.tensor([1.0, 2.0, 3.0])
-    cutoff = 2.0
-    expected_output = torch.tensor([0.5, 0.0, 0.0])
-    output = _cosine_cutoff(d_ij, cutoff)
-    assert torch.allclose(output, expected_output, rtol=1e-3)
 
 
 def test_cosine_cutoff_module():
     # Test CosineCutoff module
-    d_ij = torch.tensor([1.0, 2.0, 3.0])
-    cutoff = 2.0
+    from openmm import unit
+
+    # test the cutoff on this distance vector (NOTE: it is in angstrom)
+    d_ij_angstrom = torch.tensor([1.0, 2.0, 3.0])
+    # the expected outcome is that entry 1 and 2 become zero
+    # and entry 0 becomes 0.5 (since the cutoff is 2.0 angstrom)
+
+    cutoff = unit.Quantity(2.0, unit.angstrom)
     expected_output = torch.tensor([0.5, 0.0, 0.0])
-    cosine_cutoff_module = CosineCutoff(cutoff)
-    output = cosine_cutoff_module(d_ij)
+    cosine_cutoff_module = _CosineCutoff(cutoff)
+
+    output = cosine_cutoff_module(d_ij_angstrom / 10)  # input is in nanometer
+
     assert torch.allclose(output, expected_output, rtol=1e-3)
 
 

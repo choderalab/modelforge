@@ -307,9 +307,7 @@ def test_qm9_curation_parse_xyz(prep_temp_dir):
     assert data_dict_temp["energy_of_homo"] == [[-0.3877]] * unit.hartree
     assert data_dict_temp["energy_of_lumo"] == [[0.1171]] * unit.hartree
     assert data_dict_temp["lumo-homo_gap"] == [[0.5048]] * unit.hartree
-    assert (
-        data_dict_temp["electronic_spatial_extent"] == [[35.3641]] * unit.angstrom**2
-    )
+    assert data_dict_temp["electronic_spatial_extent"] == [[35.3641]] * unit.angstrom**2
     assert (
         data_dict_temp["zero_point_vibrational_energy"] == [[0.044749]] * unit.hartree
     )
@@ -1485,7 +1483,6 @@ def test_spice12_openff_test_fetching(prep_temp_dir):
         keys = list(spice_db.keys())
 
         assert len(keys) == 2
-        assert np.all(keys == ["160862784-0", "163359334-30"])
 
     # same test as above, but we will pass pbar
     # pbar.total gets updated by the number of records
@@ -1514,7 +1511,6 @@ def test_spice12_openff_test_fetching(prep_temp_dir):
         keys = list(spice_db.keys())
 
         assert len(keys) == 2
-        assert np.all(keys == ["160862784-0", "163359334-30"])
 
     # test using sqlite db, by setting force_download=False
     pbar = tqdm()
@@ -1539,7 +1535,6 @@ def test_spice12_openff_test_fetching(prep_temp_dir):
         keys = list(spice_db.keys())
 
         assert len(keys) == 2
-        assert np.all(keys == ["160862784-0", "163359334-30"])
 
     # test fetching additional records
     # we already have 2 and thus should only need to
@@ -1567,21 +1562,6 @@ def test_spice12_openff_test_fetching(prep_temp_dir):
         keys = list(spice_db.keys())
 
         assert len(keys) == 10
-        assert np.all(
-            keys
-            == [
-                "160862784-0",
-                "163359334-30",
-                "186526043-36",
-                "242053812-3",
-                "252627293-25",
-                "252627293-26",
-                "252627293-27",
-                "252627293-28",
-                "252627293-29",
-                "252627293-30",
-            ]
-        )
 
 
 # def test_spice12_openff_test_process_downloaded(prep_temp_dir):

@@ -245,7 +245,7 @@ def test_pairlist():
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_pairlist_on_dataset(dataset):
     from modelforge.dataset.dataset import TorchDataModule
-    from modelforge.potential.models import _PairList, _NeighbourList
+    from modelforge.potential.models import _NeighbourList
 
     data = dataset(for_unit_testing=True)
     data_module = TorchDataModule(data)
@@ -279,6 +279,7 @@ def test_equivariant_energies_and_forces(input_data, model_class):
 
     for lightning in [True, False]:
         # increase precision to 64 bit
+        torch.manual_seed(1234)
         model = setup_simple_model(model_class, lightning).double()
         input_data["positions"] = input_data["positions"]
         # reference values
@@ -342,7 +343,7 @@ def test_equivariant_energies_and_forces(input_data, model_class):
         assert torch.allclose(
             rotation_forces,
             rotate_reference,
-            atol=1e-3,
+            atol=1e-4,
         )
 
         # reflection test
@@ -367,7 +368,7 @@ def test_equivariant_energies_and_forces(input_data, model_class):
         assert torch.allclose(
             reflection_forces,
             reflection(reference_forces.to(torch.float32)).double(),
-            atol=1e-3,
+            atol=1e-4,
         )
 
 

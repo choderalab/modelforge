@@ -24,8 +24,6 @@ class SAKE(BaseNNP):
         radial_basis_module: nn.Module,
         cutoff_module: nn.Module,
         activation: Optional[Callable] = F.silu,
-        shared_interactions: bool = False,
-        shared_filters: bool = False,
         epsilon: float = 1e-8,
     ):
         """
@@ -41,10 +39,6 @@ class SAKE(BaseNNP):
                 Cutoff function for the radial basis.
             activation : Callable, optional
                 Activation function to use.
-            shared_interactions : bool, optional
-                Whether to share weights across interaction blocks (default is False).
-            shared_filters : bool, optional
-                Whether to share weights across filter-generating networks (default is False).
             epsilon : float, optional
                 Stability constant to prevent numerical instabilities (default is 1e-8).
         """
@@ -54,7 +48,6 @@ class SAKE(BaseNNP):
         super().__init__(cutoff=cutoff_module.cutoff)
         self.nr_interaction_blocks = nr_interaction_blocks
         self.cutoff_module = cutoff_module
-        self.share_filters = shared_filters
         self.radial_basis_module = radial_basis_module
 
         # initialize the energy readout
@@ -67,19 +60,13 @@ class SAKE(BaseNNP):
         log.debug(f"Initialized embedding: {embedding_module=}")
 
         # initialize the filter network
-        if shared_filters:
-            self.filter_net = nn.Sequential(
-                nn.Linear(self.radial_basis_module.n_rbf, 3 * self.nr_atom_basis),
-                nn.Identity(),
-            )
-        else:
-            self.filter_net = nn.Sequential(
-                nn.Linear(
-                    self.radial_basis_module.n_rbf,
-                    self.nr_interaction_blocks * 3 * self.nr_atom_basis,
-                ),
-                nn.Identity(),
-            )
+        self.filter_net = nn.Sequential(
+            nn.Linear(
+                self.radial_basis_module.n_rbf,
+                self.nr_interaction_blocks * 3 * self.nr_atom_basis,
+            ),
+            nn.Identity(),
+        )
 
         # initialize the interaction and mixing networks
         self.interaction_modules = nn.ModuleList(
@@ -137,14 +124,10 @@ class SAKE(BaseNNP):
         fcut = self.cutoff_module(d_ij) 
 
         filters = self.filter_net(f_ij) * fcut[..., None]
-        if self.share_filters:
-            self.filter_list = [filters] * self.nr_interaction_blocks
-        else:
-            self.filter_list = torch.split(filters, 3 * self.nr_atom_basis, dim=-1)
+        self.filter_list = torch.split(filters, 3 * self.nr_atom_basis, dim=-1)
 
         # generate q and mu
         atomic_embedding = inputs["atomic_embedding"]
-        qs = atomic_embedding.shape
 
         q = atomic_embedding[:, None]
         qs = q.shape
@@ -392,8 +375,6 @@ class LightningSAKE(SAKE, LightningModuleMixin):
             radial_basis_module=radial_basis,
             cutoff_module=cutoff,
             activation=activation,
-            shared_interactions=shared_interactions,
-            shared_filters=shared_filters,
             epsilon=epsilon,
         )
         self.loss_function = loss

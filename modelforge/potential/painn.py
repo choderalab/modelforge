@@ -135,7 +135,7 @@ class PaiNN(BaseNNP):
         dir_ij = r_ij / d_ij
         f_ij, _ = _distance_to_radial_basis(d_ij, self.radial_basis_module)
 
-        fcut = self.cutoff_module(d_ij) 
+        fcut = self.cutoff_module(d_ij)
 
         filters = self.filter_net(f_ij) * fcut[..., None]
         if self.share_filters:
@@ -176,13 +176,15 @@ class PaiNN(BaseNNP):
 
         # extract properties from pairlist
         transformed_input = self._generate_representation(inputs)
+        q = transformed_input["q"]
+        mu = transformed_input["mu"]
 
         for i, (interaction_mod, mixing_mod) in enumerate(
             zip(self.interaction_modules, self.mixing_modules)
         ):
             q, mu = interaction_mod(
-                transformed_input["q"],
-                transformed_input["mu"],
+                q,
+                mu,
                 self.filter_list[i],
                 transformed_input["dir_ij"],
                 inputs["pair_indices"],
@@ -296,7 +298,7 @@ class PaiNNInteraction(nn.Module):
         expanded_idx_i_dmu = idx_i.view(-1, 1, 1).expand_as(dmu)
         dmu = zeros.scatter_add(0, expanded_idx_i_dmu, dmu)
 
-        q = q + dq 
+        q = q + dq
         mu = mu + dmu
 
         return q, mu

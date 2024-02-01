@@ -30,12 +30,12 @@ model = LighningPaiNN(
 from modelforge.dataset.qm9 import QM9Dataset
 from modelforge.dataset.dataset import TorchDataModule
 
-data = QM9Dataset()
+data = QM9Dataset(for_unit_testing=False)
 dataset = TorchDataModule(data)
 dataset.prepare_data()
 dataset.setup(stage="fit")
 
-trainer = Trainer(max_epochs=2, num_nodes=8)
+trainer = Trainer(max_epochs=2, num_nodes=1)
 
 # Move model to the appropriate dtype and device
 model = model.to(torch.float32)

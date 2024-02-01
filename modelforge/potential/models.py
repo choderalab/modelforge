@@ -220,6 +220,8 @@ class BaseNNP(nn.Module):
         self._cutoff = cutoff
         self.calculate_distances_and_pairlist = _PairList()
         self._dtype = None  # set at runtime
+        self._log_message_dtype = False
+        self._log_message_units = False
 
     def preate_input(self, inputs: Dict[str, torch.Tensor]):
         # needs to be implemented by the subclass
@@ -258,8 +260,16 @@ class BaseNNP(nn.Module):
     def _set_dtype(self):
         dtypes = list({p.dtype for p in self.parameters()})
         assert len(dtypes) == 1
+
+        if not self._log_message_dtype:
+            log.debug(f"Setting dtype to {dtypes[0]}.")
+            self._log_message_dtype = True
+
+        if self._dtype is not None and self._dtype != dtypes[0]:
+            log.warning(f"Setting dtype to {dtypes[0]}.")
+            log.warning(f"This is new, be carful. You are resetting the dtype!")
+
         self._dtype = dtypes[0]
-        log.debug(f"Setting dtype to {self._dtype}.")
 
     def _input_checks(self, inputs: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
@@ -303,9 +313,11 @@ class BaseNNP(nn.Module):
                 unit.md_unit_system
             )
         except AttributeError:
-            log.warning(
-                "Could not convert positions to nanometer. Assuming positions are already in nanometer."
-            )
+            if not self._log_message_units:
+                log.warning(
+                    "Could not convert positions to nanometer. Assuming positions are already in nanometer."
+                )
+                self._log_message_units = True
 
         return inputs
 

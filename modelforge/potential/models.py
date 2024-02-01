@@ -197,8 +197,6 @@ class LightningModuleMixin(pl.LightningModule):
         return self.optimizer(self.parameters(), lr=self.learning_rate)
 
 
-from openmm import unit
-
 
 class BaseNNP(nn.Module):
     """

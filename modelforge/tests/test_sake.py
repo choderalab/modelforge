@@ -153,15 +153,3 @@ def test_sake_interaction_equivariance():
     # mu is different, q is invariant
     assert torch.allclose(reference_q, perturbed_q)
     assert not torch.allclose(reference_mu, perturbed_mu)
-
-    mixed_reference_q, mixed_reference_mu = sake.mixing_modules[0](
-        reference_q, reference_mu
-    )
-    mixed_perturbed_q, mixed_perturbed_mu = sake.mixing_modules[0](
-        perturbed_q, perturbed_mu
-    )
-
-    # q is a scalar property and invariant
-    assert torch.allclose(mixed_reference_q, mixed_perturbed_q, atol=1e-2)
-    # mu is a vector property and should not be invariant
-    assert not torch.allclose(mixed_reference_mu, mixed_perturbed_mu)

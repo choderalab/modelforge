@@ -68,15 +68,12 @@ class SAKE(BaseNNP):
             nn.Identity(),
         )
 
-        # initialize the interaction and mixing networks
+        # initialize the interaction networks
         self.interaction_modules = nn.ModuleList(
             SAKEInteraction(self.nr_atom_basis, activation=activation)
             for _ in range(self.nr_interaction_blocks)
         )
-        self.mixing_modules = nn.ModuleList(
-            SAKEMixing(self.nr_atom_basis, activation=activation, epsilon=epsilon)
-            for _ in range(self.nr_interaction_blocks)
-        )
+
         # save the embedding
         self.embedding_module = embedding_module
 
@@ -99,7 +96,7 @@ class SAKE(BaseNNP):
 
     def _generate_representation(self, inputs: Dict[str, torch.Tensor]):
         """
-        Transforms the input data for the PAInn potential model.
+        Transforms the input data for the SAKE potential model.
 
         Args:
             inputs (Dict[str, torch.Tensor]): A dictionary containing the input tensors.
@@ -157,9 +154,7 @@ class SAKE(BaseNNP):
         # extract properties from pairlist
         transformed_input = self._generate_representation(inputs)
 
-        for i, (interaction_mod, mixing_mod) in enumerate(
-            zip(self.interaction_modules, self.mixing_modules)
-        ):
+        for i, interaction_mod in enumerate(self.interaction_modules):
             q, mu = interaction_mod(
                 transformed_input["q"],
                 transformed_input["mu"],
@@ -167,7 +162,6 @@ class SAKE(BaseNNP):
                 transformed_input["dir_ij"],
                 inputs["pair_indices"],
             )
-            q, mu = mixing_mod(q, mu)
 
         # Use squeeze to remove dimensions of size 1
         q = q.squeeze(dim=1)
@@ -279,76 +273,6 @@ class SAKEInteraction(nn.Module):
         q = q + dq 
         mu = mu + dmu
 
-        return q, mu
-
-
-class SAKEMixing(nn.Module):
-    r"""SAKE interaction block for mixing on atom features."""
-
-    def __init__(self, nr_atom_basis: int, activation: Callable, epsilon: float = 1e-8):
-        """
-        Parameters
-        ----------
-        nr_atom_basis : int
-            Number of features to describe atomic environments.
-        activation : Callable
-            Activation function to use.
-        epsilon : float, optional
-            Stability constant added in norm to prevent numerical instabilities. Default is 1e-8.
-
-        Attributes
-        ----------
-        nr_atom_basis : int
-            Number of features to describe atomic environments.
-        intra_atomic_net : nn.Sequential
-            Neural network for intra-atomic interactions.
-        mu_channel_mix : nn.Sequential
-            Neural network for mixing mu channels.
-        epsilon : float
-            Stability constant for numerical stability.
-        """
-        super().__init__()
-        self.nr_atom_basis = nr_atom_basis
-
-        # initialize the intra-atomic neural network
-        self.intra_atomic_net = nn.Sequential(
-            Dense(2 * nr_atom_basis, nr_atom_basis, activation=activation),
-            Dense(nr_atom_basis, 3 * nr_atom_basis, activation=None),
-        )
-        # initialize the mu channel mixing network
-        self.mu_channel_mix = Dense(nr_atom_basis, 2 * nr_atom_basis, bias=False)
-        self.epsilon = epsilon
-
-    def forward(self, q: torch.Tensor, mu: torch.Tensor):
-        """
-        compute intratomic mixing
-
-        Parameters
-        ----------
-        q : torch.Tensor
-            Scalar input values.
-        mu : torch.Tensor
-            Vector input values.
-
-        Returns
-        -------
-        Tuple[torch.Tensor, torch.Tensor]
-            Updated scalar and vector representations (q, mu).
-        """
-        mu_mix = self.mu_channel_mix(mu)
-        mu_V, mu_W = torch.split(mu_mix, self.nr_atom_basis, dim=-1)
-        mu_Vn = torch.sqrt(torch.sum(mu_V**2, dim=-2, keepdim=True) + self.epsilon)
-
-        ctx = torch.cat([q, mu_Vn], dim=-1)
-        x = self.intra_atomic_net(ctx)
-
-        dq_intra, dmu_intra, dqmu_intra = torch.split(x, self.nr_atom_basis, dim=-1)
-        dmu_intra = dmu_intra * mu_W
-
-        dqmu_intra = dqmu_intra * torch.sum(mu_V * mu_W, dim=1, keepdim=True)
-
-        q = q + dq_intra + dqmu_intra
-        mu = mu + dmu_intra
         return q, mu
 
 

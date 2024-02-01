@@ -24,7 +24,6 @@ class SAKE(BaseNNP):
         radial_basis_module: nn.Module,
         cutoff_module: nn.Module,
         activation: Optional[Callable] = F.silu,
-        epsilon: float = 1e-8,
     ):
         """
         Parameters
@@ -284,9 +283,6 @@ class LightningSAKE(SAKE, LightningModuleMixin):
         radial_basis: nn.Module,
         cutoff: nn.Module,
         activation: Optional[Callable] = F.silu,
-        shared_interactions: bool = False,
-        shared_filters: bool = False,
-        epsilon: float = 1e-8,
         loss: Type[nn.Module] = nn.MSELoss(),
         optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
         lr: float = 1e-3,
@@ -299,7 +295,6 @@ class LightningSAKE(SAKE, LightningModuleMixin):
             radial_basis_module=radial_basis,
             cutoff_module=cutoff,
             activation=activation,
-            epsilon=epsilon,
         )
         self.loss_function = loss
         self.optimizer = optimizer

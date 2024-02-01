@@ -310,7 +310,6 @@ class EnergyReadout(nn.Module):
 
         # Sum across feature dimension to get final tensor of shape (num_molecules, 1)
         total_energy_per_molecule = result.sum(dim=1, keepdim=True)
-
         return total_energy_per_molecule
 
 

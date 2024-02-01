@@ -4,11 +4,12 @@ from modelforge.dataset.dataset import TorchDataModule
 from modelforge.dataset.qm9 import QM9Dataset
 from modelforge.potential.schnet import SchNET, LightningSchNET
 from modelforge.potential.painn import PaiNN, LighningPaiNN
+from modelforge.potential.sake import SAKE, LightningSAKE
 from modelforge.potential.models import BaseNNP
 
 from typing import Optional, Dict
 
-MODELS_TO_TEST = [SchNET, PaiNN]
+MODELS_TO_TEST = [SchNET, PaiNN, SAKE]
 DATASETS = [QM9Dataset]
 
 from openmm import unit
@@ -74,6 +75,20 @@ def setup_simple_model(
                 cutoff=cutoff,
             )
         return PaiNN(
+            embedding_module=embedding,
+            nr_interaction_blocks=nr_interaction_blocks,
+            radial_basis_module=rbf,
+            cutoff_module=cutoff,
+        )
+    elif model_class is SAKE:
+        if lightning:
+            return LightningSAKE(
+                embedding=embedding,
+                nr_interaction_blocks=nr_interaction_blocks,
+                radial_basis=rbf,
+                cutoff=cutoff,
+            )
+        return SAKE(
             embedding_module=embedding,
             nr_interaction_blocks=nr_interaction_blocks,
             radial_basis_module=rbf,

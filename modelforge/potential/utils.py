@@ -375,9 +375,8 @@ class _GaussianRBF(nn.Module):
         self.cutoff = cutoff
         # compute offset and width of Gaussian functions
         offset = torch.linspace(start, cutoff, n_rbf, dtype=dtype)
-        widths = torch.tensor(
-            torch.abs(offset[1] - offset[0]) * torch.ones_like(offset), dtype=dtype
-        )
+        widths = (torch.abs(offset[1] - offset[0]) * torch.ones_like(offset)).to(dtype)
+
         if trainable:
             self.widths = nn.Parameter(widths)
             self.offsets = nn.Parameter(offset)
@@ -445,15 +444,13 @@ def _pair_list(
     if only_unique_pairs:
         i_indices, j_indices = torch.triu_indices(n, n, 1)
     else:
-        # meshgrid, but remove the diagonal
-        i_indices, j_indices = torch.meshgrid(
-            torch.arange(start=0, end=n, dtype=torch.int64),
-            torch.arange(start=0, end=n, dtype=torch.int64),
+        # Repeat each number n-1 times for i_indices
+        i_indices = torch.repeat_interleave(torch.arange(n), repeats=n - 1)
+
+        # Correctly construct j_indices
+        j_indices = torch.cat(
+            [torch.cat((torch.arange(i), torch.arange(i + 1, n))) for i in range(n)]
         )
-        # remove indices for which i_indices == j_indices
-        mask = i_indices != j_indices
-        i_indices = i_indices[mask]
-        j_indices = j_indices[mask]
 
     # filter pairs to only keep those belonging to the same molecule
     same_molecule_mask = (

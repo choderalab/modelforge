@@ -564,7 +564,10 @@ class TorchDataModule(pl.LightningDataModule):
             DataLoader containing the validation dataset.
         """
         return DataLoader(
-            self.val_dataset, batch_size=self.batch_size, collate_fn=collate_conformers
+            self.val_dataset,
+            batch_size=self.batch_size,
+            collate_fn=collate_conformers,
+            num_workers=4,
         )
 
     def test_dataloader(self) -> DataLoader:

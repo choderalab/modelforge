@@ -1,4 +1,3 @@
-from abc import ABC, abstractmethod
 from typing import Dict
 
 import lightning as pl
@@ -160,6 +159,10 @@ class LightningModuleMixin(pl.LightningModule):
         Configures the optimizer for training.
     """
 
+    def _log_batch_size(self, batch: Dict[str, torch.Tensor]):
+        batch_size = int(len(batch["E_label"]))
+        return batch_size
+
     def training_step(
         self, batch: Dict[str, torch.Tensor], batch_idx: int
     ) -> torch.Tensor:
@@ -178,11 +181,39 @@ class LightningModuleMixin(pl.LightningModule):
         torch.Tensor, shape [batch_size, 1]
             Loss tensor.
         """
-
-        E_hat = self.forward(batch).flatten()
-        loss = self.loss_function(E_hat, batch["E_label"])
-        self.log("train_loss", loss)
+        batch_size = self._log_batch_size(batch)
+        predictions = self.forward(batch).flatten()
+        targets = batch["E_label"].flatten()
+        loss = self.loss_function(predictions, targets)
+        # Specify the batch size explicitly using self.log
+        self.log(
+            "train_loss",
+            loss,
+            on_epoch=True,
+            on_step=False,
+            prog_bar=True,
+            batch_size=batch_size,
+        )
         return loss
+
+    def test_step(self, batch, batch_idx):
+        from torch.nn import functional as F
+
+        batch_size = self._log_batch_size(batch)
+
+        predictions = self.forward(batch).flatten()
+        targets = batch["E_label"].flatten()
+        test_loss = F.mse_loss(predictions, targets)
+        self.log("test_loss", test_loss, batch_size=batch_size)
+
+    def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx):
+        from torch.nn import functional as F
+
+        batch_size = self._log_batch_size(batch)
+        predictions = self.forward(batch)
+        targets = batch["E_label"]
+        val_loss = F.mse_loss(predictions, targets)
+        self.log("val_loss", val_loss, batch_size=batch_size, on_epoch=True)
 
     def configure_optimizers(self) -> AdamW:
         """
@@ -195,7 +226,6 @@ class LightningModuleMixin(pl.LightningModule):
         """
 
         return self.optimizer(self.parameters(), lr=self.learning_rate)
-
 
 
 class BaseNNP(nn.Module):
@@ -329,7 +359,7 @@ class BaseNNP(nn.Module):
             Inputs containing atomic numbers ('atomic_numbers'), coordinates ('positions') and pairlist ('pairlist').
             - 'atomic_numbers': int; shape (nr_of_atoms_in_batch, 1), 0 indicates non-interacting atoms that will be masked
             - 'total_charge' : int; shape (n_system)
-            - 'positions': float; shape (nr_of_atoms_in_batch, 3), with openmm units attached
+            - 'positions': float; shape (nr_of_atoms_in_batch, 3)
 
         Returns
         -------

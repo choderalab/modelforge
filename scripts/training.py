@@ -34,8 +34,15 @@ data = QM9Dataset(for_unit_testing=False)
 dataset = TorchDataModule(data, batch_size=512)
 dataset.prepare_data()
 dataset.setup(stage="fit")
+from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
-trainer = Trainer(max_epochs=10, num_nodes=1)
+trainer = Trainer(
+    max_epochs=10,
+    num_nodes=1,
+    callbacks=[
+        EarlyStopping(monitor="val_loss", mode="min", patience=3, min_delta=0.001)
+    ],
+)
 
 # Move model to the appropriate dtype and device
 model = model.to(torch.float32)

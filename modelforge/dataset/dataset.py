@@ -260,9 +260,9 @@ class HDF5Dataset:
 
                 if all(property_found):
                     # we want to exclude conformers with NaN values for any property of interest
-                    configs_nan_by_prop: Dict[
-                        str, np.ndarray
-                    ] = OrderedDict()  # ndarray.size (n_configs, )
+                    configs_nan_by_prop: Dict[str, np.ndarray] = (
+                        OrderedDict()
+                    )  # ndarray.size (n_configs, )
                     for value in list(series_mol_data.keys()) + list(
                         series_atom_data.keys()
                     ):
@@ -447,6 +447,9 @@ class DatasetFactory:
         return TorchDataset(data.numpy_data, data._property_names)
 
 
+from torch import nn
+
+
 class TorchDataModule(pl.LightningDataModule):
     """
     A custom data module class to handle data loading and preparation for PyTorch Lightning training.
@@ -476,6 +479,7 @@ class TorchDataModule(pl.LightningDataModule):
         split: SplittingStrategy = RandomRecordSplittingStrategy(),
         batch_size: int = 64,
         split_file: Optional[str] = None,
+        transform: nn.Module = None,
     ):
         super().__init__()
         self.data = data

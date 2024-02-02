@@ -338,7 +338,7 @@ class BaseNNP(nn.Module):
 
         try:
             inputs["positions"] = inputs["positions"].to(unit.nanometer).m
-            )
+
         except AttributeError:
             if not self._log_message_units:
                 log.warning(

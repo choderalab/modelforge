@@ -172,7 +172,7 @@ def gaussian_rbf(
     return y
 
 
-from openmm import unit
+from openff.units import unit
 
 
 class _CosineCutoff(nn.Module):
@@ -187,7 +187,7 @@ class _CosineCutoff(nn.Module):
 
         """
         super().__init__()
-        cutoff = cutoff.value_in_unit_system(unit.md_unit_system)
+        cutoff = cutoff.to(unit.nanometer).m
         self.register_buffer("cutoff", torch.FloatTensor([cutoff]))
 
     def forward(self, input: torch.Tensor):
@@ -371,7 +371,7 @@ class _GaussianRBF(nn.Module):
         """
         super().__init__()
         self.n_rbf = n_rbf
-        cutoff = cutoff.value_in_unit(unit.nanometer)
+        cutoff = cutoff.to(unit.nanometer).m
         self.cutoff = cutoff
         # compute offset and width of Gaussian functions
         offset = torch.linspace(start, cutoff, n_rbf, dtype=dtype)
@@ -467,8 +467,7 @@ def _pair_list(
     return pair_indices
 
 
-from openmm import unit
-
+from openff.units import unit, Quantity
 
 def _neighbor_list_with_cutoff(
     coordinates: torch.Tensor,  # in nanometer
@@ -501,7 +500,7 @@ def _neighbor_list_with_cutoff(
     )
 
     # Find pairs within the cutoff
-    in_cutoff = (distances <= cutoff).nonzero(as_tuple=False).squeeze()
+    in_cutoff = (distances <= cutoff.to(unit.nanometer).m).nonzero(as_tuple=False).squeeze()
 
     # Get the atom indices within the cutoff
     pair_indices_within_cutoff = pair_indices[:, in_cutoff]

@@ -315,7 +315,7 @@ class BaseNNP(nn.Module):
             If the input dictionary is missing required keys or has invalid shapes.
 
         """
-        from openmm import unit
+        from openff.units import unit
 
         required_keys = ["atomic_numbers", "positions", "atomic_subsystem_indices"]
         for key in required_keys:
@@ -337,8 +337,7 @@ class BaseNNP(nn.Module):
             inputs["positions"] = inputs["positions"].to(self._dtype)
 
         try:
-            inputs["positions"] = inputs["positions"].value_in_unit_system(
-                unit.md_unit_system
+            inputs["positions"] = inputs["positions"].to(unit.nanometer).m
             )
         except AttributeError:
             if not self._log_message_units:

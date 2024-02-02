@@ -11,8 +11,7 @@ from typing import Optional, Dict
 MODELS_TO_TEST = [SchNET, PaiNN]
 DATASETS = [QM9Dataset]
 
-from openmm import unit
-
+from openff.units import unit
 
 def setup_simple_model(
     model_class,
@@ -20,7 +19,7 @@ def setup_simple_model(
     nr_atom_basis: int = 128,
     max_atomic_number: int = 100,
     n_rbf: int = 20,
-    cutoff: unit.Quantity = unit.Quantity(5.0, unit.angstrom),
+    cutoff: unit.Quantity = 5.0*unit.angstrom,
     nr_interaction_blocks: int = 2,
     nr_filters: int = 2,
 ) -> Optional[BaseNNP]:

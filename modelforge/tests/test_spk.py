@@ -5,12 +5,12 @@ def test_gaussian_rbf_implementation():
     # compare schnetpack GaussianRBF with modelforge GaussianRBF
     from modelforge.potential.utils import _GaussianRBF
     from schnetpack.nn import GaussianRBF as schnetpack_GaussianRBF
-    from openmm import unit
+    from openff.units import unit
 
     n_rbf = 2
     cutoff = unit.Quantity(5.0, unit.angstrom)
     schnetpack_rbf = schnetpack_GaussianRBF(
-        n_rbf=n_rbf, cutoff=cutoff.value_in_unit(unit.angstrom)
+        n_rbf=n_rbf, cutoff=cutoff.to(unit.angstrom)
     )
     rbf = _GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
 
@@ -145,14 +145,14 @@ def setup_spk_painn_representation(cutoff, nr_atom_basis, n_rbf):
     # set up the schnetpack Painn representation model
     from schnetpack.nn import GaussianRBF, CosineCutoff
     from schnetpack.representation import PaiNN as schnetpack_PaiNN
-    from openmm import unit
+    from openff.units import unit
 
-    radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff.value_in_unit(unit.angstrom))
+    radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff.to(unit.angstrom))
     return schnetpack_PaiNN(
         n_atom_basis=nr_atom_basis,
         n_interactions=3,
         radial_basis=radial_basis,
-        cutoff_fn=CosineCutoff(cutoff.value_in_unit(unit.angstrom)),
+        cutoff_fn=CosineCutoff(cutoff.to(unit.angstrom)),
     )
 
 
@@ -164,7 +164,7 @@ def setup_modelforge_painn_representation(cutoff, nr_atom_basis, n_rbf):
     from modelforge.potential import _CosineCutoff, _GaussianRBF
     from modelforge.potential.utils import SlicedEmbedding
     from modelforge.potential.painn import PaiNN
-    from openmm import unit
+    from openff.units import unit
 
     embedding = SlicedEmbedding(max_Z=100, embedding_dim=nr_atom_basis, sliced_dim=0)
     radial_basis = _GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
@@ -182,7 +182,7 @@ def test_painn_representation_implementation():
     # ---------------------------------------- #
     # test the implementation of the representation part of the PaiNN model
     # ---------------------------------------- #
-    from openmm import unit
+    from openff.units import unit
 
     cutoff = unit.Quantity(5.0, unit.angstrom)
     nr_atom_basis = 8

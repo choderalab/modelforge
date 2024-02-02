@@ -79,7 +79,7 @@ def test_gaussian_rbf(RBF):
     assert gaussian_rbf.n_rbf == n_rbf
 
     # Test that the cutoff distance is correct
-    assert gaussian_rbf.cutoff == cutoff.value_in_unit_system(unit.md_unit_system)
+    assert gaussian_rbf.cutoff == cutoff.to(unit.nanometer).m
 
     # Test that the widths and offsets are correct
     expected_offsets = torch.linspace(

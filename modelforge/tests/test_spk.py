@@ -10,7 +10,7 @@ def test_gaussian_rbf_implementation():
     n_rbf = 2
     cutoff = unit.Quantity(5.0, unit.angstrom)
     schnetpack_rbf = schnetpack_GaussianRBF(
-        n_rbf=n_rbf, cutoff=cutoff.to(unit.angstrom)
+        n_rbf=n_rbf, cutoff=cutoff.to(unit.angstrom).m
     )
     rbf = _GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
 

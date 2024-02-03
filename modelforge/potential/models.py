@@ -336,10 +336,10 @@ class BaseNNP(nn.Module):
             )
             inputs["positions"] = inputs["positions"].to(self._dtype)
 
-        try:
+        if isinstance(inputs["positions"], unit.Quantity)
             inputs["positions"] = inputs["positions"].to(unit.nanometer).m
 
-        except AttributeError:
+        else AttributeError:
             if not self._log_message_units:
                 log.warning(
                     "Could not convert positions to nanometer. Assuming positions are already in nanometer."

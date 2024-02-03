@@ -147,7 +147,7 @@ def setup_spk_painn_representation(cutoff, nr_atom_basis, n_rbf):
     from schnetpack.representation import PaiNN as schnetpack_PaiNN
     from openff.units import unit
 
-    radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff.to(unit.angstrom))
+    radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff.to(unit.angstrom).m)
     return schnetpack_PaiNN(
         n_atom_basis=nr_atom_basis,
         n_interactions=3,

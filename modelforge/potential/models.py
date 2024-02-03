@@ -336,7 +336,7 @@ class BaseNNP(nn.Module):
             )
             inputs["positions"] = inputs["positions"].to(self._dtype)
 
-        if isinstance(inputs["positions"], unit.Quantity)
+        if isinstance(inputs["positions"], unit.Quantity):
             inputs["positions"] = inputs["positions"].to(unit.nanometer).m
 
         else AttributeError:

@@ -83,7 +83,7 @@ def test_gaussian_rbf(RBF):
 
     # Test that the widths and offsets are correct
     expected_offsets = torch.linspace(
-        start, cutoff.to(unit.nanometer), n_rbf
+        start, cutoff.to(unit.nanometer).m, n_rbf
     )
     expected_widths = torch.abs(
         expected_offsets[1] - expected_offsets[0]

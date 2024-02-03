@@ -152,7 +152,7 @@ def setup_spk_painn_representation(cutoff, nr_atom_basis, n_rbf):
         n_atom_basis=nr_atom_basis,
         n_interactions=3,
         radial_basis=radial_basis,
-        cutoff_fn=CosineCutoff(cutoff.to(unit.angstrom)),
+        cutoff_fn=CosineCutoff(cutoff.to(unit.angstrom).m),
     )
 
 

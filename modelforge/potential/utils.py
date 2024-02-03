@@ -361,7 +361,7 @@ class _GaussianRBF(nn.Module):
         ----------
         n_rbf : int
             Number of radial basis functions.
-        cutoff : float
+        cutoff : unit.Quantity
             The cutoff distance. NOTE: IN ANGSTROM #FIXME
         start: float
             center of first Gaussian function.
@@ -467,12 +467,12 @@ def _pair_list(
     return pair_indices
 
 
-from openff.units import unit, Quantity
+from openff.units import unit
 
 def _neighbor_list_with_cutoff(
     coordinates: torch.Tensor,  # in nanometer
     atomic_subsystem_indices: torch.Tensor,
-    cutoff: unit.Quantity,
+    cutoff: float,
     only_unique_pairs: bool = False,
 ) -> torch.Tensor:
     """Compute all pairs of atoms and their distances.
@@ -482,7 +482,7 @@ def _neighbor_list_with_cutoff(
     coordinates : torch.Tensor, shape (nr_atoms_per_systems, 3), in nanometer
     atomic_subsystem_indices : torch.Tensor, shape (nr_atoms_per_systems)
         Atom indices to indicate which atoms belong to which molecule
-    cutoff : unit.Quantity
+    cutoff : float
         The cutoff distance.
     """
     positions = coordinates.detach()
@@ -500,7 +500,8 @@ def _neighbor_list_with_cutoff(
     )
 
     # Find pairs within the cutoff
-    in_cutoff = (distances <= cutoff.to(unit.nanometer).m).nonzero(as_tuple=False).squeeze()
+    #cutoff = cutoff.to(unit.nanometer).m
+    in_cutoff = (distances <= cutoff).nonzero(as_tuple=False).squeeze()
 
     # Get the atom indices within the cutoff
     pair_indices_within_cutoff = pair_indices[:, in_cutoff]

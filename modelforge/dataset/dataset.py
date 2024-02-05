@@ -505,6 +505,23 @@ class TorchDataModule(pl.LightningDataModule):
 
         factory = DatasetFactory()
         self.dataset = factory.create_dataset(self.data)
+        # Initialize variables to store the sum of batch averages and the total count of elements
+        weighted_sum_of_averages = 0
+        total_count = 0
+
+        # DataLoader for iterating over batches
+        for batch in DataLoader(
+            self.dataset, batch_size=self.batch_size, collate_fn=collate_conformers
+        ):
+            # Compute the average for the current batch and count the number of elements
+            batch_sum = torch.sum(batch["E_label"])
+            atoms_in_batch = batch["atomic_numbers"].size(
+                0
+            )  # This is the number of elements in the current batch
+            batch_mean_per_atom = batch_sum / atoms_in_batch
+
+        # Compute the overall average by dividing the weighted sum of batch averages by the total count
+        self.mean_value = weighted_sum_of_averages / total_count
 
     def setup(self, stage: str) -> None:
         """

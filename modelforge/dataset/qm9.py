@@ -95,9 +95,6 @@ class QM9Dataset(HDF5Dataset):
         )
         self.dataset_name = dataset_name
         self.for_unit_testing = for_unit_testing
-        # self.test_id = "17oZ07UOxv2fkEmu-d5mLk6aGIuhV0mJ7"
-        # self.full_id = "1_bSdQjEvI67Tk_LKYbW0j8nmggnb5MoU"
-        # updated tests.
         self.test_id = "18C9Iq_7VZLx0gZbJYje8X6tybZb5m3JY"
         self.full_id = "1damjPgjKviTogDJ2UJvhYjyBZxGvRPP-"
 

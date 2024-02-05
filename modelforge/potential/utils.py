@@ -172,28 +172,32 @@ def gaussian_rbf(
     return y
 
 
-class CosineCutoff(nn.Module):
-    def __init__(self, cutoff: float):
-        r"""
+from openff.units import unit
+
+
+class _CosineCutoff(nn.Module):
+    def __init__(self, cutoff: unit.Quantity):
+        """
         Behler-style cosine cutoff module.
 
-        Args:
-            cutoff (float): The cutoff distance.
-
-        Attributes:
-            cutoff (torch.Tensor): The cutoff distance as a tensor.
+        Parameters:
+        ----------
+        cutoff: unit.Quantity
+            The cutoff distance.
 
         """
         super().__init__()
+        cutoff = cutoff.to(unit.nanometer).m
         self.register_buffer("cutoff", torch.FloatTensor([cutoff]))
 
     def forward(self, input: torch.Tensor):
-        return cosine_cutoff(input, self.cutoff)
+        return _cosine_cutoff(input, self.cutoff)
 
 
-def cosine_cutoff(d_ij: torch.Tensor, cutoff: float) -> torch.Tensor:
+def _cosine_cutoff(d_ij: torch.Tensor, cutoff: float) -> torch.Tensor:
     """
     Compute the cosine cutoff for a distance tensor.
+    NOTE: the cutoff function doesn't care about units as long as they are consisten,
 
     Parameters
     ----------
@@ -210,7 +214,7 @@ def cosine_cutoff(d_ij: torch.Tensor, cutoff: float) -> torch.Tensor:
     # Compute values of cutoff function
     input_cut = 0.5 * (torch.cos(d_ij * np.pi / cutoff) + 1.0)
     # Remove contributions beyond the cutoff radius
-    input_cut = input_cut * (d_ij < cutoff)
+    input_cut *= (d_ij < cutoff).float()
     return input_cut
 
 
@@ -310,7 +314,7 @@ class EnergyReadout(nn.Module):
         return total_energy_per_molecule
 
 
-def shifted_softplus(x: torch.Tensor):
+def _shifted_softplus(x: torch.Tensor):
     r"""Compute shifted soft-plus activation function.
 
     .. math::
@@ -326,13 +330,13 @@ def shifted_softplus(x: torch.Tensor):
     from torch.nn import functional
     import math
 
-    return functional.softplus(x) - math.log(2.0)
+    return functional.softplus(x) - math.log(0.2)
 
 
 from typing import Optional
 
 
-class GaussianRBF(nn.Module):
+class _GaussianRBF(nn.Module):
     """
     Gaussian Radial Basis Function module.
 
@@ -345,7 +349,7 @@ class GaussianRBF(nn.Module):
     def __init__(
         self,
         n_rbf: int,
-        cutoff: float,
+        cutoff: unit.Quantity,
         start: float = 0.0,
         trainable: bool = False,
         dtype: Optional[torch.dtype] = None,
@@ -357,7 +361,7 @@ class GaussianRBF(nn.Module):
         ----------
         n_rbf : int
             Number of radial basis functions.
-        cutoff : float
+        cutoff : unit.Quantity
             The cutoff distance. NOTE: IN ANGSTROM #FIXME
         start: float
             center of first Gaussian function.
@@ -367,12 +371,12 @@ class GaussianRBF(nn.Module):
         """
         super().__init__()
         self.n_rbf = n_rbf
+        cutoff = cutoff.to(unit.nanometer).m
         self.cutoff = cutoff
         # compute offset and width of Gaussian functions
         offset = torch.linspace(start, cutoff, n_rbf, dtype=dtype)
-        widths = torch.tensor(
-            torch.abs(offset[1] - offset[0]) * torch.ones_like(offset), dtype=dtype
-        )
+        widths = (torch.abs(offset[1] - offset[0]) * torch.ones_like(offset)).to(dtype)
+
         if trainable:
             self.widths = nn.Parameter(widths)
             self.offsets = nn.Parameter(offset)
@@ -416,45 +420,37 @@ def _distance_to_radial_basis(
     """
     assert d_ij.dim() == 2
     f_ij = radial_basis(d_ij)
-    rcut_ij = cosine_cutoff(d_ij, radial_basis.cutoff)
+    rcut_ij = _cosine_cutoff(d_ij, radial_basis.cutoff)
     return f_ij, rcut_ij
 
 
-def pair_list(
-    coordinates: torch.Tensor,
+def _pair_list(
     atomic_subsystem_indices: torch.Tensor,
-    cutoff: float,
     only_unique_pairs: bool = False,
 ) -> torch.Tensor:
-    """Compute pairs of atoms that are neighbors (doesn't use PBC)
+    """Compute all pairs of atoms and their distances.
 
     Parameters
     ----------
-    coordinates : torch.Tensor, shape (nr_atoms_per_systems, 3)
     atomic_subsystem_indices : torch.Tensor, shape (nr_atoms_per_systems)
         Atom indices to indicate which atoms belong to which molecule
-    cutoff : float
-        the cutoff inside which atoms are considered pairs
+    only_unique_pairs : bool, optional
+        If True, only unique pairs are returned (default is False).
+        Otherwise, all pairs are returned.
     """
-    positions = coordinates.detach()
     # generate index grid
     n = len(atomic_subsystem_indices)
 
     if only_unique_pairs:
         i_indices, j_indices = torch.triu_indices(n, n, 1)
     else:
-        # meshgrid, but remove the diagonal
-        i_indices, j_indices = torch.meshgrid(
-            torch.arange(start=0, end=n, dtype=torch.int64),
-            torch.arange(start=0, end=n, dtype=torch.int64),
-        )
-        # remove indices for which i_indices == j_indices
-        mask = i_indices != j_indices
-        i_indices = i_indices[mask]
-        j_indices = j_indices[mask]
+        # Repeat each number n-1 times for i_indices
+        i_indices = torch.repeat_interleave(torch.arange(n), repeats=n - 1)
 
-        # i_indices = i_indices.reshape(-1)
-        # j_indices = j_indices.reshape(-1)
+        # Correctly construct j_indices
+        j_indices = torch.cat(
+            [torch.cat((torch.arange(i), torch.arange(i + 1, n))) for i in range(n)]
+        )
 
     # filter pairs to only keep those belonging to the same molecule
     same_molecule_mask = (
@@ -468,16 +464,43 @@ def pair_list(
     # concatenate to form final (2, n_pairs) tensor
     pair_indices = torch.stack((i_final_pairs, j_final_pairs))
 
+    return pair_indices
+
+
+from openff.units import unit
+
+def _neighbor_list_with_cutoff(
+    coordinates: torch.Tensor,  # in nanometer
+    atomic_subsystem_indices: torch.Tensor,
+    cutoff: float,
+    only_unique_pairs: bool = False,
+) -> torch.Tensor:
+    """Compute all pairs of atoms and their distances.
+
+    Parameters
+    ----------
+    coordinates : torch.Tensor, shape (nr_atoms_per_systems, 3), in nanometer
+    atomic_subsystem_indices : torch.Tensor, shape (nr_atoms_per_systems)
+        Atom indices to indicate which atoms belong to which molecule
+    cutoff : float
+        The cutoff distance.
+    """
+    positions = coordinates.detach()
+    pair_indices = _pair_list(
+        atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
+    )
+
     # create pair_coordinates tensor
     pair_coordinates = positions[pair_indices.T]
     pair_coordinates = pair_coordinates.view(-1, 2, 3)
 
     # Calculate distances
-    distances = (pair_coordinates[:, 1, :] - pair_coordinates[:, 0, :]).norm(
+    distances = (pair_coordinates[:, 0, :] - pair_coordinates[:, 1, :]).norm(
         p=2, dim=-1
     )
 
     # Find pairs within the cutoff
+    #cutoff = cutoff.to(unit.nanometer).m
     in_cutoff = (distances <= cutoff).nonzero(as_tuple=False).squeeze()
 
     # Get the atom indices within the cutoff

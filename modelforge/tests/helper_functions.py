@@ -11,6 +11,7 @@ from typing import Optional, Dict
 MODELS_TO_TEST = [SchNET, PaiNN]
 DATASETS = [QM9Dataset]
 
+from openff.units import unit
 
 def setup_simple_model(
     model_class,
@@ -18,7 +19,7 @@ def setup_simple_model(
     nr_atom_basis: int = 128,
     max_atomic_number: int = 100,
     n_rbf: int = 20,
-    cutoff: float = 5.0,
+    cutoff: unit.Quantity = 5.0*unit.angstrom,
     nr_interaction_blocks: int = 2,
     nr_filters: int = 2,
 ) -> Optional[BaseNNP]:
@@ -37,13 +38,14 @@ def setup_simple_model(
     Optional[BaseNNP]
         Initialized model.
     """
-    from modelforge.potential import CosineCutoff, GaussianRBF
+    from modelforge.potential import _CosineCutoff, _GaussianRBF
     from modelforge.potential.utils import SlicedEmbedding
 
     embedding = SlicedEmbedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
     assert embedding.embedding_dim == nr_atom_basis
-    rbf = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
-    cutoff = CosineCutoff(cutoff)
+    rbf = _GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
+
+    cutoff = _CosineCutoff(cutoff=cutoff)
 
     if model_class is SchNET:
         if lightning:
@@ -148,11 +150,11 @@ def prepare_pairlist_for_single_batch(
         Pairlist with keys 'atom_index12', 'd_ij', 'r_ij'.
     """
 
-    from modelforge.potential.models import PairList
+    from modelforge.potential.models import _PairList
 
     positions = batch["positions"]
     atomic_subsystem_indices = batch["atomic_subsystem_indices"]
-    pairlist = PairList(cutoff=5.0)
+    pairlist = _PairList()
     return pairlist(positions, atomic_subsystem_indices)
 
 
@@ -167,15 +169,18 @@ def generate_methane_input() -> Dict[str, torch.Tensor]:
     """
 
     atomic_numbers = torch.tensor([[6], [1], [1], [1], [1]], dtype=torch.int64)
-    positions = torch.tensor(
-        [
-            [0.0, 0.0, 0.0],
-            [0.63918859, 0.63918859, 0.63918859],
-            [-0.63918859, -0.63918859, 0.63918859],
-            [-0.63918859, 0.63918859, -0.63918859],
-            [0.63918859, -0.63918859, -0.63918859],
-        ],
-        requires_grad=True,
+    positions = (
+        torch.tensor(
+            [
+                [0.0, 0.0, 0.0],
+                [0.63918859, 0.63918859, 0.63918859],
+                [-0.63918859, -0.63918859, 0.63918859],
+                [-0.63918859, 0.63918859, -0.63918859],
+                [0.63918859, -0.63918859, -0.63918859],
+            ],
+            requires_grad=True,
+        )
+        / 10  # NOTE: converting to nanometer
     )
     E_labels = torch.tensor([0.0], requires_grad=True)
     atomic_subsystem_indices = torch.tensor([0, 0, 0, 0, 0], dtype=torch.int32)
@@ -224,13 +229,18 @@ def generate_interaction_block_data(
     import torch.nn as nn
 
     from modelforge.dataset.qm9 import QM9Dataset
-    from modelforge.potential import GaussianRBF
+    from modelforge.potential import _GaussianRBF
     from modelforge.potential.utils import _distance_to_radial_basis
+    from openff.units import unit
 
     embedding = nn.Embedding(nr_embeddings, nr_atom_basis, padding_idx=0)
     batch = return_single_batch(QM9Dataset, "fit")
     r = prepare_pairlist_for_single_batch(batch)
-    radial_basis = GaussianRBF(n_rbf=nr_rbf, cutoff=5.0, dtype=batch["positions"].dtype)
+    radial_basis = _GaussianRBF(
+        n_rbf=nr_rbf,
+        cutoff=unit.Quantity(5.0, unit.angstrom),
+        dtype=batch["positions"].dtype,
+    )
 
     d_ij = r["d_ij"]
     f_ij, rcut_ij = _distance_to_radial_basis(d_ij, radial_basis)

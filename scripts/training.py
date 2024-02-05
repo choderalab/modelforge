@@ -3,7 +3,7 @@ from lightning import Trainer
 import torch
 from modelforge.potential.painn import LighningPaiNN
 
-from modelforge.potential import _CosineCutoff, _GaussianRBF
+from modelforge.potential import CosineCutoff, GaussianRBF
 from modelforge.potential.utils import SlicedEmbedding
 
 from openmm import unit
@@ -16,9 +16,9 @@ nr_interaction_blocks = 4
 cutoff = unit.Quantity(5, unit.angstrom)
 embedding = SlicedEmbedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
 assert embedding.embedding_dim == nr_atom_basis
-rbf = _GaussianRBF(n_rbf=nr_rbf, cutoff=cutoff)
+rbf = GaussianRBF(n_rbf=nr_rbf, cutoff=cutoff)
 
-cutoff = _CosineCutoff(cutoff=cutoff)
+cutoff = CosineCutoff(cutoff=cutoff)
 
 model = LighningPaiNN(
     embedding=embedding,

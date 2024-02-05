@@ -175,7 +175,7 @@ def gaussian_rbf(
 from openmm import unit
 
 
-class _CosineCutoff(nn.Module):
+class CosineCutoff(nn.Module):
     def __init__(self, cutoff: unit.Quantity):
         """
         Behler-style cosine cutoff module.
@@ -335,7 +335,7 @@ def _shifted_softplus(x: torch.Tensor):
 from typing import Optional
 
 
-class _GaussianRBF(nn.Module):
+class GaussianRBF(nn.Module):
     """
     Gaussian Radial Basis Function module.
 

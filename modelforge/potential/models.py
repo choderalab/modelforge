@@ -228,7 +228,11 @@ class LightningModuleMixin(pl.LightningModule):
         return self.optimizer(self.parameters(), lr=self.learning_rate)
 
 
-class BaseNNP(nn.Module):
+# import abstract base class and method
+from abc import ABC, abstractmethod
+
+
+class BaseNNP(ABC, nn.Module):
     """
     Base class for neural network potentials.
     """
@@ -251,17 +255,20 @@ class BaseNNP(nn.Module):
         self._log_message_dtype = False
         self._log_message_units = False
 
-    def preate_input(self, inputs: Dict[str, torch.Tensor]):
+    @abstractmethod
+    def prepare_inputs(self, inputs: Dict[str, torch.Tensor]):
         # needs to be implemented by the subclass
         # if subclass needs any additional input preparation (e.g. embedding),
         # it should be done here
         raise NotImplementedError
 
+    @abstractmethod
     def _forward(self, inputs: Dict[str, torch.Tensor]):
         # needs to be implemented by the subclass
         # perform the forward pass implemented in the subclass
         raise NotImplementedError
 
+    @abstractmethod
     def _readout(self, input: Dict[str, torch.Tensor]):
         # needs to be implemented by the subclass
         # perform the readout operation implemented in the subclass

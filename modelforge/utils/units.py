@@ -1,4 +1,3 @@
-import pint
 from openff.units import unit, Quantity
 
 # define new context for converting energy (e.g., hartree)
@@ -39,3 +38,13 @@ c.add_transformation(
 
 
 unit.add_context(c)
+
+
+def provide_details_about_used_unitsystem():
+    """
+    Provide details about the used unit systems.
+    """
+    print(
+        f"Available unit systems: {unit.unit_systems}, "
+        f"used unit system: {unit.get_unit_system()}"
+    )

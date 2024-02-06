@@ -4,7 +4,7 @@ from typing import Callable, Dict, List, Optional
 import numpy as np
 import pytorch_lightning as pl
 import torch
-from loguru import logger
+from loguru import logger as log
 from torch.utils.data import DataLoader
 
 from modelforge.utils.prop import PropertyNames
@@ -152,7 +152,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             self.properties_of_interest["E_label"][idx]
             .clone()
             .detach()
-            .to(torch.float32)
+            .to(torch.float64)  # NOTE: upgrading to float64 to avoid precision issues
         )
 
         return {
@@ -203,7 +203,7 @@ class HDF5Dataset:
         import tqdm
         import shutil
 
-        logger.debug(f"Processing and extracting data from {self.raw_data_file}")
+        log.debug(f"Processing and extracting data from {self.raw_data_file}")
 
         # this will create an unzipped file which we can then load in
         # this is substantially faster than passing gz_file directly to h5py.File()
@@ -214,7 +214,7 @@ class HDF5Dataset:
             with open(temp_hdf5_file, "wb") as out_file:
                 shutil.copyfileobj(gz_file, out_file)
 
-        logger.debug("Reading in and processing hdf5 file ...")
+        log.debug("Reading in and processing hdf5 file ...")
 
         with h5py.File(temp_hdf5_file, "r") as hf:
             # create dicts to store data for each format type
@@ -248,7 +248,7 @@ class HDF5Dataset:
 
             # loop over all records in the hdf5 file and add property arrays to the appropriate dict
 
-            logger.debug(f"n_entries: {len(hf.keys())}")
+            log.debug(f"n_entries: {len(hf.keys())}")
 
             for record in tqdm.tqdm(list(hf.keys())):
                 # There may be cases where a specific property of interest
@@ -348,7 +348,7 @@ class HDF5Dataset:
         >>> hdf5_data = HDF5Dataset("raw_data.hdf5", "processed_data.npz")
         >>> processed_data = hdf5_data._from_file_cache()
         """
-        logger.debug(f"Loading processed data from {self.processed_data_file}")
+        log.debug(f"Loading processed data from {self.processed_data_file}")
         self.numpy_data = np.load(self.processed_data_file)
 
     def _to_file_cache(
@@ -364,7 +364,7 @@ class HDF5Dataset:
                 >>> hdf5_data = HDF5Dataset("raw_data.hdf5", "processed_data.npz")
                 >>> hdf5_data._to_file_cache()
         """
-        logger.debug(f"Writing data cache to {self.processed_data_file}")
+        log.debug(f"Writing data cache to {self.processed_data_file}")
 
         np.savez(
             self.processed_data_file,
@@ -442,7 +442,7 @@ class DatasetFactory:
             Dataset instance wrapped for PyTorch.
         """
 
-        logger.info(f"Creating {data.dataset_name} dataset")
+        log.info(f"Creating {data.dataset_name} dataset")
         DatasetFactory._load_or_process_data(data, label_transform, transform)
         return TorchDataset(data.numpy_data, data._property_names)
 
@@ -479,7 +479,7 @@ class TorchDataModule(pl.LightningDataModule):
         split: SplittingStrategy = RandomRecordSplittingStrategy(),
         batch_size: int = 64,
         split_file: Optional[str] = None,
-        transform: nn.Module = None,
+        transform: Optional[nn.Module] = None,
     ):
         super().__init__()
         self.data = data
@@ -488,76 +488,125 @@ class TorchDataModule(pl.LightningDataModule):
         self.train_dataset = Optional[TorchDataset]
         self.test_dataset = Optional[TorchDataset]
         self.val_dataset = Optional[TorchDataset]
+        self.transform = transform
+        self.split = split
+
+        # data preparation
+        self.offset = False
+        self.normalize = False
+        self.dataset_mean = 0
+        self.dataset_std = 1.0  # Default to 1 to avoid division by zero if normalization is not applied
 
         if split_file:
-            import numpy as np
-
-            logger.debug(f"Loading split indices from {split_file}")
-            self.split_idxs = np.load(split_file)
+            self.split_idxs = np.load(split_file, allow_pickle=True)
+            log.debug(f"Loaded split indices from {split_file}")
         else:
-            logger.debug(f"Using splitting strategy {split}")
-            self.split = split
+            log.debug("Splitting strategy will be applied")
 
-    def prepare_data(self) -> None:
+    @classmethod
+    def compute_statistics(
+        cls, dataset: TorchDataset, collate: bool = True
+    ) -> Dict[str, float]:
+        """Computes global mean and standard deviation for normalization."""
+        from modelforge.utils.misc import Welford
+
+        log.info("Computing global mean and standard deviation for normalization")
+        if collate == False:
+            collate_conformer_fkt = None
+        else:
+            collate_conformer_fkt = collate_conformers
+
+        # Initialize variables
+        welfords_algo = Welford()
+        for batch in DataLoader(
+            dataset, batch_size=64, collate_fn=collate_conformer_fkt
+        ):
+            welfords_algo.update(batch["E_label"])
+
+        mean = welfords_algo.mean
+        stddev = torch.sqrt(welfords_algo.variance)
+        log.info(f"Computed global mean: {mean}, global std: {stddev}")
+        return {"mean": mean, "stddev": stddev}
+
+    # print information about the unit system used in the dataset
+    def print_unit_system(self) -> None:
+        """
+        Print information about the unit system used in the dataset.
+        """
+        from modelforge.utils import provide_details_about_used_unitsystem
+
+        provide_details_about_used_unitsystem()
+
+    def prepare_data(self, offset: bool = True, normalize: bool = False) -> None:
         """
         Prepares the data by creating a dataset instance.
         """
 
         factory = DatasetFactory()
         self.dataset = factory.create_dataset(self.data)
-        # Initialize variables to store the sum of batch averages and the total count of elements
-        weighted_sum_of_averages = 0
-        total_count = 0
+        if offset or normalize:
+            self.offset = offset
+            self.normalize = normalize
+            stats = TorchDataModule.compute_statistics(self.dataset)
+            self.dataset_mean = stats["mean"]
+            self.dataset_std = stats["stddev"]
 
-        # DataLoader for iterating over batches
-        for batch in DataLoader(
-            self.dataset, batch_size=self.batch_size, collate_fn=collate_conformers
-        ):
-            # Compute the average for the current batch and count the number of elements
-            batch_sum = torch.sum(batch["E_label"])
-            atoms_in_batch = batch["atomic_numbers"].size(
-                0
-            )  # This is the number of elements in the current batch
-            batch_mean_per_atom = batch_sum / atoms_in_batch
+    @classmethod
+    def preprocess_dataset(
+        cls,
+        dataset: TorchDataset,
+        normalize: bool,
+        dataset_mean: float,
+        dataset_std: Optional[float] = None,
+    ) -> None:
+        from tqdm import tqdm
 
-        # Compute the overall average by dividing the weighted sum of batch averages by the total count
-        self.mean_value = weighted_sum_of_averages / total_count
+        log.info(f"Adjusting energies by subtracting global mean {dataset_mean}")
 
-    def setup(self, stage: str) -> None:
+        if normalize:
+            log.info("Normalizing energies using computed mean and std")
+        for i in tqdm(range(len(dataset)), desc="Adjusting Energies"):
+            energy = dataset[i]["E_label"]
+            if normalize:
+                # Normalize using the computed mean and std
+                modified_energy = (energy - dataset_mean) / dataset_std
+            else:
+                # Only adjust by subtracting the mean
+                modified_energy = energy - dataset_mean
+            dataset[i]["E_label"] = modified_energy
+
+        return dataset
+
+    def setup(self) -> None:
         """
-        Splits the data into training, validation, and test sets based on the stage.
-
-        Parameters
-        ----------
-        stage : str
-            Either "fit" for training/validation split or "test" for test split.
+        Splits the data into training, validation, and test set.
         """
         from torch.utils.data import Subset
 
-        if stage == "fit":
-            if self.split_idxs:
-                train_idx, val_idx = (
-                    self.split_idxs["train_idx"],
-                    self.split_idxs["val_idx"],
-                )
-                self.train_dataset = Subset(self.dataset, train_idx)
-                self.val_dataset = Subset(self.dataset, val_idx)
-            else:
-                train_dataset, val_dataset, _ = self.split.split(self.dataset)
-                self.train_dataset = train_dataset
-                self.val_dataset = val_dataset
+        # Adjust atomic properties by subtracting the global mean
 
-        # Assign test dataset for use in dataloader(s)
-        elif stage == "test":
-            if self.split_idxs:
-                test_idx = self.split_idxs["test_idx"]
-                self.test_dataset = Subset(self.dataset, test_idx)
-            else:
-                _, _, test_dataset = self.split.split(self.dataset)
-                self.test_dataset = test_dataset
+        if self.offset or self.normalize:
+            modified_dataset = TorchDataModule.preprocess_dataset(
+                self.dataset,
+                self.normalize,
+                self.dataset_mean,
+                self.dataset_std,
+            )
+
+        if self.split_idxs:
+            train_idx, val_idx, test_idx = (
+                self.split_idxs["train_idx"],
+                self.split_idxs["val_idx"],
+                self.split_idxs["test_idx"],
+            )
+            self.train_dataset = Subset(self.dataset, train_idx)
+            self.val_dataset = Subset(self.dataset, val_idx)
+            self.test_dataset = Subset(self.dataset, test_idx)
 
         else:
-            raise ValueError(f"Unknown stage {stage}")
+            self.train_dataset, self.val_dataset, self.test_dataset = self.split.split(
+                self.dataset
+            )
 
     def train_dataloader(self) -> DataLoader:
         """

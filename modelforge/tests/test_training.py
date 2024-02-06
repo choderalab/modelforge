@@ -35,7 +35,7 @@ def test_train_with_lightning(dataset: Type[BaseNNP], model_class: Type[BaseNNP]
         pytest.fail("Failed to set up the model.")
 
     # Initialize dataset and data loader
-    dataset = initialize_dataset(dataset, mode="fit")
+    dataset = initialize_dataset(dataset)
     if dataset is None:
         pytest.fail("Failed to initialize the dataset.")
     # Initialize PyTorch Lightning Trainer
@@ -83,7 +83,7 @@ def test_pt_lightning():
     data = QM9Dataset(for_unit_testing=True)
     dataset = TorchDataModule(data, batch_size=64)
     dataset.prepare_data()
-    dataset.setup(stage="fit")
+    dataset.setup()
     from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
     trainer = Trainer(

@@ -13,13 +13,14 @@ DATASETS = [QM9Dataset]
 
 from openff.units import unit
 
+
 def setup_simple_model(
     model_class,
     lightning: bool = False,
     nr_atom_basis: int = 128,
     max_atomic_number: int = 100,
     n_rbf: int = 20,
-    cutoff: unit.Quantity = 5.0*unit.angstrom,
+    cutoff: unit.Quantity = 5.0 * unit.angstrom,
     nr_interaction_blocks: int = 2,
     nr_filters: int = 2,
 ) -> Optional[BaseNNP]:
@@ -38,7 +39,7 @@ def setup_simple_model(
     Optional[BaseNNP]
         Initialized model.
     """
-    from modelforge.potential import _CosineCutoff, _GaussianRBF
+    from modelforge.potential import CosineCutoff, GaussianRBF
     from modelforge.potential.utils import SlicedEmbedding
 
     embedding = SlicedEmbedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
@@ -83,7 +84,7 @@ def setup_simple_model(
 
 
 def return_single_batch(
-    dataset, mode: str, split_file: Optional[str] = None, for_unit_testing: bool = True
+    dataset, split_file: Optional[str] = None, for_unit_testing: bool = True
 ) -> Dict[str, torch.Tensor]:
     """
     Return a single batch from a dataset.
@@ -197,7 +198,7 @@ def generate_mock_data():
 
 
 def generate_batch_data():
-    return return_single_batch(QM9Dataset, mode="fit")
+    return return_single_batch(QM9Dataset)
 
 
 def generate_interaction_block_data(
@@ -222,12 +223,12 @@ def generate_interaction_block_data(
     import torch.nn as nn
 
     from modelforge.dataset.qm9 import QM9Dataset
-    from modelforge.potential import _GaussianRBF
+    from modelforge.potential import GaussianRBF
     from modelforge.potential.utils import _distance_to_radial_basis
     from openff.units import unit
 
     embedding = nn.Embedding(nr_embeddings, nr_atom_basis, padding_idx=0)
-    batch = return_single_batch(QM9Dataset, "fit")
+    batch = return_single_batch(QM9Dataset)
     r = prepare_pairlist_for_single_batch(batch)
     radial_basis = GaussianRBF(
         n_rbf=nr_rbf,

@@ -19,7 +19,6 @@ def test_forward_pass(model_class, dataset):
         initialized_model = setup_simple_model(model_class, lightning)
         inputs = return_single_batch(
             dataset,
-            mode="fit",
         )  # split_file="modelforge/tests/qm9tut/split.npz")
         nr_of_mols = inputs["atomic_subsystem_indices"].unique().shape[0]
         nr_of_atoms_per_batch = inputs["atomic_subsystem_indices"].shape[0]
@@ -250,7 +249,7 @@ def test_pairlist_on_dataset(dataset):
     data = dataset(for_unit_testing=True)
     data_module = TorchDataModule(data)
     data_module.prepare_data()
-    data_module.setup("fit")
+    data_module.setup()
     for data in data_module.train_dataloader():
         positions = data["positions"]
         atomic_subsystem_indices = data["atomic_subsystem_indices"]

@@ -149,10 +149,11 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             .detach()
         ).to(torch.float32)
         E_label = (
-            self.properties_of_interest["E_label"][idx]
+            (self.properties_of_interest["E_label"][idx])
             .clone()
             .detach()
-            .to(torch.float64)  # NOTE: upgrading to float64 to avoid precision issues
+            .to(torch.float64)
+        )  # NOTE: upgrading to float64 to avoid precision issues
 
         return {
             "atomic_numbers": atomic_numbers,
@@ -468,7 +469,7 @@ class TorchDataModule(pl.LightningDataModule):
     >>> data = QM9Dataset()
     >>> data_module = TorchDataModule(data)
     >>> data_module.prepare_data()
-    >>> data_module.setup("fit")
+    >>> data_module.setup("")
     >>> train_loader = data_module.train_dataloader()
     """
 

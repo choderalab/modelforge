@@ -183,7 +183,7 @@ class LightningModuleMixin(pl.LightningModule):
         """
         batch_size = self._log_batch_size(batch)
         predictions = self.forward(batch).flatten()
-        targets = batch["E_label"].flatten()
+        targets = batch["E_label"].flatten().to(torch.float32)
         loss = self.loss_function(predictions, targets)
         # Specify the batch size explicitly using self.log
         self.log(
@@ -195,7 +195,6 @@ class LightningModuleMixin(pl.LightningModule):
             batch_size=batch_size,
         )
         return loss
-
 
     def test_step(self, batch, batch_idx):
         from torch.nn import functional as F

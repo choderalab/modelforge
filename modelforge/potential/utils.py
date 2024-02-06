@@ -335,7 +335,7 @@ def _shifted_softplus(x: torch.Tensor):
 from typing import Optional
 
 
-class _GaussianRBF(nn.Module):
+class GaussianRBF(nn.Module):
     """
     Gaussian Radial Basis Function module.
 
@@ -468,6 +468,7 @@ def _pair_list(
 
 from openff.units import unit
 
+
 def _neighbor_list_with_cutoff(
     coordinates: torch.Tensor,  # in nanometer
     atomic_subsystem_indices: torch.Tensor,
@@ -499,7 +500,7 @@ def _neighbor_list_with_cutoff(
     )
 
     # Find pairs within the cutoff
-    #cutoff = cutoff.to(unit.nanometer).m
+    # cutoff = cutoff.to(unit.nanometer).m
     in_cutoff = (distances <= cutoff).nonzero(as_tuple=False).squeeze()
 
     # Get the atom indices within the cutoff

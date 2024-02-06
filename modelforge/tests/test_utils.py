@@ -44,7 +44,7 @@ def test_cosine_cutoff_module():
     assert torch.allclose(output, expected_output, rtol=1e-3)
 
 
-@pytest.mark.parametrize("RBF", [_GaussianRBF])
+@pytest.mark.parametrize("RBF", [GaussianRBF])
 def test_rbf(RBF):
     """
     Test the Gaussian Radial Basis Function (RBF) implementation.
@@ -53,7 +53,7 @@ def test_rbf(RBF):
 
     from .helper_functions import prepare_pairlist_for_single_batch, return_single_batch
 
-    batch = return_single_batch(QM9Dataset, mode="fit")
+    batch = return_single_batch(QM9Dataset)
     pairlist = prepare_pairlist_for_single_batch(batch)
     from openff.units import unit
 
@@ -63,7 +63,7 @@ def test_rbf(RBF):
     assert output.shape[2] == 20  # n_rbf dimension
 
 
-@pytest.mark.parametrize("RBF", [_GaussianRBF])
+@pytest.mark.parametrize("RBF", [GaussianRBF])
 def test_gaussian_rbf(RBF):
     # Check dimensions of output and output
     from openff.units import unit
@@ -82,9 +82,7 @@ def test_gaussian_rbf(RBF):
     assert gaussian_rbf.cutoff == cutoff.to(unit.nanometer).m
 
     # Test that the widths and offsets are correct
-    expected_offsets = torch.linspace(
-        start, cutoff.to(unit.nanometer).m, n_rbf
-    )
+    expected_offsets = torch.linspace(start, cutoff.to(unit.nanometer).m, n_rbf)
     expected_widths = torch.abs(
         expected_offsets[1] - expected_offsets[0]
     ) * torch.ones_like(expected_offsets)
@@ -97,7 +95,7 @@ def test_gaussian_rbf(RBF):
     assert expected_output.shape == (3, n_rbf)
 
 
-@pytest.mark.parametrize("RBF", [_GaussianRBF])
+@pytest.mark.parametrize("RBF", [GaussianRBF])
 def test_rbf_invariance(RBF):
     # Define a set of coordinates
     from openff.units import unit
@@ -146,12 +144,12 @@ def test_scatter_add():
     native_result.scatter_add_(dim, idx_i, x)
 
 
-def test_GaussianRBF():
+def testGaussianRBF():
     """
     Test the GaussianRBF layer.
     """
 
-    from modelforge.potential import _GaussianRBF
+    from modelforge.potential import GaussianRBF
     from openff.units import unit
 
     n_rbf = 10

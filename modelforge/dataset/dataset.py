@@ -584,9 +584,9 @@ class TorchDataModule(pl.LightningDataModule):
         from torch.utils.data import Subset
 
         # Adjust atomic properties by subtracting the global mean
-
         if self.offset or self.normalize:
-            modified_dataset = TorchDataModule.preprocess_dataset(
+            log.info("Removing offset and/or normalizing energies")
+            TorchDataModule.preprocess_dataset(
                 self.dataset,
                 self.normalize,
                 self.dataset_mean,

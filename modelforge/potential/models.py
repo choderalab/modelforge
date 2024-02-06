@@ -194,6 +194,8 @@ class LightningModuleMixin(pl.LightningModule):
             prog_bar=True,
             batch_size=batch_size,
         )
+        return loss
+
 
     def test_step(self, batch, batch_idx):
         from torch.nn import functional as F
@@ -215,6 +217,25 @@ class LightningModuleMixin(pl.LightningModule):
         self.log(
             "val_loss", val_loss, batch_size=batch_size, on_epoch=True, prog_bar=True
         )
+
+    def test_step(self, batch, batch_idx):
+        from torch.nn import functional as F
+
+        batch_size = self._log_batch_size(batch)
+
+        predictions = self.forward(batch).flatten()
+        targets = batch["E_label"].flatten()
+        test_loss = F.mse_loss(predictions, targets)
+        self.log("test_loss", test_loss, batch_size=batch_size)
+
+    def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx):
+        from torch.nn import functional as F
+
+        batch_size = self._log_batch_size(batch)
+        predictions = self.forward(batch)
+        targets = batch["E_label"]
+        val_loss = F.mse_loss(predictions, targets)
+        self.log("val_loss", val_loss, batch_size=batch_size, on_epoch=True)
 
     def configure_optimizers(self) -> AdamW:
         """
@@ -316,7 +337,7 @@ class BaseNNP(nn.Module):
             If the input dictionary is missing required keys or has invalid shapes.
 
         """
-        from openmm import unit
+        from openff.units import unit
 
         required_keys = ["atomic_numbers", "positions", "atomic_subsystem_indices"]
         for key in required_keys:
@@ -337,11 +358,10 @@ class BaseNNP(nn.Module):
             )
             inputs["positions"] = inputs["positions"].to(self._dtype)
 
-        try:
-            inputs["positions"] = inputs["positions"].value_in_unit_system(
-                unit.md_unit_system
-            )
-        except AttributeError:
+        if isinstance(inputs["positions"], unit.Quantity):
+            inputs["positions"] = inputs["positions"].to(unit.nanometer).m
+
+        else:
             if not self._log_message_units:
                 log.warning(
                     "Could not convert positions to nanometer. Assuming positions are already in nanometer."

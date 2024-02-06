@@ -153,7 +153,6 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             .clone()
             .detach()
             .to(torch.float64)  # NOTE: upgrading to float64 to avoid precision issues
-        )
 
         return {
             "atomic_numbers": atomic_numbers,

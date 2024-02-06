@@ -6,7 +6,7 @@ from modelforge.potential.painn import LighningPaiNN
 from modelforge.potential import CosineCutoff, GaussianRBF
 from modelforge.potential.utils import SlicedEmbedding
 
-from openmm import unit
+from openff.units import unit
 
 max_atomic_number = 100
 nr_atom_basis = 128

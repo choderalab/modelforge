@@ -20,7 +20,7 @@ def test_PaiNN_init(lightning):
     assert painn is not None, "PaiNN model should be initialized."
 
 
-from openmm import unit
+from openff.units import unit
 
 
 @pytest.mark.parametrize("lightning", [True, False])

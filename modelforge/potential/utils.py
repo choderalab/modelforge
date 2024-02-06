@@ -172,7 +172,7 @@ def gaussian_rbf(
     return y
 
 
-from openmm import unit
+from openff.units import unit
 
 
 class CosineCutoff(nn.Module):
@@ -187,7 +187,7 @@ class CosineCutoff(nn.Module):
 
         """
         super().__init__()
-        cutoff = cutoff.value_in_unit_system(unit.md_unit_system)
+        cutoff = cutoff.to(unit.nanometer).m
         self.register_buffer("cutoff", torch.FloatTensor([cutoff]))
 
     def forward(self, input: torch.Tensor):
@@ -335,7 +335,7 @@ def _shifted_softplus(x: torch.Tensor):
 from typing import Optional
 
 
-class GaussianRBF(nn.Module):
+class _GaussianRBF(nn.Module):
     """
     Gaussian Radial Basis Function module.
 
@@ -360,7 +360,7 @@ class GaussianRBF(nn.Module):
         ----------
         n_rbf : int
             Number of radial basis functions.
-        cutoff : float
+        cutoff : unit.Quantity
             The cutoff distance. NOTE: IN ANGSTROM #FIXME
         start: float
             center of first Gaussian function.
@@ -370,7 +370,7 @@ class GaussianRBF(nn.Module):
         """
         super().__init__()
         self.n_rbf = n_rbf
-        cutoff = cutoff.value_in_unit(unit.nanometer)
+        cutoff = cutoff.to(unit.nanometer).m
         self.cutoff = cutoff
         # compute offset and width of Gaussian functions
         offset = torch.linspace(start, cutoff, n_rbf, dtype=dtype)
@@ -466,13 +466,12 @@ def _pair_list(
     return pair_indices
 
 
-from openmm import unit
-
+from openff.units import unit
 
 def _neighbor_list_with_cutoff(
     coordinates: torch.Tensor,  # in nanometer
     atomic_subsystem_indices: torch.Tensor,
-    cutoff: unit.Quantity,
+    cutoff: float,
     only_unique_pairs: bool = False,
 ) -> torch.Tensor:
     """Compute all pairs of atoms and their distances.
@@ -482,7 +481,7 @@ def _neighbor_list_with_cutoff(
     coordinates : torch.Tensor, shape (nr_atoms_per_systems, 3), in nanometer
     atomic_subsystem_indices : torch.Tensor, shape (nr_atoms_per_systems)
         Atom indices to indicate which atoms belong to which molecule
-    cutoff : unit.Quantity
+    cutoff : float
         The cutoff distance.
     """
     positions = coordinates.detach()
@@ -500,6 +499,7 @@ def _neighbor_list_with_cutoff(
     )
 
     # Find pairs within the cutoff
+    #cutoff = cutoff.to(unit.nanometer).m
     in_cutoff = (distances <= cutoff).nonzero(as_tuple=False).squeeze()
 
     # Get the atom indices within the cutoff

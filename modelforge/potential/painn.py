@@ -178,7 +178,6 @@ class PaiNN(BaseNNP):
         transformed_input = self._generate_representation(inputs)
         q = transformed_input["q"]
         mu = transformed_input["mu"]
-
         for i, (interaction_mod, mixing_mod) in enumerate(
             zip(self.interaction_modules, self.mixing_modules)
         ):

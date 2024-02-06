@@ -44,7 +44,8 @@ def provide_details_about_used_unitsystem():
     """
     Provide details about the used unit systems.
     """
-    print(
-        f"Available unit systems: {unit.unit_systems}, "
-        f"used unit system: {unit.get_unit_system()}"
-    )
+    from loguru import logger as log
+
+    log.info("Distance are in nanometer.")
+    log.info("Energies are in kJ/mol")
+    log.info("Forces are in kJ/mol/nm**2")

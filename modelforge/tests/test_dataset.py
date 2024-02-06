@@ -395,3 +395,16 @@ def test_offset_and_normalization():
     assert torch.isclose(
         mod_dataset[2]["E_label"], torch.tensor([1.2247], dtype=torch.float), atol=1e-4
     )
+
+    # test offset and normalization with QM9
+    from modelforge.dataset.qm9 import QM9Dataset
+
+    data = QM9Dataset(for_unit_testing=True)
+    dataset = TorchDataModule(data, batch_size=64)
+    dataset.prepare_data(offset=True, normalize=True)
+    dataset.setup()
+
+    for batch in dataset.train_dataloader():
+        labels = batch["E_label"]
+        # no datapoint should be outside the a normal distribution with stddev of 1
+        assert torch.all(labels < 2.0 + 1e-4)

@@ -82,7 +82,7 @@ def test_pt_lightning():
 
     data = QM9Dataset(for_unit_testing=True)
     dataset = TorchDataModule(data, batch_size=64)
-    dataset.prepare_data()
+    dataset.prepare_data(offset=True)
     dataset.setup()
     from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 

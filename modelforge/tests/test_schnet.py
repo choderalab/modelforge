@@ -15,8 +15,7 @@ def test_Schnet_init(lightning):
     assert schnet is not None, "Schnet model should be initialized."
 
 
-from openmm import unit
-
+from openff.units import unit
 
 @pytest.mark.parametrize("lightning", [True, False])
 @pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)

@@ -12,8 +12,7 @@ from typing import Optional, Dict
 MODELS_TO_TEST = [SchNET, PaiNN, SAKE]
 DATASETS = [QM9Dataset]
 
-from openmm import unit
-
+from openff.units import unit
 
 def setup_simple_model(
     model_class,
@@ -21,7 +20,7 @@ def setup_simple_model(
     nr_atom_basis: int = 128,
     max_atomic_number: int = 100,
     n_rbf: int = 20,
-    cutoff: unit.Quantity = unit.Quantity(5.0, unit.angstrom),
+    cutoff: unit.Quantity = 5.0*unit.angstrom,
     nr_interaction_blocks: int = 2,
     nr_filters: int = 2,
 ) -> Optional[BaseNNP]:
@@ -247,7 +246,7 @@ def generate_interaction_block_data(
     from modelforge.dataset.qm9 import QM9Dataset
     from modelforge.potential import _GaussianRBF
     from modelforge.potential.utils import _distance_to_radial_basis
-    from openmm import unit
+    from openff.units import unit
 
     embedding = nn.Embedding(nr_embeddings, nr_atom_basis, padding_idx=0)
     batch = return_single_batch(QM9Dataset, "fit")

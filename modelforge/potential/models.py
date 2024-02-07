@@ -236,7 +236,9 @@ class LightningModuleMixin(pl.LightningModule):
         predictions = self.forward(batch)
         targets = batch["E_label"]
         val_loss = F.mse_loss(predictions, targets)
-        self.log("val_loss", val_loss, batch_size=batch_size, on_epoch=True)
+        self.log(
+            "val_loss", val_loss, batch_size=batch_size, on_epoch=True, prog_bar=True
+        )
 
     def configure_optimizers(self) -> AdamW:
         """

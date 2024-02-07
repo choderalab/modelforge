@@ -107,6 +107,21 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             )
         )
 
+    def __setitem__(self, idx: int, value: Dict[str, torch.Tensor]) -> None:
+        """
+        Set the value of a property for a given conformer index.
+
+        Parameters
+        ----------
+        idx : int
+            Index of the conformer to set the value for.
+        value : Dict[str, torch.Tensor]
+            Dictionary containing the property name and value to set.
+
+        """
+        for key, val in value.items():
+            self.properties_of_interest[key][idx] = val
+
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         """
         Fetch a tuple of the values for the properties of interest for a given conformer index.
@@ -484,10 +499,10 @@ class TorchDataModule(pl.LightningDataModule):
         super().__init__()
         self.data = data
         self.batch_size = batch_size
-        self.split_idxs: Optional[str] = None
-        self.train_dataset = Optional[TorchDataset]
-        self.test_dataset = Optional[TorchDataset]
-        self.val_dataset = Optional[TorchDataset]
+        self.split_idxs = None
+        self.train_dataset = None
+        self.test_dataset = None
+        self.val_dataset = None
         self.transform = transform
         self.split = split
 
@@ -541,15 +556,13 @@ class TorchDataModule(pl.LightningDataModule):
         """
         Prepares the data by creating a dataset instance.
         """
-
+        self.offset = offset
+        self.normalize = normalize
         factory = DatasetFactory()
         self.dataset = factory.create_dataset(self.data)
-        if offset or normalize:
-            self.offset = offset
-            self.normalize = normalize
-            stats = TorchDataModule.compute_statistics(self.dataset)
-            self.dataset_mean = stats["mean"]
-            self.dataset_std = stats["stddev"]
+        stats = TorchDataModule.compute_statistics(self.dataset)
+        self.dataset_mean = stats["mean"]
+        self.dataset_std = stats["stddev"]
 
     @classmethod
     def preprocess_dataset(
@@ -573,7 +586,7 @@ class TorchDataModule(pl.LightningDataModule):
             else:
                 # Only adjust by subtracting the mean
                 modified_energy = energy - dataset_mean
-            dataset[i]["E_label"] = modified_energy
+            dataset[i] = {"E_label": modified_energy}
 
         return dataset
 
@@ -586,7 +599,7 @@ class TorchDataModule(pl.LightningDataModule):
         # Adjust atomic properties by subtracting the global mean
         if self.offset or self.normalize:
             log.info("Removing offset and/or normalizing energies")
-            TorchDataModule.preprocess_dataset(
+            self.dataset = TorchDataModule.preprocess_dataset(
                 self.dataset,
                 self.normalize,
                 self.dataset_mean,

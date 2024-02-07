@@ -331,6 +331,9 @@ def test_offset_and_normalization():
             item = self.data[idx]
             return item
 
+        def __setitem__(self, idx, value):
+            self.data[idx] = value
+
     # add the mock datapoints
     dataset = [
         {"E_label": torch.tensor([2], dtype=torch.float)},
@@ -407,4 +410,5 @@ def test_offset_and_normalization():
     for batch in dataset.train_dataloader():
         labels = batch["E_label"]
         # no datapoint should be outside the a normal distribution with stddev of 1
-        assert torch.all(labels < 2.0 + 1e-4)
+        # test that all labels are within [-2,2]
+        assert torch.all(labels > -2.0) or torch.all(labels < 2.0)

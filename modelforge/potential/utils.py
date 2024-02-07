@@ -305,7 +305,7 @@ class EnergyReadout(nn.Module):
         # Perform scatter add operation
         indices = atomic_subsystem_indices.unsqueeze(1).to(torch.int64)
         result = torch.zeros(
-            len(atomic_subsystem_indices.unique()), 1, dtype=x.dtype
+            len(atomic_subsystem_indices.unique()), 1, dtype=x.dtype, device=x.device
         ).scatter_add(0, indices, x)
 
         # Sum across feature dimension to get final tensor of shape (num_molecules, 1)

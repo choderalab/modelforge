@@ -185,7 +185,15 @@ class LightningModuleMixin(pl.LightningModule):
         predictions = self.forward(batch).flatten()
         targets = batch["E_label"].flatten().to(torch.float32)
         loss = self.loss_function(predictions, targets)
-        # Specify the batch size explicitly using self.log
+
+        if self.report_loss_in_kJ_per_mol and not self.energy_average:
+            log.warning("Please provide the energy average")
+        else:
+            if self.energy_stddev:
+                loss = loss * self.energy_stddev
+
+            loss = loss + self.energy_average
+
         self.log(
             "train_loss",
             loss,
@@ -254,6 +262,25 @@ class BaseNNP(nn.Module):
         self._dtype = None  # set at runtime
         self._log_message_dtype = False
         self._log_message_units = False
+        self.report_loss_in_kJ_per_mol = True
+        self._energy_average = None
+        self._energy_stddev = None
+
+    @property
+    def energy_average(self):
+        return self._energy_average
+
+    @energy_average.setter
+    def energy_average(self, value):
+        self._energy_average = value
+
+    @property
+    def energy_stddev(self):
+        return self._energy_stddev
+
+    @energy_stddev.setter
+    def energy_stddev(self, value):
+        self._energy_stddev = value
 
     def preate_input(self, inputs: Dict[str, torch.Tensor]):
         # needs to be implemented by the subclass

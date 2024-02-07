@@ -484,7 +484,7 @@ class TorchDataModule(pl.LightningDataModule):
     >>> data = QM9Dataset()
     >>> data_module = TorchDataModule(data)
     >>> data_module.prepare_data()
-    >>> data_module.setup("")
+    >>> data_module.setup()
     >>> train_loader = data_module.train_dataloader()
     """
 
@@ -562,7 +562,10 @@ class TorchDataModule(pl.LightningDataModule):
         self.dataset = factory.create_dataset(self.data)
         stats = TorchDataModule.compute_statistics(self.dataset)
         self.dataset_mean = stats["mean"]
-        self.dataset_std = stats["stddev"]
+        if self.normalize:
+            self.dataset_std = stats["stddev"]
+            # NOTE: oterwise it is 1, so that it does not have an impact in
+            # the inverse normalization operation
 
     @classmethod
     def preprocess_dataset(

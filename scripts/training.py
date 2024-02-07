@@ -20,13 +20,6 @@ rbf = GaussianRBF(n_rbf=nr_rbf, cutoff=cutoff)
 
 cutoff = CosineCutoff(cutoff=cutoff)
 
-model = LighningPaiNN(
-    embedding=embedding,
-    nr_interaction_blocks=nr_interaction_blocks,
-    radial_basis=rbf,
-    cutoff=cutoff,
-)
-
 from modelforge.dataset.qm9 import QM9Dataset
 from modelforge.dataset.dataset import TorchDataModule
 
@@ -43,6 +36,17 @@ trainer = Trainer(
         EarlyStopping(monitor="val_loss", mode="min", patience=3, min_delta=0.001)
     ],
 )
+
+
+model = LighningPaiNN(
+    embedding=embedding,
+    nr_interaction_blocks=nr_interaction_blocks,
+    radial_basis=rbf,
+    cutoff=cutoff,
+)
+
+model.energy_average = dataset.data.energy_average
+model.energy_std = dataset.data.energy_std
 
 # Move model to the appropriate dtype and device
 model = model.to(torch.float32)

@@ -70,13 +70,6 @@ def test_pt_lightning():
 
     cutoff = CosineCutoff(cutoff=cutoff)
 
-    model = LighningPaiNN(
-        embedding=embedding,
-        nr_interaction_blocks=nr_interaction_blocks,
-        radial_basis=rbf,
-        cutoff=cutoff,
-    )
-
     from modelforge.dataset.qm9 import QM9Dataset
     from modelforge.dataset.dataset import TorchDataModule
 
@@ -94,6 +87,15 @@ def test_pt_lightning():
         ],
     )
 
+    model = LighningPaiNN(
+        embedding=embedding,
+        nr_interaction_blocks=nr_interaction_blocks,
+        radial_basis=rbf,
+        cutoff=cutoff,
+    )
+
+    model.energy_average = dataset.dataset_mean
+    model.energy_std = dataset.dataset_std
     # Move model to the appropriate dtype and device
     model = model.to(torch.float32)
     # Run training loop and validate

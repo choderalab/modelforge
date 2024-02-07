@@ -228,9 +228,6 @@ class LightningModuleMixin(pl.LightningModule):
         return self.optimizer(self.parameters(), lr=self.learning_rate)
 
 
-from openmm import unit
-
-
 class BaseNNP(nn.Module):
     """
     Base class for neural network potentials.
@@ -318,7 +315,6 @@ class BaseNNP(nn.Module):
             If the input dictionary is missing required keys or has invalid shapes.
 
         """
-
         from openff.units import unit
 
         required_keys = ["atomic_numbers", "positions", "atomic_subsystem_indices"]
@@ -339,7 +335,6 @@ class BaseNNP(nn.Module):
                 f"Setting dtype of positions tensor to {self._dtype}."
             )
             inputs["positions"] = inputs["positions"].to(self._dtype)
-
 
         if isinstance(inputs["positions"], unit.Quantity):
             inputs["positions"] = inputs["positions"].to(unit.nanometer).m
@@ -363,7 +358,7 @@ class BaseNNP(nn.Module):
             Inputs containing atomic numbers ('atomic_numbers'), coordinates ('positions') and pairlist ('pairlist').
             - 'atomic_numbers': int; shape (nr_of_atoms_in_batch, 1), 0 indicates non-interacting atoms that will be masked
             - 'total_charge' : int; shape (n_system)
-            - 'positions': float; shape (nr_of_atoms_in_batch, 3), with openmm units attached
+            - 'positions': float; shape (nr_of_atoms_in_batch, 3)
 
         Returns
         -------

@@ -174,6 +174,7 @@ def gaussian_rbf(
 
 from openff.units import unit
 
+
 class _CosineCutoff(nn.Module):
     def __init__(self, cutoff: unit.Quantity):
         """

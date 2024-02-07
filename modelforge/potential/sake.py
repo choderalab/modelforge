@@ -117,7 +117,7 @@ class SAKE(BaseNNP):
         dir_ij = r_ij / d_ij
         f_ij, _ = _distance_to_radial_basis(d_ij, self.radial_basis_module)
 
-        fcut = self.cutoff_module(d_ij) 
+        fcut = self.cutoff_module(d_ij)
 
         filters = self.filter_net(f_ij) * fcut[..., None]
         self.filter_list = torch.split(filters, 3 * self.nr_atom_basis, dim=-1)
@@ -269,7 +269,7 @@ class SAKEInteraction(nn.Module):
         expanded_idx_i_dmu = idx_i.view(-1, 1, 1).expand_as(dmu)
         dmu = zeros.scatter_add(0, expanded_idx_i_dmu, dmu)
 
-        q = q + dq 
+        q = q + dq
         mu = mu + dmu
 
         return q, mu

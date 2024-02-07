@@ -20,7 +20,7 @@ def test_SAKE_init(lightning):
     assert sake is not None, "SAKE model should be initialized."
 
 
-from openmm import unit
+from openff.units import unit
 
 
 @pytest.mark.parametrize("lightning", [True, False])

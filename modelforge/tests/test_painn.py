@@ -22,7 +22,6 @@ def test_PaiNN_init(lightning):
 
 from openff.units import unit
 
-
 @pytest.mark.parametrize("lightning", [True, False])
 @pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
 @pytest.mark.parametrize(

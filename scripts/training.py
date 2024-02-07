@@ -9,9 +9,9 @@ from modelforge.potential.utils import SlicedEmbedding
 from openff.units import unit
 
 max_atomic_number = 100
-nr_atom_basis = 128
-nr_rbf = 20
-nr_interaction_blocks = 4
+nr_atom_basis = 32
+nr_rbf = 15
+nr_interaction_blocks = 2
 
 cutoff = unit.Quantity(5, unit.angstrom)
 embedding = SlicedEmbedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
@@ -24,14 +24,16 @@ from modelforge.dataset.qm9 import QM9Dataset
 from modelforge.dataset.dataset import TorchDataModule
 
 data = QM9Dataset(for_unit_testing=True)
-dataset = TorchDataModule(data, batch_size=64)
-dataset.prepare_data()
+dataset = TorchDataModule(data, batch_size=512)
+dataset.prepare_data(offset=True, normalize=True)
 dataset.setup()
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
 trainer = Trainer(
-    max_epochs=1000,
+    max_epochs=200,
     num_nodes=1,
+    accelerator='cuda',
+    devices=[0],
     callbacks=[
         EarlyStopping(monitor="val_loss", mode="min", patience=3, min_delta=0.001)
     ],
@@ -45,8 +47,11 @@ model = LighningPaiNN(
     cutoff=cutoff,
 )
 
-model.energy_average = dataset.data.energy_average
-model.energy_std = dataset.data.energy_std
+model.energy_average = dataset.dataset_mean
+model.energy_stddev = dataset.dataset_std
+
+print(model.energy_average)
+print(model.energy_stddev)
 
 # Move model to the appropriate dtype and device
 model = model.to(torch.float32)

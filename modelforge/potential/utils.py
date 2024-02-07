@@ -440,15 +440,28 @@ def _pair_list(
     # generate index grid
     n = len(atomic_subsystem_indices)
 
+    # get device that passed tensors lives on, initialize on the same device
+    device = atomic_subsystem_indices.device
+
     if only_unique_pairs:
-        i_indices, j_indices = torch.triu_indices(n, n, 1)
+        i_indices, j_indices = torch.triu_indices(n, n, 1, device=device)
     else:
         # Repeat each number n-1 times for i_indices
-        i_indices = torch.repeat_interleave(torch.arange(n), repeats=n - 1)
+        i_indices = torch.repeat_interleave(
+            torch.arange(n, device=device), repeats=n - 1
+        )
 
         # Correctly construct j_indices
         j_indices = torch.cat(
-            [torch.cat((torch.arange(i), torch.arange(i + 1, n))) for i in range(n)]
+            [
+                torch.cat(
+                    (
+                        torch.arange(i, device=device),
+                        torch.arange(i + 1, n, device=device),
+                    )
+                )
+                for i in range(n)
+            ]
         )
 
     # filter pairs to only keep those belonging to the same molecule
@@ -463,7 +476,7 @@ def _pair_list(
     # concatenate to form final (2, n_pairs) tensor
     pair_indices = torch.stack((i_final_pairs, j_final_pairs))
 
-    return pair_indices
+    return pair_indices.to(device)
 
 
 from openff.units import unit

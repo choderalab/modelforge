@@ -214,7 +214,10 @@ class LightningModuleMixin(pl.LightningModule):
         targets = batch["E_label"]
         val_loss = F.mse_loss(predictions, targets)
         self.log(
-            "val_loss", val_loss, batch_size=batch_size, on_epoch=True, prog_bar=True
+            "val_loss",
+            val_loss,
+            batch_size=batch_size,
+            on_epoch=True,  # prog_bar=True
         )
 
     def test_step(self, batch, batch_idx):

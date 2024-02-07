@@ -152,11 +152,12 @@ class SAKE(BaseNNP):
 
         # extract properties from pairlist
         transformed_input = self._generate_representation(inputs)
-
+        q = transformed_input["q"]
+        mu = transformed_input["mu"]
         for i, interaction_mod in enumerate(self.interaction_modules):
             q, mu = interaction_mod(
-                transformed_input["q"],
-                transformed_input["mu"],
+                q,
+                mu,
                 self.filter_list[i],
                 transformed_input["dir_ij"],
                 inputs["pair_indices"],

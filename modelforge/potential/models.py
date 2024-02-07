@@ -214,10 +214,7 @@ class LightningModuleMixin(pl.LightningModule):
         targets = batch["E_label"]
         val_loss = F.mse_loss(predictions, targets)
         self.log(
-            "val_loss",
-            val_loss,
-            batch_size=batch_size,
-            on_epoch=True,  # prog_bar=True
+            "val_loss", val_loss, batch_size=batch_size, on_epoch=True, prog_bar=True
         )
 
     def test_step(self, batch, batch_idx):
@@ -228,7 +225,9 @@ class LightningModuleMixin(pl.LightningModule):
         predictions = self.forward(batch).flatten()
         targets = batch["E_label"].flatten()
         test_loss = F.mse_loss(predictions, targets)
-        self.log("test_loss", test_loss, batch_size=batch_size)
+        self.log(
+            "test_loss", test_loss, batch_size=batch_size, on_epoch=True, prog_bar=True
+        )
 
     def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx):
         from torch.nn import functional as F

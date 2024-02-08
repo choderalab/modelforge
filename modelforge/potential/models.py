@@ -80,8 +80,8 @@ class PairList(nn.Module):
         -------
         dict : Dict[str, torch.Tensor], containing atom index pairs, distances, and displacement vectors.
             - 'pair_indices': torch.Tensor, shape (2, n_pairs)
-            - 'r_ij' : torch.Tensor, shape (1, n_pairs)
-            - 'd_ij' : torch.Tenso, shape (3, n_pairs)
+            - 'r_ij' : torch.Tensor, shape (3, n_pairs)
+            - 'd_ij' : torch.Tensor, shape (1, n_pairs)
 
         """
         pair_indices = self.calculate_pairs(
@@ -97,10 +97,11 @@ class PairList(nn.Module):
         }
 
 
-class NeighbourList(PairList):
+class NeighborList(PairList):
     def __init__(self, cutoff: float, only_unique_pairs: bool = False):
         """
-        Initialize PairList.
+        Initialize Neighborlist.
+        A neighbor list is a list of atom pairs that are within a certain cutoff distance.
 
         Parameters
         ----------
@@ -119,7 +120,7 @@ class NeighbourList(PairList):
         self, positions: torch.Tensor, atomic_subsystem_indices: torch.Tensor
     ) -> Dict[str, torch.Tensor]:
         """
-        Forward pass for PairList.
+        Forward pass for NeighborList.
 
         Parameters
         ----------
@@ -130,8 +131,8 @@ class NeighbourList(PairList):
         -------
         dict : Dict[str, torch.Tensor], containing atom index pairs, distances, and displacement vectors.
             - 'pair_indices': torch.Tensor, shape (2, n_pairs)
-            - 'r_ij' : torch.Tensor, shape (1, n_pairs)
-            - 'd_ij' : torch.Tenso, shape (3, n_pairs)
+            - 'r_ij' : torch.Tensor, shape (3, n_pairs)
+            - 'd_ij' : torch.Tensor, shape (1, n_pairs)
 
         """
         pair_indices = self.calculate_pairs(

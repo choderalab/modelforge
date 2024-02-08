@@ -127,7 +127,7 @@ def test_pairlist_logic():
 
 
 def test_pairlist():
-    from modelforge.potential.models import PairList, NeighbourList
+    from modelforge.potential.models import PairList, NeighborList
     import torch
 
     atomic_subsystem_indices = torch.tensor([80, 80, 80, 11, 11, 11])
@@ -142,7 +142,7 @@ def test_pairlist():
         ]
     )
     cutoff = 5.0  # no relevant cutoff
-    pairlist = NeighbourList(cutoff, only_unique_pairs=True)
+    pairlist = NeighborList(cutoff, only_unique_pairs=True)
     r = pairlist(positions, atomic_subsystem_indices)
     pair_indices = r["pair_indices"]
 
@@ -172,7 +172,7 @@ def test_pairlist():
 
     # test with cutoff
     cutoff = 2.0  #
-    pairlist = NeighbourList(cutoff, only_unique_pairs=True)
+    pairlist = NeighborList(cutoff, only_unique_pairs=True)
     r = pairlist(positions, atomic_subsystem_indices)
     pair_indices = r["pair_indices"]
 
@@ -196,7 +196,7 @@ def test_pairlist():
 
     # test with complete pairlist
     cutoff = 2.0  #
-    pairlist = NeighbourList(cutoff, only_unique_pairs=False)
+    pairlist = NeighborList(cutoff, only_unique_pairs=False)
     r = pairlist(positions, atomic_subsystem_indices)
     pair_indices = r["pair_indices"]
 
@@ -208,7 +208,7 @@ def test_pairlist():
     # make sure that Pairlist and Neighborlist behave the same for large cutoffs
     cutoff = 10.0  #
     only_unique_pairs = False
-    neighborlist = NeighbourList(cutoff, only_unique_pairs=only_unique_pairs)
+    neighborlist = NeighborList(cutoff, only_unique_pairs=only_unique_pairs)
     pairlist = PairList(only_unique_pairs=only_unique_pairs)
     r = pairlist(positions, atomic_subsystem_indices)
     pair_indices = r["pair_indices"]
@@ -220,7 +220,7 @@ def test_pairlist():
     # make sure that they are the same also for non-redundant pairs
     cutoff = 10.0  #
     only_unique_pairs = True
-    neighborlist = NeighbourList(cutoff, only_unique_pairs=only_unique_pairs)
+    neighborlist = NeighborList(cutoff, only_unique_pairs=only_unique_pairs)
     pairlist = PairList(only_unique_pairs=only_unique_pairs)
     r = pairlist(positions, atomic_subsystem_indices)
     pair_indices = r["pair_indices"]
@@ -232,7 +232,7 @@ def test_pairlist():
     # this should fail
     cutoff = 2.0  #
     only_unique_pairs = True
-    neighborlist = NeighbourList(cutoff, only_unique_pairs=only_unique_pairs)
+    neighborlist = NeighborList(cutoff, only_unique_pairs=only_unique_pairs)
     pairlist = PairList(only_unique_pairs=only_unique_pairs)
     r = pairlist(positions, atomic_subsystem_indices)
     pair_indices = r["pair_indices"]
@@ -245,7 +245,7 @@ def test_pairlist():
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_pairlist_on_dataset(dataset):
     from modelforge.dataset.dataset import TorchDataModule
-    from modelforge.potential.models import PairList, NeighbourList
+    from modelforge.potential.models import PairList, NeighborList
 
     data = dataset(for_unit_testing=True)
     data_module = TorchDataModule(data)
@@ -255,7 +255,7 @@ def test_pairlist_on_dataset(dataset):
         positions = data["positions"]
         atomic_subsystem_indices = data["atomic_subsystem_indices"]
         print(atomic_subsystem_indices)
-        pairlist = NeighbourList(cutoff=5.0)
+        pairlist = NeighborList(cutoff=5.0)
         r = pairlist(positions, atomic_subsystem_indices)
         print(r)
         shape_pairlist = r["pair_indices"].shape
@@ -373,7 +373,7 @@ def test_equivariant_energies_and_forces(input_data, model_class):
 
 def test_pairlist_calculate_r_ij_and_d_ij():
     # Define inputs
-    from modelforge.potential.models import PairList, NeighbourList
+    from modelforge.potential.models import PairList, NeighborList
     import torch
 
     positions = torch.tensor(
@@ -385,7 +385,7 @@ def test_pairlist_calculate_r_ij_and_d_ij():
     # Create Pairlist instance
     # --------------------------- #
     # Only unique pairs
-    pairlist = NeighbourList(cutoff, only_unique_pairs=True)
+    pairlist = NeighborList(cutoff, only_unique_pairs=True)
     pair_indices = pairlist.calculate_pairs(
         positions, atomic_subsystem_indices, pairlist.cutoff, only_unique_pairs=True
     )
@@ -409,7 +409,7 @@ def test_pairlist_calculate_r_ij_and_d_ij():
 
     # --------------------------- #
     # ALL pairs
-    pairlist = NeighbourList(cutoff, only_unique_pairs=False)
+    pairlist = NeighborList(cutoff, only_unique_pairs=False)
     pair_indices = pairlist.calculate_pairs(
         positions, atomic_subsystem_indices, pairlist.cutoff, only_unique_pairs=False
     )

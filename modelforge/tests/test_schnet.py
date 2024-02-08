@@ -15,11 +15,18 @@ def test_Schnet_init(lightning):
     assert schnet is not None, "Schnet model should be initialized."
 
 
+from openff.units import unit
+
+
 @pytest.mark.parametrize("lightning", [True, False])
 @pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
 @pytest.mark.parametrize(
     "model_parameter",
-    ([64, 50, 20, 5.0, 2], [32, 60, 10, 7.0, 1], [128, 120, 64, 5.0, 3]),
+    (
+        [64, 50, 20, unit.Quantity(5.0, unit.angstrom), 2],
+        [32, 60, 10, unit.Quantity(7.0, unit.angstrom), 1],
+        [128, 120, 64, unit.Quantity(5.0, unit.angstrom), 3],
+    ),
 )
 def test_schnet_forward(lightning, input_data, model_parameter):
     """
@@ -73,7 +80,7 @@ def test_schnet_interaction_layer():
     interaction = SchNETInteractionBlock(
         nr_atom_basis=nr_atom_basis, nr_filters=3, nr_rbf=nr_rbf
     )
-    
+
     v = interaction(
         interaction_data["x"],
         interaction_data["pair_indices"],

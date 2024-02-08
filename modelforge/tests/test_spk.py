@@ -3,18 +3,21 @@ import torch
 
 def test_gaussian_rbf_implementation():
     # compare schnetpack GaussianRBF with modelforge GaussianRBF
-    from modelforge.potential.utils import GaussianRBF
+    from modelforge.potential.utils import _GaussianRBF
     from schnetpack.nn import GaussianRBF as schnetpack_GaussianRBF
+    from openff.units import unit
 
     n_rbf = 2
-    cutoff = 5.0
-    schnetpack_rbf = schnetpack_GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
-    rbf = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
+    cutoff = unit.Quantity(5.0, unit.angstrom)
+    schnetpack_rbf = schnetpack_GaussianRBF(
+        n_rbf=n_rbf, cutoff=cutoff.to(unit.angstrom).m
+    )
+    rbf = _GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
 
     r = torch.rand(5, 3)
-    schnetpack_rbf(r)
-    rbf(r)
-    assert torch.allclose(schnetpack_rbf(r), rbf(r))
+    print(schnetpack_rbf(r))
+    print(rbf(r / 10))
+    assert torch.allclose(schnetpack_rbf(r), rbf(r / 10), atol=1e-8)
     assert schnetpack_rbf.n_rbf == rbf.n_rbf
 
 
@@ -107,16 +110,19 @@ def setup_input():
     # set up the input for the modelforge Painn model
     atomic_numbers = torch.tensor([[6], [1], [1], [1], [1]], dtype=torch.int64)
 
-    positions = torch.tensor(
-        [
-            [-1.2698e-02, 1.0858e00, 8.0010e-03],
-            [2.1504e-03, -6.0313e-03, 1.9761e-03],
-            [1.0117e00, 1.4638e00, 2.7657e-04],
-            [-5.4082e-01, 1.4475e00, -8.7664e-01],
-            [-5.2381e-01, 1.4379e00, 9.0640e-01],
-        ],
-        dtype=torch.float64,
-        requires_grad=True,
+    positions = (
+        torch.tensor(
+            [
+                [-1.2698e-02, 1.0858e00, 8.0010e-03],
+                [2.1504e-03, -6.0313e-03, 1.9761e-03],
+                [1.0117e00, 1.4638e00, 2.7657e-04],
+                [-5.4082e-01, 1.4475e00, -8.7664e-01],
+                [-5.2381e-01, 1.4379e00, 9.0640e-01],
+            ],
+            dtype=torch.float64,
+            requires_grad=True,
+        )
+        / 10
     )
     E_labels = torch.tensor([0.0], requires_grad=True)
     atomic_subsystem_indices = torch.tensor([0, 0, 0, 0, 0], dtype=torch.int32)
@@ -139,14 +145,14 @@ def setup_spk_painn_representation(cutoff, nr_atom_basis, n_rbf):
     # set up the schnetpack Painn representation model
     from schnetpack.nn import GaussianRBF, CosineCutoff
     from schnetpack.representation import PaiNN as schnetpack_PaiNN
-    from schnetpack.atomistic import PairwiseDistances
+    from openff.units import unit
 
-    radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
+    radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff.to(unit.angstrom).m)
     return schnetpack_PaiNN(
         n_atom_basis=nr_atom_basis,
         n_interactions=3,
         radial_basis=radial_basis,
-        cutoff_fn=CosineCutoff(cutoff),
+        cutoff_fn=CosineCutoff(cutoff.to(unit.angstrom).m),
     )
 
 
@@ -155,13 +161,14 @@ def setup_modelforge_painn_representation(cutoff, nr_atom_basis, n_rbf):
     # set up the modelforge Painn representation model
     # which means that we only want to call the
     # _transform_input() method
-    from modelforge.potential import CosineCutoff, GaussianRBF
+    from modelforge.potential import _CosineCutoff, _GaussianRBF
     from modelforge.potential.utils import SlicedEmbedding
     from modelforge.potential.painn import PaiNN
+    from openff.units import unit
 
     embedding = SlicedEmbedding(max_Z=100, embedding_dim=nr_atom_basis, sliced_dim=0)
-    radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
-    cutoff = CosineCutoff(cutoff)
+    radial_basis = _GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
+    cutoff = _CosineCutoff(cutoff)
 
     return PaiNN(
         embedding_module=embedding,
@@ -175,8 +182,9 @@ def test_painn_representation_implementation():
     # ---------------------------------------- #
     # test the implementation of the representation part of the PaiNN model
     # ---------------------------------------- #
+    from openff.units import unit
 
-    cutoff = 5.0
+    cutoff = unit.Quantity(5.0, unit.angstrom)
     nr_atom_basis = 8
     n_rbf = 5
     torch.manual_seed(1234)
@@ -202,7 +210,7 @@ def test_painn_representation_implementation():
     # ---------------------------------------- #
     # test neighborlist and distance
     # ---------------------------------------- #
-    assert torch.allclose(spk_input["_Rij"], modelforge_input_2["r_ij"], atol=1e-4)
+    assert torch.allclose(spk_input["_Rij"] / 10, modelforge_input_2["r_ij"], atol=1e-4)
     assert torch.allclose(spk_input["_idx_i"], modelforge_input_2["pair_indices"][0])
     assert torch.allclose(spk_input["_idx_j"], modelforge_input_2["pair_indices"][1])
     idx_i = spk_input["_idx_i"]
@@ -215,14 +223,17 @@ def test_painn_representation_implementation():
     d_ij = torch.norm(r_ij, dim=1, keepdim=True)
     dir_ij = r_ij / d_ij
     schnetpack_phi_ij = schnetpack_painn.radial_basis(d_ij)
-    modelforge_phi_ij = modelforge_painn.radial_basis_module(d_ij)
+    modelforge_phi_ij = modelforge_painn.radial_basis_module(
+        d_ij / 10
+    )  # NOTE: converting to nm
+
     assert torch.allclose(schnetpack_phi_ij, modelforge_phi_ij)
     phi_ij = schnetpack_phi_ij
     # ---------------------------------------- #
     # test cutoff
     # ---------------------------------------- #
     spk_fcut = schnetpack_painn.cutoff_fn(d_ij)
-    mf_fcut = modelforge_painn.cutoff_module(d_ij)
+    mf_fcut = modelforge_painn.cutoff_module(d_ij / 10)  # NOTE: converting to nm
     assert torch.allclose(spk_fcut, mf_fcut)
 
     # ---------------------------------------- #
@@ -326,7 +337,7 @@ def test_painn_representation_implementation():
     # ---------------------------------------- #
 
     modelforge_results = modelforge_painn._forward(modelforge_input_2)
-
+    # FIXME: NOTE: this is still not the same
     # assert torch.allclose(
     #     schnetpack_results["scalar_representation"],
     #     modelforge_results["scalar_representation"],
@@ -336,5 +347,3 @@ def test_painn_representation_implementation():
     #     schnetpack_results["vector_representation"],
     #     modelforge_results["vector_representation"],
     # )
-
-    # a = 7

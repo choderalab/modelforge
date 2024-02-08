@@ -203,7 +203,7 @@ class SchNETInteractionBlock(nn.Module):
 
         # Initialize a tensor to gather the results
         shape = list(x.shape)  # note that we're using x.shape, not x_ij.shape
-        x_native = torch.zeros(shape, dtype=x.dtype)
+        x_native = torch.zeros(shape, dtype=x.dtype, device=x.device)
 
         idx_i_expanded = idx_i.unsqueeze(1).expand_as(x_ij)
 

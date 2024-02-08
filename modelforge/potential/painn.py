@@ -69,17 +69,14 @@ class PaiNN(BaseNNP):
 
         # initialize the filter network
         if shared_filters:
-            self.filter_net = nn.Sequential(
-                nn.Linear(self.radial_basis_module.n_rbf, 3 * self.nr_atom_basis),
-                nn.Identity(),
+            self.filter_net = Dense(
+                self.radial_basis_module.n_rbf, 3 * self.nr_atom_basis
             )
         else:
-            self.filter_net = nn.Sequential(
-                nn.Linear(
-                    self.radial_basis_module.n_rbf,
-                    self.nr_interaction_blocks * 3 * self.nr_atom_basis,
-                ),
-                nn.Identity(),
+            self.filter_net = Dense(
+                self.radial_basis_module.n_rbf,
+                self.nr_interaction_blocks * self.nr_atom_basis * 3,
+                activation=None,
             )
 
         # initialize the interaction and mixing networks

@@ -186,9 +186,7 @@ class LightningModuleMixin(pl.LightningModule):
         targets = batch["E_label"].flatten().to(torch.float32)
         loss = self.loss_function(predictions, targets)
 
-        if self.report_loss_in_kJ_per_mol and not self.energy_average:
-            log.warning("Please provide the energy average")
-        else:
+        if self.report_loss_in_kJ_per_mol and self.energy_average:
             if self.energy_stddev:
                 loss = loss * self.energy_stddev
 

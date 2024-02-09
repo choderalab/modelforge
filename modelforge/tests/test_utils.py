@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import pytest
 
-from modelforge.potential.utils import _CosineCutoff, _cosine_cutoff, _GaussianRBF
+from modelforge.potential.utils import CosineCutoff, _cosine_cutoff, GaussianRBF
 
 
 def test_cosine_cutoff():
@@ -37,24 +37,24 @@ def test_cosine_cutoff_module():
 
     cutoff = unit.Quantity(2.0, unit.angstrom)
     expected_output = torch.tensor([0.5, 0.0, 0.0])
-    cosine_cutoff_module = _CosineCutoff(cutoff)
+    cosine_cutoff_module = CosineCutoff(cutoff)
 
     output = cosine_cutoff_module(d_ij_angstrom / 10)  # input is in nanometer
 
     assert torch.allclose(output, expected_output, rtol=1e-3)
 
 
-@pytest.mark.parametrize("RBF", [_GaussianRBF])
+@pytest.mark.parametrize("RBF", [GaussianRBF])
 def test_rbf(RBF):
     """
     Test the Gaussian Radial Basis Function (RBF) implementation.
     """
     from modelforge.dataset import QM9Dataset
 
-    from .helper_functions import prepare_pairlist_for_single_batch, return_single_batch
+    from .helper_functions import preparePairlist_for_single_batch, return_single_batch
 
     batch = return_single_batch(QM9Dataset, mode="fit")
-    pairlist = prepare_pairlist_for_single_batch(batch)
+    pairlist = preparePairlist_for_single_batch(batch)
     from openff.units import unit
 
     radial_basis = RBF(n_rbf=20, cutoff=unit.Quantity(5.0, unit.angstrom))
@@ -63,14 +63,14 @@ def test_rbf(RBF):
     assert output.shape[2] == 20  # n_rbf dimension
 
 
-@pytest.mark.parametrize("RBF", [_GaussianRBF])
+@pytest.mark.parametrize("RBF", [GaussianRBF])
 def test_gaussian_rbf(RBF):
     # Check dimensions of output and output
     from openff.units import unit
 
     n_rbf = 5
     cutoff = unit.Quantity(10.0, unit.angstrom)
-    start = 0.0
+    start = unit.Quantity(0.0, unit.angstrom)
     trainable = False
 
     gaussian_rbf = RBF(n_rbf=n_rbf, cutoff=cutoff, start=start, trainable=trainable)
@@ -82,9 +82,7 @@ def test_gaussian_rbf(RBF):
     assert gaussian_rbf.cutoff == cutoff.to(unit.nanometer).m
 
     # Test that the widths and offsets are correct
-    expected_offsets = torch.linspace(
-        start, cutoff.to(unit.nanometer).m, n_rbf
-    )
+    expected_offsets = torch.linspace(start.to(unit.nanometer).m, cutoff.to(unit.nanometer).m, n_rbf)
     expected_widths = torch.abs(
         expected_offsets[1] - expected_offsets[0]
     ) * torch.ones_like(expected_offsets)
@@ -97,7 +95,7 @@ def test_gaussian_rbf(RBF):
     assert expected_output.shape == (3, n_rbf)
 
 
-@pytest.mark.parametrize("RBF", [_GaussianRBF])
+@pytest.mark.parametrize("RBF", [GaussianRBF])
 def test_rbf_invariance(RBF):
     # Define a set of coordinates
     from openff.units import unit
@@ -151,13 +149,13 @@ def test_GaussianRBF():
     Test the GaussianRBF layer.
     """
 
-    from modelforge.potential import _GaussianRBF
+    from modelforge.potential import GaussianRBF
     from openff.units import unit
 
     n_rbf = 10
     dim_of_x = 3
     cutoff = unit.Quantity(5.0, unit.angstrom)
-    layer = _GaussianRBF(10, cutoff)
+    layer = GaussianRBF(10, cutoff)
     x = torch.tensor([1.0, 2.0, 3.0], dtype=torch.float32)
     y = layer(x)  # Shape: [dim_of_x, n_rbf]
 

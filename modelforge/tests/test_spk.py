@@ -490,11 +490,11 @@ def setup_spk_schnet_representation(
     # ------------------------------------ #
     # set up the schnetpack Painn representation model
     from schnetpack.nn import GaussianRBF, CosineCutoff
-    from schnetpack.representation import PaiNN as schnetpack_PaiNN
+    from schnetpack.representation import SchNet as schnetpack_SchNET
     from openff.units import unit
 
     radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff.to(unit.angstrom).m)
-    return schnetpack_PaiNN(
+    return schnetpack_SchNET(
         n_atom_basis=nr_atom_basis,
         n_interactions=nr_of_interactions,
         radial_basis=radial_basis,
@@ -602,15 +602,79 @@ def test_schnet_representation_implementation():
     # test representation
     # --------------------------------------- #
     rep_mf = modelforge_schnet.schnet_representation_module(d_ij / 10)
-    rep_spk = modelforge_schnet.schnet_representation_module(d_ij)
-    torch.allclose(rep_mf["f_ij"], rep_spk["f_ij"])
-    torch.allclose(rep_mf["rcut_ij"], rep_spk["rcut_ij"])
+
+    r_ij = spk_input["_Rij"]
+    d_ij = torch.norm(r_ij, dim=1)
+    f_ij_spk = schnetpack_schnet.radial_basis(d_ij)
+    rcut_ij_spk = schnetpack_schnet.cutoff_fn(d_ij)
+
+    assert torch.allclose(rep_mf["f_ij"], f_ij_spk)
+    assert torch.allclose(rep_mf["rcut_ij"], rcut_ij_spk)
 
     # ---------------------------------------- #
     # test interactions
     # ---------------------------------------- #
-    
 
+    torch.manual_seed(1234)
+    for i in range(nr_of_interactions):
+        schnetpack_schnet.interactions[i].in2f.reset_parameters()
+        for j in range(2):
+            schnetpack_schnet.interactions[i].f2out[j].reset_parameters()
+            schnetpack_schnet.interactions[i].filter_network[j].reset_parameters()
+
+    torch.manual_seed(1234)
+    for i in range(nr_of_interactions):
+        modelforge_schnet.interaction_modules[i].intput_to_feature.reset_parameters()
+        for j in range(2):
+            modelforge_schnet.interaction_modules[i].feature_to_output[
+                j
+            ].reset_parameters()
+            modelforge_schnet.interaction_modules[i].filter_network[
+                j
+            ].reset_parameters()
+
+    print(modelforge_schnet)
+    print(schnetpack_schnet)
+
+    assert torch.allclose(
+        schnetpack_schnet.interactions[0].filter_network[0].weight,
+        modelforge_schnet.interaction_modules[0].filter_network[0].weight,
+    )
+    assert torch.allclose(
+        schnetpack_schnet.interactions[0].filter_network[0].bias,
+        modelforge_schnet.interaction_modules[0].filter_network[0].bias,
+    )
+
+    assert torch.allclose(
+        schnetpack_schnet.interactions[0].filter_network[1].weight,
+        modelforge_schnet.interaction_modules[0].filter_network[1].weight,
+    )
+    assert torch.allclose(
+        schnetpack_schnet.interactions[0].filter_network[1].bias,
+        modelforge_schnet.interaction_modules[0].filter_network[1].bias,
+    )
+
+
+    assert torch.allclose(embedding_spk, embedding_mf)
+
+    for mf_interaction, spk_interaction in zip(
+        modelforge_schnet.interaction_modules, schnetpack_schnet.interactions
+    ):
+        v_spk = spk_interaction(
+            embedding_spk,
+            f_ij_spk,
+            spk_input["_idx_i"],
+            spk_input["_idx_j"],
+            rcut_ij_spk,
+        )
+        v_mf = mf_interaction(
+            embedding_mf,
+            modelforge_input_2["pair_indices"],
+            rep_mf["f_ij"],
+            rep_mf["rcut_ij"],
+        )
+
+        assert torch.allclose(v_spk, v_mf)
 
     # modelforge_results = modelforge_schnet._forward(modelforge_input_2)
     # schnetpack_results = schnetpack_schnet(spk_input)

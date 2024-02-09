@@ -482,3 +482,150 @@ def test_painn_representation_implementation():
         modelforge_results["vector_representation"],
         atol=1e-4,
     )
+
+
+def setup_spk_schnet_representation(
+    cutoff: float, nr_atom_basis: int, n_rbf: int, nr_of_interactions: int
+):
+    # ------------------------------------ #
+    # set up the schnetpack Painn representation model
+    from schnetpack.nn import GaussianRBF, CosineCutoff
+    from schnetpack.representation import PaiNN as schnetpack_PaiNN
+    from openff.units import unit
+
+    radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff.to(unit.angstrom).m)
+    return schnetpack_PaiNN(
+        n_atom_basis=nr_atom_basis,
+        n_interactions=nr_of_interactions,
+        radial_basis=radial_basis,
+        cutoff_fn=CosineCutoff(cutoff.to(unit.angstrom).m),
+    )
+
+
+def setup_mf_schnet_representation(
+    cutoff: float, nr_atom_basis: int, n_rbf: int, nr_of_interactions: int
+):
+    # ------------------------------------ #
+    # set up the modelforge Painn representation model
+    # which means that we only want to call the
+    # _transform_input() method
+    from modelforge.potential import CosineCutoff, GaussianRBF
+    from modelforge.potential.utils import SlicedEmbedding
+    from modelforge.potential.schnet import SchNET as mf_SchNET
+
+    embedding = SlicedEmbedding(max_Z=100, embedding_dim=nr_atom_basis, sliced_dim=0)
+    radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
+    cutoff = CosineCutoff(cutoff)
+
+    return mf_SchNET(
+        embedding_module=embedding,
+        nr_interaction_blocks=nr_of_interactions,
+        radial_basis_module=radial_basis,
+        cutoff_module=cutoff,
+    )
+
+
+def test_schnet_representation_implementation():
+    # ---------------------------------------- #
+    # test the implementation of the representation part of the PaiNN model
+    # ---------------------------------------- #
+    from openff.units import unit
+
+    cutoff = unit.Quantity(5.0, unit.angstrom)
+    nr_atom_basis = 12
+    n_rbf = 5
+    nr_of_interactions = 3
+    torch.manual_seed(1234)
+    schnetpack_schnet = setup_spk_schnet_representation(
+        cutoff, nr_atom_basis, n_rbf, nr_of_interactions
+    ).double()
+    torch.manual_seed(1234)
+    modelforge_schnet = setup_mf_schnet_representation(
+        cutoff, nr_atom_basis, n_rbf, nr_of_interactions
+    ).double()
+    # ------------------------------------ #
+    # set up the input for the spk Schnet model
+    input = setup_input()
+    spk_input = input["spk_methane_input"]
+    modelforge_input = input["modelforge_methane_input"]
+
+    schnetpack_results = schnetpack_schnet(spk_input)
+    modelforge_schnet._set_dtype()
+    modelforge_input_1 = modelforge_schnet._input_checks(modelforge_input)
+    modelforge_input_2 = modelforge_schnet.prepare_inputs(modelforge_input_1)
+
+    # ---------------------------------------- #
+    # test neighborlist and distance
+    # ---------------------------------------- #
+    assert torch.allclose(spk_input["_Rij"] / 10, modelforge_input_2["r_ij"], atol=1e-4)
+    assert torch.allclose(spk_input["_idx_i"], modelforge_input_2["pair_indices"][0])
+    assert torch.allclose(spk_input["_idx_j"], modelforge_input_2["pair_indices"][1])
+    idx_i = spk_input["_idx_i"]
+    idx_j = spk_input["_idx_j"]
+
+    # ---------------------------------------- #
+    # test rbf
+    # ---------------------------------------- #
+    r_ij = spk_input["_Rij"]
+    d_ij = torch.norm(r_ij, dim=1, keepdim=True)
+    dir_ij = r_ij / d_ij
+    schnetpack_phi_ij = schnetpack_schnet.radial_basis(d_ij)
+    modelforge_phi_ij = modelforge_schnet.radial_basis_module(
+        d_ij / 10
+    )  # NOTE: converting to nm
+
+    assert torch.allclose(schnetpack_phi_ij, modelforge_phi_ij)
+    phi_ij = schnetpack_phi_ij
+    # ---------------------------------------- #
+    # test cutoff
+    # ---------------------------------------- #
+    fcut_spk = schnetpack_schnet.cutoff_fn(d_ij)
+    fcut_mf = modelforge_schnet.cutoff_module(d_ij / 10)  # NOTE: converting to nm
+    assert torch.allclose(fcut_spk, fcut_mf)
+
+    # ---------------------------------------- #
+    # test embedding
+    # ---------------------------------------- #
+    import schnetpack.properties as properties
+
+    assert torch.allclose(
+        spk_input[properties.Z], modelforge_input["atomic_numbers"].squeeze()
+    )
+    embedding_spk = schnetpack_schnet.embedding(spk_input[properties.Z])
+    embedding_mf = modelforge_schnet.embedding_module(
+        modelforge_input["atomic_numbers"]
+    )
+
+    assert torch.allclose(embedding_spk, embedding_mf)
+
+    # --------------------------------------- #
+    # test representation
+    # --------------------------------------- #
+    rep_mf = modelforge_schnet.schnet_representation_module(d_ij / 10)
+    rep_spk = modelforge_schnet.schnet_representation_module(d_ij)
+    torch.allclose(rep_mf["f_ij"], rep_spk["f_ij"])
+    torch.allclose(rep_mf["rcut_ij"], rep_spk["rcut_ij"])
+
+    # ---------------------------------------- #
+    # test interactions
+    # ---------------------------------------- #
+    
+
+
+    # modelforge_results = modelforge_schnet._forward(modelforge_input_2)
+    # schnetpack_results = schnetpack_schnet(spk_input)
+
+    # assert (
+    #     schnetpack_results["scalar_representation"].shape
+    #     == modelforge_results["scalar_representation"].shape
+    # )
+
+    # scalar_spk = schnetpack_results["scalar_representation"]
+    # scalar_mf = modelforge_results["scalar_representation"]
+    # assert torch.allclose(scalar_spk, scalar_mf, atol=1e-4)
+
+    # assert torch.allclose(
+    #     schnetpack_results["vector_representation"],
+    #     modelforge_results["vector_representation"],
+    #     atol=1e-4,
+    # )

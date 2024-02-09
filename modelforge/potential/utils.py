@@ -507,3 +507,65 @@ def _neighbor_list_with_cutoff(
     pair_indices_within_cutoff = pair_indices[:, in_cutoff]
 
     return pair_indices_within_cutoff
+
+def broadcast(src: torch.Tensor, other: torch.Tensor, dim: int):
+    if dim < 0:
+        dim = other.dim() + dim
+    if src.dim() == 1:
+        for _ in range(0, dim):
+            src = src.unsqueeze(0)
+    for _ in range(src.dim(), other.dim()):
+        src = src.unsqueeze(-1)
+    src = src.expand(other.size())
+    return src
+def scatter_softmax(
+    src: torch.Tensor, index: torch.Tensor, dim: int = -1, dim_size: Optional[int] = None
+) -> torch.Tensor:
+    """
+    Softmax operation over all values in :attr:`src` tensor that share indices
+    specified in the :attr:`index` tensor along a given axis :attr:`dim`.
+
+    For one-dimensional tensors, the operation computes
+
+    .. math::
+        \mathrm{out}_i = {\textrm{softmax}(\mathrm{src})}_i =
+        \frac{\exp(\mathrm{src}_i)}{\sum_j \exp(\mathrm{src}_j)}
+
+    where :math:`\sum_j` is over :math:`j` such that
+    :math:`\mathrm{index}_j = i`.
+
+    Args:
+        src (Tensor): The source tensor.
+        index (LongTensor): The indices of elements to scatter.
+        dim (int, optional): The axis along which to index.
+            (default: :obj:`-1`)
+        dim_size: The number of classes, i.e. the number of unique indices in `index`.
+
+    :rtype: :class:`Tensor`
+
+    Adapted from: https://github.com/rusty1s/pytorch_scatter/blob/c31915e1c4ceb27b2e7248d21576f685dc45dd01/torch_scatter/composite/softmax.py
+    """
+    if not torch.is_floating_point(src):
+        raise ValueError('`scatter_softmax` can only be computed over tensors '
+                         'with floating point data types.')
+
+    out_shape = [
+        other_dim_size
+        if (other_dim != dim)
+        else dim_size
+        for (other_dim, other_dim_size)
+        in enumerate(src.shape)
+    ]
+
+    index = broadcast(index, src, dim)
+    max_value_per_index = torch.zeros(out_shape).scatter_reduce(dim, index, src, "amax", include_self=False)
+    max_per_src_element = max_value_per_index.gather(dim, index)
+
+    recentered_scores = src - max_per_src_element
+    recentered_scores_exp = recentered_scores.exp()
+
+    sum_per_index = torch.zeros(out_shape).scatter_add(dim, index, recentered_scores_exp)
+    normalizing_constants = sum_per_index.gather(dim, index)
+
+    return recentered_scores_exp.div(normalizing_constants)
+

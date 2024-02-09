@@ -140,7 +140,9 @@ def setup_input():
     }
 
 
-def setup_spk_painn_representation(cutoff, nr_atom_basis, n_rbf):
+def setup_spk_painn_representation(
+    cutoff: float, nr_atom_basis: int, n_rbf: int, nr_of_interactions: int
+):
     # ------------------------------------ #
     # set up the schnetpack Painn representation model
     from schnetpack.nn import GaussianRBF, CosineCutoff
@@ -150,29 +152,31 @@ def setup_spk_painn_representation(cutoff, nr_atom_basis, n_rbf):
     radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff.to(unit.angstrom).m)
     return schnetpack_PaiNN(
         n_atom_basis=nr_atom_basis,
-        n_interactions=2,
+        n_interactions=nr_of_interactions,
         radial_basis=radial_basis,
         cutoff_fn=CosineCutoff(cutoff.to(unit.angstrom).m),
     )
 
 
-def setup_modelforge_painn_representation(cutoff, nr_atom_basis, n_rbf):
+def setup_modelforge_painn_representation(
+    cutoff: float, nr_atom_basis: int, n_rbf: int, nr_of_interactions: int
+):
     # ------------------------------------ #
     # set up the modelforge Painn representation model
     # which means that we only want to call the
     # _transform_input() method
     from modelforge.potential import CosineCutoff, GaussianRBF
     from modelforge.potential.utils import SlicedEmbedding
-    from modelforge.potential.painn import PaiNN
+    from modelforge.potential.painn import PaiNN as mf_PaiNN
     from openff.units import unit
 
     embedding = SlicedEmbedding(max_Z=100, embedding_dim=nr_atom_basis, sliced_dim=0)
     radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
     cutoff = CosineCutoff(cutoff)
 
-    return PaiNN(
+    return mf_PaiNN(
         embedding_module=embedding,
-        nr_interaction_blocks=2,
+        nr_interaction_blocks=nr_of_interactions,
         radial_basis_module=radial_basis,
         cutoff_module=cutoff,
     )
@@ -187,16 +191,15 @@ def test_painn_representation_implementation():
     cutoff = unit.Quantity(5.0, unit.angstrom)
     nr_atom_basis = 8
     n_rbf = 5
+    nr_of_interactions = 3
     torch.manual_seed(1234)
     schnetpack_painn = setup_spk_painn_representation(
-        cutoff, nr_atom_basis, n_rbf
+        cutoff, nr_atom_basis, n_rbf, nr_of_interactions
     ).double()
     torch.manual_seed(1234)
     modelforge_painn = setup_modelforge_painn_representation(
-        cutoff, nr_atom_basis, n_rbf
+        cutoff, nr_atom_basis, n_rbf, nr_of_interactions
     ).double()
-    print(schnetpack_painn)
-    print(modelforge_painn)
     # ------------------------------------ #
     # set up the input for the spk Painn model
     input = setup_input()
@@ -254,8 +257,8 @@ def test_painn_representation_implementation():
     )
     embedding_spk = schnetpack_painn.embedding(spk_input[properties.Z])
     embedding_mf = modelforge_painn.embedding_module(modelforge_input["atomic_numbers"])
-    assert torch.allclose(embedding_spk, embedding_mf)
 
+    assert torch.allclose(embedding_spk, embedding_mf)
     # ---------------------------------------- #
     # test interaction
     # ---------------------------------------- #
@@ -273,15 +276,32 @@ def test_painn_representation_implementation():
 
     # set up the filter and interaction, pass the input and compare the results
     # ---------------------------------------- #
-    mf_intra_net = modelforge_painn.interaction_modules[0].intra_atomic_net
-    spk_intra_net = schnetpack_painn.interactions[0].interatomic_context_net
     assert torch.allclose(q_mf_initial, q_spk_initial)
     # reset parameters
     torch.manual_seed(1234)
-    [dense.reset_parameters() for dense in mf_intra_net]
+    [
+        dense.reset_parameters()
+        for i in range(nr_of_interactions)
+        for dense in modelforge_painn.interaction_modules[i].interatomic_net
+    ]
     torch.manual_seed(1234)
-    [dense.reset_parameters() for dense in spk_intra_net]
+    [
+        dense.reset_parameters()
+        for i in range(nr_of_interactions)
+        for dense in schnetpack_painn.interactions[i].interatomic_context_net
+    ]
+    print(modelforge_painn.interaction_modules[0].interatomic_net[0].weight)
+    print(schnetpack_painn.interactions[0].interatomic_context_net[0].weight)
 
+    assert torch.allclose(
+        modelforge_painn.interaction_modules[0].interatomic_net[0].weight,
+        schnetpack_painn.interactions[0].interatomic_context_net[0].weight,
+        atol=1e-4,
+    )
+
+    # first layer
+    mf_intra_net = modelforge_painn.interaction_modules[0].interatomic_net
+    spk_intra_net = schnetpack_painn.interactions[0].interatomic_context_net
     intra_mf_q = mf_intra_net(q_mf_initial)
     intra_spk_q = spk_intra_net(q_spk_initial)
 
@@ -317,16 +337,40 @@ def test_painn_representation_implementation():
     # reset parameters
     torch.manual_seed(1234)
     [
-        dense.reset_parameters()
-        for dense in modelforge_painn.mixing_modules[0].intra_atomic_net
+        (
+            modelforge_painn.mixing_modules[i].mu_channel_mix.reset_parameters(),
+            modelforge_painn.mixing_modules[i].intra_atomic_net[0].reset_parameters(),
+            modelforge_painn.mixing_modules[i].intra_atomic_net[1].reset_parameters(),
+        )
+        for i in range(nr_of_interactions)
     ]
-    modelforge_painn.mixing_modules[0].mu_channel_mix.reset_parameters()
+
     torch.manual_seed(1234)
+
     [
-        dense.reset_parameters()
-        for dense in schnetpack_painn.mixing[0].intraatomic_context_net
+        (
+            schnetpack_painn.mixing[i].mu_channel_mix.reset_parameters(),
+            schnetpack_painn.mixing[i].intraatomic_context_net[0].reset_parameters(),
+            schnetpack_painn.mixing[i].intraatomic_context_net[1].reset_parameters(),
+        )
+        for i in range(nr_of_interactions)
     ]
-    schnetpack_painn.mixing[0].mu_channel_mix.reset_parameters()
+
+    # test painn mixing
+    for i in range(nr_of_interactions):
+        print(i, flush=True)
+        assert torch.allclose(
+            modelforge_painn.mixing_modules[i].mu_channel_mix.weight,
+            schnetpack_painn.mixing[i].mu_channel_mix.weight,
+        )
+        assert torch.allclose(
+            modelforge_painn.mixing_modules[i].intra_atomic_net[0].weight,
+            schnetpack_painn.mixing[i].intraatomic_context_net[0].weight,
+        )
+        assert torch.allclose(
+            modelforge_painn.mixing_modules[i].intra_atomic_net[1].weight,
+            schnetpack_painn.mixing[i].intraatomic_context_net[1].weight,
+        )
 
     mixed_spk_q, mixed_spk_mu = schnetpack_painn.mixing[0](q_spk, mu_spk)
     mixed_mf_q, mixed_mf_mu = modelforge_painn.mixing_modules[0](q_mf, mu_mf)
@@ -411,18 +455,30 @@ def test_painn_representation_implementation():
     # test forward pass
     # ---------------------------------------- #
 
+    # reset filter parameters
+    torch.manual_seed(1234)
+    modelforge_painn.filter_net.reset_parameters()
+    torch.manual_seed(1234)
+    schnetpack_painn.filter_net.reset_parameters()
+    assert torch.allclose(
+        modelforge_painn.filter_net.weight,
+        schnetpack_painn.filter_net.weight,
+        atol=1e-4,
+    )
     modelforge_results = modelforge_painn._forward(modelforge_input_2)
+    schnetpack_results = schnetpack_painn(spk_input)
+
     assert (
         schnetpack_results["scalar_representation"].shape
         == modelforge_results["scalar_representation"].shape
     )
 
-    assert torch.allclose(
-        schnetpack_results["scalar_representation"],
-        modelforge_results["scalar_representation"],
-    )
+    scalar_spk = schnetpack_results["scalar_representation"]
+    scalar_mf = modelforge_results["scalar_representation"]
+    assert torch.allclose(scalar_spk, scalar_mf, atol=1e-4)
 
-    # assert torch.allclose(
-    #     schnetpack_results["vector_representation"],
-    #     modelforge_results["vector_representation"],
-    # )
+    assert torch.allclose(
+        schnetpack_results["vector_representation"],
+        modelforge_results["vector_representation"],
+        atol=1e-4,
+    )

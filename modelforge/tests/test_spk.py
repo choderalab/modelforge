@@ -615,6 +615,7 @@ def test_schnet_representation_implementation():
     # test interactions
     # ---------------------------------------- #
 
+    # reset all parameters
     torch.manual_seed(1234)
     for i in range(nr_of_interactions):
         schnetpack_schnet.interactions[i].in2f.reset_parameters()
@@ -633,9 +634,6 @@ def test_schnet_representation_implementation():
                 j
             ].reset_parameters()
 
-    print(modelforge_schnet)
-    print(schnetpack_schnet)
-
     assert torch.allclose(
         schnetpack_schnet.interactions[0].filter_network[0].weight,
         modelforge_schnet.interaction_modules[0].filter_network[0].weight,
@@ -653,7 +651,6 @@ def test_schnet_representation_implementation():
         schnetpack_schnet.interactions[0].filter_network[1].bias,
         modelforge_schnet.interaction_modules[0].filter_network[1].bias,
     )
-
 
     assert torch.allclose(embedding_spk, embedding_mf)
 
@@ -676,20 +673,16 @@ def test_schnet_representation_implementation():
 
         assert torch.allclose(v_spk, v_mf)
 
-    # modelforge_results = modelforge_schnet._forward(modelforge_input_2)
-    # schnetpack_results = schnetpack_schnet(spk_input)
+    # Check full pass
 
-    # assert (
-    #     schnetpack_results["scalar_representation"].shape
-    #     == modelforge_results["scalar_representation"].shape
-    # )
+    modelforge_results = modelforge_schnet._forward(modelforge_input_2)
+    schnetpack_results = schnetpack_schnet(spk_input)
 
-    # scalar_spk = schnetpack_results["scalar_representation"]
-    # scalar_mf = modelforge_results["scalar_representation"]
-    # assert torch.allclose(scalar_spk, scalar_mf, atol=1e-4)
+    assert (
+        schnetpack_results["scalar_representation"].shape
+        == modelforge_results["scalar_representation"].shape
+    )
 
-    # assert torch.allclose(
-    #     schnetpack_results["vector_representation"],
-    #     modelforge_results["vector_representation"],
-    #     atol=1e-4,
-    # )
+    scalar_spk = schnetpack_results["scalar_representation"]
+    scalar_mf = modelforge_results["scalar_representation"]
+    assert torch.allclose(scalar_spk, scalar_mf, atol=1e-4)

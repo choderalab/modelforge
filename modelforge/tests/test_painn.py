@@ -20,11 +20,18 @@ def test_PaiNN_init(lightning):
     assert painn is not None, "PaiNN model should be initialized."
 
 
+from openff.units import unit
+
+
 @pytest.mark.parametrize("lightning", [True, False])
 @pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
 @pytest.mark.parametrize(
     "model_parameter",
-    ([64, 50, 2, 5.0, 2], [32, 60, 10, 7.0, 1], [128, 120, 5, 5.0, 3]),
+    (
+        [64, 50, 2, unit.Quantity(5.0, unit.angstrom), 2],
+        [32, 60, 10, unit.Quantity(7.0, unit.angstrom), 1],
+        [128, 120, 5, unit.Quantity(5.0, unit.angstrom), 3],
+    ),
 )
 def test_painn_forward(lightning, input_data, model_parameter):
     """
@@ -56,76 +63,105 @@ def test_painn_forward(lightning, input_data, model_parameter):
     )  # Assuming energy is calculated per sample in the batch
 
 
-@pytest.mark.skipif(
-    IN_GITHUB_ACTIONS,
-    reason="This test is not intended to be performed regularly.",
-)
-def test_schnetpack_PaiNN():
-    # NOTE: this test sets up the schnetpack Painn implementation and trains a model
-    # units are not cnnsistent with the modelforge implementation yet
-    import os
-
-    import schnetpack as spk
-    import schnetpack.transform as trn
-    from schnetpack.datasets import QM9
-
-    from .schnetpack_pain_implementation import setup_painn
-
-    qm9tut = "./qm9tut"
-    if not os.path.exists("qm9tut"):
-        os.makedirs(qm9tut)
-
-    qm9data = QM9(
-        "./qm9.db",
-        batch_size=64,
-        num_train=1000,
-        num_val=1000,
-        transforms=[
-            trn.ASENeighborList(cutoff=5.0),
-            trn.RemoveOffsets(QM9.U0, remove_mean=True, remove_atomrefs=True),
-            trn.CastTo32(),
-        ],
-        property_units={QM9.U0: "eV"},
-        num_workers=1,
-        split_file=os.path.join(qm9tut, "split.npz"),
-        pin_memory=False,  # set to false, when not using a GPU
-        load_properties=[QM9.U0],  # only load U0 property
-    )
-    qm9data.prepare_data()
-    qm9data.setup()
-
-    nnpot = setup_painn()
+def test_painn_interaction_equivariance():
     import torch
-    import torchmetrics
+    from torch import nn
+    from .helper_functions import generate_methane_input, setup_simple_model
+    from modelforge.potential.painn import PaiNN
+    from modelforge.potential.utils import _distance_to_radial_basis
 
-    output_U0 = spk.task.ModelOutput(
-        name=QM9.U0,
-        loss_fn=torch.nn.MSELoss(),
-        loss_weight=1.0,
-        metrics={"MAE": torchmetrics.MeanAbsoluteError()},
+    # define a rotation matrix in 3D that rotates by 90 degrees around the z-axis
+    # (clockwise when looking along the z-axis towards the origin)
+    rotation_matrix = torch.tensor([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
+
+    painn = setup_simple_model(PaiNN)
+    methane_input = generate_methane_input()
+    perturbed_methane_input = methane_input.copy()
+    perturbed_methane_input["positions"] = torch.matmul(
+        methane_input["positions"], rotation_matrix
     )
-    task = spk.task.AtomisticTask(
-        model=nnpot,
-        outputs=[output_U0],
-        optimizer_cls=torch.optim.AdamW,
-        optimizer_args={"lr": 1e-4},
+
+    # prepare reference and perturbed inputs
+    reference_prepared_input = painn.prepare_inputs(methane_input)
+    reference_d_ij = reference_prepared_input["d_ij"]
+    reference_r_ij = reference_prepared_input["r_ij"]
+    reference_dir_ij = reference_r_ij / reference_d_ij
+    reference_f_ij, _ = _distance_to_radial_basis(
+        reference_d_ij, painn.radial_basis_module
     )
 
-    import pytorch_lightning as pl
-
-    logger = pl.loggers.TensorBoardLogger(save_dir=qm9tut)
-    callbacks = [
-        spk.train.ModelCheckpoint(
-            model_path=os.path.join(qm9tut, "best_inference_model"),
-            save_top_k=1,
-            monitor="val_loss",
-        )
-    ]
-
-    trainer = pl.Trainer(
-        callbacks=callbacks,
-        logger=logger,
-        default_root_dir=qm9tut,
-        max_epochs=3,  # for testing, we restrict the number of epochs
+    perturbed_prepared_input = painn.prepare_inputs(perturbed_methane_input)
+    perturbed_d_ij = perturbed_prepared_input["d_ij"]
+    perturbed_r_ij = perturbed_prepared_input["r_ij"]
+    perturbed_dir_ij = perturbed_r_ij / perturbed_d_ij
+    perturbed_f_ij, _ = _distance_to_radial_basis(
+        perturbed_d_ij, painn.radial_basis_module
     )
-    trainer.fit(task, datamodule=qm9data)
+
+    # check that the invariant properties are preserved
+    # d_ij is the distance between atom i and j
+    # f_ij is the radial basis function of d_ij
+    assert torch.allclose(reference_d_ij, perturbed_d_ij)
+    assert torch.allclose(reference_f_ij, perturbed_f_ij)
+
+    # what shoudl not be invariant is the direction
+    assert not torch.allclose(reference_dir_ij, perturbed_dir_ij)
+
+    # Check for equivariance
+    # rotate the reference dir_ij
+    rotated_reference_dir_ij = torch.matmul(reference_dir_ij, rotation_matrix)
+    # Compare the rotated original dir_ij with the dir_ij from rotated positions
+    assert torch.allclose(rotated_reference_dir_ij, perturbed_dir_ij)
+
+    # Test that the interaction block is equivariant
+    # First we test the transformed inputs
+    reference_tranformed_inputs = painn._generate_representation(
+        reference_prepared_input
+    )
+    perturbed_tranformed_inputs = painn._generate_representation(
+        perturbed_prepared_input
+    )
+
+    assert torch.allclose(
+        reference_tranformed_inputs["q"], perturbed_tranformed_inputs["q"]
+    )
+    assert torch.allclose(
+        reference_tranformed_inputs["mu"], perturbed_tranformed_inputs["mu"]
+    )
+
+    painn_interaction = painn.interaction_modules[0]
+
+    reference_r = painn_interaction(
+        reference_tranformed_inputs["q"],
+        reference_tranformed_inputs["mu"],
+        painn.filter_list[0],
+        reference_dir_ij,
+        reference_prepared_input["pair_indices"],
+    )
+
+    perturbed_r = painn_interaction(
+        perturbed_tranformed_inputs["q"],
+        perturbed_tranformed_inputs["mu"],
+        painn.filter_list[0],
+        perturbed_dir_ij,
+        perturbed_prepared_input["pair_indices"],
+    )
+
+    perturbed_q, perturbed_mu = perturbed_r
+    reference_q, reference_mu = reference_r
+
+    # mu is different, q is invariant
+    assert torch.allclose(reference_q, perturbed_q)
+    assert not torch.allclose(reference_mu, perturbed_mu)
+
+    mixed_reference_q, mixed_reference_mu = painn.mixing_modules[0](
+        reference_q, reference_mu
+    )
+    mixed_perturbed_q, mixed_perturbed_mu = painn.mixing_modules[0](
+        perturbed_q, perturbed_mu
+    )
+
+    # q is a scalar property and invariant
+    assert torch.allclose(mixed_reference_q, mixed_perturbed_q, atol=1e-2)
+    # mu is a vector property and should not be invariant
+    assert not torch.allclose(mixed_reference_mu, mixed_perturbed_mu)

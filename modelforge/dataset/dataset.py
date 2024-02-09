@@ -56,17 +56,15 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         if len(single_atom_start_idxs_by_rec) != len(self.series_mol_start_idxs_by_rec):
             raise ValueError(
                 "Number of records in `atomic_subsystem_counts` and `n_confs` do not match."
-                )
-
+            )
 
         self.single_atom_start_idxs_by_conf = np.repeat(
-            single_atom_start_idxs_by_rec[:self.n_records], dataset["n_confs"]
+            single_atom_start_idxs_by_rec[: self.n_records], dataset["n_confs"]
         )
         self.single_atom_end_idxs_by_conf = np.repeat(
             single_atom_start_idxs_by_rec[1 : self.n_records + 1], dataset["n_confs"]
         )
         # length: n_conformers
-
 
         self.series_atom_start_idxs_by_conf = np.concatenate(
             [
@@ -109,8 +107,6 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             )
         )
 
-
-
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         """
         Fetch a tuple of the values for the properties of interest for a given conformer index.
@@ -138,20 +134,25 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         series_atom_end_idx = self.series_atom_start_idxs_by_conf[idx + 1]
         single_atom_start_idx = self.single_atom_start_idxs_by_conf[idx]
         single_atom_end_idx = self.single_atom_end_idxs_by_conf[idx]
-        atomic_numbers = torch.tensor(
+        atomic_numbers = (
             self.properties_of_interest["atomic_numbers"][
                 single_atom_start_idx:single_atom_end_idx
-            ],
-            dtype=torch.int64,
-        )
-        positions = torch.tensor(
+            ]
+            .clone()
+            .detach()
+        ).to(torch.int64)
+        positions = (
             self.properties_of_interest["positions"][
                 series_atom_start_idx:series_atom_end_idx
-            ],
-            dtype=torch.float32,
-        )
-        E_label = torch.tensor(
-            self.properties_of_interest["E_label"][idx], dtype=torch.float32
+            ]
+            .clone()
+            .detach()
+        ).to(torch.float32)
+        E_label = (
+            self.properties_of_interest["E_label"][idx]
+            .clone()
+            .detach()
+            .to(torch.float32)
         )
 
         return {
@@ -476,8 +477,6 @@ class TorchDataModule(pl.LightningDataModule):
         batch_size: int = 64,
         split_file: Optional[str] = None,
     ):
-        from torch.utils.data import Subset
-
         super().__init__()
         self.data = data
         self.batch_size = batch_size
@@ -552,6 +551,7 @@ class TorchDataModule(pl.LightningDataModule):
             self.train_dataset,
             batch_size=self.batch_size,
             collate_fn=collate_conformers,
+            num_workers=4,
         )
 
     def val_dataloader(self) -> DataLoader:
@@ -564,7 +564,10 @@ class TorchDataModule(pl.LightningDataModule):
             DataLoader containing the validation dataset.
         """
         return DataLoader(
-            self.val_dataset, batch_size=self.batch_size, collate_fn=collate_conformers
+            self.val_dataset,
+            batch_size=self.batch_size,
+            collate_fn=collate_conformers,
+            num_workers=4,
         )
 
     def test_dataloader(self) -> DataLoader:

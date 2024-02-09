@@ -329,7 +329,7 @@ def _shifted_softplus(x: torch.Tensor):
     from torch.nn import functional
     import math
 
-    return functional.softplus(x) - math.log(0.2)
+    return functional.softplus(x) - math.log(2.0)
 
 
 from typing import Optional

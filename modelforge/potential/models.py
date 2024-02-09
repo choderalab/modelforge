@@ -260,19 +260,19 @@ class BaseNNP(ABC, nn.Module):
         # needs to be implemented by the subclass
         # if subclass needs any additional input preparation (e.g. embedding),
         # it should be done here
-        raise NotImplementedError
+        pass
 
     @abstractmethod
     def _forward(self, inputs: Dict[str, torch.Tensor]):
         # needs to be implemented by the subclass
         # perform the forward pass implemented in the subclass
-        raise NotImplementedError
+        pass
 
     @abstractmethod
     def _readout(self, input: Dict[str, torch.Tensor]):
         # needs to be implemented by the subclass
         # perform the readout operation implemented in the subclass
-        raise NotImplementedError
+        pass
 
     def _prepare_inputs(self, inputs: Dict[str, torch.Tensor]):
         atomic_numbers = inputs["atomic_numbers"]  # shape (nr_of_atoms_in_batch, 1)

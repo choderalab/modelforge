@@ -15,7 +15,7 @@ class SchNET(BaseNNP):
         nr_interaction_blocks: int,
         radial_basis_module: nn.Module,
         cutoff_module: nn.Module,
-        nr_filters: int = 2,
+        nr_filters: int = None,
         shared_interactions: bool = False,
         activation: nn.Module = _shifted_softplus,
     ) -> None:
@@ -30,7 +30,7 @@ class SchNET(BaseNNP):
         radial_basis : nn.Module
         cutoff : nn.Module
         nr_filters : int, optional
-            Number of filters; defines the dimensionality of the intermediate features (default is 2).
+            Number of filters; defines the dimensionality of the intermediate features.
         """
 
         log.debug("Initializing SchNet model.")
@@ -43,9 +43,10 @@ class SchNET(BaseNNP):
 
         self.nr_atom_basis = embedding_module.embedding_dim
         self.readout_module = EnergyReadout(self.nr_atom_basis)
+        self.nr_filters = nr_filters or self.nr_atom_basis
 
         log.debug(
-            f"Passed parameters to constructor: {self.nr_atom_basis=}, {nr_interaction_blocks=}, {nr_filters=}, {cutoff_module=}"
+            f"Passed parameters to constructor: {self.nr_atom_basis=}, {nr_interaction_blocks=}, {self.nr_filters=}, {cutoff_module=}"
         )
 
         # Initialize representation block
@@ -56,7 +57,7 @@ class SchNET(BaseNNP):
         self.interaction_modules = nn.ModuleList(
             [
                 SchNETInteractionBlock(
-                    self.nr_atom_basis, nr_filters, self.radial_basis_module.n_rbf
+                    self.nr_atom_basis, self.nr_filters, self.radial_basis_module.n_rbf
                 )
                 for _ in range(nr_interaction_blocks)
             ]
@@ -146,7 +147,9 @@ class SchNETInteractionBlock(nn.Module):
         assert nr_atom_basis > 10, "Number of atom basis must be larger than 10."
 
         self.nr_atom_basis = nr_atom_basis  # Initialize parameters
-        self.intput_to_feature = nn.Linear(nr_atom_basis, nr_filters)
+        self.intput_to_feature = Dense(
+            nr_atom_basis, nr_filters, bias=False, activation=None
+        )
         self.feature_to_output = nn.Sequential(
             Dense(nr_filters, nr_atom_basis, activation=_shifted_softplus),
             Dense(nr_atom_basis, nr_atom_basis, activation=None),

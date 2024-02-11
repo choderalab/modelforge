@@ -314,101 +314,26 @@ def test_numpy_dataset_assignment(dataset):
     assert isinstance(data.numpy_data, np.lib.npyio.NpzFile)
 
 
-def test_offset_and_normalization():
+def test_self_energy():
 
     from modelforge.dataset.dataset import TorchDataModule
-    from torch.utils.data import Dataset
 
-    # create a small mock dataset
-    class SimpleDataset(Dataset):
-        def __init__(self, data):
-            self.data = data
-
-        def __len__(self):
-            return len(self.data)
-
-        def __getitem__(self, idx):
-            item = self.data[idx]
-            return item
-
-        def __setitem__(self, idx, value):
-            self.data[idx] = value
-
-    # add the mock datapoints
-    dataset = [
-        {"E_label": torch.tensor([2], dtype=torch.float)},
-        {"E_label": torch.tensor([4], dtype=torch.float)},
-        {"E_label": torch.tensor([6], dtype=torch.float)},
-    ]
-
-    # Create an instance of the SimpleDataset with your data
-    simple_dataset = SimpleDataset(dataset)
-
-    # compute statistics for this dataset
-    stats = TorchDataModule.compute_statistics(simple_dataset, collate=False)
-
-    # make sure that mean and stddev are correct
-    assert torch.isclose(stats["mean"], torch.tensor([4.0]))
-    assert torch.isclose(stats["stddev"], torch.tensor([1.6330]))
-    # NOTE: since we are using a single batch ddof = 0 and the above
-    # represents the population stddev, if multiple batches are provided
-    # the sample stddev is calculates with ddof=1
-
-    # only offset the dataset by global mean
-    mod_dataset = TorchDataModule.preprocess_dataset(
-        simple_dataset,
-        normalize=False,
-        dataset_mean=stats["mean"],
-        dataset_std=stats["stddev"],
-    )
-
-    # new datapoints are -2,0,2 --> offset is 4
-    assert torch.isclose(
-        mod_dataset[0]["E_label"], torch.tensor([-2], dtype=torch.float)
-    )
-    assert torch.isclose(
-        mod_dataset[1]["E_label"], torch.tensor([0], dtype=torch.float)
-    )
-    assert torch.isclose(
-        mod_dataset[2]["E_label"], torch.tensor([2], dtype=torch.float)
-    )
-
-    # normalize the dataset using global mean and stddev
-    # NOTE: Since the dataset was modified in place we need to reinitialize the dataloader
-    # # add the mock datapoints
-    dataset = [
-        {"E_label": torch.tensor([2], dtype=torch.float)},
-        {"E_label": torch.tensor([4], dtype=torch.float)},
-        {"E_label": torch.tensor([6], dtype=torch.float)},
-    ]
-    simple_dataset = SimpleDataset(dataset)
-    mod_dataset = TorchDataModule.preprocess_dataset(
-        simple_dataset,
-        normalize=True,
-        dataset_mean=stats["mean"],
-        dataset_std=stats["stddev"],
-    )
-
-    assert torch.isclose(
-        mod_dataset[0]["E_label"], torch.tensor([-1.2247], dtype=torch.float), atol=1e-4
-    )
-    assert torch.isclose(
-        mod_dataset[1]["E_label"], torch.tensor([0], dtype=torch.float), atol=1e-4
-    )
-    assert torch.isclose(
-        mod_dataset[2]["E_label"], torch.tensor([1.2247], dtype=torch.float), atol=1e-4
-    )
-
-    # test offset and normalization with QM9
+    # test the self energy calculation on the QM9 dataset
     from modelforge.dataset.qm9 import QM9Dataset
+    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
     data = QM9Dataset(for_unit_testing=True)
-    dataset = TorchDataModule(data, batch_size=64)
-    dataset.prepare_data(offset=True, normalize=True)
-    dataset.setup()
+    dataset = TorchDataModule(
+        data, batch_size=32, split=FirstComeFirstServeSplittingStrategy()
+    )
 
-    for batch in dataset.train_dataloader():
-        labels = batch["E_label"]
-        # no datapoint should be outside the a normal distribution with stddev of 1
-        # test that all labels are within [-2,2]
-        assert torch.all(labels > -2.0) or torch.all(labels < 2.0)
+    # self energy is calculated and removed in prepare_data if `remove_self_energies` is True
+    dataset.prepare_data(remove_self_energies=True, normalize=True)
+
+    assert dataset.self_energies
+    # only 4 elements present in the reduced QM9 dataset
+    assert len(dataset.self_energies) == 4
+    assert np.isclose(dataset.self_energies[1], -1584.5087457646348)
+    assert np.isclose(dataset.self_energies[6], -99960.88941782094)
+    assert np.isclose(dataset.self_energies[7], -143754.0263865598)
+    assert np.isclose(dataset.self_energies[8], -197495.00132926644)

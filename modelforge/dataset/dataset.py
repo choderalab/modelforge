@@ -756,10 +756,10 @@ class TorchDataModule(pl.LightningDataModule):
         from torch.utils.data import Subset
 
         # Create subsets for training, validation, and testing
-        if self.split_idxs:
-            self.train_dataset = Subset(self.dataset, self.split_idxs["train"])
-            self.val_dataset = Subset(self.dataset, self.split_idxs["val"])
-            self.test_dataset = Subset(self.dataset, self.split_idxs["test"])
+        if self.split_idxs and os.path.exists(self.split_file):
+            self.train_dataset = Subset(self.dataset, self.split_idxs["train_idx"])
+            self.val_dataset = Subset(self.dataset, self.split_idxs["val_idx"])
+            self.test_dataset = Subset(self.dataset, self.split_idxs["test_idx"])
         else:
             # Fallback to manual splitting if split_idxs is not available
             self.train_dataset, self.val_dataset, self.test_dataset = self.split.split(

@@ -426,3 +426,97 @@ def test_pairlist_calculate_r_ij_and_d_ij():
 
     assert torch.allclose(r_ij, expected_r_ij, atol=1e-3)
     assert torch.allclose(d_ij, expected_d_ij, atol=1e-3)
+
+
+@pytest.mark.parametrize("model_class", MODELS_TO_TEST)
+def test_postprocessing(model_class):
+
+    from modelforge.dataset.dataset import TorchDataModule
+
+    # test the self energy calculation on the QM9 dataset
+    from modelforge.dataset.qm9 import QM9Dataset
+    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
+
+    data = QM9Dataset(for_unit_testing=True)
+    dataset = TorchDataModule(
+        data, batch_size=32, split=FirstComeFirstServeSplittingStrategy()
+    )
+
+    # self energy is calculated and removed in prepare_data if `remove_self_energies` is True
+    dataset.prepare_data(remove_self_energies=True, normalize=False)
+    dataset.setup()
+    assert dataset.self_energies
+    # only 4 elements present in the reduced QM9 dataset
+    assert len(dataset.self_energies) == 4
+
+    from modelforge.potential.schnet import SchNET
+    import torch
+    from modelforge.potential import CosineCutoff, GaussianRBF
+    from modelforge.potential.utils import SlicedEmbedding
+    from openff.units import unit
+
+    nr_atom_basis = 128
+    max_atomic_number = 100
+    n_rbf = 20
+    cutoff = 5.0 * unit.angstrom
+    nr_interaction_blocks = 2
+    nr_filters = 2
+
+    embedding = SlicedEmbedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
+    rbf = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
+
+    cutoff = CosineCutoff(cutoff=cutoff)
+
+    model = SchNET(
+        embedding_module=embedding,
+        nr_interaction_blocks=nr_interaction_blocks,
+        radial_basis_module=rbf,
+        cutoff_module=cutoff,
+        nr_filters=nr_filters,
+    )
+    
+    for batch in dataset.train_dataloader():
+        result = model(batch)
+        assert torch.allclose(
+            result,
+            torch.tensor(
+                [
+                    [
+                        22.5281,
+                        17.9000,
+                        12.5885,
+                        16.5068,
+                        12.1874,
+                        16.4190,
+                        36.6355,
+                        26.3394,
+                        29.8389,
+                        25.5186,
+                        30.1196,
+                        25.5026,
+                        51.0404,
+                        40.5016,
+                        40.4161,
+                        40.4025,
+                        30.1454,
+                        44.0697,
+                        39.3594,
+                        34.7243,
+                        65.7728,
+                        55.0955,
+                        23.8971,
+                        19.6258,
+                        15.3646,
+                        23.7961,
+                        19.4949,
+                        23.8577,
+                        43.1214,
+                        43.7238,
+                        39.4030,
+                        34.7665,
+                    ]
+                ]
+            ),
+        )
+
+        break

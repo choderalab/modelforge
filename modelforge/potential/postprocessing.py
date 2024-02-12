@@ -64,25 +64,24 @@ class NoPostprocess(Postprocess):
 class UndoNormalization(Postprocess):
     def forward(
         self,
-        energies: torch.Tensor,
-        atomic_numbers: torch.Tensor,
-        molecule_indices: torch.Tensor,
-    ) -> torch.Tensor:
+        postprocessing_data: Dict[str, torch.Tensor],
+    ) -> Dict[str, torch.Tensor]:
         """
         Undoes the normalization of the energies using the mean and stddev from the statistics.
         """
         mean = self.stats.get("mean", 0.0)
         stddev = self.stats.get("stddev", 1.0)
-        return (energies * stddev) + mean
+        postprocessing_data["energy_readout"] = (
+            postprocessing_data["energy_readout"] * stddev
+        ) + mean
+        return postprocessing_data
 
 
 class AddSelfEnergies(Postprocess):
     def forward(
         self,
-        energies: torch.Tensor,
-        atomic_numbers: torch.Tensor,
-        molecule_indices: torch.Tensor,
-    ) -> torch.Tensor:
+        postprocessing_data: Dict[str, torch.Tensor],
+    ) -> Dict[str, torch.Tensor]:
         """
         Adds self energies to each molecule based on its constituent atomic numbers in a vectorized manner.
         """

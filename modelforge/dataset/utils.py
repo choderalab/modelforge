@@ -27,8 +27,8 @@ class SplittingStrategy(ABC):
     """
 
     def __init__(
-            self,
-            seed: Optional[int] = None,
+        self,
+        seed: Optional[int] = None,
     ):
         self.seed = seed
         if self.seed is not None:
@@ -207,9 +207,9 @@ class RandomRecordSplittingStrategy(SplittingStrategy):
 
 
 def random_record_split(
-        dataset: "TorchDataset",
-        lengths: List[Union[int, float]],
-        generator: Optional[torch.Generator] = torch.default_generator
+    dataset: "TorchDataset",
+    lengths: List[Union[int, float]],
+    generator: Optional[torch.Generator] = torch.default_generator,
 ) -> List[Subset]:
     """
     Randomly split a TorchDataset into non-overlapping new datasets of given lengths, keeping all conformers in a record in the same split
@@ -260,26 +260,35 @@ def random_record_split(
 
         for i, length in enumerate(lengths):
             if length == 0:
-                warnings.warn(f"Length of split at index {i} is 0. "
-                              f"This might result in an empty dataset.")
+                warnings.warn(
+                    f"Length of split at index {i} is 0. "
+                    f"This might result in an empty dataset."
+                )
 
     # Cannot verify that dataset is Sized
     if sum(lengths) != dataset.record_len():  # type: ignore[arg-type]
-        raise ValueError("Sum of input lengths does not equal the number of records of the input dataset!")
+        raise ValueError(
+            "Sum of input lengths does not equal the number of records of the input dataset!"
+        )
 
     record_indices = torch.randperm(sum(lengths), generator=generator).tolist()  # type: ignore[arg-type, call-overload]
 
     indices_by_split: List[List[int]] = []
     for offset, length in zip(torch._utils._accumulate(lengths), lengths):
         indices = []
-        for record_idx in record_indices[offset - length: offset]:
+        for record_idx in record_indices[offset - length : offset]:
             indices.extend(dataset.get_series_mol_idxs(record_idx))
         indices_by_split.append(indices)
 
     if sum([len(indices) for indices in indices_by_split]) != len(dataset):
-        raise ValueError("Sum of all split lengths does not equal the length of the input dataset!")
+        raise ValueError(
+            "Sum of all split lengths does not equal the length of the input dataset!"
+        )
 
-    return [Subset(dataset, indices_by_split[split_idx]) for split_idx in range(len(lengths))]
+    return [
+        Subset(dataset, indices_by_split[split_idx])
+        for split_idx in range(len(lengths))
+    ]
 
 
 class FirstComeFirstServeSplittingStrategy(SplittingStrategy):
@@ -338,8 +347,30 @@ def _download_from_gdrive(id: str, raw_dataset_file: str):
     gdown.download(url, raw_dataset_file, quiet=False)
 
 
+def _download_from_gh(url: str, raw_dataset_file: str):
+    """
+    Downloads a dataset from github lfs.
+
+    Parameters
+    ----------
+    url : str
+        gh raw link.
+    raw_dataset_file : str
+        Path to save the downloaded dataset.
+
+    Examples
+    --------
+    >>> _download_from_gh(url, "data_file.hdf5.gz")
+    """
+    import requests
+
+    r = requests.get(url)
+    with open(raw_dataset_file, "wb") as f:
+        f.write(r.content)
+
+
 def _to_file_cache(
-        data: OrderedDict[str, List[np.ndarray]], processed_dataset_file: str
+    data: OrderedDict[str, List[np.ndarray]], processed_dataset_file: str
 ) -> None:
     """
     Save processed data to a numpy (.npz) file.

@@ -26,7 +26,6 @@ from modelforge.dataset.dataset import TorchDataModule
 data = QM9Dataset(for_unit_testing=True)
 dataset = TorchDataModule(data, batch_size=512)
 dataset.prepare_data(offset=True, normalize=True)
-dataset.setup()
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
 trainer = Trainer(

@@ -185,7 +185,7 @@ class LightningModuleMixin(pl.LightningModule):
             Loss tensor.
         """
         batch_size = self._log_batch_size(batch)
-        predictions = self.forward(batch).flatten()
+        predictions = self.forward(batch)["energy_readout"].flatten()
         targets = batch["E_label"].flatten().to(torch.float32)
         loss = self.loss_function(predictions, targets)
 
@@ -206,7 +206,7 @@ class LightningModuleMixin(pl.LightningModule):
 
         predictions = self.forward(batch).flatten()
         targets = batch["E_label"].flatten()
-        test_loss = F.mse_loss(predictions, targets)
+        test_loss = F.mse_loss(predictions["energy_readout"], targets)
         self.log(
             "test_loss", test_loss, batch_size=batch_size, on_epoch=True, prog_bar=True
         )
@@ -215,7 +215,7 @@ class LightningModuleMixin(pl.LightningModule):
         from torch.nn import functional as F
 
         batch_size = self._log_batch_size(batch)
-        predictions = self.forward(batch)
+        predictions = self.forward(batch)["energy_readout"]
         targets = batch["E_label"]
         val_loss = F.mse_loss(predictions, targets)
         self.log(
@@ -415,9 +415,12 @@ class BaseNNP(nn.Module):
         inputs = self.prepare_inputs(inputs)
         # perform the forward pass implemented in the subclass
         outputs = self._forward(inputs)
+        # aggreate energies
         energy_readout = self._readout(outputs)
-        processed_data = self._energy_postprocessing(energy_readout, inputs)
-        return processed_data["energy_readout"]
+        # postprocess energies
+        processed_energies = self._energy_postprocessing(energy_readout, inputs)
+        # return energies
+        return processed_energies
 
 
 class SingleTopologyAlchemicalBaseNNPModel(BaseNNP):

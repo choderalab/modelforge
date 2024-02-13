@@ -12,7 +12,7 @@ import torch
 
 
 class Postprocess(nn.Module, ABC):
-    def __init__(self, stats: dict):
+    def __init__(self, dataset_statistics: dict):
         """
         Initializes the postprocessing operation with dataset statistics.
 
@@ -22,7 +22,7 @@ class Postprocess(nn.Module, ABC):
             A dictionary containing dataset statistics such as self energies, mean, and stddev.
         """
         super().__init__()
-        self.stats = stats
+        self.dataset_statistics = dataset_statistics
 
     @abstractmethod
     def forward(
@@ -48,8 +48,8 @@ class Postprocess(nn.Module, ABC):
 
 class NoPostprocess(Postprocess):
 
-    def __init__(self, stats: Dict = {}):
-        super().__init__(stats)
+    def __init__(self, dataset_statistics: dict = {}):
+        super().__init__(dataset_statistics)
 
     def forward(
         self,
@@ -62,6 +62,7 @@ class NoPostprocess(Postprocess):
 
 
 class UndoNormalization(Postprocess):
+
     def forward(
         self,
         postprocessing_data: Dict[str, torch.Tensor],
@@ -69,15 +70,19 @@ class UndoNormalization(Postprocess):
         """
         Undoes the normalization of the energies using the mean and stddev from the statistics.
         """
-        mean = self.stats.get("mean", 0.0)
-        stddev = self.stats.get("stddev", 1.0)
+        mean = self.dataset_statistics.get("mean", 0.0)
+        stddev = self.dataset_statistics.get("stddev", 1.0)
         postprocessing_data["energy_readout"] = (
             postprocessing_data["energy_readout"] * stddev
         ) + mean
-        return postprocessing_data
+        return postprocessing_data["energy_readout"]
 
 
 class AddSelfEnergies(Postprocess):
+
+    def __init__(self, dataset_statistics: Dict):
+        super().__init__(dataset_statistics)
+
     def forward(
         self,
         postprocessing_data: Dict[str, torch.Tensor],
@@ -86,9 +91,12 @@ class AddSelfEnergies(Postprocess):
         Adds self energies to each molecule based on its constituent atomic numbers in a vectorized manner.
         """
         # Convert self_energies to a tensor for efficient lookup
-        max_atomic_number = max(self.stats["self_energies"].keys())
+        energies = postprocessing_data["energy_readout"]
+        atomic_numbers = postprocessing_data["atomic_numbers"]
+        molecule_indices = postprocessing_data["atomic_subsystem_indices"]
+        max_atomic_number = torch.max(atomic_numbers).item()
         self_energies_tensor = torch.zeros(max_atomic_number + 1)
-        for atomic_number, energy in self.stats["self_energies"].items():
+        for atomic_number, energy in self.dataset_statistics["self_energies"].items():
             self_energies_tensor[atomic_number] = energy
 
         # Calculate self energies for each atom and then aggregate them per molecule

@@ -123,7 +123,6 @@ def initialize_dataset(
     data = dataset(for_unit_testing=for_unit_testing)
     data_module = TorchDataModule(data, split_file=split_file)
     data_module.prepare_data()
-    data_module.setup()
     return data_module
 
 

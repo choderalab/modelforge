@@ -530,6 +530,7 @@ class TorchDataModule(pl.LightningDataModule):
         self.split_file = split_file
         self.dataset_statistics = {}
 
+
     @classmethod
     def calculate_self_energies(
         cls, dataset: TorchDataset, collate: bool = True

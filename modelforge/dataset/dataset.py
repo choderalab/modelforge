@@ -527,9 +527,8 @@ class TorchDataModule(pl.LightningDataModule):
         self.val_dataset = None
         self.transform = transform
         self.split = split
-        self.self_energies = {}
-        self.stats = {"mean": 0, "stddev": 1}  # Initialize with default values
         self.split_file = split_file
+        self.dataset_statistics = {}
 
     @classmethod
     def calculate_self_energies(
@@ -652,21 +651,23 @@ class TorchDataModule(pl.LightningDataModule):
         # generate dataset
         factory = DatasetFactory()
         self.dataset = factory.create_dataset(self.data)
-
+        dataset_statistics = {}
         # calculate self energies
         if remove_self_energies:
             self_energies = TorchDataModule.calculate_self_energies(self.dataset)
             self.dataset = TorchDataModule.remove_self_energies(
                 self.dataset, self_energies
             )
-            self.self_energies = self_energies
+            dataset_statistics["self_energies"] = self_energies
 
         # calculate average and variance
         if normalize:
             stats = TorchDataModule.calculate_mean_and_variance(self.dataset)
             self.dataset = TorchDataModule.normalize_energies(self.dataset, stats)
-            self.stats = stats
+            dataset_statistics["stddev"] = stats["stddev"]
+            dataset_statistics["mean"] = stats["mean"]
 
+        self.dataset_statistics = dataset_statistics
         self.setup()
 
     @classmethod

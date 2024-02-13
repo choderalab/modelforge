@@ -246,9 +246,7 @@ class BaseNNP(nn.Module):
     def __init__(
         self,
         cutoff: float,
-        postprocessing: PostprocessingPipeline = PostprocessingPipeline(
-            [NoPostprocess({})]
-        ),
+        postprocessing: PostprocessingPipeline,
     ):
         """
         Initialize the NNP class.

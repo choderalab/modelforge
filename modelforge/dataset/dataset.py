@@ -507,7 +507,6 @@ class TorchDataModule(pl.LightningDataModule):
     >>> data = QM9Dataset()
     >>> data_module = TorchDataModule(data)
     >>> data_module.prepare_data()
-    >>> data_module.setup()
     >>> train_loader = data_module.train_dataloader()
     """
 
@@ -665,8 +664,10 @@ class TorchDataModule(pl.LightningDataModule):
         # calculate average and variance
         if normalize:
             stats = TorchDataModule.calculate_mean_and_variance(self.dataset)
-            self.stats = stats
             self.dataset = TorchDataModule.normalize_energies(self.dataset, stats)
+            self.stats = stats
+
+        self.setup()
 
     @classmethod
     def normalize_energies(cls, dataset, stats: Dict[str, float]) -> None:

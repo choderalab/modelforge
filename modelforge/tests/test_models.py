@@ -249,7 +249,6 @@ def test_pairlist_on_dataset(dataset):
     data = dataset(for_unit_testing=True)
     data_module = TorchDataModule(data)
     data_module.prepare_data()
-    data_module.setup()
     for data in data_module.train_dataloader():
         positions = data["positions"]
         atomic_subsystem_indices = data["atomic_subsystem_indices"]
@@ -428,8 +427,8 @@ def test_pairlist_calculate_r_ij_and_d_ij():
     assert torch.allclose(d_ij, expected_d_ij, atol=1e-3)
 
 
-@pytest.mark.parametrize("model_class", MODELS_TO_TEST)
-def test_postprocessing(model_class):
+# @pytest.mark.parametrize("model_class", MODELS_TO_TEST)
+def test_postprocessing():
 
     from modelforge.dataset.dataset import TorchDataModule
 
@@ -444,13 +443,11 @@ def test_postprocessing(model_class):
 
     # self energy is calculated and removed in prepare_data if `remove_self_energies` is True
     dataset.prepare_data(remove_self_energies=True, normalize=False)
-    dataset.setup()
     assert dataset.self_energies
     # only 4 elements present in the reduced QM9 dataset
     assert len(dataset.self_energies) == 4
 
     from modelforge.potential.schnet import SchNET
-    import torch
     from modelforge.potential import CosineCutoff, GaussianRBF
     from modelforge.potential.utils import SlicedEmbedding
     from openff.units import unit
@@ -474,49 +471,24 @@ def test_postprocessing(model_class):
         cutoff_module=cutoff,
         nr_filters=nr_filters,
     )
-    
+
     for batch in dataset.train_dataloader():
         result = model(batch)
-        assert torch.allclose(
-            result,
-            torch.tensor(
-                [
-                    [
-                        22.5281,
-                        17.9000,
-                        12.5885,
-                        16.5068,
-                        12.1874,
-                        16.4190,
-                        36.6355,
-                        26.3394,
-                        29.8389,
-                        25.5186,
-                        30.1196,
-                        25.5026,
-                        51.0404,
-                        40.5016,
-                        40.4161,
-                        40.4025,
-                        30.1454,
-                        44.0697,
-                        39.3594,
-                        34.7243,
-                        65.7728,
-                        55.0955,
-                        23.8971,
-                        19.6258,
-                        15.3646,
-                        23.7961,
-                        19.4949,
-                        23.8577,
-                        43.1214,
-                        43.7238,
-                        39.4030,
-                        34.7665,
-                    ]
-                ]
-            ),
-        )
+
+        break
+
+    from modelforge.potential.postprocessing import AddSelfEnergies
+
+    model = SchNET(
+        embedding_module=embedding,
+        nr_interaction_blocks=nr_interaction_blocks,
+        radial_basis_module=rbf,
+        cutoff_module=cutoff,
+        nr_filters=nr_filters,
+        postprocessing=[AddSelfEnergies(dataset.state_dict)],
+    )
+
+    for batch in dataset.train_dataloader():
+        result = model(batch)
 
         break

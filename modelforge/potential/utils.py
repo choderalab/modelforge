@@ -109,13 +109,13 @@ class Dense(nn.Linear):
     """
 
     def __init__(
-        self,
-        in_features: int,
-        out_features: int,
-        bias: bool = True,
-        activation: Union[Callable, nn.Module] = None,
-        weight_init: Callable = xavier_uniform_,
-        bias_init: Callable = zeros_,
+            self,
+            in_features: int,
+            out_features: int,
+            bias: bool = True,
+            activation: Union[Callable, nn.Module] = None,
+            weight_init: Callable = xavier_uniform_,
+            bias_init: Callable = zeros_,
     ):
         """
         Args:
@@ -146,7 +146,7 @@ class Dense(nn.Linear):
 
 
 def gaussian_rbf(
-    d_ij: torch.Tensor, offsets: torch.Tensor, widths: torch.Tensor
+        d_ij: torch.Tensor, offsets: torch.Tensor, widths: torch.Tensor
 ) -> torch.Tensor:
     """
     Gaussian radial basis function (RBF) transformation.
@@ -219,7 +219,7 @@ def _cosine_cutoff(d_ij: torch.Tensor, cutoff: float) -> torch.Tensor:
 
 
 def embed_atom_features(
-    atomic_numbers: torch.Tensor, embedding: nn.Embedding
+        atomic_numbers: torch.Tensor, embedding: nn.Embedding
 ) -> torch.Tensor:
     """
     Embed atomic numbers to atom features.
@@ -347,12 +347,12 @@ class _GaussianRBF(nn.Module):
     """
 
     def __init__(
-        self,
-        n_rbf: int,
-        cutoff: unit.Quantity,
-        start: float = 0.0,
-        trainable: bool = False,
-        dtype: Optional[torch.dtype] = None,
+            self,
+            n_rbf: int,
+            cutoff: unit.Quantity,
+            start: float = 0.0,
+            trainable: bool = False,
+            dtype: Optional[torch.dtype] = None,
     ):
         """
         Initialize the GaussianRBF class.
@@ -402,7 +402,7 @@ class _GaussianRBF(nn.Module):
 
 
 def _distance_to_radial_basis(
-    d_ij: torch.Tensor, radial_basis: Callable
+        d_ij: torch.Tensor, radial_basis: Callable
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Convert distances to radial basis functions.
@@ -425,8 +425,8 @@ def _distance_to_radial_basis(
 
 
 def _pair_list(
-    atomic_subsystem_indices: torch.Tensor,
-    only_unique_pairs: bool = False,
+        atomic_subsystem_indices: torch.Tensor,
+        only_unique_pairs: bool = False,
 ) -> torch.Tensor:
     """Compute all pairs of atoms and their distances.
 
@@ -454,7 +454,7 @@ def _pair_list(
 
     # filter pairs to only keep those belonging to the same molecule
     same_molecule_mask = (
-        atomic_subsystem_indices[i_indices] == atomic_subsystem_indices[j_indices]
+            atomic_subsystem_indices[i_indices] == atomic_subsystem_indices[j_indices]
     )
 
     # Apply mask to get final pair indices
@@ -469,11 +469,12 @@ def _pair_list(
 
 from openff.units import unit
 
+
 def _neighbor_list_with_cutoff(
-    coordinates: torch.Tensor,  # in nanometer
-    atomic_subsystem_indices: torch.Tensor,
-    cutoff: float,
-    only_unique_pairs: bool = False,
+        coordinates: torch.Tensor,  # in nanometer
+        atomic_subsystem_indices: torch.Tensor,
+        cutoff: float,
+        only_unique_pairs: bool = False,
 ) -> torch.Tensor:
     """Compute all pairs of atoms and their distances.
 
@@ -500,13 +501,14 @@ def _neighbor_list_with_cutoff(
     )
 
     # Find pairs within the cutoff
-    #cutoff = cutoff.to(unit.nanometer).m
+    # cutoff = cutoff.to(unit.nanometer).m
     in_cutoff = (distances <= cutoff).nonzero(as_tuple=False).squeeze()
 
     # Get the atom indices within the cutoff
     pair_indices_within_cutoff = pair_indices[:, in_cutoff]
 
     return pair_indices_within_cutoff
+
 
 def broadcast(src: torch.Tensor, other: torch.Tensor, dim: int):
     if dim < 0:
@@ -518,8 +520,10 @@ def broadcast(src: torch.Tensor, other: torch.Tensor, dim: int):
         src = src.unsqueeze(-1)
     src = src.expand(other.size())
     return src
+
+
 def scatter_softmax(
-    src: torch.Tensor, index: torch.Tensor, dim: int = -1, dim_size: Optional[int] = None
+        src: torch.Tensor, index: torch.Tensor, dim: int = -1, dim_size: Optional[int] = None
 ) -> torch.Tensor:
     """
     Softmax operation over all values in :attr:`src` tensor that share indices
@@ -558,14 +562,13 @@ def scatter_softmax(
     ]
 
     index = broadcast(index, src, dim)
-    max_value_per_index = torch.zeros(out_shape).scatter_reduce(dim, index, src, "amax", include_self=False)
+    max_value_per_index = torch.zeros(out_shape, dtype=src.dtype).scatter_reduce(dim, index, src, "amax", include_self=False)
     max_per_src_element = max_value_per_index.gather(dim, index)
 
     recentered_scores = src - max_per_src_element
     recentered_scores_exp = recentered_scores.exp()
 
-    sum_per_index = torch.zeros(out_shape).scatter_add(dim, index, recentered_scores_exp)
+    sum_per_index = torch.zeros(out_shape, dtype=src.dtype).scatter_add(dim, index, recentered_scores_exp)
     normalizing_constants = sum_per_index.gather(dim, index)
 
     return recentered_scores_exp.div(normalizing_constants)
-

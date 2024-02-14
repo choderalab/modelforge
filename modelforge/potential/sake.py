@@ -169,11 +169,11 @@ class SAKEInteraction(nn.Module):
                                                                        self.nr_edge_basis,
                                                                        radial_basis_module,
                                                                        activation)
-        
+
         self.semantic_attention_mlp = nn.Sequential(
             Dense(self.nr_edge_basis, self.n_heads, activation=nn.CELU(alpha=2.0))
         )
-        
+
         self.x_mixing = nn.Sequential(
             Dense(self.n_coefficients, self.n_coefficients, bias=False, activation=nn.Tanh()),
         )
@@ -192,12 +192,12 @@ class SAKEInteraction(nn.Module):
         combinations = torch.einsum("px,pc->pcx", r_ij, coefficients)
         broadcast_idx_j = broadcast(idx_j, torch.zeros(idx_j.shape[0], self.n_coefficients, 3), dim=0)
         out_shape = (n_atoms, self.n_coefficients, 3)
-        combinations_sum = torch.zeros(out_shape).scatter_reduce(0,
-                                                                 broadcast_idx_j,
-                                                                 combinations,
-                                                                 "mean",
-                                                                 include_self=False
-                                                                 )
+        combinations_sum = torch.zeros(out_shape, dtype=combinations.dtype).scatter_reduce(0,
+                                                                                           broadcast_idx_j,
+                                                                                           combinations,
+                                                                                           "mean",
+                                                                                           include_self=False
+                                                                                           )
         combinations_norm = (combinations_sum ** 2).sum(-1)
         q_combinations = self.post_norm_mlp(combinations_norm)
         return q_combinations
@@ -205,7 +205,7 @@ class SAKEInteraction(nn.Module):
     def aggregate(self, q_ij_mtx, idx_j, n_atoms):
         broadcast_idx_j = broadcast(idx_j, torch.zeros(idx_j.shape[0], self.n_coefficients), dim=0)
         out_shape = (n_atoms, self.n_coefficients)
-        return torch.zeros(out_shape).scatter_add(0, broadcast_idx_j, q_ij_mtx)
+        return torch.zeros(out_shape, dtype=q_ij_mtx.dtype).scatter_add(0, broadcast_idx_j, q_ij_mtx)
 
     def node_model(self, q, q_ij, q_combinations):
         print("q", q.shape)
@@ -233,10 +233,13 @@ class SAKEInteraction(nn.Module):
         print("n_atoms", n_atoms)
         print("idx_j", idx_j.shape)
         broadcast_idx_j = broadcast(idx_j, torch.zeros(idx_j.shape[0], self.n_heads), dim=0)
-        combined_attention_agg = torch.zeros(n_atoms, self.n_heads).scatter_add(0, broadcast_idx_j, combined_attention)
+        combined_attention_agg = torch.zeros(n_atoms, self.n_heads, dtype=combined_attention.dtype).scatter_add(0,
+                                                                                                                broadcast_idx_j,
+                                                                                                                combined_attention)
         combined_attention = combined_attention / combined_attention_agg[idx_j]
 
         return combined_attention
+
     def forward(
             self,
             q: torch.Tensor,  # shape [nr_of_atoms_in_batch, nr_atom_basis]

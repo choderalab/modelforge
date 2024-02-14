@@ -28,7 +28,7 @@ from openff.units import unit
 @pytest.mark.parametrize(
     "model_parameter",
     (
-        [63, 53, 3, unit.Quantity(5.0, unit.angstrom), 2],
+        [64, 50, 2, unit.Quantity(5.0, unit.angstrom), 2],
         [32, 60, 10, unit.Quantity(7.0, unit.angstrom), 1],
         [128, 120, 5, unit.Quantity(5.0, unit.angstrom), 3],
     ),

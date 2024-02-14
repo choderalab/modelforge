@@ -71,9 +71,8 @@ def test_gaussian_rbf(RBF):
     n_rbf = 5
     cutoff = unit.Quantity(10.0, unit.angstrom)
     start = 0.0
-    trainable = False
 
-    gaussian_rbf = RBF(n_rbf=n_rbf, cutoff=cutoff, start=start, trainable=trainable)
+    gaussian_rbf = RBF(n_rbf=n_rbf, cutoff=cutoff, start=start)
 
     # Test that the number of radial basis functions is correct
     assert gaussian_rbf.n_rbf == n_rbf

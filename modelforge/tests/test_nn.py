@@ -15,8 +15,7 @@ def test_gaussian_rbf_1D():
     assert torch.allclose(expt, rbf_expension(dist), atol=1e-4)
     assert list(rbf_expension.parameters()) == []
 
-    rbf_expension = GaussianRBF(n_rbf=6, cutoff=5.0 * unit.angstrom, trainable=True)
-    assert list(rbf_expension.parameters()) != []
+    rbf_expension = GaussianRBF(n_rbf=6, cutoff=5.0 * unit.angstrom)
 
 
 def test_gaussian_rbf_3D():

@@ -304,11 +304,10 @@ def test_numpy_dataset_assignment(dataset):
     """
     Test if the numpy_dataset attribute is correctly assigned after processing or loading.
     """
-    from modelforge.dataset.transformation import default_transformation
 
     factory = DatasetFactory()
     data = dataset(for_unit_testing=True)
-    factory._load_or_process_data(data, None, default_transformation)
+    factory._load_or_process_data(data)
 
     assert hasattr(data, "numpy_data")
     assert isinstance(data.numpy_data, np.lib.npyio.NpzFile)

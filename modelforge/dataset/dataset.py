@@ -434,8 +434,6 @@ class DatasetFactory:
     @staticmethod
     def _load_or_process_data(
         data: HDF5Dataset,
-        label_transform: Optional[Dict[str, Callable]],
-        transform: Optional[Dict[str, Callable]],
     ) -> None:
         """
         Loads the dataset from cache if available, otherwise processes and caches the data.
@@ -460,8 +458,6 @@ class DatasetFactory:
     @staticmethod
     def create_dataset(
         data: HDF5Dataset,
-        label_transform: Optional[Dict[str, Callable]] = None,
-        transform: Optional[Dict[str, Callable]] = None,
     ) -> TorchDataset:
         """
         Creates a TorchDataset from an HDF5Dataset, applying optional transformations.
@@ -470,10 +466,6 @@ class DatasetFactory:
         ----------
         data : HDF5Dataset
             The HDF5 dataset to convert.
-        label_transform : Optional[Dict[str, Callable]], optional
-            Transformations to apply to labels, keyed by property name.
-        transform : Optional[Dict[str, Callable]], optional
-            Transformations to apply to data, keyed by property name.
 
         Returns
         -------
@@ -482,7 +474,7 @@ class DatasetFactory:
         """
 
         log.info(f"Creating {data.dataset_name} dataset")
-        DatasetFactory._load_or_process_data(data, label_transform, transform)
+        DatasetFactory._load_or_process_data(data)
         return TorchDataset(data.numpy_data, data._property_names)
 
 
@@ -629,7 +621,10 @@ class TorchDataModule(pl.LightningDataModule):
         provide_details_about_used_unitsystem()
 
     def prepare_data(
-        self, remove_self_energies: bool = True, normalize: bool = False
+        self,
+        remove_self_energies: bool = True,
+        normalize: bool = False,
+        self_energies: Dict[str, float] = {},
     ) -> None:
         """
         Prepares the dataset for use by calculating self energies, normalizing data, and splitting the dataset.
@@ -640,6 +635,10 @@ class TorchDataModule(pl.LightningDataModule):
             Whether to remove self energies from the dataset. Defaults to True.
         normalize : bool, optional
             Whether to normalize the dataset. Defaults to True.
+        self_energies : Dict[str, float], optional
+            A dictionary mapping atomic numbers to their calculated self energies. Defaults to {}.
+            If self_energies is not provided, but remove_self_energies is True, self-energies are calculated
+            using a linear fit regression.
         """
 
         if self.split_file and os.path.exists(self.split_file):
@@ -654,7 +653,8 @@ class TorchDataModule(pl.LightningDataModule):
         dataset_statistics = {}
         # calculate self energies
         if remove_self_energies:
-            self_energies = TorchDataModule.calculate_self_energies(self.dataset)
+            if not self_energies:
+                self_energies = TorchDataModule.calculate_self_energies(self.dataset)
             self.dataset = TorchDataModule.remove_self_energies(
                 self.dataset, self_energies
             )

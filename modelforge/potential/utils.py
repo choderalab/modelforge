@@ -145,33 +145,6 @@ class Dense(nn.Linear):
         return y
 
 
-def gaussian_rbf(
-    d_ij: torch.Tensor, offsets: torch.Tensor, widths: torch.Tensor
-) -> torch.Tensor:
-    """
-    Gaussian radial basis function (RBF) transformation.
-
-    Parameters
-    ----------
-    d_ij : torch.Tensor
-        coordinates.
-    offsets : torch.Tensor
-        Offsets for Gaussian functions.
-    widths : torch.Tensor
-        Widths for Gaussian functions.
-
-    Returns
-    -------
-    torch.Tensor
-        Transformed tensor with Gaussian RBF applied
-    """
-
-    coeff = -0.5 / torch.pow(widths, 2)
-    diff = d_ij[..., None] - offsets
-    y = torch.exp(coeff * torch.pow(diff, 2))
-    return y
-
-
 from openff.units import unit
 
 
@@ -350,7 +323,6 @@ class GaussianRBF(nn.Module):
         n_rbf: int,
         cutoff: unit.Quantity,
         start: float = 0.0,
-        trainable: bool = False,
         dtype: Optional[torch.dtype] = None,
     ):
         """
@@ -376,12 +348,8 @@ class GaussianRBF(nn.Module):
         offset = torch.linspace(start, cutoff, n_rbf, dtype=dtype)
         widths = (torch.abs(offset[1] - offset[0]) * torch.ones_like(offset)).to(dtype)
 
-        if trainable:
-            self.widths = nn.Parameter(widths)
-            self.offsets = nn.Parameter(offset)
-        else:
-            self.register_buffer("widths", widths)
-            self.register_buffer("offsets", offset)
+        self.register_buffer("widths", widths)
+        self.register_buffer("offsets", offset)
 
     def forward(self, d_ij: torch.Tensor) -> torch.Tensor:
         """
@@ -397,7 +365,11 @@ class GaussianRBF(nn.Module):
         torch.Tensor
             The output tensor.
         """
-        return gaussian_rbf(d_ij, self.offsets, self.widths)
+
+        coeff = -0.5 / torch.pow(self.widths, 2)
+        diff = d_ij[..., None] - self.offsets
+        y = torch.exp(coeff * torch.pow(diff, 2))
+        return y
 
 
 def _distance_to_radial_basis(

@@ -197,7 +197,7 @@ class SAKEInteraction(nn.Module):
         print(v.shape)
         print(v_ij.shape)
         broadcast_idx_i = broadcast(idx_i, torch.zeros_like(v_ij), dim=0)
-        dv = torch.zeros((nr_atoms, self.nr_atom_basis_in)).scatter_reduce(0, broadcast_idx_i, v_ij, "mean", include_self=False)
+        dv = torch.zeros_like(v).scatter_reduce(0, broadcast_idx_i, v_ij, "mean", include_self=False)
         return self.velocity_mlp(h) * v + dv
 
     def spatial_attention(self, h_ij, dir_ij, idx_i, nr_atoms):
@@ -206,8 +206,8 @@ class SAKEInteraction(nn.Module):
 
         # p: pair axis; x: position axis, c: coefficient axis
         combinations = torch.einsum("px,pc->pcx", dir_ij, self.x_mixing(h_ij))
-        broadcast_idx_i = broadcast(idx_i, torch.zeros(idx_i.shape[0], self.nr_coefficients, self.nr_atom_basis_in), dim=0)
-        out_shape = (nr_atoms, self.nr_coefficients, self.nr_atom_basis_in)
+        broadcast_idx_i = broadcast(idx_i, torch.zeros(len(idx_i), self.nr_coefficients, dir_ij.shape[-1]), dim=0)
+        out_shape = (nr_atoms, self.nr_coefficients, dir_ij.shape[-1])
         combinations_mean = torch.zeros(out_shape, dtype=combinations.dtype).scatter_reduce(0,
                                                                                             broadcast_idx_i,
                                                                                             combinations,
@@ -218,24 +218,24 @@ class SAKEInteraction(nn.Module):
         return self.post_norm_mlp(combinations_norm_square), combinations
 
     def aggregate(self, h_ij_semantic, idx_i, nr_atoms):
-        broadcast_idx_i = broadcast(idx_i, torch.zeros(idx_i.shape[0], self.nr_coefficients), dim=0)
+        broadcast_idx_i = broadcast(idx_i, torch.zeros(len(idx_i), self.nr_coefficients), dim=0)
         out_shape = (nr_atoms, self.nr_coefficients)
         return torch.zeros(out_shape, dtype=h_ij_semantic.dtype).scatter_add(0, broadcast_idx_i, h_ij_semantic)
 
-    def semantic_attention_with_cutoff(self, d_ij, h_ij_edge, idx_i, nr_atoms, nr_pairs):
+    def semantic_attention_with_cutoff(self, d_ij, h_ij_edge, idx_i, nr_atoms):
         # semantic_attention shape: (nr_pairs, nr_heads)
         semantic_attention = scatter_softmax(self.semantic_attention_mlp(h_ij_edge), idx_i, dim=0, dim_size=nr_atoms)
 
         # combined_attention shape: (nr_pairs, nr_heads)
         combined_attention = semantic_attention
         # combined_attention_agg shape: (nr_atoms, nr_heads)
-        broadcast_idx_i = broadcast(idx_i, torch.zeros(idx_i.shape[0], self.nr_heads), dim=0)
+        broadcast_idx_i = broadcast(idx_i, torch.zeros(len(idx_i), self.nr_heads), dim=0)
         combined_attention_agg = (torch.zeros(nr_atoms, self.nr_heads, dtype=combined_attention.dtype).
                                   scatter_add(0, broadcast_idx_i, combined_attention))
         combined_attention_normed = combined_attention / combined_attention_agg[idx_i]
         # p: pair axis; f: hidden feature axis; h: head axis
         return torch.reshape(torch.einsum("pf,ph->pfh", h_ij_edge, combined_attention_normed),
-                             (nr_pairs, self.nr_coefficients))
+                             (len(idx_i), self.nr_coefficients))
 
     def forward(
             self,
@@ -251,11 +251,9 @@ class SAKEInteraction(nn.Module):
         h : torch.Tensor
             Scalar input values of shape [nr_of_atoms_in_systems, nr_atom_basis].
         x : torch.Tensor
-            Vector input values of shape [n_mols, n_interactions, nr_atom_basis].
-        Wij : torch.Tensor
-            Filter of shape [n_interactions].
-        dir_ij : torch.Tensor
-            Directional vector between atoms i and j.
+            Equivariant position input values of shape [nr_of_atoms_in_systems, nr_atom_basis].
+        v : torch.Tensor
+            Equivariant velocity input values of shape [nr_of_atoms_in_systems, nr_atom_basis].
         pairlist : torch.Tensor, shape (2, nr_pairs)
 
         Returns
@@ -264,15 +262,13 @@ class SAKEInteraction(nn.Module):
             Updated scalar and vector representations (q, mu).
         """
         idx_i, idx_j = pairlist[0], pairlist[1]
-        nr_pairs = len(idx_i)
-        nr_of_atoms_in_all_systems, _ = h.shape
-        r_ij = h[idx_j] - h[idx_i]
+        nr_of_atoms_in_all_systems, _ = x.shape
+        r_ij = x[idx_j] - x[idx_i]
         d_ij = torch.norm(r_ij, dim=-1)
         dir_ij = r_ij / (d_ij.unsqueeze(-1) + 1e-5)
 
         h_ij_edge = self.edge_model(torch.cat([h[idx_i], h[idx_j]], dim=-1), d_ij)
-        h_ij_semantic = self.semantic_attention_with_cutoff(d_ij, h_ij_edge, idx_i, nr_of_atoms_in_all_systems,
-                                                            nr_pairs)
+        h_ij_semantic = self.semantic_attention_with_cutoff(d_ij, h_ij_edge, idx_i, nr_of_atoms_in_all_systems)
         h_i_semantic = self.aggregate(h_ij_semantic, idx_i, nr_of_atoms_in_all_systems)
         h_i_spatial, combinations = self.spatial_attention(h_ij_semantic, dir_ij, idx_i, nr_of_atoms_in_all_systems)
         h_updated = self.node_update(h, h_i_semantic, h_i_spatial)

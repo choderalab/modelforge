@@ -3,20 +3,22 @@ from lightning import Trainer
 import torch
 from modelforge.potential.painn import LighningPaiNN
 
-from modelforge.potential import CosineCutoff, GaussianRBF
+from modelforge.potential import CosineCutoff, RadialSymmetryFunction
 from modelforge.potential.utils import SlicedEmbedding
 
 from openff.units import unit
 
 max_atomic_number = 100
 nr_atom_basis = 32
-nr_rbf = 15
+number_of_gaussians = 15
 nr_interaction_blocks = 2
 
 cutoff = unit.Quantity(5, unit.angstrom)
 embedding = SlicedEmbedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
 assert embedding.embedding_dim == nr_atom_basis
-rbf = GaussianRBF(n_rbf=nr_rbf, cutoff=cutoff)
+radial_symmetry_function_module = RadialSymmetryFunction(
+    number_of_gaussians=number_of_gaussians, cutoff=cutoff
+)
 
 cutoff = CosineCutoff(cutoff=cutoff)
 
@@ -31,7 +33,7 @@ from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 trainer = Trainer(
     max_epochs=200,
     num_nodes=1,
-    accelerator='cuda',
+    accelerator="cuda",
     devices=[0],
     callbacks=[
         EarlyStopping(monitor="val_loss", mode="min", patience=3, min_delta=0.001)
@@ -42,7 +44,7 @@ trainer = Trainer(
 model = LighningPaiNN(
     embedding=embedding,
     nr_interaction_blocks=nr_interaction_blocks,
-    radial_basis=rbf,
+    radial_basis=radial_symmetry_function_module,
     cutoff=cutoff,
 )
 

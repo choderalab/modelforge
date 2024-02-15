@@ -2,7 +2,11 @@ import numpy as np
 import torch
 import pytest
 
-from modelforge.potential.utils import CosineCutoff, _cosine_cutoff, GaussianRBF
+from modelforge.potential.utils import (
+    CosineCutoff,
+    _cosine_cutoff,
+    RadialSymmetryFunction,
+)
 
 
 def test_cosine_cutoff():
@@ -44,8 +48,8 @@ def test_cosine_cutoff_module():
     assert torch.allclose(output, expected_output, rtol=1e-3)
 
 
-@pytest.mark.parametrize("RBF", [GaussianRBF])
-def test_rbf(RBF):
+@pytest.mark.parametrize("RadialSymmetryFunction", [RadialSymmetryFunction])
+def test_rbf(RadialSymmetryFunction):
     """
     Test the Gaussian Radial Basis Function (RBF) implementation.
     """
@@ -57,58 +61,68 @@ def test_rbf(RBF):
     pairlist = prepare_pairlist_for_single_batch(batch)
     from openff.units import unit
 
-    radial_basis = RBF(n_rbf=20, cutoff=unit.Quantity(5.0, unit.angstrom))
-    output = radial_basis(pairlist["d_ij"])  # Shape: [n_pairs, n_rbf]
+    radial_symmetry_function_module = RadialSymmetryFunction(
+        number_of_gaussians=20, cutoff=unit.Quantity(5.0, unit.angstrom)
+    )
+    output = radial_symmetry_function_module(
+        pairlist["d_ij"]
+    )  # Shape: [n_pairs, number_of_gaussians]
     # Add assertion to check the shape of the output
-    assert output.shape[2] == 20  # n_rbf dimension
+    assert output.shape[2] == 20  # number_of_gaussians dimension
 
 
-@pytest.mark.parametrize("RBF", [GaussianRBF])
-def test_gaussian_rbf(RBF):
+@pytest.mark.parametrize("RadialSymmetryFunction", [RadialSymmetryFunction])
+def test_gaussian_rbf(RadialSymmetryFunction):
     # Check dimensions of output and output
     from openff.units import unit
 
-    n_rbf = 5
+    number_of_gaussians = 5
     cutoff = unit.Quantity(10.0, unit.angstrom)
     start = 0.0
 
-    gaussian_rbf = RBF(n_rbf=n_rbf, cutoff=cutoff, start=start)
+    radial_symmetry_function_module = RadialSymmetryFunction(
+        number_of_gaussians=number_of_gaussians, cutoff=cutoff, start=start
+    )
 
     # Test that the number of radial basis functions is correct
-    assert gaussian_rbf.n_rbf == n_rbf
+    assert radial_symmetry_function_module.number_of_gaussians == number_of_gaussians
 
     # Test that the cutoff distance is correct
-    assert gaussian_rbf.cutoff == cutoff.to(unit.nanometer).m
+    assert radial_symmetry_function_module.cutoff == cutoff.to(unit.nanometer).m
 
     # Test that the widths and offsets are correct
-    expected_offsets = torch.linspace(start, cutoff.to(unit.nanometer).m, n_rbf)
+    expected_offsets = torch.linspace(
+        start, cutoff.to(unit.nanometer).m, number_of_gaussians
+    )
     expected_widths = torch.abs(
         expected_offsets[1] - expected_offsets[0]
     ) * torch.ones_like(expected_offsets)
-    assert torch.allclose(gaussian_rbf.offsets, expected_offsets)
-    assert torch.allclose(gaussian_rbf.widths, expected_widths)
+    assert torch.allclose(radial_symmetry_function_module.offsets, expected_offsets)
+    assert torch.allclose(radial_symmetry_function_module.widths, expected_widths)
 
     # Test that the forward pass returns the expected output
     d_ij = torch.tensor([1.0, 2.0, 3.0])
-    expected_output = gaussian_rbf(d_ij)
-    assert expected_output.shape == (3, n_rbf)
+    expected_output = radial_symmetry_function_module(d_ij)
+    assert expected_output.shape == (3, number_of_gaussians)
 
 
-@pytest.mark.parametrize("RBF", [GaussianRBF])
-def test_rbf_invariance(RBF):
+@pytest.mark.parametrize("RadialSymmetryFunction", [RadialSymmetryFunction])
+def test_rbf_invariance(RadialSymmetryFunction):
     # Define a set of coordinates
     from openff.units import unit
 
     coordinates = torch.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]]) / 10
 
     # Initialize RBF
-    rbf = RBF(n_rbf=10, cutoff=unit.Quantity(5.0, unit.angstrom))
+    radial_symmetry_function_module = RadialSymmetryFunction(
+        number_of_gaussians=10, cutoff=unit.Quantity(5.0, unit.angstrom)
+    )
 
     # Calculate pairwise distances for the original coordinates
     original_d_ij = torch.cdist(coordinates, coordinates)
 
     # Apply RBF
-    original_output = rbf(original_d_ij)
+    original_output = radial_symmetry_function_module(original_d_ij)
 
     # Apply a rotation and reflection to the coordinates
     rotation_matrix = torch.tensor(
@@ -121,7 +135,7 @@ def test_rbf_invariance(RBF):
     transformed_d_ij = torch.cdist(reflected_coordinates, reflected_coordinates)
 
     # Apply Gaussian RBF to transformed coordinates
-    transformed_output = rbf(transformed_d_ij)
+    transformed_output = radial_symmetry_function_module(transformed_d_ij)
 
     # Assert that the outputs are the same
     assert torch.allclose(original_output, transformed_output, atol=1e-6)
@@ -143,23 +157,23 @@ def test_scatter_add():
     native_result.scatter_add_(dim, idx_i, x)
 
 
-def testGaussianRBF():
+def testRadialSymmetryFunction():
     """
-    Test the GaussianRBF layer.
+    Test the RadialSymmetryFunction layer.
     """
 
-    from modelforge.potential import GaussianRBF
+    from modelforge.potential import RadialSymmetryFunction
     from openff.units import unit
 
-    n_rbf = 10
+    number_of_gaussians = 10
     dim_of_x = 3
     cutoff = unit.Quantity(5.0, unit.angstrom)
-    layer = GaussianRBF(10, cutoff)
+    layer = RadialSymmetryFunction(10, cutoff)
     x = torch.tensor([1.0, 2.0, 3.0], dtype=torch.float32)
-    y = layer(x)  # Shape: [dim_of_x, n_rbf]
+    y = layer(x)  # Shape: [dim_of_x, number_of_gaussians]
 
     # Add assertion to check the shape of the output
-    assert y.shape == (dim_of_x, n_rbf)
+    assert y.shape == (dim_of_x, number_of_gaussians)
 
 
 def test_sliced_embedding():

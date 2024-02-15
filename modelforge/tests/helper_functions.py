@@ -19,7 +19,7 @@ def setup_simple_model(
     lightning: bool = False,
     nr_atom_basis: int = 128,
     max_atomic_number: int = 100,
-    n_rbf: int = 20,
+    number_of_gaussians: int = 20,
     cutoff: unit.Quantity = 5.0 * unit.angstrom,
     nr_interaction_blocks: int = 2,
     nr_filters: int = 2,
@@ -39,12 +39,14 @@ def setup_simple_model(
     Optional[BaseNNP]
         Initialized model.
     """
-    from modelforge.potential import CosineCutoff, GaussianRBF
+    from modelforge.potential import CosineCutoff, RadialSymmetryFunction
     from modelforge.potential.utils import SlicedEmbedding
 
     embedding = SlicedEmbedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
     assert embedding.embedding_dim == nr_atom_basis
-    rbf = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
+    radial_symmetry_function_module = RadialSymmetryFunction(
+        number_of_gaussians=number_of_gaussians, cutoff=cutoff
+    )
 
     cutoff = CosineCutoff(cutoff=cutoff)
 
@@ -53,14 +55,14 @@ def setup_simple_model(
             return LightningSchNET(
                 embedding=embedding,
                 nr_interaction_blocks=nr_interaction_blocks,
-                radial_basis=rbf,
+                radial_symmetry_function_module=radial_symmetry_function_module,
                 cutoff=cutoff,
                 nr_filters=nr_filters,
             )
         return SchNET(
             embedding_module=embedding,
             nr_interaction_blocks=nr_interaction_blocks,
-            radial_basis_module=rbf,
+            radial_symmetry_function_module=radial_symmetry_function_module,
             cutoff_module=cutoff,
             nr_filters=nr_filters,
         )
@@ -70,13 +72,13 @@ def setup_simple_model(
             return LighningPaiNN(
                 embedding=embedding,
                 nr_interaction_blocks=nr_interaction_blocks,
-                radial_basis=rbf,
+                radial_symmetry_function_module=radial_symmetry_function_module,
                 cutoff=cutoff,
             )
         return PaiNN(
             embedding_module=embedding,
             nr_interaction_blocks=nr_interaction_blocks,
-            radial_basis_module=rbf,
+            radial_symmetry_function_module=radial_symmetry_function_module,
             cutoff_module=cutoff,
         )
     else:
@@ -201,7 +203,7 @@ def generate_batch_data():
 
 
 def generate_interaction_block_data(
-    nr_atom_basis: int, nr_embeddings: int, nr_rbf: int
+    nr_atom_basis: int, nr_embeddings: int, number_of_gaussians: int
 ) -> Dict[str, torch.Tensor]:
     """
     Prepare inputs for testing the SchNet interaction block.
@@ -222,21 +224,21 @@ def generate_interaction_block_data(
     import torch.nn as nn
 
     from modelforge.dataset.qm9 import QM9Dataset
-    from modelforge.potential import GaussianRBF
+    from modelforge.potential import RadialSymmetryFunction
     from modelforge.potential.utils import _distance_to_radial_basis
     from openff.units import unit
 
     embedding = nn.Embedding(nr_embeddings, nr_atom_basis, padding_idx=0)
     batch = return_single_batch(QM9Dataset)
     r = prepare_pairlist_for_single_batch(batch)
-    radial_basis = GaussianRBF(
-        n_rbf=nr_rbf,
+    radial_symmetry_function_module = RadialSymmetryFunction(
+        number_of_gaussians=number_of_gaussians,
         cutoff=unit.Quantity(5.0, unit.angstrom),
         dtype=batch["positions"].dtype,
     )
 
     d_ij = r["d_ij"]
-    f_ij, rcut_ij = _distance_to_radial_basis(d_ij, radial_basis)
+    f_ij, rcut_ij = _distance_to_radial_basis(d_ij, radial_symmetry_function_module)
     return {
         "x": embedding(batch["atomic_numbers"].squeeze(dim=1)),
         "f_ij": f_ij,

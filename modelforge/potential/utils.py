@@ -308,72 +308,82 @@ def _shifted_softplus(x: torch.Tensor):
 from typing import Optional
 
 
-class GaussianRBF(nn.Module):
+class RadialSymmetryFunction(nn.Module):
     """
     Gaussian Radial Basis Function module.
 
     Methods
     -------
     forward(x: torch.Tensor) -> torch.Tensor:
-        Forward pass for the GaussianRBF.
+        Forward pass for the RadialSymmetryFunction.
     """
 
     def __init__(
         self,
-        n_rbf: int,
+        number_of_gaussians: int,
         cutoff: unit.Quantity,
         start: float = 0.0,
         dtype: Optional[torch.dtype] = None,
     ):
         """
-        Initialize the GaussianRBF class.
+        Initialize the RadialSymmetryFunction class.
 
         Parameters
         ----------
-        n_rbf : int
+        number_of_gaussians : int
             Number of radial basis functions.
         cutoff : unit.Quantity
-            The cutoff distance. NOTE: IN ANGSTROM #FIXME
+            The cutoff distance.
         start: float
             center of first Gaussian function.
-        trainable: boolean
-        If True, widths and offset of Gaussian functions are adjusted during training process.
 
         """
-        super().__init__()
-        self.n_rbf = n_rbf
-        cutoff = cutoff.to(unit.nanometer).m
-        self.cutoff = cutoff
-        # compute offset and width of Gaussian functions
-        offset = torch.linspace(start, cutoff, n_rbf, dtype=dtype)
-        widths = (torch.abs(offset[1] - offset[0]) * torch.ones_like(offset)).to(dtype)
+        from loguru import logger as log
 
+        super().__init__()
+        self.number_of_gaussians = number_of_gaussians
+        self.cutoff = cutoff.to(unit.nanometer).m
+        # calculate offsets
+        # ===============
+        offset = torch.linspace(
+            start, self.cutoff, number_of_gaussians, dtype=dtype
+        )  # R_s
+        # ===============
+        # calculate eta
+        widths = (torch.abs(offset[1] - offset[0]) * torch.ones_like(offset)).to(dtype)
+        # ===============
+        eta = -0.5 / torch.pow(widths, 2)  # eta
         self.register_buffer("widths", widths)
         self.register_buffer("offsets", offset)
+        self.register_buffer("eta", eta)
+        log.info(
+            f"RadialSymmetryFunction: cutoff={self.cutoff}, number_of_gaussians={self.number_of_gaussians}, widths={widths[[0]]}, eta={eta[0]}"
+        )
 
     def forward(self, d_ij: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass for the GaussianRBF.
-
+        Computes the radial basis functions for the distance tensor.
+        This computes the terms of the following equation
+        G_{m}^{R} = \sum_{j!=i}^{N} exp(-eta(|R_{ij} - R_s|)^2))
+        (NOTE: sum is not performed)
         Parameters
         ----------
         d_ij : torch.Tensor
-            Pairwise distances for the forward pass.
+            Pairwise distances.
 
         Returns
         -------
         torch.Tensor
-            The output tensor.
+            The radial basis functions. Shape: [..., N, number_of_gaussians]
         """
 
-        coeff = -0.5 / torch.pow(self.widths, 2)
-        diff = d_ij[..., None] - self.offsets
-        y = torch.exp(coeff * torch.pow(diff, 2))
+        diff = d_ij[..., None] - self.offsets  # R_ij - R_s
+        y = torch.exp(self.eta * torch.pow(diff, 2))
         return y
 
 
 def _distance_to_radial_basis(
-    d_ij: torch.Tensor, radial_basis: Callable
+    d_ij: torch.Tensor, radial_symmetry_function_module: Callable
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Convert distances to radial basis functions.
@@ -382,16 +392,16 @@ def _distance_to_radial_basis(
     ----------
     d_ij : torch.Tensor, shape [n_pairs,1 ]
         Pairwise distances between atoms.
-
+    radial_symmetry_function_module : Callable
     Returns
     -------
     Tuple[torch.Tensor, torch.Tensor]
-        - Radial basis functions, shape [n_pairs, n_rbf]
+        - Radial basis functions, shape [n_pairs, number_of_gaussians]
         - cutoff values, shape [n_pairs]
     """
     assert d_ij.dim() == 2
-    f_ij = radial_basis(d_ij)
-    rcut_ij = _cosine_cutoff(d_ij, radial_basis.cutoff)
+    f_ij = radial_symmetry_function_module(d_ij)
+    rcut_ij = _cosine_cutoff(d_ij, radial_symmetry_function_module.cutoff)
     return f_ij, rcut_ij
 
 

@@ -444,19 +444,21 @@ def test_postprocessing():
     assert len(dataset.dataset_statistics["self_energies"]) == 4
 
     from modelforge.potential.schnet import SchNET
-    from modelforge.potential import CosineCutoff, GaussianRBF
+    from modelforge.potential import CosineCutoff, RadialSymmetryFunction
     from modelforge.potential.utils import SlicedEmbedding
     from openff.units import unit
 
     nr_atom_basis = 128
     max_atomic_number = 100
-    n_rbf = 20
+    number_of_gaussians = 20
     cutoff = 5.0 * unit.angstrom
     nr_interaction_blocks = 2
     nr_filters = 2
 
     embedding = SlicedEmbedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
-    rbf = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
+    radial_symmetry_function_module = RadialSymmetryFunction(
+        number_of_gaussians=number_of_gaussians, cutoff=cutoff
+    )
 
     cutoff = CosineCutoff(cutoff=cutoff)
 
@@ -467,7 +469,7 @@ def test_postprocessing():
     model = SchNET(
         embedding_module=embedding,
         nr_interaction_blocks=nr_interaction_blocks,
-        radial_basis_module=rbf,
+        radial_symmetry_function_module=radial_symmetry_function_module,
         cutoff_module=cutoff,
         nr_filters=nr_filters,
     )
@@ -500,7 +502,7 @@ def test_postprocessing():
     model = SchNET(
         embedding_module=embedding,
         nr_interaction_blocks=nr_interaction_blocks,
-        radial_basis_module=rbf,
+        radial_symmetry_function_module=radial_symmetry_function_module,
         cutoff_module=cutoff,
         nr_filters=nr_filters,
         postprocessing=PostprocessingPipeline(
@@ -515,6 +517,6 @@ def test_postprocessing():
     r1 = result_with_offset[0].item()
     r2 = (e + offset).item()
 
-    # make sure that the prediction between the two 
+    # make sure that the prediction between the two
     # SchNET models differ only by the offset
     assert np.isclose(r1, r2)

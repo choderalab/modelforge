@@ -23,7 +23,7 @@ class PaiNN(BaseNNP):
         self,
         embedding_module: nn.Module,
         nr_interaction_blocks: int,
-        radial_basis_module: nn.Module,
+        radial_symmetry_function_module: nn.Module,
         cutoff_module: nn.Module,
         activation: Optional[Callable] = F.silu,
         shared_interactions: bool = False,
@@ -40,8 +40,8 @@ class PaiNN(BaseNNP):
                 Embedding dimensions also define self.nr_atom_basis.
             nr_interaction_blocks : int
                 Number of interaction blocks.
-            rbf : torch.Module
-                radial basis functions.
+            radial_symmetry_function_module : torch.Module
+                radial gaussian symmetriy function module.
             cutoff : torch.Module
                 Cutoff function for the radial basis.
             activation : Callable, optional
@@ -60,7 +60,7 @@ class PaiNN(BaseNNP):
         self.nr_interaction_blocks = nr_interaction_blocks
         self.cutoff_module = cutoff_module
         self.share_filters = shared_filters
-        self.radial_basis_module = radial_basis_module
+        self.radial_symmetry_function_module = radial_symmetry_function_module
 
         # initialize the energy readout
         self.nr_atom_basis = embedding_module.embedding_dim
@@ -74,13 +74,16 @@ class PaiNN(BaseNNP):
         # initialize the filter network
         if shared_filters:
             self.filter_net = nn.Sequential(
-                nn.Linear(self.radial_basis_module.n_rbf, 3 * self.nr_atom_basis),
+                nn.Linear(
+                    self.radial_symmetry_function_module.number_of_gaussians,
+                    3 * self.nr_atom_basis,
+                ),
                 nn.Identity(),
             )
         else:
             self.filter_net = nn.Sequential(
                 nn.Linear(
-                    self.radial_basis_module.n_rbf,
+                    self.radial_symmetry_function_module.number_of_gaussians,
                     self.nr_interaction_blocks * 3 * self.nr_atom_basis,
                 ),
                 nn.Identity(),
@@ -137,7 +140,7 @@ class PaiNN(BaseNNP):
         d_ij = inputs["d_ij"]
         r_ij = inputs["r_ij"]
         dir_ij = r_ij / d_ij
-        f_ij, _ = _distance_to_radial_basis(d_ij, self.radial_basis_module)
+        f_ij, _ = _distance_to_radial_basis(d_ij, self.radial_symmetry_function_module)
 
         fcut = self.cutoff_module(d_ij)
 
@@ -382,7 +385,7 @@ class LighningPaiNN(PaiNN, LightningModuleMixin):
         self,
         embedding: nn.Module,
         nr_interaction_blocks: int,
-        radial_basis: nn.Module,
+        radial_symmetry_function_module: nn.Module,
         cutoff: nn.Module,
         activation: Optional[Callable] = F.silu,
         shared_interactions: bool = False,
@@ -400,7 +403,7 @@ class LighningPaiNN(PaiNN, LightningModuleMixin):
         super().__init__(
             embedding_module=embedding,
             nr_interaction_blocks=nr_interaction_blocks,
-            radial_basis_module=radial_basis,
+            radial_symmetry_function_module=radial_symmetry_function_module,
             cutoff_module=cutoff,
             activation=activation,
             shared_interactions=shared_interactions,

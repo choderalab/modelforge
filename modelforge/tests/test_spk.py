@@ -2,23 +2,27 @@ import torch
 
 
 def test_gaussian_rbf_implementation():
-    # compare schnetpack GaussianRBF with modelforge GaussianRBF
-    from modelforge.potential.utils import GaussianRBF
+    # compare schnetpack RadialSymmetryFunction with modelforge RadialSymmetryFunction
+    from modelforge.potential.utils import RadialSymmetryFunction
     from schnetpack.nn import GaussianRBF as schnetpackGaussianRBF
     from openff.units import unit
 
-    n_rbf = 2
+    number_of_gaussians = 2
     cutoff = unit.Quantity(5.0, unit.angstrom)
     schnetpack_rbf = schnetpackGaussianRBF(
-        n_rbf=n_rbf, cutoff=cutoff.to(unit.angstrom).m
+        n_rbf=number_of_gaussians, cutoff=cutoff.to(unit.angstrom).m
     )
-    rbf = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
+    radial_symmetry_function_module = RadialSymmetryFunction(
+        number_of_gaussians=number_of_gaussians, cutoff=cutoff
+    )
 
     r = torch.rand(5, 3)
     print(schnetpack_rbf(r))
-    print(rbf(r / 10))
-    assert torch.allclose(schnetpack_rbf(r), rbf(r / 10), atol=1e-8)
-    assert schnetpack_rbf.n_rbf == rbf.n_rbf
+    print(radial_symmetry_function_module(r / 10))
+    assert torch.allclose(
+        schnetpack_rbf(r), radial_symmetry_function_module(r / 10), atol=1e-8
+    )
+    assert schnetpack_rbf.n_rbf == radial_symmetry_function_module.number_of_gaussians
 
 
 def setup_input():
@@ -140,14 +144,16 @@ def setup_input():
     }
 
 
-def setup_spk_painn_representation(cutoff, nr_atom_basis, n_rbf):
+def setup_spk_painn_representation(cutoff, nr_atom_basis, number_of_gaussians):
     # ------------------------------------ #
     # set up the schnetpack Painn representation model
     from schnetpack.nn import GaussianRBF, CosineCutoff
     from schnetpack.representation import PaiNN as schnetpack_PaiNN
     from openff.units import unit
 
-    radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff.to(unit.angstrom).m)
+    radial_basis = GaussianRBF(
+        n_rbf=number_of_gaussians, cutoff=cutoff.to(unit.angstrom).m
+    )
     return schnetpack_PaiNN(
         n_atom_basis=nr_atom_basis,
         n_interactions=3,
@@ -156,24 +162,26 @@ def setup_spk_painn_representation(cutoff, nr_atom_basis, n_rbf):
     )
 
 
-def setup_modelforge_painn_representation(cutoff, nr_atom_basis, n_rbf):
+def setup_modelforge_painn_representation(cutoff, nr_atom_basis, number_of_gaussians):
     # ------------------------------------ #
     # set up the modelforge Painn representation model
     # which means that we only want to call the
     # _transform_input() method
-    from modelforge.potential import CosineCutoff, GaussianRBF
+    from modelforge.potential import CosineCutoff, RadialSymmetryFunction
     from modelforge.potential.utils import SlicedEmbedding
     from modelforge.potential.painn import PaiNN
     from openff.units import unit
 
     embedding = SlicedEmbedding(max_Z=100, embedding_dim=nr_atom_basis, sliced_dim=0)
-    radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
+    radial_symmetry_function_module = RadialSymmetryFunction(
+        number_of_gaussians=number_of_gaussians, cutoff=cutoff
+    )
     cutoff = CosineCutoff(cutoff)
 
     return PaiNN(
         embedding_module=embedding,
         nr_interaction_blocks=3,
-        radial_basis_module=radial_basis,
+        radial_symmetry_function_module=radial_symmetry_function_module,
         cutoff_module=cutoff,
     )
 
@@ -186,14 +194,14 @@ def test_painn_representation_implementation():
 
     cutoff = unit.Quantity(5.0, unit.angstrom)
     nr_atom_basis = 8
-    n_rbf = 5
+    number_of_gaussians = 5
     torch.manual_seed(1234)
     schnetpack_painn = setup_spk_painn_representation(
-        cutoff, nr_atom_basis, n_rbf
+        cutoff, nr_atom_basis, number_of_gaussians
     ).double()
     torch.manual_seed(1234)
     modelforge_painn = setup_modelforge_painn_representation(
-        cutoff, nr_atom_basis, n_rbf
+        cutoff, nr_atom_basis, number_of_gaussians
     ).double()
 
     # ------------------------------------ #
@@ -217,13 +225,13 @@ def test_painn_representation_implementation():
     idx_j = spk_input["_idx_j"]
 
     # ---------------------------------------- #
-    # test rbf
+    # test radial symmetry function
     # ---------------------------------------- #
     r_ij = spk_input["_Rij"]
     d_ij = torch.norm(r_ij, dim=1, keepdim=True)
     dir_ij = r_ij / d_ij
     schnetpack_phi_ij = schnetpack_painn.radial_basis(d_ij)
-    modelforge_phi_ij = modelforge_painn.radial_basis_module(
+    modelforge_phi_ij = modelforge_painn.radial_symmetry_function_module(
         d_ij / 10
     )  # NOTE: converting to nm
 

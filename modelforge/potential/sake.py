@@ -103,20 +103,20 @@ class SAKE(BaseNNP):
         """
 
         # extract properties from pairlist
-        q = inputs["atomic_embedding"]
+        h = inputs["atomic_embedding"]
         mu = inputs["positions"]
         for i, interaction_mod in enumerate(self.interaction_modules):
-            q, mu = interaction_mod(
-                q,
+            h, mu = interaction_mod(
+                h,
                 mu,
                 inputs["pair_indices"]
             )
 
         # Use squeeze to remove dimensions of size 1
-        q = q.squeeze(dim=1)
+        h = h.squeeze(dim=1)
 
         return {
-            "scalar_representation": q,
+            "scalar_representation": h,
             "vector_representation": mu,
             "atomic_subsystem_indices": inputs["atomic_subsystem_indices"],
         }
@@ -128,7 +128,7 @@ class SAKEInteraction(nn.Module):
 
     """
 
-    def __init__(self, nr_atom_basis: int, activation: Callable, radial_basis_module: nn.Module, n_heads: int = 7):
+    def __init__(self, nr_atom_basis: int, activation: Callable, radial_basis_module: nn.Module, nr_heads: int = 7):
         """
         Parameters
         ----------
@@ -150,17 +150,17 @@ class SAKEInteraction(nn.Module):
         self.nr_atom_basis_out = nr_atom_basis
         self.nr_atom_basis_post_norm_hidden = nr_atom_basis
         self.nr_atom_basis_post_norm_out = nr_atom_basis
-        self.n_heads = n_heads
-        self.n_coefficients = n_heads * self.nr_edge_basis
+        self.nr_heads = nr_heads
+        self.nr_coefficients = nr_heads * self.nr_edge_basis
 
         self.node_mlp = nn.Sequential(
-            Dense(self.nr_atom_basis_in + self.n_coefficients + self.nr_edge_basis,
+            Dense(self.nr_atom_basis_in + self.nr_coefficients + self.nr_edge_basis,
                   self.nr_atom_basis_hidden, activation=activation),
             Dense(self.nr_atom_basis_hidden, self.nr_atom_basis_out, activation=activation)
         )
 
         self.post_norm_mlp = nn.Sequential(
-            Dense(self.n_coefficients, self.nr_atom_basis_post_norm_hidden, activation=activation),
+            Dense(self.nr_coefficients, self.nr_atom_basis_post_norm_hidden, activation=activation),
             Dense(self.nr_atom_basis_post_norm_hidden, self.nr_atom_basis_post_norm_out, activation=activation)
         )
 
@@ -171,128 +171,95 @@ class SAKEInteraction(nn.Module):
                                                                        activation)
 
         self.semantic_attention_mlp = nn.Sequential(
-            Dense(self.nr_edge_basis, self.n_heads, activation=nn.CELU(alpha=2.0))
+            Dense(self.nr_edge_basis, self.nr_heads, activation=nn.CELU(alpha=2.0))
         )
 
         self.x_mixing = nn.Sequential(
-            Dense(self.n_coefficients, self.n_coefficients, bias=False, activation=nn.Tanh()),
+            Dense(self.nr_coefficients, self.nr_coefficients, bias=False, activation=nn.Tanh()),
         )
 
-    def spatial_attention(self, q_ij_mtx, r_ij, d_ij, idx_j, n_atoms):
-        # q_ij_mtx shape: (n_pairs,  n_coefficients)
-        # coefficients shape: (n_pairs, n_coefficients)
-        coefficients = self.x_mixing(q_ij_mtx)
-
-        # d_ij shape: (n_pairs, 3)
-        print("r_ij", r_ij.shape)
-        print("d_ij", d_ij.shape)
-        r_ij = torch.div(r_ij, (d_ij + 1e-5).unsqueeze(-1))
+    def spatial_attention(self, h_ij, dir_ij, idx_i, nr_atoms):
+        # h_ij shape: (nr_pairs,  nr_coefficients)
+        # d_ij shape: (nr_pairs, 3)
 
         # p: pair axis; x: position axis, c: coefficient axis
-        combinations = torch.einsum("px,pc->pcx", r_ij, coefficients)
-        broadcast_idx_j = broadcast(idx_j, torch.zeros(idx_j.shape[0], self.n_coefficients, 3), dim=0)
-        out_shape = (n_atoms, self.n_coefficients, 3)
+        combinations = torch.einsum("px,pc->pcx", dir_ij, self.x_mixing(h_ij))
+        broadcast_idx_i = broadcast(idx_i, torch.zeros(idx_i.shape[0], self.nr_coefficients, 3), dim=0)
+        out_shape = (nr_atoms, self.nr_coefficients, 3)
         combinations_sum = torch.zeros(out_shape, dtype=combinations.dtype).scatter_reduce(0,
-                                                                                           broadcast_idx_j,
+                                                                                           broadcast_idx_i,
                                                                                            combinations,
                                                                                            "mean",
                                                                                            include_self=False
                                                                                            )
         combinations_norm = (combinations_sum ** 2).sum(-1)
-        q_combinations = self.post_norm_mlp(combinations_norm)
-        return q_combinations
+        return self.post_norm_mlp(combinations_norm)
 
-    def aggregate(self, q_ij_mtx, idx_j, n_atoms):
-        broadcast_idx_j = broadcast(idx_j, torch.zeros(idx_j.shape[0], self.n_coefficients), dim=0)
-        out_shape = (n_atoms, self.n_coefficients)
-        return torch.zeros(out_shape, dtype=q_ij_mtx.dtype).scatter_add(0, broadcast_idx_j, q_ij_mtx)
+    def aggregate(self, h_ij_semantic, idx_i, nr_atoms):
+        broadcast_idx_i = broadcast(idx_i, torch.zeros(idx_i.shape[0], self.nr_coefficients), dim=0)
+        out_shape = (nr_atoms, self.nr_coefficients)
+        return torch.zeros(out_shape, dtype=h_ij_semantic.dtype).scatter_add(0, broadcast_idx_i, h_ij_semantic)
 
-    def node_model(self, q, q_ij, q_combinations):
-        print("q", q.shape)
-        print("q_ij", q_ij.shape)
-        print("q_combinations", q_combinations.shape)
-        out = torch.cat([q, q_ij, q_combinations], dim=-1)
-        out = self.node_mlp(out)
-        out = q + out
-        return out
+    def semantic_attention_with_cutoff(self, d_ij, h_ij_edge, idx_i, nr_atoms, nr_pairs):
+        # semantic_attention shape: (nr_pairs, nr_heads)
+        semantic_attention = scatter_softmax(self.semantic_attention_mlp(h_ij_edge), idx_i, dim=0, dim_size=nr_atoms)
 
-    def semantic_attention(self, q_ij_mtx, idx_j, n_atoms):
-        # att shape: (n_pairs, n_heads)
-        att = self.semantic_attention_mlp(q_ij_mtx)
-        semantic_attention = scatter_softmax(att, idx_j, dim=0, dim_size=n_atoms)
-        return semantic_attention
-
-    def combined_attention(self, d_ij, q_ij_mtx, idx_j, n_atoms):
-        # semantic_attention shape: (n_pairs, n_heads)
-        semantic_attention = self.semantic_attention(q_ij_mtx, idx_j, n_atoms)
-
-        # combined_attention shape: (n_pairs, n_heads)
+        # combined_attention shape: (nr_pairs, nr_heads)
         combined_attention = semantic_attention
-        # combined_attention_agg shape: (n_atoms, n_heads)
-        print("combined_attention", combined_attention.shape)
-        print("n_atoms", n_atoms)
-        print("idx_j", idx_j.shape)
-        broadcast_idx_j = broadcast(idx_j, torch.zeros(idx_j.shape[0], self.n_heads), dim=0)
-        combined_attention_agg = torch.zeros(n_atoms, self.n_heads, dtype=combined_attention.dtype).scatter_add(0,
-                                                                                                                broadcast_idx_j,
-                                                                                                                combined_attention)
-        combined_attention = combined_attention / combined_attention_agg[idx_j]
-
-        return combined_attention
+        # combined_attention_agg shape: (nr_atoms, nr_heads)
+        broadcast_idx_i = broadcast(idx_i, torch.zeros(idx_i.shape[0], self.nr_heads), dim=0)
+        combined_attention_agg = (torch.zeros(nr_atoms, self.nr_heads, dtype=combined_attention.dtype).
+                                  scatter_add(0, broadcast_idx_i, combined_attention))
+        combined_attention_normed = combined_attention / combined_attention_agg[idx_i]
+        # p: pair axis; f: hidden feature axis; h: head axis
+        return torch.reshape(torch.einsum("pf,ph->pfh", h_ij_edge, combined_attention_normed),
+                             (nr_pairs, self.nr_coefficients))
 
     def forward(
             self,
-            q: torch.Tensor,  # shape [nr_of_atoms_in_batch, nr_atom_basis]
-            mu: torch.Tensor,  # shape [n_mols, n_interactions, nr_atom_basis]
+            h: torch.Tensor,  # shape [nr_of_atoms_in_batch, nr_atom_basis]
+            x: torch.Tensor,  # shape [n_mols, n_interactions, nr_atom_basis]
             pairlist: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Compute interaction output.
 
         Parameters
         ----------
-        q : torch.Tensor
+        h : torch.Tensor
             Scalar input values of shape [nr_of_atoms_in_systems, nr_atom_basis].
-        mu : torch.Tensor
+        x : torch.Tensor
             Vector input values of shape [n_mols, n_interactions, nr_atom_basis].
         Wij : torch.Tensor
             Filter of shape [n_interactions].
         dir_ij : torch.Tensor
             Directional vector between atoms i and j.
-        pairlist : torch.Tensor, shape (2, n_pairs)
+        pairlist : torch.Tensor, shape (2, nr_pairs)
 
         Returns
         -------
         Tuple[torch.Tensor, torch.Tensor]
             Updated scalar and vector representations (q, mu).
         """
-        # inter-atomic
         idx_i, idx_j = pairlist[0], pairlist[1]
-
-        nr_of_atoms_in_all_systems, _ = q.shape
-
-        # qi_cat_qj shape: (n_pairs, in_features * 2 [concatenated sender and receiver]) 
-        qi_cat_qj = torch.cat([q[idx_i], q[idx_j]], dim=1)
-        print("qi_cat_qj shape:", qi_cat_qj.shape)
-
-        r_ij = q[idx_j] - q[idx_i]
+        nr_pairs = len(idx_i)
+        nr_of_atoms_in_all_systems, _ = h.shape
+        r_ij = h[idx_j] - h[idx_i]
         d_ij = torch.norm(r_ij, dim=-1)
-        # q_ij_mtx shape: (n_pairs, nr_edge_basis)
-        q_ij_mtx = self.edge_model(qi_cat_qj, d_ij)
-        # combined_attention shape: (n_pairs, n_heads)
-        combined_attention = self.combined_attention(d_ij, q_ij_mtx, idx_j, nr_of_atoms_in_all_systems)
-        # p: pair axis; f: hidden feature axis; h: head axis
-        q_ij_att = torch.einsum("pf,ph->pfh", q_ij_mtx, combined_attention)
-        # q_ij_att shape before reshape: (n_pairs, hidden_features, n_heads)
-        q_ij_att = torch.reshape(q_ij_att, q_ij_att.shape[:-2] + (-1,))
-        # q_ij_att shape after reshape: (n_pairs, n_coefficients)
-        q_combinations = self.spatial_attention(q_ij_att, r_ij, d_ij, idx_j, nr_of_atoms_in_all_systems)
+        dir_ij = r_ij / (d_ij.unsqueeze(-1) + 1e-5)
 
-        q_ij = self.aggregate(q_ij_att, idx_j, nr_of_atoms_in_all_systems)
-        dq = self.node_model(q, q_ij, q_combinations)
+        # h_ij_edge shape: (nr_pairs, nr_edge_basis)
+        h_ij_edge = self.edge_model(torch.cat([h[idx_i], h[idx_j]], dim=1), d_ij)
+        # combined_attention shape: (nr_pairs, nr_heads)
+        h_ij_semantic = self.semantic_attention_with_cutoff(d_ij, h_ij_edge, idx_i, nr_of_atoms_in_all_systems,
+                                                            nr_pairs)
+        h_i_semantic = self.aggregate(h_ij_semantic, idx_i, nr_of_atoms_in_all_systems)
+        h_i_spatial = self.spatial_attention(h_ij_semantic, dir_ij, idx_i, nr_of_atoms_in_all_systems)
 
-        q = q + dq
+        dh = self.node_mlp(torch.cat([h, h_i_semantic, h_i_spatial], dim=-1))
 
-        return q, mu
+        h = h + dh
+
+        return h, x
 
 
 class LightningSAKE(SAKE, LightningModuleMixin):
@@ -332,19 +299,14 @@ class ContinuousFilterConvolutionWithConcatenation(nn.Module):
             nn.Linear(hidden_features, out_features),
         )
 
-    def forward(self, qi_cat_qj, d_ij):
-        q_ij = self.mlp_in(qi_cat_qj)
-        q_ij_filtered = self.rbf(d_ij) * q_ij
+    def forward(self, h_ij_cat, d_ij):
+        h_ij_filtered = self.rbf(d_ij) * self.mlp_in(h_ij_cat)
 
-        print("q_ij_filtered.shape", q_ij_filtered.shape)
-        print("d_ij.shape", d_ij.shape)
-        print("qi_cat_qj.shape", qi_cat_qj.shape)
-
-        q_ij_out = self.mlp_out(
+        h_ij_out = self.mlp_out(
             torch.cat(
-                [qi_cat_qj, q_ij_filtered, d_ij.unsqueeze(-1)],
+                [h_ij_cat, h_ij_filtered, d_ij.unsqueeze(-1)],
                 dim=1
             )
         )
 
-        return q_ij_out
+        return h_ij_out

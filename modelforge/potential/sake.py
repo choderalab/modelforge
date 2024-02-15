@@ -104,11 +104,14 @@ class SAKE(BaseNNP):
 
         # extract properties from pairlist
         h = inputs["atomic_embedding"]
-        mu = inputs["positions"]
+        x = inputs["positions"]
+        v = torch.zeros_like(x)
+        print("initial v shape", v.shape)
         for i, interaction_mod in enumerate(self.interaction_modules):
-            h, mu = interaction_mod(
+            h, x, v = interaction_mod(
                 h,
-                mu,
+                x,
+                v,
                 inputs["pair_indices"]
             )
 
@@ -117,7 +120,6 @@ class SAKE(BaseNNP):
 
         return {
             "scalar_representation": h,
-            "vector_representation": mu,
             "atomic_subsystem_indices": inputs["atomic_subsystem_indices"],
         }
 
@@ -150,6 +152,7 @@ class SAKEInteraction(nn.Module):
         self.nr_atom_basis_out = nr_atom_basis
         self.nr_atom_basis_post_norm_hidden = nr_atom_basis
         self.nr_atom_basis_post_norm_out = nr_atom_basis
+        self.nr_atom_basis_velocity = nr_atom_basis
         self.nr_heads = nr_heads
         self.nr_coefficients = nr_heads * self.nr_edge_basis
 
@@ -174,9 +177,28 @@ class SAKEInteraction(nn.Module):
             Dense(self.nr_edge_basis, self.nr_heads, activation=nn.CELU(alpha=2.0))
         )
 
+        self.velocity_mlp = nn.Sequential(
+            Dense(self.nr_atom_basis_in, self.nr_atom_basis_velocity, activation=activation),
+            Dense(self.nr_atom_basis_velocity, 1, activation=lambda x: 2.0 * F.sigmoid(x), bias=False)
+        )
+
         self.x_mixing = nn.Sequential(
             Dense(self.nr_coefficients, self.nr_coefficients, bias=False, activation=nn.Tanh()),
         )
+
+        self.v_mixing = Dense(self.nr_coefficients, 1, bias=False)
+
+    def node_update(self, h, h_i_semantic, h_i_spatial):
+        return h + self.node_mlp(torch.cat([h, h_i_semantic, h_i_spatial], dim=-1))
+
+    def velocity_update(self, v, h, combinations, idx_i, nr_atoms):
+        print("combinations", combinations.shape)
+        v_ij = self.v_mixing(combinations.swapaxes(-1, -2)).squeeze(-1)
+        print(v.shape)
+        print(v_ij.shape)
+        broadcast_idx_i = broadcast(idx_i, torch.zeros_like(v_ij), dim=0)
+        dv = torch.zeros((nr_atoms, self.nr_atom_basis_in)).scatter_reduce(0, broadcast_idx_i, v_ij, "mean", include_self=False)
+        return self.velocity_mlp(h) * v + dv
 
     def spatial_attention(self, h_ij, dir_ij, idx_i, nr_atoms):
         # h_ij shape: (nr_pairs,  nr_coefficients)
@@ -184,16 +206,16 @@ class SAKEInteraction(nn.Module):
 
         # p: pair axis; x: position axis, c: coefficient axis
         combinations = torch.einsum("px,pc->pcx", dir_ij, self.x_mixing(h_ij))
-        broadcast_idx_i = broadcast(idx_i, torch.zeros(idx_i.shape[0], self.nr_coefficients, 3), dim=0)
-        out_shape = (nr_atoms, self.nr_coefficients, 3)
-        combinations_sum = torch.zeros(out_shape, dtype=combinations.dtype).scatter_reduce(0,
-                                                                                           broadcast_idx_i,
-                                                                                           combinations,
-                                                                                           "mean",
-                                                                                           include_self=False
-                                                                                           )
-        combinations_norm = (combinations_sum ** 2).sum(-1)
-        return self.post_norm_mlp(combinations_norm)
+        broadcast_idx_i = broadcast(idx_i, torch.zeros(idx_i.shape[0], self.nr_coefficients, self.nr_atom_basis_in), dim=0)
+        out_shape = (nr_atoms, self.nr_coefficients, self.nr_atom_basis_in)
+        combinations_mean = torch.zeros(out_shape, dtype=combinations.dtype).scatter_reduce(0,
+                                                                                            broadcast_idx_i,
+                                                                                            combinations,
+                                                                                            "mean",
+                                                                                            include_self=False
+                                                                                            )
+        combinations_norm_square = (combinations_mean ** 2).sum(dim=-1)
+        return self.post_norm_mlp(combinations_norm_square), combinations
 
     def aggregate(self, h_ij_semantic, idx_i, nr_atoms):
         broadcast_idx_i = broadcast(idx_i, torch.zeros(idx_i.shape[0], self.nr_coefficients), dim=0)
@@ -218,9 +240,10 @@ class SAKEInteraction(nn.Module):
     def forward(
             self,
             h: torch.Tensor,  # shape [nr_of_atoms_in_batch, nr_atom_basis]
-            x: torch.Tensor,  # shape [n_mols, n_interactions, nr_atom_basis]
+            x: torch.Tensor,  # shape [nr_of_atoms_in_batch, nr_atom_basis]
+            v: torch.Tensor,  # shape [nr_of_atoms_in_batch, nr_atom_basis]
             pairlist: torch.Tensor,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Compute interaction output.
 
         Parameters
@@ -247,19 +270,16 @@ class SAKEInteraction(nn.Module):
         d_ij = torch.norm(r_ij, dim=-1)
         dir_ij = r_ij / (d_ij.unsqueeze(-1) + 1e-5)
 
-        # h_ij_edge shape: (nr_pairs, nr_edge_basis)
-        h_ij_edge = self.edge_model(torch.cat([h[idx_i], h[idx_j]], dim=1), d_ij)
-        # combined_attention shape: (nr_pairs, nr_heads)
+        h_ij_edge = self.edge_model(torch.cat([h[idx_i], h[idx_j]], dim=-1), d_ij)
         h_ij_semantic = self.semantic_attention_with_cutoff(d_ij, h_ij_edge, idx_i, nr_of_atoms_in_all_systems,
                                                             nr_pairs)
         h_i_semantic = self.aggregate(h_ij_semantic, idx_i, nr_of_atoms_in_all_systems)
-        h_i_spatial = self.spatial_attention(h_ij_semantic, dir_ij, idx_i, nr_of_atoms_in_all_systems)
+        h_i_spatial, combinations = self.spatial_attention(h_ij_semantic, dir_ij, idx_i, nr_of_atoms_in_all_systems)
+        h_updated = self.node_update(h, h_i_semantic, h_i_spatial)
+        v_updated = self.velocity_update(v, h, combinations, idx_i, nr_of_atoms_in_all_systems)
+        x_updated = x + v_updated
 
-        dh = self.node_mlp(torch.cat([h, h_i_semantic, h_i_spatial], dim=-1))
-
-        h = h + dh
-
-        return h, x
+        return h_updated, x_updated, v_updated
 
 
 class LightningSAKE(SAKE, LightningModuleMixin):

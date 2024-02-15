@@ -92,7 +92,7 @@ def test_pt_lightning():
         embedding=embedding,
         nr_interaction_blocks=nr_interaction_blocks,
         radial_symmetry_function_module=radial_symmetry_function_module,
-        cutoff=cutoff,
+        cutoff_module=cutoff,
     )
 
     # Move model to the appropriate dtype and device

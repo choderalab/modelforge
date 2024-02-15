@@ -4,7 +4,6 @@ import pytest
 
 from modelforge.potential.utils import (
     CosineCutoff,
-    _cosine_cutoff,
     RadialSymmetryFunction,
 )
 
@@ -16,14 +15,18 @@ def test_cosine_cutoff():
     # Define inputs
     x = torch.Tensor([1, 2, 3])
     y = torch.Tensor([4, 5, 6])
+    from openff.units import unit
+
     cutoff = 6
 
     # Calculate expected output
     d_ij = torch.linalg.norm(x - y)
     expected_output = 0.5 * (torch.cos(d_ij * np.pi / cutoff) + 1.0)
+    cutoff = 0.6 * unit.nanometer
 
     # Calculate actual output
-    actual_output = _cosine_cutoff(d_ij / 10, cutoff / 10)
+    cutoff_module = CosineCutoff(cutoff)
+    actual_output = cutoff_module(d_ij / 10)
 
     # Check if the results are equal
     # NOTE: Cutoff function doesn't care about the units as long as they are the same
@@ -88,7 +91,9 @@ def test_gaussian_rbf(RadialSymmetryFunction):
     assert radial_symmetry_function_module.number_of_gaussians == number_of_gaussians
 
     # Test that the cutoff distance is correct
-    assert radial_symmetry_function_module.cutoff == cutoff.to(unit.nanometer).m
+    assert (
+        radial_symmetry_function_module._unitless_cutoff == cutoff.to(unit.nanometer).m
+    )
 
     # Test that the widths and offsets are correct
     expected_offsets = torch.linspace(

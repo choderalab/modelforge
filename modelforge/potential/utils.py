@@ -163,32 +163,26 @@ class CosineCutoff(nn.Module):
         cutoff = cutoff.to(unit.nanometer).m
         self.register_buffer("cutoff", torch.FloatTensor([cutoff]))
 
-    def forward(self, input: torch.Tensor):
-        return _cosine_cutoff(input, self.cutoff)
+    def forward(self, d_ij: torch.Tensor):
+        """
+        Compute the cosine cutoff for a distance tensor.
+        NOTE: the cutoff function doesn't care about units as long as they are consisten,
 
+        Parameters
+        ----------
+        d_ij : Tensor
+            Pairwise distance tensor. Shape: [n_pairs, distance]
 
-def _cosine_cutoff(d_ij: torch.Tensor, cutoff: float) -> torch.Tensor:
-    """
-    Compute the cosine cutoff for a distance tensor.
-    NOTE: the cutoff function doesn't care about units as long as they are consisten,
-
-    Parameters
-    ----------
-    d_ij : Tensor
-        Pairwise distance tensor. Shape: [n_pairs, distance]
-    cutoff : float
-        The cutoff distance.
-
-    Returns
-    -------
-    Tensor
-        The cosine cutoff tensor. Shape: [..., N]
-    """
-    # Compute values of cutoff function
-    input_cut = 0.5 * (torch.cos(d_ij * np.pi / cutoff) + 1.0)
-    # Remove contributions beyond the cutoff radius
-    input_cut *= (d_ij < cutoff).float()
-    return input_cut
+        Returns
+        -------
+        Tensor
+            The cosine cutoff tensor. Shape: [..., N]
+        """
+        # Compute values of cutoff function
+        input_cut = 0.5 * (torch.cos(d_ij * np.pi / self.cutoff) + 1.0)
+        # Remove contributions beyond the cutoff radius
+        input_cut *= (d_ij < self.cutoff).float()
+        return input_cut
 
 
 def embed_atom_features(
@@ -342,11 +336,12 @@ class RadialSymmetryFunction(nn.Module):
 
         super().__init__()
         self.number_of_gaussians = number_of_gaussians
-        self.cutoff = cutoff.to(unit.nanometer).m
+        self.cutoff = cutoff
+        self._unitless_cutoff = cutoff.to(unit.nanometer).m
         # calculate offsets
         # ===============
         offset = torch.linspace(
-            start, self.cutoff, number_of_gaussians, dtype=dtype
+            start, self._unitless_cutoff, number_of_gaussians, dtype=dtype
         )  # R_s
         # ===============
         # calculate eta
@@ -401,7 +396,8 @@ def _distance_to_radial_basis(
     """
     assert d_ij.dim() == 2
     f_ij = radial_symmetry_function_module(d_ij)
-    rcut_ij = _cosine_cutoff(d_ij, radial_symmetry_function_module.cutoff)
+    cosine_cutoff_module = CosineCutoff(radial_symmetry_function_module.cutoff)
+    rcut_ij = cosine_cutoff_module(d_ij)
     return f_ij, rcut_ij
 
 

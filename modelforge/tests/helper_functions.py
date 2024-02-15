@@ -48,7 +48,7 @@ def setup_simple_model(
         number_of_gaussians=number_of_gaussians, cutoff=cutoff
     )
 
-    cutoff = CosineCutoff(cutoff=cutoff)
+    cutoff_module = CosineCutoff(cutoff=cutoff)
 
     if model_class is SchNET:
         if lightning:
@@ -56,14 +56,14 @@ def setup_simple_model(
                 embedding=embedding,
                 nr_interaction_blocks=nr_interaction_blocks,
                 radial_symmetry_function_module=radial_symmetry_function_module,
-                cutoff=cutoff,
+                cutoff_module=cutoff_module,
                 nr_filters=nr_filters,
             )
         return SchNET(
             embedding_module=embedding,
             nr_interaction_blocks=nr_interaction_blocks,
             radial_symmetry_function_module=radial_symmetry_function_module,
-            cutoff_module=cutoff,
+            cutoff_module=cutoff_module,
             nr_filters=nr_filters,
         )
 
@@ -73,13 +73,13 @@ def setup_simple_model(
                 embedding=embedding,
                 nr_interaction_blocks=nr_interaction_blocks,
                 radial_symmetry_function_module=radial_symmetry_function_module,
-                cutoff=cutoff,
+                cutoff_module=cutoff_module,
             )
         return PaiNN(
             embedding_module=embedding,
             nr_interaction_blocks=nr_interaction_blocks,
             radial_symmetry_function_module=radial_symmetry_function_module,
-            cutoff_module=cutoff,
+            cutoff_module=cutoff_module,
         )
     else:
         raise NotImplementedError

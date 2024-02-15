@@ -251,9 +251,9 @@ class SAKEInteraction(nn.Module):
         h : torch.Tensor
             Scalar input values of shape [nr_of_atoms_in_systems, nr_atom_basis].
         x : torch.Tensor
-            Equivariant position input values of shape [nr_of_atoms_in_systems, nr_atom_basis].
+            Equivariant position input values of shape [nr_of_atoms_in_systems, geometry_basis].
         v : torch.Tensor
-            Equivariant velocity input values of shape [nr_of_atoms_in_systems, nr_atom_basis].
+            Equivariant velocity input values of shape [nr_of_atoms_in_systems, geometry_basis].
         pairlist : torch.Tensor, shape (2, nr_pairs)
 
         Returns

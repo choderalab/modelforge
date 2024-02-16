@@ -24,6 +24,7 @@ class SAKE(BaseNNP):
             radial_basis_module: nn.Module,
             cutoff_module: nn.Module,
             activation: Optional[Callable] = F.silu,
+            epsilon: float = 1e-8
     ):
         """
         Parameters
@@ -60,7 +61,8 @@ class SAKE(BaseNNP):
 
         # initialize the interaction networks
         self.interaction_modules = nn.ModuleList(
-            SAKEInteraction(self.nr_atom_basis, activation=activation, radial_basis_module=self.radial_basis_module)
+            SAKEInteraction(self.nr_atom_basis, activation=activation, radial_basis_module=self.radial_basis_module,
+                            cutoff_module=self.cutoff_module, epsilon=epsilon)
             for _ in range(self.nr_interaction_blocks)
         )
 
@@ -106,7 +108,6 @@ class SAKE(BaseNNP):
         h = inputs["atomic_embedding"]
         x = inputs["positions"]
         v = torch.zeros_like(x)
-        print("initial v shape", v.shape)
         for i, interaction_mod in enumerate(self.interaction_modules):
             h, x, v = interaction_mod(
                 h,
@@ -130,7 +131,8 @@ class SAKEInteraction(nn.Module):
 
     """
 
-    def __init__(self, nr_atom_basis: int, activation: Callable, radial_basis_module: nn.Module, nr_heads: int = 7):
+    def __init__(self, nr_atom_basis: int, activation: Callable, radial_basis_module: nn.Module,
+                 cutoff_module: nn.Module, epsilon: float, nr_heads: int = 7):
         """
         Parameters
         ----------
@@ -155,6 +157,9 @@ class SAKEInteraction(nn.Module):
         self.nr_atom_basis_velocity = nr_atom_basis
         self.nr_heads = nr_heads
         self.nr_coefficients = nr_heads * self.nr_edge_basis
+        self.epsilon = epsilon
+
+        self.cutoff_module = cutoff_module
 
         self.node_mlp = nn.Sequential(
             Dense(self.nr_atom_basis_in + self.nr_coefficients + self.nr_edge_basis,
@@ -192,57 +197,40 @@ class SAKEInteraction(nn.Module):
         return h + self.node_mlp(torch.cat([h, h_i_semantic, h_i_spatial], dim=-1))
 
     def velocity_update(self, v, h, combinations, idx_i, nr_atoms):
-        print("combinations", combinations.shape)
         v_ij = self.v_mixing(combinations.swapaxes(-1, -2)).squeeze(-1)
-        print(v.shape)
-        print(v_ij.shape)
         broadcast_idx_i = broadcast(idx_i, torch.zeros_like(v_ij), dim=0)
         dv = torch.zeros_like(v).scatter_reduce(0, broadcast_idx_i, v_ij, "mean", include_self=False)
         return self.velocity_mlp(h) * v + dv
 
-    def spatial_attention(self, h_ij, dir_ij, idx_i, nr_atoms):
-        # h_ij shape: (nr_pairs,  nr_coefficients)
-        # d_ij shape: (nr_pairs, 3)
-
-        # p: pair axis; x: position axis, c: coefficient axis
+    def spatial_attention(self, h_ij, idx_i, dir_ij, nr_atoms):
         combinations = torch.einsum("px,pc->pcx", dir_ij, self.x_mixing(h_ij))
         broadcast_idx_i = broadcast(idx_i, torch.zeros(len(idx_i), self.nr_coefficients, dir_ij.shape[-1]), dim=0)
         out_shape = (nr_atoms, self.nr_coefficients, dir_ij.shape[-1])
-        combinations_mean = torch.zeros(out_shape, dtype=combinations.dtype).scatter_reduce(0,
-                                                                                            broadcast_idx_i,
-                                                                                            combinations,
-                                                                                            "mean",
-                                                                                            include_self=False
-                                                                                            )
+        zeros = torch.zeros(out_shape, dtype=combinations.dtype, device=combinations.device)
+        combinations_mean = zeros.scatter_reduce(0, broadcast_idx_i, combinations, "mean", include_self=False)
         combinations_norm_square = (combinations_mean ** 2).sum(dim=-1)
         return self.post_norm_mlp(combinations_norm_square), combinations
 
     def aggregate(self, h_ij_semantic, idx_i, nr_atoms):
         broadcast_idx_i = broadcast(idx_i, torch.zeros(len(idx_i), self.nr_coefficients), dim=0)
         out_shape = (nr_atoms, self.nr_coefficients)
-        return torch.zeros(out_shape, dtype=h_ij_semantic.dtype).scatter_add(0, broadcast_idx_i, h_ij_semantic)
+        zeros = torch.zeros(out_shape, dtype=h_ij_semantic.dtype, device=h_ij_semantic.device)
+        return zeros.scatter_add(0, broadcast_idx_i, h_ij_semantic)
 
-    def semantic_attention_with_cutoff(self, d_ij, h_ij_edge, idx_i, nr_atoms):
-        # semantic_attention shape: (nr_pairs, nr_heads)
-        semantic_attention = scatter_softmax(self.semantic_attention_mlp(h_ij_edge), idx_i, dim=0, dim_size=nr_atoms)
-
-        # combined_attention shape: (nr_pairs, nr_heads)
-        combined_attention = semantic_attention
-        # combined_attention_agg shape: (nr_atoms, nr_heads)
-        broadcast_idx_i = broadcast(idx_i, torch.zeros(len(idx_i), self.nr_heads), dim=0)
-        combined_attention_agg = (torch.zeros(nr_atoms, self.nr_heads, dtype=combined_attention.dtype).
-                                  scatter_add(0, broadcast_idx_i, combined_attention))
-        combined_attention_normed = combined_attention / combined_attention_agg[idx_i]
-        # p: pair axis; f: hidden feature axis; h: head axis
-        return torch.reshape(torch.einsum("pf,ph->pfh", h_ij_edge, combined_attention_normed),
+    def semantic_attention_with_cutoff(self, h_ij_edge, idx_i, d_ij, nr_atoms):
+        h_ij_semantic_att = self.semantic_attention_mlp(h_ij_edge)
+        h_ij_euclidean_att = self.cutoff_module(d_ij)
+        h_ij_att_weights = torch.einsum("ph,p->ph", h_ij_semantic_att, h_ij_euclidean_att)
+        h_ij_att = scatter_softmax(h_ij_att_weights, idx_i, dim=-2, dim_size=nr_atoms)
+        return torch.reshape(torch.einsum("pf,ph->pfh", h_ij_edge, h_ij_att),
                              (len(idx_i), self.nr_coefficients))
 
     def forward(
             self,
-            h: torch.Tensor,  # shape [nr_of_atoms_in_batch, nr_atom_basis]
-            x: torch.Tensor,  # shape [nr_of_atoms_in_batch, nr_atom_basis]
-            v: torch.Tensor,  # shape [nr_of_atoms_in_batch, nr_atom_basis]
-            pairlist: torch.Tensor,
+            h: torch.Tensor,
+            x: torch.Tensor,
+            v: torch.Tensor,
+            pairlist: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Compute interaction output.
 
@@ -255,6 +243,8 @@ class SAKEInteraction(nn.Module):
         v : torch.Tensor
             Equivariant velocity input values of shape [nr_of_atoms_in_systems, geometry_basis].
         pairlist : torch.Tensor, shape (2, nr_pairs)
+        epsilon : float
+            Stability constant to prevent numerical instabilities (default is 1e-8).
 
         Returns
         -------
@@ -265,12 +255,12 @@ class SAKEInteraction(nn.Module):
         nr_of_atoms_in_all_systems, _ = x.shape
         r_ij = x[idx_j] - x[idx_i]
         d_ij = torch.norm(r_ij, dim=-1)
-        dir_ij = r_ij / (d_ij.unsqueeze(-1) + 1e-5)
+        dir_ij = r_ij / (d_ij.unsqueeze(-1) + self.epsilon)
 
-        h_ij_edge = self.edge_model(torch.cat([h[idx_i], h[idx_j]], dim=-1), d_ij)
-        h_ij_semantic = self.semantic_attention_with_cutoff(d_ij, h_ij_edge, idx_i, nr_of_atoms_in_all_systems)
+        h_ij_edge = self.edge_model(h[idx_i], h[idx_j], d_ij)
+        h_ij_semantic = self.semantic_attention_with_cutoff(h_ij_edge, idx_i, d_ij, nr_of_atoms_in_all_systems)
         h_i_semantic = self.aggregate(h_ij_semantic, idx_i, nr_of_atoms_in_all_systems)
-        h_i_spatial, combinations = self.spatial_attention(h_ij_semantic, dir_ij, idx_i, nr_of_atoms_in_all_systems)
+        h_i_spatial, combinations = self.spatial_attention(h_ij_semantic, idx_i, dir_ij, nr_of_atoms_in_all_systems)
         h_updated = self.node_update(h, h_i_semantic, h_i_spatial)
         v_updated = self.velocity_update(v, h, combinations, idx_i, nr_of_atoms_in_all_systems)
         x_updated = x + v_updated
@@ -315,7 +305,8 @@ class ContinuousFilterConvolutionWithConcatenation(nn.Module):
             nn.Linear(hidden_features, out_features),
         )
 
-    def forward(self, h_ij_cat, d_ij):
+    def forward(self, h_i, h_j, d_ij):
+        h_ij_cat = torch.cat([h_i, h_j], dim=-1)
         h_ij_filtered = self.rbf(d_ij) * self.mlp_in(h_ij_cat)
 
         h_ij_out = self.mlp_out(

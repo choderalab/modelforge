@@ -196,8 +196,8 @@ class SAKEInteraction(nn.Module):
     def update_node(self, h, h_i_semantic, h_i_spatial):
         return h + self.node_mlp(torch.cat([h, h_i_semantic, h_i_spatial], dim=-1))
 
-    def update_velocity(self, v, h, combinations, idx_i, nr_atoms):
-        v_ij = self.v_mixing(combinations.swapaxes(-1, -2)).squeeze(-1)
+    def update_velocity(self, v, h, combinations, idx_i):
+        v_ij = self.v_mixing(combinations.transpose(-1, -2)).squeeze(-1)
         expanded_idx_i = idx_i.view(-1, 1).expand_as(v_ij)
         dv = torch.zeros_like(v).scatter_reduce(0, expanded_idx_i, v_ij, "mean", include_self=False)
         return self.velocity_mlp(h) * v + dv
@@ -266,7 +266,7 @@ class SAKEInteraction(nn.Module):
         combinations = self.get_combinations(h_ij_semantic, dir_ij)
         h_i_spatial = self.get_spatial_attention(combinations, idx_i, dir_ij, nr_of_atoms_in_all_systems)
         h_updated = self.update_node(h, h_i_semantic, h_i_spatial)
-        v_updated = self.update_velocity(v, h, combinations, idx_i, nr_of_atoms_in_all_systems)
+        v_updated = self.update_velocity(v, h, combinations, idx_i)
         x_updated = x + v_updated
 
         return h_updated, x_updated, v_updated
@@ -321,3 +321,42 @@ class ContinuousFilterConvolutionWithConcatenation(nn.Module):
         )
 
         return h_ij_out
+
+
+class ExpNormalSmearing(nn.Module):
+
+    def __init__(self, cutoff_lower: float = 0.0, cutoff_upper: float = 5.0, num_rbf: int = 50, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.cutoff_lower = cutoff_lower
+        self.cutoff_upper = cutoff_upper
+        self.num_rbf = num_rbf
+        self.alpha = 5.0 / (self.cutoff_upper - self.cutoff_lower)
+        means, betas = self._initial_params()
+        self.out_features = self.num_rbf
+        self.means = self.aram(
+            "means",
+            nn.init.constant_(means),
+            means.shape,
+        )
+
+        self.betas = self.param(
+            "betas",
+            nn.initializers.constant(betas),
+            betas.shape,
+        )
+
+    def _initial_params(self):
+        # initialize means and betas according to the default values in PhysNet
+        # https://pubs.acs.org/doi/10.1021/acs.jctc.9b00181
+        start_value = torch.exp(torch.tensor(-self.cutoff_upper + self.cutoff_lower))
+        means = torch.linspace(start_value.item(), 1.0, self.num_rbf)
+        betas = torch.tensor(
+            [(2 / self.num_rbf * (1 - start_value)) ** -2] * self.num_rbf
+        )
+        return means, betas
+
+    def __call__(self, dist):
+        return torch.exp(
+            -self.betas
+            * (torch.exp(self.alpha * (-dist + self.cutoff_lower)) - self.means) ** 2
+        )

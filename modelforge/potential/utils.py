@@ -511,18 +511,6 @@ def neighbor_list_with_cutoff(
     return pair_indices_within_cutoff
 
 
-def broadcast(src: torch.Tensor, other: torch.Tensor, dim: int):
-    if dim < 0:
-        dim = other.dim() + dim
-    if src.dim() == 1:
-        for _ in range(0, dim):
-            src = src.unsqueeze(0)
-    for _ in range(src.dim(), other.dim()):
-        src = src.unsqueeze(-1)
-    src = src.expand(other.size())
-    return src
-
-
 def scatter_softmax(
         src: torch.Tensor, index: torch.Tensor, dim: int = -1, dim_size: Optional[int] = None
 ) -> torch.Tensor:
@@ -562,7 +550,6 @@ def scatter_softmax(
         in enumerate(src.shape)
     ]
 
-    index = broadcast(index, src, dim)
     max_value_per_index = torch.zeros(out_shape, dtype=src.dtype).scatter_reduce(dim, index, src, "amax", include_self=False)
     max_per_src_element = max_value_per_index.gather(dim, index)
 

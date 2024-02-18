@@ -4,7 +4,7 @@ from loguru import logger as log
 from typing import Dict, Type, Callable, Optional, Tuple
 
 from .models import BaseNNP, LightningModuleMixin
-from .utils import Dense, scatter_softmax, broadcast
+from .utils import Dense, scatter_softmax
 import torch
 import torch.nn.functional as F
 
@@ -198,32 +198,33 @@ class SAKEInteraction(nn.Module):
 
     def update_velocity(self, v, h, combinations, idx_i, nr_atoms):
         v_ij = self.v_mixing(combinations.swapaxes(-1, -2)).squeeze(-1)
-        broadcast_idx_i = broadcast(idx_i, torch.zeros_like(v_ij), dim=0)
-        dv = torch.zeros_like(v).scatter_reduce(0, broadcast_idx_i, v_ij, "mean", include_self=False)
+        expanded_idx_i = idx_i.view(-1, 1).expand_as(v_ij)
+        dv = torch.zeros_like(v).scatter_reduce(0, expanded_idx_i, v_ij, "mean", include_self=False)
         return self.velocity_mlp(h) * v + dv
 
     def get_combinations(self, h_ij, dir_ij):
         return torch.einsum("px,pc->pcx", dir_ij, self.x_mixing_mlp(h_ij))
 
     def get_spatial_attention(self, combinations, idx_i, dir_ij, nr_atoms):
-        broadcast_idx_i = broadcast(idx_i, torch.zeros(len(idx_i), self.nr_coefficients, dir_ij.shape[-1]), dim=0)
+        expanded_idx_i = idx_i.view(-1, 1, 1).expand_as(combinations)
         out_shape = (nr_atoms, self.nr_coefficients, dir_ij.shape[-1])
         zeros = torch.zeros(out_shape, dtype=combinations.dtype, device=combinations.device)
-        combinations_mean = zeros.scatter_reduce(0, broadcast_idx_i, combinations, "mean", include_self=False)
+        combinations_mean = zeros.scatter_reduce(0, expanded_idx_i, combinations, "mean", include_self=False)
         combinations_norm_square = (combinations_mean ** 2).sum(dim=-1)
         return self.post_norm_mlp(combinations_norm_square)
 
     def aggregate(self, h_ij_semantic, idx_i, nr_atoms):
-        broadcast_idx_i = broadcast(idx_i, torch.zeros(len(idx_i), self.nr_coefficients), dim=0)
+        expanded_idx_i = idx_i.view(-1, 1).expand_as(h_ij_semantic)
         out_shape = (nr_atoms, self.nr_coefficients)
         zeros = torch.zeros(out_shape, dtype=h_ij_semantic.dtype, device=h_ij_semantic.device)
-        return zeros.scatter_add(0, broadcast_idx_i, h_ij_semantic)
+        return zeros.scatter_add(0, expanded_idx_i, h_ij_semantic)
 
     def get_semantic_attention(self, h_ij_edge, idx_i, d_ij, nr_atoms):
         h_ij_att_weights = self.semantic_attention_mlp(h_ij_edge)
         d_ij_att_weights = self.cutoff_module(d_ij)
         combined_ij_att_weights = torch.einsum("ph,p->ph", h_ij_att_weights, d_ij_att_weights)
-        combined_ij_att = scatter_softmax(combined_ij_att_weights, idx_i, dim=-2, dim_size=nr_atoms)
+        expanded_idx_i = idx_i.view(-1, 1).expand_as(combined_ij_att_weights)
+        combined_ij_att = scatter_softmax(combined_ij_att_weights, expanded_idx_i, dim=-2, dim_size=nr_atoms)
         return torch.reshape(torch.einsum("pf,ph->pfh", h_ij_edge, combined_ij_att),
                              (len(idx_i), self.nr_coefficients))
 

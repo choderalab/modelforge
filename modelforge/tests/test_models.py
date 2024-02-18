@@ -13,26 +13,21 @@ from .helper_functions import (
 @pytest.mark.parametrize("model_class", MODELS_TO_TEST)
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_forward_pass(model_class, dataset):
-    import torch
 
+    # test the forward pass through each of the models
     for lightning in [True, False]:
         initialized_model = setup_simple_model(model_class, lightning)
         inputs = return_single_batch(
             dataset,
-            mode="fit",
         )  # split_file="modelforge/tests/qm9tut/split.npz")
         nr_of_mols = inputs["atomic_subsystem_indices"].unique().shape[0]
         nr_of_atoms_per_batch = inputs["atomic_subsystem_indices"].shape[0]
         print(f"nr_of_mols: {nr_of_mols}")
-        output = initialized_model(inputs)
-        print(output)
-        if isinstance(output, dict):
-            assert (
-                output["scalar_representation"].shape[0] == nr_of_atoms_per_batch
-            )  # 642
-        else:
-            assert output.shape[0] == nr_of_mols
-            assert output.shape[1] == 1
+        output = initialized_model(inputs)["energy_readout"]
+
+        # test tat we get an energie per molecule
+        assert output.shape[0] == nr_of_mols
+        assert output.shape[1] == 1
 
 
 @pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
@@ -40,15 +35,15 @@ def test_forward_pass(model_class, dataset):
 def test_calculate_energies_and_forces(input_data, model_class):
     """
     Test the calculation of energies and forces for a molecule.
-    This test will be adapted once we have a trained model.
     """
     import torch
 
+    # test the backward pass through each of the models
     nr_of_mols = input_data["atomic_subsystem_indices"].unique().shape[0]
     nr_of_atoms_per_batch = input_data["atomic_subsystem_indices"].shape[0]
     for lightning in [True, False]:
-        model = setup_simple_model(model_class, lightning)  # .double()
-        result = model(input_data)
+        model = setup_simple_model(model_class, lightning)
+        result = model(input_data)["energy_readout"]
         print(result.sum())
         forces = -torch.autograd.grad(
             result.sum(), input_data["positions"], create_graph=True, retain_graph=True
@@ -252,7 +247,6 @@ def testPairlist_on_dataset(dataset):
     data = dataset(for_unit_testing=True)
     data_module = TorchDataModule(data)
     data_module.prepare_data()
-    data_module.setup("fit")
     for data in data_module.train_dataloader():
         positions = data["positions"]
         atomic_subsystem_indices = data["atomic_subsystem_indices"]
@@ -287,7 +281,7 @@ def test_equivariant_energies_and_forces(input_data, model_class):
         model = setup_simple_model(model_class, lightning).double()
         input_data["positions"] = input_data["positions"]
         # reference values
-        reference_result = model(input_data).double()
+        reference_result = model(input_data)["energy_readout"].double()
         reference_forces = -torch.autograd.grad(
             reference_result.sum(),
             input_data["positions"],
@@ -300,7 +294,7 @@ def test_equivariant_energies_and_forces(input_data, model_class):
         translation_input_data["positions"] = translation(
             translation_input_data["positions"]
         )
-        translation_result = model(translation_input_data)
+        translation_result = model(translation_input_data)["energy_readout"]
         assert torch.allclose(
             translation_result,
             reference_result,
@@ -325,7 +319,7 @@ def test_equivariant_energies_and_forces(input_data, model_class):
         rotation_input_data["positions"] = rotation(
             rotation_input_data["positions"].to(torch.float32)
         ).double()
-        rotation_result = model(rotation_input_data)
+        rotation_result = model(rotation_input_data)["energy_readout"]
 
         print(rotation_result)
         print(reference_result, flush=True)
@@ -355,7 +349,7 @@ def test_equivariant_energies_and_forces(input_data, model_class):
         reflection_input_data["positions"] = reflection(
             reflection_input_data["positions"].to(torch.float32)
         ).double()
-        reflection_result = model(reflection_input_data)
+        reflection_result = model(reflection_input_data)["energy_readout"]
         reflection_forces = -torch.autograd.grad(
             reflection_result.sum(),
             reflection_input_data["positions"],
@@ -433,3 +427,100 @@ def testPairlist_calculate_r_ij_and_d_ij():
 
     assert torch.allclose(r_ij, expected_r_ij, atol=1e-3)
     assert torch.allclose(d_ij, expected_d_ij, atol=1e-3)
+
+
+# @pytest.mark.parametrize("model_class", MODELS_TO_TEST)
+def test_postprocessing():
+
+    from modelforge.dataset.dataset import TorchDataModule
+
+    # test the self energy calculation on the QM9 dataset
+    from modelforge.dataset.qm9 import QM9Dataset
+    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
+
+    data = QM9Dataset(for_unit_testing=True)
+    dataset = TorchDataModule(
+        data, batch_size=8, split=FirstComeFirstServeSplittingStrategy()
+    )
+
+    # self energy is calculated and removed in prepare_data if `remove_self_energies` is True
+    dataset.prepare_data(remove_self_energies=True, normalize=False)
+    assert dataset.dataset_statistics
+    # only 4 elements present in the reduced QM9 dataset
+    assert len(dataset.dataset_statistics["self_energies"]) == 4
+
+    from modelforge.potential.schnet import SchNET
+    from modelforge.potential import CosineCutoff, GaussianRBF
+    from modelforge.potential.utils import SlicedEmbedding
+    from openff.units import unit
+
+    nr_atom_basis = 128
+    max_atomic_number = 100
+    n_rbf = 20
+    cutoff = 5.0 * unit.angstrom
+    nr_interaction_blocks = 2
+    nr_filters = 2
+
+    embedding = SlicedEmbedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
+    rbf = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
+
+    cutoff = CosineCutoff(cutoff=cutoff)
+
+    # reset seed
+    import torch
+
+    torch.manual_seed(1234)
+    model = SchNET(
+        embedding_module=embedding,
+        nr_interaction_blocks=nr_interaction_blocks,
+        radial_basis_module=rbf,
+        cutoff_module=cutoff,
+        nr_filters=nr_filters,
+    )
+
+    for batch in dataset.train_dataloader():
+        print(batch)
+        result = model(batch)
+        break
+
+    # test the postprocessing pipeline
+    # extract the energy and the species for the first result
+    e = result["energy_readout"][0]
+    species = [6, 1, 1, 1, 1]  # double check that this is the case
+    for atom_idx in range(len(species)):
+        assert species[atom_idx] == result["atomic_numbers"][atom_idx].item()
+
+    # calculate the offset
+    import numpy as np
+
+    self_energies = dataset.dataset_statistics["self_energies"]
+    offset = np.sum([self_energies[z] for z in species])
+
+    from modelforge.potential.postprocessing import (
+        AddSelfEnergies,
+        PostprocessingPipeline,
+    )
+
+    # in order to compare the two predictions we neet to reset the seed
+    torch.manual_seed(1234)
+    model = SchNET(
+        embedding_module=embedding,
+        nr_interaction_blocks=nr_interaction_blocks,
+        radial_basis_module=rbf,
+        cutoff_module=cutoff,
+        nr_filters=nr_filters,
+        postprocessing=PostprocessingPipeline(
+            [AddSelfEnergies(dataset.dataset_statistics)]
+        ),
+    )
+
+    for batch in dataset.train_dataloader():
+        result_with_offset = model(batch)
+        break
+
+    r1 = result_with_offset[0].item()
+    r2 = (e + offset).item()
+
+    # make sure that the prediction between the two 
+    # SchNET models differ only by the offset
+    assert np.isclose(r1, r2)

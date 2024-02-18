@@ -4,7 +4,7 @@ from typing import Callable, Dict, List, Optional
 import numpy as np
 import pytorch_lightning as pl
 import torch
-from loguru import logger
+from loguru import logger as log
 from torch.utils.data import DataLoader
 
 from modelforge.utils.prop import PropertyNames
@@ -14,17 +14,16 @@ from modelforge.dataset.utils import RandomRecordSplittingStrategy, SplittingStr
 
 class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
     """
-    A custom dataset class to wrap numpy datasets for PyTorch.
+    Wraps a numpy dataset to make it compatible with PyTorch DataLoader.
 
     Parameters
     ----------
     dataset : np.lib.npyio.NpzFile
         The underlying numpy dataset.
     property_name : PropertyNames
-        Property names to extract from the dataset.
+        Names of the properties to extract from the dataset.
     preloaded : bool, optional
-        If True, preconverts the properties to PyTorch tensors to save time during item fetching.
-        Default is False.
+        If True, converts properties to PyTorch tensors ahead of time. Default is False.
 
     """
 
@@ -36,6 +35,19 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         property_name: PropertyNames,
         preloaded: bool = False,
     ):
+        """
+        Initializes the TorchDataset with a numpy dataset and property names.
+
+        Parameters
+        ----------
+        dataset : np.lib.npyio.NpzFile
+            The numpy dataset to wrap.
+        property_name : PropertyNames
+            The property names to extract from the dataset for use in PyTorch.
+        preloaded : bool, optional
+            If set to True, properties are preloaded as PyTorch tensors. Default is False.
+        """
+
         self.properties_of_interest = {
             "atomic_numbers": torch.from_numpy(dataset[property_name.Z]),
             "positions": torch.from_numpy(dataset[property_name.R]),
@@ -107,6 +119,21 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             )
         )
 
+    def __setitem__(self, idx: int, value: Dict[str, torch.Tensor]) -> None:
+        """
+        Set the value of a property for a given conformer index.
+
+        Parameters
+        ----------
+        idx : int
+            Index of the conformer to set the value for.
+        value : Dict[str, torch.Tensor]
+            Dictionary containing the property name and value to set.
+
+        """
+        for key, val in value.items():
+            self.properties_of_interest[key][idx] = val
+
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         """
         Fetch a tuple of the values for the properties of interest for a given conformer index.
@@ -149,11 +176,11 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             .detach()
         ).to(torch.float32)
         E_label = (
-            self.properties_of_interest["E_label"][idx]
+            (self.properties_of_interest["E_label"][idx])
             .clone()
             .detach()
-            .to(torch.float32)
-        )
+            .to(torch.float64)
+        )  # NOTE: upgrading to float64 to avoid precision issues
 
         return {
             "atomic_numbers": atomic_numbers,
@@ -166,21 +193,32 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
 
 class HDF5Dataset:
     """
-    Base class for data stored in HDF5 format.
-
-    Provides methods for processing and interacting with the data stored in HDF5 format.
+    Manages data stored in HDF5 format, supporting processing and interaction.
 
     Attributes
     ----------
     raw_data_file : str
-        Path to the raw data file.
+        Path to the raw HDF5 data file.
     processed_data_file : str
-        Path to the processed data file.
+        Path to the processed data file, typically a .npz file for efficiency.
     """
 
     def __init__(
         self, raw_data_file: str, processed_data_file: str, local_cache_dir: str
     ):
+        """
+        Initializes the HDF5Dataset with paths to raw and processed data files.
+
+        Parameters
+        ----------
+        raw_data_file : str
+            Path to the raw HDF5 data file.
+        processed_data_file : str
+            Path to the processed data file.
+        local_cache_dir : str
+            Directory to store temporary processing files.
+        """
+
         self.raw_data_file = raw_data_file
         self.processed_data_file = processed_data_file
         self.hdf5data: Optional[Dict[str, List[np.ndarray]]] = None
@@ -203,7 +241,7 @@ class HDF5Dataset:
         import tqdm
         import shutil
 
-        logger.debug(f"Processing and extracting data from {self.raw_data_file}")
+        log.debug(f"Processing and extracting data from {self.raw_data_file}")
 
         # this will create an unzipped file which we can then load in
         # this is substantially faster than passing gz_file directly to h5py.File()
@@ -214,7 +252,7 @@ class HDF5Dataset:
             with open(temp_hdf5_file, "wb") as out_file:
                 shutil.copyfileobj(gz_file, out_file)
 
-        logger.debug("Reading in and processing hdf5 file ...")
+        log.debug("Reading in and processing hdf5 file ...")
 
         with h5py.File(temp_hdf5_file, "r") as hf:
             # create dicts to store data for each format type
@@ -248,7 +286,7 @@ class HDF5Dataset:
 
             # loop over all records in the hdf5 file and add property arrays to the appropriate dict
 
-            logger.debug(f"n_entries: {len(hf.keys())}")
+            log.debug(f"n_entries: {len(hf.keys())}")
 
             for record in tqdm.tqdm(list(hf.keys())):
                 # There may be cases where a specific property of interest
@@ -260,9 +298,9 @@ class HDF5Dataset:
 
                 if all(property_found):
                     # we want to exclude conformers with NaN values for any property of interest
-                    configs_nan_by_prop: Dict[
-                        str, np.ndarray
-                    ] = OrderedDict()  # ndarray.size (n_configs, )
+                    configs_nan_by_prop: Dict[str, np.ndarray] = (
+                        OrderedDict()
+                    )  # ndarray.size (n_configs, )
                     for value in list(series_mol_data.keys()) + list(
                         series_atom_data.keys()
                     ):
@@ -348,7 +386,7 @@ class HDF5Dataset:
         >>> hdf5_data = HDF5Dataset("raw_data.hdf5", "processed_data.npz")
         >>> processed_data = hdf5_data._from_file_cache()
         """
-        logger.debug(f"Loading processed data from {self.processed_data_file}")
+        log.debug(f"Loading processed data from {self.processed_data_file}")
         self.numpy_data = np.load(self.processed_data_file)
 
     def _to_file_cache(
@@ -364,7 +402,7 @@ class HDF5Dataset:
                 >>> hdf5_data = HDF5Dataset("raw_data.hdf5", "processed_data.npz")
                 >>> hdf5_data._to_file_cache()
         """
-        logger.debug(f"Writing data cache to {self.processed_data_file}")
+        log.debug(f"Writing data cache to {self.processed_data_file}")
 
         np.savez(
             self.processed_data_file,
@@ -377,9 +415,9 @@ class HDF5Dataset:
 
 class DatasetFactory:
     """
-    Factory class for creating Dataset instances.
+    Factory for creating TorchDataset instances from HDF5 data.
 
-    Provides utilities for processing and caching data.
+    Methods are provided to load or process data as needed, handling caching to improve efficiency.
 
     Examples
     --------
@@ -396,8 +434,6 @@ class DatasetFactory:
     @staticmethod
     def _load_or_process_data(
         data: HDF5Dataset,
-        label_transform: Optional[Dict[str, Callable]],
-        transform: Optional[Dict[str, Callable]],
     ) -> None:
         """
         Loads the dataset from cache if available, otherwise processes and caches the data.
@@ -422,51 +458,47 @@ class DatasetFactory:
     @staticmethod
     def create_dataset(
         data: HDF5Dataset,
-        label_transform: Optional[Dict[str, Callable]] = None,
-        transform: Optional[Dict[str, Callable]] = None,
     ) -> TorchDataset:
         """
-        Creates a Dataset instance given an HDF5Dataset.
+        Creates a TorchDataset from an HDF5Dataset, applying optional transformations.
 
         Parameters
         ----------
         data : HDF5Dataset
-            The HDF5 data to use.
-        transform : Optional[Dict[str, Callable]], optional
-            Transformation to apply to the data based on the property name, by default None
-        label_transform : Optional[Dict[str, Callable]], optional
-            Transformation to apply to the labels based on the property name, by default default_transformation
+            The HDF5 dataset to convert.
+
         Returns
         -------
         TorchDataset
-            Dataset instance wrapped for PyTorch.
+            The resulting PyTorch-compatible dataset.
         """
 
-        logger.info(f"Creating {data.dataset_name} dataset")
-        DatasetFactory._load_or_process_data(data, label_transform, transform)
+        log.info(f"Creating {data.dataset_name} dataset")
+        DatasetFactory._load_or_process_data(data)
         return TorchDataset(data.numpy_data, data._property_names)
+
+
+from torch import nn
 
 
 class TorchDataModule(pl.LightningDataModule):
     """
-    A custom data module class to handle data loading and preparation for PyTorch Lightning training.
+    Data module for PyTorch Lightning, handling data preparation and loading.
 
     Parameters
     ----------
     data : HDF5Dataset
-        The underlying dataset.
-    SplittingStrategy : SplittingStrategy, optional
-        Strategy used to split the data into training, validation, and test sets.
-        Default is RandomSplittingStrategy.
-    batch_size : int, optional
-        Batch size for data loading. Default is 64.
+        The dataset to use.
+    split : SplittingStrategy, optional
+        The strategy for splitting data into training,
+        validation, and test sets. Defaults to RandomRecordSplittingStrategy.
+    batch_size : int,
 
     Examples
     --------
     >>> data = QM9Dataset()
     >>> data_module = TorchDataModule(data)
     >>> data_module.prepare_data()
-    >>> data_module.setup("fit")
     >>> train_loader = data_module.train_dataloader()
     """
 
@@ -476,67 +508,265 @@ class TorchDataModule(pl.LightningDataModule):
         split: SplittingStrategy = RandomRecordSplittingStrategy(),
         batch_size: int = 64,
         split_file: Optional[str] = None,
+        transform: Optional[nn.Module] = None,
     ):
         super().__init__()
         self.data = data
         self.batch_size = batch_size
-        self.split_idxs: Optional[str] = None
-        self.train_dataset = Optional[TorchDataset]
-        self.test_dataset = Optional[TorchDataset]
-        self.val_dataset = Optional[TorchDataset]
+        self.split_idxs = None
+        self.train_dataset = None
+        self.test_dataset = None
+        self.val_dataset = None
+        self.transform = transform
+        self.split = split
+        self.split_file = split_file
+        self.dataset_statistics = {}
 
-        if split_file:
-            import numpy as np
-
-            logger.debug(f"Loading split indices from {split_file}")
-            self.split_idxs = np.load(split_file)
-        else:
-            logger.debug(f"Using splitting strategy {split}")
-            self.split = split
-
-    def prepare_data(self) -> None:
+    @classmethod
+    def calculate_self_energies(
+        cls, dataset: TorchDataset, collate: bool = True
+    ) -> Dict[str, float]:
         """
-        Prepares the data by creating a dataset instance.
-        """
-
-        factory = DatasetFactory()
-        self.dataset = factory.create_dataset(self.data)
-
-    def setup(self, stage: str) -> None:
-        """
-        Splits the data into training, validation, and test sets based on the stage.
+        Calculates the self energies for each atomic number in the dataset by performing a least squares regression.
 
         Parameters
         ----------
-        stage : str
-            Either "fit" for training/validation split or "test" for test split.
+        dataset : TorchDataset
+            The dataset from which to calculate self energies.
+        collate : bool, optional
+            If True, uses a custom collate function to gather batch data. Defaults to True.
+
+        Returns
+        -------
+        Dict[int, float]
+            A dictionary mapping atomic numbers to their calculated self energies.
+        """
+        log.info("Computing self energies for elements in the dataset.")
+
+        # Define the collate function based on the `collate` parameter
+        collate_fn = collate_conformers if collate else None
+
+        # Initialize variables to hold data for regression
+        batch_size = 64
+        # Determine the size of the counts tensor
+        num_molecules = dataset.n_records
+        # Determine up to which Z we detect elements
+        max_atomic_number = 100
+        # Initialize the counts tensor
+        counts = torch.zeros(num_molecules, max_atomic_number + 1, dtype=torch.int64)
+        # save energies in list
+        energy_array = torch.zeros(dataset.n_records, dtype=torch.float64)
+        # for filling in the element count matrix
+        molecule_counter = 0
+        # counter for saving energy values
+        current_index = 0
+        # save unique atomic numbers in list
+        unique_atomic_numbers = set()
+
+        for batch in DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn):
+            energies, atomic_numbers, molecules_id = (
+                batch["E_label"].squeeze(),
+                batch["atomic_numbers"].squeeze(-1),
+                batch["atomic_subsystem_indices"].to(torch.int64),
+            )
+
+            # Update the energy array and unique atomic numbers set
+            batch_size = energies.size(0)
+            energy_array[current_index : current_index + batch_size] = (
+                energies.squeeze()
+            )
+            current_index += batch_size
+            unique_atomic_numbers |= set(atomic_numbers.tolist())
+            atomic_numbers_ = atomic_numbers - 1
+
+            # Count the occurrence of each atomic number in molecules
+            for molecule_id in molecules_id.unique():
+                mask = molecules_id == molecule_id
+                counts[molecule_counter].scatter_add_(
+                    0, atomic_numbers_[mask], torch.ones_like(atomic_numbers_[mask])
+                )
+                molecule_counter += 1
+
+        # Prepare the data for lineare regression
+        valid_elements_mask = counts.sum(dim=0) > 0
+        filtered_counts = counts[:, valid_elements_mask]
+
+        Xs = [
+            filtered_counts[:, i].unsqueeze(1).detach().numpy()
+            for i in range(filtered_counts.shape[1])
+        ]
+
+        A = np.hstack(Xs)
+        y = energy_array.numpy()
+
+        # Perform least squares regression
+        least_squares_fit, _, _, _ = np.linalg.lstsq(A, y, rcond=None)
+        self_energies = {
+            idx: energy for idx, energy in zip(unique_atomic_numbers, least_squares_fit)
+        }
+
+        log.info("Calculated self energies for elements.")
+
+        log.info("Coefficients for each element:", self_energies)
+        print(self_energies)
+        return self_energies
+
+    # print information about the unit system used in the dataset
+    def print_unit_system(self) -> None:
+        """
+        Print information about the unit system used in the dataset.
+        """
+        from modelforge.utils import provide_details_about_used_unitsystem
+
+        provide_details_about_used_unitsystem()
+
+    def prepare_data(
+        self,
+        remove_self_energies: bool = True,
+        normalize: bool = False,
+        self_energies: Dict[str, float] = {},
+    ) -> None:
+        """
+        Prepares the dataset for use by calculating self energies, normalizing data, and splitting the dataset.
+
+        Parameters
+        ----------
+        remove_self_energies : bool, optional
+            Whether to remove self energies from the dataset. Defaults to True.
+        normalize : bool, optional
+            Whether to normalize the dataset. Defaults to True.
+        self_energies : Dict[str, float], optional
+            A dictionary mapping atomic numbers to their calculated self energies. Defaults to {}.
+            If self_energies is not provided, but remove_self_energies is True, self-energies are calculated
+            using a linear fit regression.
+        """
+
+        if self.split_file and os.path.exists(self.split_file):
+            self.split_idxs = np.load(self.split_file, allow_pickle=True)
+            log.debug(f"Loaded split indices from {self.split_file}")
+        else:
+            log.debug("Splitting strategy will be applied")
+
+        # generate dataset
+        factory = DatasetFactory()
+        self.dataset = factory.create_dataset(self.data)
+        dataset_statistics = {}
+        # calculate self energies
+        if remove_self_energies:
+            if not self_energies:
+                self_energies = TorchDataModule.calculate_self_energies(self.dataset)
+            self.dataset = TorchDataModule.remove_self_energies(
+                self.dataset, self_energies
+            )
+            dataset_statistics["self_energies"] = self_energies
+
+        # calculate average and variance
+        if normalize:
+            stats = TorchDataModule.calculate_mean_and_variance(self.dataset)
+            self.dataset = TorchDataModule.normalize_energies(self.dataset, stats)
+            dataset_statistics["stddev"] = stats["stddev"]
+            dataset_statistics["mean"] = stats["mean"]
+
+        self.dataset_statistics = dataset_statistics
+        self.setup()
+
+    @classmethod
+    def normalize_energies(cls, dataset, stats: Dict[str, float]) -> None:
+        """
+        Normalizes the energies in the dataset.
+        """
+        from tqdm import tqdm
+
+        for i in tqdm(range(len(dataset)), desc="Adjusting Energies"):
+            energy = dataset[i]["E_label"]
+            # Normalize using the computed mean and std
+            modified_energy = (energy - stats["mean"]) / stats["stddev"]
+            dataset[i] = {"E_label": modified_energy}
+
+        return dataset
+
+    @classmethod
+    def calculate_mean_and_variance(cls, dataset) -> Dict[str, float]:
+        """
+        Calculates the mean and variance of the dataset.
+
+        """
+        import numpy as np
+
+        log.info("Calculating mean and variance for normalization")
+        energies = np.array([dataset[i]["E_label"] for i in range(len(dataset))])
+        stats = {"mean": energies.mean(), "stddev": energies.std()}
+        log.info(f"Mean and standard deviation of the dataset:{stats}")
+        return stats
+
+    @classmethod
+    def remove_self_energies(cls, dataset, self_energies: Dict[str, float]) -> None:
+        """
+        Removes the self energies from the dataset.
+
+        Parameters
+        ----------
+        self_energies : Dict[str, float]
+            Dictionary containing the self energies for each element in the dataset.
+        """
+        from tqdm import tqdm
+
+        log.info("Removing self energies from the dataset")
+        for i in tqdm(range(len(dataset)), desc="Removing Self Energies"):
+            atomic_numbers = dataset[i]["atomic_numbers"]
+            E_label = dataset[i]["E_label"]
+            for idx, Z in enumerate(atomic_numbers):
+                E_label -= self_energies[Z.item()]
+            dataset[i] = {"E_label": E_label}
+        return dataset
+
+    @classmethod
+    def preprocess_dataset(
+        cls,
+        dataset: TorchDataset,
+        normalize: bool,
+        dataset_mean: float,
+        dataset_std: Optional[float] = None,
+    ) -> None:
+        from tqdm import tqdm
+
+        log.info(f"Adjusting energies by subtracting global mean {dataset_mean}")
+
+        if normalize:
+            log.info("Normalizing energies using computed mean and std")
+        for i in tqdm(range(len(dataset)), desc="Adjusting Energies"):
+            energy = dataset[i]["E_label"]
+            if normalize:
+                # Normalize using the computed mean and std
+                modified_energy = (energy - dataset_mean) / dataset_std
+            else:
+                # Only adjust by subtracting the mean
+                modified_energy = energy - dataset_mean
+            dataset[i] = {"E_label": modified_energy}
+
+        return dataset
+
+    def setup(self) -> None:
+        """
+        Sets up datasets for the train, validation, and test stages.
+
+        Parameters
+        ----------
+        stage : Optional[str]
+            The stage for which to set up the dataset. Can be 'fit', 'validate', 'test', or 'predict'. Defaults to None.
         """
         from torch.utils.data import Subset
 
-        if stage == "fit":
-            if self.split_idxs:
-                train_idx, val_idx = (
-                    self.split_idxs["train_idx"],
-                    self.split_idxs["val_idx"],
-                )
-                self.train_dataset = Subset(self.dataset, train_idx)
-                self.val_dataset = Subset(self.dataset, val_idx)
-            else:
-                train_dataset, val_dataset, _ = self.split.split(self.dataset)
-                self.train_dataset = train_dataset
-                self.val_dataset = val_dataset
-
-        # Assign test dataset for use in dataloader(s)
-        elif stage == "test":
-            if self.split_idxs:
-                test_idx = self.split_idxs["test_idx"]
-                self.test_dataset = Subset(self.dataset, test_idx)
-            else:
-                _, _, test_dataset = self.split.split(self.dataset)
-                self.test_dataset = test_dataset
-
+        # Create subsets for training, validation, and testing
+        if self.split_idxs and os.path.exists(self.split_file):
+            self.train_dataset = Subset(self.dataset, self.split_idxs["train_idx"])
+            self.val_dataset = Subset(self.dataset, self.split_idxs["val_idx"])
+            self.test_dataset = Subset(self.dataset, self.split_idxs["test_idx"])
         else:
-            raise ValueError(f"Unknown stage {stage}")
+            # Fallback to manual splitting if split_idxs is not available
+            self.train_dataset, self.val_dataset, self.test_dataset = self.split.split(
+                self.dataset
+            )
 
     def train_dataloader(self) -> DataLoader:
         """

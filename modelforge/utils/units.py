@@ -1,4 +1,3 @@
-import pint
 from openff.units import unit, Quantity
 
 # define new context for converting energy (e.g., hartree)
@@ -39,3 +38,14 @@ c.add_transformation(
 
 
 unit.add_context(c)
+
+
+def provide_details_about_used_unitsystem():
+    """
+    Provide details about the used unit systems.
+    """
+    from loguru import logger as log
+
+    log.info("Distance are in nanometer.")
+    log.info("Energies are in kJ/mol")
+    log.info("Forces are in kJ/mol/nm**2")

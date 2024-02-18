@@ -64,11 +64,17 @@ def test_dataset_basic_operations():
     geom_shape = (total_atoms_series, 3)
     atomic_numbers_shape = (total_atoms_single, 1)
     internal_energy_shape = (total_confs, 1)
-    input_data = {"geometry": np.arange(geom_shape[0] * geom_shape[1]).reshape(geom_shape),
-                  "atomic_numbers": np.arange(atomic_numbers_shape[0]).reshape(atomic_numbers_shape),
-                  "internal_energy_at_0K": np.arange(internal_energy_shape[0]).reshape(internal_energy_shape),
-                  "atomic_subsystem_counts": atomic_subsystem_counts,
-                  "n_confs": n_confs}
+    input_data = {
+        "geometry": np.arange(geom_shape[0] * geom_shape[1]).reshape(geom_shape),
+        "atomic_numbers": np.arange(atomic_numbers_shape[0]).reshape(
+            atomic_numbers_shape
+        ),
+        "internal_energy_at_0K": np.arange(internal_energy_shape[0]).reshape(
+            internal_energy_shape
+        ),
+        "atomic_subsystem_counts": atomic_subsystem_counts,
+        "n_confs": n_confs,
+    }
 
     property_names = PropertyNames(
         "atomic_numbers",
@@ -77,7 +83,7 @@ def test_dataset_basic_operations():
     )
     dataset = TorchDataset(input_data, property_names)
     assert len(dataset) == total_confs
-    assert (dataset.record_len() == total_records)
+    assert dataset.record_len() == total_records
 
     atomic_numbers_true = []
     geom_true = []
@@ -92,8 +98,12 @@ def test_dataset_basic_operations():
         for conf in range(n_confs[rec]):
             atom_end_idx_series = atom_start_idx_series + atomic_subsystem_counts[rec]
             energy_true.append(input_data["internal_energy_at_0K"][conf_idx])
-            geom_true.append(input_data["geometry"][atom_start_idx_series:atom_end_idx_series])
-            atomic_numbers_true.append(input_data["atomic_numbers"][atom_start_idx_single:atom_end_idx_single])
+            geom_true.append(
+                input_data["geometry"][atom_start_idx_series:atom_end_idx_series]
+            )
+            atomic_numbers_true.append(
+                input_data["atomic_numbers"][atom_start_idx_single:atom_end_idx_single]
+            )
             series_mol_idxs_for_rec.append(conf_idx)
             atom_start_idx_series = atom_end_idx_series
             conf_idx += 1
@@ -102,12 +112,16 @@ def test_dataset_basic_operations():
 
     for conf_idx in range(len(dataset)):
         conf_data = dataset[conf_idx]
-        assert(np.array_equal(conf_data["positions"], geom_true[conf_idx]))
-        assert(np.array_equal(conf_data["atomic_numbers"], atomic_numbers_true[conf_idx]))
-        assert(np.array_equal(conf_data["E_label"], energy_true[conf_idx]))
+        assert np.array_equal(conf_data["positions"], geom_true[conf_idx])
+        assert np.array_equal(
+            conf_data["atomic_numbers"], atomic_numbers_true[conf_idx]
+        )
+        assert np.array_equal(conf_data["E_label"], energy_true[conf_idx])
 
     for rec_idx in range(dataset.record_len()):
-        assert(np.array_equal(dataset.get_series_mol_idxs(rec_idx), series_mol_idxs[rec_idx]))
+        assert np.array_equal(
+            dataset.get_series_mol_idxs(rec_idx), series_mol_idxs[rec_idx]
+        )
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
@@ -175,7 +189,7 @@ def test_data_item_format(dataset):
     from typing import Dict
 
     dataset = initialize_dataset(
-        dataset, mode="fit", split_file="modelforge/tests/qm9tut/split.npz"
+        dataset, split_file="modelforge/tests/qm9tut/split.npz"
     )
 
     raw_data_item = dataset.dataset[0]
@@ -186,7 +200,7 @@ def test_data_item_format(dataset):
     print(raw_data_item)
 
     assert (
-            raw_data_item["atomic_numbers"].shape[0] == raw_data_item["positions"].shape[0]
+        raw_data_item["atomic_numbers"].shape[0] == raw_data_item["positions"].shape[0]
     )
 
 
@@ -210,7 +224,7 @@ def test_padding():
 def test_dataset_generation(dataset):
     """Test the splitting of the dataset."""
 
-    dataset = initialize_dataset(dataset, mode="fit")
+    dataset = initialize_dataset(dataset)
     train_dataloader = dataset.train_dataloader()
     val_dataloader = dataset.val_dataloader()
 
@@ -235,7 +249,9 @@ def test_dataset_splitting(dataset):
     from modelforge.dataset.utils import RandomRecordSplittingStrategy
 
     dataset = generate_torch_dataset(dataset)
-    train_dataset, val_dataset, test_dataset = RandomRecordSplittingStrategy().split(dataset)
+    train_dataset, val_dataset, test_dataset = RandomRecordSplittingStrategy().split(
+        dataset
+    )
 
     energy = train_dataset[0]["E_label"].item()
     assert np.isclose(energy, -412509.9375)
@@ -244,9 +260,9 @@ def test_dataset_splitting(dataset):
     try:
         RandomRecordSplittingStrategy(split=[0.2, 0.1, 0.1])
     except AssertionError as e:
-        print(f'AssertionError raised: {e}')
+        print(f"AssertionError raised: {e}")
         logger.debug(e)
-    
+
     train_dataset, val_dataset, test_dataset = RandomRecordSplittingStrategy(
         split=[0.6, 0.3, 0.1]
     ).split(dataset)
@@ -262,7 +278,7 @@ def test_file_cache_methods(dataset):
 
     # generate files to test _from_hdf5()
 
-    _ = initialize_dataset(dataset, mode="fit")
+    _ = initialize_dataset(dataset)
 
     data = dataset(for_unit_testing=True)
 
@@ -288,11 +304,36 @@ def test_numpy_dataset_assignment(dataset):
     """
     Test if the numpy_dataset attribute is correctly assigned after processing or loading.
     """
-    from modelforge.dataset.transformation import default_transformation
 
     factory = DatasetFactory()
     data = dataset(for_unit_testing=True)
-    factory._load_or_process_data(data, None, default_transformation)
+    factory._load_or_process_data(data)
 
     assert hasattr(data, "numpy_data")
     assert isinstance(data.numpy_data, np.lib.npyio.NpzFile)
+
+
+def test_self_energy():
+
+    from modelforge.dataset.dataset import TorchDataModule
+
+    # test the self energy calculation on the QM9 dataset
+    from modelforge.dataset.qm9 import QM9Dataset
+    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
+
+    data = QM9Dataset(for_unit_testing=True)
+    dataset = TorchDataModule(
+        data, batch_size=32, split=FirstComeFirstServeSplittingStrategy()
+    )
+
+    # self energy is calculated and removed in prepare_data if `remove_self_energies` is True
+    dataset.prepare_data(remove_self_energies=True, normalize=True)
+
+    assert dataset.dataset_statistics
+    self_energies = dataset.dataset_statistics["self_energies"]
+    # only 4 elements present in the reduced QM9 dataset
+    assert len(self_energies) == 4
+    assert np.isclose(self_energies[1], -1584.5087457646348)
+    assert np.isclose(self_energies[6], -99960.88941782094)
+    assert np.isclose(self_energies[7], -143754.0263865598)
+    assert np.isclose(self_energies[8], -197495.00132926644)

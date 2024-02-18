@@ -146,6 +146,8 @@ class DatasetCuration(ABC):
         Converts the units of properties in self.data to desired output values.
 
         """
+        import pint
+
         for datapoint in self.data:
             for key, val in datapoint.items():
                 if isinstance(val, pint.Quantity):

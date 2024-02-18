@@ -187,29 +187,31 @@ class SAKEInteraction(nn.Module):
             Dense(self.nr_atom_basis_velocity, 1, activation=lambda x: 2.0 * F.sigmoid(x), bias=False)
         )
 
-        self.x_mixing = nn.Sequential(
+        self.x_mixing_mlp = nn.Sequential(
             Dense(self.nr_coefficients, self.nr_coefficients, bias=False, activation=nn.Tanh()),
         )
 
         self.v_mixing = Dense(self.nr_coefficients, 1, bias=False)
 
-    def node_update(self, h, h_i_semantic, h_i_spatial):
+    def update_node(self, h, h_i_semantic, h_i_spatial):
         return h + self.node_mlp(torch.cat([h, h_i_semantic, h_i_spatial], dim=-1))
 
-    def velocity_update(self, v, h, combinations, idx_i, nr_atoms):
+    def update_velocity(self, v, h, combinations, idx_i, nr_atoms):
         v_ij = self.v_mixing(combinations.swapaxes(-1, -2)).squeeze(-1)
         broadcast_idx_i = broadcast(idx_i, torch.zeros_like(v_ij), dim=0)
         dv = torch.zeros_like(v).scatter_reduce(0, broadcast_idx_i, v_ij, "mean", include_self=False)
         return self.velocity_mlp(h) * v + dv
 
-    def spatial_attention(self, h_ij, idx_i, dir_ij, nr_atoms):
-        combinations = torch.einsum("px,pc->pcx", dir_ij, self.x_mixing(h_ij))
+    def get_combinations(self, h_ij, dir_ij):
+        return torch.einsum("px,pc->pcx", dir_ij, self.x_mixing_mlp(h_ij))
+
+    def get_spatial_attention(self, combinations, idx_i, dir_ij, nr_atoms):
         broadcast_idx_i = broadcast(idx_i, torch.zeros(len(idx_i), self.nr_coefficients, dir_ij.shape[-1]), dim=0)
         out_shape = (nr_atoms, self.nr_coefficients, dir_ij.shape[-1])
         zeros = torch.zeros(out_shape, dtype=combinations.dtype, device=combinations.device)
         combinations_mean = zeros.scatter_reduce(0, broadcast_idx_i, combinations, "mean", include_self=False)
         combinations_norm_square = (combinations_mean ** 2).sum(dim=-1)
-        return self.post_norm_mlp(combinations_norm_square), combinations
+        return self.post_norm_mlp(combinations_norm_square)
 
     def aggregate(self, h_ij_semantic, idx_i, nr_atoms):
         broadcast_idx_i = broadcast(idx_i, torch.zeros(len(idx_i), self.nr_coefficients), dim=0)
@@ -217,12 +219,12 @@ class SAKEInteraction(nn.Module):
         zeros = torch.zeros(out_shape, dtype=h_ij_semantic.dtype, device=h_ij_semantic.device)
         return zeros.scatter_add(0, broadcast_idx_i, h_ij_semantic)
 
-    def semantic_attention_with_cutoff(self, h_ij_edge, idx_i, d_ij, nr_atoms):
-        h_ij_semantic_att = self.semantic_attention_mlp(h_ij_edge)
-        h_ij_euclidean_att = self.cutoff_module(d_ij)
-        h_ij_att_weights = torch.einsum("ph,p->ph", h_ij_semantic_att, h_ij_euclidean_att)
-        h_ij_att = scatter_softmax(h_ij_att_weights, idx_i, dim=-2, dim_size=nr_atoms)
-        return torch.reshape(torch.einsum("pf,ph->pfh", h_ij_edge, h_ij_att),
+    def get_semantic_attention(self, h_ij_edge, idx_i, d_ij, nr_atoms):
+        h_ij_att_weights = self.semantic_attention_mlp(h_ij_edge)
+        d_ij_att_weights = self.cutoff_module(d_ij)
+        combined_ij_att_weights = torch.einsum("ph,p->ph", h_ij_att_weights, d_ij_att_weights)
+        combined_ij_att = scatter_softmax(combined_ij_att_weights, idx_i, dim=-2, dim_size=nr_atoms)
+        return torch.reshape(torch.einsum("pf,ph->pfh", h_ij_edge, combined_ij_att),
                              (len(idx_i), self.nr_coefficients))
 
     def forward(
@@ -258,11 +260,12 @@ class SAKEInteraction(nn.Module):
         dir_ij = r_ij / (d_ij.unsqueeze(-1) + self.epsilon)
 
         h_ij_edge = self.edge_model(h[idx_i], h[idx_j], d_ij)
-        h_ij_semantic = self.semantic_attention_with_cutoff(h_ij_edge, idx_i, d_ij, nr_of_atoms_in_all_systems)
+        h_ij_semantic = self.get_semantic_attention(h_ij_edge, idx_i, d_ij, nr_of_atoms_in_all_systems)
         h_i_semantic = self.aggregate(h_ij_semantic, idx_i, nr_of_atoms_in_all_systems)
-        h_i_spatial, combinations = self.spatial_attention(h_ij_semantic, idx_i, dir_ij, nr_of_atoms_in_all_systems)
-        h_updated = self.node_update(h, h_i_semantic, h_i_spatial)
-        v_updated = self.velocity_update(v, h, combinations, idx_i, nr_of_atoms_in_all_systems)
+        combinations = self.get_combinations(h_ij_semantic, dir_ij)
+        h_i_spatial = self.get_spatial_attention(combinations, idx_i, dir_ij, nr_of_atoms_in_all_systems)
+        h_updated = self.update_node(h, h_i_semantic, h_i_spatial)
+        v_updated = self.update_velocity(v, h, combinations, idx_i, nr_of_atoms_in_all_systems)
         x_updated = x + v_updated
 
         return h_updated, x_updated, v_updated

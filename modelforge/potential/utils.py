@@ -355,21 +355,109 @@ from typing import Optional
 
 
 class AngularSymmetryFunction(nn.Module):
+    """
+    Initialize AngularSymmetryFunction module.
+
+    """
 
     def __init__(
         self,
+        number_of_gaussians_for_rsf: int,
+        angular_cutoff: unit.angstrom,
+        angular_start: unit.angstrom,
+        number_of_gaussians_for_asf: int,
+        radial_cutoff: unit.angstrom,
+        radial_start: unit.angstrom,
+        ani_style: bool = True,
+        dtype: Optional[torch.dtype] = None,
     ) -> None:
+        """
+        Parameters
+        ----
+        number_of_gaussian: Number of gaussian functions to use for angular symmetry function.
+        angular_cutoff: Cutoff distance for angular symmetry function.
+        angular_start: Starting distance for angular symmetry function.
+        ani_style: Whether to use ANI symmetry function style.
+        """
+
         super().__init__()
+        from loguru import logger as log
+
+        self.number_of_gaussians_asf = number_of_gaussians_for_asf
+        self.number_of_gaussians_rsf = number_of_gaussians_for_rsf
+        self.angular_cutoff = angular_cutoff
+        self.radial_cutoff = radial_cutoff
+        _unitless_angular_cutoff = angular_cutoff.to(unit.nanometer).m
+        _unitless_radial_cutoff = radial_cutoff.to(unit.nanometer).m
+        self.angular_start = angular_start
+        self.radial_start = radial_start
+        _unitless_angular_start = angular_start.to(unit.nanometer).m
+        _unitless_radial_start = radial_start.to(unit.nanometer).m
+        # calculate offsets
+        # ===============
+        ShfZ = torch.linspace(
+            _unitless_angular_start,
+            _unitless_angular_cutoff,
+            number_of_gaussians_asf + 1,
+            dtype=dtype,
+        )[:-1]
+        ShfR = torch.linspace(
+            _unitless_radial_start,
+            _unitless_radial_cutoff,
+            number_of_gaussians_for_rsf + 1,
+        )[:-1]
+
+        EtaA = angular_eta = 19.7 * 100  # FIXME hardcoded eta
+        Zeta = 32.0  # FIXME hardcoded zeta
+        self.register_buffer("Rca", _unitless_angular_cutoff)
+        self.register_buffer("ShfZ", ShfZ)
+        self.register_buffer("ShfR", ShfR)
+        self.register_buffer("EtaA", EtaA)
+        self.register_buffer("Zeta", Zeta)
+        log.info(
+            f"""RadialSymmetryFunction: 
+            Rca={_unitless_angular_cutoff} 
+            ShfZ={ShfZ}, 
+            eta={EtaA}"""
+        )
+
+    def forward(self, vectors12: torch.Tensor) -> torch.Tensor:
+        """Compute the angular subAEV terms of the center atom given neighbor pairs.
+
+        This correspond to equation (4) in the `ANI paper`_. This function just
+        compute the terms. The sum in the equation is not computed.
+        The input tensor have shape (conformations, atoms, N), where N
+        is the number of neighbor atom pairs within the cutoff radius and
+        output tensor should have shape
+        (conformations, atoms, ``self.angular_sublength()``)
+
+        .. _ANI paper:
+            http://pubs.rsc.org/en/Content/ArticleLanding/2017/SC/C6SC05720A#!divAbstract
+        """
+        vectors12 = vectors12.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+        distances12 = vectors12.norm(2, dim=-5)
+
+        # 0.95 is multiplied to the cos values to prevent acos from
+        # returning NaN.
+        cos_angles = 0.95 * torch.nn.functional.cosine_similarity(
+            vectors12[0], vectors12[1], dim=-5
+        )
+        angles = torch.acos(cos_angles)
+
+        fcj12 = cutoff_cosine(distances12, self.Rca)
+        factor1 = ((1 + torch.cos(angles - self.ShfZ)) / 2) ** self.Zeta
+        factor2 = torch.exp(-self.EtaA * (distances12.sum(0) / 2 - self.ShfA) ** 2)
+        ret = 2 * factor1 * factor2 * fcj12.prod(0)
+        # At this point, ret now have shape
+        # (conformations, atoms, N, ?, ?, ?, ?) where ? depend on constants.
+        # We then should flat the last 4 dimensions to view the subAEV as one
+        # dimension vector
+        return ret.flatten(start_dim=-4)
 
 
 class RadialSymmetryFunction(nn.Module):
     """
     Gaussian Radial Basis Function module.
-
-    Methods
-    -------
-    forward(x: torch.Tensor) -> torch.Tensor:
-        Forward pass for the RadialSymmetryFunction.
     """
 
     def __init__(
@@ -387,14 +475,15 @@ class RadialSymmetryFunction(nn.Module):
         ----------
         number_of_gaussians : int
             Number of radial basis functions.
-        cutoff : unit.Quantity
+        radial_cutoff : unit.Quantity
             The cutoff distance.
-        start: float
+        radial_start: unit.Quantity
             center of first Gaussian function.
 
         """
         from loguru import logger as log
 
+        log.info(f"RadialSymmetryFunction: ani-style: {ani_style}")
         super().__init__()
         self.number_of_gaussians = number_of_gaussians
         self.radial_cutoff = radial_cutoff
@@ -424,6 +513,7 @@ class RadialSymmetryFunction(nn.Module):
                 dtype
             )  # since we are in nanometer
             eta = eta * 100  # NOTE: this is a hack to get eta to be in the right range
+            # FIXME eta is for now hardcoded
             prefactor = 0.25
         else:
             widths = (torch.abs(offsets[1] - offsets[0]) * torch.ones_like(offsets)).to(
@@ -437,7 +527,10 @@ class RadialSymmetryFunction(nn.Module):
         self.prefactor = prefactor
         self.register_buffer("eta", eta)
         log.info(
-            f"RadialSymmetryFunction: cutoff={self.radial_cutoff}, number_of_gaussians={self.number_of_gaussians}, eta={eta}"
+            f"""RadialSymmetryFunction: 
+                cutoff={self.radial_cutoff} 
+                number_of_gaussians={self.number_of_gaussians} 
+                eta={eta}"""
         )
 
     def forward(self, R_ij: torch.Tensor) -> torch.Tensor:

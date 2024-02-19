@@ -74,7 +74,7 @@ class _PairList(nn.Module):
 
         Parameters
         ----------
-        positions : torch.Tensor, shape [nr_systems, nr_atoms, 3]
+        positions : torch.Tensor, shape [nr_atoms, 3]
             Position tensor.
         atomic_subsystem_indices : torch.Tensor, shape [nr_atoms]
         Returns
@@ -82,9 +82,10 @@ class _PairList(nn.Module):
         dict : Dict[str, torch.Tensor], containing atom index pairs, distances, and displacement vectors.
             - 'pair_indices': torch.Tensor, shape (2, n_pairs)
             - 'r_ij' : torch.Tensor, shape (1, n_pairs)
-            - 'd_ij' : torch.Tenso, shape (3, n_pairs)
+            - 'd_ij' : torch.Tensor, shape (3, n_pairs)
 
         """
+        assert positions.ndim == 2 
         pair_indices = self.calculate_pairs(
             atomic_subsystem_indices,
             only_unique_pairs=self.only_unique_pairs,

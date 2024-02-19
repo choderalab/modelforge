@@ -302,6 +302,14 @@ def _shifted_softplus(x: torch.Tensor):
 from typing import Optional
 
 
+class AngularSymmetryFunction(nn.Module):
+
+    def __init__(
+        self,
+    ) -> None:
+        super().__init__()
+
+
 class RadialSymmetryFunction(nn.Module):
     """
     Gaussian Radial Basis Function module.
@@ -315,9 +323,10 @@ class RadialSymmetryFunction(nn.Module):
     def __init__(
         self,
         number_of_gaussians: int,
-        cutoff: unit.Quantity,
-        start: float = 0.0,
+        radial_cutoff: unit.Quantity,
+        radial_start: unit.Quantity = 0.0 * unit.nanometer,
         dtype: Optional[torch.dtype] = None,
+        ani_style: bool = False,
     ):
         """
         Initialize the RadialSymmetryFunction class.
@@ -336,26 +345,50 @@ class RadialSymmetryFunction(nn.Module):
 
         super().__init__()
         self.number_of_gaussians = number_of_gaussians
-        self.cutoff = cutoff
-        self._unitless_cutoff = cutoff.to(unit.nanometer).m
+        self.radial_cutoff = radial_cutoff
+        _unitless_radial_cutoff = radial_cutoff.to(unit.nanometer).m
+        self.radial_start = radial_start
+        _unitless_radial_start = radial_start.to(unit.nanometer).m
         # calculate offsets
         # ===============
-        offset = torch.linspace(
-            start, self._unitless_cutoff, number_of_gaussians, dtype=dtype
-        )  # R_s
-        # ===============
+        if ani_style:
+            offsets = torch.linspace(
+                _unitless_radial_start,
+                _unitless_radial_cutoff,
+                number_of_gaussians + 1,
+                dtype=dtype,
+            )[:-1]
+        else:
+            offsets = torch.linspace(
+                _unitless_radial_start,
+                _unitless_radial_cutoff,
+                number_of_gaussians,
+                dtype=dtype,
+            )  # R_s
         # calculate eta
-        widths = (torch.abs(offset[1] - offset[0]) * torch.ones_like(offset)).to(dtype)
         # ===============
-        eta = -0.5 / torch.pow(widths, 2)  # eta
-        self.register_buffer("widths", widths)
-        self.register_buffer("offsets", offset)
+        if ani_style:
+            eta = (torch.tensor([19.7]) * torch.ones_like(offsets)).to(
+                dtype
+            )  # since we are in nanometer
+            eta = eta * 100 #NOTE: this is a hack to get eta to be in the right range
+            prefactor = 1.0
+        else:
+            widths = (torch.abs(offsets[1] - offsets[0]) * torch.ones_like(offsets)).to(
+                dtype
+            )
+            eta = 0.5 / torch.pow(widths, 2)  # eta
+            prefactor = 1.0
+        # ===============
+
+        self.register_buffer("R_s", offsets)
+        self.prefactor = prefactor
         self.register_buffer("eta", eta)
         log.info(
-            f"RadialSymmetryFunction: cutoff={self.cutoff}, number_of_gaussians={self.number_of_gaussians}, widths={widths[[0]]}, eta={eta[0]}"
+            f"RadialSymmetryFunction: cutoff={self.radial_cutoff}, number_of_gaussians={self.number_of_gaussians}, eta={eta}"
         )
 
-    def forward(self, d_ij: torch.Tensor) -> torch.Tensor:
+    def forward(self, R_ij: torch.Tensor) -> torch.Tensor:
         """
         Computes the radial basis functions for the distance tensor.
         This computes the terms of the following equation
@@ -371,9 +404,8 @@ class RadialSymmetryFunction(nn.Module):
         torch.Tensor
             The radial basis functions. Shape: [..., N, number_of_gaussians]
         """
-
-        diff = d_ij[..., None] - self.offsets  # R_ij - R_s
-        y = torch.exp(self.eta * torch.pow(diff, 2))
+        diff = R_ij[..., None] - self.R_s  # R_ij - R_s
+        y = self.prefactor * torch.exp((-1 * self.eta) * torch.pow(diff, 2))
         return y
 
 
@@ -396,7 +428,7 @@ def _distance_to_radial_basis(
     """
     assert d_ij.dim() == 2
     f_ij = radial_symmetry_function_module(d_ij)
-    cosine_cutoff_module = CosineCutoff(radial_symmetry_function_module.cutoff)
+    cosine_cutoff_module = CosineCutoff(radial_symmetry_function_module.radial_cutoff)
     rcut_ij = cosine_cutoff_module(d_ij)
     return f_ij, rcut_ij
 

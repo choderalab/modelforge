@@ -37,41 +37,33 @@ def test_ani(setup_methane):
     force = -derivative
 
 
-def test_compare_radial_symmetry_features(setup_methane):
+
+def test_compare_radial_symmetry_features():
 
     import torch
     from modelforge.potential.utils import RadialSymmetryFunction
-    from modelforge.potential.models import _PairList
     from openff.units import unit
 
-    _, coordinates, device = setup_methane
-    pairlist = _PairList(only_unique_pairs=True)
-    distances = pairlist(
-        coordinates[0], torch.tensor([0, 0, 0, 0, 0], dtype=torch.int8)
-    )
-    d_ij = distances["d_ij"]
+    r = torch.rand(5, 3)
 
     # ANI constants
-    Rcr = radial_cutoff = 5.1  # radial_cutoff
+    radial_cutoff = 5.1  # radial_cutoff
     radial_start = 0.8
     radial_dist_divisions = 8
-    EtaR = torch.tensor([19.7], device=device)  # radial eta
-
-    # ShfR is ths shift in the ani implementation
+    EtaR = torch.tensor([19.7])  # radial eta
     ShfR = torch.linspace(radial_start, radial_cutoff, radial_dist_divisions + 1)[:-1]
 
-    # testing the ANI Radial Symmetry Function implemented
-    # in modelforge with the same input
     rsf = RadialSymmetryFunction(
         radial_dist_divisions,
         radial_cutoff * unit.angstrom,
         radial_start * unit.angstrom,
         ani_style=True,
     )
-    r_mf = rsf(distances["d_ij"]/10)
-
+    r_mf = rsf(r / 10)
     from torchani.aev import radial_terms
 
-    r_ani = radial_terms(1, EtaR, ShfR, distances["d_ij"])
-
+    r_ani = radial_terms(1, EtaR, ShfR, r)
+    print(r_ani)
+    print(r_mf)
     assert torch.allclose(r_mf, r_ani)
+

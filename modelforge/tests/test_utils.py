@@ -53,8 +53,8 @@ def test_rbf(RBF):
 
     from .helper_functions import preparePairlist_for_single_batch, return_single_batch
 
-    batch = return_single_batch(QM9Dataset)
-    pairlist = prepare_pairlist_for_single_batch(batch)
+    batch = return_single_batch(QM9Dataset, mode="fit")
+    pairlist = preparePairlist_for_single_batch(batch)
     from openff.units import unit
 
     radial_basis = RBF(n_rbf=20, cutoff=unit.Quantity(5.0, unit.angstrom))
@@ -82,7 +82,7 @@ def test_gaussian_rbf(RBF):
     assert gaussian_rbf.cutoff == cutoff.to(unit.nanometer).m
 
     # Test that the widths and offsets are correct
-    expected_offsets = torch.linspace(start, cutoff.to(unit.nanometer).m, n_rbf)
+    expected_offsets = torch.linspace(start.to(unit.nanometer).m, cutoff.to(unit.nanometer).m, n_rbf)
     expected_widths = torch.abs(
         expected_offsets[1] - expected_offsets[0]
     ) * torch.ones_like(expected_offsets)
@@ -144,7 +144,7 @@ def test_scatter_add():
     native_result.scatter_add_(dim, idx_i, x)
 
 
-def testGaussianRBF():
+def test_GaussianRBF():
     """
     Test the GaussianRBF layer.
     """

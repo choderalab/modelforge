@@ -95,10 +95,8 @@ class QM9Dataset(HDF5Dataset):
         )
         self.dataset_name = dataset_name
         self.for_unit_testing = for_unit_testing
-        self.test_url = (
-            "https://github.com/wiederm/gm9/raw/main/qm9_dataset_n100.hdf5.gz"
-        )
-        self.full_url = "https://github.com/wiederm/gm9/raw/main/qm9.hdf5.gz"
+        self.test_id = "18C9Iq_7VZLx0gZbJYje8X6tybZb5m3JY"
+        self.full_id = "1damjPgjKviTogDJ2UJvhYjyBZxGvRPP-"
 
     @property
     def properties_of_interest(self) -> List[str]:
@@ -166,9 +164,7 @@ class QM9Dataset(HDF5Dataset):
         >>> data.download()  # Downloads the dataset from Google Drive
 
         """
-        from modelforge.dataset.utils import _download_from_gh
-        import requests
+        from modelforge.dataset.utils import _download_from_gdrive
 
-        url = self.test_url if self.for_unit_testing else self.full_url
-        _download_from_gh(url, self.raw_data_file)
-        # _download_from_gdrive(id, self.raw_data_file)
+        id = self.test_id if self.for_unit_testing else self.full_id
+        _download_from_gdrive(id, self.raw_data_file)

@@ -49,7 +49,7 @@ def test_schnet_forward(lightning, input_data, model_parameter):
         cutoff=cutoff,
         nr_interaction_blocks=nr_interaction_blocks,
     )
-    energy = schnet(input_data)['energy_readout']
+    energy = schnet(input_data)
     nr_of_mols = input_data["atomic_subsystem_indices"].unique().shape[0]
 
     assert energy.shape == (

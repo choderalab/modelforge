@@ -4,12 +4,12 @@ import torch
 def test_gaussian_rbf_implementation():
     # compare schnetpack GaussianRBF with modelforge GaussianRBF
     from modelforge.potential.utils import GaussianRBF
-    from schnetpack.nn import GaussianRBF as schnetpackGaussianRBF
+    from schnetpack.nn import GaussianRBF as schnetpack_GaussianRBF
     from openff.units import unit
 
     n_rbf = 2
     cutoff = unit.Quantity(5.0, unit.angstrom)
-    schnetpack_rbf = schnetpackGaussianRBF(
+    schnetpack_rbf = schnetpack_GaussianRBF(
         n_rbf=n_rbf, cutoff=cutoff.to(unit.angstrom).m
     )
     rbf = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)

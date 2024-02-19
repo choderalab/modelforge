@@ -99,7 +99,7 @@ def setup_simple_model(
 
 
 def return_single_batch(
-    dataset, split_file: Optional[str] = None, for_unit_testing: bool = True
+    dataset, mode: str, split_file: Optional[str] = None, for_unit_testing: bool = True
 ) -> Dict[str, torch.Tensor]:
     """
     Return a single batch from a dataset.
@@ -108,19 +108,22 @@ def return_single_batch(
     ----------
     dataset : class
         Dataset class.
+    mode : str
+        Mode to setup the dataset ('fit', or 'test').
+
     Returns
     -------
     Dict[str, Tensor]
         A single batch from the dataset.
     """
 
-    train_loader = initialize_dataset(dataset, split_file, for_unit_testing)
+    train_loader = initialize_dataset(dataset, mode, split_file, for_unit_testing)
     for batch in train_loader.train_dataloader():
         return batch
 
 
 def initialize_dataset(
-    dataset, split_file: Optional[str] = None, for_unit_testing: bool = True
+    dataset, mode: str, split_file: Optional[str] = None, for_unit_testing: bool = True
 ) -> TorchDataModule:
     """
     Initialize a dataset for a given mode.
@@ -129,6 +132,10 @@ def initialize_dataset(
     ----------
     dataset : class
         Dataset class.
+    mode : str
+        Mode to setup the dataset. Either "fit" for training/validation split
+        or "test" for test split.
+
     Returns
     -------
     TorchDataModule
@@ -138,6 +145,7 @@ def initialize_dataset(
     data = dataset(for_unit_testing=for_unit_testing)
     data_module = TorchDataModule(data, split_file=split_file)
     data_module.prepare_data()
+    data_module.setup(stage=mode)
     return data_module
 
 
@@ -212,7 +220,7 @@ def generate_mock_data():
 
 
 def generate_batch_data():
-    return return_single_batch(QM9Dataset)
+    return return_single_batch(QM9Dataset, mode="fit")
 
 
 def generate_interaction_block_data(
@@ -242,8 +250,8 @@ def generate_interaction_block_data(
     from openff.units import unit
 
     embedding = nn.Embedding(nr_embeddings, nr_atom_basis, padding_idx=0)
-    batch = return_single_batch(QM9Dataset)
-    r = prepare_pairlist_for_single_batch(batch)
+    batch = return_single_batch(QM9Dataset, "fit")
+    r = preparePairlist_for_single_batch(batch)
     radial_basis = GaussianRBF(
         n_rbf=nr_rbf,
         cutoff=unit.Quantity(5.0, unit.angstrom),

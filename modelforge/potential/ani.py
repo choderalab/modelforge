@@ -12,10 +12,10 @@ class ANIRepresentation(nn.Module):
 
     def __init__(self):
         # radial symmetry functions
-        from .utils import RadialSymmetryFunction
+        from .utils import RadialSymmetryFunction, AngularSymmetryFunction
 
         self.radial_symmetry_functions = RadialSymmetryFunction()
-        self.angular_symmetry_functions = AngularSymmetryFUnction()
+        self.angular_symmetry_functions = AngularSymmetryFunction()
 
 
 class ANIInteraction(nn.Module):

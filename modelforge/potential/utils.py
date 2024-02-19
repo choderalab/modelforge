@@ -442,9 +442,6 @@ def pair_list(
     # generate index grid
     n = len(atomic_subsystem_indices)
 
-    # get device that passed tensors lives on, initialize on the same device
-    device = atomic_subsystem_indices.device
-
     if only_unique_pairs:
         i_indices, j_indices = torch.triu_indices(n, n, 1)
     else:

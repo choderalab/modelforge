@@ -1,19 +1,24 @@
 import torch
 
 
-def test_gaussian_rbf_implementation():
+def test_compare_radial_symmetry_features():
     # compare schnetpack RadialSymmetryFunction with modelforge RadialSymmetryFunction
     from modelforge.potential.utils import RadialSymmetryFunction
     from schnetpack.nn import GaussianRBF as schnetpackGaussianRBF
     from openff.units import unit
 
-    number_of_gaussians = 2
-    cutoff = unit.Quantity(5.0, unit.angstrom)
+    number_of_gaussians = 10
+    cutoff = unit.Quantity(5.2, unit.angstrom)
+    start = unit.Quantity(0.8, unit.angstrom)
     schnetpack_rbf = schnetpackGaussianRBF(
-        n_rbf=number_of_gaussians, cutoff=cutoff.to(unit.angstrom).m
+        n_rbf=number_of_gaussians,
+        cutoff=cutoff.to(unit.angstrom).m,
+        start=start.to(unit.angstrom).m,
     )
     radial_symmetry_function_module = RadialSymmetryFunction(
-        number_of_gaussians=number_of_gaussians, cutoff=cutoff
+        number_of_gaussians=number_of_gaussians,
+        radial_cutoff=cutoff,
+        radial_start=start,
     )
 
     r = torch.rand(5, 3)
@@ -174,7 +179,7 @@ def setup_modelforge_painn_representation(cutoff, nr_atom_basis, number_of_gauss
 
     embedding = SlicedEmbedding(max_Z=100, embedding_dim=nr_atom_basis, sliced_dim=0)
     radial_symmetry_function_module = RadialSymmetryFunction(
-        number_of_gaussians=number_of_gaussians, cutoff=cutoff
+        number_of_gaussians=number_of_gaussians, radial_cutoff=cutoff
     )
     cutoff = CosineCutoff(cutoff)
 

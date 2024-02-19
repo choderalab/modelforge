@@ -457,7 +457,7 @@ def test_postprocessing():
 
     embedding = SlicedEmbedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
     radial_symmetry_function_module = RadialSymmetryFunction(
-        number_of_gaussians=number_of_gaussians, cutoff=cutoff
+        number_of_gaussians=number_of_gaussians, radial_cutoff=cutoff
     )
 
     cutoff = CosineCutoff(cutoff=cutoff)

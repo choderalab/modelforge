@@ -65,7 +65,7 @@ def test_rbf(RadialSymmetryFunction):
     from openff.units import unit
 
     radial_symmetry_function_module = RadialSymmetryFunction(
-        number_of_gaussians=20, cutoff=unit.Quantity(5.0, unit.angstrom)
+        number_of_gaussians=20, radial_cutoff=unit.Quantity(5.0, unit.angstrom)
     )
     output = radial_symmetry_function_module(
         pairlist["d_ij"]
@@ -81,10 +81,12 @@ def test_gaussian_rbf(RadialSymmetryFunction):
 
     number_of_gaussians = 5
     cutoff = unit.Quantity(10.0, unit.angstrom)
-    start = 0.0
+    start = unit.Quantity(0.0, unit.angstrom)
 
     radial_symmetry_function_module = RadialSymmetryFunction(
-        number_of_gaussians=number_of_gaussians, cutoff=cutoff, start=start
+        number_of_gaussians=number_of_gaussians,
+        radial_cutoff=cutoff,
+        radial_start=start,
     )
 
     # Test that the number of radial basis functions is correct
@@ -92,18 +94,18 @@ def test_gaussian_rbf(RadialSymmetryFunction):
 
     # Test that the cutoff distance is correct
     assert (
-        radial_symmetry_function_module._unitless_cutoff == cutoff.to(unit.nanometer).m
+        radial_symmetry_function_module.radial_cutoff.to(unit.nanometer).m
+        == cutoff.to(unit.nanometer).m
     )
 
     # Test that the widths and offsets are correct
     expected_offsets = torch.linspace(
-        start, cutoff.to(unit.nanometer).m, number_of_gaussians
+        start.to(unit.nanometer).m, cutoff.to(unit.nanometer).m, number_of_gaussians
     )
     expected_widths = torch.abs(
         expected_offsets[1] - expected_offsets[0]
     ) * torch.ones_like(expected_offsets)
-    assert torch.allclose(radial_symmetry_function_module.offsets, expected_offsets)
-    assert torch.allclose(radial_symmetry_function_module.widths, expected_widths)
+    assert torch.allclose(radial_symmetry_function_module.R_s, expected_offsets)
 
     # Test that the forward pass returns the expected output
     d_ij = torch.tensor([1.0, 2.0, 3.0])
@@ -120,7 +122,7 @@ def test_rbf_invariance(RadialSymmetryFunction):
 
     # Initialize RBF
     radial_symmetry_function_module = RadialSymmetryFunction(
-        number_of_gaussians=10, cutoff=unit.Quantity(5.0, unit.angstrom)
+        number_of_gaussians=10, radial_cutoff=unit.Quantity(5.0, unit.angstrom)
     )
 
     # Calculate pairwise distances for the original coordinates

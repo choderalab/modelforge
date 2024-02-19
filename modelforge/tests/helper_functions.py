@@ -45,7 +45,7 @@ def setup_simple_model(
     embedding = SlicedEmbedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
     assert embedding.embedding_dim == nr_atom_basis
     radial_symmetry_function_module = RadialSymmetryFunction(
-        number_of_gaussians=number_of_gaussians, cutoff=cutoff
+        number_of_gaussians=number_of_gaussians, radial_cutoff=cutoff
     )
 
     cutoff_module = CosineCutoff(cutoff=cutoff)
@@ -233,7 +233,7 @@ def generate_interaction_block_data(
     r = prepare_pairlist_for_single_batch(batch)
     radial_symmetry_function_module = RadialSymmetryFunction(
         number_of_gaussians=number_of_gaussians,
-        cutoff=unit.Quantity(5.0, unit.angstrom),
+        radial_cutoff=unit.Quantity(5.0, unit.angstrom),
         dtype=batch["positions"].dtype,
     )
 

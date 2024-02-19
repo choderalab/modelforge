@@ -246,7 +246,7 @@ def test_dataset_splitting(dataset):
     except AssertionError as e:
         print(f'AssertionError raised: {e}')
         logger.debug(e)
-
+    
     train_dataset, val_dataset, test_dataset = RandomRecordSplittingStrategy(
         split=[0.6, 0.3, 0.1]
     ).split(dataset)

@@ -7,7 +7,6 @@ from .models import BaseNNP, LightningModuleMixin
 from .utils import Dense
 import torch
 import torch.nn.functional as F
-from .postprocessing import PostprocessingPipeline, NoPostprocess
 
 
 class PaiNN(BaseNNP):
@@ -29,9 +28,6 @@ class PaiNN(BaseNNP):
         shared_interactions: bool = False,
         shared_filters: bool = False,
         epsilon: float = 1e-8,
-        postprocessing: PostprocessingPipeline = PostprocessingPipeline(
-            [NoPostprocess({})]
-        ),
     ):
         """
         Parameters
@@ -56,7 +52,7 @@ class PaiNN(BaseNNP):
         from .utils import EnergyReadout
 
         log.debug("Initializing PaiNN model.")
-        super().__init__(cutoff=cutoff_module.cutoff, postprocessing=postprocessing)
+        super().__init__(cutoff=cutoff_module.cutoff)
         self.nr_interaction_blocks = nr_interaction_blocks
         self.cutoff_module = cutoff_module
         self.share_filters = shared_filters
@@ -390,9 +386,6 @@ class LighningPaiNN(PaiNN, LightningModuleMixin):
         epsilon: float = 1e-8,
         loss: Type[nn.Module] = nn.MSELoss(),
         optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
-        postprocessing: PostprocessingPipeline = PostprocessingPipeline(
-            [NoPostprocess({})]
-        ),
         lr: float = 1e-3,
     ) -> None:
         """PyTorch Lightning version of the PaiNN model."""
@@ -406,7 +399,6 @@ class LighningPaiNN(PaiNN, LightningModuleMixin):
             shared_interactions=shared_interactions,
             shared_filters=shared_filters,
             epsilon=epsilon,
-            postprocessing=postprocessing,
         )
         self.loss_function = loss
         self.optimizer = optimizer

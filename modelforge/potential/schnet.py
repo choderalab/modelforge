@@ -6,7 +6,6 @@ import torch.nn as nn
 
 from .models import BaseNNP, LightningModuleMixin
 from .utils import _distance_to_radial_basis, _shifted_softplus
-from .postprocessing import PostprocessingPipeline, NoPostprocess
 
 
 class SchNET(BaseNNP):
@@ -19,9 +18,6 @@ class SchNET(BaseNNP):
         nr_filters: int = 2,
         shared_interactions: bool = False,
         activation: nn.Module = _shifted_softplus,
-        postprocessing: PostprocessingPipeline = PostprocessingPipeline(
-            [NoPostprocess({})]
-        ),
     ) -> None:
         """
         Initialize the SchNet class.
@@ -38,9 +34,7 @@ class SchNET(BaseNNP):
         """
 
         log.debug("Initializing SchNet model.")
-        super().__init__(
-            cutoff=float(cutoff_module.cutoff), postprocessing=postprocessing
-        )
+        super().__init__(cutoff=float(cutoff_module.cutoff))
         self.radial_basis_module = radial_basis_module
         self.cutoff_module = cutoff_module
 
@@ -270,9 +264,6 @@ class LightningSchNET(SchNET, LightningModuleMixin):
         nr_filters: int = 2,
         shared_interactions: bool = False,
         activation: nn.Module = _shifted_softplus,
-        postprocessing: PostprocessingPipeline = PostprocessingPipeline(
-            [NoPostprocess({})]
-        ),
         loss: Type[nn.Module] = nn.MSELoss(),
         optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
         lr: float = 1e-3,
@@ -297,14 +288,7 @@ class LightningSchNET(SchNET, LightningModuleMixin):
         """
 
         super().__init__(
-            embedding_module=embedding,
-            nr_interaction_blocks=nr_interaction_blocks,
-            radial_basis_module=radial_basis,
-            cutoff_module=cutoff,
-            nr_filters=nr_filters,
-            shared_interactions=shared_interactions,
-            activation=activation,
-            postprocessing=postprocessing,
+            embedding, nr_interaction_blocks, radial_basis, cutoff, nr_filters
         )
         self.loss_function = loss
         self.optimizer = optimizer

@@ -109,13 +109,13 @@ class Dense(nn.Linear):
     """
 
     def __init__(
-            self,
-            in_features: int,
-            out_features: int,
-            bias: bool = True,
-            activation: Union[Callable, nn.Module] = None,
-            weight_init: Callable = xavier_uniform_,
-            bias_init: Callable = zeros_,
+        self,
+        in_features: int,
+        out_features: int,
+        bias: bool = True,
+        activation: Union[Callable, nn.Module] = None,
+        weight_init: Callable = xavier_uniform_,
+        bias_init: Callable = zeros_,
     ):
         """
         Args:
@@ -146,7 +146,7 @@ class Dense(nn.Linear):
 
 
 def gaussian_rbf(
-        d_ij: torch.Tensor, offsets: torch.Tensor, widths: torch.Tensor
+    d_ij: torch.Tensor, offsets: torch.Tensor, widths: torch.Tensor
 ) -> torch.Tensor:
     """
     Gaussian radial basis function (RBF) transformation.
@@ -219,7 +219,7 @@ def _cosine_cutoff(d_ij: torch.Tensor, cutoff: float) -> torch.Tensor:
 
 
 def embed_atom_features(
-        atomic_numbers: torch.Tensor, embedding: nn.Embedding
+    atomic_numbers: torch.Tensor, embedding: nn.Embedding
 ) -> torch.Tensor:
     """
     Embed atomic numbers to atom features.
@@ -305,11 +305,12 @@ class EnergyReadout(nn.Module):
         # Perform scatter add operation
         indices = atomic_subsystem_indices.unsqueeze(1).to(torch.int64)
         result = torch.zeros(
-            len(atomic_subsystem_indices.unique()), 1, dtype=x.dtype, device=x.device
+            len(atomic_subsystem_indices.unique()), 1, dtype=x.dtype
         ).scatter_add(0, indices, x)
 
         # Sum across feature dimension to get final tensor of shape (num_molecules, 1)
         total_energy_per_molecule = result.sum(dim=1, keepdim=True)
+
         return total_energy_per_molecule
 
 
@@ -361,8 +362,8 @@ class GaussianRBF(nn.Module):
         n_rbf : int
             Number of radial basis functions.
         cutoff : unit.Quantity
-            The cutoff distance. NOTE: IN ANGSTROM #FIXME
-        start: float
+            The cutoff distance.
+        start: unit.Quantity
             center of first Gaussian function.
         trainable: boolean
         If True, widths and offset of Gaussian functions are adjusted during training process.
@@ -371,6 +372,7 @@ class GaussianRBF(nn.Module):
         super().__init__()
         self.n_rbf = n_rbf
         cutoff = cutoff.to(unit.nanometer).m
+        start = start.to(unit.nanometer).m
         self.cutoff = cutoff
         # compute offset and width of Gaussian functions
         offset = torch.linspace(start, cutoff, n_rbf, dtype=dtype)
@@ -401,7 +403,7 @@ class GaussianRBF(nn.Module):
 
 
 def _distance_to_radial_basis(
-        d_ij: torch.Tensor, radial_basis: Callable
+    d_ij: torch.Tensor, radial_basis: Callable
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Convert distances to radial basis functions.
@@ -444,29 +446,19 @@ def pair_list(
     device = atomic_subsystem_indices.device
 
     if only_unique_pairs:
-        i_indices, j_indices = torch.triu_indices(n, n, 1, device=device)
+        i_indices, j_indices = torch.triu_indices(n, n, 1)
     else:
         # Repeat each number n-1 times for i_indices
-        i_indices = torch.repeat_interleave(
-            torch.arange(n, device=device), repeats=n - 1
-        )
+        i_indices = torch.repeat_interleave(torch.arange(n), repeats=n - 1)
 
         # Correctly construct j_indices
         j_indices = torch.cat(
-            [
-                torch.cat(
-                    (
-                        torch.arange(i, device=device),
-                        torch.arange(i + 1, n, device=device),
-                    )
-                )
-                for i in range(n)
-            ]
+            [torch.cat((torch.arange(i), torch.arange(i + 1, n))) for i in range(n)]
         )
 
     # filter pairs to only keep those belonging to the same molecule
     same_molecule_mask = (
-            atomic_subsystem_indices[i_indices] == atomic_subsystem_indices[j_indices]
+        atomic_subsystem_indices[i_indices] == atomic_subsystem_indices[j_indices]
     )
 
     # Apply mask to get final pair indices
@@ -476,7 +468,7 @@ def pair_list(
     # concatenate to form final (2, n_pairs) tensor
     pair_indices = torch.stack((i_final_pairs, j_final_pairs))
 
-    return pair_indices.to(device)
+    return pair_indices
 
 
 from openff.units import unit
@@ -485,7 +477,7 @@ from openff.units import unit
 def neighbor_list_with_cutoff(
     coordinates: torch.Tensor,  # in nanometer
     atomic_subsystem_indices: torch.Tensor,
-    cutoff: float,
+    cutoff: unit.Quantity,
     only_unique_pairs: bool = False,
 ) -> torch.Tensor:
     """Compute all pairs of atoms and their distances.
@@ -495,7 +487,7 @@ def neighbor_list_with_cutoff(
     coordinates : torch.Tensor, shape (nr_atoms_per_systems, 3), in nanometer
     atomic_subsystem_indices : torch.Tensor, shape (nr_atoms_per_systems)
         Atom indices to indicate which atoms belong to which molecule
-    cutoff : float
+    cutoff : unit.Quantity
         The cutoff distance.
     """
     positions = coordinates.detach()
@@ -513,7 +505,7 @@ def neighbor_list_with_cutoff(
     )
 
     # Find pairs within the cutoff
-    # cutoff = cutoff.to(unit.nanometer).m
+    cutoff = cutoff.to(unit.nanometer).m
     in_cutoff = (distances <= cutoff).nonzero(as_tuple=False).squeeze()
 
     # Get the atom indices within the cutoff

@@ -7,9 +7,15 @@ from typing import Dict
 
 
 class ANIRepresentation(nn.Module):
+    # calculate the atomic environment vectors
+    # used for the ANI architecture of NNPs
 
     def __init__(self):
-        pass
+        # radial symmetry functions
+        from .utils import RadialSymmetryFunction
+
+        self.radial_symmetry_functions = RadialSymmetryFunction()
+        self.angular_symmetry_functions = AngularSymmetryFUnction()
 
 
 class ANIInteraction(nn.Module):
@@ -37,7 +43,7 @@ class ANI2x(BaseNNP):
 
         log.debug("Initializing SchNet model.")
         super().__init__(
-            cutoff=float(cutoff_module.cutoff), postprocessing=postprocessing
+            cutoff=float(cutoff_module.radial_cutoff), postprocessing=postprocessing
         )
 
         # initialize the energy readout

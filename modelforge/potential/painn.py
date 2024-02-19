@@ -42,7 +42,7 @@ class PaiNN(BaseNNP):
                 Number of interaction blocks.
             radial_symmetry_function_module : torch.Module
                 radial gaussian symmetriy function module.
-            cutoff : torch.Module
+            cutoff_module : torch.Module
                 Cutoff function for the radial basis.
             activation : Callable, optional
                 Activation function to use.

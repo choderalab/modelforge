@@ -231,7 +231,9 @@ class CosineCutoff(nn.Module):
             The cosine cutoff tensor. Shape: [..., N]
         """
         # Compute values of cutoff function
-        input_cut = 0.5 * (torch.cos(d_ij * np.pi / self.cutoff) + 1.0)
+        input_cut = 0.5 * (
+            torch.cos(d_ij * np.pi / self.cutoff) + 1.0
+        )  # NOTE: ANI adds 0.5 instead of 1.
         # Remove contributions beyond the cutoff radius
         input_cut *= (d_ij < self.cutoff).float()
         return input_cut
@@ -386,21 +388,20 @@ class AngularSymmetryFunction(nn.Module):
         self.number_of_gaussians_asf = number_of_gaussians_for_asf
         self.number_of_gaussians_rsf = number_of_gaussians_for_rsf
         self.angular_cutoff = angular_cutoff
+        self.cosine_cutoff = CosineCutoff(self.angular_cutoff)
         self.radial_cutoff = radial_cutoff
         _unitless_angular_cutoff = angular_cutoff.to(unit.nanometer).m
         _unitless_radial_cutoff = radial_cutoff.to(unit.nanometer).m
         self.angular_start = angular_start
         self.radial_start = radial_start
-        _unitless_angular_start = angular_start.to(unit.nanometer).m
         _unitless_radial_start = radial_start.to(unit.nanometer).m
         # calculate offsets
         # ===============
-        ShfZ = torch.linspace(
-            _unitless_angular_start,
-            _unitless_angular_cutoff,
-            number_of_gaussians_asf + 1,
-            dtype=dtype,
-        )[:-1]
+        import math
+
+        angle_sections = 8
+        angle_start = math.pi / (2 * angle_sections)
+        ShfZ = (torch.linspace(0, math.pi, angle_sections + 1) + angle_start)[:-1]
         ShfR = torch.linspace(
             _unitless_radial_start,
             _unitless_radial_cutoff,
@@ -409,11 +410,13 @@ class AngularSymmetryFunction(nn.Module):
 
         EtaA = angular_eta = 19.7 * 100  # FIXME hardcoded eta
         Zeta = 32.0  # FIXME hardcoded zeta
-        self.register_buffer("Rca", _unitless_angular_cutoff)
+        self.register_buffer(
+            "Rca", torch.tensor([_unitless_angular_cutoff], dtype=dtype)
+        )
         self.register_buffer("ShfZ", ShfZ)
         self.register_buffer("ShfR", ShfR)
-        self.register_buffer("EtaA", EtaA)
-        self.register_buffer("Zeta", Zeta)
+        self.register_buffer("EtaA", torch.tensor([EtaA], dtype=dtype))
+        self.register_buffer("Zeta", torch.tensor([Zeta], dtype=dtype))
         log.info(
             f"""RadialSymmetryFunction: 
             Rca={_unitless_angular_cutoff} 
@@ -444,7 +447,7 @@ class AngularSymmetryFunction(nn.Module):
         )
         angles = torch.acos(cos_angles)
 
-        fcj12 = cutoff_cosine(distances12, self.Rca)
+        fcj12 = self.cosine_cutoff(distances12, self.Rca)
         factor1 = ((1 + torch.cos(angles - self.ShfZ)) / 2) ** self.Zeta
         factor2 = torch.exp(-self.EtaA * (distances12.sum(0) / 2 - self.ShfA) ** 2)
         ret = 2 * factor1 * factor2 * fcj12.prod(0)

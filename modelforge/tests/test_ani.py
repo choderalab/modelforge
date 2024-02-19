@@ -87,16 +87,27 @@ def test_compare_angular_symmetry_features(setup_methane):
     # ANI constants
     angular_cutoff = Rca = 3.5  # angular_cutoff
     angular_start = 0.9
+    EtaA = angular_eta = 19.7
     angular_dist_divisions = 4
-    radial_cutoff = 5.1  # radial_cutoff
-    radial_start = 0.8
-    radial_dist_divisions = 8
-
     ShfA = torch.linspace(angular_start, angular_cutoff, angular_dist_divisions + 1)[
         :-1
     ]
-    ShfR = torch.linspace(radial_start, radial_cutoff, radial_dist_divisions + 1)[:-1]
+    radial_cutoff = 5.1  # radial_cutoff
+    radial_start = 0.8
+    radial_dist_divisions = 8
+    EtaA = angular_eta = 19.7
+    Zeta = 32.0
 
+    even_closer_indices = (d_ij <= Rca).nonzero().flatten()
+    atom_index12 = atom_index12.index_select(1, even_closer_indices)
+    species12 = species12.index_select(1, even_closer_indices)
+    r_ij = r_ij.index_select(0, even_closer_indices)
+    central_atom_index, pair_index12, sign12 = triple_by_molecule(atom_index12)
+    species12_small = species12[:, pair_index12]
+    vec12 = r_ij.index_select(0, pair_index12.view(-1)).view(
+        2, -1, 3
+    ) * sign12.unsqueeze(-1)
+    species12_ = torch.where(sign12 == 1, species12_small[1], species12_small[0])
     asf = AngularSymmetryFunction(
         angular_dist_divisions,
         angular_cutoff * unit.angstrom,
@@ -106,16 +117,12 @@ def test_compare_angular_symmetry_features(setup_methane):
         radial_cutoff * unit.angstrom,
         ani_style=True,
     )
-    r_mf = asf(r / 10)
 
-    even_closer_indices = (d_ij <= Rca).nonzero().flatten()
-    atom_index12 = atom_index12.index_select(1, even_closer_indices)
-    species12 = species12.index_select(1, even_closer_indices)
-    r_ij = r_ij.index_select(0, even_closer_indices)
-    central_atom_index, pair_index12, sign12 = triple_by_molecule(atom_index12)
-    species12_small = species12[:, pair_index12]
-    vec12 = vec.index_select(0, pair_index12.view(-1)).view(
-        2, -1, 3
-    ) * sign12.unsqueeze(-1)
-    species12_ = torch.where(sign12 == 1, species12_small[1], species12_small[0])
+    from torchani.aev import angular_terms
+    import math
+
+    angle_sections = 8
+    angle_start = math.pi / (2 * angle_sections)
+    ShfZ = (torch.linspace(0, math.pi, angle_sections + 1) + angle_start)[:-1]
+
     angular_terms_ = angular_terms(Rca, ShfZ, EtaA, Zeta, ShfA, vec12)

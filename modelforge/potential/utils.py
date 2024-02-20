@@ -211,9 +211,29 @@ class CosineCutoff(nn.Module):
             The cutoff distance.
 
         """
+        from loguru import logger as log
+
         super().__init__()
-        cutoff = cutoff.to(unit.nanometer).m
-        self.register_buffer("cutoff", torch.FloatTensor([cutoff]))
+        from pint import DimensionalityError
+
+        # test if length
+        convert_success = False
+        try:
+            cutoff = cutoff.to(unit.nanometer).m
+            convert_success = True
+        except DimensionalityError as e1:
+            # test if angular measurment
+            log.debug(e1)
+        try:
+            cutoff = cutoff.to(unit.radian).m
+            convert_success = True
+        except DimensionalityError as e2:
+            log.debug(e2)
+
+        if convert_success:
+            self.register_buffer("cutoff", torch.FloatTensor([cutoff]))
+        else:
+            raise ValueError("Couldn't convert provided unit in either radian or nm.")
 
     def forward(self, d_ij: torch.Tensor):
         """
@@ -388,14 +408,14 @@ class AngularSymmetryFunction(nn.Module):
         self.number_of_gaussians_asf = number_of_gaussians_for_asf
         self.number_of_gaussians_rsf = number_of_gaussians_for_rsf
         self.angular_cutoff = angular_cutoff
-        self.cosine_cutoff = CosineCutoff(self.angular_cutoff * 10)
+        self.cosine_cutoff = CosineCutoff(self.angular_cutoff)
         self.radial_cutoff = radial_cutoff
-        _unitless_angular_cutoff = angular_cutoff.to(unit.nanometer).m * 10
-        _unitless_radial_cutoff = radial_cutoff.to(unit.nanometer).m * 10
+        _unitless_angular_cutoff = angular_cutoff.to(unit.radian).m
+        _unitless_radial_cutoff = radial_cutoff.to(unit.nanometer).m
         self.angular_start = angular_start
         self.radial_start = radial_start
-        _unitless_angular_start = angular_start.to(unit.nanometer).m * 10
-        _unitless_radial_start = radial_start.to(unit.nanometer).m * 10
+        _unitless_angular_start = angular_start.to(unit.radian).m
+        _unitless_radial_start = radial_start.to(unit.nanometer).m
 
         # save constants
         EtaA = angular_eta = 19.7  # FIXME hardcoded eta

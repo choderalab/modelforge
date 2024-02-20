@@ -211,29 +211,9 @@ class CosineCutoff(nn.Module):
             The cutoff distance.
 
         """
-        from loguru import logger as log
-
         super().__init__()
-        from pint import DimensionalityError
-
-        # test if length
-        convert_success = False
-        try:
-            cutoff = cutoff.to(unit.nanometer).m
-            convert_success = True
-        except DimensionalityError as e1:
-            # test if angular measurment
-            log.debug(e1)
-        try:
-            cutoff = cutoff.to(unit.radian).m
-            convert_success = True
-        except DimensionalityError as e2:
-            log.debug(e2)
-
-        if convert_success:
-            self.register_buffer("cutoff", torch.FloatTensor([cutoff]))
-        else:
-            raise ValueError("Couldn't convert provided unit in either radian or nm.")
+        cutoff = cutoff.to(unit.nanometer).m
+        self.register_buffer("cutoff", torch.FloatTensor([cutoff]))
 
     def forward(self, d_ij: torch.Tensor):
         """
@@ -386,10 +366,7 @@ class AngularSymmetryFunction(nn.Module):
         self,
         angular_cutoff: unit.Quantity,
         angular_start: unit.Quantity,
-        radial_cutoff: unit.Quantity,
-        radial_start: unit.Quantity,
         number_of_gaussians_for_asf: int = 8,
-        number_of_gaussians_for_rsf: int = 8,
         angle_sections: int = 4,
         dtype: Optional[torch.dtype] = None,
     ) -> None:
@@ -406,16 +383,11 @@ class AngularSymmetryFunction(nn.Module):
         from loguru import logger as log
 
         self.number_of_gaussians_asf = number_of_gaussians_for_asf
-        self.number_of_gaussians_rsf = number_of_gaussians_for_rsf
         self.angular_cutoff = angular_cutoff
-        self.cosine_cutoff = CosineCutoff(self.angular_cutoff)
-        self.radial_cutoff = radial_cutoff
-        _unitless_angular_cutoff = angular_cutoff.to(unit.radian).m
-        _unitless_radial_cutoff = radial_cutoff.to(unit.nanometer).m
+        self.cosine_cutoff = CosineCutoff(self.angular_cutoff * 10)
+        _unitless_angular_cutoff = angular_cutoff.to(unit.nanometer).m * 10
         self.angular_start = angular_start
-        self.radial_start = radial_start
-        _unitless_angular_start = angular_start.to(unit.radian).m
-        _unitless_radial_start = radial_start.to(unit.nanometer).m
+        _unitless_angular_start = angular_start.to(unit.nanometer).m * 10
 
         # save constants
         EtaA = angular_eta = 19.7  # FIXME hardcoded eta
@@ -435,13 +407,6 @@ class AngularSymmetryFunction(nn.Module):
         angle_start = math.pi / (2 * angle_sections)
         ShfZ = (torch.linspace(0, math.pi, angle_sections + 1) + angle_start)[:-1]
 
-        # ShfR
-        ShfR = torch.linspace(
-            _unitless_radial_start,
-            _unitless_radial_cutoff,
-            number_of_gaussians_for_rsf + 1,
-        )[:-1]
-
         # ShfA
         ShfA = torch.linspace(
             _unitless_angular_start,
@@ -452,7 +417,6 @@ class AngularSymmetryFunction(nn.Module):
         # register shifts
         self.register_buffer("ShfZ", ShfZ)
         self.register_buffer("ShfA", ShfA)
-        self.register_buffer("ShfR", ShfR)
 
         log.info(
             f"""RadialSymmetryFunction: 

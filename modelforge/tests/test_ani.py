@@ -100,10 +100,6 @@ def test_compare_angular_symmetry_features(setup_methane):
     angle_start = math.pi / (2 * angle_sections)
     ShfZ = (torch.linspace(0, math.pi, angle_sections + 1) + angle_start)[:-1]
 
-    # for radial features
-    radial_cutoff = 5.1
-    radial_start = 0.8
-    radial_dist_divisions = 8
     # other constants
     Zeta = 32.0
 
@@ -132,10 +128,7 @@ def test_compare_angular_symmetry_features(setup_methane):
     asf = AngularSymmetryFunction(
         angular_cutoff * unit.angstrom,
         angular_start * unit.angstrom,
-        radial_start * unit.angstrom,
-        radial_cutoff * unit.angstrom,
         angular_dist_divisions,
-        radial_dist_divisions,
         angle_sections,
     )
     angular_feature_vector_mf = asf(vec12)

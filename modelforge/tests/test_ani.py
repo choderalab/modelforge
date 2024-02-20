@@ -38,7 +38,8 @@ def test_ani(setup_methane):
 
 
 def test_compare_radial_symmetry_features():
-
+    # Compare the ANI radial symmetry function 
+    # agsint the output of the Modelforge radial symmetry function
     import torch
     from modelforge.potential.utils import RadialSymmetryFunction
     from openff.units import unit
@@ -68,6 +69,8 @@ def test_compare_radial_symmetry_features():
 
 
 def test_compare_angular_symmetry_features(setup_methane):
+    # Compare the Modelforge angular symmetry function
+    # against the original torchani implementation
 
     import torch
     from modelforge.potential.utils import AngularSymmetryFunction, triple_by_molecule
@@ -120,6 +123,7 @@ def test_compare_angular_symmetry_features(setup_methane):
     # and with its implementation in torchani
     from torchani.aev import angular_terms
 
+    # First with ANI
     angular_feature_vector_ani = angular_terms(
         Rca, ShfZ.unsqueeze(0).unsqueeze(0), EtaA, Zeta, ShfA.unsqueeze(1), vec12
     )
@@ -131,7 +135,8 @@ def test_compare_angular_symmetry_features(setup_methane):
         angular_dist_divisions,
         angle_sections,
     )
+    # NOTE: ANI works with Angstrom, modelforge with nanometer
     angular_feature_vector_mf = asf(vec12 / 10)
-
+    # make sure that the output is the same
     assert angular_feature_vector_ani.dim() == angular_feature_vector_mf.dim()
     assert torch.allclose(angular_feature_vector_ani, angular_feature_vector_mf)

@@ -21,6 +21,7 @@ class SAKE(BaseNNP):
             self,
             embedding_module: nn.Module,
             nr_interaction_blocks: int,
+            nr_heads: int,
             radial_basis_module: nn.Module,
             cutoff_module: nn.Module,
             activation: Optional[Callable] = F.silu,
@@ -47,6 +48,7 @@ class SAKE(BaseNNP):
         log.debug("Initializing SAKE model.")
         super().__init__(cutoff=cutoff_module.cutoff)
         self.nr_interaction_blocks = nr_interaction_blocks
+        self.nr_heads = nr_heads
         self.cutoff_module = cutoff_module
         self.radial_basis_module = radial_basis_module
 
@@ -61,8 +63,19 @@ class SAKE(BaseNNP):
 
         # initialize the interaction networks
         self.interaction_modules = nn.ModuleList(
-            SAKEInteraction(self.nr_atom_basis, activation=activation, radial_basis_module=self.radial_basis_module,
-                            cutoff_module=self.cutoff_module, epsilon=epsilon)
+            SAKEInteraction(nr_atom_basis=self.nr_atom_basis,
+                            nr_edge_basis=self.nr_atom_basis,
+                            nr_edge_basis_hidden=self.nr_atom_basis,
+                            nr_atom_basis_hidden=self.nr_atom_basis,
+                            nr_atom_basis_post_norm_hidden=self.nr_atom_basis,
+                            nr_atom_basis_post_norm_out=self.nr_atom_basis,
+                            nr_atom_basis_velocity=self.nr_atom_basis,
+                            nr_coefficients=(self.nr_heads * self.nr_atom_basis),
+                            nr_heads=self.nr_heads,
+                            activation=activation,
+                            radial_basis_module=self.radial_basis_module,
+                            cutoff_module=self.cutoff_module,
+                            epsilon=epsilon)
             for _ in range(self.nr_interaction_blocks)
         )
 
@@ -131,8 +144,18 @@ class SAKEInteraction(nn.Module):
 
     """
 
-    def __init__(self, nr_atom_basis: int, activation: Callable, radial_basis_module: nn.Module,
-                 cutoff_module: nn.Module, epsilon: float, nr_heads: int = 7):
+    def __init__(self,
+                 nr_atom_basis: int,
+                 nr_edge_basis: int,
+                 nr_edge_basis_hidden: int,
+                 nr_atom_basis_hidden: int,
+                 nr_atom_basis_post_norm_hidden: int,
+                 nr_atom_basis_post_norm_out: int,
+                 nr_atom_basis_velocity: int,
+                 nr_coefficients: int,
+                 nr_heads: int,
+                 activation: Callable, radial_basis_module: nn.Module,
+                 cutoff_module: nn.Module, epsilon: float):
         """
         Parameters
         ----------
@@ -147,24 +170,23 @@ class SAKEInteraction(nn.Module):
             Number of features to describe atomic environments.
         """
         super().__init__()
-        self.nr_atom_basis_in = nr_atom_basis
-        self.nr_edge_basis = nr_atom_basis
-        self.nr_edge_basis_hidden = nr_atom_basis
-        self.nr_atom_basis_hidden = nr_atom_basis
-        self.nr_atom_basis_out = nr_atom_basis
-        self.nr_atom_basis_post_norm_hidden = nr_atom_basis
-        self.nr_atom_basis_post_norm_out = nr_atom_basis
-        self.nr_atom_basis_velocity = nr_atom_basis
+        self.nr_atom_basis = nr_atom_basis
+        self.nr_edge_basis = nr_edge_basis
+        self.nr_edge_basis_hidden = nr_edge_basis_hidden
+        self.nr_atom_basis_hidden = nr_atom_basis_hidden
+        self.nr_atom_basis_post_norm_hidden = nr_atom_basis_post_norm_hidden
+        self.nr_atom_basis_post_norm_out = nr_atom_basis_post_norm_out
+        self.nr_atom_basis_velocity = nr_atom_basis_velocity
+        self.nr_coefficients = nr_coefficients
         self.nr_heads = nr_heads
-        self.nr_coefficients = nr_heads * self.nr_edge_basis
         self.epsilon = epsilon
 
         self.cutoff_module = cutoff_module
 
         self.node_mlp = nn.Sequential(
-            Dense(self.nr_atom_basis_in + self.nr_coefficients + self.nr_edge_basis,
+            Dense(self.nr_atom_basis + self.nr_heads * self.nr_edge_basis + self.nr_atom_basis_post_norm_out,
                   self.nr_atom_basis_hidden, activation=activation),
-            Dense(self.nr_atom_basis_hidden, self.nr_atom_basis_out, activation=activation)
+            Dense(self.nr_atom_basis_hidden, self.nr_atom_basis, activation=activation)
         )
 
         self.post_norm_mlp = nn.Sequential(
@@ -172,24 +194,20 @@ class SAKEInteraction(nn.Module):
             Dense(self.nr_atom_basis_post_norm_hidden, self.nr_atom_basis_post_norm_out, activation=activation)
         )
 
-        self.edge_model = ContinuousFilterConvolutionWithConcatenation(self.nr_atom_basis_in * 2,
+        self.edge_model = ContinuousFilterConvolutionWithConcatenation(self.nr_atom_basis * 2,
                                                                        self.nr_edge_basis_hidden,
                                                                        self.nr_edge_basis,
                                                                        radial_basis_module,
                                                                        activation)
 
-        self.semantic_attention_mlp = nn.Sequential(
-            Dense(self.nr_edge_basis, self.nr_heads, activation=nn.CELU(alpha=2.0))
-        )
+        self.semantic_attention_mlp = Dense(self.nr_edge_basis, self.nr_heads, activation=nn.CELU(alpha=2.0))
 
         self.velocity_mlp = nn.Sequential(
-            Dense(self.nr_atom_basis_in, self.nr_atom_basis_velocity, activation=activation),
+            Dense(self.nr_atom_basis, self.nr_atom_basis_velocity, activation=activation),
             Dense(self.nr_atom_basis_velocity, 1, activation=lambda x: 2.0 * F.sigmoid(x), bias=False)
         )
 
-        self.x_mixing_mlp = nn.Sequential(
-            Dense(self.nr_coefficients, self.nr_coefficients, bias=False, activation=nn.Tanh()),
-        )
+        self.x_mixing_mlp = Dense(self.nr_heads * self.nr_edge_basis, self.nr_coefficients, bias=False, activation=nn.Tanh())
 
         self.v_mixing = Dense(self.nr_coefficients, 1, bias=False)
 
@@ -202,8 +220,8 @@ class SAKEInteraction(nn.Module):
         dv = torch.zeros_like(v).scatter_reduce(0, expanded_idx_i, v_ij, "mean", include_self=False)
         return self.velocity_mlp(h) * v + dv
 
-    def get_combinations(self, h_ij, dir_ij):
-        return torch.einsum("px,pc->pcx", dir_ij, self.x_mixing_mlp(h_ij))
+    def get_combinations(self, h_ij_semantic, dir_ij):
+        return torch.einsum("px,pc->pcx", dir_ij, self.x_mixing_mlp(h_ij_semantic))
 
     def get_spatial_attention(self, combinations, idx_i, dir_ij, nr_atoms):
         expanded_idx_i = idx_i.view(-1, 1, 1).expand_as(combinations)
@@ -215,7 +233,7 @@ class SAKEInteraction(nn.Module):
 
     def aggregate(self, h_ij_semantic, idx_i, nr_atoms):
         expanded_idx_i = idx_i.view(-1, 1).expand_as(h_ij_semantic)
-        out_shape = (nr_atoms, self.nr_coefficients)
+        out_shape = (nr_atoms, self.nr_heads * self.nr_edge_basis)
         zeros = torch.zeros(out_shape, dtype=h_ij_semantic.dtype, device=h_ij_semantic.device)
         return zeros.scatter_add(0, expanded_idx_i, h_ij_semantic)
 
@@ -226,7 +244,7 @@ class SAKEInteraction(nn.Module):
         expanded_idx_i = idx_i.view(-1, 1).expand_as(combined_ij_att_weights)
         combined_ij_att = scatter_softmax(combined_ij_att_weights, expanded_idx_i, dim=-2, dim_size=nr_atoms)
         return torch.reshape(torch.einsum("pf,ph->pfh", h_ij_edge, combined_ij_att),
-                             (len(idx_i), self.nr_coefficients))
+                             (len(idx_i), self.nr_edge_basis * self.nr_heads))
 
     def forward(
             self,
@@ -254,7 +272,7 @@ class SAKEInteraction(nn.Module):
         Tuple[torch.Tensor, torch.Tensor]
             Updated scalar and vector representations (q, mu).
         """
-        idx_i, idx_j = pairlist[0], pairlist[1]
+        idx_i, idx_j = pairlist
         nr_of_atoms_in_all_systems, _ = x.shape
         r_ij = x[idx_j] - x[idx_i]
         d_ij = torch.norm(r_ij, dim=-1)
@@ -277,6 +295,7 @@ class LightningSAKE(SAKE, LightningModuleMixin):
             self,
             embedding: nn.Module,
             nr_interaction_blocks: int,
+            nr_heads: int,
             radial_basis: nn.Module,
             cutoff: nn.Module,
             activation: Optional[Callable] = F.silu,
@@ -289,6 +308,7 @@ class LightningSAKE(SAKE, LightningModuleMixin):
         super().__init__(
             embedding_module=embedding,
             nr_interaction_blocks=nr_interaction_blocks,
+            nr_heads=nr_heads,
             radial_basis_module=radial_basis,
             cutoff_module=cutoff,
             activation=activation,

@@ -3,6 +3,7 @@ channels:
   - conda-forge
   - pytorch
   - pyg
+  - nvidia
 dependencies:
   # Base depends
   - python
@@ -32,7 +33,13 @@ dependencies:
   - qcelemental=0.25.1
   - qcportal>=0.50
   - requests
+  - jax
+  - jaxlib=*=*cuda*
+  - cuda-nvcc
+  - flax
+  - versioneer
 
   # pip installs
   - pip:
       - schnetpack>=2.0.0
+      - git+https://github.com/ArnNag/sake.git@update_versioneer

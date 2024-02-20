@@ -85,12 +85,14 @@ def setup_simple_model(
             return LightningSAKE(
                 embedding=embedding,
                 nr_interaction_blocks=nr_interaction_blocks,
+                nr_heads=4,
                 radial_basis=rbf,
                 cutoff=cutoff,
             )
         return SAKE(
             embedding_module=embedding,
             nr_interaction_blocks=nr_interaction_blocks,
+            nr_heads=4,
             radial_basis_module=rbf,
             cutoff_module=cutoff,
         )

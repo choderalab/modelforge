@@ -1,14 +1,19 @@
 import os
 
+import jax.random
+import jax.numpy as jnp
 import pytest
+import torch
+import numpy as onp
 
-from modelforge.potential.sake import SAKE
+from modelforge.potential.sake import SAKE, SAKEInteraction
+import sake as reference_sake
 from .helper_functions import (
     setup_simple_model,
     SIMPLIFIED_INPUT_DATA,
 )
 
-IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
+IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "https://www.reddit.com/true"
 
 
 @pytest.mark.parametrize("lightning", [True, False])
@@ -60,6 +65,37 @@ def test_sake_forward(lightning, input_data, model_parameter):
         nr_of_mols,
         1,
     )  # Assuming energy is calculated per sample in the batch
+
+
+def test_sake_interaction_forward():
+    from modelforge.potential import CosineCutoff
+    from modelforge.potential import GaussianRBF
+    nr_atoms = 41
+    nr_atom_basis = 2
+    geometry_basis = 37
+    sake_block = SAKEInteraction(
+        nr_atom_basis=nr_atom_basis,
+        nr_edge_basis=3,
+        nr_edge_basis_hidden=5,
+        nr_atom_basis_hidden=7,
+        nr_atom_basis_post_norm_hidden=13,
+        nr_atom_basis_post_norm_out=17,
+        nr_atom_basis_velocity=19,
+        nr_coefficients=23,
+        nr_heads=29,
+        activation=torch.nn.ReLU(),
+        radial_basis_module=GaussianRBF(n_rbf=31, cutoff=5.0 * unit.nanometer),
+        cutoff_module=CosineCutoff(5.0 * unit.nanometer),
+        epsilon=1e-5
+    )
+    h = torch.randn(nr_atoms, nr_atom_basis)
+    x = torch.randn(nr_atoms, geometry_basis)
+    v = torch.randn(nr_atoms, geometry_basis)
+    pairlist = torch.cartesian_prod(torch.arange(nr_atoms), torch.arange(nr_atoms))
+    nr_pairs = 43
+    edge_mask = onp.random.choice(len(pairlist), nr_pairs, replace=False)
+    pairlist = pairlist[edge_mask].T
+    sake_block(h, x, v, pairlist)
 
 
 def test_sake_interaction_equivariance():
@@ -128,3 +164,69 @@ def test_sake_interaction_equivariance():
     assert torch.allclose(reference_h, perturbed_h)
     assert torch.allclose(torch.matmul(reference_x, rotation_matrix), perturbed_x)
     assert torch.allclose(torch.matmul(reference_v, rotation_matrix), perturbed_v)
+
+
+def test_spatial_attention_against_reference():
+    from modelforge.potential import CosineCutoff
+    from modelforge.potential import GaussianRBF
+    nr_atoms = 41
+    out_features = 7
+    hidden_features = 5
+    geometry_basis = 37
+    nr_heads = 3
+    nr_rbf = 50
+    cutoff_module = CosineCutoff(5.0 * unit.nanometer)
+    mf_sake_block = SAKEInteraction(
+        nr_atom_basis=out_features,
+        nr_edge_basis=hidden_features,
+        nr_edge_basis_hidden=hidden_features,
+        nr_atom_basis_hidden=hidden_features,
+        nr_atom_basis_post_norm_hidden=hidden_features,
+        nr_atom_basis_post_norm_out=hidden_features,
+        nr_atom_basis_velocity=hidden_features,
+        nr_coefficients=nr_heads * hidden_features,
+        nr_heads=nr_heads,
+        activation=torch.nn.SiLU(),
+        radial_basis_module=GaussianRBF(n_rbf=nr_rbf, cutoff=5.0 * unit.nanometer),
+        cutoff_module=cutoff_module,
+        epsilon=1e-5
+    )
+    ref_sake_interaction = reference_sake.layers.DenseSAKELayer(out_features=out_features,
+                                                                hidden_features=hidden_features,
+                                                                n_heads=nr_heads,
+                                                                cutoff=cutoff_module
+                                                                )
+
+    pairlist = torch.cartesian_prod(torch.arange(nr_atoms), torch.arange(nr_atoms))
+    nr_pairs = nr_atoms ** 2
+    pairlist = pairlist.T
+    idx_i, idx_j = pairlist
+
+    key = jax.random.PRNGKey(1884)
+    h_e_att = jax.random.normal(key, (nr_atoms, nr_atoms, hidden_features * nr_heads))
+    x_minus_xt = jax.random.normal(key, (nr_atoms, nr_atoms, geometry_basis))
+    x_minus_xt_norm = jnp.linalg.norm(x_minus_xt, axis=-1, keepdims=True)
+
+    h_e_att_torch = torch.from_numpy(onp.array(h_e_att)).reshape(nr_pairs, hidden_features * nr_heads)
+    x_minus_xt_torch = torch.from_numpy(onp.array(x_minus_xt)).reshape(nr_pairs, geometry_basis)
+
+    mf_combinations = mf_sake_block.get_combinations(h_e_att_torch, x_minus_xt_torch)
+    mf_result = mf_sake_block.get_spatial_attention(mf_combinations, idx_i, x_minus_xt, nr_atoms)
+
+    variables = ref_sake_interaction.init(key, h_e_att, x_minus_xt, x_minus_xt_norm,
+                                          method=ref_sake_interaction.spatial_attention)
+
+    variables["params"]["x_mixing"]["layers_0"]["kernel"] = mf_sake_block.x_mixing_mlp.weight.detach().numpy().T
+    ref_result = ref_sake_interaction.apply(variables, h_e_att, x_minus_xt, x_minus_xt_norm,
+                                            method=ref_sake_interaction.spatial_attention)
+    # print("mf_result.shape", mf_result.shape)
+    # print("ref_result[0].shape", ref_result[0].shape)
+    # print("mf_combinations.shape", mf_combinations.shape)
+    # print("ref_result[1].shape", ref_result[1].shape)
+    #
+    # print("mf_combinations", mf_combinations)
+    # print("ref_result[1]", ref_result[1])
+    assert (torch.allclose(mf_combinations,
+                         torch.from_numpy(onp.array(ref_result[1])).reshape(nr_pairs, nr_heads * hidden_features,
+                                                                            geometry_basis), atol=1e-3))
+    assert (torch.allclose(mf_result, torch.from_numpy(onp.array(ref_result[0])), atol=1e-3))

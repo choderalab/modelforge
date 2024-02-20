@@ -74,7 +74,8 @@ def test_compare_angular_symmetry_features(setup_methane):
     from openff.units import unit
     from modelforge.potential.models import _PairList
 
-    species, r, device = setup_methane
+    # set up relevant system properties
+    species, r, _ = setup_methane
     pairlist = _PairList(only_unique_pairs=True)
     pairs = pairlist(r[0], torch.tensor([0, 0, 0, 0, 0]))
     d_ij = pairs["d_ij"].squeeze(1)
@@ -85,19 +86,28 @@ def test_compare_angular_symmetry_features(setup_methane):
     atom_index12 = pairs["pair_indices"]
     species12 = species[atom_index12]
     # ANI constants
+    # for angular features
     angular_cutoff = Rca = 3.5  # angular_cutoff
-    angular_start = 0.9
+    angular_start = 0.8
     EtaA = angular_eta = 19.7
-    angular_dist_divisions = 4
+    angular_dist_divisions = 8
     ShfA = torch.linspace(angular_start, angular_cutoff, angular_dist_divisions + 1)[
         :-1
     ]
-    radial_cutoff = 5.1  # radial_cutoff
+    angle_sections = 4
+    import math
+
+    angle_start = math.pi / (2 * angle_sections)
+    ShfZ = (torch.linspace(0, math.pi, angle_sections + 1) + angle_start)[:-1]
+
+    # for radial features
+    radial_cutoff = 5.1
     radial_start = 0.8
     radial_dist_divisions = 8
-    EtaA = angular_eta = 19.7
+    # other constants
     Zeta = 32.0
 
+    # get index in right order
     even_closer_indices = (d_ij <= Rca).nonzero().flatten()
     atom_index12 = atom_index12.index_select(1, even_closer_indices)
     species12 = species12.index_select(1, even_closer_indices)
@@ -108,21 +118,27 @@ def test_compare_angular_symmetry_features(setup_methane):
         2, -1, 3
     ) * sign12.unsqueeze(-1)
     species12_ = torch.where(sign12 == 1, species12_small[1], species12_small[0])
-    asf = AngularSymmetryFunction(
-        angular_dist_divisions,
-        angular_cutoff * unit.angstrom,
-        angular_start * unit.angstrom,
-        radial_dist_divisions,
-        radial_start * unit.angstrom,
-        radial_cutoff * unit.angstrom,
-        ani_style=True,
+
+    # now use formated indices and inputs to calculate the
+    # angular terms, both with the modelforge AngularSymmetryFunction
+    # and with its implementation in torchani
+    from torchani.aev import angular_terms
+
+    angular_feature_vector_ani = angular_terms(
+        Rca, ShfZ.unsqueeze(0).unsqueeze(0), EtaA, Zeta, ShfA.unsqueeze(1), vec12
     )
 
-    from torchani.aev import angular_terms
-    import math
+    # set up modelforge angular features
+    asf = AngularSymmetryFunction(
+        angular_cutoff * unit.angstrom,
+        angular_start * unit.angstrom,
+        radial_start * unit.angstrom,
+        radial_cutoff * unit.angstrom,
+        angular_dist_divisions,
+        radial_dist_divisions,
+        angle_sections,
+    )
+    angular_feature_vector_mf = asf(vec12)
 
-    angle_sections = 8
-    angle_start = math.pi / (2 * angle_sections)
-    ShfZ = (torch.linspace(0, math.pi, angle_sections + 1) + angle_start)[:-1]
-
-    angular_terms_ = angular_terms(Rca, ShfZ, EtaA, Zeta, ShfA, vec12)
+    assert angular_feature_vector_ani.dim() == angular_feature_vector_mf.dim()
+    assert torch.allclose(angular_feature_vector_ani, angular_feature_vector_mf)

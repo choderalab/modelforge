@@ -364,13 +364,13 @@ class AngularSymmetryFunction(nn.Module):
 
     def __init__(
         self,
-        number_of_gaussians_for_rsf: int,
-        angular_cutoff: unit.angstrom,
-        angular_start: unit.angstrom,
-        number_of_gaussians_for_asf: int,
-        radial_cutoff: unit.angstrom,
-        radial_start: unit.angstrom,
-        ani_style: bool = True,
+        angular_cutoff: unit.Quantity,
+        angular_start: unit.Quantity,
+        radial_cutoff: unit.Quantity,
+        radial_start: unit.Quantity,
+        number_of_gaussians_for_asf: int = 8,
+        number_of_gaussians_for_rsf: int = 8,
+        angle_sections: int = 4,
         dtype: Optional[torch.dtype] = None,
     ) -> None:
         """
@@ -388,35 +388,52 @@ class AngularSymmetryFunction(nn.Module):
         self.number_of_gaussians_asf = number_of_gaussians_for_asf
         self.number_of_gaussians_rsf = number_of_gaussians_for_rsf
         self.angular_cutoff = angular_cutoff
-        self.cosine_cutoff = CosineCutoff(self.angular_cutoff)
+        self.cosine_cutoff = CosineCutoff(self.angular_cutoff * 10)
         self.radial_cutoff = radial_cutoff
-        _unitless_angular_cutoff = angular_cutoff.to(unit.nanometer).m
-        _unitless_radial_cutoff = radial_cutoff.to(unit.nanometer).m
+        _unitless_angular_cutoff = angular_cutoff.to(unit.nanometer).m * 10
+        _unitless_radial_cutoff = radial_cutoff.to(unit.nanometer).m * 10
         self.angular_start = angular_start
         self.radial_start = radial_start
-        _unitless_radial_start = radial_start.to(unit.nanometer).m
-        # calculate offsets
+        _unitless_angular_start = angular_start.to(unit.nanometer).m * 10
+        _unitless_radial_start = radial_start.to(unit.nanometer).m * 10
+
+        # save constants
+        EtaA = angular_eta = 19.7  # FIXME hardcoded eta
+        Zeta = 32.0  # FIXME hardcoded zeta
+        self.register_buffer("EtaA", torch.tensor([EtaA], dtype=dtype))
+        self.register_buffer("Zeta", torch.tensor([Zeta], dtype=dtype))
+        self.register_buffer(
+            "Rca", torch.tensor([_unitless_angular_cutoff], dtype=dtype)
+        )
+
+        # ===============
+        # # calculate shifts
         # ===============
         import math
 
-        angle_sections = 8
+        # ShfZ
         angle_start = math.pi / (2 * angle_sections)
         ShfZ = (torch.linspace(0, math.pi, angle_sections + 1) + angle_start)[:-1]
+
+        # ShfR
         ShfR = torch.linspace(
             _unitless_radial_start,
             _unitless_radial_cutoff,
             number_of_gaussians_for_rsf + 1,
         )[:-1]
 
-        EtaA = angular_eta = 19.7 * 100  # FIXME hardcoded eta
-        Zeta = 32.0  # FIXME hardcoded zeta
-        self.register_buffer(
-            "Rca", torch.tensor([_unitless_angular_cutoff], dtype=dtype)
-        )
+        # ShfA
+        ShfA = torch.linspace(
+            _unitless_angular_start,
+            _unitless_angular_cutoff,
+            number_of_gaussians_for_asf + 1,
+        )[:-1]
+
+        # register shifts
         self.register_buffer("ShfZ", ShfZ)
+        self.register_buffer("ShfA", ShfA)
         self.register_buffer("ShfR", ShfR)
-        self.register_buffer("EtaA", torch.tensor([EtaA], dtype=dtype))
-        self.register_buffer("Zeta", torch.tensor([Zeta], dtype=dtype))
+
         log.info(
             f"""RadialSymmetryFunction: 
             Rca={_unitless_angular_cutoff} 
@@ -447,9 +464,12 @@ class AngularSymmetryFunction(nn.Module):
         )
         angles = torch.acos(cos_angles)
 
-        fcj12 = self.cosine_cutoff(distances12, self.Rca)
+        fcj12 = self.cosine_cutoff(distances12)
         factor1 = ((1 + torch.cos(angles - self.ShfZ)) / 2) ** self.Zeta
-        factor2 = torch.exp(-self.EtaA * (distances12.sum(0) / 2 - self.ShfA) ** 2)
+        factor2 = torch.exp(
+            -self.EtaA * (distances12.sum(0) / 2 - self.ShfA) ** 2
+        ).unsqueeze(-1)
+        factor2 = factor2.squeeze(4).squeeze(3)
         ret = 2 * factor1 * factor2 * fcj12.prod(0)
         # At this point, ret now have shape
         # (conformations, atoms, N, ?, ?, ?, ?) where ? depend on constants.

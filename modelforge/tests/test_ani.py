@@ -131,7 +131,7 @@ def test_compare_angular_symmetry_features(setup_methane):
         angular_dist_divisions,
         angle_sections,
     )
-    angular_feature_vector_mf = asf(vec12)
+    angular_feature_vector_mf = asf(vec12 / 10)
 
     assert angular_feature_vector_ani.dim() == angular_feature_vector_mf.dim()
     assert torch.allclose(angular_feature_vector_ani, angular_feature_vector_mf)

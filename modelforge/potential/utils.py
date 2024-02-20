@@ -384,13 +384,13 @@ class AngularSymmetryFunction(nn.Module):
 
         self.number_of_gaussians_asf = number_of_gaussians_for_asf
         self.angular_cutoff = angular_cutoff
-        self.cosine_cutoff = CosineCutoff(self.angular_cutoff * 10)
-        _unitless_angular_cutoff = angular_cutoff.to(unit.nanometer).m * 10
+        self.cosine_cutoff = CosineCutoff(self.angular_cutoff)
+        _unitless_angular_cutoff = angular_cutoff.to(unit.nanometer).m
         self.angular_start = angular_start
-        _unitless_angular_start = angular_start.to(unit.nanometer).m * 10
+        _unitless_angular_start = angular_start.to(unit.nanometer).m
 
         # save constants
-        EtaA = angular_eta = 19.7  # FIXME hardcoded eta
+        EtaA = angular_eta = 19.7 * 100  # FIXME hardcoded eta
         Zeta = 32.0  # FIXME hardcoded zeta
         self.register_buffer("EtaA", torch.tensor([EtaA], dtype=dtype))
         self.register_buffer("Zeta", torch.tensor([Zeta], dtype=dtype))

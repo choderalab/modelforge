@@ -169,11 +169,11 @@ def test_sake_interaction_equivariance():
 def test_spatial_attention_against_reference():
     from modelforge.potential import CosineCutoff
     from modelforge.potential import GaussianRBF
-    nr_atoms = 41
-    out_features = 7
-    hidden_features = 5
-    geometry_basis = 37
-    nr_heads = 3
+    nr_atoms = 2
+    out_features = 11
+    hidden_features = 7
+    geometry_basis = 3
+    nr_heads = 5
     nr_rbf = 50
     cutoff_module = CosineCutoff(5.0 * unit.nanometer)
     mf_sake_block = SAKEInteraction(
@@ -207,26 +207,21 @@ def test_spatial_attention_against_reference():
     x_minus_xt = jax.random.normal(key, (nr_atoms, nr_atoms, geometry_basis))
     x_minus_xt_norm = jnp.linalg.norm(x_minus_xt, axis=-1, keepdims=True)
 
-    h_e_att_torch = torch.from_numpy(onp.array(h_e_att)).reshape(nr_pairs, hidden_features * nr_heads)
-    x_minus_xt_torch = torch.from_numpy(onp.array(x_minus_xt)).reshape(nr_pairs, geometry_basis)
+    h_ij_semantic = torch.from_numpy(onp.array(h_e_att)).reshape(nr_pairs, hidden_features * nr_heads)
+    dir_ij = torch.from_numpy(onp.array(x_minus_xt / (x_minus_xt_norm + 1e-5))).reshape(nr_pairs, geometry_basis)
 
-    mf_combinations = mf_sake_block.get_combinations(h_e_att_torch, x_minus_xt_torch)
+    mf_combinations = mf_sake_block.get_combinations(h_ij_semantic, dir_ij)
     mf_result = mf_sake_block.get_spatial_attention(mf_combinations, idx_i, x_minus_xt, nr_atoms)
 
     variables = ref_sake_interaction.init(key, h_e_att, x_minus_xt, x_minus_xt_norm,
                                           method=ref_sake_interaction.spatial_attention)
 
     variables["params"]["x_mixing"]["layers_0"]["kernel"] = mf_sake_block.x_mixing_mlp.weight.detach().numpy().T
+    variables["params"]["post_norm_mlp"]["layers_0"]["kernel"] = mf_sake_block.post_norm_mlp[0].weight.detach().numpy().T
+    variables["params"]["post_norm_mlp"]["layers_2"]["kernel"] = mf_sake_block.post_norm_mlp[1].weight.detach().numpy().T
     ref_result = ref_sake_interaction.apply(variables, h_e_att, x_minus_xt, x_minus_xt_norm,
                                             method=ref_sake_interaction.spatial_attention)
-    # print("mf_result.shape", mf_result.shape)
-    # print("ref_result[0].shape", ref_result[0].shape)
-    # print("mf_combinations.shape", mf_combinations.shape)
-    # print("ref_result[1].shape", ref_result[1].shape)
-    #
-    # print("mf_combinations", mf_combinations)
-    # print("ref_result[1]", ref_result[1])
     assert (torch.allclose(mf_combinations,
                          torch.from_numpy(onp.array(ref_result[1])).reshape(nr_pairs, nr_heads * hidden_features,
-                                                                            geometry_basis), atol=1e-3))
-    assert (torch.allclose(mf_result, torch.from_numpy(onp.array(ref_result[0])), atol=1e-3))
+                                                                            geometry_basis), atol=1e-8))
+    assert (torch.allclose(mf_result, torch.from_numpy(onp.array(ref_result[0])), atol=1e-8))

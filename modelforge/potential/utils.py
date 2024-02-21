@@ -368,6 +368,7 @@ class AngularSymmetryFunction(nn.Module):
         angular_start: unit.Quantity,
         number_of_gaussians_for_asf: int = 8,
         angle_sections: int = 4,
+        trainable: bool = False,
         dtype: Optional[torch.dtype] = None,
     ) -> None:
         """
@@ -392,11 +393,18 @@ class AngularSymmetryFunction(nn.Module):
         # save constants
         EtaA = angular_eta = 19.7 * 100  # FIXME hardcoded eta
         Zeta = 32.0  # FIXME hardcoded zeta
-        self.register_buffer("EtaA", torch.tensor([EtaA], dtype=dtype))
-        self.register_buffer("Zeta", torch.tensor([Zeta], dtype=dtype))
-        self.register_buffer(
-            "Rca", torch.tensor([_unitless_angular_cutoff], dtype=dtype)
-        )
+
+        if trainable:
+            self.EtaA = torch.tensor([EtaA], dtype=dtype)
+            self.Zeta = torch.tensor([Zeta], dtype=dtype)
+            self.Rca = torch.tensor([_unitless_angular_cutoff], dtype=dtype)
+
+        else:
+            self.register_buffer("EtaA", torch.tensor([EtaA], dtype=dtype))
+            self.register_buffer("Zeta", torch.tensor([Zeta], dtype=dtype))
+            self.register_buffer(
+                "Rca", torch.tensor([_unitless_angular_cutoff], dtype=dtype)
+            )
 
         # ===============
         # # calculate shifts
@@ -415,14 +423,19 @@ class AngularSymmetryFunction(nn.Module):
         )[:-1]
 
         # register shifts
-        self.register_buffer("ShfZ", ShfZ)
-        self.register_buffer("ShfA", ShfA)
+        if trainable:
+            self.ShfZ = ShfZ
+            self.ShfA = ShfA
+        else:
+            self.register_buffer("ShfZ", ShfZ)
+            self.register_buffer("ShfA", ShfA)
 
         log.info(
-            f"""RadialSymmetryFunction: 
-            Rca={_unitless_angular_cutoff} 
-            ShfZ={ShfZ}, 
-            eta={EtaA}"""
+            f"""
+RadialSymmetryFunction: 
+Rca={_unitless_angular_cutoff} 
+ShfZ={ShfZ}, 
+eta={EtaA}"""
         )
 
     def forward(self, vectors12: torch.Tensor) -> torch.Tensor:
@@ -473,6 +486,7 @@ class RadialSymmetryFunction(nn.Module):
         radial_cutoff: unit.Quantity,
         radial_start: unit.Quantity = 0.0 * unit.nanometer,
         dtype: Optional[torch.dtype] = None,
+        trainable: bool = False,
         ani_style: bool = False,
     ):
         """
@@ -521,23 +535,30 @@ class RadialSymmetryFunction(nn.Module):
             )  # since we are in nanometer
             eta = eta * 100  # NOTE: this is a hack to get eta to be in the right range
             # FIXME eta is for now hardcoded
-            prefactor = 0.25
+            prefactor = torch.tensor([0.25], dtype=dtype)
         else:
             widths = (torch.abs(offsets[1] - offsets[0]) * torch.ones_like(offsets)).to(
                 dtype
             )
             eta = 0.5 / torch.pow(widths, 2)  # eta
-            prefactor = 1.0
+            prefactor = torch.tensor([1.0], dtype=dtype)
         # ===============
 
-        self.register_buffer("R_s", offsets)
-        self.prefactor = prefactor
-        self.register_buffer("eta", eta)
+        if trainable:
+            self.R_s = offsets
+            self.prefactor = prefactor
+            self.eta = eta
+        else:
+            self.register_buffer("R_s", offsets)
+            self.register_buffer("prefactor", prefactor)
+            self.register_buffer("eta", eta)
         log.info(
-            f"""RadialSymmetryFunction: 
-                cutoff={self.radial_cutoff} 
-                number_of_gaussians={self.number_of_gaussians} 
-                eta={eta}"""
+            f"""
+RadialSymmetryFunction: 
+cutoff={self.radial_cutoff} 
+number_of_gaussians={self.number_of_gaussians} 
+eta={eta}
+"""
         )
 
     def forward(self, R_ij: torch.Tensor) -> torch.Tensor:

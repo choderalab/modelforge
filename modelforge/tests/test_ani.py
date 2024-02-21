@@ -25,7 +25,7 @@ def setup_methane():
     return species, coordinates, device
 
 
-def test_ani(setup_methane):
+def test_torchani_ani(setup_methane):
     import torch
     import torchani
 
@@ -37,8 +37,15 @@ def test_ani(setup_methane):
     force = -derivative
 
 
+def test_modelforge_ani(setup_methane):
+    from modelforge.potential.ani import ANI2x as mf_ANI2x
+
+    species, coordinates, device = setup_methane
+    model = mf_ANI2x()
+
+
 def test_compare_radial_symmetry_features():
-    # Compare the ANI radial symmetry function 
+    # Compare the ANI radial symmetry function
     # agsint the output of the Modelforge radial symmetry function
     import torch
     from modelforge.potential.utils import RadialSymmetryFunction

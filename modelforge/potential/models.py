@@ -85,7 +85,7 @@ class _PairList(nn.Module):
             - 'd_ij' : torch.Tensor, shape (3, n_pairs)
 
         """
-        assert positions.ndim == 2 
+        assert positions.ndim == 2
         pair_indices = self.calculate_pairs(
             atomic_subsystem_indices,
             only_unique_pairs=self.only_unique_pairs,
@@ -237,6 +237,7 @@ class LightningModuleMixin(pl.LightningModule):
 
 
 from modelforge.potential.postprocessing import PostprocessingPipeline, NoPostprocess
+from typing import Optional
 
 
 class BaseNNP(nn.Module):
@@ -246,21 +247,27 @@ class BaseNNP(nn.Module):
 
     def __init__(
         self,
-        cutoff: float,
-        postprocessing: PostprocessingPipeline,
+        radial_cutoff: float,
+        angular_cutoff: Optional[float] = None,
+        postprocessing: PostprocessingPipeline = PostprocessingPipeline(
+            [NoPostprocess()]
+        ),
     ):
         """
         Initialize the NNP class.
 
         Parameters
         ----------
-        cutoff : float
-            Cutoff distance for atom centered interactions, in nanometer.
+        radial_cutoff : float
+            Cutoff distance for atom centered symmetry functions, in nanometer.
+        angular_cutoff : float
+            Cutoff distance for atom centered angular functions, in nanometer.
         """
         from .models import _PairList
 
         super().__init__()
-        self._cutoff = cutoff
+        self._radial_cutoff = radial_cutoff
+        self._angular_cutoff = angular_cutoff
         self.calculate_distances_and_pairlist = _PairList()
         self._dtype = None  # set at runtime
         self._log_message_dtype = False

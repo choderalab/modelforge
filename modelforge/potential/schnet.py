@@ -39,7 +39,7 @@ class SchNET(BaseNNP):
 
         log.debug("Initializing SchNet model.")
         super().__init__(
-            cutoff=float(cutoff_module.cutoff), postprocessing=postprocessing
+            radial_cutoff=float(cutoff_module.cutoff), postprocessing=postprocessing
         )
         self.radial_symmetry_function_module = radial_symmetry_function_module
         self.cutoff_module = cutoff_module
@@ -97,9 +97,9 @@ class SchNET(BaseNNP):
 
         Parameters
         ----------
-        atomic_embedding : torch.Tensor
-            Atomic numbers embedding; shape (nr_of_atoms_in_systems, 1, nr_atom_basis).
         inputs : Dict[str, torch.Tensor]
+        - atomic_embedding : torch.Tensor
+            Atomic numbers embedding; shape (nr_of_atoms_in_systems, 1, nr_atom_basis).
         - pairlist:  shape (n_pairs, 2)
         - r_ij:  shape (n_pairs, 1)
         - d_ij:  shape (n_pairs, 3)

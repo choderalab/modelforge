@@ -20,6 +20,13 @@ rbf = GaussianRBF(n_rbf=nr_rbf, cutoff=cutoff)
 
 cutoff = CosineCutoff(cutoff=cutoff)
 
+model = LighningPaiNN(
+    embedding=embedding,
+    nr_interaction_blocks=nr_interaction_blocks,
+    radial_basis=rbf,
+    cutoff=cutoff,
+)
+
 from modelforge.dataset.qm9 import QM9Dataset
 from modelforge.dataset.dataset import TorchDataModule
 

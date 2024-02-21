@@ -126,7 +126,7 @@ def initialize_dataset(
     return data_module
 
 
-def prepare_pairlist_for_single_batch(
+def preparePairlist_for_single_batch(
     batch: Dict[str, torch.Tensor]
 ) -> Dict[str, torch.Tensor]:
     """
@@ -143,11 +143,11 @@ def prepare_pairlist_for_single_batch(
         Pairlist with keys 'atom_index12', 'd_ij', 'r_ij'.
     """
 
-    from modelforge.potential.models import _PairList
+    from modelforge.potential.models import Pairlist
 
     positions = batch["positions"]
     atomic_subsystem_indices = batch["atomic_subsystem_indices"]
-    pairlist = _PairList()
+    pairlist = Pairlist()
     return pairlist(positions, atomic_subsystem_indices)
 
 

@@ -51,7 +51,7 @@ def test_rbf(RBF):
     """
     from modelforge.dataset import QM9Dataset
 
-    from .helper_functions import prepare_pairlist_for_single_batch, return_single_batch
+    from .helper_functions import preparePairlist_for_single_batch, return_single_batch
 
     batch = return_single_batch(QM9Dataset)
     pairlist = prepare_pairlist_for_single_batch(batch)
@@ -70,7 +70,7 @@ def test_gaussian_rbf(RBF):
 
     n_rbf = 5
     cutoff = unit.Quantity(10.0, unit.angstrom)
-    start = 0.0
+    start = unit.Quantity(0.0, unit.angstrom)
     trainable = False
 
     gaussian_rbf = RBF(n_rbf=n_rbf, cutoff=cutoff, start=start, trainable=trainable)
@@ -82,7 +82,7 @@ def test_gaussian_rbf(RBF):
     assert gaussian_rbf.cutoff == cutoff.to(unit.nanometer).m
 
     # Test that the widths and offsets are correct
-    expected_offsets = torch.linspace(start, cutoff.to(unit.nanometer).m, n_rbf)
+    expected_offsets = torch.linspace(start.to(unit.nanometer).m, cutoff.to(unit.nanometer).m, n_rbf)
     expected_widths = torch.abs(
         expected_offsets[1] - expected_offsets[0]
     ) * torch.ones_like(expected_offsets)

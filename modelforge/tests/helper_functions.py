@@ -126,7 +126,7 @@ def initialize_dataset(
     return data_module
 
 
-def preparePairlist_for_single_batch(
+def prepare_pairlist_for_single_batch(
     batch: Dict[str, torch.Tensor]
 ) -> Dict[str, torch.Tensor]:
     """

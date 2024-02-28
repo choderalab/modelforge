@@ -347,20 +347,20 @@ def _download_from_gdrive(id: str, raw_dataset_file: str):
     gdown.download(url, raw_dataset_file, quiet=False)
 
 
-def _download_from_gh(url: str, raw_dataset_file: str):
+def _download_from_url(url: str, raw_dataset_file: str):
     """
-    Downloads a dataset from github lfs.
+    Downloads a dataset from a specified URLS.
 
     Parameters
     ----------
     url : str
-        gh raw link.
+        raw link address.
     raw_dataset_file : str
         Path to save the downloaded dataset.
 
     Examples
     --------
-    >>> _download_from_gh(url, "data_file.hdf5.gz")
+    >>> _download_from_url(url, "data_file.hdf5.gz")
     """
     import requests
 

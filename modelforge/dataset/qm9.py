@@ -166,9 +166,9 @@ class QM9Dataset(HDF5Dataset):
         >>> data.download()  # Downloads the dataset from Google Drive
 
         """
-        from modelforge.dataset.utils import _download_from_gh
+        from modelforge.dataset.utils import _download_from_url
         import requests
 
         url = self.test_url if self.for_unit_testing else self.full_url
-        _download_from_gh(url, self.raw_data_file)
+        _download_from_url(url, self.raw_data_file)
         # _download_from_gdrive(id, self.raw_data_file)

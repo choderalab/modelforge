@@ -96,7 +96,7 @@ class AddSelfEnergies(Postprocess):
         molecule_indices = postprocessing_data["atomic_subsystem_indices"]
         max_atomic_number = torch.max(atomic_numbers).item()
         self_energies_tensor = torch.zeros(max_atomic_number + 1)
-        for atomic_number, energy in self.dataset_statistics["self_energies"].items():
+        for atomic_number, energy in self.dataset_statistics["self_energies"]:
             self_energies_tensor[atomic_number] = energy
 
         # Calculate self energies for each atom and then aggregate them per molecule

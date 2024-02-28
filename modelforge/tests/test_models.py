@@ -446,8 +446,8 @@ def test_postprocessing():
     # self energy is calculated and removed in prepare_data if `remove_self_energies` is True
     dataset.prepare_data(remove_self_energies=True, normalize=False)
     assert dataset.dataset_statistics
-    # only 4 elements present in the reduced QM9 dataset
-    assert len(dataset.dataset_statistics["self_energies"]) == 4
+    # 5 elements present in the QM9 dataset
+    assert len(dataset.dataset_statistics["self_energies"]) == 5
 
     from modelforge.potential.schnet import SchNET
     from modelforge.potential import CosineCutoff, GaussianRBF
@@ -479,7 +479,6 @@ def test_postprocessing():
     )
 
     for batch in dataset.train_dataloader():
-        print(batch)
         result = model(batch)
         break
 
@@ -518,9 +517,11 @@ def test_postprocessing():
         result_with_offset = model(batch)
         break
 
+    print(f"{offset=}")
+    print(f"{e=}")
     r1 = result_with_offset[0].item()
     r2 = (e + offset).item()
 
-    # make sure that the prediction between the two 
+    # make sure that the prediction between the two
     # SchNET models differ only by the offset
     assert np.isclose(r1, r2)

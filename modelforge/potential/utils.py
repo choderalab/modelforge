@@ -397,7 +397,11 @@ class AtomicSelfEnergies:
     def __iter__(self) -> Iterator[Dict[str, float]]:
         """Iterate over the energies dictionary."""
         for element, energy in self.energies.items():
-            yield (element, energy)
+            yield (self.atomic_number_to_element.get(element), energy)
+
+    def __len__(self) -> int:
+        """Return the number of element-energy pairs."""
+        return len(self.energies)
 
 
 class ShiftedSoftplus(nn.Module):

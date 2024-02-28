@@ -40,7 +40,7 @@ c.add_transformation(
 unit.add_context(c)
 
 
-def provide_details_about_used_unitsystem():
+def print_modelforge_unit_system():
     """
     Provide details about the used unit systems.
     """

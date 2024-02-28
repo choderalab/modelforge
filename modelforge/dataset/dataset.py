@@ -521,6 +521,7 @@ class TorchDataModule(pl.LightningDataModule):
         self.split = split
         self.split_file = split_file
         self.dataset_statistics = {}
+        self._ase = data.atomic_self_energies  # atomic self energies
 
     def calculate_self_energies(self, collate: bool = True) -> Dict[str, float]:
         """
@@ -559,6 +560,7 @@ class TorchDataModule(pl.LightningDataModule):
         remove_self_energies: bool = True,
         normalize: bool = False,
         self_energies: Dict[str, float] = {},
+        regression_ase: bool = False,
     ) -> None:
         """
         Prepares the dataset for use by calculating self energies, normalizing data, and splitting the dataset.
@@ -571,8 +573,13 @@ class TorchDataModule(pl.LightningDataModule):
             Whether to normalize the dataset. Defaults to True.
         self_energies : Dict[str, float], optional
             A dictionary mapping atomic numbers to their calculated self energies. Defaults to {}.
-            If self_energies is not provided, but remove_self_energies is True, self-energies are calculated
-            using a linear fit regression.
+        regression_ase : bool, optional
+            If regression_ase is True, atomic self energies are calculated using linear regression
+
+        if remove_self_energies is True and
+            - self_energies are passed as dictionary, these will be used
+            - self_energies are {}, self._ase will be used
+            - regression_ase is True, self_energies will be calculated
         """
 
         if self.split_file and os.path.exists(self.split_file):
@@ -591,15 +598,19 @@ class TorchDataModule(pl.LightningDataModule):
         if remove_self_energies:
             log.debug("Self energies are removed ...")
             if not self_energies:
-                log.debug("No self energies are provided, calculating them ...")
-                self_energies = self.calculate_self_energies()
+                if regression_ase:
+                    log.debug(
+                        "Using linear regression to calculate atomic self energies..."
+                    )
+                    self_energies = self.calculate_self_energies()
+                else:
+                    log.debug("Using atomic self energies from the dataset...")
+                    self_energies = self._ase
             self.dataset = self.remove_self_energies(self.dataset, self_energies)
             # save the self energies that are removed from the dataset
             dataset_statistics["self_energies"] = self_energies
             with open("ase.toml", "w") as f:
-                self_energies_ = {
-                    str(idx): energy for idx, energy in self_energies.items()
-                }
+                self_energies_ = {str(idx): energy for (idx, energy) in self_energies}
                 toml.dump(self_energies_, f)
 
         # calculate average and variance

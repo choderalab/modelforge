@@ -313,10 +313,98 @@ class EnergyReadout(nn.Module):
         return total_energy_per_molecule
 
 
+from dataclasses import dataclass, field
+from typing import Dict, Iterator
+
+
+@dataclass
+class AtomicSelfEnergies:
+    energies: Dict[str, float] = field(default_factory=dict)
+    # Example mapping, replace or extend as necessary
+    atomic_number_to_element: Dict[int, str] = field(
+        default_factory=lambda: {
+            1: "H",
+            2: "He",
+            3: "Li",
+            4: "Be",
+            5: "B",
+            6: "C",
+            7: "N",
+            8: "O",
+            9: "F",
+            10: "Ne",
+            11: "Na",
+            12: "Mg",
+            13: "Al",
+            14: "Si",
+            15: "P",
+            16: "S",
+            17: "Cl",
+            18: "Ar",
+            19: "K",
+            20: "Ca",
+            21: "Sc",
+            22: "Ti",
+            23: "V",
+            24: "Cr",
+            25: "Mn",
+            26: "Fe",
+            27: "Co",
+            28: "Ni",
+            29: "Cu",
+            30: "Zn",
+            31: "Ga",
+            32: "Ge",
+            33: "As",
+            34: "Se",
+            35: "Br",
+            36: "Kr",
+            37: "Rb",
+            38: "Sr",
+            39: "Y",
+            40: "Zr",
+            41: "Nb",
+            42: "Mo",
+            43: "Tc",
+            44: "Ru",
+            45: "Rh",
+            46: "Pd",
+            47: "Ag",
+            48: "Cd",
+            49: "In",
+            50: "Sn",
+            # Add more elements as needed
+        }
+    )
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            # Convert atomic number to element symbol
+            element = self.atomic_number_to_element.get(key)
+            if element is None:
+                raise KeyError(f"Atomic number {key} not found.")
+            return self.energies.get(element)
+        elif isinstance(key, str):
+            # Directly access by element symbol
+            if key not in self.energies:
+                raise KeyError(f"Element '{key}' not found.")
+            return self.energies[key]
+        else:
+            raise TypeError(
+                "Key must be an integer (atomic number) or string (element name)."
+            )
+
+    def __iter__(self) -> Iterator[Dict[str, float]]:
+        """Iterate over the energies dictionary."""
+        for element, energy in self.energies.items():
+            yield (element, energy)
+
+
 class ShiftedSoftplus(nn.Module):
     def __init__(self):
         super().__init__()
         import math
+
         self.log_2 = math.log(2.0)
 
     def forward(self, x: torch.Tensor):

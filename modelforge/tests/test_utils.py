@@ -5,6 +5,21 @@ import pytest
 from modelforge.potential.utils import CosineCutoff, _cosine_cutoff, GaussianRBF
 
 
+def test_ase_dataclass():
+    from modelforge.potential.utils import AtomicSelfEnergies
+
+    # Example usage
+    atomic_self_energies = AtomicSelfEnergies(
+        energies={"H": 13.6, "He": 24.6, "Li": 5.4}
+    )
+
+    # Access by element name
+    print(atomic_self_energies["H"])  # Output: 13.6
+
+    # Access by atomic number
+    print(atomic_self_energies[1])  # Output: 13.6
+
+
 def test_cosine_cutoff():
     """
     Test the cosine cutoff implementation.

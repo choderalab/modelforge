@@ -327,13 +327,20 @@ def test_self_energy():
     )
 
     # self energy is calculated and removed in prepare_data if `remove_self_energies` is True
-    dataset.prepare_data(remove_self_energies=True, normalize=True)
+    dataset.prepare_data(remove_self_energies=True, normalize=False)
 
     assert dataset.dataset_statistics
     self_energies = dataset.dataset_statistics["self_energies"]
     # only 4 elements present in the reduced QM9 dataset
     assert len(self_energies) == 4
+    # H: -1313.4668615546
     assert np.isclose(self_energies[1], -1584.5087457646348)
+    # C: -99366.70745535441
     assert np.isclose(self_energies[6], -99960.88941782094)
+    # N: -143309.9379722722
     assert np.isclose(self_energies[7], -143754.0263865598)
+    # O: -197082.0671774158
     assert np.isclose(self_energies[8], -197495.00132926644)
+
+
+

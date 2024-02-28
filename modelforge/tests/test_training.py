@@ -75,8 +75,7 @@ def test_pt_lightning():
 
     data = QM9Dataset(for_unit_testing=True)
     dataset = TorchDataModule(data, batch_size=64)
-    dataset.prepare_data(offset=True)
-    dataset.setup()
+    dataset.prepare_data(remove_self_energies=True)
     from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
     trainer = Trainer(
@@ -94,8 +93,6 @@ def test_pt_lightning():
         cutoff=cutoff,
     )
 
-    model.energy_average = dataset.dataset_mean
-    model.energy_std = dataset.dataset_std
     # Move model to the appropriate dtype and device
     model = model.to(torch.float32)
     # Run training loop and validate

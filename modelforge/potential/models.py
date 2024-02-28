@@ -7,6 +7,9 @@ from torch.optim import AdamW
 
 from loguru import logger as log
 
+from abc import ABC, abstractmethod
+import torch
+
 
 class _PairList(nn.Module):
     """
@@ -182,15 +185,9 @@ class LightningModuleMixin(pl.LightningModule):
             Loss tensor.
         """
         batch_size = self._log_batch_size(batch)
-        predictions = self.forward(batch).flatten()
+        predictions = self.forward(batch)["energy_readout"].flatten()
         targets = batch["E_label"].flatten().to(torch.float32)
         loss = self.loss_function(predictions, targets)
-
-        if self.report_loss_in_kJ_per_mol and self.energy_average:
-            if self.energy_stddev:
-                loss = loss * self.energy_stddev
-
-            loss = loss + self.energy_average
 
         self.log(
             "train_loss",
@@ -209,7 +206,7 @@ class LightningModuleMixin(pl.LightningModule):
 
         predictions = self.forward(batch).flatten()
         targets = batch["E_label"].flatten()
-        test_loss = F.mse_loss(predictions, targets)
+        test_loss = F.mse_loss(predictions["energy_readout"], targets)
         self.log(
             "test_loss", test_loss, batch_size=batch_size, on_epoch=True, prog_bar=True
         )
@@ -218,7 +215,7 @@ class LightningModuleMixin(pl.LightningModule):
         from torch.nn import functional as F
 
         batch_size = self._log_batch_size(batch)
-        predictions = self.forward(batch)
+        predictions = self.forward(batch)["energy_readout"]
         targets = batch["E_label"]
         val_loss = F.mse_loss(predictions, targets)
         self.log(
@@ -238,12 +235,19 @@ class LightningModuleMixin(pl.LightningModule):
         return self.optimizer(self.parameters(), lr=self.learning_rate)
 
 
+from modelforge.potential.postprocessing import PostprocessingPipeline, NoPostprocess
+
+
 class BaseNNP(nn.Module):
     """
     Base class for neural network potentials.
     """
 
-    def __init__(self, cutoff: float):
+    def __init__(
+        self,
+        cutoff: float,
+        postprocessing: PostprocessingPipeline,
+    ):
         """
         Initialize the NNP class.
 
@@ -260,25 +264,8 @@ class BaseNNP(nn.Module):
         self._dtype = None  # set at runtime
         self._log_message_dtype = False
         self._log_message_units = False
-        self.report_loss_in_kJ_per_mol = True
-        self._energy_average = None
-        self._energy_stddev = None
-
-    @property
-    def energy_average(self):
-        return self._energy_average
-
-    @energy_average.setter
-    def energy_average(self, value):
-        self._energy_average = value
-
-    @property
-    def energy_stddev(self):
-        return self._energy_stddev
-
-    @energy_stddev.setter
-    def energy_stddev(self, value):
-        self._energy_stddev = value
+        self._energy_postprocessing_pipeline = postprocessing
+        self.dataset_stats = {}
 
     def preate_input(self, inputs: Dict[str, torch.Tensor]):
         # needs to be implemented by the subclass
@@ -295,6 +282,31 @@ class BaseNNP(nn.Module):
         # needs to be implemented by the subclass
         # perform the readout operation implemented in the subclass
         raise NotImplementedError
+
+    def _energy_postprocessing(
+        self, energy_readout: torch.Tensor, inputs: Dict[str, torch.Tensor]
+    ):
+        """
+        Performs postprocessing of the energies.
+
+        Parameters
+        ----------
+        energy_readout: torch.Tensor
+        inputs: Dict[str, torch.Tensor]: with keys
+                energy_readout: torch.Tensor, shape (nr_of_molecuels_in_batch)
+                atomic_numbers: torch.Tensor, shape (nr_of_atoms_in_batch)
+                atomic_subsystem_indices: torch.Tensor, shape (nr_of_atoms_in_batch)
+
+        """
+        pipeline = self._energy_postprocessing_pipeline
+
+        postprocessing_data = {}
+        postprocessing_data["energy_readout"] = energy_readout
+        postprocessing_data["atomic_numbers"] = inputs["atomic_numbers"]
+        postprocessing_data["atomic_subsystem_indices"] = inputs[
+            "atomic_subsystem_indices"
+        ]
+        return pipeline(postprocessing_data)
 
     def _prepare_inputs(self, inputs: Dict[str, torch.Tensor]):
         atomic_numbers = inputs["atomic_numbers"]  # shape (nr_of_atoms_in_batch, 1)
@@ -402,9 +414,13 @@ class BaseNNP(nn.Module):
         # prepare the input for the forward pass
         inputs = self.prepare_inputs(inputs)
         # perform the forward pass implemented in the subclass
-        output = self._forward(inputs)
-
-        return self._readout(output)
+        outputs = self._forward(inputs)
+        # aggreate energies
+        energy_readout = self._readout(outputs)
+        # postprocess energies
+        processed_energies = self._energy_postprocessing(energy_readout, inputs)
+        # return energies
+        return processed_energies
 
 
 class SingleTopologyAlchemicalBaseNNPModel(BaseNNP):

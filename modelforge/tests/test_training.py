@@ -58,26 +58,34 @@ def test_pt_lightning():
 
     from openff.units import unit
 
+    # provide embedding dimensions for atoms
     max_atomic_number = 100
     nr_atom_basis = 128
+    # provide number of radial symmetry functions
     nr_rbf = 20
+    # depth of the PaiNN Network
     nr_interaction_blocks = 4
-
+    # cutoff of the radial symmetry function
     cutoff = 5 * unit.angstrom
+    # initialize the embedding space
     embedding = SlicedEmbedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
     assert embedding.embedding_dim == nr_atom_basis
+    # initialize the radial symmetry functions
     rbf = GaussianRBF(n_rbf=nr_rbf, cutoff=cutoff)
-
+    # initialize the cosine cutoff functino to generate smooth cutoff for the the radial symmetry functions
     cutoff = CosineCutoff(cutoff=cutoff)
 
     from modelforge.dataset.qm9 import QM9Dataset
     from modelforge.dataset.dataset import TorchDataModule
 
+    # load the QM9Dataset
     data = QM9Dataset(for_unit_testing=True)
     dataset = TorchDataModule(data, batch_size=64)
+    # remove the self energies
     dataset.prepare_data(remove_self_energies=True)
     from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
+    # set up the pytorch lightning trainer 
     trainer = Trainer(
         max_epochs=500,
         num_nodes=1,
@@ -86,13 +94,13 @@ def test_pt_lightning():
         ],
     )
 
+    # initialize the PaiNN potential
     model = LighningPaiNN(
         embedding=embedding,
         nr_interaction_blocks=nr_interaction_blocks,
         radial_basis=rbf,
         cutoff=cutoff,
     )
-
     # Move model to the appropriate dtype and device
     model = model.to(torch.float32)
     # Run training loop and validate

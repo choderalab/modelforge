@@ -22,14 +22,23 @@ def setup_methane():
     )
     # In periodic table, C = 6 and H = 1
     species = torch.tensor([[6, 1, 1, 1, 1]], device=device)
-    return species, coordinates, device
+    atomic_subsystem_indices = torch.tensor(
+        [0, 0, 0, 0, 0], dtype=torch.int32, device=device
+    )
+    mf_input = {
+        "atomic_numbers": species.squeeze(),
+        "positions": coordinates.squeeze(),
+        "atomic_subsystem_indices": atomic_subsystem_indices,
+    }
+
+    return species, coordinates, device, mf_input
 
 
 def test_torchani_ani(setup_methane):
     import torch
     import torchani
 
-    species, coordinates, device = setup_methane
+    species, coordinates, device, _ = setup_methane
     model = torchani.models.ANI2x(periodic_table_index=True).to(device)
 
     energy = model((species, coordinates)).energies
@@ -40,8 +49,9 @@ def test_torchani_ani(setup_methane):
 def test_modelforge_ani(setup_methane):
     from modelforge.potential.ani import ANI2x as mf_ANI2x
 
-    species, coordinates, device = setup_methane
+    _, _, _, mf_input = setup_methane
     model = mf_ANI2x()
+    model(mf_input)
 
 
 def test_compare_radial_symmetry_features():
@@ -85,7 +95,7 @@ def test_compare_angular_symmetry_features(setup_methane):
     from modelforge.potential.models import _PairList
 
     # set up relevant system properties
-    species, r, _ = setup_methane
+    species, r, _, _ = setup_methane
     pairlist = _PairList(only_unique_pairs=True)
     pairs = pairlist(r[0], torch.tensor([0, 0, 0, 0, 0]))
     d_ij = pairs["d_ij"].squeeze(1)
@@ -147,3 +157,5 @@ def test_compare_angular_symmetry_features(setup_methane):
     # make sure that the output is the same
     assert angular_feature_vector_ani.dim() == angular_feature_vector_mf.dim()
     assert torch.allclose(angular_feature_vector_ani, angular_feature_vector_mf)
+
+

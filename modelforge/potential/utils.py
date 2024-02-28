@@ -552,6 +552,9 @@ class RadialSymmetryFunction(nn.Module):
             self.register_buffer("R_s", offsets)
             self.register_buffer("prefactor", prefactor)
             self.register_buffer("eta", eta)
+
+        self.radial_sublength = self.eta.numel() * self.R_s.numel()
+
         log.info(
             f"""
 RadialSymmetryFunction: 
@@ -561,9 +564,9 @@ eta={eta}
 """
         )
 
-    def forward(self, R_ij: torch.Tensor) -> torch.Tensor:
+    def forward(self, d_ij: torch.Tensor) -> torch.Tensor:
         """
-        Computes the radial basis functions for the distance tensor.
+        Computes the radial symmetry functions for the pairwise distance tensor.
         This computes the terms of the following equation
         G_{m}^{R} = \sum_{j!=i}^{N} exp(-eta(|R_{ij} - R_s|)^2))
         (NOTE: sum is not performed)
@@ -577,7 +580,7 @@ eta={eta}
         torch.Tensor
             The radial basis functions. Shape: [..., N, number_of_gaussians]
         """
-        diff = R_ij[..., None] - self.R_s  # R_ij - R_s
+        diff = d_ij[..., None] - self.R_s  # d_ij - R_s
         y = self.prefactor * torch.exp((-1 * self.eta) * torch.pow(diff, 2))
         return y
 

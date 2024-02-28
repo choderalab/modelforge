@@ -336,7 +336,7 @@ class BaseNNP(nn.Module):
 
     def _set_dtype(self):
         dtypes = list({p.dtype for p in self.parameters()})
-        assert len(dtypes) == 1
+        assert len(dtypes) == 1, f"Multiple dtypes: {dtypes}"
 
         if not self._log_message_dtype:
             log.debug(f"Setting dtype to {dtypes[0]}.")

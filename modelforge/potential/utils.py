@@ -313,23 +313,30 @@ class EnergyReadout(nn.Module):
         return total_energy_per_molecule
 
 
-def _shifted_softplus(x: torch.Tensor):
-    r"""Compute shifted soft-plus activation function.
+class ShiftedSoftplus(nn.Module):
+    def __init__(self):
+        super().__init__()
+        import math
+        self.log_2 = math.log(2.0)
 
-    .. math::
-       y = \ln\left(1 + e^{-x}\right) - \ln(2)
+    def forward(self, x: torch.Tensor):
+        """Compute shifted soft-plus activation function.
 
-    Args:
-        x (torch.Tensor): input tensor.
+        y = \ln\left(1 + e^{-x}\right) - \ln(2)
 
-    Returns:
+        Parameters:
+        -----------
+        x:torch.Tensor
+            input tensor
+
+        Returns:
+        -----------
         torch.Tensor: shifted soft-plus of input.
 
-    """
-    from torch.nn import functional
-    import math
+        """
+        from torch.nn import functional
 
-    return functional.softplus(x) - math.log(0.2)
+        return functional.softplus(x) - self.log_2
 
 
 from typing import Optional

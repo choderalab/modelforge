@@ -556,6 +556,12 @@ ShfZ={ShfZ},
 eta={EtaA}"""
         )
 
+        # The length of angular subaev of a single species
+        self.angular_sublength = (
+            self.ShfA.numel()
+            * self.ShfZ.numel()
+        )
+
     def forward(self, vectors12: torch.Tensor) -> torch.Tensor:
         """Compute the angular subAEV terms of the center atom given neighbor pairs.
 
@@ -645,40 +651,43 @@ class RadialSymmetryFunction(nn.Module):
                 number_of_gaussians,
                 dtype=dtype,
             )  # R_s
-        # calculate eta
+        # calculate EtaR
         # ===============
         if ani_style:
-            eta = (torch.tensor([19.7]) * torch.ones_like(offsets)).to(
+            EtaR = (torch.tensor([19.7]) * torch.ones_like(offsets)).to(
                 dtype
             )  # since we are in nanometer
-            eta = eta * 100  # NOTE: this is a hack to get eta to be in the right range
-            # FIXME eta is for now hardcoded
+            EtaR = (
+                EtaR * 100
+            )  # NOTE: this is a hack to get EtaR to be in the right range
+            # FIXME EtaR is for now hardcoded
             prefactor = torch.tensor([0.25], dtype=dtype)
         else:
             widths = (torch.abs(offsets[1] - offsets[0]) * torch.ones_like(offsets)).to(
                 dtype
             )
-            eta = 0.5 / torch.pow(widths, 2)  # eta
+            EtaR = 0.5 / torch.pow(widths, 2)  # EtaR
             prefactor = torch.tensor([1.0], dtype=dtype)
         # ===============
 
         if trainable:
             self.R_s = offsets
             self.prefactor = prefactor
-            self.eta = eta
+            self.EtaR = EtaR
         else:
             self.register_buffer("R_s", offsets)
             self.register_buffer("prefactor", prefactor)
-            self.register_buffer("eta", eta)
+            self.register_buffer("EtaR", EtaR)
 
-        self.radial_sublength = self.eta.numel() * self.R_s.numel()
+        # The length of radial subaev of a single species
+        self.radial_sublength = self.EtaR.numel()
 
         log.info(
             f"""
 RadialSymmetryFunction: 
 cutoff={self.radial_cutoff} 
 number_of_gaussians={self.number_of_gaussians} 
-eta={eta}
+eta={EtaR}
 """
         )
 
@@ -686,7 +695,7 @@ eta={eta}
         """
         Computes the radial symmetry functions for the pairwise distance tensor.
         This computes the terms of the following equation
-        G_{m}^{R} = \sum_{j!=i}^{N} exp(-eta(|R_{ij} - R_s|)^2))
+        G_{m}^{R} = \sum_{j!=i}^{N} exp(-EtaR(|R_{ij} - R_s|)^2))
         (NOTE: sum is not performed)
         Parameters
         ----------
@@ -699,7 +708,7 @@ eta={eta}
             The radial basis functions. Shape: [..., N, number_of_gaussians]
         """
         diff = d_ij[..., None] - self.R_s  # d_ij - R_s
-        y = self.prefactor * torch.exp((-1 * self.eta) * torch.pow(diff, 2))
+        y = self.prefactor * torch.exp((-1 * self.EtaR) * torch.pow(diff, 2))
         return y
 
 

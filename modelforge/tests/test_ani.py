@@ -26,7 +26,7 @@ def setup_methane():
         [0, 0, 0, 0, 0], dtype=torch.int32, device=device
     )
     mf_input = {
-        "atomic_numbers": species.squeeze(),
+        "atomic_numbers": species,
         "positions": coordinates.squeeze(),
         "atomic_subsystem_indices": atomic_subsystem_indices,
     }
@@ -157,5 +157,3 @@ def test_compare_angular_symmetry_features(setup_methane):
     # make sure that the output is the same
     assert angular_feature_vector_ani.dim() == angular_feature_vector_mf.dim()
     assert torch.allclose(angular_feature_vector_ani, angular_feature_vector_mf)
-
-

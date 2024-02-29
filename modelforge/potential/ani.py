@@ -11,12 +11,18 @@ class ANIRepresentation(nn.Module):
     # calculate the atomic environment vectors
     # used for the ANI architecture of NNPs
 
-    def __init__(self, radial_cutoff: unit.Quantity, angular_cutoff: unit.Quantity):
+    def __init__(
+        self,
+        radial_cutoff: unit.Quantity,
+        angular_cutoff: unit.Quantity,
+        nr_of_supported_atom_types: int = 5,
+    ):
         # radial symmetry functions
 
         super().__init__()
         self.radial_cutoff = radial_cutoff
         self.angular_cutoff = angular_cutoff
+        self.nr_of_supported_atom_types = nr_of_supported_atom_types
 
         self.radial_symmetry_functions = self._setup_radial_symmetry_functions(
             self.radial_cutoff
@@ -38,6 +44,7 @@ class ANIRepresentation(nn.Module):
             radial_cutoff,
             radial_start,
             ani_style=True,
+            dtype=torch.float32,
         )
         return radial_symmetry_function
 
@@ -56,13 +63,75 @@ class ANIRepresentation(nn.Module):
             angular_start,
             angular_dist_divisions,
             angle_sections,
+            dtype=torch.float32,
         )
+
+    def forward(self, inputs: Dict[str, torch.Tensor]):
+
+        # calculate the atomic environment vectors
+        # used for the ANI architecture of NNPs
+        radial_feature_vector = self.radial_symmetry_functions(inputs)
+        angular_feature_vector = self.angular_symmetry_functions(inputs)
+        return [radial_feature_vector, angular_feature_vector]
 
 
 class ANIInteraction(nn.Module):
 
-    def __init__(self):
-        pass
+    def __init__(self, aev_dim: int):
+        super().__init__()
+        # define atomic neural network
+        atomic_neural_networks = self.intialize_atomic_neural_network(aev_dim)
+        self.H_network = atomic_neural_networks["H"]
+        self.C_network = atomic_neural_networks["C"]
+        self.O_network = atomic_neural_networks["O"]
+        self.N_network = atomic_neural_networks["N"]
+        # self.S_network = atomic_neural_networks["S"]
+        # self.F_network = atomic_neural_networks["F"]
+        # self.Cl_network = atomic_neural_networks["Cl"]
+
+    def intialize_atomic_neural_network(self, aev_dim: int) -> Dict[str, nn.Module]:
+
+        H_network = torch.nn.Sequential(
+            torch.nn.Linear(aev_dim, 160),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(160, 128),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(128, 96),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(96, 1),
+        )
+
+        C_network = torch.nn.Sequential(
+            torch.nn.Linear(aev_dim, 144),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(144, 112),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(112, 96),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(96, 1),
+        )
+
+        N_network = torch.nn.Sequential(
+            torch.nn.Linear(aev_dim, 128),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(128, 112),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(112, 96),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(96, 1),
+        )
+
+        O_network = torch.nn.Sequential(
+            torch.nn.Linear(aev_dim, 128),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(128, 112),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(112, 96),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(96, 1),
+        )
+
+        return {"H": H_network, "C": C_network, "N": N_network, "O": O_network}
 
 
 class ANI2x(BaseNNP):
@@ -80,9 +149,9 @@ class ANI2x(BaseNNP):
 
         Parameters
         ----------
-        nr_filters : int, optional
-            Number of filters; defines the dimensionality of the intermediate features (default is 2).
         """
+        # number of elements in ANI2x
+        self.num_species = 7
 
         log.debug("Initializing ANI model.")
         super().__init__(
@@ -95,37 +164,41 @@ class ANI2x(BaseNNP):
         self.ani_representation_module = ANIRepresentation(
             radial_cutoff, angular_cutoff
         )
+        # The length of radial aev
+        self.radial_length = (
+            self.num_species
+            * self.ani_representation_module.radial_symmetry_functions.radial_sublength
+        )
+        # The length of angular aev
+        self.angular_length = (
+            (self.num_species * (self.num_species + 1))
+            // 2
+            * self.ani_representation_module.angular_symmetry_functions.angular_sublength
+        )
+
+        # The length of full aev
+        self.aev_length = self.radial_length + self.angular_length
+
         # Intialize interaction blocks
-        self.interaction_modules = ANIInteraction()
+        self.interaction_modules = ANIInteraction(self.aev_length)
+
+        # generate indices
+        from modelforge.potential.utils import triple_by_molecule
+
+        self.triple_by_molecule = triple_by_molecule
 
     def _readout(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         # Compute the energy for each system
         return self.readout_module(inputs)
 
     def prepare_inputs(self, inputs: Dict[str, torch.Tensor]):
+        # generate input preparation, implemented in BaseNNP class
         inputs = self._prepare_inputs(inputs)
+        # ANI specific modifications
         inputs = self._model_specific_input_preparation(inputs)
         return inputs
 
     def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
-        # Perform atomic embedding
-        # reformat for input
-        species = species.flatten()
-        atom_index12 = inputs["pair_indices"]
-        species12 = species[atom_index12]
-
-        # get index in right order
-        even_closer_indices = (d_ij <= Rca).nonzero().flatten()
-        atom_index12 = atom_index12.index_select(1, even_closer_indices)
-        species12 = species12.index_select(1, even_closer_indices)
-        r_ij = r_ij.index_select(0, even_closer_indices)
-        central_atom_index, pair_index12, sign12 = triple_by_molecule(atom_index12)
-        species12_small = species12[:, pair_index12]
-        vec12 = r_ij.index_select(0, pair_index12.view(-1)).view(
-            2, -1, 3
-        ) * sign12.unsqueeze(-1)
-        species12_ = torch.where(sign12 == 1, species12_small[1], species12_small[0])
-
         return inputs
 
     def _forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
@@ -134,8 +207,6 @@ class ANI2x(BaseNNP):
 
         Parameters
         ----------
-        atomic_embedding : torch.Tensor
-            Atomic numbers embedding; shape (nr_of_atoms_in_systems, 1, nr_atom_basis).
         inputs : Dict[str, torch.Tensor]
         - pairlist:  shape (n_pairs, 2)
         - r_ij:  shape (n_pairs, 1)
@@ -151,17 +222,8 @@ class ANI2x(BaseNNP):
         """
 
         # Compute the representation for each atom
-        representation = self.schnet_representation_module(inputs["d_ij"])
-        x = inputs["atomic_embedding"]
-        # Iterate over interaction blocks to update features
-        for interaction in self.interaction_modules:
-            v = interaction(
-                x,
-                inputs["pair_indices"],
-                representation["f_ij"],
-                representation["rcut_ij"],
-            )
-            x = x + v  # Update atomic features
+        representation = self.ani_representation_module(inputs["r_ij"])
+        a = 7
 
         return {
             "scalar_representation": x,

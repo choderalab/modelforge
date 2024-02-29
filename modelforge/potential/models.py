@@ -242,11 +242,11 @@ class LightningModuleMixin(pl.LightningModule):
 from modelforge.potential.postprocessing import PostprocessingPipeline, NoPostprocess
 
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from openff.units import unit
 
 
-class BaseNNP(ABC, nn.Module):
+class BaseNNP(nn.Module):
     """
     Abstract Base class for neural network potentials.
     """
@@ -439,9 +439,12 @@ class BaseNNP(ABC, nn.Module):
         ----------
         inputs : Dict[str, torch.Tensor]
             Inputs containing atomic numbers ('atomic_numbers'), coordinates ('positions') and pairlist ('pairlist').
-            - 'atomic_numbers': int; shape (nr_of_atoms_in_batch, 1), 0 indicates non-interacting atoms that will be masked
-            - 'total_charge' : int; shape (n_system)
-            - 'positions': float; shape (nr_of_atoms_in_batch, 3)
+        - 'atomic_numbers': int
+            shape (nr_of_atoms_in_batch, 1), 0 indicates non-interacting atoms that will be masked
+        - 'total_charge' : int
+            shape (n_system)
+        - 'positions': float
+            shape (nr_of_atoms_in_batch, 3)
 
         Returns
         -------
@@ -449,6 +452,7 @@ class BaseNNP(ABC, nn.Module):
             Calculated energies; float; shape (n_systems).
 
         """
+        print(self.parameters())
         # adjust the dtype of the input tensors to match the model parameters
         self._set_dtype()
         # perform input checks

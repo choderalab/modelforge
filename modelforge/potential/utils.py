@@ -305,32 +305,148 @@ class EnergyReadout(nn.Module):
         # Perform scatter add operation
         indices = atomic_subsystem_indices.unsqueeze(1).to(torch.int64)
         result = torch.zeros(
-            len(atomic_subsystem_indices.unique()), 1, dtype=x.dtype
+            len(atomic_subsystem_indices.unique()), 1, dtype=x.dtype, device=x.device
         ).scatter_add(0, indices, x)
 
         # Sum across feature dimension to get final tensor of shape (num_molecules, 1)
         total_energy_per_molecule = result.sum(dim=1, keepdim=True)
-
         return total_energy_per_molecule
 
 
-def _shifted_softplus(x: torch.Tensor):
-    r"""Compute shifted soft-plus activation function.
+from dataclasses import dataclass, field
+from typing import Dict, Iterator
 
-    .. math::
-       y = \ln\left(1 + e^{-x}\right) - \ln(2)
 
-    Args:
-        x (torch.Tensor): input tensor.
+@dataclass
+class AtomicSelfEnergies:
+    """
+    AtomicSelfEnergies stores a mapping of atomic elements to their self energies.
 
-    Returns:
+    Provides lookup by atomic number or symbol, iteration over the mapping,
+    and utilities to convert between atomic number and symbol.
+
+    Intended as a base class to be extended with specific element-energy values.
+    """    
+    # We provide a dictionary with {str:float} of element name to atomic self-energy,
+    # which can then be accessed by atomic index or element name
+    energies: Dict[str, float] = field(default_factory=dict)
+    # Example mapping, replace or extend as necessary
+    atomic_number_to_element: Dict[int, str] = field(
+        default_factory=lambda: {
+            1: "H",
+            2: "He",
+            3: "Li",
+            4: "Be",
+            5: "B",
+            6: "C",
+            7: "N",
+            8: "O",
+            9: "F",
+            10: "Ne",
+            11: "Na",
+            12: "Mg",
+            13: "Al",
+            14: "Si",
+            15: "P",
+            16: "S",
+            17: "Cl",
+            18: "Ar",
+            19: "K",
+            20: "Ca",
+            21: "Sc",
+            22: "Ti",
+            23: "V",
+            24: "Cr",
+            25: "Mn",
+            26: "Fe",
+            27: "Co",
+            28: "Ni",
+            29: "Cu",
+            30: "Zn",
+            31: "Ga",
+            32: "Ge",
+            33: "As",
+            34: "Se",
+            35: "Br",
+            36: "Kr",
+            37: "Rb",
+            38: "Sr",
+            39: "Y",
+            40: "Zr",
+            41: "Nb",
+            42: "Mo",
+            43: "Tc",
+            44: "Ru",
+            45: "Rh",
+            46: "Pd",
+            47: "Ag",
+            48: "Cd",
+            49: "In",
+            50: "Sn",
+            # Add more elements as needed
+        }
+    )
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            # Convert atomic number to element symbol
+            element = self.atomic_number_to_element.get(key)
+            if element is None:
+                raise KeyError(f"Atomic number {key} not found.")
+            return self.energies.get(element)
+        elif isinstance(key, str):
+            # Directly access by element symbol
+            if key not in self.energies:
+                raise KeyError(f"Element {key} not found.")
+            return self.energies[key]
+        else:
+            raise TypeError(
+                "Key must be an integer (atomic number) or string (element name)."
+            )
+
+    def __iter__(self) -> Iterator[Dict[str, float]]:
+        """Iterate over the energies dictionary."""
+        for element, energy in self.energies.items():
+            atomic_number = self.element_to_atomic_number(element)
+            yield (atomic_number, energy)
+
+    def __len__(self) -> int:
+        """Return the number of element-energy pairs."""
+        return len(self.energies)
+
+    def element_to_atomic_number(self, element: str) -> int:
+        """Return the atomic number for a given element symbol."""
+        for atomic_number, elem_symbol in self.atomic_number_to_element.items():
+            if elem_symbol == element:
+                return atomic_number
+        raise ValueError(f"Element symbol '{element}' not found in the mapping.")
+
+
+class ShiftedSoftplus(nn.Module):
+    def __init__(self):
+        super().__init__()
+        import math
+
+        self.log_2 = math.log(2.0)
+
+    def forward(self, x: torch.Tensor):
+        """Compute shifted soft-plus activation function.
+
+        y = \ln\left(1 + e^{-x}\right) - \ln(2)
+
+        Parameters:
+        -----------
+        x:torch.Tensor
+            input tensor
+
+        Returns:
+        -----------
         torch.Tensor: shifted soft-plus of input.
 
-    """
-    from torch.nn import functional
-    import math
+        """
+        from torch.nn import functional
 
-    return functional.softplus(x) - math.log(0.2)
+        return functional.softplus(x) - self.log_2
 
 
 from typing import Optional
@@ -442,15 +558,28 @@ def pair_list(
     # generate index grid
     n = len(atomic_subsystem_indices)
 
+    # get device that passed tensors lives on, initialize on the same device
+    device = atomic_subsystem_indices.device
+
     if only_unique_pairs:
-        i_indices, j_indices = torch.triu_indices(n, n, 1)
+        i_indices, j_indices = torch.triu_indices(n, n, 1, device=device)
     else:
         # Repeat each number n-1 times for i_indices
-        i_indices = torch.repeat_interleave(torch.arange(n), repeats=n - 1)
+        i_indices = torch.repeat_interleave(
+            torch.arange(n, device=device), repeats=n - 1
+        )
 
         # Correctly construct j_indices
         j_indices = torch.cat(
-            [torch.cat((torch.arange(i), torch.arange(i + 1, n))) for i in range(n)]
+            [
+                torch.cat(
+                    (
+                        torch.arange(i, device=device),
+                        torch.arange(i + 1, n, device=device),
+                    )
+                )
+                for i in range(n)
+            ]
         )
 
     # filter pairs to only keep those belonging to the same molecule
@@ -465,7 +594,7 @@ def pair_list(
     # concatenate to form final (2, n_pairs) tensor
     pair_indices = torch.stack((i_final_pairs, j_final_pairs))
 
-    return pair_indices
+    return pair_indices.to(device)
 
 
 from openff.units import unit

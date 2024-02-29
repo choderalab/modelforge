@@ -6,6 +6,7 @@ def test_gaussian_rbf_1D():
     dist = (
         torch.tensor([[[1.0]]]) / 10
     )  # NOTE: converting to nanometer, NOTE: invariant as long as consisten units are used
+
     from openff.units import unit
 
     rbf_expension = GaussianRBF(n_rbf=6, cutoff=unit.Quantity(5.0, unit.angstrom))

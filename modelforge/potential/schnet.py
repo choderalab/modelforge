@@ -5,7 +5,8 @@ from loguru import logger as log
 import torch.nn as nn
 
 from .models import BaseNNP, LightningModuleMixin
-from .utils import _distance_to_radial_basis, _shifted_softplus
+from .utils import _distance_to_radial_basis, ShiftedSoftplus
+from .postprocessing import PostprocessingPipeline, NoPostprocess
 
 
 class SchNET(BaseNNP):
@@ -15,9 +16,12 @@ class SchNET(BaseNNP):
         nr_interaction_blocks: int,
         radial_basis_module: nn.Module,
         cutoff_module: nn.Module,
-        nr_filters: int = 2,
+        nr_filters: int = None,
         shared_interactions: bool = False,
-        activation: nn.Module = _shifted_softplus,
+        activation: nn.Module = ShiftedSoftplus(),
+        postprocessing: PostprocessingPipeline = PostprocessingPipeline(
+            [NoPostprocess({})]
+        ),
     ) -> None:
         """
         Initialize the SchNet class.
@@ -30,11 +34,13 @@ class SchNET(BaseNNP):
         radial_basis : nn.Module
         cutoff : nn.Module
         nr_filters : int, optional
-            Number of filters; defines the dimensionality of the intermediate features (default is 2).
+            Number of filters; defines the dimensionality of the intermediate features.
         """
 
         log.debug("Initializing SchNet model.")
-        super().__init__(cutoff=float(cutoff_module.cutoff))
+        super().__init__(
+            cutoff=float(cutoff_module.cutoff), postprocessing=postprocessing
+        )
         self.radial_basis_module = radial_basis_module
         self.cutoff_module = cutoff_module
 
@@ -43,9 +49,10 @@ class SchNET(BaseNNP):
 
         self.nr_atom_basis = embedding_module.embedding_dim
         self.readout_module = EnergyReadout(self.nr_atom_basis)
+        self.nr_filters = nr_filters or self.nr_atom_basis
 
         log.debug(
-            f"Passed parameters to constructor: {self.nr_atom_basis=}, {nr_interaction_blocks=}, {nr_filters=}, {cutoff_module=}"
+            f"Passed parameters to constructor: {self.nr_atom_basis=}, {nr_interaction_blocks=}, {self.nr_filters=}, {cutoff_module=}"
         )
 
         # Initialize representation block
@@ -56,7 +63,7 @@ class SchNET(BaseNNP):
         self.interaction_modules = nn.ModuleList(
             [
                 SchNETInteractionBlock(
-                    self.nr_atom_basis, nr_filters, self.radial_basis_module.n_rbf
+                    self.nr_atom_basis, self.nr_filters, self.radial_basis_module.n_rbf
                 )
                 for _ in range(nr_interaction_blocks)
             ]
@@ -139,20 +146,22 @@ class SchNETInteractionBlock(nn.Module):
             Number of radial basis functions.
         """
         super().__init__()
-        from .utils import _shifted_softplus, Dense
+        from .utils import ShiftedSoftplus, Dense
 
         assert nr_rbf > 4, "Number of radial basis functions must be larger than 10."
         assert nr_filters > 1, "Number of filters must be larger than 1."
         assert nr_atom_basis > 10, "Number of atom basis must be larger than 10."
 
         self.nr_atom_basis = nr_atom_basis  # Initialize parameters
-        self.intput_to_feature = nn.Linear(nr_atom_basis, nr_filters)
+        self.intput_to_feature = Dense(
+            nr_atom_basis, nr_filters, bias=False, activation=None
+        )
         self.feature_to_output = nn.Sequential(
-            Dense(nr_filters, nr_atom_basis, activation=_shifted_softplus),
+            Dense(nr_filters, nr_atom_basis, activation=ShiftedSoftplus()),
             Dense(nr_atom_basis, nr_atom_basis, activation=None),
         )
         self.filter_network = nn.Sequential(
-            Dense(nr_rbf, nr_filters, activation=_shifted_softplus),
+            Dense(nr_rbf, nr_filters, activation=ShiftedSoftplus()),
             Dense(nr_filters, nr_filters, activation=None),
         )
 
@@ -203,7 +212,7 @@ class SchNETInteractionBlock(nn.Module):
 
         # Initialize a tensor to gather the results
         shape = list(x.shape)  # note that we're using x.shape, not x_ij.shape
-        x_native = torch.zeros(shape, dtype=x.dtype)
+        x_native = torch.zeros(shape, dtype=x.dtype, device=x.device)
 
         idx_i_expanded = idx_i.unsqueeze(1).expand_as(x_ij)
 
@@ -263,7 +272,10 @@ class LightningSchNET(SchNET, LightningModuleMixin):
         cutoff: nn.Module,
         nr_filters: int = 2,
         shared_interactions: bool = False,
-        activation: nn.Module = _shifted_softplus,
+        activation: nn.Module = ShiftedSoftplus(),
+        postprocessing: PostprocessingPipeline = PostprocessingPipeline(
+            [NoPostprocess({})]
+        ),
         loss: Type[nn.Module] = nn.MSELoss(),
         optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
         lr: float = 1e-3,
@@ -288,7 +300,14 @@ class LightningSchNET(SchNET, LightningModuleMixin):
         """
 
         super().__init__(
-            embedding, nr_interaction_blocks, radial_basis, cutoff, nr_filters
+            embedding_module=embedding,
+            nr_interaction_blocks=nr_interaction_blocks,
+            radial_basis_module=radial_basis,
+            cutoff_module=cutoff,
+            nr_filters=nr_filters,
+            shared_interactions=shared_interactions,
+            activation=activation,
+            postprocessing=postprocessing,
         )
         self.loss_function = loss
         self.optimizer = optimizer

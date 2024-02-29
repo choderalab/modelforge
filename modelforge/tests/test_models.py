@@ -450,7 +450,7 @@ def test_postprocessing():
     assert len(dataset.dataset_statistics["self_energies"]) == 5
 
     from modelforge.potential.schnet import SchNET
-    from modelforge.potential import CosineCutoff, GaussianRBF
+    from modelforge.potential import CosineCutoff, RadialSymmetryFunction
     from modelforge.potential.utils import SlicedEmbedding
     from openff.units import unit
 

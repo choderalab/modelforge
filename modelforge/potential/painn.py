@@ -75,20 +75,16 @@ class PaiNN(BaseNNP):
 
         # initialize the filter network
         if shared_filters:
-            self.filter_net = nn.Sequential(
-                nn.Linear(
-                    self.radial_symmetry_function_module.number_of_gaussians,
-                    3 * self.nr_atom_basis,
-                ),
-                nn.Identity(),
+            self.filter_net = Dense(
+                self.radial_symmetry_function_module.number_of_gaussians,
+                3 * self.nr_atom_basis,
             )
+
         else:
-            self.filter_net = nn.Sequential(
-                nn.Linear(
-                    self.radial_symmetry_function_module.number_of_gaussians,
-                    self.nr_interaction_blocks * 3 * self.nr_atom_basis,
-                ),
-                nn.Identity(),
+            self.filter_net = Dense(
+                self.radial_symmetry_function_module.number_of_gaussians,
+                self.nr_interaction_blocks * self.nr_atom_basis * 3,
+                activation=None,
             )
 
         # initialize the interaction and mixing networks
@@ -124,17 +120,22 @@ class PaiNN(BaseNNP):
         """
         Transforms the input data for the PAInn potential model.
 
-        Args:
-            inputs (Dict[str, torch.Tensor]): A dictionary containing the input tensors.
-                - "d_ij" (torch.Tensor): Pairwise distances between atoms. Shape: (n_pairs, 1, distance).
-                - "r_ij" (torch.Tensor): Displacement vector between atoms. Shape: (n_pairs, 1, 3).
-                - "atomic_embedding" (torch.Tensor): Embeddings of atomic numbers. Shape: (n_atoms, embedding_dim).
+        Parameters
+        ----------
+        inputs (Dict[str, torch.Tensor]): A dictionary containing the input tensors.
+            - "d_ij" (torch.Tensor): Pairwise distances between atoms. Shape: (n_pairs, 1, distance).
+            - "r_ij" (torch.Tensor): Displacement vector between atoms. Shape: (n_pairs, 1, 3).
+            - "atomic_embedding" (torch.Tensor): Embeddings of atomic numbers. Shape: (n_atoms, embedding_dim).
 
         Returns:
-            Dict[str, torch.Tensor]: A dictionary containing the transformed input tensors.
-                - "mu" (torch.Tensor): Zero-initialized tensor for atom features. Shape: (n_atoms, 3, nr_atom_basis).
-                - "dir_ij" (torch.Tensor): Direction vectors between atoms. Shape: (n_pairs, 1, distance).
-                - "q" (torch.Tensor): Reshaped atomic number embeddings. Shape: (n_atoms, 1, embedding_dim).
+        ----------
+        Dict[str, torch.Tensor]:
+            A dictionary containing the transformed input tensors.
+            - "mu" (torch.Tensor)
+                Zero-initialized tensor for atom features. Shape: (n_atoms, 3, nr_atom_basis).
+            - "dir_ij" (torch.Tensor)
+                Direction vectors between atoms. Shape: (n_pairs, 1, distance).
+            - "q" (torch.Tensor): Reshaped atomic number embeddings. Shape: (n_atoms, 1, embedding_dim).
         """
         from modelforge.potential.utils import _distance_to_radial_basis
 

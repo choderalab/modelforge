@@ -559,7 +559,7 @@ class TorchDataModule(pl.LightningDataModule):
         self,
         remove_self_energies: bool = True,
         normalize: bool = False,
-        self_energies: Dict[str, float] = {},
+        self_energies: Dict[str, float] = None,
         regression_ase: bool = False,
     ) -> None:
         """
@@ -572,13 +572,13 @@ class TorchDataModule(pl.LightningDataModule):
         normalize : bool, optional
             Whether to normalize the dataset. Defaults to True.
         self_energies : Dict[str, float], optional
-            A dictionary mapping atomic numbers to their calculated self energies. Defaults to {}.
+            A dictionary mapping atomic numbers to their calculated self energies. Defaults to None.
         regression_ase : bool, optional
             If regression_ase is True, atomic self energies are calculated using linear regression
 
         if remove_self_energies is True and
             - self_energies are passed as dictionary, these will be used
-            - self_energies are {}, self._ase will be used
+            - self_energies are None, self._ase will be used
             - regression_ase is True, self_energies will be calculated
         """
 

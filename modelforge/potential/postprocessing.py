@@ -83,6 +83,18 @@ class AddSelfEnergies(Postprocess):
     def __init__(self, dataset_statistics: Dict):
         super().__init__(dataset_statistics)
 
+        # calculate maximum atomic number from provided ase
+        atomic_numbers = []
+        for atomic_number, ase in dataset_statistics["self_energies"]:
+            atomic_numbers.append(atomic_number)
+
+        self.max_atomic_number: int = max(atomic_numbers) + 1
+
+        # fill ase in self_energies tensor
+        self.self_energies_tensor = torch.zeros(self.max_atomic_number)
+        for atomic_number, ase in self.dataset_statistics["self_energies"]:
+            self.self_energies_tensor[atomic_number] = ase
+
     def forward(
         self,
         postprocessing_data: Dict[str, torch.Tensor],
@@ -94,16 +106,12 @@ class AddSelfEnergies(Postprocess):
         energies = postprocessing_data["energy_readout"]
         atomic_numbers = postprocessing_data["atomic_numbers"]
         molecule_indices = postprocessing_data["atomic_subsystem_indices"]
-        max_atomic_number = torch.max(atomic_numbers).item()
-        self_energies_tensor = torch.zeros(max_atomic_number + 1)
-        for atomic_number, energy in self.dataset_statistics["self_energies"]:
-            self_energies_tensor[atomic_number] = energy
 
         # Calculate self energies for each atom and then aggregate them per molecule
-        atom_self_energies = self_energies_tensor[atomic_numbers]
+        atom_self_energies = self.self_energies_tensor[atomic_numbers]
         molecule_self_energies = torch.zeros_like(energies)
 
-        for i, energy in enumerate(energies):
+        for i in range(len(energies)):
             # Find atoms belonging to the current molecule
             mask = molecule_indices == i
             # Sum self energies for these atoms

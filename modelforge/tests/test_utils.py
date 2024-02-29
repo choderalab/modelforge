@@ -14,10 +14,15 @@ def test_ase_dataclass():
     )
 
     # Access by element name
-    print(atomic_self_energies["H"])  # Output: 13.6
+    assert np.isclose(atomic_self_energies["H"], 13.6)
 
     # Access by atomic number
-    print(atomic_self_energies[1])  # Output: 13.6
+    assert np.isclose(atomic_self_energies[1], 13.6)
+
+    # Iterate over the atomic self energies
+    for idx, (atom_index, ase) in enumerate(atomic_self_energies):
+        print(atom_index, ase)
+        assert atom_index == idx + 1
 
 
 def test_cosine_cutoff():

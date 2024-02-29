@@ -2,10 +2,27 @@ import numpy as np
 import torch
 import pytest
 
-from modelforge.potential.utils import (
-    CosineCutoff,
-    RadialSymmetryFunction,
-)
+from modelforge.potential.utils import CosineCutoff, _cosine_cutoff, GaussianRBF
+
+
+def test_ase_dataclass():
+    from modelforge.potential.utils import AtomicSelfEnergies
+
+    # Example usage
+    atomic_self_energies = AtomicSelfEnergies(
+        energies={"H": 13.6, "He": 24.6, "Li": 5.4}
+    )
+
+    # Access by element name
+    assert np.isclose(atomic_self_energies["H"], 13.6)
+
+    # Access by atomic number
+    assert np.isclose(atomic_self_energies[1], 13.6)
+
+    # Iterate over the atomic self energies
+    for idx, (atom_index, ase) in enumerate(atomic_self_energies):
+        print(atom_index, ase)
+        assert atom_index == idx + 1
 
 
 def test_cosine_cutoff():
@@ -209,3 +226,27 @@ def test_sliced_embedding():
 
     assert sliced_output.shape == (5, embedding_dim)
     assert normal_output.shape == (5, 1, embedding_dim)
+
+
+def test_welford():
+    """
+    Test the Welford's algorithm implementation.
+    """
+    from modelforge.utils.misc import Welford
+    import torch
+    import numpy as np
+
+    torch.manual_seed(0)
+    target_mean = 1000
+    target_stddev = 50
+    target_variance = target_stddev**2
+
+    online_estimator = Welford()
+
+    for i in range(0, 5):
+        batch = torch.normal(target_mean, target_stddev, size=(1000,))
+        online_estimator.update(batch)
+
+        assert np.isclose(online_estimator.mean / target_mean, 1.0, rtol=1e-1)
+        assert np.isclose(online_estimator.variance / target_variance, 1.0, rtol=1e-1)
+        assert np.isclose(online_estimator.stddev / target_stddev, 1.0, rtol=1e-1)

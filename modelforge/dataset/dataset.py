@@ -434,8 +434,6 @@ class DatasetFactory:
     @staticmethod
     def _load_or_process_data(
         data: HDF5Dataset,
-        label_transform: Optional[Dict[str, Callable]],
-        transform: Optional[Dict[str, Callable]],
     ) -> None:
         """
         Loads the dataset from cache if available, otherwise processes and caches the data.
@@ -460,8 +458,6 @@ class DatasetFactory:
     @staticmethod
     def create_dataset(
         data: HDF5Dataset,
-        label_transform: Optional[Dict[str, Callable]] = None,
-        transform: Optional[Dict[str, Callable]] = None,
     ) -> TorchDataset:
         """
         Creates a TorchDataset from an HDF5Dataset, applying optional transformations.
@@ -470,10 +466,6 @@ class DatasetFactory:
         ----------
         data : HDF5Dataset
             The HDF5 dataset to convert.
-        label_transform : Optional[Dict[str, Callable]], optional
-            Transformations to apply to labels, keyed by property name.
-        transform : Optional[Dict[str, Callable]], optional
-            Transformations to apply to data, keyed by property name.
 
         Returns
         -------
@@ -482,7 +474,7 @@ class DatasetFactory:
         """
 
         log.info(f"Creating {data.dataset_name} dataset")
-        DatasetFactory._load_or_process_data(data, label_transform, transform)
+        DatasetFactory._load_or_process_data(data)
         return TorchDataset(data.numpy_data, data._property_names)
 
 
@@ -529,12 +521,9 @@ class TorchDataModule(pl.LightningDataModule):
         self.split = split
         self.split_file = split_file
         self.dataset_statistics = {}
+        self._ase = data.atomic_self_energies  # atomic self energies
 
-
-    @classmethod
-    def calculate_self_energies(
-        cls, dataset: TorchDataset, collate: bool = True
-    ) -> Dict[str, float]:
+    def calculate_self_energies(self, collate: bool = True) -> Dict[str, float]:
         """
         Calculates the self energies for each atomic number in the dataset by performing a least squares regression.
 
@@ -551,74 +540,11 @@ class TorchDataModule(pl.LightningDataModule):
             A dictionary mapping atomic numbers to their calculated self energies.
         """
         log.info("Computing self energies for elements in the dataset.")
+        from modelforge.dataset.utils import calculate_self_energies
 
         # Define the collate function based on the `collate` parameter
         collate_fn = collate_conformers if collate else None
-
-        # Initialize variables to hold data for regression
-        batch_size = 64
-        # Determine the size of the counts tensor
-        num_molecules = dataset.n_records
-        # Determine up to which Z we detect elements
-        max_atomic_number = 100
-        # Initialize the counts tensor
-        counts = torch.zeros(num_molecules, max_atomic_number + 1, dtype=torch.int64)
-        # save energies in list
-        energy_array = torch.zeros(dataset.n_records, dtype=torch.float64)
-        # for filling in the element count matrix
-        molecule_counter = 0
-        # counter for saving energy values
-        current_index = 0
-        # save unique atomic numbers in list
-        unique_atomic_numbers = set()
-
-        for batch in DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn):
-            energies, atomic_numbers, molecules_id = (
-                batch["E_label"].squeeze(),
-                batch["atomic_numbers"].squeeze(-1),
-                batch["atomic_subsystem_indices"].to(torch.int64),
-            )
-
-            # Update the energy array and unique atomic numbers set
-            batch_size = energies.size(0)
-            energy_array[current_index : current_index + batch_size] = (
-                energies.squeeze()
-            )
-            current_index += batch_size
-            unique_atomic_numbers |= set(atomic_numbers.tolist())
-            atomic_numbers_ = atomic_numbers - 1
-
-            # Count the occurrence of each atomic number in molecules
-            for molecule_id in molecules_id.unique():
-                mask = molecules_id == molecule_id
-                counts[molecule_counter].scatter_add_(
-                    0, atomic_numbers_[mask], torch.ones_like(atomic_numbers_[mask])
-                )
-                molecule_counter += 1
-
-        # Prepare the data for lineare regression
-        valid_elements_mask = counts.sum(dim=0) > 0
-        filtered_counts = counts[:, valid_elements_mask]
-
-        Xs = [
-            filtered_counts[:, i].unsqueeze(1).detach().numpy()
-            for i in range(filtered_counts.shape[1])
-        ]
-
-        A = np.hstack(Xs)
-        y = energy_array.numpy()
-
-        # Perform least squares regression
-        least_squares_fit, _, _, _ = np.linalg.lstsq(A, y, rcond=None)
-        self_energies = {
-            idx: energy for idx, energy in zip(unique_atomic_numbers, least_squares_fit)
-        }
-
-        log.info("Calculated self energies for elements.")
-
-        log.info("Coefficients for each element:", self_energies)
-        print(self_energies)
-        return self_energies
+        return calculate_self_energies(self.dataset, collate_fn)
 
     # print information about the unit system used in the dataset
     def print_unit_system(self) -> None:
@@ -630,7 +556,11 @@ class TorchDataModule(pl.LightningDataModule):
         provide_details_about_used_unitsystem()
 
     def prepare_data(
-        self, remove_self_energies: bool = True, normalize: bool = False
+        self,
+        remove_self_energies: bool = True,
+        normalize: bool = False,
+        self_energies: Dict[str, float] = None,
+        regression_ase: bool = False,
     ) -> None:
         """
         Prepares the dataset for use by calculating self energies, normalizing data, and splitting the dataset.
@@ -641,7 +571,19 @@ class TorchDataModule(pl.LightningDataModule):
             Whether to remove self energies from the dataset. Defaults to True.
         normalize : bool, optional
             Whether to normalize the dataset. Defaults to True.
+        self_energies : Dict[str, float], optional
+            A dictionary mapping atomic numbers to their calculated self energies. Defaults to None.
+        regression_ase : bool, optional
+            If regression_ase is True, atomic self energies are calculated using linear regression
+
+        if remove_self_energies is True and
+            - self_energies are passed as dictionary, these will be used
+            - self_energies are None, self._ase will be used
+            - regression_ase is True, self_energies will be calculated
         """
+        from modelforge.utils import provide_details_about_used_unitsystem
+
+        provide_details_about_used_unitsystem()
 
         if self.split_file and os.path.exists(self.split_file):
             self.split_idxs = np.load(self.split_file, allow_pickle=True)
@@ -654,54 +596,42 @@ class TorchDataModule(pl.LightningDataModule):
         self.dataset = factory.create_dataset(self.data)
         dataset_statistics = {}
         # calculate self energies
+        import toml
+
         if remove_self_energies:
-            self_energies = TorchDataModule.calculate_self_energies(self.dataset)
-            self.dataset = TorchDataModule.remove_self_energies(
-                self.dataset, self_energies
-            )
+            log.debug("Self energies are removed ...")
+            if not self_energies:
+                if regression_ase:
+                    log.debug(
+                        "Using linear regression to calculate atomic self energies..."
+                    )
+                    self_energies = self.calculate_self_energies()
+                else:
+                    log.debug("Using atomic self energies from the dataset...")
+                    self_energies = self._ase
+            self.dataset = self.remove_self_energies(self.dataset, self_energies)
+            # save the self energies that are removed from the dataset
             dataset_statistics["self_energies"] = self_energies
+            with open("ase.toml", "w") as f:
+                self_energies_ = {str(idx): energy for (idx, energy) in self_energies}
+                toml.dump(self_energies_, f)
 
         # calculate average and variance
         if normalize:
-            stats = TorchDataModule.calculate_mean_and_variance(self.dataset)
-            self.dataset = TorchDataModule.normalize_energies(self.dataset, stats)
+            from modelforge.dataset.utils import (
+                calculate_mean_and_variance,
+                normalize_energies,
+            )
+
+            stats = calculate_mean_and_variance(self.dataset)
+            self.dataset = normalize_energies(self.dataset, stats)
             dataset_statistics["stddev"] = stats["stddev"]
             dataset_statistics["mean"] = stats["mean"]
 
         self.dataset_statistics = dataset_statistics
         self.setup()
 
-    @classmethod
-    def normalize_energies(cls, dataset, stats: Dict[str, float]) -> None:
-        """
-        Normalizes the energies in the dataset.
-        """
-        from tqdm import tqdm
-
-        for i in tqdm(range(len(dataset)), desc="Adjusting Energies"):
-            energy = dataset[i]["E_label"]
-            # Normalize using the computed mean and std
-            modified_energy = (energy - stats["mean"]) / stats["stddev"]
-            dataset[i] = {"E_label": modified_energy}
-
-        return dataset
-
-    @classmethod
-    def calculate_mean_and_variance(cls, dataset) -> Dict[str, float]:
-        """
-        Calculates the mean and variance of the dataset.
-
-        """
-        import numpy as np
-
-        log.info("Calculating mean and variance for normalization")
-        energies = np.array([dataset[i]["E_label"] for i in range(len(dataset))])
-        stats = {"mean": energies.mean(), "stddev": energies.std()}
-        log.info(f"Mean and standard deviation of the dataset:{stats}")
-        return stats
-
-    @classmethod
-    def remove_self_energies(cls, dataset, self_energies: Dict[str, float]) -> None:
+    def remove_self_energies(self, dataset, self_energies: Dict[str, float]) -> None:
         """
         Removes the self energies from the dataset.
 
@@ -717,7 +647,7 @@ class TorchDataModule(pl.LightningDataModule):
             atomic_numbers = dataset[i]["atomic_numbers"]
             E_label = dataset[i]["E_label"]
             for idx, Z in enumerate(atomic_numbers):
-                E_label -= self_energies[Z.item()]
+                E_label -= self_energies[int(Z.item())]
             dataset[i] = {"E_label": E_label}
         return dataset
 
@@ -751,10 +681,6 @@ class TorchDataModule(pl.LightningDataModule):
         """
         Sets up datasets for the train, validation, and test stages.
 
-        Parameters
-        ----------
-        stage : Optional[str]
-            The stage for which to set up the dataset. Can be 'fit', 'validate', 'test', or 'predict'. Defaults to None.
         """
         from torch.utils.data import Subset
 

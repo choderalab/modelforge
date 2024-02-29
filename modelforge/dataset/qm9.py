@@ -99,6 +99,18 @@ class QM9Dataset(HDF5Dataset):
             "https://github.com/wiederm/gm9/raw/main/qm9_dataset_n100.hdf5.gz"
         )
         self.full_url = "https://github.com/wiederm/gm9/raw/main/qm9.hdf5.gz"
+        self._ase = {
+            "H": -1313.4668615546,
+            "C": -99366.70745535441,
+            "N": -143309.9379722722,
+            "O": -197082.0671774158,
+            "F": -261811.54555874597,
+        }
+
+    @property
+    def atomic_self_energies(self):
+        from modelforge.potential.utils import AtomicSelfEnergies
+        return AtomicSelfEnergies(energies=self._ase)
 
     @property
     def properties_of_interest(self) -> List[str]:
@@ -166,9 +178,9 @@ class QM9Dataset(HDF5Dataset):
         >>> data.download()  # Downloads the dataset from Google Drive
 
         """
-        from modelforge.dataset.utils import _download_from_gh
+        from modelforge.dataset.utils import _download_from_url
         import requests
 
         url = self.test_url if self.for_unit_testing else self.full_url
-        _download_from_gh(url, self.raw_data_file)
+        _download_from_url(url, self.raw_data_file)
         # _download_from_gdrive(id, self.raw_data_file)

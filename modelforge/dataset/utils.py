@@ -14,6 +14,106 @@ if TYPE_CHECKING:
     from modelforge.dataset.dataset import TorchDataset
 
 
+def normalize_energies(dataset, stats: Dict[str, float]) -> None:
+    """
+    Normalizes the energies in the dataset.
+    """
+    from tqdm import tqdm
+
+    for i in tqdm(range(len(dataset)), desc="Adjusting Energies"):
+        energy = dataset[i]["E_label"]
+        # Normalize using the computed mean and std
+        modified_energy = (energy - stats["mean"]) / stats["stddev"]
+        dataset[i] = {"E_label": modified_energy}
+
+    return dataset
+
+
+def calculate_mean_and_variance(dataset) -> Dict[str, float]:
+    """
+    Calculates the mean and variance of the dataset.
+
+    """
+    import numpy as np
+    from loguru import logger as log
+
+    log.info("Calculating mean and variance for normalization")
+    energies = np.array([dataset[i]["E_label"] for i in range(len(dataset))])
+    stats = {"mean": energies.mean(), "stddev": energies.std()}
+    log.info(f"Mean and standard deviation of the dataset:{stats}")
+    return stats
+
+
+def calculate_self_energies(dataset, collate_fn) -> Dict[int, float]:
+    from torch.utils.data import DataLoader
+    import torch
+    from loguru import logger as log
+
+    # Initialize variables to hold data for regression
+    batch_size = 64
+    # Determine the size of the counts tensor
+    num_molecules = dataset.n_records
+    # Determine up to which Z we detect elements
+    max_atomic_number = 100
+    # Initialize the counts tensor
+    counts = torch.zeros(num_molecules, max_atomic_number + 1, dtype=torch.int16)
+    # save energies in list
+    energy_array = torch.zeros(dataset.n_records, dtype=torch.float64)
+    # for filling in the element count matrix
+    molecule_counter = 0
+    # counter for saving energy values
+    current_index = 0
+    # save unique atomic numbers in list
+    unique_atomic_numbers = set()
+
+    for batch in DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn):
+        energies, atomic_numbers, molecules_id = (
+            batch["E_label"].squeeze(),
+            batch["atomic_numbers"].squeeze(-1).to(torch.int64),
+            batch["atomic_subsystem_indices"].to(torch.int16),
+        )
+
+        # Update the energy array and unique atomic numbers set
+        batch_size = energies.size(0)
+        energy_array[current_index : current_index + batch_size] = energies.squeeze()
+        current_index += batch_size
+        unique_atomic_numbers |= set(atomic_numbers.tolist())
+        atomic_numbers_ = atomic_numbers - 1
+
+        # Count the occurrence of each atomic number in molecules
+        for molecule_id in molecules_id.unique():
+            mask = molecules_id == molecule_id
+            counts[molecule_counter].scatter_add_(
+                0,
+                atomic_numbers_[mask],
+                torch.ones_like(atomic_numbers_[mask], dtype=torch.int16),
+            )
+            molecule_counter += 1
+
+    # Prepare the data for lineare regression
+    valid_elements_mask = counts.sum(dim=0) > 0
+    filtered_counts = counts[:, valid_elements_mask]
+
+    Xs = [
+        filtered_counts[:, i].unsqueeze(1).detach().numpy()
+        for i in range(filtered_counts.shape[1])
+    ]
+
+    A = np.hstack(Xs)
+    y = energy_array.numpy()
+
+    # Perform least squares regression
+    least_squares_fit, _, _, _ = np.linalg.lstsq(A, y, rcond=None)
+    self_energies = {
+        idx: energy for idx, energy in zip(unique_atomic_numbers, least_squares_fit)
+    }
+
+    log.debug("Calculated self energies for elements.")
+
+    log.info("Atomic self energies for each element:", self_energies)
+    return self_energies
+
+
 class SplittingStrategy(ABC):
     """
     Base class for dataset splitting strategies.
@@ -347,20 +447,20 @@ def _download_from_gdrive(id: str, raw_dataset_file: str):
     gdown.download(url, raw_dataset_file, quiet=False)
 
 
-def _download_from_gh(url: str, raw_dataset_file: str):
+def _download_from_url(url: str, raw_dataset_file: str):
     """
-    Downloads a dataset from github lfs.
+    Downloads a dataset from a specified URLS.
 
     Parameters
     ----------
     url : str
-        gh raw link.
+        raw link address.
     raw_dataset_file : str
         Path to save the downloaded dataset.
 
     Examples
     --------
-    >>> _download_from_gh(url, "data_file.hdf5.gz")
+    >>> _download_from_url(url, "data_file.hdf5.gz")
     """
     import requests
 

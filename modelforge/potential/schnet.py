@@ -5,7 +5,7 @@ from loguru import logger as log
 import torch.nn as nn
 
 from .models import BaseNNP, LightningModuleMixin
-from .utils import _distance_to_radial_basis, _shifted_softplus
+from .utils import _distance_to_radial_basis, ShiftedSoftplus
 from .postprocessing import PostprocessingPipeline, NoPostprocess
 
 
@@ -16,9 +16,9 @@ class SchNET(BaseNNP):
         nr_interaction_blocks: int,
         radial_symmetry_function_module: nn.Module,
         cutoff_module: nn.Module,
-        nr_filters: int = 2,
+        nr_filters: int = None,
         shared_interactions: bool = False,
-        activation: nn.Module = _shifted_softplus,
+        activation: nn.Module = ShiftedSoftplus(),
         postprocessing: PostprocessingPipeline = PostprocessingPipeline(
             [NoPostprocess({})]
         ),
@@ -34,7 +34,7 @@ class SchNET(BaseNNP):
         radial_symmetry_function_module : nn.Module
         cutoff : nn.Module
         nr_filters : int, optional
-            Number of filters; defines the dimensionality of the intermediate features (default is 2).
+            Number of filters; defines the dimensionality of the intermediate features.
         """
 
         log.debug("Initializing SchNet model.")
@@ -49,9 +49,10 @@ class SchNET(BaseNNP):
 
         self.nr_atom_basis = embedding_module.embedding_dim
         self.readout_module = EnergyReadout(self.nr_atom_basis)
+        self.nr_filters = nr_filters or self.nr_atom_basis
 
         log.debug(
-            f"Passed parameters to constructor: {self.nr_atom_basis=}, {nr_interaction_blocks=}, {nr_filters=}, {cutoff_module=}"
+            f"Passed parameters to constructor: {self.nr_atom_basis=}, {nr_interaction_blocks=}, {self.nr_filters=}, {cutoff_module=}"
         )
 
         # Initialize representation block
@@ -149,7 +150,7 @@ class SchNETInteractionBlock(nn.Module):
             Number of radial basis functions.
         """
         super().__init__()
-        from .utils import _shifted_softplus, Dense
+        from .utils import ShiftedSoftplus, Dense
 
         assert (
             number_of_gaussians > 4
@@ -158,9 +159,11 @@ class SchNETInteractionBlock(nn.Module):
         assert nr_atom_basis > 10, "Number of atom basis must be larger than 10."
 
         self.nr_atom_basis = nr_atom_basis  # Initialize parameters
-        self.intput_to_feature = nn.Linear(nr_atom_basis, nr_filters)
+        self.intput_to_feature = Dense(
+            nr_atom_basis, nr_filters, bias=False, activation=None
+        )
         self.feature_to_output = nn.Sequential(
-            Dense(nr_filters, nr_atom_basis, activation=_shifted_softplus),
+            Dense(nr_filters, nr_atom_basis, activation=ShiftedSoftplus()),
             Dense(nr_atom_basis, nr_atom_basis, activation=None),
         )
         self.filter_network = nn.Sequential(
@@ -215,7 +218,7 @@ class SchNETInteractionBlock(nn.Module):
 
         # Initialize a tensor to gather the results
         shape = list(x.shape)  # note that we're using x.shape, not x_ij.shape
-        x_native = torch.zeros(shape, dtype=x.dtype)
+        x_native = torch.zeros(shape, dtype=x.dtype, device=x.device)
 
         idx_i_expanded = idx_i.unsqueeze(1).expand_as(x_ij)
 
@@ -277,7 +280,7 @@ class LightningSchNET(SchNET, LightningModuleMixin):
         cutoff_module: nn.Module,
         nr_filters: int = 2,
         shared_interactions: bool = False,
-        activation: nn.Module = _shifted_softplus,
+        activation: nn.Module = ShiftedSoftplus(),
         postprocessing: PostprocessingPipeline = PostprocessingPipeline(
             [NoPostprocess({})]
         ),

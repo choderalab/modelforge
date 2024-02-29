@@ -70,16 +70,19 @@ def test_pt_lightning():
         number_of_gaussians=number_of_gaussians, radial_cutoff=cutoff
     )
 
-    cutoff = CosineCutoff(cutoff=cutoff)
+    cutoff_module = CosineCutoff(cutoff=cutoff)
 
     from modelforge.dataset.qm9 import QM9Dataset
     from modelforge.dataset.dataset import TorchDataModule
 
+    # load the QM9Dataset
     data = QM9Dataset(for_unit_testing=True)
     dataset = TorchDataModule(data, batch_size=64)
+    # remove the self energies
     dataset.prepare_data(remove_self_energies=True)
     from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
+    # set up the pytorch lightning trainer 
     trainer = Trainer(
         max_epochs=500,
         num_nodes=1,
@@ -92,7 +95,7 @@ def test_pt_lightning():
         embedding=embedding,
         nr_interaction_blocks=nr_interaction_blocks,
         radial_symmetry_function_module=radial_symmetry_function_module,
-        cutoff_module=cutoff,
+        cutoff_module=cutoff_module,
     )
 
     # Move model to the appropriate dtype and device

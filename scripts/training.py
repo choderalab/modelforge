@@ -33,7 +33,7 @@ from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 trainer = Trainer(
     max_epochs=200,
     num_nodes=1,
-    accelerator="cuda",
+    accelerator='cuda',
     devices=[0],
     callbacks=[
         EarlyStopping(monitor="val_loss", mode="min", patience=3, min_delta=0.001)

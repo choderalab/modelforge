@@ -149,7 +149,9 @@ def setup_input():
     }
 
 
-def setup_spk_painn_representation(cutoff, nr_atom_basis, number_of_gaussians, nr_of_interactions):
+def setup_spk_painn_representation(
+    cutoff, nr_atom_basis, number_of_gaussians, nr_of_interactions
+):
     # ------------------------------------ #
     # set up the schnetpack Painn representation model
     from schnetpack.nn import GaussianRBF, CosineCutoff
@@ -167,7 +169,9 @@ def setup_spk_painn_representation(cutoff, nr_atom_basis, number_of_gaussians, n
     )
 
 
-def setup_modelforge_painn_representation(cutoff, nr_atom_basis, number_of_gaussians, nr_of_interactions):
+def setup_modelforge_painn_representation(
+    cutoff, nr_atom_basis, number_of_gaussians, nr_of_interactions
+):
     # ------------------------------------ #
     # set up the modelforge Painn representation model
     # which means that we only want to call the
@@ -512,24 +516,26 @@ def setup_spk_schnet_representation(
 
 
 def setup_mf_schnet_representation(
-    cutoff: float, nr_atom_basis: int, n_rbf: int, nr_of_interactions: int
+    cutoff: float, nr_atom_basis: int, number_of_gaussians: int, nr_of_interactions: int
 ):
     # ------------------------------------ #
     # set up the modelforge Painn representation model
     # which means that we only want to call the
     # _transform_input() method
-    from modelforge.potential import CosineCutoff, GaussianRBF
+    from modelforge.potential import CosineCutoff, RadialSymmetryFunction
     from modelforge.potential.utils import SlicedEmbedding
     from modelforge.potential.schnet import SchNET as mf_SchNET
 
     embedding = SlicedEmbedding(max_Z=100, embedding_dim=nr_atom_basis, sliced_dim=0)
-    radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
+    radial_basis = RadialSymmetryFunction(
+        number_of_gaussians=number_of_gaussians, radial_cutoff=cutoff
+    )
     cutoff = CosineCutoff(cutoff)
 
     return mf_SchNET(
         embedding_module=embedding,
         nr_interaction_blocks=nr_of_interactions,
-        radial_basis_module=radial_basis,
+        radial_symmetry_function_module=radial_basis,
         cutoff_module=cutoff,
     )
 
@@ -579,7 +585,7 @@ def test_schnet_representation_implementation():
     d_ij = torch.norm(r_ij, dim=1, keepdim=True)
     dir_ij = r_ij / d_ij
     schnetpack_phi_ij = schnetpack_schnet.radial_basis(d_ij)
-    modelforge_phi_ij = modelforge_schnet.radial_basis_module(
+    modelforge_phi_ij = modelforge_schnet.radial_symmetry_function_module(
         d_ij / 10
     )  # NOTE: converting to nm
 

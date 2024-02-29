@@ -64,7 +64,7 @@ class SchNET(BaseNNP):
             [
                 SchNETInteractionBlock(
                     self.nr_atom_basis,
-                    nr_filters,
+                    self.nr_filters,
                     self.radial_symmetry_function_module.number_of_gaussians,
                 )
                 for _ in range(nr_interaction_blocks)

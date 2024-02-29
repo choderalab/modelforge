@@ -92,11 +92,11 @@ def test_compare_angular_symmetry_features(setup_methane):
     import torch
     from modelforge.potential.utils import AngularSymmetryFunction, triple_by_molecule
     from openff.units import unit
-    from modelforge.potential.models import _PairList
+    from modelforge.potential.models import Pairlist
 
     # set up relevant system properties
     species, r, _, _ = setup_methane
-    pairlist = _PairList(only_unique_pairs=True)
+    pairlist = Pairlist(only_unique_pairs=True)
     pairs = pairlist(r[0], torch.tensor([0, 0, 0, 0, 0]))
     d_ij = pairs["d_ij"].squeeze(1)
     r_ij = pairs["r_ij"].squeeze(1)

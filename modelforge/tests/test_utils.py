@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import pytest
 
-from modelforge.potential.utils import CosineCutoff, _cosine_cutoff, GaussianRBF
+from modelforge.potential.utils import CosineCutoff, RadialSymmetryFunction
 
 
 def test_ase_dataclass():

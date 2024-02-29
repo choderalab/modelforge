@@ -546,15 +546,6 @@ class TorchDataModule(pl.LightningDataModule):
         collate_fn = collate_conformers if collate else None
         return calculate_self_energies(self.dataset, collate_fn)
 
-    # print information about the unit system used in the dataset
-    def print_unit_system(self) -> None:
-        """
-        Print information about the unit system used in the dataset.
-        """
-        from modelforge.utils import provide_details_about_used_unitsystem
-
-        provide_details_about_used_unitsystem()
-
     def prepare_data(
         self,
         remove_self_energies: bool = True,
@@ -581,10 +572,6 @@ class TorchDataModule(pl.LightningDataModule):
             - self_energies are None, self._ase will be used
             - regression_ase is True, self_energies will be calculated
         """
-        from modelforge.utils import provide_details_about_used_unitsystem
-
-        provide_details_about_used_unitsystem()
-
         if self.split_file and os.path.exists(self.split_file):
             self.split_idxs = np.load(self.split_file, allow_pickle=True)
             log.debug(f"Loaded split indices from {self.split_file}")

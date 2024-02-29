@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Optional
 
 import lightning as pl
 import torch
@@ -274,7 +274,7 @@ class BaseNNP(ABC, nn.Module):
         super().__init__()
         self._radial_cutoff = radial_cutoff
         self._angular_cutoff = angular_cutoff
-        self.calculate_distances_and_pairlist = _PairList()
+        self.calculate_distances_and_pairlist = Pairlist()
         self._dtype = None  # set at runtime
         self._log_message_dtype = False
         self._log_message_units = False
@@ -356,7 +356,7 @@ class BaseNNP(ABC, nn.Module):
         atomic_subsystem_indices = inputs["atomic_subsystem_indices"]
         nr_of_atoms_in_batch = inputs["atomic_numbers"].shape[0]
 
-        r = self.calculate_distances_and_Pairlist(positions, atomic_subsystem_indices)
+        r = self.calculate_distances_and_pairlist(positions, atomic_subsystem_indices)
 
         return {
             "pair_indices": r["pair_indices"],

@@ -198,7 +198,7 @@ def test_painn_representation_implementation():
     from openff.units import unit
 
     cutoff = unit.Quantity(5.0, unit.angstrom)
-    nr_atom_basis =
+    nr_atom_basis = 128
     number_of_gaussians = 5
     nr_of_interactions = 3
     torch.manual_seed(1234)

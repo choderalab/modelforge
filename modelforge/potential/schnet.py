@@ -167,7 +167,7 @@ class SchNETInteractionBlock(nn.Module):
             Dense(nr_atom_basis, nr_atom_basis, activation=None),
         )
         self.filter_network = nn.Sequential(
-            Dense(number_of_gaussians, nr_filters, activation=_shifted_softplus),
+            Dense(number_of_gaussians, nr_filters, activation=ShiftedSoftplus()),
             Dense(nr_filters, nr_filters, activation=None),
         )
 

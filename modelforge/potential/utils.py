@@ -347,7 +347,8 @@ class AtomicSelfEnergies:
     and utilities to convert between atomic number and symbol.
 
     Intended as a base class to be extended with specific element-energy values.
-    """    
+    """
+
     # We provide a dictionary with {str:float} of element name to atomic self-energy,
     # which can then be accessed by atomic index or element name
     energies: Dict[str, float] = field(default_factory=dict)
@@ -703,7 +704,7 @@ eta={eta}
 
 
 def _distance_to_radial_basis(
-    d_ij: torch.Tensor, radial_symmetry_function_module: Callable
+    d_ij: torch.Tensor, radial_symmetry_function_module: nn.Module
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Convert distances to radial basis functions.
@@ -712,7 +713,7 @@ def _distance_to_radial_basis(
     ----------
     d_ij : torch.Tensor, shape [n_pairs,1 ]
         Pairwise distances between atoms.
-    radial_symmetry_function_module : Callable
+    radial_symmetry_function_module : nn.Module
     Returns
     -------
     Tuple[torch.Tensor, torch.Tensor]

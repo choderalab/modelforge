@@ -319,6 +319,16 @@ from typing import Dict, Iterator
 
 @dataclass
 class AtomicSelfEnergies:
+    """
+    AtomicSelfEnergies stores a mapping of atomic elements to their self energies.
+
+    Provides lookup by atomic number or symbol, iteration over the mapping,
+    and utilities to convert between atomic number and symbol.
+
+    Intended as a base class to be extended with specific element-energy values.
+    """    
+    # We provide a dictionary with {str:float} of element name to atomic self-energy,
+    # which can then be accessed by atomic index or element name
     energies: Dict[str, float] = field(default_factory=dict)
     # Example mapping, replace or extend as necessary
     atomic_number_to_element: Dict[int, str] = field(
@@ -387,7 +397,7 @@ class AtomicSelfEnergies:
         elif isinstance(key, str):
             # Directly access by element symbol
             if key not in self.energies:
-                raise KeyError(f"Element '{key}' not found.")
+                raise KeyError(f"Element {key} not found.")
             return self.energies[key]
         else:
             raise TypeError(
@@ -397,11 +407,19 @@ class AtomicSelfEnergies:
     def __iter__(self) -> Iterator[Dict[str, float]]:
         """Iterate over the energies dictionary."""
         for element, energy in self.energies.items():
-            yield (self.atomic_number_to_element.get(element), energy)
+            atomic_number = self.element_to_atomic_number(element)
+            yield (atomic_number, energy)
 
     def __len__(self) -> int:
         """Return the number of element-energy pairs."""
         return len(self.energies)
+
+    def element_to_atomic_number(self, element: str) -> int:
+        """Return the atomic number for a given element symbol."""
+        for atomic_number, elem_symbol in self.atomic_number_to_element.items():
+            if elem_symbol == element:
+                return atomic_number
+        raise ValueError(f"Element symbol '{element}' not found in the mapping.")
 
 
 class ShiftedSoftplus(nn.Module):

@@ -34,6 +34,9 @@ class BayesianAutoNormalPotential(torch.nn.Module):
         init_log_sigma(self, log_sigma)
 
     def model(self, *args, **kwargs):
+        """The model function. If no `y` argument is provided, 
+        provide the prior; if `y` is provided, provide the likelihood.
+        """
         y = kwargs.pop("y", None)
         y_hat = self(*args, **kwargs)
         pyro.sample(

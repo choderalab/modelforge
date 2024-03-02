@@ -15,14 +15,14 @@ class ANIRepresentation(nn.Module):
         self,
         radial_cutoff: unit.Quantity,
         angular_cutoff: unit.Quantity,
-        nr_of_supported_atom_types: int = 5,
+        nr_of_supported_elements: int = 7,
     ):
         # radial symmetry functions
 
         super().__init__()
         self.radial_cutoff = radial_cutoff
         self.angular_cutoff = angular_cutoff
-        self.nr_of_supported_atom_types = nr_of_supported_atom_types
+        self.nr_of_supported_elements = nr_of_supported_elements
 
         self.radial_symmetry_functions = self._setup_radial_symmetry_functions(
             self.radial_cutoff
@@ -70,9 +70,39 @@ class ANIRepresentation(nn.Module):
 
         # calculate the atomic environment vectors
         # used for the ANI architecture of NNPs
-        radial_feature_vector = self.radial_symmetry_functions(inputs)
+        radial_feature_vector = self.radial_symmetry_functions(inputs["r_ij"])
+        radial_feature_vector = self._postprocess_radial_aev(
+            radial_feature_vector, inputs=inputs
+        )
         angular_feature_vector = self.angular_symmetry_functions(inputs)
         return [radial_feature_vector, angular_feature_vector]
+
+    def _postprocess_radial_aev(
+        self,
+        radial_feature_vector,
+        inputs: Dict[str, torch.Tensor],
+    ):
+
+        number_of_atoms_in_batch = 5 #inputs["number_of_atoms_in_batch"]
+        radial_sublength = self.radial_symmetry_functions.radial_sublength
+        radial_length = radial_sublength * self.nr_of_supported_elements 
+        radial_aev = radial_feature_vector.new_zeros(
+            (
+                number_of_atoms_in_batch * self.nr_of_supported_elements,
+                radial_sublength,
+            )
+        )
+        atom_index12 = inputs["pair_indices"]
+        species = inputs["atomic_numbers"]
+        species12 = species[atom_index12]
+
+        index12 = atom_index12 * self.nr_of_supported_elements + species12.flip(0)
+        radial_aev.index_add_(0, index12[0], radial_feature_vector)
+        radial_aev.index_add_(0, index12[1], radial_feature_vector)
+        
+        #radial_aev = radial_aev.reshape(number_of_atoms_in_batch, radial_length)
+        
+        return radial_aev
 
 
 class ANIInteraction(nn.Module):
@@ -191,14 +221,10 @@ class ANI2x(BaseNNP):
         # Compute the energy for each system
         return self.readout_module(inputs)
 
-    def prepare_inputs(self, inputs: Dict[str, torch.Tensor]):
-        # generate input preparation, implemented in BaseNNP class
-        inputs = self._prepare_inputs(inputs)
-        # ANI specific modifications
-        inputs = self._model_specific_input_preparation(inputs)
-        return inputs
+    def _model_specific_input_preparation(
+        self, inputs: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
 
-    def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
         return inputs
 
     def _forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
@@ -222,7 +248,7 @@ class ANI2x(BaseNNP):
         """
 
         # Compute the representation for each atom
-        representation = self.ani_representation_module(inputs["r_ij"])
+        representation = self.ani_representation_module(inputs)
         a = 7
 
         return {

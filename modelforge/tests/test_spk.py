@@ -579,7 +579,7 @@ def test_schnet_representation_implementation():
     idx_j = spk_input["_idx_j"]
 
     # ---------------------------------------- #
-    # test rbf
+    # test radial symmetry function
     # ---------------------------------------- #
     r_ij = spk_input["_Rij"]
     d_ij = torch.norm(r_ij, dim=1, keepdim=True)

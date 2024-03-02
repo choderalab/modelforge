@@ -77,11 +77,6 @@ class SchNET(BaseNNP):
         # Compute the energy for each system
         return self.readout_module(inputs)
 
-    def prepare_inputs(self, inputs: Dict[str, torch.Tensor]):
-        inputs = self._prepare_inputs(inputs)
-        inputs = self._model_specific_input_preparation(inputs)
-        return inputs
-
     def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
         # Perform atomic embedding
         from modelforge.potential.utils import embed_atom_features

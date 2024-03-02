@@ -102,10 +102,6 @@ class PaiNN(BaseNNP):
     def _readout(self, input: Dict[str, Tensor]):
         return self.readout_module(input)
 
-    def prepare_inputs(self, inputs: Dict[str, torch.Tensor]):
-        inputs = self._prepare_inputs(inputs)
-        return self._model_specific_input_preparation(inputs)
-
     def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
         # Perform atomic embedding
         from modelforge.potential.utils import embed_atom_features

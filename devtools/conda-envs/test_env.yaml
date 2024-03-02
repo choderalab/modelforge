@@ -31,6 +31,7 @@ dependencies:
   - qcelemental=0.25.1
   - qcportal>=0.50
   - requests
+  - torchani
 
   # pip installs
   - pip:

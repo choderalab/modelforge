@@ -24,20 +24,14 @@ class Pairlist(nn.Module):
         Forward pass for PairList.
     """
 
-    def __init__(self, only_unique_pairs: bool = False):
+    def __init__(self):
         """
         Initialize PairList.
-
-        Parameters
-        ----------
-        only_unique_pairs : bool, optional
-            If set to True, only unique pairs of atoms are considered, default is False.
         """
         super().__init__()
         from .utils import pair_list
 
         self.calculate_pairs = pair_list
-        self.only_unique_pairs = only_unique_pairs
 
     def calculate_r_ij(
         self, pair_indices: torch.Tensor, positions: torch.Tensor
@@ -67,7 +61,10 @@ class Pairlist(nn.Module):
         return r_ij.norm(2, -1).unsqueeze(-1)
 
     def forward(
-        self, positions: torch.Tensor, atomic_subsystem_indices: torch.Tensor
+        self,
+        positions: torch.Tensor,
+        atomic_subsystem_indices: torch.Tensor,
+        only_unique_pairs: bool = False,
     ) -> Dict[str, torch.Tensor]:
         """
         Forward pass for PairList.
@@ -77,6 +74,9 @@ class Pairlist(nn.Module):
         positions : torch.Tensor, shape [nr_atoms, 3]
             Position tensor.
         atomic_subsystem_indices : torch.Tensor, shape [nr_atoms]
+        only_unique_pairs : bool, optional
+            If set to True, only unique pairs of atoms are considered, default is False.
+
         Returns
         -------
         dict : Dict[str, torch.Tensor], containing atom index pairs, distances, and displacement vectors.
@@ -88,7 +88,7 @@ class Pairlist(nn.Module):
         assert positions.ndim == 2
         pair_indices = self.calculate_pairs(
             atomic_subsystem_indices,
-            only_unique_pairs=self.only_unique_pairs,
+            only_unique_pairs=only_unique_pairs,
         )
         r_ij = self.calculate_r_ij(pair_indices, positions)
 
@@ -103,7 +103,7 @@ from openff.units import unit
 
 
 class Neighborlist(Pairlist):
-    def __init__(self, cutoff: unit.Quantity, only_unique_pairs: bool = False):
+    def __init__(self, cutoff: unit.Quantity):
         """
         Initialize PairList.
 
@@ -111,17 +111,18 @@ class Neighborlist(Pairlist):
         ----------
         cutoff : unit.Quantity
             Cutoff distance for neighbor calculations.
-        only_unique_pairs : bool, optional
-            If set to True, only unique pairs of atoms are considered, default is False.
         """
-        super().__init__(only_unique_pairs=only_unique_pairs)
+        super().__init__()
         from .utils import neighbor_list_with_cutoff
 
         self.calculate_pairs = neighbor_list_with_cutoff
         self.cutoff = cutoff
 
     def forward(
-        self, positions: torch.Tensor, atomic_subsystem_indices: torch.Tensor
+        self,
+        positions: torch.Tensor,
+        atomic_subsystem_indices: torch.Tensor,
+        only_unique_pairs: bool = False,
     ) -> Dict[str, torch.Tensor]:
         """
         Forward pass for Neighborlist.
@@ -131,6 +132,10 @@ class Neighborlist(Pairlist):
         positions : torch.Tensor, shape [nr_systems, nr_atoms, 3]
             Position tensor.
         atomic_subsystem_indices : torch.Tensor, shape [nr_atoms]
+        only_unique_pairs : bool, optional
+            If set to True, only unique pairs of atoms are considered, default is False.
+
+
         Returns
         -------
         dict : Dict[str, torch.Tensor], containing atom index pairs, distances, and displacement vectors.
@@ -143,7 +148,7 @@ class Neighborlist(Pairlist):
             positions,
             atomic_subsystem_indices,
             cutoff=self.cutoff,
-            only_unique_pairs=self.only_unique_pairs,
+            only_unique_pairs=only_unique_pairs,
         )
         r_ij = self.calculate_r_ij(pair_indices, positions)
 
@@ -282,7 +287,7 @@ class BaseNNP(nn.Module):
         self.dataset_stats = {}
 
     @abstractmethod
-    def prepare_inputs(self, inputs: Dict[str, torch.Tensor]):
+    def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
         # needs to be implemented by the subclass
         # if subclass needs any additional input preparation (e.g. embedding),
         # it should be done here
@@ -325,48 +330,48 @@ class BaseNNP(nn.Module):
         ]
         return pipeline(postprocessing_data)
 
-    def _energy_postprocessing(
-        self, energy_readout: torch.Tensor, inputs: Dict[str, torch.Tensor]
-    ):
-        """
-        Performs postprocessing of the energies.
+    def prepare_inputs(self, inputs: Dict[str, torch.Tensor]):
+        """Prepares the input tensors for passing to the model.
+
+        Performs general input manipulation like calculating distances,
+        generating the pair list, etc. Also calls the model-specific input
+        preparation.
 
         Parameters
         ----------
-        energy_readout: torch.Tensor
-        inputs: Dict[str, torch.Tensor]: with keys
-                energy_readout: torch.Tensor, shape (nr_of_molecuels_in_batch)
-                atomic_numbers: torch.Tensor, shape (nr_of_atoms_in_batch)
-                atomic_subsystem_indices: torch.Tensor, shape (nr_of_atoms_in_batch)
+        inputs : Dict[str, torch.Tensor]
+            Input tensors like atomic numbers, positions etc.
 
+        Returns
+        -------
+        inputs : Dict[str, torch.Tensor]
+            Input tensors after preparation.
         """
-        pipeline = self._energy_postprocessing_pipeline
 
-        postprocessing_data = {}
-        postprocessing_data["energy_readout"] = energy_readout
-        postprocessing_data["atomic_numbers"] = inputs["atomic_numbers"]
-        postprocessing_data["atomic_subsystem_indices"] = inputs[
-            "atomic_subsystem_indices"
-        ]
-        return pipeline(postprocessing_data)
-
-    def _prepare_inputs(self, inputs: Dict[str, torch.Tensor]):
-        atomic_numbers = inputs["atomic_numbers"]  # shape (nr_of_atoms_in_batch, 1)
-        positions = inputs["positions"]  # shape (nr_of_atoms_in_batch, 3)
+        # ---------------------------
+        # general input manipulation
+        atomic_numbers = inputs["atomic_numbers"]
+        positions = inputs["positions"]
         atomic_subsystem_indices = inputs["atomic_subsystem_indices"]
-        nr_of_atoms_in_batch = inputs["atomic_numbers"].shape[0]
+        number_of_atoms_in_batch = atomic_numbers.shape[0]
 
         r = self.calculate_distances_and_pairlist(positions, atomic_subsystem_indices)
 
-        return {
+        inputs = {
             "pair_indices": r["pair_indices"],
             "d_ij": r["d_ij"],
             "r_ij": r["r_ij"],
-            "nr_of_atoms_in_batch": nr_of_atoms_in_batch,
+            "number_of_atoms_in_batch": number_of_atoms_in_batch,
             "positions": positions,
             "atomic_numbers": atomic_numbers,
             "atomic_subsystem_indices": atomic_subsystem_indices,
         }
+
+        # ---------------------------
+        # perform model specific modifications
+        inputs = self._model_specific_input_preparation(inputs)
+
+        return inputs
 
     def _set_dtype(self):
         dtypes = list({p.dtype for p in self.parameters()})
@@ -452,7 +457,6 @@ class BaseNNP(nn.Module):
             Calculated energies; float; shape (n_systems).
 
         """
-        print(self.parameters())
         # adjust the dtype of the input tensors to match the model parameters
         self._set_dtype()
         # perform input checks

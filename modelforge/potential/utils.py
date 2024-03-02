@@ -557,23 +557,23 @@ eta={EtaA}"""
         )
 
         # The length of angular subaev of a single species
-        self.angular_sublength = (
-            self.ShfA.numel()
-            * self.ShfZ.numel()
-        )
+        self.angular_sublength = self.ShfA.numel() * self.ShfZ.numel()
 
-    def forward(self, vectors12: torch.Tensor) -> torch.Tensor:
+    def forward(self, r_ij: torch.Tensor) -> torch.Tensor:
+        # calculate the angular sub aev
+        sub_aev = self.compute_angular_sub_aev(r_ij)
+        return sub_aev
+
+    def compute_angular_sub_aev(self, vectors12: torch.Tensor) -> torch.Tensor:
         """Compute the angular subAEV terms of the center atom given neighbor pairs.
 
-        This correspond to equation (4) in the `ANI paper`_. This function just
+        This correspond to equation (4) in the ANI paper. This function just
         compute the terms. The sum in the equation is not computed.
         The input tensor have shape (conformations, atoms, N), where N
         is the number of neighbor atom pairs within the cutoff radius and
         output tensor should have shape
         (conformations, atoms, ``self.angular_sublength()``)
 
-        .. _ANI paper:
-            http://pubs.rsc.org/en/Content/ArticleLanding/2017/SC/C6SC05720A#!divAbstract
         """
         vectors12 = vectors12.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
         distances12 = vectors12.norm(2, dim=-5)
@@ -680,7 +680,7 @@ class RadialSymmetryFunction(nn.Module):
             self.register_buffer("EtaR", EtaR)
 
         # The length of radial subaev of a single species
-        self.radial_sublength = self.EtaR.numel()
+        self.radial_sublength = self.R_s.numel()
 
         log.info(
             f"""
@@ -699,13 +699,13 @@ eta={EtaR}
         (NOTE: sum is not performed)
         Parameters
         ----------
-        d_ij : torch.Tensor
+        d_ij : torch.Tensor, size (nr_of_atoms, distance)
             Pairwise distances.
 
         Returns
         -------
         torch.Tensor
-            The radial basis functions. Shape: [..., N, number_of_gaussians]
+            The radial basis functions. Shape: [pairs, number_of_gaussians]
         """
         diff = d_ij[..., None] - self.R_s  # d_ij - R_s
         y = self.prefactor * torch.exp((-1 * self.EtaR) * torch.pow(diff, 2))

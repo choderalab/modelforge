@@ -7,6 +7,7 @@ from .models import BaseNNP, LightningModuleMixin
 from .utils import Dense
 import torch
 import torch.nn.functional as F
+from .postprocessing import PostprocessingPipeline, NoPostprocess
 
 
 class PaiNN(BaseNNP):
@@ -28,6 +29,9 @@ class PaiNN(BaseNNP):
         shared_interactions: bool = False,
         shared_filters: bool = False,
         epsilon: float = 1e-8,
+        postprocessing: PostprocessingPipeline = PostprocessingPipeline(
+            [NoPostprocess({})]
+        ),
     ):
         """
         Parameters
@@ -52,7 +56,7 @@ class PaiNN(BaseNNP):
         from .utils import EnergyReadout
 
         log.debug("Initializing PaiNN model.")
-        super().__init__(cutoff=cutoff_module.cutoff)
+        super().__init__(cutoff=cutoff_module.cutoff, postprocessing=postprocessing)
         self.nr_interaction_blocks = nr_interaction_blocks
         self.cutoff_module = cutoff_module
         self.share_filters = shared_filters
@@ -69,17 +73,14 @@ class PaiNN(BaseNNP):
 
         # initialize the filter network
         if shared_filters:
-            self.filter_net = nn.Sequential(
-                nn.Linear(self.radial_basis_module.n_rbf, 3 * self.nr_atom_basis),
-                nn.Identity(),
+            self.filter_net = Dense(
+                self.radial_basis_module.n_rbf, 3 * self.nr_atom_basis
             )
         else:
-            self.filter_net = nn.Sequential(
-                nn.Linear(
-                    self.radial_basis_module.n_rbf,
-                    self.nr_interaction_blocks * 3 * self.nr_atom_basis,
-                ),
-                nn.Identity(),
+            self.filter_net = Dense(
+                self.radial_basis_module.n_rbf,
+                self.nr_interaction_blocks * self.nr_atom_basis * 3,
+                activation=None,
             )
 
         # initialize the interaction and mixing networks
@@ -219,14 +220,14 @@ class PaiNNInteraction(nn.Module):
         ----------
         nr_atom_basis : int
             Number of features to describe atomic environments.
-        intra_atomic_net : nn.Sequential
-            Neural network for intra-atomic interactions.
+        interatomic_net : nn.Sequential
+            Neural network for interatomic interactions.
         """
         super().__init__()
         self.nr_atom_basis = nr_atom_basis
 
         # Initialize the intra-atomic neural network
-        self.intra_atomic_net = nn.Sequential(
+        self.interatomic_net = nn.Sequential(
             Dense(nr_atom_basis, nr_atom_basis, activation=activation),
             Dense(nr_atom_basis, 3 * nr_atom_basis, activation=None),
         )
@@ -261,7 +262,7 @@ class PaiNNInteraction(nn.Module):
         # inter-atomic
         idx_i, idx_j = pairlist[0], pairlist[1]
 
-        x = self.intra_atomic_net(q)
+        x = self.interatomic_net(q)
         nr_of_atoms_in_all_systems, _, _ = q.shape  # [nr_systems,n_atoms,96]
         x = x.reshape(nr_of_atoms_in_all_systems, 1, 3 * self.nr_atom_basis)
 
@@ -386,6 +387,9 @@ class LighningPaiNN(PaiNN, LightningModuleMixin):
         epsilon: float = 1e-8,
         loss: Type[nn.Module] = nn.MSELoss(),
         optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
+        postprocessing: PostprocessingPipeline = PostprocessingPipeline(
+            [NoPostprocess({})]
+        ),
         lr: float = 1e-3,
     ) -> None:
         """PyTorch Lightning version of the PaiNN model."""
@@ -399,6 +403,7 @@ class LighningPaiNN(PaiNN, LightningModuleMixin):
             shared_interactions=shared_interactions,
             shared_filters=shared_filters,
             epsilon=epsilon,
+            postprocessing=postprocessing,
         )
         self.loss_function = loss
         self.optimizer = optimizer

@@ -23,7 +23,6 @@ dependencies:
   - rdkit
   - retry
   - sqlitedict
-  #- schnetpack>=2.0.0
 
   # Testing
   - pytest>=2.1

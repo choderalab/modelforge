@@ -4,6 +4,7 @@ from loguru import logger as log
 from typing import Dict, Type, Callable, Optional, Tuple
 
 from .models import BaseNNP, LightningModuleMixin
+from .postprocessing import PostprocessingPipeline, NoPostprocess
 from .utils import Dense, scatter_softmax
 import torch
 import torch.nn.functional as F
@@ -88,7 +89,7 @@ class SAKE(BaseNNP):
         from .utils import EnergyReadout
 
         log.debug("Initializing SAKE model.")
-        super().__init__(cutoff=cutoff_module.cutoff)
+        super().__init__(cutoff=cutoff_module.cutoff, postprocessing=PostprocessingPipeline([NoPostprocess({})]))
         self.nr_interaction_blocks = nr_interaction_blocks
         self.nr_heads = nr_heads
         self.cutoff_module = cutoff_module

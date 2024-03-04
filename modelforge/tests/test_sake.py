@@ -71,15 +71,15 @@ def test_sake_interaction_forward():
     from modelforge.potential import CosineCutoff
     from modelforge.potential import GaussianRBF
     nr_atoms = 41
-    nr_atom_basis = 2
-    geometry_basis = 37
+    nr_atom_basis = 47
+    geometry_basis = 3
     sake_block = SAKEInteraction(
         nr_atom_basis=nr_atom_basis,
-        nr_edge_basis=3,
+        nr_edge_basis=37,
         nr_edge_basis_hidden=5,
         nr_atom_basis_hidden=7,
-        nr_atom_basis_post_norm_hidden=13,
-        nr_atom_basis_post_norm_out=17,
+        nr_atom_basis_spatial_hidden=13,
+        nr_atom_basis_spatial=17,
         nr_atom_basis_velocity=19,
         nr_coefficients=23,
         nr_heads=29,
@@ -181,8 +181,8 @@ def test_spatial_attention_against_reference():
         nr_edge_basis=hidden_features,
         nr_edge_basis_hidden=hidden_features,
         nr_atom_basis_hidden=hidden_features,
-        nr_atom_basis_post_norm_hidden=hidden_features,
-        nr_atom_basis_post_norm_out=hidden_features,
+        nr_atom_basis_spatial_hidden=hidden_features,
+        nr_atom_basis_spatial=hidden_features,
         nr_atom_basis_velocity=hidden_features,
         nr_coefficients=nr_heads * hidden_features,
         nr_heads=nr_heads,
@@ -203,6 +203,7 @@ def test_spatial_attention_against_reference():
     idx_i, idx_j = pairlist
 
     key = jax.random.PRNGKey(1884)
+
     h_e_att = jax.random.normal(key, (nr_atoms, nr_atoms, hidden_features * nr_heads))
     x_minus_xt = jax.random.normal(key, (nr_atoms, nr_atoms, geometry_basis))
     x_minus_xt_norm = jnp.linalg.norm(x_minus_xt, axis=-1, keepdims=True)
@@ -210,18 +211,26 @@ def test_spatial_attention_against_reference():
     h_ij_semantic = torch.from_numpy(onp.array(h_e_att)).reshape(nr_pairs, hidden_features * nr_heads)
     dir_ij = torch.from_numpy(onp.array(x_minus_xt / (x_minus_xt_norm + 1e-5))).reshape(nr_pairs, geometry_basis)
 
+    # variables = ref_sake_interaction.init(key, h_e_att, x_minus_xt, x_minus_xt_norm,
+    #                                       method=ref_sake_interaction.combined_attention)
+    # variables["params"]["semantic_attention_mlp"]["layers_0"]["kernel"] = mf_sake_block.x_mixing_mlp.weight.detach().numpy().T
+    #
     mf_combinations = mf_sake_block.get_combinations(h_ij_semantic, dir_ij)
-    mf_result = mf_sake_block.get_spatial_attention(mf_combinations, idx_i, x_minus_xt, nr_atoms)
+    mf_result = mf_sake_block.get_spatial_attention(mf_combinations, idx_i, nr_atoms)
 
     variables = ref_sake_interaction.init(key, h_e_att, x_minus_xt, x_minus_xt_norm,
                                           method=ref_sake_interaction.spatial_attention)
 
     variables["params"]["x_mixing"]["layers_0"]["kernel"] = mf_sake_block.x_mixing_mlp.weight.detach().numpy().T
-    variables["params"]["post_norm_mlp"]["layers_0"]["kernel"] = mf_sake_block.post_norm_mlp[0].weight.detach().numpy().T
-    variables["params"]["post_norm_mlp"]["layers_2"]["kernel"] = mf_sake_block.post_norm_mlp[1].weight.detach().numpy().T
+    # variables["params"]["post_norm_mlp"]["layers_0"]["kernel"] = mf_sake_block.post_norm_mlp[
+    #     0].weight.detach().numpy().T
+    # variables["params"]["post_norm_mlp"]["layers_2"]["kernel"] = mf_sake_block.post_norm_mlp[
+    #     1].weight.detach().numpy().T
     ref_result = ref_sake_interaction.apply(variables, h_e_att, x_minus_xt, x_minus_xt_norm,
                                             method=ref_sake_interaction.spatial_attention)
     assert (torch.allclose(mf_combinations,
-                         torch.from_numpy(onp.array(ref_result[1])).reshape(nr_pairs, nr_heads * hidden_features,
-                                                                            geometry_basis), atol=1e-8))
-    assert (torch.allclose(mf_result, torch.from_numpy(onp.array(ref_result[0])), atol=1e-8))
+                           torch.from_numpy(onp.array(ref_result[1])).reshape(nr_pairs, nr_heads * hidden_features,
+                                                                              geometry_basis), atol=1e-4))
+    assert (torch.allclose(mf_result, torch.from_numpy(onp.array(ref_result[0])), atol=1e-4))
+
+

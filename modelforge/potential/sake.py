@@ -72,7 +72,7 @@ class SAKE(BaseNNP):
         Parameters
             ----------
             nr_atom_basis : int
-                Number of features in semantic atomic embedding (h). Must be at least the maximum atomic number.
+                Number of features in atomic embeddings. Must be at least the maximum atomic number.
             nr_interaction_blocks : int
                 Number of interaction blocks.
             radial_basis_module : torch.Module
@@ -367,7 +367,7 @@ class SAKEInteraction(nn.Module):
             Linear combinations of mixed edge features. Shape [nr_pairs, nr_coefficients, geometry_basis].
         idx_i : torch.Tensor
             Indices of the receiver nodes. Shape [nr_pairs, ].
-        nr_atoms : int
+        nr_atoms : in
             Number of atoms in all systems.
 
         Returns
@@ -385,7 +385,7 @@ class SAKEInteraction(nn.Module):
     def aggregate(self, h_ij_semantic, idx_i, nr_atoms):
         """Aggregate edge semantic attention over all senders connected to a receiver.
 
-        Wang and Chodera (2023) Sec. 4 Eq. 6.
+        Wang and Chodera (2023) Sec. 5 Algorithm 1,  step labelled "Neighborhood aggregation".
 
         Parameters
         ----------

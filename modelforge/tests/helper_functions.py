@@ -240,7 +240,7 @@ def generate_interaction_block_data(
     d_ij = r["d_ij"]
     f_ij, rcut_ij = _distance_to_radial_basis(d_ij, radial_symmetry_function_module)
     return {
-        "x": embedding(batch["atomic_numbers"].squeeze(dim=1)),
+        "x": embedding(batch["atomic_numbers"]),
         "f_ij": f_ij,
         "pair_indices": r["pair_indices"],
         "rcut_ij": rcut_ij,

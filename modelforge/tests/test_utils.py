@@ -200,32 +200,26 @@ def testRadialSymmetryFunction():
     assert y.shape == (dim_of_x, number_of_gaussians)
 
 
-def test_sliced_embedding():
+def test_embedding():
     """
-    Test the SlicedEmbedding module.
+    Test the Embedding module.
     """
     from modelforge.potential.utils import Embedding
-    from torch.nn import Embedding
 
     max_Z = 100
     embedding_dim = 7
-    sliced_dim = 0
 
-    # Create SlicedEmbedding instance
-    sliced_embedding = Embedding(max_Z, embedding_dim, sliced_dim)
-    normal_embedding = Embedding(max_Z, embedding_dim)
+    # Create Embedding instance
+    embedding = Embedding(max_Z, embedding_dim)
 
     # Test embedding_dim property
-    assert sliced_embedding.embedding_dim == embedding_dim
+    assert embedding.embedding_dim == embedding_dim
 
     # Test forward pass
-    input_tensor = torch.randint(0, 99, (5, 1))
+    input_tensor = torch.randint(0, 99, (5,))
 
-    sliced_output = sliced_embedding(input_tensor)
-    normal_output = normal_embedding(input_tensor)
-
-    assert sliced_output.shape == (5, embedding_dim)
-    assert normal_output.shape == (5, 1, embedding_dim)
+    output = embedding(input_tensor)
+    assert output.shape == (5, embedding_dim)
 
 
 def test_welford():

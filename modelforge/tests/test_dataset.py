@@ -102,7 +102,9 @@ def test_dataset_basic_operations():
                 input_data["geometry"][atom_start_idx_series:atom_end_idx_series]
             )
             atomic_numbers_true.append(
-                input_data["atomic_numbers"][atom_start_idx_single:atom_end_idx_single]
+                input_data["atomic_numbers"][
+                    atom_start_idx_single:atom_end_idx_single
+                ].flatten()
             )
             series_mol_idxs_for_rec.append(conf_idx)
             atom_start_idx_series = atom_end_idx_series
@@ -341,6 +343,3 @@ def test_self_energy():
     assert np.isclose(self_energies[7], -143309.9379722722)
     # O: -197082.0671774158
     assert np.isclose(self_energies[8], -197082.0671774158)
-
-
-

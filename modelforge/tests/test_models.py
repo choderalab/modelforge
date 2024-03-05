@@ -473,7 +473,7 @@ def test_postprocessing():
     nr_interaction_blocks = 2
     nr_filters = 2
 
-    embedding = Embedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
+    embedding = Embedding(max_atomic_number, nr_atom_basis)
     radial_symmetry_function_module = RadialSymmetryFunction(
         number_of_gaussians=number_of_gaussians, radial_cutoff=cutoff
     )

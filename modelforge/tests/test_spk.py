@@ -117,7 +117,7 @@ def setup_input():
 
     # ------------------------------------ #
     # set up the input for the modelforge Painn model
-    atomic_numbers = torch.tensor([[6], [1], [1], [1], [1]], dtype=torch.int64)
+    atomic_numbers = torch.tensor([6, 1, 1, 1, 1], dtype=torch.int64)
 
     positions = (
         torch.tensor(
@@ -181,7 +181,7 @@ def setup_modelforge_painn_representation(
     from modelforge.potential.painn import PaiNN as mf_PaiNN
     from openff.units import unit
 
-    embedding = Embedding(num_embeddings=100, embedding_dim=nr_atom_basis, sliced_dim=0)
+    embedding = Embedding(num_embeddings=100, embedding_dim=nr_atom_basis)
     radial_symmetry_function_module = RadialSymmetryFunction(
         number_of_gaussians=number_of_gaussians, radial_cutoff=cutoff
     )
@@ -222,7 +222,9 @@ def test_painn_representation_implementation():
     schnetpack_results = schnetpack_painn(spk_input)
     modelforge_painn._set_dtype()
     modelforge_input_1 = modelforge_painn._input_checks(modelforge_input)
-    modelforge_input_2 = modelforge_painn.prepare_inputs(modelforge_input_1)
+    modelforge_input_2 = modelforge_painn.prepare_inputs(
+        modelforge_input_1, only_unique_pairs=False
+    )
 
     # ---------------------------------------- #
     # test neighborlist and distance
@@ -526,7 +528,7 @@ def setup_mf_schnet_representation(
     from modelforge.potential.utils import Embedding
     from modelforge.potential.schnet import SchNET as mf_SchNET
 
-    embedding = Embedding(num_embeddings=100, embedding_dim=nr_atom_basis, sliced_dim=0)
+    embedding = Embedding(num_embeddings=100, embedding_dim=nr_atom_basis)
     radial_basis = RadialSymmetryFunction(
         number_of_gaussians=number_of_gaussians, radial_cutoff=cutoff
     )
@@ -567,7 +569,9 @@ def test_schnet_representation_implementation():
     schnetpack_results = schnetpack_schnet(spk_input)
     modelforge_schnet._set_dtype()
     modelforge_input_1 = modelforge_schnet._input_checks(modelforge_input)
-    modelforge_input_2 = modelforge_schnet.prepare_inputs(modelforge_input_1)
+    modelforge_input_2 = modelforge_schnet.prepare_inputs(
+        modelforge_input_1, only_unique_pairs=False
+    )
 
     # ---------------------------------------- #
     # test neighborlist and distance

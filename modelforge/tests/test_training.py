@@ -64,7 +64,7 @@ def test_pt_lightning():
     nr_interaction_blocks = 4
 
     cutoff = 5 * unit.angstrom
-    embedding = Embedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
+    embedding = Embedding(max_atomic_number, nr_atom_basis)
     assert embedding.embedding_dim == nr_atom_basis
     radial_symmetry_function_module = RadialSymmetryFunction(
         number_of_gaussians=number_of_gaussians, radial_cutoff=cutoff

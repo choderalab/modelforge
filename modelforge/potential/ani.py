@@ -7,6 +7,15 @@ from typing import Dict
 from openff.units import unit
 
 
+def triu_index(num_species: int) -> torch.Tensor:
+    species1, species2 = torch.triu_indices(num_species, num_species).unbind(0)
+    pair_index = torch.arange(species1.shape[0], dtype=torch.long)
+    ret = torch.zeros(num_species, num_species, dtype=torch.long)
+    ret[species1, species2] = pair_index
+    ret[species2, species1] = pair_index
+    return ret
+
+
 class ANIRepresentation(nn.Module):
     # calculate the atomic environment vectors
     # used for the ANI architecture of NNPs
@@ -16,6 +25,7 @@ class ANIRepresentation(nn.Module):
         radial_cutoff: unit.Quantity,
         angular_cutoff: unit.Quantity,
         nr_of_supported_elements: int = 7,
+        device: torch.device = torch.device("cpu"),
     ):
         # radial symmetry functions
 
@@ -34,6 +44,10 @@ class ANIRepresentation(nn.Module):
         from modelforge.potential.utils import triple_by_molecule
 
         self.triple_by_molecule = triple_by_molecule
+        self.register_buffer(
+            "triu_index",
+            triu_index(self.nr_of_supported_elements).to(device=device),
+        )
 
     def _setup_radial_symmetry_functions(self, radial_cutoff: unit.Quantity):
         from openff.units import unit
@@ -74,31 +88,66 @@ class ANIRepresentation(nn.Module):
 
         # calculate the atomic environment vectors
         # used for the ANI architecture of NNPs
+
+        # ----------------- Radial symmetry vector ---------------- #
+        # compute radial aev
         radial_feature_vector = self.radial_symmetry_functions(inputs["d_ij"])
+        # process output to prepare for agular symmetry vector
         postprocessed_radial_aev_and_additional_data = self._postprocess_radial_aev(
             radial_feature_vector, inputs=inputs
         )
+        processed_radial_feature_vector = postprocessed_radial_aev_and_additional_data[
+            "radial_aev"
+        ]
 
+        # ----------------- Angular symmetry vector ---------------- #
+        # preprocess
         angular_data = self._preprocess_angular_aev(
             postprocessed_radial_aev_and_additional_data
         )
-        angular_feature_vector = self.angular_symmetry_functions(angular_data["r_ij"])
-        return [radial_feature_vector, angular_feature_vector]
+        # calculate angular aev
+        angular_feature_vector = self.angular_symmetry_functions(
+            angular_data["angular_r_ij"]
+        )
+        # postprocess
+        angular_data["angular_feature_vector"] = angular_feature_vector
+        processed_angular_feature_vector = self._postprocess_angular_aev(
+            inputs, angular_data
+        )
+        return [processed_radial_feature_vector, processed_angular_feature_vector]
 
-    def _preprocess_angular_aev(self, data: Dict[str, torch.Tensor]):
+    def _postprocess_angular_aev(
+        self, inputs: Dict[str, torch.Tensor], data: Dict[str, torch.Tensor]
+    ):
+        # postprocess the angular aev
+        # used for the ANI architecture of NNPs
+        angular_sublength = self.angular_symmetry_functions.angular_sublength
+        angular_length = (
+            (self.nr_of_supported_elements * (self.nr_of_supported_elements + 1))
+            // 2
+            * angular_sublength
+        )
 
-        atom_index12 = data["atom_index12"]
-        species12 = data["species12"]
-        vec = data["vec"]
+        num_species_pairs = angular_length // angular_sublength
 
+        number_of_atoms_in_batch = inputs["number_of_atoms_in_batch"]
         # compute angular aev
-        central_atom_index, pair_index12, sign12 = self.triple_by_molecule(atom_index12)
-        species12_small = species12[:, pair_index12]
-        vec12 = vec.index_select(0, pair_index12.view(-1)).view(
-            2, -1, 3
-        ) * sign12.unsqueeze(-1)
-        species12_ = torch.where(sign12 == 1, species12_small[1], species12_small[0])
-        return {"r_ij": vec12}
+        central_atom_index = data["central_atom_index"]
+        angular_species12 = data["angular_species12"]
+        angular_r_ij = data["angular_r_ij"]
+
+        angular_terms_ = data["angular_feature_vector"]
+
+        angular_aev = angular_terms_.new_zeros(
+            (number_of_atoms_in_batch * num_species_pairs, angular_sublength)
+        )
+        index = (
+            central_atom_index * num_species_pairs
+            + self.triu_index[angular_species12[0], angular_species12[1]]
+        )
+        angular_aev.index_add_(0, index, angular_terms_)
+        angular_aev = angular_aev.reshape(number_of_atoms_in_batch, angular_length)
+        return angular_aev
 
     def _postprocess_radial_aev(
         self,
@@ -124,22 +173,43 @@ class ANIRepresentation(nn.Module):
         radial_aev.index_add_(0, index12[0], radial_feature_vector)
         radial_aev.index_add_(0, index12[1], radial_feature_vector)
 
-        # radial_aev = radial_aev.reshape(number_of_atoms_in_batch, radial_length)
+        radial_aev = radial_aev.reshape(number_of_atoms_in_batch, radial_length)
 
+        # compute new neighbors with radial_cutoff
+        distances = inputs["d_ij"].T.flatten()
         even_closer_indices = (
-            (inputs["d_ij"] <= self.angular_cutoff.to(unit.nanometer).m)
-            .nonzero()
-            .flatten()
+            (distances <= self.angular_cutoff.to(unit.nanometer).m).nonzero().flatten()
         )
+        r_ij = inputs["r_ij"]
         atom_index12 = atom_index12.index_select(1, even_closer_indices)
         species12 = species12.index_select(1, even_closer_indices)
-        vec = inputs["d_ij"].index_select(0, even_closer_indices)
+        r_ij_small = r_ij.index_select(0, even_closer_indices)
 
         return {
             "radial_aev": radial_aev,
             "atom_index12": atom_index12,
             "species12": species12,
-            "vec": vec,
+            "r_ij": r_ij_small,
+        }
+
+    def _preprocess_angular_aev(self, data: Dict[str, torch.Tensor]):
+
+        atom_index12 = data["atom_index12"]
+        species12 = data["species12"]
+        r_ij = data["r_ij"]
+
+        # compute angular aev
+        central_atom_index, pair_index12, sign12 = self.triple_by_molecule(atom_index12)
+        species12_small = species12[:, pair_index12]
+
+        r_ij12 = r_ij.index_select(0, pair_index12.view(-1)).view(
+            2, -1, 3
+        ) * sign12.unsqueeze(-1)
+        species12_ = torch.where(sign12 == 1, species12_small[1], species12_small[0])
+        return {
+            "angular_r_ij": r_ij12,
+            "central_atom_index": central_atom_index,
+            "angular_species12": species12_,
         }
 
 
@@ -211,6 +281,7 @@ class ANI2x(BaseNNP):
         ),
         radial_cutoff: unit.Quantity = 5.3 * unit.angstrom,
         angular_cutoff: unit.Quantity = 3.5 * unit.angstrom,
+        device: torch.device = torch.device("cpu"),
     ) -> None:
         """
         Initialize the ANi NNP architeture.
@@ -231,7 +302,7 @@ class ANI2x(BaseNNP):
 
         # Initialize representation block
         self.ani_representation_module = ANIRepresentation(
-            radial_cutoff, angular_cutoff
+            radial_cutoff, angular_cutoff, device=device
         )
         # The length of radial aev
         self.radial_length = (

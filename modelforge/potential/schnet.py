@@ -38,6 +38,7 @@ class SchNET(BaseNNP):
         """
 
         log.debug("Initializing SchNet model.")
+        self.only_unique_pairs = False
         super().__init__(
             radial_cutoff=float(cutoff_module.cutoff), postprocessing=postprocessing
         )

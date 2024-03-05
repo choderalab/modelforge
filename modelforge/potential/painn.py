@@ -59,6 +59,7 @@ class PaiNN(BaseNNP):
         super().__init__(
             radial_cutoff=cutoff_module.cutoff, postprocessing=postprocessing
         )
+        self.only_unique_pairs = False
         self.nr_interaction_blocks = nr_interaction_blocks
         self.cutoff_module = cutoff_module
         self.share_filters = shared_filters

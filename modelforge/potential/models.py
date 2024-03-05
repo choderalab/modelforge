@@ -330,7 +330,9 @@ class BaseNNP(nn.Module):
         ]
         return pipeline(postprocessing_data)
 
-    def prepare_inputs(self, inputs: Dict[str, torch.Tensor]):
+    def prepare_inputs(
+        self, inputs: Dict[str, torch.Tensor], only_unique_pairs: bool = True
+    ):
         """Prepares the input tensors for passing to the model.
 
         Performs general input manipulation like calculating distances,
@@ -341,7 +343,8 @@ class BaseNNP(nn.Module):
         ----------
         inputs : Dict[str, torch.Tensor]
             Input tensors like atomic numbers, positions etc.
-
+        only_unique_pairs : bool, optional
+            Whether to only use unique pairs or not in the pairlist.
         Returns
         -------
         inputs : Dict[str, torch.Tensor]
@@ -355,7 +358,9 @@ class BaseNNP(nn.Module):
         atomic_subsystem_indices = inputs["atomic_subsystem_indices"]
         number_of_atoms_in_batch = atomic_numbers.shape[0]
 
-        r = self.calculate_distances_and_pairlist(positions, atomic_subsystem_indices)
+        r = self.calculate_distances_and_pairlist(
+            positions, atomic_subsystem_indices, only_unique_pairs
+        )
 
         inputs = {
             "pair_indices": r["pair_indices"],
@@ -410,7 +415,7 @@ class BaseNNP(nn.Module):
             if key not in inputs:
                 raise ValueError(f"Missing required key: {key}")
 
-        if inputs["atomic_numbers"].dim() != 2:
+        if inputs["atomic_numbers"].dim() != 1:
             raise ValueError("Shape mismatch: 'atomic_numbers' should be a 2D tensor.")
 
         if inputs["positions"].dim() != 2:
@@ -462,7 +467,7 @@ class BaseNNP(nn.Module):
         # perform input checks
         inputs = self._input_checks(inputs)
         # prepare the input for the forward pass
-        inputs = self.prepare_inputs(inputs)
+        inputs = self.prepare_inputs(inputs, self.only_unique_pairs)
         # perform the forward pass implemented in the subclass
         outputs = self._forward(inputs)
         # aggreate energies

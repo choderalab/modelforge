@@ -74,12 +74,12 @@ def setup_two_methanes():
     return species, coordinates, device, mf_input
 
 
-def test_torchani_ani(setup_methane):
+def test_torchani_ani(setup_two_methanes):
     import torch
     import torchani
 
-    species, coordinates, device, _ = setup_methane
-    model = torchani.models.ANI2x(periodic_table_index=True).to(device)
+    species, coordinates, device, _ = setup_two_methanes
+    model = torchani.models.ANI2x(periodic_table_index=False).to(device)
 
     energy = model((species, coordinates)).energies
     derivative = torch.autograd.grad(energy.sum(), coordinates)[0]
@@ -88,7 +88,6 @@ def test_torchani_ani(setup_methane):
 
 def test_modelforge_ani(setup_two_methanes):
     from modelforge.potential.ani import ANI2x as mf_ANI2x
-
     _, _, _, mf_input = setup_two_methanes
     model = mf_ANI2x()
     model(mf_input)

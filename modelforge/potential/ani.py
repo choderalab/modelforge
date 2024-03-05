@@ -30,6 +30,10 @@ class ANIRepresentation(nn.Module):
         self.angular_symmetry_functions = self._setup_angular_symmetry_functions(
             self.angular_cutoff
         )
+        # generate indices
+        from modelforge.potential.utils import triple_by_molecule
+
+        self.triple_by_molecule = triple_by_molecule
 
     def _setup_radial_symmetry_functions(self, radial_cutoff: unit.Quantity):
         from openff.units import unit
@@ -37,7 +41,7 @@ class ANIRepresentation(nn.Module):
 
         # ANI constants
         radial_start = 0.8 * unit.angstrom
-        radial_dist_divisions = 8
+        radial_dist_divisions = 16
 
         radial_symmetry_function = RadialSymmetryFunction(
             radial_dist_divisions,
@@ -70,12 +74,31 @@ class ANIRepresentation(nn.Module):
 
         # calculate the atomic environment vectors
         # used for the ANI architecture of NNPs
-        radial_feature_vector = self.radial_symmetry_functions(inputs["r_ij"])
-        radial_feature_vector = self._postprocess_radial_aev(
+        radial_feature_vector = self.radial_symmetry_functions(inputs["d_ij"])
+        postprocessed_radial_aev_and_additional_data = self._postprocess_radial_aev(
             radial_feature_vector, inputs=inputs
         )
-        angular_feature_vector = self.angular_symmetry_functions(inputs)
+
+        angular_data = self._preprocess_angular_aev(
+            postprocessed_radial_aev_and_additional_data
+        )
+        angular_feature_vector = self.angular_symmetry_functions(angular_data["r_ij"])
         return [radial_feature_vector, angular_feature_vector]
+
+    def _preprocess_angular_aev(self, data: Dict[str, torch.Tensor]):
+
+        atom_index12 = data["atom_index12"]
+        species12 = data["species12"]
+        vec = data["vec"]
+
+        # compute angular aev
+        central_atom_index, pair_index12, sign12 = self.triple_by_molecule(atom_index12)
+        species12_small = species12[:, pair_index12]
+        vec12 = vec.index_select(0, pair_index12.view(-1)).view(
+            2, -1, 3
+        ) * sign12.unsqueeze(-1)
+        species12_ = torch.where(sign12 == 1, species12_small[1], species12_small[0])
+        return {"r_ij": vec12}
 
     def _postprocess_radial_aev(
         self,
@@ -83,9 +106,10 @@ class ANIRepresentation(nn.Module):
         inputs: Dict[str, torch.Tensor],
     ):
 
-        number_of_atoms_in_batch = 5 #inputs["number_of_atoms_in_batch"]
+        radial_feature_vector = radial_feature_vector.squeeze(1)
+        number_of_atoms_in_batch = inputs["number_of_atoms_in_batch"]
         radial_sublength = self.radial_symmetry_functions.radial_sublength
-        radial_length = radial_sublength * self.nr_of_supported_elements 
+        radial_length = radial_sublength * self.nr_of_supported_elements
         radial_aev = radial_feature_vector.new_zeros(
             (
                 number_of_atoms_in_batch * self.nr_of_supported_elements,
@@ -99,10 +123,24 @@ class ANIRepresentation(nn.Module):
         index12 = atom_index12 * self.nr_of_supported_elements + species12.flip(0)
         radial_aev.index_add_(0, index12[0], radial_feature_vector)
         radial_aev.index_add_(0, index12[1], radial_feature_vector)
-        
-        #radial_aev = radial_aev.reshape(number_of_atoms_in_batch, radial_length)
-        
-        return radial_aev
+
+        # radial_aev = radial_aev.reshape(number_of_atoms_in_batch, radial_length)
+
+        even_closer_indices = (
+            (inputs["d_ij"] <= self.angular_cutoff.to(unit.nanometer).m)
+            .nonzero()
+            .flatten()
+        )
+        atom_index12 = atom_index12.index_select(1, even_closer_indices)
+        species12 = species12.index_select(1, even_closer_indices)
+        vec = inputs["d_ij"].index_select(0, even_closer_indices)
+
+        return {
+            "radial_aev": radial_aev,
+            "atom_index12": atom_index12,
+            "species12": species12,
+            "vec": vec,
+        }
 
 
 class ANIInteraction(nn.Module):
@@ -182,6 +220,7 @@ class ANI2x(BaseNNP):
         """
         # number of elements in ANI2x
         self.num_species = 7
+        self.only_unique_pairs = True
 
         log.debug("Initializing ANI model.")
         super().__init__(
@@ -211,11 +250,6 @@ class ANI2x(BaseNNP):
 
         # Intialize interaction blocks
         self.interaction_modules = ANIInteraction(self.aev_length)
-
-        # generate indices
-        from modelforge.potential.utils import triple_by_molecule
-
-        self.triple_by_molecule = triple_by_molecule
 
     def _readout(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         # Compute the energy for each system

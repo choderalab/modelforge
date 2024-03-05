@@ -167,6 +167,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             ]
             .clone()
             .detach()
+            .squeeze(1)
         ).to(torch.int64)
         positions = (
             self.properties_of_interest["positions"][

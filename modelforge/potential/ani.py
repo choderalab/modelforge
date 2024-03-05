@@ -3,8 +3,18 @@ from torch import nn
 from loguru import logger as log
 from modelforge.potential.models import BaseNNP
 from modelforge.potential.postprocessing import PostprocessingPipeline, NoPostprocess
-from typing import Dict
+from typing import Dict, NamedTuple, Tuple
 from openff.units import unit
+
+
+class SpeciesEnergies(NamedTuple):
+    species: torch.Tensor
+    energies: torch.Tensor
+
+
+class SpeciesAEV(NamedTuple):
+    species: torch.Tensor
+    aevs: torch.Tensor
 
 
 def triu_index(num_species: int) -> torch.Tensor:
@@ -114,7 +124,11 @@ class ANIRepresentation(nn.Module):
         processed_angular_feature_vector = self._postprocess_angular_aev(
             inputs, angular_data
         )
-        return [processed_radial_feature_vector, processed_angular_feature_vector]
+        aevs = torch.cat(
+            [processed_radial_feature_vector, processed_angular_feature_vector], dim=-1
+        )
+
+        return SpeciesAEV(inputs["atomic_numbers"], aevs)
 
     def _postprocess_angular_aev(
         self, inputs: Dict[str, torch.Tensor], data: Dict[str, torch.Tensor]
@@ -226,6 +240,12 @@ class ANIInteraction(nn.Module):
         # self.S_network = atomic_neural_networks["S"]
         # self.F_network = atomic_neural_networks["F"]
         # self.Cl_network = atomic_neural_networks["Cl"]
+        self.atomic_networks = [
+            self.H_network,
+            self.C_network,
+            self.O_network,
+            self.N_network,
+        ]
 
     def intialize_atomic_neural_network(self, aev_dim: int) -> Dict[str, nn.Module]:
 
@@ -270,6 +290,20 @@ class ANIInteraction(nn.Module):
         )
 
         return {"H": H_network, "C": C_network, "N": N_network, "O": O_network}
+
+    def forward(self, input: Tuple[torch.Tensor, torch.Tensor]):
+
+        species, aev = input
+        output = aev.new_zeros(species.shape)
+
+        for i, model in enumerate(self.atomic_networks):
+            mask = species == i
+            midx = mask.nonzero().flatten()
+            if midx.shape[0] > 0:
+                input_ = aev.index_select(0, midx)
+                output.masked_scatter_(mask, model(input_).flatten())
+
+        return output.view_as(species)
 
 
 class ANI2x(BaseNNP):
@@ -352,11 +386,27 @@ class ANI2x(BaseNNP):
             Calculated energies; shape (nr_systems,).
         """
 
-        # Compute the representation for each atom
+        # compute the representation (atomic environment vectors) for each atom
         representation = self.ani_representation_module(inputs)
-        a = 7
+        # compute the atomic energies
+        per_species_energies = self.interaction_modules(representation)
 
         return {
-            "scalar_representation": x,
+            "scalar_representation": per_species_energies,
             "atomic_subsystem_indices": inputs["atomic_subsystem_indices"],
         }
+
+    def _readout(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
+
+        per_species_energies = inputs["scalar_representation"]
+        atomic_subsystem_indices = inputs["atomic_subsystem_indices"]
+        # output tensor for the sums, size based on the number of unique values in atomic_subsystem_indices
+        energy_per_molecule = torch.zeros(
+            atomic_subsystem_indices.max() + 1, dtype=per_species_energies.dtype
+        )
+
+        # use index_add_ to sum values in per_species_energies according to indices in atomic_subsystem_indices
+        energy_per_molecule.index_add_(
+            0, atomic_subsystem_indices, per_species_energies
+        )
+        return energy_per_molecule

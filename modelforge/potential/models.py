@@ -300,9 +300,11 @@ class BaseNNP(nn.Module):
         pass
 
     @abstractmethod
-    def _readout(self, input: Dict[str, torch.Tensor]):
+    def _readout(self, input: Dict[str, torch.Tensor]) -> torch.Tensor:
         # needs to be implemented by the subclass
         # perform the readout operation implemented in the subclass
+        # returns a torch.Tensor with shape (nr_of_molecules) containing the
+        # aggregated energies
         pass
 
     def _energy_postprocessing(
@@ -416,6 +418,7 @@ class BaseNNP(nn.Module):
                 raise ValueError(f"Missing required key: {key}")
 
         if inputs["atomic_numbers"].dim() != 1:
+            print(inputs["atomic_numbers"])
             raise ValueError("Shape mismatch: 'atomic_numbers' should be a 2D tensor.")
 
         if inputs["positions"].dim() != 2:

@@ -57,56 +57,19 @@ def triple_by_molecule(
     return central_atom_index, local_index12 % n, sign12
 
 
-class SlicedEmbedding(nn.Module):
-    """
-    A module that performs embedding on a selected slice of input tensor.
-
-    Parameters
-    ----------
-    max_Z : int
-        Highest atomic number to embed, this will define the upper bound of the vocabulary that is used for embedding.
-    embedding_dim : int
-        Size of the embedding.
-    sliced_dim : int, optional
-        The dimension along which to slice the input tensor (default is 0).
-        This is relevant since the input dimensions are (n_atoms_in_batch, nr_of_properties, property_size), but we want to embed a specific
-        property.
-
-    Attributes
-    ----------
-    embedding : nn.Embedding
-        The embedding layer.
-    sliced_dim : int
-        The dimension along which the input tensor is sliced.
-
-    Methods
-    -------
-    forward(x)
-        Forward pass for the Embedding.
-
-    Properties
-    ----------
-    embedding_dim : int
-        The dimensionality of the embedding.
-
-    """
-
-    def __init__(self, max_Z: int, embedding_dim: int, sliced_dim: int = 0):
+class Embedding(nn.Module):
+    def __init__(self, num_embeddings: int, embedding_dim: int):
         """
-        Initialize the Embedding class.
+        Initialize the embedding module.
 
         Parameters
         ----------
-        max_Z : int
-            Highest atomic numbers.
+        num_embeddings: int
         embedding_dim : int
             Dimensionality of the embedding.
-        sliced_dim : int, optional
-            The dimension along which to slice the input tensor (default is 0).
         """
         super().__init__()
-        self.embedding = nn.Embedding(max_Z, embedding_dim)
-        self.sliced_dim = sliced_dim
+        self.embedding = nn.Embedding(num_embeddings, embedding_dim)
 
     @property
     def data(self):
@@ -130,21 +93,20 @@ class SlicedEmbedding(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass for the Embedding.
+        Embeddes the pr3ovided 1D tensor using the embedding layer.
 
         Parameters
         ----------
         x : torch.Tensor
-            Input tensor for the forward pass.
+            1D tensor to be embedded.
 
         Returns
         -------
         torch.Tensor
-            The output tensor.
+            with shape (num_embeddings, embedding_dim)
         """
-        selected_tensor = x[:, self.sliced_dim, ...]
 
-        return self.embedding(selected_tensor)
+        return self.embedding(x)
 
 
 from torch.nn.init import xavier_uniform_
@@ -258,9 +220,9 @@ def embed_atom_features(
         The atom features.
     """
     # Perform atomic embedding
-    from .utils import SlicedEmbedding
+    from .utils import Embedding
 
-    assert isinstance(embedding, SlicedEmbedding), "embedding must be SlicedEmbedding"
+    assert isinstance(embedding, Embedding), "embedding must be SlicedEmbedding"
     assert embedding.embedding_dim > 0, "embedding_dim must be > 0"
 
     atomic_embedding = embedding(

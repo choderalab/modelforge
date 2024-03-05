@@ -54,7 +54,7 @@ def test_pt_lightning():
     from modelforge.potential.painn import LighningPaiNN
 
     from modelforge.potential import CosineCutoff, RadialSymmetryFunction
-    from modelforge.potential.utils import SlicedEmbedding
+    from modelforge.potential.utils import Embedding
 
     from openff.units import unit
 
@@ -64,7 +64,7 @@ def test_pt_lightning():
     nr_interaction_blocks = 4
 
     cutoff = 5 * unit.angstrom
-    embedding = SlicedEmbedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
+    embedding = Embedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
     assert embedding.embedding_dim == nr_atom_basis
     radial_symmetry_function_module = RadialSymmetryFunction(
         number_of_gaussians=number_of_gaussians, radial_cutoff=cutoff
@@ -82,7 +82,7 @@ def test_pt_lightning():
     dataset.prepare_data(remove_self_energies=True)
     from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
-    # set up the pytorch lightning trainer 
+    # set up the pytorch lightning trainer
     trainer = Trainer(
         max_epochs=500,
         num_nodes=1,

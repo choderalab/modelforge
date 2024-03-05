@@ -40,9 +40,9 @@ def setup_simple_model(
         Initialized model.
     """
     from modelforge.potential import CosineCutoff, RadialSymmetryFunction
-    from modelforge.potential.utils import SlicedEmbedding
+    from modelforge.potential.utils import Embedding
 
-    embedding = SlicedEmbedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
+    embedding = Embedding(max_atomic_number, nr_atom_basis)
     assert embedding.embedding_dim == nr_atom_basis
     radial_symmetry_function_module = RadialSymmetryFunction(
         number_of_gaussians=number_of_gaussians, radial_cutoff=cutoff
@@ -163,7 +163,7 @@ def generate_methane_input() -> Dict[str, torch.Tensor]:
         Dictionary with keys 'atomic_numbers', 'positions', 'atomic_subsystem_indices', 'E_labels'.
     """
 
-    atomic_numbers = torch.tensor([[6], [1], [1], [1], [1]], dtype=torch.int64)
+    atomic_numbers = torch.tensor([6, 1, 1, 1, 1], dtype=torch.int64)
     positions = (
         torch.tensor(
             [
@@ -189,7 +189,7 @@ def generate_methane_input() -> Dict[str, torch.Tensor]:
 
 def generate_mock_data():
     return {
-        "atomic_numbers": torch.tensor([[1], [2], [2], [3]]),
+        "atomic_numbers": torch.tensor([1, 2, 2, 3]),
         "positions": torch.tensor(
             [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [0.0, 0.0, 0.0], [1.0, 1.0, 1.0]],
             requires_grad=True,

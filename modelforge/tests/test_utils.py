@@ -204,7 +204,7 @@ def test_sliced_embedding():
     """
     Test the SlicedEmbedding module.
     """
-    from modelforge.potential.utils import SlicedEmbedding
+    from modelforge.potential.utils import Embedding
     from torch.nn import Embedding
 
     max_Z = 100
@@ -212,7 +212,7 @@ def test_sliced_embedding():
     sliced_dim = 0
 
     # Create SlicedEmbedding instance
-    sliced_embedding = SlicedEmbedding(max_Z, embedding_dim, sliced_dim)
+    sliced_embedding = Embedding(max_Z, embedding_dim, sliced_dim)
     normal_embedding = Embedding(max_Z, embedding_dim)
 
     # Test embedding_dim property

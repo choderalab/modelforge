@@ -177,11 +177,11 @@ def setup_modelforge_painn_representation(
     # which means that we only want to call the
     # _transform_input() method
     from modelforge.potential import CosineCutoff, RadialSymmetryFunction
-    from modelforge.potential.utils import SlicedEmbedding
+    from modelforge.potential.utils import Embedding
     from modelforge.potential.painn import PaiNN as mf_PaiNN
     from openff.units import unit
 
-    embedding = SlicedEmbedding(max_Z=100, embedding_dim=nr_atom_basis, sliced_dim=0)
+    embedding = Embedding(num_embeddings=100, embedding_dim=nr_atom_basis, sliced_dim=0)
     radial_symmetry_function_module = RadialSymmetryFunction(
         number_of_gaussians=number_of_gaussians, radial_cutoff=cutoff
     )
@@ -523,10 +523,10 @@ def setup_mf_schnet_representation(
     # which means that we only want to call the
     # _transform_input() method
     from modelforge.potential import CosineCutoff, RadialSymmetryFunction
-    from modelforge.potential.utils import SlicedEmbedding
+    from modelforge.potential.utils import Embedding
     from modelforge.potential.schnet import SchNET as mf_SchNET
 
-    embedding = SlicedEmbedding(max_Z=100, embedding_dim=nr_atom_basis, sliced_dim=0)
+    embedding = Embedding(num_embeddings=100, embedding_dim=nr_atom_basis, sliced_dim=0)
     radial_basis = RadialSymmetryFunction(
         number_of_gaussians=number_of_gaussians, radial_cutoff=cutoff
     )

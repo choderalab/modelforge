@@ -207,9 +207,13 @@ def testPairlist():
     only_unique_pairs = False
     neighborlist = Neighborlist(cutoff)
     pairlist = Pairlist()
-    r = pairlist(positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs)
+    r = pairlist(
+        positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
+    )
     pair_indices = r["pair_indices"]
-    r = neighborlist(positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs)
+    r = neighborlist(
+        positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
+    )
     neighbor_indices = r["pair_indices"]
 
     assert torch.equal(pair_indices, neighbor_indices)
@@ -219,9 +223,13 @@ def testPairlist():
     only_unique_pairs = True
     neighborlist = Neighborlist(cutoff)
     pairlist = Pairlist()
-    r = pairlist(positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs)
+    r = pairlist(
+        positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
+    )
     pair_indices = r["pair_indices"]
-    r = neighborlist(positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs)
+    r = neighborlist(
+        positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
+    )
     neighbor_indices = r["pair_indices"]
 
     assert torch.equal(pair_indices, neighbor_indices)
@@ -231,9 +239,13 @@ def testPairlist():
     only_unique_pairs = True
     neighborlist = Neighborlist(cutoff)
     pairlist = Pairlist()
-    r = pairlist(positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs)
+    r = pairlist(
+        positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
+    )
     pair_indices = r["pair_indices"]
-    r = neighborlist(positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs)
+    r = neighborlist(
+        positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
+    )
     neighbor_indices = r["pair_indices"]
 
     assert not pair_indices.shape == neighbor_indices.shape
@@ -451,7 +463,7 @@ def test_postprocessing():
 
     from modelforge.potential.schnet import SchNET
     from modelforge.potential import CosineCutoff, RadialSymmetryFunction
-    from modelforge.potential.utils import SlicedEmbedding
+    from modelforge.potential.utils import Embedding
     from openff.units import unit
 
     nr_atom_basis = 128
@@ -461,7 +473,7 @@ def test_postprocessing():
     nr_interaction_blocks = 2
     nr_filters = 2
 
-    embedding = SlicedEmbedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
+    embedding = Embedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
     radial_symmetry_function_module = RadialSymmetryFunction(
         number_of_gaussians=number_of_gaussians, radial_cutoff=cutoff
     )

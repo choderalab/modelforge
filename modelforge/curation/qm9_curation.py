@@ -252,25 +252,25 @@ class QM9Curation(DatasetCuration):
 
         return sum_of_energy
 
-    def _extract(self, file_path: str, cache_directory: str) -> None:
-        """
-        Extract the contents of a tar.bz2 file.
-
-        Parameters
-        ----------
-        file_path: str, required
-            tar.bz2 to extract.
-        cache_directory: str, required
-            Location to save the contents from the tar.bz2 file
-        """
-
-        import tarfile
-
-        logger.debug(f"Extracting tar {file_path}.")
-
-        tar = tarfile.open(f"{file_path}", "r:bz2")
-        tar.extractall(cache_directory)
-        tar.close()
+    # def _extract(self, file_path: str, cache_directory: str) -> None:
+    #     """
+    #     Extract the contents of a tar.bz2 file.
+    #
+    #     Parameters
+    #     ----------
+    #     file_path: str, required
+    #         tar.bz2 to extract.
+    #     cache_directory: str, required
+    #         Location to save the contents from the tar.bz2 file
+    #     """
+    #
+    #     import tarfile
+    #
+    #     logger.debug(f"Extracting tar {file_path}.")
+    #
+    #     tar = tarfile.open(f"{file_path}", "r:bz2")
+    #     tar.extractall(cache_directory)
+    #     tar.close()
 
     def _parse_properties(self, line: str) -> dict:
         """
@@ -520,7 +520,6 @@ class QM9Curation(DatasetCuration):
     def _process_downloaded(
         self,
         local_path_dir: str,
-        name: str,
         unit_testing_max_records: Optional[int] = None,
     ):
         """
@@ -530,8 +529,6 @@ class QM9Curation(DatasetCuration):
         ----------
         local_path_dir: str, required
             Path to the directory that contains the tar.bz2 file.
-        name: str, required
-            name of the tar.bz2 file,
         unit_testing_max_records: int, optional, default=None
             If set to an integer, 'n', the routine will only process the first 'n' records, useful for unit tests.
 
@@ -542,14 +539,8 @@ class QM9Curation(DatasetCuration):
         from tqdm import tqdm
         from modelforge.utils.misc import list_files
 
-        # untar the dataset
-        self._extract(
-            file_path=f"{local_path_dir}/{name}",
-            cache_directory=self.local_cache_dir,
-        )
-
         # list the files in the directory to examine
-        files = list_files(directory=self.local_cache_dir, extension=".xyz")
+        files = list_files(directory=local_path_dir, extension=".xyz")
         if unit_testing_max_records is None:
             n_max = len(files)
         else:
@@ -558,7 +549,7 @@ class QM9Curation(DatasetCuration):
         for i, file in enumerate(
             tqdm(files[0:n_max], desc="processing", total=len(files))
         ):
-            data_temp = self._parse_xyzfile(f"{self.local_cache_dir}/{file}")
+            data_temp = self._parse_xyzfile(f"{local_path_dir}/{file}")
             self.data.append(data_temp)
 
         # if unit outputs were defined perform conversion
@@ -609,9 +600,20 @@ class QM9Curation(DatasetCuration):
         if self.name is None:
             raise Exception("Failed to retrieve name of file from figshare.")
 
+        # untar the dataset
+        from modelforge.utils.misc import extract_tarred_file
+
+        # extract the tar.bz2 file into the local_cache_dir
+        # creating a directory called qm9_xyz_files to hold the contents
+        extract_tarred_file(
+            input_path_dir=self.local_cache_dir,
+            file_name=self.name,
+            output_path_dir=f"{self.local_cache_dir}/qm9_xyz_files",
+            mode="r:bz2",
+        )
+
         self._process_downloaded(
-            self.local_cache_dir,
-            self.name,
+            f"{self.local_cache_dir}/qm9_xyz_files",
             unit_testing_max_records,
         )
 

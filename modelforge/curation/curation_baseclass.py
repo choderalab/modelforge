@@ -66,6 +66,8 @@ def dict_to_hdf5(
                         group.create_dataset(name=key, data=val_m)
                     elif isinstance(val_m, np.ndarray):
                         group.create_dataset(name=key, data=val_m, shape=val_m.shape)
+                    else:
+                        raise ValueError(f"Type {type(val_m)} not recognized.")
                     if not val_u is None:
                         group[key].attrs["u"] = val_u
 

@@ -96,26 +96,6 @@ class ANI2xCuration(DatasetCuration):
             "name": "single_rec",
         }
 
-    def _extract(self, file_path: str, cache_directory: str) -> None:
-        """
-        Extract the contents of a tar.bz2 file.
-
-        Parameters
-        ----------
-        file_path: str, required
-            tar.bz2 to extract.
-        cache_directory: str, required
-            Location to save the contents from the tar.bz2 file
-        """
-
-        import tarfile
-
-        logger.debug(f"Extracting tar {file_path}.")
-
-        tar = tarfile.open(f"{file_path}", "r:gz")
-        tar.extractall(cache_directory)
-        tar.close()
-
     def _process_downloaded(
         self,
         local_path_dir: str,
@@ -141,23 +121,7 @@ class ANI2xCuration(DatasetCuration):
         from tqdm import tqdm
 
         input_file_name = f"{local_path_dir}/{name}"
-
-        # untar the dataset
-        self._extract(
-            file_path=input_file_name,
-            cache_directory=self.local_cache_dir,
-        )
-
-        # untar the dataset
-        self._extract(
-            file_path=f"{local_path_dir}/{name}",
-            cache_directory=self.local_cache_dir,
-        )
-
-        # the untarred file will be in a directory with the same name as the tar file
-        root_name = name.replace(".tar.gz", "")
-        input_file_name = f"{local_path_dir}/final_h5/{root_name}.h5"
-
+        logger.debug(f"Processing {input_file_name}.")
         with h5py.File(input_file_name, "r") as hf:
             #  The ani2x hdf5 file groups molecules by number of atoms
             # we need to break up each of these groups into individual molecules
@@ -214,7 +178,8 @@ class ANI2xCuration(DatasetCuration):
                         coordinates[mask] * self.qm_parameters["geometry"]["u_in"]
                     )
                     ds_temp["energies"] = (
-                        energies[mask] * self.qm_parameters["energies"]["u_in"]
+                        energies[mask].reshape(-1, 1)
+                        * self.qm_parameters["energies"]["u_in"]
                     )
                     ds_temp["forces"] = (
                         forces[mask] * self.qm_parameters["forces"]["u_in"]
@@ -259,13 +224,28 @@ class ANI2xCuration(DatasetCuration):
             force_download=force_download,
         )
 
-        self._clear_data()
-
-        # process the rest of the dataset
         if self.name is None:
             raise Exception("Failed to retrieve name of file from Zenodo.")
+
+        # clear any data that might be present so we don't append to it
+        self._clear_data()
+
+        # untar and uncompress the dataset
+        from modelforge.utils.misc import extract_tarred_file
+
+        extract_tarred_file(
+            input_path_dir=self.local_cache_dir,
+            file_name=self.name,
+            output_path_dir=self.local_cache_dir,
+            mode="r:gz",
+        )
+
+        # the untarred file will be in a directory named 'final_h5' within the local_cache_dir,
+        hdf5_filename = f"{self.name.replace('.tar.gz', '')}.h5"
+
+        # process the rest of the dataset
         self._process_downloaded(
-            self.local_cache_dir, self.name, unit_testing_max_records
+            f"{self.local_cache_dir}/final_h5/", hdf5_filename, unit_testing_max_records
         )
 
         self._generate_hdf5()

@@ -106,6 +106,24 @@ def test_dict_to_hdf5(prep_temp_dir):
             id_key="name_should_fail",
         )
 
+    # test to see if we can catch a ValueError for an int64 (from np.sum) rather than int
+    test_data = [
+        {
+            "name": "test1",
+            "n_configs": np.sum([1, 2]),
+            "energy": 123 * unit.hartree,
+            "geometry": np.array([[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]]) * unit.angstrom,
+        }
+    ]
+
+    with pytest.raises(ValueError):
+        dict_to_hdf5(
+            file_name=file_name_path,
+            data=test_data,
+            series_info=record_entries_series,
+            id_key="name",
+        )
+
 
 def test_series_dict_to_hdf5(prep_temp_dir):
     # generate an hdf5 file from simple test data
@@ -307,7 +325,9 @@ def test_qm9_curation_parse_xyz(prep_temp_dir):
     assert data_dict_temp["energy_of_homo"] == [[-0.3877]] * unit.hartree
     assert data_dict_temp["energy_of_lumo"] == [[0.1171]] * unit.hartree
     assert data_dict_temp["lumo-homo_gap"] == [[0.5048]] * unit.hartree
-    assert data_dict_temp["electronic_spatial_extent"] == [[35.3641]] * unit.angstrom**2
+    assert (
+        data_dict_temp["electronic_spatial_extent"] == [[35.3641]] * unit.angstrom**2
+    )
     assert (
         data_dict_temp["zero_point_vibrational_energy"] == [[0.044749]] * unit.hartree
     )
@@ -388,8 +408,14 @@ def test_qm9_local_archive(prep_temp_dir):
     file_name_path = str(local_data_path) + "/first10.tar.bz2"
     assert os.path.isfile(file_name_path)
 
+    from modelforge.utils.misc import extract_tarred_file
+
+    extract_tarred_file(
+        str(local_data_path), "first10.tar.bz2", str(prep_temp_dir), mode="r:bz2"
+    )
+
     # pass the local file to the process_downloaded function
-    qm9_data._process_downloaded(str(local_data_path), "first10.tar.bz2")
+    qm9_data._process_downloaded(str(prep_temp_dir))
 
     assert len(qm9_data.data) == 10
     # internal_energy_at_0K in kj/mol
@@ -425,9 +451,7 @@ def test_qm9_local_archive(prep_temp_dir):
     qm9_data._clear_data()
     assert len(qm9_data.data) == 0
 
-    qm9_data._process_downloaded(
-        str(local_data_path), "first10.tar.bz2", unit_testing_max_records=5
-    )
+    qm9_data._process_downloaded(str(prep_temp_dir), unit_testing_max_records=5)
 
     assert len(qm9_data.data) == 5
 
@@ -1446,6 +1470,67 @@ def test_spice114_process_download_conversion(prep_temp_dir):
             spice_data.data[0]["scf_quadrupole"][0][0],
             array([-0.10442506, -0.01294832, 0.01081958], dtype=float32)
             * unit.parse_expression("elementary_charge * nanometer ** 2"),
+        )
+    )
+
+
+# We will skip this test because it will take too long to download
+# the whole data set and process the inputs
+def test_ani2x(prep_temp_dir):
+    from modelforge.curation.ani2x_curation import ANI2xCuration
+
+    local_path_dir = str(prep_temp_dir)
+    local_data_path = resources.files("modelforge").joinpath("tests", "data")
+
+    # create an hdf5 file that only contains the dimer data, generated using the following script
+    # so we can test the _process_downloaded function
+    # with h5py.File("ANI-2x-wB97X-631Gd.h5", "r") as hf_in:
+    #     with h5py.File('ani2x_n10.hdf5', "w") as hf_out:
+    #         for num_atoms, properties in hf_in.items():
+    #             hf_in.copy(hf_in[num_atoms], hf_out)
+    #             break
+
+    filename = "ani2x_minimal.hdf5"
+
+    ani2x_data = ANI2xCuration(
+        hdf5_file_name="ani2x_dataset.hdf5",
+        output_file_dir=local_path_dir,
+        local_cache_dir=local_path_dir,
+    )
+    ani2x_data._process_downloaded(
+        local_data_path, filename, unit_testing_max_records=1
+    )
+
+    assert len(ani2x_data.data) == 1
+    assert ani2x_data.data[0]["name"] == "[1_9]"
+    assert ani2_dataset.data[0]["n_configs"] == 517
+    assert ani2_dataset.data[0]["energies"].shape == (517, 1)
+    assert ani2_dataset.data[0]["atomic_numbers"].shape == (2, 1)
+    assert ani2_dataset.data[0]["geometry"].shape == (517, 2, 3)
+    assert ani2_dataset.data[0]["forces"].shape == (517, 2, 3)
+    assert np.all(
+        ani2_dataset.data[0]["energies"][0:5].m
+        == np.array(
+            [
+                [-263595.6246798465],
+                [-263591.3453779841],
+                [-263596.28778916295],
+                [-263592.7221558636],
+                [-263591.0017998503],
+            ]
+        ),
+    )
+
+    assert np.all(
+        ani2_dataset.data[0]["forces"][0:1].m
+        == np.array(
+            [[[-0.0, -0.0, 1058.7310900538516], [-0.0, -0.0, -1058.7310900538516]]]
+        )
+    )
+    assert np.all(
+        ani2_dataset.data[0]["geometry"][0].m
+        == np.array(
+            [[0.0, 0.0, -0.08543934673070908], [0.0, 0.0, 0.009493260644376278]]
         )
     )
 

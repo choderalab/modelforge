@@ -14,7 +14,7 @@ class QM9Curation(DatasetCuration):
     All properties were calculated at the B3LYP/6-31G(2df,p) level of quantum chemistry.
 
     Citation: Ramakrishnan, R., Dral, P., Rupp, M. et al.
-                Quantum chemistry structures and properties of 134 kilo molecules.
+                "Quantum chemistry structures and properties of 134 kilo molecules."
                 Sci Data 1, 140022 (2014).
                 https://doi.org/10.1038/sdata.2014.22
 
@@ -29,8 +29,8 @@ class QM9Curation(DatasetCuration):
     local_cache_dir: str, optional, default='./qm9_datafiles'
         Location to save downloaded dataset.
     convert_units: bool, optional, default=True
-        Convert from e.g., source units [angstrom, hartree]
-        to output units [nanometer, kJ/mol]
+        Convert from [e.g., angstrom, bohr, hartree] (i.e., source units)
+        to [nanometer, kJ/mol] (i.e., target units)
 
     Examples
     --------
@@ -59,7 +59,8 @@ class QM9Curation(DatasetCuration):
             "description": "QM9 Dataset: Includes 133,885 organic molecules with up to nine heavy atoms (CONF). All properties were calculated at the B3LYP/6-31G(2df,p) level of quantum chemistry.",
         }
 
-        # if convert_units is True, we will convert each input unit (key) to the following output units (val)
+        # if convert_units is True, which it is by default
+        # we will convert each input unit (key) to the following output units (val)
 
         self.qm_parameters = {
             "geometry": {

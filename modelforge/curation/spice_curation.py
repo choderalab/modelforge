@@ -32,8 +32,8 @@ class SPICE114Curation(DatasetCuration):
     local_cache_dir: str, optional, default='./spice_dataset'
         Location to save downloaded dataset.
     convert_units: bool, optional, default=True
-        Convert from [angstrom, hartree] (i.e., source units)
-        to [nanometer, kJ/mol]
+        Convert from [e.g., angstrom, bohr, hartree] (i.e., source units)
+        to [nanometer, kJ/mol] (i.e., target units)
 
     Examples
     --------

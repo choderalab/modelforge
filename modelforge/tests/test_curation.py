@@ -1474,8 +1474,6 @@ def test_spice114_process_download_conversion(prep_temp_dir):
     )
 
 
-# We will skip this test because it will take too long to download
-# the whole data set and process the inputs
 def test_ani2x(prep_temp_dir):
     from modelforge.curation.ani2x_curation import ANI2xCuration
 
@@ -1492,24 +1490,24 @@ def test_ani2x(prep_temp_dir):
 
     filename = "ani2x_minimal.hdf5"
 
-    ani2x_data = ANI2xCuration(
+    ani2x_dataset = ANI2xCuration(
         hdf5_file_name="ani2x_dataset.hdf5",
         output_file_dir=local_path_dir,
         local_cache_dir=local_path_dir,
     )
-    ani2x_data._process_downloaded(
+    ani2x_dataset._process_downloaded(
         local_data_path, filename, unit_testing_max_records=1
     )
 
-    assert len(ani2x_data.data) == 1
-    assert ani2x_data.data[0]["name"] == "[1_9]"
-    assert ani2_dataset.data[0]["n_configs"] == 517
-    assert ani2_dataset.data[0]["energies"].shape == (517, 1)
-    assert ani2_dataset.data[0]["atomic_numbers"].shape == (2, 1)
-    assert ani2_dataset.data[0]["geometry"].shape == (517, 2, 3)
-    assert ani2_dataset.data[0]["forces"].shape == (517, 2, 3)
+    assert len(ani2x_dataset.data) == 1
+    assert ani2x_dataset.data[0]["name"] == "[1_9]"
+    assert ani2x_dataset.data[0]["n_configs"] == 517
+    assert ani2x_dataset.data[0]["energies"].shape == (517, 1)
+    assert ani2x_dataset.data[0]["atomic_numbers"].shape == (2, 1)
+    assert ani2x_dataset.data[0]["geometry"].shape == (517, 2, 3)
+    assert ani2x_dataset.data[0]["forces"].shape == (517, 2, 3)
     assert np.all(
-        ani2_dataset.data[0]["energies"][0:5].m
+        ani2x_dataset.data[0]["energies"][0:5].m
         == np.array(
             [
                 [-263595.6246798465],
@@ -1522,13 +1520,13 @@ def test_ani2x(prep_temp_dir):
     )
 
     assert np.all(
-        ani2_dataset.data[0]["forces"][0:1].m
+        ani2x_dataset.data[0]["forces"][0:1].m
         == np.array(
             [[[-0.0, -0.0, 1058.7310900538516], [-0.0, -0.0, -1058.7310900538516]]]
         )
     )
     assert np.all(
-        ani2_dataset.data[0]["geometry"][0].m
+        ani2x_dataset.data[0]["geometry"][0].m
         == np.array(
             [[0.0, 0.0, -0.08543934673070908], [0.0, 0.0, 0.009493260644376278]]
         )

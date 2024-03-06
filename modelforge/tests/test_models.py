@@ -10,6 +10,62 @@ from .helper_functions import (
 )
 
 
+def test_scaling_and_offset():
+
+    from modelforge.dataset.qm9 import QM9Dataset
+    from modelforge.dataset.dataset import TorchDataModule
+    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
+
+    data = QM9Dataset(for_unit_testing=True)
+    dataset = TorchDataModule(
+        data, batch_size=128, split=FirstComeFirstServeSplittingStrategy()
+    )
+
+    dataset.prepare_data(remove_self_energies=True, normalize=True)
+
+    from modelforge.potential.schnet import LightningSchNET
+
+    from modelforge.potential import CosineCutoff, RadialSymmetryFunction
+    from modelforge.potential.utils import Embedding
+
+    from openff.units import unit
+
+    max_atomic_number = 100
+    nr_atom_basis = 32
+    number_of_gaussians = 14
+    nr_interaction_blocks = 4
+
+    cutoff = unit.Quantity(5, unit.angstrom)
+    embedding = Embedding(max_atomic_number, nr_atom_basis)
+    radial_symmetry_function_module = RadialSymmetryFunction(
+        number_of_gaussians=number_of_gaussians, radial_cutoff=cutoff
+    )
+    cutoff_module = CosineCutoff(cutoff=cutoff)
+
+    from lightning import Trainer
+
+    trainer = Trainer(
+        max_epochs=5,
+        accelerator="cpu",
+    )
+
+    model = LightningSchNET(
+        embedding=embedding,
+        nr_interaction_blocks=nr_interaction_blocks,
+        radial_symmetry_function_module=radial_symmetry_function_module,
+        cutoff_module=cutoff_module,
+    )
+    import torch
+
+    model.dataset_statistics = dataset.dataset_statistics
+
+    # Move model to the appropriate dtype and device
+    model = model.to(torch.float32)
+
+    methane = dataset[1]
+    a = 7
+
+
 @pytest.mark.parametrize("model_class", MODELS_TO_TEST)
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_forward_pass(model_class, dataset):
@@ -20,14 +76,14 @@ def test_forward_pass(model_class, dataset):
         inputs = return_single_batch(
             dataset,
         )  # split_file="modelforge/tests/qm9tut/split.npz")
+
         nr_of_mols = inputs["atomic_subsystem_indices"].unique().shape[0]
         nr_of_atoms_per_batch = inputs["atomic_subsystem_indices"].shape[0]
-        print(f"nr_of_mols: {nr_of_mols}")
-        output = initialized_model(inputs)["energy_readout"]
+
+        output = initialized_model(inputs)["E_predict"]
 
         # test tat we get an energie per molecule
-        assert output.shape[0] == nr_of_mols
-        assert output.shape[1] == 1
+        assert len(output) == nr_of_mols
 
 
 @pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
@@ -43,17 +99,17 @@ def test_calculate_energies_and_forces(input_data, model_class):
     nr_of_atoms_per_batch = input_data["atomic_subsystem_indices"].shape[0]
     for lightning in [True, False]:
         model = setup_simple_model(model_class, lightning)
-        result = model(input_data)["energy_readout"]
+        result = model(input_data)["E_predict"]
         print(result.sum())
         forces = -torch.autograd.grad(
             result.sum(), input_data["positions"], create_graph=True, retain_graph=True
         )[0]
 
-        assert result.shape == (nr_of_mols, 1)  #  only one molecule
+        assert result.shape == torch.Size([nr_of_mols])  #  only one molecule
         assert forces.shape == (nr_of_atoms_per_batch, 3)  #  only one molecule
 
 
-def testPairlist_logic():
+def test_pairlist_logic():
     import torch
 
     # dummy data for illustration
@@ -121,7 +177,7 @@ def testPairlist_logic():
     )
 
 
-def testPairlist():
+def test_pairlist():
     from modelforge.potential.models import Pairlist, Neighborlist
     import torch
 
@@ -293,7 +349,7 @@ def test_equivariant_energies_and_forces(input_data, model_class):
         model = setup_simple_model(model_class, lightning).double()
         input_data["positions"] = input_data["positions"]
         # reference values
-        reference_result = model(input_data)["energy_readout"].double()
+        reference_result = model(input_data)["E_predict"].double()
         reference_forces = -torch.autograd.grad(
             reference_result.sum(),
             input_data["positions"],
@@ -306,7 +362,7 @@ def test_equivariant_energies_and_forces(input_data, model_class):
         translation_input_data["positions"] = translation(
             translation_input_data["positions"]
         )
-        translation_result = model(translation_input_data)["energy_readout"]
+        translation_result = model(translation_input_data)["E_predict"]
         assert torch.allclose(
             translation_result,
             reference_result,
@@ -331,7 +387,7 @@ def test_equivariant_energies_and_forces(input_data, model_class):
         rotation_input_data["positions"] = rotation(
             rotation_input_data["positions"].to(torch.float32)
         ).double()
-        rotation_result = model(rotation_input_data)["energy_readout"]
+        rotation_result = model(rotation_input_data)["E_predict"]
 
         print(rotation_result)
         print(reference_result, flush=True)
@@ -361,7 +417,7 @@ def test_equivariant_energies_and_forces(input_data, model_class):
         reflection_input_data["positions"] = reflection(
             reflection_input_data["positions"].to(torch.float32)
         ).double()
-        reflection_result = model(reflection_input_data)["energy_readout"]
+        reflection_result = model(reflection_input_data)["E_predict"]
         reflection_forces = -torch.autograd.grad(
             reflection_result.sum(),
             reflection_input_data["positions"],
@@ -439,101 +495,3 @@ def testPairlist_calculate_r_ij_and_d_ij():
 
     assert torch.allclose(r_ij, expected_r_ij, atol=1e-3)
     assert torch.allclose(d_ij, expected_d_ij, atol=1e-3)
-
-
-# @pytest.mark.parametrize("model_class", MODELS_TO_TEST)
-def test_postprocessing():
-
-    from modelforge.dataset.dataset import TorchDataModule
-
-    # test the self energy calculation on the QM9 dataset
-    from modelforge.dataset.qm9 import QM9Dataset
-    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
-
-    data = QM9Dataset(for_unit_testing=True)
-    dataset = TorchDataModule(
-        data, batch_size=8, split=FirstComeFirstServeSplittingStrategy()
-    )
-
-    # self energy is calculated and removed in prepare_data if `remove_self_energies` is True
-    dataset.prepare_data(remove_self_energies=True, normalize=False)
-    assert dataset.dataset_statistics
-    # 5 elements present in the QM9 dataset
-    assert len(dataset.dataset_statistics["self_energies"]) == 5
-
-    from modelforge.potential.schnet import SchNET
-    from modelforge.potential import CosineCutoff, RadialSymmetryFunction
-    from modelforge.potential.utils import Embedding
-    from openff.units import unit
-
-    nr_atom_basis = 128
-    max_atomic_number = 100
-    number_of_gaussians = 20
-    cutoff = 5.0 * unit.angstrom
-    nr_interaction_blocks = 2
-    nr_filters = 2
-
-    embedding = Embedding(max_atomic_number, nr_atom_basis)
-    radial_symmetry_function_module = RadialSymmetryFunction(
-        number_of_gaussians=number_of_gaussians, radial_cutoff=cutoff
-    )
-
-    cutoff = CosineCutoff(cutoff=cutoff)
-
-    # reset seed
-    import torch
-
-    torch.manual_seed(1234)
-    model = SchNET(
-        embedding_module=embedding,
-        nr_interaction_blocks=nr_interaction_blocks,
-        radial_symmetry_function_module=radial_symmetry_function_module,
-        cutoff_module=cutoff,
-        nr_filters=nr_filters,
-    )
-
-    for batch in dataset.train_dataloader():
-        result = model(batch)
-        break
-
-    # test the postprocessing pipeline
-    # extract the energy and the species for the first result
-    e = result["energy_readout"][0]
-    species = [6, 1, 1, 1, 1]  # double check that this is the case
-    for atom_idx in range(len(species)):
-        assert species[atom_idx] == result["atomic_numbers"][atom_idx].item()
-
-    # calculate the offset
-    import numpy as np
-
-    self_energies = dataset.dataset_statistics["self_energies"]
-    offset = np.sum([self_energies[z] for z in species])
-
-    from modelforge.potential.postprocessing import (
-        AddSelfEnergies,
-        PostprocessingPipeline,
-    )
-
-    # in order to compare the two predictions we neet to reset the seed
-    torch.manual_seed(1234)
-    model = SchNET(
-        embedding_module=embedding,
-        nr_interaction_blocks=nr_interaction_blocks,
-        radial_symmetry_function_module=radial_symmetry_function_module,
-        cutoff_module=cutoff,
-        nr_filters=nr_filters,
-        postprocessing=PostprocessingPipeline(
-            [AddSelfEnergies(dataset.dataset_statistics)]
-        ),
-    )
-
-    for batch in dataset.train_dataloader():
-        result_with_offset = model(batch)
-        break
-
-    r1 = result_with_offset[0].item()
-    r2 = (e + offset).item()
-
-    # make sure that the prediction between the two
-    # SchNET models differ only by the offset
-    assert np.isclose(r1, r2)

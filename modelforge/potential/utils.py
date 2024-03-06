@@ -4,6 +4,19 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+ATOMIC_NUMBER_TO_INDEX_MAP = {
+    1: 0,  # H
+    6: 1,  # C
+    7: 2,  # N
+    8: 3,  # O
+    9: 4,  # F
+    15: 5,  # P
+    16: 6,  # S
+    17: 7,  # Cl
+    35: 8,  # Br
+    53: 9,  # I
+}
+
 
 def triple_by_molecule(
     atom_pairs: torch.Tensor,
@@ -287,13 +300,13 @@ class EnergyReadout(nn.Module):
 
         # Perform scatter add operation
         indices = atomic_subsystem_indices.unsqueeze(1).to(torch.int64)
-        result = torch.zeros(
+        total_energy_per_molecule = torch.zeros(
             len(atomic_subsystem_indices.unique()), 1, dtype=x.dtype, device=x.device
         ).scatter_add(0, indices, x)
 
         # Sum across feature dimension to get final tensor of shape (num_molecules, 1)
-        total_energy_per_molecule = result.sum(dim=1, keepdim=True)
-        return total_energy_per_molecule
+        # total_energy_per_molecule = result.sum(dim=1, keepdim=True)
+        return total_energy_per_molecule.squeeze(1)
 
 
 from dataclasses import dataclass, field
@@ -370,6 +383,7 @@ class AtomicSelfEnergies:
             # Add more elements as needed
         }
     )
+    _ase_tensor_for_indexing = None
 
     def __getitem__(self, key):
         if isinstance(key, int):
@@ -404,6 +418,29 @@ class AtomicSelfEnergies:
             if elem_symbol == element:
                 return atomic_number
         raise ValueError(f"Element symbol '{element}' not found in the mapping.")
+
+    @property
+    def atomic_number_to_energy(self) -> Dict[int, float]:
+        """Return a dictionary mapping atomic numbers to their energies."""
+        return {
+            atomic_number: self[atomic_number]
+            for atomic_number in self.atomic_number_to_element.keys()
+            if self[atomic_number] is not None
+        }
+
+    @property
+    def ase_tensor_for_indexing(self) -> torch.Tensor:
+        if self._ase_tensor_for_indexing is None:
+            max_z = max(self.atomic_number_to_element.keys()) + 1
+            ase_tensor_for_indexing = torch.zeros(max_z)
+            for idx in self.atomic_number_to_element:
+                if self[idx]:
+                    ase_tensor_for_indexing[idx] = self[idx]
+                else:
+                    ase_tensor_for_indexing[idx] = 0.0
+            self._ase_tensor_for_indexing = ase_tensor_for_indexing
+
+        return self._ase_tensor_for_indexing
 
 
 class ShiftedSoftplus(nn.Module):

@@ -187,17 +187,6 @@ def generate_methane_input() -> Dict[str, torch.Tensor]:
     }
 
 
-def generate_mock_data():
-    return {
-        "atomic_numbers": torch.tensor([1, 2, 2, 3]),
-        "positions": torch.tensor(
-            [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [0.0, 0.0, 0.0], [1.0, 1.0, 1.0]],
-            requires_grad=True,
-        ),
-        "atomic_subsystem_indices": torch.tensor([0, 0, 1, 1]),
-    }
-
-
 def generate_batch_data():
     return return_single_batch(QM9Dataset)
 
@@ -250,7 +239,6 @@ def generate_interaction_block_data(
 
 SIMPLIFIED_INPUT_DATA = [
     generate_methane_input(),
-    generate_mock_data(),
     generate_batch_data(),
 ]
 

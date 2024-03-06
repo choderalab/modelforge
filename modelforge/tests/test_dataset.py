@@ -194,7 +194,7 @@ def test_data_item_format(dataset):
         dataset, split_file="modelforge/tests/qm9tut/split.npz"
     )
 
-    raw_data_item = dataset.dataset[0]
+    raw_data_item = dataset.torch_dataset[0]
     assert isinstance(raw_data_item, Dict)
     assert isinstance(raw_data_item["atomic_numbers"], torch.Tensor)
     assert isinstance(raw_data_item["positions"], torch.Tensor)
@@ -204,22 +204,6 @@ def test_data_item_format(dataset):
     assert (
         raw_data_item["atomic_numbers"].shape[0] == raw_data_item["positions"].shape[0]
     )
-
-
-def test_padding():
-    """Test the padding function to ensure correct behavior on dummy data."""
-    from modelforge.dataset.utils import pad_molecules
-
-    dummy_data = np.array([[0, 0, 0], [0, 0, 0], [0, 0, 0]]), np.array(
-        [[0, 0, 0], [0, 0, 0]]
-    )
-    max_len = max(len(arr) for arr in dummy_data)
-    padded_data = pad_molecules(dummy_data)
-
-    for data in padded_data:
-        assert data.shape[0] == max_len
-
-    assert np.array_equal(padded_data[-1][-1], np.array([-1, -1, -1]))
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
@@ -332,7 +316,7 @@ def test_self_energy():
     dataset.prepare_data(remove_self_energies=True, normalize=False)
 
     assert dataset.dataset_statistics
-    self_energies = dataset.dataset_statistics["self_energies"]
+    self_energies = dataset.dataset_statistics["atomic_self_energies"]
     # 5 elements present in the QM9 dataset
     assert len(self_energies) == 5
     # H: -1313.4668615546

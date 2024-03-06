@@ -6,7 +6,6 @@ import torch.nn as nn
 
 from .models import BaseNNP, LightningModuleMixin
 from .utils import _distance_to_radial_basis, ShiftedSoftplus
-from .postprocessing import PostprocessingPipeline, NoPostprocess
 
 
 class SchNET(BaseNNP):
@@ -19,9 +18,6 @@ class SchNET(BaseNNP):
         nr_filters: int = None,
         shared_interactions: bool = False,
         activation: nn.Module = ShiftedSoftplus(),
-        postprocessing: PostprocessingPipeline = PostprocessingPipeline(
-            [NoPostprocess({})]
-        ),
     ) -> None:
         """
         Initialize the SchNet class.
@@ -39,9 +35,7 @@ class SchNET(BaseNNP):
 
         log.debug("Initializing SchNet model.")
         self.only_unique_pairs = False
-        super().__init__(
-            radial_cutoff=float(cutoff_module.cutoff), postprocessing=postprocessing
-        )
+        super().__init__(radial_cutoff=float(cutoff_module.cutoff))
         self.radial_symmetry_function_module = radial_symmetry_function_module
         self.cutoff_module = cutoff_module
 
@@ -277,9 +271,6 @@ class LightningSchNET(SchNET, LightningModuleMixin):
         nr_filters: int = 2,
         shared_interactions: bool = False,
         activation: nn.Module = ShiftedSoftplus(),
-        postprocessing: PostprocessingPipeline = PostprocessingPipeline(
-            [NoPostprocess({})]
-        ),
         loss: Type[nn.Module] = nn.MSELoss(),
         optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
         lr: float = 1e-3,
@@ -311,7 +302,6 @@ class LightningSchNET(SchNET, LightningModuleMixin):
             nr_filters=nr_filters,
             shared_interactions=shared_interactions,
             activation=activation,
-            postprocessing=postprocessing,
         )
         self.loss_function = loss
         self.optimizer = optimizer

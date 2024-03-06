@@ -162,14 +162,12 @@ class Neighborlist(Pairlist):
 class LightningModuleMixin(pl.LightningModule):
     """
     A mixin for PyTorch Lightning training.
-
-    Methods
-    -------
-    training_step(batch: Dict[str, torch.Tensor], batch_idx: int) -> torch.Tensor
-        Perform a single training step.
-    configure_optimizers() -> AdamW
-        Configures the optimizer for training.
     """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.save_hyperparameters()
+        self.automatic_optimization = False
 
     def _log_batch_size(self, batch: Dict[str, torch.Tensor]):
         batch_size = int(len(batch["E_label"]))
@@ -194,10 +192,9 @@ class LightningModuleMixin(pl.LightningModule):
             Loss tensor.
         """
         batch_size = self._log_batch_size(batch)
-        predictions = self.forward(batch)["energy_readout"].flatten()
+        predictions = self.forward(batch)["E_predict"].flatten()
         targets = batch["E_label"].flatten().to(torch.float32)
         loss = self.loss_function(predictions, targets)
-
         self.log(
             "train_loss",
             loss,
@@ -206,6 +203,7 @@ class LightningModuleMixin(pl.LightningModule):
             prog_bar=True,
             batch_size=batch_size,
         )
+
         return loss
 
     def test_step(self, batch, batch_idx):
@@ -215,7 +213,7 @@ class LightningModuleMixin(pl.LightningModule):
 
         predictions = self.forward(batch).flatten()
         targets = batch["E_label"].flatten()
-        test_loss = F.mse_loss(predictions["energy_readout"], targets)
+        test_loss = F.mse_loss(predictions["E_predict"], targets)
         self.log(
             "test_loss", test_loss, batch_size=batch_size, on_epoch=True, prog_bar=True
         )
@@ -224,8 +222,14 @@ class LightningModuleMixin(pl.LightningModule):
         from torch.nn import functional as F
 
         batch_size = self._log_batch_size(batch)
-        predictions = self.forward(batch)["energy_readout"]
-        targets = batch["E_label"]
+        predictions = self.forward(batch)["E_predict"]
+        targets = batch["E_label"].squeeze(1)
+        print(f"predictions: {predictions}")
+        print(f"targets: {targets}")
+
+        import time
+
+        time.sleep(1)
         val_loss = F.mse_loss(predictions, targets)
         self.log(
             "val_loss", val_loss, batch_size=batch_size, on_epoch=True, prog_bar=True
@@ -244,9 +248,7 @@ class LightningModuleMixin(pl.LightningModule):
         return self.optimizer(self.parameters(), lr=self.learning_rate)
 
 
-from modelforge.potential.postprocessing import PostprocessingPipeline, NoPostprocess
-
-
+from modelforge.potential.utils import AtomicSelfEnergies
 from abc import abstractmethod
 from openff.units import unit
 
@@ -260,9 +262,6 @@ class BaseNNP(nn.Module):
         self,
         radial_cutoff: float,
         angular_cutoff: Optional[float] = None,
-        postprocessing: PostprocessingPipeline = PostprocessingPipeline(
-            [NoPostprocess()]
-        ),
     ):
         """
         Initialize the NNP class.
@@ -283,8 +282,25 @@ class BaseNNP(nn.Module):
         self._dtype = None  # set at runtime
         self._log_message_dtype = False
         self._log_message_units = False
-        self._energy_postprocessing_pipeline = postprocessing
-        self.dataset_stats = {}
+        self._dataset_statistics: Dict = {
+            "scaling_mean": 1.0,
+            "scaling_stddev": 1.0,
+            "atomic_self_energies": AtomicSelfEnergies(),
+        }
+
+    @property
+    def dataset_statistics(self):
+        return self._dataset_statistics
+
+    @dataset_statistics.setter
+    def dataset_statistics(self, dataset_statistics: Dict):
+
+        for key in ["scaling_mean", "scaling_stddev", "atomic_self_energies"]:
+            assert (
+                key in dataset_statistics.keys()
+            ), f"dataset_statistics must contain the key '{key}'"
+
+        self._dataset_statistics = dataset_statistics
 
     @abstractmethod
     def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
@@ -307,30 +323,48 @@ class BaseNNP(nn.Module):
         # aggregated energies
         pass
 
-    def _energy_postprocessing(
-        self, energy_readout: torch.Tensor, inputs: Dict[str, torch.Tensor]
-    ):
-        """
-        Performs postprocessing of the energies.
+    def _rescale_energy(self, energies: torch.Tensor) -> torch.Tensor:
 
-        Parameters
-        ----------
-        energy_readout: torch.Tensor
-        inputs: Dict[str, torch.Tensor]: with keys
-                energy_readout: torch.Tensor, shape (nr_of_molecuels_in_batch)
-                atomic_numbers: torch.Tensor, shape (nr_of_atoms_in_batch)
-                atomic_subsystem_indices: torch.Tensor, shape (nr_of_atoms_in_batch)
+        return (
+            energies * self.dataset_statistics["scaling_stddev"]
+            + self.dataset_statistics["scaling_mean"]
+        )
 
-        """
-        pipeline = self._energy_postprocessing_pipeline
+    def _calculate_molecular_self_energy(
+        self, inputs: Dict[str, torch.Tensor], number_of_molecules: int
+    ) -> torch.Tensor:
 
-        postprocessing_data = {}
-        postprocessing_data["energy_readout"] = energy_readout
-        postprocessing_data["atomic_numbers"] = inputs["atomic_numbers"]
-        postprocessing_data["atomic_subsystem_indices"] = inputs[
-            "atomic_subsystem_indices"
-        ]
-        return pipeline(postprocessing_data)
+        atomic_numbers = inputs["atomic_numbers"]
+        atomic_subsystem_indices = inputs["atomic_subsystem_indices"].to(
+            dtype=torch.long
+        )
+
+        # atomic_number_to_energy
+        atomic_self_energies = self.dataset_statistics["atomic_self_energies"]
+        ase_tensor_for_indexing = atomic_self_energies.ase_tensor_for_indexing
+
+        # first, we need to use the atomic numbers to generate a tensor that
+        # contains the atomic self energy for each atomic number
+        ase_tensor = ase_tensor_for_indexing[atomic_numbers]
+
+        # then, we use the atomic_subsystem_indices to scatter add the atomic self
+        # energies in the ase_tensor to generate the molecular self energies
+        ase_tensor = torch.zeros((number_of_molecules,)).scatter_add(
+            0, atomic_subsystem_indices, ase_tensor
+        )
+
+        return ase_tensor
+
+    def _energy_postprocessing(self, properties_per_molecule, inputs):
+
+        # first, resale the energies
+        properties_per_molecule = self._rescale_energy(properties_per_molecule)
+        # then, calculate the molecular self energy
+        molecular_ase = self._calculate_molecular_self_energy(
+            inputs, properties_per_molecule.numel()
+        )
+        # add the molecular self energy to the rescaled energies
+        return properties_per_molecule + molecular_ase
 
     def prepare_inputs(
         self, inputs: Dict[str, torch.Tensor], only_unique_pairs: bool = True
@@ -473,12 +507,14 @@ class BaseNNP(nn.Module):
         inputs = self.prepare_inputs(inputs, self.only_unique_pairs)
         # perform the forward pass implemented in the subclass
         outputs = self._forward(inputs)
-        # aggreate energies
-        energy_readout = self._readout(outputs)
+        # postprocess the outputs
+        properties_per_molecule = self._readout(outputs)
         # postprocess energies
-        processed_energies = self._energy_postprocessing(energy_readout, inputs)
+        processed_energies = self._energy_postprocessing(
+            properties_per_molecule, inputs
+        )
         # return energies
-        return processed_energies
+        return {"E_predict": processed_energies}
 
 
 class SingleTopologyAlchemicalBaseNNPModel(BaseNNP):

@@ -545,12 +545,12 @@ class TorchDataModule(pl.LightningDataModule):
 
         # Define the collate function based on the `collate` parameter
         collate_fn = collate_conformers if collate else None
-        return calculate_self_energies(self.dataset, collate_fn)
+        return calculate_self_energies(self.torch_dataset, collate_fn)
 
     def prepare_data(
         self,
         remove_self_energies: bool = True,
-        normalize: bool = False,
+        normalize: bool = True,
         self_energies: Dict[str, float] = None,
         regression_ase: bool = False,
     ) -> None:
@@ -581,12 +581,13 @@ class TorchDataModule(pl.LightningDataModule):
 
         # generate dataset
         factory = DatasetFactory()
-        self.dataset = factory.create_dataset(self.data)
+        torch_dataset = factory.create_dataset(self.data)
         dataset_statistics = {}
-        # calculate self energies
-        import toml
 
         if remove_self_energies:
+            # calculate self energies
+            import toml
+
             log.debug("Self energies are removed ...")
             if not self_energies:
                 if regression_ase:
@@ -597,34 +598,44 @@ class TorchDataModule(pl.LightningDataModule):
                 else:
                     log.debug("Using atomic self energies from the dataset...")
                     self_energies = self._ase
-            self.dataset = self.remove_self_energies(self.dataset, self_energies)
+            # remove self energies
+            torch_dataset = self.subtract_self_energies(torch_dataset, self_energies)
+            # store self energies
+            dataset_statistics["atomic_self_energies"] = self_energies
             # save the self energies that are removed from the dataset
-            dataset_statistics["self_energies"] = self_energies
             with open("ase.toml", "w") as f:
-                self_energies_ = {str(idx): energy for (idx, energy) in self_energies}
+                self_energies_ = {str(idx): energy for (idx, energy) in self._ase}
                 toml.dump(self_energies_, f)
 
-        # calculate average and variance
         if normalize:
+            # calculate average and variance
+            if not remove_self_energies:
+                raise RuntimeError(
+                    "Cannot normalize the dataset if self energies are not removed."
+                )
+
+            log.debug("Normalizing energies...")
             from modelforge.dataset.utils import (
                 calculate_mean_and_variance,
                 normalize_energies,
             )
 
-            stats = calculate_mean_and_variance(self.dataset)
-            self.dataset = normalize_energies(self.dataset, stats)
-            dataset_statistics["stddev"] = stats["stddev"]
-            dataset_statistics["mean"] = stats["mean"]
+            stats = calculate_mean_and_variance(torch_dataset)
+            torch_dataset = normalize_energies(torch_dataset, stats)
+            dataset_statistics["scaling_stddev"] = stats["stddev"]
+            dataset_statistics["scaling_mean"] = stats["mean"]
 
         self.dataset_statistics = dataset_statistics
-        self.setup()
+        self.setup(torch_dataset)
 
-    def remove_self_energies(self, dataset, self_energies: Dict[str, float]) -> None:
+    def subtract_self_energies(self, dataset, self_energies: Dict[str, float]) -> None:
         """
-        Removes the self energies from the dataset.
+        Removes the self energies from the total energies for each molecule in the dataset .
 
         Parameters
         ----------
+        dataset: torch.Dataset
+            The dataset from which to remove the self energies.
         self_energies : Dict[str, float]
             Dictionary containing the self energies for each element in the dataset.
         """
@@ -632,11 +643,12 @@ class TorchDataModule(pl.LightningDataModule):
 
         log.info("Removing self energies from the dataset")
         for i in tqdm(range(len(dataset)), desc="Removing Self Energies"):
-            atomic_numbers = dataset[i]["atomic_numbers"]
+            atomic_numbers = list(dataset[i]["atomic_numbers"])
             E_label = dataset[i]["E_label"]
-            for idx, Z in enumerate(atomic_numbers):
-                E_label -= self_energies[int(Z.item())]
+            for Z in atomic_numbers:
+                E_label -= self_energies[int(Z)]
             dataset[i] = {"E_label": E_label}
+
         return dataset
 
     @classmethod
@@ -665,22 +677,24 @@ class TorchDataModule(pl.LightningDataModule):
 
         return dataset
 
-    def setup(self) -> None:
+    def setup(self, torch_dataset) -> None:
         """
         Sets up datasets for the train, validation, and test stages.
 
         """
         from torch.utils.data import Subset
 
+        # saving the raw dataset
+        self.torch_dataset = torch_dataset  # FIXME: is this necessary?
         # Create subsets for training, validation, and testing
         if self.split_idxs and os.path.exists(self.split_file):
-            self.train_dataset = Subset(self.dataset, self.split_idxs["train_idx"])
-            self.val_dataset = Subset(self.dataset, self.split_idxs["val_idx"])
-            self.test_dataset = Subset(self.dataset, self.split_idxs["test_idx"])
+            self.train_dataset = Subset(torch_dataset, self.split_idxs["train_idx"])
+            self.val_dataset = Subset(torch_dataset, self.split_idxs["val_idx"])
+            self.test_dataset = Subset(torch_dataset, self.split_idxs["test_idx"])
         else:
             # Fallback to manual splitting if split_idxs is not available
             self.train_dataset, self.val_dataset, self.test_dataset = self.split.split(
-                self.dataset
+                torch_dataset
             )
 
     def train_dataloader(self) -> DataLoader:

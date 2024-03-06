@@ -25,10 +25,10 @@ def test_gaussian_rbf_1D():
 def test_gaussian_rbf_3D():
     from openff.units import unit
 
-    dist = torch.tensor([[[0.0, 1.0, 1.5], [0.5, 1.5, 3.0]]])
+    dist = torch.tensor([[[0.0, 1.0, 1.5], [0.5, 1.5, 3.0]]]) / 10
     # smear using 4 Gaussian functions with 1. spacing
     smear = RadialSymmetryFunction(
-        radial_start=0.1 * unit.angstrom,
+        radial_start=0.0 * unit.angstrom,
         radial_cutoff=4.0 * unit.angstrom,
         number_of_gaussians=4,
     )
@@ -40,9 +40,9 @@ def test_gaussian_rbf_3D():
                 [[0.5, 1.5, 2.5, 3.5], [0.5, 0.5, 1.5, 2.5], [2, 1, 0, 1]],
             ]
         ]
-    )
+    )/10
     expt = torch.exp(-1 * expt**2)
-    print(expt)
     print(smear(dist))
+    print(expt)
     assert torch.allclose(expt, smear(dist), atol=1e-5)
     assert list(smear.parameters()) == []

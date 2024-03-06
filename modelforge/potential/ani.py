@@ -2,7 +2,6 @@ import torch
 from torch import nn
 from loguru import logger as log
 from modelforge.potential.models import BaseNNP
-from modelforge.potential.postprocessing import PostprocessingPipeline, NoPostprocess
 from typing import Dict, NamedTuple, Tuple
 from openff.units import unit
 
@@ -289,6 +288,7 @@ class ANIInteraction(nn.Module):
             torch.nn.Linear(96, 1),
         )
 
+        # TODO: Add additional elements (S, Cl, etc)
         return {"H": H_network, "C": C_network, "N": N_network, "O": O_network}
 
     def forward(self, input: Tuple[torch.Tensor, torch.Tensor]):
@@ -310,9 +310,6 @@ class ANI2x(BaseNNP):
 
     def __init__(
         self,
-        postprocessing: PostprocessingPipeline = PostprocessingPipeline(
-            [NoPostprocess({})]
-        ),
         radial_cutoff: unit.Quantity = 5.3 * unit.angstrom,
         angular_cutoff: unit.Quantity = 3.5 * unit.angstrom,
         device: torch.device = torch.device("cpu"),
@@ -331,7 +328,6 @@ class ANI2x(BaseNNP):
         super().__init__(
             radial_cutoff=radial_cutoff,
             angular_cutoff=angular_cutoff,
-            postprocessing=postprocessing,
         )
 
         # Initialize representation block

@@ -167,7 +167,7 @@ class LightningModuleMixin(pl.LightningModule):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.save_hyperparameters()
-        self.automatic_optimization = False
+        self.automatic_optimization = True
 
     def _log_batch_size(self, batch: Dict[str, torch.Tensor]):
         batch_size = int(len(batch["E_label"]))

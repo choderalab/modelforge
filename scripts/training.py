@@ -9,7 +9,7 @@ from modelforge.potential.utils import Embedding
 from openff.units import unit
 
 max_atomic_number = 100
-nr_atom_basis = 32
+nr_atom_basis = 64
 number_of_gaussians = 14
 nr_interaction_blocks = 4
 
@@ -28,7 +28,7 @@ from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
 data = QM9Dataset(for_unit_testing=False)
 dataset = TorchDataModule(
-    data, batch_size=128, split=FirstComeFirstServeSplittingStrategy()
+    data, batch_size=256, split=FirstComeFirstServeSplittingStrategy()
 )
 
 dataset.prepare_data(remove_self_energies=True, normalize=True)
@@ -51,6 +51,8 @@ model = LightningSchNET(
     nr_interaction_blocks=nr_interaction_blocks,
     radial_symmetry_function_module=radial_symmetry_function_module,
     cutoff_module=cutoff,
+    nr_filters=32,
+    lr=1e-3,
 )
 
 print(model)

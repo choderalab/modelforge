@@ -66,8 +66,10 @@ class SAKE(BaseNNP):
             radial_basis_module: nn.Module = ExpNormalSmearing,
             cutoff_module: nn.Module = nn.Identity(),
             activation: Optional[Callable] = F.silu,
-            epsilon: float = 1e-8
-    ):
+            epsilon: float = 1e-8,
+            postprocessing: PostprocessingPipeline = PostprocessingPipeline(
+                [NoPostprocess({})])
+        ):
         """
         Parameters
             ----------
@@ -89,7 +91,7 @@ class SAKE(BaseNNP):
         from .utils import EnergyReadout
 
         log.debug("Initializing SAKE model.")
-        super().__init__(cutoff=cutoff_module.cutoff, postprocessing=PostprocessingPipeline([NoPostprocess({})]))
+        super().__init__(cutoff=cutoff_module.cutoff, postprocessing=postprocessing)
         self.nr_interaction_blocks = nr_interaction_blocks
         self.nr_heads = nr_heads
         self.cutoff_module = cutoff_module

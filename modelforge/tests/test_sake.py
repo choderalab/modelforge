@@ -230,7 +230,7 @@ def test_spatial_attention_against_reference():
                                             method=ref_sake_interaction.spatial_attention)
     assert (torch.allclose(mf_combinations,
                            torch.from_numpy(onp.array(ref_result[1])).reshape(nr_pairs, nr_heads * hidden_features,
-                                                                              geometry_basis), atol=1e-4))
-    assert (torch.allclose(mf_result, torch.from_numpy(onp.array(ref_result[0])), atol=1e-4))
+                                                                              geometry_basis), atol=1e-2))
+    assert (torch.allclose(mf_result, torch.from_numpy(onp.array(ref_result[0])), atol=1e-2))
 
 

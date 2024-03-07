@@ -182,7 +182,7 @@ class LightningModuleMixin(pl.LightningModule):
         Parameters
         ----------
         batch : Dict[str, torch.Tensor]
-            Batch data. Expected to include 'E', a tensor with shape [batch_size, 1].
+            Batch data. Expected to include 'E_predict', a tensor with shape [batch_size, 1].
         batch_idx : int
             Batch index.
 
@@ -194,7 +194,12 @@ class LightningModuleMixin(pl.LightningModule):
         batch_size = self._log_batch_size(batch)
         predictions = self.forward(batch)["E_predict"].flatten()
         targets = batch["E_label"].flatten().to(torch.float32)
-        loss = self.loss_function(predictions, targets)
+
+        import math
+        number_of_atoms = math.sqrt(len(batch["atomic_numbers"]))
+
+        # time.sleep(1)
+        loss = self.loss_function(predictions, targets) / number_of_atoms
         self.log(
             "train_loss",
             loss,
@@ -358,11 +363,14 @@ class BaseNNP(nn.Module):
     def _energy_postprocessing(self, properties_per_molecule, inputs):
 
         # first, resale the energies
+        inputs["_raw_E_predict"] = properties_per_molecule.clone().detach()
         properties_per_molecule = self._rescale_energy(properties_per_molecule)
+        inputs["_rescaled_E_predict"] = properties_per_molecule.clone().detach()
         # then, calculate the molecular self energy
         molecular_ase = self._calculate_molecular_self_energy(
             inputs, properties_per_molecule.numel()
         )
+        inputs["_molecular_ase"] = molecular_ase.clone().detach()
         # add the molecular self energy to the rescaled energies
         return properties_per_molecule + molecular_ase
 
@@ -514,7 +522,12 @@ class BaseNNP(nn.Module):
             properties_per_molecule, inputs
         )
         # return energies
-        return {"E_predict": processed_energies}
+        return {
+            "E_predict": processed_energies,
+            "_raw_E_predict": inputs["_raw_E_predict"],
+            "_rescaled_E_predict": inputs["_rescaled_E_predict"],
+            "_molecular_ase": inputs["_molecular_ase"],
+        }
 
 
 class SingleTopologyAlchemicalBaseNNPModel(BaseNNP):

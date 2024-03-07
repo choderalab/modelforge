@@ -711,30 +711,6 @@ eta={EtaR}
         return y
 
 
-def _distance_to_radial_basis(
-    d_ij: torch.Tensor, radial_symmetry_function_module: nn.Module
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    """
-    Convert distances to radial basis functions.
-
-    Parameters
-    ----------
-    d_ij : torch.Tensor, shape [n_pairs,1 ]
-        Pairwise distances between atoms.
-    radial_symmetry_function_module : nn.Module
-    Returns
-    -------
-    Tuple[torch.Tensor, torch.Tensor]
-        - Radial basis functions, shape [n_pairs, number_of_gaussians]
-        - cutoff values, shape [n_pairs]
-    """
-    assert d_ij.dim() == 2
-    f_ij = radial_symmetry_function_module(d_ij)
-    cosine_cutoff_module = CosineCutoff(radial_symmetry_function_module.radial_cutoff)
-    rcut_ij = cosine_cutoff_module(d_ij)
-    return f_ij, rcut_ij
-
-
 def pair_list(
     atomic_subsystem_indices: torch.Tensor,
     only_unique_pairs: bool = False,

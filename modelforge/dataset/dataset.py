@@ -54,7 +54,8 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             "E_label": torch.from_numpy(dataset[property_name.E]),
         }
 
-        self.n_records = len(dataset["atomic_subsystem_counts"])
+        self.number_of_records = len(dataset["atomic_subsystem_counts"])
+        self.number_of_atoms = len(dataset["atomic_numbers"])
         single_atom_start_idxs_by_rec = np.concatenate(
             [[0], np.cumsum(dataset["atomic_subsystem_counts"])]
         )
@@ -71,10 +72,11 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             )
 
         self.single_atom_start_idxs_by_conf = np.repeat(
-            single_atom_start_idxs_by_rec[: self.n_records], dataset["n_confs"]
+            single_atom_start_idxs_by_rec[: self.number_of_records], dataset["n_confs"]
         )
         self.single_atom_end_idxs_by_conf = np.repeat(
-            single_atom_start_idxs_by_rec[1 : self.n_records + 1], dataset["n_confs"]
+            single_atom_start_idxs_by_rec[1 : self.number_of_records + 1],
+            dataset["n_confs"],
         )
         # length: n_conformers
 
@@ -106,7 +108,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         """
         Return the number of records in the TorchDataset.
         """
-        return self.n_records
+        return self.number_of_records
 
     def get_series_mol_idxs(self, record_idx: int) -> List[int]:
         """
@@ -599,7 +601,6 @@ class TorchDataModule(pl.LightningDataModule):
                     log.debug("Using atomic self energies from the dataset...")
                     self_energies = self._ase
             # remove self energies
-            torch_dataset = self.subtract_self_energies(torch_dataset, self_energies)
             # store self energies
             dataset_statistics["atomic_self_energies"] = self_energies
             # save the self energies that are removed from the dataset
@@ -621,7 +622,6 @@ class TorchDataModule(pl.LightningDataModule):
             )
 
             stats = calculate_mean_and_variance(torch_dataset)
-            torch_dataset = normalize_energies(torch_dataset, stats)
             dataset_statistics["scaling_stddev"] = stats["stddev"]
             dataset_statistics["scaling_mean"] = stats["mean"]
 

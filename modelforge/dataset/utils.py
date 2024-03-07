@@ -11,7 +11,6 @@ from loguru import logger
 from torch.utils.data import Subset, random_split
 
 
-
 if TYPE_CHECKING:
     from modelforge.dataset.dataset import TorchDataset
 
@@ -41,7 +40,6 @@ def calculate_mean_and_variance(
     Calculates the mean and variance of the dataset.
 
     """
-    import numpy as np
     from loguru import logger as log
     from modelforge.utils.misc import Welford
     from modelforge.dataset.dataset import collate_conformers
@@ -55,10 +53,14 @@ def calculate_mean_and_variance(
         num_workers=4,
     )
     log.info("Calculating mean and variance for normalization")
+    nr_of_atoms = 0
     for batch in dataloader:
         online_estimator.update(batch["E_label"])
 
-    stats = {"mean": online_estimator.mean, "stddev": online_estimator.stddev}
+    stats = {
+        "mean": online_estimator.mean / torch_dataset.number_of_atoms,
+        "stddev": online_estimator.stddev / torch_dataset.number_of_atoms,
+    }
     log.info(f"Mean and standard deviation of the dataset:{stats}")
     return stats
 

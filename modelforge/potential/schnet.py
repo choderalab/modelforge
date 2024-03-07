@@ -5,7 +5,7 @@ from loguru import logger as log
 import torch.nn as nn
 
 from .models import BaseNNP, LightningModuleMixin
-from .utils import _distance_to_radial_basis, ShiftedSoftplus
+from .utils import ShiftedSoftplus
 
 
 class SchNET(BaseNNP):

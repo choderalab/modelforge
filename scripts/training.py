@@ -11,7 +11,7 @@ from openff.units import unit
 max_atomic_number = 100
 nr_atom_basis = 64
 number_of_gaussians = 14
-nr_interaction_blocks = 4
+nr_interaction_blocks = 2
 
 cutoff = unit.Quantity(5, unit.angstrom)
 embedding = Embedding(max_atomic_number, nr_atom_basis)
@@ -26,9 +26,9 @@ from modelforge.dataset.qm9 import QM9Dataset
 from modelforge.dataset.dataset import TorchDataModule
 from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
-data = QM9Dataset(for_unit_testing=True)
+data = QM9Dataset(for_unit_testing=False)
 dataset = TorchDataModule(
-    data, batch_size=32, split=FirstComeFirstServeSplittingStrategy()
+    data, batch_size=128, split=FirstComeFirstServeSplittingStrategy()
 )
 
 dataset.prepare_data(remove_self_energies=True, normalize=True)

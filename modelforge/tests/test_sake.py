@@ -222,15 +222,15 @@ def test_spatial_attention_against_reference():
                                           method=ref_sake_interaction.spatial_attention)
 
     variables["params"]["x_mixing"]["layers_0"]["kernel"] = mf_sake_block.x_mixing_mlp.weight.detach().numpy().T
-    # variables["params"]["post_norm_mlp"]["layers_0"]["kernel"] = mf_sake_block.post_norm_mlp[
-    #     0].weight.detach().numpy().T
-    # variables["params"]["post_norm_mlp"]["layers_2"]["kernel"] = mf_sake_block.post_norm_mlp[
-    #     1].weight.detach().numpy().T
+    variables["params"]["post_norm_mlp"]["layers_0"]["kernel"] = mf_sake_block.post_norm_mlp[
+        0].weight.detach().numpy().T
+    variables["params"]["post_norm_mlp"]["layers_2"]["kernel"] = mf_sake_block.post_norm_mlp[
+        1].weight.detach().numpy().T
     ref_result = ref_sake_interaction.apply(variables, h_e_att, x_minus_xt, x_minus_xt_norm,
                                             method=ref_sake_interaction.spatial_attention)
     assert (torch.allclose(mf_combinations,
                            torch.from_numpy(onp.array(ref_result[1])).reshape(nr_pairs, nr_heads * hidden_features,
-                                                                              geometry_basis), atol=1e-2))
-    assert (torch.allclose(mf_result, torch.from_numpy(onp.array(ref_result[0])), atol=1e-2))
+                                                                              geometry_basis), atol=1e-4))
+    assert (torch.allclose(mf_result, torch.from_numpy(onp.array(ref_result[0])), atol=1e-4))
 
 

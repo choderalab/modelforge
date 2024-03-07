@@ -477,6 +477,7 @@ class SAKEInteraction(nn.Module):
         h_updated = self.update_node(h, h_i_semantic, h_i_spatial)
         del h_i_semantic, h_i_spatial
         v_updated = self.update_velocity(v, h, combinations, idx_i)
+        del h, v
         x_updated = x + v_updated
 
         return h_updated, x_updated, v_updated

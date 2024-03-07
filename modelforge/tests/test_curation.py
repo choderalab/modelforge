@@ -10,7 +10,7 @@ import pint
 from modelforge.curation.qm9_curation import QM9Curation
 from modelforge.curation.ani1x_curation import ANI1xCuration
 from modelforge.curation.spice_curation import SPICE114Curation
-from modelforge.curation.spice_openff_curation import SPICE12PubChemOpenFFCuration
+from modelforge.curation.spice_openff_curation import SPICEOpenFFCuration
 
 from modelforge.curation.curation_baseclass import dict_to_hdf5
 
@@ -1533,216 +1533,233 @@ def test_ani2x(prep_temp_dir):
     )
 
 
-# def test_spice12_openff_test_fetching(prep_temp_dir):
-#     from tqdm import tqdm
-#     from sqlitedict import SqliteDict
+def test_spice114_openff_test_fetching(prep_temp_dir):
+    from tqdm import tqdm
+    from sqlitedict import SqliteDict
 
-#     local_path_dir = str(prep_temp_dir)
-#     local_database_name = "test.sqlite"
-#     specification_name = "entry"
+    local_path_dir = str(prep_temp_dir)
+    local_database_name = "test.sqlite"
+    specification_name = "entry"
 
-#     spice_openff_data = SPICE12PubChemOpenFFCuration(
-#         hdf5_file_name="test_dataset.hdf5",
-#         output_file_dir=local_path_dir,
-#         local_cache_dir=local_path_dir,
-#         convert_units=True,
-#     )
+    spice_openff_data = SPICEOpenFFCuration(
+        hdf5_file_name="test_dataset.hdf5",
+        output_file_dir=local_path_dir,
+        local_cache_dir=local_path_dir,
+        convert_units=True,
+        release_version="1.1.4",
+    )
 
-#     # test downloading two new records and saving to the sqlite db
-#     spice_openff_data._fetch_singlepoint_from_qcarchive(
-#         dataset_name="SPICE PubChem Set 1 Single Points Dataset v1.2",
-#         specification_name=specification_name,
-#         local_database_name=local_database_name,
-#         local_path_dir=local_path_dir,
-#         force_download=True,
-#         unit_testing_max_records=2,
-#     )
+    # test downloading two new records and saving to the sqlite db
+    spice_openff_data._fetch_singlepoint_from_qcarchive(
+        dataset_name="SPICE PubChem Set 1 Single Points Dataset v1.2",
+        specification_name=specification_name,
+        local_database_name=local_database_name,
+        local_path_dir=local_path_dir,
+        force_download=True,
+        unit_testing_max_records=2,
+    )
 
-#     with SqliteDict(
-#         f"{local_path_dir}/{local_database_name}",
-#         tablename=specification_name,
-#         autocommit=True,
-#     ) as spice_db:
-#         keys = list(spice_db.keys())
+    with SqliteDict(
+        f"{local_path_dir}/{local_database_name}",
+        tablename=specification_name,
+        autocommit=True,
+    ) as spice_db:
+        keys = list(spice_db.keys())
 
-#         assert len(keys) == 2
+        assert len(keys) == 2
 
-#     # same test as above, but we will pass pbar
-#     # pbar.total gets updated by the number of records
-#     # we need to fetch. Since force_download=True
-#     # we should fetch the 2 records again
-#     pbar = tqdm()
-#     pbar.total = 0
+    # same test as above, but we will pass pbar
+    # pbar.total gets updated by the number of records
+    # we need to fetch. Since force_download=True
+    # we should fetch the 2 records again
+    pbar = tqdm()
+    pbar.total = 0
 
-#     spice_openff_data._fetch_singlepoint_from_qcarchive(
-#         dataset_name="SPICE PubChem Set 1 Single Points Dataset v1.2",
-#         specification_name=specification_name,
-#         local_database_name=local_database_name,
-#         local_path_dir=local_path_dir,
-#         force_download=True,
-#         unit_testing_max_records=2,
-#         pbar=pbar,
-#     )
+    spice_openff_data._fetch_singlepoint_from_qcarchive(
+        dataset_name="SPICE PubChem Set 1 Single Points Dataset v1.2",
+        specification_name=specification_name,
+        local_database_name=local_database_name,
+        local_path_dir=local_path_dir,
+        force_download=True,
+        unit_testing_max_records=2,
+        pbar=pbar,
+    )
 
-#     assert pbar.total == 2
+    assert pbar.total == 2
 
-#     with SqliteDict(
-#         f"{local_path_dir}/{local_database_name}",
-#         tablename=specification_name,
-#         autocommit=True,
-#     ) as spice_db:
-#         keys = list(spice_db.keys())
+    with SqliteDict(
+        f"{local_path_dir}/{local_database_name}",
+        tablename=specification_name,
+        autocommit=True,
+    ) as spice_db:
+        keys = list(spice_db.keys())
 
-#         assert len(keys) == 2
+        assert len(keys) == 2
 
-#     # test using sqlite db, by setting force_download=False
-#     pbar = tqdm()
-#     pbar.total = 0
+    # test using sqlite db, by setting force_download=False
+    pbar = tqdm()
+    pbar.total = 0
 
-#     spice_openff_data._fetch_singlepoint_from_qcarchive(
-#         dataset_name="SPICE PubChem Set 1 Single Points Dataset v1.2",
-#         specification_name=specification_name,
-#         local_database_name=local_database_name,
-#         local_path_dir=local_path_dir,
-#         force_download=False,
-#         unit_testing_max_records=2,
-#     )
+    spice_openff_data._fetch_singlepoint_from_qcarchive(
+        dataset_name="SPICE PubChem Set 1 Single Points Dataset v1.2",
+        specification_name=specification_name,
+        local_database_name=local_database_name,
+        local_path_dir=local_path_dir,
+        force_download=False,
+        unit_testing_max_records=2,
+    )
 
-#     assert pbar.total == 0
+    assert pbar.total == 0
 
-#     with SqliteDict(
-#         f"{local_path_dir}/{local_database_name}",
-#         tablename=specification_name,
-#         autocommit=True,
-#     ) as spice_db:
-#         keys = list(spice_db.keys())
+    with SqliteDict(
+        f"{local_path_dir}/{local_database_name}",
+        tablename=specification_name,
+        autocommit=True,
+    ) as spice_db:
+        keys = list(spice_db.keys())
 
-#         assert len(keys) == 2
+        assert len(keys) == 2
 
-#     # test fetching additional records
-#     # we already have 2 and thus should only need to
-#     # fetch 8
+    # test fetching additional records
+    # we already have 2 and thus should only need to
+    # fetch 8
 
-#     pbar = tqdm()
-#     pbar.total = 0
+    pbar = tqdm()
+    pbar.total = 0
 
-#     spice_openff_data._fetch_singlepoint_from_qcarchive(
-#         dataset_name="SPICE PubChem Set 1 Single Points Dataset v1.2",
-#         specification_name=specification_name,
-#         local_database_name=local_database_name,
-#         local_path_dir=local_path_dir,
-#         force_download=False,
-#         unit_testing_max_records=10,
-#         pbar=pbar,
-#     )
+    spice_openff_data._fetch_singlepoint_from_qcarchive(
+        dataset_name="SPICE PubChem Set 1 Single Points Dataset v1.2",
+        specification_name=specification_name,
+        local_database_name=local_database_name,
+        local_path_dir=local_path_dir,
+        force_download=False,
+        unit_testing_max_records=10,
+        pbar=pbar,
+    )
 
-#     assert pbar.total == 8
-#     with SqliteDict(
-#         f"{local_path_dir}/{local_database_name}",
-#         tablename=specification_name,
-#         autocommit=True,
-#     ) as spice_db:
-#         keys = list(spice_db.keys())
+    assert pbar.total == 8
 
-#         assert len(keys) == 10
+    with SqliteDict(
+        f"{local_path_dir}/{local_database_name}",
+        tablename=specification_name,
+        autocommit=True,
+    ) as spice_db:
+        keys = list(spice_db.keys())
 
-
-# def test_spice12_openff_test_process_downloaded(prep_temp_dir):
-#     from tqdm import tqdm
-#     from sqlitedict import SqliteDict
-
-#     local_path_dir = str(prep_temp_dir)
-#     local_database_name = "test.sqlite"
-#     specification_names = ["entry", "spec_2", "spec_6"]
-#     dataset_name = "SPICE PubChem Set 1 Single Points Dataset v1.2"
-
-#     spice_openff_data = SPICE12PubChemOpenFFCuration(
-#         hdf5_file_name="test_dataset.hdf5",
-#         output_file_dir=local_path_dir,
-#         local_cache_dir=local_path_dir,
-#         convert_units=True,
-#     )
-
-#     for specification_name in specification_names:
-#         # test downloading two new records and saving to the sqlite db
-#         spice_openff_data._fetch_singlepoint_from_qcarchive(
-#             dataset_name=dataset_name,
-#             specification_name=specification_name,
-#             local_database_name=local_database_name,
-#             local_path_dir=local_path_dir,
-#             force_download=True,
-#             unit_testing_max_records=2,
-#         )
-
-#     spice_openff_data._process_downloaded(
-#         local_path_dir, [local_database_name], [dataset_name]
-#     )
+        assert len(keys) == 10
 
 
-# def test_spice12_openff_process_datasets(prep_temp_dir):
-#     from numpy import array, float32
+def test_spice12_openff_test_process_downloaded(prep_temp_dir):
+    from tqdm import tqdm
+    from sqlitedict import SqliteDict
 
-#     local_path_dir = str(prep_temp_dir)
-#     hdf5_file_name = "test_dataset.hdf5"
+    local_path_dir = str(prep_temp_dir)
+    local_database_name = "test.sqlite"
+    specification_names = ["entry", "spec_2", "spec_6"]
+    dataset_name = "SPICE PubChem Set 1 Single Points Dataset v1.2"
 
-#     spice_openff_data = SPICE12PubChemOpenFFCuration(
-#         hdf5_file_name=hdf5_file_name,
-#         output_file_dir=local_path_dir,
-#         local_cache_dir=local_path_dir,
-#         convert_units=False,
-#     )
+    spice_openff_data = SPICEOpenFFCuration(
+        hdf5_file_name="test_dataset.hdf5",
+        output_file_dir=local_path_dir,
+        local_cache_dir=local_path_dir,
+        convert_units=True,
+        release_version="1.1.4",
+    )
 
-#     spice_openff_data.process(
-#         force_download=False, unit_testing_max_records=10, n_threads=3
-#     )
+    for specification_name in specification_names:
+        # test downloading two new records and saving to the sqlite db
+        spice_openff_data._fetch_singlepoint_from_qcarchive(
+            dataset_name=dataset_name,
+            specification_name=specification_name,
+            local_database_name=local_database_name,
+            local_path_dir=local_path_dir,
+            force_download=True,
+            unit_testing_max_records=2,
+        )
 
-#     assert len(spice_openff_data.data) == 5
-#     assert spice_openff_data.data[0]["n_configs"] == 1
-#     assert spice_openff_data.data[1]["n_configs"] == 1
-#     assert spice_openff_data.data[2]["n_configs"] == 1
-#     assert spice_openff_data.data[3]["n_configs"] == 1
-#     assert spice_openff_data.data[4]["n_configs"] == 6
+    spice_openff_data._process_downloaded(
+        local_path_dir, [local_database_name], [dataset_name]
+    )
 
-#     assert np.all(
-#         np.isclose(
-#             spice_openff_data.data[0]["geometry"][0][0],
-#             array([3.95964426, 8.33708863, 2.95160792], dtype=float32)
-#             * unit.parse_expression("bohr"),
-#         )
-#     )
-#     # look at the first atom in last configuration in the array
-#     assert np.all(
-#         np.isclose(
-#             spice_openff_data.data[4]["geometry"][-1][0],
-#             array([2.06074536, -6.33012589, 4.43769815], dtype=float32)
-#             * unit.parse_expression("bohr"),
-#         )
-#     )
-#     # spot check energy
-#     assert (
-#         spice_openff_data.data[0]["dft_total_energy"][0][0]
-#         == -1168.2328704724725 * unit.hartree
-#     )
-#     assert (
-#         spice_openff_data.data[4]["dft_total_energy"][0][0]
-#         == -2011.874682644447 * unit.hartree
-#     )
 
-#     # check the shape of a molecule with only a single conformer in the test set
-#     assert spice_openff_data.data[0]["atomic_numbers"].shape == (47, 1)
-#     assert spice_openff_data.data[0]["geometry"].shape == (1, 47, 3)
-#     assert spice_openff_data.data[0]["dft_total_energy"].shape == (1, 1)
-#     assert spice_openff_data.data[0]["dft_total_gradient"].shape == (1, 47, 3)
-#     assert spice_openff_data.data[0]["mbis_charges"].shape == (1, 47, 1)
-#     assert spice_openff_data.data[0]["scf_dipole"].shape == (1, 3)
-#     assert spice_openff_data.data[0]["formation_energy"].shape == (1, 1)
-#     assert spice_openff_data.data[0]["formation_energy"].shape == (1, 1)
+def test_spice12_openff_process_datasets(prep_temp_dir):
+    from numpy import array, float32
 
-#     # check the shape of a molecule with multiple conformers in the test set
-#     assert spice_openff_data.data[4]["atomic_numbers"].shape == (16, 1)
-#     assert spice_openff_data.data[4]["geometry"].shape == (6, 16, 3)
-#     assert spice_openff_data.data[4]["dft_total_energy"].shape == (6, 1)
-#     assert spice_openff_data.data[4]["dft_total_gradient"].shape == (6, 16, 3)
-#     assert spice_openff_data.data[4]["mbis_charges"].shape == (6, 16, 1)
-#     assert spice_openff_data.data[4]["scf_dipole"].shape == (6, 3)
-#     assert spice_openff_data.data[4]["formation_energy"].shape == (6, 1)
+    local_path_dir = str(prep_temp_dir)
+    hdf5_file_name = "test_dataset.hdf5"
+
+    spice_openff_data = SPICEOpenFFCuration(
+        hdf5_file_name=hdf5_file_name,
+        output_file_dir=local_path_dir,
+        local_cache_dir=local_path_dir,
+        convert_units=True,
+        release_version="1.1.4",
+    )
+
+    spice_openff_data.process(
+        force_download=True, unit_testing_max_records=10, n_threads=3
+    )
+
+    # note that when we fetch the data, all the records are conformers of the same molecule
+    # so we only end up with one molecule in data, but with 10 conformers
+    assert sum([datapoint["n_configs"] for datapoint in spice_openff_data.data]) == 10
+
+    assert spice_openff_data.data[0]["atomic_numbers"].shape == (32, 1)
+    assert np.all(
+        spice_openff_data.data[0]["atomic_numbers"]
+        == np.array(
+            [
+                [7],
+                [6],
+                [7],
+                [6],
+                [6],
+                [6],
+                [6],
+                [6],
+                [6],
+                [6],
+                [6],
+                [6],
+                [6],
+                [6],
+                [1],
+                [1],
+                [1],
+                [1],
+                [1],
+                [1],
+                [1],
+                [1],
+                [1],
+                [1],
+                [1],
+                [1],
+                [1],
+                [1],
+                [1],
+                [1],
+                [1],
+                [1],
+            ]
+        )
+    )
+
+    # spot check the energy
+    assert np.all(
+        spice_openff_data.data[0]["dft_total_energy"].m
+        == np.array(
+            [
+                [-1516718.0904709378],
+                [-1516683.816274856],
+                [-1516700.3863245035],
+                [-1516680.5107079088],
+                [-1516640.745521272],
+                [-1516695.1003979458],
+                [-1516703.3300155026],
+                [-1516644.1624653281],
+                [-1516731.5604999226],
+                [-1516641.2112121284],
+            ]
+        )
+    )

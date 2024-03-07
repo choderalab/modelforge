@@ -5,9 +5,9 @@ from retry import retry
 from tqdm import tqdm
 
 
-class SPICE12PubChemOpenFFCuration(DatasetCuration):
+class SPICEOpenFFCuration(DatasetCuration):
     """
-    Fetches the SPICE pubchem 1.2 dataset from MOLSSI QCArchive and processes it into a curated hdf5 file.
+    Fetches the SPICE dataset from MOLSSI QCArchive and processes it into a curated hdf5 file.
 
     All QM datapoints retrieved wer generated using B3LYP-D3BJ/DZVP level of theory.
     This is the default theory used for force field development by the Open Force Field Initiative.
@@ -30,9 +30,10 @@ class SPICE12PubChemOpenFFCuration(DatasetCuration):
     local_cache_dir: str, optional, default='./spice_dataset'
         Location to save downloaded dataset.
     convert_units: bool, optional, default=True
-        Convert from [e.g., angstrom, bohr, hartree] (i.e., source units)
+        Convert from the source units (e.g., angstrom, bohr, hartree)
         to [nanometer, kJ/mol] (i.e., target units)
-
+    release_version: str, optional, default='1.1.4'
+        Version of the SPICE dataset to fetch from the MOLSSI QCArchive.
     Examples
     --------
     >>> spice_openff_data = SPICE12PubChemOpenFFCuration(hdf5_file_name='spice_pubchem_12_openff_dataset.hdf5',
@@ -40,6 +41,22 @@ class SPICE12PubChemOpenFFCuration(DatasetCuration):
     >>> spice_openff_data.process()
 
     """
+
+    def __init__(
+        self,
+        hdf5_file_name: str,
+        output_file_dir: str,
+        local_cache_dir: str,
+        convert_units: bool = True,
+        release_version: str = "1.1.4",
+    ):
+        super().__init__(
+            hdf5_file_name=hdf5_file_name,
+            output_file_dir=output_file_dir,
+            local_cache_dir=local_cache_dir,
+            convert_units=convert_units,
+        )
+        self.release_version = release_version
 
     def _init_dataset_parameters(self):
         self.qcarchive_server = "ml.qcarchive.molssi.org"
@@ -297,7 +314,7 @@ class SPICE12PubChemOpenFFCuration(DatasetCuration):
 
         Examples
         --------
-        >>> spice_openff_data = SPICE12PubChemOpenFFCuration(hdf5_file_name='spice_pubchem_12_openff_dataset.hdf5',
+        >>> spice_openff_data = SPICE12OpenFFCuration(hdf5_file_name='spice_pubchem_12_openff_dataset.hdf5',
         >>>                             local_cache_dir='~/datasets/spice12_openff_dataset')
         >>> spice_openff_data._process_downloaded(local_path_dir='~/datasets/spice12_openff_dataset',
         >>>                                      filenames=['spice_pubchem_set1_v1.2.sqlite'],
@@ -332,14 +349,13 @@ class SPICE12PubChemOpenFFCuration(DatasetCuration):
                             non_error_keys.append(key)
 
             # sort the keys such that conformers are listed in numerical order
-            # this is not strickly necessary, but will help to better retain
+            # this is not strictly necessary, but will help to better retain
             # connection to the original QCArchive data
             sorted_keys = []
 
             # names of the pubchem molecules are of form  {numerical_id}-{conformer_number}
             # first sort by numerical_id
             pre_sort = sorted(non_error_keys, key=lambda x: int(x.split("-")[0]))
-
             # then sort each molecule by conformer_number
             current_val = pre_sort[0].split("-")[0]
             temp_list = []
@@ -566,6 +582,9 @@ class SPICE12PubChemOpenFFCuration(DatasetCuration):
             If True, this will force the software to download the data again, even if present.
         unit_testing_max_records: int, optional, default=None
             If set to an integer, 'n', the routine will only process the first 'n' records, useful for unit tests.
+            Note, that in SPICE, conformers are stored as separate records, and are combined within this routine.
+            As such the number of molecules in 'data' may be less than unit_testing_max_records, if the records fetched
+            are all conformers of the same molecule.
         n_threads, int, default=6
             Number of concurrent threads for retrieving data from QCArchive
         Examples
@@ -577,14 +596,26 @@ class SPICE12PubChemOpenFFCuration(DatasetCuration):
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
-        dataset_names = [
-            "SPICE PubChem Set 1 Single Points Dataset v1.2",
-            "SPICE PubChem Set 2 Single Points Dataset v1.2",
-            "SPICE PubChem Set 3 Single Points Dataset v1.2",
-            "SPICE PubChem Set 4 Single Points Dataset v1.2",
-            "SPICE PubChem Set 5 Single Points Dataset v1.2",
-            "SPICE PubChem Set 6 Single Points Dataset v1.2",
-        ]
+        if self.release_version == "1.1.4":
+            # The SPICE dataset is available in the MOLSSI QCArchive
+            # This will need to load from various datasets, as described on the spice-dataset github page
+            # see https://github.com/openmm/spice-dataset/blob/1.1.4/downloader/config.yaml
+
+            dataset_names = [
+                "SPICE Solvated Amino Acids Single Points Dataset v1.1",
+                "SPICE Dipeptides Single Points Dataset v1.2",
+                "SPICE DES Monomers Single Points Dataset v1.1",
+                "SPICE DES370K Single Points Dataset v1.0",
+                "SPICE DES370K Single Points Dataset Supplement v1.0",
+                "SPICE PubChem Set 1 Single Points Dataset v1.2",
+                "SPICE PubChem Set 2 Single Points Dataset v1.2",
+                "SPICE PubChem Set 3 Single Points Dataset v1.2",
+                "SPICE PubChem Set 4 Single Points Dataset v1.2",
+                "SPICE PubChem Set 5 Single Points Dataset v1.2",
+                "SPICE PubChem Set 6 Single Points Dataset v1.2",
+                "SPICE Ion Pairs Single Points Dataset v1.1",
+            ]
+
         specification_names = ["spec_2", "spec_6", "entry"]
 
         # if we specify the number of records, restrict to only the first subset
@@ -598,7 +629,7 @@ class SPICE12PubChemOpenFFCuration(DatasetCuration):
             pbar.total = 0
             with ThreadPoolExecutor(max_workers=n_threads) as e:
                 for i, dataset_name in enumerate(dataset_names):
-                    local_database_name = f"spice_pubchem{i+1}_12.sqlite"
+                    local_database_name = f"{dataset_name}.sqlite"
                     local_database_names.append(local_database_name)
                     for specification_name in specification_names:
                         threads.append(

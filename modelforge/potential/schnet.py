@@ -175,12 +175,9 @@ class SchNETInteractionBlock(nn.Module):
         ----------
         x : torch.Tensor, shape [nr_of_atoms_in_systems, nr_atom_basis]
             Input feature tensor for atoms.
+        pairlist : torch.Tensor, shape [n_pairs, 2]
         f_ij : torch.Tensor, shape [n_pairs, number_of_gaussians]
             Radial basis functions for pairs of atoms.
-        idx_i : torch.Tensor, shape [n_pairs]
-            Indices for the first atom in each pair.
-        idx_j : torch.Tensor, shape [n_pairs]
-            Indices for the second atom in each pair.
         rcut_ij : torch.Tensor, shape [n_pairs]
             Cutoff values for each pair.
 
@@ -191,33 +188,27 @@ class SchNETInteractionBlock(nn.Module):
         """
 
         # Map input features to the filter space
-        x = self.intput_to_feature(x)  # (n_pairs, n_filters)
+        x = self.intput_to_feature(x)  # (nr_of_atoms_in_systems, n_filters)
 
         # Generate interaction filters based on radial basis functions
         Wij = self.filter_network(f_ij)  # (n_pairs, n_filters)
         Wij = Wij * rcut_ij[:, None]  # Apply the cutoff
-        Wij = Wij.to(dtype=x.dtype)
+        # Wij = Wij.to(dtype=x.dtype)
 
         idx_i, idx_j = pairlist[0], pairlist[1]
+        x_j = x[idx_j]
 
         # Perform continuous-filter convolution
-        x_j = torch.index_select(
-            x, 0, idx_j
-        )  # Gather features of second atoms in each pair
         x_ij = x_j * Wij  # shape (n_pairs, nr_filters)
 
         # Initialize a tensor to gather the results
-        shape = list(x.shape)  # note that we're using x.shape, not x_ij.shape
-        x_native = torch.zeros(shape, dtype=x.dtype, device=x.device)
-
-        idx_i_expanded = idx_i.unsqueeze(1).expand_as(x_ij)
+        x = torch.zeros_like(x, dtype=x.dtype, device=x.device)
 
         # Sum contributions to update atom features
-
-        x_native.scatter_add_(0, idx_i_expanded, x_ij)
-
+        x.scatter_add_(0, idx_i.unsqueeze(1).expand_as(x_ij), x_ij)
+        idx_1_index = idx_i.unsqueeze(1).expand_as(x_ij)
         # Map back to the original feature space and reshape
-        x = self.feature_to_output(x_native)
+        x = self.feature_to_output(x)
         return x
 
 
@@ -249,16 +240,14 @@ class SchNETRepresentation(nn.Module):
             - 'f_ij': Radial basis functions for pairs of atoms; shape [n_pairs, number_of_gaussians]
             - 'rcut_ij': Cutoff values for each pair; shape [n_pairs]
         """
+        from modelforge.potential.utils import CosineCutoff
 
         # Convert distances to radial basis functions
-        f_ij, rcut_ij = _distance_to_radial_basis(
-            d_ij, self.radial_symmetry_function_module
-        )
-        f_ij_ = f_ij.squeeze(1)
-        rcut_ij_ = rcut_ij.squeeze(1)
-        assert f_ij_.dim() == 2, f"Expected 2D tensor, got {f_ij_.dim()}"
-        assert rcut_ij_.dim() == 1, f"Expected 1D tensor, got {rcut_ij_.dim()}"
-        return {"f_ij": f_ij_, "rcut_ij": rcut_ij_}
+        f_ij = self.radial_symmetry_function_module(d_ij).squeeze(1)
+        cutoff_module = CosineCutoff(self.radial_symmetry_function_module.radial_cutoff)
+
+        rcut_ij = cutoff_module(d_ij).squeeze(1)
+        return {"f_ij": f_ij, "rcut_ij": rcut_ij}
 
 
 class LightningSchNET(SchNET, LightningModuleMixin):

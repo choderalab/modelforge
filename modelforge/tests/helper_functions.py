@@ -83,7 +83,7 @@ def setup_simple_model(
     elif model_class is SAKE:
         if lightning:
             return LightningSAKE(
-                nr_atom_basis=64,
+                nr_atom_basis=10,
                 nr_interaction_blocks=nr_interaction_blocks,
                 nr_heads=4,
                 radial_basis=rbf,

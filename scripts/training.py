@@ -26,9 +26,9 @@ from modelforge.dataset.qm9 import QM9Dataset
 from modelforge.dataset.dataset import TorchDataModule
 from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
-data = QM9Dataset(for_unit_testing=False)
+data = QM9Dataset(for_unit_testing=True)
 dataset = TorchDataModule(
-    data, batch_size=256, split=FirstComeFirstServeSplittingStrategy()
+    data, batch_size=32, split=FirstComeFirstServeSplittingStrategy()
 )
 
 dataset.prepare_data(remove_self_energies=True, normalize=True)
@@ -52,10 +52,12 @@ model = LightningSchNET(
     radial_symmetry_function_module=radial_symmetry_function_module,
     cutoff_module=cutoff,
     nr_filters=32,
-    lr=1e-3,
+    lr=1e-6,
 )
 
 print(model)
+# set scaling and ase values
+model.dataset_statistics = dataset.dataset_statistics
 
 # Move model to the appropriate dtype and device
 model = model.to(torch.float32)

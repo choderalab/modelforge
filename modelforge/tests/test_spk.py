@@ -30,7 +30,7 @@ def test_compare_radial_symmetry_features():
     assert schnetpack_rbf.n_rbf == radial_symmetry_function_module.number_of_gaussians
 
 
-def setup_input():
+def setup_single_methane_input():
     import torch
 
     # ------------------------------------ #
@@ -215,7 +215,7 @@ def test_painn_representation_implementation():
     ).double()
     # ------------------------------------ #
     # set up the input for the spk Painn model
-    input = setup_input()
+    input = setup_single_methane_input()
     spk_input = input["spk_methane_input"]
     modelforge_input = input["modelforge_methane_input"]
 
@@ -562,7 +562,7 @@ def test_schnet_representation_implementation():
     ).double()
     # ------------------------------------ #
     # set up the input for the spk Schnet model
-    input = setup_input()
+    input = setup_single_methane_input()
     spk_input = input["spk_methane_input"]
     modelforge_input = input["modelforge_methane_input"]
 
@@ -627,7 +627,7 @@ def test_schnet_representation_implementation():
     f_ij_spk = schnetpack_schnet.radial_basis(d_ij)
     rcut_ij_spk = schnetpack_schnet.cutoff_fn(d_ij)
 
-    assert torch.allclose(rep_mf["f_ij"], f_ij_spk)
+    assert torch.allclose(rep_mf["f_ij"].unsqueeze(0), f_ij_spk)
     assert torch.allclose(rep_mf["rcut_ij"], rcut_ij_spk)
 
     # ---------------------------------------- #
@@ -693,7 +693,6 @@ def test_schnet_representation_implementation():
         assert torch.allclose(v_spk, v_mf)
 
     # Check full pass
-
     modelforge_results = modelforge_schnet._forward(modelforge_input_2)
     schnetpack_results = schnetpack_schnet(spk_input)
 

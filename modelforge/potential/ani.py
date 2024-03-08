@@ -256,17 +256,17 @@ class ANIInteraction(nn.Module):
 
         H_network = torch.nn.Sequential(
             torch.nn.Linear(aev_dim, 256),
-            torch.nn.CELU(.1),
+            torch.nn.CELU(0.1),
             torch.nn.Linear(256, 192),
-            torch.nn.CELU(.1),
+            torch.nn.CELU(0.1),
             torch.nn.Linear(192, 160),
-            torch.nn.CELU(.1,
+            torch.nn.CELU(0.1),
             torch.nn.Linear(160, 1),
         )
 
         C_network = torch.nn.Sequential(
             torch.nn.Linear(aev_dim, 224),
-            torch.nn.CELU(.1),
+            torch.nn.CELU(0.1),
             torch.nn.Linear(224, 192),
             torch.nn.CELU(0.1),
             torch.nn.Linear(192, 160),

@@ -88,6 +88,7 @@ def test_torchani_ani(setup_two_methanes):
 
 def test_modelforge_ani(setup_two_methanes):
     from modelforge.potential.ani import ANI2x as mf_ANI2x
+
     _, _, _, mf_input = setup_two_methanes
     model = mf_ANI2x()
     model(mf_input)
@@ -97,10 +98,16 @@ def test_compare_radial_symmetry_features():
     # Compare the ANI radial symmetry function
     # agsint the output of the Modelforge radial symmetry function
     import torch
-    from modelforge.potential.utils import RadialSymmetryFunction
+    from modelforge.potential.utils import RadialSymmetryFunction, CosineCutoff
     from openff.units import unit
 
-    r = torch.rand(5, 3)
+    # generate a random list of distances, all < 5
+    d_ij = (
+        torch.rand(
+            5,
+        )
+        * 5
+    )
 
     # ANI constants
     radial_cutoff = 5.1  # radial_cutoff
@@ -109,16 +116,21 @@ def test_compare_radial_symmetry_features():
     EtaR = torch.tensor([19.7])  # radial eta
     ShfR = torch.linspace(radial_start, radial_cutoff, radial_dist_divisions + 1)[:-1]
 
+    # NOTE: we pass in Angstrom to ANI and in nanometer to mf
     rsf = RadialSymmetryFunction(
         radial_dist_divisions,
         radial_cutoff * unit.angstrom,
         radial_start * unit.angstrom,
         ani_style=True,
     )
-    r_mf = rsf(r / 10)
+    r_mf = rsf(d_ij / 10)  # torch.Size([5, 8]) # NOTE: nanometer
+    cutoff_module = CosineCutoff(5 * unit.angstrom)
     from torchani.aev import radial_terms
 
-    r_ani = radial_terms(1, EtaR, ShfR, r)
+    d_cutoff = cutoff_module(d_ij/10)  # torch.Size([5]) # NOTE: nanometer
+
+    r_mf = (r_mf.T * d_cutoff).T
+    r_ani = radial_terms(5, EtaR, ShfR, d_ij)  # torch.Size([5,8]) # NOTE: Angstrom
     assert torch.allclose(r_mf, r_ani)
 
 

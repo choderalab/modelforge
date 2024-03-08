@@ -44,7 +44,7 @@ def triple_by_molecule(
     )
 
     # compute central_atom_index
-    pair_sizes = torch.div(counts * (counts - 1), 2, rounding_mode='trunc')
+    pair_sizes = torch.div(counts * (counts - 1), 2, rounding_mode="trunc")
     pair_indices = torch.repeat_interleave(pair_sizes)
     central_atom_index = uniqued_central_atom_index.index_select(0, pair_indices)
 
@@ -176,7 +176,9 @@ from openff.units import unit
 
 
 class CosineCutoff(nn.Module):
-    def __init__(self, cutoff: unit.Quantity, device:torch.device):
+    def __init__(
+        self, cutoff: unit.Quantity, device: torch.device = torch.device("cpu")
+    ):
         """
         Behler-style cosine cutoff module.
 
@@ -188,7 +190,7 @@ class CosineCutoff(nn.Module):
         """
         super().__init__()
         cutoff = cutoff.to(unit.nanometer).m
-        self.register_buffer("cutoff", torch.tensor([cutoff]))
+        self.register_buffer("cutoff", torch.tensor([cutoff], device=device))
 
     def forward(self, d_ij: torch.Tensor):
         """
@@ -457,7 +459,7 @@ class AngularSymmetryFunction(nn.Module):
         angle_sections: int = 4,
         trainable: bool = False,
         dtype: Optional[torch.dtype] = None,
-        device: torch.device = torch.device('cpu')
+        device: torch.device = torch.device("cpu"),
     ) -> None:
         """
         Parameters

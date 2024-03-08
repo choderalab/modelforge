@@ -58,7 +58,7 @@ class SchNET(BaseNNP):
 
         # Initialize representation block
         self.schnet_representation_module = SchNETRepresentation(
-            cutoff, number_of_gaussians_basis_functions
+            cutoff, number_of_gaussians_basis_functions, self.device
         )
         # Intialize interaction blocks
         self.interaction_modules = nn.ModuleList(
@@ -265,7 +265,7 @@ class SchNETRepresentation(nn.Module):
         # Convert distances to radial basis functions
         f_ij = self.radial_symmetry_function_module(d_ij).squeeze(1)
         cutoff_module = CosineCutoff(
-            self.radial_symmetry_function_module.radial_cutoff, device=device
+            self.radial_symmetry_function_module.radial_cutoff, device=d_ij.device
         )
 
         rcut_ij = cutoff_module(d_ij).squeeze(1)

@@ -27,6 +27,11 @@ class SPICEOpenFFCuration(DatasetCuration):
     "SPICE PubChem Set 5 Single Points Dataset v1.2",
     "SPICE PubChem Set 6 Single Points Dataset v1.2",
 
+    It does not include the following datasets that are part of the official 1.1.4 release of SPICE (calculated
+    at the ωB97M-D3(BJ)/def2-TZVPPD level of theory), as the openff level of theory was not used for these datasets:
+
+    "SPICE Ion Pairs Single Points Dataset v1.1",
+    "SPICE DES370K Single Points Dataset Supplement v1.0",
 
     Reference to original SPICE publication:
     Eastman, P., Behara, P.K., Dotson, D.L. et al. SPICE,

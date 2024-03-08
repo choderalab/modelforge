@@ -255,6 +255,46 @@ class ANIInteraction(nn.Module):
     def intialize_atomic_neural_network(self, aev_dim: int) -> Dict[str, nn.Module]:
 
         H_network = torch.nn.Sequential(
+            torch.nn.Linear(aev_dim, 256),
+            torch.nn.CELU(.1),
+            torch.nn.Linear(256, 192),
+            torch.nn.CELU(.1),
+            torch.nn.Linear(192, 160),
+            torch.nn.CELU(.1,
+            torch.nn.Linear(160, 1),
+        )
+
+        C_network = torch.nn.Sequential(
+            torch.nn.Linear(aev_dim, 224),
+            torch.nn.CELU(.1),
+            torch.nn.Linear(224, 192),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(192, 160),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(160, 1),
+        )
+
+        N_network = torch.nn.Sequential(
+            torch.nn.Linear(aev_dim, 192),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(192, 160),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(160, 128),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(128, 1),
+        )
+
+        O_network = torch.nn.Sequential(
+            torch.nn.Linear(aev_dim, 192),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(192, 160),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(160, 128),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(128, 1),
+        )
+
+        S_network = torch.nn.Sequential(
             torch.nn.Linear(aev_dim, 160),
             torch.nn.CELU(0.1),
             torch.nn.Linear(160, 128),
@@ -264,38 +304,36 @@ class ANIInteraction(nn.Module):
             torch.nn.Linear(96, 1),
         )
 
-        C_network = torch.nn.Sequential(
-            torch.nn.Linear(aev_dim, 144),
+        F_network = torch.nn.Sequential(
+            torch.nn.Linear(aev_dim, 160),
             torch.nn.CELU(0.1),
-            torch.nn.Linear(144, 112),
+            torch.nn.Linear(160, 128),
             torch.nn.CELU(0.1),
-            torch.nn.Linear(112, 96),
-            torch.nn.CELU(0.1),
-            torch.nn.Linear(96, 1),
-        )
-
-        N_network = torch.nn.Sequential(
-            torch.nn.Linear(aev_dim, 128),
-            torch.nn.CELU(0.1),
-            torch.nn.Linear(128, 112),
-            torch.nn.CELU(0.1),
-            torch.nn.Linear(112, 96),
+            torch.nn.Linear(128, 96),
             torch.nn.CELU(0.1),
             torch.nn.Linear(96, 1),
         )
 
-        O_network = torch.nn.Sequential(
-            torch.nn.Linear(aev_dim, 128),
+        Cl_network = torch.nn.Sequential(
+            torch.nn.Linear(aev_dim, 160),
             torch.nn.CELU(0.1),
-            torch.nn.Linear(128, 112),
+            torch.nn.Linear(160, 128),
             torch.nn.CELU(0.1),
-            torch.nn.Linear(112, 96),
+            torch.nn.Linear(128, 96),
             torch.nn.CELU(0.1),
             torch.nn.Linear(96, 1),
         )
 
         # TODO: Add additional elements (S, Cl, etc)
-        return {"H": H_network, "C": C_network, "N": N_network, "O": O_network}
+        return {
+            "H": H_network,
+            "C": C_network,
+            "N": N_network,
+            "O": O_network,
+            "S": S_network,
+            "F": F_network,
+            "Cl": Cl_network,
+        }
 
     def forward(self, input: Tuple[torch.Tensor, torch.Tensor]):
 

@@ -6,7 +6,7 @@ from loguru import logger
 
 class SPICE114Curation(DatasetCuration):
     """
-    Routines to fetch and process the spice 1.1.4 dataset into a curated hdf5 file.
+    Routines to fetch  the spice 1.1.4 dataset from zenodo and process into a curated hdf5 file.
 
     Small-molecule/Protein Interaction Chemical Energies (SPICE).
     The SPICE dataset contains 1.1 million conformations for a diverse set of small molecules,

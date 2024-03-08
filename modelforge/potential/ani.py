@@ -40,10 +40,12 @@ class ANIRepresentation(nn.Module):
         # radial symmetry functions
 
         super().__init__()
+        from modelforge.potential.utils import CosineCutoff
+
         self.radial_cutoff = radial_cutoff
         self.angular_cutoff = angular_cutoff
         self.nr_of_supported_elements = nr_of_supported_elements
-
+        self.cutoff_module = CosineCutoff(radial_cutoff)
         self.radial_symmetry_functions = self._setup_radial_symmetry_functions(
             self.radial_cutoff
         )
@@ -102,6 +104,10 @@ class ANIRepresentation(nn.Module):
         # ----------------- Radial symmetry vector ---------------- #
         # compute radial aev
         radial_feature_vector = self.radial_symmetry_functions(inputs["d_ij"])
+        # cutoff
+        rcut_ij = self.cutoff_module(inputs["d_ij"] / 10)
+        radial_feature_vector = radial_feature_vector * rcut_ij[:, None]
+
         # process output to prepare for agular symmetry vector
         postprocessed_radial_aev_and_additional_data = self._postprocess_radial_aev(
             radial_feature_vector, inputs=inputs

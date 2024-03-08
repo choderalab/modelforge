@@ -2,6 +2,7 @@
 from lightning import Trainer
 import torch
 from modelforge.potential.schnet import SchNET
+from modelforge.potential.painn import PaiNN
 from modelforge.potential.ani import ANI2x
 
 from modelforge.dataset.qm9 import QM9Dataset
@@ -17,7 +18,7 @@ dataset = TorchDataModule(
 dataset.prepare_data(remove_self_energies=True, normalize=True)
 
 # Set up model
-model = ANI2x()
+model = ANI2x()  # PaiNN() # SchNET()
 model = model.to(torch.float32)
 
 print(model)
@@ -29,8 +30,8 @@ from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 trainer = Trainer(
     max_epochs=10_000,
     num_nodes=1,
-    accelerator="cpu",
-    # devices=[0],
+    accelerator="gpu",
+    devices=[0],
     # callbacks=[
     #    EarlyStopping(monitor="val_loss", mode="min", patience=3, min_delta=0.001)
     # ],

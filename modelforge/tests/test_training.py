@@ -51,7 +51,7 @@ def test_pt_lightning():
     # This is an example script that trains the PaiNN model on the QM9 dataset.
     from lightning import Trainer
     import torch
-    from modelforge.potential.painn import PaiNN
+    from modelforge.potential.schnet import SchNET
 
     from modelforge.dataset.qm9 import QM9Dataset
     from modelforge.dataset.dataset import TorchDataModule
@@ -66,16 +66,14 @@ def test_pt_lightning():
     dataset.prepare_data(remove_self_energies=True, normalize=True)
 
     # Set up model
-    model = PaiNN()  # PaiNN() # SchNET()
+    model = SchNET()  # PaiNN() # SchNET()
     model = model.to(torch.float32)
 
     # set up traininer
 
     trainer = Trainer(
         max_epochs=2,
-        num_nodes=1,
         accelerator="cpu",
-        devices=[0],
     )
 
     # set scaling and ase values

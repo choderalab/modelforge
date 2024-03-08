@@ -10,62 +10,6 @@ from .helper_functions import (
 )
 
 
-def test_scaling_and_offset():
-
-    from modelforge.dataset.qm9 import QM9Dataset
-    from modelforge.dataset.dataset import TorchDataModule
-    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
-
-    data = QM9Dataset(for_unit_testing=True)
-    dataset = TorchDataModule(
-        data, batch_size=128, split=FirstComeFirstServeSplittingStrategy()
-    )
-
-    dataset.prepare_data(remove_self_energies=True, normalize=True)
-
-    from modelforge.potential.schnet import LightningSchNET
-
-    from modelforge.potential import CosineCutoff, RadialSymmetryFunction
-    from modelforge.potential.utils import Embedding
-
-    from openff.units import unit
-
-    max_atomic_number = 100
-    nr_atom_basis = 32
-    number_of_gaussians = 14
-    nr_interaction_blocks = 4
-
-    cutoff = unit.Quantity(5, unit.angstrom)
-    embedding = Embedding(max_atomic_number, nr_atom_basis)
-    radial_symmetry_function_module = RadialSymmetryFunction(
-        number_of_gaussians=number_of_gaussians, radial_cutoff=cutoff
-    )
-    cutoff_module = CosineCutoff(cutoff=cutoff)
-
-    from lightning import Trainer
-
-    trainer = Trainer(
-        max_epochs=5,
-        accelerator="cpu",
-    )
-
-    model = LightningSchNET(
-        embedding=embedding,
-        nr_interaction_blocks=nr_interaction_blocks,
-        radial_symmetry_function_module=radial_symmetry_function_module,
-        cutoff_module=cutoff_module,
-    )
-    import torch
-
-    model.dataset_statistics = dataset.dataset_statistics
-
-    # Move model to the appropriate dtype and device
-    model = model.to(torch.float32)
-
-    methane = dataset[1]
-    a = 7
-
-
 @pytest.mark.parametrize("model_class", MODELS_TO_TEST)
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_forward_pass(model_class, dataset):

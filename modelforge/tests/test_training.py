@@ -30,7 +30,7 @@ def test_train_with_lightning(dataset: Type[BaseNNP], model_class: Type[BaseNNP]
     from lightning import Trainer
     import torch
 
-    model: Optional[BaseNNP] = setup_simple_model(model_class, lightning=True)
+    model: Optional[BaseNNP] = setup_simple_model(model_class)
     if model is None:
         pytest.fail("Failed to set up the model.")
 
@@ -48,57 +48,38 @@ def test_train_with_lightning(dataset: Type[BaseNNP], model_class: Type[BaseNNP]
 
 
 def test_pt_lightning():
-    # This is an example script that trains the PaiNN model on the .
+    # This is an example script that trains the PaiNN model on the QM9 dataset.
     from lightning import Trainer
     import torch
-    from modelforge.potential.painn import LighningPaiNN
-
-    from modelforge.potential import CosineCutoff, RadialSymmetryFunction
-    from modelforge.potential.utils import Embedding
-
-    from openff.units import unit
-
-    max_atomic_number = 100
-    nr_atom_basis = 128
-    number_of_gaussians = 20
-    nr_interaction_blocks = 4
-
-    cutoff = 5 * unit.angstrom
-    embedding = Embedding(max_atomic_number, nr_atom_basis)
-    assert embedding.embedding_dim == nr_atom_basis
-    radial_symmetry_function_module = RadialSymmetryFunction(
-        number_of_gaussians=number_of_gaussians, radial_cutoff=cutoff
-    )
-
-    cutoff_module = CosineCutoff(cutoff=cutoff)
+    from modelforge.potential.schnet import SchNET
 
     from modelforge.dataset.qm9 import QM9Dataset
     from modelforge.dataset.dataset import TorchDataModule
+    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
-    # load the QM9Dataset
+    # Set up dataset
     data = QM9Dataset(for_unit_testing=True)
-    dataset = TorchDataModule(data, batch_size=64)
-    # remove the self energies
-    dataset.prepare_data(remove_self_energies=True)
-    from lightning.pytorch.callbacks.early_stopping import EarlyStopping
-
-    # set up the pytorch lightning trainer
-    trainer = Trainer(
-        max_epochs=500,
-        num_nodes=1,
-        callbacks=[
-            EarlyStopping(monitor="val_loss", mode="min", patience=3, min_delta=0.001)
-        ],
+    dataset = TorchDataModule(
+        data, batch_size=128, split=FirstComeFirstServeSplittingStrategy()
     )
 
-    model = LighningPaiNN(
-        embedding=embedding,
-        nr_interaction_blocks=nr_interaction_blocks,
-        radial_symmetry_function_module=radial_symmetry_function_module,
-        cutoff_module=cutoff_module,
-    )
+    dataset.prepare_data(remove_self_energies=True, normalize=True)
 
-    # Move model to the appropriate dtype and device
+    # Set up model
+    model = SchNET()  # PaiNN() # SchNET()
     model = model.to(torch.float32)
+
+    # set up traininer
+
+    trainer = Trainer(
+        max_epochs=2,
+        accelerator="cpu",
+    )
+
+    # set scaling and ase values
+
+    dataset.dataset_statistics["scaling_stddev"] = 1
+    model.dataset_statistics = dataset.dataset_statistics
+
     # Run training loop and validate
     trainer.fit(model, dataset.train_dataloader(), dataset.val_dataloader())

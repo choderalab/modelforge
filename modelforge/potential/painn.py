@@ -55,7 +55,7 @@ class PaiNN(BaseNNP):
             nr_interaction_blocks,
             nr_atom_basis,
             shared_filters,
-            self.device
+            self.device,
         )
 
         # initialize the interaction and mixing networks

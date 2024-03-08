@@ -159,6 +159,8 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             - 'atomic_subsystem_counts': torch.Tensor, shape [1]
                 Number of atoms in the conformer. Length one if __getitem__ is called with a single index, length batch_size if collate_conformers is used with DataLoader
         """
+        from modelforge.potential.utils import ATOMIC_NUMBER_TO_INDEX_MAP
+
         series_atom_start_idx = self.series_atom_start_idxs_by_conf[idx]
         series_atom_end_idx = self.series_atom_start_idxs_by_conf[idx + 1]
         single_atom_start_idx = self.single_atom_start_idxs_by_conf[idx]
@@ -191,6 +193,12 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             "E_label": E_label,
             "atomic_subsystem_counts": torch.tensor([atomic_numbers.shape[0]]),
             "idx": idx,
+            "atomic_index": torch.tensor(
+                [
+                    ATOMIC_NUMBER_TO_INDEX_MAP[atomic_number]
+                    for atomic_number in list(atomic_numbers.numpy())
+                ]
+            ),
         }
 
 
@@ -748,6 +756,8 @@ def collate_conformers(
 ) -> Dict[str, torch.Tensor]:
     # TODO: once TorchDataset is reimplemented for general properties, reimplement this function using formats too.
     """Concatenate the Z, R, and E tensors from a list of molecules into a single tensor each, and return a new dictionary with the concatenated tensors."""
+    from modelforge.potential.utils import ATOMIC_NUMBER_TO_INDEX_MAP
+
     atomic_numbers_list = []
     positions_list = []
     E_list = []
@@ -768,6 +778,12 @@ def collate_conformers(
     E_stack = torch.stack(E_list)
     return {
         "atomic_numbers": atomic_numbers_cat,
+        "atomic_index": torch.tensor(
+            [
+                ATOMIC_NUMBER_TO_INDEX_MAP[atomic_number]
+                for atomic_number in list(atomic_numbers_cat.numpy())
+            ]
+        ),
         "positions": positions_cat,
         "E_label": E_stack,
         "atomic_subsystem_counts": torch.tensor(

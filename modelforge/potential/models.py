@@ -196,6 +196,7 @@ class LightningModuleMixin(pl.LightningModule):
         targets = batch["E_label"].flatten().to(torch.float32)
 
         import math
+
         number_of_atoms = math.sqrt(len(batch["atomic_numbers"]))
 
         # time.sleep(1)
@@ -400,6 +401,7 @@ class BaseNNP(nn.Module):
         atomic_numbers = inputs["atomic_numbers"]
         positions = inputs["positions"]
         atomic_subsystem_indices = inputs["atomic_subsystem_indices"]
+        atomic_index = inputs["atomic_index"]
         number_of_atoms_in_batch = atomic_numbers.shape[0]
 
         r = self.calculate_distances_and_pairlist(
@@ -414,6 +416,7 @@ class BaseNNP(nn.Module):
             "positions": positions,
             "atomic_numbers": atomic_numbers,
             "atomic_subsystem_indices": atomic_subsystem_indices,
+            "atomic_index": atomic_index,
         }
 
         # ---------------------------
@@ -510,6 +513,7 @@ class BaseNNP(nn.Module):
         # adjust the dtype of the input tensors to match the model parameters
         self._set_dtype()
         # perform input checks
+        print(inputs)
         inputs = self._input_checks(inputs)
         # prepare the input for the forward pass
         inputs = self.prepare_inputs(inputs, self.only_unique_pairs)

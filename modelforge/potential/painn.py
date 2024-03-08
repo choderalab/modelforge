@@ -130,13 +130,12 @@ class PaiNN(BaseNNP):
                 Direction vectors between atoms. Shape: (n_pairs, 1, distance).
             - "q" (torch.Tensor): Reshaped atomic number embeddings. Shape: (n_atoms, 1, embedding_dim).
         """
-        from modelforge.potential.utils import _distance_to_radial_basis
 
         # compute pairwise distances
         d_ij = inputs["d_ij"]
         r_ij = inputs["r_ij"]
         dir_ij = r_ij / d_ij
-        f_ij, _ = _distance_to_radial_basis(d_ij, self.radial_symmetry_function_module)
+        f_ij = self.radial_symmetry_function_module(d_ij)
 
         fcut = self.cutoff_module(d_ij)
 

@@ -339,7 +339,6 @@ def test_equivariant_energies_and_forces(input_data, model_class):
     This test will be adapted once we have a trained model.
     """
     import torch
-    import torch.nn as nn
 
     translation, rotation, reflection = equivariance_test_utils()
 

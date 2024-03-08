@@ -179,7 +179,7 @@ class ANIRepresentation(nn.Module):
             )
         )
         atom_index12 = inputs["pair_indices"]
-        species = inputs["atomic_numbers"]
+        species = inputs["atomic_index"]
         species12 = species[atom_index12]
 
         index12 = atom_index12 * self.nr_of_supported_elements + species12.flip(0)
@@ -373,8 +373,6 @@ class ANI2x(BaseNNP):
         - r_ij:  shape (n_pairs, 1)
         - d_ij:  shape (n_pairs, 3)
         - positions:  shape (nr_of_atoms_per_molecules, 3)
-        - atomic_embedding:  shape (nr_of_atoms_in_systems, nr_atom_basis)
-
 
         Returns
         -------

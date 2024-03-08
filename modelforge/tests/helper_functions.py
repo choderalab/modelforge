@@ -5,10 +5,10 @@ from modelforge.dataset.qm9 import QM9Dataset
 from modelforge.potential.schnet import SchNET, LightningSchNET
 from modelforge.potential.painn import PaiNN, LighningPaiNN
 from modelforge.potential.models import BaseNNP
-
+from modelforge.potential.ani import ANI2x
 from typing import Optional, Dict
 
-MODELS_TO_TEST = [SchNET, PaiNN]
+MODELS_TO_TEST = [SchNET, PaiNN, ANI2x]
 DATASETS = [QM9Dataset]
 
 from openff.units import unit
@@ -66,7 +66,8 @@ def setup_simple_model(
             cutoff_module=cutoff_module,
             nr_filters=nr_filters,
         )
-
+    elif model_class is ANI2x:
+        return ANI2x()
     elif model_class is PaiNN:
         if lightning:
             return LighningPaiNN(
@@ -162,6 +163,7 @@ def generate_methane_input() -> Dict[str, torch.Tensor]:
     Dict[str, Tensor]
         Dictionary with keys 'atomic_numbers', 'positions', 'atomic_subsystem_indices', 'E_labels'.
     """
+    from modelforge.potential.utils import ATOMIC_NUMBER_TO_INDEX_MAP
 
     atomic_numbers = torch.tensor([6, 1, 1, 1, 1], dtype=torch.int64)
     positions = (
@@ -184,6 +186,12 @@ def generate_methane_input() -> Dict[str, torch.Tensor]:
         "positions": positions,
         "E_labels": E_labels,
         "atomic_subsystem_indices": atomic_subsystem_indices,
+        "atomic_index": torch.tensor(
+            [
+                ATOMIC_NUMBER_TO_INDEX_MAP[atomic_number]
+                for atomic_number in list(atomic_numbers.numpy())
+            ]
+        ),
     }
 
 

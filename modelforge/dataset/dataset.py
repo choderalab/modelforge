@@ -195,7 +195,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             "idx": idx,
             "atomic_index": torch.tensor(
                 [
-                    ATOMIC_NUMBER_TO_INDEX_MAP[atomic_number]
+                    ATOMIC_NUMBER_TO_INDEX_MAP.get(atomic_number, -1)
                     for atomic_number in list(atomic_numbers.numpy())
                 ]
             ),

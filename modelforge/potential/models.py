@@ -342,7 +342,8 @@ class BaseNNP(pl.LightningModule):
 
         # then, we use the atomic_subsystem_indices to scatter add the atomic self
         # energies in the ase_tensor to generate the molecular self energies
-        ase_tensor = torch.zeros((number_of_molecules,)).scatter_add(
+        ase_tensor_zeros = torch.zeros((number_of_molecules,)).to(device=self.device)
+        ase_tensor = ase_tensor_zeros.scatter_add(
             0, atomic_subsystem_indices, ase_tensor
         )
 

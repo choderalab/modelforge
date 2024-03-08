@@ -176,7 +176,7 @@ from openff.units import unit
 
 
 class CosineCutoff(nn.Module):
-    def __init__(self, cutoff: unit.Quantity):
+    def __init__(self, cutoff: unit.Quantity, device:torch.device):
         """
         Behler-style cosine cutoff module.
 
@@ -188,7 +188,7 @@ class CosineCutoff(nn.Module):
         """
         super().__init__()
         cutoff = cutoff.to(unit.nanometer).m
-        self.register_buffer("cutoff", torch.FloatTensor([cutoff]))
+        self.register_buffer("cutoff", torch.tensor([cutoff]))
 
     def forward(self, d_ij: torch.Tensor):
         """

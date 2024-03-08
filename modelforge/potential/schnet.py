@@ -49,7 +49,7 @@ class SchNET(BaseNNP):
         # cutoff
         from modelforge.potential import CosineCutoff
 
-        self.cutoff_module = CosineCutoff(cutoff)
+        self.cutoff_module = CosineCutoff(cutoff, self.device)
 
         # initialize the energy readout
         from .utils import EnergyReadout

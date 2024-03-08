@@ -44,7 +44,7 @@ class ANIRepresentation(nn.Module):
         self.radial_cutoff = radial_cutoff
         self.angular_cutoff = angular_cutoff
         self.nr_of_supported_elements = nr_of_supported_elements
-        self.cutoff_module = CosineCutoff(radial_cutoff)
+        self.cutoff_module = CosineCutoff(radial_cutoff, device)
         self.radial_symmetry_functions = self._setup_radial_symmetry_functions(
             self.radial_cutoff
         )
@@ -318,7 +318,6 @@ class ANI2x(BaseNNP):
         self,
         radial_cutoff: unit.Quantity = 5.3 * unit.angstrom,
         angular_cutoff: unit.Quantity = 3.5 * unit.angstrom,
-        device: torch.device = torch.device("cpu"),
     ) -> None:
         """
         Initialize the ANi NNP architeture.
@@ -337,7 +336,7 @@ class ANI2x(BaseNNP):
 
         # Initialize representation block
         self.ani_representation_module = ANIRepresentation(
-            radial_cutoff, angular_cutoff, device=device
+            radial_cutoff, angular_cutoff, device=self.device
         )
         # The length of radial aev
         self.radial_length = (

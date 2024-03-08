@@ -44,7 +44,7 @@ def triple_by_molecule(
     )
 
     # compute central_atom_index
-    pair_sizes = counts * (counts - 1) // 2
+    pair_sizes = torch.div(counts * (counts - 1), 2, rounding_mode='trunc')
     pair_indices = torch.repeat_interleave(pair_sizes)
     central_atom_index = uniqued_central_atom_index.index_select(0, pair_indices)
 
@@ -686,7 +686,6 @@ class RadialSymmetryFunction(nn.Module):
 RadialSymmetryFunction: 
 cutoff={self.radial_cutoff} 
 number_of_gaussians={self.number_of_gaussians} 
-eta={EtaR}
 """
         )
 

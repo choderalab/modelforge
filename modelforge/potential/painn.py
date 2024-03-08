@@ -35,7 +35,7 @@ class PaiNN(BaseNNP):
         self.nr_interaction_blocks = nr_interaction_blocks
         self.nr_atom_basis = nr_atom_basis = embedding_dimensions
         self.only_unique_pairs = False  # NOTE: for pairlist
-        self.shared_filters = shared_filters 
+        self.shared_filters = shared_filters
         super().__init__(cutoff=cutoff)
 
         # embedding
@@ -96,25 +96,13 @@ class PaiNN(BaseNNP):
             Dictionary containing scalar and vector representations.
         """
 
-        # extract properties from pairlist
+        # initialize filters, q and mu
         transformed_input = self.representation_module(inputs)
 
-        filters = transformed_input["filters"]
-
-        if self.shared_filters:
-            self.filter_list = [filters] * self.nr_interaction_blocks
-        else:
-            self.filter_list = torch.split(filters, 3 * self.nr_atom_basis, dim=-1)
-
-        # generate q and mu
-        atomic_embedding = inputs["atomic_embedding"]
-        qs = atomic_embedding.shape
-
-        q = atomic_embedding[:, None]
-        qs = q.shape
-        mu = torch.zeros(
-            (qs[0], 3, qs[2]), device=q.device
-        )  # total_number_of_atoms_in_the_batch, 3, nr_atom_basis
+        filter_list = transformed_input["filters"]
+        q = transformed_input["q"]
+        mu = transformed_input["mu"]
+        dir_ij = transformed_input["dir_ij"]
 
         for i, (interaction_mod, mixing_mod) in enumerate(
             zip(self.interaction_modules, self.mixing_modules)
@@ -122,8 +110,8 @@ class PaiNN(BaseNNP):
             q, mu = interaction_mod(
                 q,
                 mu,
-                self.filter_list[i],
-                transformed_input["dir_ij"],
+                filter_list[i],
+                dir_ij,
                 inputs["pair_indices"],
             )
             q, mu = mixing_mod(q, mu)
@@ -222,7 +210,22 @@ class PaiNNRepresentation(nn.Module):
 
         filters = self.filter_net(f_ij) * fcut[..., None]
 
-        return {"filters": filters, "dir_ij": dir_ij}
+        if self.shared_filters:
+            filter_list = [filters] * self.nr_interaction_blocks
+        else:
+            filter_list = torch.split(filters, 3 * self.nr_atom_basis, dim=-1)
+
+        # generate q and mu
+        atomic_embedding = inputs["atomic_embedding"]
+        qs = atomic_embedding.shape
+
+        q = atomic_embedding[:, None]
+        qs = q.shape
+        mu = torch.zeros(
+            (qs[0], 3, qs[2]), device=q.device
+        )  # total_number_of_atoms_in_the_batch, 3, nr_atom_basis
+
+        return {"filters": filter_list, "dir_ij": dir_ij, 'q':q, 'mu':mu}
 
 
 class PaiNNInteraction(nn.Module):

@@ -1,7 +1,7 @@
 from torch._tensor import Tensor
 import torch.nn as nn
 from loguru import logger as log
-from typing import Dict, Type, Callable, Optional, Tuple
+from typing import Dict, Callable, Tuple
 
 from .models import BaseNNP
 from .utils import Dense

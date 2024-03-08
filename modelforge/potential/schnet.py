@@ -5,7 +5,6 @@ from loguru import logger as log
 import torch.nn as nn
 
 from .models import BaseNNP
-from .utils import ShiftedSoftplus
 from openff.units import unit
 
 

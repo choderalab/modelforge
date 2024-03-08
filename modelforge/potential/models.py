@@ -162,6 +162,7 @@ class Neighborlist(Pairlist):
 from modelforge.potential.utils import AtomicSelfEnergies
 from abc import abstractmethod
 from openff.units import unit
+from typing import Dict, Type
 
 
 class BaseNNP(pl.LightningModule):
@@ -172,6 +173,9 @@ class BaseNNP(pl.LightningModule):
     def __init__(
         self,
         cutoff: unit.Quantity,
+        loss: Type[nn.Module] = nn.MSELoss(),
+        optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
+        lr: float = 1e-3,
     ):
         """
         Initialize the NNP class.
@@ -193,6 +197,9 @@ class BaseNNP(pl.LightningModule):
             "scaling_stddev": 1.0,
             "atomic_self_energies": AtomicSelfEnergies(),
         }
+        self.loss_function = loss
+        self.optimizer = optimizer
+        self.learning_rate = lr
 
     @property
     def dataset_statistics(self):
@@ -290,12 +297,6 @@ class BaseNNP(pl.LightningModule):
         batch_size = self._log_batch_size(batch)
         predictions = self.forward(batch)["E_predict"]
         targets = batch["E_label"].squeeze(1)
-        print(f"predictions: {predictions}")
-        print(f"targets: {targets}")
-
-        import time
-
-        time.sleep(1)
         val_loss = F.mse_loss(predictions, targets)
         self.log(
             "val_loss", val_loss, batch_size=batch_size, on_epoch=True, prog_bar=True
@@ -497,7 +498,6 @@ class BaseNNP(pl.LightningModule):
         # adjust the dtype of the input tensors to match the model parameters
         self._set_dtype()
         # perform input checks
-        print(inputs)
         inputs = self._input_checks(inputs)
         # prepare the input for the forward pass
         inputs = self.prepare_inputs(inputs, self.only_unique_pairs)

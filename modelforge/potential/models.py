@@ -327,12 +327,14 @@ class BaseNNP(pl.LightningModule):
 
         atomic_numbers = inputs["atomic_numbers"]
         atomic_subsystem_indices = inputs["atomic_subsystem_indices"].to(
-            dtype=torch.long
+            dtype=torch.long, device=self.device
         )
 
         # atomic_number_to_energy
         atomic_self_energies = self.dataset_statistics["atomic_self_energies"]
-        ase_tensor_for_indexing = atomic_self_energies.ase_tensor_for_indexing
+        ase_tensor_for_indexing = atomic_self_energies.ase_tensor_for_indexing.to(
+            device=self.device
+        )
 
         # first, we need to use the atomic numbers to generate a tensor that
         # contains the atomic self energy for each atomic number

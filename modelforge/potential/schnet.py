@@ -206,7 +206,7 @@ class SchNETInteractionBlock(nn.Module):
 
         # Sum contributions to update atom features
         x.scatter_add_(0, idx_i.unsqueeze(1).expand_as(x_ij), x_ij)
-        idx_1_index = idx_i.unsqueeze(1).expand_as(x_ij)
+
         # Map back to the original feature space and reshape
         x = self.feature_to_output(x)
         return x

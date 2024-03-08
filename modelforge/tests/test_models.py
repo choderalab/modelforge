@@ -71,19 +71,18 @@ def test_scaling_and_offset():
 def test_forward_pass(model_class, dataset):
 
     # test the forward pass through each of the models
-    for lightning in [True, False]:
-        initialized_model = setup_simple_model(model_class, lightning)
-        inputs = return_single_batch(
-            dataset,
-        )  # split_file="modelforge/tests/qm9tut/split.npz")
+    initialized_model = setup_simple_model(model_class)
+    inputs = return_single_batch(
+        dataset,
+    )  # split_file="modelforge/tests/qm9tut/split.npz")
 
-        nr_of_mols = inputs["atomic_subsystem_indices"].unique().shape[0]
-        nr_of_atoms_per_batch = inputs["atomic_subsystem_indices"].shape[0]
+    nr_of_mols = inputs["atomic_subsystem_indices"].unique().shape[0]
+    nr_of_atoms_per_batch = inputs["atomic_subsystem_indices"].shape[0]
 
-        output = initialized_model(inputs)["E_predict"]
+    output = initialized_model(inputs)["E_predict"]
 
-        # test tat we get an energie per molecule
-        assert len(output) == nr_of_mols
+    # test tat we get an energie per molecule
+    assert len(output) == nr_of_mols
 
 
 @pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
@@ -97,16 +96,15 @@ def test_calculate_energies_and_forces(input_data, model_class):
     # test the backward pass through each of the models
     nr_of_mols = input_data["atomic_subsystem_indices"].unique().shape[0]
     nr_of_atoms_per_batch = input_data["atomic_subsystem_indices"].shape[0]
-    for lightning in [True, False]:
-        model = setup_simple_model(model_class, lightning)
-        result = model(input_data)["E_predict"]
-        print(result.sum())
-        forces = -torch.autograd.grad(
-            result.sum(), input_data["positions"], create_graph=True, retain_graph=True
-        )[0]
+    model = setup_simple_model(model_class)
+    result = model(input_data)["E_predict"]
+    print(result.sum())
+    forces = -torch.autograd.grad(
+        result.sum(), input_data["positions"], create_graph=True, retain_graph=True
+    )[0]
 
-        assert result.shape == torch.Size([nr_of_mols])  #  only one molecule
-        assert forces.shape == (nr_of_atoms_per_batch, 3)  #  only one molecule
+    assert result.shape == torch.Size([nr_of_mols])  #  only one molecule
+    assert forces.shape == (nr_of_atoms_per_batch, 3)  #  only one molecule
 
 
 def test_pairlist_logic():
@@ -342,99 +340,98 @@ def test_equivariant_energies_and_forces(input_data, model_class):
 
     translation, rotation, reflection = equivariance_test_utils()
 
-    for lightning in [True, False]:
-        # increase precision to 64 bit
-        torch.manual_seed(1234)
-        model = setup_simple_model(model_class, lightning).double()
-        input_data["positions"] = input_data["positions"]
-        # reference values
-        reference_result = model(input_data)["E_predict"].double()
-        reference_forces = -torch.autograd.grad(
-            reference_result.sum(),
-            input_data["positions"],
-            create_graph=True,
-            retain_graph=True,
-        )[0]
+    # increase precision to 64 bit
+    torch.manual_seed(1234)
+    model = setup_simple_model(model_class).double()
+    input_data["positions"] = input_data["positions"]
+    # reference values
+    reference_result = model(input_data)["E_predict"].double()
+    reference_forces = -torch.autograd.grad(
+        reference_result.sum(),
+        input_data["positions"],
+        create_graph=True,
+        retain_graph=True,
+    )[0]
 
-        # translation test
-        translation_input_data = input_data.copy()
-        translation_input_data["positions"] = translation(
-            translation_input_data["positions"]
-        )
-        translation_result = model(translation_input_data)["E_predict"]
-        assert torch.allclose(
-            translation_result,
-            reference_result,
-            atol=1e-5,
-        )
+    # translation test
+    translation_input_data = input_data.copy()
+    translation_input_data["positions"] = translation(
+        translation_input_data["positions"]
+    )
+    translation_result = model(translation_input_data)["E_predict"]
+    assert torch.allclose(
+        translation_result,
+        reference_result,
+        atol=1e-5,
+    )
 
-        translation_forces = -torch.autograd.grad(
-            translation_result.sum(),
-            translation_input_data["positions"],
-            create_graph=True,
-            retain_graph=True,
-        )[0]
+    translation_forces = -torch.autograd.grad(
+        translation_result.sum(),
+        translation_input_data["positions"],
+        create_graph=True,
+        retain_graph=True,
+    )[0]
 
-        assert torch.allclose(
-            translation_forces,
-            reference_forces,
-            atol=1e-5,
-        )
+    assert torch.allclose(
+        translation_forces,
+        reference_forces,
+        atol=1e-5,
+    )
 
-        # rotation test
-        rotation_input_data = input_data.copy()
-        rotation_input_data["positions"] = rotation(
-            rotation_input_data["positions"].to(torch.float32)
-        ).double()
-        rotation_result = model(rotation_input_data)["E_predict"]
+    # rotation test
+    rotation_input_data = input_data.copy()
+    rotation_input_data["positions"] = rotation(
+        rotation_input_data["positions"].to(torch.float32)
+    ).double()
+    rotation_result = model(rotation_input_data)["E_predict"]
 
-        print(rotation_result)
-        print(reference_result, flush=True)
+    print(rotation_result)
+    print(reference_result, flush=True)
 
-        assert torch.allclose(
-            rotation_result,
-            reference_result,
-            atol=1e-4,
-        )
+    assert torch.allclose(
+        rotation_result,
+        reference_result,
+        atol=1e-4,
+    )
 
-        rotation_forces = -torch.autograd.grad(
-            rotation_result.sum(),
-            rotation_input_data["positions"],
-            create_graph=True,
-            retain_graph=True,
-        )[0]
+    rotation_forces = -torch.autograd.grad(
+        rotation_result.sum(),
+        rotation_input_data["positions"],
+        create_graph=True,
+        retain_graph=True,
+    )[0]
 
-        rotate_reference = rotation(reference_forces.to(torch.float32)).double()
-        assert torch.allclose(
-            rotation_forces,
-            rotate_reference,
-            atol=1e-4,
-        )
+    rotate_reference = rotation(reference_forces.to(torch.float32)).double()
+    assert torch.allclose(
+        rotation_forces,
+        rotate_reference,
+        atol=1e-4,
+    )
 
-        # reflection test
-        reflection_input_data = input_data.copy()
-        reflection_input_data["positions"] = reflection(
-            reflection_input_data["positions"].to(torch.float32)
-        ).double()
-        reflection_result = model(reflection_input_data)["E_predict"]
-        reflection_forces = -torch.autograd.grad(
-            reflection_result.sum(),
-            reflection_input_data["positions"],
-            create_graph=True,
-            retain_graph=True,
-        )[0]
+    # reflection test
+    reflection_input_data = input_data.copy()
+    reflection_input_data["positions"] = reflection(
+        reflection_input_data["positions"].to(torch.float32)
+    ).double()
+    reflection_result = model(reflection_input_data)["E_predict"]
+    reflection_forces = -torch.autograd.grad(
+        reflection_result.sum(),
+        reflection_input_data["positions"],
+        create_graph=True,
+        retain_graph=True,
+    )[0]
 
-        assert torch.allclose(
-            reflection_result,
-            reference_result,
-            atol=1e-4,
-        )
+    assert torch.allclose(
+        reflection_result,
+        reference_result,
+        atol=1e-4,
+    )
 
-        assert torch.allclose(
-            reflection_forces,
-            reflection(reference_forces.to(torch.float32)).double(),
-            atol=1e-4,
-        )
+    assert torch.allclose(
+        reflection_forces,
+        reflection(reference_forces.to(torch.float32)).double(),
+        atol=1e-4,
+    )
 
 
 def testPairlist_calculate_r_ij_and_d_ij():

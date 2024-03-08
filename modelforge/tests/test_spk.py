@@ -176,22 +176,15 @@ def setup_modelforge_painn_representation(
     # set up the modelforge Painn representation model
     # which means that we only want to call the
     # _transform_input() method
-    from modelforge.potential import CosineCutoff, RadialSymmetryFunction
-    from modelforge.potential.utils import Embedding
     from modelforge.potential.painn import PaiNN as mf_PaiNN
     from openff.units import unit
 
-    embedding = Embedding(num_embeddings=100, embedding_dim=nr_atom_basis)
-    radial_symmetry_function_module = RadialSymmetryFunction(
-        number_of_gaussians=number_of_gaussians, radial_cutoff=cutoff
-    )
-    cutoff = CosineCutoff(cutoff)
-
     return mf_PaiNN(
-        embedding_module=embedding,
+        max_Z=100,
+        embedding_dimensions=nr_atom_basis,
         nr_interaction_blocks=nr_of_interactions,
-        radial_symmetry_function_module=radial_symmetry_function_module,
-        cutoff_module=cutoff,
+        number_of_gaussians_basis_functions=number_of_gaussians,
+        cutoff=cutoff,
     )
 
 
@@ -210,6 +203,7 @@ def test_painn_representation_implementation():
         cutoff, nr_atom_basis, number_of_gaussians, nr_of_interactions
     ).double()
     torch.manual_seed(1234)
+
     modelforge_painn = setup_modelforge_painn_representation(
         cutoff, nr_atom_basis, number_of_gaussians, nr_of_interactions
     ).double()

@@ -225,7 +225,7 @@ class PaiNNRepresentation(nn.Module):
             (qs[0], 3, qs[2]), device=q.device
         )  # total_number_of_atoms_in_the_batch, 3, nr_atom_basis
 
-        return {"filters": filter_list, "dir_ij": dir_ij, 'q':q, 'mu':mu}
+        return {"filters": filter_list, "dir_ij": dir_ij, "q": q, "mu": mu}
 
 
 class PaiNNInteraction(nn.Module):

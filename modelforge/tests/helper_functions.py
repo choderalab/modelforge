@@ -2,8 +2,8 @@ import torch
 
 from modelforge.dataset.dataset import TorchDataModule
 from modelforge.dataset.qm9 import QM9Dataset
-from modelforge.potential.schnet import SchNET, LightningSchNET
-from modelforge.potential.painn import PaiNN, LighningPaiNN
+from modelforge.potential.schnet import SchNET
+from modelforge.potential.painn import PaiNN
 from modelforge.potential.models import BaseNNP
 from modelforge.potential.ani import ANI2x
 from typing import Optional, Dict
@@ -16,7 +16,6 @@ from openff.units import unit
 
 def setup_simple_model(
     model_class,
-    lightning: bool = False,
     nr_atom_basis: int = 128,
     max_atomic_number: int = 100,
     number_of_gaussians: int = 20,
@@ -39,49 +38,15 @@ def setup_simple_model(
     Optional[BaseNNP]
         Initialized model.
     """
-    from modelforge.potential import CosineCutoff, RadialSymmetryFunction
-    from modelforge.potential.utils import Embedding
-
-    embedding = Embedding(max_atomic_number, nr_atom_basis)
-    assert embedding.embedding_dim == nr_atom_basis
-    radial_symmetry_function_module = RadialSymmetryFunction(
-        number_of_gaussians=number_of_gaussians, radial_cutoff=cutoff
-    )
-
-    cutoff_module = CosineCutoff(cutoff=cutoff)
 
     if model_class is SchNET:
-        if lightning:
-            return LightningSchNET(
-                embedding=embedding,
-                nr_interaction_blocks=nr_interaction_blocks,
-                radial_symmetry_function_module=radial_symmetry_function_module,
-                cutoff_module=cutoff_module,
-                nr_filters=nr_filters,
-            )
-        return SchNET(
-            embedding_module=embedding,
-            nr_interaction_blocks=nr_interaction_blocks,
-            radial_symmetry_function_module=radial_symmetry_function_module,
-            cutoff_module=cutoff_module,
-            nr_filters=nr_filters,
-        )
+        return SchNET()
     elif model_class is ANI2x:
         return ANI2x()
     elif model_class is PaiNN:
-        if lightning:
-            return LighningPaiNN(
-                embedding=embedding,
-                nr_interaction_blocks=nr_interaction_blocks,
-                radial_symmetry_function_module=radial_symmetry_function_module,
-                cutoff_module=cutoff_module,
-            )
-        return PaiNN(
-            embedding_module=embedding,
-            nr_interaction_blocks=nr_interaction_blocks,
-            radial_symmetry_function_module=radial_symmetry_function_module,
-            cutoff_module=cutoff_module,
-        )
+        return PaiNN()
+    elif model_class is ANI2x:
+        return ANI2x()
     else:
         raise NotImplementedError
 
@@ -222,7 +187,6 @@ def generate_interaction_block_data(
 
     from modelforge.dataset.qm9 import QM9Dataset
     from modelforge.potential import RadialSymmetryFunction
-    from modelforge.potential.utils import _distance_to_radial_basis
     from openff.units import unit
 
     embedding = nn.Embedding(nr_embeddings, nr_atom_basis, padding_idx=0)

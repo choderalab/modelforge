@@ -159,15 +159,75 @@ class Neighborlist(Pairlist):
         }
 
 
-class LightningModuleMixin(pl.LightningModule):
+from modelforge.potential.utils import AtomicSelfEnergies
+from abc import abstractmethod
+from openff.units import unit
+
+
+class BaseNNP(pl.LightningModule):
     """
-    A mixin for PyTorch Lightning training.
+    Abstract Base class for neural network potentials.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.save_hyperparameters()
-        self.automatic_optimization = True
+    def __init__(
+        self,
+        cutoff: unit.Quantity,
+    ):
+        """
+        Initialize the NNP class.
+
+        Parameters
+        ----------
+        cutoff : unit.Quantity
+            Cutoff distance for neighbor list.
+        """
+        from .models import Neighborlist
+
+        super().__init__()
+        self.calculate_distances_and_pairlist = Neighborlist(cutoff)
+        self._dtype = None  # set at runtime
+        self._log_message_dtype = False
+        self._log_message_units = False
+        self._dataset_statistics: Dict = {
+            "scaling_mean": 1.0,
+            "scaling_stddev": 1.0,
+            "atomic_self_energies": AtomicSelfEnergies(),
+        }
+
+    @property
+    def dataset_statistics(self):
+        return self._dataset_statistics
+
+    @dataset_statistics.setter
+    def dataset_statistics(self, dataset_statistics: Dict):
+
+        for key in ["scaling_mean", "scaling_stddev", "atomic_self_energies"]:
+            assert (
+                key in dataset_statistics.keys()
+            ), f"dataset_statistics must contain the key '{key}'"
+
+        self._dataset_statistics = dataset_statistics
+
+    @abstractmethod
+    def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
+        # needs to be implemented by the subclass
+        # if subclass needs any additional input preparation (e.g. embedding),
+        # it should be done here
+        pass
+
+    @abstractmethod
+    def _forward(self, inputs: Dict[str, torch.Tensor]):
+        # needs to be implemented by the subclass
+        # perform the forward pass implemented in the subclass
+        pass
+
+    @abstractmethod
+    def _readout(self, input: Dict[str, torch.Tensor]) -> torch.Tensor:
+        # needs to be implemented by the subclass
+        # perform the readout operation implemented in the subclass
+        # returns a torch.Tensor with shape (nr_of_molecules) containing the
+        # aggregated energies
+        pass
 
     def _log_batch_size(self, batch: Dict[str, torch.Tensor]):
         batch_size = int(len(batch["E_label"]))
@@ -252,82 +312,6 @@ class LightningModuleMixin(pl.LightningModule):
         """
 
         return self.optimizer(self.parameters(), lr=self.learning_rate)
-
-
-from modelforge.potential.utils import AtomicSelfEnergies
-from abc import abstractmethod
-from openff.units import unit
-
-
-class BaseNNP(nn.Module):
-    """
-    Abstract Base class for neural network potentials.
-    """
-
-    def __init__(
-        self,
-        radial_cutoff: float,
-        angular_cutoff: Optional[float] = None,
-    ):
-        """
-        Initialize the NNP class.
-
-        Parameters
-        ----------
-        radial_cutoff : float
-            Cutoff distance for atom centered symmetry functions, in nanometer.
-        angular_cutoff : float
-            Cutoff distance for atom centered angular functions, in nanometer.
-        """
-        from .models import Pairlist
-
-        super().__init__()
-        self._radial_cutoff = radial_cutoff
-        self._angular_cutoff = angular_cutoff
-        self.calculate_distances_and_pairlist = Pairlist()
-        self._dtype = None  # set at runtime
-        self._log_message_dtype = False
-        self._log_message_units = False
-        self._dataset_statistics: Dict = {
-            "scaling_mean": 1.0,
-            "scaling_stddev": 1.0,
-            "atomic_self_energies": AtomicSelfEnergies(),
-        }
-
-    @property
-    def dataset_statistics(self):
-        return self._dataset_statistics
-
-    @dataset_statistics.setter
-    def dataset_statistics(self, dataset_statistics: Dict):
-
-        for key in ["scaling_mean", "scaling_stddev", "atomic_self_energies"]:
-            assert (
-                key in dataset_statistics.keys()
-            ), f"dataset_statistics must contain the key '{key}'"
-
-        self._dataset_statistics = dataset_statistics
-
-    @abstractmethod
-    def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
-        # needs to be implemented by the subclass
-        # if subclass needs any additional input preparation (e.g. embedding),
-        # it should be done here
-        pass
-
-    @abstractmethod
-    def _forward(self, inputs: Dict[str, torch.Tensor]):
-        # needs to be implemented by the subclass
-        # perform the forward pass implemented in the subclass
-        pass
-
-    @abstractmethod
-    def _readout(self, input: Dict[str, torch.Tensor]) -> torch.Tensor:
-        # needs to be implemented by the subclass
-        # perform the readout operation implemented in the subclass
-        # returns a torch.Tensor with shape (nr_of_molecules) containing the
-        # aggregated energies
-        pass
 
     def _rescale_energy(self, energies: torch.Tensor) -> torch.Tensor:
 

@@ -19,7 +19,6 @@ class SchNET(BaseNNP):
         number_of_gaussians_basis_functions: int = 16,
         nr_filters: int = None,
         shared_interactions: bool = False,
-        activation: nn.Module = ShiftedSoftplus(),
     ) -> None:
         """
         Initialize the SchNet class.

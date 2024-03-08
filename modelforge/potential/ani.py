@@ -332,8 +332,7 @@ class ANI2x(BaseNNP):
 
         log.debug("Initializing ANI model.")
         super().__init__(
-            radial_cutoff=radial_cutoff,
-            angular_cutoff=angular_cutoff,
+            cutoff=radial_cutoff,
         )
 
         # Initialize representation block

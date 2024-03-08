@@ -401,7 +401,9 @@ class ANI2x(BaseNNP):
         atomic_subsystem_indices = inputs["atomic_subsystem_indices"]
         # output tensor for the sums, size based on the number of unique values in atomic_subsystem_indices
         energy_per_molecule = torch.zeros(
-            atomic_subsystem_indices.max() + 1, dtype=per_species_energies.dtype
+            atomic_subsystem_indices.max() + 1,
+            dtype=per_species_energies.dtype,
+            device=per_species_energies.device,
         )
 
         # use index_add_ to sum values in per_species_energies according to indices in atomic_subsystem_indices

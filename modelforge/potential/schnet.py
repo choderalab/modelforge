@@ -1,20 +1,22 @@
-from typing import Dict, Type, Optional
+from typing import Dict
 
 import torch
 from loguru import logger as log
 import torch.nn as nn
 
-from .models import BaseNNP, LightningModuleMixin
+from .models import BaseNNP
 from .utils import ShiftedSoftplus
+from openff.units import unit
 
 
 class SchNET(BaseNNP):
     def __init__(
         self,
-        embedding_module: nn.Module,
-        nr_interaction_blocks: int,
-        radial_symmetry_function_module: nn.Module,
-        cutoff_module: nn.Module,
+        max_Z: int = 100,
+        embedding_dimensions: int = 64,
+        nr_interaction_blocks: int = 2,
+        cutoff: unit.Quantity = 5 * unit.angstrom,
+        number_of_gaussians_basis_functions: int = 16,
         nr_filters: int = None,
         shared_interactions: bool = False,
         activation: nn.Module = ShiftedSoftplus(),
@@ -34,25 +36,31 @@ class SchNET(BaseNNP):
         """
 
         log.debug("Initializing SchNet model.")
-        self.only_unique_pairs = False
-        super().__init__(radial_cutoff=float(cutoff_module.cutoff))
-        self.radial_symmetry_function_module = radial_symmetry_function_module
-        self.cutoff_module = cutoff_module
+
+        self.only_unique_pairs = False  # NOTE: for pairlist
+        super().__init__(cutoff=cutoff)
+        self.nr_atom_basis = embedding_dimensions
+        self.nr_filters = nr_filters or self.nr_atom_basis
+        self.number_of_gaussians_basis_functions = number_of_gaussians_basis_functions
+
+        # embedding
+        from modelforge.potential.utils import Embedding
+
+        self.embedding_module = Embedding(max_Z, embedding_dimensions)
+
+        # cutoff
+        from modelforge.potential import CosineCutoff
+
+        self.cutoff_module = CosineCutoff(cutoff)
 
         # initialize the energy readout
         from .utils import EnergyReadout
 
-        self.nr_atom_basis = embedding_module.embedding_dim
         self.readout_module = EnergyReadout(self.nr_atom_basis)
-        self.nr_filters = nr_filters or self.nr_atom_basis
-
-        log.debug(
-            f"Passed parameters to constructor: {self.nr_atom_basis=}, {nr_interaction_blocks=}, {self.nr_filters=}, {cutoff_module=}"
-        )
 
         # Initialize representation block
         self.schnet_representation_module = SchNETRepresentation(
-            self.radial_symmetry_function_module
+            cutoff, number_of_gaussians_basis_functions
         )
         # Intialize interaction blocks
         self.interaction_modules = nn.ModuleList(
@@ -60,13 +68,11 @@ class SchNET(BaseNNP):
                 SchNETInteractionBlock(
                     self.nr_atom_basis,
                     self.nr_filters,
-                    self.radial_symmetry_function_module.number_of_gaussians,
+                    number_of_gaussians_basis_functions,
                 )
                 for _ in range(nr_interaction_blocks)
             ]
         )
-        # save the embedding
-        self.embedding_module = embedding_module
 
     def _readout(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         # Compute the energy for each system
@@ -74,12 +80,7 @@ class SchNET(BaseNNP):
 
     def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
         # Perform atomic embedding
-        from modelforge.potential.utils import embed_atom_features
-
-        atomic_embedding = embed_atom_features(
-            inputs["atomic_numbers"], self.embedding_module
-        )
-        inputs["atomic_embedding"] = atomic_embedding
+        inputs["atomic_embedding"] = self.embedding_module(inputs["atomic_numbers"])
         return inputs
 
     def _forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
@@ -92,8 +93,8 @@ class SchNET(BaseNNP):
         - atomic_embedding : torch.Tensor
             Atomic numbers embedding; shape (nr_of_atoms_in_systems, 1, nr_atom_basis).
         - pairlist:  shape (n_pairs, 2)
-        - r_ij:  shape (n_pairs, 1)
-        - d_ij:  shape (n_pairs, 3)
+        - r_ij:  shape (n_pairs, 3)
+        - d_ij:  shape (n_pairs, 1)
         - positions:  shape (nr_of_atoms_per_molecules, 3)
         - atomic_embedding:  shape (nr_of_atoms_in_systems, nr_atom_basis)
 
@@ -213,7 +214,7 @@ class SchNETInteractionBlock(nn.Module):
 
 
 class SchNETRepresentation(nn.Module):
-    def __init__(self, radial_symmetry_function_module: nn.Module):
+    def __init__(self, radial_cutoff: unit.Quantity, number_of_gaussians: int):
         """
         Initialize the SchNet representation layer.
 
@@ -223,7 +224,22 @@ class SchNETRepresentation(nn.Module):
         """
         super().__init__()
 
-        self.radial_symmetry_function_module = radial_symmetry_function_module
+        self.radial_symmetry_function_module = self._setup_radial_symmetry_functions(
+            radial_cutoff, number_of_gaussians
+        )
+
+    def _setup_radial_symmetry_functions(
+        self, radial_cutoff: unit.Quantity, number_of_gaussians: int
+    ):
+        from .utils import RadialSymmetryFunction
+
+        radial_symmetry_function = RadialSymmetryFunction(
+            number_of_gaussians=number_of_gaussians,
+            radial_cutoff=radial_cutoff,
+            ani_style=False,
+            dtype=torch.float32,
+        )
+        return radial_symmetry_function
 
     def forward(self, d_ij: torch.Tensor) -> Dict[str, torch.Tensor]:
         """
@@ -248,50 +264,3 @@ class SchNETRepresentation(nn.Module):
 
         rcut_ij = cutoff_module(d_ij).squeeze(1)
         return {"f_ij": f_ij, "rcut_ij": rcut_ij}
-
-
-class LightningSchNET(SchNET, LightningModuleMixin):
-    def __init__(
-        self,
-        embedding: nn.Module,
-        nr_interaction_blocks: int,
-        radial_symmetry_function_module: nn.Module,
-        cutoff_module: nn.Module,
-        nr_filters: int = 2,
-        shared_interactions: bool = False,
-        activation: nn.Module = ShiftedSoftplus(),
-        loss: Type[nn.Module] = nn.MSELoss(),
-        optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
-        lr: float = 1e-3,
-    ) -> None:
-        """
-        PyTorch Lightning version of the SchNet model.
-
-        Parameters
-        ----------
-        nr_interactions : int
-            Number of interaction blocks in the architecture.
-        nr_filters : int, optional
-            Dimensionality of the intermediate features (default is 2).
-        cutoff : float, optional
-            Cutoff value for the pairlist (default is 5.0).
-        loss : Type[nn.Module], optional
-            Loss function to use (default is nn.MSELoss).
-        optimizer : Type[torch.optim.Optimizer], optional
-            Optimizer to use (default is torch.optim.Adam).
-        lr : float, optional
-            Learning rate (default is 1e-3).
-        """
-
-        super().__init__(
-            embedding_module=embedding,
-            nr_interaction_blocks=nr_interaction_blocks,
-            radial_symmetry_function_module=radial_symmetry_function_module,
-            cutoff_module=cutoff_module,
-            nr_filters=nr_filters,
-            shared_interactions=shared_interactions,
-            activation=activation,
-        )
-        self.loss_function = loss
-        self.optimizer = optimizer
-        self.learning_rate = lr

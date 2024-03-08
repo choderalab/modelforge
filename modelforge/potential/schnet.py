@@ -212,7 +212,12 @@ class SchNETInteractionBlock(nn.Module):
 
 
 class SchNETRepresentation(nn.Module):
-    def __init__(self, radial_cutoff: unit.Quantity, number_of_gaussians: int):
+    def __init__(
+        self,
+        radial_cutoff: unit.Quantity,
+        number_of_gaussians: int,
+        device: torch.device,
+    ):
         """
         Initialize the SchNet representation layer.
 
@@ -225,6 +230,7 @@ class SchNETRepresentation(nn.Module):
         self.radial_symmetry_function_module = self._setup_radial_symmetry_functions(
             radial_cutoff, number_of_gaussians
         )
+        self.device = device
 
     def _setup_radial_symmetry_functions(
         self, radial_cutoff: unit.Quantity, number_of_gaussians: int
@@ -258,7 +264,9 @@ class SchNETRepresentation(nn.Module):
 
         # Convert distances to radial basis functions
         f_ij = self.radial_symmetry_function_module(d_ij).squeeze(1)
-        cutoff_module = CosineCutoff(self.radial_symmetry_function_module.radial_cutoff)
+        cutoff_module = CosineCutoff(
+            self.radial_symmetry_function_module.radial_cutoff, device=device
+        )
 
         rcut_ij = cutoff_module(d_ij).squeeze(1)
         return {"f_ij": f_ij, "rcut_ij": rcut_ij}

@@ -457,6 +457,7 @@ class AngularSymmetryFunction(nn.Module):
         angle_sections: int = 4,
         trainable: bool = False,
         dtype: Optional[torch.dtype] = None,
+        device: torch.device = torch.device('cpu')
     ) -> None:
         """
         Parameters
@@ -472,7 +473,7 @@ class AngularSymmetryFunction(nn.Module):
 
         self.number_of_gaussians_asf = number_of_gaussians_for_asf
         self.angular_cutoff = angular_cutoff
-        self.cosine_cutoff = CosineCutoff(self.angular_cutoff)
+        self.cosine_cutoff = CosineCutoff(self.angular_cutoff, device=device)
         _unitless_angular_cutoff = angular_cutoff.to(unit.nanometer).m
         self.angular_start = angular_start
         _unitless_angular_start = angular_start.to(unit.nanometer).m

@@ -65,7 +65,7 @@ def calculate_mean_and_variance(
     return stats
 
 
-def calculate_self_energies(dataset, collate_fn) -> Dict[int, float]:
+def calculate_self_energies(torch_dataset, collate_fn) -> Dict[int, float]:
     from torch.utils.data import DataLoader
     import torch
     from loguru import logger as log
@@ -73,13 +73,13 @@ def calculate_self_energies(dataset, collate_fn) -> Dict[int, float]:
     # Initialize variables to hold data for regression
     batch_size = 64
     # Determine the size of the counts tensor
-    num_molecules = dataset.n_records
+    num_molecules = torch_dataset.number_of_records
     # Determine up to which Z we detect elements
     max_atomic_number = 100
     # Initialize the counts tensor
     counts = torch.zeros(num_molecules, max_atomic_number + 1, dtype=torch.int16)
     # save energies in list
-    energy_array = torch.zeros(dataset.n_records, dtype=torch.float64)
+    energy_array = torch.zeros(torch_dataset.number_of_records, dtype=torch.float64)
     # for filling in the element count matrix
     molecule_counter = 0
     # counter for saving energy values
@@ -87,7 +87,9 @@ def calculate_self_energies(dataset, collate_fn) -> Dict[int, float]:
     # save unique atomic numbers in list
     unique_atomic_numbers = set()
 
-    for batch in DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn):
+    for batch in DataLoader(
+        torch_dataset, batch_size=batch_size, collate_fn=collate_fn
+    ):
         energies, atomic_numbers, molecules_id = (
             batch["E_label"].squeeze(),
             batch["atomic_numbers"].squeeze(-1).to(torch.int64),

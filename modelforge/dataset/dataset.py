@@ -596,7 +596,7 @@ class TorchDataModule(pl.LightningDataModule):
         # generate dataset
         factory = DatasetFactory()
         torch_dataset = factory.create_dataset(self.data)
-        dataset_statistics = {}
+        dataset_statistics = {"scaling_stddev": 1, "scaling_mean": 0}
 
         if remove_self_energies:
             # calculate self energies, and then remove them from the dataset

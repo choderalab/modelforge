@@ -385,6 +385,11 @@ def test_self_energy():
         methane_atomic_indices = dataset.torch_dataset[0]["atomic_numbers"]
         # extract energy
         methane_energy_offset = dataset.torch_dataset[0]["E_label"]
+        if regression is False:
+            # checking that the offset energy is actually correct for methane
+            assert torch.isclose(
+                methane_energy_offset, torch.tensor([-1656.8412], dtype=torch.float64)
+            )
         # extract the ase offset
         self_energies = dataset.dataset_statistics["atomic_self_energies"]
         methane_ase = sum(

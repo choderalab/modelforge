@@ -193,7 +193,7 @@ class BaseNNP(pl.LightningModule):
         self._log_message_dtype = False
         self._log_message_units = False
         self._dataset_statistics: Dict = {
-            "scaling_mean": 1.0,
+            "scaling_mean": 0.0,
             "scaling_stddev": 1.0,
             "atomic_self_energies": AtomicSelfEnergies(),
         }

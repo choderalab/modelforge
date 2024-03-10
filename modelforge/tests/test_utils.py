@@ -230,6 +230,7 @@ def test_energy_readout():
     )
 
 
+
 def test_welford():
     """
     Test the Welford's algorithm implementation.

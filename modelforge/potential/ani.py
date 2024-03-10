@@ -324,7 +324,6 @@ class ANIInteraction(nn.Module):
             torch.nn.Linear(96, 1),
         )
 
-        # TODO: Add additional elements (S, Cl, etc)
         return {
             "H": H_network,
             "C": C_network,

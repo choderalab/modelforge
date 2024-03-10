@@ -524,7 +524,6 @@ def setup_mf_schnet_representation(
     # which means that we only want to call the
     # _transform_input() method
     from modelforge.potential.schnet import SchNET as mf_SchNET
-
     return mf_SchNET(
         embedding_dimensions=nr_atom_basis,
         nr_interaction_blocks=nr_of_interactions,

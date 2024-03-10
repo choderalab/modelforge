@@ -1,10 +1,7 @@
 # This is an example script that trains the PaiNN model on the .
 from lightning import Trainer
 import torch
-from modelforge.potential.schnet import SchNET
-from modelforge.potential.painn import PaiNN
-from modelforge.potential.ani import ANI2x, PaiNN, SchNET
-
+from modelforge.potential import SchNET, PaiNN, ANI2x
 from modelforge.dataset.qm9 import QM9Dataset
 from modelforge.dataset.dataset import TorchDataModule
 from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy

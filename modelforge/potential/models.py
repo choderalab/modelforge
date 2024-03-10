@@ -351,6 +351,7 @@ class BaseNNP(pl.LightningModule):
 
     def _energy_postprocessing(self, properties_per_molecule, inputs):
 
+
         # first, resale the energies
         inputs["_raw_E_predict"] = properties_per_molecule.clone().detach()
         properties_per_molecule = self._rescale_energy(properties_per_molecule)
@@ -383,7 +384,6 @@ class BaseNNP(pl.LightningModule):
         inputs : Dict[str, torch.Tensor]
             Input tensors after preparation.
         """
-
         # ---------------------------
         # general input manipulation
         atomic_numbers = inputs["atomic_numbers"]

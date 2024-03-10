@@ -45,8 +45,6 @@ def setup_simple_model(
         return ANI2x()
     elif model_class is PaiNN:
         return PaiNN()
-    elif model_class is ANI2x:
-        return ANI2x()
     else:
         raise NotImplementedError
 

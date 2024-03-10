@@ -58,6 +58,7 @@ class PaiNN(BaseNNP):
             self.device,
         )
 
+
         # initialize the interaction and mixing networks
         self.interaction_modules = nn.ModuleList(
             PaiNNInteraction(nr_atom_basis, activation=F.silu)

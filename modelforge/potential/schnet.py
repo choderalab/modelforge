@@ -56,6 +56,7 @@ class SchNET(BaseNNP):
 
         self.readout_module = FromAtomToMoleculeReduction(self.nr_atom_basis)
 
+
         # Initialize representation block
         self.schnet_representation_module = SchNETRepresentation(
             cutoff, number_of_gaussians_basis_functions, self.device

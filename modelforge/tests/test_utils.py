@@ -181,25 +181,6 @@ def test_scatter_add():
     native_result.scatter_add_(dim, idx_i, x)
 
 
-def testRadialSymmetryFunction():
-    """
-    Test the RadialSymmetryFunction layer.
-    """
-
-    from modelforge.potential import RadialSymmetryFunction
-    from openff.units import unit
-
-    number_of_gaussians = 10
-    dim_of_x = 3
-    cutoff = unit.Quantity(5.0, unit.angstrom)
-    layer = RadialSymmetryFunction(10, cutoff)
-    x = torch.tensor([1.0, 2.0, 3.0], dtype=torch.float32)
-    y = layer(x)  # Shape: [dim_of_x, number_of_gaussians]
-
-    # Add assertion to check the shape of the output
-    assert y.shape == (dim_of_x, number_of_gaussians)
-
-
 def test_embedding():
     """
     Test the Embedding module.
@@ -220,6 +201,33 @@ def test_embedding():
 
     output = embedding(input_tensor)
     assert output.shape == (5, embedding_dim)
+
+
+def test_energy_readout():
+    from modelforge.potential.utils import FromAtomToMoleculeReduction
+    import torch
+
+    # the EnergyReadout module performs a linear pass to reduce the nr_of_atom_basis to 1
+    # and then performs a scatter add operation to return a tensor with size [nr_of_molecules,]
+
+    # the input for the EnergyReadout module is a diction with 'scalar_representation' (nr_of_atoms, nr_of_atom_basis)
+    # and 'atomic_subsystem_indices (nr_of_atoms_in_batch)
+    nr_of_atom_basis = 128
+    nr_of_atoms_in_batch = 8
+
+    inputs = {}
+    inputs["scalar_representation"] = torch.rand(nr_of_atoms_in_batch, nr_of_atom_basis)
+    inputs["atomic_subsystem_indices"] = torch.tensor([0, 0, 1, 1, 1, 1, 1, 1])
+
+    energy_readout = FromAtomToMoleculeReduction(nr_of_atom_basis)
+    x_ = energy_readout(inputs)
+
+    # check that output has length of total number of molecules in batch
+    assert x_.size() == torch.Size(
+        [
+            2,
+        ]
+    )
 
 
 def test_welford():

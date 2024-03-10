@@ -44,9 +44,9 @@ class PaiNN(BaseNNP):
         self.embedding_module = Embedding(max_Z, embedding_dimensions)
 
         # initialize the energy readout
-        from .utils import EnergyReadout
+        from .utils import FromAtomToMoleculeReduction
 
-        self.readout_module = EnergyReadout(embedding_dimensions)
+        self.readout_module = FromAtomToMoleculeReduction(embedding_dimensions)
 
         # initialize representation block
         self.representation_module = PaiNNRepresentation(

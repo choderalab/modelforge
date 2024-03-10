@@ -3,7 +3,7 @@ from lightning import Trainer
 import torch
 from modelforge.potential.schnet import SchNET
 from modelforge.potential.painn import PaiNN
-from modelforge.potential.ani import ANI2x
+from modelforge.potential.ani import ANI2x, PaiNN, SchNET
 
 from modelforge.dataset.qm9 import QM9Dataset
 from modelforge.dataset.dataset import TorchDataModule
@@ -32,16 +32,11 @@ trainer = Trainer(
     num_nodes=1,
     accelerator="gpu",
     devices=[0],
-    # callbacks=[
-    #    EarlyStopping(monitor="val_loss", mode="min", patience=3, min_delta=0.001)
-    # ],
+    callbacks=[
+       EarlyStopping(monitor="val_loss", mode="min", patience=10, min_delta=0.001)
+    ],
 )
 
-
-# set scaling and ase values
-
-dataset.dataset_statistics["scaling_stddev"] = 1
-model.dataset_statistics = dataset.dataset_statistics
 
 # Run training loop and validate
 trainer.fit(model, dataset.train_dataloader(), dataset.val_dataloader())

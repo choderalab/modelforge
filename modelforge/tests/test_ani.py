@@ -175,7 +175,6 @@ def test_radial_with_diagonal_batching(setup_two_methanes):
     )
     vec = selected_coordinates[0] - selected_coordinates[1]
     distances = vec.norm(2, -1)
-
     # ------------ Modelforge calculation ----------#
 
     radial_symmetry_function = RadialSymmetryFunction(

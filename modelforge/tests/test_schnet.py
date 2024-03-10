@@ -53,3 +53,4 @@ def test_schnet_forward(input_data, model_parameter):
         len(energy) == nr_of_mols
     )  # Assuming energy is calculated per sample in the batch
 
+

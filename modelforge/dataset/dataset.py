@@ -534,7 +534,7 @@ class TorchDataModule(pl.LightningDataModule):
         self.dataset_statistics = {}
         self._ase = data.atomic_self_energies  # atomic self energies
 
-    def calculate_self_energies(self, collate: bool = True) -> Dict[str, float]:
+    def calculate_self_energies(self, torch_dataset: TorchDataset, collate: bool = True) -> Dict[str, float]:
         """
         Calculates the self energies for each atomic number in the dataset by performing a least squares regression.
 
@@ -555,7 +555,7 @@ class TorchDataModule(pl.LightningDataModule):
 
         # Define the collate function based on the `collate` parameter
         collate_fn = collate_conformers if collate else None
-        return calculate_self_energies(self.torch_dataset, collate_fn)
+        return calculate_self_energies(torch_dataset, collate_fn)
 
     def prepare_data(
         self,

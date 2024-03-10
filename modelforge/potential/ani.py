@@ -324,7 +324,6 @@ class ANIInteraction(nn.Module):
             torch.nn.Linear(96, 1),
         )
 
-        # TODO: Add additional elements (S, Cl, etc)
         return {
             "H": H_network,
             "C": C_network,
@@ -356,6 +355,9 @@ class ANI2x(BaseNNP):
         self,
         radial_cutoff: unit.Quantity = 5.3 * unit.angstrom,
         angular_cutoff: unit.Quantity = 3.5 * unit.angstrom,
+        radial_cutoff: unit.Quantity = 5.3 * unit.angstrom,
+        angular_cutoff: unit.Quantity = 3.5 * unit.angstrom,
+        device: torch.device = torch.device("cpu"),
     ) -> None:
         """
         Initialize the ANi NNP architeture.

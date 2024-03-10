@@ -266,6 +266,7 @@ class SchNETRepresentation(nn.Module):
         f_ij = self.radial_symmetry_function_module(d_ij).squeeze(1)
         cutoff_module = CosineCutoff(
             self.radial_symmetry_function_module.radial_cutoff, device=d_ij.device
+
         )
 
         rcut_ij = cutoff_module(d_ij).squeeze(1)

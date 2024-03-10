@@ -432,12 +432,14 @@ class SAKEInteraction(nn.Module):
             Semantic attention. Shape [nr_pairs, nr_heads * nr_edge_basis].
         """
         h_ij_att_weights = self.semantic_attention_mlp(h_ij_edge)
+        expanded_idx_i = idx_i.view(-1, 1).expand_as(h_ij_att_weights)
+        h_ij_att_before_cutoff = scatter_softmax(h_ij_att_weights, expanded_idx_i, dim=-2, dim_size=nr_atoms,
+                                                device=h_ij_edge.device)
         d_ij_att_weights = self.cutoff_module(d_ij)
         # p: nr_pairs, h: nr_heads
-        combined_ij_att_weights = torch.einsum("ph,p->ph", h_ij_att_weights, d_ij_att_weights)
-        expanded_idx_i = idx_i.view(-1, 1).expand_as(combined_ij_att_weights)
-        combined_ij_att = scatter_softmax(combined_ij_att_weights, expanded_idx_i, dim=-2, dim_size=nr_atoms,
-                                          device=h_ij_edge.device)
+        combined_ij_att_prenorm = torch.einsum("ph,p->ph", h_ij_att_before_cutoff, d_ij_att_weights)
+        zeros = torch.zeros_like(combined_ij_att_prenorm)
+        combined_ij_att = combined_ij_att_prenorm / zeros.scatter_add(0, expanded_idx_i, combined_ij_att_prenorm)
         # p: nr_pairs, f: nr_edge_basis, h: nr_heads
         return torch.reshape(torch.einsum("pf,ph->pfh", h_ij_edge, combined_ij_att),
                              (len(idx_i), self.nr_edge_basis * self.nr_heads))

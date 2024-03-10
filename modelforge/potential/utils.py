@@ -679,7 +679,8 @@ def scatter_softmax(
         in enumerate(src.shape)
     ]
 
-    max_value_per_index = torch.zeros(out_shape, dtype=src.dtype, device=device).scatter_reduce(dim, index, src, "amax", include_self=False)
+    zeros = torch.zeros(out_shape, dtype=src.dtype, device=device)
+    max_value_per_index = zeros.scatter_reduce(dim, index, src, "amax", include_self=False)
     max_per_src_element = max_value_per_index.gather(dim, index)
 
     recentered_scores = src - max_per_src_element

@@ -261,7 +261,6 @@ def test_cutoff_against_reference():
                                                                                      nr_heads)
     mf_cutoff = mf_sake_block.cutoff_module(d_ij)
     ref_cutoff = ref_sake_interaction.cutoff.apply({}, x_minus_xt_norm)
-    # See above note about the exponentiation of the cutoff function.
     assert torch.allclose(mf_cutoff, torch.from_numpy(onp.array(ref_cutoff).reshape(nr_pairs, )), atol=1e-4)
 
 def test_semantic_attention_against_reference():
@@ -270,13 +269,13 @@ def test_semantic_attention_against_reference():
     nr_atoms = 13
     out_features = 11
     hidden_features = 7
-    geometry_basis = 3
     nr_heads = 5
     key = jax.random.PRNGKey(1884)
 
     nr_edge_basis = hidden_features
     pairlist = torch.cartesian_prod(torch.arange(nr_atoms), torch.arange(nr_atoms))
-    nr_pairs = nr_atoms ** 2
+    self_pairs = pairlist[:, 0] == pairlist[:, 1]
+    pairlist = pairlist[~self_pairs]
     pairlist = pairlist.T
     idx_i, idx_j = pairlist
 
@@ -285,10 +284,9 @@ def test_semantic_attention_against_reference():
                                                                                      nr_heads)
     # Generate random input data in JAX
     h_e_mtx = jax.random.normal(key, (nr_atoms, nr_atoms, nr_edge_basis))
-    x_minus_xt = jax.random.normal(key, (nr_atoms, nr_atoms, geometry_basis))
 
     # Convert the input tensors from JAX to torch and reshape to diagonal batching
-    h_ij_edge = torch.from_numpy(onp.array(h_e_mtx)).reshape(nr_pairs, hidden_features)
+    h_ij_edge = torch.from_numpy(onp.array(h_e_mtx)).reshape(nr_atoms ** 2, hidden_features)[~self_pairs]
     h_ij_att_weights = mf_sake_block.semantic_attention_mlp(h_ij_edge)
     expanded_idx_i = idx_i.view(-1, 1).expand_as(h_ij_att_weights)
     h_ij_att_before_cutoff = scatter_softmax(h_ij_att_weights, expanded_idx_i, dim=-2, dim_size=nr_atoms,
@@ -301,7 +299,9 @@ def test_semantic_attention_against_reference():
     ref_semantic_attention = \
         ref_sake_interaction.apply(variables, h_e_mtx, method=ref_sake_interaction.semantic_attention)
 
-    ref_semantic_attention = ref_semantic_attention.reshape(nr_pairs, nr_heads)
+    print(ref_semantic_attention[2])
+
+    ref_semantic_attention = (ref_semantic_attention.reshape(nr_atoms ** 2, nr_heads))[~onp.array(self_pairs)]
 
     print(h_ij_att_before_cutoff, torch.from_numpy(onp.array(ref_semantic_attention)))
     assert torch.allclose(h_ij_att_before_cutoff, torch.from_numpy(onp.array(ref_semantic_attention)), atol=1e-4)

@@ -263,6 +263,7 @@ def test_cutoff_against_reference():
     ref_cutoff = ref_sake_interaction.cutoff.apply({}, x_minus_xt_norm)
     assert torch.allclose(mf_cutoff, torch.from_numpy(onp.array(ref_cutoff).reshape(nr_pairs, )), atol=1e-4)
 
+
 def test_semantic_attention_against_reference():
     from modelforge.potential.utils import scatter_softmax
 
@@ -279,7 +280,6 @@ def test_semantic_attention_against_reference():
     pairlist = pairlist.T
     idx_i, idx_j = pairlist
 
-
     mf_sake_block, ref_sake_interaction = make_reference_equivalent_sake_interaction(out_features, hidden_features,
                                                                                      nr_heads)
     # Generate random input data in JAX
@@ -289,7 +289,7 @@ def test_semantic_attention_against_reference():
     h_ij_edge = torch.from_numpy(onp.array(h_e_mtx)).reshape(nr_atoms ** 2, hidden_features)[~self_pairs]
     h_ij_att_weights = mf_sake_block.semantic_attention_mlp(h_ij_edge)
     expanded_idx_i = idx_i.view(-1, 1).expand_as(h_ij_att_weights)
-    h_ij_att_before_cutoff = scatter_softmax(h_ij_att_weights, expanded_idx_i, dim=-2, dim_size=nr_atoms,
+    h_ij_att_before_cutoff = scatter_softmax(h_ij_att_weights, expanded_idx_i, dim=0, dim_size=nr_atoms,
                                              device=h_ij_edge.device)
 
     variables = ref_sake_interaction.init(key, h_e_mtx,
@@ -306,6 +306,56 @@ def test_semantic_attention_against_reference():
     print(h_ij_att_before_cutoff, torch.from_numpy(onp.array(ref_semantic_attention)))
     assert torch.allclose(h_ij_att_before_cutoff, torch.from_numpy(onp.array(ref_semantic_attention)), atol=1e-4)
 
+
+def test_sake_layer_against_reference():
+    nr_atoms = 13
+    out_features = 11
+    hidden_features = 7
+    geometry_basis = 3
+    nr_heads = 5
+    nr_atom_basis = out_features
+    key = jax.random.PRNGKey(1884)
+
+    pairlist = torch.cartesian_prod(torch.arange(nr_atoms), torch.arange(nr_atoms))
+    pairlist = pairlist.T
+
+    mf_sake_block, ref_sake_interaction = make_reference_equivalent_sake_interaction(out_features, hidden_features,
+                                                                                     nr_heads)
+    # Generate random input data in JAX
+    h_jax = jax.random.normal(key, (nr_atoms, nr_atom_basis))
+    x_jax = jax.random.normal(key, (nr_atoms, geometry_basis))
+    v_jax = jax.random.normal(key, (nr_atoms, geometry_basis))
+
+    # Convert the input tensors from JAX to torch and reshape to diagonal batching
+    h = torch.from_numpy(onp.array(h_jax))
+    x = torch.from_numpy(onp.array(x_jax))
+    v = torch.from_numpy(onp.array(v_jax))
+
+    mf_h, mf_x, mf_v = mf_sake_block(h, x, v, pairlist)
+
+    variables = ref_sake_interaction.init(key, h_jax, x_jax, v_jax)
+    variables["params"]["node_mlp"]["layers_0"]["kernel"] = mf_sake_block.node_mlp[0].weight.detach().numpy().T
+    variables["params"]["node_mlp"]["layers_2"]["kernel"] = mf_sake_block.node_mlp[1].weight.detach().numpy().T
+    variables["params"]["velocity_mlp"]["layers_0"]["kernel"] = mf_sake_block.velocity_mlp[0].weight.detach().numpy().T
+    variables["params"]["velocity_mlp"]["layers_2"]["kernel"] = mf_sake_block.velocity_mlp[1].weight.detach().numpy().T
+    variables["params"]["semantic_attention_mlp"]["layers_0"][
+        "kernel"] = mf_sake_block.semantic_attention_mlp.weight.detach().numpy().T
+    variables["params"]["v_mixing"]["kernel"] = mf_sake_block.v_mixing_mlp.weight.detach().numpy().T
+    variables["params"]["x_mixing"]["layers_0"]["kernel"] = mf_sake_block.x_mixing_mlp.weight.detach().numpy().T
+    variables["params"]["post_norm_mlp"]["layers_0"]["kernel"] = mf_sake_block.post_norm_mlp[
+        0].weight.detach().numpy().T
+    variables["params"]["post_norm_mlp"]["layers_2"]["kernel"] = mf_sake_block.post_norm_mlp[
+        1].weight.detach().numpy().T
+
+    ref_h, ref_x, ref_v = ref_sake_interaction.apply(variables, h_jax, x_jax, v_jax)
+
+    print(mf_h, torch.from_numpy(onp.array(ref_h)))
+    assert torch.allclose(mf_h, torch.from_numpy(onp.array(ref_h)), atol=1e-4)
+    assert torch.allclose(mf_x, torch.from_numpy(onp.array(ref_x)), atol=1e-4)
+    assert torch.allclose(mf_v, torch.from_numpy(onp.array(ref_v)), atol=1e-4)
+
+
+
 def test_combined_attention_against_reference():
     nr_atoms = 13
     out_features = 11
@@ -319,7 +369,6 @@ def test_combined_attention_against_reference():
     nr_pairs = nr_atoms ** 2
     pairlist = pairlist.T
     idx_i, idx_j = pairlist
-
 
     mf_sake_block, ref_sake_interaction = make_reference_equivalent_sake_interaction(out_features, hidden_features,
                                                                                      nr_heads)
@@ -346,7 +395,6 @@ def test_combined_attention_against_reference():
 
     print(mf_h_ij_semantic, torch.from_numpy(onp.array(ref_h_ij_semantic)))
     assert torch.allclose(mf_h_ij_semantic, torch.from_numpy(onp.array(ref_h_ij_semantic)), atol=1e-4)
-
 
 
 def test_spatial_attention_against_reference():
@@ -377,7 +425,6 @@ def test_spatial_attention_against_reference():
     # Convert the input tensors from JAX to torch and reshape to diagonal batching
     h_ij_semantic = torch.from_numpy(onp.array(h_e_att)).reshape(nr_pairs, hidden_features * nr_heads)
     dir_ij = torch.from_numpy(onp.array(x_minus_xt / (x_minus_xt_norm + 1e-5))).reshape(nr_pairs, geometry_basis)
-
 
     mf_combinations = mf_sake_block.get_combinations(h_ij_semantic, dir_ij)
     mf_result = mf_sake_block.get_spatial_attention(mf_combinations, idx_i, nr_atoms)

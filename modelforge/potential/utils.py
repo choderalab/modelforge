@@ -641,7 +641,7 @@ def neighbor_list_with_cutoff(
 
 
 def scatter_softmax(
-        src: torch.Tensor, index: torch.Tensor, dim: int = -1, dim_size: Optional[int] = None, device: Optional[torch.device] = None
+        src: torch.Tensor, index: torch.Tensor, dim: int, dim_size: Optional[int] = None, device: Optional[torch.device] = None
 ) -> torch.Tensor:
     """
     Softmax operation over all values in :attr:`src` tensor that share indices
@@ -670,6 +670,9 @@ def scatter_softmax(
     if not torch.is_floating_point(src):
         raise ValueError('`scatter_softmax` can only be computed over tensors '
                          'with floating point data types.')
+
+    assert dim >= 0, f"dim must be non-negative, got {dim}"
+    assert dim < src.dim(), f"dim must be less than the number of dimensions of src {src.dim()}, got {dim}"
 
     out_shape = [
         other_dim_size

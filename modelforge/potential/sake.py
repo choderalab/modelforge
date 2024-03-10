@@ -47,7 +47,7 @@ class ExpNormalSmearing(torch.nn.Module):
         self.betas.data.copy_(betas)
 
     def forward(self, dist):
-        return -self.betas * (torch.exp(self.alpha * (-dist + self.cutoff_lower)) - self.means) ** 2
+        return torch.exp(-self.betas * (torch.exp(self.alpha * (-dist + self.cutoff_lower)) - self.means) ** 2)
 
 
 class SAKE(BaseNNP):
@@ -265,7 +265,7 @@ class SAKEInteraction(nn.Module):
         self.x_mixing_mlp = Dense(self.nr_heads * self.nr_edge_basis, self.nr_coefficients, bias=False,
                                   activation=nn.Tanh())
 
-        self.v_mixing = Dense(self.nr_coefficients, 1, bias=False)
+        self.v_mixing_mlp = Dense(self.nr_coefficients, 1, bias=False)
 
     def update_edge(self, h_i_by_pair, h_j_by_pair, d_ij):
         """Compute intermediate edge features for semantic attention.
@@ -335,7 +335,7 @@ class SAKEInteraction(nn.Module):
         torch.Tensor
             Updated velocity features. Shape [nr_of_atoms_in_systems, geometry_basis].
         """
-        v_ij = self.v_mixing(combinations.transpose(-1, -2)).squeeze(-1)
+        v_ij = self.v_mixing_mlp(combinations.transpose(-1, -2)).squeeze(-1)
         expanded_idx_i = idx_i.view(-1, 1).expand_as(v_ij)
         dv = torch.zeros_like(v).scatter_reduce(0, expanded_idx_i, v_ij, "mean", include_self=False)
         return self.velocity_mlp(h) * v + dv
@@ -433,13 +433,13 @@ class SAKEInteraction(nn.Module):
         """
         h_ij_att_weights = self.semantic_attention_mlp(h_ij_edge)
         expanded_idx_i = idx_i.view(-1, 1).expand_as(h_ij_att_weights)
-        h_ij_att_before_cutoff = scatter_softmax(h_ij_att_weights, expanded_idx_i, dim=-2, dim_size=nr_atoms,
-                                                device=h_ij_edge.device)
+        h_ij_att_before_cutoff = scatter_softmax(h_ij_att_weights, expanded_idx_i, dim=0, dim_size=nr_atoms,
+                                                 device=h_ij_edge.device)
         d_ij_att_weights = self.cutoff_module(d_ij)
         # p: nr_pairs, h: nr_heads
         combined_ij_att_prenorm = torch.einsum("ph,p->ph", h_ij_att_before_cutoff, d_ij_att_weights)
         zeros = torch.zeros_like(combined_ij_att_prenorm)
-        combined_ij_att = combined_ij_att_prenorm / zeros.scatter_add(0, expanded_idx_i, combined_ij_att_prenorm)
+        combined_ij_att = combined_ij_att_prenorm / (zeros.scatter_add(0, expanded_idx_i, combined_ij_att_prenorm) + self.epsilon)
         # p: nr_pairs, f: nr_edge_basis, h: nr_heads
         return torch.reshape(torch.einsum("pf,ph->pfh", h_ij_edge, combined_ij_att),
                              (len(idx_i), self.nr_edge_basis * self.nr_heads))

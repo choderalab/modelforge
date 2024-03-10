@@ -355,8 +355,6 @@ class ANI2x(BaseNNP):
         self,
         radial_cutoff: unit.Quantity = 5.3 * unit.angstrom,
         angular_cutoff: unit.Quantity = 3.5 * unit.angstrom,
-        radial_cutoff: unit.Quantity = 5.3 * unit.angstrom,
-        angular_cutoff: unit.Quantity = 3.5 * unit.angstrom,
         device: torch.device = torch.device("cpu"),
     ) -> None:
         """

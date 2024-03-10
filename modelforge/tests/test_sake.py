@@ -215,7 +215,7 @@ def _cosine_cutoff(d_ij: Array, cutoff: float) -> Array:
 
 def make_reference_equivalent_sake_interaction(out_features, hidden_features, nr_heads):
     from modelforge.potential import CosineCutoff
-    from modelforge.potential import GaussianRBF
+    from modelforge.potential.sake import ExpNormalSmearing
 
     # Define the modelforge layer
     mf_sake_block = SAKEInteraction(
@@ -229,7 +229,7 @@ def make_reference_equivalent_sake_interaction(out_features, hidden_features, nr
         nr_coefficients=(nr_heads * hidden_features),
         nr_heads=nr_heads,
         activation=torch.nn.SiLU(),
-        radial_basis_module=GaussianRBF(n_rbf=50, cutoff=5.0 * unit.nanometer),
+        radial_basis_module=ExpNormalSmearing(n_rbf=50),
         cutoff_module=CosineCutoff(5.0 * unit.nanometer),
         epsilon=1e-5
     )
@@ -307,6 +307,31 @@ def test_semantic_attention_against_reference():
     assert torch.allclose(h_ij_att_before_cutoff, torch.from_numpy(onp.array(ref_semantic_attention)), atol=1e-4)
 
 
+def test_exp_normal_smearing_against_reference():
+    from modelforge.potential.sake import ExpNormalSmearing
+    from sake.utils import ExpNormalSmearing as RefExpNormalSmearing
+
+    nr_atoms = 13
+    nr_rbf = 11
+
+    radial_basis_module = ExpNormalSmearing(n_rbf=nr_rbf)
+    ref_radial_basis_module = RefExpNormalSmearing(num_rbf=nr_rbf)
+    key = jax.random.PRNGKey(1884)
+
+    # Generate random input data in JAX
+    d_ij_jax = jax.random.normal(key, (nr_atoms, nr_atoms, 1))
+    d_ij = torch.from_numpy(onp.array(d_ij_jax)).reshape(nr_atoms ** 2)
+
+    mf_rbf = radial_basis_module(d_ij)
+    variables = ref_radial_basis_module.init(key, d_ij_jax)
+
+    ref_rbf = ref_radial_basis_module.apply(variables, d_ij_jax)
+
+    assert torch.allclose(mf_rbf, torch.from_numpy(onp.array(ref_rbf)).reshape(nr_atoms ** 2, nr_rbf), atol=1e-4)
+
+
+
+
 def test_sake_layer_against_reference():
     nr_atoms = 13
     out_features = 11
@@ -331,8 +356,6 @@ def test_sake_layer_against_reference():
     x = torch.from_numpy(onp.array(x_jax))
     v = torch.from_numpy(onp.array(v_jax))
 
-    mf_h, mf_x, mf_v = mf_sake_block(h, x, v, pairlist)
-
     variables = ref_sake_interaction.init(key, h_jax, x_jax, v_jax)
     variables["params"]["node_mlp"]["layers_0"]["kernel"] = mf_sake_block.node_mlp[0].weight.detach().numpy().T
     variables["params"]["node_mlp"]["layers_2"]["kernel"] = mf_sake_block.node_mlp[1].weight.detach().numpy().T
@@ -346,6 +369,8 @@ def test_sake_layer_against_reference():
         0].weight.detach().numpy().T
     variables["params"]["post_norm_mlp"]["layers_2"]["kernel"] = mf_sake_block.post_norm_mlp[
         1].weight.detach().numpy().T
+
+    mf_h, mf_x, mf_v = mf_sake_block(h, x, v, pairlist)
 
     ref_h, ref_x, ref_v = ref_sake_interaction.apply(variables, h_jax, x_jax, v_jax)
 

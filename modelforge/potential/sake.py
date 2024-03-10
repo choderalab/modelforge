@@ -11,11 +11,11 @@ import torch.nn.functional as F
 
 
 class ExpNormalSmearing(torch.nn.Module):
-    def __init__(self, cutoff_lower=0.0, cutoff_upper=5.0, num_rbf=50, trainable=True):
+    def __init__(self, cutoff_lower=0.0, cutoff_upper=5.0, n_rbf=50, trainable=True):
         super(ExpNormalSmearing, self).__init__()
         self.cutoff_lower = cutoff_lower
         self.cutoff_upper = cutoff_upper
-        self.num_rbf = num_rbf
+        self.n_rbf = n_rbf
         self.trainable = trainable
         self.alpha = 5.0 / (cutoff_upper - cutoff_lower)
 
@@ -27,7 +27,7 @@ class ExpNormalSmearing(torch.nn.Module):
             self.register_buffer("means", means)
             self.register_buffer("betas", betas)
 
-        self.out_features = self.num_rbf
+        self.out_features = self.n_rbf
 
     def _initial_params(self):
         # initialize means and betas according to the default values in PhysNet
@@ -35,9 +35,9 @@ class ExpNormalSmearing(torch.nn.Module):
         start_value = torch.exp(
             torch.scalar_tensor(-self.cutoff_upper + self.cutoff_lower)
         )
-        means = torch.linspace(start_value, 1, self.num_rbf)
+        means = torch.linspace(start_value, 1, self.n_rbf)
         betas = torch.tensor(
-            [(2 / self.num_rbf * (1 - start_value)) ** -2] * self.num_rbf
+            [(2 / self.n_rbf * (1 - start_value)) ** -2] * self.n_rbf
         )
         return means, betas
 
@@ -47,7 +47,13 @@ class ExpNormalSmearing(torch.nn.Module):
         self.betas.data.copy_(betas)
 
     def forward(self, dist):
-        return torch.exp(-self.betas * (torch.exp(self.alpha * (-dist + self.cutoff_lower)) - self.means) ** 2)
+        return torch.exp(
+            -self.betas *
+            (torch.exp(
+                self.alpha *
+                (-dist.unsqueeze(-1) + self.cutoff_lower))
+             - self.means) ** 2
+        )
 
 
 class SAKE(BaseNNP):
@@ -439,7 +445,8 @@ class SAKEInteraction(nn.Module):
         # p: nr_pairs, h: nr_heads
         combined_ij_att_prenorm = torch.einsum("ph,p->ph", h_ij_att_before_cutoff, d_ij_att_weights)
         zeros = torch.zeros_like(combined_ij_att_prenorm)
-        combined_ij_att = combined_ij_att_prenorm / (zeros.scatter_add(0, expanded_idx_i, combined_ij_att_prenorm) + self.epsilon)
+        combined_ij_att = combined_ij_att_prenorm / (
+                zeros.scatter_add(0, expanded_idx_i, combined_ij_att_prenorm) + self.epsilon)
         # p: nr_pairs, f: nr_edge_basis, h: nr_heads
         return torch.reshape(torch.einsum("pf,ph->pfh", h_ij_edge, combined_ij_att),
                              (len(idx_i), self.nr_edge_basis * self.nr_heads))
@@ -471,7 +478,7 @@ class SAKEInteraction(nn.Module):
         idx_i, idx_j = pairlist
         nr_of_atoms_in_all_systems, _ = x.shape
         r_ij = x[idx_j] - x[idx_i]
-        d_ij = torch.norm(r_ij, dim=-1)
+        d_ij = torch.sqrt((r_ij ** 2).sum(dim=1) + self.epsilon)
         dir_ij = r_ij / (d_ij.unsqueeze(-1) + self.epsilon)
 
         h_ij_edge = self.update_edge(h[idx_i], h[idx_j], d_ij)

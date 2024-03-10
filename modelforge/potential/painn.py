@@ -23,7 +23,7 @@ class PaiNN(BaseNNP):
         self,
         embedding_module: nn.Module,
         nr_interaction_blocks: int,
-        radial_basis_module: nn.Module,
+        radial_symmetry_function_module: nn.Module,
         cutoff_module: nn.Module,
         activation: Optional[Callable] = F.silu,
         shared_interactions: bool = False,
@@ -40,9 +40,9 @@ class PaiNN(BaseNNP):
                 Embedding dimensions also define self.nr_atom_basis.
             nr_interaction_blocks : int
                 Number of interaction blocks.
-            rbf : torch.Module
-                radial basis functions.
-            cutoff : torch.Module
+            radial_symmetry_function_module : torch.Module
+                radial gaussian symmetriy function module.
+            cutoff_module : torch.Module
                 Cutoff function for the radial basis.
             activation : Callable, optional
                 Activation function to use.
@@ -56,11 +56,14 @@ class PaiNN(BaseNNP):
         from .utils import EnergyReadout
 
         log.debug("Initializing PaiNN model.")
-        super().__init__(cutoff=cutoff_module.cutoff, postprocessing=postprocessing)
+        super().__init__(
+            radial_cutoff=cutoff_module.cutoff, postprocessing=postprocessing
+        )
+        self.only_unique_pairs = False
         self.nr_interaction_blocks = nr_interaction_blocks
         self.cutoff_module = cutoff_module
         self.share_filters = shared_filters
-        self.radial_basis_module = radial_basis_module
+        self.radial_symmetry_function_module = radial_symmetry_function_module
 
         # initialize the energy readout
         self.nr_atom_basis = embedding_module.embedding_dim
@@ -74,11 +77,13 @@ class PaiNN(BaseNNP):
         # initialize the filter network
         if shared_filters:
             self.filter_net = Dense(
-                self.radial_basis_module.n_rbf, 3 * self.nr_atom_basis
+                self.radial_symmetry_function_module.number_of_gaussians,
+                3 * self.nr_atom_basis,
             )
+
         else:
             self.filter_net = Dense(
-                self.radial_basis_module.n_rbf,
+                self.radial_symmetry_function_module.number_of_gaussians,
                 self.nr_interaction_blocks * self.nr_atom_basis * 3,
                 activation=None,
             )
@@ -98,10 +103,6 @@ class PaiNN(BaseNNP):
     def _readout(self, input: Dict[str, Tensor]):
         return self.readout_module(input)
 
-    def prepare_inputs(self, inputs: Dict[str, torch.Tensor]):
-        inputs = self._prepare_inputs(inputs)
-        return self._model_specific_input_preparation(inputs)
-
     def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
         # Perform atomic embedding
         from modelforge.potential.utils import embed_atom_features
@@ -116,17 +117,22 @@ class PaiNN(BaseNNP):
         """
         Transforms the input data for the PAInn potential model.
 
-        Args:
-            inputs (Dict[str, torch.Tensor]): A dictionary containing the input tensors.
-                - "d_ij" (torch.Tensor): Pairwise distances between atoms. Shape: (n_pairs, 1, distance).
-                - "r_ij" (torch.Tensor): Displacement vector between atoms. Shape: (n_pairs, 1, 3).
-                - "atomic_embedding" (torch.Tensor): Embeddings of atomic numbers. Shape: (n_atoms, embedding_dim).
+        Parameters
+        ----------
+        inputs (Dict[str, torch.Tensor]): A dictionary containing the input tensors.
+            - "d_ij" (torch.Tensor): Pairwise distances between atoms. Shape: (n_pairs, 1, distance).
+            - "r_ij" (torch.Tensor): Displacement vector between atoms. Shape: (n_pairs, 1, 3).
+            - "atomic_embedding" (torch.Tensor): Embeddings of atomic numbers. Shape: (n_atoms, embedding_dim).
 
         Returns:
-            Dict[str, torch.Tensor]: A dictionary containing the transformed input tensors.
-                - "mu" (torch.Tensor): Zero-initialized tensor for atom features. Shape: (n_atoms, 3, nr_atom_basis).
-                - "dir_ij" (torch.Tensor): Direction vectors between atoms. Shape: (n_pairs, 1, distance).
-                - "q" (torch.Tensor): Reshaped atomic number embeddings. Shape: (n_atoms, 1, embedding_dim).
+        ----------
+        Dict[str, torch.Tensor]:
+            A dictionary containing the transformed input tensors.
+            - "mu" (torch.Tensor)
+                Zero-initialized tensor for atom features. Shape: (n_atoms, 3, nr_atom_basis).
+            - "dir_ij" (torch.Tensor)
+                Direction vectors between atoms. Shape: (n_pairs, 1, distance).
+            - "q" (torch.Tensor): Reshaped atomic number embeddings. Shape: (n_atoms, 1, embedding_dim).
         """
         from modelforge.potential.utils import _distance_to_radial_basis
 
@@ -134,7 +140,7 @@ class PaiNN(BaseNNP):
         d_ij = inputs["d_ij"]
         r_ij = inputs["r_ij"]
         dir_ij = r_ij / d_ij
-        f_ij, _ = _distance_to_radial_basis(d_ij, self.radial_basis_module)
+        f_ij, _ = _distance_to_radial_basis(d_ij, self.radial_symmetry_function_module)
 
         fcut = self.cutoff_module(d_ij)
 
@@ -379,8 +385,8 @@ class LighningPaiNN(PaiNN, LightningModuleMixin):
         self,
         embedding: nn.Module,
         nr_interaction_blocks: int,
-        radial_basis: nn.Module,
-        cutoff: nn.Module,
+        radial_symmetry_function_module: nn.Module,
+        cutoff_module: nn.Module,
         activation: Optional[Callable] = F.silu,
         shared_interactions: bool = False,
         shared_filters: bool = False,
@@ -397,8 +403,8 @@ class LighningPaiNN(PaiNN, LightningModuleMixin):
         super().__init__(
             embedding_module=embedding,
             nr_interaction_blocks=nr_interaction_blocks,
-            radial_basis_module=radial_basis,
-            cutoff_module=cutoff,
+            radial_symmetry_function_module=radial_symmetry_function_module,
+            cutoff_module=cutoff_module,
             activation=activation,
             shared_interactions=shared_interactions,
             shared_filters=shared_filters,

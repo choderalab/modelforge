@@ -53,27 +53,24 @@ def test_pt_lightning():
     import torch
     from modelforge.potential.painn import LighningPaiNN
 
-    from modelforge.potential import CosineCutoff, GaussianRBF
-    from modelforge.potential.utils import SlicedEmbedding
+    from modelforge.potential import CosineCutoff, RadialSymmetryFunction
+    from modelforge.potential.utils import Embedding
 
     from openff.units import unit
 
-    # provide embedding dimensions for atoms
     max_atomic_number = 100
     nr_atom_basis = 128
-    # provide number of radial symmetry functions
-    nr_rbf = 20
-    # depth of the PaiNN Network
+    number_of_gaussians = 20
     nr_interaction_blocks = 4
-    # cutoff of the radial symmetry function
+
     cutoff = 5 * unit.angstrom
-    # initialize the embedding space
-    embedding = SlicedEmbedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
+    embedding = Embedding(max_atomic_number, nr_atom_basis)
     assert embedding.embedding_dim == nr_atom_basis
-    # initialize the radial symmetry functions
-    rbf = GaussianRBF(n_rbf=nr_rbf, cutoff=cutoff)
-    # initialize the cosine cutoff functino to generate smooth cutoff for the the radial symmetry functions
-    cutoff = CosineCutoff(cutoff=cutoff)
+    radial_symmetry_function_module = RadialSymmetryFunction(
+        number_of_gaussians=number_of_gaussians, radial_cutoff=cutoff
+    )
+
+    cutoff_module = CosineCutoff(cutoff=cutoff)
 
     from modelforge.dataset.qm9 import QM9Dataset
     from modelforge.dataset.dataset import TorchDataModule
@@ -85,7 +82,7 @@ def test_pt_lightning():
     dataset.prepare_data(remove_self_energies=True)
     from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
-    # set up the pytorch lightning trainer 
+    # set up the pytorch lightning trainer
     trainer = Trainer(
         max_epochs=500,
         num_nodes=1,
@@ -94,13 +91,13 @@ def test_pt_lightning():
         ],
     )
 
-    # initialize the PaiNN potential
     model = LighningPaiNN(
         embedding=embedding,
         nr_interaction_blocks=nr_interaction_blocks,
-        radial_basis=rbf,
-        cutoff=cutoff,
+        radial_symmetry_function_module=radial_symmetry_function_module,
+        cutoff_module=cutoff_module,
     )
+
     # Move model to the appropriate dtype and device
     model = model.to(torch.float32)
     # Run training loop and validate

@@ -1,24 +1,33 @@
 import torch
 
 
-def test_gaussian_rbf_implementation():
-    # compare schnetpack GaussianRBF with modelforge GaussianRBF
-    from modelforge.potential.utils import GaussianRBF
+def test_compare_radial_symmetry_features():
+    # compare schnetpack RadialSymmetryFunction with modelforge RadialSymmetryFunction
+    from modelforge.potential.utils import RadialSymmetryFunction
     from schnetpack.nn import GaussianRBF as schnetpackGaussianRBF
     from openff.units import unit
 
-    n_rbf = 2
-    cutoff = unit.Quantity(5.0, unit.angstrom)
+    number_of_gaussians = 10
+    cutoff = unit.Quantity(5.2, unit.angstrom)
+    start = unit.Quantity(0.8, unit.angstrom)
     schnetpack_rbf = schnetpackGaussianRBF(
-        n_rbf=n_rbf, cutoff=cutoff.to(unit.angstrom).m
+        n_rbf=number_of_gaussians,
+        cutoff=cutoff.to(unit.angstrom).m,
+        start=start.to(unit.angstrom).m,
     )
-    rbf = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
+    radial_symmetry_function_module = RadialSymmetryFunction(
+        number_of_gaussians=number_of_gaussians,
+        radial_cutoff=cutoff,
+        radial_start=start,
+    )
 
     r = torch.rand(5, 3)
     print(schnetpack_rbf(r))
-    print(rbf(r / 10))
-    assert torch.allclose(schnetpack_rbf(r), rbf(r / 10), atol=1e-8)
-    assert schnetpack_rbf.n_rbf == rbf.n_rbf
+    print(radial_symmetry_function_module(r / 10))
+    assert torch.allclose(
+        schnetpack_rbf(r), radial_symmetry_function_module(r / 10), atol=1e-8
+    )
+    assert schnetpack_rbf.n_rbf == radial_symmetry_function_module.number_of_gaussians
 
 
 def setup_input():
@@ -108,7 +117,7 @@ def setup_input():
 
     # ------------------------------------ #
     # set up the input for the modelforge Painn model
-    atomic_numbers = torch.tensor([[6], [1], [1], [1], [1]], dtype=torch.int64)
+    atomic_numbers = torch.tensor([6, 1, 1, 1, 1], dtype=torch.int64)
 
     positions = (
         torch.tensor(
@@ -141,7 +150,7 @@ def setup_input():
 
 
 def setup_spk_painn_representation(
-    cutoff: float, nr_atom_basis: int, n_rbf: int, nr_of_interactions: int
+    cutoff, nr_atom_basis, number_of_gaussians, nr_of_interactions
 ):
     # ------------------------------------ #
     # set up the schnetpack Painn representation model
@@ -149,7 +158,9 @@ def setup_spk_painn_representation(
     from schnetpack.representation import PaiNN as schnetpack_PaiNN
     from openff.units import unit
 
-    radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff.to(unit.angstrom).m)
+    radial_basis = GaussianRBF(
+        n_rbf=number_of_gaussians, cutoff=cutoff.to(unit.angstrom).m
+    )
     return schnetpack_PaiNN(
         n_atom_basis=nr_atom_basis,
         n_interactions=nr_of_interactions,
@@ -159,25 +170,27 @@ def setup_spk_painn_representation(
 
 
 def setup_modelforge_painn_representation(
-    cutoff: float, nr_atom_basis: int, n_rbf: int, nr_of_interactions: int
+    cutoff, nr_atom_basis, number_of_gaussians, nr_of_interactions
 ):
     # ------------------------------------ #
     # set up the modelforge Painn representation model
     # which means that we only want to call the
     # _transform_input() method
-    from modelforge.potential import CosineCutoff, GaussianRBF
-    from modelforge.potential.utils import SlicedEmbedding
+    from modelforge.potential import CosineCutoff, RadialSymmetryFunction
+    from modelforge.potential.utils import Embedding
     from modelforge.potential.painn import PaiNN as mf_PaiNN
     from openff.units import unit
 
-    embedding = SlicedEmbedding(max_Z=100, embedding_dim=nr_atom_basis, sliced_dim=0)
-    radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
+    embedding = Embedding(num_embeddings=100, embedding_dim=nr_atom_basis)
+    radial_symmetry_function_module = RadialSymmetryFunction(
+        number_of_gaussians=number_of_gaussians, radial_cutoff=cutoff
+    )
     cutoff = CosineCutoff(cutoff)
 
     return mf_PaiNN(
         embedding_module=embedding,
         nr_interaction_blocks=nr_of_interactions,
-        radial_basis_module=radial_basis,
+        radial_symmetry_function_module=radial_symmetry_function_module,
         cutoff_module=cutoff,
     )
 
@@ -189,16 +202,16 @@ def test_painn_representation_implementation():
     from openff.units import unit
 
     cutoff = unit.Quantity(5.0, unit.angstrom)
-    nr_atom_basis = 8
-    n_rbf = 5
+    nr_atom_basis = 128
+    number_of_gaussians = 5
     nr_of_interactions = 3
     torch.manual_seed(1234)
     schnetpack_painn = setup_spk_painn_representation(
-        cutoff, nr_atom_basis, n_rbf, nr_of_interactions
+        cutoff, nr_atom_basis, number_of_gaussians, nr_of_interactions
     ).double()
     torch.manual_seed(1234)
     modelforge_painn = setup_modelforge_painn_representation(
-        cutoff, nr_atom_basis, n_rbf, nr_of_interactions
+        cutoff, nr_atom_basis, number_of_gaussians, nr_of_interactions
     ).double()
     # ------------------------------------ #
     # set up the input for the spk Painn model
@@ -209,7 +222,9 @@ def test_painn_representation_implementation():
     schnetpack_results = schnetpack_painn(spk_input)
     modelforge_painn._set_dtype()
     modelforge_input_1 = modelforge_painn._input_checks(modelforge_input)
-    modelforge_input_2 = modelforge_painn.prepare_inputs(modelforge_input_1)
+    modelforge_input_2 = modelforge_painn.prepare_inputs(
+        modelforge_input_1, only_unique_pairs=False
+    )
 
     # ---------------------------------------- #
     # test neighborlist and distance
@@ -221,13 +236,13 @@ def test_painn_representation_implementation():
     idx_j = spk_input["_idx_j"]
 
     # ---------------------------------------- #
-    # test rbf
+    # test radial symmetry function
     # ---------------------------------------- #
     r_ij = spk_input["_Rij"]
     d_ij = torch.norm(r_ij, dim=1, keepdim=True)
     dir_ij = r_ij / d_ij
     schnetpack_phi_ij = schnetpack_painn.radial_basis(d_ij)
-    modelforge_phi_ij = modelforge_painn.radial_basis_module(
+    modelforge_phi_ij = modelforge_painn.radial_symmetry_function_module(
         d_ij / 10
     )  # NOTE: converting to nm
 
@@ -503,24 +518,26 @@ def setup_spk_schnet_representation(
 
 
 def setup_mf_schnet_representation(
-    cutoff: float, nr_atom_basis: int, n_rbf: int, nr_of_interactions: int
+    cutoff: float, nr_atom_basis: int, number_of_gaussians: int, nr_of_interactions: int
 ):
     # ------------------------------------ #
     # set up the modelforge Painn representation model
     # which means that we only want to call the
     # _transform_input() method
-    from modelforge.potential import CosineCutoff, GaussianRBF
-    from modelforge.potential.utils import SlicedEmbedding
+    from modelforge.potential import CosineCutoff, RadialSymmetryFunction
+    from modelforge.potential.utils import Embedding
     from modelforge.potential.schnet import SchNET as mf_SchNET
 
-    embedding = SlicedEmbedding(max_Z=100, embedding_dim=nr_atom_basis, sliced_dim=0)
-    radial_basis = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
+    embedding = Embedding(num_embeddings=100, embedding_dim=nr_atom_basis)
+    radial_basis = RadialSymmetryFunction(
+        number_of_gaussians=number_of_gaussians, radial_cutoff=cutoff
+    )
     cutoff = CosineCutoff(cutoff)
 
     return mf_SchNET(
         embedding_module=embedding,
         nr_interaction_blocks=nr_of_interactions,
-        radial_basis_module=radial_basis,
+        radial_symmetry_function_module=radial_basis,
         cutoff_module=cutoff,
     )
 
@@ -552,7 +569,9 @@ def test_schnet_representation_implementation():
     schnetpack_results = schnetpack_schnet(spk_input)
     modelforge_schnet._set_dtype()
     modelforge_input_1 = modelforge_schnet._input_checks(modelforge_input)
-    modelforge_input_2 = modelforge_schnet.prepare_inputs(modelforge_input_1)
+    modelforge_input_2 = modelforge_schnet.prepare_inputs(
+        modelforge_input_1, only_unique_pairs=False
+    )
 
     # ---------------------------------------- #
     # test neighborlist and distance
@@ -564,13 +583,13 @@ def test_schnet_representation_implementation():
     idx_j = spk_input["_idx_j"]
 
     # ---------------------------------------- #
-    # test rbf
+    # test radial symmetry function
     # ---------------------------------------- #
     r_ij = spk_input["_Rij"]
     d_ij = torch.norm(r_ij, dim=1, keepdim=True)
     dir_ij = r_ij / d_ij
     schnetpack_phi_ij = schnetpack_schnet.radial_basis(d_ij)
-    modelforge_phi_ij = modelforge_schnet.radial_basis_module(
+    modelforge_phi_ij = modelforge_schnet.radial_symmetry_function_module(
         d_ij / 10
     )  # NOTE: converting to nm
 

@@ -125,9 +125,11 @@ class AddSelfEnergies(Postprocess):
 
 import torch.nn as nn
 
+from typing import List
+
 
 class PostprocessingPipeline(nn.Module):
-    def __init__(self, modules):
+    def __init__(self, modules: List[nn.Module]):
         """
         Initializes the postprocessing pipeline with a list of postprocessing modules.
 

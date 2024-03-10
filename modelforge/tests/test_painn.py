@@ -41,7 +41,7 @@ def test_painn_forward(lightning, input_data, model_parameter):
     (
         nr_atom_basis,
         max_atomic_number,
-        n_rbf,
+        number_of_gaussians,
         cutoff,
         nr_interaction_blocks,
     ) = model_parameter
@@ -50,11 +50,11 @@ def test_painn_forward(lightning, input_data, model_parameter):
         lightning=lightning,
         nr_atom_basis=nr_atom_basis,
         max_atomic_number=max_atomic_number,
-        n_rbf=n_rbf,
+        number_of_gaussians=number_of_gaussians,
         cutoff=cutoff,
         nr_interaction_blocks=nr_interaction_blocks,
     )
-    energy = painn(input_data)['energy_readout']
+    energy = painn(input_data)["energy_readout"]
     nr_of_mols = input_data["atomic_subsystem_indices"].unique().shape[0]
 
     assert energy.shape == (
@@ -87,7 +87,7 @@ def test_painn_interaction_equivariance():
     reference_r_ij = reference_prepared_input["r_ij"]
     reference_dir_ij = reference_r_ij / reference_d_ij
     reference_f_ij, _ = _distance_to_radial_basis(
-        reference_d_ij, painn.radial_basis_module
+        reference_d_ij, painn.radial_symmetry_function_module
     )
 
     perturbed_prepared_input = painn.prepare_inputs(perturbed_methane_input)
@@ -95,7 +95,7 @@ def test_painn_interaction_equivariance():
     perturbed_r_ij = perturbed_prepared_input["r_ij"]
     perturbed_dir_ij = perturbed_r_ij / perturbed_d_ij
     perturbed_f_ij, _ = _distance_to_radial_basis(
-        perturbed_d_ij, painn.radial_basis_module
+        perturbed_d_ij, painn.radial_symmetry_function_module
     )
 
     # check that the invariant properties are preserved

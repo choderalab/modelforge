@@ -139,8 +139,8 @@ def testPairlist():
     from openff.units import unit
 
     cutoff = 5.0 * unit.nanometer  # no relevant cutoff
-    pairlist = Neighborlist(cutoff, only_unique_pairs=True)
-    r = pairlist(positions, atomic_subsystem_indices)
+    pairlist = Neighborlist(cutoff)
+    r = pairlist(positions, atomic_subsystem_indices, only_unique_pairs=True)
     pair_indices = r["pair_indices"]
 
     # pairlist describes the pairs of interacting atoms within a batch
@@ -169,8 +169,8 @@ def testPairlist():
 
     # test with cutoff
     cutoff = 2.0 * unit.nanometer
-    pairlist = Neighborlist(cutoff, only_unique_pairs=True)
-    r = pairlist(positions, atomic_subsystem_indices)
+    pairlist = Neighborlist(cutoff)
+    r = pairlist(positions, atomic_subsystem_indices, only_unique_pairs=True)
     pair_indices = r["pair_indices"]
 
     assert torch.equal(pair_indices, torch.tensor([[0, 1, 3, 4], [1, 2, 4, 5]]))
@@ -193,8 +193,8 @@ def testPairlist():
 
     # test with complete pairlist
     cutoff = 2.0 * unit.nanometer
-    pairlist = Neighborlist(cutoff, only_unique_pairs=False)
-    r = pairlist(positions, atomic_subsystem_indices)
+    pairlist = Neighborlist(cutoff)
+    r = pairlist(positions, atomic_subsystem_indices, only_unique_pairs=False)
     pair_indices = r["pair_indices"]
 
     print(pair_indices, flush=True)
@@ -205,11 +205,15 @@ def testPairlist():
     # make sure that Pairlist and Neighborlist behave the same for large cutoffs
     cutoff = 10.0 * unit.nanometer
     only_unique_pairs = False
-    neighborlist = Neighborlist(cutoff, only_unique_pairs=only_unique_pairs)
-    pairlist = Pairlist(only_unique_pairs=only_unique_pairs)
-    r = pairlist(positions, atomic_subsystem_indices)
+    neighborlist = Neighborlist(cutoff)
+    pairlist = Pairlist()
+    r = pairlist(
+        positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
+    )
     pair_indices = r["pair_indices"]
-    r = neighborlist(positions, atomic_subsystem_indices)
+    r = neighborlist(
+        positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
+    )
     neighbor_indices = r["pair_indices"]
 
     assert torch.equal(pair_indices, neighbor_indices)
@@ -217,11 +221,15 @@ def testPairlist():
     # make sure that they are the same also for non-redundant pairs
     cutoff = 10.0 * unit.nanometer
     only_unique_pairs = True
-    neighborlist = Neighborlist(cutoff, only_unique_pairs=only_unique_pairs)
-    pairlist = Pairlist(only_unique_pairs=only_unique_pairs)
-    r = pairlist(positions, atomic_subsystem_indices)
+    neighborlist = Neighborlist(cutoff)
+    pairlist = Pairlist()
+    r = pairlist(
+        positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
+    )
     pair_indices = r["pair_indices"]
-    r = neighborlist(positions, atomic_subsystem_indices)
+    r = neighborlist(
+        positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
+    )
     neighbor_indices = r["pair_indices"]
 
     assert torch.equal(pair_indices, neighbor_indices)
@@ -229,11 +237,15 @@ def testPairlist():
     # this should fail
     cutoff = 2.0 * unit.nanometer
     only_unique_pairs = True
-    neighborlist = Neighborlist(cutoff, only_unique_pairs=only_unique_pairs)
-    pairlist = Pairlist(only_unique_pairs=only_unique_pairs)
-    r = pairlist(positions, atomic_subsystem_indices)
+    neighborlist = Neighborlist(cutoff)
+    pairlist = Pairlist()
+    r = pairlist(
+        positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
+    )
     pair_indices = r["pair_indices"]
-    r = neighborlist(positions, atomic_subsystem_indices)
+    r = neighborlist(
+        positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
+    )
     neighbor_indices = r["pair_indices"]
 
     assert not pair_indices.shape == neighbor_indices.shape
@@ -386,7 +398,7 @@ def testPairlist_calculate_r_ij_and_d_ij():
     # Create Pairlist instance
     # --------------------------- #
     # Only unique pairs
-    pairlist = Neighborlist(cutoff, only_unique_pairs=True)
+    pairlist = Neighborlist(cutoff)
     pair_indices = pairlist.calculate_pairs(
         positions, atomic_subsystem_indices, pairlist.cutoff, only_unique_pairs=True
     )
@@ -410,7 +422,7 @@ def testPairlist_calculate_r_ij_and_d_ij():
 
     # --------------------------- #
     # ALL pairs
-    pairlist = Neighborlist(cutoff, only_unique_pairs=False)
+    pairlist = Neighborlist(cutoff)
     pair_indices = pairlist.calculate_pairs(
         positions, atomic_subsystem_indices, pairlist.cutoff, only_unique_pairs=False
     )
@@ -450,19 +462,21 @@ def test_postprocessing():
     assert len(dataset.dataset_statistics["self_energies"]) == 5
 
     from modelforge.potential.schnet import SchNET
-    from modelforge.potential import CosineCutoff, GaussianRBF
-    from modelforge.potential.utils import SlicedEmbedding
+    from modelforge.potential import CosineCutoff, RadialSymmetryFunction
+    from modelforge.potential.utils import Embedding
     from openff.units import unit
 
     nr_atom_basis = 128
     max_atomic_number = 100
-    n_rbf = 20
+    number_of_gaussians = 20
     cutoff = 5.0 * unit.angstrom
     nr_interaction_blocks = 2
     nr_filters = 2
 
-    embedding = SlicedEmbedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
-    rbf = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
+    embedding = Embedding(max_atomic_number, nr_atom_basis)
+    radial_symmetry_function_module = RadialSymmetryFunction(
+        number_of_gaussians=number_of_gaussians, radial_cutoff=cutoff
+    )
 
     cutoff = CosineCutoff(cutoff=cutoff)
 
@@ -473,7 +487,7 @@ def test_postprocessing():
     model = SchNET(
         embedding_module=embedding,
         nr_interaction_blocks=nr_interaction_blocks,
-        radial_basis_module=rbf,
+        radial_symmetry_function_module=radial_symmetry_function_module,
         cutoff_module=cutoff,
         nr_filters=nr_filters,
     )
@@ -505,7 +519,7 @@ def test_postprocessing():
     model = SchNET(
         embedding_module=embedding,
         nr_interaction_blocks=nr_interaction_blocks,
-        radial_basis_module=rbf,
+        radial_symmetry_function_module=radial_symmetry_function_module,
         cutoff_module=cutoff,
         nr_filters=nr_filters,
         postprocessing=PostprocessingPipeline(
@@ -517,8 +531,6 @@ def test_postprocessing():
         result_with_offset = model(batch)
         break
 
-    print(f"{offset=}")
-    print(f"{e=}")
     r1 = result_with_offset[0].item()
     r2 = (e + offset).item()
 

@@ -14,7 +14,7 @@ class SchNET(BaseNNP):
         self,
         embedding_module: nn.Module,
         nr_interaction_blocks: int,
-        radial_basis_module: nn.Module,
+        radial_symmetry_function_module: nn.Module,
         cutoff_module: nn.Module,
         nr_filters: int = None,
         shared_interactions: bool = False,
@@ -31,17 +31,18 @@ class SchNET(BaseNNP):
         embedding : nn.Module
         nr_interaction_blocks : int
             Number of interaction blocks in the architecture.
-        radial_basis : nn.Module
+        radial_symmetry_function_module : nn.Module
         cutoff : nn.Module
         nr_filters : int, optional
             Number of filters; defines the dimensionality of the intermediate features.
         """
 
         log.debug("Initializing SchNet model.")
+        self.only_unique_pairs = False
         super().__init__(
-            cutoff=float(cutoff_module.cutoff), postprocessing=postprocessing
+            radial_cutoff=float(cutoff_module.cutoff), postprocessing=postprocessing
         )
-        self.radial_basis_module = radial_basis_module
+        self.radial_symmetry_function_module = radial_symmetry_function_module
         self.cutoff_module = cutoff_module
 
         # initialize the energy readout
@@ -57,13 +58,15 @@ class SchNET(BaseNNP):
 
         # Initialize representation block
         self.schnet_representation_module = SchNETRepresentation(
-            self.radial_basis_module
+            self.radial_symmetry_function_module
         )
         # Intialize interaction blocks
         self.interaction_modules = nn.ModuleList(
             [
                 SchNETInteractionBlock(
-                    self.nr_atom_basis, self.nr_filters, self.radial_basis_module.n_rbf
+                    self.nr_atom_basis,
+                    self.nr_filters,
+                    self.radial_symmetry_function_module.number_of_gaussians,
                 )
                 for _ in range(nr_interaction_blocks)
             ]
@@ -74,11 +77,6 @@ class SchNET(BaseNNP):
     def _readout(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         # Compute the energy for each system
         return self.readout_module(inputs)
-
-    def prepare_inputs(self, inputs: Dict[str, torch.Tensor]):
-        inputs = self._prepare_inputs(inputs)
-        inputs = self._model_specific_input_preparation(inputs)
-        return inputs
 
     def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
         # Perform atomic embedding
@@ -96,9 +94,9 @@ class SchNET(BaseNNP):
 
         Parameters
         ----------
-        atomic_embedding : torch.Tensor
-            Atomic numbers embedding; shape (nr_of_atoms_in_systems, 1, nr_atom_basis).
         inputs : Dict[str, torch.Tensor]
+        - atomic_embedding : torch.Tensor
+            Atomic numbers embedding; shape (nr_of_atoms_in_systems, 1, nr_atom_basis).
         - pairlist:  shape (n_pairs, 2)
         - r_ij:  shape (n_pairs, 1)
         - d_ij:  shape (n_pairs, 3)
@@ -132,7 +130,9 @@ class SchNET(BaseNNP):
 
 
 class SchNETInteractionBlock(nn.Module):
-    def __init__(self, nr_atom_basis: int, nr_filters: int, nr_rbf: int) -> None:
+    def __init__(
+        self, nr_atom_basis: int, nr_filters: int, number_of_gaussians: int
+    ) -> None:
         """
         Initialize the SchNet interaction block.
 
@@ -142,13 +142,15 @@ class SchNETInteractionBlock(nn.Module):
             Number of atom basis, defines the dimensionality of the output features.
         nr_filters : int
             Number of filters, defines the dimensionality of the intermediate features.
-        nr_rbf : int
+        number_of_gaussians : int
             Number of radial basis functions.
         """
         super().__init__()
         from .utils import ShiftedSoftplus, Dense
 
-        assert nr_rbf > 4, "Number of radial basis functions must be larger than 10."
+        assert (
+            number_of_gaussians > 4
+        ), "Number of radial basis functions must be larger than 10."
         assert nr_filters > 1, "Number of filters must be larger than 1."
         assert nr_atom_basis > 10, "Number of atom basis must be larger than 10."
 
@@ -161,7 +163,7 @@ class SchNETInteractionBlock(nn.Module):
             Dense(nr_atom_basis, nr_atom_basis, activation=None),
         )
         self.filter_network = nn.Sequential(
-            Dense(nr_rbf, nr_filters, activation=ShiftedSoftplus()),
+            Dense(number_of_gaussians, nr_filters, activation=ShiftedSoftplus()),
             Dense(nr_filters, nr_filters, activation=None),
         )
 
@@ -179,7 +181,7 @@ class SchNETInteractionBlock(nn.Module):
         ----------
         x : torch.Tensor, shape [nr_of_atoms_in_systems, nr_atom_basis]
             Input feature tensor for atoms.
-        f_ij : torch.Tensor, shape [n_pairs, n_rbf]
+        f_ij : torch.Tensor, shape [n_pairs, number_of_gaussians]
             Radial basis functions for pairs of atoms.
         idx_i : torch.Tensor, shape [n_pairs]
             Indices for the first atom in each pair.
@@ -226,7 +228,7 @@ class SchNETInteractionBlock(nn.Module):
 
 
 class SchNETRepresentation(nn.Module):
-    def __init__(self, rbf: nn.Module):
+    def __init__(self, radial_symmetry_function_module: nn.Module):
         """
         Initialize the SchNet representation layer.
 
@@ -236,7 +238,7 @@ class SchNETRepresentation(nn.Module):
         """
         super().__init__()
 
-        self.radial_basis = rbf
+        self.radial_symmetry_function_module = radial_symmetry_function_module
 
     def forward(self, d_ij: torch.Tensor) -> Dict[str, torch.Tensor]:
         """
@@ -250,12 +252,14 @@ class SchNETRepresentation(nn.Module):
         -------
         Dict[str, torch.Tensor]
             Dictionary containing:
-            - 'f_ij': Radial basis functions for pairs of atoms; shape [n_pairs, n_rbf]
+            - 'f_ij': Radial basis functions for pairs of atoms; shape [n_pairs, number_of_gaussians]
             - 'rcut_ij': Cutoff values for each pair; shape [n_pairs]
         """
 
         # Convert distances to radial basis functions
-        f_ij, rcut_ij = _distance_to_radial_basis(d_ij, self.radial_basis)
+        f_ij, rcut_ij = _distance_to_radial_basis(
+            d_ij, self.radial_symmetry_function_module
+        )
         f_ij_ = f_ij.squeeze(1)
         rcut_ij_ = rcut_ij.squeeze(1)
         assert f_ij_.dim() == 2, f"Expected 2D tensor, got {f_ij_.dim()}"
@@ -268,8 +272,8 @@ class LightningSchNET(SchNET, LightningModuleMixin):
         self,
         embedding: nn.Module,
         nr_interaction_blocks: int,
-        radial_basis: nn.Module,
-        cutoff: nn.Module,
+        radial_symmetry_function_module: nn.Module,
+        cutoff_module: nn.Module,
         nr_filters: int = 2,
         shared_interactions: bool = False,
         activation: nn.Module = ShiftedSoftplus(),
@@ -302,8 +306,8 @@ class LightningSchNET(SchNET, LightningModuleMixin):
         super().__init__(
             embedding_module=embedding,
             nr_interaction_blocks=nr_interaction_blocks,
-            radial_basis_module=radial_basis,
-            cutoff_module=cutoff,
+            radial_symmetry_function_module=radial_symmetry_function_module,
+            cutoff_module=cutoff_module,
             nr_filters=nr_filters,
             shared_interactions=shared_interactions,
             activation=activation,

@@ -167,6 +167,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             ]
             .clone()
             .detach()
+            .squeeze(1)
         ).to(torch.int64)
         positions = (
             self.properties_of_interest["positions"][
@@ -546,15 +547,6 @@ class TorchDataModule(pl.LightningDataModule):
         collate_fn = collate_conformers if collate else None
         return calculate_self_energies(self.dataset, collate_fn)
 
-    # print information about the unit system used in the dataset
-    def print_unit_system(self) -> None:
-        """
-        Print information about the unit system used in the dataset.
-        """
-        from modelforge.utils import provide_details_about_used_unitsystem
-
-        provide_details_about_used_unitsystem()
-
     def prepare_data(
         self,
         remove_self_energies: bool = True,
@@ -581,7 +573,6 @@ class TorchDataModule(pl.LightningDataModule):
             - self_energies are None, self._ase will be used
             - regression_ase is True, self_energies will be calculated
         """
-
         if self.split_file and os.path.exists(self.split_file):
             self.split_idxs = np.load(self.split_file, allow_pickle=True)
             log.debug(f"Loaded split indices from {self.split_file}")
@@ -639,9 +630,6 @@ class TorchDataModule(pl.LightningDataModule):
         """
         from tqdm import tqdm
 
-        print(self_energies)
-        print(self_energies[1])
-
         log.info("Removing self energies from the dataset")
         for i in tqdm(range(len(dataset)), desc="Removing Self Energies"):
             atomic_numbers = dataset[i]["atomic_numbers"]
@@ -681,10 +669,6 @@ class TorchDataModule(pl.LightningDataModule):
         """
         Sets up datasets for the train, validation, and test stages.
 
-        Parameters
-        ----------
-        stage : Optional[str]
-            The stage for which to set up the dataset. Can be 'fit', 'validate', 'test', or 'predict'. Defaults to None.
         """
         from torch.utils.data import Subset
 

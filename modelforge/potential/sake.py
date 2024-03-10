@@ -69,7 +69,7 @@ class SAKE(BaseNNP):
             epsilon: float = 1e-8,
             postprocessing: PostprocessingPipeline = PostprocessingPipeline(
                 [NoPostprocess({})])
-        ):
+    ):
         """
         Parameters
             ----------
@@ -132,7 +132,8 @@ class SAKE(BaseNNP):
 
     def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
         # Perform atomic embedding
-        inputs["atomic_embedding"] = F.one_hot(inputs["atomic_numbers"].squeeze(-1), num_classes=self.nr_atom_basis).float()
+        inputs["atomic_embedding"] = F.one_hot(inputs["atomic_numbers"].squeeze(-1),
+                                               num_classes=self.nr_atom_basis).float()
         return inputs
 
     def _forward(
@@ -356,6 +357,7 @@ class SAKEInteraction(nn.Module):
         torch.Tensor
             Linear combinations of mixed edge features. Shape [nr_pairs, nr_coefficients, geometry_basis].
         """
+        # p: nr_pairs, x: geometry_basis, c: nr_coefficients
         return torch.einsum("px,pc->pcx", dir_ij, self.x_mixing_mlp(h_ij_semantic))
 
     def get_spatial_attention(self, combinations, idx_i, nr_atoms):
@@ -431,9 +433,12 @@ class SAKEInteraction(nn.Module):
         """
         h_ij_att_weights = self.semantic_attention_mlp(h_ij_edge)
         d_ij_att_weights = self.cutoff_module(d_ij)
+        # p: nr_pairs, h: nr_heads
         combined_ij_att_weights = torch.einsum("ph,p->ph", h_ij_att_weights, d_ij_att_weights)
         expanded_idx_i = idx_i.view(-1, 1).expand_as(combined_ij_att_weights)
-        combined_ij_att = scatter_softmax(combined_ij_att_weights, expanded_idx_i, dim=-2, dim_size=nr_atoms)
+        combined_ij_att = scatter_softmax(combined_ij_att_weights, expanded_idx_i, dim=-2, dim_size=nr_atoms,
+                                          device=h_ij_edge.device)
+        # p: nr_pairs, f: nr_edge_basis, h: nr_heads
         return torch.reshape(torch.einsum("pf,ph->pfh", h_ij_edge, combined_ij_att),
                              (len(idx_i), self.nr_edge_basis * self.nr_heads))
 

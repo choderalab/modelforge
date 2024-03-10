@@ -5,6 +5,8 @@ import jax.numpy as jnp
 import pytest
 import torch
 import numpy as onp
+from jax import Array
+import flax
 
 from modelforge.potential.sake import SAKE, SAKEInteraction
 import sake as reference_sake
@@ -166,16 +168,58 @@ def test_sake_interaction_equivariance():
     assert torch.allclose(torch.matmul(reference_v, rotation_matrix), perturbed_v)
 
 
-def test_spatial_attention_against_reference():
+class CosineCutoffJAX(flax.linen.Module):
+    """ JAX version of the cosine cutoff module. """
+    cutoff_units: unit.Quantity
+
+    def setup(self):
+        """
+        Behler-style cosine cutoff module.
+
+        Parameters:
+        ----------
+        cutoff_units: unit.Quantity
+            The cutoff distance.
+
+        """
+        super().__init__()
+        self.cutoff = self.cutoff_units.to(unit.nanometer).m
+
+    def __call__(self, input: Array) -> Array:
+        return _cosine_cutoff(input, self.cutoff)
+
+
+def _cosine_cutoff(d_ij: Array, cutoff: float) -> Array:
+    """
+    Compute the cosine cutoff for a distance tensor using JAX.
+    NOTE: the cutoff function doesn't care about units as long as they are consisten,
+
+    Parameters
+    ----------
+    d_ij : Tensor
+        Pairwise distance tensor. Shape: [n_pairs, distance]
+    cutoff : float
+        The cutoff distance.
+
+    Returns
+    -------
+    Tensor
+        The cosine cutoff tensor. Shape: [..., N]
+    """
+    # Compute values of cutoff function
+    input_cut = 0.5 * (jnp.cos(d_ij * jnp.pi / cutoff) + 1.0)
+    # Remove contributions beyond the cutoff radius
+    input_cut *= (d_ij < cutoff).astype(jnp.float_)
+    return jnp.exp(input_cut)  # NOTE: The reference implementation multiplies by the cutoff function after
+    # softmax, but the modelforge implementation multiplies by the cutoff function before softmax. Thus, to get an
+    # equivalent result, we need to exponentiate the cutoff function for the reference implementation.
+
+
+def make_reference_equivalent_sake_interaction(out_features, hidden_features, nr_heads):
     from modelforge.potential import CosineCutoff
     from modelforge.potential import GaussianRBF
-    nr_atoms = 2
-    out_features = 11
-    hidden_features = 7
-    geometry_basis = 3
-    nr_heads = 5
-    nr_rbf = 50
-    cutoff_module = CosineCutoff(5.0 * unit.nanometer)
+
+    # Define the modelforge layer
     mf_sake_block = SAKEInteraction(
         nr_atom_basis=out_features,
         nr_edge_basis=hidden_features,
@@ -184,18 +228,98 @@ def test_spatial_attention_against_reference():
         nr_atom_basis_spatial_hidden=hidden_features,
         nr_atom_basis_spatial=hidden_features,
         nr_atom_basis_velocity=hidden_features,
-        nr_coefficients=nr_heads * hidden_features,
+        nr_coefficients=(nr_heads * hidden_features),
         nr_heads=nr_heads,
         activation=torch.nn.SiLU(),
-        radial_basis_module=GaussianRBF(n_rbf=nr_rbf, cutoff=5.0 * unit.nanometer),
-        cutoff_module=cutoff_module,
+        radial_basis_module=GaussianRBF(n_rbf=50, cutoff=5.0 * unit.nanometer),
+        cutoff_module=CosineCutoff(5.0 * unit.nanometer),
         epsilon=1e-5
     )
+
+    # Define the reference layer
     ref_sake_interaction = reference_sake.layers.DenseSAKELayer(out_features=out_features,
                                                                 hidden_features=hidden_features,
                                                                 n_heads=nr_heads,
-                                                                cutoff=cutoff_module
+                                                                cutoff=CosineCutoffJAX(5.0 * unit.nanometer),
                                                                 )
+
+    return mf_sake_block, ref_sake_interaction
+
+
+def test_cutoff_against_reference():
+    nr_atoms = 13
+    out_features = 11
+    hidden_features = 7
+    geometry_basis = 3
+    nr_heads = 5
+    nr_pairs = nr_atoms ** 2
+    key = jax.random.PRNGKey(1884)
+
+    x_minus_xt = jax.random.normal(key, (nr_atoms, nr_atoms, geometry_basis))
+    x_minus_xt_norm = jnp.linalg.norm(x_minus_xt, axis=-1, keepdims=True)
+    d_ij = torch.from_numpy(onp.array(x_minus_xt_norm)).reshape(nr_pairs, )
+
+    mf_sake_block, ref_sake_interaction = make_reference_equivalent_sake_interaction(out_features, hidden_features,
+                                                                                     nr_heads)
+    mf_cutoff = mf_sake_block.cutoff_module(d_ij)
+    ref_cutoff = ref_sake_interaction.cutoff.apply({}, x_minus_xt_norm)
+    # See above note about the exponentiation of the cutoff function.
+    assert torch.allclose(torch.exp(mf_cutoff), torch.from_numpy(onp.array(ref_cutoff).reshape(nr_pairs, )), atol=1e-4)
+
+def test_combined_attention_against_reference():
+    nr_atoms = 13
+    out_features = 11
+    hidden_features = 7
+    geometry_basis = 3
+    nr_heads = 5
+    key = jax.random.PRNGKey(1884)
+
+    nr_edge_basis = hidden_features
+    pairlist = torch.cartesian_prod(torch.arange(nr_atoms), torch.arange(nr_atoms))
+    nr_pairs = nr_atoms ** 2
+    pairlist = pairlist.T
+    idx_i, idx_j = pairlist
+
+
+    mf_sake_block, ref_sake_interaction = make_reference_equivalent_sake_interaction(out_features, hidden_features,
+                                                                                     nr_heads)
+    # Generate random input data in JAX
+    h_e_mtx = jax.random.normal(key, (nr_atoms, nr_atoms, nr_edge_basis))
+    x_minus_xt = jax.random.normal(key, (nr_atoms, nr_atoms, geometry_basis))
+    x_minus_xt_norm = jnp.linalg.norm(x_minus_xt, axis=-1, keepdims=True)
+
+    # Convert the input tensors from JAX to torch and reshape to diagonal batching
+    h_ij_edge = torch.from_numpy(onp.array(h_e_mtx)).reshape(nr_pairs, hidden_features)
+    d_ij = torch.from_numpy(onp.array(x_minus_xt_norm)).reshape(nr_pairs, )
+    mf_h_ij_semantic = mf_sake_block.get_semantic_attention(h_ij_edge, idx_i, d_ij, nr_atoms)
+
+    variables = ref_sake_interaction.init(key, x_minus_xt_norm, h_e_mtx,
+                                          method=ref_sake_interaction.combined_attention)
+    variables["params"]["semantic_attention_mlp"]["layers_0"][
+        "kernel"] = mf_sake_block.semantic_attention_mlp.weight.detach().numpy().T
+    ref_combined_attention = \
+        ref_sake_interaction.apply(variables, x_minus_xt_norm, h_e_mtx, method=ref_sake_interaction.combined_attention)[
+            2]
+    ref_h_ij_semantic = jnp.reshape(
+        jnp.expand_dims(h_e_mtx, axis=-1) * jnp.expand_dims(ref_combined_attention, axis=-2),
+        (nr_pairs, nr_heads * nr_edge_basis))
+
+    assert torch.allclose(mf_h_ij_semantic, torch.from_numpy(onp.array(ref_h_ij_semantic)), atol=1e-4)
+
+
+
+def test_spatial_attention_against_reference():
+    # Define the parameters for the test
+    nr_atoms = 13
+    out_features = 11
+    hidden_features = 7
+    geometry_basis = 3
+    nr_heads = 5
+
+    mf_sake_block, ref_sake_interaction = make_reference_equivalent_sake_interaction(out_features, hidden_features,
+                                                                                     nr_heads)
+
+    nr_coefficients = nr_heads * hidden_features
 
     pairlist = torch.cartesian_prod(torch.arange(nr_atoms), torch.arange(nr_atoms))
     nr_pairs = nr_atoms ** 2
@@ -204,17 +328,16 @@ def test_spatial_attention_against_reference():
 
     key = jax.random.PRNGKey(1884)
 
-    h_e_att = jax.random.normal(key, (nr_atoms, nr_atoms, hidden_features * nr_heads))
+    # Generate random input data in JAX
+    h_e_att = jax.random.normal(key, (nr_atoms, nr_atoms, nr_coefficients))
     x_minus_xt = jax.random.normal(key, (nr_atoms, nr_atoms, geometry_basis))
     x_minus_xt_norm = jnp.linalg.norm(x_minus_xt, axis=-1, keepdims=True)
 
+    # Convert the input tensors from JAX to torch and reshape to diagonal batching
     h_ij_semantic = torch.from_numpy(onp.array(h_e_att)).reshape(nr_pairs, hidden_features * nr_heads)
     dir_ij = torch.from_numpy(onp.array(x_minus_xt / (x_minus_xt_norm + 1e-5))).reshape(nr_pairs, geometry_basis)
 
-    # variables = ref_sake_interaction.init(key, h_e_att, x_minus_xt, x_minus_xt_norm,
-    #                                       method=ref_sake_interaction.combined_attention)
-    # variables["params"]["semantic_attention_mlp"]["layers_0"]["kernel"] = mf_sake_block.x_mixing_mlp.weight.detach().numpy().T
-    #
+
     mf_combinations = mf_sake_block.get_combinations(h_ij_semantic, dir_ij)
     mf_result = mf_sake_block.get_spatial_attention(mf_combinations, idx_i, nr_atoms)
 
@@ -226,11 +349,9 @@ def test_spatial_attention_against_reference():
         0].weight.detach().numpy().T
     variables["params"]["post_norm_mlp"]["layers_2"]["kernel"] = mf_sake_block.post_norm_mlp[
         1].weight.detach().numpy().T
-    ref_result = ref_sake_interaction.apply(variables, h_e_att, x_minus_xt, x_minus_xt_norm,
-                                            method=ref_sake_interaction.spatial_attention)
+    ref_spatial, ref_combinations = ref_sake_interaction.apply(variables, h_e_att, x_minus_xt, x_minus_xt_norm,
+                                                               method=ref_sake_interaction.spatial_attention)
     assert (torch.allclose(mf_combinations,
-                           torch.from_numpy(onp.array(ref_result[1])).reshape(nr_pairs, nr_heads * hidden_features,
-                                                                              geometry_basis), atol=1e-4))
-    assert (torch.allclose(mf_result, torch.from_numpy(onp.array(ref_result[0])), atol=1e-4))
-
-
+                           torch.from_numpy(onp.array(ref_combinations)).reshape(nr_pairs, nr_heads * hidden_features,
+                                                                                 geometry_basis), atol=1e-4))
+    assert (torch.allclose(mf_result, torch.from_numpy(onp.array(ref_spatial)), atol=1e-4))

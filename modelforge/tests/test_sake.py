@@ -210,9 +210,7 @@ def _cosine_cutoff(d_ij: Array, cutoff: float) -> Array:
     input_cut = 0.5 * (jnp.cos(d_ij * jnp.pi / cutoff) + 1.0)
     # Remove contributions beyond the cutoff radius
     input_cut *= (d_ij < cutoff).astype(jnp.float_)
-    return jnp.exp(input_cut)  # NOTE: The reference implementation multiplies by the cutoff function after
-    # softmax, but the modelforge implementation multiplies by the cutoff function before softmax. Thus, to get an
-    # equivalent result, we need to exponentiate the cutoff function for the reference implementation.
+    return input_cut
 
 
 def make_reference_equivalent_sake_interaction(out_features, hidden_features, nr_heads):
@@ -264,7 +262,7 @@ def test_cutoff_against_reference():
     mf_cutoff = mf_sake_block.cutoff_module(d_ij)
     ref_cutoff = ref_sake_interaction.cutoff.apply({}, x_minus_xt_norm)
     # See above note about the exponentiation of the cutoff function.
-    assert torch.allclose(torch.exp(mf_cutoff), torch.from_numpy(onp.array(ref_cutoff).reshape(nr_pairs, )), atol=1e-4)
+    assert torch.allclose(mf_cutoff, torch.from_numpy(onp.array(ref_cutoff).reshape(nr_pairs, )), atol=1e-4)
 
 def test_combined_attention_against_reference():
     nr_atoms = 13

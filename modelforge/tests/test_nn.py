@@ -3,9 +3,8 @@ import torch
 
 
 def test_gaussian_rbf_1D():
-    dist = (
-        torch.tensor([[[1.0]]]) / 10
-    )  # NOTE: converting to nanometer, NOTE: invariant as long as consisten units are used
+
+    dist = torch.tensor([[[1.0]]]) / 10  # NOTE: converting to nanometer
 
     from openff.units import unit
 

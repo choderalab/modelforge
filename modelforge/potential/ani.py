@@ -2,7 +2,6 @@ import torch
 from torch import nn
 from loguru import logger as log
 from modelforge.potential.models import BaseNNP
-from modelforge.potential.postprocessing import PostprocessingPipeline, NoPostprocess
 from typing import Dict, NamedTuple, Tuple
 from openff.units import unit
 
@@ -45,7 +44,7 @@ class ANIRepresentation(nn.Module):
         self.radial_cutoff = radial_cutoff
         self.angular_cutoff = angular_cutoff
         self.nr_of_supported_elements = nr_of_supported_elements
-        self.cutoff_module = CosineCutoff(radial_cutoff)
+        self.cutoff_module = CosineCutoff(radial_cutoff, device)
         self.radial_symmetry_functions = self._setup_radial_symmetry_functions(
             self.radial_cutoff
         )
@@ -186,7 +185,7 @@ class ANIRepresentation(nn.Module):
             )
         )
         atom_index12 = inputs["pair_indices"]
-        species = inputs["atomic_numbers"]
+        species = inputs["atomic_index"]
         species12 = species[atom_index12]
 
         index12 = atom_index12 * self.nr_of_supported_elements + species12.flip(0)
@@ -256,6 +255,46 @@ class ANIInteraction(nn.Module):
     def intialize_atomic_neural_network(self, aev_dim: int) -> Dict[str, nn.Module]:
 
         H_network = torch.nn.Sequential(
+            torch.nn.Linear(aev_dim, 256),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(256, 192),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(192, 160),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(160, 1),
+        )
+
+        C_network = torch.nn.Sequential(
+            torch.nn.Linear(aev_dim, 224),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(224, 192),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(192, 160),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(160, 1),
+        )
+
+        N_network = torch.nn.Sequential(
+            torch.nn.Linear(aev_dim, 192),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(192, 160),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(160, 128),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(128, 1),
+        )
+
+        O_network = torch.nn.Sequential(
+            torch.nn.Linear(aev_dim, 192),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(192, 160),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(160, 128),
+            torch.nn.CELU(0.1),
+            torch.nn.Linear(128, 1),
+        )
+
+        S_network = torch.nn.Sequential(
             torch.nn.Linear(aev_dim, 160),
             torch.nn.CELU(0.1),
             torch.nn.Linear(160, 128),
@@ -265,37 +304,35 @@ class ANIInteraction(nn.Module):
             torch.nn.Linear(96, 1),
         )
 
-        C_network = torch.nn.Sequential(
-            torch.nn.Linear(aev_dim, 144),
+        F_network = torch.nn.Sequential(
+            torch.nn.Linear(aev_dim, 160),
             torch.nn.CELU(0.1),
-            torch.nn.Linear(144, 112),
+            torch.nn.Linear(160, 128),
             torch.nn.CELU(0.1),
-            torch.nn.Linear(112, 96),
-            torch.nn.CELU(0.1),
-            torch.nn.Linear(96, 1),
-        )
-
-        N_network = torch.nn.Sequential(
-            torch.nn.Linear(aev_dim, 128),
-            torch.nn.CELU(0.1),
-            torch.nn.Linear(128, 112),
-            torch.nn.CELU(0.1),
-            torch.nn.Linear(112, 96),
+            torch.nn.Linear(128, 96),
             torch.nn.CELU(0.1),
             torch.nn.Linear(96, 1),
         )
 
-        O_network = torch.nn.Sequential(
-            torch.nn.Linear(aev_dim, 128),
+        Cl_network = torch.nn.Sequential(
+            torch.nn.Linear(aev_dim, 160),
             torch.nn.CELU(0.1),
-            torch.nn.Linear(128, 112),
+            torch.nn.Linear(160, 128),
             torch.nn.CELU(0.1),
-            torch.nn.Linear(112, 96),
+            torch.nn.Linear(128, 96),
             torch.nn.CELU(0.1),
             torch.nn.Linear(96, 1),
         )
 
-        return {"H": H_network, "C": C_network, "N": N_network, "O": O_network}
+        return {
+            "H": H_network,
+            "C": C_network,
+            "N": N_network,
+            "O": O_network,
+            "S": S_network,
+            "F": F_network,
+            "Cl": Cl_network,
+        }
 
     def forward(self, input: Tuple[torch.Tensor, torch.Tensor]):
 
@@ -316,9 +353,6 @@ class ANI2x(BaseNNP):
 
     def __init__(
         self,
-        postprocessing: PostprocessingPipeline = PostprocessingPipeline(
-            [NoPostprocess({})]
-        ),
         radial_cutoff: unit.Quantity = 5.3 * unit.angstrom,
         angular_cutoff: unit.Quantity = 3.5 * unit.angstrom,
         device: torch.device = torch.device("cpu"),
@@ -335,14 +369,12 @@ class ANI2x(BaseNNP):
 
         log.debug("Initializing ANI model.")
         super().__init__(
-            radial_cutoff=radial_cutoff,
-            angular_cutoff=angular_cutoff,
-            postprocessing=postprocessing,
+            cutoff=radial_cutoff,
         )
 
         # Initialize representation block
         self.ani_representation_module = ANIRepresentation(
-            radial_cutoff, angular_cutoff, device=device
+            radial_cutoff, angular_cutoff, device=self.device
         )
         # The length of radial aev
         self.radial_length = (
@@ -383,8 +415,6 @@ class ANI2x(BaseNNP):
         - r_ij:  shape (n_pairs, 1)
         - d_ij:  shape (n_pairs, 3)
         - positions:  shape (nr_of_atoms_per_molecules, 3)
-        - atomic_embedding:  shape (nr_of_atoms_in_systems, nr_atom_basis)
-
 
         Returns
         -------
@@ -408,7 +438,9 @@ class ANI2x(BaseNNP):
         atomic_subsystem_indices = inputs["atomic_subsystem_indices"]
         # output tensor for the sums, size based on the number of unique values in atomic_subsystem_indices
         energy_per_molecule = torch.zeros(
-            atomic_subsystem_indices.max() + 1, dtype=per_species_energies.dtype
+            atomic_subsystem_indices.max() + 1,
+            dtype=per_species_energies.dtype,
+            device=per_species_energies.device,
         )
 
         # use index_add_ to sum values in per_species_energies according to indices in atomic_subsystem_indices

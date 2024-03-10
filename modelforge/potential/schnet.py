@@ -1,27 +1,23 @@
-from typing import Dict, Type, Optional
+from typing import Dict
 
 import torch
 from loguru import logger as log
 import torch.nn as nn
 
-from .models import BaseNNP, LightningModuleMixin
-from .utils import _distance_to_radial_basis, ShiftedSoftplus
-from .postprocessing import PostprocessingPipeline, NoPostprocess
+from .models import BaseNNP
+from openff.units import unit
 
 
 class SchNET(BaseNNP):
     def __init__(
         self,
-        embedding_module: nn.Module,
-        nr_interaction_blocks: int,
-        radial_symmetry_function_module: nn.Module,
-        cutoff_module: nn.Module,
+        max_Z: int = 100,
+        embedding_dimensions: int = 64,
+        nr_interaction_blocks: int = 2,
+        cutoff: unit.Quantity = 5 * unit.angstrom,
+        number_of_gaussians_basis_functions: int = 16,
         nr_filters: int = None,
         shared_interactions: bool = False,
-        activation: nn.Module = ShiftedSoftplus(),
-        postprocessing: PostprocessingPipeline = PostprocessingPipeline(
-            [NoPostprocess({})]
-        ),
     ) -> None:
         """
         Initialize the SchNet class.
@@ -38,27 +34,31 @@ class SchNET(BaseNNP):
         """
 
         log.debug("Initializing SchNet model.")
-        self.only_unique_pairs = False
-        super().__init__(
-            radial_cutoff=float(cutoff_module.cutoff), postprocessing=postprocessing
-        )
-        self.radial_symmetry_function_module = radial_symmetry_function_module
-        self.cutoff_module = cutoff_module
+
+        self.only_unique_pairs = False  # NOTE: for pairlist
+        super().__init__(cutoff=cutoff)
+        self.nr_atom_basis = embedding_dimensions
+        self.nr_filters = nr_filters or self.nr_atom_basis
+        self.number_of_gaussians_basis_functions = number_of_gaussians_basis_functions
+
+        # embedding
+        from modelforge.potential.utils import Embedding
+
+        self.embedding_module = Embedding(max_Z, embedding_dimensions)
+
+        # cutoff
+        from modelforge.potential import CosineCutoff
+
+        self.cutoff_module = CosineCutoff(cutoff, self.device)
 
         # initialize the energy readout
         from .utils import EnergyReadout
 
-        self.nr_atom_basis = embedding_module.embedding_dim
         self.readout_module = EnergyReadout(self.nr_atom_basis)
-        self.nr_filters = nr_filters or self.nr_atom_basis
-
-        log.debug(
-            f"Passed parameters to constructor: {self.nr_atom_basis=}, {nr_interaction_blocks=}, {self.nr_filters=}, {cutoff_module=}"
-        )
 
         # Initialize representation block
         self.schnet_representation_module = SchNETRepresentation(
-            self.radial_symmetry_function_module
+            cutoff, number_of_gaussians_basis_functions, self.device
         )
         # Intialize interaction blocks
         self.interaction_modules = nn.ModuleList(
@@ -66,13 +66,11 @@ class SchNET(BaseNNP):
                 SchNETInteractionBlock(
                     self.nr_atom_basis,
                     self.nr_filters,
-                    self.radial_symmetry_function_module.number_of_gaussians,
+                    number_of_gaussians_basis_functions,
                 )
                 for _ in range(nr_interaction_blocks)
             ]
         )
-        # save the embedding
-        self.embedding_module = embedding_module
 
     def _readout(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         # Compute the energy for each system
@@ -80,12 +78,7 @@ class SchNET(BaseNNP):
 
     def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
         # Perform atomic embedding
-        from modelforge.potential.utils import embed_atom_features
-
-        atomic_embedding = embed_atom_features(
-            inputs["atomic_numbers"], self.embedding_module
-        )
-        inputs["atomic_embedding"] = atomic_embedding
+        inputs["atomic_embedding"] = self.embedding_module(inputs["atomic_numbers"])
         return inputs
 
     def _forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
@@ -98,8 +91,8 @@ class SchNET(BaseNNP):
         - atomic_embedding : torch.Tensor
             Atomic numbers embedding; shape (nr_of_atoms_in_systems, 1, nr_atom_basis).
         - pairlist:  shape (n_pairs, 2)
-        - r_ij:  shape (n_pairs, 1)
-        - d_ij:  shape (n_pairs, 3)
+        - r_ij:  shape (n_pairs, 3)
+        - d_ij:  shape (n_pairs, 1)
         - positions:  shape (nr_of_atoms_per_molecules, 3)
         - atomic_embedding:  shape (nr_of_atoms_in_systems, nr_atom_basis)
 
@@ -181,12 +174,9 @@ class SchNETInteractionBlock(nn.Module):
         ----------
         x : torch.Tensor, shape [nr_of_atoms_in_systems, nr_atom_basis]
             Input feature tensor for atoms.
+        pairlist : torch.Tensor, shape [n_pairs, 2]
         f_ij : torch.Tensor, shape [n_pairs, number_of_gaussians]
             Radial basis functions for pairs of atoms.
-        idx_i : torch.Tensor, shape [n_pairs]
-            Indices for the first atom in each pair.
-        idx_j : torch.Tensor, shape [n_pairs]
-            Indices for the second atom in each pair.
         rcut_ij : torch.Tensor, shape [n_pairs]
             Cutoff values for each pair.
 
@@ -197,38 +187,37 @@ class SchNETInteractionBlock(nn.Module):
         """
 
         # Map input features to the filter space
-        x = self.intput_to_feature(x)  # (n_pairs, n_filters)
+        x = self.intput_to_feature(x)  # (nr_of_atoms_in_systems, n_filters)
 
         # Generate interaction filters based on radial basis functions
         Wij = self.filter_network(f_ij)  # (n_pairs, n_filters)
         Wij = Wij * rcut_ij[:, None]  # Apply the cutoff
-        Wij = Wij.to(dtype=x.dtype)
+        # Wij = Wij.to(dtype=x.dtype)
 
         idx_i, idx_j = pairlist[0], pairlist[1]
+        x_j = x[idx_j]
 
         # Perform continuous-filter convolution
-        x_j = torch.index_select(
-            x, 0, idx_j
-        )  # Gather features of second atoms in each pair
         x_ij = x_j * Wij  # shape (n_pairs, nr_filters)
 
         # Initialize a tensor to gather the results
-        shape = list(x.shape)  # note that we're using x.shape, not x_ij.shape
-        x_native = torch.zeros(shape, dtype=x.dtype, device=x.device)
-
-        idx_i_expanded = idx_i.unsqueeze(1).expand_as(x_ij)
+        x = torch.zeros_like(x, dtype=x.dtype, device=x.device)
 
         # Sum contributions to update atom features
-
-        x_native.scatter_add_(0, idx_i_expanded, x_ij)
+        x.scatter_add_(0, idx_i.unsqueeze(1).expand_as(x_ij), x_ij)
 
         # Map back to the original feature space and reshape
-        x = self.feature_to_output(x_native)
+        x = self.feature_to_output(x)
         return x
 
 
 class SchNETRepresentation(nn.Module):
-    def __init__(self, radial_symmetry_function_module: nn.Module):
+    def __init__(
+        self,
+        radial_cutoff: unit.Quantity,
+        number_of_gaussians: int,
+        device: torch.device,
+    ):
         """
         Initialize the SchNet representation layer.
 
@@ -238,7 +227,23 @@ class SchNETRepresentation(nn.Module):
         """
         super().__init__()
 
-        self.radial_symmetry_function_module = radial_symmetry_function_module
+        self.radial_symmetry_function_module = self._setup_radial_symmetry_functions(
+            radial_cutoff, number_of_gaussians
+        )
+        self.device = device
+
+    def _setup_radial_symmetry_functions(
+        self, radial_cutoff: unit.Quantity, number_of_gaussians: int
+    ):
+        from .utils import RadialSymmetryFunction
+
+        radial_symmetry_function = RadialSymmetryFunction(
+            number_of_gaussians=number_of_gaussians,
+            radial_cutoff=radial_cutoff,
+            ani_style=False,
+            dtype=torch.float32,
+        )
+        return radial_symmetry_function
 
     def forward(self, d_ij: torch.Tensor) -> Dict[str, torch.Tensor]:
         """
@@ -255,64 +260,14 @@ class SchNETRepresentation(nn.Module):
             - 'f_ij': Radial basis functions for pairs of atoms; shape [n_pairs, number_of_gaussians]
             - 'rcut_ij': Cutoff values for each pair; shape [n_pairs]
         """
+        from modelforge.potential.utils import CosineCutoff
 
         # Convert distances to radial basis functions
-        f_ij, rcut_ij = _distance_to_radial_basis(
-            d_ij, self.radial_symmetry_function_module
+        f_ij = self.radial_symmetry_function_module(d_ij).squeeze(1)
+        cutoff_module = CosineCutoff(
+            self.radial_symmetry_function_module.radial_cutoff, device=d_ij.device
+
         )
-        f_ij_ = f_ij.squeeze(1)
-        rcut_ij_ = rcut_ij.squeeze(1)
-        assert f_ij_.dim() == 2, f"Expected 2D tensor, got {f_ij_.dim()}"
-        assert rcut_ij_.dim() == 1, f"Expected 1D tensor, got {rcut_ij_.dim()}"
-        return {"f_ij": f_ij_, "rcut_ij": rcut_ij_}
 
-
-class LightningSchNET(SchNET, LightningModuleMixin):
-    def __init__(
-        self,
-        embedding: nn.Module,
-        nr_interaction_blocks: int,
-        radial_symmetry_function_module: nn.Module,
-        cutoff_module: nn.Module,
-        nr_filters: int = 2,
-        shared_interactions: bool = False,
-        activation: nn.Module = ShiftedSoftplus(),
-        postprocessing: PostprocessingPipeline = PostprocessingPipeline(
-            [NoPostprocess({})]
-        ),
-        loss: Type[nn.Module] = nn.MSELoss(),
-        optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
-        lr: float = 1e-3,
-    ) -> None:
-        """
-        PyTorch Lightning version of the SchNet model.
-
-        Parameters
-        ----------
-        nr_interactions : int
-            Number of interaction blocks in the architecture.
-        nr_filters : int, optional
-            Dimensionality of the intermediate features (default is 2).
-        cutoff : float, optional
-            Cutoff value for the pairlist (default is 5.0).
-        loss : Type[nn.Module], optional
-            Loss function to use (default is nn.MSELoss).
-        optimizer : Type[torch.optim.Optimizer], optional
-            Optimizer to use (default is torch.optim.Adam).
-        lr : float, optional
-            Learning rate (default is 1e-3).
-        """
-
-        super().__init__(
-            embedding_module=embedding,
-            nr_interaction_blocks=nr_interaction_blocks,
-            radial_symmetry_function_module=radial_symmetry_function_module,
-            cutoff_module=cutoff_module,
-            nr_filters=nr_filters,
-            shared_interactions=shared_interactions,
-            activation=activation,
-            postprocessing=postprocessing,
-        )
-        self.loss_function = loss
-        self.optimizer = optimizer
-        self.learning_rate = lr
+        rcut_ij = cutoff_module(d_ij).squeeze(1)
+        return {"f_ij": f_ij, "rcut_ij": rcut_ij}

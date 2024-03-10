@@ -10,6 +10,7 @@ import torch
 from loguru import logger
 from torch.utils.data import Subset, random_split
 
+
 if TYPE_CHECKING:
     from modelforge.dataset.dataset import TorchDataset
 
@@ -29,17 +30,37 @@ def normalize_energies(dataset, stats: Dict[str, float]) -> None:
     return dataset
 
 
-def calculate_mean_and_variance(dataset) -> Dict[str, float]:
+from torch.utils.data import Dataset, DataLoader
+
+
+def calculate_mean_and_variance(
+    torch_dataset: Dataset, batch_size: int = 512
+) -> Dict[str, float]:
     """
     Calculates the mean and variance of the dataset.
 
     """
-    import numpy as np
     from loguru import logger as log
+    from modelforge.utils.misc import Welford
+    from modelforge.dataset.dataset import collate_conformers
 
+    online_estimator = Welford()
+
+    dataloader = DataLoader(
+        torch_dataset,
+        batch_size=batch_size,
+        collate_fn=collate_conformers,
+        num_workers=4,
+    )
     log.info("Calculating mean and variance for normalization")
-    energies = np.array([dataset[i]["E_label"] for i in range(len(dataset))])
-    stats = {"mean": energies.mean(), "stddev": energies.std()}
+    nr_of_atoms = 0
+    for batch in dataloader:
+        online_estimator.update(batch["E_label"])
+
+    stats = {
+        "mean": online_estimator.mean / torch_dataset.number_of_atoms,
+        "stddev": online_estimator.stddev / torch_dataset.number_of_atoms,
+    }
     log.info(f"Mean and standard deviation of the dataset:{stats}")
     return stats
 
@@ -509,54 +530,3 @@ def _to_file_cache(
         processed_dataset_file,
         **data,
     )
-
-
-def pad_to_max_length(data: List[np.ndarray]) -> List[np.ndarray]:
-    """
-    Pad each array in the data list to a specified maximum length.
-
-    Parameters
-    ----------
-    data : List[np.ndarray]
-        List of arrays to be padded.
-    Returns
-    -------
-    List[np.ndarray]
-        List of padded arrays.
-    """
-    max_length = max(arr.shape[0] for arr in data)
-
-    return [
-        np.pad(arr, (0, max_length - arr.shape[0]), "constant", constant_values=0)
-        for arr in data
-    ]
-
-
-def pad_molecules(molecules: List[np.ndarray]) -> List[np.ndarray]:
-    """
-    Pad molecules to ensure each has a consistent number of atoms.
-
-    Parameters:
-    -----------
-    molecules : List[np.ndarray]
-        List of molecules to be padded.
-
-    Returns:
-    --------
-    List[np.ndarray]
-        List of padded molecules.
-    """
-    max_atoms = max(mol.shape[0] for mol in molecules)
-    # I don't think this is quite right.  As this is going to create a 2D array. why are we padding
-    return [
-        np.pad(
-            mol,
-            ((0, max_atoms - mol.shape[0]), (0, 0)),
-            mode="constant",
-            constant_values=(-1, -1),
-        )
-        for mol in molecules
-    ]
-
-
-translate_property_names = {"return_energy": "U0"}

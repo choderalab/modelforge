@@ -4,6 +4,19 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+ATOMIC_NUMBER_TO_INDEX_MAP = {
+    1: 0,  # H
+    6: 1,  # C
+    7: 2,  # N
+    8: 3,  # O
+    9: 4,  # F
+    15: 5,  # P
+    16: 6,  # S
+    17: 7,  # Cl
+    35: 8,  # Br
+    53: 9,  # I
+}
+
 
 def triple_by_molecule(
     atom_pairs: torch.Tensor,
@@ -31,7 +44,7 @@ def triple_by_molecule(
     )
 
     # compute central_atom_index
-    pair_sizes = torch.div(counts * (counts - 1), 2, rounding_mode='trunc')
+    pair_sizes = torch.div(counts * (counts - 1), 2, rounding_mode="trunc")
     pair_indices = torch.repeat_interleave(pair_sizes)
     central_atom_index = uniqued_central_atom_index.index_select(0, pair_indices)
 
@@ -163,7 +176,9 @@ from openff.units import unit
 
 
 class CosineCutoff(nn.Module):
-    def __init__(self, cutoff: unit.Quantity):
+    def __init__(
+        self, cutoff: unit.Quantity, device: torch.device = torch.device("cpu")
+    ):
         """
         Behler-style cosine cutoff module.
 
@@ -175,7 +190,7 @@ class CosineCutoff(nn.Module):
         """
         super().__init__()
         cutoff = cutoff.to(unit.nanometer).m
-        self.register_buffer("cutoff", torch.FloatTensor([cutoff]))
+        self.register_buffer("cutoff", torch.tensor([cutoff], device=device))
 
     def forward(self, d_ij: torch.Tensor):
         """
@@ -199,36 +214,6 @@ class CosineCutoff(nn.Module):
         # Remove contributions beyond the cutoff radius
         input_cut *= (d_ij < self.cutoff).float()
         return input_cut
-
-
-def embed_atom_features(
-    atomic_numbers: torch.Tensor, embedding: nn.Embedding
-) -> torch.Tensor:
-    """
-    Embed atomic numbers to atom features.
-
-    Parameters
-    ----------
-    atomic_numbers : torch.Tensor
-        Atomic numbers of the atoms.
-    embedding : nn.Embedding
-        The embedding layer.
-
-    Returns
-    -------
-    torch.Tensor
-        The atom features.
-    """
-    # Perform atomic embedding
-    from .utils import Embedding
-
-    assert isinstance(embedding, Embedding), "embedding must be SlicedEmbedding"
-    assert embedding.embedding_dim > 0, "embedding_dim must be > 0"
-
-    atomic_embedding = embedding(
-        atomic_numbers
-    )  # shape (nr_of_atoms_in_batch, nr_atom_basis)
-    return atomic_embedding
 
 
 from typing import Dict
@@ -287,13 +272,13 @@ class EnergyReadout(nn.Module):
 
         # Perform scatter add operation
         indices = atomic_subsystem_indices.unsqueeze(1).to(torch.int64)
-        result = torch.zeros(
+        total_energy_per_molecule = torch.zeros(
             len(atomic_subsystem_indices.unique()), 1, dtype=x.dtype, device=x.device
         ).scatter_add(0, indices, x)
 
         # Sum across feature dimension to get final tensor of shape (num_molecules, 1)
-        total_energy_per_molecule = result.sum(dim=1, keepdim=True)
-        return total_energy_per_molecule
+        # total_energy_per_molecule = result.sum(dim=1, keepdim=True)
+        return total_energy_per_molecule.squeeze(1)
 
 
 from dataclasses import dataclass, field
@@ -370,6 +355,7 @@ class AtomicSelfEnergies:
             # Add more elements as needed
         }
     )
+    _ase_tensor_for_indexing = None
 
     def __getitem__(self, key):
         if isinstance(key, int):
@@ -404,6 +390,29 @@ class AtomicSelfEnergies:
             if elem_symbol == element:
                 return atomic_number
         raise ValueError(f"Element symbol '{element}' not found in the mapping.")
+
+    @property
+    def atomic_number_to_energy(self) -> Dict[int, float]:
+        """Return a dictionary mapping atomic numbers to their energies."""
+        return {
+            atomic_number: self[atomic_number]
+            for atomic_number in self.atomic_number_to_element.keys()
+            if self[atomic_number] is not None
+        }
+
+    @property
+    def ase_tensor_for_indexing(self) -> torch.Tensor:
+        if self._ase_tensor_for_indexing is None:
+            max_z = max(self.atomic_number_to_element.keys()) + 1
+            ase_tensor_for_indexing = torch.zeros(max_z)
+            for idx in self.atomic_number_to_element:
+                if self[idx]:
+                    ase_tensor_for_indexing[idx] = self[idx]
+                else:
+                    ase_tensor_for_indexing[idx] = 0.0
+            self._ase_tensor_for_indexing = ase_tensor_for_indexing
+
+        return self._ase_tensor_for_indexing
 
 
 class ShiftedSoftplus(nn.Module):
@@ -450,6 +459,7 @@ class AngularSymmetryFunction(nn.Module):
         angle_sections: int = 4,
         trainable: bool = False,
         dtype: Optional[torch.dtype] = None,
+        device: torch.device = torch.device("cpu"),
     ) -> None:
         """
         Parameters
@@ -465,7 +475,7 @@ class AngularSymmetryFunction(nn.Module):
 
         self.number_of_gaussians_asf = number_of_gaussians_for_asf
         self.angular_cutoff = angular_cutoff
-        self.cosine_cutoff = CosineCutoff(self.angular_cutoff)
+        self.cosine_cutoff = CosineCutoff(self.angular_cutoff, device=device)
         _unitless_angular_cutoff = angular_cutoff.to(unit.nanometer).m
         self.angular_start = angular_start
         _unitless_angular_start = angular_start.to(unit.nanometer).m
@@ -671,30 +681,6 @@ number_of_gaussians={self.number_of_gaussians}
         diff = d_ij[..., None] - self.R_s  # d_ij - R_s
         y = self.prefactor * torch.exp((-1 * self.EtaR) * torch.pow(diff, 2))
         return y
-
-
-def _distance_to_radial_basis(
-    d_ij: torch.Tensor, radial_symmetry_function_module: nn.Module
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    """
-    Convert distances to radial basis functions.
-
-    Parameters
-    ----------
-    d_ij : torch.Tensor, shape [n_pairs,1 ]
-        Pairwise distances between atoms.
-    radial_symmetry_function_module : nn.Module
-    Returns
-    -------
-    Tuple[torch.Tensor, torch.Tensor]
-        - Radial basis functions, shape [n_pairs, number_of_gaussians]
-        - cutoff values, shape [n_pairs]
-    """
-    assert d_ij.dim() == 2
-    f_ij = radial_symmetry_function_module(d_ij)
-    cosine_cutoff_module = CosineCutoff(radial_symmetry_function_module.radial_cutoff)
-    rcut_ij = cosine_cutoff_module(d_ij)
-    return f_ij, rcut_ij
 
 
 def pair_list(

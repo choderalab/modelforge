@@ -37,6 +37,7 @@ def setup_methane():
 @pytest.fixture
 def setup_two_methanes():
     import torch
+    from modelforge.potential.utils import ATOMIC_NUMBER_TO_INDEX_MAP
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -61,7 +62,7 @@ def setup_two_methanes():
         device=device,
     )
     # In periodic table, C = 6 and H = 1
-    species = torch.tensor([[1, 0, 0, 0, 0], [1, 0, 0, 0, 0]], device=device)
+    species = torch.tensor([[6, 1, 1, 1, 1], [6, 1, 1, 1, 1]], device=device)
     atomic_subsystem_indices = torch.tensor(
         [0, 0, 0, 0, 0, 1, 1, 1, 1, 1], dtype=torch.int32, device=device
     )
@@ -70,7 +71,12 @@ def setup_two_methanes():
         "positions": torch.cat((coordinates[0], coordinates[1]), dim=0) / 10,
         "atomic_subsystem_indices": atomic_subsystem_indices,
     }
-
+    mf_input["atomic_index"] = torch.tensor(
+        [
+            ATOMIC_NUMBER_TO_INDEX_MAP[atomic_number]
+            for atomic_number in list(mf_input["atomic_numbers"].numpy())
+        ]
+    ).flatten()
     return species, coordinates, device, mf_input
 
 
@@ -169,7 +175,6 @@ def test_radial_with_diagonal_batching(setup_two_methanes):
     )
     vec = selected_coordinates[0] - selected_coordinates[1]
     distances = vec.norm(2, -1)
-    
     # ------------ Modelforge calculation ----------#
 
     radial_symmetry_function = RadialSymmetryFunction(
@@ -180,7 +185,7 @@ def test_radial_with_diagonal_batching(setup_two_methanes):
     )
 
     cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom)
-    rcut_ij = cutoff_module(d_ij) 
+    rcut_ij = cutoff_module(d_ij)
 
     radial_symmetry_feature_vector_mf = radial_symmetry_function(d_ij)
     radial_symmetry_feature_vector_mf = (

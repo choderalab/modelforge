@@ -54,7 +54,8 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             "E_label": torch.from_numpy(dataset[property_name.E]),
         }
 
-        self.n_records = len(dataset["atomic_subsystem_counts"])
+        self.number_of_records = len(dataset["atomic_subsystem_counts"])
+        self.number_of_atoms = len(dataset["atomic_numbers"])
         single_atom_start_idxs_by_rec = np.concatenate(
             [[0], np.cumsum(dataset["atomic_subsystem_counts"])]
         )
@@ -71,10 +72,11 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             )
 
         self.single_atom_start_idxs_by_conf = np.repeat(
-            single_atom_start_idxs_by_rec[: self.n_records], dataset["n_confs"]
+            single_atom_start_idxs_by_rec[: self.number_of_records], dataset["n_confs"]
         )
         self.single_atom_end_idxs_by_conf = np.repeat(
-            single_atom_start_idxs_by_rec[1 : self.n_records + 1], dataset["n_confs"]
+            single_atom_start_idxs_by_rec[1 : self.number_of_records + 1],
+            dataset["n_confs"],
         )
         # length: n_conformers
 
@@ -106,7 +108,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         """
         Return the number of records in the TorchDataset.
         """
-        return self.n_records
+        return self.number_of_records
 
     def get_series_mol_idxs(self, record_idx: int) -> List[int]:
         """
@@ -157,6 +159,8 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             - 'atomic_subsystem_counts': torch.Tensor, shape [1]
                 Number of atoms in the conformer. Length one if __getitem__ is called with a single index, length batch_size if collate_conformers is used with DataLoader
         """
+        from modelforge.potential.utils import ATOMIC_NUMBER_TO_INDEX_MAP
+
         series_atom_start_idx = self.series_atom_start_idxs_by_conf[idx]
         series_atom_end_idx = self.series_atom_start_idxs_by_conf[idx + 1]
         single_atom_start_idx = self.single_atom_start_idxs_by_conf[idx]
@@ -189,6 +193,12 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             "E_label": E_label,
             "atomic_subsystem_counts": torch.tensor([atomic_numbers.shape[0]]),
             "idx": idx,
+            "atomic_index": torch.tensor(
+                [
+                    ATOMIC_NUMBER_TO_INDEX_MAP.get(atomic_number, -1)
+                    for atomic_number in list(atomic_numbers.numpy())
+                ]
+            ),
         }
 
 
@@ -524,7 +534,7 @@ class TorchDataModule(pl.LightningDataModule):
         self.dataset_statistics = {}
         self._ase = data.atomic_self_energies  # atomic self energies
 
-    def calculate_self_energies(self, collate: bool = True) -> Dict[str, float]:
+    def calculate_self_energies(self, torch_dataset: TorchDataset, collate: bool = True) -> Dict[str, float]:
         """
         Calculates the self energies for each atomic number in the dataset by performing a least squares regression.
 
@@ -545,12 +555,12 @@ class TorchDataModule(pl.LightningDataModule):
 
         # Define the collate function based on the `collate` parameter
         collate_fn = collate_conformers if collate else None
-        return calculate_self_energies(self.dataset, collate_fn)
+        return calculate_self_energies(torch_dataset, collate_fn)
 
     def prepare_data(
         self,
         remove_self_energies: bool = True,
-        normalize: bool = False,
+        normalize: bool = True,
         self_energies: Dict[str, float] = None,
         regression_ase: bool = False,
     ) -> None:
@@ -581,12 +591,13 @@ class TorchDataModule(pl.LightningDataModule):
 
         # generate dataset
         factory = DatasetFactory()
-        self.dataset = factory.create_dataset(self.data)
+        torch_dataset = factory.create_dataset(self.data)
         dataset_statistics = {}
-        # calculate self energies
-        import toml
 
         if remove_self_energies:
+            # calculate self energies
+            import toml
+
             log.debug("Self energies are removed ...")
             if not self_energies:
                 if regression_ase:
@@ -597,34 +608,42 @@ class TorchDataModule(pl.LightningDataModule):
                 else:
                     log.debug("Using atomic self energies from the dataset...")
                     self_energies = self._ase
-            self.dataset = self.remove_self_energies(self.dataset, self_energies)
+            # remove self energies
+            # store self energies
+            dataset_statistics["atomic_self_energies"] = self_energies
             # save the self energies that are removed from the dataset
-            dataset_statistics["self_energies"] = self_energies
             with open("ase.toml", "w") as f:
-                self_energies_ = {str(idx): energy for (idx, energy) in self_energies}
+                self_energies_ = {str(idx): energy for (idx, energy) in self._ase}
                 toml.dump(self_energies_, f)
 
-        # calculate average and variance
         if normalize:
+            # calculate average and variance
+            if not remove_self_energies:
+                raise RuntimeError(
+                    "Cannot normalize the dataset if self energies are not removed."
+                )
+
+            log.debug("Normalizing energies...")
             from modelforge.dataset.utils import (
                 calculate_mean_and_variance,
                 normalize_energies,
             )
 
-            stats = calculate_mean_and_variance(self.dataset)
-            self.dataset = normalize_energies(self.dataset, stats)
-            dataset_statistics["stddev"] = stats["stddev"]
-            dataset_statistics["mean"] = stats["mean"]
+            stats = calculate_mean_and_variance(torch_dataset)
+            dataset_statistics["scaling_stddev"] = stats["stddev"]
+            dataset_statistics["scaling_mean"] = stats["mean"]
 
         self.dataset_statistics = dataset_statistics
-        self.setup()
+        self.setup(torch_dataset)
 
-    def remove_self_energies(self, dataset, self_energies: Dict[str, float]) -> None:
+    def subtract_self_energies(self, dataset, self_energies: Dict[str, float]) -> None:
         """
-        Removes the self energies from the dataset.
+        Removes the self energies from the total energies for each molecule in the dataset .
 
         Parameters
         ----------
+        dataset: torch.Dataset
+            The dataset from which to remove the self energies.
         self_energies : Dict[str, float]
             Dictionary containing the self energies for each element in the dataset.
         """
@@ -632,11 +651,12 @@ class TorchDataModule(pl.LightningDataModule):
 
         log.info("Removing self energies from the dataset")
         for i in tqdm(range(len(dataset)), desc="Removing Self Energies"):
-            atomic_numbers = dataset[i]["atomic_numbers"]
+            atomic_numbers = list(dataset[i]["atomic_numbers"])
             E_label = dataset[i]["E_label"]
-            for idx, Z in enumerate(atomic_numbers):
-                E_label -= self_energies[int(Z.item())]
+            for Z in atomic_numbers:
+                E_label -= self_energies[int(Z)]
             dataset[i] = {"E_label": E_label}
+
         return dataset
 
     @classmethod
@@ -665,22 +685,24 @@ class TorchDataModule(pl.LightningDataModule):
 
         return dataset
 
-    def setup(self) -> None:
+    def setup(self, torch_dataset) -> None:
         """
         Sets up datasets for the train, validation, and test stages.
 
         """
         from torch.utils.data import Subset
 
+        # saving the raw dataset
+        self.torch_dataset = torch_dataset  # FIXME: is this necessary?
         # Create subsets for training, validation, and testing
         if self.split_idxs and os.path.exists(self.split_file):
-            self.train_dataset = Subset(self.dataset, self.split_idxs["train_idx"])
-            self.val_dataset = Subset(self.dataset, self.split_idxs["val_idx"])
-            self.test_dataset = Subset(self.dataset, self.split_idxs["test_idx"])
+            self.train_dataset = Subset(torch_dataset, self.split_idxs["train_idx"])
+            self.val_dataset = Subset(torch_dataset, self.split_idxs["val_idx"])
+            self.test_dataset = Subset(torch_dataset, self.split_idxs["test_idx"])
         else:
             # Fallback to manual splitting if split_idxs is not available
             self.train_dataset, self.val_dataset, self.test_dataset = self.split.split(
-                self.dataset
+                torch_dataset
             )
 
     def train_dataloader(self) -> DataLoader:
@@ -734,6 +756,8 @@ def collate_conformers(
 ) -> Dict[str, torch.Tensor]:
     # TODO: once TorchDataset is reimplemented for general properties, reimplement this function using formats too.
     """Concatenate the Z, R, and E tensors from a list of molecules into a single tensor each, and return a new dictionary with the concatenated tensors."""
+    from modelforge.potential.utils import ATOMIC_NUMBER_TO_INDEX_MAP
+
     atomic_numbers_list = []
     positions_list = []
     E_list = []
@@ -754,6 +778,12 @@ def collate_conformers(
     E_stack = torch.stack(E_list)
     return {
         "atomic_numbers": atomic_numbers_cat,
+        "atomic_index": torch.tensor(
+            [
+                ATOMIC_NUMBER_TO_INDEX_MAP[atomic_number]
+                for atomic_number in list(atomic_numbers_cat.numpy())
+            ]
+        ),
         "positions": positions_cat,
         "E_label": E_stack,
         "atomic_subsystem_counts": torch.tensor(

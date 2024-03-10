@@ -242,9 +242,9 @@ class ANIInteraction(nn.Module):
         self.C_network = atomic_neural_networks["C"]
         self.O_network = atomic_neural_networks["O"]
         self.N_network = atomic_neural_networks["N"]
-        # self.S_network = atomic_neural_networks["S"]
-        # self.F_network = atomic_neural_networks["F"]
-        # self.Cl_network = atomic_neural_networks["Cl"]
+        self.S_network = atomic_neural_networks["S"]
+        self.F_network = atomic_neural_networks["F"]
+        self.Cl_network = atomic_neural_networks["Cl"]
         self.atomic_networks = [
             self.H_network,
             self.C_network,

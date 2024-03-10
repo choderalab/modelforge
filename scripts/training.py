@@ -12,10 +12,10 @@ dataset = TorchDataModule(
     data, batch_size=128, split=FirstComeFirstServeSplittingStrategy()
 )
 
-dataset.prepare_data(remove_self_energies=True, normalize=True)
+dataset.prepare_data(remove_self_energies=True, normalize=False)
 
 # Set up model
-model = ANI2x()  # PaiNN() # SchNET()
+model = ANI2x()   # PaiNN() # ANI2x()
 model = model.to(torch.float32)
 
 print(model)
@@ -27,11 +27,7 @@ from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 trainer = Trainer(
     max_epochs=10_000,
     num_nodes=1,
-    accelerator="gpu",
-    devices=[0],
-    callbacks=[
-       EarlyStopping(monitor="val_loss", mode="min", patience=10, min_delta=0.001)
-    ],
+    accelerator="cpu",
 )
 
 

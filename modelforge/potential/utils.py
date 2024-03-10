@@ -641,7 +641,7 @@ def neighbor_list_with_cutoff(
 
 
 def scatter_softmax(
-        src: torch.Tensor, index: torch.Tensor, dim: int = -1, dim_size: Optional[int] = None
+        src: torch.Tensor, index: torch.Tensor, dim: int = -1, dim_size: Optional[int] = None, device: Optional[torch.device] = None
 ) -> torch.Tensor:
     """
     Softmax operation over all values in :attr:`src` tensor that share indices
@@ -679,13 +679,13 @@ def scatter_softmax(
         in enumerate(src.shape)
     ]
 
-    max_value_per_index = torch.zeros(out_shape, dtype=src.dtype).scatter_reduce(dim, index, src, "amax", include_self=False)
+    max_value_per_index = torch.zeros(out_shape, dtype=src.dtype, device=device).scatter_reduce(dim, index, src, "amax", include_self=False)
     max_per_src_element = max_value_per_index.gather(dim, index)
 
     recentered_scores = src - max_per_src_element
     recentered_scores_exp = recentered_scores.exp()
 
-    sum_per_index = torch.zeros(out_shape, dtype=src.dtype).scatter_add(dim, index, recentered_scores_exp)
+    sum_per_index = torch.zeros(out_shape, dtype=src.dtype, device=device).scatter_add(dim, index, recentered_scores_exp)
     normalizing_constants = sum_per_index.gather(dim, index)
 
     return recentered_scores_exp.div(normalizing_constants)

@@ -71,7 +71,6 @@ def test_pt_lightning():
 
     # set up traininer
 
-    # set up the pytorch lightning trainer
     trainer = Trainer(
         max_epochs=2,
         accelerator="cpu",

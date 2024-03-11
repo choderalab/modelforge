@@ -534,7 +534,9 @@ class TorchDataModule(pl.LightningDataModule):
         self.dataset_statistics = {}
         self._ase = data.atomic_self_energies  # atomic self energies
 
-    def calculate_self_energies(self, torch_dataset: TorchDataset, collate: bool = True) -> Dict[str, float]:
+    def calculate_self_energies(
+        self, torch_dataset: TorchDataset, collate: bool = True
+    ) -> Dict[str, float]:
         """
         Calculates the self energies for each atomic number in the dataset by performing a least squares regression.
 
@@ -555,7 +557,9 @@ class TorchDataModule(pl.LightningDataModule):
 
         # Define the collate function based on the `collate` parameter
         collate_fn = collate_conformers if collate else None
-        return calculate_self_energies(torch_dataset, collate_fn)
+        return calculate_self_energies(
+            torch_dataset=torch_dataset, collate_fn=collate_fn
+        )
 
     def prepare_data(
         self,
@@ -592,11 +596,10 @@ class TorchDataModule(pl.LightningDataModule):
         # generate dataset
         factory = DatasetFactory()
         torch_dataset = factory.create_dataset(self.data)
-        dataset_statistics = {}
+        dataset_statistics = {"scaling_stddev": 1, "scaling_mean": 0}
 
         if remove_self_energies:
-            # calculate self energies
-            import toml
+            # calculate self energies, and then remove them from the dataset
 
             log.debug("Self energies are removed ...")
             if not self_energies:
@@ -604,17 +607,24 @@ class TorchDataModule(pl.LightningDataModule):
                     log.debug(
                         "Using linear regression to calculate atomic self energies..."
                     )
-                    self_energies = self.calculate_self_energies()
+                    self_energies = self.calculate_self_energies(
+                        torch_dataset=torch_dataset
+                    )
                 else:
                     log.debug("Using atomic self energies from the dataset...")
                     self_energies = self._ase
+
             # remove self energies
-            # store self energies
-            dataset_statistics["atomic_self_energies"] = self_energies
-            # save the self energies that are removed from the dataset
+            self.subtract_self_energies(torch_dataset, self_energies)
+            # write the self energies that are removed from the dataset to disk
+            import toml
+
             with open("ase.toml", "w") as f:
                 self_energies_ = {str(idx): energy for (idx, energy) in self._ase}
                 toml.dump(self_energies_, f)
+
+            # store self energies
+            dataset_statistics["atomic_self_energies"] = self_energies
 
         if normalize:
             # calculate average and variance
@@ -630,6 +640,7 @@ class TorchDataModule(pl.LightningDataModule):
             )
 
             stats = calculate_mean_and_variance(torch_dataset)
+            normalize_energies(torch_dataset, stats)
             dataset_statistics["scaling_stddev"] = stats["stddev"]
             dataset_statistics["scaling_mean"] = stats["mean"]
 

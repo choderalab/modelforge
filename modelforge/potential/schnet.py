@@ -52,9 +52,10 @@ class SchNET(BaseNNP):
         self.cutoff_module = CosineCutoff(cutoff, self.device)
 
         # initialize the energy readout
-        from .utils import EnergyReadout
+        from .utils import FromAtomToMoleculeReduction
 
-        self.readout_module = EnergyReadout(self.nr_atom_basis)
+        self.readout_module = FromAtomToMoleculeReduction(self.nr_atom_basis)
+
 
         # Initialize representation block
         self.schnet_representation_module = SchNETRepresentation(
@@ -266,7 +267,6 @@ class SchNETRepresentation(nn.Module):
         f_ij = self.radial_symmetry_function_module(d_ij).squeeze(1)
         cutoff_module = CosineCutoff(
             self.radial_symmetry_function_module.radial_cutoff, device=d_ij.device
-
         )
 
         rcut_ij = cutoff_module(d_ij).squeeze(1)

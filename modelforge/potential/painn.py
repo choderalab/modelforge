@@ -42,10 +42,11 @@ class PaiNN(BaseNNP):
         from modelforge.potential.utils import Embedding
 
         self.embedding_module = Embedding(max_Z, embedding_dimensions)
-        # initialize the energy readout
-        from .utils import EnergyReadout
 
-        self.readout_module = EnergyReadout(embedding_dimensions)
+        # initialize the energy readout
+        from .utils import FromAtomToMoleculeReduction
+
+        self.readout_module = FromAtomToMoleculeReduction(embedding_dimensions)
 
         # initialize representation block
         self.representation_module = PaiNNRepresentation(
@@ -76,7 +77,6 @@ class PaiNN(BaseNNP):
 
         inputs["atomic_embedding"] = self.embedding_module(inputs["atomic_numbers"])
         return inputs
-
 
     def _forward(
         self,
@@ -402,4 +402,3 @@ class PaiNNMixing(nn.Module):
         q = q + dq_intra + dqmu_intra
         mu = mu + dmu_intra
         return q, mu
-

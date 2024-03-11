@@ -129,10 +129,9 @@ import torch.nn.functional as F
 
 
 class Dense(nn.Linear):
-    r"""Fully connected linear layer with activation function.
+    """
+    Fully connected linear layer with activation function.
 
-    .. math::
-       y = activation(x W^T + b)
     """
 
     def __init__(
@@ -155,7 +154,7 @@ class Dense(nn.Linear):
         """
         self.weight_init = weight_init
         self.bias_init = bias_init
-        super(Dense, self).__init__(in_features, out_features, bias)
+        super().__init__(in_features, out_features, bias)
 
         self.activation = activation
         if self.activation is None:
@@ -219,19 +218,12 @@ class CosineCutoff(nn.Module):
 from typing import Dict
 
 
-class EnergyReadout(nn.Module):
-    """
-    Defines the energy readout module.
+class FromAtomToMoleculeReduction(nn.Module):
 
-    Methods
-    -------
-    forward(x: torch.Tensor) -> torch.Tensor:
-        Forward pass for the energy readout.
-    """
-
-    def __init__(self, nr_atom_basis: int, nr_of_layers: int = 1):
+    def __init__(self, nr_atom_basis: int):
         """
-        Initialize the EnergyReadout class.
+        Initializes the energy readout module.
+        Performs the reduction of 'per_atom' property to 'per_molecule' property.
 
         Parameters
         ----------
@@ -239,27 +231,20 @@ class EnergyReadout(nn.Module):
             Number of atom basis.
         """
         super().__init__()
-        if nr_of_layers == 1:
-            self.energy_layer = nn.Linear(nr_atom_basis, 1)
-        else:
-            activation_fct = nn.ReLU()
-            energy_layer_start = nn.Linear(nr_atom_basis, nr_atom_basis)
-            energy_layer_end = nn.Linear(nr_atom_basis, 1)
-            energy_layer_intermediate = [
-                (nn.Linear(nr_atom_basis, nr_atom_basis), activation_fct)
-                for _ in range(nr_of_layers - 2)
-            ]
-            self.energy_layer = nn.Sequential(
-                energy_layer_end, *energy_layer_intermediate, energy_layer_start
-            )
+        self.energy_layer = nn.Sequential(
+            Dense(nr_atom_basis, nr_atom_basis, activation=nn.ReLU()),
+            Dense(
+                nr_atom_basis,
+                1,
+            ),
+        )
 
-    def forward(self, input: Dict[str, torch.Tensor]) -> torch.Tensor:
+    def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
-        Forward pass for the energy readout.
 
         Parameters
         ----------
-        input : Dict[str, torch.Tensor],
+        inputs : Dict[str, torch.Tensor],
             "scalar_representation", shape [nr_of_atoms_in_batch, nr_atom_basis]
             "atomic_subsystem_indices", shape [nr_of_atoms_in_batch]
         Returns
@@ -267,8 +252,8 @@ class EnergyReadout(nn.Module):
         Tensor, shape [nr_of_moleculs_in_batch, 1]
             The total energy tensor.
         """
-        x = self.energy_layer(input["scalar_representation"])
-        atomic_subsystem_indices = input["atomic_subsystem_indices"]
+        x = self.energy_layer(inputs["scalar_representation"])
+        atomic_subsystem_indices = inputs["atomic_subsystem_indices"]
 
         # Perform scatter add operation
         indices = atomic_subsystem_indices.unsqueeze(1).to(torch.int64)

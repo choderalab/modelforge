@@ -10,6 +10,59 @@ from .helper_functions import (
 )
 
 
+def test_energy_scaling_and_offset():
+    # setup test dataset
+    from modelforge.dataset.dataset import TorchDataModule
+    from modelforge.potential.ani import ANI2x
+
+    # test the self energy calculation on the QM9 dataset
+    from modelforge.dataset.qm9 import QM9Dataset
+    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
+
+    # prepare reference value
+    data = QM9Dataset(for_unit_testing=True)
+    dataset = TorchDataModule(
+        data, batch_size=1, split=FirstComeFirstServeSplittingStrategy()
+    )
+
+    # -------------------------------#
+    # initialize model
+    model = ANI2x()
+
+    # -------------------------------#
+    # Test that we can add the reference energy correctly
+    dataset.prepare_data(
+        remove_self_energies=True, normalize=False, regression_ase=False
+    )
+    # get methane input
+    methane = next(iter(dataset.train_dataloader()))
+
+    # let's predict without any further postprocessing
+    output_no_postprocessing = model(methane)
+
+    # let's add self energies
+    model.dataset_statistics = dataset.dataset_statistics
+    output_with_ase = model(methane)
+
+    # make sure that the raw prediction is the same
+    import torch
+
+    assert torch.isclose(
+        output_no_postprocessing["_raw_E_predict"], output_with_ase["_raw_E_predict"]
+    )
+    
+    # make sure that the difference in E_predict is the ase
+    assert torch.isclose(
+        output_with_ase["E_predict"] - output_no_postprocessing["E_predict"],
+        output_with_ase["_molecular_ase"],
+    )
+    
+    # -------------------------------#
+    # Test energy scaling    
+    
+    a = 7
+
+
 @pytest.mark.parametrize("model_class", MODELS_TO_TEST)
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_forward_pass(model_class, dataset):
@@ -435,4 +488,3 @@ def testPairlist_calculate_r_ij_and_d_ij():
 
     assert torch.allclose(r_ij, expected_r_ij, atol=1e-3)
     assert torch.allclose(d_ij, expected_d_ij, atol=1e-3)
-

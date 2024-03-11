@@ -15,8 +15,3 @@ def test_gaussian_rbf_1D():
     expt = torch.exp(-0.5 * torch.tensor([[[1.0, 0.0, 1.0, 4.0, 9.0, 16.0]]]))
     assert torch.allclose(expt, rbf_expension(dist), atol=1e-4)
     assert list(rbf_expension.parameters()) == []
-
-    rbf_expension = RadialSymmetryFunction(
-        number_of_gaussians=6, radial_cutoff=5.0 * unit.angstrom
-    )
-

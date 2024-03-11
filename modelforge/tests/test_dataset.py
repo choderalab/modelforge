@@ -307,14 +307,26 @@ def test_self_energy():
     from modelforge.dataset.qm9 import QM9Dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
+    # prepare reference value
+    data = QM9Dataset(for_unit_testing=True)
+    dataset = TorchDataModule(
+        data, batch_size=32, split=FirstComeFirstServeSplittingStrategy()
+    )
+    dataset.prepare_data(
+        remove_self_energies=False, normalize=False, regression_ase=False
+    )
+    methane_energy_reference = float(dataset.torch_dataset[0]["E_label"])
+    assert np.isclose(methane_energy_reference, -106277.4161)
+
     data = QM9Dataset(for_unit_testing=True)
     dataset = TorchDataModule(
         data, batch_size=32, split=FirstComeFirstServeSplittingStrategy()
     )
 
-    # self energy is calculated and removed in prepare_data if `remove_self_energies` is True
+    # Scenario 1: dataset contains self energies
+    # self energy is obtained in prepare_data if `remove_self_energies` is True
     dataset.prepare_data(remove_self_energies=True, normalize=False)
-
+    # it is saved in the dataset statistics
     assert dataset.dataset_statistics
     self_energies = dataset.dataset_statistics["atomic_self_energies"]
     # 5 elements present in the QM9 dataset
@@ -327,3 +339,64 @@ def test_self_energy():
     assert np.isclose(self_energies[7], -143309.9379722722)
     # O: -197082.0671774158
     assert np.isclose(self_energies[8], -197082.0671774158)
+
+    # Scenario 2: dataset may or may not contain self energies
+    # but user wants to use least square regression to calculate the energies
+    data = QM9Dataset(for_unit_testing=True)
+    dataset = TorchDataModule(
+        data, batch_size=32, split=FirstComeFirstServeSplittingStrategy()
+    )
+    dataset.prepare_data(
+        remove_self_energies=True, normalize=False, regression_ase=True
+    )
+    # it is saved in the dataset statistics
+    assert dataset.dataset_statistics
+    self_energies = dataset.dataset_statistics["atomic_self_energies"]
+    # 5 elements present in the total QM9 dataset
+    # but only 4 in the reduced QM9 dataset
+    assert len(self_energies) == 4
+    # H: -1313.4668615546
+    assert np.isclose(self_energies[1], -1584.5087457646314)
+    # C: -99366.70745535441
+    assert np.isclose(self_energies[6], -99960.8894178209)
+    # N: -143309.9379722722
+    assert np.isclose(self_energies[7], -143754.02638655982)
+    # O: -197082.0671774158
+    assert np.isclose(self_energies[8], -197495.00132926635)
+
+    dataset.prepare_data(
+        remove_self_energies=True, normalize=False, regression_ase=True
+    )
+    # it is saved in the dataset statistics
+    assert dataset.dataset_statistics
+    self_energies = dataset.dataset_statistics["atomic_self_energies"]
+
+    # Test that self energies are correctly removed
+    for regression in [True, False]:
+        data = QM9Dataset(for_unit_testing=True)
+        dataset = TorchDataModule(
+            data, batch_size=32, split=FirstComeFirstServeSplittingStrategy()
+        )
+        dataset.prepare_data(
+            remove_self_energies=True, normalize=False, regression_ase=regression
+        )
+        # Extract the first molecule (methane)
+        # double check that it is methane
+        methane_atomic_indices = dataset.torch_dataset[0]["atomic_numbers"]
+        # extract energy
+        methane_energy_offset = dataset.torch_dataset[0]["E_label"]
+        if regression is False:
+            # checking that the offset energy is actually correct for methane
+            assert torch.isclose(
+                methane_energy_offset, torch.tensor([-1656.8412], dtype=torch.float64)
+            )
+        # extract the ase offset
+        self_energies = dataset.dataset_statistics["atomic_self_energies"]
+        methane_ase = sum(
+            [
+                self_energies[int(index)]
+                for index in list(methane_atomic_indices.numpy())
+            ]
+        )
+        # compare this to the energy without postprocessing
+        assert np.isclose(methane_energy_reference, methane_energy_offset + methane_ase)

@@ -15,8 +15,13 @@ def test_radial_symmetry_function():
     )
 
     # calculate expension and cutoff
-    d = torch.tensor([[0.0, 0.1, 0.2, 0.3, 0.4, 0.5]])
-    vs = rbf_expension(d) * cutoff(d).T
+    d_ij = torch.tensor(
+        [[0.0], [0.1], [0.2], [0.3], [0.4], [0.5]]
+    )  # distances have the dimensions [nr_of_pairs, 1] (because displacement vectors have the dimensions [nr_of_pairs, 3])
+
+    f_ij_cutoff = cutoff(d_ij)
+    f_ij = rbf_expension(d_ij)
+    vs = (f_ij * f_ij_cutoff.unsqueeze(-1)).squeeze(1)
 
     # make sure that this matches the output of SchNETRepresentation
     from modelforge.potential.schnet import SchNETRepresentation
@@ -26,7 +31,7 @@ def test_radial_symmetry_function():
         number_of_gaussians=18,
         device=torch.device("cpu"),
     )
-    d = torch.tensor([[0.0, 0.1, 0.2, 0.3, 0.4, 0.5]])
-    rep_ = rep(d)
+
+    rep_ = rep(d_ij)
 
     assert torch.allclose(vs, rep_)

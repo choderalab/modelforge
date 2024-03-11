@@ -5,13 +5,14 @@ import torch
 from typing import Dict
 from torch import nn
 
+
 class PhysNetRepresentation(nn.Module):
 
     def __init__(
         self,
         cutoff: unit = 5 * unit.angstrom,
         number_of_gaussians: int = 16,
-        device:torch.device = torch.device('cpu')
+        device: torch.device = torch.device("cpu"),
     ):
         super().__init__()
 
@@ -54,14 +55,12 @@ class PhysNetRepresentation(nn.Module):
 
 class PhysNetInteraction(nn.Module):
 
-    def __init__():
+    def __init__(self):
         pass
 
-
-    def forward(self, inputs: Dict[str, torch.Tensor])
-    
+    def forward(self, inputs: Dict[str, torch.Tensor]):
         """
-        PhysNetInteraction module. Takes as input the embedded nuclear charges 
+        PhysNetInteraction module. Takes as input the embedded nuclear charges
         and the expended radial basis functions (already with cutoff added).
 
         Parameters:
@@ -78,40 +77,47 @@ class PhysNetInteraction(nn.Module):
             _type_: _description_
         """
         from .utils import ShiftedSoftplus
+
         softplus = ShiftedSoftplus()
-        
+
         atom_embedding = inputs["atomic_embedding"]
         # Start with embedded features
-        x = 
+        x = softplus(atom_embedding)
+
+        idx_i, idx_j = inputs["pairlist"]
+
 
 class PhysNetResidual(nn.Module):
-    def __init__():
-        super().__init__()
-
-    def forward():
-        pass
-
-class PhysNetOutput(nn.Module):
-    def __init__():
-        super().__init__()
-        
-    def forward():
-        pass
-
-class PhysNetModule(nn.Module):
-    
     def __init__(self):
         super().__init__()
-        
-        # this class combines the PhysNetInteraction, PhysNetResidual and 
+
+    def forward():
+        pass
+
+
+class PhysNetOutput(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward():
+        pass
+
+
+class PhysNetModule(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+        # this class combines the PhysNetInteraction, PhysNetResidual and
         # PhysNetOutput class
-        
+
         self.interaction = PhysNetInteraction()
         self.residula = PhysNetResidual()
         self.output = PhysNetOutput()
-        
+
     def forward():
         pass
+
 
 class PhysNet(BaseNeuralNetworkPotential):
     def __init__(
@@ -119,7 +125,7 @@ class PhysNet(BaseNeuralNetworkPotential):
         max_Z: int = 100,
         embedding_dimensions: int = 64,
         cutoff: unit.Quantity = 5 * unit.angstrom,
-        nr_of_modules : int = 2
+        nr_of_modules: int = 2,
     ) -> None:
         """
         Initialize the PhysNET class.
@@ -151,20 +157,24 @@ class PhysNet(BaseNeuralNetworkPotential):
 
         # cutoff
         from modelforge.potential import CosineCutoff
+
         self.cutoff_module = CosineCutoff(cutoff, self.device)
 
         # initialize the energy readout
-        from .utils import EnergyReadout
+        # from .utils import EnergyReadout
 
-        self.readout_module = EnergyReadout(embedding_dimensions)
+        # self.readout_module = EnergyReadout(embedding_dimensions)
 
         self.physnet_representation_module = PhysNetRepresentation(
-            radial_cutoff=cutoff, number_of_gaussians=16
+            cutoff=cutoff, number_of_gaussians=16
         )
 
         # initialize the PhysNetModule building blocks
         from torch.nn import ModuleList
-        self.physnet_module = PhysNetModule([PhysNetModule() for module_idx in range(nr_of_modules)])
+
+        self.physnet_module = ModuleList(
+            [PhysNetModule() for module_idx in range(nr_of_modules)]
+        )
 
     def _readout(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         # Compute the energy for each system
@@ -191,11 +201,10 @@ class PhysNet(BaseNeuralNetworkPotential):
         torch.Tensor
             Calculated energies; shape (nr_systems,).
         """
-        
+
         # calculate rbf
         representation = self.physnet_representation_module(inputs["d_ij"])
-        
-        
+
         output = self.physnet_module(inputs, representation)
 
         self._readout(output)

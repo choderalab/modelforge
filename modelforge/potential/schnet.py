@@ -46,11 +46,6 @@ class SchNET(BaseNNP):
 
         self.embedding_module = Embedding(max_Z, embedding_dimensions)
 
-        # cutoff
-        from modelforge.potential import CosineCutoff
-
-        self.cutoff_module = CosineCutoff(cutoff, self.device)
-
         # initialize the energy readout
         from .utils import FromAtomToMoleculeReduction
 
@@ -63,7 +58,7 @@ class SchNET(BaseNNP):
         # Intialize interaction blocks
         self.interaction_modules = nn.ModuleList(
             [
-                SchNETInteractionBlock(
+                SchNETInteractionModule(
                     self.nr_atom_basis,
                     self.nr_filters,
                     number_of_gaussians_basis_functions,
@@ -104,14 +99,15 @@ class SchNET(BaseNNP):
         """
 
         # Compute the representation for each atom (transform to radial basis set, multiply by cutoff)
-        f_ij = self.schnet_representation_module(inputs["d_ij"])
+        representation = self.schnet_representation_module(inputs["d_ij"])
         x = inputs["atomic_embedding"]
         # Iterate over interaction blocks to update features
         for interaction in self.interaction_modules:
             v = interaction(
                 x,
                 inputs["pair_indices"],
-                f_ij,
+                representation["f_ij"],
+                representation["f_cutoff"],
             )
             x = x + v  # Update atomic features
 
@@ -121,7 +117,7 @@ class SchNET(BaseNNP):
         }
 
 
-class SchNETInteractionBlock(nn.Module):
+class SchNETInteractionModule(nn.Module):
     def __init__(
         self, nr_atom_basis: int, nr_filters: int, number_of_gaussians: int
     ) -> None:
@@ -163,7 +159,8 @@ class SchNETInteractionBlock(nn.Module):
         self,
         x: torch.Tensor,
         pairlist: torch.Tensor,  # shape [n_pairs, 2]
-        f_ij: torch.Tensor,
+        f_ij: torch.Tensor,  # shape [n_pairs, 1, number_of_gaussians]
+        f_ij_cutoff: torch.Tensor,  # shape [n_pairs, 1]
     ) -> torch.Tensor:
         """
         Forward pass for the interaction block.
@@ -173,8 +170,9 @@ class SchNETInteractionBlock(nn.Module):
         x : torch.Tensor, shape [nr_of_atoms_in_systems, nr_atom_basis]
             Input feature tensor for atoms.
         pairlist : torch.Tensor, shape [n_pairs, 2]
-        f_ij : torch.Tensor, shape [n_pairs, number_of_gaussians]
+        f_ij : torch.Tensor, shape [n_pairs, 1, number_of_gaussians]
             Radial basis functions for pairs of atoms.
+        f_ij_cutoff : torch.Tensor, shape [n_pairs, 1]
 
         Returns
         -------
@@ -186,13 +184,13 @@ class SchNETInteractionBlock(nn.Module):
         x = self.intput_to_feature(x)
 
         # Generate interaction filters based on radial basis functions
-        Wij = self.filter_network(f_ij).squeeze(0)
+        Wij = self.filter_network(f_ij.squeeze(1))
 
         idx_i, idx_j = pairlist[0], pairlist[1]
         x_j = x[idx_j]
 
         # Perform continuous-filter convolution
-        x_ij = x_j * Wij
+        x_ij = x_j * Wij * f_ij_cutoff
 
         # Initialize a tensor to gather the results
         x_ = torch.zeros_like(x, dtype=x.dtype, device=x.device)
@@ -227,6 +225,10 @@ class SchNETRepresentation(nn.Module):
             radial_cutoff, number_of_gaussians
         )
         self.device = device
+        # cutoff
+        from modelforge.potential import CosineCutoff
+
+        self.cutoff_module = CosineCutoff(radial_cutoff, self.device)
 
     def _setup_radial_symmetry_functions(
         self, radial_cutoff: unit.Quantity, number_of_gaussians: int
@@ -251,30 +253,14 @@ class SchNETRepresentation(nn.Module):
 
         Returns
         -------
-        Radial basis functions for pairs of atoms; shape [n_pairs, number_of_gaussians]
+        Radial basis functions for pairs of atoms; shape [n_pairs, 1, number_of_gaussians]
         """
-        from modelforge.potential.utils import CosineCutoff
 
         # Convert distances to radial basis functions
         f_ij = self.radial_symmetry_function_module(
             d_ij
         )  # shape (n_pairs, 1, number_of_gaussians)
 
-        cutoff_module = CosineCutoff(
-            self.radial_symmetry_function_module.radial_cutoff, device=d_ij.device
-        )
+        f_cutoff = self.cutoff_module(d_ij)  # shape (n_pairs, 1)
 
-        # calculate offset
-        rcut_ij = cutoff_module(d_ij)  # shape(n_pairs, 1)
-
-        # return f_ij with cutoff
-        f_ij_ = f_ij * rcut_ij.unsqueeze(-1)
-
-        # check that broadcasting dimension is correct
-        assert f_ij_.shape == (
-            d_ij.shape[0],
-            1,
-            self.radial_symmetry_function_module.number_of_gaussians,
-        )
-
-        return f_ij_.squeeze(1)  # shape (n_pairs, number_of_gaussians)
+        return {"f_ij": f_ij, "f_cutoff": f_cutoff}

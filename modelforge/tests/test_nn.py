@@ -32,6 +32,11 @@ def test_radial_symmetry_function():
         device=torch.device("cpu"),
     )
 
-    rep_ = rep(d_ij)
+    representation = rep(d_ij)
+    f_ij_cutoff = (
+        representation["f_ij"] * representation["f_cutoff"].unsqueeze(-1)
+    ).squeeze(1)
+    print(f_ij_cutoff.shape)
+    print(vs.shape)
 
-    assert torch.allclose(vs, rep_)
+    assert torch.allclose(vs, f_ij_cutoff)

@@ -108,12 +108,7 @@ def test_compare_radial_symmetry_features():
     from openff.units import unit
 
     # generate a random list of distances, all < 5
-    d_ij = (
-        torch.rand(
-            5,
-        )
-        * 5
-    )
+    d_ij = torch.rand(5, 1) * 5
 
     # ANI constants
     radial_cutoff = 5.0  # radial_cutoff
@@ -129,7 +124,7 @@ def test_compare_radial_symmetry_features():
         radial_start * unit.angstrom,
         ani_style=True,
     )
-    r_mf = rsf(d_ij / 10)  # torch.Size([5, 8]) # NOTE: nanometer
+    r_mf = rsf(d_ij / 10)  # torch.Size([5,1, 8]) # NOTE: nanometer
     cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom)
     from torchani.aev import radial_terms
 
@@ -137,7 +132,7 @@ def test_compare_radial_symmetry_features():
 
     r_mf = r_mf * rcut_ij[:, None]
     r_ani = radial_terms(5, EtaR, ShfR, d_ij)  # torch.Size([5,8]) # NOTE: Angstrom
-    assert torch.allclose(r_mf, r_ani)
+    assert torch.allclose(r_mf.squeeze(1), r_ani)
 
 
 def test_radial_with_diagonal_batching(setup_two_methanes):
@@ -155,7 +150,7 @@ def test_radial_with_diagonal_batching(setup_two_methanes):
         mf_input["atomic_subsystem_indices"],
         only_unique_pairs=True,
     )
-    d_ij = pairs["d_ij"].squeeze()
+    d_ij = pairs["d_ij"]
 
     # ANI constants
     radial_cutoff = 5.1  # radial_cutoff
@@ -194,17 +189,17 @@ def test_radial_with_diagonal_batching(setup_two_methanes):
     # ------------ ANI calculation ----------#
     from torchani.aev import radial_terms
 
-    assert torch.allclose(distances, d_ij * 10)  # NOTE: unit mismatch
+    assert torch.allclose(distances, d_ij.squeeze(1) * 10)  # NOTE: unit mismatch
     radial_symmetry_feature_vector_ani = radial_terms(
         radial_cutoff, EtaR, ShfR, distances
     )
     # test that both ANI and MF obtain the same radial symmetry outpu
     assert torch.allclose(
-        radial_symmetry_feature_vector_mf, radial_symmetry_feature_vector_ani
+        radial_symmetry_feature_vector_mf.squeeze(1), radial_symmetry_feature_vector_ani
     )
 
     assert radial_symmetry_feature_vector_mf.shape == torch.Size(
-        [20, radial_dist_divisions]
+        [20, 1, radial_dist_divisions]
     )
 
 

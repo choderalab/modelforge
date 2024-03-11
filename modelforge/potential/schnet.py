@@ -183,24 +183,25 @@ class SchNETInteractionBlock(nn.Module):
         """
 
         # Map input features to the filter space
-        x = self.intput_to_feature(x)  # (nr_of_atoms_in_systems, n_filters)
+        x = self.intput_to_feature(x)
 
         # Generate interaction filters based on radial basis functions
-        Wij = self.filter_network(f_ij)  # (n_pairs, n_filters)
+        Wij = self.filter_network(f_ij).squeeze(0)
 
         idx_i, idx_j = pairlist[0], pairlist[1]
         x_j = x[idx_j]
 
         # Perform continuous-filter convolution
-        x_ij = x_j * Wij  # shape (n_pairs, nr_filters)
+        x_ij = x_j * Wij
 
         # Initialize a tensor to gather the results
         x_ = torch.zeros_like(x, dtype=x.dtype, device=x.device)
 
         # Sum contributions to update atom features
+        # x shape: torch.Size([nr_of_atoms_in_batch, 64])
+        # x_ij shape: torch.Size([nr_of_pairs, 64])
         idx_i_expand = idx_i.unsqueeze(1).expand_as(x_ij)
         x_.scatter_add_(0, idx_i_expand, x_ij)
-
         # Map back to the original feature space and reshape
         x = self.feature_to_output(x_)
         return x
@@ -255,14 +256,25 @@ class SchNETRepresentation(nn.Module):
         from modelforge.potential.utils import CosineCutoff
 
         # Convert distances to radial basis functions
-        d_ij_ = d_ij.flatten().unsqueeze(0)
-        f_ij = self.radial_symmetry_function_module(d_ij_)
+        f_ij = self.radial_symmetry_function_module(
+            d_ij
+        )  # shape (n_pairs, 1, number_of_gaussians)
+
         cutoff_module = CosineCutoff(
             self.radial_symmetry_function_module.radial_cutoff, device=d_ij.device
         )
 
         # calculate offset
-        rcut_ij = cutoff_module(d_ij_)
+        rcut_ij = cutoff_module(d_ij)  # shape(n_pairs, 1)
 
         # return f_ij with cutoff
-        return f_ij * rcut_ij.T
+        f_ij_ = f_ij * rcut_ij.unsqueeze(-1)
+
+        # check that broadcasting dimension is correct
+        assert f_ij_.shape == (
+            d_ij.shape[0],
+            1,
+            self.radial_symmetry_function_module.number_of_gaussians,
+        )
+
+        return f_ij_.squeeze(1)  # shape (n_pairs, number_of_gaussians)

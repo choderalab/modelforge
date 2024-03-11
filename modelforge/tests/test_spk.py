@@ -21,7 +21,7 @@ def test_compare_radial_symmetry_features():
         radial_start=start,
     )
 
-    r = torch.rand(5, 3)
+    r = torch.rand(5, 1)
     print(schnetpack_rbf(r))
     print(radial_symmetry_function_module(r / 10))
     assert torch.allclose(
@@ -524,6 +524,7 @@ def setup_mf_schnet_representation(
     # which means that we only want to call the
     # _transform_input() method
     from modelforge.potential.schnet import SchNET as mf_SchNET
+
     return mf_SchNET(
         embedding_dimensions=nr_atom_basis,
         nr_interaction_blocks=nr_of_interactions,
@@ -591,7 +592,7 @@ def test_schnet_representation_implementation():
     # test cutoff
     # ---------------------------------------- #
     fcut_spk = schnetpack_schnet.cutoff_fn(d_ij)
-    fcut_mf = modelforge_schnet.cutoff_module(d_ij / 10)  # NOTE: converting to nm
+    fcut_mf = modelforge_schnet.schnet_representation_module.cutoff_module(d_ij / 10)  # NOTE: converting to nm
     assert torch.allclose(fcut_spk, fcut_mf)
 
     # ---------------------------------------- #
@@ -612,15 +613,22 @@ def test_schnet_representation_implementation():
     # --------------------------------------- #
     # test representation
     # --------------------------------------- #
-    rep_mf = modelforge_schnet.schnet_representation_module(d_ij / 10)
+    f_ij_mf = (
+        modelforge_schnet.schnet_representation_module.radial_symmetry_function_module(
+            d_ij / 10
+        )
+    )
+    r_cut_ij_mf = modelforge_schnet.schnet_representation_module.cutoff_module(d_ij / 10)
 
     r_ij = spk_input["_Rij"]
     d_ij = torch.norm(r_ij, dim=1)
     f_ij_spk = schnetpack_schnet.radial_basis(d_ij)
     rcut_ij_spk = schnetpack_schnet.cutoff_fn(d_ij)
 
-    assert torch.allclose(rep_mf["f_ij"].unsqueeze(0), f_ij_spk)
-    assert torch.allclose(rep_mf["rcut_ij"], rcut_ij_spk)
+    f_ij_mf_ = f_ij_mf.squeeze(1)
+    r_cut_ij_mf_ = r_cut_ij_mf.squeeze(1)
+    assert torch.allclose(f_ij_mf_, f_ij_spk)
+    assert torch.allclose(r_cut_ij_mf_, rcut_ij_spk)
 
     # ---------------------------------------- #
     # test interactions
@@ -665,6 +673,8 @@ def test_schnet_representation_implementation():
 
     assert torch.allclose(embedding_spk, embedding_mf)
 
+    f_ij_cutoff = (f_ij_mf * r_cut_ij_mf.unsqueeze(1)).squeeze(1)
+
     for mf_interaction, spk_interaction in zip(
         modelforge_schnet.interaction_modules, schnetpack_schnet.interactions
     ):
@@ -678,8 +688,8 @@ def test_schnet_representation_implementation():
         v_mf = mf_interaction(
             embedding_mf,
             modelforge_input_2["pair_indices"],
-            rep_mf["f_ij"],
-            rep_mf["rcut_ij"],
+            f_ij_mf,
+            r_cut_ij_mf
         )
 
         assert torch.allclose(v_spk, v_mf)

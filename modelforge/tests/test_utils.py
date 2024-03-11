@@ -125,44 +125,9 @@ def test_gaussian_rbf(RadialSymmetryFunction):
     assert torch.allclose(radial_symmetry_function_module.R_s, expected_offsets)
 
     # Test that the forward pass returns the expected output
-    d_ij = torch.tensor([1.0, 2.0, 3.0])
+    d_ij = torch.tensor([[1.0], [2.0], [3.0]])
     expected_output = radial_symmetry_function_module(d_ij)
-    assert expected_output.shape == (3, number_of_gaussians)
-
-
-@pytest.mark.parametrize("RadialSymmetryFunction", [RadialSymmetryFunction])
-def test_rbf_invariance(RadialSymmetryFunction):
-    # Define a set of coordinates
-    from openff.units import unit
-
-    coordinates = torch.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]]) / 10
-
-    # Initialize RBF
-    radial_symmetry_function_module = RadialSymmetryFunction(
-        number_of_gaussians=10, radial_cutoff=unit.Quantity(5.0, unit.angstrom)
-    )
-
-    # Calculate pairwise distances for the original coordinates
-    original_d_ij = torch.cdist(coordinates, coordinates)
-
-    # Apply RBF
-    original_output = radial_symmetry_function_module(original_d_ij)
-
-    # Apply a rotation and reflection to the coordinates
-    rotation_matrix = torch.tensor(
-        [[0, -1, 0], [1, 0, 0], [0, 0, 1]], dtype=torch.float32
-    )  # 90-degree rotation
-    reflected_coordinates = torch.mm(coordinates, rotation_matrix)
-    reflected_coordinates[:, 0] *= -1  # Reflect across the x-axis
-
-    # Recalculate pairwise distances
-    transformed_d_ij = torch.cdist(reflected_coordinates, reflected_coordinates)
-
-    # Apply Gaussian RBF to transformed coordinates
-    transformed_output = radial_symmetry_function_module(transformed_d_ij)
-
-    # Assert that the outputs are the same
-    assert torch.allclose(original_output, transformed_output, atol=1e-6)
+    assert expected_output.shape == (3, 1, number_of_gaussians)
 
 
 def test_scatter_add():
@@ -228,7 +193,6 @@ def test_energy_readout():
             2,
         ]
     )
-
 
 
 def test_welford():

@@ -655,7 +655,7 @@ number_of_gaussians={self.number_of_gaussians}
         (NOTE: sum is not performed)
         Parameters
         ----------
-        d_ij : torch.Tensor, size (nr_of_atoms, distance)
+        d_ij : torch.Tensor, size (nr_of_atoms, 1)
             Pairwise distances.
 
         Returns
@@ -663,6 +663,9 @@ number_of_gaussians={self.number_of_gaussians}
         torch.Tensor
             The radial basis functions. Shape: [pairs, number_of_gaussians]
         """
+        assert d_ij.ndim == 2
+        assert d_ij.shape[1] == 1
+
         diff = d_ij[..., None] - self.R_s  # d_ij - R_s
         y = self.prefactor * torch.exp((-1 * self.EtaR) * torch.pow(diff, 2))
         return y

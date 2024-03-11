@@ -81,8 +81,8 @@ class Pairlist(nn.Module):
         -------
         dict : Dict[str, torch.Tensor], containing atom index pairs, distances, and displacement vectors.
             - 'pair_indices': torch.Tensor, shape (2, n_pairs)
-            - 'r_ij' : torch.Tensor, shape (3, n_pairs)
-            - 'd_ij' : torch.Tensor, shape (1, n_pairs)
+            - 'r_ij' : torch.Tensor, shape (n_pairs, 3)
+            - 'd_ij' : torch.Tensor, shape (n_pairs, 1)
 
         """
         assert positions.ndim == 2
@@ -140,8 +140,8 @@ class Neighborlist(Pairlist):
         -------
         dict : Dict[str, torch.Tensor], containing atom index pairs, distances, and displacement vectors.
             - 'pair_indices': torch.Tensor, shape (2, n_pairs)
-            - 'r_ij' : torch.Tensor, shape (3, n_pairs)
-            - 'd_ij' : torch.Tensor, shape (1, n_pairs)
+            - 'r_ij' : torch.Tensor, shape (n_pairs, 3)
+            - 'd_ij' : torch.Tensor, shape (n_pairs, 1)
 
         """
         pair_indices = self.calculate_pairs(

@@ -2,7 +2,7 @@ from typing import Optional, Type
 
 import pytest
 
-from modelforge.potential.models import BaseNNP
+from modelforge.potential.models import BaseNeuralNetworkPotential
 from modelforge.potential.schnet import SchNET
 
 from .helper_functions import (
@@ -15,7 +15,10 @@ from .helper_functions import (
 
 @pytest.mark.parametrize("model_class", MODELS_TO_TEST)
 @pytest.mark.parametrize("dataset", DATASETS)
-def test_train_with_lightning(dataset: Type[BaseNNP], model_class: Type[BaseNNP]):
+def test_train_with_lightning(
+    dataset: Type[BaseNeuralNetworkPotential],
+    model_class: Type[BaseNeuralNetworkPotential],
+):
     """
     Test the forward pass for a given model and dataset.
 
@@ -30,7 +33,7 @@ def test_train_with_lightning(dataset: Type[BaseNNP], model_class: Type[BaseNNP]
     from lightning import Trainer
     import torch
 
-    model: Optional[BaseNNP] = setup_simple_model(model_class)
+    model: Optional[BaseNeuralNetworkPotential] = setup_simple_model(model_class)
     if model is None:
         pytest.fail("Failed to set up the model.")
 

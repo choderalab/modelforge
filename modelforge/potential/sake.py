@@ -164,13 +164,9 @@ class SAKE(BaseNNP):
         h = inputs["atomic_embedding"]
         x = inputs["positions"]
         v = torch.zeros_like(x)
+
         for i, interaction_mod in enumerate(self.interaction_modules):
-            h, x, v = interaction_mod(
-                h,
-                x,
-                v,
-                inputs["pair_indices"]
-            )
+            h, x, v = interaction_mod(h, x, v, inputs["pair_indices"])
 
         # Use squeeze to remove dimensions of size 1
         h = h.squeeze(dim=1)

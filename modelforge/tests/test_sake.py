@@ -330,8 +330,6 @@ def test_exp_normal_smearing_against_reference():
     assert torch.allclose(mf_rbf, torch.from_numpy(onp.array(ref_rbf)).reshape(nr_atoms ** 2, nr_rbf), atol=1e-4)
 
 
-
-
 def test_sake_layer_against_reference():
     nr_atoms = 13
     out_features = 11
@@ -378,7 +376,6 @@ def test_sake_layer_against_reference():
     assert torch.allclose(mf_h, torch.from_numpy(onp.array(ref_h)), atol=1e-4)
     assert torch.allclose(mf_x, torch.from_numpy(onp.array(ref_x)), atol=1e-4)
     assert torch.allclose(mf_v, torch.from_numpy(onp.array(ref_v)), atol=1e-4)
-
 
 
 def test_combined_attention_against_reference():

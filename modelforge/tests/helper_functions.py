@@ -4,7 +4,7 @@ from modelforge.dataset.dataset import TorchDataModule
 from modelforge.dataset.qm9 import QM9Dataset
 from modelforge.potential.schnet import SchNET
 from modelforge.potential.painn import PaiNN
-from modelforge.potential.models import BaseNNP
+from modelforge.potential.models import BaseNeuralNetworkPotential
 from modelforge.potential.ani import ANI2x
 from typing import Optional, Dict
 
@@ -22,7 +22,7 @@ def setup_simple_model(
     cutoff: unit.Quantity = 5.0 * unit.angstrom,
     nr_interaction_blocks: int = 2,
     nr_filters: int = 2,
-) -> Optional[BaseNNP]:
+) -> Optional[BaseNeuralNetworkPotential]:
     """
     Setup a simple model based on the given model_class.
 

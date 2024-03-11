@@ -56,7 +56,6 @@ class SchNET(BaseNNP):
 
         self.readout_module = FromAtomToMoleculeReduction(self.nr_atom_basis)
 
-
         # Initialize representation block
         self.schnet_representation_module = SchNETRepresentation(
             cutoff, number_of_gaussians_basis_functions, self.device
@@ -104,16 +103,15 @@ class SchNET(BaseNNP):
             Calculated energies; shape (nr_systems,).
         """
 
-        # Compute the representation for each atom
-        representation = self.schnet_representation_module(inputs["d_ij"])
+        # Compute the representation for each atom (transform to radial basis set, multiply by cutoff)
+        f_ij = self.schnet_representation_module(inputs["d_ij"])
         x = inputs["atomic_embedding"]
         # Iterate over interaction blocks to update features
         for interaction in self.interaction_modules:
             v = interaction(
                 x,
                 inputs["pair_indices"],
-                representation["f_ij"],
-                representation["rcut_ij"],
+                f_ij,
             )
             x = x + v  # Update atomic features
 
@@ -166,7 +164,6 @@ class SchNETInteractionBlock(nn.Module):
         x: torch.Tensor,
         pairlist: torch.Tensor,  # shape [n_pairs, 2]
         f_ij: torch.Tensor,
-        rcut_ij: torch.Tensor,
     ) -> torch.Tensor:
         """
         Forward pass for the interaction block.
@@ -178,8 +175,6 @@ class SchNETInteractionBlock(nn.Module):
         pairlist : torch.Tensor, shape [n_pairs, 2]
         f_ij : torch.Tensor, shape [n_pairs, number_of_gaussians]
             Radial basis functions for pairs of atoms.
-        rcut_ij : torch.Tensor, shape [n_pairs]
-            Cutoff values for each pair.
 
         Returns
         -------
@@ -192,8 +187,6 @@ class SchNETInteractionBlock(nn.Module):
 
         # Generate interaction filters based on radial basis functions
         Wij = self.filter_network(f_ij)  # (n_pairs, n_filters)
-        Wij = Wij * rcut_ij[:, None]  # Apply the cutoff
-        # Wij = Wij.to(dtype=x.dtype)
 
         idx_i, idx_j = pairlist[0], pairlist[1]
         x_j = x[idx_j]
@@ -202,13 +195,14 @@ class SchNETInteractionBlock(nn.Module):
         x_ij = x_j * Wij  # shape (n_pairs, nr_filters)
 
         # Initialize a tensor to gather the results
-        x = torch.zeros_like(x, dtype=x.dtype, device=x.device)
+        x_ = torch.zeros_like(x, dtype=x.dtype, device=x.device)
 
         # Sum contributions to update atom features
-        x.scatter_add_(0, idx_i.unsqueeze(1).expand_as(x_ij), x_ij)
+        idx_i_expand = idx_i.unsqueeze(1).expand_as(x_ij)
+        x_.scatter_add_(0, idx_i_expand, x_ij)
 
         # Map back to the original feature space and reshape
-        x = self.feature_to_output(x)
+        x = self.feature_to_output(x_)
         return x
 
 
@@ -217,7 +211,7 @@ class SchNETRepresentation(nn.Module):
         self,
         radial_cutoff: unit.Quantity,
         number_of_gaussians: int,
-        device: torch.device,
+        device: torch.device = torch.device("cpu"),
     ):
         """
         Initialize the SchNet representation layer.
@@ -248,26 +242,27 @@ class SchNETRepresentation(nn.Module):
 
     def forward(self, d_ij: torch.Tensor) -> Dict[str, torch.Tensor]:
         """
-        Forward pass for the representation layer.
+        Generate the radial symmetry representation of the pairwise distances.
 
         Parameters
         ----------
-        d_ij : Dict[str, torch.Tensor], Pairwise distances between atoms; shape [n_pairs, 1]
+        d_ij : Pairwise distances between atoms; shape [n_pairs, 1]
 
         Returns
         -------
-        Dict[str, torch.Tensor]
-            Dictionary containing:
-            - 'f_ij': Radial basis functions for pairs of atoms; shape [n_pairs, number_of_gaussians]
-            - 'rcut_ij': Cutoff values for each pair; shape [n_pairs]
+        Radial basis functions for pairs of atoms; shape [n_pairs, number_of_gaussians]
         """
         from modelforge.potential.utils import CosineCutoff
 
         # Convert distances to radial basis functions
-        f_ij = self.radial_symmetry_function_module(d_ij).squeeze(1)
+        d_ij_ = d_ij.flatten().unsqueeze(0)
+        f_ij = self.radial_symmetry_function_module(d_ij_)
         cutoff_module = CosineCutoff(
             self.radial_symmetry_function_module.radial_cutoff, device=d_ij.device
         )
 
-        rcut_ij = cutoff_module(d_ij).squeeze(1)
-        return {"f_ij": f_ij, "rcut_ij": rcut_ij}
+        # calculate offset
+        rcut_ij = cutoff_module(d_ij_)
+
+        # return f_ij with cutoff
+        return f_ij * rcut_ij.T

@@ -4,11 +4,11 @@ import torch
 from loguru import logger as log
 import torch.nn as nn
 
-from .models import BaseNNP
+from .models import BaseNeuralNetworkPotential
 from openff.units import unit
 
 
-class SchNET(BaseNNP):
+class SchNET(BaseNeuralNetworkPotential):
     def __init__(
         self,
         max_Z: int = 100,

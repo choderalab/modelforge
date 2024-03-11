@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from loguru import logger as log
-from modelforge.potential.models import BaseNNP
+from modelforge.potential.models import BaseNeuralNetworkPotential
 from typing import Dict, NamedTuple, Tuple
 from openff.units import unit
 
@@ -349,7 +349,7 @@ class ANIInteraction(nn.Module):
         return output.view_as(species)
 
 
-class ANI2x(BaseNNP):
+class ANI2x(BaseNeuralNetworkPotential):
 
     def __init__(
         self,

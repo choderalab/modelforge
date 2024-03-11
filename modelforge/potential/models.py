@@ -165,7 +165,7 @@ from openff.units import unit
 from typing import Dict, Type
 
 
-class BaseNNP(pl.LightningModule):
+class BaseNeuralNetworkPotential(pl.LightningModule):
     """
     Abstract Base class for neural network potentials.
     """
@@ -351,7 +351,6 @@ class BaseNNP(pl.LightningModule):
 
     def _energy_postprocessing(self, properties_per_molecule, inputs):
 
-
         # first, resale the energies
         inputs["_raw_E_predict"] = properties_per_molecule.clone().detach()
         properties_per_molecule = self._rescale_energy(properties_per_molecule)
@@ -521,7 +520,7 @@ class BaseNNP(pl.LightningModule):
         }
 
 
-class SingleTopologyAlchemicalBaseNNPModel(BaseNNP):
+class SingleTopologyAlchemicalBaseNNPModel(BaseNeuralNetworkPotential):
     """
     Subclass for handling alchemical energy calculations.
 

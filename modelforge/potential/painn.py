@@ -3,14 +3,14 @@ import torch.nn as nn
 from loguru import logger as log
 from typing import Dict, Callable, Tuple
 
-from .models import BaseNNP
+from .models import BaseNeuralNetworkPotential
 from .utils import Dense
 import torch
 import torch.nn.functional as F
 from openff.units import unit
 
 
-class PaiNN(BaseNNP):
+class PaiNN(BaseNeuralNetworkPotential):
     """PaiNN - polarizable interaction neural network
 
     References:
@@ -57,7 +57,6 @@ class PaiNN(BaseNNP):
             shared_filters,
             self.device,
         )
-
 
         # initialize the interaction and mixing networks
         self.interaction_modules = nn.ModuleList(

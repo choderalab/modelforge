@@ -264,6 +264,30 @@ def test_cutoff_against_reference():
     assert torch.allclose(mf_cutoff, torch.from_numpy(onp.array(ref_cutoff).reshape(nr_pairs, )), atol=1e-4)
 
 
+def test_x_minus_xt_against_reference():
+    from sake.functional import get_x_minus_xt, get_x_minus_xt_norm
+    nr_atoms = 13
+    geometry_basis = 3
+    key = jax.random.PRNGKey(1884)
+
+    x_jax = jax.random.normal(key, (nr_atoms, geometry_basis))
+    x_minus_xt = get_x_minus_xt(x_jax)
+
+    pairlist = torch.cartesian_prod(torch.arange(nr_atoms), torch.arange(nr_atoms))
+    pairlist = pairlist.T
+    idx_i, idx_j = pairlist
+
+    x = torch.from_numpy(onp.array(x_jax))
+    r_ij = x[idx_j] - x[idx_i]
+
+    assert torch.allclose(torch.from_numpy(onp.array(x_minus_xt.reshape(nr_atoms ** 2, geometry_basis))), r_ij, atol=1e-4)
+
+    x_minus_xt_norm = get_x_minus_xt_norm(x_minus_xt)
+    d_ij = torch.sqrt((r_ij ** 2).sum(dim=1) + 1e-5)
+
+    assert torch.allclose(torch.from_numpy(onp.array(x_minus_xt_norm.reshape(nr_atoms ** 2, ))), d_ij, atol=1e-4)
+
+
 def test_update_edge_against_reference():
     from modelforge.potential import CosineCutoff
     from modelforge.potential.sake import ExpNormalSmearing
@@ -337,9 +361,13 @@ def test_update_edge_against_reference():
     variables['params']["kernel"]["betas"] = mf_sake_block.radial_basis_module.betas.detach().numpy().T
 
     ref_edge = ref_sake_edge_model.apply(variables, h_cat_ht, x_minus_xt_norm)
-    mf_edge = mf_sake_block.update_edge(h[idx_i], h[idx_j], d_ij)
+    mf_edge = mf_sake_block.update_edge(h[idx_j], h[idx_i], d_ij)
 
-    # TODO: Why is the ordering different?
+    # NOTE: if h[idx_j] is the first argument and h[idx_i] is the second argument, it matches C-style ordering.
+    # if h[idx_i] is the first argument and h[idx_j] is the second argument, it matches Fortran-style ordering.
+    assert torch.allclose(mf_edge, torch.from_numpy(onp.array(ref_edge).reshape(nr_pairs, -1, order='C')), atol=1e-4)
+
+    mf_edge = mf_sake_block.update_edge(h[idx_i], h[idx_j], d_ij)
     assert torch.allclose(mf_edge, torch.from_numpy(onp.array(ref_edge).reshape(nr_pairs, -1, order='F')), atol=1e-4)
 
 
@@ -438,10 +466,14 @@ def test_sake_layer_against_reference():
 
     variables["params"]["edge_model"]["mlp_in"]["kernel"] = mf_sake_block.edge_mlp_in.weight.detach().numpy().T
     variables["params"]["edge_model"]["mlp_in"]["bias"] = mf_sake_block.edge_mlp_in.bias.detach().numpy().T
-    variables["params"]["edge_model"]["mlp_out"]["layers_0"]["kernel"] = mf_sake_block.edge_mlp_out[0].weight.detach().numpy().T
-    variables["params"]["edge_model"]["mlp_out"]["layers_0"]["bias"] = mf_sake_block.edge_mlp_out[0].bias.detach().numpy().T
-    variables["params"]["edge_model"]["mlp_out"]["layers_2"]["kernel"] = mf_sake_block.edge_mlp_out[1].weight.detach().numpy().T
-    variables["params"]["edge_model"]["mlp_out"]["layers_2"]["bias"] = mf_sake_block.edge_mlp_out[1].bias.detach().numpy().T
+    variables["params"]["edge_model"]["mlp_out"]["layers_0"]["kernel"] = mf_sake_block.edge_mlp_out[
+        0].weight.detach().numpy().T
+    variables["params"]["edge_model"]["mlp_out"]["layers_0"]["bias"] = mf_sake_block.edge_mlp_out[
+        0].bias.detach().numpy().T
+    variables["params"]["edge_model"]["mlp_out"]["layers_2"]["kernel"] = mf_sake_block.edge_mlp_out[
+        1].weight.detach().numpy().T
+    variables["params"]["edge_model"]["mlp_out"]["layers_2"]["bias"] = mf_sake_block.edge_mlp_out[
+        1].bias.detach().numpy().T
     variables['params']["edge_model"]["kernel"]["means"] = mf_sake_block.radial_basis_module.means.detach().numpy().T
     variables['params']["edge_model"]["kernel"]["betas"] = mf_sake_block.radial_basis_module.betas.detach().numpy().T
     variables["params"]["node_mlp"]["layers_0"]["kernel"] = mf_sake_block.node_mlp[0].weight.detach().numpy().T

@@ -280,7 +280,8 @@ def test_x_minus_xt_against_reference():
     x = torch.from_numpy(onp.array(x_jax))
     r_ij = x[idx_j] - x[idx_i]
 
-    assert torch.allclose(torch.from_numpy(onp.array(x_minus_xt.reshape(nr_atoms ** 2, geometry_basis, order='C'))), r_ij, atol=1e-4)
+    assert torch.allclose(torch.from_numpy(onp.array(x_minus_xt.reshape(nr_atoms ** 2, geometry_basis, order='C'))),
+                          r_ij, atol=1e-4)
 
     x_minus_xt_norm = get_x_minus_xt_norm(x_minus_xt)
     d_ij = torch.sqrt((r_ij ** 2).sum(dim=1) + 1e-5)

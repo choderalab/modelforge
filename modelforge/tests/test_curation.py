@@ -11,6 +11,7 @@ from modelforge.curation.qm9_curation import QM9Curation
 from modelforge.curation.ani1x_curation import ANI1xCuration
 from modelforge.curation.spice_114_curation import SPICE114Curation
 from modelforge.curation.spice_openff_curation import SPICEOpenFFCuration
+from modelforge.curation.spice_2_curation import SPICE2Curation
 
 from modelforge.curation.curation_baseclass import dict_to_hdf5
 
@@ -1649,7 +1650,67 @@ def test_spice114_openff_test_fetching(prep_temp_dir):
         assert len(keys) == 10
 
 
-def test_spice12_openff_test_process_downloaded(prep_temp_dir):
+def test_spice114_rename(prep_temp_dir):
+    local_path_dir = str(prep_temp_dir)
+    local_database_name = "test.sqlite"
+    specification_names = ["entry", "spec_2", "spec_6"]
+    dataset_name = "SPICE PubChem Set 1 Single Points Dataset v1.2"
+
+    spice_openff_data = SPICEOpenFFCuration(
+        hdf5_file_name="test_dataset.hdf5",
+        output_file_dir=local_path_dir,
+        local_cache_dir=local_path_dir,
+        convert_units=True,
+        release_version="1.1.4",
+    )
+
+    test_keys = ["ALA-1", "GLU-0", "GLU-1", "ALA-0", "ALA-2", "GLU-10", "GLU-3"]
+    sorted_keys, original_name = spice_openff_data._sort_keys(test_keys)
+
+    assert np.all(
+        sorted_keys == ["ALA-0", "ALA-1", "ALA-2", "GLU-0", "GLU-1", "GLU-3", "GLU-10"]
+    )
+
+    test_keys = [
+        "ALA-ALA-1",
+        "ALA-GLU-0",
+        "ALA-GLU-1",
+        "ALA-ALA-0",
+        "ALA-ALA-2",
+        "GLU-GLU-1",
+        "GLU-GLU-0",
+    ]
+    assert original_name[sorted_keys[0]] == "ALA-0"
+    assert original_name[sorted_keys[1]] == "ALA-1"
+    assert original_name[sorted_keys[2]] == "ALA-2"
+    assert original_name[sorted_keys[3]] == "GLU-0"
+    assert original_name[sorted_keys[4]] == "GLU-1"
+    assert original_name[sorted_keys[5]] == "GLU-3"
+    assert original_name[sorted_keys[6]] == "GLU-10"
+
+    sorted_keys, original_name = spice_openff_data._sort_keys(test_keys)
+    assert np.all(
+        sorted_keys
+        == [
+            "ALA_ALA-0",
+            "ALA_ALA-1",
+            "ALA_ALA-2",
+            "ALA_GLU-0",
+            "ALA_GLU-1",
+            "GLU_GLU-0",
+            "GLU_GLU-1",
+        ]
+    )
+    assert original_name[sorted_keys[0]] == "ALA-ALA-0"
+    assert original_name[sorted_keys[1]] == "ALA-ALA-1"
+    assert original_name[sorted_keys[2]] == "ALA-ALA-2"
+    assert original_name[sorted_keys[3]] == "ALA-GLU-0"
+    assert original_name[sorted_keys[4]] == "ALA-GLU-1"
+    assert original_name[sorted_keys[5]] == "GLU-GLU-0"
+    assert original_name[sorted_keys[6]] == "GLU-GLU-1"
+
+
+def test_spice114_openff_test_process_downloaded(prep_temp_dir):
     from tqdm import tqdm
     from sqlitedict import SqliteDict
 
@@ -1682,7 +1743,7 @@ def test_spice12_openff_test_process_downloaded(prep_temp_dir):
     )
 
 
-def test_spice12_openff_process_datasets(prep_temp_dir):
+def test_spice_114_openff_process_datasets(prep_temp_dir):
     from numpy import array, float32
 
     local_path_dir = str(prep_temp_dir)
@@ -1763,3 +1824,103 @@ def test_spice12_openff_process_datasets(prep_temp_dir):
             ]
         )
     )
+
+
+def test_spice2_renaming(prep_temp_dir):
+    local_path_dir = str(prep_temp_dir)
+    hdf5_file_name = "test_spice2_dataset.hdf5"
+
+    spice_2_data = SPICE2Curation(
+        hdf5_file_name=hdf5_file_name,
+        output_file_dir=local_path_dir,
+        local_cache_dir=local_path_dir,
+        convert_units=True,
+        release_version="2",
+    )
+    test_keys = ["ALA-1", "GLU-0", "GLU-1", "ALA-0", "ALA-2", "GLU-10", "GLU-3"]
+    sorted_keys, original_name = spice_2_data._sort_keys(test_keys)
+
+    assert np.all(
+        sorted_keys == ["ALA-0", "ALA-1", "ALA-2", "GLU-0", "GLU-1", "GLU-3", "GLU-10"]
+    )
+
+    test_keys = [
+        "ALA-ALA-1",
+        "ALA-GLU-0",
+        "ALA-GLU-1",
+        "ALA-ALA-0",
+        "ALA-ALA-2",
+        "GLU-GLU-1",
+        "GLU-GLU-0",
+    ]
+    assert original_name[sorted_keys[0]] == "ALA-0"
+    assert original_name[sorted_keys[1]] == "ALA-1"
+    assert original_name[sorted_keys[2]] == "ALA-2"
+    assert original_name[sorted_keys[3]] == "GLU-0"
+    assert original_name[sorted_keys[4]] == "GLU-1"
+    assert original_name[sorted_keys[5]] == "GLU-3"
+    assert original_name[sorted_keys[6]] == "GLU-10"
+
+    sorted_keys, original_name = spice_2_data._sort_keys(test_keys)
+    assert np.all(
+        sorted_keys
+        == [
+            "ALA_ALA-0",
+            "ALA_ALA-1",
+            "ALA_ALA-2",
+            "ALA_GLU-0",
+            "ALA_GLU-1",
+            "GLU_GLU-0",
+            "GLU_GLU-1",
+        ]
+    )
+    assert original_name[sorted_keys[0]] == "ALA-ALA-0"
+    assert original_name[sorted_keys[1]] == "ALA-ALA-1"
+    assert original_name[sorted_keys[2]] == "ALA-ALA-2"
+    assert original_name[sorted_keys[3]] == "ALA-GLU-0"
+    assert original_name[sorted_keys[4]] == "ALA-GLU-1"
+    assert original_name[sorted_keys[5]] == "GLU-GLU-0"
+    assert original_name[sorted_keys[6]] == "GLU-GLU-1"
+
+
+def test_spice_2_process_datasets(prep_temp_dir):
+    from numpy import array, float32
+
+    local_path_dir = str(prep_temp_dir)
+    hdf5_file_name = "test_spice2_dataset.hdf5"
+
+    spice_2_data = SPICE2Curation(
+        hdf5_file_name=hdf5_file_name,
+        output_file_dir=local_path_dir,
+        local_cache_dir=local_path_dir,
+        convert_units=True,
+        release_version="2",
+    )
+
+    spice_2_data.process(force_download=True, unit_testing_max_records=10, n_threads=2)
+
+    # note that when we fetch the data, all the records are conformers of the same molecule
+    # so we only end up with one molecule in data, but with 10 conformers
+    assert sum([datapoint["n_configs"] for datapoint in spice_2_data.data]) == 10
+
+    assert spice_2_data.data[0]["atomic_numbers"].shape == (32, 1)
+    assert spice_2_data.data[0]["dft_total_energy"].shape == (10, 1)
+    assert spice_2_data.data[0]["dft_total_gradient"].shape == (10, 32, 3)
+
+    # spot check the energy
+    # kilojoules per mole
+    known_energies = np.array(
+        [
+            [-1517627.69992024],
+            [-1517601.06744853],
+            [-1517609.47613857],
+            [-1517603.27857799],
+            [-1517565.96533027],
+            [-1517617.0327266],
+            [-1517629.78098516],
+            [-1517569.06731524],
+            [-1517649.95002649],
+            [-1517562.26691007],
+        ]
+    )
+    assert np.allclose(spice_2_data.data[0]["dft_total_energy"].m, known_energies)

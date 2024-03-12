@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional, Dict, Tuple
 
 from modelforge.curation.curation_baseclass import *
 from retry import retry
@@ -364,6 +364,80 @@ class SPICE2Curation(DatasetCuration):
 
         return sum(atom_energy[s][c] for s, c in zip(symbol, charge))
 
+    def _sort_keys(self, non_error_keys: List[str]) -> Tuple[List[str], Dict[str, str]]:
+        """
+        This will sort record identifiers such that conformers are listed in numerical order.
+
+        This will, if necessarily also sanitize the names of the molecule, to ensure that we have the following
+        form {name}-{conformer_number}. In some cases, the original name has a "-" which would causes issues
+        with simply splitting based upon a "-" to either get the name or the conformer number.
+
+        The function is called by _process_downloaded.
+
+        Parameters
+        ----------
+        non_error_keys
+
+        Returns
+        -------
+
+        """
+        # we need to sanitize the names of the molecule, as
+        # some of the names have a dash in them, for example ALA-ALA-1
+        # This will replace any hyphens in the name with an underscore.
+        # To be able to retain the original name, needed for accessing the record in the sqlite file
+        # we will create a simple dictionary that maps the sanitized name to the original name.
+
+        non_error_keys_sanitized = []
+        original_name = {}
+
+        for key in non_error_keys:
+            s = "_"
+            d = "-"
+            temp = key.split("-")
+            name = d.join([s.join(temp[0:-1]), temp[-1]])
+            non_error_keys_sanitized.append(name)
+            original_name[name] = key
+
+        # We will sort the keys such that conformers are listed in numerical order.
+        # This is not strictly necessary, but will help to better retain
+        # connection to the original QCArchive data, where in most cases conformer-id will directly correspond to
+        # the index of the final array constructed here.
+        # Note, if the calculation of an individual conformer failed on qcarchive,
+        # it will have been excluded from the non_error_keys list. As such, in such cases,
+        # the conformer id in the record name will no longer have a one-to-one correspondence with the
+        # index of the conformers in the combined arrays.  This should not be an issue in terms of training,
+        # but could cause some confusion when interrogating a specific set of conformers geometries for a molecule.
+
+        sorted_keys = []
+
+        # names of the molecules are of form  {name}-{conformer_number}
+        # first sort by name
+        s = "_"
+        pre_sort = sorted(non_error_keys_sanitized, key=lambda x: (x.split("-")[0]))
+
+        # then sort each molecule by conformer_number
+        # we'll do this by simple iteration through the list, and when we encounter a new molecule name, we'll sort the
+        # previous temporary list we generated.
+        current_val = pre_sort[0].split("-")[0]
+        temp_list = []
+
+        for val in pre_sort:
+            name = val.split("-")[0]
+
+            if name == current_val:
+                temp_list.append(val)
+            else:
+                sorted_keys += sorted(temp_list, key=lambda x: int(x.split("-")[-1]))
+                temp_list = []
+                current_val = name
+                temp_list.append(val)
+
+        # sort the final batch
+        sorted_keys += sorted(temp_list, key=lambda x: int(x.split("-")[-1]))
+
+        return sorted_keys, original_name
+
     def _process_downloaded(
         self,
         local_path_dir: str,
@@ -415,45 +489,8 @@ class SPICE2Curation(DatasetCuration):
                     if spice_db[key].status.value == "complete":
                         non_error_keys.append(key)
 
-            # we need to sanitize the names of the molecule, as
-            # some of the names have a dash in them.
-            non_error_keys_sanitized = []
-            original_name = {}
-            for key in non_error_keys:
-                s = "_"
-                d = "-"
-                temp = key.split("-")
-                name = d.join([s.join(temp[0:-1]), temp[-1]])
-                non_error_keys_sanitized.append(name)
-                original_name[name] = key
+            sorted_keys, original_name = self._sort_keys(non_error_keys)
 
-            # sort the keys such that conformers are listed in numerical order
-            # this is not strictly necessary, but will help to better retain
-            # connection to the original QCArchive data
-            sorted_keys = []
-
-            # names of the  molecules are of form  {name}-{conformer_number}
-            # first sort by numerical_id
-            s = "_"
-            pre_sort = sorted(non_error_keys_sanitized, key=lambda x: (x.split("-")[0]))
-            # then sort each molecule by conformer_number
-            current_val = pre_sort[0].split("-")[0]
-            temp_list = []
-
-            for val in pre_sort:
-                name = val.split("-")[0]
-
-                if name == current_val:
-                    temp_list.append(val)
-                else:
-                    sorted_keys += sorted(
-                        temp_list, key=lambda x: int(x.split("-")[-1])
-                    )
-                    temp_list = []
-                    current_val = name
-                    temp_list.append(val)
-
-            sorted_keys += sorted(temp_list, key=lambda x: int(x.split("-")[-1]))
             # first read in molecules from entry
             with SqliteDict(
                 input_file_name, tablename="entry", autocommit=False

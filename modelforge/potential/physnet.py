@@ -4,6 +4,7 @@ from openff.units import unit
 import torch
 from typing import Dict
 from torch import nn
+from torch_scatter import scatter_add
 
 
 class PhysNetRepresentation(nn.Module):
@@ -61,10 +62,10 @@ class PhysNetRepresentation(nn.Module):
             shape (n_pairs, 1, n_gaussians), after applying the cutoff function.
         """
 
-        rbf = self.radial_symmetry_function_module(d_ij)
+        rbf = self.radial_symmetry_function_module(d_ij).squeeze(1)
         cutoff = self.cutoff_module(d_ij)
         f_ij = torch.mul(rbf, cutoff)
-        return f_ij
+        return f_ij.unsqueeze(1)
 
 
 class GaussianLogarithmAttention(nn.Module):
@@ -85,61 +86,98 @@ class GaussianLogarithmAttention(nn.Module):
 
 class PhysNetInteraction(nn.Module):
 
-    def __init__(self, number_of_atom_basis: int = 16):
+    def __init__(
+        self,
+        embedding_dimensions: int = 64,
+        number_of_atom_basis: int = 16,
+    ):
         """
-        Interaction module for PhysNet, which is responsible for processing the
-        embedded nuclear charges and the expanded radial basis functions.
+        Defines the interaction module within PhysNet, responsible for capturing the
+        effects of atomic interactions through embedded nuclear charges and distance-based
+        modulations.
 
-        This module currently acts as a placeholder to be expanded upon.
+        The module utilizes Gaussian Logarithm Attention to weigh radial basis function (RBF)
+        expansions based on pairwise distances, integrating these weights with atomic embeddings
+        to generate interaction messages. These messages are aggregated to update atomic feature
+        representations, contributing to the model's ability to predict molecular properties.
+
+        Parameters
+        ----------
+        embedding_dimensions : int, default=64
+            Dimensionality of the atomic embeddings.
+        number_of_atom_basis : int, default=16
+            Specifies the number of basis functions for the Gaussian Logarithm Attention,
+            essentially defining the output feature dimension for attention-weighted interactions.
+
+        Attributes
+        ----------
+        glog_attention : GaussianLogarithmAttention
+            The attention mechanism based on pairwise distances between atoms.
+        activation_function : ShiftedSoftplus
+            Non-linear activation function applied to atomic embeddings.
+        interaction_i : nn.Sequential
+            A neural network sequence processing features of atom i.
+        interaction_j : nn.Sequential
+            A neural network sequence processing features of atom j, parallel to interaction_i.
         """
-        from .utils import ShiftedSoftplus
 
         super().__init__()
+        from .utils import ShiftedSoftplus
+
         self.glog_attention = GaussianLogarithmAttention(
             output_features=number_of_atom_basis
         )
         self.activation_function = ShiftedSoftplus()
+
+        # Networks for processing atomic embeddings of i and j atoms
         self.interaction_i = nn.Sequential(
-            nn.Linear(number_of_atom_basis, 2 * number_of_atom_basis),
+            nn.Linear(embedding_dimensions, 2 * embedding_dimensions),
             nn.Softplus(),
-            nn.Linear(2 * number_of_atom_basis, 1),
+            nn.Linear(2 * embedding_dimensions, 1),
         )
         self.interaction_j = nn.Sequential(
-            nn.Linear(number_of_atom_basis, 2 * number_of_atom_basis),
+            nn.Linear(embedding_dimensions, 2 * embedding_dimensions),
             nn.Softplus(),
-            nn.Linear(2 * number_of_atom_basis, 1),
+            nn.Linear(2 * embedding_dimensions, 1),
         )
 
     def forward(self, inputs: Dict[str, torch.Tensor]):
         """
-        Forward pass of the interaction module. Currently, a placeholder that
-        needs further implementation.
+        Processes input tensors through the interaction module, applying
+        Gaussian Logarithm Attention to modulate the influence of pairwise distances
+        on the interaction features, followed by aggregation to update atomic embeddings.
 
         Parameters
         ----------
         inputs : Dict[str, torch.Tensor]
-            A dictionary containing the input tensors. Expected tensors include
-            "f_ij" for radial basis function expansions, "atomic_embedding" for
-            embeddings of atomic numbers, and "pairlist" for the pair lists.
+            Contains the tensors necessary for interaction calculations:
+            - "pair_indices": Indices of atom pairs (shape: [2, n_pairs]).
+            - "f_ij": Radial basis function expansions (shape: [n_pairs, n_gaussians]).
+            - "d_ij": Pairwise distances between atoms (shape: [n_pairs, 1]).
+            - "atomic_embedding": Atomic embeddings (shape: [nr_of_atoms_in_batch, embedding_dim]).
 
         Returns
         -------
+        torch.Tensor
+            Updated atomic feature representations incorporating interaction information.
         """
 
         # extract relevant variables
-        idx_i, idx_j = inputs["pairlist"]
-        f_ij = inputs["f_ij"]  # shape: (n_pairs, 1, n_gaussians)
+        idx_i, idx_j = inputs["pair_indices"]  # shape: (2, n_pairs)
+        f_ij = inputs["f_ij"].squeeze(1)  # shape: (n_pairs, n_gaussians)
         d_ij = inputs["d_ij"]  # shape: (n_pairs, 1)
-        atom_embedding = inputs["atomic_embedding"] #shape (nr_of_atoms_in_batch, embedding dim)
-        
-        x_i = x[idx_i]
-        x_j = x[idx_j]
+        atom_embedding = inputs[
+            "atomic_embedding"
+        ]  # shape (nr_of_atoms_in_batch, embedding dim)
 
+        # Apply activation to atomic embeddings
+        nr_of_atoms_in_batch = atom_embedding.shape[0]
         # Start with embedded features
         x = self.activation_function(atom_embedding)
 
-        # this function implements equation 6 from the PhysNet manuscript
-    
+        x_i = x[idx_i]  # embedding for atoms i
+        x_j = x[idx_j]  # embedding for atoms j
+
         # Equation 6 implementation overview:
         # v_tilde_i = x_i_prime + sum_over_j(x_j_prime * f_ij_prime)
         # where:
@@ -148,21 +186,22 @@ class PhysNetInteraction(nn.Module):
 
         # Obtain attention mask G(r_ij)
         # Get attention weights from distances
-        attention_weights = self.glog_attention(d_ij)
+        attention_weights = self.glog_attention(d_ij)  # shape: (n_pairs, embedding_dim)
 
         # Draft proto message v_tilde
-        # x_i_prime
         x_i_prime = self.interaction_i(x_i)
-        # x_j_prime
         x_j_prime = self.interaction_j(x_j)
-        # f_ij_prime
         f_ij_prime = torch.mul(f_ij, attention_weights)
 
-        # Compute the interaction for x_j
-        x_j_prime = torch.mul(x_j_prime, f_ij_prime)
-
-        # gating vectors
-        # u =
+        # Compute sum_over_j(x_j_prime * f_ij_prime)
+        x_j_modulated = torch.mul(x_j_prime, f_ij_prime)
+        # Aggregate modulated contributions for each atom i
+        summed_contributions = scatter_add(
+            x_j_modulated, idx_i, dim=0, dim_size=atom_embedding.shape[0]
+        )
+        # summed_contributions now contains the aggregated contributions for each atom i,
+        # with shape [nr_of_atoms_in_batch, feature_dim]
+        a = 7
 
 
 class PhysNetResidual(nn.Module):
@@ -254,10 +293,15 @@ class PhysNet(BaseNeuralNetworkPotential):
 
         self.readout_module = FromAtomToMoleculeReduction(embedding_dimensions)
 
+        number_of_gaussian = 16
         self.physnet_representation_module = PhysNetRepresentation(
-            cutoff=cutoff, number_of_gaussians=16
+            cutoff=cutoff, number_of_gaussians=number_of_gaussian
         )
 
+        self.physnet_module_tmp = PhysNetInteraction(
+            embedding_dimensions=embedding_dimensions,
+            number_of_atom_basis=number_of_gaussian,
+        )
         # initialize the PhysNetModule building blocks
         from torch.nn import ModuleList
 
@@ -293,9 +337,8 @@ class PhysNet(BaseNeuralNetworkPotential):
         """
 
         # Computed representation
-        representation = self.physnet_representation_module(inputs["d_ij"])
-        inputs["representation"] = representation
-
+        inputs["f_ij"] = self.physnet_representation_module(inputs["d_ij"])
+        self.physnet_module_tmp(inputs)
         for module in self.physnet_module:
             output = module(inputs)
 

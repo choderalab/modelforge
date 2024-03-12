@@ -264,6 +264,33 @@ def test_cutoff_against_reference():
     assert torch.allclose(mf_cutoff, torch.from_numpy(onp.array(ref_cutoff).reshape(nr_pairs, )), atol=1e-4)
 
 
+def test_x_minus_xt_against_reference():
+    from sake.functional import get_x_minus_xt, get_x_minus_xt_norm
+    nr_atoms = 13
+    geometry_basis = 3
+    key = jax.random.PRNGKey(1884)
+
+    x_jax = jax.random.normal(key, (nr_atoms, geometry_basis))
+    x_minus_xt = get_x_minus_xt(x_jax)
+
+    pairlist = torch.cartesian_prod(torch.arange(nr_atoms), torch.arange(nr_atoms))
+    pairlist = pairlist.T
+    idx_i, idx_j = pairlist
+
+    x = torch.from_numpy(onp.array(x_jax))
+    r_ij = x[idx_j] - x[idx_i]
+
+    assert torch.allclose(torch.from_numpy(onp.array(x_minus_xt.reshape(nr_atoms ** 2, geometry_basis, order='C'))), r_ij, atol=1e-4)
+
+    x_minus_xt_norm = get_x_minus_xt_norm(x_minus_xt)
+    d_ij = torch.sqrt((r_ij ** 2).sum(dim=1) + 1e-5)
+
+    # Fortran and C ordering give the same result since x_minus_xt_norm is symmetric
+    assert jnp.array_equal(x_minus_xt_norm, jnp.transpose(x_minus_xt_norm, (1, 0, 2)))
+    assert torch.allclose(torch.from_numpy(onp.array(x_minus_xt_norm.reshape(nr_atoms ** 2, order='F'))), d_ij)
+    assert torch.allclose(torch.from_numpy(onp.array(x_minus_xt_norm.reshape(nr_atoms ** 2, order='C'))), d_ij)
+
+
 def test_update_edge_against_reference():
     from modelforge.potential import CosineCutoff
     from modelforge.potential.sake import ExpNormalSmearing
@@ -316,8 +343,6 @@ def test_update_edge_against_reference():
     idx_i, idx_j = pairlist
     nr_pairs = nr_atoms ** 2
 
-    print(x_minus_xt_norm.shape, h_cat_ht.shape)
-
     # Convert the input tensors from JAX to torch and reshape to diagonal batching
     h = torch.from_numpy(onp.array(h_jax))
     x = torch.from_numpy(onp.array(x_jax))
@@ -337,10 +362,14 @@ def test_update_edge_against_reference():
     variables['params']["kernel"]["betas"] = mf_sake_block.radial_basis_module.betas.detach().numpy().T
 
     ref_edge = ref_sake_edge_model.apply(variables, h_cat_ht, x_minus_xt_norm)
-    mf_edge = mf_sake_block.update_edge(h[idx_i], h[idx_j], d_ij)
+    mf_edge = mf_sake_block.update_edge(h[idx_j], h[idx_i], d_ij)
 
-    # TODO: Why is the ordering different?
-    assert torch.allclose(mf_edge, torch.from_numpy(onp.array(ref_edge).reshape(nr_pairs, -1, order='F')), atol=1e-4)
+    # NOTE: if h[idx_j] is the first argument and h[idx_i] is the second argument, it matches C-style ordering.
+    # if h[idx_i] is the first argument and h[idx_j] is the second argument, it matches Fortran-style ordering.
+    assert torch.allclose(mf_edge, torch.from_numpy(onp.array(ref_edge).reshape(nr_pairs, -1, order='C')), atol=1e-7)
+
+    mf_edge = mf_sake_block.update_edge(h[idx_i], h[idx_j], d_ij)
+    assert torch.allclose(mf_edge, torch.from_numpy(onp.array(ref_edge).reshape(nr_pairs, -1, order='F')), atol=1e-7)
 
 
 def test_semantic_attention_against_reference():
@@ -383,7 +412,7 @@ def test_semantic_attention_against_reference():
     ref_semantic_attention = (ref_semantic_attention.reshape(nr_atoms ** 2, nr_heads))[~onp.array(self_pairs)]
 
     print(h_ij_att_before_cutoff, torch.from_numpy(onp.array(ref_semantic_attention)))
-    assert torch.allclose(h_ij_att_before_cutoff, torch.from_numpy(onp.array(ref_semantic_attention)), atol=1e-4)
+    assert torch.allclose(h_ij_att_before_cutoff, torch.from_numpy(onp.array(ref_semantic_attention)))
 
 
 def test_exp_normal_smearing_against_reference():
@@ -406,7 +435,7 @@ def test_exp_normal_smearing_against_reference():
 
     ref_rbf = ref_radial_basis_module.apply(variables, d_ij_jax)
 
-    assert torch.allclose(mf_rbf, torch.from_numpy(onp.array(ref_rbf)).reshape(nr_atoms ** 2, nr_rbf), atol=1e-4)
+    assert torch.allclose(mf_rbf, torch.from_numpy(onp.array(ref_rbf)).reshape(nr_atoms ** 2, nr_rbf))
 
 
 def test_sake_layer_against_reference():
@@ -438,10 +467,14 @@ def test_sake_layer_against_reference():
 
     variables["params"]["edge_model"]["mlp_in"]["kernel"] = mf_sake_block.edge_mlp_in.weight.detach().numpy().T
     variables["params"]["edge_model"]["mlp_in"]["bias"] = mf_sake_block.edge_mlp_in.bias.detach().numpy().T
-    variables["params"]["edge_model"]["mlp_out"]["layers_0"]["kernel"] = mf_sake_block.edge_mlp_out[0].weight.detach().numpy().T
-    variables["params"]["edge_model"]["mlp_out"]["layers_0"]["bias"] = mf_sake_block.edge_mlp_out[0].bias.detach().numpy().T
-    variables["params"]["edge_model"]["mlp_out"]["layers_2"]["kernel"] = mf_sake_block.edge_mlp_out[1].weight.detach().numpy().T
-    variables["params"]["edge_model"]["mlp_out"]["layers_2"]["bias"] = mf_sake_block.edge_mlp_out[1].bias.detach().numpy().T
+    variables["params"]["edge_model"]["mlp_out"]["layers_0"]["kernel"] = mf_sake_block.edge_mlp_out[
+        0].weight.detach().numpy().T
+    variables["params"]["edge_model"]["mlp_out"]["layers_0"]["bias"] = mf_sake_block.edge_mlp_out[
+        0].bias.detach().numpy().T
+    variables["params"]["edge_model"]["mlp_out"]["layers_2"]["kernel"] = mf_sake_block.edge_mlp_out[
+        1].weight.detach().numpy().T
+    variables["params"]["edge_model"]["mlp_out"]["layers_2"]["bias"] = mf_sake_block.edge_mlp_out[
+        1].bias.detach().numpy().T
     variables['params']["edge_model"]["kernel"]["means"] = mf_sake_block.radial_basis_module.means.detach().numpy().T
     variables['params']["edge_model"]["kernel"]["betas"] = mf_sake_block.radial_basis_module.betas.detach().numpy().T
     variables["params"]["node_mlp"]["layers_0"]["kernel"] = mf_sake_block.node_mlp[0].weight.detach().numpy().T
@@ -557,5 +590,5 @@ def test_spatial_attention_against_reference():
                                                                method=ref_sake_interaction.spatial_attention)
     assert (torch.allclose(mf_combinations,
                            torch.from_numpy(onp.array(ref_combinations)).reshape(nr_pairs, nr_heads * hidden_features,
-                                                                                 geometry_basis), atol=1e-4))
-    assert (torch.allclose(mf_result, torch.from_numpy(onp.array(ref_spatial)), atol=1e-4))
+                                                                                 geometry_basis), atol=1e-6))
+    assert (torch.allclose(mf_result, torch.from_numpy(onp.array(ref_spatial)), atol=1e-6))

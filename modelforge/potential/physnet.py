@@ -68,6 +68,18 @@ class PhysNetRepresentation(nn.Module):
         return f_ij.unsqueeze(1)
 
 
+class GatingModule(nn.Module):
+    def __init__(self, feature_dim):
+        super().__init__()
+        # Initialize learnable parameters for the gating vector
+        self.u = nn.Parameter(torch.randn(feature_dim))
+
+    def forward(self, v):
+        # Apply gating to the input vector v
+        gated_v = torch.sigmoid(self.u) * v
+        return gated_v
+
+
 class GaussianLogarithmAttention(nn.Module):
     def __init__(self, input_features: int = 1, output_features: int = 64):
         super().__init__()
@@ -82,6 +94,52 @@ class GaussianLogarithmAttention(nn.Module):
         logits = self.linear(distances)
         attention_weights = self.activation(logits)
         return attention_weights
+
+
+class ResidualBlock(nn.Module):
+    """
+    Implements a preactivation residual block as described in Equation 4 of the PhysNet paper.
+
+    The block refines atomic feature vectors by adding a residual component computed through
+    two linear transformations and a non-linear activation function (Softplus). This setup
+    enhances gradient flow and supports effective deep network training by employing a
+    preactivation scheme.
+
+    Parameters:
+    -----------
+    input_dim: int
+        Dimensionality of the input feature vector.
+    output_dim: int
+        Dimensionality of the output feature vector, which typically matches the input dimension.
+    """
+
+    def __init__(self, input_dim, output_dim):
+        super(ResidualBlock, self).__init__()
+        self.linear1 = nn.Linear(input_dim, output_dim)
+        self.linear2 = nn.Linear(output_dim, output_dim)
+        self.activation = nn.Softplus()
+
+    def forward(self, x):
+        """
+        Forward pass of the ResidualBlock.
+
+        Parameters:
+        -----------
+        x: torch.Tensor
+            Input tensor containing feature vectors of atoms.
+
+        Returns:
+        --------
+        torch.Tensor
+            Output tensor after applying the residual block operations.
+        """
+        # Apply the first linear transformation and activation
+        residual = self.activation(self.linear1(x))
+        # Apply the second linear transformation
+        residual = self.linear2(residual)
+        # Add the input x (identity) to the output of the second linear layer
+        out = x + residual
+        return out
 
 
 class PhysNetInteraction(nn.Module):
@@ -141,6 +199,17 @@ class PhysNetInteraction(nn.Module):
             nn.Linear(2 * embedding_dimensions, 1),
         )
 
+        self.process_v = nn.Sequential(
+            nn.Softplus(),
+            nn.Linear(2 * embedding_dimensions, 1),
+        )
+
+        # Residual block
+        self.residual_block = ResidualBlock(embedding_dimensions, embedding_dimensions)
+
+        # Gating Module
+        self.gating_module = GatingModule(embedding_dimensions)
+
     def forward(self, inputs: Dict[str, torch.Tensor]):
         """
         Processes input tensors through the interaction module, applying
@@ -171,22 +240,24 @@ class PhysNetInteraction(nn.Module):
         ]  # shape (nr_of_atoms_in_batch, embedding dim)
 
         # Apply activation to atomic embeddings
-        nr_of_atoms_in_batch = atom_embedding.shape[0]
-        # Start with embedded features
         x = self.activation_function(atom_embedding)
 
         x_i = x[idx_i]  # embedding for atoms i
         x_j = x[idx_j]  # embedding for atoms j
 
+        # Equation 6: Formation of the Proto-Message ṽ_i for an Atom i
+        # ṽ_i = σ(Wl_I * x_i^l + bl_I) + Σ_j (G_g * Wl * (σ(σl_J * x_j^l + bl_J)) * g(r_ij))
         # Equation 6 implementation overview:
-        # v_tilde_i = x_i_prime + sum_over_j(x_j_prime * f_ij_prime)
+        # ṽ_i = x_i_prime + sum_over_j(x_j_prime * f_ij_prime)
         # where:
         # - x_i_prime and x_j_prime are the features of atoms i and j, respectively, processed through separate networks.
         # - f_ij_prime represents the modulated radial basis functions (f_ij) by the Gaussian Logarithm Attention weights.
 
         # Obtain attention mask G(r_ij)
         # Get attention weights from distances
-        attention_weights = self.glog_attention(d_ij)  # shape: (n_pairs, embedding_dim)
+        attention_weights = self.glog_attention(
+            d_ij
+        )  # shape: (n_pairs, embedding_dim) # NOTE: are we sure about the dimensions?
 
         # Draft proto message v_tilde
         x_i_prime = self.interaction_i(x_i)
@@ -199,9 +270,13 @@ class PhysNetInteraction(nn.Module):
         summed_contributions = scatter_add(
             x_j_modulated, idx_i, dim=0, dim_size=atom_embedding.shape[0]
         )
-        # summed_contributions now contains the aggregated contributions for each atom i,
-        # with shape [nr_of_atoms_in_batch, feature_dim]
-        a = 7
+        v_tilde = x_i_prime + summed_contributions
+        # Equation 4: Preactivation Residual Block Implementation
+        # xl+2_i = xl_i + Wl+1 * sigma(Wl * xl_i + bl) + bl+1
+        v = self.residual_block(v_tilde)
+        v = self.self.process_v(v)
+
+        # add gated
 
 
 class PhysNetResidual(nn.Module):

@@ -264,6 +264,96 @@ def test_cutoff_against_reference():
     assert torch.allclose(mf_cutoff, torch.from_numpy(onp.array(ref_cutoff).reshape(nr_pairs, )), atol=1e-4)
 
 
+def test_update_edge_against_reference():
+    from modelforge.potential import CosineCutoff
+    from modelforge.potential.sake import ExpNormalSmearing
+
+    from sake.layers import ContinuousFilterConvolutionWithConcatenation
+    from sake.functional import get_h_cat_ht, get_x_minus_xt, get_x_minus_xt_norm
+    nr_atoms = 13
+    out_features = 11
+    hidden_features = 7
+    nr_heads = 5
+    nr_atom_basis = out_features
+    nr_edge_basis = hidden_features
+    geometry_basis = 3
+    num_rbf = 31
+    epsilon = 1e-5
+
+    key = jax.random.PRNGKey(1884)
+
+    mf_sake_block = SAKEInteraction(
+        nr_atom_basis=out_features,
+        nr_edge_basis=hidden_features,
+        nr_edge_basis_hidden=hidden_features,
+        nr_atom_basis_hidden=hidden_features,
+        nr_atom_basis_spatial_hidden=hidden_features,
+        nr_atom_basis_spatial=hidden_features,
+        nr_atom_basis_velocity=hidden_features,
+        nr_coefficients=(
+                nr_heads * hidden_features),
+        nr_heads=nr_heads,
+        activation=torch.nn.SiLU(),
+        radial_basis_module=ExpNormalSmearing(
+            n_rbf=num_rbf),
+        cutoff_module=CosineCutoff(
+            5.0 * unit.nanometer),
+        epsilon=epsilon
+    )
+    ref_sake_edge_model = ContinuousFilterConvolutionWithConcatenation(out_features=nr_edge_basis,
+                                                                       kernel_features=num_rbf)
+
+    # Generate random input data in JAX
+    h_jax = jax.random.normal(key, (nr_atoms, nr_atom_basis))
+    x_jax = jax.random.normal(key, (nr_atoms, geometry_basis))
+
+    h_cat_ht = get_h_cat_ht(h_jax)
+    x_minus_xt = get_x_minus_xt(x_jax)
+    x_minus_xt_norm = get_x_minus_xt_norm(x_minus_xt)
+
+    pairlist = torch.cartesian_prod(torch.arange(nr_atoms), torch.arange(nr_atoms))
+    pairlist = pairlist.T
+    idx_i, idx_j = pairlist
+    nr_pairs = nr_atoms ** 2
+
+    print(x_minus_xt_norm.shape, h_cat_ht.shape)
+
+    # Convert the input tensors from JAX to torch and reshape to diagonal batching
+    h = torch.from_numpy(onp.array(h_jax))
+    x = torch.from_numpy(onp.array(x_jax))
+
+    r_ij = x[idx_j] - x[idx_i]
+    d_ij = torch.sqrt((r_ij ** 2).sum(dim=1) + epsilon)
+
+    variables = ref_sake_edge_model.init(key, h_cat_ht, x_minus_xt_norm)
+    print(variables["params"]["mlp_out"].keys())
+
+    variables["params"]["mlp_in"]["kernel"] = mf_sake_block.edge_mlp_in.weight.detach().numpy().T
+    variables["params"]["mlp_in"]["bias"] = mf_sake_block.edge_mlp_in.bias.detach().numpy().T
+    variables["params"]["mlp_out"]["layers_0"]["kernel"] = mf_sake_block.edge_mlp_out[0].weight.detach().numpy().T
+    variables["params"]["mlp_out"]["layers_0"]["bias"] = mf_sake_block.edge_mlp_out[0].bias.detach().numpy().T
+    variables["params"]["mlp_out"]["layers_2"]["kernel"] = mf_sake_block.edge_mlp_out[1].weight.detach().numpy().T
+    variables["params"]["mlp_out"]["layers_2"]["bias"] = mf_sake_block.edge_mlp_out[1].bias.detach().numpy().T
+    variables['params']["kernel"]["means"] = mf_sake_block.radial_basis_module.means.detach().numpy().T
+    variables['params']["kernel"]["betas"] = mf_sake_block.radial_basis_module.betas.detach().numpy().T
+
+    print(variables["params"]["mlp_in"]["kernel"].shape)
+    print(variables["params"]["mlp_in"]["bias"].shape)
+    print(variables["params"]["mlp_out"]["layers_0"]["kernel"].shape)
+    print(variables["params"]["mlp_out"]["layers_0"]["bias"].shape)
+    print(variables["params"]["mlp_out"]["layers_2"]["kernel"].shape)
+    print(variables["params"]["mlp_out"]["layers_2"]["bias"].shape)
+    print(variables['params']["kernel"]["means"].shape)
+    print(variables['params']["kernel"]["betas"].shape)
+
+    ref_edge = ref_sake_edge_model.apply(variables, h_cat_ht, x_minus_xt_norm)
+    mf_edge = mf_sake_block.update_edge(h[idx_i], h[idx_j], d_ij)
+
+    print(mf_edge, torch.from_numpy(onp.array(ref_edge)).reshape(nr_pairs, -1))
+
+    assert torch.allclose(mf_edge, torch.from_numpy(onp.array(ref_edge)).reshape(nr_pairs, -1), atol=1e-4)
+
+
 def test_semantic_attention_against_reference():
     from modelforge.potential.utils import scatter_softmax
 
@@ -296,10 +386,10 @@ def test_semantic_attention_against_reference():
                                           method=ref_sake_interaction.semantic_attention)
     variables["params"]["semantic_attention_mlp"]["layers_0"][
         "kernel"] = mf_sake_block.semantic_attention_mlp.weight.detach().numpy().T
+    variables["params"]["semantic_attention_mlp"]["layers_0"][
+        "bias"] = mf_sake_block.semantic_attention_mlp.bias.detach().numpy().T
     ref_semantic_attention = \
         ref_sake_interaction.apply(variables, h_e_mtx, method=ref_sake_interaction.semantic_attention)
-
-    print(ref_semantic_attention[2])
 
     ref_semantic_attention = (ref_semantic_attention.reshape(nr_atoms ** 2, nr_heads))[~onp.array(self_pairs)]
 
@@ -355,12 +445,25 @@ def test_sake_layer_against_reference():
     v = torch.from_numpy(onp.array(v_jax))
 
     variables = ref_sake_interaction.init(key, h_jax, x_jax, v_jax)
+    print(variables["params"].keys())
+
+    variables["params"]["edge_model"]["mlp_in"]["kernel"] = mf_sake_block.edge_mlp_in.weight.detach().numpy().T
+    variables["params"]["edge_model"]["mlp_in"]["bias"] = mf_sake_block.edge_mlp_in.bias.detach().numpy().T
+    variables["params"]["edge_model"]["mlp_out"]["layers_0"]["kernel"] = mf_sake_block.edge_mlp_out[0].weight.detach().numpy().T
+    variables["params"]["edge_model"]["mlp_out"]["layers_0"]["bias"] = mf_sake_block.edge_mlp_out[0].bias.detach().numpy().T
+    variables["params"]["edge_model"]["mlp_out"]["layers_2"]["kernel"] = mf_sake_block.edge_mlp_out[1].weight.detach().numpy().T
+    variables["params"]["edge_model"]["mlp_out"]["layers_2"]["bias"] = mf_sake_block.edge_mlp_out[1].bias.detach().numpy().T
+    variables['params']["edge_model"]["kernel"]["means"] = mf_sake_block.radial_basis_module.means.detach().numpy().T
+    variables['params']["edge_model"]["kernel"]["betas"] = mf_sake_block.radial_basis_module.betas.detach().numpy().T
     variables["params"]["node_mlp"]["layers_0"]["kernel"] = mf_sake_block.node_mlp[0].weight.detach().numpy().T
     variables["params"]["node_mlp"]["layers_2"]["kernel"] = mf_sake_block.node_mlp[1].weight.detach().numpy().T
     variables["params"]["velocity_mlp"]["layers_0"]["kernel"] = mf_sake_block.velocity_mlp[0].weight.detach().numpy().T
+    variables["params"]["velocity_mlp"]["layers_0"]["bias"] = mf_sake_block.velocity_mlp[0].bias.detach().numpy().T
     variables["params"]["velocity_mlp"]["layers_2"]["kernel"] = mf_sake_block.velocity_mlp[1].weight.detach().numpy().T
     variables["params"]["semantic_attention_mlp"]["layers_0"][
         "kernel"] = mf_sake_block.semantic_attention_mlp.weight.detach().numpy().T
+    variables["params"]["semantic_attention_mlp"]["layers_0"][
+        "bias"] = mf_sake_block.semantic_attention_mlp.bias.detach().numpy().T
     variables["params"]["v_mixing"]["kernel"] = mf_sake_block.v_mixing_mlp.weight.detach().numpy().T
     variables["params"]["x_mixing"]["layers_0"]["kernel"] = mf_sake_block.x_mixing_mlp.weight.detach().numpy().T
     variables["params"]["post_norm_mlp"]["layers_0"]["kernel"] = mf_sake_block.post_norm_mlp[
@@ -408,6 +511,8 @@ def test_combined_attention_against_reference():
                                           method=ref_sake_interaction.combined_attention)
     variables["params"]["semantic_attention_mlp"]["layers_0"][
         "kernel"] = mf_sake_block.semantic_attention_mlp.weight.detach().numpy().T
+    variables["params"]["semantic_attention_mlp"]["layers_0"][
+        "bias"] = mf_sake_block.semantic_attention_mlp.bias.detach().numpy().T
     ref_combined_attention = \
         ref_sake_interaction.apply(variables, x_minus_xt_norm, h_e_mtx, method=ref_sake_interaction.combined_attention)[
             2]

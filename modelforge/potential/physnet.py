@@ -12,7 +12,7 @@ class PhysNetRepresentation(nn.Module):
     def __init__(
         self,
         cutoff: unit = 5 * unit.angstrom,
-        number_of_gaussians: int = 16,
+        number_of_basis_functions: int = 16,
         device: torch.device = torch.device("cpu"),
     ):
         """
@@ -40,7 +40,7 @@ class PhysNetRepresentation(nn.Module):
         from .utils import RadialSymmetryFunction
 
         self.radial_symmetry_function_module = RadialSymmetryFunction(
-            number_of_gaussians=number_of_gaussians,
+            number_of_gaussians=number_of_basis_functions,
             radial_cutoff=cutoff,
             ani_style=False,
             dtype=torch.float32,
@@ -69,10 +69,10 @@ class PhysNetRepresentation(nn.Module):
 
 
 class GatingModule(nn.Module):
-    def __init__(self, feature_dim):
+    def __init__(self, number_of_atom_basis: int):
         super().__init__()
         # Initialize learnable parameters for the gating vector
-        self.u = nn.Parameter(torch.randn(feature_dim))
+        self.u = nn.Parameter(torch.randn(number_of_atom_basis))
 
     def forward(self, v):
         # Apply gating to the input vector v
@@ -96,7 +96,7 @@ class GaussianLogarithmAttention(nn.Module):
         return attention_weights
 
 
-class ResidualBlock(nn.Module):
+class PhysNetResidual(nn.Module):
     """
     Implements a preactivation residual block as described in Equation 4 of the PhysNet paper.
 
@@ -113,13 +113,13 @@ class ResidualBlock(nn.Module):
         Dimensionality of the output feature vector, which typically matches the input dimension.
     """
 
-    def __init__(self, input_dim, output_dim):
-        super(ResidualBlock, self).__init__()
+    def __init__(self, input_dim: int, output_dim: int):
+        super().__init__()
         self.linear1 = nn.Linear(input_dim, output_dim)
         self.linear2 = nn.Linear(output_dim, output_dim)
         self.activation = nn.Softplus()
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass of the ResidualBlock.
 
@@ -146,8 +146,9 @@ class PhysNetInteraction(nn.Module):
 
     def __init__(
         self,
-        embedding_dimensions: int = 64,
-        number_of_atom_basis: int = 16,
+        number_of_atom_features: int = 64,
+        number_of_basis_functions: int = 16,
+        number_of_interaction_residual: int = 3,
     ):
         """
         Defines the interaction module within PhysNet, responsible for capturing the
@@ -161,9 +162,9 @@ class PhysNetInteraction(nn.Module):
 
         Parameters
         ----------
-        embedding_dimensions : int, default=64
+        number_of_atom_features : int, default=64
             Dimensionality of the atomic embeddings.
-        number_of_atom_basis : int, default=16
+        number_of_basis_functions : int, default=16
             Specifies the number of basis functions for the Gaussian Logarithm Attention,
             essentially defining the output feature dimension for attention-weighted interactions.
 
@@ -183,34 +184,37 @@ class PhysNetInteraction(nn.Module):
         from .utils import ShiftedSoftplus
 
         self.glog_attention = GaussianLogarithmAttention(
-            output_features=number_of_atom_basis
+            output_features=number_of_basis_functions
         )
         self.activation_function = ShiftedSoftplus()
 
         # Networks for processing atomic embeddings of i and j atoms
         self.interaction_i = nn.Sequential(
-            nn.Linear(embedding_dimensions, 2 * embedding_dimensions),
+            nn.Linear(number_of_atom_features, number_of_basis_functions),
             nn.Softplus(),
-            nn.Linear(2 * embedding_dimensions, 1),
         )
         self.interaction_j = nn.Sequential(
-            nn.Linear(embedding_dimensions, 2 * embedding_dimensions),
+            nn.Linear(number_of_atom_features, number_of_basis_functions),
             nn.Softplus(),
-            nn.Linear(2 * embedding_dimensions, 1),
         )
 
         self.process_v = nn.Sequential(
             nn.Softplus(),
-            nn.Linear(2 * embedding_dimensions, 1),
+            nn.Linear(number_of_basis_functions, 1),
         )
 
         # Residual block
-        self.residual_block = ResidualBlock(embedding_dimensions, embedding_dimensions)
+        self.residual = nn.Sequential(
+            [
+                PhysNetResidual(number_of_basis_functions, number_of_basis_functions)
+                for _ in range(number_of_interaction_residual)
+            ]
+        )
 
         # Gating Module
-        self.gating_module = GatingModule(embedding_dimensions)
+        self.gating_module = GatingModule(number_of_atom_features)
 
-    def forward(self, inputs: Dict[str, torch.Tensor]):
+    def forward(self, inputs: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
         Processes input tensors through the interaction module, applying
         Gaussian Logarithm Attention to modulate the influence of pairwise distances
@@ -233,17 +237,19 @@ class PhysNetInteraction(nn.Module):
 
         # extract relevant variables
         idx_i, idx_j = inputs["pair_indices"]  # shape: (2, n_pairs)
-        f_ij = inputs["f_ij"].squeeze(1)  # shape: (n_pairs, n_gaussians)
+        f_ij = inputs["f_ij"].squeeze(1)  # shape: (n_pairs, number_of_basis_functions)
         d_ij = inputs["d_ij"]  # shape: (n_pairs, 1)
         atom_embedding = inputs[
             "atomic_embedding"
-        ]  # shape (nr_of_atoms_in_batch, embedding dim)
+        ]  # shape (nr_of_atoms_in_batch, number_of_atom_features dim)
 
         # Apply activation to atomic embeddings
         x = self.activation_function(atom_embedding)
 
-        x_i = x[idx_i]  # embedding for atoms i
-        x_j = x[idx_j]  # embedding for atoms j
+        x_j_embedding = x[
+            idx_j
+        ]  # embedding for all neighboring atoms j!=i, shape (nr_of_pairs, number_of_atom_features)
+        x_i_embedding = x  # shape (nr_of_atoms, number_of_atom_features)
 
         # Equation 6: Formation of the Proto-Message ṽ_i for an Atom i
         # ṽ_i = σ(Wl_I * x_i^l + bl_I) + Σ_j (G_g * Wl * (σ(σl_J * x_j^l + bl_J)) * g(r_ij))
@@ -257,12 +263,15 @@ class PhysNetInteraction(nn.Module):
         # Get attention weights from distances
         attention_weights = self.glog_attention(
             d_ij
-        )  # shape: (n_pairs, embedding_dim) # NOTE: are we sure about the dimensions?
+        )  # shape: (number_of_atom_features, number_of_basis_functions) # NOTE: are we sure about the dimensions?
 
         # Draft proto message v_tilde
-        x_i_prime = self.interaction_i(x_i)
-        x_j_prime = self.interaction_j(x_j)
-        f_ij_prime = torch.mul(f_ij, attention_weights)
+        x_i_prime = self.interaction_i(x_i_embedding)
+        x_j_prime = self.interaction_j(x_j_embedding)
+        f_ij_prime = torch.mul(
+            f_ij, attention_weights
+        )  # f_ij (n_pairs, number_of_basis_functions),
+        # attention_weights (n_pairs, number_of_basis_functions)
 
         # Compute sum_over_j(x_j_prime * f_ij_prime)
         x_j_modulated = torch.mul(x_j_prime, f_ij_prime)
@@ -271,25 +280,30 @@ class PhysNetInteraction(nn.Module):
             x_j_modulated, idx_i, dim=0, dim_size=atom_embedding.shape[0]
         )
         v_tilde = x_i_prime + summed_contributions
+        # shape of v_tilde (nr_of_atoms_in_batch, 1)
         # Equation 4: Preactivation Residual Block Implementation
         # xl+2_i = xl_i + Wl+1 * sigma(Wl * xl_i + bl) + bl+1
-        v = self.residual_block(v_tilde)
-        v = self.self.process_v(v)
+        v_tilde = self.residual(
+            v_tilde
+        )  # shape (nr_of_atoms_in_batch, number_of_basis_functions)
 
-        # add gated
-
-
-class PhysNetResidual(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(inputs: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
-        return inputs
+        # FIXME: add gated vector
+        v = self.process_v(v_tilde)
+        return {
+            "atomic_embedding": v,
+            "f_ij": f_ij,
+            "d_ij": d_ij,
+            "pair_indices": inputs["pair_indices"],
+        }
 
 
 class PhysNetOutput(nn.Module):
-    def __init__(self):
+    def __init__(self, number_of_basis_functions: int):
         super().__init__()
+        residual = PhysNetResidual()
+        self.output = nn.Sequential(
+            nn.Linear(1, 1),
+        )
 
     def forward(inputs: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         return inputs
@@ -297,7 +311,12 @@ class PhysNetOutput(nn.Module):
 
 class PhysNetModule(nn.Module):
 
-    def __init__(self):
+    def __init__(
+        self,
+        number_of_atom_features: int = 64,
+        number_of_basis_functions: int = 16,
+        number_of_interaction_residual: int = 3,
+    ):
         """
         Wrapper module that combines the PhysNetInteraction, PhysNetResidual, and
         PhysNetOutput classes into a single module. This serves as the building
@@ -311,9 +330,18 @@ class PhysNetModule(nn.Module):
         # this class combines the PhysNetInteraction, PhysNetResidual and
         # PhysNetOutput class
 
-        self.interaction = PhysNetInteraction()
-        self.residula = PhysNetResidual()
-        self.output = PhysNetOutput()
+        self.interaction = PhysNetInteraction(
+            number_of_atom_features=number_of_atom_features,
+            number_of_basis_functions=number_of_basis_functions,
+            number_of_interaction_residual=number_of_interaction_residual,
+        )
+        self.residual = nn.Sequential(
+            [
+                PhysNetResidual(number_of_basis_functions, number_of_basis_functions)
+                for _ in range(number_of_interaction_residual)
+            ]
+        )
+        self.output = PhysNetOutput(number_of_basis_functions)
 
     def forward(self, inputs: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
@@ -321,16 +349,22 @@ class PhysNetModule(nn.Module):
         needs further implementation.
         """
         # Placeholder for actual module operations.
-        return inputs
+        interactions = self.interaction(inputs)
+        interactions = self.residual(interactions)
+        return {
+            "output_of_module": self.output(interactions),
+            "interactions": interactions,
+        }
 
 
 class PhysNet(BaseNeuralNetworkPotential):
     def __init__(
         self,
         max_Z: int = 100,
-        embedding_dimensions: int = 64,
         cutoff: unit.Quantity = 5 * unit.angstrom,
-        nr_of_modules: int = 2,
+        number_of_atom_features: int = 64,
+        number_of_basis_functions: int = 16,
+        nr_of_modules: int = 5,
     ) -> None:
         """
         Implementation of the PhysNet neural network potential.
@@ -339,7 +373,7 @@ class PhysNet(BaseNeuralNetworkPotential):
         ----------
         max_Z : int, default=100
             Maximum atomic number to be embedded.
-        embedding_dimensions : int, default=64
+        number_of_atom_features : int, default=64
             Dimension of the embedding vectors for atomic numbers.
         cutoff : openff.units.unit.Quantity, default=5*unit.angstrom
             The cutoff distance for interactions.
@@ -347,41 +381,33 @@ class PhysNet(BaseNeuralNetworkPotential):
             Number of PhysNet modules to be stacked in the network.
         """
 
-        log.debug("Initializing PhysNET model.")
+        log.debug("Initializing PhysNet model.")
 
         self.only_unique_pairs = False  # NOTE: for pairlist
         super().__init__(cutoff=cutoff)
-        self.nr_atom_basis = embedding_dimensions
 
         # embedding
         from modelforge.potential.utils import Embedding
 
-        self.embedding_module = Embedding(max_Z, embedding_dimensions)
-
-        # cutoff
-        from modelforge.potential import CosineCutoff
-
-        self.cutoff_module = CosineCutoff(cutoff, self.device)
+        self.embedding_module = Embedding(max_Z, number_of_atom_features)
 
         # initialize the energy readout
         from .utils import FromAtomToMoleculeReduction
 
-        self.readout_module = FromAtomToMoleculeReduction(embedding_dimensions)
+        self.readout_module = FromAtomToMoleculeReduction(number_of_atom_features)
 
-        number_of_gaussian = 16
         self.physnet_representation_module = PhysNetRepresentation(
-            cutoff=cutoff, number_of_gaussians=number_of_gaussian
+            cutoff=cutoff, number_of_basis_functions=number_of_basis_functions
         )
 
-        self.physnet_module_tmp = PhysNetInteraction(
-            embedding_dimensions=embedding_dimensions,
-            number_of_atom_basis=number_of_gaussian,
-        )
         # initialize the PhysNetModule building blocks
         from torch.nn import ModuleList
 
         self.physnet_module = ModuleList(
-            [PhysNetModule() for module_idx in range(nr_of_modules)]
+            [
+                PhysNetModule(number_of_atom_features, number_of_basis_functions)
+                for _ in range(nr_of_modules)
+            ]
         )
 
     def _readout(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
@@ -413,10 +439,23 @@ class PhysNet(BaseNeuralNetworkPotential):
 
         # Computed representation
         inputs["f_ij"] = self.physnet_representation_module(inputs["d_ij"])
-        self.physnet_module_tmp(inputs)
+
+        # see https://doi.org/10.1021/acs.jctc.9b00181
+        # in the following we are implementing the calculations analoguous
+        # to the modules outlined in Figure 1
+
+        # inputs are the embedding vectors and f_ij
+        # the embedding vector will get updated in each pass through the modules
+        nr_of_atoms_in_batch = inputs["atomic_embedding"].shape[0]
+
+        input_for_module = inputs
+
+        # the atomic energies are accumulated in per_atom_energies
+        per_atom_energies = torch.zeros(
+            (nr_of_atoms_in_batch, 1), device=inputs["d_ij"].device
+        )
         for module in self.physnet_module:
-            output = module(inputs)
+            input_for_module = module(input_for_module)
+            per_atom_energies += input_for_module["output_of_module"]
 
-        return torch.rand_like(inputs["d_ij"])
-
-        # return self._readout(output)
+        return self._readout(per_atom_energies)

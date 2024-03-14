@@ -206,17 +206,13 @@ class PhysNetInteraction(nn.Module):
 
         self.process_v = nn.Sequential(
             nn.Softplus(),
-            nn.Linear(
-                number_of_radial_basis_functions, number_of_radial_basis_functions
-            ),
+            nn.Linear(number_of_atom_features, number_of_atom_features),
         )
 
         # Residual block
         self.residuals = nn.ModuleList(
             [
-                PhysNetResidual(
-                    number_of_radial_basis_functions, number_of_radial_basis_functions
-                )
+                PhysNetResidual(number_of_atom_features, number_of_atom_features)
                 for _ in range(number_of_interaction_residual)
             ]
         )
@@ -224,7 +220,7 @@ class PhysNetInteraction(nn.Module):
         # Gating Module
         self.gating_module = GatingModule(number_of_atom_features)
 
-    def forward(self, inputs: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
         Processes input tensors through the interaction module, applying
         Gaussian Logarithm Attention to modulate the influence of pairwise distances
@@ -298,12 +294,7 @@ class PhysNetInteraction(nn.Module):
         v = self.process_v(
             v_tilde
         )  # shape (nr_of_atoms_in_batch, number_of_atom_features)
-        return {
-            "atomic_embedding": v,
-            "f_ij": f_ij,
-            "d_ij": d_ij,
-            "pair_indices": inputs["pair_indices"],
-        }
+        return v
 
 
 class PhysNetOutput(nn.Module):
@@ -360,13 +351,39 @@ class PhysNetModule(nn.Module):
         Forward pass for the PhysNet module. Currently, a placeholder that
         needs further implementation.
         """
-        # Placeholder for actual module operations.
-        interactions = self.interaction(inputs)
+
+        # The PhysNet module is a sequence of interaction modules and residual modules.
+        #              x_1, ..., x_N
+        #                     |
+        #                     v
+        #               ┌─────────────┐
+        #               │ interaction │ <-- g(d_ij)
+        #               └─────────────┘
+        #                     │
+        #                     v
+        #                ┌───────────┐
+        #                │  residual │
+        #                └───────────┘
+        #                ┌───────────┐
+        #                │  residual │
+        #                └───────────┘
+        # ┌───────────┐      │
+        # │   output  │<-----│
+        # └───────────┘      │
+        #                    v
+
+        # calculate the interaction
+        v = self.interaction(inputs)
+
+        # add the atomic residual blocks
         for residual in self.residual:
-            interactions = residual(interactions)
+            v = residual(v)
+
+        # calculate the module output
+        module_output = self.output(v)
         return {
-            "output_of_module": self.output(interactions),
-            "interactions": interactions,
+            "output_of_module": module_output,
+            "v": v,  # input for next module
         }
 
 
@@ -499,7 +516,9 @@ class PhysNet(BaseNeuralNetworkPotential):
             (nr_of_atoms_in_batch, 1), device=inputs["d_ij"].device
         )
         for module in self.physnet_module:
-            input_for_module = module(input_for_module)
-            per_atom_energies += input_for_module["output_of_module"]
-
+            output_of_module = module(input_for_module)
+            # accumulate output for atomic energies
+            per_atom_energies += output_of_module["output_of_module"]
+            # update embedding for next module
+            input_for_module["atomic_embedding"] = output_of_module["v"]
         return self._readout(per_atom_energies)

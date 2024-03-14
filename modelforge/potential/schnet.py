@@ -119,18 +119,21 @@ class SchNET(BaseNeuralNetworkPotential):
 
 class SchNETInteractionModule(nn.Module):
     def __init__(
-        self, nr_atom_basis: int, nr_filters: int, number_of_gaussians: int
+        self,
+        number_of_atom_features: int,
+        nr_filters: int,
+        number_of_radial_basis_functions: int,
     ) -> None:
         """
         Initialize the SchNet interaction block.
 
         Parameters
         ----------
-        nr_atom_basis : int
-            Number of atom basis, defines the dimensionality of the output features.
+        number_of_atom_features : int
+            Number of atom ffeatures, defines the dimensionality of the embedding.
         nr_filters : int
             Number of filters, defines the dimensionality of the intermediate features.
-        number_of_gaussians : int
+        number_of_radial_basis_functions : int
             Number of radial basis functions.
         """
         super().__init__()
@@ -140,19 +143,25 @@ class SchNETInteractionModule(nn.Module):
             number_of_gaussians > 4
         ), "Number of radial basis functions must be larger than 10."
         assert nr_filters > 1, "Number of filters must be larger than 1."
-        assert nr_atom_basis > 10, "Number of atom basis must be larger than 10."
+        assert (
+            number_of_atom_features > 10
+        ), "Number of atom basis must be larger than 10."
 
-        self.nr_atom_basis = nr_atom_basis  # Initialize parameters
+        self.number_of_atom_features = number_of_atom_features  # Initialize parameters
         self.intput_to_feature = Dense(
-            nr_atom_basis, nr_filters, bias=False, activation=None
+            number_of_atom_features, nr_filters, bias=True, activation=ShiftedSoftplus()
         )
         self.feature_to_output = nn.Sequential(
-            Dense(nr_filters, nr_atom_basis, activation=ShiftedSoftplus()),
-            Dense(nr_atom_basis, nr_atom_basis, activation=None),
+            Dense(nr_filters, number_of_atom_features, activation=ShiftedSoftplus()),
+            Dense(number_of_atom_features, number_of_atom_features, activation=None),
         )
         self.filter_network = nn.Sequential(
-            Dense(number_of_gaussians, nr_filters, activation=ShiftedSoftplus()),
-            Dense(nr_filters, nr_filters, activation=None),
+            Dense(
+                number_of_radial_basis_functions,
+                nr_filters,
+                activation=ShiftedSoftplus(),
+            ),
+            Dense(nr_filters, nr_filters, activation=ShiftedSoftplus()),
         )
 
     def forward(
@@ -209,7 +218,7 @@ class SchNETRepresentation(nn.Module):
     def __init__(
         self,
         radial_cutoff: unit.Quantity,
-        number_of_gaussians: int,
+        number_of_radial_basis_functions: int,
         device: torch.device = torch.device("cpu"),
     ):
         """
@@ -222,7 +231,7 @@ class SchNETRepresentation(nn.Module):
         super().__init__()
 
         self.radial_symmetry_function_module = self._setup_radial_symmetry_functions(
-            radial_cutoff, number_of_gaussians
+            radial_cutoff, number_of_radial_basis_functions
         )
         self.device = device
         # cutoff
@@ -231,12 +240,12 @@ class SchNETRepresentation(nn.Module):
         self.cutoff_module = CosineCutoff(radial_cutoff, self.device)
 
     def _setup_radial_symmetry_functions(
-        self, radial_cutoff: unit.Quantity, number_of_gaussians: int
+        self, radial_cutoff: unit.Quantity, number_of_radial_basis_functions: int
     ):
         from .utils import RadialSymmetryFunction
 
         radial_symmetry_function = RadialSymmetryFunction(
-            number_of_gaussians=number_of_gaussians,
+            number_of_radial_basis_functions=number_of_radial_basis_functions,
             radial_cutoff=radial_cutoff,
             ani_style=False,
             dtype=torch.float32,

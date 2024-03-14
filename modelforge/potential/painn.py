@@ -46,7 +46,7 @@ class PaiNN(BaseNeuralNetworkPotential):
         # initialize the energy readout
         from .utils import FromAtomToMoleculeReduction
 
-        self.readout_module = FromAtomToMoleculeReduction(embedding_dimensions)
+        self.readout_module = FromAtomToMoleculeReduction()
 
         # initialize representation block
         self.representation_module = PaiNNRepresentation(
@@ -68,8 +68,22 @@ class PaiNN(BaseNeuralNetworkPotential):
             for _ in range(nr_interaction_blocks)
         )
 
-    def _readout(self, input: Dict[str, Tensor]):
-        return self.readout_module(input)
+        self.energy_layer = nn.Sequential(
+            Dense(nr_atom_basis, nr_atom_basis, activation=nn.ReLU()),
+            Dense(
+                nr_atom_basis,
+                1,
+            ),
+        )
+
+    def _readout(self, inputs: Dict[str, Tensor]):
+
+        # perform final pass through output layer
+        inputs["scalar_representation"] = self.energy_layer(
+            inputs["scalar_representation"]
+        )
+
+        return self.readout_module(inputs)
 
     def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
         # Perform atomic embedding

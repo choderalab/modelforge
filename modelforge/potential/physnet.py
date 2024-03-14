@@ -70,14 +70,33 @@ class PhysNetRepresentation(nn.Module):
 
 class GatingModule(nn.Module):
     def __init__(self, number_of_atom_basis: int):
-        super().__init__()
-        # Initialize learnable parameters for the gating vector
-        self.u = nn.Parameter(torch.randn(number_of_atom_basis))
+        """
+        Initializes a gating module that applies a sigmoid gating mechanism to input features.
 
-    def forward(self, v):
-        # Apply gating to the input vector v
-        gated_v = torch.sigmoid(self.u) * v
-        return gated_v
+        Parameters:
+        -----------
+        input_dim : int
+            The dimensionality of the input (and output) features.
+        """
+        super().__init__()
+        self.gate = nn.Parameter(torch.randn(number_of_atom_basis))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Apply gating to the input tensor.
+
+        Parameters:
+        -----------
+        x : torch.Tensor
+            The input tensor to gate.
+
+        Returns:
+        --------
+        torch.Tensor
+            The gated input tensor.
+        """
+        gating_signal = torch.sigmoid(self.gate)
+        return gating_signal * x
 
 
 class AttentionMask(nn.Module):
@@ -147,23 +166,17 @@ class PhysNetResidual(nn.Module):
         return out
 
 
-class PhysNetInteraction(nn.Module):
+class PhysNetInteractionModule(nn.Module):
 
     def __init__(
         self,
         number_of_atom_features: int = 64,
         number_of_radial_basis_functions: int = 16,
         number_of_interaction_residual: int = 3,
+        device=torch.device("cpu"),
     ):
         """
-        Defines the interaction module within PhysNet, responsible for capturing the
-        effects of atomic interactions through embedded nuclear charges and distance-based
-        modulations.
-
-        The module utilizes Gaussian Logarithm Attention to weigh radial basis function (RBF)
-        expansions based on pairwise distances, integrating these weights with atomic embeddings
-        to generate interaction messages. These messages are aggregated to update atomic feature
-        representations, contributing to the model's ability to predict molecular properties.
+        Module to compute interaction terms based on atomic distances and features.
 
         Parameters
         ----------
@@ -172,17 +185,6 @@ class PhysNetInteraction(nn.Module):
         number_of_radial_basis_functions : int, default=16
             Specifies the number of basis functions for the Gaussian Logarithm Attention,
             essentially defining the output feature dimension for attention-weighted interactions.
-
-        Attributes
-        ----------
-        attention_mask : AttentionMask
-            The attention mechanism applied to the radial basis function outputs.
-        activation_function : ShiftedSoftplus
-            Non-linear activation function applied to atomic embeddings.
-        interaction_i : nn.Sequential
-            A neural network sequence processing features of atom i.
-        interaction_j : nn.Sequential
-            A neural network sequence processing features of atom j, parallel to interaction_i.
         """
 
         super().__init__()
@@ -306,7 +308,7 @@ class PhysNetOutput(nn.Module):
             nn.Linear(number_of_atom_features, number_of_atom_features),
         )
 
-    def forward(inputs: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def forward(self, inputs: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         return inputs
 
 
@@ -331,16 +333,14 @@ class PhysNetModule(nn.Module):
         # this class combines the PhysNetInteraction, PhysNetResidual and
         # PhysNetOutput class
 
-        self.interaction = PhysNetInteraction(
+        self.interaction = PhysNetInteractionModule(
             number_of_atom_features=number_of_atom_features,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             number_of_interaction_residual=number_of_interaction_residual,
         )
-        self.residual = nn.ModuleList(
+        self.residuals = nn.ModuleList(
             [
-                PhysNetResidual(
-                    number_of_radial_basis_functions, number_of_radial_basis_functions
-                )
+                PhysNetResidual(number_of_atom_features, number_of_atom_features)
                 for _ in range(number_of_interaction_residual)
             ]
         )
@@ -376,7 +376,7 @@ class PhysNetModule(nn.Module):
         v = self.interaction(inputs)
 
         # add the atomic residual blocks
-        for residual in self.residual:
+        for residual in self.residuals:
             v = residual(v)
 
         # calculate the module output
@@ -424,7 +424,7 @@ class PhysNet(BaseNeuralNetworkPotential):
         # initialize the energy readout
         from .utils import FromAtomToMoleculeReduction
 
-        self.readout_module = FromAtomToMoleculeReduction(number_of_atom_features)
+        self.readout_module = FromAtomToMoleculeReduction()
 
         self.physnet_representation_module = PhysNetRepresentation(
             cutoff=cutoff,
@@ -443,8 +443,7 @@ class PhysNet(BaseNeuralNetworkPotential):
 
     def _readout(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         # Compute the energy for each system
-        # return self.readout_module(inputs)
-        return inputs
+        return self.readout_module(inputs)
 
     def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
         # Perform atomic embedding
@@ -513,7 +512,8 @@ class PhysNet(BaseNeuralNetworkPotential):
 
         # the atomic energies are accumulated in per_atom_energies
         per_atom_energies = torch.zeros(
-            (nr_of_atoms_in_batch, 1), device=inputs["d_ij"].device
+            (nr_of_atoms_in_batch, self.embedding_module.embedding_dim),
+            device=inputs["d_ij"].device,
         )
         for module in self.physnet_module:
             output_of_module = module(input_for_module)
@@ -521,4 +521,12 @@ class PhysNet(BaseNeuralNetworkPotential):
             per_atom_energies += output_of_module["output_of_module"]
             # update embedding for next module
             input_for_module["atomic_embedding"] = output_of_module["v"]
-        return self._readout(per_atom_energies)
+
+        # sum over atom features
+        per_atom_energies = per_atom_energies.sum(1)  # shape(nr_of_atoms, 1)
+        output = {
+            "scalar_representation": per_atom_energies,
+            "atomic_subsystem_indices": inputs["atomic_subsystem_indices"],
+        }
+
+        return output

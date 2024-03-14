@@ -324,23 +324,23 @@ local_prefix = "/Users/cri/Documents/Projects-msk/datasets"
 # we will save all the files to a central location
 output_file_dir = f"{local_prefix}/hdf5_files"
 
-# # SPICE 2 dataset
-# local_cache_dir = f"{local_prefix}/spice2_dataset"
-# hdf5_file_name = "spice_2_dataset.hdf5"
-#
-# SPICE_2(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)
-#
-# # SPICE 1.1.4 OpenFF dataset
-# local_cache_dir = f"{local_prefix}/spice_openff_dataset"
-# hdf5_file_name = "spice_114_openff_dataset.hdf5"
-#
-# SPICE_114_OpenFF(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)
-#
-# # SPICE 1.1.4 dataset
-# local_cache_dir = f"{local_prefix}/spice_114_dataset"
-# hdf5_file_name = "spice_114_dataset.hdf5"
-#
-# SPICE_114(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)
+# SPICE 2 dataset
+local_cache_dir = f"{local_prefix}/spice2_dataset"
+hdf5_file_name = "spice_2_dataset.hdf5"
+
+SPICE_2(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)
+
+# SPICE 1.1.4 OpenFF dataset
+local_cache_dir = f"{local_prefix}/spice_openff_dataset"
+hdf5_file_name = "spice_114_openff_dataset.hdf5"
+
+SPICE_114_OpenFF(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)
+
+# SPICE 1.1.4 dataset
+local_cache_dir = f"{local_prefix}/spice_114_dataset"
+hdf5_file_name = "spice_114_dataset.hdf5"
+
+SPICE_114(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)
 
 # QM9 dataset
 local_cache_dir = f"{local_prefix}/qm9_dataset"

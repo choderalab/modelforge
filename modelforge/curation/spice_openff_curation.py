@@ -9,7 +9,7 @@ class SPICEOpenFFCuration(DatasetCuration):
     """
     Fetches the SPICE 1.1.4 dataset from MOLSSI QCArchive and processes it into a curated hdf5 file.
 
-    All QM datapoints retrieved wer generated using B3LYP-D3BJ/DZVP level of theory.
+    All QM datapoints retrieved were generated using B3LYP-D3BJ/DZVP level of theory.
     This is the default theory used for force field development by the Open Force Field Initiative.
     This data appears as two separate records in QCArchive: ('spec_2'  and 'spec_6'),
     where 'spec_6' provides the dispersion corrections for energy and gradient.
@@ -433,13 +433,6 @@ class SPICEOpenFFCuration(DatasetCuration):
         dataset_names: List[str], required
             List of names of the sqlite datasets to process.
 
-        Examples
-        --------
-        >>> spice_openff_data = SPICE12OpenFFCuration(hdf5_file_name='spice_pubchem_12_openff_dataset.hdf5',
-        >>>                             local_cache_dir='~/datasets/spice12_openff_dataset')
-        >>> spice_openff_data._process_downloaded(local_path_dir='~/datasets/spice12_openff_dataset',
-        >>>                                      filenames=['spice_pubchem_set1_v1.2.sqlite'],
-        >>>                                      dataset_names=['SPICE PubChem Set 1 Single Points Dataset v1.2'])
         """
         from tqdm import tqdm
         import numpy as np

@@ -46,6 +46,7 @@ class QM9Curation(DatasetCuration):
         self.dataset_download_url = (
             "https://springernature.figshare.com/ndownloader/files/3195389"
         )
+        self.dataset_md5_checksum = "ad1ebd51ee7f5b3a6e32e974e5d54012"
 
         # Below, we define key pieces of information related to the dataset in the form of a dict.
         # Metadata will be used to generate a README to go along with the HDF5 dataset.
@@ -590,6 +591,7 @@ class QM9Curation(DatasetCuration):
         # download the dataset
         self.name = download_from_figshare(
             url=url,
+            md5_checksum=self.dataset_md5_checksum,
             output_path=self.local_cache_dir,
             force_download=force_download,
         )

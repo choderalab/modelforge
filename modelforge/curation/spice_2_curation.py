@@ -9,7 +9,7 @@ class SPICE2Curation(DatasetCuration):
     """
     Fetches the SPICE 2 dataset from MOLSSI QCArchive and processes it into a curated hdf5 file.
 
-    March 2004: Note this is still the preliminary release; a subset of calculations are still being performed
+    March 2004: Note this is still the preliminary release; a subset of calculations are still being performed.
 
     The SPICE dataset contains onformations for a diverse set of small molecules,
     dimers, dipeptides, and solvated amino acids. It includes 15 elements, charged and
@@ -19,30 +19,29 @@ class SPICE2Curation(DatasetCuration):
 
     This includes the following collections from qcarchive. Collections included in SPICE 1.1.4 are annotated with
     along with the version used in  SPICE 1.1.4; while the underlying molecules are the same in a given collection,
-    newer versions may have had some calculations redone, e.g., rerun calculations that failed or rerunning with
-     a patched version Psi4
+    newer versions may have had some calculations redone, e.g., rerun calculations that failed or reru with
+    a patched version Psi4
 
-      - 'SPICE Solvated Amino Acids Single Points Dataset v1.1' * (SPICE 1.1.4 at v1.1)
-      - 'SPICE Dipeptides Single Points Dataset v1.3' * (SPICE 1.1.4 at v1.2)
-      - 'SPICE DES Monomers Single Points Dataset v1.1' * (SPICE 1.1.4 at v1.1)
-      - 'SPICE DES370K Single Points Dataset v1.0' * (SPICE 1.1.4 at v1.0)
-      - 'SPICE DES370K Single Points Dataset Supplement v1.1' * (SPICE 1.1.4 at v1.0)
-      - 'SPICE PubChem Set 1 Single Points Dataset v1.3' * (SPICE 1.1.4 at v1.2)
-      - 'SPICE PubChem Set 2 Single Points Dataset v1.3' * (SPICE 1.1.4 at v1.2)
-      - 'SPICE PubChem Set 3 Single Points Dataset v1.3' * (SPICE 1.1.4 at v1.2)
-      - 'SPICE PubChem Set 4 Single Points Dataset v1.3' * (SPICE 1.1.4 at v1.2)
-      - 'SPICE PubChem Set 5 Single Points Dataset v1.3' * (SPICE 1.1.4 at v1.2)
-      - 'SPICE PubChem Set 6 Single Points Dataset v1.3' * (SPICE 1.1.4 at v1.2)
+      - 'SPICE Solvated Amino Acids Single Points Dataset v1.1'     * (SPICE 1.1.4 at v1.1)
+      - 'SPICE Dipeptides Single Points Dataset v1.3'               * (SPICE 1.1.4 at v1.2)
+      - 'SPICE DES Monomers Single Points Dataset v1.1'             * (SPICE 1.1.4 at v1.1)
+      - 'SPICE DES370K Single Points Dataset v1.0'                  * (SPICE 1.1.4 at v1.0)
+      - 'SPICE DES370K Single Points Dataset Supplement v1.1'       * (SPICE 1.1.4 at v1.0)
+      - 'SPICE PubChem Set 1 Single Points Dataset v1.3'            * (SPICE 1.1.4 at v1.2)
+      - 'SPICE PubChem Set 2 Single Points Dataset v1.3'            * (SPICE 1.1.4 at v1.2)
+      - 'SPICE PubChem Set 3 Single Points Dataset v1.3'            * (SPICE 1.1.4 at v1.2)
+      - 'SPICE PubChem Set 4 Single Points Dataset v1.3'            * (SPICE 1.1.4 at v1.2)
+      - 'SPICE PubChem Set 5 Single Points Dataset v1.3'            * (SPICE 1.1.4 at v1.2)
+      - 'SPICE PubChem Set 6 Single Points Dataset v1.3'            * (SPICE 1.1.4 at v1.2)
       - 'SPICE PubChem Set 7 Single Points Dataset v1.0'
       - 'SPICE PubChem Set 8 Single Points Dataset v1.0'
       - 'SPICE PubChem Set 9 Single Points Dataset v1.0'
       - 'SPICE PubChem Set 10 Single Points Dataset v1.0'
-      - 'SPICE Ion Pairs Single Points Dataset v1.2' * (SPICE 1.1.4 at v1.1)
+      - 'SPICE Ion Pairs Single Points Dataset v1.2'                * (SPICE 1.1.4 at v1.1)
       - 'SPICE PubChem Boron Silicon v1.0'
       - 'SPICE Solvated PubChem Set 1 v1.0'
       - 'SPICE Water Clusters v1.0'
       - 'SPICE Amino Acid Ligand v1.0
-
 
 
     Reference to original SPICE publication:
@@ -67,9 +66,9 @@ class SPICE2Curation(DatasetCuration):
         Currently doesn't do anything
     Examples
     --------
-    >>> spice_openff_data = SPICEOpenFFCuration(hdf5_file_name='spice114_openff_dataset.hdf5',
-    >>>                             local_cache_dir='~/datasets/spice114_openff_dataset')
-    >>> spice_openff_data.process()
+    >>> spice2_data = SPICE2Curation(hdf5_file_name='spice2_dataset.hdf5',
+    >>>                             local_cache_dir='~/datasets/spice2_dataset')
+    >>> spice2_data.process()
 
     """
 
@@ -454,15 +453,9 @@ class SPICE2Curation(DatasetCuration):
         filenames: List[str], required
             Names of the raw sqlite files to process,
         dataset_sources: List[Dict], required
-            List of Dicts, where each Dict provies the names of the sqlite datasets to process and specification.
+            List of Dicts, where each Dict provides the names of the sqlite file to process ( accessed with key 'name')
+             and specification where data is stored on qcarchive (accessible with key 'specifications').
 
-        Examples
-        --------
-        >>> spice_openff_data = SPICE12OpenFFCuration(hdf5_file_name='spice_pubchem_12_openff_dataset.hdf5',
-        >>>                             local_cache_dir='~/datasets/spice12_openff_dataset')
-        >>> spice_openff_data._process_downloaded(local_path_dir='~/datasets/spice12_openff_dataset',
-        >>>                                      filenames=['spice_pubchem_set1_v1.2.sqlite'],
-        >>>                                      dataset_names=['SPICE PubChem Set 1 Single Points Dataset v1.2'])
         """
         from tqdm import tqdm
         import numpy as np
@@ -702,9 +695,9 @@ class SPICE2Curation(DatasetCuration):
             Number of concurrent threads for retrieving data from QCArchive
         Examples
         --------
-        >>> spice_openff_data = SPICEOpenFFCuration(hdf5_file_name='spice114_openff_dataset.hdf5',
-        >>>                             local_cache_dir='~/datasets/spice114_openff_dataset')
-        >>> spice_openff_data.process()
+        >>> spice2_data = SPICE2Curation(hdf5_file_name='spice2_dataset.hdf5',
+        >>>                             local_cache_dir='~/datasets/spice2_dataset')
+        >>> spice2_data.process()
 
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed

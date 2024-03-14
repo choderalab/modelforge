@@ -261,7 +261,7 @@ class SPICE114Curation(DatasetCuration):
         # download the dataset
         self.name = download_from_zenodo(
             url=url,
-            zenodo_md5_checksum=self.dataset_md5_checksum,
+            md5_checksum=self.dataset_md5_checksum,
             output_path=self.local_cache_dir,
             force_download=force_download,
         )

@@ -191,7 +191,7 @@ def generate_interaction_block_data(
     batch = return_single_batch(QM9Dataset)
     r = prepare_pairlist_for_single_batch(batch)
     radial_symmetry_function_module = RadialSymmetryFunction(
-        number_of_gaussians=number_of_gaussians,
+        number_of_radial_basis_functions=number_of_gaussians,
         radial_cutoff=unit.Quantity(5.0, unit.angstrom),
         dtype=batch["positions"].dtype,
     )

@@ -11,7 +11,8 @@ def test_radial_symmetry_function():
     # set cutoff and radial symmetry function
     cutoff = CosineCutoff(cutoff=unit.Quantity(5.0, unit.angstrom))
     rbf_expension = RadialSymmetryFunction(
-        number_of_gaussians=18, radial_cutoff=unit.Quantity(5.0, unit.angstrom)
+        number_of_radial_basis_functions=18,
+        radial_cutoff=unit.Quantity(5.0, unit.angstrom),
     )
 
     # calculate expension and cutoff
@@ -28,7 +29,7 @@ def test_radial_symmetry_function():
 
     rep = SchNETRepresentation(
         radial_cutoff=5 * unit.angstrom,
-        number_of_gaussians=18,
+        number_of_radial_basis_functions=18,
         device=torch.device("cpu"),
     )
 

@@ -40,7 +40,7 @@ class PhysNetRepresentation(nn.Module):
         from .utils import RadialSymmetryFunction
 
         self.radial_symmetry_function_module = RadialSymmetryFunction(
-            number_of_gaussians=number_of_radial_basis_functions,
+            number_of_radial_basis_functions=number_of_radial_basis_functions,
             radial_cutoff=cutoff,
             ani_style=False,
             dtype=torch.float32,

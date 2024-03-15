@@ -25,6 +25,19 @@ def init_log_sigma(model, value):
         setattr(model, name, param)
 
 class BayesianAutoNormalPotential(torch.nn.Module):
+    """A Bayesian model with a normal prior and likelihood.
+
+    Parameters
+    ----------
+    log_sigma : float, optional
+        The initial value of the log_sigma parameters. Default is 0.0.
+
+    Methods
+    -------
+    model
+        The model function. If no `y` argument is provided, 
+        provide the prior; if `y` is provided, provide the likelihood.
+    """
     def __init__(
             self,
             *args, **kwargs,

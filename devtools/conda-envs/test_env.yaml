@@ -36,3 +36,4 @@ dependencies:
   # pip installs
   - pip:
       - schnetpack>=2.0.0
+      - pyro-ppl

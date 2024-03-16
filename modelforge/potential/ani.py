@@ -393,10 +393,6 @@ class ANI2x(BaseNeuralNetworkPotential):
         # Intialize interaction blocks
         self.interaction_modules = ANIInteraction(self.aev_length)
 
-    def _readout(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
-        # Compute the energy for each system
-        return self.readout_module(inputs)
-
     def _model_specific_input_preparation(
         self, inputs: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
@@ -430,20 +426,3 @@ class ANI2x(BaseNeuralNetworkPotential):
             "E_i": E_i,
             "atomic_subsystem_indices": inputs["atomic_subsystem_indices"],
         }
-
-    def _readout(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
-
-        E_i = inputs["E_i"]
-        atomic_subsystem_indices = inputs["atomic_subsystem_indices"]
-        # output tensor for the sums, size based on the number of unique values in atomic_subsystem_indices
-        E = torch.zeros(
-            atomic_subsystem_indices.max() + 1,
-            dtype=E_i.dtype,
-            device=E_i.device,
-        )
-
-        # use index_add_ to sum values in per_species_energies according to indices in atomic_subsystem_indices
-        E.index_add_(
-            0, atomic_subsystem_indices, E_i
-        )
-        return E

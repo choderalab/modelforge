@@ -69,6 +69,7 @@ class SchNet(BaseNeuralNetworkPotential):
             ]
         )
 
+        # final output layer
         self.energy_layer = nn.Sequential(
             Dense(
                 number_of_atom_features,
@@ -80,15 +81,6 @@ class SchNet(BaseNeuralNetworkPotential):
                 1,
             ),
         )
-
-    def _readout(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
-        # Compute the energy for each system
-        # perform final pass through output layer
-        inputs["scalar_representation"] = self.energy_layer(
-            inputs["scalar_representation"]
-        ).squeeze(1)
-
-        return self.readout_module(inputs)
 
     def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
         # Perform atomic embedding
@@ -130,8 +122,10 @@ class SchNet(BaseNeuralNetworkPotential):
             )
             x = x + v  # Update atomic features
 
+        E_i = self.energy_layer(x).squeeze(1)
+
         return {
-            "scalar_representation": x,
+            "E_i": E_i,
             "atomic_subsystem_indices": inputs["atomic_subsystem_indices"],
         }
 

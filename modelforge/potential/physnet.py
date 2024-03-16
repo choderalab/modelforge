@@ -1,3 +1,4 @@
+from collections import namedtuple
 from .models import BaseNeuralNetworkPotential
 from loguru import logger as log
 from openff.units import unit
@@ -432,7 +433,6 @@ class PhysNet(BaseNeuralNetworkPotential):
 
         self.embedding_module = Embedding(max_Z, number_of_atom_features)
 
-
         self.physnet_representation_module = PhysNetRepresentation(
             cutoff=cutoff,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
@@ -450,7 +450,6 @@ class PhysNet(BaseNeuralNetworkPotential):
 
         self.atomic_scale = nn.Parameter(torch.ones(max_Z, 2))
         self.atomic_shift = nn.Parameter(torch.ones(max_Z, 2))
-
 
     def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
         # Perform atomic embedding
@@ -538,10 +537,12 @@ class PhysNet(BaseNeuralNetworkPotential):
         # sum over atom features
         E_i = prediction_i_shifted_scaled[:, 0]  # shape(nr_of_atoms, 1)
         q_i = prediction_i_shifted_scaled[:, 1]  # shape(nr_of_atoms, 1)
+
         output = {
-            "E": E_i,
+            "E_i": E_i,
             "q_i": q_i,
             "atomic_subsystem_indices": inputs["atomic_subsystem_indices"],
+            "atomic_numbers": inputs["atomic_numbers"],
         }
 
         return output

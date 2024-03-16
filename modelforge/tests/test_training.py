@@ -13,11 +13,11 @@ from .helper_functions import (
 )
 
 
-@pytest.mark.parametrize("model_class", MODELS_TO_TEST)
+@pytest.mark.parametrize("default_model", MODELS_TO_TEST)
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_train_with_lightning(
     dataset: Type[BaseNeuralNetworkPotential],
-    model_class: Type[BaseNeuralNetworkPotential],
+    default_model: Type[BaseNeuralNetworkPotential],
 ):
     """
     Test the forward pass for a given model and dataset.
@@ -33,7 +33,9 @@ def test_train_with_lightning(
     from lightning import Trainer
     import torch
 
-    model: Optional[BaseNeuralNetworkPotential] = setup_simple_model(model_class)
+    # Initialize model
+    model = default_model()
+
     if model is None:
         pytest.fail("Failed to set up the model.")
 

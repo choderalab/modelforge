@@ -78,15 +78,6 @@ class PaiNN(BaseNeuralNetworkPotential):
             ),
         )
 
-    def _readout(self, inputs: Dict[str, Tensor]):
-
-        # perform final pass through output layer
-        inputs["E_i"] = self.energy_layer(
-            inputs["E_i"]
-        ).squeeze(1)
-
-        return self.readout_module(inputs)
-
     def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
         # Perform atomic embedding
 
@@ -134,11 +125,13 @@ class PaiNN(BaseNeuralNetworkPotential):
             q, mu = mixing_mod(q, mu)
 
         # Use squeeze to remove dimensions of size 1
-        E_i = q.squeeze(dim=1)
+        q = q.squeeze(dim=1)
+        E_i = self.energy_layer(q).squeeze(1)
 
         return {
             "E_i": E_i,
-            "vector_representation": mu,
+            "mu": mu,
+            "q": q,
             "atomic_subsystem_indices": inputs["atomic_subsystem_indices"],
         }
 

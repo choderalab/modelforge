@@ -200,6 +200,10 @@ class BaseNeuralNetworkPotential(pl.LightningModule):
         self.loss_function = loss
         self.optimizer = optimizer
         self.learning_rate = lr
+        # initialize the per molecule readout module
+        from .utils import FromAtomToMoleculeReduction
+
+        self.readout_module = FromAtomToMoleculeReduction()
 
     @property
     def dataset_statistics(self):
@@ -228,13 +232,9 @@ class BaseNeuralNetworkPotential(pl.LightningModule):
         # perform the forward pass implemented in the subclass
         pass
 
-    @abstractmethod
-    def _readout(self, input: Dict[str, torch.Tensor]) -> torch.Tensor:
-        # needs to be implemented by the subclass
-        # perform the readout operation implemented in the subclass
-        # returns a torch.Tensor with shape (nr_of_molecules) containing the
-        # aggregated energies
-        pass
+    def _readout(self, x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
+        # readout the per molecule values
+        return self.readout_module(x, index)
 
     def _log_batch_size(self, batch: Dict[str, torch.Tensor]):
         batch_size = int(len(batch["E_label"]))
@@ -352,16 +352,20 @@ class BaseNeuralNetworkPotential(pl.LightningModule):
     def _energy_postprocessing(self, properties_per_molecule, inputs):
 
         # first, resale the energies
-        inputs["_raw_E_predict"] = properties_per_molecule.clone().detach()
+        processed_energy = {}
+        processed_energy["_raw_E_predict"] = properties_per_molecule.clone().detach()
         properties_per_molecule = self._rescale_energy(properties_per_molecule)
-        inputs["_rescaled_E_predict"] = properties_per_molecule.clone().detach()
+        processed_energy["_rescaled_E_predict"] = (
+            properties_per_molecule.clone().detach()
+        )
         # then, calculate the molecular self energy
         molecular_ase = self._calculate_molecular_self_energy(
             inputs, properties_per_molecule.numel()
         )
-        inputs["_molecular_ase"] = molecular_ase.clone().detach()
+        processed_energy["_molecular_ase"] = molecular_ase.clone().detach()
         # add the molecular self energy to the rescaled energies
-        return properties_per_molecule + molecular_ase
+        processed_energy["E"] = properties_per_molecule + molecular_ase
+        return processed_energy
 
     def prepare_inputs(
         self, inputs: Dict[str, torch.Tensor], only_unique_pairs: bool = True
@@ -505,18 +509,18 @@ class BaseNeuralNetworkPotential(pl.LightningModule):
         inputs = self.prepare_inputs(inputs, self.only_unique_pairs)
         # perform the forward pass implemented in the subclass
         outputs = self._forward(inputs)
-        # postprocess the outputs
-        properties_per_molecule = self._readout(outputs)
-        # postprocess energies
-        processed_energies = self._energy_postprocessing(
-            properties_per_molecule, inputs
-        )
+        # sum over atomic properties to generate per molecule properties
+        E = self._readout(outputs["E_i"], outputs["atomic_subsystem_indices"])
+        # postprocess energies: add atomic self energies,
+        # and other constant factors used to optionally normalize the data range of the training dataset
+        processed_energy = self._energy_postprocessing(E, inputs)
         # return energies
         return {
-            "E_predict": processed_energies,
-            "_raw_E_predict": inputs["_raw_E_predict"],
-            "_rescaled_E_predict": inputs["_rescaled_E_predict"],
-            "_molecular_ase": inputs["_molecular_ase"],
+            "E_predict": processed_energy["E"],
+            "_raw_E_predict": processed_energy["_raw_E_predict"],
+            "_rescaled_E_predict": processed_energy["_rescaled_E_predict"],
+            "_molecular_ase": processed_energy["_molecular_ase"],
+            "outputs": outputs,
         }
 
 

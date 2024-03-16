@@ -160,12 +160,12 @@ class Neighborlist(Pairlist):
 
 
 from modelforge.potential.utils import AtomicSelfEnergies
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from openff.units import unit
 from typing import Dict, Type
 
 
-class BaseNeuralNetworkPotential(pl.LightningModule):
+class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
     """
     Abstract Base class for neural network potentials.
     """

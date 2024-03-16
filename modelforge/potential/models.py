@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Optional
 
 import lightning as pl
 import torch
@@ -6,6 +6,9 @@ import torch.nn as nn
 from torch.optim import AdamW
 
 from loguru import logger as log
+
+from abc import ABC, abstractmethod
+import torch
 
 
 class Pairlist(nn.Module):
@@ -21,20 +24,14 @@ class Pairlist(nn.Module):
         Forward pass for PairList.
     """
 
-    def __init__(self, only_unique_pairs: bool = False):
+    def __init__(self):
         """
         Initialize PairList.
-
-        Parameters
-        ----------
-        only_unique_pairs : bool, optional
-            If set to True, only unique pairs of atoms are considered, default is False.
         """
         super().__init__()
         from .utils import pair_list
 
         self.calculate_pairs = pair_list
-        self.only_unique_pairs = only_unique_pairs
 
     def calculate_r_ij(
         self, pair_indices: torch.Tensor, positions: torch.Tensor
@@ -64,27 +61,34 @@ class Pairlist(nn.Module):
         return r_ij.norm(2, -1).unsqueeze(-1)
 
     def forward(
-        self, positions: torch.Tensor, atomic_subsystem_indices: torch.Tensor
+        self,
+        positions: torch.Tensor,
+        atomic_subsystem_indices: torch.Tensor,
+        only_unique_pairs: bool = False,
     ) -> Dict[str, torch.Tensor]:
         """
         Forward pass for PairList.
 
         Parameters
         ----------
-        positions : torch.Tensor, shape [nr_systems, nr_atoms, 3]
+        positions : torch.Tensor, shape [nr_atoms, 3]
             Position tensor.
         atomic_subsystem_indices : torch.Tensor, shape [nr_atoms]
+        only_unique_pairs : bool, optional
+            If set to True, only unique pairs of atoms are considered, default is False.
+
         Returns
         -------
         dict : Dict[str, torch.Tensor], containing atom index pairs, distances, and displacement vectors.
             - 'pair_indices': torch.Tensor, shape (2, n_pairs)
-            - 'r_ij' : torch.Tensor, shape (3, n_pairs)
-            - 'd_ij' : torch.Tensor, shape (1, n_pairs)
+            - 'r_ij' : torch.Tensor, shape (n_pairs, 3)
+            - 'd_ij' : torch.Tensor, shape (n_pairs, 1)
 
         """
+        assert positions.ndim == 2
         pair_indices = self.calculate_pairs(
             atomic_subsystem_indices,
-            only_unique_pairs=self.only_unique_pairs,
+            only_unique_pairs=only_unique_pairs,
         )
         r_ij = self.calculate_r_ij(pair_indices, positions)
 
@@ -99,7 +103,7 @@ from openff.units import unit
 
 
 class Neighborlist(Pairlist):
-    def __init__(self, cutoff: unit.Quantity, only_unique_pairs: bool = False):
+    def __init__(self, cutoff: unit.Quantity):
         """
         Initialize PairList.
 
@@ -107,17 +111,18 @@ class Neighborlist(Pairlist):
         ----------
         cutoff : unit.Quantity
             Cutoff distance for neighbor calculations.
-        only_unique_pairs : bool, optional
-            If set to True, only unique pairs of atoms are considered, default is False.
         """
-        super().__init__(only_unique_pairs=only_unique_pairs)
+        super().__init__()
         from .utils import neighbor_list_with_cutoff
 
         self.calculate_pairs = neighbor_list_with_cutoff
         self.cutoff = cutoff
 
     def forward(
-        self, positions: torch.Tensor, atomic_subsystem_indices: torch.Tensor
+        self,
+        positions: torch.Tensor,
+        atomic_subsystem_indices: torch.Tensor,
+        only_unique_pairs: bool = False,
     ) -> Dict[str, torch.Tensor]:
         """
         Forward pass for Neighborlist.
@@ -127,19 +132,23 @@ class Neighborlist(Pairlist):
         positions : torch.Tensor, shape [nr_systems, nr_atoms, 3]
             Position tensor.
         atomic_subsystem_indices : torch.Tensor, shape [nr_atoms]
+        only_unique_pairs : bool, optional
+            If set to True, only unique pairs of atoms are considered, default is False.
+
+
         Returns
         -------
         dict : Dict[str, torch.Tensor], containing atom index pairs, distances, and displacement vectors.
             - 'pair_indices': torch.Tensor, shape (2, n_pairs)
-            - 'r_ij' : torch.Tensor, shape (3, n_pairs)
-            - 'd_ij' : torch.Tensor, shape (1, n_pairs)
+            - 'r_ij' : torch.Tensor, shape (n_pairs, 3)
+            - 'd_ij' : torch.Tensor, shape (n_pairs, 1)
 
         """
         pair_indices = self.calculate_pairs(
             positions,
             atomic_subsystem_indices,
             cutoff=self.cutoff,
-            only_unique_pairs=self.only_unique_pairs,
+            only_unique_pairs=only_unique_pairs,
         )
         r_ij = self.calculate_r_ij(pair_indices, positions)
 
@@ -150,17 +159,82 @@ class Neighborlist(Pairlist):
         }
 
 
-class LightningModuleMixin(pl.LightningModule):
-    """
-    A mixin for PyTorch Lightning training.
+from modelforge.potential.utils import AtomicSelfEnergies
+from abc import abstractmethod
+from openff.units import unit
+from typing import Dict, Type
 
-    Methods
-    -------
-    training_step(batch: Dict[str, torch.Tensor], batch_idx: int) -> torch.Tensor
-        Perform a single training step.
-    configure_optimizers() -> AdamW
-        Configures the optimizer for training.
+
+class BaseNeuralNetworkPotential(pl.LightningModule):
     """
+    Abstract Base class for neural network potentials.
+    """
+
+    def __init__(
+        self,
+        cutoff: unit.Quantity,
+        loss: Type[nn.Module] = nn.MSELoss(),
+        optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
+        lr: float = 1e-3,
+    ):
+        """
+        Initialize the NNP class.
+
+        Parameters
+        ----------
+        cutoff : unit.Quantity
+            Cutoff distance for neighbor list.
+        """
+        from .models import Neighborlist
+
+        super().__init__()
+        self.calculate_distances_and_pairlist = Neighborlist(cutoff)
+        self._dtype = None  # set at runtime
+        self._log_message_dtype = False
+        self._log_message_units = False
+        self._dataset_statistics: Dict = {
+            "scaling_mean": 0.0,
+            "scaling_stddev": 1.0,
+            "atomic_self_energies": AtomicSelfEnergies(),
+        }
+        self.loss_function = loss
+        self.optimizer = optimizer
+        self.learning_rate = lr
+        # initialize the per molecule readout module
+        from .utils import FromAtomToMoleculeReduction
+
+        self.readout_module = FromAtomToMoleculeReduction()
+
+    @property
+    def dataset_statistics(self):
+        return self._dataset_statistics
+
+    @dataset_statistics.setter
+    def dataset_statistics(self, dataset_statistics: Dict):
+
+        for key in ["scaling_mean", "scaling_stddev", "atomic_self_energies"]:
+            assert (
+                key in dataset_statistics.keys()
+            ), f"dataset_statistics must contain the key '{key}'"
+
+        self._dataset_statistics = dataset_statistics
+
+    @abstractmethod
+    def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
+        # needs to be implemented by the subclass
+        # if subclass needs any additional input preparation (e.g. embedding),
+        # it should be done here
+        pass
+
+    @abstractmethod
+    def _forward(self, inputs: Dict[str, torch.Tensor]):
+        # needs to be implemented by the subclass
+        # perform the forward pass implemented in the subclass
+        pass
+
+    def _readout(self, x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
+        # readout the per molecule values
+        return self.readout_module(x, index)
 
     def _log_batch_size(self, batch: Dict[str, torch.Tensor]):
         batch_size = int(len(batch["E_label"]))
@@ -175,7 +249,7 @@ class LightningModuleMixin(pl.LightningModule):
         Parameters
         ----------
         batch : Dict[str, torch.Tensor]
-            Batch data. Expected to include 'E', a tensor with shape [batch_size, 1].
+            Batch data. Expected to include 'E_predict', a tensor with shape [batch_size, 1].
         batch_idx : int
             Batch index.
 
@@ -185,18 +259,24 @@ class LightningModuleMixin(pl.LightningModule):
             Loss tensor.
         """
         batch_size = self._log_batch_size(batch)
-        predictions = self.forward(batch).flatten()
-        targets = batch["E_label"].flatten()
-        loss = self.loss_function(predictions, targets)
-        # Specify the batch size explicitly using self.log
+        predictions = self.forward(batch)["E_predict"].flatten()
+        targets = batch["E_label"].flatten().to(torch.float32)
+
+        import math
+
+        number_of_atoms = math.sqrt(len(batch["atomic_numbers"]))
+
+        # time.sleep(1)
+        loss = self.loss_function(predictions, targets) / number_of_atoms
         self.log(
             "train_loss",
             loss,
             on_epoch=True,
-            on_step=False,
+            on_step=True,
             prog_bar=True,
             batch_size=batch_size,
         )
+
         return loss
 
     def test_step(self, batch, batch_idx):
@@ -206,17 +286,21 @@ class LightningModuleMixin(pl.LightningModule):
 
         predictions = self.forward(batch).flatten()
         targets = batch["E_label"].flatten()
-        test_loss = F.mse_loss(predictions, targets)
-        self.log("test_loss", test_loss, batch_size=batch_size)
+        test_loss = F.mse_loss(predictions["E_predict"], targets)
+        self.log(
+            "test_loss", test_loss, batch_size=batch_size, on_epoch=True, prog_bar=True
+        )
 
     def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx):
         from torch.nn import functional as F
 
         batch_size = self._log_batch_size(batch)
-        predictions = self.forward(batch)
-        targets = batch["E_label"]
+        predictions = self.forward(batch)["E_predict"]
+        targets = batch["E_label"].squeeze(1)
         val_loss = F.mse_loss(predictions, targets)
-        self.log("val_loss", val_loss, batch_size=batch_size, on_epoch=True)
+        self.log(
+            "val_loss", val_loss, batch_size=batch_size, on_epoch=True, prog_bar=True
+        )
 
     def configure_optimizers(self) -> AdamW:
         """
@@ -230,74 +314,111 @@ class LightningModuleMixin(pl.LightningModule):
 
         return self.optimizer(self.parameters(), lr=self.learning_rate)
 
+    def _rescale_energy(self, energies: torch.Tensor) -> torch.Tensor:
 
-from abc import ABC, abstractmethod
-from openff.units import unit
+        return (
+            energies * self.dataset_statistics["scaling_stddev"]
+            + self.dataset_statistics["scaling_mean"]
+        )
 
+    def _calculate_molecular_self_energy(
+        self, inputs: Dict[str, torch.Tensor], number_of_molecules: int
+    ) -> torch.Tensor:
 
-class BaseNNP(ABC, nn.Module):
-    """
-    Abstract Base class for neural network potentials.
-    """
+        atomic_numbers = inputs["atomic_numbers"]
+        atomic_subsystem_indices = inputs["atomic_subsystem_indices"].to(
+            dtype=torch.long, device=self.device
+        )
 
-    def __init__(self, cutoff: unit.Quantity):
-        """
-        Initialize the NNP class.
+        # atomic_number_to_energy
+        atomic_self_energies = self.dataset_statistics["atomic_self_energies"]
+        ase_tensor_for_indexing = atomic_self_energies.ase_tensor_for_indexing.to(
+            device=self.device
+        )
+
+        # first, we need to use the atomic numbers to generate a tensor that
+        # contains the atomic self energy for each atomic number
+        ase_tensor = ase_tensor_for_indexing[atomic_numbers]
+
+        # then, we use the atomic_subsystem_indices to scatter add the atomic self
+        # energies in the ase_tensor to generate the molecular self energies
+        ase_tensor_zeros = torch.zeros((number_of_molecules,)).to(device=self.device)
+        ase_tensor = ase_tensor_zeros.scatter_add(
+            0, atomic_subsystem_indices, ase_tensor
+        )
+
+        return ase_tensor
+
+    def _energy_postprocessing(self, properties_per_molecule, inputs):
+
+        # first, resale the energies
+        processed_energy = {}
+        processed_energy["_raw_E_predict"] = properties_per_molecule.clone().detach()
+        properties_per_molecule = self._rescale_energy(properties_per_molecule)
+        processed_energy["_rescaled_E_predict"] = (
+            properties_per_molecule.clone().detach()
+        )
+        # then, calculate the molecular self energy
+        molecular_ase = self._calculate_molecular_self_energy(
+            inputs, properties_per_molecule.numel()
+        )
+        processed_energy["_molecular_ase"] = molecular_ase.clone().detach()
+        # add the molecular self energy to the rescaled energies
+        processed_energy["E"] = properties_per_molecule + molecular_ase
+        return processed_energy
+
+    def prepare_inputs(
+        self, inputs: Dict[str, torch.Tensor], only_unique_pairs: bool = True
+    ):
+        """Prepares the input tensors for passing to the model.
+
+        Performs general input manipulation like calculating distances,
+        generating the pair list, etc. Also calls the model-specific input
+        preparation.
 
         Parameters
         ----------
-        cutoff : float
-            Cutoff distance for atom centered interactions, in nanometer.
+        inputs : Dict[str, torch.Tensor]
+            Input tensors like atomic numbers, positions etc.
+        only_unique_pairs : bool, optional
+            Whether to only use unique pairs or not in the pairlist.
+        Returns
+        -------
+        inputs : Dict[str, torch.Tensor]
+            Input tensors after preparation.
         """
-        from .models import Pairlist
-
-        super().__init__()
-        self._cutoff = cutoff
-        self.calculate_distances_and_Pairlist = Pairlist()
-        self._dtype = None  # set at runtime
-        self._log_message_dtype = False
-        self._log_message_units = False
-
-    @abstractmethod
-    def prepare_inputs(self, inputs: Dict[str, torch.Tensor]):
-        # needs to be implemented by the subclass
-        # if subclass needs any additional input preparation (e.g. embedding),
-        # it should be done here
-        pass
-
-    @abstractmethod
-    def _forward(self, inputs: Dict[str, torch.Tensor]):
-        # needs to be implemented by the subclass
-        # perform the forward pass implemented in the subclass
-        pass
-
-    @abstractmethod
-    def _readout(self, input: Dict[str, torch.Tensor]):
-        # needs to be implemented by the subclass
-        # perform the readout operation implemented in the subclass
-        pass
-
-    def _prepare_inputs(self, inputs: Dict[str, torch.Tensor]):
-        atomic_numbers = inputs["atomic_numbers"]  # shape (nr_of_atoms_in_batch, 1)
-        positions = inputs["positions"]  # shape (nr_of_atoms_in_batch, 3)
+        # ---------------------------
+        # general input manipulation
+        atomic_numbers = inputs["atomic_numbers"]
+        positions = inputs["positions"]
         atomic_subsystem_indices = inputs["atomic_subsystem_indices"]
-        nr_of_atoms_in_batch = inputs["atomic_numbers"].shape[0]
+        atomic_index = inputs["atomic_index"]
+        number_of_atoms_in_batch = atomic_numbers.shape[0]
 
-        r = self.calculate_distances_and_Pairlist(positions, atomic_subsystem_indices)
+        r = self.calculate_distances_and_pairlist(
+            positions, atomic_subsystem_indices, only_unique_pairs
+        )
 
-        return {
+        inputs = {
             "pair_indices": r["pair_indices"],
             "d_ij": r["d_ij"],
             "r_ij": r["r_ij"],
-            "nr_of_atoms_in_batch": nr_of_atoms_in_batch,
+            "number_of_atoms_in_batch": number_of_atoms_in_batch,
             "positions": positions,
             "atomic_numbers": atomic_numbers,
             "atomic_subsystem_indices": atomic_subsystem_indices,
+            "atomic_index": atomic_index,
         }
+
+        # ---------------------------
+        # perform model specific modifications
+        inputs = self._model_specific_input_preparation(inputs)
+
+        return inputs
 
     def _set_dtype(self):
         dtypes = list({p.dtype for p in self.parameters()})
-        assert len(dtypes) == 1
+        assert len(dtypes) == 1, f"Multiple dtypes: {dtypes}"
 
         if not self._log_message_dtype:
             log.debug(f"Setting dtype to {dtypes[0]}.")
@@ -332,7 +453,8 @@ class BaseNNP(ABC, nn.Module):
             if key not in inputs:
                 raise ValueError(f"Missing required key: {key}")
 
-        if inputs["atomic_numbers"].dim() != 2:
+        if inputs["atomic_numbers"].dim() != 1:
+            print(inputs["atomic_numbers"])
             raise ValueError("Shape mismatch: 'atomic_numbers' should be a 2D tensor.")
 
         if inputs["positions"].dim() != 2:
@@ -366,9 +488,12 @@ class BaseNNP(ABC, nn.Module):
         ----------
         inputs : Dict[str, torch.Tensor]
             Inputs containing atomic numbers ('atomic_numbers'), coordinates ('positions') and pairlist ('pairlist').
-            - 'atomic_numbers': int; shape (nr_of_atoms_in_batch, 1), 0 indicates non-interacting atoms that will be masked
-            - 'total_charge' : int; shape (n_system)
-            - 'positions': float; shape (nr_of_atoms_in_batch, 3)
+        - 'atomic_numbers': int
+            shape (nr_of_atoms_in_batch, 1), 0 indicates non-interacting atoms that will be masked
+        - 'total_charge' : int
+            shape (n_system)
+        - 'positions': float
+            shape (nr_of_atoms_in_batch, 3)
 
         Returns
         -------
@@ -381,14 +506,25 @@ class BaseNNP(ABC, nn.Module):
         # perform input checks
         inputs = self._input_checks(inputs)
         # prepare the input for the forward pass
-        inputs = self.prepare_inputs(inputs)
+        inputs = self.prepare_inputs(inputs, self.only_unique_pairs)
         # perform the forward pass implemented in the subclass
-        output = self._forward(inputs)
+        outputs = self._forward(inputs)
+        # sum over atomic properties to generate per molecule properties
+        E = self._readout(outputs["E_i"], outputs["atomic_subsystem_indices"])
+        # postprocess energies: add atomic self energies,
+        # and other constant factors used to optionally normalize the data range of the training dataset
+        processed_energy = self._energy_postprocessing(E, inputs)
+        # return energies
+        return {
+            "E_predict": processed_energy["E"],
+            "_raw_E_predict": processed_energy["_raw_E_predict"],
+            "_rescaled_E_predict": processed_energy["_rescaled_E_predict"],
+            "_molecular_ase": processed_energy["_molecular_ase"],
+            "outputs": outputs,
+        }
 
-        return self._readout(output)
 
-
-class SingleTopologyAlchemicalBaseNNPModel(BaseNNP):
+class SingleTopologyAlchemicalBaseNNPModel(BaseNeuralNetworkPotential):
     """
     Subclass for handling alchemical energy calculations.
 

@@ -3,14 +3,14 @@ import torch.nn as nn
 from loguru import logger as log
 from typing import Dict, Callable, Tuple
 
-from .models import BaseNNP
+from .models import BaseNeuralNetworkPotential
 from .utils import Dense
 import torch
 import torch.nn.functional as F
 from openff.units import unit
 
 
-class PaiNN(BaseNNP):
+class PaiNN(BaseNeuralNetworkPotential):
     """PaiNN - polarizable interaction neural network
 
     References:
@@ -22,18 +22,18 @@ class PaiNN(BaseNNP):
     def __init__(
         self,
         max_Z: int = 100,
-        embedding_dimensions: int = 64,
-        nr_interaction_blocks: int = 2,
+        number_of_atom_features: int = 64,
+        number_of_radial_basis_functions: int = 16,
         cutoff: unit.Quantity = 5 * unit.angstrom,
-        number_of_gaussians_basis_functions: int = 16,
+        number_of_interaction_modules: int = 2,
         shared_interactions: bool = False,
         shared_filters: bool = False,
         epsilon: float = 1e-8,
     ):
 
         log.debug("Initializing PaiNN model.")
-        self.nr_interaction_blocks = nr_interaction_blocks
-        self.nr_atom_basis = nr_atom_basis = embedding_dimensions
+        self.number_of_interaction_modules = number_of_interaction_modules
+        self.number_of_atom_features = number_of_atom_features
         self.only_unique_pairs = False  # NOTE: for pairlist
         self.shared_filters = shared_filters
         super().__init__(cutoff=cutoff)
@@ -41,36 +41,42 @@ class PaiNN(BaseNNP):
         # embedding
         from modelforge.potential.utils import Embedding
 
-        self.embedding_module = Embedding(max_Z, embedding_dimensions)
+        self.embedding_module = Embedding(max_Z, number_of_atom_features)
 
         # initialize the energy readout
         from .utils import FromAtomToMoleculeReduction
 
-        self.readout_module = FromAtomToMoleculeReduction(embedding_dimensions)
+        self.readout_module = FromAtomToMoleculeReduction()
 
         # initialize representation block
         self.representation_module = PaiNNRepresentation(
             cutoff,
-            number_of_gaussians_basis_functions,
-            nr_interaction_blocks,
-            nr_atom_basis,
+            number_of_radial_basis_functions,
+            number_of_interaction_modules,
+            number_of_atom_features,
             shared_filters,
             self.device,
         )
 
-
         # initialize the interaction and mixing networks
         self.interaction_modules = nn.ModuleList(
-            PaiNNInteraction(nr_atom_basis, activation=F.silu)
-            for _ in range(nr_interaction_blocks)
+            PaiNNInteraction(number_of_atom_features, activation=F.silu)
+            for _ in range(number_of_interaction_modules)
         )
         self.mixing_modules = nn.ModuleList(
-            PaiNNMixing(nr_atom_basis, activation=F.silu, epsilon=epsilon)
-            for _ in range(nr_interaction_blocks)
+            PaiNNMixing(number_of_atom_features, activation=F.silu, epsilon=epsilon)
+            for _ in range(number_of_interaction_modules)
         )
 
-    def _readout(self, input: Dict[str, Tensor]):
-        return self.readout_module(input)
+        self.energy_layer = nn.Sequential(
+            Dense(
+                number_of_atom_features, number_of_atom_features, activation=nn.ReLU()
+            ),
+            Dense(
+                number_of_atom_features,
+                1,
+            ),
+        )
 
     def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
         # Perform atomic embedding
@@ -120,10 +126,12 @@ class PaiNN(BaseNNP):
 
         # Use squeeze to remove dimensions of size 1
         q = q.squeeze(dim=1)
+        E_i = self.energy_layer(q).squeeze(1)
 
         return {
-            "scalar_representation": q,
-            "vector_representation": mu,
+            "E_i": E_i,
+            "mu": mu,
+            "q": q,
             "atomic_subsystem_indices": inputs["atomic_subsystem_indices"],
         }
 
@@ -137,7 +145,7 @@ class PaiNNRepresentation(nn.Module):
     def __init__(
         self,
         cutoff: unit = 5 * unit.angstrom,
-        number_of_gaussians: int = 16,
+        number_of_radial_basis_functions: int = 16,
         nr_interaction_blocks: int = 3,
         nr_atom_basis: int = 8,
         shared_filters: bool = False,
@@ -154,7 +162,7 @@ class PaiNNRepresentation(nn.Module):
         from .utils import RadialSymmetryFunction
 
         self.radial_symmetry_function_module = RadialSymmetryFunction(
-            number_of_gaussians=number_of_gaussians,
+            number_of_radial_basis_functions=number_of_radial_basis_functions,
             radial_cutoff=cutoff,
             ani_style=False,
             dtype=torch.float32,
@@ -163,13 +171,13 @@ class PaiNNRepresentation(nn.Module):
         # initialize the filter network
         if shared_filters:
             filter_net = Dense(
-                number_of_gaussians,
+                number_of_radial_basis_functions,
                 3 * nr_atom_basis,
             )
 
         else:
             filter_net = Dense(
-                number_of_gaussians,
+                number_of_radial_basis_functions,
                 nr_interaction_blocks * nr_atom_basis * 3,
                 activation=None,
             )

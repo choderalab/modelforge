@@ -50,41 +50,42 @@ def test_energy_scaling_and_offset():
     assert torch.isclose(
         output_no_postprocessing["_raw_E_predict"], output_with_ase["_raw_E_predict"]
     )
-    
+
     # make sure that the difference in E_predict is the ase
     assert torch.isclose(
         output_with_ase["E_predict"] - output_no_postprocessing["E_predict"],
         output_with_ase["_molecular_ase"],
     )
-    
+
     # -------------------------------#
-    # Test energy scaling    
-    
+    # Test energy scaling
+
     a = 7
 
 
-@pytest.mark.parametrize("model_class", MODELS_TO_TEST)
+@pytest.mark.parametrize("default_model", MODELS_TO_TEST)
 @pytest.mark.parametrize("dataset", DATASETS)
-def test_forward_pass(model_class, dataset):
+def test_forward_pass(default_model, dataset):
+    # this test sends a single batch from different datasets through the model
 
-    # test the forward pass through each of the models
-    initialized_model = setup_simple_model(model_class)
+    # initialize default model
+    model = default_model()
+    # return a single batch
     inputs = return_single_batch(
         dataset,
     )  # split_file="modelforge/tests/qm9tut/split.npz")
-
     nr_of_mols = inputs["atomic_subsystem_indices"].unique().shape[0]
-    nr_of_atoms_per_batch = inputs["atomic_subsystem_indices"].shape[0]
 
-    output = initialized_model(inputs)["E_predict"]
+    # test the forward pass through each of the models
+    output = model(inputs)["E_predict"]
 
     # test tat we get an energie per molecule
     assert len(output) == nr_of_mols
 
 
 @pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
-@pytest.mark.parametrize("model_class", MODELS_TO_TEST)
-def test_calculate_energies_and_forces(input_data, model_class):
+@pytest.mark.parametrize("default_model", MODELS_TO_TEST)
+def test_calculate_energies_and_forces(input_data, default_model):
     """
     Test the calculation of energies and forces for a molecule.
     """
@@ -93,9 +94,15 @@ def test_calculate_energies_and_forces(input_data, model_class):
     # test the backward pass through each of the models
     nr_of_mols = input_data["atomic_subsystem_indices"].unique().shape[0]
     nr_of_atoms_per_batch = input_data["atomic_subsystem_indices"].shape[0]
-    model = setup_simple_model(model_class)
+
+    # initialize model with default parameters
+    model = default_model()
+
+    # forward pass
     result = model(input_data)["E_predict"]
     print(result.sum())
+
+    # backpropagation
     forces = -torch.autograd.grad(
         result.sum(), input_data["positions"], create_graph=True, retain_graph=True
     )[0]
@@ -303,7 +310,7 @@ def test_pairlist():
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
-def testPairlist_on_dataset(dataset):
+def test_pairlist_on_dataset(dataset):
     from modelforge.dataset.dataset import TorchDataModule
     from modelforge.potential.models import Neighborlist
 
@@ -327,19 +334,24 @@ def testPairlist_on_dataset(dataset):
 
 
 @pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
-@pytest.mark.parametrize("model_class", MODELS_TO_TEST)
-def test_equivariant_energies_and_forces(input_data, model_class):
+@pytest.mark.parametrize("default_model", MODELS_TO_TEST)
+def test_equivariant_energies_and_forces(input_data, default_model):
     """
     Test the calculation of energies and forces for a molecule.
     This test will be adapted once we have a trained model.
     """
     import torch
 
+    # define the symmetry operations
     translation, rotation, reflection = equivariance_test_utils()
 
-    # increase precision to 64 bit
+    # set seed manually
     torch.manual_seed(1234)
-    model = setup_simple_model(model_class).double()
+    # initialize the models
+    model = default_model().to(torch.float64)
+
+    # ------------------- #
+    # start the test
     input_data["positions"] = input_data["positions"]
     # reference values
     reference_result = model(input_data)["E_predict"].double()

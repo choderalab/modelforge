@@ -32,6 +32,7 @@ dependencies:
   - qcportal>=0.50
   - requests
   - torchani
+  - pytorch_scatter
 
   # pip installs
   - pip:

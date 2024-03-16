@@ -1,4 +1,4 @@
-from modelforge.potential.schnet import SchNET
+from modelforge.potential.schnet import SchNet
 
 import pytest
 from .helper_functions import (
@@ -10,7 +10,7 @@ from .helper_functions import (
 
 def test_Schnet_init():
     """Test initialization of the Schnet model."""
-    schnet = setup_simple_model(SchNET)
+    schnet = setup_simple_model(SchNet)
     assert schnet is not None, "Schnet model should be initialized."
 
 
@@ -39,7 +39,7 @@ def test_schnet_forward(input_data, model_parameter):
         nr_interaction_blocks,
     ) = model_parameter
     schnet = setup_simple_model(
-        SchNET,
+        SchNet,
         nr_atom_basis=nr_atom_basis,
         max_atomic_number=max_atomic_number,
         number_of_gaussians=number_of_gaussians,
@@ -52,4 +52,3 @@ def test_schnet_forward(input_data, model_parameter):
     assert (
         len(energy) == nr_of_mols
     )  # Assuming energy is calculated per sample in the batch
-

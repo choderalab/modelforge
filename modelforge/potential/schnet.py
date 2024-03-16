@@ -4,18 +4,18 @@ import torch
 from loguru import logger as log
 import torch.nn as nn
 
-from .models import BaseNNP
+from .models import BaseNeuralNetworkPotential
 from openff.units import unit
 
 
-class SchNET(BaseNNP):
+class SchNet(BaseNeuralNetworkPotential):
     def __init__(
         self,
         max_Z: int = 100,
-        embedding_dimensions: int = 64,
-        nr_interaction_blocks: int = 2,
+        number_of_atom_features: int = 64,
+        number_of_radial_basis_functions: int = 16,
+        nr_interaction_modules: int = 2,
         cutoff: unit.Quantity = 5 * unit.angstrom,
-        number_of_gaussians_basis_functions: int = 16,
         nr_filters: int = None,
         shared_interactions: bool = False,
     ) -> None:
@@ -24,52 +24,63 @@ class SchNET(BaseNNP):
 
         Parameters
         ----------
-        embedding : nn.Module
-        nr_interaction_blocks : int
-            Number of interaction blocks in the architecture.
-        radial_symmetry_function_module : nn.Module
-        cutoff : nn.Module
-        nr_filters : int, optional
-            Number of filters; defines the dimensionality of the intermediate features.
+        max_Z : int, default=100
+            Maximum atomic number to be embedded.
+        number_of_atom_features : int, default=64
+            Dimension of the embedding vectors for atomic numbers.
+        number_of_radial_basis_functions:int, default=16
+        nr_interaction_modules : int, default=2
+        cutoff : openff.units.unit.Quantity, default=5*unit.angstrom
+            The cutoff distance for interactions.
         """
+        from .utils import ShiftedSoftplus, Dense
 
         log.debug("Initializing SchNet model.")
 
         self.only_unique_pairs = False  # NOTE: for pairlist
         super().__init__(cutoff=cutoff)
-        self.nr_atom_basis = embedding_dimensions
-        self.nr_filters = nr_filters or self.nr_atom_basis
-        self.number_of_gaussians_basis_functions = number_of_gaussians_basis_functions
+        self.number_of_atom_features = number_of_atom_features
+        self.nr_filters = nr_filters or self.number_of_atom_features
+        self.number_of_radial_basis_functions = number_of_radial_basis_functions
 
         # embedding
         from modelforge.potential.utils import Embedding
 
-        self.embedding_module = Embedding(max_Z, embedding_dimensions)
+        self.embedding_module = Embedding(max_Z, number_of_atom_features)
 
         # initialize the energy readout
         from .utils import FromAtomToMoleculeReduction
 
-        self.readout_module = FromAtomToMoleculeReduction(self.nr_atom_basis)
+        self.readout_module = FromAtomToMoleculeReduction()
 
         # Initialize representation block
         self.schnet_representation_module = SchNETRepresentation(
-            cutoff, number_of_gaussians_basis_functions, self.device
+            cutoff, number_of_radial_basis_functions, self.device
         )
         # Intialize interaction blocks
         self.interaction_modules = nn.ModuleList(
             [
                 SchNETInteractionModule(
-                    self.nr_atom_basis,
+                    self.number_of_atom_features,
                     self.nr_filters,
-                    number_of_gaussians_basis_functions,
+                    number_of_radial_basis_functions,
                 )
-                for _ in range(nr_interaction_blocks)
+                for _ in range(nr_interaction_modules)
             ]
         )
 
-    def _readout(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
-        # Compute the energy for each system
-        return self.readout_module(inputs)
+        # final output layer
+        self.energy_layer = nn.Sequential(
+            Dense(
+                number_of_atom_features,
+                number_of_atom_features,
+                activation=ShiftedSoftplus(),
+            ),
+            Dense(
+                number_of_atom_features,
+                1,
+            ),
+        )
 
     def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
         # Perform atomic embedding
@@ -111,47 +122,59 @@ class SchNET(BaseNNP):
             )
             x = x + v  # Update atomic features
 
+        E_i = self.energy_layer(x).squeeze(1)
+
         return {
-            "scalar_representation": x,
+            "E_i": E_i,
+            "q": x,
             "atomic_subsystem_indices": inputs["atomic_subsystem_indices"],
         }
 
 
 class SchNETInteractionModule(nn.Module):
     def __init__(
-        self, nr_atom_basis: int, nr_filters: int, number_of_gaussians: int
+        self,
+        number_of_atom_features: int,
+        nr_filters: int,
+        number_of_radial_basis_functions: int,
     ) -> None:
         """
         Initialize the SchNet interaction block.
 
         Parameters
         ----------
-        nr_atom_basis : int
-            Number of atom basis, defines the dimensionality of the output features.
+        number_of_atom_features : int
+            Number of atom ffeatures, defines the dimensionality of the embedding.
         nr_filters : int
             Number of filters, defines the dimensionality of the intermediate features.
-        number_of_gaussians : int
+        number_of_radial_basis_functions : int
             Number of radial basis functions.
         """
         super().__init__()
         from .utils import ShiftedSoftplus, Dense
 
         assert (
-            number_of_gaussians > 4
+            number_of_radial_basis_functions > 4
         ), "Number of radial basis functions must be larger than 10."
         assert nr_filters > 1, "Number of filters must be larger than 1."
-        assert nr_atom_basis > 10, "Number of atom basis must be larger than 10."
+        assert (
+            number_of_atom_features > 10
+        ), "Number of atom basis must be larger than 10."
 
-        self.nr_atom_basis = nr_atom_basis  # Initialize parameters
+        self.number_of_atom_features = number_of_atom_features  # Initialize parameters
         self.intput_to_feature = Dense(
-            nr_atom_basis, nr_filters, bias=False, activation=None
+            number_of_atom_features, nr_filters, bias=False, activation=None
         )
         self.feature_to_output = nn.Sequential(
-            Dense(nr_filters, nr_atom_basis, activation=ShiftedSoftplus()),
-            Dense(nr_atom_basis, nr_atom_basis, activation=None),
+            Dense(nr_filters, number_of_atom_features, activation=ShiftedSoftplus()),
+            Dense(number_of_atom_features, number_of_atom_features, activation=None),
         )
         self.filter_network = nn.Sequential(
-            Dense(number_of_gaussians, nr_filters, activation=ShiftedSoftplus()),
+            Dense(
+                number_of_radial_basis_functions,
+                nr_filters,
+                activation=ShiftedSoftplus(),
+            ),
             Dense(nr_filters, nr_filters, activation=None),
         )
 
@@ -159,7 +182,7 @@ class SchNETInteractionModule(nn.Module):
         self,
         x: torch.Tensor,
         pairlist: torch.Tensor,  # shape [n_pairs, 2]
-        f_ij: torch.Tensor,  # shape [n_pairs, 1, number_of_gaussians]
+        f_ij: torch.Tensor,  # shape [n_pairs, 1, number_of_radial_basis_functions]
         f_ij_cutoff: torch.Tensor,  # shape [n_pairs, 1]
     ) -> torch.Tensor:
         """
@@ -170,7 +193,7 @@ class SchNETInteractionModule(nn.Module):
         x : torch.Tensor, shape [nr_of_atoms_in_systems, nr_atom_basis]
             Input feature tensor for atoms.
         pairlist : torch.Tensor, shape [n_pairs, 2]
-        f_ij : torch.Tensor, shape [n_pairs, 1, number_of_gaussians]
+        f_ij : torch.Tensor, shape [n_pairs, 1, number_of_radial_basis_functions]
             Radial basis functions for pairs of atoms.
         f_ij_cutoff : torch.Tensor, shape [n_pairs, 1]
 
@@ -209,7 +232,7 @@ class SchNETRepresentation(nn.Module):
     def __init__(
         self,
         radial_cutoff: unit.Quantity,
-        number_of_gaussians: int,
+        number_of_radial_basis_functions: int,
         device: torch.device = torch.device("cpu"),
     ):
         """
@@ -222,7 +245,7 @@ class SchNETRepresentation(nn.Module):
         super().__init__()
 
         self.radial_symmetry_function_module = self._setup_radial_symmetry_functions(
-            radial_cutoff, number_of_gaussians
+            radial_cutoff, number_of_radial_basis_functions
         )
         self.device = device
         # cutoff
@@ -231,12 +254,12 @@ class SchNETRepresentation(nn.Module):
         self.cutoff_module = CosineCutoff(radial_cutoff, self.device)
 
     def _setup_radial_symmetry_functions(
-        self, radial_cutoff: unit.Quantity, number_of_gaussians: int
+        self, radial_cutoff: unit.Quantity, number_of_radial_basis_functions: int
     ):
         from .utils import RadialSymmetryFunction
 
         radial_symmetry_function = RadialSymmetryFunction(
-            number_of_gaussians=number_of_gaussians,
+            number_of_radial_basis_functions=number_of_radial_basis_functions,
             radial_cutoff=radial_cutoff,
             ani_style=False,
             dtype=torch.float32,
@@ -253,13 +276,13 @@ class SchNETRepresentation(nn.Module):
 
         Returns
         -------
-        Radial basis functions for pairs of atoms; shape [n_pairs, 1, number_of_gaussians]
+        Radial basis functions for pairs of atoms; shape [n_pairs, 1, number_of_radial_basis_functions]
         """
 
         # Convert distances to radial basis functions
         f_ij = self.radial_symmetry_function_module(
             d_ij
-        )  # shape (n_pairs, 1, number_of_gaussians)
+        )  # shape (n_pairs, 1, number_of_radial_basis_functions)
 
         f_cutoff = self.cutoff_module(d_ij)  # shape (n_pairs, 1)
 

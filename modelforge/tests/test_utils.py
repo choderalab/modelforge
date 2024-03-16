@@ -82,32 +82,36 @@ def test_rbf(RadialSymmetryFunction):
     from openff.units import unit
 
     radial_symmetry_function_module = RadialSymmetryFunction(
-        number_of_gaussians=20, radial_cutoff=unit.Quantity(5.0, unit.angstrom)
+        number_of_radial_basis_functions=20,
+        radial_cutoff=unit.Quantity(5.0, unit.angstrom),
     )
     output = radial_symmetry_function_module(
         pairlist["d_ij"]
-    )  # Shape: [n_pairs, number_of_gaussians]
+    )  # Shape: [n_pairs, number_of_radial_basis_functions]
     # Add assertion to check the shape of the output
-    assert output.shape[2] == 20  # number_of_gaussians dimension
+    assert output.shape[2] == 20  # number_of_radial_basis_functions dimension
 
 
 @pytest.mark.parametrize("RadialSymmetryFunction", [RadialSymmetryFunction])
-def test_gaussian_rbf(RadialSymmetryFunction):
+def test_radial_symmetry_functions(RadialSymmetryFunction):
     # Check dimensions of output and output
     from openff.units import unit
 
-    number_of_gaussians = 5
+    number_of_radial_basis_functions = 5
     cutoff = unit.Quantity(10.0, unit.angstrom)
     start = unit.Quantity(0.0, unit.angstrom)
 
     radial_symmetry_function_module = RadialSymmetryFunction(
-        number_of_gaussians=number_of_gaussians,
+        number_of_radial_basis_functions=number_of_radial_basis_functions,
         radial_cutoff=cutoff,
         radial_start=start,
     )
 
     # Test that the number of radial basis functions is correct
-    assert radial_symmetry_function_module.number_of_gaussians == number_of_gaussians
+    assert (
+        radial_symmetry_function_module.number_of_radial_basis_functions
+        == number_of_radial_basis_functions
+    )
 
     # Test that the cutoff distance is correct
     assert (
@@ -117,7 +121,9 @@ def test_gaussian_rbf(RadialSymmetryFunction):
 
     # Test that the widths and offsets are correct
     expected_offsets = torch.linspace(
-        start.to(unit.nanometer).m, cutoff.to(unit.nanometer).m, number_of_gaussians
+        start.to(unit.nanometer).m,
+        cutoff.to(unit.nanometer).m,
+        number_of_radial_basis_functions,
     )
     expected_widths = torch.abs(
         expected_offsets[1] - expected_offsets[0]
@@ -127,7 +133,7 @@ def test_gaussian_rbf(RadialSymmetryFunction):
     # Test that the forward pass returns the expected output
     d_ij = torch.tensor([[1.0], [2.0], [3.0]])
     expected_output = radial_symmetry_function_module(d_ij)
-    assert expected_output.shape == (3, 1, number_of_gaussians)
+    assert expected_output.shape == (3, 1, number_of_radial_basis_functions)
 
 
 def test_scatter_add():
@@ -175,24 +181,24 @@ def test_energy_readout():
     # the EnergyReadout module performs a linear pass to reduce the nr_of_atom_basis to 1
     # and then performs a scatter add operation to return a tensor with size [nr_of_molecules,]
 
-    # the input for the EnergyReadout module is a diction with 'scalar_representation' (nr_of_atoms, nr_of_atom_basis)
-    # and 'atomic_subsystem_indices (nr_of_atoms_in_batch)
-    nr_of_atom_basis = 128
-    nr_of_atoms_in_batch = 8
+    # the input for the EnergyReadout module is vector (E_i) that will be scatter_added, and 
+    # a second tensor supplying the indixes for the summation
 
-    inputs = {}
-    inputs["scalar_representation"] = torch.rand(nr_of_atoms_in_batch, nr_of_atom_basis)
-    inputs["atomic_subsystem_indices"] = torch.tensor([0, 0, 1, 1, 1, 1, 1, 1])
+    E_i = torch.tensor([3, 3, 1, 1, 1, 1, 1, 1], dtype=torch.float32)
+    atomic_subsystem_indices = torch.tensor([0, 0, 1, 1, 1, 1, 1, 1])
 
-    energy_readout = FromAtomToMoleculeReduction(nr_of_atom_basis)
-    x_ = energy_readout(inputs)
+    energy_readout = FromAtomToMoleculeReduction()
+    E = energy_readout(E_i, atomic_subsystem_indices)
 
     # check that output has length of total number of molecules in batch
-    assert x_.size() == torch.Size(
+    assert E.size() == torch.Size(
         [
             2,
         ]
     )
+    # check that the correct values were summed
+    assert torch.isclose(E[0], torch.tensor([6.0], dtype=torch.float32))
+    assert torch.isclose(E[1], torch.tensor([6.0], dtype=torch.float32))
 
 
 def test_welford():

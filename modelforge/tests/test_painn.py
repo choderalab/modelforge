@@ -45,10 +45,10 @@ def test_painn_forward(input_data, model_parameter):
     ) = model_parameter
     painn = PaiNN(
         max_Z=max_Z,
-        embedding_dimensions=embedding_dimensions,
-        number_of_gaussians_basis_functions=number_of_gaussians,
+        number_of_atom_features=embedding_dimensions,
+        number_of_radial_basis_functions=number_of_gaussians,
         cutoff=cutoff,
-        nr_interaction_blocks=nr_interaction_blocks,
+        number_of_interaction_modules=nr_interaction_blocks,
     )
     energy = painn(input_data)["E_predict"]
     nr_of_mols = input_data["atomic_subsystem_indices"].unique().shape[0]

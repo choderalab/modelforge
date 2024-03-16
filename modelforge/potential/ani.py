@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from loguru import logger as log
-from modelforge.potential.models import BaseNNP
+from modelforge.potential.models import BaseNeuralNetworkPotential
 from typing import Dict, NamedTuple, Tuple
 from openff.units import unit
 
@@ -349,7 +349,7 @@ class ANIInteraction(nn.Module):
         return output.view_as(species)
 
 
-class ANI2x(BaseNNP):
+class ANI2x(BaseNeuralNetworkPotential):
 
     def __init__(
         self,
@@ -393,10 +393,6 @@ class ANI2x(BaseNNP):
         # Intialize interaction blocks
         self.interaction_modules = ANIInteraction(self.aev_length)
 
-    def _readout(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
-        # Compute the energy for each system
-        return self.readout_module(inputs)
-
     def _model_specific_input_preparation(
         self, inputs: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
@@ -424,26 +420,9 @@ class ANI2x(BaseNNP):
         # compute the representation (atomic environment vectors) for each atom
         representation = self.ani_representation_module(inputs)
         # compute the atomic energies
-        per_species_energies = self.interaction_modules(representation)
+        E_i = self.interaction_modules(representation)
 
         return {
-            "scalar_representation": per_species_energies,
+            "E_i": E_i,
             "atomic_subsystem_indices": inputs["atomic_subsystem_indices"],
         }
-
-    def _readout(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
-
-        per_species_energies = inputs["scalar_representation"]
-        atomic_subsystem_indices = inputs["atomic_subsystem_indices"]
-        # output tensor for the sums, size based on the number of unique values in atomic_subsystem_indices
-        energy_per_molecule = torch.zeros(
-            atomic_subsystem_indices.max() + 1,
-            dtype=per_species_energies.dtype,
-            device=per_species_energies.device,
-        )
-
-        # use index_add_ to sum values in per_species_energies according to indices in atomic_subsystem_indices
-        energy_per_molecule.index_add_(
-            0, atomic_subsystem_indices, per_species_energies
-        )
-        return energy_per_molecule

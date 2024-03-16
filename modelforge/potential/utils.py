@@ -220,50 +220,38 @@ from typing import Dict
 
 class FromAtomToMoleculeReduction(nn.Module):
 
-    def __init__(self, nr_atom_basis: int):
+    def __init__(self):
         """
         Initializes the energy readout module.
         Performs the reduction of 'per_atom' property to 'per_molecule' property.
-
-        Parameters
-        ----------
-        nr_atom_basis : int
-            Number of atom basis.
         """
         super().__init__()
-        self.energy_layer = nn.Sequential(
-            Dense(nr_atom_basis, nr_atom_basis, activation=nn.ReLU()),
-            Dense(
-                nr_atom_basis,
-                1,
-            ),
-        )
 
-    def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
         """
 
         Parameters
         ----------
-        inputs : Dict[str, torch.Tensor],
-            "scalar_representation", shape [nr_of_atoms_in_batch, nr_atom_basis]
-            "atomic_subsystem_indices", shape [nr_of_atoms_in_batch]
+        x, shape [nr_of_atoms, 1]
+        index, shape [nr_of_atoms]
+
         Returns
         -------
-        Tensor, shape [nr_of_moleculs_in_batch, 1]
+        Tensor, shape [nr_of_moleculs, 1]
             The total energy tensor.
         """
-        x = self.energy_layer(inputs["scalar_representation"])
-        atomic_subsystem_indices = inputs["atomic_subsystem_indices"]
 
         # Perform scatter add operation
-        indices = atomic_subsystem_indices.unsqueeze(1).to(torch.int64)
+        indices = index.to(torch.int64)
         total_energy_per_molecule = torch.zeros(
-            len(atomic_subsystem_indices.unique()), 1, dtype=x.dtype, device=x.device
-        ).scatter_add(0, indices, x)
+            len(index.unique()), dtype=x.dtype, device=x.device
+        )
+
+        total_energy_per_molecule = total_energy_per_molecule.scatter_add(0, indices, x)
 
         # Sum across feature dimension to get final tensor of shape (num_molecules, 1)
         # total_energy_per_molecule = result.sum(dim=1, keepdim=True)
-        return total_energy_per_molecule.squeeze(1)
+        return total_energy_per_molecule
 
 
 from dataclasses import dataclass, field
@@ -563,7 +551,7 @@ class RadialSymmetryFunction(nn.Module):
 
     def __init__(
         self,
-        number_of_gaussians: int,
+        number_of_radial_basis_functions: int,
         radial_cutoff: unit.Quantity,
         radial_start: unit.Quantity = 0.0 * unit.nanometer,
         dtype: Optional[torch.dtype] = None,
@@ -575,7 +563,7 @@ class RadialSymmetryFunction(nn.Module):
 
         Parameters
         ----------
-        number_of_gaussians : int
+        number_of_radial_basis_functions : int
             Number of radial basis functions.
         radial_cutoff : unit.Quantity
             The cutoff distance.
@@ -587,7 +575,7 @@ class RadialSymmetryFunction(nn.Module):
 
         log.info(f"RadialSymmetryFunction: ani-style: {ani_style}")
         super().__init__()
-        self.number_of_gaussians = number_of_gaussians
+        self.number_of_radial_basis_functions = number_of_radial_basis_functions
         self.radial_cutoff = radial_cutoff
         _unitless_radial_cutoff = radial_cutoff.to(unit.nanometer).m
         self.radial_start = radial_start
@@ -598,14 +586,14 @@ class RadialSymmetryFunction(nn.Module):
             offsets = torch.linspace(
                 _unitless_radial_start,
                 _unitless_radial_cutoff,
-                number_of_gaussians + 1,
+                number_of_radial_basis_functions + 1,
                 dtype=dtype,
             )[:-1]
         else:
             offsets = torch.linspace(
                 _unitless_radial_start,
                 _unitless_radial_cutoff,
-                number_of_gaussians,
+                number_of_radial_basis_functions,
                 dtype=dtype,
             )  # R_s
         # calculate EtaR
@@ -643,7 +631,7 @@ class RadialSymmetryFunction(nn.Module):
             f"""
 RadialSymmetryFunction: 
 cutoff={self.radial_cutoff} 
-number_of_gaussians={self.number_of_gaussians} 
+number_of_gaussians={self.number_of_radial_basis_functions} 
 """
         )
 

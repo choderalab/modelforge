@@ -300,16 +300,24 @@ class PhysNetInteractionModule(nn.Module):
 
 
 class PhysNetOutput(nn.Module):
-    # FIXME
-    def __init__(self, number_of_atom_features: int):
+
+    def __init__(
+        self, number_of_atom_features: int, number_of_atomic_properties: int = 2
+    ):
+        from .utils import ShiftedSoftplus
+
         super().__init__()
-        residual = PhysNetResidual(number_of_atom_features, number_of_atom_features)
+        self.residual = PhysNetResidual(
+            number_of_atom_features, number_of_atom_features
+        )
         self.output = nn.Sequential(
-            nn.Linear(number_of_atom_features, number_of_atom_features),
+            nn.Linear(number_of_atom_features, number_of_atomic_properties),
+            ShiftedSoftplus(),
         )
 
-    def forward(self, inputs: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
-        return inputs
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.output(self.residual(x))
+        return x
 
 
 class PhysNetModule(nn.Module):
@@ -344,7 +352,10 @@ class PhysNetModule(nn.Module):
                 for _ in range(number_of_interaction_residual)
             ]
         )
-        self.output = PhysNetOutput(number_of_radial_basis_functions)
+        self.output = PhysNetOutput(
+            number_of_atom_features=number_of_atom_features,
+            number_of_atomic_properties=2,
+        )
 
     def forward(self, inputs: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
@@ -382,8 +393,8 @@ class PhysNetModule(nn.Module):
         # calculate the module output
         module_output = self.output(v)
         return {
-            "output_of_module": module_output,
-            "v": v,  # input for next module
+            "prediction": module_output,
+            "updated_embedding": v,  # input for next module
         }
 
 
@@ -421,10 +432,6 @@ class PhysNet(BaseNeuralNetworkPotential):
 
         self.embedding_module = Embedding(max_Z, number_of_atom_features)
 
-        # initialize the energy readout
-        from .utils import FromAtomToMoleculeReduction
-
-        self.readout_module = FromAtomToMoleculeReduction()
 
         self.physnet_representation_module = PhysNetRepresentation(
             cutoff=cutoff,
@@ -441,9 +448,9 @@ class PhysNet(BaseNeuralNetworkPotential):
             ]
         )
 
-    def _readout(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
-        # Compute the energy for each system
-        return self.readout_module(inputs)
+        self.atomic_scale = nn.Parameter(torch.ones(max_Z, 2))
+        self.atomic_shift = nn.Parameter(torch.ones(max_Z, 2))
+
 
     def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
         # Perform atomic embedding
@@ -511,21 +518,29 @@ class PhysNet(BaseNeuralNetworkPotential):
         #                       └────────────---┘
 
         # the atomic energies are accumulated in per_atom_energies
-        per_atom_energies = torch.zeros(
-            (nr_of_atoms_in_batch, self.embedding_module.embedding_dim),
+        prediction_i = torch.zeros(
+            (nr_of_atoms_in_batch, 2),
             device=inputs["d_ij"].device,
         )
+
         for module in self.physnet_module:
             output_of_module = module(input_for_module)
             # accumulate output for atomic energies
-            per_atom_energies += output_of_module["output_of_module"]
+            prediction_i += output_of_module["prediction"]
             # update embedding for next module
-            input_for_module["atomic_embedding"] = output_of_module["v"]
+            input_for_module["atomic_embedding"] = output_of_module["updated_embedding"]
+
+        prediction_i_shifted_scaled = (
+            self.atomic_shift[inputs["atomic_numbers"]] * prediction_i
+            + self.atomic_scale[inputs["atomic_numbers"]]
+        )
 
         # sum over atom features
-        per_atom_energies = per_atom_energies.sum(1)  # shape(nr_of_atoms, 1)
+        E_i = prediction_i_shifted_scaled[:, 0]  # shape(nr_of_atoms, 1)
+        q_i = prediction_i_shifted_scaled[:, 1]  # shape(nr_of_atoms, 1)
         output = {
-            "scalar_representation": per_atom_energies,
+            "E": E_i,
+            "q_i": q_i,
             "atomic_subsystem_indices": inputs["atomic_subsystem_indices"],
         }
 

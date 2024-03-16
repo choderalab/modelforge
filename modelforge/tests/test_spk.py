@@ -526,13 +526,16 @@ def setup_spk_schnet_representation(
 
 
 def setup_mf_schnet_representation(
-    cutoff: float, number_of_atom_features: int, number_of_radial_basis_functions: int, nr_of_interactions: int
+    cutoff: float,
+    number_of_atom_features: int,
+    number_of_radial_basis_functions: int,
+    nr_of_interactions: int,
 ):
     # ------------------------------------ #
     # set up the modelforge Painn representation model
     # which means that we only want to call the
     # _transform_input() method
-    from modelforge.potential.schnet import SchNET as mf_SchNET
+    from modelforge.potential.schnet import SchNet as mf_SchNET
 
     return mf_SchNET(
         number_of_atom_features=number_of_atom_features,
@@ -685,8 +688,6 @@ def test_schnet_representation_implementation():
     )
 
     assert torch.allclose(embedding_spk, embedding_mf)
-
-    f_ij_cutoff = (f_ij_mf * r_cut_ij_mf.unsqueeze(1)).squeeze(1)
 
     for mf_interaction, spk_interaction in zip(
         modelforge_schnet.interaction_modules, schnetpack_schnet.interactions

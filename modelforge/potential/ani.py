@@ -424,26 +424,26 @@ class ANI2x(BaseNeuralNetworkPotential):
         # compute the representation (atomic environment vectors) for each atom
         representation = self.ani_representation_module(inputs)
         # compute the atomic energies
-        per_species_energies = self.interaction_modules(representation)
+        E_i = self.interaction_modules(representation)
 
         return {
-            "scalar_representation": per_species_energies,
+            "E_i": E_i,
             "atomic_subsystem_indices": inputs["atomic_subsystem_indices"],
         }
 
     def _readout(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
 
-        per_species_energies = inputs["scalar_representation"]
+        E_i = inputs["E_i"]
         atomic_subsystem_indices = inputs["atomic_subsystem_indices"]
         # output tensor for the sums, size based on the number of unique values in atomic_subsystem_indices
-        energy_per_molecule = torch.zeros(
+        E = torch.zeros(
             atomic_subsystem_indices.max() + 1,
-            dtype=per_species_energies.dtype,
-            device=per_species_energies.device,
+            dtype=E_i.dtype,
+            device=E_i.device,
         )
 
         # use index_add_ to sum values in per_species_energies according to indices in atomic_subsystem_indices
-        energy_per_molecule.index_add_(
-            0, atomic_subsystem_indices, per_species_energies
+        E.index_add_(
+            0, atomic_subsystem_indices, E_i
         )
-        return energy_per_molecule
+        return E

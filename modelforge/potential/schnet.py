@@ -8,7 +8,7 @@ from .models import BaseNeuralNetworkPotential
 from openff.units import unit
 
 
-class SchNET(BaseNeuralNetworkPotential):
+class SchNet(BaseNeuralNetworkPotential):
     def __init__(
         self,
         max_Z: int = 100,

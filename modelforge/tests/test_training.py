@@ -3,7 +3,7 @@ from typing import Optional, Type
 import pytest
 
 from modelforge.potential.models import BaseNeuralNetworkPotential
-from modelforge.potential.schnet import SchNET
+from modelforge.potential.schnet import SchNet
 
 from .helper_functions import (
     MODELS_TO_TEST,
@@ -54,7 +54,7 @@ def test_pt_lightning():
     # This is an example script that trains the PaiNN model on the QM9 dataset.
     from lightning import Trainer
     import torch
-    from modelforge.potential.schnet import SchNET
+    from modelforge.potential.schnet import SchNet
 
     from modelforge.dataset.qm9 import QM9Dataset
     from modelforge.dataset.dataset import TorchDataModule
@@ -69,7 +69,7 @@ def test_pt_lightning():
     dataset.prepare_data(remove_self_energies=True, normalize=True)
 
     # Set up model
-    model = SchNET()  # PaiNN() # SchNET()
+    model = SchNet()  # PaiNN() # SchNET()
     model = model.to(torch.float32)
 
     # set up traininer

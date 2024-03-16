@@ -2,13 +2,12 @@ import torch
 
 from modelforge.dataset.dataset import TorchDataModule
 from modelforge.dataset.qm9 import QM9Dataset
-from modelforge.potential.schnet import SchNET
-from modelforge.potential.painn import PaiNN
+from modelforge.potential import SchNet, PaiNN, ANI2x, PhysNet
+
 from modelforge.potential.models import BaseNeuralNetworkPotential
-from modelforge.potential.ani import ANI2x
 from typing import Optional, Dict
 
-MODELS_TO_TEST = [SchNET, PaiNN, ANI2x]
+MODELS_TO_TEST = [SchNet, PaiNN, ANI2x, PhysNet]
 DATASETS = [QM9Dataset]
 
 from openff.units import unit
@@ -39,8 +38,8 @@ def setup_simple_model(
         Initialized model.
     """
 
-    if model_class is SchNET:
-        return SchNET()
+    if model_class is SchNet:
+        return SchNet()
     elif model_class is ANI2x:
         return ANI2x()
     elif model_class is PaiNN:

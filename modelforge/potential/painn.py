@@ -81,8 +81,8 @@ class PaiNN(BaseNeuralNetworkPotential):
     def _readout(self, inputs: Dict[str, Tensor]):
 
         # perform final pass through output layer
-        inputs["scalar_representation"] = self.energy_layer(
-            inputs["scalar_representation"]
+        inputs["E_i"] = self.energy_layer(
+            inputs["E_i"]
         ).squeeze(1)
 
         return self.readout_module(inputs)
@@ -134,10 +134,10 @@ class PaiNN(BaseNeuralNetworkPotential):
             q, mu = mixing_mod(q, mu)
 
         # Use squeeze to remove dimensions of size 1
-        q = q.squeeze(dim=1)
+        E_i = q.squeeze(dim=1)
 
         return {
-            "scalar_representation": q,
+            "E_i": E_i,
             "vector_representation": mu,
             "atomic_subsystem_indices": inputs["atomic_subsystem_indices"],
         }

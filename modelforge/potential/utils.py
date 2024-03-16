@@ -227,27 +227,24 @@ class FromAtomToMoleculeReduction(nn.Module):
         """
         super().__init__()
 
-    def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
         """
 
         Parameters
         ----------
-        inputs : Dict[str, torch.Tensor],
-            "scalar_representation", shape [nr_of_atoms, 1]
-            "atomic_subsystem_indices", shape [nr_of_atoms]
+        x, shape [nr_of_atoms, 1]
+        index, shape [nr_of_atoms]
+
         Returns
         -------
         Tensor, shape [nr_of_moleculs, 1]
             The total energy tensor.
         """
 
-        atomic_subsystem_indices = inputs["atomic_subsystem_indices"]
-        x = inputs["scalar_representation"]
-
         # Perform scatter add operation
-        indices = atomic_subsystem_indices.to(torch.int64)
+        indices = index.to(torch.int64)
         total_energy_per_molecule = torch.zeros(
-            len(atomic_subsystem_indices.unique()), dtype=x.dtype, device=x.device
+            len(index.unique()), dtype=x.dtype, device=x.device
         )
 
         total_energy_per_molecule = total_energy_per_molecule.scatter_add(0, indices, x)

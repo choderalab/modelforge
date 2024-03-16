@@ -126,6 +126,7 @@ class SchNet(BaseNeuralNetworkPotential):
 
         return {
             "E_i": E_i,
+            "q": x,
             "atomic_subsystem_indices": inputs["atomic_subsystem_indices"],
         }
 
@@ -162,7 +163,7 @@ class SchNETInteractionModule(nn.Module):
 
         self.number_of_atom_features = number_of_atom_features  # Initialize parameters
         self.intput_to_feature = Dense(
-            number_of_atom_features, nr_filters, bias=True, activation=ShiftedSoftplus()
+            number_of_atom_features, nr_filters, bias=False, activation=None
         )
         self.feature_to_output = nn.Sequential(
             Dense(nr_filters, number_of_atom_features, activation=ShiftedSoftplus()),
@@ -174,7 +175,7 @@ class SchNETInteractionModule(nn.Module):
                 nr_filters,
                 activation=ShiftedSoftplus(),
             ),
-            Dense(nr_filters, nr_filters, activation=ShiftedSoftplus()),
+            Dense(nr_filters, nr_filters, activation=None),
         )
 
     def forward(

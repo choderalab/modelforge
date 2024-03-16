@@ -711,9 +711,9 @@ def test_schnet_representation_implementation():
 
     assert (
         schnetpack_results["scalar_representation"].shape
-        == modelforge_results["scalar_representation"].shape
+        == modelforge_results["q"].shape
     )
 
     scalar_spk = schnetpack_results["scalar_representation"]
-    scalar_mf = modelforge_results["scalar_representation"]
+    scalar_mf = modelforge_results["q"]
     assert torch.allclose(scalar_spk, scalar_mf, atol=1e-4)

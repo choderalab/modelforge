@@ -260,7 +260,7 @@ class SchNETRepresentation(nn.Module):
 
         radial_symmetry_function = RadialSymmetryFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
-            radial_cutoff=radial_cutoff,
+            max_distance=radial_cutoff,
             ani_style=False,
             dtype=torch.float32,
         )

@@ -71,7 +71,7 @@ def test_cosine_cutoff_module():
 @pytest.mark.parametrize("RadialSymmetryFunction", [RadialSymmetryFunction])
 def test_rbf(RadialSymmetryFunction):
     """
-    Test the Gaussian Radial Basis Function (RBF) implementation.
+    Test the Radial Symmetry function module implementation.
     """
     from modelforge.dataset import QM9Dataset
 
@@ -83,7 +83,7 @@ def test_rbf(RadialSymmetryFunction):
 
     radial_symmetry_function_module = RadialSymmetryFunction(
         number_of_radial_basis_functions=20,
-        radial_cutoff=unit.Quantity(5.0, unit.angstrom),
+        max_distance=unit.Quantity(5.0, unit.angstrom),
     )
     output = radial_symmetry_function_module(
         pairlist["d_ij"]
@@ -103,8 +103,8 @@ def test_radial_symmetry_functions(RadialSymmetryFunction):
 
     radial_symmetry_function_module = RadialSymmetryFunction(
         number_of_radial_basis_functions=number_of_radial_basis_functions,
-        radial_cutoff=cutoff,
-        radial_start=start,
+        max_distance=cutoff,
+        min_distance=start,
     )
 
     # Test that the number of radial basis functions is correct
@@ -115,22 +115,19 @@ def test_radial_symmetry_functions(RadialSymmetryFunction):
 
     # Test that the cutoff distance is correct
     assert (
-        radial_symmetry_function_module.radial_cutoff.to(unit.nanometer).m
+        radial_symmetry_function_module.max_distance.to(unit.nanometer).m
         == cutoff.to(unit.nanometer).m
     )
 
-    # Test that the widths and offsets are correct
+    # Test that the centers are correct
     expected_offsets = torch.linspace(
         start.to(unit.nanometer).m,
         cutoff.to(unit.nanometer).m,
         number_of_radial_basis_functions,
     )
-    expected_widths = torch.abs(
-        expected_offsets[1] - expected_offsets[0]
-    ) * torch.ones_like(expected_offsets)
-    assert torch.allclose(radial_symmetry_function_module.R_s, expected_offsets)
+    assert torch.allclose(radial_symmetry_function_module.radial_basis_centers, expected_offsets)
 
-    # Test that the forward pass returns the expected output
+    # Test that the forward pass returns the expected output shpe
     d_ij = torch.tensor([[1.0], [2.0], [3.0]])
     expected_output = radial_symmetry_function_module(d_ij)
     assert expected_output.shape == (3, 1, number_of_radial_basis_functions)
@@ -181,7 +178,7 @@ def test_energy_readout():
     # the EnergyReadout module performs a linear pass to reduce the nr_of_atom_basis to 1
     # and then performs a scatter add operation to return a tensor with size [nr_of_molecules,]
 
-    # the input for the EnergyReadout module is vector (E_i) that will be scatter_added, and 
+    # the input for the EnergyReadout module is vector (E_i) that will be scatter_added, and
     # a second tensor supplying the indixes for the summation
 
     E_i = torch.tensor([3, 3, 1, 1, 1, 1, 1, 1], dtype=torch.float32)

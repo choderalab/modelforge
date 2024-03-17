@@ -12,7 +12,7 @@ def test_radial_symmetry_function():
     cutoff = CosineCutoff(cutoff=unit.Quantity(5.0, unit.angstrom))
     rbf_expension = RadialSymmetryFunction(
         number_of_radial_basis_functions=18,
-        radial_cutoff=unit.Quantity(5.0, unit.angstrom),
+        max_distance=unit.Quantity(5.0, unit.angstrom),
     )
 
     # calculate expension and cutoff

@@ -163,7 +163,7 @@ class PaiNNRepresentation(nn.Module):
 
         self.radial_symmetry_function_module = RadialSymmetryFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
-            radial_cutoff=cutoff,
+            max_distance=cutoff,
             ani_style=False,
             dtype=torch.float32,
         )

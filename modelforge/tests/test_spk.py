@@ -17,8 +17,8 @@ def test_compare_radial_symmetry_features():
     )
     radial_symmetry_function_module = RadialSymmetryFunction(
         number_of_radial_basis_functions=number_of_gaussians,
-        radial_cutoff=cutoff,
-        radial_start=start,
+        max_distance=cutoff,
+        min_distance=start,
     )
 
     r = torch.rand(5, 1)

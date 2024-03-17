@@ -68,69 +68,260 @@ def test_cosine_cutoff_module():
     assert torch.allclose(output, expected_output, rtol=1e-3)
 
 
-@pytest.mark.parametrize("RadialSymmetryFunction", [RadialSymmetryFunction])
-def test_rbf(RadialSymmetryFunction):
+def test_radial_symmetry_function_implementation():
     """
-    Test the Radial Symmetry function module implementation.
+    Test the Radial Symmetry function implementation.
     """
-    from modelforge.dataset import QM9Dataset
-
-    from .helper_functions import prepare_pairlist_for_single_batch, return_single_batch
-
-    batch = return_single_batch(QM9Dataset)
-    pairlist = prepare_pairlist_for_single_batch(batch)
+    from modelforge.potential import RadialSymmetryFunction, CosineCutoff
+    import torch
     from openff.units import unit
+    import numpy as np
 
-    radial_symmetry_function_module = RadialSymmetryFunction(
-        number_of_radial_basis_functions=20,
+    cutoff_module = CosineCutoff(cutoff=unit.Quantity(5.0, unit.angstrom))
+    RSF = RadialSymmetryFunction(
+        number_of_radial_basis_functions=18,
         max_distance=unit.Quantity(5.0, unit.angstrom),
     )
-    output = radial_symmetry_function_module(
-        pairlist["d_ij"]
-    )  # Shape: [n_pairs, number_of_radial_basis_functions]
-    # Add assertion to check the shape of the output
-    assert output.shape[2] == 20  # number_of_radial_basis_functions dimension
+    # test a single distance
+    d_ij = torch.tensor([[0.2]])
+    radial_expension = RSF(d_ij)
 
-
-@pytest.mark.parametrize("RadialSymmetryFunction", [RadialSymmetryFunction])
-def test_radial_symmetry_functions(RadialSymmetryFunction):
-    # Check dimensions of output and output
-    from openff.units import unit
-
-    number_of_radial_basis_functions = 5
-    cutoff = unit.Quantity(10.0, unit.angstrom)
-    start = unit.Quantity(0.0, unit.angstrom)
-
-    radial_symmetry_function_module = RadialSymmetryFunction(
-        number_of_radial_basis_functions=number_of_radial_basis_functions,
-        max_distance=cutoff,
-        min_distance=start,
+    expected_output = np.array(
+        [
+            5.5345993e-12,
+            6.4639507e-09,
+            2.4604744e-06,
+            3.0524534e-04,
+            1.2342081e-02,
+            1.6264367e-01,
+            6.9854599e-01,
+            9.7782737e-01,
+            4.4610667e-01,
+            6.6332147e-02,
+            3.2145421e-03,
+            5.0771905e-05,
+            2.6135859e-07,
+            4.3849102e-10,
+            2.3976884e-13,
+            4.2730126e-17,
+            2.4819276e-21,
+            4.6983385e-26,
+        ],
+        dtype=np.float32,
     )
 
-    # Test that the number of radial basis functions is correct
-    assert (
-        radial_symmetry_function_module.number_of_radial_basis_functions
-        == number_of_radial_basis_functions
+    assert np.allclose(radial_expension.numpy().flatten(), expected_output, rtol=1e-3)
+
+    # test multiple distances with cutoff
+    d_ij = torch.tensor([[r] for r in np.linspace(0, 0.5, 10)])
+    radial_expension = RSF(d_ij) * cutoff_module(d_ij)
+
+    expected_output = np.array(
+        [
+            [
+                1.00000000e00,
+                5.70892913e-01,
+                1.06223011e-01,
+                6.44157068e-03,
+                1.27313493e-04,
+                8.20098165e-07,
+                1.72173816e-09,
+                1.17808801e-12,
+                2.62722782e-16,
+                1.90952293e-20,
+                4.52338298e-25,
+                3.49229730e-30,
+                8.78756240e-36,
+                7.20667607e-42,
+                1.92624244e-48,
+                1.67801662e-55,
+                4.76421044e-63,
+                4.40854197e-71,
+            ],
+            [
+                1.31254429e-01,
+                6.22803495e-01,
+                9.63157741e-01,
+                4.85459571e-01,
+                7.97476857e-02,
+                4.26964819e-03,
+                7.45033363e-05,
+                4.23710002e-07,
+                7.85364158e-10,
+                4.74439730e-13,
+                9.34118334e-17,
+                5.99421213e-21,
+                1.25363667e-25,
+                8.54516847e-31,
+                1.89836159e-36,
+                1.37450592e-42,
+                3.24357284e-49,
+                2.49465253e-56,
+            ],
+            [
+                2.96220990e-04,
+                1.16824875e-02,
+                1.50163411e-01,
+                6.29074751e-01,
+                8.58913915e-01,
+                3.82213690e-01,
+                5.54334913e-02,
+                2.62027933e-03,
+                4.03675429e-05,
+                2.02686637e-07,
+                3.31686906e-10,
+                1.76905324e-13,
+                3.07512550e-17,
+                1.74218453e-21,
+                3.21687974e-26,
+                1.93590867e-31,
+                3.79703211e-37,
+                2.42724179e-43,
+            ],
+            [
+                1.14224879e-08,
+                3.74423091e-06,
+                4.00012761e-04,
+                1.39281827e-02,
+                1.58060810e-01,
+                5.84606177e-01,
+                7.04712145e-01,
+                2.76865906e-01,
+                3.54516593e-02,
+                1.47949056e-03,
+                2.01232338e-05,
+                8.92057220e-08,
+                1.28883410e-10,
+                6.06890989e-14,
+                9.31394622e-18,
+                4.65871485e-22,
+                7.59465234e-27,
+                4.03514395e-32,
+            ],
+            [
+                7.43164095e-15,
+                2.02473905e-11,
+                1.79788829e-08,
+                5.20314337e-06,
+                4.90769884e-04,
+                1.50868891e-02,
+                1.51157750e-01,
+                4.93594719e-01,
+                5.25315188e-01,
+                1.82212606e-01,
+                2.05990104e-02,
+                7.58968339e-04,
+                9.11402737e-06,
+                3.56702673e-08,
+                4.55000385e-11,
+                1.89158791e-14,
+                2.56301214e-18,
+                1.13183772e-22,
+            ],
+            [
+                7.96913570e-23,
+                1.80458766e-18,
+                1.33184612e-14,
+                3.20360984e-11,
+                2.51150528e-08,
+                6.41709524e-06,
+                5.34381690e-04,
+                1.45035401e-02,
+                1.28293849e-01,
+                3.69868314e-01,
+                3.47534103e-01,
+                1.06428293e-01,
+                1.06224850e-02,
+                3.45544931e-04,
+                3.66346706e-06,
+                1.26587091e-08,
+                1.42559419e-11,
+                5.23253063e-15,
+            ],
+            [
+                1.34504798e-32,
+                2.53155264e-27,
+                1.55290701e-22,
+                3.10465609e-18,
+                2.02297418e-14,
+                4.29612912e-11,
+                2.97353307e-08,
+                6.70776111e-06,
+                4.93164455e-04,
+                1.18172354e-02,
+                9.22887052e-02,
+                2.34904093e-01,
+                1.94868652e-01,
+                5.26869117e-02,
+                4.64272405e-03,
+                1.33337517e-04,
+                1.24807655e-06,
+                3.80749596e-09,
+            ],
+            [
+                3.21547233e-44,
+                5.03009727e-38,
+                2.56458615e-32,
+                4.26155230e-27,
+                2.30795335e-22,
+                4.07377097e-18,
+                2.34355107e-14,
+                4.39401565e-11,
+                2.68508564e-08,
+                5.34767608e-06,
+                3.47120387e-04,
+                7.34352396e-03,
+                5.06335382e-02,
+                1.13784054e-01,
+                8.33362386e-02,
+                1.98927925e-02,
+                1.54762942e-03,
+                3.92416776e-05,
+            ],
+            [
+                7.75617510e-58,
+                1.00846686e-50,
+                4.27351237e-44,
+                5.90225508e-38,
+                2.65680416e-32,
+                3.89772973e-27,
+                1.86368237e-22,
+                2.90429976e-18,
+                1.47509621e-14,
+                2.44180021e-11,
+                1.31736924e-08,
+                2.31640384e-06,
+                1.32748738e-04,
+                2.47945306e-03,
+                1.50935274e-02,
+                2.99457344e-02,
+                1.93637094e-02,
+                4.08085825e-03,
+            ],
+            [
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+            ],
+        ]
     )
 
-    # Test that the cutoff distance is correct
-    assert (
-        radial_symmetry_function_module.max_distance.to(unit.nanometer).m
-        == cutoff.to(unit.nanometer).m
-    )
-
-    # Test that the centers are correct
-    expected_offsets = torch.linspace(
-        start.to(unit.nanometer).m,
-        cutoff.to(unit.nanometer).m,
-        number_of_radial_basis_functions,
-    )
-    assert torch.allclose(radial_symmetry_function_module.radial_basis_centers, expected_offsets)
-
-    # Test that the forward pass returns the expected output shpe
-    d_ij = torch.tensor([[1.0], [2.0], [3.0]])
-    expected_output = radial_symmetry_function_module(d_ij)
-    assert expected_output.shape == (3, 1, number_of_radial_basis_functions)
+    assert np.allclose(radial_expension.numpy(), expected_output, rtol=1e-3)
 
 
 def test_scatter_add():

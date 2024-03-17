@@ -141,7 +141,7 @@ class Neighborlist(Pairlist):
         dict : Dict[str, torch.Tensor], containing atom index pairs, distances, and displacement vectors.
             - 'pair_indices': torch.Tensor, shape (2, n_pairs)
             - 'r_ij' : torch.Tensor, shape (n_pairs, 3)
-            - 'd_ij' : torch.Tensor, shape (n_pairs, 1)
+            - 'd_ij' : torch.Tensor, shape (n_pairs, )
 
         """
         pair_indices = self.calculate_pairs(

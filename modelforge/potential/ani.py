@@ -60,19 +60,18 @@ class ANIRepresentation(nn.Module):
             triu_index(self.nr_of_supported_elements).to(device=device),
         )
 
-    def _setup_radial_symmetry_functions(self, radial_cutoff: unit.Quantity):
+    def _setup_radial_symmetry_functions(self, max_distance: unit.Quantity):
         from openff.units import unit
-        from .utils import RadialSymmetryFunction
+        from .utils import AniRadialSymmetryFunction
 
         # ANI constants
-        radial_start = 0.8 * unit.angstrom
-        radial_dist_divisions = 16
+        min_distance = 0.8 * unit.angstrom
+        number_of_radial_basis_functions = 16
 
-        radial_symmetry_function = RadialSymmetryFunction(
-            radial_dist_divisions,
-            radial_cutoff,
-            radial_start,
-            ani_style=True,
+        radial_symmetry_function = AniRadialSymmetryFunction(
+            number_of_radial_basis_functions,
+            max_distance,
+            min_distance,
             dtype=torch.float32,
         )
         return radial_symmetry_function
@@ -105,7 +104,7 @@ class ANIRepresentation(nn.Module):
         radial_feature_vector = self.radial_symmetry_functions(inputs["d_ij"])
         # cutoff
         rcut_ij = self.cutoff_module(inputs["d_ij"] / 10)
-        radial_feature_vector = radial_feature_vector * rcut_ij[:, None]
+        radial_feature_vector = radial_feature_vector * rcut_ij  # [:, None]
 
         # process output to prepare for agular symmetry vector
         postprocessed_radial_aev_and_additional_data = self._postprocess_radial_aev(

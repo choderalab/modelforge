@@ -256,12 +256,11 @@ class SchNETRepresentation(nn.Module):
     def _setup_radial_symmetry_functions(
         self, radial_cutoff: unit.Quantity, number_of_radial_basis_functions: int
     ):
-        from .utils import RadialSymmetryFunction
+        from .utils import SchnetRadialSymmetryFunction
 
-        radial_symmetry_function = RadialSymmetryFunction(
+        radial_symmetry_function = SchnetRadialSymmetryFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
-            radial_cutoff=radial_cutoff,
-            ani_style=False,
+            max_distance=radial_cutoff,
             dtype=torch.float32,
         )
         return radial_symmetry_function

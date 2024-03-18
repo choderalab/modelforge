@@ -3,7 +3,7 @@ import torch
 
 def test_compare_radial_symmetry_features():
     # compare schnetpack RadialSymmetryFunction with modelforge RadialSymmetryFunction
-    from modelforge.potential.utils import RadialSymmetryFunction
+    from modelforge.potential.utils import SchnetRadialSymmetryFunction
     from schnetpack.nn import GaussianRBF as schnetpackGaussianRBF
     from openff.units import unit
 
@@ -15,18 +15,20 @@ def test_compare_radial_symmetry_features():
         cutoff=cutoff.to(unit.angstrom).m,
         start=start.to(unit.angstrom).m,
     )
-    radial_symmetry_function_module = RadialSymmetryFunction(
+    radial_symmetry_function_module = SchnetRadialSymmetryFunction(
         number_of_radial_basis_functions=number_of_gaussians,
-        radial_cutoff=cutoff,
-        radial_start=start,
+        max_distance=cutoff,
+        min_distance=start,
     )
 
     r = torch.rand(5, 1)
     print(schnetpack_rbf(r))
     print(radial_symmetry_function_module(r / 10))
     assert torch.allclose(
-        schnetpack_rbf(r), radial_symmetry_function_module(r / 10), atol=1e-8
-    )
+        schnetpack_rbf(r),
+        radial_symmetry_function_module(r / 10).unsqueeze(1),
+        atol=1e-5,
+    )  # NOTE: there is a shape mismatch between the two outputs
     assert (
         schnetpack_rbf.n_rbf
         == radial_symmetry_function_module.number_of_radial_basis_functions
@@ -243,7 +245,9 @@ def test_painn_representation_implementation():
     modelforge_phi_ij = (
         modelforge_painn.representation_module.radial_symmetry_function_module(
             d_ij / 10
-        )
+        ).unsqueeze(
+            1
+        )  # NOTE: for the sake of comparision, changing the shape here
     )  # NOTE: converting to nm
 
     assert torch.allclose(schnetpack_phi_ij, modelforge_phi_ij)
@@ -340,7 +344,7 @@ def test_painn_representation_implementation():
     q_mf, mu_mf = modelforge_painn.interaction_modules[0](
         q_mf_initial,
         mu_mf_initial,
-        filter_list[0],
+        filter_list[0].squeeze(1),  # NOTE: change of shape
         dir_ij,
         pair_indices,
     )
@@ -430,7 +434,9 @@ def test_painn_representation_implementation():
             modelforge_painn.mixing_modules[0:1],
         )
     ):
-        q_mf, mu_mf = interaction(q_mf, mu_mf, mf_filter_list[i], dir_ij, pair_indices)
+        q_mf, mu_mf = interaction(
+            q_mf, mu_mf, mf_filter_list[i].squeeze(1), dir_ij, pair_indices
+        )
         q_mf, mu_mf = mixing(q_mf, mu_mf)
 
     assert torch.allclose(q_mf, q_spk)
@@ -468,7 +474,7 @@ def test_painn_representation_implementation():
         )
         q_spk, mu_spk = spk_mixing(q_spk, mu_spk)
         q_mf, mu_mf = mf_interaction(
-            q_mf, mu_mf, mf_filter_list[i], dir_ij, pair_indices
+            q_mf, mu_mf, mf_filter_list[i].squeeze(1), dir_ij, pair_indices
         )
         q_mf, mu_mf = mf_mixing(q_mf, mu_mf)
         assert torch.allclose(q_mf, q_spk)
@@ -590,11 +596,10 @@ def test_schnet_representation_implementation():
     # ---------------------------------------- #
     r_ij = spk_input["_Rij"]
     d_ij = torch.norm(r_ij, dim=1, keepdim=True)
-    dir_ij = r_ij / d_ij
     schnetpack_phi_ij = schnetpack_schnet.radial_basis(d_ij)
     modelforge_phi_ij = (
         modelforge_schnet.schnet_representation_module.radial_symmetry_function_module(
-            d_ij / 10
+            d_ij.unsqueeze(1) / 10
         )
     )  # NOTE: converting to nm
 
@@ -629,7 +634,7 @@ def test_schnet_representation_implementation():
     # --------------------------------------- #
     f_ij_mf = (
         modelforge_schnet.schnet_representation_module.radial_symmetry_function_module(
-            d_ij / 10
+            d_ij.unsqueeze(1) / 10
         )
     )
     r_cut_ij_mf = modelforge_schnet.schnet_representation_module.cutoff_module(

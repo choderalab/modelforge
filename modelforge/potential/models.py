@@ -141,7 +141,7 @@ class Neighborlist(Pairlist):
         dict : Dict[str, torch.Tensor], containing atom index pairs, distances, and displacement vectors.
             - 'pair_indices': torch.Tensor, shape (2, n_pairs)
             - 'r_ij' : torch.Tensor, shape (n_pairs, 3)
-            - 'd_ij' : torch.Tensor, shape (n_pairs, 1)
+            - 'd_ij' : torch.Tensor, shape (n_pairs, )
 
         """
         pair_indices = self.calculate_pairs(
@@ -160,12 +160,12 @@ class Neighborlist(Pairlist):
 
 
 from modelforge.potential.utils import AtomicSelfEnergies
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from openff.units import unit
 from typing import Dict, Type
 
 
-class BaseNeuralNetworkPotential(pl.LightningModule):
+class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
     """
     Abstract Base class for neural network potentials.
     """

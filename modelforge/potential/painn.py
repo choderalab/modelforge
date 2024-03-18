@@ -32,11 +32,12 @@ class PaiNN(BaseNeuralNetworkPotential):
     ):
 
         log.debug("Initializing PaiNN model.")
+        super().__init__(cutoff=cutoff)
+
         self.number_of_interaction_modules = number_of_interaction_modules
         self.number_of_atom_features = number_of_atom_features
         self.only_unique_pairs = False  # NOTE: for pairlist
         self.shared_filters = shared_filters
-        super().__init__(cutoff=cutoff)
 
         # embedding
         from modelforge.potential.utils import Embedding
@@ -159,12 +160,11 @@ class PaiNNRepresentation(nn.Module):
         self.cutoff_module = CosineCutoff(cutoff, device)
 
         # radial symmetry function
-        from .utils import RadialSymmetryFunction
+        from .utils import SchnetRadialSymmetryFunction
 
-        self.radial_symmetry_function_module = RadialSymmetryFunction(
+        self.radial_symmetry_function_module = SchnetRadialSymmetryFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
-            radial_cutoff=cutoff,
-            ani_style=False,
+            max_distance=cutoff,
             dtype=torch.float32,
         )
 
@@ -195,8 +195,8 @@ class PaiNNRepresentation(nn.Module):
         Parameters
         ----------
         inputs (Dict[str, torch.Tensor]): A dictionary containing the input tensors.
-            - "d_ij" (torch.Tensor): Pairwise distances between atoms. Shape: (n_pairs, 1, distance).
-            - "r_ij" (torch.Tensor): Displacement vector between atoms. Shape: (n_pairs, 1, 3).
+            - "d_ij" (torch.Tensor): Pairwise distances between atoms. Shape: (n_pairs, 1).
+            - "r_ij" (torch.Tensor): Displacement vector between atoms. Shape: (n_pairs, 3).
             - "atomic_embedding" (torch.Tensor): Embeddings of atomic numbers. Shape: (n_atoms, embedding_dim).
 
         Returns:
@@ -213,13 +213,13 @@ class PaiNNRepresentation(nn.Module):
         # compute pairwise distances
         d_ij = inputs["d_ij"]
         r_ij = inputs["r_ij"]
-        dir_ij = r_ij / d_ij
+        dir_ij = r_ij / d_ij  # shape (nr_of_pairs, 3)
 
         f_ij = self.radial_symmetry_function_module(d_ij)
 
-        fcut = self.cutoff_module(d_ij)
+        fcut = self.cutoff_module(d_ij)  # nr_of_pairs, nr_of_radial_basis_functions
 
-        filters = self.filter_net(f_ij) * fcut[..., None]
+        filters = self.filter_net(f_ij) * fcut
 
         if self.shared_filters:
             filter_list = [filters] * self.nr_interaction_blocks
@@ -228,13 +228,11 @@ class PaiNNRepresentation(nn.Module):
 
         # generate q and mu
         atomic_embedding = inputs["atomic_embedding"]
-        qs = atomic_embedding.shape
-
-        q = atomic_embedding[:, None]
-        qs = q.shape
+        q = atomic_embedding[:, None]  # nr_of_atoms, 1, nr_atom_basis
+        q_shape = q.shape
         mu = torch.zeros(
-            (qs[0], 3, qs[2]), device=q.device
-        )  # total_number_of_atoms_in_the_batch, 3, nr_atom_basis
+            (q_shape[0], 3, q_shape[2]), device=q.device
+        )  # nr_of_atoms, 3, nr_atom_basis
 
         return {"filters": filter_list, "dir_ij": dir_ij, "q": q, "mu": mu}
 
@@ -272,9 +270,9 @@ class PaiNNInteraction(nn.Module):
 
     def forward(
         self,
-        q: torch.Tensor,  # shape [nr_of_atoms_in_batch, nr_atom_basis]
-        mu: torch.Tensor,  # shape [n_mols, n_interactions, nr_atom_basis]
-        Wij: torch.Tensor,  # shape [n_interactions]
+        q: torch.Tensor,  # shape [nr_of_atoms, nr_atom_basis]
+        mu: torch.Tensor,  # shape [nr_of_atoms, nr_atom_basis]
+        W_ij: torch.Tensor,  # shape
         dir_ij: torch.Tensor,
         pairlist: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -283,11 +281,11 @@ class PaiNNInteraction(nn.Module):
         Parameters
         ----------
         q : torch.Tensor
-            Scalar input values of shape [nr_of_atoms_in_systems, nr_atom_basis].
+            Scalar input values of shape [nr_of_atoms, 1, nr_atom_basis].
         mu : torch.Tensor
-            Vector input values of shape [n_mols, n_interactions, nr_atom_basis].
+            Vector input values of shape [nr_of_atoms, 3, nr_atom_basis].
         Wij : torch.Tensor
-            Filter of shape [n_interactions].
+            Filter of shape [nr_of_pairs, 1, n_interactions].
         dir_ij : torch.Tensor
             Directional vector between atoms i and j.
         pairlist : torch.Tensor, shape (2, n_pairs)
@@ -301,40 +299,26 @@ class PaiNNInteraction(nn.Module):
         idx_i, idx_j = pairlist[0], pairlist[1]
 
         x = self.interatomic_net(q)
-        nr_of_atoms_in_all_systems, _, _ = q.shape  # [nr_systems,n_atoms,96]
-        x = x.reshape(nr_of_atoms_in_all_systems, 1, 3 * self.nr_atom_basis)
+        nr_of_atoms = q.shape[0]
 
         xj = x[idx_j]
-        muj = mu[idx_j]
-        x = Wij * xj
+        muj = mu[idx_j]  # shape (nr_of_pairs, nr_atom_basis)
+        W_ij = W_ij.unsqueeze(1)
+        x = W_ij * xj
 
         dq, dmuR, dmumu = torch.split(x, self.nr_atom_basis, dim=-1)
+        from torch_scatter import scatter_add
 
-        ##############
-        # Expand the dimensions of idx_i to match that of dq
-        expanded_idx_i = idx_i.view(-1, 1, 1).expand_as(dq)
-
-        # Create a zero tensor with appropriate shape
-        zeros = torch.zeros(
-            nr_of_atoms_in_all_systems,
-            1,
-            self.nr_atom_basis,
-            dtype=dq.dtype,
-            device=dq.device,
-        )
-
-        dq = zeros.scatter_add(0, expanded_idx_i, dq)
+        dq = scatter_add(
+            dq, idx_i, dim=0
+        )  # dq: (nr_of_pairs, nr_atom_basis); idx_i: (nr_of_pairs)
         ##########
-        dmu = dmuR * dir_ij[..., None] + dmumu * muj
-        zeros = torch.zeros(
-            nr_of_atoms_in_all_systems,
-            3,
-            self.nr_atom_basis,
-            dtype=dmu.dtype,
-            device=dmu.device,
-        )
-        expanded_idx_i_dmu = idx_i.view(-1, 1, 1).expand_as(dmu)
-        dmu = zeros.scatter_add(0, expanded_idx_i_dmu, dmu)
+        dmuR * dir_ij[..., None]
+        dmumu * muj
+        dmu = (
+            dmuR * dir_ij[..., None] + dmumu * muj
+        )  # shape (nr_of_pairs, 3, nr_atom_basis)
+        dmu = scatter_add(dmu, idx_i, dim=0)  # nr_of_atoms, 3, nr_atom_basis
 
         q = q + dq
         mu = mu + dmu

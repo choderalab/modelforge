@@ -191,7 +191,7 @@ def generate_interaction_block_data(
     r = prepare_pairlist_for_single_batch(batch)
     radial_symmetry_function_module = RadialSymmetryFunction(
         number_of_radial_basis_functions=number_of_gaussians,
-        radial_cutoff=unit.Quantity(5.0, unit.angstrom),
+        max_distance=unit.Quantity(5.0, unit.angstrom),
         dtype=batch["positions"].dtype,
     )
 

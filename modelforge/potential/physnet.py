@@ -38,12 +38,11 @@ class PhysNetRepresentation(nn.Module):
         self.cutoff_module = CosineCutoff(cutoff, device)
 
         # radial symmetry function
-        from .utils import RadialSymmetryFunction
+        from .utils import SchnetRadialSymmetryFunction
 
-        self.radial_symmetry_function_module = RadialSymmetryFunction(
+        self.radial_symmetry_function_module = SchnetRadialSymmetryFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
-            radial_cutoff=cutoff,
-            ani_style=False,
+            max_distance=cutoff,
             dtype=torch.float32,
         )
 
@@ -54,19 +53,19 @@ class PhysNetRepresentation(nn.Module):
         Parameters
         ----------
         d_ij : torch.Tensor
-            pairwise distances between atoms, shape (n_pairs, 1).
+            pairwise distances between atoms, shape (n_pairs).
 
         Returns
         -------
         torch.Tensor
             The radial basis function expansion applied to the input distances,
-            shape (n_pairs, 1, n_gaussians), after applying the cutoff function.
+            shape (n_pairs, n_gaussians), after applying the cutoff function.
         """
 
-        rbf = self.radial_symmetry_function_module(d_ij).squeeze(1)
+        rbf = self.radial_symmetry_function_module(d_ij)
         cutoff = self.cutoff_module(d_ij)
         f_ij = torch.mul(rbf, cutoff)
-        return f_ij.unsqueeze(1)
+        return f_ij
 
 
 class GatingModule(nn.Module):

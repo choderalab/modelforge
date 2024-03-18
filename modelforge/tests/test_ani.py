@@ -104,7 +104,7 @@ def test_compare_radial_symmetry_features():
     # Compare the ANI radial symmetry function
     # agsint the output of the Modelforge radial symmetry function
     import torch
-    from modelforge.potential.utils import RadialSymmetryFunction, CosineCutoff
+    from modelforge.potential.utils import AniRadialSymmetryFunction, CosineCutoff
     from openff.units import unit
 
     # generate a random list of distances, all < 5
@@ -118,11 +118,10 @@ def test_compare_radial_symmetry_features():
     ShfR = torch.linspace(radial_start, radial_cutoff, radial_dist_divisions + 1)[:-1]
 
     # NOTE: we pass in Angstrom to ANI and in nanometer to mf
-    rsf = RadialSymmetryFunction(
-        radial_dist_divisions,
-        radial_cutoff * unit.angstrom,
-        radial_start * unit.angstrom,
-        ani_style=True,
+    rsf = AniRadialSymmetryFunction(
+        number_of_radial_basis_functions=radial_dist_divisions,
+        max_distance=radial_cutoff * unit.angstrom,
+        min_distance=radial_start * unit.angstrom,
     )
     r_mf = rsf(d_ij / 10)  # torch.Size([5,1, 8]) # NOTE: nanometer
     cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom)
@@ -130,14 +129,14 @@ def test_compare_radial_symmetry_features():
 
     rcut_ij = cutoff_module(d_ij / 10)  # torch.Size([5]) # NOTE: nanometer
 
-    r_mf = r_mf * rcut_ij[:, None]
+    r_mf = r_mf * rcut_ij
     r_ani = radial_terms(5, EtaR, ShfR, d_ij)  # torch.Size([5,8]) # NOTE: Angstrom
-    assert torch.allclose(r_mf.squeeze(1), r_ani)
+    assert torch.allclose(r_mf, r_ani)
 
 
 def test_radial_with_diagonal_batching(setup_two_methanes):
     import torch
-    from modelforge.potential.utils import RadialSymmetryFunction, CosineCutoff
+    from modelforge.potential.utils import AniRadialSymmetryFunction, CosineCutoff
     from openff.units import unit
     from modelforge.potential.models import Pairlist
     from torchani.aev import neighbor_pairs_nopbc
@@ -172,20 +171,17 @@ def test_radial_with_diagonal_batching(setup_two_methanes):
     distances = vec.norm(2, -1)
     # ------------ Modelforge calculation ----------#
 
-    radial_symmetry_function = RadialSymmetryFunction(
+    radial_symmetry_function = AniRadialSymmetryFunction(
         radial_dist_divisions,
         radial_cutoff * unit.angstrom,
         radial_start * unit.angstrom,
-        ani_style=True,
     )
 
     cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom)
     rcut_ij = cutoff_module(d_ij)
 
     radial_symmetry_feature_vector_mf = radial_symmetry_function(d_ij)
-    radial_symmetry_feature_vector_mf = (
-        radial_symmetry_feature_vector_mf * rcut_ij[:, None]
-    )
+    radial_symmetry_feature_vector_mf = radial_symmetry_feature_vector_mf * rcut_ij
     # ------------ ANI calculation ----------#
     from torchani.aev import radial_terms
 
@@ -195,11 +191,11 @@ def test_radial_with_diagonal_batching(setup_two_methanes):
     )
     # test that both ANI and MF obtain the same radial symmetry outpu
     assert torch.allclose(
-        radial_symmetry_feature_vector_mf.squeeze(1), radial_symmetry_feature_vector_ani
+        radial_symmetry_feature_vector_mf, radial_symmetry_feature_vector_ani
     )
 
     assert radial_symmetry_feature_vector_mf.shape == torch.Size(
-        [20, 1, radial_dist_divisions]
+        [20, radial_dist_divisions]
     )
 
 

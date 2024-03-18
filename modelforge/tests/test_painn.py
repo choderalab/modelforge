@@ -75,7 +75,9 @@ def test_painn_interaction_equivariance():
     )
 
     # prepare reference and perturbed inputs
-    reference_prepared_input = painn.prepare_inputs(methane_input)
+    reference_prepared_input = painn.prepare_inputs(
+        methane_input, only_unique_pairs=False
+    )
     reference_d_ij = reference_prepared_input["d_ij"]
     reference_r_ij = reference_prepared_input["r_ij"]
     reference_dir_ij = reference_r_ij / reference_d_ij
@@ -83,7 +85,9 @@ def test_painn_interaction_equivariance():
         reference_d_ij
     )
 
-    perturbed_prepared_input = painn.prepare_inputs(perturbed_methane_input)
+    perturbed_prepared_input = painn.prepare_inputs(
+        perturbed_methane_input, only_unique_pairs=False
+    )
     perturbed_d_ij = perturbed_prepared_input["d_ij"]
     perturbed_r_ij = perturbed_prepared_input["r_ij"]
     perturbed_dir_ij = perturbed_r_ij / perturbed_d_ij

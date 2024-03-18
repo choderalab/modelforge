@@ -38,12 +38,11 @@ class PhysNetRepresentation(nn.Module):
         self.cutoff_module = CosineCutoff(cutoff, device)
 
         # radial symmetry function
-        from .utils import RadialSymmetryFunction
+        from .utils import SchnetRadialSymmetryFunction
 
-        self.radial_symmetry_function_module = RadialSymmetryFunction(
+        self.radial_symmetry_function_module = SchnetRadialSymmetryFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             max_distance=cutoff,
-            ani_style=False,
             dtype=torch.float32,
         )
 

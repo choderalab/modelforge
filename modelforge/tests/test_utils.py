@@ -72,13 +72,13 @@ def test_radial_symmetry_function_implementation():
     """
     Test the Radial Symmetry function implementation.
     """
-    from modelforge.potential import RadialSymmetryFunction, CosineCutoff
+    from modelforge.potential.utils import SchnetRadialSymmetryFunction, CosineCutoff
     import torch
     from openff.units import unit
     import numpy as np
 
     cutoff_module = CosineCutoff(cutoff=unit.Quantity(5.0, unit.angstrom))
-    RSF = RadialSymmetryFunction(
+    RSF = SchnetRadialSymmetryFunction(
         number_of_radial_basis_functions=18,
         max_distance=unit.Quantity(5.0, unit.angstrom),
     )
@@ -109,6 +109,8 @@ def test_radial_symmetry_function_implementation():
         ],
         dtype=np.float32,
     )
+
+    print(radial_expension.numpy().flatten())
 
     assert np.allclose(radial_expension.numpy().flatten(), expected_output, rtol=1e-3)
 

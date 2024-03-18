@@ -674,7 +674,7 @@ class RadialSymmetryFunction(nn.Module):
             (_unitless_min_distance - _unitless_max_distance)
             / number_of_radial_basis_functions,
         )
-
+        scale_factors = scale_factors * -15_000
         return scale_factors
 
     def forward(self, d_ij: torch.Tensor) -> torch.Tensor:

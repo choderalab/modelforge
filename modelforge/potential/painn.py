@@ -32,11 +32,12 @@ class PaiNN(BaseNeuralNetworkPotential):
     ):
 
         log.debug("Initializing PaiNN model.")
+        super().__init__(cutoff=cutoff)
+
         self.number_of_interaction_modules = number_of_interaction_modules
         self.number_of_atom_features = number_of_atom_features
         self.only_unique_pairs = False  # NOTE: for pairlist
         self.shared_filters = shared_filters
-        super().__init__(cutoff=cutoff)
 
         # embedding
         from modelforge.potential.utils import Embedding
@@ -280,11 +281,11 @@ class PaiNNInteraction(nn.Module):
         Parameters
         ----------
         q : torch.Tensor
-            Scalar input values of shape [nr_of_atoms, nr_atom_basis].
+            Scalar input values of shape [nr_of_atoms, 1, nr_atom_basis].
         mu : torch.Tensor
-            Vector input values of shape [nr_of_atoms, nr_atom_basis].
+            Vector input values of shape [nr_of_atoms, 3, nr_atom_basis].
         Wij : torch.Tensor
-            Filter of shape [n_interactions].
+            Filter of shape [nr_of_pairs, 1, n_interactions].
         dir_ij : torch.Tensor
             Directional vector between atoms i and j.
         pairlist : torch.Tensor, shape (2, n_pairs)
@@ -312,6 +313,8 @@ class PaiNNInteraction(nn.Module):
             dq, idx_i, dim=0
         )  # dq: (nr_of_pairs, nr_atom_basis); idx_i: (nr_of_pairs)
         ##########
+        dmuR * dir_ij[..., None]
+        dmumu * muj
         dmu = (
             dmuR * dir_ij[..., None] + dmumu * muj
         )  # shape (nr_of_pairs, 3, nr_atom_basis)

@@ -696,6 +696,56 @@ class RadialSymmetryFunction(nn.Module):
         return self.prefactor * features
 
 
+class SchnetRadialSymmetryFunction(RadialSymmetryFunction):
+    def __init__(
+        self,
+        number_of_radial_basis_functions: int,
+        max_distance: unit.Quantity,
+        min_distance: unit.Quantity = 0.0 * unit.nanometer,
+        dtype: Optional[torch.dtype] = None,
+        trainable: bool = False,
+        radial_basis_function: RadialBasisFunction = GaussianRadialBasisFunction(),
+    ):
+        """RadialSymmetryFunction class.
+
+        Initializes and contains the logic for computing radial symmetry functions.
+
+        Parameters
+        ---------
+        """
+
+        super().__init__(
+            number_of_radial_basis_functions,
+            max_distance,
+            min_distance,
+            dtype,
+            trainable,
+            radial_basis_function,
+        )
+        self.prefactor = torch.tensor([1.0])
+
+    def calculate_radial_scale_factor(
+        self,
+        _unitless_min_distance,
+        _unitless_max_distance,
+        number_of_radial_basis_functions,
+    ):
+
+        scale_factors = torch.linspace(
+            _unitless_min_distance,
+            _unitless_max_distance,
+            number_of_radial_basis_functions,
+        )
+
+        widths = (
+            torch.abs(scale_factors[1] - scale_factors[0])
+            * torch.ones_like(scale_factors)
+        ).to(self.dtype)
+
+        scale_factors = 0.5 / torch.square_(widths)
+        return scale_factors
+
+
 class AniRadialSymmetryFunction(RadialSymmetryFunction):
     def __init__(
         self,

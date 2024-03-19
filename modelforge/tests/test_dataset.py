@@ -118,7 +118,7 @@ def test_dataset_basic_operations():
         assert np.array_equal(
             conf_data["atomic_numbers"], atomic_numbers_true[conf_idx]
         )
-        assert np.array_equal(conf_data["E_label"], energy_true[conf_idx])
+        assert np.array_equal(conf_data["E"], energy_true[conf_idx])
 
     for rec_idx in range(dataset.record_len()):
         assert np.array_equal(
@@ -198,7 +198,7 @@ def test_data_item_format(dataset):
     assert isinstance(raw_data_item, Dict)
     assert isinstance(raw_data_item["atomic_numbers"], torch.Tensor)
     assert isinstance(raw_data_item["positions"], torch.Tensor)
-    assert isinstance(raw_data_item["E_label"], torch.Tensor)
+    assert isinstance(raw_data_item["E"], torch.Tensor)
     print(raw_data_item)
 
     assert (
@@ -239,7 +239,7 @@ def test_dataset_splitting(dataset):
         dataset
     )
 
-    energy = train_dataset[0]["E_label"].item()
+    energy = train_dataset[0]["E"].item()
     assert np.isclose(energy, -412509.9375)
     print(energy)
 
@@ -315,7 +315,7 @@ def test_self_energy():
     dataset.prepare_data(
         remove_self_energies=False, normalize=False, regression_ase=False
     )
-    methane_energy_reference = float(dataset.torch_dataset[0]["E_label"])
+    methane_energy_reference = float(dataset.torch_dataset[0]["E"])
     assert np.isclose(methane_energy_reference, -106277.4161)
 
     data = QM9Dataset(for_unit_testing=True)
@@ -384,7 +384,7 @@ def test_self_energy():
         # double check that it is methane
         methane_atomic_indices = dataset.torch_dataset[0]["atomic_numbers"]
         # extract energy
-        methane_energy_offset = dataset.torch_dataset[0]["E_label"]
+        methane_energy_offset = dataset.torch_dataset[0]["E"]
         if regression is False:
             # checking that the offset energy is actually correct for methane
             assert torch.isclose(

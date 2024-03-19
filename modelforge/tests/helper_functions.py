@@ -3,49 +3,12 @@ import torch
 from modelforge.dataset.dataset import TorchDataModule
 from modelforge.dataset.qm9 import QM9Dataset
 from modelforge.potential import SchNet, PaiNN, ANI2x, PhysNet
-
+from modelforge.potential.utils import NeuralNetworkInput
 from modelforge.potential.models import BaseNeuralNetworkPotential
 from typing import Optional, Dict
 
 MODELS_TO_TEST = [SchNet, PaiNN, ANI2x, PhysNet]
 DATASETS = [QM9Dataset]
-
-from openff.units import unit
-
-
-def setup_simple_model(
-    model_class,
-    nr_atom_basis: int = 128,
-    max_atomic_number: int = 100,
-    number_of_gaussians: int = 20,
-    cutoff: unit.Quantity = 5.0 * unit.angstrom,
-    nr_interaction_blocks: int = 2,
-    nr_filters: int = 2,
-) -> Optional[BaseNeuralNetworkPotential]:
-    """
-    Setup a simple model based on the given model_class.
-
-    Parameters
-    ----------
-    model_class : class
-        Class of the model to be set up.
-    lightning : bool, optional
-        Flag to indicate if the Lightning variant should be returned.
-
-    Returns
-    -------
-    Optional[BaseNNP]
-        Initialized model.
-    """
-
-    if model_class is SchNet:
-        return SchNet()
-    elif model_class is ANI2x:
-        return ANI2x()
-    elif model_class is PaiNN:
-        return PaiNN()
-    else:
-        raise NotImplementedError
 
 
 def return_single_batch(
@@ -116,14 +79,13 @@ def prepare_pairlist_for_single_batch(
     return pairlist(positions, atomic_subsystem_indices)
 
 
-def generate_methane_input() -> Dict[str, torch.Tensor]:
+def generate_methane_input() -> NeuralNetworkInput:
     """
     Generate a methane molecule input for testing.
 
     Returns
     -------
-    Dict[str, Tensor]
-        Dictionary with keys 'atomic_numbers', 'positions', 'atomic_subsystem_indices', 'E_labels'.
+    NeuralNetworkInput
     """
     from modelforge.potential.utils import ATOMIC_NUMBER_TO_INDEX_MAP
 
@@ -141,20 +103,21 @@ def generate_methane_input() -> Dict[str, torch.Tensor]:
         )
         / 10  # NOTE: converting to nanometer
     )
-    E_labels = torch.tensor([0.0], requires_grad=True)
+    E = torch.tensor([0.0], requires_grad=True)
     atomic_subsystem_indices = torch.tensor([0, 0, 0, 0, 0], dtype=torch.int32)
-    return {
-        "atomic_numbers": atomic_numbers,
-        "positions": positions,
-        "E_labels": E_labels,
-        "atomic_subsystem_indices": atomic_subsystem_indices,
-        "atomic_index": torch.tensor(
+    return NeuralNetworkInput(
+        atomic_numbers=atomic_numbers,
+        positions=positions,
+        atomic_subsystem_indices=atomic_subsystem_indices,
+        E=E,
+        atom_index=torch.tensor(
             [
                 ATOMIC_NUMBER_TO_INDEX_MAP[atomic_number]
                 for atomic_number in list(atomic_numbers.numpy())
             ]
         ),
-    }
+        total_charge=torch.tensor([0.0]),
+    )
 
 
 def generate_batch_data():

@@ -138,12 +138,12 @@ def setup_single_methane_input():
         )
         / 10
     )
-    E_labels = torch.tensor([0.0], requires_grad=True)
+    E = torch.tensor([0.0], requires_grad=True)
     atomic_subsystem_indices = torch.tensor([0, 0, 0, 0, 0], dtype=torch.int32)
     modelforge_methane = {
         "atomic_numbers": atomic_numbers,
         "positions": positions,
-        "E_labels": E_labels,
+        "E": E,
         "atomic_subsystem_indices": atomic_subsystem_indices,
         "atomic_index": torch.tensor([1, 0, 0, 0, 0], dtype=torch.int32),
     }

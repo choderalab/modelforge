@@ -51,7 +51,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         self.properties_of_interest = {
             "atomic_numbers": torch.from_numpy(dataset[property_name.Z]),
             "positions": torch.from_numpy(dataset[property_name.R]),
-            "E_label": torch.from_numpy(dataset[property_name.E]),
+            "E": torch.from_numpy(dataset[property_name.E]),
         }
 
         self.number_of_records = len(dataset["atomic_subsystem_counts"])
@@ -152,7 +152,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
                 Atomic numbers for each atom in the molecule.
             - 'positions': torch.Tensor, shape [n_atoms, 3]
                 Coordinates for each atom in the molecule.
-            - 'E_label': torch.Tensor, shape []
+            - 'E': torch.Tensor, shape []
                 Scalar energy value for the molecule.
             - 'idx': int
                 Index of the conformer in the dataset.
@@ -180,17 +180,14 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             .clone()
             .detach()
         ).to(torch.float32)
-        E_label = (
-            (self.properties_of_interest["E_label"][idx])
-            .clone()
-            .detach()
-            .to(torch.float64)
+        E = (
+            (self.properties_of_interest["E"][idx]).clone().detach().to(torch.float64)
         )  # NOTE: upgrading to float64 to avoid precision issues
 
         return {
             "atomic_numbers": atomic_numbers,
             "positions": positions,
-            "E_label": E_label,
+            "E": E,
             "atomic_subsystem_counts": torch.tensor([atomic_numbers.shape[0]]),
             "idx": idx,
             "atomic_index": torch.tensor(
@@ -663,10 +660,10 @@ class TorchDataModule(pl.LightningDataModule):
         log.info("Removing self energies from the dataset")
         for i in tqdm(range(len(dataset)), desc="Removing Self Energies"):
             atomic_numbers = list(dataset[i]["atomic_numbers"])
-            E_label = dataset[i]["E_label"]
+            E = dataset[i]["E"]
             for Z in atomic_numbers:
-                E_label -= self_energies[int(Z)]
-            dataset[i] = {"E_label": E_label}
+                E -= self_energies[int(Z)]
+            dataset[i] = {"E": E}
 
         return dataset
 
@@ -685,14 +682,14 @@ class TorchDataModule(pl.LightningDataModule):
         if normalize:
             log.info("Normalizing energies using computed mean and std")
         for i in tqdm(range(len(dataset)), desc="Adjusting Energies"):
-            energy = dataset[i]["E_label"]
+            energy = dataset[i]["E"]
             if normalize:
                 # Normalize using the computed mean and std
                 modified_energy = (energy - dataset_mean) / dataset_std
             else:
                 # Only adjust by subtracting the mean
                 modified_energy = energy - dataset_mean
-            dataset[i] = {"E_label": modified_energy}
+            dataset[i] = {"E": modified_energy}
 
         return dataset
 
@@ -778,7 +775,7 @@ def collate_conformers(
     for idx, conf in enumerate(conf_list):
         atomic_numbers_list.append(conf["atomic_numbers"])
         positions_list.append(conf["positions"])
-        E_list.append(conf["E_label"])
+        E_list.append(conf["E"])
         atomic_subsystem_counts.extend(conf["atomic_subsystem_counts"])
         atomic_subsystem_indices.extend([idx] * conf["atomic_subsystem_counts"][0])
         atomic_subsystem_indices_referencing_dataset.extend(
@@ -796,7 +793,7 @@ def collate_conformers(
             ]
         ),
         "positions": positions_cat,
-        "E_label": E_stack,
+        "E": E_stack,
         "atomic_subsystem_counts": torch.tensor(
             atomic_subsystem_counts, dtype=torch.int32
         ),

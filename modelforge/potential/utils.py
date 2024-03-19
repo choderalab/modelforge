@@ -3,6 +3,100 @@ from typing import Callable, Tuple, Optional
 import numpy as np
 import torch
 import torch.nn as nn
+from typing import NamedTuple
+
+
+class DatasetEntry(NamedTuple):
+    """
+    A NamedTuple to structure the inputs for neural network potentials.
+
+    Parameters
+    ----------
+    atomic_numbers : torch.Tensor
+        A 1D tensor containing atomic numbers for each atom in the system(s).
+        Shape: [num_atoms], where `num_atoms` is the total number of atoms across all systems.
+    positions : torch.Tensor
+        A 2D tensor of shape [num_atoms, 3], representing the XYZ coordinates of each atom.
+    atomic_subsystem_indices : torch.Tensor
+        A 1D tensor mapping each atom to its respective subsystem or molecule.
+        This allows for calculations involving multiple molecules or subsystems within the same batch.
+        Shape: [num_atoms].
+    total_charge : Optional[torch.Tensor]
+        An optional tensor with the total charge of each system or molecule, if applicable.
+        Shape: [num_systems], where `num_systems` is the number of distinct systems or molecules.
+    additional_features : Optional[torch.Tensor]
+        An optional 2D tensor containing any additional features required by the model for each atom.
+        Shape: [num_atoms, num_features], where `num_features` is the number of additional features per atom.
+
+    Notes
+    -----
+    This structure is designed to encapsulate all necessary inputs for neural network potentials
+    in a structured and type-safe manner, facilitating easy access and manipulation of input data
+    for the model.
+
+    Examples
+    --------
+    >>> inputs = NeuralNetworkInputs(
+    ...     atomic_numbers=torch.tensor([1, 6, 6, 8]),  # H, C, C, O for an example molecule
+    ...     positions=torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]),
+    ...     atomic_subsystem_indices=torch.tensor([0, 0, 0, 0]),  # All atoms belong to the same molecule
+    ...     total_charge=torch.tensor([0.0]),  # Assuming the molecule is neutral
+    ...     additional_features=torch.randn(4, 5)  # Random example features
+    ...
+    """
+
+    atomic_numbers: torch.Tensor
+    positions: torch.Tensor
+    atomic_subsystem_indices: torch.Tensor
+    total_charge: torch.Tensor
+    additional_features: torch.Tensor
+
+
+class NeuralNetworkInput(NamedTuple):
+    """
+    A NamedTuple to structure the inputs for neural network potentials.
+
+    Parameters
+    ----------
+    atomic_numbers : torch.Tensor
+        A 1D tensor containing atomic numbers for each atom in the system(s).
+        Shape: [num_atoms], where `num_atoms` is the total number of atoms across all systems.
+    positions : torch.Tensor
+        A 2D tensor of shape [num_atoms, 3], representing the XYZ coordinates of each atom.
+    atomic_subsystem_indices : torch.Tensor
+        A 1D tensor mapping each atom to its respective subsystem or molecule.
+        This allows for calculations involving multiple molecules or subsystems within the same batch.
+        Shape: [num_atoms].
+    total_charge : Optional[torch.Tensor]
+        An optional tensor with the total charge of each system or molecule, if applicable.
+        Shape: [num_systems], where `num_systems` is the number of distinct systems or molecules.
+    additional_features : Optional[torch.Tensor]
+        An optional 2D tensor containing any additional features required by the model for each atom.
+        Shape: [num_atoms, num_features], where `num_features` is the number of additional features per atom.
+
+    Notes
+    -----
+    This structure is designed to encapsulate all necessary inputs for neural network potentials
+    in a structured and type-safe manner, facilitating easy access and manipulation of input data
+    for the model.
+
+    Examples
+    --------
+    >>> inputs = NeuralNetworkInputs(
+    ...     atomic_numbers=torch.tensor([1, 6, 6, 8]),  # H, C, C, O for an example molecule
+    ...     positions=torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]),
+    ...     atomic_subsystem_indices=torch.tensor([0, 0, 0, 0]),  # All atoms belong to the same molecule
+    ...     total_charge=torch.tensor([0.0]),  # Assuming the molecule is neutral
+    ...     additional_features=torch.randn(4, 5)  # Random example features
+    ...
+    """
+
+    atomic_numbers: torch.Tensor
+    positions: torch.Tensor
+    atomic_subsystem_indices: torch.Tensor
+    total_charge: torch.Tensor
+    additional_features: torch.Tensor
+
 
 ATOMIC_NUMBER_TO_INDEX_MAP = {
     1: 0,  # H

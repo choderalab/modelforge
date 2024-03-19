@@ -22,10 +22,10 @@ def normalize_energies(dataset, stats: Dict[str, float]) -> None:
     from tqdm import tqdm
 
     for i in tqdm(range(len(dataset)), desc="Adjusting Energies"):
-        energy = dataset[i]["E_label"]
+        energy = dataset[i]["E"]
         # Normalize using the computed mean and std
         modified_energy = (energy - stats["mean"]) / stats["stddev"]
-        dataset[i] = {"E_label": modified_energy}
+        dataset[i] = {"E": modified_energy}
 
     return dataset
 
@@ -55,7 +55,7 @@ def calculate_mean_and_variance(
     log.info("Calculating mean and variance for normalization")
     nr_of_atoms = 0
     for batch in dataloader:
-        online_estimator.update(batch["E_label"])
+        online_estimator.update(batch["E"])
 
     stats = {
         "mean": online_estimator.mean / torch_dataset.number_of_atoms,
@@ -91,7 +91,7 @@ def calculate_self_energies(torch_dataset, collate_fn) -> Dict[int, float]:
         torch_dataset, batch_size=batch_size, collate_fn=collate_fn
     ):
         energies, atomic_numbers, molecules_id = (
-            batch["E_label"].squeeze(),
+            batch["E"].squeeze(),
             batch["atomic_numbers"].squeeze(-1).to(torch.int64),
             batch["atomic_subsystem_indices"].to(torch.int16),
         )

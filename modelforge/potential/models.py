@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict
 
 import lightning as pl
 import torch
@@ -9,19 +9,50 @@ from loguru import logger as log
 
 from abc import ABC, abstractmethod
 import torch
+from typing import NamedTuple
+from modelforge.potential.utils import AtomicSelfEnergies, NeuralNetworkInput
+from abc import abstractmethod, ABC
+from openff.units import unit
+from typing import Dict, Type
+
+
+# Define NamedTuple for the outputs of Pairlist and Neighborlist forward method
+class PairListOutputs(NamedTuple):
+    pair_indices: torch.Tensor
+    d_ij: torch.Tensor
+    r_ij: torch.Tensor
+
+
+class EnergyOutput(NamedTuple):
+    E_predict: torch.Tensor
+    raw_E_predict: torch.Tensor
+    rescaled_E_predict: torch.Tensor
+    molecular_ase: torch.Tensor
+    outputs: Dict[str, torch.Tensor]
+
+
+class DatasetStatistics(NamedTuple):
+    scaling_mean: float
+    scaling_stddev: float
+    atomic_self_energies: AtomicSelfEnergies
 
 
 class Pairlist(nn.Module):
-    """
-    A module to handle pair list calculations for atoms.
-    This returns a pair list of atom indices and the displacement vectors between them.
+    """Handle pair list calculations for atoms, returning atom indices pairs and displacement vectors.
+
+    Attributes
+    ----------
+    calculate_pairs : callable
+        A function to calculate pairs given specific criteria.
 
     Methods
     -------
-    compute_r_ij(atom_pairs: torch.Tensor, positions: torch.Tensor) -> torch.Tensor
-        Compute the displacement vector between atom pairs.
-    forward(mask: torch.Tensor, positions: torch.Tensor) -> Dict[str, torch.Tensor]
-        Forward pass for PairList.
+    calculate_r_ij(pair_indices, positions)
+        Computes the displacement vector between atom pairs.
+    calculate_d_ij(r_ij)
+        Computes the Euclidean distance between atoms in a pair.
+    forward(positions, atomic_subsystem_indices, only_unique_pairs=False)
+        Forward pass to compute pair indices, distances, and displacement vectors.
     """
 
     def __init__(self):
@@ -36,19 +67,19 @@ class Pairlist(nn.Module):
     def calculate_r_ij(
         self, pair_indices: torch.Tensor, positions: torch.Tensor
     ) -> torch.Tensor:
-        """Compute displacement vector between atom pairs.
+        """Compute displacement vectors between atom pairs.
 
         Parameters
         ----------
-        pair_indices : torch.Tensor, shape [2, n_pairs]
-            Atom indices for pairs of atoms
-        positions : torch.Tensor, shape [atoms, 3]
-            Atom positions.
+        pair_indices : torch.Tensor
+            Atom indices for pairs of atoms. Shape: [2, n_pairs].
+        positions : torch.Tensor
+            Atom positions. Shape: [atoms, 3].
 
         Returns
         -------
-        torch.Tensor, shape [n_pairs, 3]
-            Displacement vector between atom pairs.
+        torch.Tensor
+            Displacement vectors between atom pairs. Shape: [n_pairs, 3].
         """
         # Select the pairs of atom coordinates from the positions
         selected_positions = positions.index_select(0, pair_indices.view(-1)).view(
@@ -56,56 +87,74 @@ class Pairlist(nn.Module):
         )
         return selected_positions[1] - selected_positions[0]
 
-    def calculate_d_ij(self, r_ij):
-        # Calculate the euclidian distance between the atoms in the pair
-        return r_ij.norm(2, -1).unsqueeze(-1)
+    def calculate_d_ij(self, r_ij: torch.Tensor) -> torch.Tensor:
+        """Compute Euclidean distances between atoms in each pair.
+
+        Parameters
+        ----------
+        r_ij : torch.Tensor
+            Displacement vectors between atoms in a pair. Shape: [n_pairs, 3].
+
+        Returns
+        -------
+        torch.Tensor
+            Euclidean distances. Shape: [n_pairs, 1].
+        """
+        return r_ij.norm(dim=1).unsqueeze(1)
 
     def forward(
         self,
         positions: torch.Tensor,
         atomic_subsystem_indices: torch.Tensor,
         only_unique_pairs: bool = False,
-    ) -> Dict[str, torch.Tensor]:
+    ) -> PairListOutputs:
         """
-        Forward pass for PairList.
+        Compute interacting pairs, distances, and displacement vectors.
 
         Parameters
         ----------
-        positions : torch.Tensor, shape [nr_atoms, 3]
-            Position tensor.
-        atomic_subsystem_indices : torch.Tensor, shape [nr_atoms]
+        positions : torch.Tensor
+            Atom positions. Shape: [nr_atoms, 3].
+        atomic_subsystem_indices : torch.Tensor
+            Indices to identify atoms in subsystems. Shape: [nr_atoms].
         only_unique_pairs : bool, optional
-            If set to True, only unique pairs of atoms are considered, default is False.
+            If True, considers only unique pairs of atoms. Default is False.
 
         Returns
         -------
-        dict : Dict[str, torch.Tensor], containing atom index pairs, distances, and displacement vectors.
-            - 'pair_indices': torch.Tensor, shape (2, n_pairs)
-            - 'r_ij' : torch.Tensor, shape (n_pairs, 3)
-            - 'd_ij' : torch.Tensor, shape (n_pairs, 1)
-
+        PairListOutputs
+            A NamedTuple containing 'pair_indices', 'd_ij' (distances), and 'r_ij' (displacement vectors).
         """
-        assert positions.ndim == 2
         pair_indices = self.calculate_pairs(
             atomic_subsystem_indices,
             only_unique_pairs=only_unique_pairs,
         )
         r_ij = self.calculate_r_ij(pair_indices, positions)
 
-        return {
-            "pair_indices": pair_indices,
-            "d_ij": self.calculate_d_ij(r_ij),
-            "r_ij": r_ij,
-        }
+        return PairListOutputs(
+            pair_indices=pair_indices,
+            d_ij=self.calculate_d_ij(r_ij),
+            r_ij=r_ij,
+        )
 
 
 from openff.units import unit
 
 
 class Neighborlist(Pairlist):
+    """Manage neighbor list calculations with a specified cutoff distance.
+
+    This class extends Pairlist to consider a cutoff distance for neighbor calculations.
+
+    Attributes
+    ----------
+    cutoff : unit.Quantity
+        Cutoff distance for neighbor list calculations.
+    """
+
     def __init__(self, cutoff: unit.Quantity):
         """
-        Initialize PairList.
+        Initialize the Neighborlist with a specific cutoff distance.
 
         Parameters
         ----------
@@ -123,27 +172,27 @@ class Neighborlist(Pairlist):
         positions: torch.Tensor,
         atomic_subsystem_indices: torch.Tensor,
         only_unique_pairs: bool = False,
-    ) -> Dict[str, torch.Tensor]:
+    ) -> PairListOutputs:
         """
-        Forward pass for Neighborlist.
+        Forward pass to compute neighbor list considering a cutoff distance.
+
+        Overrides the `forward` method from Pairlist to include cutoff distance in calculations.
 
         Parameters
         ----------
-        positions : torch.Tensor, shape [nr_systems, nr_atoms, 3]
-            Position tensor.
-        atomic_subsystem_indices : torch.Tensor, shape [nr_atoms]
+        positions : torch.Tensor
+            Atom positions. Shape: [nr_systems, nr_atoms, 3].
+        atomic_subsystem_indices : torch.Tensor
+            Indices identifying atoms in subsystems. Shape: [nr_atoms].
         only_unique_pairs : bool, optional
-            If set to True, only unique pairs of atoms are considered, default is False.
-
+            If True, considers only unique pairs of atoms. Default is False.
 
         Returns
         -------
-        dict : Dict[str, torch.Tensor], containing atom index pairs, distances, and displacement vectors.
-            - 'pair_indices': torch.Tensor, shape (2, n_pairs)
-            - 'r_ij' : torch.Tensor, shape (n_pairs, 3)
-            - 'd_ij' : torch.Tensor, shape (n_pairs, )
-
+        PairListOutputs
+            A NamedTuple containing 'pair_indices', 'd_ij' (distances), and 'r_ij' (displacement vectors).
         """
+
         pair_indices = self.calculate_pairs(
             positions,
             atomic_subsystem_indices,
@@ -152,22 +201,30 @@ class Neighborlist(Pairlist):
         )
         r_ij = self.calculate_r_ij(pair_indices, positions)
 
-        return {
-            "pair_indices": pair_indices,
-            "d_ij": self.calculate_d_ij(r_ij),
-            "r_ij": r_ij,
-        }
-
-
-from modelforge.potential.utils import AtomicSelfEnergies
-from abc import abstractmethod, ABC
-from openff.units import unit
-from typing import Dict, Type
+        return PairListOutputs(
+            pair_indices=pair_indices,
+            d_ij=self.calculate_d_ij(r_ij),
+            r_ij=r_ij,
+        )
 
 
 class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
-    """
-    Abstract Base class for neural network potentials.
+    """Abstract base class for neural network potentials.
+
+    Attributes
+    ----------
+    cutoff : unit.Quantity
+        Cutoff distance for neighbor list calculations.
+    loss_function : Type[nn.Module]
+        Loss function for training the neural network.
+    optimizer : Type[torch.optim.Optimizer]
+        Optimizer used for training.
+    learning_rate : float
+        Learning rate for the optimizer.
+    calculate_distances_and_pairlist : Neighborlist
+        Module for calculating distances and pairlist with a given cutoff.
+    readout_module : FromAtomToMoleculeReduction
+        Module for reading out per molecule properties from atomic properties.
     """
 
     def __init__(
@@ -177,14 +234,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
         lr: float = 1e-3,
     ):
-        """
-        Initialize the NNP class.
-
-        Parameters
-        ----------
-        cutoff : unit.Quantity
-            Cutoff distance for neighbor list.
-        """
+        """Initialize the neural network potential class with specified parameters."""
         from .models import Neighborlist
 
         super().__init__()
@@ -192,11 +242,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         self._dtype = None  # set at runtime
         self._log_message_dtype = False
         self._log_message_units = False
-        self._dataset_statistics: Dict = {
-            "scaling_mean": 0.0,
-            "scaling_stddev": 1.0,
-            "atomic_self_energies": AtomicSelfEnergies(),
-        }
+        self._dataset_statistics = DatasetStatistics(0.0, 1.0, AtomicSelfEnergies())
         self.loss_function = loss
         self.optimizer = optimizer
         self.learning_rate = lr
@@ -205,39 +251,49 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
         self.readout_module = FromAtomToMoleculeReduction()
 
+    @abstractmethod
+    def _model_specific_input_preparation(
+        self, inputs: NeuralNetworkInput
+    ) -> NeuralNetworkInput:
+        """
+        Prepares model-specific inputs before the forward pass.
+
+        This method should be implemented by subclasses to accommodate any
+        model-specific processing of inputs.
+
+        Parameters
+        ----------
+        inputs : NeuralNetworkInput
+            The initial inputs to the neural network model.
+
+        Returns
+        -------
+        NeuralNetworkInput
+            The processed inputs, ready for the model's forward pass.
+        """
+        pass
+
+    @abstractmethod
+    def _forward(self, inputs: NeuralNetworkInput):
+        # needs to be implemented by the subclass
+        # perform the forward pass implemented in the subclass
+        pass
+
     @property
     def dataset_statistics(self):
         return self._dataset_statistics
 
     @dataset_statistics.setter
-    def dataset_statistics(self, dataset_statistics: Dict):
+    def dataset_statistics(self, key: str, value: float):
 
-        for key in ["scaling_mean", "scaling_stddev", "atomic_self_energies"]:
-            assert (
-                key in dataset_statistics.keys()
-            ), f"dataset_statistics must contain the key '{key}'"
-
-        self._dataset_statistics = dataset_statistics
-
-    @abstractmethod
-    def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
-        # needs to be implemented by the subclass
-        # if subclass needs any additional input preparation (e.g. embedding),
-        # it should be done here
-        pass
-
-    @abstractmethod
-    def _forward(self, inputs: Dict[str, torch.Tensor]):
-        # needs to be implemented by the subclass
-        # perform the forward pass implemented in the subclass
-        pass
+        self._dataset_statistics.key = value
 
     def _readout(self, x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
         # readout the per molecule values
         return self.readout_module(x, index)
 
     def _log_batch_size(self, batch: Dict[str, torch.Tensor]):
-        batch_size = int(len(batch["E_label"]))
+        batch_size = int(len(batch["E"]))
         return batch_size
 
     def training_step(
@@ -260,7 +316,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         """
         batch_size = self._log_batch_size(batch)
         predictions = self.forward(batch)["E_predict"].flatten()
-        targets = batch["E_label"].flatten().to(torch.float32)
+        targets = batch["E"].flatten().to(torch.float32)
 
         import math
 
@@ -285,7 +341,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         batch_size = self._log_batch_size(batch)
 
         predictions = self.forward(batch).flatten()
-        targets = batch["E_label"].flatten()
+        targets = batch["E"].flatten()
         test_loss = F.mse_loss(predictions["E_predict"], targets)
         self.log(
             "test_loss", test_loss, batch_size=batch_size, on_epoch=True, prog_bar=True
@@ -296,7 +352,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
         batch_size = self._log_batch_size(batch)
         predictions = self.forward(batch)["E_predict"]
-        targets = batch["E_label"].squeeze(1)
+        targets = batch["E"].squeeze(1)
         val_loss = F.mse_loss(predictions, targets)
         self.log(
             "val_loss", val_loss, batch_size=batch_size, on_epoch=True, prog_bar=True
@@ -369,7 +425,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
     def prepare_inputs(
         self, inputs: Dict[str, torch.Tensor], only_unique_pairs: bool = True
-    ):
+    ):  # FIXME
         """Prepares the input tensors for passing to the model.
 
         Performs general input manipulation like calculating distances,

@@ -1,15 +1,13 @@
-from typing import Optional, Type
+from typing import Type
 
 import pytest
 
 from modelforge.potential.models import BaseNeuralNetworkPotential
-from modelforge.potential.schnet import SchNet
 
 from .helper_functions import (
     MODELS_TO_TEST,
     DATASETS,
     initialize_dataset,
-    setup_simple_model,
 )
 
 

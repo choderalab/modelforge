@@ -545,7 +545,7 @@ def setup_mf_schnet_representation(
 
     return mf_SchNET(
         number_of_atom_features=number_of_atom_features,
-        nr_interaction_modules=nr_of_interactions,
+        number_of_interaction_modules=nr_of_interactions,
         number_of_radial_basis_functions=number_of_radial_basis_functions,
         cutoff=cutoff,
     )

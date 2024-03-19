@@ -3,8 +3,7 @@ import torch
 from modelforge.dataset.dataset import TorchDataModule
 from modelforge.dataset.qm9 import QM9Dataset
 from modelforge.potential import SchNet, PaiNN, ANI2x, PhysNet
-from modelforge.potential.utils import NeuralNetworkInput
-from modelforge.potential.models import BaseNeuralNetworkPotential
+from modelforge.potential.utils import NeuralNetworkInput, DatasetEntry
 from typing import Optional, Dict
 
 MODELS_TO_TEST = [SchNet, PaiNN, ANI2x, PhysNet]
@@ -105,7 +104,7 @@ def generate_methane_input() -> NeuralNetworkInput:
     )
     E = torch.tensor([0.0], requires_grad=True)
     atomic_subsystem_indices = torch.tensor([0, 0, 0, 0, 0], dtype=torch.int32)
-    return NeuralNetworkInput(
+    return DatasetEntry(
         atomic_numbers=atomic_numbers,
         positions=positions,
         atomic_subsystem_indices=atomic_subsystem_indices,

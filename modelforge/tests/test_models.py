@@ -5,7 +5,6 @@ from .helper_functions import (
     MODELS_TO_TEST,
     SIMPLIFIED_INPUT_DATA,
     return_single_batch,
-    setup_simple_model,
     equivariance_test_utils,
 )
 
@@ -92,8 +91,8 @@ def test_calculate_energies_and_forces(input_data, default_model):
     import torch
 
     # test the backward pass through each of the models
-    nr_of_mols = input_data["atomic_subsystem_indices"].unique().shape[0]
-    nr_of_atoms_per_batch = input_data["atomic_subsystem_indices"].shape[0]
+    nr_of_mols = input_data.atomic_subsystem_indices.unique().shape[0]
+    nr_of_atoms_per_batch = input_data.atomic_subsystem_indices.shape[0]
 
     # initialize model with default parameters
     model = default_model()

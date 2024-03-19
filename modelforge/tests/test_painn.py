@@ -4,7 +4,6 @@ import pytest
 
 from modelforge.potential.painn import PaiNN
 from .helper_functions import (
-    setup_simple_model,
     SIMPLIFIED_INPUT_DATA,
 )
 

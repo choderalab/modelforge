@@ -48,8 +48,9 @@ class DatasetEntry(NamedTuple):
     atomic_numbers: torch.Tensor
     positions: torch.Tensor
     atomic_subsystem_indices: torch.Tensor
+    E: torch.Tensor
+    atom_index: torch.Tensor
     total_charge: torch.Tensor
-    additional_features: torch.Tensor
 
 
 class NeuralNetworkInput(NamedTuple):
@@ -91,11 +92,15 @@ class NeuralNetworkInput(NamedTuple):
     ...
     """
 
-    atomic_numbers: torch.Tensor
+    pair_indices: torch.Tensor
+    d_ij: torch.Tensor
+    r_ij: torch.Tensor
+    number_of_atoms: torch.Tensor
     positions: torch.Tensor
+    atomic_numbers: torch.Tensor
     atomic_subsystem_indices: torch.Tensor
+    atom_index: torch.Tensor
     total_charge: torch.Tensor
-    additional_features: torch.Tensor
 
 
 ATOMIC_NUMBER_TO_INDEX_MAP = {

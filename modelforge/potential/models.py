@@ -10,7 +10,11 @@ from loguru import logger as log
 from abc import ABC, abstractmethod
 import torch
 from typing import NamedTuple
-from modelforge.potential.utils import AtomicSelfEnergies, NeuralNetworkInput
+from modelforge.potential.utils import (
+    AtomicSelfEnergies,
+    NeuralNetworkInput,
+    DatasetEntry,
+)
 from abc import abstractmethod, ABC
 from openff.units import unit
 from typing import Dict, Type
@@ -253,7 +257,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
     @abstractmethod
     def _model_specific_input_preparation(
-        self, inputs: NeuralNetworkInput
+        self, data: DatasetEntry, pairlist: PairListOutputs
     ) -> NeuralNetworkInput:
         """
         Prepares model-specific inputs before the forward pass.
@@ -263,8 +267,9 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
         Parameters
         ----------
-        inputs : NeuralNetworkInput
+        data : DatasetEntry
             The initial inputs to the neural network model.
+        pairlist : PairListOutputs
 
         Returns
         -------
@@ -373,21 +378,21 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
     def _rescale_energy(self, energies: torch.Tensor) -> torch.Tensor:
 
         return (
-            energies * self.dataset_statistics["scaling_stddev"]
-            + self.dataset_statistics["scaling_mean"]
+            energies * self.dataset_statistics.scaling_stddev
+            + self.dataset_statistics.scaling_mean
         )
 
     def _calculate_molecular_self_energy(
-        self, inputs: Dict[str, torch.Tensor], number_of_molecules: int
+        self, data: DatasetEntry, number_of_molecules: int
     ) -> torch.Tensor:
 
-        atomic_numbers = inputs["atomic_numbers"]
-        atomic_subsystem_indices = inputs["atomic_subsystem_indices"].to(
+        atomic_numbers = data.atomic_numbers
+        atomic_subsystem_indices = data.atomic_subsystem_indices.to(
             dtype=torch.long, device=self.device
         )
 
         # atomic_number_to_energy
-        atomic_self_energies = self.dataset_statistics["atomic_self_energies"]
+        atomic_self_energies = self.dataset_statistics,atomic_self_energies
         ase_tensor_for_indexing = atomic_self_energies.ase_tensor_for_indexing.to(
             device=self.device
         )
@@ -424,8 +429,8 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         return processed_energy
 
     def prepare_inputs(
-        self, inputs: Dict[str, torch.Tensor], only_unique_pairs: bool = True
-    ):  # FIXME
+        self, data: DatasetEntry, only_unique_pairs: bool = True
+    ) -> NeuralNetworkInput:
         """Prepares the input tensors for passing to the model.
 
         Performs general input manipulation like calculating distances,
@@ -434,43 +439,29 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
         Parameters
         ----------
-        inputs : Dict[str, torch.Tensor]
-            Input tensors like atomic numbers, positions etc.
+        data : DatasetEntry
+            NameTuple containing the data provided by the dataset.
         only_unique_pairs : bool, optional
             Whether to only use unique pairs or not in the pairlist.
         Returns
         -------
-        inputs : Dict[str, torch.Tensor]
-            Input tensors after preparation.
+        nnp_input : NeuralNetworkInput
+            NamedTuple containg the relevant data for the model.
         """
         # ---------------------------
         # general input manipulation
-        atomic_numbers = inputs["atomic_numbers"]
-        positions = inputs["positions"]
-        atomic_subsystem_indices = inputs["atomic_subsystem_indices"]
-        atomic_index = inputs["atomic_index"]
-        number_of_atoms_in_batch = atomic_numbers.shape[0]
+        positions = data.positions
+        atomic_subsystem_indices = data.atomic_subsystem_indices
 
-        r = self.calculate_distances_and_pairlist(
+        pairlist_output = self.calculate_distances_and_pairlist(
             positions, atomic_subsystem_indices, only_unique_pairs
         )
 
-        inputs = {
-            "pair_indices": r["pair_indices"],
-            "d_ij": r["d_ij"],
-            "r_ij": r["r_ij"],
-            "number_of_atoms_in_batch": number_of_atoms_in_batch,
-            "positions": positions,
-            "atomic_numbers": atomic_numbers,
-            "atomic_subsystem_indices": atomic_subsystem_indices,
-            "atomic_index": atomic_index,
-        }
-
         # ---------------------------
         # perform model specific modifications
-        inputs = self._model_specific_input_preparation(inputs)
+        nnp_input = self._model_specific_input_preparation(data, pairlist_output)
 
-        return inputs
+        return nnp_input
 
     def _set_dtype(self):
         dtypes = list({p.dtype for p in self.parameters()})
@@ -486,15 +477,9 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
         self._dtype = dtypes[0]
 
-    def _input_checks(self, inputs: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def _input_checks(self, data: DatasetEntry) -> Dict[str, torch.Tensor]:
         """
         Perform input checks to validate the input dictionary.
-
-        Parameters
-        ----------
-        inputs : Dict[str, torch.Tensor], with distance units attached
-            Inputs containing necessary data for the forward pass.
-            The exact keys and shapes are implementation-dependent.
 
         Raises
         ------
@@ -504,29 +489,27 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         """
         from openff.units import unit
 
-        required_keys = ["atomic_numbers", "positions", "atomic_subsystem_indices"]
-        for key in required_keys:
-            if key not in inputs:
-                raise ValueError(f"Missing required key: {key}")
+        # check that the named tuple is DatasetEntry
+        assert isinstance(data, DatasetEntry)
 
-        if inputs["atomic_numbers"].dim() != 1:
-            print(inputs["atomic_numbers"])
-            raise ValueError("Shape mismatch: 'atomic_numbers' should be a 2D tensor.")
+        nr_of_atoms = data.atomic_numbers.shape[0]
+        assert data.atomic_numbers.shape == torch.Size([nr_of_atoms])
+        assert data.atom_index.shape == torch.Size([nr_of_atoms])
+        assert data.atomic_subsystem_indices.shape == torch.Size([nr_of_atoms])
+        nr_of_molecules = torch.unique(data.atomic_subsystem_indices).numel()
+        assert data.total_charge.shape == torch.Size([nr_of_molecules])
+        assert data.positions.shape == torch.Size([nr_of_atoms, 3])
 
-        if inputs["positions"].dim() != 2:
-            raise ValueError("Shape mismatch: 'positions' should be a 2D tensor.")
-
-        if inputs["positions"].dtype != self._dtype:
+        if data.positions.dtype != self._dtype:
             log.debug(
-                f"Precision mismatch: dtype of positions tensor is {inputs['positions'].dtype}, "
+                f"Precision mismatch: dtype of positions tensor is {data.positions.dtype}, "
                 f"but dtype of model parameters is {self._dtype}. "
                 f"Setting dtype of positions tensor to {self._dtype}."
             )
-            inputs["positions"] = inputs["positions"].to(self._dtype)
+            data.positions = data.positions.to(self._dtype)
 
-        if isinstance(inputs["positions"], unit.Quantity):
-            inputs["positions"] = inputs["positions"].to(unit.nanometer).m
-
+        if isinstance(data.positions, unit.Quantity):
+            data.positions = data.positions.to(unit.nanometer).m
         else:
             if not self._log_message_units:
                 log.warning(
@@ -534,22 +517,26 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
                 )
                 self._log_message_units = True
 
-        return inputs
+        return data
 
-    def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
+    def forward(self, data: DatasetEntry) -> torch.Tensor:
         """
         Abstract method for forward pass in neural network potentials.
 
         Parameters
         ----------
-        inputs : Dict[str, torch.Tensor]
-            Inputs containing atomic numbers ('atomic_numbers'), coordinates ('positions') and pairlist ('pairlist').
-        - 'atomic_numbers': int
-            shape (nr_of_atoms_in_batch, 1), 0 indicates non-interacting atoms that will be masked
-        - 'total_charge' : int
-            shape (n_system)
-        - 'positions': float
-            shape (nr_of_atoms_in_batch, 3)
+        data : DatasetEntry
+            NamedTuple containing the following fields.
+        - atomic_numbers: torch.Tensor
+            Contains the atomic number (nuclear charge) of each atom, shape (nr_of_atoms).
+        - atom_index: torch.Tensor
+            Contains the index of the atom in the molecule, shape (nr_of_atoms).
+        - atomic_subsystem_indices: torch.Tensor
+            Contains the index of the subsystem the atom belongs to, shape (nr_of_atoms).
+        - 'total_charge' : torch.Tensor
+            Contains the total charge per molecule, shape (number_of_molecules).
+        - 'positions': torch.Tensor
+            Positions of each atom, shape (nr_of_atoms, 3)
 
         Returns
         -------
@@ -560,9 +547,9 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         # adjust the dtype of the input tensors to match the model parameters
         self._set_dtype()
         # perform input checks
-        inputs = self._input_checks(inputs)
+        inputs = self._input_checks(data)
         # prepare the input for the forward pass
-        inputs = self.prepare_inputs(inputs, self.only_unique_pairs)
+        inputs = self.prepare_inputs(data, self.only_unique_pairs)
         # perform the forward pass implemented in the subclass
         outputs = self._forward(inputs)
         # sum over atomic properties to generate per molecule properties

@@ -1,4 +1,3 @@
-from torch._tensor import Tensor
 import torch.nn as nn
 from loguru import logger as log
 from typing import Dict, Callable, Tuple
@@ -8,6 +7,61 @@ from .utils import Dense
 import torch
 import torch.nn.functional as F
 from openff.units import unit
+from typing import TYPE_CHECKING, NamedTuple
+
+if TYPE_CHECKING:
+    from .models import DatasetEntry, PairListOutputs
+
+
+class PaiNNNeuralNetworkInput(NamedTuple):
+    """
+    A NamedTuple to structure the inputs for neural network potentials.
+
+    Parameters
+    ----------
+    atomic_numbers : torch.Tensor
+        A 1D tensor containing atomic numbers for each atom in the system(s).
+        Shape: [num_atoms], where `num_atoms` is the total number of atoms across all systems.
+    positions : torch.Tensor
+        A 2D tensor of shape [num_atoms, 3], representing the XYZ coordinates of each atom.
+    atomic_subsystem_indices : torch.Tensor
+        A 1D tensor mapping each atom to its respective subsystem or molecule.
+        This allows for calculations involving multiple molecules or subsystems within the same batch.
+        Shape: [num_atoms].
+    total_charge : Optional[torch.Tensor]
+        An optional tensor with the total charge of each system or molecule, if applicable.
+        Shape: [num_systems], where `num_systems` is the number of distinct systems or molecules.
+    additional_features : Optional[torch.Tensor]
+        An optional 2D tensor containing any additional features required by the model for each atom.
+        Shape: [num_atoms, num_features], where `num_features` is the number of additional features per atom.
+
+    Notes
+    -----
+    This structure is designed to encapsulate all necessary inputs for neural network potentials
+    in a structured and type-safe manner, facilitating easy access and manipulation of input data
+    for the model.
+
+    Examples
+    --------
+    >>> inputs = NeuralNetworkInputs(
+    ...     atomic_numbers=torch.tensor([1, 6, 6, 8]),  # H, C, C, O for an example molecule
+    ...     positions=torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]),
+    ...     atomic_subsystem_indices=torch.tensor([0, 0, 0, 0]),  # All atoms belong to the same molecule
+    ...     total_charge=torch.tensor([0.0]),  # Assuming the molecule is neutral
+    ...     additional_features=torch.randn(4, 5)  # Random example features
+    ...
+    """
+
+    pair_indices: torch.Tensor
+    d_ij: torch.Tensor
+    r_ij: torch.Tensor
+    number_of_atoms: torch.Tensor
+    positions: torch.Tensor
+    atomic_numbers: torch.Tensor
+    atomic_subsystem_indices: torch.Tensor
+    atom_index: torch.Tensor
+    total_charge: torch.Tensor
+    atomic_embedding: torch.Tensor
 
 
 class PaiNN(BaseNeuralNetworkPotential):
@@ -79,11 +133,29 @@ class PaiNN(BaseNeuralNetworkPotential):
             ),
         )
 
-    def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
+    def _model_specific_input_preparation(
+        self, data: "DatasetEntry", pairlist_output: "PairListOutputs"
+    ) -> PaiNNNeuralNetworkInput:
         # Perform atomic embedding
 
-        inputs["atomic_embedding"] = self.embedding_module(inputs["atomic_numbers"])
-        return inputs
+        number_of_atoms = data.atomic_numbers.shape[0]
+
+        nnp_input = PaiNNNeuralNetworkInput(
+            pair_indices=pairlist_output.pair_indices,
+            d_ij=pairlist_output.d_ij,
+            r_ij=pairlist_output.r_ij,
+            number_of_atoms=number_of_atoms,
+            positions=data.positions,
+            atomic_numbers=data.atomic_numbers,
+            atomic_subsystem_indices=data.atomic_subsystem_indices,
+            atom_index=data.atom_index,
+            total_charge=data.total_charge,
+            atomic_embedding=self.embedding_module(
+                data.atomic_numbers
+            ),  # atom embedding
+        )
+
+        return nnp_input
 
     def _forward(
         self,

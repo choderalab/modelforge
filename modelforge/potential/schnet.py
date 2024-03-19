@@ -9,7 +9,6 @@ from openff.units import unit
 from typing import NamedTuple
 
 from typing import TYPE_CHECKING
-from .models import NeuralNetworkInput
 
 if TYPE_CHECKING:
     from .models import DatasetEntry, PairListOutputs

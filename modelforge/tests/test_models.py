@@ -98,12 +98,12 @@ def test_calculate_energies_and_forces(input_data, default_model):
     model = default_model()
 
     # forward pass
-    result = model(input_data)["E_predict"]
+    result = model(input_data).E
     print(result.sum())
 
     # backpropagation
     forces = -torch.autograd.grad(
-        result.sum(), input_data["positions"], create_graph=True, retain_graph=True
+        result.sum(), input_data.positions, create_graph=True, retain_graph=True
     )[0]
 
     assert result.shape == torch.Size([nr_of_mols])  #  only one molecule

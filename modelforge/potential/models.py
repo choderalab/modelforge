@@ -28,11 +28,10 @@ class PairListOutputs(NamedTuple):
 
 
 class EnergyOutput(NamedTuple):
-    E_predict: torch.Tensor
-    raw_E_predict: torch.Tensor
-    rescaled_E_predict: torch.Tensor
+    E: torch.Tensor
+    raw_E: torch.Tensor
+    rescaled_E: torch.Tensor
     molecular_ase: torch.Tensor
-    outputs: Dict[str, torch.Tensor]
 
 
 class DatasetStatistics(NamedTuple):
@@ -392,7 +391,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         )
 
         # atomic_number_to_energy
-        atomic_self_energies = self.dataset_statistics,atomic_self_energies
+        atomic_self_energies = self.dataset_statistics.atomic_self_energies
         ase_tensor_for_indexing = atomic_self_energies.ase_tensor_for_indexing.to(
             device=self.device
         )
@@ -414,11 +413,9 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
         # first, resale the energies
         processed_energy = {}
-        processed_energy["_raw_E_predict"] = properties_per_molecule.clone().detach()
+        processed_energy["raw_E"] = properties_per_molecule.clone().detach()
         properties_per_molecule = self._rescale_energy(properties_per_molecule)
-        processed_energy["_rescaled_E_predict"] = (
-            properties_per_molecule.clone().detach()
-        )
+        processed_energy["rescaled_E"] = properties_per_molecule.clone().detach()
         # then, calculate the molecular self energy
         molecular_ase = self._calculate_molecular_self_energy(
             inputs, properties_per_molecule.numel()
@@ -558,13 +555,12 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         # and other constant factors used to optionally normalize the data range of the training dataset
         processed_energy = self._energy_postprocessing(E, inputs)
         # return energies
-        return {
-            "E_predict": processed_energy["E"],
-            "_raw_E_predict": processed_energy["_raw_E_predict"],
-            "_rescaled_E_predict": processed_energy["_rescaled_E_predict"],
-            "_molecular_ase": processed_energy["_molecular_ase"],
-            "outputs": outputs,
-        }
+        return EnergyOutput(
+            E=E,
+            raw_E=processed_energy["raw_E"],
+            rescaled_E=processed_energy["rescaled_E"],
+            molecular_ase=processed_energy["_molecular_ase"],
+        )
 
 
 class SingleTopologyAlchemicalBaseNNPModel(BaseNeuralNetworkPotential):

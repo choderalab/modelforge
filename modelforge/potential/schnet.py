@@ -11,7 +11,8 @@ from typing import NamedTuple
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .models import Metadata, PairListOutputs
+    from .models import PairListOutputs
+    from modelforge.potential.utils import NNPInput
 
 
 class SchnetNeuralNetworkInput(NamedTuple):
@@ -139,7 +140,7 @@ class SchNet(BaseNeuralNetworkPotential):
         )
 
     def _model_specific_input_preparation(
-        self, data: "Metadata", pairlist_output: "PairListOutputs"
+        self, data: "NNPInput", pairlist_output: "PairListOutputs"
     ) -> SchnetNeuralNetworkInput:
         number_of_atoms = data.atomic_numbers.shape[0]
 

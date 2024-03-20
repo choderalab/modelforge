@@ -808,5 +808,6 @@ def collate_conformers(conf_list: List[Dict[str, torch.Tensor]]) -> BatchData:
         atomic_subsystem_indices_referencing_dataset=torch.tensor(
             atomic_subsystem_indices_referencing_dataset, dtype=torch.int32
         ),
+        number_of_atoms=atomic_numbers_cat.numel(),
     )
     return BatchData(nnp_input, metadata)

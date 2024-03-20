@@ -10,7 +10,8 @@ from openff.units import unit
 from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
-    from .models import Metadata, PairListOutputs
+    from .models import PairListOutputs
+    from modelforge.potential.utils import NNPInput
 
 
 class PaiNNNeuralNetworkInput(NamedTuple):
@@ -114,7 +115,7 @@ class PaiNN(BaseNeuralNetworkPotential):
         )
 
     def _model_specific_input_preparation(
-        self, data: "Metadata", pairlist_output: "PairListOutputs"
+        self, data: "NNPInput", pairlist_output: "PairListOutputs"
     ) -> PaiNNNeuralNetworkInput:
         # Perform atomic embedding
 

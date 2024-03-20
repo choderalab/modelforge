@@ -115,6 +115,7 @@ def generate_methane_input() -> NeuralNetworInternalData:
             E=E,
             atomic_subsystem_counts=torch.tensor([0]),
             atomic_subsystem_indices_referencing_dataset=torch.tensor([0]),
+            number_of_atoms=atomic_numbers.numel(),
         ),
     )
 

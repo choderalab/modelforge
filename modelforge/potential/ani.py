@@ -5,6 +5,11 @@ from modelforge.potential.models import BaseNeuralNetworkPotential
 from typing import Dict, Tuple
 from openff.units import unit
 from modelforge.utils.prop import SpeciesAEV, SpeciesEnergies
+from typing import TYPE_CHECKING, NamedTuple
+
+if TYPE_CHECKING:
+    from .models import PairListOutputs
+    from modelforge.potential.utils import NNPInput
 
 
 def triu_index(num_species: int) -> torch.Tensor:
@@ -14,6 +19,56 @@ def triu_index(num_species: int) -> torch.Tensor:
     ret[species1, species2] = pair_index
     ret[species2, species1] = pair_index
     return ret
+
+
+class AniNeuralNetworkInput(NamedTuple):
+    """
+    A NamedTuple to structure the inputs for neural network potentials.
+
+    Parameters
+    ----------
+    atom_index : torch.Tensor
+        A 1D tensor containing atomic numbers for each atom in the system(s).
+        Shape: [num_atoms], where `num_atoms` is the total number of atoms across all systems.
+    positions : torch.Tensor
+        A 2D tensor of shape [num_atoms, 3], representing the XYZ coordinates of each atom.
+    atomic_subsystem_indices : torch.Tensor
+        A 1D tensor mapping each atom to its respective subsystem or molecule.
+        This allows for calculations involving multiple molecules or subsystems within the same batch.
+        Shape: [num_atoms].
+    total_charge : Optional[torch.Tensor]
+        An optional tensor with the total charge of each system or molecule, if applicable.
+        Shape: [num_systems], where `num_systems` is the number of distinct systems or molecules.
+    additional_features : Optional[torch.Tensor]
+        An optional 2D tensor containing any additional features required by the model for each atom.
+        Shape: [num_atoms, num_features], where `num_features` is the number of additional features per atom.
+
+    Notes
+    -----
+    This structure is designed to encapsulate all necessary inputs for neural network potentials
+    in a structured and type-safe manner, facilitating easy access and manipulation of input data
+    for the model.
+
+    Examples
+    --------
+    >>> inputs = NeuralNetworkInputs(
+    ...     atomic_numbers=torch.tensor([1, 6, 6, 8]),  # H, C, C, O for an example molecule
+    ...     positions=torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]),
+    ...     atomic_subsystem_indices=torch.tensor([0, 0, 0, 0]),  # All atoms belong to the same molecule
+    ...     total_charge=torch.tensor([0.0]),  # Assuming the molecule is neutral
+    ...     additional_features=torch.randn(4, 5)  # Random example features
+    ...
+    """
+
+    pair_indices: torch.Tensor
+    d_ij: torch.Tensor
+    r_ij: torch.Tensor
+    number_of_atoms: torch.Tensor
+    positions: torch.Tensor
+    atom_index: torch.Tensor
+    atomic_subsystem_indices: torch.Tensor
+    total_charge: torch.Tensor
+    atomic_numbers: torch.Tensor
 
 
 class ANIRepresentation(nn.Module):
@@ -85,21 +140,21 @@ class ANIRepresentation(nn.Module):
             dtype=torch.float32,
         )
 
-    def forward(self, inputs: Dict[str, torch.Tensor]):
+    def forward(self, data: AniNeuralNetworkInput):
 
         # calculate the atomic environment vectors
         # used for the ANI architecture of NNPs
 
         # ----------------- Radial symmetry vector ---------------- #
         # compute radial aev
-        radial_feature_vector = self.radial_symmetry_functions(inputs["d_ij"])
+        radial_feature_vector = self.radial_symmetry_functions(data.d_ij)
         # cutoff
-        rcut_ij = self.cutoff_module(inputs["d_ij"] / 10)
-        radial_feature_vector = radial_feature_vector * rcut_ij  # [:, None]
+        rcut_ij = self.cutoff_module(data.d_ij)
+        radial_feature_vector = radial_feature_vector * rcut_ij
 
         # process output to prepare for agular symmetry vector
         postprocessed_radial_aev_and_additional_data = self._postprocess_radial_aev(
-            radial_feature_vector, inputs=inputs
+            radial_feature_vector, data=data
         )
         processed_radial_feature_vector = postprocessed_radial_aev_and_additional_data[
             "radial_aev"
@@ -117,16 +172,16 @@ class ANIRepresentation(nn.Module):
         # postprocess
         angular_data["angular_feature_vector"] = angular_feature_vector
         processed_angular_feature_vector = self._postprocess_angular_aev(
-            inputs, angular_data
+            data, angular_data
         )
         aevs = torch.cat(
             [processed_radial_feature_vector, processed_angular_feature_vector], dim=-1
         )
 
-        return SpeciesAEV(inputs["atomic_numbers"], aevs)
+        return SpeciesAEV(data.atomic_numbers, aevs)
 
     def _postprocess_angular_aev(
-        self, inputs: Dict[str, torch.Tensor], data: Dict[str, torch.Tensor]
+        self, data: AniNeuralNetworkInput, angular_data: Dict[str, torch.Tensor]
     ):
         # postprocess the angular aev
         # used for the ANI architecture of NNPs
@@ -139,57 +194,57 @@ class ANIRepresentation(nn.Module):
 
         num_species_pairs = angular_length // angular_sublength
 
-        number_of_atoms_in_batch = inputs["number_of_atoms_in_batch"]
+        number_of_atoms = data.number_of_atoms
         # compute angular aev
-        central_atom_index = data["central_atom_index"]
-        angular_species12 = data["angular_species12"]
-        angular_r_ij = data["angular_r_ij"]
+        central_atom_index = angular_data["central_atom_index"]
+        angular_species12 = angular_data["angular_species12"]
+        angular_r_ij = angular_data["angular_r_ij"]
 
-        angular_terms_ = data["angular_feature_vector"]
+        angular_terms_ = angular_data["angular_feature_vector"]
 
         angular_aev = angular_terms_.new_zeros(
-            (number_of_atoms_in_batch * num_species_pairs, angular_sublength)
+            (number_of_atoms * num_species_pairs, angular_sublength)
         )
         index = (
             central_atom_index * num_species_pairs
             + self.triu_index[angular_species12[0], angular_species12[1]]
         )
         angular_aev.index_add_(0, index, angular_terms_)
-        angular_aev = angular_aev.reshape(number_of_atoms_in_batch, angular_length)
+        angular_aev = angular_aev.reshape(number_of_atoms, angular_length)
         return angular_aev
 
     def _postprocess_radial_aev(
         self,
-        radial_feature_vector,
-        inputs: Dict[str, torch.Tensor],
+        radial_feature_vector: Dict[str, torch.Tensor],
+        data: AniNeuralNetworkInput,
     ):
 
         radial_feature_vector = radial_feature_vector.squeeze(1)
-        number_of_atoms_in_batch = inputs["number_of_atoms_in_batch"]
+        number_of_atoms = data.number_of_atoms
         radial_sublength = self.radial_symmetry_functions.radial_sublength
         radial_length = radial_sublength * self.nr_of_supported_elements
         radial_aev = radial_feature_vector.new_zeros(
             (
-                number_of_atoms_in_batch * self.nr_of_supported_elements,
+                number_of_atoms * self.nr_of_supported_elements,
                 radial_sublength,
             )
         )
-        atom_index12 = inputs["pair_indices"]
-        species = inputs["atomic_index"]
+        atom_index12 = data.pair_indices
+        species = data.atom_index
         species12 = species[atom_index12]
 
         index12 = atom_index12 * self.nr_of_supported_elements + species12.flip(0)
         radial_aev.index_add_(0, index12[0], radial_feature_vector)
         radial_aev.index_add_(0, index12[1], radial_feature_vector)
 
-        radial_aev = radial_aev.reshape(number_of_atoms_in_batch, radial_length)
+        radial_aev = radial_aev.reshape(number_of_atoms, radial_length)
 
         # compute new neighbors with radial_cutoff
-        distances = inputs["d_ij"].T.flatten()
+        distances = data.d_ij.T.flatten()
         even_closer_indices = (
             (distances <= self.angular_cutoff.to(unit.nanometer).m).nonzero().flatten()
         )
-        r_ij = inputs["r_ij"]
+        r_ij = data.r_ij
         atom_index12 = atom_index12.index_select(1, even_closer_indices)
         species12 = species12.index_select(1, even_closer_indices)
         r_ij_small = r_ij.index_select(0, even_closer_indices)
@@ -384,18 +439,38 @@ class ANI2x(BaseNeuralNetworkPotential):
         self.interaction_modules = ANIInteraction(self.aev_length)
 
     def _model_specific_input_preparation(
-        self, inputs: Dict[str, torch.Tensor]
-    ) -> Dict[str, torch.Tensor]:
+        self, data: "NNPInput", pairlist_output: "PairListOutputs"
+    ) -> AniNeuralNetworkInput:
+        from modelforge.potential.utils import ATOMIC_NUMBER_TO_INDEX_MAP
 
-        return inputs
+        number_of_atoms = data.atomic_numbers.shape[0]
 
-    def _forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
+        nnp_input = AniNeuralNetworkInput(
+            pair_indices=pairlist_output.pair_indices,
+            d_ij=pairlist_output.d_ij,
+            r_ij=pairlist_output.r_ij,
+            number_of_atoms=number_of_atoms,
+            positions=data.positions,
+            atom_index=torch.tensor(
+                [
+                    ATOMIC_NUMBER_TO_INDEX_MAP.get(atomic_number, -1)
+                    for atomic_number in list(data.atomic_numbers.numpy())
+                ]
+            ),
+            atomic_numbers=data.atomic_numbers,
+            atomic_subsystem_indices=data.atomic_subsystem_indices,
+            total_charge=data.total_charge,
+        )
+
+        return nnp_input
+
+    def _forward(self, data: AniNeuralNetworkInput) -> torch.Tensor:
         """
         Calculate the energy for a given input batch.
 
         Parameters
         ----------
-        inputs : Dict[str, torch.Tensor]
+        data : AniNeuralNetworkInput
         - pairlist:  shape (n_pairs, 2)
         - r_ij:  shape (n_pairs, 1)
         - d_ij:  shape (n_pairs, 3)
@@ -408,11 +483,11 @@ class ANI2x(BaseNeuralNetworkPotential):
         """
 
         # compute the representation (atomic environment vectors) for each atom
-        representation = self.ani_representation_module(inputs)
+        representation = self.ani_representation_module(data)
         # compute the atomic energies
         E_i = self.interaction_modules(representation)
 
         return {
             "E_i": E_i,
-            "atomic_subsystem_indices": inputs["atomic_subsystem_indices"],
+            "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }

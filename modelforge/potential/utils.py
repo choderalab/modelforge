@@ -42,7 +42,9 @@ class NNPInput:
         # Unit conversion for positions
         if isinstance(self.positions, unit.Quantity):
             self.positions = self.positions.to(unit.nanometer).m
-        self.positions = torch.tensor(self.positions, dtype=torch.float32, requires_grad=True)
+        self.positions = torch.tensor(
+            self.positions, dtype=torch.float32, requires_grad=True
+        )
 
         # Validate inputs
         self._validate_inputs()
@@ -80,6 +82,7 @@ class Metadata:
     E: torch.Tensor
     atomic_subsystem_counts: torch.Tensor
     atomic_subsystem_indices_referencing_dataset: torch.Tensor
+    number_of_atoms: int
 
 
 class BatchData(NamedTuple):

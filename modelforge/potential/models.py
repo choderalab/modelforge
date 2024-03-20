@@ -14,6 +14,7 @@ from modelforge.potential.utils import (
     AtomicSelfEnergies,
     NeuralNetworInternalData,
     NNPInput,
+    BatchData,
 )
 from abc import abstractmethod, ABC
 from openff.units import unit
@@ -296,13 +297,11 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         # readout the per molecule values
         return self.readout_module(x, index)
 
-    def _log_batch_size(self, batch: Dict[str, torch.Tensor]):
-        batch_size = int(len(batch["E"]))
+    def _log_batch_size(self, y: torch.Tensor):
+        batch_size = int(y.numel())
         return batch_size
 
-    def training_step(
-        self, batch: Dict[str, torch.Tensor], batch_idx: int
-    ) -> torch.Tensor:
+    def training_step(self, batch: BatchData, batch_idx: int) -> torch.Tensor:
         """
         Perform a single training step.
 
@@ -318,23 +317,21 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         torch.Tensor, shape [batch_size, 1]
             Loss tensor.
         """
-        batch_size = self._log_batch_size(batch)
-        predictions = self.forward(batch)["E_predict"].flatten()
-        targets = batch["E"].flatten().to(torch.float32)
+        E_true, E_predict = self._get_energies(batch)
 
         import math
 
-        number_of_atoms = math.sqrt(len(batch["atomic_numbers"]))
+        scale_error = math.sqrt(batch.metadata.number_of_atoms)
 
         # time.sleep(1)
-        loss = self.loss_function(predictions, targets) / number_of_atoms
+        loss = self.loss_function(E_true, E_predict) / scale_error
         self.log(
             "train_loss",
             loss,
             on_epoch=True,
             on_step=True,
             prog_bar=True,
-            batch_size=batch_size,
+            batch_size=self.batch_size,
         )
 
         return loss
@@ -342,25 +339,39 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
     def test_step(self, batch, batch_idx):
         from torch.nn import functional as F
 
-        batch_size = self._log_batch_size(batch)
+        E_true, E_predict = self._get_energies(batch)
 
-        predictions = self.forward(batch).flatten()
-        targets = batch["E"].flatten()
-        test_loss = F.mse_loss(predictions["E_predict"], targets)
+        test_loss = F.mse_loss(E_true, E_predict)
         self.log(
-            "test_loss", test_loss, batch_size=batch_size, on_epoch=True, prog_bar=True
+            "test_loss",
+            test_loss,
+            batch_size=self.batch_size,
+            on_epoch=True,
+            prog_bar=True,
         )
 
     def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx):
         from torch.nn import functional as F
 
-        batch_size = self._log_batch_size(batch)
-        predictions = self.forward(batch)["E_predict"]
-        targets = batch["E"].squeeze(1)
-        val_loss = F.mse_loss(predictions, targets)
+        E_true, E_predict = self._get_energies(batch)
+
+        val_loss = F.mse_loss(E_true, E_predict)
         self.log(
-            "val_loss", val_loss, batch_size=batch_size, on_epoch=True, prog_bar=True
+            "val_loss",
+            val_loss,
+            batch_size=self.batch_size,
+            on_epoch=True,
+            prog_bar=True,
         )
+
+    def _get_energies(self, batch: BatchData):
+
+        nnp_input = batch.nnp_input
+        E_true = batch.metadata.E.to(torch.float32)
+        self.batch_size = self._log_batch_size(E_true)
+
+        E_predict = self.forward(nnp_input).E
+        return E_true, E_predict
 
     def configure_optimizers(self) -> AdamW:
         """

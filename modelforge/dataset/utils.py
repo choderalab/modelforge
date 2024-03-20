@@ -54,8 +54,8 @@ def calculate_mean_and_variance(
     )
     log.info("Calculating mean and variance for normalization")
     nr_of_atoms = 0
-    for batch in dataloader:
-        online_estimator.update(batch["E"])
+    for batch_data in dataloader:
+        online_estimator.update(batch_data.metadata.E)
 
     stats = {
         "mean": online_estimator.mean / torch_dataset.number_of_atoms,

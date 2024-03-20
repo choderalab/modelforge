@@ -3,7 +3,7 @@ import torch
 from modelforge.dataset.dataset import TorchDataModule
 from modelforge.dataset.qm9 import QM9Dataset
 from modelforge.potential import SchNet, PaiNN, ANI2x, PhysNet
-from modelforge.potential.utils import NeuralNetworkInput, DatasetEntry
+from modelforge.potential.utils import NeuralNetworInternalData, Metadata
 from typing import Optional, Dict
 
 MODELS_TO_TEST = [SchNet, PaiNN, ANI2x, PhysNet]
@@ -78,15 +78,15 @@ def prepare_pairlist_for_single_batch(
     return pairlist(positions, atomic_subsystem_indices)
 
 
-def generate_methane_input() -> NeuralNetworkInput:
+def generate_methane_input() -> NeuralNetworInternalData:
     """
     Generate a methane molecule input for testing.
 
     Returns
     -------
-    NeuralNetworkInput
+    NeuralNetworInternalData
     """
-    from modelforge.potential.utils import ATOMIC_NUMBER_TO_INDEX_MAP
+    from modelforge.potential.utils import Metadata, NNPInput, BatchData
 
     atomic_numbers = torch.tensor([6, 1, 1, 1, 1], dtype=torch.int64)
     positions = (
@@ -104,68 +104,23 @@ def generate_methane_input() -> NeuralNetworkInput:
     )
     E = torch.tensor([0.0], requires_grad=True)
     atomic_subsystem_indices = torch.tensor([0, 0, 0, 0, 0], dtype=torch.int32)
-    return DatasetEntry(
-        atomic_numbers=atomic_numbers,
-        positions=positions,
-        atomic_subsystem_indices=atomic_subsystem_indices,
-        E=E,
-        atom_index=torch.tensor(
-            [
-                ATOMIC_NUMBER_TO_INDEX_MAP[atomic_number]
-                for atomic_number in list(atomic_numbers.numpy())
-            ]
+    return BatchData(
+        NNPInput(
+            atomic_numbers=atomic_numbers,
+            positions=positions,
+            atomic_subsystem_indices=atomic_subsystem_indices,
+            total_charge=torch.tensor([0.0]),
         ),
-        total_charge=torch.tensor([0.0]),
+        Metadata(
+            E=E,
+            atomic_subsystem_counts=torch.tensor([0]),
+            atomic_subsystem_indices_referencing_dataset=torch.tensor([0]),
+        ),
     )
 
 
 def generate_batch_data():
     return return_single_batch(QM9Dataset)
-
-
-def generate_interaction_block_data(
-    nr_atom_basis: int, nr_embeddings: int, number_of_gaussians: int
-) -> Dict[str, torch.Tensor]:
-    """
-    Prepare inputs for testing the SchNet interaction block.
-
-    Parameters
-    ----------
-    nr_atom_basis : int
-        Number of atom basis.
-    nr_embeddings : int
-        Number of embeddings.
-
-    Returns
-    -------
-    Dict[str, torch.Tensor]
-        Dictionary containing tensors for the interaction block test.
-    """
-
-    import torch.nn as nn
-
-    from modelforge.dataset.qm9 import QM9Dataset
-    from modelforge.potential import RadialSymmetryFunction
-    from openff.units import unit
-
-    embedding = nn.Embedding(nr_embeddings, nr_atom_basis, padding_idx=0)
-    batch = return_single_batch(QM9Dataset)
-    r = prepare_pairlist_for_single_batch(batch)
-    radial_symmetry_function_module = RadialSymmetryFunction(
-        number_of_radial_basis_functions=number_of_gaussians,
-        max_distance=unit.Quantity(5.0, unit.angstrom),
-        dtype=batch["positions"].dtype,
-    )
-
-    d_ij = r["d_ij"]
-    f_ij, rcut_ij = _distance_to_radial_basis(d_ij, radial_symmetry_function_module)
-    return {
-        "x": embedding(batch["atomic_numbers"]),
-        "f_ij": f_ij,
-        "pair_indices": r["pair_indices"],
-        "rcut_ij": rcut_ij,
-        "atomic_subsystem_indices": batch["atomic_subsystem_indices"],
-    }
 
 
 SIMPLIFIED_INPUT_DATA = [

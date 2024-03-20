@@ -90,20 +90,20 @@ def test_calculate_energies_and_forces(input_data, default_model):
     """
     import torch
 
+    nnp_input = input_data.nnp_input
     # test the backward pass through each of the models
-    nr_of_mols = input_data.atomic_subsystem_indices.unique().shape[0]
-    nr_of_atoms_per_batch = input_data.atomic_subsystem_indices.shape[0]
+    nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
+    nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
 
     # initialize model with default parameters
     model = default_model()
 
     # forward pass
-    result = model(input_data).E
-    print(result.sum())
+    result = model(nnp_input).E
 
     # backpropagation
     forces = -torch.autograd.grad(
-        result.sum(), input_data.positions, create_graph=True, retain_graph=True
+        result.sum(), nnp_input.positions, create_graph=True, retain_graph=True
     )[0]
 
     assert result.shape == torch.Size([nr_of_mols])  #  only one molecule

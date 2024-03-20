@@ -11,7 +11,7 @@ from typing import NamedTuple
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .models import DatasetEntry, PairListOutputs
+    from .models import Metadata, PairListOutputs
 
 
 class SchnetNeuralNetworkInput(NamedTuple):
@@ -60,7 +60,6 @@ class SchnetNeuralNetworkInput(NamedTuple):
     positions: torch.Tensor
     atomic_numbers: torch.Tensor
     atomic_subsystem_indices: torch.Tensor
-    atom_index: torch.Tensor
     total_charge: torch.Tensor
     atomic_embedding: torch.Tensor
 
@@ -140,7 +139,7 @@ class SchNet(BaseNeuralNetworkPotential):
         )
 
     def _model_specific_input_preparation(
-        self, data: "DatasetEntry", pairlist_output: "PairListOutputs"
+        self, data: "Metadata", pairlist_output: "PairListOutputs"
     ) -> SchnetNeuralNetworkInput:
         number_of_atoms = data.atomic_numbers.shape[0]
 
@@ -152,7 +151,6 @@ class SchNet(BaseNeuralNetworkPotential):
             positions=data.positions,
             atomic_numbers=data.atomic_numbers,
             atomic_subsystem_indices=data.atomic_subsystem_indices,
-            atom_index=data.atom_index,
             total_charge=data.total_charge,
             atomic_embedding=self.embedding_module(
                 data.atomic_numbers

@@ -12,8 +12,8 @@ import torch
 from typing import NamedTuple
 from modelforge.potential.utils import (
     AtomicSelfEnergies,
-    NeuralNetworkInput,
-    DatasetEntry,
+    NeuralNetworInternalData,
+    NNPInput,
 )
 from abc import abstractmethod, ABC
 from openff.units import unit
@@ -256,8 +256,8 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
     @abstractmethod
     def _model_specific_input_preparation(
-        self, data: DatasetEntry, pairlist: PairListOutputs
-    ) -> NeuralNetworkInput:
+        self, data: NNPInput, pairlist: PairListOutputs
+    ) -> NeuralNetworInternalData:
         """
         Prepares model-specific inputs before the forward pass.
 
@@ -266,19 +266,19 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
         Parameters
         ----------
-        data : DatasetEntry
+        data : NNPInput
             The initial inputs to the neural network model.
         pairlist : PairListOutputs
 
         Returns
         -------
-        NeuralNetworkInput
+        NeuralNetworInternalData
             The processed inputs, ready for the model's forward pass.
         """
         pass
 
     @abstractmethod
-    def _forward(self, inputs: NeuralNetworkInput):
+    def _forward(self, inputs: NeuralNetworInternalData):
         # needs to be implemented by the subclass
         # perform the forward pass implemented in the subclass
         pass
@@ -382,7 +382,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         )
 
     def _calculate_molecular_self_energy(
-        self, data: DatasetEntry, number_of_molecules: int
+        self, data: NNPInput, number_of_molecules: int
     ) -> torch.Tensor:
 
         atomic_numbers = data.atomic_numbers
@@ -426,8 +426,8 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         return processed_energy
 
     def prepare_inputs(
-        self, data: DatasetEntry, only_unique_pairs: bool = True
-    ) -> NeuralNetworkInput:
+        self, data: NNPInput, only_unique_pairs: bool = True
+    ) -> NeuralNetworInternalData:
         """Prepares the input tensors for passing to the model.
 
         Performs general input manipulation like calculating distances,
@@ -436,13 +436,13 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
         Parameters
         ----------
-        data : DatasetEntry
+        data : NNPInput
             NameTuple containing the data provided by the dataset.
         only_unique_pairs : bool, optional
             Whether to only use unique pairs or not in the pairlist.
         Returns
         -------
-        nnp_input : NeuralNetworkInput
+        nnp_input : NeuralNetworInternalData
             NamedTuple containg the relevant data for the model.
         """
         # ---------------------------
@@ -474,7 +474,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
         self._dtype = dtypes[0]
 
-    def _input_checks(self, data: DatasetEntry) -> Dict[str, torch.Tensor]:
+    def _input_checks(self, data: NNPInput) -> Dict[str, torch.Tensor]:
         """
         Perform input checks to validate the input dictionary.
 
@@ -484,45 +484,23 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
             If the input dictionary is missing required keys or has invalid shapes.
 
         """
-        from openff.units import unit
-
-        # check that the named tuple is DatasetEntry
-        assert isinstance(data, DatasetEntry)
+        # check that the input is instance of NNPInput
+        assert isinstance(data, NNPInput)
 
         nr_of_atoms = data.atomic_numbers.shape[0]
         assert data.atomic_numbers.shape == torch.Size([nr_of_atoms])
-        assert data.atom_index.shape == torch.Size([nr_of_atoms])
         assert data.atomic_subsystem_indices.shape == torch.Size([nr_of_atoms])
         nr_of_molecules = torch.unique(data.atomic_subsystem_indices).numel()
         assert data.total_charge.shape == torch.Size([nr_of_molecules])
         assert data.positions.shape == torch.Size([nr_of_atoms, 3])
 
-        if data.positions.dtype != self._dtype:
-            log.debug(
-                f"Precision mismatch: dtype of positions tensor is {data.positions.dtype}, "
-                f"but dtype of model parameters is {self._dtype}. "
-                f"Setting dtype of positions tensor to {self._dtype}."
-            )
-            data.positions = data.positions.to(self._dtype)
-
-        if isinstance(data.positions, unit.Quantity):
-            data.positions = data.positions.to(unit.nanometer).m
-        else:
-            if not self._log_message_units:
-                log.warning(
-                    "Could not convert positions to nanometer. Assuming positions are already in nanometer."
-                )
-                self._log_message_units = True
-
-        return data
-
-    def forward(self, data: DatasetEntry) -> torch.Tensor:
+    def forward(self, data: NNPInput) -> torch.Tensor:
         """
         Abstract method for forward pass in neural network potentials.
 
         Parameters
         ----------
-        data : DatasetEntry
+        data : Metadata
             NamedTuple containing the following fields.
         - atomic_numbers: torch.Tensor
             Contains the atomic number (nuclear charge) of each atom, shape (nr_of_atoms).
@@ -544,7 +522,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         # adjust the dtype of the input tensors to match the model parameters
         self._set_dtype()
         # perform input checks
-        inputs = self._input_checks(data)
+        self._input_checks(data)
         # prepare the input for the forward pass
         inputs = self.prepare_inputs(data, self.only_unique_pairs)
         # perform the forward pass implemented in the subclass

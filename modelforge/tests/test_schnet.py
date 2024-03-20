@@ -3,7 +3,6 @@ from modelforge.potential.schnet import SchNet
 import pytest
 from .helper_functions import (
     SIMPLIFIED_INPUT_DATA,
-    generate_interaction_block_data,
 )
 
 

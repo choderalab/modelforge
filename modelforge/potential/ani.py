@@ -2,18 +2,9 @@ import torch
 from torch import nn
 from loguru import logger as log
 from modelforge.potential.models import BaseNeuralNetworkPotential
-from typing import Dict, NamedTuple, Tuple
+from typing import Dict, Tuple
 from openff.units import unit
-
-
-class SpeciesEnergies(NamedTuple):
-    species: torch.Tensor
-    energies: torch.Tensor
-
-
-class SpeciesAEV(NamedTuple):
-    species: torch.Tensor
-    aevs: torch.Tensor
+from modelforge.utils.prop import SpeciesAEV, SpeciesEnergies
 
 
 def triu_index(num_species: int) -> torch.Tensor:

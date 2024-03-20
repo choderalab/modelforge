@@ -10,7 +10,7 @@ from openff.units import unit
 from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
-    from .models import DatasetEntry, PairListOutputs
+    from .models import Metadata, PairListOutputs
 
 
 class PaiNNNeuralNetworkInput(NamedTuple):
@@ -31,25 +31,6 @@ class PaiNNNeuralNetworkInput(NamedTuple):
     total_charge : Optional[torch.Tensor]
         An optional tensor with the total charge of each system or molecule, if applicable.
         Shape: [num_systems], where `num_systems` is the number of distinct systems or molecules.
-    additional_features : Optional[torch.Tensor]
-        An optional 2D tensor containing any additional features required by the model for each atom.
-        Shape: [num_atoms, num_features], where `num_features` is the number of additional features per atom.
-
-    Notes
-    -----
-    This structure is designed to encapsulate all necessary inputs for neural network potentials
-    in a structured and type-safe manner, facilitating easy access and manipulation of input data
-    for the model.
-
-    Examples
-    --------
-    >>> inputs = NeuralNetworkInputs(
-    ...     atomic_numbers=torch.tensor([1, 6, 6, 8]),  # H, C, C, O for an example molecule
-    ...     positions=torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]),
-    ...     atomic_subsystem_indices=torch.tensor([0, 0, 0, 0]),  # All atoms belong to the same molecule
-    ...     total_charge=torch.tensor([0.0]),  # Assuming the molecule is neutral
-    ...     additional_features=torch.randn(4, 5)  # Random example features
-    ...
     """
 
     pair_indices: torch.Tensor
@@ -59,7 +40,6 @@ class PaiNNNeuralNetworkInput(NamedTuple):
     positions: torch.Tensor
     atomic_numbers: torch.Tensor
     atomic_subsystem_indices: torch.Tensor
-    atom_index: torch.Tensor
     total_charge: torch.Tensor
     atomic_embedding: torch.Tensor
 
@@ -134,7 +114,7 @@ class PaiNN(BaseNeuralNetworkPotential):
         )
 
     def _model_specific_input_preparation(
-        self, data: "DatasetEntry", pairlist_output: "PairListOutputs"
+        self, data: "Metadata", pairlist_output: "PairListOutputs"
     ) -> PaiNNNeuralNetworkInput:
         # Perform atomic embedding
 
@@ -148,7 +128,6 @@ class PaiNN(BaseNeuralNetworkPotential):
             positions=data.positions,
             atomic_numbers=data.atomic_numbers,
             atomic_subsystem_indices=data.atomic_subsystem_indices,
-            atom_index=data.atom_index,
             total_charge=data.total_charge,
             atomic_embedding=self.embedding_module(
                 data.atomic_numbers
@@ -159,15 +138,14 @@ class PaiNN(BaseNeuralNetworkPotential):
 
     def _forward(
         self,
-        inputs: Dict[str, torch.Tensor],
+        data: PaiNNNeuralNetworkInput,
     ):
         """
         Compute atomic representations/embeddings.
 
         Parameters
         ----------
-        input : Dict[str, torch.Tensor]
-            Dictionary containing pairlist information.
+        data : PaiNNNeuralNetworkInput(NamedTuple)
         atomic_embedding : torch.Tensor
             Tensor containing atomic number embeddings.
 
@@ -178,7 +156,7 @@ class PaiNN(BaseNeuralNetworkPotential):
         """
 
         # initialize filters, q and mu
-        transformed_input = self.representation_module(inputs)
+        transformed_input = self.representation_module(data)
 
         filter_list = transformed_input["filters"]
         q = transformed_input["q"]
@@ -193,7 +171,7 @@ class PaiNN(BaseNeuralNetworkPotential):
                 mu,
                 filter_list[i],
                 dir_ij,
-                inputs["pair_indices"],
+                data.pair_indices,
             )
             q, mu = mixing_mod(q, mu)
 
@@ -205,7 +183,7 @@ class PaiNN(BaseNeuralNetworkPotential):
             "E_i": E_i,
             "mu": mu,
             "q": q,
-            "atomic_subsystem_indices": inputs["atomic_subsystem_indices"],
+            "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
 
 
@@ -260,7 +238,7 @@ class PaiNNRepresentation(nn.Module):
         self.nr_interaction_blocks = nr_interaction_blocks
         self.nr_atom_basis = nr_atom_basis
 
-    def forward(self, inputs: Dict[str, torch.Tensor]):
+    def forward(self, data: PaiNNNeuralNetworkInput):
         """
         Transforms the input data for the PAInn potential model.
 
@@ -282,14 +260,14 @@ class PaiNNRepresentation(nn.Module):
             - "q" (torch.Tensor): Reshaped atomic number embeddings. Shape: (n_atoms, 1, embedding_dim).
         """
 
-        # compute pairwise distances
-        d_ij = inputs["d_ij"]
-        r_ij = inputs["r_ij"]
-        dir_ij = r_ij / d_ij  # shape (nr_of_pairs, 3)
+        # compute normalized pairwise distances
+        d_ij = data.d_ij
+        r_ij = data.r_ij
+        dir_ij = r_ij / d_ij
 
         f_ij = self.radial_symmetry_function_module(d_ij)
 
-        fcut = self.cutoff_module(d_ij)  # nr_of_pairs, nr_of_radial_basis_functions
+        fcut = self.cutoff_module(d_ij)
 
         filters = self.filter_net(f_ij) * fcut
 
@@ -299,7 +277,7 @@ class PaiNNRepresentation(nn.Module):
             filter_list = torch.split(filters, 3 * self.nr_atom_basis, dim=-1)
 
         # generate q and mu
-        atomic_embedding = inputs["atomic_embedding"]
+        atomic_embedding = data.atomic_embedding
         q = atomic_embedding[:, None]  # nr_of_atoms, 1, nr_atom_basis
         q_shape = q.shape
         mu = torch.zeros(

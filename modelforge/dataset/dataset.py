@@ -52,6 +52,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             "atomic_numbers": torch.from_numpy(dataset[property_name.Z]),
             "positions": torch.from_numpy(dataset[property_name.R]),
             "E": torch.from_numpy(dataset[property_name.E]),
+            "Q": torch.from_numpy(dataset[property_name.Q]),
         }
 
         self.number_of_records = len(dataset["atomic_subsystem_counts"])
@@ -138,7 +139,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         """
-        Fetch a tuple of the values for the properties of interest for a given conformer index.
+        Fetch a dictionary of the values for the properties of interest for a given conformer index.
 
         Parameters
         ----------
@@ -147,16 +148,16 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
 
         Returns
         -------
-        dict, contains:
-            - 'atomic_numbers': torch.Tensor, shape [n_atoms]
+        Dictionary, contains:
+            - atomic_numbers: torch.Tensor, shape [n_atoms]
                 Atomic numbers for each atom in the molecule.
-            - 'positions': torch.Tensor, shape [n_atoms, 3]
+            - positions: torch.Tensor, shape [n_atoms, 3]
                 Coordinates for each atom in the molecule.
-            - 'E': torch.Tensor, shape []
+            - E: torch.Tensor, shape []
                 Scalar energy value for the molecule.
-            - 'idx': int
+            - idx: int
                 Index of the conformer in the dataset.
-            - 'atomic_subsystem_counts': torch.Tensor, shape [1]
+            - atomic_subsystem_counts: torch.Tensor, shape [1]
                 Number of atoms in the conformer. Length one if __getitem__ is called with a single index, length batch_size if collate_conformers is used with DataLoader
         """
         from modelforge.potential.utils import ATOMIC_NUMBER_TO_INDEX_MAP
@@ -183,10 +184,12 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         E = (
             (self.properties_of_interest["E"][idx]).clone().detach().to(torch.float64)
         )  # NOTE: upgrading to float64 to avoid precision issues
+        Q = (self.properties_of_interest["Q"][idx]).clone().detach().to(torch.int32)
 
         return {
             "atomic_numbers": atomic_numbers,
             "positions": positions,
+            "total_charge": Q,
             "E": E,
             "atomic_subsystem_counts": torch.tensor([atomic_numbers.shape[0]]),
             "idx": idx,
@@ -759,48 +762,51 @@ class TorchDataModule(pl.LightningDataModule):
         )
 
 
-def collate_conformers(
-    conf_list: List[Dict[str, torch.Tensor]]
-) -> Dict[str, torch.Tensor]:
+from modelforge.potential.utils import Metadata, NNPInput, BatchData
+from typing import Tuple
+
+
+def collate_conformers(conf_list: List[Dict[str, torch.Tensor]]) -> BatchData:
     # TODO: once TorchDataset is reimplemented for general properties, reimplement this function using formats too.
     """Concatenate the Z, R, and E tensors from a list of molecules into a single tensor each, and return a new dictionary with the concatenated tensors."""
     from modelforge.potential.utils import ATOMIC_NUMBER_TO_INDEX_MAP
 
-    atomic_numbers_list = []
-    positions_list = []
-    E_list = []
+    Z_list = []  # nuclear charges/atomic numbers
+    R_list = []  # positions
+    E_list = []  # total energy
+    Q_list = []  # total charge
     atomic_subsystem_counts = []
     atomic_subsystem_indices = []
     atomic_subsystem_indices_referencing_dataset = []
     for idx, conf in enumerate(conf_list):
-        atomic_numbers_list.append(conf["atomic_numbers"])
-        positions_list.append(conf["positions"])
+        Z_list.append(conf["atomic_numbers"])
+        R_list.append(conf["positions"])
         E_list.append(conf["E"])
+        Q_list.append(conf["total_charge"])
         atomic_subsystem_counts.extend(conf["atomic_subsystem_counts"])
         atomic_subsystem_indices.extend([idx] * conf["atomic_subsystem_counts"][0])
         atomic_subsystem_indices_referencing_dataset.extend(
             [conf["idx"]] * conf["atomic_subsystem_counts"][0]
         )
-    atomic_numbers_cat = torch.cat(atomic_numbers_list)
-    positions_cat = torch.cat(positions_list).requires_grad_(True)
+    atomic_numbers_cat = torch.cat(Z_list)
+    total_charge_cat = torch.cat(Q_list)
+    positions_cat = torch.cat(R_list).requires_grad_(True)
     E_stack = torch.stack(E_list)
-    return {
-        "atomic_numbers": atomic_numbers_cat,
-        "atomic_index": torch.tensor(
-            [
-                ATOMIC_NUMBER_TO_INDEX_MAP[atomic_number]
-                for atomic_number in list(atomic_numbers_cat.numpy())
-            ]
-        ),
-        "positions": positions_cat,
-        "E": E_stack,
-        "atomic_subsystem_counts": torch.tensor(
-            atomic_subsystem_counts, dtype=torch.int32
-        ),
-        "atomic_subsystem_indices": torch.tensor(
+    nnp_input = NNPInput(
+        atomic_numbers=atomic_numbers_cat,
+        positions=positions_cat,
+        total_charge=total_charge_cat,
+        atomic_subsystem_indices=torch.tensor(
             atomic_subsystem_indices, dtype=torch.int32
         ),
-        "atomic_subsystem_indices_referencing_dataset": torch.tensor(
+    )
+    metadata = Metadata(
+        E=E_stack,
+        atomic_subsystem_counts=torch.tensor(
+            atomic_subsystem_counts, dtype=torch.int32
+        ),
+        atomic_subsystem_indices_referencing_dataset=torch.tensor(
             atomic_subsystem_indices_referencing_dataset, dtype=torch.int32
         ),
-    }
+    )
+    return BatchData(nnp_input, metadata)

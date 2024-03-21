@@ -229,7 +229,7 @@ class SPICE2Curation(DatasetCuration):
         client = PortalClient(self.qcarchive_server)
 
         ds = client.get_dataset(dataset_type=dataset_type, dataset_name=dataset_name)
-
+        logger.debug(f"Fetching {dataset_name} from the QCArchive.")
         entry_names = ds.entry_names
         if unit_testing_max_records is None:
             unit_testing_max_records = len(entry_names)
@@ -363,12 +363,38 @@ class SPICE2Curation(DatasetCuration):
 
         return sum(atom_energy[s][c] for s, c in zip(symbol, charge))
 
-    def _sort_keys(self, non_error_keys: List[str]) -> Tuple[List[str], Dict[str, str]]:
+    def _check_name_format(self, name: str):
+        """
+        Check if the name of the molecule conforms to the form {name}-{conformer_number}.
+        If not, we will return false
+
+        Parameters
+        ----------
+        name: str, required
+            Name of the molecule to check.
+
+        Returns
+        -------
+        bool
+            True if the name conforms to the form {name}-{conformer_number}, False otherwise.
+
+        """
+        import re
+
+        if len(re.findall(r"-[0-9]+", name)) > 0:
+            # if re.match(r"^[a-zA-Z0-9-_()]+-[0-9]+$", name):
+            return True
+        else:
+            return False
+
+    def _sort_keys(
+        self, non_error_keys: List[str]
+    ) -> Tuple[List[str], Dict[str, str], Dict[str, str]]:
         """
         This will sort record identifiers such that conformers are listed in numerical order.
 
-        This will, if necessarily also sanitize the names of the molecule, to ensure that we have the following
-        form {name}-{conformer_number}. In some cases, the original name has a "-" which would causes issues
+        This will, if necessarily also sanitize the key of the molecule, to ensure that we have the following
+        form {name}-{conformer_number}. In some cases, the original name has a hyphen which would causes issues
         with simply splitting based upon a "-" to either get the name or the conformer number.
 
         The function is called by _process_downloaded.
@@ -376,9 +402,13 @@ class SPICE2Curation(DatasetCuration):
         Parameters
         ----------
         non_error_keys
+            List of keys that do not have errors that will be sorted.  These need to be of the form of {name}-{conformer_number}.
 
         Returns
         -------
+        Tuple[List[str], Dict[str, str], Dict[str, str]]
+            List of sorted keys, dictionary that maps the sanitized key to the original key, and a dictionary that maps the
+            sorted keys to the molecule name (i.e., drops any conformer numbers from the end).
 
         """
         # we need to sanitize the names of the molecule, as
@@ -388,15 +418,22 @@ class SPICE2Curation(DatasetCuration):
         # we will create a simple dictionary that maps the sanitized name to the original name.
 
         non_error_keys_sanitized = []
-        original_name = {}
+        original_keys = {}
 
         for key in non_error_keys:
-            s = "_"
-            d = "-"
-            temp = key.split("-")
-            name = d.join([s.join(temp[0:-1]), temp[-1]])
-            non_error_keys_sanitized.append(name)
-            original_name[name] = key
+            # check if we have a name of the form {name}-{conformer_number}
+            if self._check_name_format(key):
+                s = "_"
+                d = "-"
+                temp = key.split("-")
+                # replace all but the last hyphens with an underscore
+                temp_key = d.join([s.join(temp[0:-1]), temp[-1]])
+            # if we do not have a conformer number at the end of the name, we will simply replace ANY hyphens with an underscore
+            else:
+                temp_key = key.replace("-", "_")
+
+            non_error_keys_sanitized.append(temp_key)
+            original_keys[temp_key] = key
 
         # We will sort the keys such that conformers are listed in numerical order.
         # This is not strictly necessary, but will help to better retain
@@ -410,9 +447,9 @@ class SPICE2Curation(DatasetCuration):
 
         sorted_keys = []
 
-        # names of the molecules are of form  {name}-{conformer_number}
-        # first sort by name
-        s = "_"
+        # often names are of the format {name}-{conformer_number}
+        # we will first sort by name
+        # note, if we don't have a conformer number, this will still work
         pre_sort = sorted(non_error_keys_sanitized, key=lambda x: (x.split("-")[0]))
 
         # then sort each molecule by conformer_number
@@ -427,15 +464,33 @@ class SPICE2Curation(DatasetCuration):
             if name == current_val:
                 temp_list.append(val)
             else:
-                sorted_keys += sorted(temp_list, key=lambda x: int(x.split("-")[-1]))
+                # we need to check to see if the name actually has a conformer id, otherwise this will fail
+                # we are going to assume the first entry in the list means the entire list has the right format
+                if self._check_name_format(temp_list[0]):
+                    sorted_keys += sorted(
+                        temp_list, key=lambda x: int(x.split("-")[-1])
+                    )
+                else:
+                    sorted_keys += temp_list
+
+                # clear out the list and restart
                 temp_list = []
                 current_val = name
                 temp_list.append(val)
 
         # sort the final batch
-        sorted_keys += sorted(temp_list, key=lambda x: int(x.split("-")[-1]))
+        # we need to check to see if the name actually has a conformer id, otherwise this will fail
+        if self._check_name_format(temp_list[0]):
+            sorted_keys += sorted(temp_list, key=lambda x: int(x.split("-")[-1]))
 
-        return sorted_keys, original_name
+        names = {}
+
+        # store the name in a dictionary
+        for key in sorted_keys:
+            name = key.split("-")[0]
+            names[key] = name
+
+        return sorted_keys, original_keys, names
 
     def _process_downloaded(
         self,
@@ -482,7 +537,7 @@ class SPICE2Curation(DatasetCuration):
                     if spice_db[key].status.value == "complete":
                         non_error_keys.append(key)
 
-            sorted_keys, original_name = self._sort_keys(non_error_keys)
+            sorted_keys, original_keys, molecule_names = self._sort_keys(non_error_keys)
 
             # first read in molecules from entry
             with SqliteDict(
@@ -490,8 +545,8 @@ class SPICE2Curation(DatasetCuration):
             ) as spice_db:
                 logger.debug(f"Processing {filename} entries.")
                 for key in tqdm(sorted_keys):
-                    val = spice_db[original_name[key]].dict()
-                    name = key.split("-")[0]
+                    val = spice_db[original_keys[key]].dict()
+                    name = molecule_names[key]
                     # if we haven't processed a molecule with this name yet
                     # we will add to the molecule_names dictionary
                     if name not in self.molecule_names.keys():
@@ -548,8 +603,8 @@ class SPICE2Curation(DatasetCuration):
                 logger.debug(f"Processing {filename} {spec[0]}.")
 
                 for key in tqdm(sorted_keys):
-                    name = key.split("-")[0]
-                    val = spice_db[original_name[key]].dict()
+                    name = molecule_names[key]
+                    val = spice_db[original_keys[key]].dict()
 
                     index = self.molecule_names[name]
 
@@ -581,9 +636,10 @@ class SPICE2Curation(DatasetCuration):
                     quantity = "mbis charges"
                     quantity_o = "mbis_charges"
                     if quantity_o not in self.data[index].keys():
-                        self.data[index][quantity_o] = np.array(
-                            val["properties"][quantity]
-                        ).reshape(1, -1)[..., newaxis]
+                        if quantity in val["properties"].keys():
+                            self.data[index][quantity_o] = np.array(
+                                val["properties"][quantity]
+                            ).reshape(1, -1)[..., newaxis]
 
                     else:
                         self.data[index][quantity_o] = np.vstack(
@@ -754,19 +810,19 @@ class SPICE2Curation(DatasetCuration):
                 },
                 {
                     "name": "SPICE PubChem Set 7 Single Points Dataset v1.0",
-                    "specifications": ["entry", "'wb97m-d3bj/def2-tzvppd'"],
+                    "specifications": ["entry", "wb97m-d3bj/def2-tzvppd"],
                 },
                 {
                     "name": "SPICE PubChem Set 8 Single Points Dataset v1.0",
-                    "specifications": ["entry", "'wb97m-d3bj/def2-tzvppd'"],
+                    "specifications": ["entry", "wb97m-d3bj/def2-tzvppd"],
                 },
                 {
                     "name": "SPICE PubChem Set 9 Single Points Dataset v1.0",
-                    "specifications": ["entry", "'wb97m-d3bj/def2-tzvppd'"],
+                    "specifications": ["entry", "wb97m-d3bj/def2-tzvppd"],
                 },
                 {
                     "name": "SPICE PubChem Set 10 Single Points Dataset v1.0",
-                    "specifications": ["entry", "'wb97m-d3bj/def2-tzvppd'"],
+                    "specifications": ["entry", "wb97m-d3bj/def2-tzvppd"],
                 },
                 {
                     "name": "SPICE Ion Pairs Single Points Dataset v1.2",

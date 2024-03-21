@@ -63,7 +63,7 @@ def SPICE_2(
         output_file_dir=output_file_dir,
         local_cache_dir=local_cache_dir,
     )
-    spice_2_data.process(force_download=force_download)
+    spice_2_data.process(force_download=force_download, n_threads=4)
 
 
 def SPICE_114_OpenFF(

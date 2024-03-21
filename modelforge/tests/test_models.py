@@ -335,7 +335,7 @@ def test_pairlist_on_dataset(dataset):
 def test_equivariant_energies_and_forces(input_data, default_model):
     """
     Test the calculation of energies and forces for a molecule.
-    This test will be adapted once we have a trained model.
+    NOTE: test will be adapted once we have a trained model.
     """
     import torch
     from dataclasses import replace
@@ -357,8 +357,6 @@ def test_equivariant_energies_and_forces(input_data, default_model):
     reference_forces = -torch.autograd.grad(
         reference_result.sum(),
         nnp_input.positions,
-        create_graph=True,
-        retain_graph=True,
     )[0]
 
     # translation test
@@ -374,8 +372,6 @@ def test_equivariant_energies_and_forces(input_data, default_model):
     translation_forces = -torch.autograd.grad(
         translation_result.sum(),
         translation_nnp_input.positions,
-        create_graph=True,
-        retain_graph=True,
     )[0]
 
     assert torch.allclose(

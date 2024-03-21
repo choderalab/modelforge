@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Optional
 
 import torch
 from loguru import logger as log
@@ -6,8 +6,7 @@ import torch.nn as nn
 
 from .models import BaseNeuralNetworkPotential
 from openff.units import unit
-from typing import NamedTuple
-
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -15,54 +14,81 @@ if TYPE_CHECKING:
     from modelforge.potential.utils import NNPInput
 
 
-class SchnetNeuralNetworkInput(NamedTuple):
+@dataclass
+class SchnetNeuralNetworkInput:
     """
-    A NamedTuple to structure the inputs for neural network potentials.
+    A dataclass to structure the inputs specifically for SchNet-based neural network potentials, including the necessary
+    geometric and chemical information, along with the radial symmetry function expansion (`f_ij`) and the cosine cutoff
+    (`f_cutoff`) to accurately represent atomistic systems for energy predictions.
 
-    Parameters
+    Attributes
     ----------
-    atomic_numbers : torch.Tensor
-        A 1D tensor containing atomic numbers for each atom in the system(s).
-        Shape: [num_atoms], where `num_atoms` is the total number of atoms across all systems.
+    pair_indices : torch.Tensor
+        A 2D tensor of shape [2, num_pairs], indicating the indices of atom pairs within a molecule or system.
+    d_ij : torch.Tensor
+        A 1D tensor containing the distances between each pair of atoms identified in `pair_indices`. Shape: [num_pairs, 1].
+    r_ij : torch.Tensor
+        A 2D tensor of shape [num_pairs, 3], representing the displacement vectors between each pair of atoms.
+    number_of_atoms : int
+        A integer indicating the number of atoms in the batch.
     positions : torch.Tensor
-        A 2D tensor of shape [num_atoms, 3], representing the XYZ coordinates of each atom.
+        A 2D tensor of shape [num_atoms, 3], representing the XYZ coordinates of each atom within the system.
+    atomic_numbers : torch.Tensor
+        A 1D tensor containing atomic numbers for each atom, used to identify the type of each atom in the system(s).
     atomic_subsystem_indices : torch.Tensor
-        A 1D tensor mapping each atom to its respective subsystem or molecule.
-        This allows for calculations involving multiple molecules or subsystems within the same batch.
-        Shape: [num_atoms].
-    total_charge : Optional[torch.Tensor]
-        An optional tensor with the total charge of each system or molecule, if applicable.
-        Shape: [num_systems], where `num_systems` is the number of distinct systems or molecules.
-    additional_features : Optional[torch.Tensor]
-        An optional 2D tensor containing any additional features required by the model for each atom.
-        Shape: [num_atoms, num_features], where `num_features` is the number of additional features per atom.
+        A 1D tensor mapping each atom to its respective subsystem or molecule, useful for systems involving multiple
+        molecules or distinct subsystems.
+    total_charge : torch.Tensor
+        A tensor with the total charge of each system or molecule. Shape: [num_systems], where each entry corresponds
+        to a distinct system or molecule.
+    atomic_embedding : torch.Tensor
+        A 2D tensor containing embeddings or features for each atom, derived from atomic numbers.
+        Shape: [num_atoms, embedding_dim], where `embedding_dim` is the dimensionality of the embedding vectors.
+    f_ij : Optional[torch.Tensor]
+        A tensor representing the radial symmetry function expansion of distances between atom pairs, capturing the
+        local chemical environment. Shape: [num_pairs, num_features], where `num_features` is the dimensionality of
+        the radial symmetry function expansion. This field will be populated after initialization.
+    f_cutoff : Optional[torch.Tensor]
+        A tensor representing the cosine cutoff function applied to the radial symmetry function expansion, ensuring
+        that atom pair contributions diminish smoothly to zero at the cutoff radius. Shape: [num_pairs]. This field
+        will be populated after initialization.
 
     Notes
     -----
-    This structure is designed to encapsulate all necessary inputs for neural network potentials
-    in a structured and type-safe manner, facilitating easy access and manipulation of input data
-    for the model.
+    The `SchnetNeuralNetworkInput` class is designed to encapsulate all necessary inputs for SchNet-based neural network
+    potentials in a structured and type-safe manner, facilitating efficient and accurate processing of input data by
+    the model. The inclusion of radial symmetry functions (`f_ij`) and cosine cutoff functions (`f_cutoff`) allows
+    for a detailed and nuanced representation of the atomistic systems, crucial for the accurate prediction of system
+    energies and properties.
 
     Examples
     --------
-    >>> inputs = NeuralNetworkInputs(
-    ...     atomic_numbers=torch.tensor([1, 6, 6, 8]),  # H, C, C, O for an example molecule
-    ...     positions=torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]),
-    ...     atomic_subsystem_indices=torch.tensor([0, 0, 0, 0]),  # All atoms belong to the same molecule
-    ...     total_charge=torch.tensor([0.0]),  # Assuming the molecule is neutral
-    ...     additional_features=torch.randn(4, 5)  # Random example features
-    ...
+    >>> inputs = SchnetNeuralNetworkInput(
+    ...     pair_indices=torch.tensor([[0, 1], [0, 2], [1, 2]]),
+    ...     d_ij=torch.tensor([1.0, 1.0, 1.0]),
+    ...     r_ij=torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),
+    ...     number_of_atoms=3,
+    ...     positions=torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0]]),
+    ...     atomic_numbers=torch.tensor([1, 6, 8]),
+    ...     atomic_subsystem_indices=torch.tensor([0, 0, 0]),
+    ...     total_charge=torch.tensor([0.0]),
+    ...     atomic_embedding=torch.randn(3, 5),  # Example atomic embeddings
+    ...     f_ij=torch.randn(3, 4),  # Example radial symmetry function expansion
+    ...     f_cutoff=torch.tensor([0.5, 0.5, 0.5])  # Example cosine cutoff function
+    ... )
     """
 
     pair_indices: torch.Tensor
     d_ij: torch.Tensor
     r_ij: torch.Tensor
-    number_of_atoms: torch.Tensor
+    number_of_atoms: int
     positions: torch.Tensor
     atomic_numbers: torch.Tensor
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
     atomic_embedding: torch.Tensor
+    f_ij: Optional[torch.Tensor] = field(default=None)
+    f_cutoff: Optional[torch.Tensor] = field(default=None)
 
 
 class SchNet(BaseNeuralNetworkPotential):
@@ -176,6 +202,8 @@ class SchNet(BaseNeuralNetworkPotential):
 
         # Compute the representation for each atom (transform to radial basis set, multiply by cutoff)
         representation = self.schnet_representation_module(data.d_ij)
+        data.f_ij = representation["f_ij"]
+        data.f_cutoff = representation["f_cutoff"]
         x = data.atomic_embedding
         # Iterate over interaction blocks to update features
         for interaction in self.interaction_modules:

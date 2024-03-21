@@ -7,41 +7,73 @@ from .utils import Dense
 import torch
 import torch.nn.functional as F
 from openff.units import unit
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .models import PairListOutputs
     from modelforge.potential.utils import NNPInput
 
+from dataclasses import dataclass
 
-class PaiNNNeuralNetworkInput(NamedTuple):
+
+@dataclass
+class PaiNNNeuralNetworkInput:
     """
-    A NamedTuple to structure the inputs for neural network potentials.
+    A dataclass designed to structure the inputs for PaiNN neural network potentials, ensuring
+    an efficient and structured representation of atomic systems for energy computation and
+    property prediction within the PaiNN framework.
 
-    Parameters
+    Attributes
     ----------
     atomic_numbers : torch.Tensor
-        A 1D tensor containing atomic numbers for each atom in the system(s).
-        Shape: [num_atoms], where `num_atoms` is the total number of atoms across all systems.
+        Atomic numbers for each atom in the system(s). Shape: [num_atoms].
     positions : torch.Tensor
-        A 2D tensor of shape [num_atoms, 3], representing the XYZ coordinates of each atom.
+        XYZ coordinates of each atom. Shape: [num_atoms, 3].
     atomic_subsystem_indices : torch.Tensor
-        A 1D tensor mapping each atom to its respective subsystem or molecule.
-        This allows for calculations involving multiple molecules or subsystems within the same batch.
-        Shape: [num_atoms].
-    total_charge : Optional[torch.Tensor]
-        An optional tensor with the total charge of each system or molecule, if applicable.
-        Shape: [num_systems], where `num_systems` is the number of distinct systems or molecules.
+        Maps each atom to its respective subsystem or molecule, useful for systems with multiple
+        molecules. Shape: [num_atoms].
+    total_charge : torch.Tensor
+        Total charge of each system or molecule. Shape: [num_systems].
+    pair_indices : torch.Tensor
+        Indicates indices of atom pairs, essential for computing pairwise features. Shape: [2, num_pairs].
+    d_ij : torch.Tensor
+        Distances between each pair of atoms, derived from `pair_indices`. Shape: [num_pairs, 1].
+    r_ij : torch.Tensor
+        Displacement vectors between atom pairs, providing directional context. Shape: [num_pairs, 3].
+    number_of_atoms : int
+        Total number of atoms in the batch, facilitating batch-wise operations.
+    atomic_embedding : torch.Tensor
+        Embeddings or features for each atom, potentially derived from atomic numbers or learned. Shape: [num_atoms, embedding_dim].
+
+    Notes
+    -----
+    The `PaiNNNeuralNetworkInput` dataclass encapsulates essential inputs required by the PaiNN neural network
+    model for accurately predicting system energies and properties. It includes atomic positions, atomic types,
+    and connectivity information, crucial for a detailed representation of atomistic systems.
+
+    Examples
+    --------
+    >>> painn_input = PaiNNNeuralNetworkInput(
+    ...     atomic_numbers=torch.tensor([1, 6, 6, 8]),
+    ...     positions=torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]),
+    ...     atomic_subsystem_indices=torch.tensor([0, 0, 0, 0]),
+    ...     total_charge=torch.tensor([0.0]),
+    ...     pair_indices=torch.tensor([[0, 1], [0, 2], [1, 2]]).T,
+    ...     d_ij=torch.tensor([[1.0], [1.0], [1.0]]),
+    ...     r_ij=torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),
+    ...     number_of_atoms=4,
+    ...     atomic_embedding=torch.randn(4, 5)  # Example atomic embeddings
+    ... )
     """
 
     pair_indices: torch.Tensor
     d_ij: torch.Tensor
     r_ij: torch.Tensor
-    number_of_atoms: torch.Tensor
+    number_of_atoms: int
     positions: torch.Tensor
     atomic_numbers: torch.Tensor
     atomic_subsystem_indices: torch.Tensor
-    total_charge: torch.Tensor
+    total_charge: Optional[torch.Tensor] = field(default=None)
     atomic_embedding: torch.Tensor
 
 

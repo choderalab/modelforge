@@ -6,6 +6,8 @@ from typing import Dict, Tuple
 from openff.units import unit
 from modelforge.utils.prop import SpeciesAEV, SpeciesEnergies
 from typing import TYPE_CHECKING, NamedTuple
+from dataclasses import dataclass
+
 
 if TYPE_CHECKING:
     from .models import PairListOutputs
@@ -21,49 +23,60 @@ def triu_index(num_species: int) -> torch.Tensor:
     return ret
 
 
-class AniNeuralNetworkInput(NamedTuple):
+@dataclass
+class AniNeuralNetworkInput:
     """
-    A NamedTuple to structure the inputs for neural network potentials.
+    A dataclass to structure the inputs for ANI neural network potentials, designed to
+    facilitate the efficient representation of atomic systems for energy computation and
+    property prediction.
 
-    Parameters
+    Attributes
     ----------
-    atom_index : torch.Tensor
-        A 1D tensor containing atomic numbers for each atom in the system(s).
-        Shape: [num_atoms], where `num_atoms` is the total number of atoms across all systems.
+    pair_indices : torch.Tensor
+        A 2D tensor indicating the indices of atom pairs. Shape: [2, num_pairs].
+    d_ij : torch.Tensor
+        A 1D tensor containing distances between each pair of atoms. Shape: [num_pairs, 1].
+    r_ij : torch.Tensor
+        A 2D tensor representing displacement vectors between atom pairs. Shape: [num_pairs, 3].
+    number_of_atoms : int
+        An integer indicating the number of atoms in the batch.
     positions : torch.Tensor
-        A 2D tensor of shape [num_atoms, 3], representing the XYZ coordinates of each atom.
+        A 2D tensor representing the XYZ coordinates of each atom. Shape: [num_atoms, 3].
+    atom_index : torch.Tensor
+        A 1D tensor containing atomic numbers for each atom in the system(s). Shape: [num_atoms].
     atomic_subsystem_indices : torch.Tensor
-        A 1D tensor mapping each atom to its respective subsystem or molecule.
-        This allows for calculations involving multiple molecules or subsystems within the same batch.
-        Shape: [num_atoms].
-    total_charge : Optional[torch.Tensor]
-        An optional tensor with the total charge of each system or molecule, if applicable.
-        Shape: [num_systems], where `num_systems` is the number of distinct systems or molecules.
-    additional_features : Optional[torch.Tensor]
-        An optional 2D tensor containing any additional features required by the model for each atom.
-        Shape: [num_atoms, num_features], where `num_features` is the number of additional features per atom.
+        A 1D tensor mapping each atom to its respective subsystem or molecule. Shape: [num_atoms].
+    total_charge : torch.Tensor
+        An tensor with the total charge of each system or molecule. Shape: [num_systems].
+    atomic_numbers : torch.Tensor
+        A 1D tensor containing the atomic numbers for atoms, used for identifying the atom types within the model. Shape: [num_atoms].
 
     Notes
     -----
-    This structure is designed to encapsulate all necessary inputs for neural network potentials
-    in a structured and type-safe manner, facilitating easy access and manipulation of input data
-    for the model.
+    The `AniNeuralNetworkInput` dataclass encapsulates essential inputs required by the
+    ANI neural network model to predict system energies and properties accurately. It
+    includes atomic positions, types, and connectivity information, crucial for representing
+    atomistic systems in detail.
 
     Examples
     --------
-    >>> inputs = NeuralNetworkInputs(
-    ...     atomic_numbers=torch.tensor([1, 6, 6, 8]),  # H, C, C, O for an example molecule
+    >>> ani_input = AniNeuralNetworkInput(
+    ...     pair_indices=torch.tensor([[0, 1], [0, 2], [1, 2]]).T,  # Transpose for correct shape
+    ...     d_ij=torch.tensor([[1.0], [1.0], [1.0]]),  # Distances between pairs
+    ...     r_ij=torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),  # Displacement vectors
+    ...     number_of_atoms=torch.tensor([4]),  # Total number of atoms
     ...     positions=torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]),
+    ...     atom_index=torch.tensor([1, 6, 6, 8]),  # Atomic numbers for H, C, C, O
     ...     atomic_subsystem_indices=torch.tensor([0, 0, 0, 0]),  # All atoms belong to the same molecule
     ...     total_charge=torch.tensor([0.0]),  # Assuming the molecule is neutral
-    ...     additional_features=torch.randn(4, 5)  # Random example features
-    ...
+    ...     atomic_numbers=torch.tensor([1, 6, 6, 8])  # Repeated for completeness
+    ... )
     """
 
     pair_indices: torch.Tensor
     d_ij: torch.Tensor
     r_ij: torch.Tensor
-    number_of_atoms: torch.Tensor
+    number_of_atoms: int
     positions: torch.Tensor
     atom_index: torch.Tensor
     atomic_subsystem_indices: torch.Tensor

@@ -9,7 +9,7 @@ from loguru import logger as log
 
 from abc import ABC, abstractmethod
 import torch
-from typing import NamedTuple
+from typing import NamedTuple, TYPE_CHECKING
 from modelforge.potential.utils import (
     AtomicSelfEnergies,
     NeuralNetworInternalData,
@@ -19,6 +19,9 @@ from modelforge.potential.utils import (
 from abc import abstractmethod, ABC
 from openff.units import unit
 from typing import Dict, Type
+
+if TYPE_CHECKING:
+    from modelforge.dataset.dataset import DatasetStatistics
 
 
 # Define NamedTuple for the outputs of Pairlist and Neighborlist forward method
@@ -33,12 +36,6 @@ class EnergyOutput(NamedTuple):
     raw_E: torch.Tensor
     rescaled_E: torch.Tensor
     molecular_ase: torch.Tensor
-
-
-class DatasetStatistics(NamedTuple):
-    scaling_mean: float
-    scaling_stddev: float
-    atomic_self_energies: AtomicSelfEnergies
 
 
 class Pairlist(nn.Module):
@@ -240,6 +237,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
     ):
         """Initialize the neural network potential class with specified parameters."""
         from .models import Neighborlist
+        from modelforge.dataset.dataset import DatasetStatistics
 
         super().__init__()
         self.calculate_distances_and_pairlist = Neighborlist(cutoff)
@@ -289,9 +287,20 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         return self._dataset_statistics
 
     @dataset_statistics.setter
-    def dataset_statistics(self, key: str, value: float):
+    def dataset_statistics(self, value: "DatasetStatistics"):
+        from modelforge.dataset.dataset import DatasetStatistics
 
-        self._dataset_statistics.key = value
+        if not isinstance(value, DatasetStatistics):
+            raise ValueError("Value must be an instance of DatasetStatistics.")
+
+        self._dataset_statistics = value
+
+    def update_dataset_statistics(self, **kwargs):
+        for key, value in kwargs.items():
+            if hasattr(self.dataset_statistics, key):
+                setattr(self.dataset_statistics, key, value)
+            else:
+                log.warning(f"{key} is not a valid field of DatasetStatistics.")
 
     def _readout(self, x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
         # readout the per molecule values
@@ -431,7 +440,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         molecular_ase = self._calculate_molecular_self_energy(
             inputs, properties_per_molecule.numel()
         )
-        processed_energy["_molecular_ase"] = molecular_ase.clone().detach()
+        processed_energy["molecular_ase"] = molecular_ase.clone().detach()
         # add the molecular self energy to the rescaled energies
         processed_energy["E"] = properties_per_molecule + molecular_ase
         return processed_energy
@@ -545,10 +554,10 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         processed_energy = self._energy_postprocessing(E, inputs)
         # return energies
         return EnergyOutput(
-            E=E,
+            E=processed_energy["E"],
             raw_E=processed_energy["raw_E"],
             rescaled_E=processed_energy["rescaled_E"],
-            molecular_ase=processed_energy["_molecular_ase"],
+            molecular_ase=processed_energy["molecular_ase"],
         )
 
 

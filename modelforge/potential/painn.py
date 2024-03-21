@@ -7,13 +7,13 @@ from .utils import Dense
 import torch
 import torch.nn.functional as F
 from openff.units import unit
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from .models import PairListOutputs
     from modelforge.potential.utils import NNPInput
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -73,7 +73,7 @@ class PaiNNNeuralNetworkInput:
     positions: torch.Tensor
     atomic_numbers: torch.Tensor
     atomic_subsystem_indices: torch.Tensor
-    total_charge: Optional[torch.Tensor] = field(default=None)
+    total_charge: torch.Tensor
     atomic_embedding: torch.Tensor
 
 

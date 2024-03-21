@@ -45,8 +45,8 @@ def test_schnet_forward(input_data, model_parameter):
         cutoff=cutoff,
         number_of_interaction_modules=nr_interaction_blocks,
     )
-    energy = schnet(input_data)["E_predict"]
-    nr_of_mols = input_data["atomic_subsystem_indices"].unique().shape[0]
+    energy = schnet(input_data.nnp_input).E
+    nr_of_mols = input_data.nnp_input.atomic_subsystem_indices.unique().shape[0]
 
     assert (
         len(energy) == nr_of_mols

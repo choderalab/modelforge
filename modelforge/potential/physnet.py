@@ -71,13 +71,13 @@ class PhysNetNeuralNetworkInput:
     pair_indices: torch.Tensor
     d_ij: torch.Tensor
     r_ij: torch.Tensor
-    f_ij: Optional[torch.Tensor] = field(default=None)
     number_of_atoms: int
     positions: torch.Tensor
     atomic_numbers: torch.Tensor
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
     atomic_embedding: torch.Tensor
+    f_ij: Optional[torch.Tensor] = field(default=None)
 
 
 class PhysNetRepresentation(nn.Module):

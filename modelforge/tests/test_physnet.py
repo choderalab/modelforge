@@ -20,7 +20,7 @@ def test_physnet_forward():
 
     dataset.prepare_data(remove_self_energies=True, normalize=False)
     # get methane input
-    methane = next(iter(dataset.train_dataloader()))
+    methane = next(iter(dataset.train_dataloader())).nnp_input
 
     model = PhysNet()
     model(methane)

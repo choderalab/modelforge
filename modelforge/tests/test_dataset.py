@@ -74,6 +74,7 @@ def test_dataset_basic_operations():
         ),
         "atomic_subsystem_counts": atomic_subsystem_counts,
         "n_confs": n_confs,
+        "charges": torch.randint(-1, 2, torch.Size([total_confs])).numpy(),
     }
 
     property_names = PropertyNames(
@@ -132,12 +133,13 @@ def test_different_properties_of_interest(dataset):
         "geometry",
         "atomic_numbers",
         "internal_energy_at_0K",
+        "charges",
     ]
 
     dataset = factory.create_dataset(data)
     raw_data_item = dataset[0]
     assert isinstance(raw_data_item, dict)
-    assert len(raw_data_item) == 6
+    assert len(raw_data_item) == 7
 
     data.properties_of_interest = ["internal_energy_at_0K", "geometry"]
     assert data.properties_of_interest == [

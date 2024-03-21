@@ -434,6 +434,11 @@ def test_equivariant_energies_and_forces(input_data, default_model):
         reflection(reference_forces.to(torch.float32)).double(),
         atol=atol,
     )
+    del input_data
+    del translation_nnp_input
+    del model
+    del translation_result
+    del reference_result
 
 
 def testPairlist_calculate_r_ij_and_d_ij():

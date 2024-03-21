@@ -1665,7 +1665,7 @@ def test_spice114_rename(prep_temp_dir):
     )
 
     test_keys = ["ALA-1", "GLU-0", "GLU-1", "ALA-0", "ALA-2", "GLU-10", "GLU-3"]
-    sorted_keys, original_name = spice_openff_data._sort_keys(test_keys)
+    sorted_keys, original_keys = spice_openff_data._sort_keys(test_keys)
 
     assert np.all(
         sorted_keys == ["ALA-0", "ALA-1", "ALA-2", "GLU-0", "GLU-1", "GLU-3", "GLU-10"]
@@ -1680,15 +1680,15 @@ def test_spice114_rename(prep_temp_dir):
         "GLU-GLU-1",
         "GLU-GLU-0",
     ]
-    assert original_name[sorted_keys[0]] == "ALA-0"
-    assert original_name[sorted_keys[1]] == "ALA-1"
-    assert original_name[sorted_keys[2]] == "ALA-2"
-    assert original_name[sorted_keys[3]] == "GLU-0"
-    assert original_name[sorted_keys[4]] == "GLU-1"
-    assert original_name[sorted_keys[5]] == "GLU-3"
-    assert original_name[sorted_keys[6]] == "GLU-10"
+    assert original_keys[sorted_keys[0]] == "ALA-0"
+    assert original_keys[sorted_keys[1]] == "ALA-1"
+    assert original_keys[sorted_keys[2]] == "ALA-2"
+    assert original_keys[sorted_keys[3]] == "GLU-0"
+    assert original_keys[sorted_keys[4]] == "GLU-1"
+    assert original_keys[sorted_keys[5]] == "GLU-3"
+    assert original_keys[sorted_keys[6]] == "GLU-10"
 
-    sorted_keys, original_name = spice_openff_data._sort_keys(test_keys)
+    sorted_keys, original_keys = spice_openff_data._sort_keys(test_keys)
     assert np.all(
         sorted_keys
         == [
@@ -1701,13 +1701,13 @@ def test_spice114_rename(prep_temp_dir):
             "GLU_GLU-1",
         ]
     )
-    assert original_name[sorted_keys[0]] == "ALA-ALA-0"
-    assert original_name[sorted_keys[1]] == "ALA-ALA-1"
-    assert original_name[sorted_keys[2]] == "ALA-ALA-2"
-    assert original_name[sorted_keys[3]] == "ALA-GLU-0"
-    assert original_name[sorted_keys[4]] == "ALA-GLU-1"
-    assert original_name[sorted_keys[5]] == "GLU-GLU-0"
-    assert original_name[sorted_keys[6]] == "GLU-GLU-1"
+    assert original_keys[sorted_keys[0]] == "ALA-ALA-0"
+    assert original_keys[sorted_keys[1]] == "ALA-ALA-1"
+    assert original_keys[sorted_keys[2]] == "ALA-ALA-2"
+    assert original_keys[sorted_keys[3]] == "ALA-GLU-0"
+    assert original_keys[sorted_keys[4]] == "ALA-GLU-1"
+    assert original_keys[sorted_keys[5]] == "GLU-GLU-0"
+    assert original_keys[sorted_keys[6]] == "GLU-GLU-1"
 
 
 def test_spice114_openff_test_process_downloaded(prep_temp_dir):
@@ -1838,7 +1838,7 @@ def test_spice2_renaming(prep_temp_dir):
         release_version="2",
     )
     test_keys = ["ALA-1", "GLU-0", "GLU-1", "ALA-0", "ALA-2", "GLU-10", "GLU-3"]
-    sorted_keys, original_name = spice_2_data._sort_keys(test_keys)
+    sorted_keys, original_keys, names = spice_2_data._sort_keys(test_keys)
 
     assert np.all(
         sorted_keys == ["ALA-0", "ALA-1", "ALA-2", "GLU-0", "GLU-1", "GLU-3", "GLU-10"]
@@ -1853,15 +1853,23 @@ def test_spice2_renaming(prep_temp_dir):
         "GLU-GLU-1",
         "GLU-GLU-0",
     ]
-    assert original_name[sorted_keys[0]] == "ALA-0"
-    assert original_name[sorted_keys[1]] == "ALA-1"
-    assert original_name[sorted_keys[2]] == "ALA-2"
-    assert original_name[sorted_keys[3]] == "GLU-0"
-    assert original_name[sorted_keys[4]] == "GLU-1"
-    assert original_name[sorted_keys[5]] == "GLU-3"
-    assert original_name[sorted_keys[6]] == "GLU-10"
+    assert original_keys[sorted_keys[0]] == "ALA-0"
+    assert original_keys[sorted_keys[1]] == "ALA-1"
+    assert original_keys[sorted_keys[2]] == "ALA-2"
+    assert original_keys[sorted_keys[3]] == "GLU-0"
+    assert original_keys[sorted_keys[4]] == "GLU-1"
+    assert original_keys[sorted_keys[5]] == "GLU-3"
+    assert original_keys[sorted_keys[6]] == "GLU-10"
 
-    sorted_keys, original_name = spice_2_data._sort_keys(test_keys)
+    assert names[sorted_keys[0]] == "ALA"
+    assert names[sorted_keys[1]] == "ALA"
+    assert names[sorted_keys[2]] == "ALA"
+    assert names[sorted_keys[3]] == "GLU"
+    assert names[sorted_keys[4]] == "GLU"
+    assert names[sorted_keys[5]] == "GLU"
+    assert names[sorted_keys[6]] == "GLU"
+
+    sorted_keys, original_keys, names = spice_2_data._sort_keys(test_keys)
     assert np.all(
         sorted_keys
         == [
@@ -1874,13 +1882,21 @@ def test_spice2_renaming(prep_temp_dir):
             "GLU_GLU-1",
         ]
     )
-    assert original_name[sorted_keys[0]] == "ALA-ALA-0"
-    assert original_name[sorted_keys[1]] == "ALA-ALA-1"
-    assert original_name[sorted_keys[2]] == "ALA-ALA-2"
-    assert original_name[sorted_keys[3]] == "ALA-GLU-0"
-    assert original_name[sorted_keys[4]] == "ALA-GLU-1"
-    assert original_name[sorted_keys[5]] == "GLU-GLU-0"
-    assert original_name[sorted_keys[6]] == "GLU-GLU-1"
+    assert original_keys[sorted_keys[0]] == "ALA-ALA-0"
+    assert original_keys[sorted_keys[1]] == "ALA-ALA-1"
+    assert original_keys[sorted_keys[2]] == "ALA-ALA-2"
+    assert original_keys[sorted_keys[3]] == "ALA-GLU-0"
+    assert original_keys[sorted_keys[4]] == "ALA-GLU-1"
+    assert original_keys[sorted_keys[5]] == "GLU-GLU-0"
+    assert original_keys[sorted_keys[6]] == "GLU-GLU-1"
+
+    assert names[sorted_keys[0]] == "ALA_ALA"
+    assert names[sorted_keys[1]] == "ALA_ALA"
+    assert names[sorted_keys[2]] == "ALA_ALA"
+    assert names[sorted_keys[3]] == "ALA_GLU"
+    assert names[sorted_keys[4]] == "ALA_GLU"
+    assert names[sorted_keys[5]] == "GLU_GLU"
+    assert names[sorted_keys[6]] == "GLU_GLU"
 
 
 def test_spice_2_process_datasets(prep_temp_dir):

@@ -1337,6 +1337,12 @@ def test_spice114_process_download_conversion(prep_temp_dir):
         convert_units=True,
     )
 
+    charge = spice_data._calculate_reference_charge("C")
+    assert charge == 0.0 * unit.elementary_charge
+
+    charge = spice_data._calculate_reference_charge("[Na+]")
+    assert charge == 1.0 * unit.elementary_charge
+
     local_data_path = resources.files("modelforge").joinpath("tests", "data")
     # make sure the data archive exists
     hdf5_file = "SPICE-1.1.4_n2.hdf5"
@@ -1757,6 +1763,18 @@ def test_spice_114_openff_process_datasets(prep_temp_dir):
         release_version="1.1.4",
     )
 
+    self_energy, charge = spice_openff_data._calculate_reference_energy_and_charge("C")
+
+    assert np.isclose(self_energy, -37.8726451 * unit.hartree)
+    assert charge == 0.0 * unit.elementary_charge
+
+    self_energy, charge = spice_openff_data._calculate_reference_energy_and_charge(
+        "[Na+]"
+    )
+
+    assert np.isclose(self_energy, -162.113665 * unit.hartree)
+    assert charge == 1.0 * unit.elementary_charge
+
     spice_openff_data.process(
         force_download=True, unit_testing_max_records=10, n_threads=3
     )
@@ -1912,6 +1930,16 @@ def test_spice_2_process_datasets(prep_temp_dir):
         convert_units=True,
         release_version="2",
     )
+
+    self_energy, charge = spice_2_data._calculate_reference_energy_and_charge("C")
+
+    assert np.isclose(self_energy, -37.8726451 * unit.hartree)
+    assert charge == 0.0 * unit.elementary_charge
+
+    self_energy, charge = spice_2_data._calculate_reference_energy_and_charge("[Na+]")
+
+    assert np.isclose(self_energy, -162.113665 * unit.hartree)
+    assert charge == 1.0 * unit.elementary_charge
 
     spice_2_data.process(force_download=True, unit_testing_max_records=10, n_threads=2)
 

@@ -71,6 +71,10 @@ class SPICE114Curation(DatasetCuration):
                 "u_in": unit.elementary_charge,
                 "u_out": unit.elementary_charge,
             },
+            "total_charge": {
+                "u_in": unit.elementary_charge,
+                "u_out": unit.elementary_charge,
+            },
             "mbis_dipoles": {
                 "u_in": unit.elementary_charge * unit.bohr,
                 "u_out": unit.elementary_charge * unit.nanometer,
@@ -128,6 +132,7 @@ class SPICE114Curation(DatasetCuration):
             "n_configs": "single_rec",
             "smiles": "single_rec",
             "subset": "single_rec",
+            "total_charge": "single_rec",
             "geometry": "series_atom",
             "dft_total_energy": "series_mol",
             "dft_total_gradient": "series_atom",
@@ -141,6 +146,26 @@ class SPICE114Curation(DatasetCuration):
             "scf_quadrupole": "series_mol",
             "wiberg_lowdin_indices": "series_atom",
         }
+
+    def _calculate_reference_charge(self, smiles: str) -> unit.Quantity:
+        """
+        Calculate the total charge of a molecule from its SMILES string.
+
+        Parameters
+        ----------
+        smiles: str, required
+            SMILES string of the molecule.
+
+        Returns
+        -------
+        total_charge: unit.Quantity
+        """
+
+        from rdkit import Chem
+
+        rdmol = Chem.MolFromSmiles(smiles, sanitize=False)
+        total_charge = sum(atom.GetFormalCharge() for atom in rdmol.GetAtoms())
+        return total_charge * unit.elementary_charge
 
     def _process_downloaded(
         self,
@@ -186,6 +211,7 @@ class SPICE114Curation(DatasetCuration):
                 ds_temp = {}
 
                 ds_temp["name"] = f"{name}"
+                ds_temp["smiles"] = hf[name]["smiles"][()][0].decode("utf-8")
                 ds_temp["atomic_numbers"] = hf[name]["atomic_numbers"][()].reshape(
                     -1, 1
                 )
@@ -220,7 +246,9 @@ class SPICE114Curation(DatasetCuration):
                             ds_temp[param_out] = temp * param_unit
                         else:
                             ds_temp[param_out] = temp
-
+                ds_temp["total_charge"] = self._calculate_reference_charge(
+                    ds_temp["smiles"]
+                )
                 self.data.append(ds_temp)
         if self.convert_units:
             self._convert_units()

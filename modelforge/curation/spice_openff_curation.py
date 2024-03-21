@@ -108,6 +108,10 @@ class SPICEOpenFFCuration(DatasetCuration):
                 "u_in": unit.elementary_charge,
                 "u_out": unit.elementary_charge,
             },
+            "total_charge": {
+                "u_in": unit.elementary_charge,
+                "u_out": unit.elementary_charge,
+            },
             "scf_dipole": {
                 "u_in": unit.elementary_charge * unit.bohr,
                 "u_out": unit.elementary_charge * unit.nanometer,
@@ -156,6 +160,7 @@ class SPICEOpenFFCuration(DatasetCuration):
             "name": "single_rec",
             "dataset_name": "single_rec",
             "source": "single_rec",
+            "total_charge": "single_rec",
             "atomic_numbers": "single_atom",
             "n_configs": "single_rec",
             "reference_energy": "single_rec",
@@ -267,7 +272,9 @@ class SPICEOpenFFCuration(DatasetCuration):
                         if pbar is not None:
                             pbar.update(1)
 
-    def _calculate_reference_energy(self, smiles: str) -> float:
+    def _calculate_reference_energy_and_charge(
+        self, smiles: str
+    ) -> Tuple[unit.Quantity, unit.Quantity]:
         """
         Calculate the reference energy for a given molecule, as defined by the SMILES string.
 
@@ -282,7 +289,9 @@ class SPICEOpenFFCuration(DatasetCuration):
 
         Returns
         -------
-        Returns the reference energy of for the atoms in the molecule (in hartrees)
+        unit.Quantity
+            Returns the reference energy of for the atoms in the molecule (in hartrees)
+            and the total charge of the molecule (in elementary charge).
         """
 
         from rdkit import Chem
@@ -339,7 +348,10 @@ class SPICEOpenFFCuration(DatasetCuration):
             charge[best_index] += delta
             delta = np.sign(total_charge - sum(charge))
 
-        return sum(atom_energy[s][c] for s, c in zip(symbol, charge))
+        return (
+            sum(atom_energy[s][c] for s, c in zip(symbol, charge)) * unit.hartree,
+            total_charge * unit.elementary_charge,
+        )
 
     def _sort_keys(self, non_error_keys: List[str]) -> Tuple[List[str], Dict[str, str]]:
         """
@@ -500,9 +512,10 @@ class SPICEOpenFFCuration(DatasetCuration):
                         data_temp["geometry"] = val["molecule"]["geometry"].reshape(
                             1, -1, 3
                         )
-                        data_temp[
-                            "reference_energy"
-                        ] = self._calculate_reference_energy(
+                        (
+                            data_temp["reference_energy"],
+                            data_temp["total_charge"],
+                        ) = self._calculate_reference_energy_and_charge(
                             data_temp[
                                 "canonical_isomeric_explicit_hydrogen_mapped_smiles"
                             ]
@@ -635,7 +648,10 @@ class SPICEOpenFFCuration(DatasetCuration):
         for datapoint in self.data:
             for key in datapoint.keys():
                 if key in self.qm_parameters:
-                    datapoint[key] = datapoint[key] * self.qm_parameters[key]["u_in"]
+                    if not isinstance(datapoint[key], unit.Quantity):
+                        datapoint[key] = (
+                            datapoint[key] * self.qm_parameters[key]["u_in"]
+                        )
             # add in the formation energy defined as:
             # dft_total_energy + dispersion_correction_energy - reference_energy
 

@@ -27,9 +27,7 @@ class QM9Dataset(HDF5Dataset):
     from modelforge.utils import PropertyNames
 
     _property_names = PropertyNames(
-        "atomic_numbers",
-        "geometry",
-        "internal_energy_at_0K",
+        "atomic_numbers", "geometry", "internal_energy_at_0K", "charges"
     )
 
     _available_properties = [
@@ -82,6 +80,7 @@ class QM9Dataset(HDF5Dataset):
             "geometry",
             "atomic_numbers",
             "internal_energy_at_0K",
+            "charges",
         ]  # NOTE: Default values
 
         self._properties_of_interest = _default_properties_of_interest
@@ -110,6 +109,7 @@ class QM9Dataset(HDF5Dataset):
     @property
     def atomic_self_energies(self):
         from modelforge.potential.utils import AtomicSelfEnergies
+
         return AtomicSelfEnergies(energies=self._ase)
 
     @property
@@ -179,8 +179,6 @@ class QM9Dataset(HDF5Dataset):
 
         """
         from modelforge.dataset.utils import _download_from_url
-        import requests
 
         url = self.test_url if self.for_unit_testing else self.full_url
         _download_from_url(url, self.raw_data_file)
-        # _download_from_gdrive(id, self.raw_data_file)

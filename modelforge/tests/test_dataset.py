@@ -74,12 +74,11 @@ def test_dataset_basic_operations():
         ),
         "atomic_subsystem_counts": atomic_subsystem_counts,
         "n_confs": n_confs,
+        "charges": torch.randint(-1, 2, torch.Size([total_confs])).numpy(),
     }
 
     property_names = PropertyNames(
-        "atomic_numbers",
-        "geometry",
-        "internal_energy_at_0K",
+        "atomic_numbers", "geometry", "internal_energy_at_0K", "charges"
     )
     dataset = TorchDataset(input_data, property_names)
     assert len(dataset) == total_confs
@@ -118,7 +117,7 @@ def test_dataset_basic_operations():
         assert np.array_equal(
             conf_data["atomic_numbers"], atomic_numbers_true[conf_idx]
         )
-        assert np.array_equal(conf_data["E_label"], energy_true[conf_idx])
+        assert np.array_equal(conf_data["E"], energy_true[conf_idx])
 
     for rec_idx in range(dataset.record_len()):
         assert np.array_equal(
@@ -134,12 +133,13 @@ def test_different_properties_of_interest(dataset):
         "geometry",
         "atomic_numbers",
         "internal_energy_at_0K",
+        "charges",
     ]
 
     dataset = factory.create_dataset(data)
     raw_data_item = dataset[0]
     assert isinstance(raw_data_item, dict)
-    assert len(raw_data_item) == 6
+    assert len(raw_data_item) == 7
 
     data.properties_of_interest = ["internal_energy_at_0K", "geometry"]
     assert data.properties_of_interest == [
@@ -198,7 +198,7 @@ def test_data_item_format(dataset):
     assert isinstance(raw_data_item, Dict)
     assert isinstance(raw_data_item["atomic_numbers"], torch.Tensor)
     assert isinstance(raw_data_item["positions"], torch.Tensor)
-    assert isinstance(raw_data_item["E_label"], torch.Tensor)
+    assert isinstance(raw_data_item["E"], torch.Tensor)
     print(raw_data_item)
 
     assert (
@@ -224,9 +224,9 @@ def test_dataset_generation(dataset):
     # for the training set it batches the 80 datapoints in
     # a batch of 64 and a batch of 16 samples
     assert len(train_dataloader) == 2  # nr of batches
-    v = [v_ for v_ in train_dataloader]
-    assert len(v[0]["atomic_subsystem_counts"]) == 64
-    assert len(v[1]["atomic_subsystem_counts"]) == 16
+    batch_data = [v_ for v_ in train_dataloader]
+    assert len(batch_data[0].metadata.atomic_subsystem_counts) == 64
+    assert len(batch_data[1].metadata.atomic_subsystem_counts) == 16
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
@@ -239,7 +239,7 @@ def test_dataset_splitting(dataset):
         dataset
     )
 
-    energy = train_dataset[0]["E_label"].item()
+    energy = train_dataset[0]["E"].item()
     assert np.isclose(energy, -412509.9375)
     print(energy)
 
@@ -315,7 +315,7 @@ def test_self_energy():
     dataset.prepare_data(
         remove_self_energies=False, normalize=False, regression_ase=False
     )
-    methane_energy_reference = float(dataset.torch_dataset[0]["E_label"])
+    methane_energy_reference = float(dataset.torch_dataset[0]["E"])
     assert np.isclose(methane_energy_reference, -106277.4161)
 
     data = QM9Dataset(for_unit_testing=True)
@@ -328,7 +328,7 @@ def test_self_energy():
     dataset.prepare_data(remove_self_energies=True, normalize=False)
     # it is saved in the dataset statistics
     assert dataset.dataset_statistics
-    self_energies = dataset.dataset_statistics["atomic_self_energies"]
+    self_energies = dataset.dataset_statistics.atomic_self_energies
     # 5 elements present in the QM9 dataset
     assert len(self_energies) == 5
     # H: -1313.4668615546
@@ -351,7 +351,7 @@ def test_self_energy():
     )
     # it is saved in the dataset statistics
     assert dataset.dataset_statistics
-    self_energies = dataset.dataset_statistics["atomic_self_energies"]
+    self_energies = dataset.dataset_statistics.atomic_self_energies
     # 5 elements present in the total QM9 dataset
     # but only 4 in the reduced QM9 dataset
     assert len(self_energies) == 4
@@ -369,7 +369,7 @@ def test_self_energy():
     )
     # it is saved in the dataset statistics
     assert dataset.dataset_statistics
-    self_energies = dataset.dataset_statistics["atomic_self_energies"]
+    self_energies = dataset.dataset_statistics.atomic_self_energies
 
     # Test that self energies are correctly removed
     for regression in [True, False]:
@@ -382,16 +382,17 @@ def test_self_energy():
         )
         # Extract the first molecule (methane)
         # double check that it is methane
+        k = dataset.torch_dataset[0]
         methane_atomic_indices = dataset.torch_dataset[0]["atomic_numbers"]
         # extract energy
-        methane_energy_offset = dataset.torch_dataset[0]["E_label"]
+        methane_energy_offset = dataset.torch_dataset[0]["E"]
         if regression is False:
             # checking that the offset energy is actually correct for methane
             assert torch.isclose(
                 methane_energy_offset, torch.tensor([-1656.8412], dtype=torch.float64)
             )
         # extract the ase offset
-        self_energies = dataset.dataset_statistics["atomic_self_energies"]
+        self_energies = dataset.dataset_statistics.atomic_self_energies
         methane_ase = sum(
             [
                 self_energies[int(index)]

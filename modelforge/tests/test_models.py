@@ -5,7 +5,6 @@ from .helper_functions import (
     MODELS_TO_TEST,
     SIMPLIFIED_INPUT_DATA,
     return_single_batch,
-    setup_simple_model,
     equivariance_test_utils,
 )
 
@@ -35,7 +34,7 @@ def test_energy_scaling_and_offset():
         remove_self_energies=True, normalize=False, regression_ase=False
     )
     # get methane input
-    methane = next(iter(dataset.train_dataloader()))
+    methane = next(iter(dataset.train_dataloader())).nnp_input
 
     # let's predict without any further postprocessing
     output_no_postprocessing = model(methane)
@@ -47,20 +46,16 @@ def test_energy_scaling_and_offset():
     # make sure that the raw prediction is the same
     import torch
 
-    assert torch.isclose(
-        output_no_postprocessing["_raw_E_predict"], output_with_ase["_raw_E_predict"]
-    )
+    assert torch.isclose(output_no_postprocessing.raw_E, output_with_ase.raw_E)
 
     # make sure that the difference in E_predict is the ase
     assert torch.isclose(
-        output_with_ase["E_predict"] - output_no_postprocessing["E_predict"],
-        output_with_ase["_molecular_ase"],
+        output_with_ase.E - output_no_postprocessing.E,
+        output_with_ase.molecular_ase,
     )
 
     # -------------------------------#
     # Test energy scaling
-
-    a = 7
 
 
 @pytest.mark.parametrize("default_model", MODELS_TO_TEST)
@@ -71,13 +66,14 @@ def test_forward_pass(default_model, dataset):
     # initialize default model
     model = default_model()
     # return a single batch
-    inputs = return_single_batch(
+    batch = return_single_batch(
         dataset,
     )  # split_file="modelforge/tests/qm9tut/split.npz")
-    nr_of_mols = inputs["atomic_subsystem_indices"].unique().shape[0]
+    nnp_input = batch.nnp_input
+    nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
     # test the forward pass through each of the models
-    output = model(inputs)["E_predict"]
+    output = model(nnp_input).E
 
     # test tat we get an energie per molecule
     assert len(output) == nr_of_mols
@@ -91,20 +87,20 @@ def test_calculate_energies_and_forces(input_data, default_model):
     """
     import torch
 
+    nnp_input = input_data.nnp_input
     # test the backward pass through each of the models
-    nr_of_mols = input_data["atomic_subsystem_indices"].unique().shape[0]
-    nr_of_atoms_per_batch = input_data["atomic_subsystem_indices"].shape[0]
+    nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
+    nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
 
     # initialize model with default parameters
     model = default_model()
 
     # forward pass
-    result = model(input_data)["E_predict"]
-    print(result.sum())
+    result = model(nnp_input).E
 
     # backpropagation
     forces = -torch.autograd.grad(
-        result.sum(), input_data["positions"], create_graph=True, retain_graph=True
+        result.sum(), nnp_input.positions, create_graph=True, retain_graph=True
     )[0]
 
     assert result.shape == torch.Size([nr_of_mols])  #  only one molecule
@@ -199,7 +195,7 @@ def test_pairlist():
     cutoff = 5.0 * unit.nanometer  # no relevant cutoff
     pairlist = Neighborlist(cutoff)
     r = pairlist(positions, atomic_subsystem_indices, only_unique_pairs=True)
-    pair_indices = r["pair_indices"]
+    pair_indices = r.pair_indices
 
     # pairlist describes the pairs of interacting atoms within a batch
     # that means for the pairlist provided below:
@@ -212,7 +208,7 @@ def test_pairlist():
     )
     # NOTE: pairs are defined on axis=1 and not axis=0
     assert torch.allclose(
-        r["r_ij"],
+        r.r_ij,
         torch.tensor(
             [
                 [1.0, 1.0, 1.0],  # pair1, [1.0, 1.0, 1.0] - [0.0, 0.0, 0.0]
@@ -229,12 +225,12 @@ def test_pairlist():
     cutoff = 2.0 * unit.nanometer
     pairlist = Neighborlist(cutoff)
     r = pairlist(positions, atomic_subsystem_indices, only_unique_pairs=True)
-    pair_indices = r["pair_indices"]
+    pair_indices = r.pair_indices
 
     assert torch.equal(pair_indices, torch.tensor([[0, 1, 3, 4], [1, 2, 4, 5]]))
     # pairs that are excluded through cutoff: (0,2) and (3,5)
     assert torch.equal(
-        r["r_ij"],
+        r.r_ij,
         torch.tensor(
             [
                 [1.0, 1.0, 1.0],
@@ -246,14 +242,14 @@ def test_pairlist():
     )
 
     assert torch.allclose(
-        r["d_ij"], torch.tensor([1.7321, 1.7321, 1.7321, 1.7321]), atol=1e-3
+        r.d_ij, torch.tensor([1.7321, 1.7321, 1.7321, 1.7321]), atol=1e-3
     )
 
     # test with complete pairlist
     cutoff = 2.0 * unit.nanometer
     pairlist = Neighborlist(cutoff)
     r = pairlist(positions, atomic_subsystem_indices, only_unique_pairs=False)
-    pair_indices = r["pair_indices"]
+    pair_indices = r.pair_indices
 
     print(pair_indices, flush=True)
     assert torch.equal(
@@ -268,11 +264,11 @@ def test_pairlist():
     r = pairlist(
         positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
     )
-    pair_indices = r["pair_indices"]
+    pair_indices = r.pair_indices
     r = neighborlist(
         positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
     )
-    neighbor_indices = r["pair_indices"]
+    neighbor_indices = r.pair_indices
 
     assert torch.equal(pair_indices, neighbor_indices)
 
@@ -284,11 +280,11 @@ def test_pairlist():
     r = pairlist(
         positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
     )
-    pair_indices = r["pair_indices"]
+    pair_indices = r.pair_indices
     r = neighborlist(
         positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
     )
-    neighbor_indices = r["pair_indices"]
+    neighbor_indices = r.pair_indices
 
     assert torch.equal(pair_indices, neighbor_indices)
 
@@ -300,11 +296,11 @@ def test_pairlist():
     r = pairlist(
         positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
     )
-    pair_indices = r["pair_indices"]
+    pair_indices = r.pair_indices
     r = neighborlist(
         positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
     )
-    neighbor_indices = r["pair_indices"]
+    neighbor_indices = r.pair_indices
 
     assert not pair_indices.shape == neighbor_indices.shape
 
@@ -318,16 +314,17 @@ def test_pairlist_on_dataset(dataset):
     data_module = TorchDataModule(data)
     data_module.prepare_data()
     for data in data_module.train_dataloader():
-        positions = data["positions"]
-        atomic_subsystem_indices = data["atomic_subsystem_indices"]
+        nnp_input = data.nnp_input
+        positions = nnp_input.positions
+        atomic_subsystem_indices = nnp_input.atomic_subsystem_indices
         print(atomic_subsystem_indices)
         from openff.units import unit
 
         pairlist = Neighborlist(cutoff=5.0 * unit.angstrom)
         r = pairlist(positions, atomic_subsystem_indices)
         print(r)
-        shapePairlist = r["pair_indices"].shape
-        shape_distance = r["d_ij"].shape
+        shapePairlist = r.pair_indices.shape
+        shape_distance = r.d_ij.shape
 
         assert shapePairlist[1] == shape_distance[0]
         assert shapePairlist[0] == 2
@@ -338,13 +335,15 @@ def test_pairlist_on_dataset(dataset):
 def test_equivariant_energies_and_forces(input_data, default_model):
     """
     Test the calculation of energies and forces for a molecule.
-    This test will be adapted once we have a trained model.
+    NOTE: test will be adapted once we have a trained model.
     """
     import torch
+    from dataclasses import replace
 
     # define the symmetry operations
     translation, rotation, reflection = equivariance_test_utils()
-
+    # define the tolerance
+    atol = 1e-4
     # set seed manually
     torch.manual_seed(1234)
     # initialize the models
@@ -352,47 +351,41 @@ def test_equivariant_energies_and_forces(input_data, default_model):
 
     # ------------------- #
     # start the test
-    input_data["positions"] = input_data["positions"]
     # reference values
-    reference_result = model(input_data)["E_predict"].double()
+    nnp_input = input_data.nnp_input
+    reference_result = model(nnp_input).E.double()
     reference_forces = -torch.autograd.grad(
         reference_result.sum(),
-        input_data["positions"],
-        create_graph=True,
-        retain_graph=True,
+        nnp_input.positions,
     )[0]
 
     # translation test
-    translation_input_data = input_data.copy()
-    translation_input_data["positions"] = translation(
-        translation_input_data["positions"]
-    )
-    translation_result = model(translation_input_data)["E_predict"]
+    translation_nnp_input = replace(nnp_input)
+    translation_nnp_input.positions = translation(translation_nnp_input.positions)
+    translation_result = model(translation_nnp_input).E
     assert torch.allclose(
         translation_result,
         reference_result,
-        atol=1e-5,
+        atol=atol,
     )
 
     translation_forces = -torch.autograd.grad(
         translation_result.sum(),
-        translation_input_data["positions"],
-        create_graph=True,
-        retain_graph=True,
+        translation_nnp_input.positions,
     )[0]
 
     assert torch.allclose(
         translation_forces,
         reference_forces,
-        atol=1e-5,
+        atol=atol,
     )
 
     # rotation test
-    rotation_input_data = input_data.copy()
-    rotation_input_data["positions"] = rotation(
-        rotation_input_data["positions"].to(torch.float32)
+    rotation_input_data = replace(nnp_input)
+    rotation_input_data.positions = rotation(
+        rotation_input_data.positions.to(torch.float32)
     ).double()
-    rotation_result = model(rotation_input_data)["E_predict"]
+    rotation_result = model(rotation_input_data).E
 
     print(rotation_result)
     print(reference_result, flush=True)
@@ -400,12 +393,12 @@ def test_equivariant_energies_and_forces(input_data, default_model):
     assert torch.allclose(
         rotation_result,
         reference_result,
-        atol=1e-4,
+        atol=atol,
     )
 
     rotation_forces = -torch.autograd.grad(
         rotation_result.sum(),
-        rotation_input_data["positions"],
+        rotation_input_data.positions,
         create_graph=True,
         retain_graph=True,
     )[0]
@@ -414,18 +407,18 @@ def test_equivariant_energies_and_forces(input_data, default_model):
     assert torch.allclose(
         rotation_forces,
         rotate_reference,
-        atol=1e-4,
+        atol=atol,
     )
 
     # reflection test
-    reflection_input_data = input_data.copy()
-    reflection_input_data["positions"] = reflection(
-        reflection_input_data["positions"].to(torch.float32)
+    reflection_input_data = replace(nnp_input)
+    reflection_input_data.positions = reflection(
+        reflection_input_data.positions.to(torch.float32)
     ).double()
-    reflection_result = model(reflection_input_data)["E_predict"]
+    reflection_result = model(reflection_input_data).E
     reflection_forces = -torch.autograd.grad(
         reflection_result.sum(),
-        reflection_input_data["positions"],
+        reflection_input_data.positions,
         create_graph=True,
         retain_graph=True,
     )[0]
@@ -433,13 +426,13 @@ def test_equivariant_energies_and_forces(input_data, default_model):
     assert torch.allclose(
         reflection_result,
         reference_result,
-        atol=1e-4,
+        atol=atol,
     )
 
     assert torch.allclose(
         reflection_forces,
         reflection(reference_forces.to(torch.float32)).double(),
-        atol=1e-4,
+        atol=atol,
     )
 
 

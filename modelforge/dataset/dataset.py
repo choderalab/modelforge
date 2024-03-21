@@ -1,5 +1,5 @@
 import os
-from typing import Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 import numpy as np
 import pytorch_lightning as pl
@@ -10,6 +10,17 @@ from torch.utils.data import DataLoader
 from modelforge.utils.prop import PropertyNames
 
 from modelforge.dataset.utils import RandomRecordSplittingStrategy, SplittingStrategy
+from dataclasses import dataclass
+
+if TYPE_CHECKING:
+    from modelforge.potential import BatchData
+
+
+@dataclass
+class DatasetStatistics:
+    scaling_mean: float
+    scaling_stddev: float
+    atomic_self_energies: Dict[str, float]
 
 
 class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
@@ -531,7 +542,7 @@ class TorchDataModule(pl.LightningDataModule):
         self.transform = transform
         self.split = split
         self.split_file = split_file
-        self.dataset_statistics = {}
+        self.dataset_statistics: DatasetStatistics = None
         self._ase = data.atomic_self_energies  # atomic self energies
 
     def calculate_self_energies(
@@ -596,7 +607,11 @@ class TorchDataModule(pl.LightningDataModule):
         # generate dataset
         factory = DatasetFactory()
         torch_dataset = factory.create_dataset(self.data)
-        dataset_statistics = {"scaling_stddev": 1, "scaling_mean": 0}
+        dataset_statistics = {
+            "scaling_stddev": 1,
+            "scaling_mean": 0,
+            "atomic_self_energies": {},
+        }
 
         if remove_self_energies:
             # calculate self energies, and then remove them from the dataset
@@ -644,7 +659,7 @@ class TorchDataModule(pl.LightningDataModule):
             dataset_statistics["scaling_stddev"] = stats["stddev"]
             dataset_statistics["scaling_mean"] = stats["mean"]
 
-        self.dataset_statistics = dataset_statistics
+        self.dataset_statistics = DatasetStatistics(**dataset_statistics)
         self.setup(torch_dataset)
 
     def subtract_self_energies(self, dataset, self_energies: Dict[str, float]) -> None:
@@ -762,14 +777,13 @@ class TorchDataModule(pl.LightningDataModule):
         )
 
 
-from modelforge.potential.utils import Metadata, NNPInput, BatchData
 from typing import Tuple
 
 
-def collate_conformers(conf_list: List[Dict[str, torch.Tensor]]) -> BatchData:
+def collate_conformers(conf_list: List[Dict[str, torch.Tensor]]) -> "BatchData":
     # TODO: once TorchDataset is reimplemented for general properties, reimplement this function using formats too.
     """Concatenate the Z, R, and E tensors from a list of molecules into a single tensor each, and return a new dictionary with the concatenated tensors."""
-    from modelforge.potential.utils import ATOMIC_NUMBER_TO_INDEX_MAP
+    from modelforge.potential.utils import NNPInput, BatchData, Metadata
 
     Z_list = []  # nuclear charges/atomic numbers
     R_list = []  # positions

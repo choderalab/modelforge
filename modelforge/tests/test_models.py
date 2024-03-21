@@ -34,7 +34,7 @@ def test_energy_scaling_and_offset():
         remove_self_energies=True, normalize=False, regression_ase=False
     )
     # get methane input
-    methane = next(iter(dataset.train_dataloader()))
+    methane = next(iter(dataset.train_dataloader())).nnp_input
 
     # let's predict without any further postprocessing
     output_no_postprocessing = model(methane)
@@ -46,20 +46,16 @@ def test_energy_scaling_and_offset():
     # make sure that the raw prediction is the same
     import torch
 
-    assert torch.isclose(
-        output_no_postprocessing["_raw_E_predict"], output_with_ase["_raw_E_predict"]
-    )
+    assert torch.isclose(output_no_postprocessing.raw_E, output_with_ase.raw_E)
 
     # make sure that the difference in E_predict is the ase
     assert torch.isclose(
-        output_with_ase["E_predict"] - output_no_postprocessing["E_predict"],
-        output_with_ase["_molecular_ase"],
+        output_with_ase.E - output_no_postprocessing.E,
+        output_with_ase.molecular_ase,
     )
 
     # -------------------------------#
     # Test energy scaling
-
-    a = 7
 
 
 @pytest.mark.parametrize("default_model", MODELS_TO_TEST)
@@ -340,6 +336,7 @@ def test_equivariant_energies_and_forces(input_data, default_model):
     This test will be adapted once we have a trained model.
     """
     import torch
+    from dataclasses import replace
 
     # define the symmetry operations
     translation, rotation, reflection = equivariance_test_utils()
@@ -351,22 +348,20 @@ def test_equivariant_energies_and_forces(input_data, default_model):
 
     # ------------------- #
     # start the test
-    input_data["positions"] = input_data["positions"]
     # reference values
-    reference_result = model(input_data)["E_predict"].double()
+    nnp_input = input_data.nnp_input
+    reference_result = model(nnp_input).E.double()
     reference_forces = -torch.autograd.grad(
         reference_result.sum(),
-        input_data["positions"],
+        nnp_input.positions,
         create_graph=True,
         retain_graph=True,
     )[0]
 
     # translation test
-    translation_input_data = input_data.copy()
-    translation_input_data["positions"] = translation(
-        translation_input_data["positions"]
-    )
-    translation_result = model(translation_input_data)["E_predict"]
+    translation_nnp_input = replace(nnp_input)
+    translation_nnp_input.positions = translation(translation_nnp_input.positions)
+    translation_result = model(translation_nnp_input).E
     assert torch.allclose(
         translation_result,
         reference_result,
@@ -375,7 +370,7 @@ def test_equivariant_energies_and_forces(input_data, default_model):
 
     translation_forces = -torch.autograd.grad(
         translation_result.sum(),
-        translation_input_data["positions"],
+        translation_nnp_input.positions,
         create_graph=True,
         retain_graph=True,
     )[0]
@@ -387,11 +382,11 @@ def test_equivariant_energies_and_forces(input_data, default_model):
     )
 
     # rotation test
-    rotation_input_data = input_data.copy()
-    rotation_input_data["positions"] = rotation(
-        rotation_input_data["positions"].to(torch.float32)
+    rotation_input_data = replace(nnp_input)
+    rotation_input_data.positions = rotation(
+        rotation_input_data.positions.to(torch.float32)
     ).double()
-    rotation_result = model(rotation_input_data)["E_predict"]
+    rotation_result = model(rotation_input_data).E
 
     print(rotation_result)
     print(reference_result, flush=True)
@@ -404,7 +399,7 @@ def test_equivariant_energies_and_forces(input_data, default_model):
 
     rotation_forces = -torch.autograd.grad(
         rotation_result.sum(),
-        rotation_input_data["positions"],
+        rotation_input_data.positions,
         create_graph=True,
         retain_graph=True,
     )[0]
@@ -417,14 +412,14 @@ def test_equivariant_energies_and_forces(input_data, default_model):
     )
 
     # reflection test
-    reflection_input_data = input_data.copy()
-    reflection_input_data["positions"] = reflection(
-        reflection_input_data["positions"].to(torch.float32)
+    reflection_input_data = replace(nnp_input)
+    reflection_input_data.positions = reflection(
+        reflection_input_data.positions.to(torch.float32)
     ).double()
-    reflection_result = model(reflection_input_data)["E_predict"]
+    reflection_result = model(reflection_input_data).E
     reflection_forces = -torch.autograd.grad(
         reflection_result.sum(),
-        reflection_input_data["positions"],
+        reflection_input_data.positions,
         create_graph=True,
         retain_graph=True,
     )[0]

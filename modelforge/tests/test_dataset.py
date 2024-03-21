@@ -77,9 +77,7 @@ def test_dataset_basic_operations():
     }
 
     property_names = PropertyNames(
-        "atomic_numbers",
-        "geometry",
-        "internal_energy_at_0K",
+        "atomic_numbers", "geometry", "internal_energy_at_0K", "charges"
     )
     dataset = TorchDataset(input_data, property_names)
     assert len(dataset) == total_confs
@@ -224,9 +222,9 @@ def test_dataset_generation(dataset):
     # for the training set it batches the 80 datapoints in
     # a batch of 64 and a batch of 16 samples
     assert len(train_dataloader) == 2  # nr of batches
-    v = [v_ for v_ in train_dataloader]
-    assert len(v[0]["atomic_subsystem_counts"]) == 64
-    assert len(v[1]["atomic_subsystem_counts"]) == 16
+    batch_data = [v_ for v_ in train_dataloader]
+    assert len(batch_data[0].metadata.atomic_subsystem_counts) == 64
+    assert len(batch_data[1].metadata.atomic_subsystem_counts) == 16
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
@@ -328,7 +326,7 @@ def test_self_energy():
     dataset.prepare_data(remove_self_energies=True, normalize=False)
     # it is saved in the dataset statistics
     assert dataset.dataset_statistics
-    self_energies = dataset.dataset_statistics["atomic_self_energies"]
+    self_energies = dataset.dataset_statistics.atomic_self_energies
     # 5 elements present in the QM9 dataset
     assert len(self_energies) == 5
     # H: -1313.4668615546
@@ -351,7 +349,7 @@ def test_self_energy():
     )
     # it is saved in the dataset statistics
     assert dataset.dataset_statistics
-    self_energies = dataset.dataset_statistics["atomic_self_energies"]
+    self_energies = dataset.dataset_statistics.atomic_self_energies
     # 5 elements present in the total QM9 dataset
     # but only 4 in the reduced QM9 dataset
     assert len(self_energies) == 4
@@ -369,7 +367,7 @@ def test_self_energy():
     )
     # it is saved in the dataset statistics
     assert dataset.dataset_statistics
-    self_energies = dataset.dataset_statistics["atomic_self_energies"]
+    self_energies = dataset.dataset_statistics.atomic_self_energies
 
     # Test that self energies are correctly removed
     for regression in [True, False]:
@@ -382,6 +380,7 @@ def test_self_energy():
         )
         # Extract the first molecule (methane)
         # double check that it is methane
+        k = dataset.torch_dataset[0]
         methane_atomic_indices = dataset.torch_dataset[0]["atomic_numbers"]
         # extract energy
         methane_energy_offset = dataset.torch_dataset[0]["E"]
@@ -391,7 +390,7 @@ def test_self_energy():
                 methane_energy_offset, torch.tensor([-1656.8412], dtype=torch.float64)
             )
         # extract the ase offset
-        self_energies = dataset.dataset_statistics["atomic_self_energies"]
+        self_energies = dataset.dataset_statistics.atomic_self_energies
         methane_ase = sum(
             [
                 self_energies[int(index)]

@@ -90,10 +90,11 @@ def calculate_self_energies(torch_dataset, collate_fn) -> Dict[int, float]:
     for batch in DataLoader(
         torch_dataset, batch_size=batch_size, collate_fn=collate_fn
     ):
+        a = 7
         energies, atomic_numbers, molecules_id = (
-            batch["E"].squeeze(),
-            batch["atomic_numbers"].squeeze(-1).to(torch.int64),
-            batch["atomic_subsystem_indices"].to(torch.int16),
+            batch.metadata.E.squeeze(),
+            batch.nnp_input.atomic_numbers.squeeze(-1).to(torch.int64),
+            batch.nnp_input.atomic_subsystem_indices.to(torch.int16),
         )
 
         # Update the energy array and unique atomic numbers set

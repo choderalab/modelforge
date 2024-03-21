@@ -41,10 +41,10 @@ class NNPInput:
 
         # Unit conversion for positions
         if isinstance(self.positions, unit.Quantity):
-            self.positions = self.positions.to(unit.nanometer).m
-        self.positions = torch.tensor(
-            self.positions, dtype=torch.float32, requires_grad=True
-        )
+            positions = self.positions.to(unit.nanometer).m
+            self.positions = torch.tensor(
+                positions, dtype=torch.float32, requires_grad=True
+            )
 
         # Validate inputs
         self._validate_inputs()

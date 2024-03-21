@@ -140,13 +140,14 @@ def setup_single_methane_input():
     )
     E = torch.tensor([0.0], requires_grad=True)
     atomic_subsystem_indices = torch.tensor([0, 0, 0, 0, 0], dtype=torch.int32)
-    modelforge_methane = {
-        "atomic_numbers": atomic_numbers,
-        "positions": positions,
-        "E": E,
-        "atomic_subsystem_indices": atomic_subsystem_indices,
-        "atomic_index": torch.tensor([1, 0, 0, 0, 0], dtype=torch.int32),
-    }
+    from modelforge.potential.utils import NNPInput
+
+    modelforge_methane = NNPInput(
+        atomic_numbers=atomic_numbers,
+        positions=positions,
+        atomic_subsystem_indices=atomic_subsystem_indices,
+        total_charge=torch.tensor([0], dtype=torch.int32),
+    )
     # ------------------------------------ #
 
     return {
@@ -217,21 +218,21 @@ def test_painn_representation_implementation():
     # set up the input for the spk Painn model
     input = setup_single_methane_input()
     spk_input = input["spk_methane_input"]
-    modelforge_input = input["modelforge_methane_input"]
+    mf_nnp_input = input["modelforge_methane_input"]
 
     schnetpack_results = schnetpack_painn(spk_input)
     modelforge_painn._set_dtype()
-    modelforge_input_1 = modelforge_painn._input_checks(modelforge_input)
-    modelforge_input_2 = modelforge_painn.prepare_inputs(
-        modelforge_input_1, only_unique_pairs=False
+    modelforge_painn._input_checks(mf_nnp_input)
+    pain_nn_input_mf = modelforge_painn.prepare_inputs(
+        mf_nnp_input, only_unique_pairs=False
     )
 
     # ---------------------------------------- #
     # test neighborlist and distance
     # ---------------------------------------- #
-    assert torch.allclose(spk_input["_Rij"] / 10, modelforge_input_2["r_ij"], atol=1e-4)
-    assert torch.allclose(spk_input["_idx_i"], modelforge_input_2["pair_indices"][0])
-    assert torch.allclose(spk_input["_idx_j"], modelforge_input_2["pair_indices"][1])
+    assert torch.allclose(spk_input["_Rij"] / 10, pain_nn_input_mf.r_ij, atol=1e-4)
+    assert torch.allclose(spk_input["_idx_i"], pain_nn_input_mf.pair_indices[0])
+    assert torch.allclose(spk_input["_idx_j"], pain_nn_input_mf.pair_indices[1])
     idx_i = spk_input["_idx_i"]
     idx_j = spk_input["_idx_j"]
 
@@ -274,10 +275,10 @@ def test_painn_representation_implementation():
     import schnetpack.properties as properties
 
     assert torch.allclose(
-        spk_input[properties.Z], modelforge_input["atomic_numbers"].squeeze()
+        spk_input[properties.Z].to(torch.int32), mf_nnp_input.atomic_numbers.squeeze()
     )
     embedding_spk = schnetpack_painn.embedding(spk_input[properties.Z])
-    embedding_mf = modelforge_painn.embedding_module(modelforge_input["atomic_numbers"])
+    embedding_mf = modelforge_painn.embedding_module(mf_nnp_input.atomic_numbers)
 
     assert torch.allclose(embedding_spk, embedding_mf)
     # ---------------------------------------- #
@@ -335,7 +336,7 @@ def test_painn_representation_implementation():
         q_spk_initial, mu_spk_initial, filter_list[0], dir_ij, idx_i, idx_j, n_atoms
     )
     torch.manual_seed(1234)
-    pair_indices = modelforge_input_2["pair_indices"]
+    pair_indices = pain_nn_input_mf.pair_indices
     filter_list = torch.split(
         filters_mf, 3 * modelforge_painn.number_of_atom_features, dim=-1
     )
@@ -494,7 +495,7 @@ def test_painn_representation_implementation():
         schnetpack_painn.filter_net.weight,
         atol=1e-4,
     )
-    modelforge_results = modelforge_painn._forward(modelforge_input_2)
+    modelforge_results = modelforge_painn._forward(pain_nn_input_mf)
     schnetpack_results = schnetpack_painn(spk_input)
 
     assert (
@@ -573,21 +574,21 @@ def test_schnet_representation_implementation():
     # set up the input for the spk Schnet model
     input = setup_single_methane_input()
     spk_input = input["spk_methane_input"]
-    modelforge_input = input["modelforge_methane_input"]
+    mf_nnp_input = input["modelforge_methane_input"]
 
     schnetpack_results = schnetpack_schnet(spk_input)
     modelforge_schnet._set_dtype()
-    modelforge_input_1 = modelforge_schnet._input_checks(modelforge_input)
-    modelforge_input_2 = modelforge_schnet.prepare_inputs(
-        modelforge_input_1, only_unique_pairs=False
+    modelforge_schnet._input_checks(mf_nnp_input)
+    schnet_nn_input_mf = modelforge_schnet.prepare_inputs(
+        mf_nnp_input, only_unique_pairs=False
     )
 
     # ---------------------------------------- #
     # test neighborlist and distance
     # ---------------------------------------- #
-    assert torch.allclose(spk_input["_Rij"] / 10, modelforge_input_2["r_ij"], atol=1e-4)
-    assert torch.allclose(spk_input["_idx_i"], modelforge_input_2["pair_indices"][0])
-    assert torch.allclose(spk_input["_idx_j"], modelforge_input_2["pair_indices"][1])
+    assert torch.allclose(spk_input["_Rij"] / 10, schnet_nn_input_mf.r_ij, atol=1e-4)
+    assert torch.allclose(spk_input["_idx_i"], schnet_nn_input_mf.pair_indices[0])
+    assert torch.allclose(spk_input["_idx_j"], schnet_nn_input_mf.pair_indices[1])
     idx_i = spk_input["_idx_i"]
     idx_j = spk_input["_idx_j"]
 
@@ -620,12 +621,11 @@ def test_schnet_representation_implementation():
     import schnetpack.properties as properties
 
     assert torch.allclose(
-        spk_input[properties.Z], modelforge_input["atomic_numbers"].squeeze()
+        spk_input[properties.Z].to(torch.int),
+        schnet_nn_input_mf.atomic_numbers.squeeze(),
     )
     embedding_spk = schnetpack_schnet.embedding(spk_input[properties.Z])
-    embedding_mf = modelforge_schnet.embedding_module(
-        modelforge_input["atomic_numbers"]
-    )
+    embedding_mf = modelforge_schnet.embedding_module(schnet_nn_input_mf.atomic_numbers)
 
     assert torch.allclose(embedding_spk, embedding_mf)
 
@@ -705,13 +705,13 @@ def test_schnet_representation_implementation():
             rcut_ij_spk,
         )
         v_mf = mf_interaction(
-            embedding_mf, modelforge_input_2["pair_indices"], f_ij_mf, r_cut_ij_mf
+            embedding_mf, schnet_nn_input_mf.pair_indices, f_ij_mf, r_cut_ij_mf
         )
 
         assert torch.allclose(v_spk, v_mf)
 
     # Check full pass
-    modelforge_results = modelforge_schnet._forward(modelforge_input_2)
+    modelforge_results = modelforge_schnet._forward(schnet_nn_input_mf)
     schnetpack_results = schnetpack_schnet(spk_input)
 
     assert (

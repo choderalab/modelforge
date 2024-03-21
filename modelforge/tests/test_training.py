@@ -81,7 +81,7 @@ def test_pt_lightning():
 
     # set scaling and ase values
 
-    dataset.dataset_statistics["scaling_stddev"] = 1
+    dataset.dataset_statistics.scaling_stddev = 1.0
     model.dataset_statistics = dataset.dataset_statistics
 
     # Run training loop and validate

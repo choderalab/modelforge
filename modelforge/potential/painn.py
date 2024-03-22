@@ -126,6 +126,20 @@ class PaiNN(BaseNNP):
             "vector_representation": mu,
             "atomic_subsystem_indices": inputs["atomic_subsystem_indices"],
         }
+    
+    def _config_prior(self):
+        from ray import tune
+        from .utils import get_default_prior
+        prior = {
+            "embedding_dimensions": tune.lograndint(2, 256),
+            "nr_interaction_blocks": tune.randint(1, 5),
+            "cutoff": tune.uniform(2, 10),
+            "number_of_gaussians_basis_functions": tune.randint(8, 32),
+            "shared_filters": tune.choice([True, False]),
+            "shared_interactions": tune.choice([True, False]),
+        }
+        prior.update(get_default_prior())
+        return prior
 
 
 from openff.units import unit

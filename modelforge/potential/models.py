@@ -476,6 +476,9 @@ class BaseNNP(pl.LightningModule):
                 self._log_message_units = True
 
         return inputs
+    
+    def _config_prior(self):
+        return {}
 
     def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         """

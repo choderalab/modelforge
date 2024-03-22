@@ -10,7 +10,7 @@ def test_bayesian_model(input_data):
     schnet = SchNet()
 
     # make a Bayesian model from the SchNet
-    schnet = BayesianAutoNormalPotential(schnet, log_sigma=1e-2)
+    schnet = BayesianAutoNormalPotential(schnet, log_sigma=1e-2).forward
     guide = pyro.infer.autoguide.AutoDiagonalNormal(schnet)
     assert guide is not None
 

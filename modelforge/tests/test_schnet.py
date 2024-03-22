@@ -2,15 +2,15 @@ from modelforge.potential.schnet import SchNet
 
 import pytest
 from .helper_functions import (
-    setup_simple_model,
     SIMPLIFIED_INPUT_DATA,
-    generate_interaction_block_data,
 )
 
 
 def test_Schnet_init():
     """Test initialization of the Schnet model."""
-    schnet = setup_simple_model(SchNet)
+    from modelforge.potential.schnet import SchNet
+
+    schnet = SchNet()
     assert schnet is not None, "Schnet model should be initialized."
 
 
@@ -38,16 +38,15 @@ def test_schnet_forward(input_data, model_parameter):
         cutoff,
         nr_interaction_blocks,
     ) = model_parameter
-    schnet = setup_simple_model(
-        SchNet,
-        nr_atom_basis=nr_atom_basis,
-        max_atomic_number=max_atomic_number,
-        number_of_gaussians=number_of_gaussians,
+    schnet = SchNet(
+        number_of_atom_features=nr_atom_basis,
+        max_Z=max_atomic_number,
+        number_of_radial_basis_functions=number_of_gaussians,
         cutoff=cutoff,
-        nr_interaction_blocks=nr_interaction_blocks,
+        number_of_interaction_modules=nr_interaction_blocks,
     )
-    energy = schnet(input_data)["E_predict"]
-    nr_of_mols = input_data["atomic_subsystem_indices"].unique().shape[0]
+    energy = schnet(input_data.nnp_input).E
+    nr_of_mols = input_data.nnp_input.atomic_subsystem_indices.unique().shape[0]
 
     assert (
         len(energy) == nr_of_mols

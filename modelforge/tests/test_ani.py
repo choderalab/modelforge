@@ -37,7 +37,6 @@ def setup_methane():
 @pytest.fixture
 def setup_two_methanes():
     import torch
-    from modelforge.potential.utils import ATOMIC_NUMBER_TO_INDEX_MAP
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -66,18 +65,17 @@ def setup_two_methanes():
     atomic_subsystem_indices = torch.tensor(
         [0, 0, 0, 0, 0, 1, 1, 1, 1, 1], dtype=torch.int32, device=device
     )
-    mf_input = {
-        "atomic_numbers": torch.cat((species[0], species[1]), dim=0),
-        "positions": torch.cat((coordinates[0], coordinates[1]), dim=0) / 10,
-        "atomic_subsystem_indices": atomic_subsystem_indices,
-    }
-    mf_input["atomic_index"] = torch.tensor(
-        [
-            ATOMIC_NUMBER_TO_INDEX_MAP[atomic_number]
-            for atomic_number in list(mf_input["atomic_numbers"].numpy())
-        ]
-    ).flatten()
-    return species, coordinates, device, mf_input
+
+    atomic_numbers = torch.cat((species[0], species[1]), dim=0)
+    from modelforge.potential.utils import NNPInput
+
+    nnp_input = NNPInput(
+        atomic_numbers=atomic_numbers,
+        positions=torch.cat((coordinates[0], coordinates[1]), dim=0) / 10,
+        atomic_subsystem_indices=atomic_subsystem_indices,
+        total_charge=torch.tensor([0.0, 0.0]),
+    )
+    return species, coordinates, device, nnp_input
 
 
 def test_torchani_ani(setup_two_methanes):
@@ -145,11 +143,11 @@ def test_radial_with_diagonal_batching(setup_two_methanes):
     ani_species, ani_coordinates, _, mf_input = setup_two_methanes
     pairlist = Pairlist()
     pairs = pairlist(
-        mf_input["positions"],
-        mf_input["atomic_subsystem_indices"],
+        mf_input.positions,
+        mf_input.atomic_subsystem_indices,
         only_unique_pairs=True,
     )
-    d_ij = pairs["d_ij"]
+    d_ij = pairs.d_ij
 
     # ANI constants
     radial_cutoff = 5.1  # radial_cutoff
@@ -213,12 +211,12 @@ def test_compare_angular_symmetry_features(setup_methane):
     species, r, _, _ = setup_methane
     pairlist = Pairlist()
     pairs = pairlist(r[0], torch.tensor([0, 0, 0, 0, 0]), only_unique_pairs=True)
-    d_ij = pairs["d_ij"].squeeze(1)
-    r_ij = pairs["r_ij"].squeeze(1)
+    d_ij = pairs.d_ij.squeeze(1)
+    r_ij = pairs.r_ij.squeeze(1)
 
     # reformat for input
     species = species.flatten()
-    atom_index12 = pairs["pair_indices"]
+    atom_index12 = pairs.pair_indices
     species12 = species[atom_index12]
     # ANI constants
     # for angular features

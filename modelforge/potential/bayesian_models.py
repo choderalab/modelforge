@@ -70,7 +70,7 @@ class BayesianAutoNormalPotential(pyro.nn.PyroModule):
         provide the prior; if `y` is provided, provide the likelihood.
         """
         y = kwargs.pop("y", None)
-        y_hat = self.base_model(*args, **kwargs)["E_predict"]
+        y_hat = self.base_model(*args, **kwargs).E
         pyro.sample(
             "obs", 
             pyro.distributions.Delta(y_hat),

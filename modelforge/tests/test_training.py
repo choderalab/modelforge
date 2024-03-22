@@ -1,15 +1,13 @@
-from typing import Optional, Type
+from typing import Type
 
 import pytest
 
 from modelforge.potential.models import BaseNeuralNetworkPotential
-from modelforge.potential.schnet import SchNet
 
 from .helper_functions import (
     MODELS_TO_TEST,
     DATASETS,
     initialize_dataset,
-    setup_simple_model,
 )
 
 
@@ -83,7 +81,7 @@ def test_pt_lightning():
 
     # set scaling and ase values
 
-    dataset.dataset_statistics["scaling_stddev"] = 1
+    dataset.dataset_statistics.scaling_stddev = 1.0
     model.dataset_statistics = dataset.dataset_statistics
 
     # Run training loop and validate

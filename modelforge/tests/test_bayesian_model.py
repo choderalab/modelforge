@@ -1,10 +1,11 @@
+import pytest
 import pyro
 from modelforge.potential import SchNet
 from modelforge.potential.bayesian_models import BayesianAutoNormalPotential
 from .helper_functions import SIMPLIFIED_INPUT_DATA
 
-
-def test_bayesian_model():
+@pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
+def test_bayesian_model(input_data):
     # initialize a vanilla SchNet model
     schnet = SchNet()
 
@@ -22,4 +23,4 @@ def test_bayesian_model():
     )
 
     # calculate VI loss
-    svi.step(SIMPLIFIED_INPUT_DATA, y=0.0)
+    svi.step(input_data, y=0.0)

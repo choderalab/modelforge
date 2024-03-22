@@ -31,7 +31,10 @@ dependencies:
   - qcelemental=0.25.1
   - qcportal>=0.50
   - requests
+  - torchani
+  - pytorch_scatter
 
   # pip installs
   - pip:
       - schnetpack>=2.0.0
+      - pyro-ppl

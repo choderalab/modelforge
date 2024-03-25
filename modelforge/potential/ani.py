@@ -153,7 +153,7 @@ class ANIRepresentation(nn.Module):
             dtype=torch.float32,
         )
 
-    def forward(self, data: AniNeuralNetworkInput):
+    def forward(self, data: AniNeuralNetworkInput) -> SpeciesAEV:
 
         # calculate the atomic environment vectors
         # used for the ANI architecture of NNPs
@@ -467,7 +467,7 @@ class ANI2x(BaseNeuralNetworkPotential):
             atom_index=torch.tensor(
                 [
                     ATOMIC_NUMBER_TO_INDEX_MAP.get(atomic_number, -1)
-                    for atomic_number in list(data.atomic_numbers.numpy())
+                    for atomic_number in list(data.atomic_numbers.cpu().numpy())
                 ]
             ),
             atomic_numbers=data.atomic_numbers,

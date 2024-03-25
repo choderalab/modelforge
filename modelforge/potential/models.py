@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Tuple
 
 import lightning as pl
 import torch
@@ -345,7 +345,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
         return loss
 
-    def test_step(self, batch, batch_idx):
+    def test_step(self, batch: BatchData, batch_idx):
         from torch.nn import functional as F
 
         E_true, E_predict = self._get_energies(batch)
@@ -359,7 +359,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
             prog_bar=True,
         )
 
-    def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx):
+    def validation_step(self, batch: BatchData, batch_idx):
         from torch.nn import functional as F
 
         E_true, E_predict = self._get_energies(batch)
@@ -373,10 +373,10 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
             prog_bar=True,
         )
 
-    def _get_energies(self, batch: BatchData):
+    def _get_energies(self, batch: BatchData) -> Tuple[torch.Tensor, torch.Tensor]:
 
         nnp_input = batch.nnp_input
-        E_true = batch.metadata.E.to(torch.float32)
+        E_true = batch.metadata.E.to(torch.float32).squeeze(1)
         self.batch_size = self._log_batch_size(E_true)
 
         E_predict = self.forward(nnp_input).E
@@ -429,7 +429,9 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
         return ase_tensor
 
-    def _energy_postprocessing(self, properties_per_molecule, inputs):
+    def _energy_postprocessing(
+        self, properties_per_molecule, inputs
+    ) -> Dict[str, torch.Tensor]:
 
         # first, resale the energies
         processed_energy = {}
@@ -494,7 +496,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
         self._dtype = dtypes[0]
 
-    def _input_checks(self, data: NNPInput) -> Dict[str, torch.Tensor]:
+    def _input_checks(self, data: NNPInput):
         """
         Perform input checks to validate the input dictionary.
 
@@ -514,7 +516,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         assert data.total_charge.shape == torch.Size([nr_of_molecules])
         assert data.positions.shape == torch.Size([nr_of_atoms, 3])
 
-    def forward(self, data: NNPInput) -> torch.Tensor:
+    def forward(self, data: NNPInput) -> EnergyOutput:
         """
         Abstract method for forward pass in neural network potentials.
 
@@ -567,17 +569,17 @@ class SingleTopologyAlchemicalBaseNNPModel(BaseNeuralNetworkPotential):
 
     Methods
     -------
-    forward(inputs: Dict[str, torch.Tensor]) -> torch.Tensor
+    forward(data: NNPInput) -> torch.Tensor
         Calculate the alchemical energy for a given input batch.
     """
 
-    def forward(self, inputs: Dict[str, torch.Tensor]):
+    def forward(self, data: NNPInput):
         """
         Calculate the alchemical energy for a given input batch.
 
         Parameters
         ----------
-        inputs : Dict[str, torch.Tensor]
+        data : NNPInput
             Inputs containing atomic numbers ('atomic_numbers'), coordinates ('positions') and pairlist ('pairlist').
             - 'atomic_numbers': shape (nr_of_atoms_in_batch, *, *), 0 indicates non-interacting atoms that will be masked
             - 'total_charge' : shape (nr_of_atoms_in_batch)
@@ -593,5 +595,5 @@ class SingleTopologyAlchemicalBaseNNPModel(BaseNeuralNetworkPotential):
 
         # emb = nn.Embedding(1,200)
         # lamb_emb = (1 - lamb) * emb(input['Z1']) + lamb * emb(input['Z2'])	def __init__():
-        self._input_checks(inputs)
+        self._input_checks(data)
         raise NotImplementedError

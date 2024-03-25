@@ -451,10 +451,23 @@ class ANI2x(BaseNeuralNetworkPotential):
         # Intialize interaction blocks
         self.interaction_modules = ANIInteraction(self.aev_length)
 
+        # ----- ATOMIC NUMBER LOOKUP --------
+        # Create a tensor for direct lookup. The size of this tensor will be
+        # # the max atomic number in map. Initialize with a default value (e.g., -1 for not found).
+        from modelforge.potential.utils import ATOMIC_NUMBER_TO_INDEX_MAP
+
+        max_atomic_number = max(ATOMIC_NUMBER_TO_INDEX_MAP.keys())
+        lookup_tensor = torch.full((max_atomic_number + 1,), -1, dtype=torch.long)
+
+        # Populate the lookup tensor with indices from your map
+        for atomic_number, index in ATOMIC_NUMBER_TO_INDEX_MAP.items():
+            lookup_tensor[atomic_number] = index
+
+        self.lookup_tensor = lookup_tensor
+
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
     ) -> AniNeuralNetworkInput:
-        from modelforge.potential.utils import ATOMIC_NUMBER_TO_INDEX_MAP
 
         number_of_atoms = data.atomic_numbers.shape[0]
 
@@ -464,12 +477,7 @@ class ANI2x(BaseNeuralNetworkPotential):
             r_ij=pairlist_output.r_ij,
             number_of_atoms=number_of_atoms,
             positions=data.positions,
-            atom_index=torch.tensor(
-                [
-                    ATOMIC_NUMBER_TO_INDEX_MAP.get(atomic_number, -1)
-                    for atomic_number in list(data.atomic_numbers.cpu().numpy())
-                ]
-            ),
+            atom_index=self.lookup_tensor[data.atomic_numbers.long()],
             atomic_numbers=data.atomic_numbers,
             atomic_subsystem_indices=data.atomic_subsystem_indices,
             total_charge=data.total_charge,

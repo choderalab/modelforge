@@ -6,6 +6,17 @@ import torch.nn as nn
 from typing import NamedTuple, Any
 from dataclasses import dataclass, field
 
+@dataclass
+class NeuralNetworkData:
+    pair_indices: torch.Tensor
+    d_ij: torch.Tensor
+    r_ij: torch.Tensor
+    number_of_atoms: int
+    positions: torch.Tensor
+    atomic_subsystem_indices: torch.Tensor
+    total_charge: torch.Tensor
+    atomic_numbers: torch.Tensor
+
 
 @dataclass(frozen=False)
 class NNPInput:
@@ -88,41 +99,6 @@ class Metadata:
 class BatchData(NamedTuple):
     nnp_input: NNPInput
     metadata: Metadata
-
-
-class NeuralNetworInternalData(NamedTuple):
-    """
-    A NamedTuple to structure the inputs for neural network potentials.
-
-    Parameters
-    ----------
-    atomic_numbers : torch.Tensor
-        A 1D tensor containing atomic numbers for each atom in the system(s).
-        Shape: [num_atoms], where `num_atoms` is the total number of atoms across all systems.
-    positions : torch.Tensor
-        A 2D tensor of shape [num_atoms, 3], representing the XYZ coordinates of each atom.
-    atomic_subsystem_indices : torch.Tensor
-        A 1D tensor mapping each atom to its respective subsystem or molecule.
-        This allows for calculations involving multiple molecules or subsystems within the same batch.
-        Shape: [num_atoms].
-    total_charge : Optional[torch.Tensor]
-        An optional tensor with the total charge of each system or molecule, if applicable.
-        Shape: [num_systems], where `num_systems` is the number of distinct systems or molecules.
-    additional_features : Optional[torch.Tensor]
-        An optional 2D tensor containing any additional features required by the model for each atom.
-        Shape: [num_atoms, num_features], where `num_features` is the number of additional features per atom.
-
-    """
-
-    pair_indices: torch.Tensor
-    d_ij: torch.Tensor
-    r_ij: torch.Tensor
-    number_of_atoms: torch.Tensor
-    positions: torch.Tensor
-    atomic_numbers: torch.Tensor
-    atomic_subsystem_indices: torch.Tensor
-    atom_index: torch.Tensor
-    total_charge: torch.Tensor
 
 
 ATOMIC_NUMBER_TO_INDEX_MAP = {

@@ -12,7 +12,6 @@ import torch
 from typing import NamedTuple, TYPE_CHECKING
 from modelforge.potential.utils import (
     AtomicSelfEnergies,
-    NeuralNetworInternalData,
     NNPInput,
     BatchData,
 )
@@ -256,7 +255,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
     @abstractmethod
     def _model_specific_input_preparation(
         self, data: NNPInput, pairlist: PairListOutputs
-    ) -> NeuralNetworInternalData:
+    ):
         """
         Prepares model-specific inputs before the forward pass.
 
@@ -271,13 +270,12 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
         Returns
         -------
-        NeuralNetworInternalData
             The processed inputs, ready for the model's forward pass.
         """
         pass
 
     @abstractmethod
-    def _forward(self, inputs: NeuralNetworInternalData):
+    def _forward(self, inputs):
         # needs to be implemented by the subclass
         # perform the forward pass implemented in the subclass
         pass
@@ -449,7 +447,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
     def prepare_inputs(
         self, data: NNPInput, only_unique_pairs: bool = True
-    ) -> NeuralNetworInternalData:
+    ):
         """Prepares the input tensors for passing to the model.
 
         Performs general input manipulation like calculating distances,
@@ -464,7 +462,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
             Whether to only use unique pairs or not in the pairlist.
         Returns
         -------
-        nnp_input : NeuralNetworInternalData
+        nnp_input 
             NamedTuple containg the relevant data for the model.
         """
         # ---------------------------

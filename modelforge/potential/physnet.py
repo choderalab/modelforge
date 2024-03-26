@@ -540,7 +540,7 @@ class PhysNet(BaseNeuralNetworkPotential):
 
         return nnp_input
 
-    def _forward(self, data: PhysNetNeuralNetworkInput) -> torch.Tensor:
+    def _forward(self, data: PhysNetNeuralNetworkInput) -> Dict[str, torch.Tensor]:
         """
         Calculate the energy for a given input batch.
         Parameters

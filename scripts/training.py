@@ -32,7 +32,9 @@ trainer = Trainer(
     devices=1,
     accelerator="gpu",
     logger=logger,  # Add the logger here
-    callbacks=[EarlyStopping(monitor="val_loss")],
+    callbacks=[
+        EarlyStopping(monitor="val_loss", min_delta=0.1, patience=5, verbose=True)
+    ],
 )
 
 

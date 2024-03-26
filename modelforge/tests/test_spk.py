@@ -7,6 +7,7 @@ def test_compare_radial_symmetry_features():
     from schnetpack.nn import GaussianRBF as schnetpackGaussianRBF
     from openff.units import unit
 
+    # Initialize the RBFs
     number_of_gaussians = 10
     cutoff = unit.Quantity(5.2, unit.angstrom)
     start = unit.Quantity(0.8, unit.angstrom)
@@ -21,9 +22,8 @@ def test_compare_radial_symmetry_features():
         min_distance=start,
     )
 
+    # compare the output
     r = torch.rand(5, 1)
-    print(schnetpack_rbf(r))
-    print(radial_symmetry_function_module(r / 10))
     assert torch.allclose(
         schnetpack_rbf(r),
         radial_symmetry_function_module(r / 10).unsqueeze(1),
@@ -549,6 +549,7 @@ def setup_mf_schnet_representation(
         number_of_interaction_modules=nr_of_interactions,
         number_of_radial_basis_functions=number_of_radial_basis_functions,
         cutoff=cutoff,
+        number_of_filters = number_of_atom_features
     )
 
 

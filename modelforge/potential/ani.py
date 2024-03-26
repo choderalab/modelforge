@@ -481,7 +481,7 @@ class ANI2x(BaseNeuralNetworkPotential):
 
         return nnp_input
 
-    def _forward(self, data: AniNeuralNetworkInput) -> torch.Tensor:
+    def _forward(self, data: AniNeuralNetworkInput) -> Dict[str, torch.Tensor]:
         """
         Calculate the energy for a given input batch.
 

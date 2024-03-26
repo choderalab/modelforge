@@ -3,7 +3,7 @@ from typing import Callable, Tuple, Optional
 import numpy as np
 import torch
 import torch.nn as nn
-from typing import NamedTuple, Any
+from typing import Any
 from dataclasses import dataclass, field
 
 
@@ -19,7 +19,7 @@ class NeuralNetworkData:
     atomic_numbers: torch.Tensor
 
 
-@dataclass(frozen=False)
+@dataclass
 class NNPInput:
     """
     A dataclass to structure the inputs for neural network potentials.
@@ -44,6 +44,14 @@ class NNPInput:
     positions: Any  # Temporarily use Any to allow for openff.units.unit.Quantity
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
+
+    def to(self, device: torch.device):
+        """Move all tensors in this instance to the specified device."""
+        self.atomic_numbers = self.atomic_numbers.to(device)
+        self.positions = self.positions.to(device)
+        self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(device)
+        self.total_charge = self.total_charge.to(device)
+        return self
 
     def __post_init__(self):
         # Set dtype and convert units if necessary
@@ -96,10 +104,23 @@ class Metadata:
     atomic_subsystem_indices_referencing_dataset: torch.Tensor
     number_of_atoms: int
 
+    def to(self, device: torch.device):
+        """Move all tensors in this instance to the specified device."""
+        self.atomic_subsystem_counts = self.atomic_subsystem_counts.to(device)
+        self.atomic_subsystem_indices_referencing_dataset = (
+            self.atomic_subsystem_indices_referencing_dataset.to(device)
+        )
+        return self
 
-class BatchData(NamedTuple):
+
+@dataclass
+class BatchData:
     nnp_input: NNPInput
     metadata: Metadata
+
+    def to(self, device: torch.device):
+        self.nnp_input = self.nnp_input.to(device)
+        self.metadata = self.metadata.to(device)
 
 
 ATOMIC_NUMBER_TO_INDEX_MAP = {

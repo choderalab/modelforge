@@ -19,13 +19,13 @@ dataset.prepare_data(remove_self_energies=True, normalize=False)
 model = SchNet().to(torch.float32)
 # optimizer and loss function setup
 optimizer = Adam(model.parameters(), lr=1e-3)
-loss_function = torch.nn.MSELoss()
 
 
-def train_one_epoch(model, dataloader, optimizer, loss_function, device):
+def train_one_epoch(model, dataloader, optimizer, device):
     model.train()
     total_loss = 0
     total_nr_of_molecules = 0
+    loss_function = torch.nn.MSELoss()
 
     for batch in dataloader:
         batch = batch.to(device)
@@ -49,10 +49,11 @@ def train_one_epoch(model, dataloader, optimizer, loss_function, device):
     return total_loss / total_nr_of_molecules
 
 
-def validate(model, dataloader, loss_function, device):
+def validate(model, dataloader, device):
     model.eval()
     total_loss = 0
     total_nr_of_molecules = 0
+    mean_absolute_error = torch.nn.L1Loss()
 
     with torch.no_grad():
         for batch in dataloader:
@@ -61,7 +62,7 @@ def validate(model, dataloader, loss_function, device):
             nnp_input = batch.nnp_input
             E_true = batch.metadata.E.to(torch.float32).squeeze(1)
             E_predict = model(nnp_input).E
-            loss = loss_function(E_predict, E_true)
+            loss = mean_absolute_error(E_predict, E_true)
             total_loss += loss.item()
             total_nr_of_molecules += batch.metadata.E.shape[0]
     return total_loss / total_nr_of_molecules
@@ -75,9 +76,9 @@ epochs = 100  # number of epochs
 progress_bar = tqdm(range(epochs), desc="Train/Val", unit="batch")
 for epoch in progress_bar:
     train_loss = train_one_epoch(
-        model, dataset.train_dataloader(), optimizer, loss_function, device
+        model, dataset.train_dataloader(), optimizer, device
     )
-    val_loss = validate(model, dataset.val_dataloader(), loss_function, device)
+    val_loss = validate(model, dataset.val_dataloader(), device)
     progress_bar.set_postfix(
         {
             "Epoch": f"{epoch}",

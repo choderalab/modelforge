@@ -86,7 +86,6 @@ class PhysNetRepresentation(nn.Module):
         self,
         cutoff: unit = 5 * unit.angstrom,
         number_of_radial_basis_functions: int = 16,
-        device: torch.device = torch.device("cpu"),
     ):
         """
         Representation module for the PhysNet potential, handling the generation of
@@ -98,8 +97,6 @@ class PhysNetRepresentation(nn.Module):
             The cutoff distance for interactions.
         number_of_gaussians : int, default=16
             Number of Gaussian functions to use in the radial basis function.
-        device : torch.device, default=torch.device("cpu")
-            The device on which to perform the computations.
         """
 
         super().__init__()
@@ -107,7 +104,7 @@ class PhysNetRepresentation(nn.Module):
         # cutoff
         from modelforge.potential import CosineCutoff
 
-        self.cutoff_module = CosineCutoff(cutoff, device)
+        self.cutoff_module = CosineCutoff(cutoff)
 
         # radial symmetry function
         from .utils import SchnetRadialSymmetryFunction
@@ -245,7 +242,6 @@ class PhysNetInteractionModule(nn.Module):
         number_of_atom_features: int = 64,
         number_of_radial_basis_functions: int = 16,
         number_of_interaction_residual: int = 3,
-        device=torch.device("cpu"),
     ):
         """
         Module to compute interaction terms based on atomic distances and features.

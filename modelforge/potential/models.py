@@ -405,7 +405,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
             "interval": "epoch",
             "frequency": 1,
         }
-        return {"optimizer": optimizer, "scheduler": scheduler}
+        return {"optimizer": optimizer, "lr_scheduler": scheduler}
 
     def _rescale_energy(self, energies: torch.Tensor) -> torch.Tensor:
 

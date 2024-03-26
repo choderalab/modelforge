@@ -292,6 +292,33 @@ def test_x_minus_xt_against_reference():
     assert torch.allclose(torch.from_numpy(onp.array(x_minus_xt_norm.reshape(nr_atoms ** 2, order='C'))), d_ij)
 
 
+def make_equivalent_pairlist_mask(key, nr_atoms, nr_pairs, include_self_pairs=True):
+    all_pairs = torch.cartesian_prod(torch.arange(nr_atoms), torch.arange(nr_atoms))
+    self_pairs = all_pairs.T[0] == all_pairs.T[1]
+    if not include_self_pairs:
+        all_pairs = all_pairs[~self_pairs]
+    all_pairs_jax = jnp.array(onp.array(all_pairs))
+    pairlist_jax = jax.random.choice(key, all_pairs_jax, (nr_pairs,), replace=False).T
+    pairlist = torch.tensor(onp.array(pairlist_jax), dtype=torch.int64)
+    mask = jnp.zeros((nr_atoms, nr_atoms))
+    for i in range(nr_pairs):
+        mask = mask.at[pairlist_jax[0, i], pairlist_jax[1, i]].set(1)
+    return pairlist, mask
+
+
+def test_make_equivalent_pairlists():
+    nr_atoms = 4
+    nr_pairs = 3
+    key = jax.random.PRNGKey(1884)
+    pairlist, mask = make_equivalent_pairlist_mask(key, nr_atoms, nr_pairs, include_self_pairs=False)
+    assert pairlist.shape == (2, nr_pairs)
+    assert mask.shape == (nr_atoms, nr_atoms)
+
+    pairlist, mask = make_equivalent_pairlist_mask(key, nr_atoms, nr_pairs, include_self_pairs=True)
+    assert pairlist.shape == (2, nr_pairs)
+    assert mask.shape == (nr_atoms, nr_atoms)
+
+
 def test_update_edge_against_reference():
     from modelforge.potential import CosineCutoff
     from modelforge.potential.sake import ExpNormalSmearing
@@ -376,26 +403,29 @@ def test_update_edge_against_reference():
 def test_semantic_attention_against_reference():
     from modelforge.potential.utils import scatter_softmax
 
-    nr_atoms = 13
+    nr_atoms = 5
     out_features = 11
-    hidden_features = 7
-    nr_heads = 5
+    hidden_features = 6
+    nr_heads = 7
+    nr_pairs = 4
     key = jax.random.PRNGKey(1884)
 
     nr_edge_basis = hidden_features
-    pairlist = torch.cartesian_prod(torch.arange(nr_atoms), torch.arange(nr_atoms))
-    self_pairs = pairlist[:, 0] == pairlist[:, 1]
-    pairlist = pairlist[~self_pairs]
-    pairlist = pairlist.T
+    pairlist, mask = make_equivalent_pairlist_mask(key, nr_atoms, nr_pairs, include_self_pairs=False)
+    print(pairlist, pairlist.dtype)
     idx_i, idx_j = pairlist
 
     mf_sake_block, ref_sake_interaction = make_reference_equivalent_sake_interaction(out_features, hidden_features,
                                                                                      nr_heads)
     # Generate random input data in JAX
-    h_e_mtx = jax.random.normal(key, (nr_atoms, nr_atoms, nr_edge_basis))
+    h_e_mtx = jnp.arange(nr_atoms ** 2 * nr_edge_basis).reshape(nr_atoms, nr_atoms, nr_edge_basis)
+    print("h_e_mtx", h_e_mtx.shape, h_e_mtx)
 
     # Convert the input tensors from JAX to torch and reshape to diagonal batching
-    h_ij_edge = torch.from_numpy(onp.array(h_e_mtx)).reshape(nr_atoms ** 2, hidden_features)[~self_pairs]
+    expanded_pair_idx = pairlist.T.unsqueeze(2).expand(nr_pairs, 2, nr_edge_basis)
+    print("expanded_pair_idx", expanded_pair_idx.shape, expanded_pair_idx)
+    h_ij_edge = torch.from_numpy(onp.array(h_e_mtx))[expanded_pair_idx]
+    print("h_ij_edge", h_ij_edge.shape, h_ij_edge)
     h_ij_att_weights = mf_sake_block.semantic_attention_mlp(h_ij_edge)
     expanded_idx_i = idx_i.view(-1, 1).expand_as(h_ij_att_weights)
     h_ij_att_before_cutoff = scatter_softmax(h_ij_att_weights, expanded_idx_i, dim=0, dim_size=nr_atoms,
@@ -410,7 +440,7 @@ def test_semantic_attention_against_reference():
     ref_semantic_attention = \
         ref_sake_interaction.apply(variables, h_e_mtx, method=ref_sake_interaction.semantic_attention)
 
-    ref_semantic_attention = (ref_semantic_attention.reshape(nr_atoms ** 2, nr_heads))[~onp.array(self_pairs)]
+    ref_semantic_attention = (ref_semantic_attention.reshape(nr_atoms ** 2, nr_heads))[pairlist.T]
 
     print(h_ij_att_before_cutoff, torch.from_numpy(onp.array(ref_semantic_attention)))
     assert torch.allclose(h_ij_att_before_cutoff, torch.from_numpy(onp.array(ref_semantic_attention)))

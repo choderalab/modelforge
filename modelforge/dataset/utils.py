@@ -435,9 +435,6 @@ class FirstComeFirstServeSplittingStrategy(SplittingStrategy):
         first_split_on = int(len_dataset * self.train_size)
         second_split_on = first_split_on + int(len_dataset * self.val_size)
         indices = np.arange(len_dataset, dtype=int)
-        print(list(indices[0:first_split_on]))
-        print(indices[first_split_on:second_split_on])
-        print(indices[second_split_on:])
         train_d, val_d, test_d = (
             Subset(dataset, list(indices[0:first_split_on])),
             Subset(dataset, list(indices[first_split_on:second_split_on])),

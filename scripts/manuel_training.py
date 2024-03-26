@@ -24,8 +24,8 @@ optimizer = Adam(model.parameters(), lr=1e-3)
 def train_one_epoch(model, dataloader, optimizer, device):
     model.train()
     total_loss = 0
-    total_nr_of_molecules = 0
     loss_function = torch.nn.MSELoss()
+    number_of_batches = 0
 
     for batch in dataloader:
         batch = batch.to(device)
@@ -38,23 +38,21 @@ def train_one_epoch(model, dataloader, optimizer, device):
         loss.backward()
         optimizer.step()
         total_loss += loss.item()
-        nr_of_molecules_in_batch = batch.metadata.E.shape[0]
-        total_nr_of_molecules += batch.metadata.E.shape[0]
+        number_of_batches += 1
         # progress_bar.set_postfix(
         #     {
         #         "loss": f"{loss.item():.4f}",
         #         "per_mol": f"{loss.item()/nr_of_molecules_in_batch:.4f}",
         #     }
         # )
-    return total_loss / total_nr_of_molecules
+    return total_loss / number_of_batches
 
 
 def validate(model, dataloader, device):
     model.eval()
     total_loss = 0
-    total_nr_of_molecules = 0
     mean_absolute_error = torch.nn.L1Loss()
-
+    number_of_batches = 0
     with torch.no_grad():
         for batch in dataloader:
             # Adjust according to how your data is structured
@@ -64,8 +62,8 @@ def validate(model, dataloader, device):
             E_predict = model(nnp_input).E
             loss = mean_absolute_error(E_predict, E_true)
             total_loss += loss.item()
-            total_nr_of_molecules += batch.metadata.E.shape[0]
-    return total_loss / total_nr_of_molecules
+            number_of_batches += 1
+    return total_loss / number_of_batches
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -75,9 +73,7 @@ model.to(device)
 epochs = 100  # number of epochs
 progress_bar = tqdm(range(epochs), desc="Train/Val", unit="batch")
 for epoch in progress_bar:
-    train_loss = train_one_epoch(
-        model, dataset.train_dataloader(), optimizer, device
-    )
+    train_loss = train_one_epoch(model, dataset.train_dataloader(), optimizer, device)
     val_loss = validate(model, dataset.val_dataloader(), device)
     progress_bar.set_postfix(
         {

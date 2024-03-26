@@ -93,7 +93,6 @@ class ANIRepresentation(nn.Module):
         radial_cutoff: unit.Quantity,
         angular_cutoff: unit.Quantity,
         nr_of_supported_elements: int = 7,
-        device: torch.device = torch.device("cpu"),
     ):
         # radial symmetry functions
 
@@ -103,7 +102,7 @@ class ANIRepresentation(nn.Module):
         self.radial_cutoff = radial_cutoff
         self.angular_cutoff = angular_cutoff
         self.nr_of_supported_elements = nr_of_supported_elements
-        self.cutoff_module = CosineCutoff(radial_cutoff, device)
+        self.cutoff_module = CosineCutoff(radial_cutoff)
         self.radial_symmetry_functions = self._setup_radial_symmetry_functions(
             self.radial_cutoff
         )

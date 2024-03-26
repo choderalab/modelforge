@@ -121,6 +121,7 @@ class BatchData:
     def to(self, device: torch.device):
         self.nnp_input = self.nnp_input.to(device)
         self.metadata = self.metadata.to(device)
+        return self
 
 
 ATOMIC_NUMBER_TO_INDEX_MAP = {

@@ -13,7 +13,7 @@ from modelforge.dataset.utils import RandomRecordSplittingStrategy, SplittingStr
 from dataclasses import dataclass
 
 if TYPE_CHECKING:
-    from modelforge.potential import BatchData
+    from modelforge.potential.utils import BatchData
 
 
 @dataclass

@@ -1,4 +1,4 @@
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Any
 
 import lightning as pl
 import torch
@@ -19,6 +19,9 @@ from modelforge.potential.utils import (
 from abc import abstractmethod, ABC
 from openff.units import unit
 from typing import Dict, Type
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim import Optimizer
+
 
 if TYPE_CHECKING:
     from modelforge.dataset.dataset import DatasetStatistics
@@ -372,6 +375,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
             on_epoch=True,
             prog_bar=True,
         )
+        return val_loss
 
     def _get_energies(self, batch: BatchData) -> Tuple[torch.Tensor, torch.Tensor]:
 
@@ -382,7 +386,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         E_predict = self.forward(nnp_input).E
         return E_true, E_predict
 
-    def configure_optimizers(self) -> AdamW:
+    def configure_optimizers(self) -> Dict[str, Any]:
         """
         Configures the optimizer for training.
 
@@ -392,7 +396,16 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
             The AdamW optimizer.
         """
 
-        return self.optimizer(self.parameters(), lr=self.learning_rate)
+        optimizer = self.optimizer(self.parameters(), lr=self.learning_rate)
+        scheduler = {
+            "scheduler": ReduceLROnPlateau(
+                optimizer, mode="min", factor=0.1, patience=10, verbose=True
+            ),
+            "monitor": "val_loss",  # Name of the metric to monitor
+            "interval": "epoch",
+            "frequency": 1,
+        }
+        return {"optimizer": optimizer, "scheduler": scheduler}
 
     def _rescale_energy(self, energies: torch.Tensor) -> torch.Tensor:
 

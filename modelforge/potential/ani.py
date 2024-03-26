@@ -113,10 +113,7 @@ class ANIRepresentation(nn.Module):
         from modelforge.potential.utils import triple_by_molecule
 
         self.triple_by_molecule = triple_by_molecule
-        self.register_buffer(
-            "triu_index",
-            triu_index(self.nr_of_supported_elements).to(device=device),
-        )
+        self.register_buffer("triu_index", triu_index(self.nr_of_supported_elements))
 
     def _setup_radial_symmetry_functions(self, max_distance: unit.Quantity):
         from openff.units import unit
@@ -430,7 +427,7 @@ class ANI2x(BaseNeuralNetworkPotential):
 
         # Initialize representation block
         self.ani_representation_module = ANIRepresentation(
-            radial_cutoff, angular_cutoff, device=self.device
+            radial_cutoff, angular_cutoff
         )
         # The length of radial aev
         self.radial_length = (
@@ -469,12 +466,6 @@ class ANI2x(BaseNeuralNetworkPotential):
     ) -> AniNeuralNetworkInput:
 
         number_of_atoms = data.atomic_numbers.shape[0]
-        device = (
-            self.parameters().__next__().device
-        )  # Get the device from the model's parameters
-        lookup_tensor_device = self.lookup_tensor.to(
-            device
-        )  # Move lookup_tensor to the correct device
 
         nnp_input = AniNeuralNetworkInput(
             pair_indices=pairlist_output.pair_indices,

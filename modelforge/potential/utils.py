@@ -106,6 +106,7 @@ class Metadata:
 
     def to(self, device: torch.device):
         """Move all tensors in this instance to the specified device."""
+        self.E = self.E.to(device)
         self.atomic_subsystem_counts = self.atomic_subsystem_counts.to(device)
         self.atomic_subsystem_indices_referencing_dataset = (
             self.atomic_subsystem_indices_referencing_dataset.to(device)

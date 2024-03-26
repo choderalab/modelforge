@@ -4,6 +4,7 @@ import lightning as pl
 import torch
 import torch.nn as nn
 from torch.optim import AdamW
+from torch.nn import functional as F
 
 from loguru import logger as log
 
@@ -208,6 +209,9 @@ class Neighborlist(Pairlist):
         )
 
 
+from typing import Callable, Optional
+
+
 class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
     """Abstract base class for neural network potentials.
 
@@ -230,7 +234,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
     def __init__(
         self,
         cutoff: unit.Quantity,
-        loss: Type[nn.Module] = nn.MSELoss(),
+        loss: Callable = F.mse_loss,
         optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
         lr: float = 1e-3,
     ):
@@ -240,7 +244,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
         super().__init__()
         self.calculate_distances_and_pairlist = Neighborlist(cutoff)
-        self._dtype = None  # set at runtime
+        self._dtype: Optional[bool] = None  # set at runtime
         self._log_message_dtype = False
         self._log_message_units = False
         self._dataset_statistics = DatasetStatistics(0.0, 1.0, AtomicSelfEnergies())
@@ -328,10 +332,8 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
         import math
 
-        scale_error = math.sqrt(batch.metadata.number_of_atoms)
-
         # time.sleep(1)
-        loss = self.loss_function(E_true, E_predict) / scale_error
+        loss = self.loss_function(E_true, E_predict)
         self.log(
             "train_loss",
             loss,
@@ -362,7 +364,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
         E_true, E_predict = self._get_energies(batch)
 
-        val_loss = F.mse_loss(E_true, E_predict)
+        val_loss = F.l1_loss(E_true, E_predict)
         self.log(
             "val_loss",
             val_loss,
@@ -445,9 +447,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         processed_energy["E"] = properties_per_molecule + molecular_ase
         return processed_energy
 
-    def prepare_inputs(
-        self, data: NNPInput, only_unique_pairs: bool = True
-    ):
+    def prepare_inputs(self, data: NNPInput, only_unique_pairs: bool = True):
         """Prepares the input tensors for passing to the model.
 
         Performs general input manipulation like calculating distances,
@@ -462,7 +462,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
             Whether to only use unique pairs or not in the pairlist.
         Returns
         -------
-        nnp_input 
+        nnp_input
             NamedTuple containg the relevant data for the model.
         """
         # ---------------------------

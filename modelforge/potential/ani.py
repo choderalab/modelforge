@@ -463,7 +463,7 @@ class ANI2x(BaseNeuralNetworkPotential):
         for atomic_number, index in ATOMIC_NUMBER_TO_INDEX_MAP.items():
             lookup_tensor[atomic_number] = index
 
-        self.register_buffer(lookup_tensor, lookup_tensor)
+        self.register_buffer("lookup_tensor", lookup_tensor)
 
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"

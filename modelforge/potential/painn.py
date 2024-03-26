@@ -123,7 +123,6 @@ class PaiNN(BaseNeuralNetworkPotential):
             number_of_interaction_modules,
             number_of_atom_features,
             shared_filters,
-            self.device,
         )
 
         # initialize the interaction and mixing networks
@@ -233,14 +232,13 @@ class PaiNNRepresentation(nn.Module):
         nr_interaction_blocks: int = 3,
         nr_atom_basis: int = 8,
         shared_filters: bool = False,
-        device: torch.device = torch.device("cpu"),
     ):
         super().__init__()
 
         # cutoff
         from modelforge.potential import CosineCutoff
 
-        self.cutoff_module = CosineCutoff(cutoff, device)
+        self.cutoff_module = CosineCutoff(cutoff)
 
         # radial symmetry function
         from .utils import SchnetRadialSymmetryFunction

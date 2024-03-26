@@ -3,16 +3,17 @@ import torch
 from modelforge.dataset.dataset import TorchDataModule
 from modelforge.dataset.qm9 import QM9Dataset
 from modelforge.potential import SchNet, PaiNN, ANI2x, PhysNet
-from modelforge.potential.utils import NeuralNetworInternalData, Metadata
 from typing import Optional, Dict
 
 MODELS_TO_TEST = [SchNet, PaiNN, ANI2x, PhysNet]
 DATASETS = [QM9Dataset]
 
+from modelforge.potential.utils import BatchData
+
 
 def return_single_batch(
     dataset, split_file: Optional[str] = None, for_unit_testing: bool = True
-) -> Dict[str, torch.Tensor]:
+) -> BatchData:
     """
     Return a single batch from a dataset.
 
@@ -78,13 +79,16 @@ def prepare_pairlist_for_single_batch(
     return pairlist(positions, atomic_subsystem_indices)
 
 
-def generate_methane_input() -> NeuralNetworInternalData:
+from modelforge.potential.utils import Metadata, NNPInput, BatchData
+
+
+def generate_methane_input() -> BatchData:
     """
     Generate a methane molecule input for testing.
 
     Returns
     -------
-    NeuralNetworInternalData
+    BatchData
     """
     from modelforge.potential.utils import Metadata, NNPInput, BatchData
 

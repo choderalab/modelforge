@@ -470,6 +470,12 @@ class ANI2x(BaseNeuralNetworkPotential):
     ) -> AniNeuralNetworkInput:
 
         number_of_atoms = data.atomic_numbers.shape[0]
+        device = (
+            self.parameters().__next__().device
+        )  # Get the device from the model's parameters
+        lookup_tensor_device = self.lookup_tensor.to(
+            device
+        )  # Move lookup_tensor to the correct device
 
         nnp_input = AniNeuralNetworkInput(
             pair_indices=pairlist_output.pair_indices,

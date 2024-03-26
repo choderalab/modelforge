@@ -137,7 +137,7 @@ class SchNet(BaseNeuralNetworkPotential):
 
         # Initialize representation block
         self.schnet_representation_module = SchNETRepresentation(
-            cutoff, number_of_radial_basis_functions, self.device
+            cutoff, number_of_radial_basis_functions
         )
         # Intialize interaction blocks
         self.interaction_modules = nn.ModuleList(
@@ -327,7 +327,6 @@ class SchNETRepresentation(nn.Module):
         self,
         radial_cutoff: unit.Quantity,
         number_of_radial_basis_functions: int,
-        device: torch.device = torch.device("cpu"),
     ):
         """
         Initialize the SchNet representation layer.
@@ -341,11 +340,10 @@ class SchNETRepresentation(nn.Module):
         self.radial_symmetry_function_module = self._setup_radial_symmetry_functions(
             radial_cutoff, number_of_radial_basis_functions
         )
-        self.device = device
         # cutoff
         from modelforge.potential import CosineCutoff
 
-        self.cutoff_module = CosineCutoff(radial_cutoff, self.device)
+        self.cutoff_module = CosineCutoff(radial_cutoff)
 
     def _setup_radial_symmetry_functions(
         self, radial_cutoff: unit.Quantity, number_of_radial_basis_functions: int
@@ -356,7 +354,6 @@ class SchNETRepresentation(nn.Module):
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             max_distance=radial_cutoff,
             dtype=torch.float32,
-            device=self.device
         )
         return radial_symmetry_function
 

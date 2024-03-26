@@ -119,7 +119,6 @@ class SchNet(BaseNeuralNetworkPotential):
         from .utils import ShiftedSoftplus, Dense
 
         log.debug("Initializing SchNet model.")
-
         self.only_unique_pairs = False  # NOTE: for pairlist
         super().__init__(cutoff=cutoff)
         self.number_of_atom_features = number_of_atom_features
@@ -186,7 +185,7 @@ class SchNet(BaseNeuralNetworkPotential):
 
         return nnp_input
 
-    def _forward(self, data: SchnetNeuralNetworkInput) -> torch.Tensor:
+    def _forward(self, data: SchnetNeuralNetworkInput) -> Dict[str, torch.Tensor]:
         """
         Calculate the energy for a given input batch.
 
@@ -196,7 +195,7 @@ class SchNet(BaseNeuralNetworkPotential):
 
         Returns
         -------
-        torch.Tensor
+        Dict[str, torch.Tensor]
             Calculated energies; shape (nr_systems,).
         """
 
@@ -357,6 +356,7 @@ class SchNETRepresentation(nn.Module):
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             max_distance=radial_cutoff,
             dtype=torch.float32,
+            device=self.device
         )
         return radial_symmetry_function
 

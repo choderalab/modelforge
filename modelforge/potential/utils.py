@@ -6,6 +6,7 @@ import torch.nn as nn
 from typing import NamedTuple, Any
 from dataclasses import dataclass, field
 
+
 @dataclass
 class NeuralNetworkData:
     pair_indices: torch.Tensor
@@ -735,11 +736,11 @@ class RadialSymmetryFunction(nn.Module):
         if self.trainable:
             self.radial_basis_centers = radial_basis_centers
             self.radial_scale_factor = radial_scale_factor
+            self.prefactor = nn.Parameter(torch.tensor([1.0]))
         else:
             self.register_buffer("radial_basis_centers", radial_basis_centers)
             self.register_buffer("radial_scale_factor", radial_scale_factor)
-
-        self.prefactor = torch.tensor([1.0])
+            self.register_buffer("prefactor", torch.tensor([1.0]))
 
     def calculate_radial_basis_centers(
         self,

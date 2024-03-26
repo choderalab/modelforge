@@ -229,31 +229,39 @@ def test_dataset_generation(dataset):
     assert len(batch_data[1].metadata.atomic_subsystem_counts) == 16
 
 
+from modelforge.dataset.utils import (
+    RandomRecordSplittingStrategy,
+    FirstComeFirstServeSplittingStrategy,
+)
+
+
+@pytest.mark.parametrize(
+    "splitting_strategy",
+    [RandomRecordSplittingStrategy, FirstComeFirstServeSplittingStrategy],
+)
 @pytest.mark.parametrize("dataset", DATASETS)
-def test_dataset_splitting(dataset):
+def test_dataset_splitting(splitting_strategy, dataset):
     """Test random_split on the the dataset."""
-    from modelforge.dataset.utils import RandomRecordSplittingStrategy
 
     dataset = generate_torch_dataset(dataset)
-    train_dataset, val_dataset, test_dataset = RandomRecordSplittingStrategy().split(
-        dataset
-    )
+    train_dataset, val_dataset, test_dataset = splitting_strategy().split(dataset)
 
     energy = train_dataset[0]["E"].item()
-    assert np.isclose(energy, -412509.9375)
-    print(energy)
+
+    assert np.isclose(energy, -412509.9375) or np.isclose(energy, -106277.4161215308)
 
     try:
-        RandomRecordSplittingStrategy(split=[0.2, 0.1, 0.1])
-    except AssertionError as e:
-        print(f"AssertionError raised: {e}")
-        logger.debug(e)
+        splitting_strategy(split=[0.2, 0.1, 0.1])
+    except AssertionError as excinfo:
+        print(f"AssertionError raised: {excinfo}")
 
-    train_dataset, val_dataset, test_dataset = RandomRecordSplittingStrategy(
+    train_dataset, val_dataset, test_dataset = splitting_strategy(
         split=[0.6, 0.3, 0.1]
     ).split(dataset)
 
     assert len(train_dataset) == 60
+    assert len(val_dataset) == 30
+    assert len(test_dataset) == 10
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
@@ -310,7 +318,7 @@ def test_self_energy():
     # prepare reference value
     data = QM9Dataset(for_unit_testing=True)
     dataset = TorchDataModule(
-        data, batch_size=32, split=FirstComeFirstServeSplittingStrategy()
+        data, batch_size=32, splitting_strategy=FirstComeFirstServeSplittingStrategy()
     )
     dataset.prepare_data(
         remove_self_energies=False, normalize=False, regression_ase=False
@@ -320,7 +328,7 @@ def test_self_energy():
 
     data = QM9Dataset(for_unit_testing=True)
     dataset = TorchDataModule(
-        data, batch_size=32, split=FirstComeFirstServeSplittingStrategy()
+        data, batch_size=32, splitting_strategy=FirstComeFirstServeSplittingStrategy()
     )
 
     # Scenario 1: dataset contains self energies
@@ -344,7 +352,7 @@ def test_self_energy():
     # but user wants to use least square regression to calculate the energies
     data = QM9Dataset(for_unit_testing=True)
     dataset = TorchDataModule(
-        data, batch_size=32, split=FirstComeFirstServeSplittingStrategy()
+        data, batch_size=32, splitting_strategy=FirstComeFirstServeSplittingStrategy()
     )
     dataset.prepare_data(
         remove_self_energies=True, normalize=False, regression_ase=True
@@ -375,7 +383,9 @@ def test_self_energy():
     for regression in [True, False]:
         data = QM9Dataset(for_unit_testing=True)
         dataset = TorchDataModule(
-            data, batch_size=32, split=FirstComeFirstServeSplittingStrategy()
+            data,
+            batch_size=32,
+            splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         )
         dataset.prepare_data(
             remove_self_energies=True, normalize=False, regression_ase=regression

@@ -1,9 +1,10 @@
-from typing import Dict
+from typing import Dict, Tuple, Any
 
 import lightning as pl
 import torch
 import torch.nn as nn
 from torch.optim import AdamW
+from torch.nn import functional as F
 
 from loguru import logger as log
 
@@ -12,13 +13,15 @@ import torch
 from typing import NamedTuple, TYPE_CHECKING
 from modelforge.potential.utils import (
     AtomicSelfEnergies,
-    NeuralNetworInternalData,
     NNPInput,
     BatchData,
 )
 from abc import abstractmethod, ABC
 from openff.units import unit
 from typing import Dict, Type
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim import Optimizer
+
 
 if TYPE_CHECKING:
     from modelforge.dataset.dataset import DatasetStatistics
@@ -209,6 +212,9 @@ class Neighborlist(Pairlist):
         )
 
 
+from typing import Callable, Optional
+
+
 class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
     """Abstract base class for neural network potentials.
 
@@ -231,7 +237,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
     def __init__(
         self,
         cutoff: unit.Quantity,
-        loss: Type[nn.Module] = nn.MSELoss(),
+        loss: Callable = F.mse_loss,
         optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
         lr: float = 1e-3,
     ):
@@ -241,7 +247,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
         super().__init__()
         self.calculate_distances_and_pairlist = Neighborlist(cutoff)
-        self._dtype = None  # set at runtime
+        self._dtype: Optional[bool] = None  # set at runtime
         self._log_message_dtype = False
         self._log_message_units = False
         self._dataset_statistics = DatasetStatistics(0.0, 1.0, AtomicSelfEnergies())
@@ -256,7 +262,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
     @abstractmethod
     def _model_specific_input_preparation(
         self, data: NNPInput, pairlist: PairListOutputs
-    ) -> NeuralNetworInternalData:
+    ):
         """
         Prepares model-specific inputs before the forward pass.
 
@@ -271,13 +277,12 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
         Returns
         -------
-        NeuralNetworInternalData
             The processed inputs, ready for the model's forward pass.
         """
         pass
 
     @abstractmethod
-    def _forward(self, inputs: NeuralNetworInternalData):
+    def _forward(self, inputs):
         # needs to be implemented by the subclass
         # perform the forward pass implemented in the subclass
         pass
@@ -330,10 +335,8 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
         import math
 
-        scale_error = math.sqrt(batch.metadata.number_of_atoms)
-
         # time.sleep(1)
-        loss = self.loss_function(E_true, E_predict) / scale_error
+        loss = self.loss_function(E_true, E_predict)
         self.log(
             "train_loss",
             loss,
@@ -345,7 +348,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
         return loss
 
-    def test_step(self, batch, batch_idx):
+    def test_step(self, batch: BatchData, batch_idx):
         from torch.nn import functional as F
 
         E_true, E_predict = self._get_energies(batch)
@@ -359,12 +362,12 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
             prog_bar=True,
         )
 
-    def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx):
+    def validation_step(self, batch: BatchData, batch_idx):
         from torch.nn import functional as F
 
         E_true, E_predict = self._get_energies(batch)
 
-        val_loss = F.mse_loss(E_true, E_predict)
+        val_loss = F.l1_loss(E_true, E_predict)
         self.log(
             "val_loss",
             val_loss,
@@ -372,17 +375,18 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
             on_epoch=True,
             prog_bar=True,
         )
+        return val_loss
 
-    def _get_energies(self, batch: BatchData):
+    def _get_energies(self, batch: BatchData) -> Tuple[torch.Tensor, torch.Tensor]:
 
         nnp_input = batch.nnp_input
-        E_true = batch.metadata.E.to(torch.float32)
+        E_true = batch.metadata.E.to(torch.float32).squeeze(1)
         self.batch_size = self._log_batch_size(E_true)
 
         E_predict = self.forward(nnp_input).E
         return E_true, E_predict
 
-    def configure_optimizers(self) -> AdamW:
+    def configure_optimizers(self) -> Dict[str, Any]:
         """
         Configures the optimizer for training.
 
@@ -392,7 +396,16 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
             The AdamW optimizer.
         """
 
-        return self.optimizer(self.parameters(), lr=self.learning_rate)
+        optimizer = self.optimizer(self.parameters(), lr=self.learning_rate)
+        scheduler = {
+            "scheduler": ReduceLROnPlateau(
+                optimizer, mode="min", factor=0.1, patience=10, verbose=True
+            ),
+            "monitor": "val_loss",  # Name of the metric to monitor
+            "interval": "epoch",
+            "frequency": 1,
+        }
+        return {"optimizer": optimizer, "lr_scheduler": scheduler}
 
     def _rescale_energy(self, energies: torch.Tensor) -> torch.Tensor:
 
@@ -429,7 +442,9 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
         return ase_tensor
 
-    def _energy_postprocessing(self, properties_per_molecule, inputs):
+    def _energy_postprocessing(
+        self, properties_per_molecule, inputs
+    ) -> Dict[str, torch.Tensor]:
 
         # first, resale the energies
         processed_energy = {}
@@ -445,9 +460,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         processed_energy["E"] = properties_per_molecule + molecular_ase
         return processed_energy
 
-    def prepare_inputs(
-        self, data: NNPInput, only_unique_pairs: bool = True
-    ) -> NeuralNetworInternalData:
+    def prepare_inputs(self, data: NNPInput, only_unique_pairs: bool = True):
         """Prepares the input tensors for passing to the model.
 
         Performs general input manipulation like calculating distances,
@@ -462,7 +475,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
             Whether to only use unique pairs or not in the pairlist.
         Returns
         -------
-        nnp_input : NeuralNetworInternalData
+        nnp_input
             NamedTuple containg the relevant data for the model.
         """
         # ---------------------------
@@ -494,7 +507,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
         self._dtype = dtypes[0]
 
-    def _input_checks(self, data: NNPInput) -> Dict[str, torch.Tensor]:
+    def _input_checks(self, data: NNPInput):
         """
         Perform input checks to validate the input dictionary.
 
@@ -514,7 +527,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         assert data.total_charge.shape == torch.Size([nr_of_molecules])
         assert data.positions.shape == torch.Size([nr_of_atoms, 3])
 
-    def forward(self, data: NNPInput) -> torch.Tensor:
+    def forward(self, data: NNPInput) -> EnergyOutput:
         """
         Abstract method for forward pass in neural network potentials.
 
@@ -567,17 +580,17 @@ class SingleTopologyAlchemicalBaseNNPModel(BaseNeuralNetworkPotential):
 
     Methods
     -------
-    forward(inputs: Dict[str, torch.Tensor]) -> torch.Tensor
+    forward(data: NNPInput) -> torch.Tensor
         Calculate the alchemical energy for a given input batch.
     """
 
-    def forward(self, inputs: Dict[str, torch.Tensor]):
+    def forward(self, data: NNPInput):
         """
         Calculate the alchemical energy for a given input batch.
 
         Parameters
         ----------
-        inputs : Dict[str, torch.Tensor]
+        data : NNPInput
             Inputs containing atomic numbers ('atomic_numbers'), coordinates ('positions') and pairlist ('pairlist').
             - 'atomic_numbers': shape (nr_of_atoms_in_batch, *, *), 0 indicates non-interacting atoms that will be masked
             - 'total_charge' : shape (nr_of_atoms_in_batch)
@@ -593,5 +606,5 @@ class SingleTopologyAlchemicalBaseNNPModel(BaseNeuralNetworkPotential):
 
         # emb = nn.Embedding(1,200)
         # lamb_emb = (1 - lamb) * emb(input['Z1']) + lamb * emb(input['Z2'])	def __init__():
-        self._input_checks(inputs)
+        self._input_checks(data)
         raise NotImplementedError

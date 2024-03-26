@@ -13,14 +13,14 @@ from modelforge.dataset.utils import RandomRecordSplittingStrategy, SplittingStr
 from dataclasses import dataclass
 
 if TYPE_CHECKING:
-    from modelforge.potential import BatchData
+    from modelforge.potential.utils import BatchData
 
 
 @dataclass
 class DatasetStatistics:
     scaling_mean: float
     scaling_stddev: float
-    atomic_self_energies: Dict[str, float]
+    atomic_self_energies: Dict[int, float]
 
 
 class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
@@ -102,17 +102,17 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         )
         # length: n_conformers + 1
 
-        self.length = len(self.single_atom_start_idxs_by_conf)
+        self.length = len(self.properties_of_interest["E"])
         self.preloaded = preloaded
 
     def __len__(self) -> int:
         """
-        Return the number of conformers in the dataset.
+        Return the number of data points in the dataset.
 
         Returns:
         --------
         int
-            Total number of conformers available in the dataset.
+            Total number of data points available in the dataset.
         """
         return self.length
 
@@ -527,7 +527,7 @@ class TorchDataModule(pl.LightningDataModule):
     def __init__(
         self,
         data: HDF5Dataset,
-        split: SplittingStrategy = RandomRecordSplittingStrategy(),
+        splitting_strategy: SplittingStrategy = RandomRecordSplittingStrategy(),
         batch_size: int = 64,
         split_file: Optional[str] = None,
         transform: Optional[nn.Module] = None,
@@ -540,14 +540,14 @@ class TorchDataModule(pl.LightningDataModule):
         self.test_dataset = None
         self.val_dataset = None
         self.transform = transform
-        self.split = split
+        self.splitting_strategy = splitting_strategy
         self.split_file = split_file
-        self.dataset_statistics: DatasetStatistics = None
+        self.dataset_statistics: Optional[DatasetStatistics] = None
         self._ase = data.atomic_self_energies  # atomic self energies
 
     def calculate_self_energies(
         self, torch_dataset: TorchDataset, collate: bool = True
-    ) -> Dict[str, float]:
+    ) -> Dict[int, float]:
         """
         Calculates the self energies for each atomic number in the dataset by performing a least squares regression.
 
@@ -576,7 +576,7 @@ class TorchDataModule(pl.LightningDataModule):
         self,
         remove_self_energies: bool = True,
         normalize: bool = True,
-        self_energies: Dict[str, float] = None,
+        self_energies: Dict[int, float] = None,
         regression_ase: bool = False,
     ) -> None:
         """
@@ -662,7 +662,7 @@ class TorchDataModule(pl.LightningDataModule):
         self.dataset_statistics = DatasetStatistics(**dataset_statistics)
         self.setup(torch_dataset)
 
-    def subtract_self_energies(self, dataset, self_energies: Dict[str, float]) -> None:
+    def subtract_self_energies(self, dataset, self_energies: Dict[int, float]) -> None:
         """
         Removes the self energies from the total energies for each molecule in the dataset .
 
@@ -670,7 +670,7 @@ class TorchDataModule(pl.LightningDataModule):
         ----------
         dataset: torch.Dataset
             The dataset from which to remove the self energies.
-        self_energies : Dict[str, float]
+        self_energies : Dict[int, float]
             Dictionary containing the self energies for each element in the dataset.
         """
         from tqdm import tqdm
@@ -692,7 +692,7 @@ class TorchDataModule(pl.LightningDataModule):
         normalize: bool,
         dataset_mean: float,
         dataset_std: Optional[float] = None,
-    ) -> None:
+    ) -> TorchDataset:
         from tqdm import tqdm
 
         log.info(f"Adjusting energies by subtracting global mean {dataset_mean}")
@@ -727,8 +727,8 @@ class TorchDataModule(pl.LightningDataModule):
             self.test_dataset = Subset(torch_dataset, self.split_idxs["test_idx"])
         else:
             # Fallback to manual splitting if split_idxs is not available
-            self.train_dataset, self.val_dataset, self.test_dataset = self.split.split(
-                torch_dataset
+            self.train_dataset, self.val_dataset, self.test_dataset = (
+                self.splitting_strategy.split(torch_dataset)
             )
 
     def train_dataloader(self) -> DataLoader:

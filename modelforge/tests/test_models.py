@@ -21,7 +21,7 @@ def test_energy_scaling_and_offset():
     # prepare reference value
     data = QM9Dataset(for_unit_testing=True)
     dataset = TorchDataModule(
-        data, batch_size=1, split=FirstComeFirstServeSplittingStrategy()
+        data, batch_size=1, splitting_strategy=FirstComeFirstServeSplittingStrategy()
     )
 
     # -------------------------------#

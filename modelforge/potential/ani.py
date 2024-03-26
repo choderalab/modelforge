@@ -93,7 +93,6 @@ class ANIRepresentation(nn.Module):
         radial_cutoff: unit.Quantity,
         angular_cutoff: unit.Quantity,
         nr_of_supported_elements: int = 7,
-        device: torch.device = torch.device("cpu"),
     ):
         # radial symmetry functions
 
@@ -103,7 +102,7 @@ class ANIRepresentation(nn.Module):
         self.radial_cutoff = radial_cutoff
         self.angular_cutoff = angular_cutoff
         self.nr_of_supported_elements = nr_of_supported_elements
-        self.cutoff_module = CosineCutoff(radial_cutoff, device)
+        self.cutoff_module = CosineCutoff(radial_cutoff)
         self.radial_symmetry_functions = self._setup_radial_symmetry_functions(
             self.radial_cutoff
         )
@@ -114,10 +113,7 @@ class ANIRepresentation(nn.Module):
         from modelforge.potential.utils import triple_by_molecule
 
         self.triple_by_molecule = triple_by_molecule
-        self.register_buffer(
-            "triu_index",
-            triu_index(self.nr_of_supported_elements).to(device=device),
-        )
+        self.register_buffer("triu_index", triu_index(self.nr_of_supported_elements))
 
     def _setup_radial_symmetry_functions(self, max_distance: unit.Quantity):
         from openff.units import unit
@@ -153,7 +149,7 @@ class ANIRepresentation(nn.Module):
             dtype=torch.float32,
         )
 
-    def forward(self, data: AniNeuralNetworkInput):
+    def forward(self, data: AniNeuralNetworkInput) -> SpeciesAEV:
 
         # calculate the atomic environment vectors
         # used for the ANI architecture of NNPs
@@ -431,7 +427,7 @@ class ANI2x(BaseNeuralNetworkPotential):
 
         # Initialize representation block
         self.ani_representation_module = ANIRepresentation(
-            radial_cutoff, angular_cutoff, device=self.device
+            radial_cutoff, angular_cutoff
         )
         # The length of radial aev
         self.radial_length = (
@@ -451,10 +447,23 @@ class ANI2x(BaseNeuralNetworkPotential):
         # Intialize interaction blocks
         self.interaction_modules = ANIInteraction(self.aev_length)
 
+        # ----- ATOMIC NUMBER LOOKUP --------
+        # Create a tensor for direct lookup. The size of this tensor will be
+        # # the max atomic number in map. Initialize with a default value (e.g., -1 for not found).
+        from modelforge.potential.utils import ATOMIC_NUMBER_TO_INDEX_MAP
+
+        max_atomic_number = max(ATOMIC_NUMBER_TO_INDEX_MAP.keys())
+        lookup_tensor = torch.full((max_atomic_number + 1,), -1, dtype=torch.long)
+
+        # Populate the lookup tensor with indices from your map
+        for atomic_number, index in ATOMIC_NUMBER_TO_INDEX_MAP.items():
+            lookup_tensor[atomic_number] = index
+
+        self.register_buffer("lookup_tensor", lookup_tensor)
+
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
     ) -> AniNeuralNetworkInput:
-        from modelforge.potential.utils import ATOMIC_NUMBER_TO_INDEX_MAP
 
         number_of_atoms = data.atomic_numbers.shape[0]
 
@@ -464,12 +473,7 @@ class ANI2x(BaseNeuralNetworkPotential):
             r_ij=pairlist_output.r_ij,
             number_of_atoms=number_of_atoms,
             positions=data.positions,
-            atom_index=torch.tensor(
-                [
-                    ATOMIC_NUMBER_TO_INDEX_MAP.get(atomic_number, -1)
-                    for atomic_number in list(data.atomic_numbers.numpy())
-                ]
-            ),
+            atom_index=self.lookup_tensor[data.atomic_numbers.long()],
             atomic_numbers=data.atomic_numbers,
             atomic_subsystem_indices=data.atomic_subsystem_indices,
             total_charge=data.total_charge,
@@ -477,7 +481,7 @@ class ANI2x(BaseNeuralNetworkPotential):
 
         return nnp_input
 
-    def _forward(self, data: AniNeuralNetworkInput) -> torch.Tensor:
+    def _forward(self, data: AniNeuralNetworkInput) -> Dict[str, torch.Tensor]:
         """
         Calculate the energy for a given input batch.
 

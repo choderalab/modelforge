@@ -182,7 +182,7 @@ class ANIRepresentation(nn.Module):
             [processed_radial_feature_vector, processed_angular_feature_vector], dim=-1
         )
 
-        return SpeciesAEV(data.atomic_numbers, aevs)
+        return SpeciesAEV(data.atom_index, aevs)
 
     def _postprocess_angular_aev(
         self, data: AniNeuralNetworkData, angular_data: Dict[str, torch.Tensor]
@@ -299,6 +299,9 @@ class ANIInteraction(nn.Module):
             self.C_network,
             self.O_network,
             self.N_network,
+            self.S_network,
+            self.F_network,
+            self.Cl_network,
         ]
 
     def intialize_atomic_neural_network(self, aev_dim: int) -> Dict[str, nn.Module]:

@@ -402,7 +402,7 @@ class ANI2x(BaseNeuralNetworkPotential):
 
     def __init__(
         self,
-        radial_cutoff: unit.Quantity = 5.3 * unit.angstrom,
+        radial_cutoff: unit.Quantity = 5.1 * unit.angstrom,
         angular_cutoff: unit.Quantity = 3.5 * unit.angstrom,
     ) -> None:
         """

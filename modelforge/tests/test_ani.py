@@ -227,7 +227,7 @@ def test_compare_angular_symmetry_features(setup_methane):
     # for angular features
     angular_cutoff = Rca = 3.5  # angular_cutoff
     angular_start = 0.8
-    EtaA = angular_eta = 19.7
+    EtaA = angular_eta = 12.5
     angular_dist_divisions = 8
     ShfA = torch.linspace(angular_start, angular_cutoff, angular_dist_divisions + 1)[
         :-1
@@ -238,7 +238,7 @@ def test_compare_angular_symmetry_features(setup_methane):
     ShfZ = (torch.linspace(0, math.pi, angle_sections + 1) + angle_start)[:-1]
 
     # other constants
-    Zeta = 32.0
+    Zeta = 14.1
 
     # get index in right order
     even_closer_indices = (d_ij <= Rca).nonzero().flatten()
@@ -278,19 +278,36 @@ def test_compare_angular_symmetry_features(setup_methane):
     assert torch.allclose(angular_feature_vector_ani, angular_feature_vector_mf)
 
 
-def test_ani_mode(setup_methane):
+def test_representation(setup_methane):
     # Compare the Modelforge angular symmetry function
     # against the original torchani implementation
 
+    # methane input
+    species, coordinates, device, mf_input = setup_methane
+
+    # generate torchani representation
     import torchani
     import torch
-    from modelforge.potential import ANI2x
 
-    species, coordinates, device, mf_input = setup_methane
-    mf_model = ANI2x()
-    mf_output = mf_model(mf_input)
     torchani_model = torchani.models.ANI2x(periodic_table_index=False)
 
-    torchani_output = torchani_model((species, coordinates))
-    derivative = torch.autograd.grad(torchani_output.energies.sum(), coordinates)[0]
-    force = -derivative
+    # calculate aev
+    (species, tochani_aev) = torchani_model.aev_computer(
+        (species, coordinates), cell=None, pbc=None
+    )
+
+    # generate modelforge ani representation
+    from modelforge.potential import ANI2x
+
+    mf_model = ANI2x()
+    mf_model._set_dtype()
+    # perform input checks
+    mf_model._input_checks(mf_input)
+    # prepare the input for the forward pass
+    data = mf_model.prepare_inputs(mf_input, True)
+    representation = mf_model.ani_representation_module(data)
+    tochani_aev = tochani_aev.squeeze(0)
+
+    # test for equivalenc
+    assert tochani_aev.shape == representation.aevs.shape
+    assert torch.allclose(tochani_aev, representation.aevs, atol=1e-4)

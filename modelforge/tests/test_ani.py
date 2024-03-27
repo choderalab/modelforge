@@ -25,13 +25,17 @@ def setup_methane():
     atomic_subsystem_indices = torch.tensor(
         [0, 0, 0, 0, 0], dtype=torch.int32, device=device
     )
-    mf_input = {
-        "atomic_numbers": species,
-        "positions": coordinates.squeeze() / 10,
-        "atomic_subsystem_indices": atomic_subsystem_indices,
-    }
 
-    return species, coordinates, device, mf_input
+    from modelforge.potential.utils import NNPInput
+
+    nnp_input = NNPInput(
+        atomic_numbers=torch.tensor([6, 1, 1, 1, 1], device=device),
+        positions=coordinates.squeeze(0) / 10,
+        atomic_subsystem_indices=atomic_subsystem_indices,
+        total_charge=torch.tensor([0.0]),
+    )
+
+    return species, coordinates, device, nnp_input
 
 
 @pytest.fixture
@@ -61,12 +65,13 @@ def setup_two_methanes():
         device=device,
     )
     # In periodic table, C = 6 and H = 1
-    species = torch.tensor([[6, 1, 1, 1, 1], [6, 1, 1, 1, 1]], device=device)
+    mf_species = torch.tensor([6, 1, 1, 1, 1, 6, 1, 1, 1, 1], device=device)
+    ani_species = torch.tensor([[1, 0, 0, 0, 0], [1, 0, 0, 0, 0]], device=device)
     atomic_subsystem_indices = torch.tensor(
         [0, 0, 0, 0, 0, 1, 1, 1, 1, 1], dtype=torch.int32, device=device
     )
 
-    atomic_numbers = torch.cat((species[0], species[1]), dim=0)
+    atomic_numbers = mf_species
     from modelforge.potential.utils import NNPInput
 
     nnp_input = NNPInput(
@@ -75,7 +80,7 @@ def setup_two_methanes():
         atomic_subsystem_indices=atomic_subsystem_indices,
         total_charge=torch.tensor([0.0, 0.0]),
     )
-    return species, coordinates, device, nnp_input
+    return ani_species, coordinates, device, nnp_input
 
 
 def test_torchani_ani(setup_two_methanes):
@@ -271,3 +276,21 @@ def test_compare_angular_symmetry_features(setup_methane):
     # make sure that the output is the same
     assert angular_feature_vector_ani.size() == angular_feature_vector_mf.size()
     assert torch.allclose(angular_feature_vector_ani, angular_feature_vector_mf)
+
+
+def test_ani_mode(setup_methane):
+    # Compare the Modelforge angular symmetry function
+    # against the original torchani implementation
+
+    import torchani
+    import torch
+    from modelforge.potential import ANI2x
+
+    species, coordinates, device, mf_input = setup_methane
+    mf_model = ANI2x()
+    mf_output = mf_model(mf_input)
+    torchani_model = torchani.models.ANI2x(periodic_table_index=False)
+
+    torchani_output = torchani_model((species, coordinates))
+    derivative = torch.autograd.grad(torchani_output.energies.sum(), coordinates)[0]
+    force = -derivative

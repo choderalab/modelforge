@@ -399,7 +399,7 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         optimizer = self.optimizer(self.parameters(), lr=self.learning_rate)
         scheduler = {
             "scheduler": ReduceLROnPlateau(
-                optimizer, mode="min", factor=0.1, patience=10, verbose=True
+                optimizer, mode="min", factor=0.1, patience=5, verbose=True
             ),
             "monitor": "val_loss",  # Name of the metric to monitor
             "interval": "epoch",

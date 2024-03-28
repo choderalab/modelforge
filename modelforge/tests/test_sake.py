@@ -440,41 +440,37 @@ def test_combined_attention_against_reference():
     hidden_features = 7
     geometry_basis = 3
     nr_heads = 5
+    nr_pairs = 17
     key = jax.random.PRNGKey(1884)
-
     nr_edge_basis = hidden_features
-    pairlist = torch.cartesian_prod(torch.arange(nr_atoms), torch.arange(nr_atoms))
-    nr_pairs = nr_atoms ** 2
-    pairlist = pairlist.T
-    idx_i, idx_j = pairlist
 
     mf_sake_block, ref_sake_interaction = make_reference_equivalent_sake_interaction(out_features, hidden_features,
                                                                                      nr_heads)
-    # Generate random input data in JAX
-    h_e_mtx = jax.random.normal(key, (nr_atoms, nr_atoms, nr_edge_basis))
-    x_minus_xt = jax.random.normal(key, (nr_atoms, nr_atoms, geometry_basis))
-    x_minus_xt_norm = jnp.linalg.norm(x_minus_xt, axis=-1, keepdims=True)
+    pairlist, mask = make_equivalent_pairlist_mask(key, nr_atoms, nr_pairs, include_self_pairs=False)
+    idx_i, idx_j = pairlist
 
-    # Convert the input tensors from JAX to torch and reshape to diagonal batching
-    h_ij_edge = torch.from_numpy(onp.array(h_e_mtx)).reshape(nr_pairs, hidden_features)
-    d_ij = torch.from_numpy(onp.array(x_minus_xt_norm)).reshape(nr_pairs, )
+    h_e_mtx, h_ij_edge = make_equivalent_arrays(nr_edge_basis, nr_atoms, pairlist)
+    x_minus_xt, x_minus_xt_norm = make_equivalent_arrays(geometry_basis, nr_atoms, pairlist)
+
+    x_minus_xt_norm = jnp.linalg.norm(x_minus_xt, axis=-1, keepdims=True)
+    d_ij = torch.norm(h_ij_edge, dim=-1)
+
     mf_h_ij_semantic = mf_sake_block.get_semantic_attention(h_ij_edge, idx_i, d_ij, nr_atoms)
 
-    variables = ref_sake_interaction.init(key, x_minus_xt_norm, h_e_mtx,
+    variables = ref_sake_interaction.init(key, x_minus_xt_norm, h_e_mtx, mask,
                                           method=ref_sake_interaction.combined_attention)
     variables["params"]["semantic_attention_mlp"]["layers_0"][
         "kernel"] = mf_sake_block.semantic_attention_mlp.weight.detach().numpy().T
     variables["params"]["semantic_attention_mlp"]["layers_0"][
         "bias"] = mf_sake_block.semantic_attention_mlp.bias.detach().numpy().T
     ref_combined_attention = \
-        ref_sake_interaction.apply(variables, x_minus_xt_norm, h_e_mtx, method=ref_sake_interaction.combined_attention)[
+        ref_sake_interaction.apply(variables, x_minus_xt_norm, h_e_mtx, mask, method=ref_sake_interaction.combined_attention)[
             2]
     ref_h_ij_semantic = jnp.reshape(
         jnp.expand_dims(h_e_mtx, axis=-1) * jnp.expand_dims(ref_combined_attention, axis=-2),
-        (nr_pairs, nr_heads * nr_edge_basis))
+        (nr_atoms, nr_atoms, nr_heads * nr_edge_basis))
 
-    print(mf_h_ij_semantic, torch.from_numpy(onp.array(ref_h_ij_semantic)))
-    assert torch.allclose(mf_h_ij_semantic, torch.from_numpy(onp.array(ref_h_ij_semantic)), atol=1e-4)
+    compare_equivalent_arrays(ref_h_ij_semantic, mf_h_ij_semantic, mask, pairlist)
 
 
 def test_spatial_attention_against_reference():

@@ -253,26 +253,6 @@ class QM9Curation(DatasetCuration):
 
         return sum_of_energy
 
-    # def _extract(self, file_path: str, cache_directory: str) -> None:
-    #     """
-    #     Extract the contents of a tar.bz2 file.
-    #
-    #     Parameters
-    #     ----------
-    #     file_path: str, required
-    #         tar.bz2 to extract.
-    #     cache_directory: str, required
-    #         Location to save the contents from the tar.bz2 file
-    #     """
-    #
-    #     import tarfile
-    #
-    #     logger.debug(f"Extracting tar {file_path}.")
-    #
-    #     tar = tarfile.open(f"{file_path}", "r:bz2")
-    #     tar.extractall(cache_directory)
-    #     tar.close()
-
     def _parse_properties(self, line: str) -> dict:
         """
         Parses the line in the xyz file that contains property information.

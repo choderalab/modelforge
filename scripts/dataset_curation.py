@@ -341,21 +341,21 @@ local_cache_dir = f"{local_prefix}/spice_114_dataset"
 hdf5_file_name = "spice_114_dataset.hdf5"
 
 SPICE_114(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)
-
-# QM9 dataset
-local_cache_dir = f"{local_prefix}/qm9_dataset"
-hdf5_file_name = "qm9_dataset.hdf5"
-
-QM9(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)
-
-# ANI-1x dataset
-local_cache_dir = f"{local_prefix}/ani1x_dataset"
-hdf5_file_name = "ani1x_dataset.hdf5"
-
-ANI1x(hdf5_file_name, output_file_dir, local_cache_dir, force_download=True)
-
-# ANI-2x dataset
-local_cache_dir = f"{local_prefix}/ani2x_dataset"
-hdf5_file_name = "ani2x_dataset.hdf5"
-
-ANI2x(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)
+#
+# # QM9 dataset
+# local_cache_dir = f"{local_prefix}/qm9_dataset"
+# hdf5_file_name = "qm9_dataset.hdf5"
+#
+# QM9(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)
+#
+# # ANI-1x dataset
+# local_cache_dir = f"{local_prefix}/ani1x_dataset"
+# hdf5_file_name = "ani1x_dataset.hdf5"
+#
+# ANI1x(hdf5_file_name, output_file_dir, local_cache_dir, force_download=True)
+#
+# # ANI-2x dataset
+# local_cache_dir = f"{local_prefix}/ani2x_dataset"
+# hdf5_file_name = "ani2x_dataset.hdf5"
+#
+# ANI2x(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)

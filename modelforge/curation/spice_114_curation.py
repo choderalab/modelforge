@@ -165,7 +165,7 @@ class SPICE114Curation(DatasetCuration):
 
         rdmol = Chem.MolFromSmiles(smiles, sanitize=False)
         total_charge = sum(atom.GetFormalCharge() for atom in rdmol.GetAtoms())
-        return total_charge * unit.elementary_charge
+        return int(total_charge) * unit.elementary_charge
 
     def _process_downloaded(
         self,

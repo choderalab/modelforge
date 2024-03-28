@@ -372,7 +372,7 @@ class SPICE2Curation(DatasetCuration):
 
         return (
             sum(atom_energy[s][c] for s, c in zip(symbol, charge)) * unit.hartree,
-            total_charge * unit.elementary_charge,
+            int(total_charge) * unit.elementary_charge,
         )
 
     def _check_name_format(self, name: str):

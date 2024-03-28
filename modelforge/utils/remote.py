@@ -59,7 +59,9 @@ def fetch_url_from_doi(doi: str, timeout: Optional[int] = 10) -> str:
     """
     import requests
 
-    # force to use ipv4; my ubuntu machine is timing out when it first tries ipv6
+    # force to use ipv4; my ubuntu machine was timing out when it first tries ipv6
+    # but that seemed to be a config issue on my machine and was resolved
+    # will leave this import in here as well commented out, in case it is needed in the future
     # requests.packages.urllib3.util.connection.HAS_IPV6 = False
 
     doi_org_url = "https://dx.doi.org/"

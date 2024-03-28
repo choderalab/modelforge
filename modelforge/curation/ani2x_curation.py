@@ -165,8 +165,10 @@ class ANI2xCuration(DatasetCuration):
                     # we have a match if the sum is equal to the number of atoms in the molecule
                     mask = np.sum(mask_temp, axis=1) == molecule.shape[0]
 
-                    # to be able to use a dictionary, come up with a string based representation of
-                    # the molecule array, e.g., [ 8, 8 ] becomes "[8_8]"
+                    # We are assuming that the name of the molecule will always be a string
+                    # This will allow us to use the value of the name as a dictionary key
+                    # We will just make  a string based representation of
+                    # the molecule array which stores the atomic numbers, e.g., [ 8, 8 ] becomes "[8_8]"
                     molecule_as_string = np.array2string(molecule, separator="_")
 
                     ds_temp["name"] = molecule_as_string

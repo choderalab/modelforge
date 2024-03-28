@@ -1,11 +1,13 @@
+from dataclasses import dataclass
+
 from torch._tensor import Tensor
 import torch.nn as nn
 from loguru import logger as log
 from typing import Dict, Type, Callable, Optional, Tuple
+from openff.units import unit
 
-from .models import BaseNNP, LightningModuleMixin
-from .postprocessing import PostprocessingPipeline, NoPostprocess
-from .utils import Dense, scatter_softmax
+from .models import BaseNeuralNetworkPotential, PairListOutputs
+from .utils import Dense, scatter_softmax, CosineCutoff, NNPInput
 import torch
 import torch.nn.functional as F
 
@@ -56,7 +58,56 @@ class ExpNormalSmearing(torch.nn.Module):
         )
 
 
-class SAKE(BaseNNP):
+@dataclass
+class SAKENeuralNetworkInput:
+    """
+    A dataclass designed to structure the inputs for SAKE neural network potentials, ensuring
+    an efficient and structured representation of atomic systems for energy computation and
+    property prediction within the SAKE framework.
+
+    Attributes
+    ----------
+    atomic_numbers : torch.Tensor
+        Atomic numbers for each atom in the system(s). Shape: [num_atoms].
+    positions : torch.Tensor
+        XYZ coordinates of each atom. Shape: [num_atoms, 3].
+    atomic_subsystem_indices : torch.Tensor
+        Maps each atom to its respective subsystem or molecule, useful for systems with multiple
+        molecules. Shape: [num_atoms].
+    pair_indices : torch.Tensor
+        Indicates indices of atom pairs, essential for computing pairwise features. Shape: [2, num_pairs].
+    number_of_atoms : int
+        Total number of atoms in the batch, facilitating batch-wise operations.
+    atomic_embedding : torch.Tensor
+        Embeddings or features for each atom, potentially derived from atomic numbers or learned. Shape: [num_atoms, embedding_dim].
+
+    Notes
+    -----
+    The `SAKENeuralNetworkInput` dataclass encapsulates essential inputs required by the SAKE neural network
+    model for accurately predicting system energies and properties. It includes atomic positions, atomic types,
+    and connectivity information, crucial for a detailed representation of atomistic systems.
+
+    Examples
+    --------
+    >>> sake_input = SAKENeuralNetworkInput(
+    ...     atomic_numbers=torch.tensor([1, 6, 6, 8]),
+    ...     positions=torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]),
+    ...     atomic_subsystem_indices=torch.tensor([0, 0, 0, 0]),
+    ...     pair_indices=torch.tensor([[0, 1], [0, 2], [1, 2]]).T,
+    ...     number_of_atoms=4,
+    ...     atomic_embedding=torch.randn(4, 5)  # Example atomic embeddings
+    ... )
+    """
+
+    pair_indices: torch.Tensor
+    number_of_atoms: int
+    positions: torch.Tensor
+    atomic_numbers: torch.Tensor
+    atomic_subsystem_indices: torch.Tensor
+    atomic_embedding: torch.Tensor
+
+
+class SAKE(BaseNeuralNetworkPotential):
     """SAKE - spatial attention kinetic networks with E(n) equivariance.
 
     Reference:
@@ -66,15 +117,12 @@ class SAKE(BaseNNP):
 
     def __init__(
             self,
-            nr_atom_basis: int,
-            nr_interaction_blocks: int,
-            nr_heads: int,
-            radial_basis_module: nn.Module = ExpNormalSmearing,
-            cutoff_module: nn.Module = nn.Identity(),
-            activation: Optional[Callable] = F.silu,
+            nr_atom_basis: int = 64,
+            nr_interaction_blocks: int = 2,
+            nr_heads: int = 4,
+            radial_basis_module: nn.Module = ExpNormalSmearing(),
+            cutoff=5 * unit.angstrom,
             epsilon: float = 1e-8,
-            postprocessing: PostprocessingPipeline = PostprocessingPipeline(
-                [NoPostprocess({})])
     ):
         """
         Parameters
@@ -89,27 +137,28 @@ class SAKE(BaseNNP):
                 Number of heads for spatial attention.
             cutoff_module : torch.Module
                 Cutoff function for the radial basis.
-            activation : Callable, optional
-                Activation function to use.
             epsilon : float, optional
                 Stability constant to prevent numerical instabilities (default is 1e-8).
         """
-        from .utils import EnergyReadout
+        from .utils import FromAtomToMoleculeReduction
 
         log.debug("Initializing SAKE model.")
-        super().__init__(cutoff=cutoff_module.cutoff, postprocessing=postprocessing)
+        super().__init__(cutoff=cutoff)
+        print("self.cutoff", self.calculate_distances_and_pairlist.cutoff)
         self.nr_interaction_blocks = nr_interaction_blocks
         self.nr_heads = nr_heads
-        self.cutoff_module = cutoff_module
         self.radial_basis_module = radial_basis_module
-
-        # initialize the energy readout
         self.nr_atom_basis = nr_atom_basis
-        self.readout_module = EnergyReadout(self.nr_atom_basis)
 
-        log.debug(
-            f"Passed parameters to constructor: {self.nr_atom_basis=}, {nr_interaction_blocks=}, {cutoff_module=}"
+        self.only_unique_pairs = False  # NOTE: for pairlist
+
+        self.cutoff_module = CosineCutoff(cutoff)
+        self.energy_layer = nn.Sequential(
+            Dense(self.nr_atom_basis, self.nr_atom_basis, activation=torch.nn.SiLU()),
+            Dense(self.nr_atom_basis, self.nr_atom_basis, activation=torch.nn.SiLU()),
+            Dense(self.nr_atom_basis, 1, activation=None),
         )
+        self.readout_module = FromAtomToMoleculeReduction()
 
         # initialize the interaction networks
         self.interaction_modules = nn.ModuleList(
@@ -122,29 +171,35 @@ class SAKE(BaseNNP):
                             nr_atom_basis_velocity=self.nr_atom_basis,
                             nr_coefficients=(self.nr_heads * self.nr_atom_basis),
                             nr_heads=self.nr_heads,
-                            activation=activation,
+                            activation=torch.nn.SiLU(),
                             radial_basis_module=self.radial_basis_module,
                             cutoff_module=self.cutoff_module,
                             epsilon=epsilon)
             for _ in range(self.nr_interaction_blocks)
         )
 
-    def _readout(self, input: Dict[str, Tensor]):
-        return self.readout_module(input)
-
-    def prepare_inputs(self, inputs: Dict[str, torch.Tensor]):
-        inputs = self._prepare_inputs(inputs)
-        return self._model_specific_input_preparation(inputs)
-
-    def _model_specific_input_preparation(self, inputs: Dict[str, torch.Tensor]):
+    def _model_specific_input_preparation(
+            self, data: "NNPInput", pairlist_output: "PairListOutputs"
+    ) -> SAKENeuralNetworkInput:
         # Perform atomic embedding
-        inputs["atomic_embedding"] = F.one_hot(inputs["atomic_numbers"].squeeze(-1),
-                                               num_classes=self.nr_atom_basis).float()
-        return inputs
+
+        number_of_atoms = data.atomic_numbers.shape[0]
+
+        nnp_input = SAKENeuralNetworkInput(
+            pair_indices=pairlist_output.pair_indices,
+            number_of_atoms=number_of_atoms,
+            positions=data.positions,
+            atomic_numbers=data.atomic_numbers,
+            atomic_subsystem_indices=data.atomic_subsystem_indices,
+            atomic_embedding=F.one_hot(data.atomic_numbers.long(),
+                                       num_classes=self.nr_atom_basis).float()
+        )
+
+        return nnp_input
 
     def _forward(
             self,
-            inputs: Dict[str, torch.Tensor],
+            data: SAKENeuralNetworkInput
     ):
         """
         Compute atomic representations/embeddings.
@@ -161,19 +216,21 @@ class SAKE(BaseNNP):
         """
 
         # extract properties from pairlist
-        h = inputs["atomic_embedding"]
-        x = inputs["positions"]
+        h = data.atomic_embedding
+        x = data.positions
         v = torch.zeros_like(x)
 
         for i, interaction_mod in enumerate(self.interaction_modules):
-            h, x, v = interaction_mod(h, x, v, inputs["pair_indices"])
+            h, x, v = interaction_mod(h, x, v, data.pair_indices)
 
         # Use squeeze to remove dimensions of size 1
         h = h.squeeze(dim=1)
 
+        E_i = self.energy_layer(h).squeeze(1)
+
         return {
-            "scalar_representation": h,
-            "atomic_subsystem_indices": inputs["atomic_subsystem_indices"],
+            "E_i": E_i,
+            "atomic_subsystem_indices": data.atomic_subsystem_indices
         }
 
 
@@ -491,31 +548,3 @@ class SAKEInteraction(nn.Module):
         x_updated = x + v_updated
 
         return h_updated, x_updated, v_updated
-
-
-class LightningSAKE(SAKE, LightningModuleMixin):
-    def __init__(
-            self,
-            nr_atom_basis: int,
-            nr_interaction_blocks: int,
-            nr_heads: int,
-            radial_basis: nn.Module,
-            cutoff: nn.Module,
-            activation: Optional[Callable] = F.silu,
-            loss: Type[nn.Module] = nn.MSELoss(),
-            optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
-            lr: float = 1e-3,
-    ) -> None:
-        """PyTorch Lightning version of the SAKE model."""
-
-        super().__init__(
-            nr_atom_basis=nr_atom_basis,
-            nr_interaction_blocks=nr_interaction_blocks,
-            nr_heads=nr_heads,
-            radial_basis_module=radial_basis,
-            cutoff_module=cutoff,
-            activation=activation,
-        )
-        self.loss_function = loss
-        self.optimizer = optimizer
-        self.learning_rate = lr

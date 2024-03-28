@@ -1,65 +1,44 @@
 # This is an example script that trains the PaiNN model on the .
 from lightning import Trainer
 import torch
-from modelforge.potential.painn import LighningPaiNN
-
-from modelforge.potential import CosineCutoff, GaussianRBF
-from modelforge.potential.utils import SlicedEmbedding
-
-from openff.units import unit
-
-max_atomic_number = 100
-nr_atom_basis = 32
-nr_rbf = 15
-nr_interaction_blocks = 2
-
-cutoff = unit.Quantity(5, unit.angstrom)
-embedding = SlicedEmbedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
-assert embedding.embedding_dim == nr_atom_basis
-rbf = GaussianRBF(n_rbf=nr_rbf, cutoff=cutoff)
-
-cutoff = CosineCutoff(cutoff=cutoff)
-
-model = LighningPaiNN(
-    embedding=embedding,
-    nr_interaction_blocks=nr_interaction_blocks,
-    radial_basis=rbf,
-    cutoff=cutoff,
-)
-
+from modelforge.potential import SchNet, PaiNN, ANI2x, PhysNet
 from modelforge.dataset.qm9 import QM9Dataset
 from modelforge.dataset.dataset import TorchDataModule
+from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
+from pytorch_lightning.loggers import TensorBoardLogger
 
-data = QM9Dataset(for_unit_testing=True)
-dataset = TorchDataModule(data, batch_size=512)
-dataset.prepare_data(offset=True, normalize=True)
+logger = TensorBoardLogger("tb_logs", name="training")
+
+# Set up dataset
+data = QM9Dataset()
+dataset = TorchDataModule(
+    data, batch_size=512, splitting_strategy=FirstComeFirstServeSplittingStrategy()
+)
+
+dataset.prepare_data(remove_self_energies=True, normalize=False)
+
+# Set up model
+model = ANI2x()  # PaiNN() # ANI2x()
+model = model.to(torch.float32)
+
+print(model)
+
+# set up traininer
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
 trainer = Trainer(
-    max_epochs=200,
+    max_epochs=10_000,
     num_nodes=1,
-    accelerator='cuda',
-    devices=[0],
+    devices=1,
+    accelerator="gpu",
+    logger=logger,  # Add the logger here
     callbacks=[
-        EarlyStopping(monitor="val_loss", mode="min", patience=3, min_delta=0.001)
+        EarlyStopping(monitor="val_loss", min_delta=0.1, patience=5, verbose=True)
     ],
 )
 
 
-model = LighningPaiNN(
-    embedding=embedding,
-    nr_interaction_blocks=nr_interaction_blocks,
-    radial_basis=rbf,
-    cutoff=cutoff,
-)
-
-model.energy_average = dataset.dataset_mean
-model.energy_stddev = dataset.dataset_std
-
-print(model.energy_average)
-print(model.energy_stddev)
-
-# Move model to the appropriate dtype and device
-model = model.to(torch.float32)
 # Run training loop and validate
 trainer.fit(model, dataset.train_dataloader(), dataset.val_dataloader())
+
+# tensorboard --logdir tb_logs

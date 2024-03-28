@@ -2,107 +2,18 @@ import torch
 
 from modelforge.dataset.dataset import TorchDataModule
 from modelforge.dataset.qm9 import QM9Dataset
-from modelforge.potential.schnet import SchNET, LightningSchNET
-from modelforge.potential.painn import PaiNN, LighningPaiNN
-from modelforge.potential.sake import SAKE, LightningSAKE
-from modelforge.potential.models import BaseNNP
-
+from modelforge.potential import SchNet, PaiNN, ANI2x, PhysNet, SAKE
 from typing import Optional, Dict
 
-MODELS_TO_TEST = [SchNET, PaiNN, SAKE]
+MODELS_TO_TEST = [SchNet, PaiNN, ANI2x, PhysNet, SAKE]
 DATASETS = [QM9Dataset]
 
-from openff.units import unit
-
-
-def setup_simple_model(
-    model_class,
-    lightning: bool = False,
-    nr_atom_basis: int = 128,
-    max_atomic_number: int = 100,
-    n_rbf: int = 20,
-    cutoff: unit.Quantity = 5.0 * unit.angstrom,
-    nr_interaction_blocks: int = 2,
-    nr_filters: int = 2,
-) -> Optional[BaseNNP]:
-    """
-    Setup a simple model based on the given model_class.
-
-    Parameters
-    ----------
-    model_class : class
-        Class of the model to be set up.
-    lightning : bool, optional
-        Flag to indicate if the Lightning variant should be returned.
-
-    Returns
-    -------
-    Optional[BaseNNP]
-        Initialized model.
-    """
-    from modelforge.potential import CosineCutoff, GaussianRBF
-    from modelforge.potential.utils import SlicedEmbedding
-
-    embedding = SlicedEmbedding(max_atomic_number, nr_atom_basis, sliced_dim=0)
-    assert embedding.embedding_dim == nr_atom_basis
-    rbf = GaussianRBF(n_rbf=n_rbf, cutoff=cutoff)
-
-    cutoff = CosineCutoff(cutoff=cutoff)
-
-    if model_class is SchNET:
-        if lightning:
-            return LightningSchNET(
-                embedding=embedding,
-                nr_interaction_blocks=nr_interaction_blocks,
-                radial_basis=rbf,
-                cutoff=cutoff,
-                nr_filters=nr_filters,
-            )
-        return SchNET(
-            embedding_module=embedding,
-            nr_interaction_blocks=nr_interaction_blocks,
-            radial_basis_module=rbf,
-            cutoff_module=cutoff,
-            nr_filters=nr_filters,
-        )
-
-    elif model_class is PaiNN:
-        if lightning:
-            return LighningPaiNN(
-                embedding=embedding,
-                nr_interaction_blocks=nr_interaction_blocks,
-                radial_basis=rbf,
-                cutoff=cutoff,
-            )
-        return PaiNN(
-            embedding_module=embedding,
-            nr_interaction_blocks=nr_interaction_blocks,
-            radial_basis_module=rbf,
-            cutoff_module=cutoff,
-        )
-    elif model_class is SAKE:
-        if lightning:
-            return LightningSAKE(
-                nr_atom_basis=10,
-                nr_interaction_blocks=nr_interaction_blocks,
-                nr_heads=4,
-                radial_basis=rbf,
-                cutoff=cutoff,
-            )
-        return SAKE(
-            nr_atom_basis=64,
-            nr_interaction_blocks=nr_interaction_blocks,
-            nr_heads=4,
-            radial_basis_module=rbf,
-            cutoff_module=cutoff,
-        )
-    else:
-        raise NotImplementedError
+from modelforge.potential.utils import BatchData
 
 
 def return_single_batch(
     dataset, split_file: Optional[str] = None, for_unit_testing: bool = True
-) -> Dict[str, torch.Tensor]:
+) -> BatchData:
     """
     Return a single batch from a dataset.
 
@@ -168,17 +79,20 @@ def prepare_pairlist_for_single_batch(
     return pairlist(positions, atomic_subsystem_indices)
 
 
-def generate_methane_input() -> Dict[str, torch.Tensor]:
+from modelforge.potential.utils import Metadata, NNPInput, BatchData
+
+
+def generate_methane_input() -> BatchData:
     """
     Generate a methane molecule input for testing.
 
     Returns
     -------
-    Dict[str, Tensor]
-        Dictionary with keys 'atomic_numbers', 'positions', 'atomic_subsystem_indices', 'E_labels'.
+    BatchData
     """
+    from modelforge.potential.utils import Metadata, NNPInput, BatchData
 
-    atomic_numbers = torch.tensor([[6], [1], [1], [1], [1]], dtype=torch.int64)
+    atomic_numbers = torch.tensor([6, 1, 1, 1, 1], dtype=torch.int64)
     positions = (
         torch.tensor(
             [
@@ -192,80 +106,30 @@ def generate_methane_input() -> Dict[str, torch.Tensor]:
         )
         / 10  # NOTE: converting to nanometer
     )
-    E_labels = torch.tensor([0.0], requires_grad=True)
+    E = torch.tensor([0.0], requires_grad=True)
     atomic_subsystem_indices = torch.tensor([0, 0, 0, 0, 0], dtype=torch.int32)
-    return {
-        "atomic_numbers": atomic_numbers,
-        "positions": positions,
-        "E_labels": E_labels,
-        "atomic_subsystem_indices": atomic_subsystem_indices,
-    }
-
-
-def generate_mock_data():
-    return {
-        "atomic_numbers": torch.tensor([[1], [2], [2], [3]]),
-        "positions": torch.tensor(
-            [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [0.0, 0.0, 0.0], [1.0, 1.0, 1.0]],
-            requires_grad=True,
+    return BatchData(
+        NNPInput(
+            atomic_numbers=atomic_numbers,
+            positions=positions,
+            atomic_subsystem_indices=atomic_subsystem_indices,
+            total_charge=torch.tensor([0.0]),
         ),
-        "atomic_subsystem_indices": torch.tensor([0, 0, 1, 1]),
-    }
+        Metadata(
+            E=E,
+            atomic_subsystem_counts=torch.tensor([0]),
+            atomic_subsystem_indices_referencing_dataset=torch.tensor([0]),
+            number_of_atoms=atomic_numbers.numel(),
+        ),
+    )
 
 
 def generate_batch_data():
     return return_single_batch(QM9Dataset)
 
 
-def generate_interaction_block_data(
-    nr_atom_basis: int, nr_embeddings: int, nr_rbf: int
-) -> Dict[str, torch.Tensor]:
-    """
-    Prepare inputs for testing the SchNet interaction block.
-
-    Parameters
-    ----------
-    nr_atom_basis : int
-        Number of atom basis.
-    nr_embeddings : int
-        Number of embeddings.
-
-    Returns
-    -------
-    Dict[str, torch.Tensor]
-        Dictionary containing tensors for the interaction block test.
-    """
-
-    import torch.nn as nn
-
-    from modelforge.dataset.qm9 import QM9Dataset
-    from modelforge.potential import GaussianRBF
-    from modelforge.potential.utils import _distance_to_radial_basis
-    from openff.units import unit
-
-    embedding = nn.Embedding(nr_embeddings, nr_atom_basis, padding_idx=0)
-    batch = return_single_batch(QM9Dataset)
-    r = prepare_pairlist_for_single_batch(batch)
-    radial_basis = GaussianRBF(
-        n_rbf=nr_rbf,
-        cutoff=unit.Quantity(5.0, unit.angstrom),
-        dtype=batch["positions"].dtype,
-    )
-
-    d_ij = r["d_ij"]
-    f_ij, rcut_ij = _distance_to_radial_basis(d_ij, radial_basis)
-    return {
-        "x": embedding(batch["atomic_numbers"].squeeze(dim=1)),
-        "f_ij": f_ij,
-        "pair_indices": r["pair_indices"],
-        "rcut_ij": rcut_ij,
-        "atomic_subsystem_indices": batch["atomic_subsystem_indices"],
-    }
-
-
 SIMPLIFIED_INPUT_DATA = [
     generate_methane_input(),
-    generate_mock_data(),
     generate_batch_data(),
 ]
 
@@ -289,6 +153,7 @@ def equivariance_test_utils():
     """
 
     # Define translation function
+    torch.manual_seed(12345)
     x_translation = torch.randn(
         size=(1, 3),
     )

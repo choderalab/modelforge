@@ -364,6 +364,17 @@ def make_equivalent_arrays(nr_features, nr_atoms, pairlist):
     return jax_array, torch_array
 
 
+def compare_equivalent_arrays(jax_array, torch_array, mask, pairlist):
+    nr_pairs = pairlist.shape[1]
+    for i in range(nr_pairs):
+        if mask[pairlist[0, i].item(), pairlist[1, i].item()] == 0:
+            # not checking masked values
+            pass
+        else:
+            assert torch.allclose(torch_array[i], torch.from_numpy(
+                onp.array(jax_array[pairlist[0, i].item(), pairlist[1, i].item()])))
+
+
 def test_semantic_attention_against_reference():
     from modelforge.potential.utils import scatter_softmax
 
@@ -396,13 +407,8 @@ def test_semantic_attention_against_reference():
     ref_semantic_attention = \
         ref_sake_interaction.apply(variables, h_e_mtx, mask, method=ref_sake_interaction.semantic_attention)
 
-    for i in range(nr_pairs):
-        if mask[pairlist[0, i].item(), pairlist[1, i].item()] == 0:
-            pass
-            # NOTE: if there is no sender(?) for a particular receiver(?), the attention weights will not be zero.
-        else:
-            assert torch.allclose(h_ij_att_before_cutoff[i], torch.from_numpy(
-                onp.array(ref_semantic_attention[pairlist[0, i].item(), pairlist[1, i].item()])))
+    # NOTE: if there is no sender(?) for a particular receiver(?), the attention weights will not be zero.
+    compare_equivalent_arrays(ref_semantic_attention, h_ij_att_before_cutoff, mask, pairlist)
 
 
 def test_exp_normal_smearing_against_reference():

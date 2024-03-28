@@ -63,7 +63,7 @@ def test_pt_lightning():
     # Set up dataset
     data = QM9Dataset(for_unit_testing=True)
     dataset = TorchDataModule(
-        data, batch_size=128, split=FirstComeFirstServeSplittingStrategy()
+        data, batch_size=128, splitting_strategy=FirstComeFirstServeSplittingStrategy()
     )
 
     dataset.prepare_data(remove_self_energies=True, normalize=True)

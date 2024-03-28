@@ -13,9 +13,9 @@ if TYPE_CHECKING:
     from .models import PairListOutputs
     from modelforge.potential.utils import NNPInput
 
-
+from modelforge.potential.utils import NeuralNetworkData
 @dataclass
-class SchnetNeuralNetworkInput:
+class SchnetNeuralNetworkData(NeuralNetworkData):
     """
     A dataclass to structure the inputs specifically for SchNet-based neural network potentials, including the necessary
     geometric and chemical information, along with the radial symmetry function expansion (`f_ij`) and the cosine cutoff
@@ -78,14 +78,6 @@ class SchnetNeuralNetworkInput:
     ... )
     """
 
-    pair_indices: torch.Tensor
-    d_ij: torch.Tensor
-    r_ij: torch.Tensor
-    number_of_atoms: int
-    positions: torch.Tensor
-    atomic_numbers: torch.Tensor
-    atomic_subsystem_indices: torch.Tensor
-    total_charge: torch.Tensor
     atomic_embedding: torch.Tensor
     f_ij: Optional[torch.Tensor] = field(default=None)
     f_cutoff: Optional[torch.Tensor] = field(default=None)
@@ -96,10 +88,10 @@ class SchNet(BaseNeuralNetworkPotential):
         self,
         max_Z: int = 100,
         number_of_atom_features: int = 64,
-        number_of_radial_basis_functions: int = 16,
-        number_of_interaction_modules: int = 2,
+        number_of_radial_basis_functions: int = 20,
+        number_of_interaction_modules: int = 3,
         cutoff: unit.Quantity = 5 * unit.angstrom,
-        number_of_filters: int = None,
+        number_of_filters: int = 64,
         shared_interactions: bool = False,
     ) -> None:
         """
@@ -119,7 +111,6 @@ class SchNet(BaseNeuralNetworkPotential):
         from .utils import ShiftedSoftplus, Dense
 
         log.debug("Initializing SchNet model.")
-
         self.only_unique_pairs = False  # NOTE: for pairlist
         super().__init__(cutoff=cutoff)
         self.number_of_atom_features = number_of_atom_features
@@ -138,7 +129,7 @@ class SchNet(BaseNeuralNetworkPotential):
 
         # Initialize representation block
         self.schnet_representation_module = SchNETRepresentation(
-            cutoff, number_of_radial_basis_functions, self.device
+            cutoff, number_of_radial_basis_functions
         )
         # Intialize interaction blocks
         self.interaction_modules = nn.ModuleList(
@@ -167,10 +158,10 @@ class SchNet(BaseNeuralNetworkPotential):
 
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
-    ) -> SchnetNeuralNetworkInput:
+    ) -> SchnetNeuralNetworkData:
         number_of_atoms = data.atomic_numbers.shape[0]
 
-        nnp_input = SchnetNeuralNetworkInput(
+        nnp_input = SchnetNeuralNetworkData(
             pair_indices=pairlist_output.pair_indices,
             d_ij=pairlist_output.d_ij,
             r_ij=pairlist_output.r_ij,
@@ -186,7 +177,7 @@ class SchNet(BaseNeuralNetworkPotential):
 
         return nnp_input
 
-    def _forward(self, data: SchnetNeuralNetworkInput) -> torch.Tensor:
+    def _forward(self, data: SchnetNeuralNetworkData) -> Dict[str, torch.Tensor]:
         """
         Calculate the energy for a given input batch.
 
@@ -196,7 +187,7 @@ class SchNet(BaseNeuralNetworkPotential):
 
         Returns
         -------
-        torch.Tensor
+        Dict[str, torch.Tensor]
             Calculated energies; shape (nr_systems,).
         """
 
@@ -328,7 +319,6 @@ class SchNETRepresentation(nn.Module):
         self,
         radial_cutoff: unit.Quantity,
         number_of_radial_basis_functions: int,
-        device: torch.device = torch.device("cpu"),
     ):
         """
         Initialize the SchNet representation layer.
@@ -342,11 +332,10 @@ class SchNETRepresentation(nn.Module):
         self.radial_symmetry_function_module = self._setup_radial_symmetry_functions(
             radial_cutoff, number_of_radial_basis_functions
         )
-        self.device = device
         # cutoff
         from modelforge.potential import CosineCutoff
 
-        self.cutoff_module = CosineCutoff(radial_cutoff, self.device)
+        self.cutoff_module = CosineCutoff(radial_cutoff)
 
     def _setup_radial_symmetry_functions(
         self, radial_cutoff: unit.Quantity, number_of_radial_basis_functions: int

@@ -15,7 +15,7 @@ def test_physnet_forward():
     # Set up dataset
     data = QM9Dataset(for_unit_testing=True)
     dataset = TorchDataModule(
-        data, batch_size=1, split=FirstComeFirstServeSplittingStrategy()
+        data, batch_size=1, splitting_strategy=FirstComeFirstServeSplittingStrategy()
     )
 
     dataset.prepare_data(remove_self_energies=True, normalize=False)

@@ -3,11 +3,23 @@ from typing import Callable, Tuple, Optional
 import numpy as np
 import torch
 import torch.nn as nn
-from typing import NamedTuple, Any
+from typing import Any
 from dataclasses import dataclass, field
+from loguru import logger as log
+
+@dataclass
+class NeuralNetworkData:
+    pair_indices: torch.Tensor
+    d_ij: torch.Tensor
+    r_ij: torch.Tensor
+    atomic_numbers: torch.Tensor
+    number_of_atoms: int
+    positions: torch.Tensor
+    atomic_subsystem_indices: torch.Tensor
+    total_charge: torch.Tensor
 
 
-@dataclass(frozen=False)
+@dataclass
 class NNPInput:
     """
     A dataclass to structure the inputs for neural network potentials.
@@ -32,6 +44,14 @@ class NNPInput:
     positions: Any  # Temporarily use Any to allow for openff.units.unit.Quantity
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
+
+    def to(self, device: torch.device):
+        """Move all tensors in this instance to the specified device."""
+        self.atomic_numbers = self.atomic_numbers.to(device)
+        self.positions = self.positions.to(device)
+        self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(device)
+        self.total_charge = self.total_charge.to(device)
+        return self
 
     def __post_init__(self):
         # Set dtype and convert units if necessary
@@ -84,45 +104,25 @@ class Metadata:
     atomic_subsystem_indices_referencing_dataset: torch.Tensor
     number_of_atoms: int
 
+    def to(self, device: torch.device):
+        """Move all tensors in this instance to the specified device."""
+        self.E = self.E.to(device)
+        self.atomic_subsystem_counts = self.atomic_subsystem_counts.to(device)
+        self.atomic_subsystem_indices_referencing_dataset = (
+            self.atomic_subsystem_indices_referencing_dataset.to(device)
+        )
+        return self
 
-class BatchData(NamedTuple):
+
+@dataclass
+class BatchData:
     nnp_input: NNPInput
     metadata: Metadata
 
-
-class NeuralNetworInternalData(NamedTuple):
-    """
-    A NamedTuple to structure the inputs for neural network potentials.
-
-    Parameters
-    ----------
-    atomic_numbers : torch.Tensor
-        A 1D tensor containing atomic numbers for each atom in the system(s).
-        Shape: [num_atoms], where `num_atoms` is the total number of atoms across all systems.
-    positions : torch.Tensor
-        A 2D tensor of shape [num_atoms, 3], representing the XYZ coordinates of each atom.
-    atomic_subsystem_indices : torch.Tensor
-        A 1D tensor mapping each atom to its respective subsystem or molecule.
-        This allows for calculations involving multiple molecules or subsystems within the same batch.
-        Shape: [num_atoms].
-    total_charge : Optional[torch.Tensor]
-        An optional tensor with the total charge of each system or molecule, if applicable.
-        Shape: [num_systems], where `num_systems` is the number of distinct systems or molecules.
-    additional_features : Optional[torch.Tensor]
-        An optional 2D tensor containing any additional features required by the model for each atom.
-        Shape: [num_atoms, num_features], where `num_features` is the number of additional features per atom.
-
-    """
-
-    pair_indices: torch.Tensor
-    d_ij: torch.Tensor
-    r_ij: torch.Tensor
-    number_of_atoms: torch.Tensor
-    positions: torch.Tensor
-    atomic_numbers: torch.Tensor
-    atomic_subsystem_indices: torch.Tensor
-    atom_index: torch.Tensor
-    total_charge: torch.Tensor
+    def to(self, device: torch.device):
+        self.nnp_input = self.nnp_input.to(device)
+        self.metadata = self.metadata.to(device)
+        return self
 
 
 ATOMIC_NUMBER_TO_INDEX_MAP = {
@@ -296,9 +296,7 @@ from openff.units import unit
 
 
 class CosineCutoff(nn.Module):
-    def __init__(
-        self, cutoff: unit.Quantity, device: torch.device = torch.device("cpu")
-    ):
+    def __init__(self, cutoff: unit.Quantity):
         """
         Behler-style cosine cutoff module.
 
@@ -310,7 +308,7 @@ class CosineCutoff(nn.Module):
         """
         super().__init__()
         cutoff = cutoff.to(unit.nanometer).m
-        self.register_buffer("cutoff", torch.tensor([cutoff], device=device))
+        self.register_buffer("cutoff", torch.tensor([cutoff]))
 
     def forward(self, d_ij: torch.Tensor):
         """
@@ -550,7 +548,6 @@ class AngularSymmetryFunction(nn.Module):
         angle_sections: int = 4,
         trainable: bool = False,
         dtype: Optional[torch.dtype] = None,
-        device: torch.device = torch.device("cpu"),
     ) -> None:
         """
         Parameters
@@ -566,14 +563,14 @@ class AngularSymmetryFunction(nn.Module):
 
         self.number_of_gaussians_asf = number_of_gaussians_for_asf
         self.angular_cutoff = angular_cutoff
-        self.cosine_cutoff = CosineCutoff(self.angular_cutoff, device=device)
+        self.cosine_cutoff = CosineCutoff(self.angular_cutoff)
         _unitless_angular_cutoff = angular_cutoff.to(unit.nanometer).m
         self.angular_start = angular_start
         _unitless_angular_start = angular_start.to(unit.nanometer).m
 
         # save constants
-        EtaA = angular_eta = 19.7 * 100  # FIXME hardcoded eta
-        Zeta = 32.0  # FIXME hardcoded zeta
+        EtaA = angular_eta = 12.5 * 100  # FIXME hardcoded eta
+        Zeta = 14.1000  # FIXME hardcoded zeta
 
         if trainable:
             self.EtaA = torch.tensor([EtaA], dtype=dtype)
@@ -616,6 +613,7 @@ class AngularSymmetryFunction(nn.Module):
 RadialSymmetryFunction: 
 Rca={_unitless_angular_cutoff} 
 ShfZ={ShfZ}, 
+ShFa={ShfA}, 
 eta={EtaA}"""
         )
 
@@ -759,11 +757,11 @@ class RadialSymmetryFunction(nn.Module):
         if self.trainable:
             self.radial_basis_centers = radial_basis_centers
             self.radial_scale_factor = radial_scale_factor
+            self.prefactor = nn.Parameter(torch.tensor([1.0]))
         else:
             self.register_buffer("radial_basis_centers", radial_basis_centers)
             self.register_buffer("radial_scale_factor", radial_scale_factor)
-
-        self.prefactor = torch.tensor([1.0])
+            self.register_buffer("prefactor", torch.tensor([1.0]))
 
     def calculate_radial_basis_centers(
         self,
@@ -908,6 +906,7 @@ class AniRadialSymmetryFunction(RadialSymmetryFunction):
             number_of_radial_basis_functions + 1,
             dtype=dtype,
         )[:-1]
+        log.info(f'{centers=}')
         return centers
 
     def calculate_radial_scale_factor(
@@ -919,121 +918,6 @@ class AniRadialSymmetryFunction(RadialSymmetryFunction):
         # ANI uses a predefined scaling factor
         scale_factors = torch.full((number_of_radial_basis_functions,), (19.7 * 100))
         return scale_factors
-
-
-# class RadialSymmetryFunction(nn.Module):
-#     """
-#     Atom centered radial symmetry function module.
-#     """
-
-#     def __init__(
-#         self,
-#         number_of_radial_basis_functions: int,
-#         radial_cutoff: unit.Quantity,
-#         radial_start: unit.Quantity = 0.0 * unit.nanometer,
-#         dtype: Optional[torch.dtype] = None,
-#         trainable: bool = False,
-#         ani_style: bool = False,
-#     ):
-#         """
-#         Initialize the RadialSymmetryFunction class.
-
-#         Parameters
-#         ----------
-#         number_of_radial_basis_functions : int
-#             Number of radial basis functions.
-#         radial_cutoff : unit.Quantity
-#             The cutoff distance.
-#         radial_start: unit.Quantity
-#             center of first Gaussian function.
-
-#         """
-#         from loguru import logger as log
-
-#         log.info(f"RadialSymmetryFunction: ani-style: {ani_style}")
-#         super().__init__()
-#         self.number_of_radial_basis_functions = number_of_radial_basis_functions
-#         self.radial_cutoff = radial_cutoff
-#         _unitless_radial_cutoff = radial_cutoff.to(unit.nanometer).m
-#         self.radial_start = radial_start
-#         _unitless_radial_start = radial_start.to(unit.nanometer).m
-#         # calculate offsets
-#         # ===============
-#         if ani_style:
-#             offsets = torch.linspace(
-#                 _unitless_radial_start,
-#                 _unitless_radial_cutoff,
-#                 number_of_radial_basis_functions + 1,
-#                 dtype=dtype,
-#             )[:-1]
-#         else:
-#             offsets = torch.linspace(
-#                 _unitless_radial_start,
-#                 _unitless_radial_cutoff,
-#                 number_of_radial_basis_functions,
-#                 dtype=dtype,
-#             )  # R_s
-#         # calculate EtaR
-#         # ===============
-#         if ani_style:
-#             EtaR = (torch.tensor([19.7]) * torch.ones_like(offsets)).to(
-#                 dtype
-#             )  # since we are in nanometer
-#             EtaR = (
-#                 EtaR * 100
-#             )  # NOTE: this is a hack to get EtaR to be in the right range
-#             # FIXME EtaR is for now hardcoded
-#             prefactor = torch.tensor([0.25], dtype=dtype)
-#         else:
-#             widths = (torch.abs(offsets[1] - offsets[0]) * torch.ones_like(offsets)).to(
-#                 dtype
-#             )
-#             EtaR = 0.5 / torch.pow(widths, 2)  # EtaR
-#             prefactor = torch.tensor([1.0], dtype=dtype)
-#         # ===============
-
-#         if trainable:
-#             self.R_s = offsets
-#             self.prefactor = prefactor
-#             self.EtaR = EtaR
-#         else:
-#             self.register_buffer("R_s", offsets)
-#             self.register_buffer("prefactor", prefactor)
-#             self.register_buffer("EtaR", EtaR)
-
-#         # The length of radial subaev of a single species
-#         self.radial_sublength = self.R_s.numel()
-
-#         log.info(
-#             f"""
-# RadialSymmetryFunction:
-# cutoff={self.radial_cutoff}
-# number_of_gaussians={self.number_of_radial_basis_functions}
-# """
-#         )
-
-#     def forward(self, d_ij: torch.Tensor) -> torch.Tensor:
-#         """
-#         Computes the radial symmetry functions for the pairwise distance tensor.
-#         This computes the terms of the following equation
-#         G_{m}^{R} = \sum_{j!=i}^{N} exp(-EtaR(|R_{ij} - R_s|)^2))
-#         (NOTE: sum is not performed)
-#         Parameters
-#         ----------
-#         d_ij : torch.Tensor, size (nr_of_atoms, 1)
-#             Pairwise distances.
-
-#         Returns
-#         -------
-#         torch.Tensor
-#             The radial basis functions. Shape: [pairs, number_of_gaussians]
-#         """
-#         assert d_ij.ndim == 2
-#         assert d_ij.shape[1] == 1
-
-#         diff = d_ij[..., None] - self.R_s  # d_ij - R_s
-#         y = self.prefactor * torch.exp((-1 * self.EtaR) * torch.pow(diff, 2))
-#         return y
 
 
 def pair_list(

@@ -26,7 +26,6 @@ def test_radial_symmetry_function():
     rep = SchNETRepresentation(
         radial_cutoff=5 * unit.angstrom,
         number_of_radial_basis_functions=18,
-        device=torch.device("cpu"),
     )
 
     representation = rep(d_ij)

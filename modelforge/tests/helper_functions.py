@@ -2,10 +2,10 @@ import torch
 
 from modelforge.dataset.dataset import TorchDataModule
 from modelforge.dataset.qm9 import QM9Dataset
-from modelforge.potential import SchNet, PaiNN, ANI2x, PhysNet
+from modelforge.potential import SchNet, PaiNN, ANI2x, PhysNet, SAKE
 from typing import Optional, Dict
 
-MODELS_TO_TEST = [SchNet, PaiNN, ANI2x, PhysNet]
+MODELS_TO_TEST = [SchNet, PaiNN, ANI2x, PhysNet, SAKE]
 DATASETS = [QM9Dataset]
 
 from modelforge.potential.utils import BatchData

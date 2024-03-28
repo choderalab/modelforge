@@ -340,6 +340,18 @@ def test_scatter_add():
     native_result.scatter_add_(dim, idx_i, x)
 
 
+def test_scatter_softmax():
+    from modelforge.potential.utils import scatter_softmax
+
+    index = torch.tensor([0, 0, 1, 1, 2])
+    src = 1.1 ** torch.arange(10).reshape(2, 5)
+    expanded_index = index.expand_as(src)
+    util_out = scatter_softmax(src, expanded_index, dim=1, dim_size=3)
+    correct_out = torch.tensor([[0.4750208259, 0.5249791741, 0.4697868228, 0.5302131772, 1.0000000000],
+                                [0.4598240554, 0.5401759744, 0.4514355958, 0.5485643744, 1.0000000000]])
+    assert torch.allclose(util_out, correct_out)
+
+
 def test_embedding():
     """
     Test the Embedding module.

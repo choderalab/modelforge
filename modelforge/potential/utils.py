@@ -5,18 +5,18 @@ import torch
 import torch.nn as nn
 from typing import Any
 from dataclasses import dataclass, field
-
+from loguru import logger as log
 
 @dataclass
 class NeuralNetworkData:
     pair_indices: torch.Tensor
     d_ij: torch.Tensor
     r_ij: torch.Tensor
+    atomic_numbers: torch.Tensor
     number_of_atoms: int
     positions: torch.Tensor
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
-    atomic_numbers: torch.Tensor
 
 
 @dataclass
@@ -569,8 +569,8 @@ class AngularSymmetryFunction(nn.Module):
         _unitless_angular_start = angular_start.to(unit.nanometer).m
 
         # save constants
-        EtaA = angular_eta = 19.7 * 100  # FIXME hardcoded eta
-        Zeta = 32.0  # FIXME hardcoded zeta
+        EtaA = angular_eta = 12.5 * 100  # FIXME hardcoded eta
+        Zeta = 14.1000  # FIXME hardcoded zeta
 
         if trainable:
             self.EtaA = torch.tensor([EtaA], dtype=dtype)
@@ -613,6 +613,7 @@ class AngularSymmetryFunction(nn.Module):
 RadialSymmetryFunction: 
 Rca={_unitless_angular_cutoff} 
 ShfZ={ShfZ}, 
+ShFa={ShfA}, 
 eta={EtaA}"""
         )
 
@@ -905,6 +906,7 @@ class AniRadialSymmetryFunction(RadialSymmetryFunction):
             number_of_radial_basis_functions + 1,
             dtype=dtype,
         )[:-1]
+        log.info(f'{centers=}')
         return centers
 
     def calculate_radial_scale_factor(
@@ -916,121 +918,6 @@ class AniRadialSymmetryFunction(RadialSymmetryFunction):
         # ANI uses a predefined scaling factor
         scale_factors = torch.full((number_of_radial_basis_functions,), (19.7 * 100))
         return scale_factors
-
-
-# class RadialSymmetryFunction(nn.Module):
-#     """
-#     Atom centered radial symmetry function module.
-#     """
-
-#     def __init__(
-#         self,
-#         number_of_radial_basis_functions: int,
-#         radial_cutoff: unit.Quantity,
-#         radial_start: unit.Quantity = 0.0 * unit.nanometer,
-#         dtype: Optional[torch.dtype] = None,
-#         trainable: bool = False,
-#         ani_style: bool = False,
-#     ):
-#         """
-#         Initialize the RadialSymmetryFunction class.
-
-#         Parameters
-#         ----------
-#         number_of_radial_basis_functions : int
-#             Number of radial basis functions.
-#         radial_cutoff : unit.Quantity
-#             The cutoff distance.
-#         radial_start: unit.Quantity
-#             center of first Gaussian function.
-
-#         """
-#         from loguru import logger as log
-
-#         log.info(f"RadialSymmetryFunction: ani-style: {ani_style}")
-#         super().__init__()
-#         self.number_of_radial_basis_functions = number_of_radial_basis_functions
-#         self.radial_cutoff = radial_cutoff
-#         _unitless_radial_cutoff = radial_cutoff.to(unit.nanometer).m
-#         self.radial_start = radial_start
-#         _unitless_radial_start = radial_start.to(unit.nanometer).m
-#         # calculate offsets
-#         # ===============
-#         if ani_style:
-#             offsets = torch.linspace(
-#                 _unitless_radial_start,
-#                 _unitless_radial_cutoff,
-#                 number_of_radial_basis_functions + 1,
-#                 dtype=dtype,
-#             )[:-1]
-#         else:
-#             offsets = torch.linspace(
-#                 _unitless_radial_start,
-#                 _unitless_radial_cutoff,
-#                 number_of_radial_basis_functions,
-#                 dtype=dtype,
-#             )  # R_s
-#         # calculate EtaR
-#         # ===============
-#         if ani_style:
-#             EtaR = (torch.tensor([19.7]) * torch.ones_like(offsets)).to(
-#                 dtype
-#             )  # since we are in nanometer
-#             EtaR = (
-#                 EtaR * 100
-#             )  # NOTE: this is a hack to get EtaR to be in the right range
-#             # FIXME EtaR is for now hardcoded
-#             prefactor = torch.tensor([0.25], dtype=dtype)
-#         else:
-#             widths = (torch.abs(offsets[1] - offsets[0]) * torch.ones_like(offsets)).to(
-#                 dtype
-#             )
-#             EtaR = 0.5 / torch.pow(widths, 2)  # EtaR
-#             prefactor = torch.tensor([1.0], dtype=dtype)
-#         # ===============
-
-#         if trainable:
-#             self.R_s = offsets
-#             self.prefactor = prefactor
-#             self.EtaR = EtaR
-#         else:
-#             self.register_buffer("R_s", offsets)
-#             self.register_buffer("prefactor", prefactor)
-#             self.register_buffer("EtaR", EtaR)
-
-#         # The length of radial subaev of a single species
-#         self.radial_sublength = self.R_s.numel()
-
-#         log.info(
-#             f"""
-# RadialSymmetryFunction:
-# cutoff={self.radial_cutoff}
-# number_of_gaussians={self.number_of_radial_basis_functions}
-# """
-#         )
-
-#     def forward(self, d_ij: torch.Tensor) -> torch.Tensor:
-#         """
-#         Computes the radial symmetry functions for the pairwise distance tensor.
-#         This computes the terms of the following equation
-#         G_{m}^{R} = \sum_{j!=i}^{N} exp(-EtaR(|R_{ij} - R_s|)^2))
-#         (NOTE: sum is not performed)
-#         Parameters
-#         ----------
-#         d_ij : torch.Tensor, size (nr_of_atoms, 1)
-#             Pairwise distances.
-
-#         Returns
-#         -------
-#         torch.Tensor
-#             The radial basis functions. Shape: [pairs, number_of_gaussians]
-#         """
-#         assert d_ij.ndim == 2
-#         assert d_ij.shape[1] == 1
-
-#         diff = d_ij[..., None] - self.R_s  # d_ij - R_s
-#         y = self.prefactor * torch.exp((-1 * self.EtaR) * torch.pow(diff, 2))
-#         return y
 
 
 def pair_list(

@@ -13,9 +13,9 @@ if TYPE_CHECKING:
     from .models import PairListOutputs
     from modelforge.potential.utils import NNPInput
 
-
+from modelforge.potential.utils import NeuralNetworkData
 @dataclass
-class SchnetNeuralNetworkInput:
+class SchnetNeuralNetworkData(NeuralNetworkData):
     """
     A dataclass to structure the inputs specifically for SchNet-based neural network potentials, including the necessary
     geometric and chemical information, along with the radial symmetry function expansion (`f_ij`) and the cosine cutoff
@@ -78,14 +78,6 @@ class SchnetNeuralNetworkInput:
     ... )
     """
 
-    pair_indices: torch.Tensor
-    d_ij: torch.Tensor
-    r_ij: torch.Tensor
-    number_of_atoms: int
-    positions: torch.Tensor
-    atomic_numbers: torch.Tensor
-    atomic_subsystem_indices: torch.Tensor
-    total_charge: torch.Tensor
     atomic_embedding: torch.Tensor
     f_ij: Optional[torch.Tensor] = field(default=None)
     f_cutoff: Optional[torch.Tensor] = field(default=None)
@@ -166,10 +158,10 @@ class SchNet(BaseNeuralNetworkPotential):
 
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
-    ) -> SchnetNeuralNetworkInput:
+    ) -> SchnetNeuralNetworkData:
         number_of_atoms = data.atomic_numbers.shape[0]
 
-        nnp_input = SchnetNeuralNetworkInput(
+        nnp_input = SchnetNeuralNetworkData(
             pair_indices=pairlist_output.pair_indices,
             d_ij=pairlist_output.d_ij,
             r_ij=pairlist_output.r_ij,
@@ -185,7 +177,7 @@ class SchNet(BaseNeuralNetworkPotential):
 
         return nnp_input
 
-    def _forward(self, data: SchnetNeuralNetworkInput) -> Dict[str, torch.Tensor]:
+    def _forward(self, data: SchnetNeuralNetworkData) -> Dict[str, torch.Tensor]:
         """
         Calculate the energy for a given input batch.
 

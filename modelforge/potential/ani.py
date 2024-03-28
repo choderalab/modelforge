@@ -23,8 +23,11 @@ def triu_index(num_species: int) -> torch.Tensor:
     return ret
 
 
+from modelforge.potential.utils import NeuralNetworkData
+
+
 @dataclass
-class AniNeuralNetworkInput:
+class AniNeuralNetworkData(NeuralNetworkData):
     """
     A dataclass to structure the inputs for ANI neural network potentials, designed to
     facilitate the efficient representation of atomic systems for energy computation and
@@ -73,15 +76,7 @@ class AniNeuralNetworkInput:
     ... )
     """
 
-    pair_indices: torch.Tensor
-    d_ij: torch.Tensor
-    r_ij: torch.Tensor
-    number_of_atoms: int
-    positions: torch.Tensor
     atom_index: torch.Tensor
-    atomic_subsystem_indices: torch.Tensor
-    total_charge: torch.Tensor
-    atomic_numbers: torch.Tensor
 
 
 class ANIRepresentation(nn.Module):
@@ -149,7 +144,7 @@ class ANIRepresentation(nn.Module):
             dtype=torch.float32,
         )
 
-    def forward(self, data: AniNeuralNetworkInput) -> SpeciesAEV:
+    def forward(self, data: AniNeuralNetworkData) -> SpeciesAEV:
 
         # calculate the atomic environment vectors
         # used for the ANI architecture of NNPs
@@ -187,10 +182,10 @@ class ANIRepresentation(nn.Module):
             [processed_radial_feature_vector, processed_angular_feature_vector], dim=-1
         )
 
-        return SpeciesAEV(data.atomic_numbers, aevs)
+        return SpeciesAEV(data.atom_index, aevs)
 
     def _postprocess_angular_aev(
-        self, data: AniNeuralNetworkInput, angular_data: Dict[str, torch.Tensor]
+        self, data: AniNeuralNetworkData, angular_data: Dict[str, torch.Tensor]
     ):
         # postprocess the angular aev
         # used for the ANI architecture of NNPs
@@ -225,7 +220,7 @@ class ANIRepresentation(nn.Module):
     def _postprocess_radial_aev(
         self,
         radial_feature_vector: Dict[str, torch.Tensor],
-        data: AniNeuralNetworkInput,
+        data: AniNeuralNetworkData,
     ):
 
         radial_feature_vector = radial_feature_vector.squeeze(1)
@@ -304,6 +299,9 @@ class ANIInteraction(nn.Module):
             self.C_network,
             self.O_network,
             self.N_network,
+            self.S_network,
+            self.F_network,
+            self.Cl_network,
         ]
 
     def intialize_atomic_neural_network(self, aev_dim: int) -> Dict[str, nn.Module]:
@@ -407,7 +405,7 @@ class ANI2x(BaseNeuralNetworkPotential):
 
     def __init__(
         self,
-        radial_cutoff: unit.Quantity = 5.3 * unit.angstrom,
+        radial_cutoff: unit.Quantity = 5.1 * unit.angstrom,
         angular_cutoff: unit.Quantity = 3.5 * unit.angstrom,
     ) -> None:
         """
@@ -463,11 +461,11 @@ class ANI2x(BaseNeuralNetworkPotential):
 
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
-    ) -> AniNeuralNetworkInput:
+    ) -> AniNeuralNetworkData:
 
         number_of_atoms = data.atomic_numbers.shape[0]
 
-        nnp_input = AniNeuralNetworkInput(
+        nnp_data = AniNeuralNetworkData(
             pair_indices=pairlist_output.pair_indices,
             d_ij=pairlist_output.d_ij,
             r_ij=pairlist_output.r_ij,
@@ -479,9 +477,9 @@ class ANI2x(BaseNeuralNetworkPotential):
             total_charge=data.total_charge,
         )
 
-        return nnp_input
+        return nnp_data
 
-    def _forward(self, data: AniNeuralNetworkInput) -> Dict[str, torch.Tensor]:
+    def _forward(self, data: AniNeuralNetworkData) -> Dict[str, torch.Tensor]:
         """
         Calculate the energy for a given input batch.
 

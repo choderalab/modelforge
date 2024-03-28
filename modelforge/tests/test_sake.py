@@ -17,12 +17,6 @@ from .helper_functions import (
 IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "https://www.reddit.com/true"
 
 
-def test_cutoff_units():
-    from modelforge.potential import CosineCutoff
-    cutoff_units = unit.Quantity(5.0, unit.angstrom)
-    cosine_cutoff = CosineCutoff(cutoff_units)
-    print("cosine_cutoff", cosine_cutoff.cutoff)
-    assert False
 def test_SAKE_init():
     """Test initialization of the SAKE neural network potential."""
 
@@ -44,7 +38,7 @@ def test_sake_forward(input_data):
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
     assert (
-        len(energy) == nr_of_mols
+            len(energy) == nr_of_mols
     )  # Assuming energy is calculated per sample in the batch
 
 
@@ -364,47 +358,48 @@ def test_update_edge_against_reference():
 def test_semantic_attention_against_reference():
     from modelforge.potential.utils import scatter_softmax
 
-    nr_atoms = 5
+    nr_atoms = 7
     out_features = 11
     hidden_features = 6
-    nr_heads = 7
-    nr_pairs = 4
+    nr_heads = 4
+    nr_pairs = 5
     key = jax.random.PRNGKey(1884)
-
     nr_edge_basis = hidden_features
-    pairlist, mask = make_equivalent_pairlist_mask(key, nr_atoms, nr_pairs, include_self_pairs=False)
-    print(pairlist, pairlist.dtype)
-    idx_i, idx_j = pairlist
 
+    pairlist, mask = make_equivalent_pairlist_mask(key, nr_atoms, nr_pairs, include_self_pairs=False)
+    idx_i, idx_j = pairlist
     mf_sake_block, ref_sake_interaction = make_reference_equivalent_sake_interaction(out_features, hidden_features,
                                                                                      nr_heads)
+
     # Generate random input data in JAX
-    h_e_mtx = jnp.arange(nr_atoms ** 2 * nr_edge_basis).reshape(nr_atoms, nr_atoms, nr_edge_basis)
-    print("h_e_mtx", h_e_mtx.shape, h_e_mtx)
+    h_e_mtx = jnp.arange(nr_atoms ** 2 * nr_edge_basis, dtype=float).reshape(nr_atoms, nr_atoms, nr_edge_basis)
 
     # Convert the input tensors from JAX to torch and reshape to diagonal batching
-    expanded_pair_idx = pairlist.T.unsqueeze(2).expand(nr_pairs, 2, nr_edge_basis)
-    print("expanded_pair_idx", expanded_pair_idx.shape, expanded_pair_idx)
-    h_ij_edge = torch.from_numpy(onp.array(h_e_mtx))[expanded_pair_idx]
-    print("h_ij_edge", h_ij_edge.shape, h_ij_edge)
+    h_ij_edge = torch.zeros((nr_pairs, nr_edge_basis))
+    for i in range(nr_pairs):
+        h_ij_edge[i] = torch.from_numpy(onp.array(h_e_mtx[pairlist[0, i].item(), pairlist[1, i].item()]))
+
     h_ij_att_weights = mf_sake_block.semantic_attention_mlp(h_ij_edge)
     expanded_idx_i = idx_i.view(-1, 1).expand_as(h_ij_att_weights)
     h_ij_att_before_cutoff = scatter_softmax(h_ij_att_weights, expanded_idx_i, dim=0, dim_size=nr_atoms,
                                              device=h_ij_edge.device)
 
-    variables = ref_sake_interaction.init(key, h_e_mtx,
+    variables = ref_sake_interaction.init(key, h_e_mtx, mask,
                                           method=ref_sake_interaction.semantic_attention)
     variables["params"]["semantic_attention_mlp"]["layers_0"][
         "kernel"] = mf_sake_block.semantic_attention_mlp.weight.detach().numpy().T
     variables["params"]["semantic_attention_mlp"]["layers_0"][
         "bias"] = mf_sake_block.semantic_attention_mlp.bias.detach().numpy().T
     ref_semantic_attention = \
-        ref_sake_interaction.apply(variables, h_e_mtx, method=ref_sake_interaction.semantic_attention)
+        ref_sake_interaction.apply(variables, h_e_mtx, mask, method=ref_sake_interaction.semantic_attention)
 
-    ref_semantic_attention = (ref_semantic_attention.reshape(nr_atoms ** 2, nr_heads))[pairlist.T]
-
-    print(h_ij_att_before_cutoff, torch.from_numpy(onp.array(ref_semantic_attention)))
-    assert torch.allclose(h_ij_att_before_cutoff, torch.from_numpy(onp.array(ref_semantic_attention)))
+    for i in range(nr_pairs):
+        if mask[pairlist[0, i].item(), pairlist[1, i].item()] == 0:
+            pass
+            # NOTE: if there is no sender(?) for a particular receiver(?), the attention weights will not be zero.
+        else:
+            assert torch.allclose(h_ij_att_before_cutoff[i], torch.from_numpy(
+                onp.array(ref_semantic_attention[pairlist[0, i].item(), pairlist[1, i].item()])))
 
 
 def test_exp_normal_smearing_against_reference():

@@ -25,10 +25,42 @@ def test_is_url():
         == False
     )
 
+
 def test_download_from_figshare(prep_temp_dir):
     url = "https://figshare.com/ndownloader/files/22247589"
     name = download_from_figshare(
         url=url,
+        md5_checksum="c1459c5ddce7bb94800032aa3d04788e",
+        output_path=str(prep_temp_dir),
+        force_download=True,
+    )
+
+    file_name_path = str(prep_temp_dir) + f"/{name}"
+    assert os.path.isfile(file_name_path)
+
+    # create a dummy document to test the case where
+    # the checksum doesn't match so it will redownload
+    with open(file_name_path, "w") as f:
+        f.write("dummy document")
+
+    # This will force a download because the checksum doesn't match
+    url = "https://figshare.com/ndownloader/files/22247589"
+    name = download_from_figshare(
+        url=url,
+        md5_checksum="c1459c5ddce7bb94800032aa3d04788e",
+        output_path=str(prep_temp_dir),
+        force_download=False,
+    )
+
+    file_name_path = str(prep_temp_dir) + f"/{name}"
+    assert os.path.isfile(file_name_path)
+
+    # the length of this file isn't listed in the headers
+    # this will check to make sure we can handle this case
+    url = "https://figshare.com/ndownloader/files/30975751"
+    name = download_from_figshare(
+        url=url,
+        md5_checksum="efa40abff1f71c121f6f0d444c18d5b3",
         output_path=str(prep_temp_dir),
         force_download=True,
     )
@@ -40,6 +72,7 @@ def test_download_from_figshare(prep_temp_dir):
         url = "https://choderalab.com/ndownloader/files/22247589"
         name = download_from_figshare(
             url=url,
+            md5_checksum="c1459c5ddce7bb94800032aa3d04788e",
             output_path=str(prep_temp_dir),
             force_download=True,
         )
@@ -61,9 +94,28 @@ def test_download_from_zenodo(prep_temp_dir):
     zenodo_checksum = "194cde222565dca8657d8521e5df1fd8"
     name = download_from_zenodo(
         url=url,
-        zenodo_md5_checksum=zenodo_checksum,
+        md5_checksum=zenodo_checksum,
         output_path=str(prep_temp_dir),
         force_download=True,
+    )
+
+    file_name_path = str(prep_temp_dir) + f"/{name}"
+    assert os.path.isfile(file_name_path)
+
+    # create a dummy document to test the case where
+    # the checksum doesn't match so it will redownload
+    with open(file_name_path, "w") as f:
+        f.write("dummy document")
+
+    # make sure that we redownload the file because the checksum of the
+    # existing file doesn't match
+    url = "https://zenodo.org/records/3401581/files/PTC-CMC/atools_ml-v0.1.zip"
+    zenodo_checksum = "194cde222565dca8657d8521e5df1fd8"
+    name = download_from_zenodo(
+        url=url,
+        md5_checksum=zenodo_checksum,
+        output_path=str(prep_temp_dir),
+        force_download=False,
     )
 
     file_name_path = str(prep_temp_dir) + f"/{name}"
@@ -73,10 +125,11 @@ def test_download_from_zenodo(prep_temp_dir):
         url = "https://choderalab.com/22247589"
         name = download_from_zenodo(
             url=url,
-            zenodo_md5_checksum=zenodo_checksum,
+            md5_checksum=zenodo_checksum,
             output_path=str(prep_temp_dir),
             force_download=True,
         )
+
 
 def test_md5_calculation(prep_temp_dir):
     url = "https://zenodo.org/records/3401581/files/PTC-CMC/atools_ml-v0.1.zip"
@@ -84,7 +137,7 @@ def test_md5_calculation(prep_temp_dir):
 
     name = download_from_zenodo(
         url=url,
-        zenodo_md5_checksum=zenodo_checksum,
+        md5_checksum=zenodo_checksum,
         output_path=str(prep_temp_dir),
         force_download=True,
     )
@@ -100,7 +153,7 @@ def test_md5_calculation(prep_temp_dir):
         bad_checksum = "294badmd5checksumthatwontwork9de"
         name = download_from_zenodo(
             url=url,
-            zenodo_md5_checksum=bad_checksum,
+            md5_checksum=bad_checksum,
             output_path=str(prep_temp_dir),
             force_download=True,
         )

@@ -198,7 +198,7 @@ def equivariance_test_utils():
     """
 
     # Define translation function
-    torch.manual_seed(12345)
+    #torch.manual_seed(12345)
     x_translation = torch.randn(
         size=(1, 3),
     )

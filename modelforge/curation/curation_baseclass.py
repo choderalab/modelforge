@@ -59,12 +59,15 @@ def dict_to_hdf5(
                     else:
                         val_m = val
                         val_u = None
+
                     if isinstance(val_m, str):
                         group.create_dataset(name=key, data=val_m, dtype=dt)
                     elif isinstance(val_m, (float, int)):
                         group.create_dataset(name=key, data=val_m)
                     elif isinstance(val_m, np.ndarray):
                         group.create_dataset(name=key, data=val_m, shape=val_m.shape)
+                    else:
+                        raise ValueError(f"Type {type(val_m)} not recognized.")
                     if not val_u is None:
                         group[key].attrs["u"] = val_u
 
@@ -95,8 +98,8 @@ class DatasetCuration(ABC):
         local_cache_dir: str, optional, default='./qm9_datafiles'
             Location to save downloaded dataset.
         convert_units: bool, optional, default=True
-            Convert from e.g., source units [angstrom, hartree]
-            to output units [nanometer, kJ/mol]
+            Convert from [e.g., angstrom, bohr, hartree] (i.e., source units)
+            to [nanometer, kJ/mol] (i.e., target units)
         """
         import os
 

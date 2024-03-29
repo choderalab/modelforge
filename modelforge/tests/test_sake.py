@@ -296,6 +296,7 @@ def test_update_edge_against_reference():
     geometry_basis = 3
     num_rbf = 31
     epsilon = 1e-5
+    nr_pairs = 17
 
     key = jax.random.PRNGKey(1884)
 
@@ -328,10 +329,8 @@ def test_update_edge_against_reference():
     x_minus_xt = get_x_minus_xt(x_jax)
     x_minus_xt_norm = get_x_minus_xt_norm(x_minus_xt)
 
-    pairlist = torch.cartesian_prod(torch.arange(nr_atoms), torch.arange(nr_atoms))
-    pairlist = pairlist.T
+    pairlist, mask = make_equivalent_pairlist_mask(key, nr_atoms, nr_pairs, include_self_pairs=False)
     idx_i, idx_j = pairlist
-    nr_pairs = nr_atoms ** 2
 
     # Convert the input tensors from JAX to torch and reshape to diagonal batching
     h = torch.from_numpy(onp.array(h_jax))
@@ -354,15 +353,14 @@ def test_update_edge_against_reference():
     ref_edge = ref_sake_edge_model.apply(variables, h_cat_ht, x_minus_xt_norm)
     mf_edge = mf_sake_block.update_edge(h[idx_j], h[idx_i], d_ij)
 
-    # NOTE: if h[idx_j] is the first argument and h[idx_i] is the second argument, it matches C-style ordering.
-    # if h[idx_i] is the first argument and h[idx_j] is the second argument, it matches Fortran-style ordering.
-    assert torch.allclose(mf_edge, torch.from_numpy(onp.array(ref_edge).reshape(nr_pairs, -1, order='C')), atol=1e-7)
+    compare_equivalent_edge_features(ref_edge, mf_edge, mask, pairlist, atol=1e-7)
 
-    mf_edge = mf_sake_block.update_edge(h[idx_i], h[idx_j], d_ij)
-    assert torch.allclose(mf_edge, torch.from_numpy(onp.array(ref_edge).reshape(nr_pairs, -1, order='F')), atol=1e-7)
+    mf_edge_switched = mf_sake_block.update_edge(h[idx_i], h[idx_j], d_ij)
+    pairlist_switched = torch.vstack([pairlist[1], pairlist[0]])
+    compare_equivalent_edge_features(ref_edge, mf_edge_switched, mask.T, pairlist_switched, atol=1e-7)
 
 
-def make_equivalent_arrays(key, nr_features, nr_atoms, pairlist):
+def make_equivalent_edge_features(key, nr_features, nr_atoms, pairlist):
     nr_pairs = pairlist.shape[1]
     jax_array = jax.random.normal(key, (nr_atoms, nr_atoms, nr_features))
     torch_array = torch.zeros((nr_pairs, nr_features))
@@ -371,7 +369,7 @@ def make_equivalent_arrays(key, nr_features, nr_atoms, pairlist):
     return jax_array, torch_array
 
 
-def compare_equivalent_arrays(jax_array, torch_array, mask, pairlist):
+def compare_equivalent_edge_features(jax_array, torch_array, mask, pairlist, atol=1e-8):
     nr_pairs = pairlist.shape[1]
     for i in range(nr_pairs):
         if mask[pairlist[0, i].item(), pairlist[1, i].item()] == 0:
@@ -379,7 +377,7 @@ def compare_equivalent_arrays(jax_array, torch_array, mask, pairlist):
             pass
         else:
             assert torch.allclose(torch_array[i], torch.from_numpy(
-                onp.array(jax_array[pairlist[0, i].item(), pairlist[1, i].item()])))
+                onp.array(jax_array[pairlist[0, i].item(), pairlist[1, i].item()])), atol=atol)
 
 
 def test_semantic_attention_against_reference():
@@ -399,7 +397,7 @@ def test_semantic_attention_against_reference():
     mf_sake_block, ref_sake_interaction = make_reference_equivalent_sake_interaction(out_features, hidden_features,
                                                                                      nr_heads)
 
-    h_e_mtx, h_ij_edge = make_equivalent_arrays(input_key, nr_edge_basis, nr_atoms, pairlist)
+    h_e_mtx, h_ij_edge = make_equivalent_edge_features(input_key, nr_edge_basis, nr_atoms, pairlist)
 
     h_ij_att_weights = mf_sake_block.semantic_attention_mlp(h_ij_edge)
     expanded_idx_i = idx_i.view(-1, 1).expand_as(h_ij_att_weights)
@@ -416,7 +414,7 @@ def test_semantic_attention_against_reference():
         ref_sake_interaction.apply(variables, h_e_mtx, mask, method=ref_sake_interaction.semantic_attention)
 
     # NOTE: if there is no sender(?) for a particular receiver(?), the attention weights will not be zero.
-    compare_equivalent_arrays(ref_semantic_attention, h_ij_att_before_cutoff, mask, pairlist)
+    compare_equivalent_edge_features(ref_semantic_attention, h_ij_att_before_cutoff, mask, pairlist)
 
 
 def test_exp_normal_smearing_against_reference():
@@ -459,8 +457,8 @@ def test_combined_attention_against_reference():
     idx_i, idx_j = pairlist
 
     h_key, x_key = jax.random.split(input_key, 2)
-    h_e_mtx, h_ij_edge = make_equivalent_arrays(h_key, nr_edge_basis, nr_atoms, pairlist)
-    x_minus_xt, x_minus_xt_torch = make_equivalent_arrays(x_key, geometry_basis, nr_atoms, pairlist)
+    h_e_mtx, h_ij_edge = make_equivalent_edge_features(h_key, nr_edge_basis, nr_atoms, pairlist)
+    x_minus_xt, x_minus_xt_torch = make_equivalent_edge_features(x_key, geometry_basis, nr_atoms, pairlist)
 
     x_minus_xt_norm = jnp.linalg.norm(x_minus_xt, axis=-1, keepdims=True)
     d_ij = torch.norm(x_minus_xt_torch, dim=-1)
@@ -474,13 +472,14 @@ def test_combined_attention_against_reference():
     variables["params"]["semantic_attention_mlp"]["layers_0"][
         "bias"] = mf_sake_block.semantic_attention_mlp.bias.detach().numpy().T
     ref_combined_attention = \
-        ref_sake_interaction.apply(variables, x_minus_xt_norm, h_e_mtx, mask, method=ref_sake_interaction.combined_attention)[
+        ref_sake_interaction.apply(variables, x_minus_xt_norm, h_e_mtx, mask,
+                                   method=ref_sake_interaction.combined_attention)[
             2]
     ref_h_ij_semantic = jnp.reshape(
         jnp.expand_dims(h_e_mtx, axis=-1) * jnp.expand_dims(ref_combined_attention, axis=-2),
         (nr_atoms, nr_atoms, nr_heads * nr_edge_basis))
 
-    compare_equivalent_arrays(ref_h_ij_semantic, mf_h_ij_semantic, mask, pairlist)
+    compare_equivalent_edge_features(ref_h_ij_semantic, mf_h_ij_semantic, mask, pairlist)
 
 
 def test_spatial_attention_against_reference():
@@ -501,8 +500,8 @@ def test_spatial_attention_against_reference():
     print("pairlist", pairlist)
 
     h_key, x_key = jax.random.split(input_key, 2)
-    h_e_att, h_ij_semantic = make_equivalent_arrays(h_key, nr_coefficients, nr_atoms, pairlist)
-    x_minus_xt, r_ij = make_equivalent_arrays(x_key, geometry_basis, nr_atoms, pairlist)
+    h_e_att, h_ij_semantic = make_equivalent_edge_features(h_key, nr_coefficients, nr_atoms, pairlist)
+    x_minus_xt, r_ij = make_equivalent_edge_features(x_key, geometry_basis, nr_atoms, pairlist)
 
     x_minus_xt_norm = jnp.linalg.norm(x_minus_xt, axis=-1, keepdims=True)
     d_ij = torch.sqrt((r_ij ** 2).sum(dim=1))
@@ -522,7 +521,7 @@ def test_spatial_attention_against_reference():
         1].weight.detach().numpy().T
     ref_spatial, ref_combinations = ref_sake_interaction.apply(variables, h_e_att, x_minus_xt, x_minus_xt_norm,
                                                                method=ref_sake_interaction.spatial_attention)
-    compare_equivalent_arrays(ref_combinations, mf_combinations, mask, pairlist)
+    compare_equivalent_edge_features(ref_combinations, mf_combinations, mask, pairlist)
     print("ref_spatial", ref_spatial)
     assert torch.allclose(mf_result, torch.from_numpy(onp.array(ref_spatial)), atol=1e-7)
 

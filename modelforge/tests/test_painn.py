@@ -54,18 +54,17 @@ def test_painn_forward(batch, model_parameter):
     )  # Assuming energy is calculated per sample in the batch
 
 
-def test_painn_interaction_equivariance():
-    import torch
-    from .helper_functions import generate_methane_input
+def test_painn_interaction_equivariance(methane):
     from modelforge.potential.painn import PaiNN
     from dataclasses import replace
+    import torch
 
     # define a rotation matrix in 3D that rotates by 90 degrees around the z-axis
     # (clockwise when looking along the z-axis towards the origin)
     rotation_matrix = torch.tensor([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
 
     painn = PaiNN()
-    methane_input = generate_methane_input().nnp_input
+    methane_input = methane.nnp_input
     perturbed_methane_input = replace(methane_input)
     perturbed_methane_input.positions = torch.matmul(
         methane_input.positions, rotation_matrix

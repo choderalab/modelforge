@@ -223,15 +223,6 @@ class NeuralNetworkPotentialFactory:
         Creates an instance of a specified NNP type configured for either training or inference.
     """
 
-    from modelforge.potential import ANI2x, SchNet, PaiNN, PhysNet
-
-    _IMPLEMENTED_NNPS = {
-        "ANI2x": ANI2x,
-        "SchNet": SchNet,
-        "PaiNN": PaiNN,
-        "PhysNet": PhysNet,
-    }
-
     @staticmethod
     def create_nnp(
         use: Literal["training", "inference"],
@@ -239,6 +230,7 @@ class NeuralNetworkPotentialFactory:
         nnp_parameters: Optional[Dict[str, Union[int, float]]] = {},
         training_parameters: Dict[str, Any] = {},
     ) -> Union["BaseNeuralNetworkPotential", "TrainingAdapter"]:
+        from modelforge.potential import _IMPLEMENTED_NNPS
 
         def _return_specific_version_of_nnp(use: str, nnp_class):
             if use == "training":
@@ -253,21 +245,13 @@ class NeuralNetworkPotentialFactory:
                 raise ValueError("Unknown NNP type requested.")
 
         if nnp_type == "ANI2x":
-            return _return_specific_version_of_nnp(
-                use, NeuralNetworkPotentialFactory._IMPLEMENTED_NNPS[nnp_type]
-            )
+            return _return_specific_version_of_nnp(use, _IMPLEMENTED_NNPS[nnp_type])
         elif nnp_type == "SchNet":
-            return _return_specific_version_of_nnp(
-                use, NeuralNetworkPotentialFactory._IMPLEMENTED_NNPS[nnp_type]
-            )
+            return _return_specific_version_of_nnp(use, _IMPLEMENTED_NNPS[nnp_type])
         elif nnp_type == "PaiNN":
-            return _return_specific_version_of_nnp(
-                use, NeuralNetworkPotentialFactory._IMPLEMENTED_NNPS[nnp_type]
-            )
+            return _return_specific_version_of_nnp(use, _IMPLEMENTED_NNPS[nnp_type])
         elif nnp_type == "PhysNet":
-            return _return_specific_version_of_nnp(
-                use, NeuralNetworkPotentialFactory._IMPLEMENTED_NNPS[nnp_type]
-            )
+            return _return_specific_version_of_nnp(use, _IMPLEMENTED_NNPS[nnp_type])
         else:
             raise NotImplementedError("Unknown NNP type requested.")
 

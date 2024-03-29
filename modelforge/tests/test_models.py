@@ -1,11 +1,9 @@
 import pytest
 
-from modelforge.potential.models import (
-    NeuralNetworkPotentialFactory,
-)
+from modelforge.potential import _IMPLEMENTED_NNPS
 
 
-@pytest.mark.parametrize("model_name", NeuralNetworkPotentialFactory._IMPLEMENTED_NNPS)
+@pytest.mark.parametrize("model_name", _IMPLEMENTED_NNPS)
 def test_model_factory(model_name):
     from modelforge.potential.models import (
         NeuralNetworkPotentialFactory,
@@ -14,7 +12,7 @@ def test_model_factory(model_name):
 
     # inference model
     model = NeuralNetworkPotentialFactory.create_nnp("inference", model_name)
-    assert model_name in type(model)
+    assert model_name in str(type(model))
 
     # training model
     model = NeuralNetworkPotentialFactory.create_nnp("training", model_name)
@@ -305,13 +303,9 @@ def test_pairlist():
 
 
 def test_pairlist_on_dataset(initialized_dataset):
-    from modelforge.dataset.dataset import TorchDataModule
     from modelforge.potential.models import Neighborlist
 
-    data = dataset(for_unit_testing=True)
-    data_module = TorchDataModule(data)
-    data_module.prepare_data()
-    for data in data_module.train_dataloader():
+    for data in initialized_dataset.train_dataloader():
         nnp_input = data.nnp_input
         positions = nnp_input.positions
         atomic_subsystem_indices = nnp_input.atomic_subsystem_indices
@@ -337,11 +331,9 @@ def test_equivariant_energies_and_forces(batch, inference_model, equivariance_ut
     from dataclasses import replace
 
     # define the symmetry operations
-    translation, rotation, reflection = equivariance_utils.equivariance_test_utils()
+    translation, rotation, reflection = equivariance_utils
     # define the tolerance
     atol = 1e-4
-    # set seed manually
-    torch.manual_seed(1234)
     # initialize the models
     model = inference_model.to(torch.float64)
 

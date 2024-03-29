@@ -1,11 +1,12 @@
 import torch
 import pytest
-from modelforge.dataset.dataset import TorchDataModule, DatasetFactory
+from modelforge.dataset import TorchDataModule, _IMPLEMENTED_DATASETS
 from typing import Optional, Dict
-from modelforge.potential import NeuralNetworkPotentialFactory
+from modelforge.potential import NeuralNetworkPotentialFactory, _IMPLEMENTED_NNPS
 
-_DATASETS_TO_TEST = [name for name in DatasetFactory._IMPLEMENTED_DATASETS]
-_MODELS_TO_TEST = [name for name in NeuralNetworkPotentialFactory._IMPLEMENTED_NNPS]
+
+_DATASETS_TO_TEST = [name for name in _IMPLEMENTED_DATASETS]
+_MODELS_TO_TEST = [name for name in _IMPLEMENTED_NNPS]
 from modelforge.potential.utils import BatchData
 
 
@@ -53,8 +54,14 @@ def initialized_dataset(request):
 
 
 @pytest.fixture(params=_DATASETS_TO_TEST)
-def batch(request):
-    batch = return_single_batch(datasets_to_test)
+def batch(initialized_dataset, request):
+    """
+    Fixture to obtain a single batch from an initialized dataset.
+
+    This fixture depends on the `initialized_dataset` fixture for the dataset instance.
+    The `request` parameter is automatically provided by pytest but is not used directly in this fixture.
+    """
+    batch = return_single_batch(initialized_dataset)
     return batch
 
 
@@ -87,9 +94,7 @@ def equivariance_utils():
 # ----------------------------------------------------------- #
 
 
-def return_single_batch(
-    dataset, split_file: Optional[str] = None, for_unit_testing: bool = True
-) -> BatchData:
+def return_single_batch(data_module) -> BatchData:
     """
     Return a single batch from a dataset.
 
@@ -103,7 +108,6 @@ def return_single_batch(
         A single batch from the dataset.
     """
 
-    data_module = initialize_dataset(dataset, split_file, for_unit_testing)
     batch = next(iter(data_module.train_dataloader()))
     return batch
 
@@ -132,7 +136,8 @@ def initialize_dataset(
 from modelforge.potential.utils import Metadata, NNPInput, BatchData
 
 
-def generate_methane_input() -> BatchData:
+@pytest.fixture
+def methane() -> BatchData:
     """
     Generate a methane molecule input for testing.
 

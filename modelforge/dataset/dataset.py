@@ -448,7 +448,6 @@ class DatasetFactory:
     >>> qm9_data = QM9Data()
     >>> torch_dataset = factory.create_dataset(qm9_data)
     """
-    _IMPLEMENTED_DATASETS = ["QM9"]
 
     def __init__(
         self,

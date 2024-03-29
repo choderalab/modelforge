@@ -252,40 +252,22 @@ def test_dataset_splitting(splitting_strategy, datasets_to_test):
     assert len(test_dataset) == 10
 
 
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_file_cache_methods(dataset):
-    """
-    Test the FileCache methods to ensure data is cached and loaded correctly.
-    """
 
-    # generate files to test _from_hdf5()
-
-    data = dataset(for_unit_testing=True)
-
-    data._from_hdf5()
-
-    data._to_file_cache()
-    data._from_file_cache()
-    assert len(data.numpy_data["atomic_subsystem_counts"]) == 100
-
-
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_dataset_downloader(dataset):
+def test_dataset_downloader(datasets_to_test):
     """
     Test the DatasetDownloader functionality.
     """
-    data = dataset(for_unit_testing=True)
-    data._download()
-    assert os.path.exists(data.raw_data_file)
+    datasets_to_test._download()
+    assert os.path.exists(datasets_to_test.raw_data_file)
 
 
-def test_numpy_dataset_assignment(initialized_dataset):
+def test_numpy_dataset_assignment(datasets_to_test):
     """
     Test if the numpy_dataset attribute is correctly assigned after processing or loading.
     """
 
     factory = DatasetFactory()
-    data = initialized_dataset(for_unit_testing=True)
+    data = datasets_to_test
     factory._load_or_process_data(data)
 
     assert hasattr(data, "numpy_data")

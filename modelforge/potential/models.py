@@ -323,6 +323,8 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
         # initialize the per molecule readout module
         from .utils import FromAtomToMoleculeReduction
 
+        self.model_retriever = ModelRetriever()
+
         self.readout_module = FromAtomToMoleculeReduction()
 
     @abstractmethod
@@ -367,6 +369,12 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
         The model's output as computed from the inputs.
         """
         pass
+
+    def download_pretrained_model(self, identifier: str) -> None:
+        # Download pretrained model
+        self.model_retriever(identifier)
+        # load model weights
+        self.load_pretrained_weights(self.model_retriever.storage_path)
 
     def load_pretrained_weights(self, path: str):
         """
@@ -894,3 +902,74 @@ class SingleTopologyAlchemicalBaseNNPModel(BaseNeuralNetworkPotential):
         # lamb_emb = (1 - lamb) * emb(input['Z1']) + lamb * emb(input['Z2'])	def __init__():
         self._input_checks(data)
         raise NotImplementedError
+
+
+class ModelRetriever:
+    """
+    Retrieves neural network potential models from a GitHub LFS repository.
+
+    Attributes
+    ----------
+    base_url : str
+        The base URL of the GitHub repository where models are stored.
+    storage_dir : str
+        The local directory where downloaded models are stored.
+    """
+
+    def __init__(self, base_url: str, storage_dir: str = "./models"):
+        """
+        Initializes the model retriever with the repository URL and storage directory.
+
+        Parameters
+        ----------
+        base_url : str
+            The base URL of the GitHub LFS repository.
+        storage_dir : str
+            The local directory to store downloaded models, by default "./models".
+        """
+        self.base_url = base_url
+        if not os.path.exists(storage_dir):
+            os.makedirs(storage_dir)
+        self.storage_dir = storage_dir
+
+    def __call__(self, identifier: str) -> str:
+        """
+        Downloads the model specified by the identifier and returns the local file path.
+
+        Parameters
+        ----------
+        identifier : str
+            A unique identifier for the model to be downloaded.
+            The identifier has the following base format:
+            {NeuralNetworkName}_{Dataset}
+
+        Returns
+        -------
+        str
+            The path to the downloaded model file.
+        """
+        import request
+        import urljoin
+
+        model_url = urljoin(self.base_url, f"{identifier}.pt")
+        response = requests.get(model_url, stream=True)
+        if response.status_code == 200:
+            model_path = os.path.join(self.storage_dir, f"{identifier}.pt")
+            with open(model_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=1024):
+                    f.write(chunk)
+            return model_path
+        else:
+            raise FileNotFoundError(f"Model {identifier} not found in the repository.")
+
+    @property
+    def storage_path(self):
+        """
+        Exposes the storage directory where models are saved.
+
+        Returns
+        -------
+        str
+            The path to the directory where models are stored locally.
+        """
+        return self.storage_dir

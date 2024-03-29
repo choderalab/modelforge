@@ -14,14 +14,14 @@ from modelforge.dataset.utils import RandomRecordSplittingStrategy, SplittingStr
 from dataclasses import dataclass
 
 if TYPE_CHECKING:
-    from modelforge.potential.utils import BatchData
+    from modelforge.potential.utils import BatchData, AtomicSelfEnergies
 
 
 @dataclass
 class DatasetStatistics:
     scaling_mean: float
     scaling_stddev: float
-    atomic_self_energies: Dict[int, float]
+    atomic_self_energies: "AtomicSelfEnergies"
 
 
 class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):

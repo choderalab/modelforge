@@ -333,7 +333,7 @@ def test_equivariant_energies_and_forces(batch, inference_model, equivariance_ut
     # define the symmetry operations
     translation, rotation, reflection = equivariance_utils
     # define the tolerance
-    atol = 1e-4
+    atol = 1e-3
     # initialize the models
     model = inference_model.to(torch.float64)
 

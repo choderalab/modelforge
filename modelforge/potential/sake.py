@@ -534,7 +534,7 @@ class SAKEInteraction(nn.Module):
         d_ij = torch.sqrt((r_ij ** 2).sum(dim=1) + self.epsilon)
         dir_ij = r_ij / (d_ij.unsqueeze(-1) + self.epsilon)
 
-        h_ij_edge = self.update_edge(h[idx_i], h[idx_j], d_ij)
+        h_ij_edge = self.update_edge(h[idx_j], h[idx_i], d_ij)
         h_ij_semantic = self.get_semantic_attention(h_ij_edge, idx_i, d_ij, nr_of_atoms_in_all_systems)
         del h_ij_edge
         h_i_semantic = self.aggregate(h_ij_semantic, idx_i, nr_of_atoms_in_all_systems)

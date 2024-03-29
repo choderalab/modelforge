@@ -247,13 +247,20 @@ def test_x_minus_xt_against_reference():
     assert torch.allclose(torch.from_numpy(onp.array(x_minus_xt_norm.reshape(nr_atoms ** 2, order='C'))), d_ij)
 
 
-def make_equivalent_pairlist_mask(key, nr_atoms, nr_pairs, include_self_pairs=True):
+def make_equivalent_pairlist_mask(key, nr_atoms, nr_pairs, include_self_pairs):
     all_pairs = torch.cartesian_prod(torch.arange(nr_atoms), torch.arange(nr_atoms))
     self_pairs = all_pairs.T[0] == all_pairs.T[1]
-    if not include_self_pairs:
-        all_pairs = all_pairs[~self_pairs]
-    all_pairs_jax = jnp.array(onp.array(all_pairs))
-    pairlist_jax = jax.random.choice(key, all_pairs_jax, (nr_pairs,), replace=False).T
+    non_self_pairs = all_pairs[~self_pairs]
+    non_self_pairs_jax = jnp.array(onp.array(non_self_pairs))
+    if include_self_pairs:
+        nr_pairs_choose = nr_pairs - nr_atoms
+        assert nr_pairs_choose >= 0, "Number of pairs must be greater than or equal to the number of atoms if " \
+                                     "include_self_pairs is True."
+    else:
+        nr_pairs_choose = nr_pairs
+    pairlist_jax = jax.random.choice(key, non_self_pairs_jax, (nr_pairs_choose,), replace=False).T
+    if include_self_pairs:
+        pairlist_jax = jnp.concatenate([pairlist_jax, jnp.array(onp.array(all_pairs[self_pairs].T))], axis=1)
     pairlist = torch.tensor(onp.array(pairlist_jax), dtype=torch.int64)
     mask = jnp.zeros((nr_atoms, nr_atoms))
     for i in range(nr_pairs):
@@ -263,7 +270,7 @@ def make_equivalent_pairlist_mask(key, nr_atoms, nr_pairs, include_self_pairs=Tr
 
 def test_make_equivalent_pairlists():
     nr_atoms = 4
-    nr_pairs = 3
+    nr_pairs = 5
     key = jax.random.PRNGKey(1884)
     pairlist, mask = make_equivalent_pairlist_mask(key, nr_atoms, nr_pairs, include_self_pairs=False)
     assert pairlist.shape == (2, nr_pairs)
@@ -355,9 +362,9 @@ def test_update_edge_against_reference():
     assert torch.allclose(mf_edge, torch.from_numpy(onp.array(ref_edge).reshape(nr_pairs, -1, order='F')), atol=1e-7)
 
 
-def make_equivalent_arrays(nr_features, nr_atoms, pairlist):
+def make_equivalent_arrays(key, nr_features, nr_atoms, pairlist):
     nr_pairs = pairlist.shape[1]
-    jax_array = jnp.arange(nr_atoms ** 2 * nr_features, dtype=float).reshape(nr_atoms, nr_atoms, nr_features)
+    jax_array = jax.random.normal(key, (nr_atoms, nr_atoms, nr_features))
     torch_array = torch.zeros((nr_pairs, nr_features))
     for i in range(nr_pairs):
         torch_array[i] = torch.from_numpy(onp.array(jax_array[pairlist[0, i].item(), pairlist[1, i].item()]))
@@ -386,12 +393,13 @@ def test_semantic_attention_against_reference():
     key = jax.random.PRNGKey(1884)
     nr_edge_basis = hidden_features
 
-    pairlist, mask = make_equivalent_pairlist_mask(key, nr_atoms, nr_pairs, include_self_pairs=False)
+    pairlist_key, input_key = jax.random.split(key, 2)
+    pairlist, mask = make_equivalent_pairlist_mask(pairlist_key, nr_atoms, nr_pairs, include_self_pairs=False)
     idx_i, idx_j = pairlist
     mf_sake_block, ref_sake_interaction = make_reference_equivalent_sake_interaction(out_features, hidden_features,
                                                                                      nr_heads)
 
-    h_e_mtx, h_ij_edge = make_equivalent_arrays(nr_edge_basis, nr_atoms, pairlist)
+    h_e_mtx, h_ij_edge = make_equivalent_arrays(input_key, nr_edge_basis, nr_atoms, pairlist)
 
     h_ij_att_weights = mf_sake_block.semantic_attention_mlp(h_ij_edge)
     expanded_idx_i = idx_i.view(-1, 1).expand_as(h_ij_att_weights)
@@ -446,14 +454,16 @@ def test_combined_attention_against_reference():
 
     mf_sake_block, ref_sake_interaction = make_reference_equivalent_sake_interaction(out_features, hidden_features,
                                                                                      nr_heads)
-    pairlist, mask = make_equivalent_pairlist_mask(key, nr_atoms, nr_pairs, include_self_pairs=False)
+    pairlist_key, input_key = jax.random.split(key, 2)
+    pairlist, mask = make_equivalent_pairlist_mask(pairlist_key, nr_atoms, nr_pairs, include_self_pairs=False)
     idx_i, idx_j = pairlist
 
-    h_e_mtx, h_ij_edge = make_equivalent_arrays(nr_edge_basis, nr_atoms, pairlist)
-    x_minus_xt, x_minus_xt_norm = make_equivalent_arrays(geometry_basis, nr_atoms, pairlist)
+    h_key, x_key = jax.random.split(input_key, 2)
+    h_e_mtx, h_ij_edge = make_equivalent_arrays(h_key, nr_edge_basis, nr_atoms, pairlist)
+    x_minus_xt, x_minus_xt_torch = make_equivalent_arrays(x_key, geometry_basis, nr_atoms, pairlist)
 
     x_minus_xt_norm = jnp.linalg.norm(x_minus_xt, axis=-1, keepdims=True)
-    d_ij = torch.norm(h_ij_edge, dim=-1)
+    d_ij = torch.norm(x_minus_xt_torch, dim=-1)
 
     mf_h_ij_semantic = mf_sake_block.get_semantic_attention(h_ij_edge, idx_i, d_ij, nr_atoms)
 
@@ -474,36 +484,33 @@ def test_combined_attention_against_reference():
 
 
 def test_spatial_attention_against_reference():
-    # Define the parameters for the test
-    nr_atoms = 13
-    out_features = 11
-    hidden_features = 7
+    nr_atoms = 11
+    out_features = 2
+    hidden_features = 2
     geometry_basis = 3
-    nr_heads = 5
+    nr_heads = 7
+    nr_pairs = 17
+    nr_coefficients = nr_heads * hidden_features
+    key = jax.random.PRNGKey(1884)
 
     mf_sake_block, ref_sake_interaction = make_reference_equivalent_sake_interaction(out_features, hidden_features,
                                                                                      nr_heads)
-
-    nr_coefficients = nr_heads * hidden_features
-
-    pairlist = torch.cartesian_prod(torch.arange(nr_atoms), torch.arange(nr_atoms))
-    nr_pairs = nr_atoms ** 2
-    pairlist = pairlist.T
+    pairlist_key, input_key = jax.random.split(key, 2)
+    pairlist, mask = make_equivalent_pairlist_mask(pairlist_key, nr_atoms, nr_pairs, include_self_pairs=False)
     idx_i, idx_j = pairlist
+    print("pairlist", pairlist)
 
-    key = jax.random.PRNGKey(1884)
+    h_key, x_key = jax.random.split(input_key, 2)
+    h_e_att, h_ij_semantic = make_equivalent_arrays(h_key, nr_coefficients, nr_atoms, pairlist)
+    x_minus_xt, r_ij = make_equivalent_arrays(x_key, geometry_basis, nr_atoms, pairlist)
 
-    # Generate random input data in JAX
-    h_e_att = jax.random.normal(key, (nr_atoms, nr_atoms, nr_coefficients))
-    x_minus_xt = jax.random.normal(key, (nr_atoms, nr_atoms, geometry_basis))
     x_minus_xt_norm = jnp.linalg.norm(x_minus_xt, axis=-1, keepdims=True)
-
-    # Convert the input tensors from JAX to torch and reshape to diagonal batching
-    h_ij_semantic = torch.from_numpy(onp.array(h_e_att)).reshape(nr_pairs, hidden_features * nr_heads)
-    dir_ij = torch.from_numpy(onp.array(x_minus_xt / (x_minus_xt_norm + 1e-5))).reshape(nr_pairs, geometry_basis)
+    d_ij = torch.sqrt((r_ij ** 2).sum(dim=1))
+    dir_ij = r_ij / (d_ij.unsqueeze(-1) + 1e-5)
 
     mf_combinations = mf_sake_block.get_combinations(h_ij_semantic, dir_ij)
     mf_result = mf_sake_block.get_spatial_attention(mf_combinations, idx_i, nr_atoms)
+    print("mf_result", mf_result)
 
     variables = ref_sake_interaction.init(key, h_e_att, x_minus_xt, x_minus_xt_norm,
                                           method=ref_sake_interaction.spatial_attention)
@@ -515,10 +522,9 @@ def test_spatial_attention_against_reference():
         1].weight.detach().numpy().T
     ref_spatial, ref_combinations = ref_sake_interaction.apply(variables, h_e_att, x_minus_xt, x_minus_xt_norm,
                                                                method=ref_sake_interaction.spatial_attention)
-    assert (torch.allclose(mf_combinations,
-                           torch.from_numpy(onp.array(ref_combinations)).reshape(nr_pairs, nr_heads * hidden_features,
-                                                                                 geometry_basis), atol=1e-6))
-    assert (torch.allclose(mf_result, torch.from_numpy(onp.array(ref_spatial)), atol=1e-6))
+    compare_equivalent_arrays(ref_combinations, mf_combinations, mask, pairlist)
+    print("ref_spatial", ref_spatial)
+    assert torch.allclose(mf_result, torch.from_numpy(onp.array(ref_spatial)), atol=1e-7)
 
 
 def test_sake_layer_against_reference():

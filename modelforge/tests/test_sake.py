@@ -44,7 +44,7 @@ def test_sake_forward(input_data):
 
 def test_sake_interaction_forward():
     from modelforge.potential import CosineCutoff
-    from modelforge.potential import GaussianRBF
+    from modelforge.potential.sake import ExpNormalSmearing
     nr_atoms = 41
     nr_atom_basis = 47
     geometry_basis = 3
@@ -59,7 +59,7 @@ def test_sake_interaction_forward():
         nr_coefficients=23,
         nr_heads=29,
         activation=torch.nn.ReLU(),
-        radial_basis_module=GaussianRBF(n_rbf=31, cutoff=5.0 * unit.nanometer),
+        radial_basis_module=ExpNormalSmearing(n_rbf=50),
         cutoff_module=CosineCutoff(5.0 * unit.nanometer),
         epsilon=1e-5
     )

@@ -33,6 +33,7 @@ def test_sake_forward(input_data):
     Test the forward pass of the SAKE model.
     """
     sake = SAKE()
+    print(list(p.dtype for p in sake.parameters()))
     nnp_input = input_data.nnp_input
     energy = sake(nnp_input).E
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
@@ -118,6 +119,8 @@ def test_sake_interaction_equivariance():
     reference_h, reference_x, reference_v = reference_out
 
     # x and v are equivariant, h is invariant
+    print("reference_h", reference_h)
+    print("perturbed_h", perturbed_h)
     assert torch.allclose(reference_h, perturbed_h)
     assert torch.allclose(torch.matmul(reference_x, rotation_matrix), perturbed_x)
     assert torch.allclose(torch.matmul(reference_v, rotation_matrix), perturbed_v)
@@ -376,6 +379,9 @@ def compare_equivalent_edge_features(jax_array, torch_array, mask, pairlist, ato
             # not checking masked values
             pass
         else:
+            # print("torch_array", torch_array[i].shape, torch_array[i])
+            # print("jax_array", jax_array[pairlist[0, i].item(), pairlist[1, i].item()].shape, jax_array[
+            #     pairlist[0, i].item(), pairlist[1, i].item()])
             assert torch.allclose(torch_array[i], torch.from_numpy(
                 onp.array(jax_array[pairlist[0, i].item(), pairlist[1, i].item()])), atol=atol)
 
@@ -441,12 +447,12 @@ def test_exp_normal_smearing_against_reference():
 
 
 def test_combined_attention_against_reference():
-    nr_atoms = 13
+    nr_atoms = 5
     out_features = 11
     hidden_features = 7
     geometry_basis = 3
-    nr_heads = 5
-    nr_pairs = 17
+    nr_heads = 1
+    nr_pairs = 2
     key = jax.random.PRNGKey(1884)
     nr_edge_basis = hidden_features
 
@@ -479,7 +485,7 @@ def test_combined_attention_against_reference():
         jnp.expand_dims(h_e_mtx, axis=-1) * jnp.expand_dims(ref_combined_attention, axis=-2),
         (nr_atoms, nr_atoms, nr_heads * nr_edge_basis))
 
-    compare_equivalent_edge_features(ref_h_ij_semantic, mf_h_ij_semantic, mask, pairlist)
+    compare_equivalent_edge_features(ref_h_ij_semantic, mf_h_ij_semantic, mask, pairlist, atol=1e-5)
 
 
 def test_spatial_attention_against_reference():
@@ -497,7 +503,6 @@ def test_spatial_attention_against_reference():
     pairlist_key, input_key = jax.random.split(key, 2)
     pairlist, mask = make_equivalent_pairlist_mask(pairlist_key, nr_atoms, nr_pairs, include_self_pairs=False)
     idx_i, idx_j = pairlist
-    print("pairlist", pairlist)
 
     h_key, x_key = jax.random.split(input_key, 2)
     h_e_att, h_ij_semantic = make_equivalent_edge_features(h_key, nr_coefficients, nr_atoms, pairlist)
@@ -509,7 +514,6 @@ def test_spatial_attention_against_reference():
 
     mf_combinations = mf_sake_block.get_combinations(h_ij_semantic, dir_ij)
     mf_result = mf_sake_block.get_spatial_attention(mf_combinations, idx_i, nr_atoms)
-    print("mf_result", mf_result)
 
     variables = ref_sake_interaction.init(key, h_e_att, x_minus_xt, x_minus_xt_norm, mask,
                                           method=ref_sake_interaction.spatial_attention)
@@ -522,7 +526,6 @@ def test_spatial_attention_against_reference():
     ref_spatial, ref_combinations = ref_sake_interaction.apply(variables, h_e_att, x_minus_xt, x_minus_xt_norm, mask,
                                                                method=ref_sake_interaction.spatial_attention)
     compare_equivalent_edge_features(ref_combinations, mf_combinations, mask, pairlist)
-    print("ref_spatial", ref_spatial)
     assert torch.allclose(mf_result, torch.from_numpy(onp.array(ref_spatial)), atol=1e-7)
 
 

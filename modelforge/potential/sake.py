@@ -439,7 +439,7 @@ class SAKEInteraction(nn.Module):
             Spatial attention. Shape [nr_atoms, nr_atom_basis_spatial].
         """
         expanded_idx_i = idx_i.view(-1, 1, 1).expand_as(combinations)
-        out_shape = (nr_atoms, self.nr_coefficients, len(idx_i))
+        out_shape = (nr_atoms, self.nr_coefficients, combinations.shape[-1])
         zeros = torch.zeros(out_shape, dtype=combinations.dtype, device=combinations.device)
         combinations_mean = zeros.scatter_reduce(0, expanded_idx_i, combinations, "mean", include_self=False)
         combinations_norm_square = (combinations_mean ** 2).sum(dim=-1)

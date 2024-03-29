@@ -8,6 +8,35 @@ class ANI1xCuration(DatasetCuration):
     """
     Routines to fetch and process the ANI-1x dataset into a curated hdf5 file.
 
+    This dataset includes ~5 million density function theory calculations
+    for small organic molecules containing H, C, N, and O.
+    A subset of ~500k are computed with accurate coupled cluster methods.
+
+    References:
+
+    ANI-1x dataset:
+    Smith, J. S.; Nebgen, B.; Lubbers, N.; Isayev, O.; Roitberg, A. E.
+    Less Is More: Sampling Chemical Space with Active Learning.
+    J. Chem. Phys. 2018, 148 (24), 241733.
+    https://doi.org/10.1063/1.5023802
+    https://arxiv.org/abs/1801.09319
+
+    ANI-1ccx dataset:
+    Smith, J. S.; Nebgen, B. T.; Zubatyuk, R.; Lubbers, N.; Devereux, C.; Barros, K.; Tretiak, S.; Isayev, O.; Roitberg, A. E.
+    Approaching Coupled Cluster Accuracy with a General-Purpose Neural Network Potential through Transfer Learning. N
+    at. Commun. 2019, 10 (1), 2903.
+    https://doi.org/10.1038/s41467-019-10827-4
+
+    wB97x/def2-TZVPP data:
+    Zubatyuk, R.; Smith, J. S.; Leszczynski, J.; Isayev, O.
+    Accurate and Transferable Multitask Prediction of Chemical Properties with an Atoms-in-Molecules Neural Network.
+    Sci. Adv. 2019, 5 (8), eaav6490.
+    https://doi.org/10.1126/sciadv.aav6490
+
+
+    Dataset DOI:
+    https://doi.org/10.6084/m9.figshare.c.4712477.v1
+
     Parameters
     ----------
     hdf5_file_name, str, required
@@ -17,8 +46,8 @@ class ANI1xCuration(DatasetCuration):
     local_cache_dir: str, optional, default='./AN1_dataset'
         Location to save downloaded dataset.
     convert_units: bool, optional, default=True
-        Convert from [angstrom, hartree] (i.e., source units)
-        to [nanometer, kJ/mol]
+        Convert from [e.g., angstrom, bohr, hartree] (i.e., source units)
+        to [nanometer, kJ/mol] (i.e., target units)
 
     Examples
     --------
@@ -32,6 +61,7 @@ class ANI1xCuration(DatasetCuration):
         self.dataset_download_url = (
             "https://springernature.figshare.com/ndownloader/files/18112775"
         )
+        self.dataset_md5_checksum = "98090dd6679106da861f52bed825ffb7"
 
         self.qm_parameters = {
             "geometry": {
@@ -315,6 +345,7 @@ class ANI1xCuration(DatasetCuration):
         # download the dataset
         self.name = download_from_figshare(
             url=url,
+            md5_checksum=self.dataset_md5_checksum,
             output_path=self.local_cache_dir,
             force_download=force_download,
         )

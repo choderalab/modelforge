@@ -6,7 +6,7 @@ from loguru import logger
 
 class SPICE114Curation(DatasetCuration):
     """
-    Routines to fetch and process the spice 1.1.4 dataset into a curated hdf5 file.
+    Routines to fetch  the spice 1.1.4 dataset from zenodo and process into a curated hdf5 file.
 
     Small-molecule/Protein Interaction Chemical Energies (SPICE).
     The SPICE dataset contains 1.1 million conformations for a diverse set of small molecules,
@@ -32,8 +32,8 @@ class SPICE114Curation(DatasetCuration):
     local_cache_dir: str, optional, default='./spice_dataset'
         Location to save downloaded dataset.
     convert_units: bool, optional, default=True
-        Convert from [angstrom, hartree] (i.e., source units)
-        to [nanometer, kJ/mol]
+        Convert from [e.g., angstrom, bohr, hartree] (i.e., source units)
+        to [nanometer, kJ/mol] (i.e., target units)
 
     Examples
     --------
@@ -68,6 +68,10 @@ class SPICE114Curation(DatasetCuration):
                 "u_out": unit.kilojoule_per_mole / unit.angstrom,
             },
             "mbis_charges": {
+                "u_in": unit.elementary_charge,
+                "u_out": unit.elementary_charge,
+            },
+            "total_charge": {
                 "u_in": unit.elementary_charge,
                 "u_out": unit.elementary_charge,
             },
@@ -128,6 +132,7 @@ class SPICE114Curation(DatasetCuration):
             "n_configs": "single_rec",
             "smiles": "single_rec",
             "subset": "single_rec",
+            "total_charge": "single_rec",
             "geometry": "series_atom",
             "dft_total_energy": "series_mol",
             "dft_total_gradient": "series_atom",
@@ -141,6 +146,26 @@ class SPICE114Curation(DatasetCuration):
             "scf_quadrupole": "series_mol",
             "wiberg_lowdin_indices": "series_atom",
         }
+
+    def _calculate_reference_charge(self, smiles: str) -> unit.Quantity:
+        """
+        Calculate the total charge of a molecule from its SMILES string.
+
+        Parameters
+        ----------
+        smiles: str, required
+            SMILES string of the molecule.
+
+        Returns
+        -------
+        total_charge: unit.Quantity
+        """
+
+        from rdkit import Chem
+
+        rdmol = Chem.MolFromSmiles(smiles, sanitize=False)
+        total_charge = sum(atom.GetFormalCharge() for atom in rdmol.GetAtoms())
+        return int(total_charge) * unit.elementary_charge
 
     def _process_downloaded(
         self,
@@ -186,6 +211,7 @@ class SPICE114Curation(DatasetCuration):
                 ds_temp = {}
 
                 ds_temp["name"] = f"{name}"
+                ds_temp["smiles"] = hf[name]["smiles"][()][0].decode("utf-8")
                 ds_temp["atomic_numbers"] = hf[name]["atomic_numbers"][()].reshape(
                     -1, 1
                 )
@@ -220,7 +246,9 @@ class SPICE114Curation(DatasetCuration):
                             ds_temp[param_out] = temp * param_unit
                         else:
                             ds_temp[param_out] = temp
-
+                ds_temp["total_charge"] = self._calculate_reference_charge(
+                    ds_temp["smiles"]
+                )
                 self.data.append(ds_temp)
         if self.convert_units:
             self._convert_units()
@@ -261,7 +289,7 @@ class SPICE114Curation(DatasetCuration):
         # download the dataset
         self.name = download_from_zenodo(
             url=url,
-            zenodo_md5_checksum=self.dataset_md5_checksum,
+            md5_checksum=self.dataset_md5_checksum,
             output_path=self.local_cache_dir,
             force_download=force_download,
         )

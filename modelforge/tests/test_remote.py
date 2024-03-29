@@ -26,6 +26,50 @@ def test_is_url():
     )
 
 
+def test_download_from_url(prep_temp_dir):
+    url = "https://raw.githubusercontent.com/choderalab/modelforge/e3e65e15e23ccc55d03dd7abb4b9add7a7dd15c3/modelforge/modelforge.py"
+    checksum = "66ec18ca5db3df5791ff1ffc584363a8"
+    # Download the file
+    download_from_url(
+        url,
+        md5_checksum=checksum,
+        output_path=str(prep_temp_dir),
+        output_filename="modelforge.py",
+        force_download=True,
+    )
+
+    file_name_path = str(prep_temp_dir) + "/modelforge.py"
+    assert os.path.isfile(file_name_path)
+
+    # create a dummy document to test the case where
+    # the checksum doesn't match so it will redownload
+    with open(file_name_path, "w") as f:
+        f.write("dummy document")
+
+    # This will force a download because the checksum doesn't match
+    download_from_url(
+        url,
+        md5_checksum=checksum,
+        output_path=str(prep_temp_dir),
+        output_filename="modelforge.py",
+        force_download=False,
+    )
+
+    file_name_path = str(prep_temp_dir) + "/modelforge.py"
+    assert os.path.isfile(file_name_path)
+
+    # let us change the expected checksum to cause a failure
+    with pytest.raises(Exception):
+        url = "https://choderalab.com/modelforge.py"
+        download_from_url(
+            url,
+            md5_checksum="checksum_garbage",
+            output_path=str(prep_temp_dir),
+            output_filename="modelforge.py",
+            force_download=True,
+        )
+
+
 def test_download_from_figshare(prep_temp_dir):
     url = "https://figshare.com/ndownloader/files/22247589"
     name = download_from_figshare(

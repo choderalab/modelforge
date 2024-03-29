@@ -93,6 +93,61 @@ def calculate_md5_checksum(file_name: str, file_path: str) -> str:
     return file_hash.hexdigest()
 
 
+def download_from_url(
+    url: str,
+    md5_checksum: str,
+    output_path: str,
+    output_filename: str,
+    force_download=False,
+) -> str:
+
+    import requests
+    import os
+    from tqdm import tqdm
+
+    chunk_size = 512
+
+    if os.path.isfile(f"{output_path}/{output_filename}"):
+        calculated_checksum = calculate_md5_checksum(
+            file_name=output_filename, file_path=output_path
+        )
+        if calculated_checksum != md5_checksum:
+            force_download = True
+            logger.debug(
+                f"Checksum {calculated_checksum} of existing file {output_filename} does not match expected checksum {md5_checksum}, re-downloading."
+            )
+
+    if not os.path.isfile(f"{output_path}/{output_filename}") or force_download:
+        logger.debug(
+            f"Downloading datafile from {url} to {output_path}/{output_filename}."
+        )
+
+        r = requests.get(url, stream=True)
+
+        os.makedirs(output_path, exist_ok=True)
+
+        with open(f"{output_path}/{output_filename}", "wb") as fd:
+            for chunk in tqdm(
+                r.iter_content(chunk_size=chunk_size),
+                ascii=True,
+                desc="downloading",
+            ):
+                fd.write(chunk)
+        calculated_checksum = calculate_md5_checksum(
+            file_name=output_filename, file_path=output_path
+        )
+        if calculated_checksum != md5_checksum:
+            raise Exception(
+                f"Checksum of downloaded file {calculated_checksum} does not match expected checksum {md5_checksum}."
+            )
+
+    else:  # if the file exists and we don't set force_download to True, just use the cached version
+        logger.debug(f"Datafile {output_filename} already exists in {output_path}.")
+        logger.debug(
+            "Using previously downloaded file; set force_download=True to re-download."
+        )
+
+
 # Figshare helper functions
 def download_from_figshare(
     url: str, md5_checksum: str, output_path: str, force_download=False

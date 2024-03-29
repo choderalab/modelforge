@@ -1,12 +1,24 @@
 import pytest
 
-from .helper_functions import (
-    DATASETS,
-    MODELS_TO_TEST,
-    SIMPLIFIED_INPUT_DATA,
-    return_single_batch,
-    equivariance_test_utils,
+from modelforge.potential.models import (
+    NeuralNetworkPotentialFactory,
 )
+
+
+@pytest.mark.parametrize("model_name", NeuralNetworkPotentialFactory._IMPLEMENTED_NNPS)
+def test_model_factory(model_name):
+    from modelforge.potential.models import (
+        NeuralNetworkPotentialFactory,
+        TrainingAdapter,
+    )
+
+    # inference model
+    model = NeuralNetworkPotentialFactory.create_nnp("inference", model_name)
+    assert model_name in type(model)
+
+    # training model
+    model = NeuralNetworkPotentialFactory.create_nnp("training", model_name)
+    assert type(model) == TrainingAdapter
 
 
 def test_energy_scaling_and_offset():
@@ -58,45 +70,32 @@ def test_energy_scaling_and_offset():
     # Test energy scaling
 
 
-@pytest.mark.parametrize("default_model", MODELS_TO_TEST)
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_forward_pass(default_model, dataset):
+def test_forward_pass(inference_model, batch):
     # this test sends a single batch from different datasets through the model
 
-    # initialize default model
-    model = default_model()
-    # return a single batch
-    batch = return_single_batch(
-        dataset,
-    )  # split_file="modelforge/tests/qm9tut/split.npz")
     nnp_input = batch.nnp_input
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
     # test the forward pass through each of the models
-    output = model(nnp_input).E
+    output = inference_model(nnp_input).E
 
     # test tat we get an energie per molecule
     assert len(output) == nr_of_mols
 
 
-@pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
-@pytest.mark.parametrize("default_model", MODELS_TO_TEST)
-def test_calculate_energies_and_forces(input_data, default_model):
+def test_calculate_energies_and_forces(inference_model, batch):
     """
     Test the calculation of energies and forces for a molecule.
     """
     import torch
 
-    nnp_input = input_data.nnp_input
+    nnp_input = batch.nnp_input
     # test the backward pass through each of the models
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
     nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
 
-    # initialize model with default parameters
-    model = default_model()
-
     # forward pass
-    result = model(nnp_input).E
+    result = inference_model(nnp_input).E
 
     # backpropagation
     forces = -torch.autograd.grad(
@@ -305,8 +304,7 @@ def test_pairlist():
     assert not pair_indices.shape == neighbor_indices.shape
 
 
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_pairlist_on_dataset(dataset):
+def test_pairlist_on_dataset(initialized_dataset):
     from modelforge.dataset.dataset import TorchDataModule
     from modelforge.potential.models import Neighborlist
 
@@ -330,9 +328,7 @@ def test_pairlist_on_dataset(dataset):
         assert shapePairlist[0] == 2
 
 
-@pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
-@pytest.mark.parametrize("default_model", MODELS_TO_TEST)
-def test_equivariant_energies_and_forces(input_data, default_model):
+def test_equivariant_energies_and_forces(batch, inference_model, equivariance_utils):
     """
     Test the calculation of energies and forces for a molecule.
     NOTE: test will be adapted once we have a trained model.
@@ -341,18 +337,18 @@ def test_equivariant_energies_and_forces(input_data, default_model):
     from dataclasses import replace
 
     # define the symmetry operations
-    translation, rotation, reflection = equivariance_test_utils()
+    translation, rotation, reflection = equivariance_utils.equivariance_test_utils()
     # define the tolerance
     atol = 1e-4
     # set seed manually
     torch.manual_seed(1234)
     # initialize the models
-    model = default_model().to(torch.float64)
+    model = inference_model.to(torch.float64)
 
     # ------------------- #
     # start the test
     # reference values
-    nnp_input = input_data.nnp_input
+    nnp_input = batch.nnp_input
     reference_result = model(nnp_input).E.double()
     reference_forces = -torch.autograd.grad(
         reference_result.sum(),

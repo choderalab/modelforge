@@ -1,4 +1,4 @@
-from typing import Dict, Tuple, Any
+from typing import Dict, Tuple, Any, NamedTuple, TYPE_CHECKING, Type
 
 import lightning as pl
 import torch
@@ -9,18 +9,13 @@ from torch.nn import functional as F
 from loguru import logger as log
 
 from abc import ABC, abstractmethod
-import torch
-from typing import NamedTuple, TYPE_CHECKING
 from modelforge.potential.utils import (
     AtomicSelfEnergies,
     NNPInput,
     BatchData,
 )
-from abc import abstractmethod, ABC
 from openff.units import unit
-from typing import Dict, Type
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from torch.optim import Optimizer
 
 
 if TYPE_CHECKING:
@@ -212,10 +207,72 @@ class Neighborlist(Pairlist):
         )
 
 
-from typing import Callable, Optional
+from typing import Callable, Optional, Union, Literal
 
 
-class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
+class NeuralNetworkPotentialFactory:
+    """
+    Factory class for creating instances of neural network potentials (NNP).
+
+    This factory allows for the creation of specific NNP instances configured for either
+    training or inference purposes based on the given parameters.
+
+    Methods
+    -------
+    create_nnp(use, nnp_type, nnp_parameters=None, training_parameters=None)
+        Creates an instance of a specified NNP type configured for either training or inference.
+    """
+
+    from modelforge.potential import ANI2x, SchNet, PaiNN, PhysNet
+
+    _IMPLEMENTED_NNPS = {
+        "ANI2x": ANI2x,
+        "SchNet": SchNet,
+        "PaiNN": PaiNN,
+        "PhysNet": PhysNet,
+    }
+
+    @staticmethod
+    def create_nnp(
+        use: Literal["training", "inference"],
+        nnp_type: Literal["ANI2x", "SchNet", "PaiNN", "SAKE", "PhysNet"],
+        nnp_parameters: Optional[Dict[str, Union[int, float]]] = {},
+        training_parameters: Dict[str, Any] = {},
+    ) -> Union["BaseNeuralNetworkPotential", "TrainingAdapter"]:
+
+        def _return_specific_version_of_nnp(use: str, nnp_class):
+            if use == "training":
+                nnp_instance = nnp_class(**nnp_parameters)
+                trainer = TrainingAdapter(
+                    base_model=nnp_instance, **training_parameters
+                )
+                return trainer
+            elif use == "inference":
+                return nnp_class(**nnp_parameters)
+            else:
+                raise ValueError("Unknown NNP type requested.")
+
+        if nnp_type == "ANI2x":
+            return _return_specific_version_of_nnp(
+                use, NeuralNetworkPotentialFactory._IMPLEMENTED_NNPS[nnp_type]
+            )
+        elif nnp_type == "SchNet":
+            return _return_specific_version_of_nnp(
+                use, NeuralNetworkPotentialFactory._IMPLEMENTED_NNPS[nnp_type]
+            )
+        elif nnp_type == "PaiNN":
+            return _return_specific_version_of_nnp(
+                use, NeuralNetworkPotentialFactory._IMPLEMENTED_NNPS[nnp_type]
+            )
+        elif nnp_type == "PhysNet":
+            return _return_specific_version_of_nnp(
+                use, NeuralNetworkPotentialFactory._IMPLEMENTED_NNPS[nnp_type]
+            )
+        else:
+            raise NotImplementedError("Unknown NNP type requested.")
+
+
+class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
     """Abstract base class for neural network potentials.
 
     Attributes
@@ -237,9 +294,6 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
     def __init__(
         self,
         cutoff: unit.Quantity,
-        loss: Callable = F.mse_loss,
-        optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
-        lr: float = 1e-3,
     ):
         """Initialize the neural network potential class with specified parameters."""
         from .models import Neighborlist
@@ -251,9 +305,6 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         self._log_message_dtype = False
         self._log_message_units = False
         self._dataset_statistics = DatasetStatistics(0.0, 1.0, AtomicSelfEnergies())
-        self.loss_function = loss
-        self.optimizer = optimizer
-        self.learning_rate = lr
         # initialize the per molecule readout module
         from .utils import FromAtomToMoleculeReduction
 
@@ -287,6 +338,10 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         # perform the forward pass implemented in the subclass
         pass
 
+    def load_pretrained_weights(self, path: str):
+        self.load_state_dict(torch.load(path, map_location=self.device))
+        self.eval()  # Set the model to evaluation mode
+
     @property
     def dataset_statistics(self):
         return self._dataset_statistics
@@ -311,102 +366,6 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
         # readout the per molecule values
         return self.readout_module(x, index)
 
-    def _log_batch_size(self, y: torch.Tensor):
-        batch_size = int(y.numel())
-        return batch_size
-
-    def training_step(self, batch: BatchData, batch_idx: int) -> torch.Tensor:
-        """
-        Perform a single training step.
-
-        Parameters
-        ----------
-        batch : Dict[str, torch.Tensor]
-            Batch data. Expected to include 'E_predict', a tensor with shape [batch_size, 1].
-        batch_idx : int
-            Batch index.
-
-        Returns
-        -------
-        torch.Tensor, shape [batch_size, 1]
-            Loss tensor.
-        """
-        E_true, E_predict = self._get_energies(batch)
-
-        import math
-
-        # time.sleep(1)
-        loss = self.loss_function(E_true, E_predict)
-        self.log(
-            "train_loss",
-            loss,
-            on_epoch=True,
-            on_step=True,
-            prog_bar=True,
-            batch_size=self.batch_size,
-        )
-
-        return loss
-
-    def test_step(self, batch: BatchData, batch_idx):
-        from torch.nn import functional as F
-
-        E_true, E_predict = self._get_energies(batch)
-
-        test_loss = F.mse_loss(E_true, E_predict)
-        self.log(
-            "test_loss",
-            test_loss,
-            batch_size=self.batch_size,
-            on_epoch=True,
-            prog_bar=True,
-        )
-
-    def validation_step(self, batch: BatchData, batch_idx):
-        from torch.nn import functional as F
-
-        E_true, E_predict = self._get_energies(batch)
-
-        val_loss = F.l1_loss(E_true, E_predict)
-        self.log(
-            "val_loss",
-            val_loss,
-            batch_size=self.batch_size,
-            on_epoch=True,
-            prog_bar=True,
-        )
-        return val_loss
-
-    def _get_energies(self, batch: BatchData) -> Tuple[torch.Tensor, torch.Tensor]:
-
-        nnp_input = batch.nnp_input
-        E_true = batch.metadata.E.to(torch.float32).squeeze(1)
-        self.batch_size = self._log_batch_size(E_true)
-
-        E_predict = self.forward(nnp_input).E
-        return E_true, E_predict
-
-    def configure_optimizers(self) -> Dict[str, Any]:
-        """
-        Configures the optimizer for training.
-
-        Returns
-        -------
-        AdamW
-            The AdamW optimizer.
-        """
-
-        optimizer = self.optimizer(self.parameters(), lr=self.learning_rate)
-        scheduler = {
-            "scheduler": ReduceLROnPlateau(
-                optimizer, mode="min", factor=0.1, patience=5, verbose=True
-            ),
-            "monitor": "val_loss",  # Name of the metric to monitor
-            "interval": "epoch",
-            "frequency": 1,
-        }
-        return {"optimizer": optimizer, "lr_scheduler": scheduler}
-
     def _rescale_energy(self, energies: torch.Tensor) -> torch.Tensor:
 
         return (
@@ -420,13 +379,13 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
         atomic_numbers = data.atomic_numbers
         atomic_subsystem_indices = data.atomic_subsystem_indices.to(
-            dtype=torch.long, device=self.device
+            dtype=torch.long, device=atomic_numbers.device
         )
 
         # atomic_number_to_energy
         atomic_self_energies = self.dataset_statistics.atomic_self_energies
         ase_tensor_for_indexing = atomic_self_energies.ase_tensor_for_indexing.to(
-            device=self.device
+            device=atomic_numbers.device
         )
 
         # first, we need to use the atomic numbers to generate a tensor that
@@ -435,7 +394,9 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
 
         # then, we use the atomic_subsystem_indices to scatter add the atomic self
         # energies in the ase_tensor to generate the molecular self energies
-        ase_tensor_zeros = torch.zeros((number_of_molecules,)).to(device=self.device)
+        ase_tensor_zeros = torch.zeros((number_of_molecules,)).to(
+            device=atomic_numbers.device
+        )
         ase_tensor = ase_tensor_zeros.scatter_add(
             0, atomic_subsystem_indices, ase_tensor
         )
@@ -572,6 +533,120 @@ class BaseNeuralNetworkPotential(pl.LightningModule, ABC):
             rescaled_E=processed_energy["rescaled_E"],
             molecular_ase=processed_energy["molecular_ase"],
         )
+
+
+class TrainingAdapter(pl.LightningModule):
+
+    def __init__(
+        self,
+        base_model: BaseNeuralNetworkPotential,
+        loss: Callable = F.mse_loss,
+        optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
+        lr: float = 1e-3,
+    ):
+
+        super().__init__()
+
+        self.base_model = base_model
+        self.loss_function = loss
+        self.optimizer = optimizer
+        self.learning_rate = lr
+
+    def _get_energies(self, batch: BatchData) -> Tuple[torch.Tensor, torch.Tensor]:
+
+        nnp_input = batch.nnp_input
+        E_true = batch.metadata.E.to(torch.float32).squeeze(1)
+        self.batch_size = self._log_batch_size(E_true)
+
+        E_predict = self.base_model.forward(nnp_input).E
+        return E_true, E_predict
+
+    def _log_batch_size(self, y: torch.Tensor):
+        batch_size = int(y.numel())
+        return batch_size
+
+    def training_step(self, batch: BatchData, batch_idx: int) -> torch.Tensor:
+        """
+        Perform a single training step.
+
+        Parameters
+        ----------
+        batch : Dict[str, torch.Tensor]
+            Batch data. Expected to include 'E_predict', a tensor with shape [batch_size, 1].
+        batch_idx : int
+            Batch index.
+
+        Returns
+        -------
+        torch.Tensor, shape [batch_size, 1]
+            Loss tensor.
+        """
+        E_true, E_predict = self._get_energies(batch)
+
+        import math
+
+        # time.sleep(1)
+        loss = self.loss_function(E_true, E_predict)
+        self.log(
+            "train_loss",
+            loss,
+            on_epoch=True,
+            on_step=True,
+            prog_bar=True,
+            batch_size=self.batch_size,
+        )
+
+        return loss
+
+    def test_step(self, batch: BatchData, batch_idx):
+        from torch.nn import functional as F
+
+        E_true, E_predict = self._get_energies(batch)
+
+        test_loss = F.mse_loss(E_true, E_predict)
+        self.log(
+            "test_loss",
+            test_loss,
+            batch_size=self.batch_size,
+            on_epoch=True,
+            prog_bar=True,
+        )
+
+    def validation_step(self, batch: BatchData, batch_idx):
+        from torch.nn import functional as F
+
+        E_true, E_predict = self._get_energies(batch)
+
+        val_loss = F.l1_loss(E_true, E_predict)
+        self.log(
+            "val_loss",
+            val_loss,
+            batch_size=self.batch_size,
+            on_epoch=True,
+            prog_bar=True,
+        )
+        return val_loss
+
+    def configure_optimizers(self) -> Dict[str, Any]:
+        """
+        Configures the optimizer for training.
+
+        Returns
+        -------
+        AdamW
+            The AdamW optimizer.
+        """
+
+        optimizer = self.optimizer(self.base_model.parameters(), lr=self.learning_rate)
+        scheduler = {
+            "scheduler": ReduceLROnPlateau(
+                optimizer, mode="min", factor=0.1, patience=5, verbose=True
+            ),
+            "monitor": "val_loss",  # Name of the metric to monitor
+            "interval": "epoch",
+            "frequency": 1,
+        }
+        return {"optimizer": optimizer, "lr_scheduler": scheduler}
 
 
 class SingleTopologyAlchemicalBaseNNPModel(BaseNeuralNetworkPotential):

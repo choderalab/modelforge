@@ -1,8 +1,9 @@
 import os
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, Literal, List, Optional
+import pytorch_lightning as pl
+
 
 import numpy as np
-import pytorch_lightning as pl
 import torch
 from loguru import logger as log
 from torch.utils.data import DataLoader
@@ -447,6 +448,7 @@ class DatasetFactory:
     >>> qm9_data = QM9Data()
     >>> torch_dataset = factory.create_dataset(qm9_data)
     """
+    _IMPLEMENTED_DATASETS = ["QM9"]
 
     def __init__(
         self,

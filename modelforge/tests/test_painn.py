@@ -3,9 +3,6 @@ import os
 import pytest
 
 from modelforge.potential.painn import PaiNN
-from .helper_functions import (
-    SIMPLIFIED_INPUT_DATA,
-)
 
 
 IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
@@ -21,7 +18,6 @@ def test_PaiNN_init():
 from openff.units import unit
 
 
-@pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
 @pytest.mark.parametrize(
     "model_parameter",
     (
@@ -30,7 +26,7 @@ from openff.units import unit
         [100, 120, 5, unit.Quantity(5.0, unit.angstrom), 3],
     ),
 )
-def test_painn_forward(input_data, model_parameter):
+def test_painn_forward(batch, model_parameter):
     """
     Test the forward pass of the Schnet model.
     """
@@ -49,7 +45,7 @@ def test_painn_forward(input_data, model_parameter):
         cutoff=cutoff,
         number_of_interaction_modules=nr_interaction_blocks,
     )
-    nnp_input = input_data.nnp_input
+    nnp_input = batch.nnp_input
     energy = painn(nnp_input).E
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 

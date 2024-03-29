@@ -483,12 +483,12 @@ def test_combined_attention_against_reference():
 
 
 def test_spatial_attention_against_reference():
-    nr_atoms = 11
+    nr_atoms = 7
     out_features = 2
     hidden_features = 2
     geometry_basis = 3
-    nr_heads = 7
-    nr_pairs = 17
+    nr_heads = 5
+    nr_pairs = 13
     nr_coefficients = nr_heads * hidden_features
     key = jax.random.PRNGKey(1884)
 
@@ -511,7 +511,7 @@ def test_spatial_attention_against_reference():
     mf_result = mf_sake_block.get_spatial_attention(mf_combinations, idx_i, nr_atoms)
     print("mf_result", mf_result)
 
-    variables = ref_sake_interaction.init(key, h_e_att, x_minus_xt, x_minus_xt_norm,
+    variables = ref_sake_interaction.init(key, h_e_att, x_minus_xt, x_minus_xt_norm, mask,
                                           method=ref_sake_interaction.spatial_attention)
 
     variables["params"]["x_mixing"]["layers_0"]["kernel"] = mf_sake_block.x_mixing_mlp.weight.detach().numpy().T
@@ -519,7 +519,7 @@ def test_spatial_attention_against_reference():
         0].weight.detach().numpy().T
     variables["params"]["post_norm_mlp"]["layers_2"]["kernel"] = mf_sake_block.post_norm_mlp[
         1].weight.detach().numpy().T
-    ref_spatial, ref_combinations = ref_sake_interaction.apply(variables, h_e_att, x_minus_xt, x_minus_xt_norm,
+    ref_spatial, ref_combinations = ref_sake_interaction.apply(variables, h_e_att, x_minus_xt, x_minus_xt_norm, mask,
                                                                method=ref_sake_interaction.spatial_attention)
     compare_equivalent_edge_features(ref_combinations, mf_combinations, mask, pairlist)
     print("ref_spatial", ref_spatial)

@@ -927,6 +927,8 @@ class ModelRetriever:
         storage_dir : str
             The local directory to store downloaded models, by default "./models".
         """
+        import os
+
         self.base_url = base_url
         if not os.path.exists(storage_dir):
             os.makedirs(storage_dir)

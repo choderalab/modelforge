@@ -1,24 +1,27 @@
-# This is an example script that trains the PaiNN model on the .
+# This is an example script that trains an implemented model on the QM9 dataset.
 from lightning import Trainer
 import torch
-from modelforge.potential import SchNet, PaiNN, ANI2x, PhysNet
+
+# import the models implemented in modelforge, for now SchNet, PaiNN, ANI2x or PhysNet
+from modelforge.potential import NeuralNetworkPotentialFactory
 from modelforge.dataset.qm9 import QM9Dataset
 from modelforge.dataset.dataset import TorchDataModule
-from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
+from modelforge.dataset.utils import RandomRecordSplittingStrategy
 from pytorch_lightning.loggers import TensorBoardLogger
 
+# set up tensor board logger
 logger = TensorBoardLogger("tb_logs", name="training")
 
-# Set up dataset
+# Set up and prepare dataset
 data = QM9Dataset()
 dataset = TorchDataModule(
-    data, batch_size=512, splitting_strategy=FirstComeFirstServeSplittingStrategy()
+    data, batch_size=512, splitting_strategy=RandomRecordSplittingStrategy()
 )
 
 dataset.prepare_data(remove_self_energies=True, normalize=False)
 
 # Set up model
-model = ANI2x()  # PaiNN() # ANI2x()
+model = NeuralNetworkPotentialFactory.create_nnp("training", "ANI2x")
 model = model.to(torch.float32)
 
 print(model)
@@ -30,10 +33,10 @@ trainer = Trainer(
     max_epochs=10_000,
     num_nodes=1,
     devices=1,
-    accelerator="gpu",
+    accelerator="cpu",
     logger=logger,  # Add the logger here
     callbacks=[
-        EarlyStopping(monitor="val_loss", min_delta=0.1, patience=5, verbose=True)
+        EarlyStopping(monitor="val_loss", min_delta=0.05, patience=20, verbose=True)
     ],
 )
 

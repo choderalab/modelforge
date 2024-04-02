@@ -3,10 +3,6 @@ import os
 import pytest
 
 from modelforge.potential.painn import PaiNN
-from .helper_functions import (
-    setup_simple_model,
-    SIMPLIFIED_INPUT_DATA,
-)
 
 
 IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
@@ -22,7 +18,6 @@ def test_PaiNN_init():
 from openff.units import unit
 
 
-@pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
 @pytest.mark.parametrize(
     "model_parameter",
     (
@@ -31,7 +26,7 @@ from openff.units import unit
         [100, 120, 5, unit.Quantity(5.0, unit.angstrom), 3],
     ),
 )
-def test_painn_forward(input_data, model_parameter):
+def test_painn_forward(batch, model_parameter):
     """
     Test the forward pass of the Schnet model.
     """
@@ -45,47 +40,52 @@ def test_painn_forward(input_data, model_parameter):
     ) = model_parameter
     painn = PaiNN(
         max_Z=max_Z,
-        embedding_dimensions=embedding_dimensions,
-        number_of_gaussians_basis_functions=number_of_gaussians,
+        number_of_atom_features=embedding_dimensions,
+        number_of_radial_basis_functions=number_of_gaussians,
         cutoff=cutoff,
-        nr_interaction_blocks=nr_interaction_blocks,
+        number_of_interaction_modules=nr_interaction_blocks,
     )
-    energy = painn(input_data)["E_predict"]
-    nr_of_mols = input_data["atomic_subsystem_indices"].unique().shape[0]
+    nnp_input = batch.nnp_input
+    energy = painn(nnp_input).E
+    nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
     assert (
         len(energy) == nr_of_mols
     )  # Assuming energy is calculated per sample in the batch
 
 
-def test_painn_interaction_equivariance():
-    import torch
-    from .helper_functions import generate_methane_input
+def test_painn_interaction_equivariance(methane):
     from modelforge.potential.painn import PaiNN
+    from dataclasses import replace
+    import torch
 
     # define a rotation matrix in 3D that rotates by 90 degrees around the z-axis
     # (clockwise when looking along the z-axis towards the origin)
     rotation_matrix = torch.tensor([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
 
     painn = PaiNN()
-    methane_input = generate_methane_input()
-    perturbed_methane_input = methane_input.copy()
-    perturbed_methane_input["positions"] = torch.matmul(
-        methane_input["positions"], rotation_matrix
+    methane_input = methane.nnp_input
+    perturbed_methane_input = replace(methane_input)
+    perturbed_methane_input.positions = torch.matmul(
+        methane_input.positions, rotation_matrix
     )
 
     # prepare reference and perturbed inputs
-    reference_prepared_input = painn.prepare_inputs(methane_input)
-    reference_d_ij = reference_prepared_input["d_ij"]
-    reference_r_ij = reference_prepared_input["r_ij"]
+    reference_prepared_input = painn.prepare_inputs(
+        methane_input, only_unique_pairs=False
+    )
+    reference_d_ij = reference_prepared_input.d_ij
+    reference_r_ij = reference_prepared_input.r_ij
     reference_dir_ij = reference_r_ij / reference_d_ij
     reference_f_ij = painn.representation_module.radial_symmetry_function_module(
         reference_d_ij
     )
 
-    perturbed_prepared_input = painn.prepare_inputs(perturbed_methane_input)
-    perturbed_d_ij = perturbed_prepared_input["d_ij"]
-    perturbed_r_ij = perturbed_prepared_input["r_ij"]
+    perturbed_prepared_input = painn.prepare_inputs(
+        perturbed_methane_input, only_unique_pairs=False
+    )
+    perturbed_d_ij = perturbed_prepared_input.d_ij
+    perturbed_r_ij = perturbed_prepared_input.r_ij
     perturbed_dir_ij = perturbed_r_ij / perturbed_d_ij
     perturbed_f_ij = painn.representation_module.radial_symmetry_function_module(
         perturbed_d_ij
@@ -125,7 +125,7 @@ def test_painn_interaction_equivariance():
         reference_tranformed_inputs["mu"],
         reference_tranformed_inputs["filters"][0],
         reference_dir_ij,
-        reference_prepared_input["pair_indices"],
+        reference_prepared_input.pair_indices,
     )
 
     perturbed_r = painn_interaction(
@@ -133,7 +133,7 @@ def test_painn_interaction_equivariance():
         perturbed_tranformed_inputs["mu"],
         reference_tranformed_inputs["filters"][0],
         perturbed_dir_ij,
-        perturbed_prepared_input["pair_indices"],
+        perturbed_prepared_input.pair_indices,
     )
 
     perturbed_q, perturbed_mu = perturbed_r

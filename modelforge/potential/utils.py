@@ -1,8 +1,129 @@
-from typing import Callable, Tuple, Union
+from typing import Callable, Tuple, Optional
 
 import numpy as np
 import torch
 import torch.nn as nn
+from typing import Any
+from dataclasses import dataclass, field
+from loguru import logger as log
+
+@dataclass
+class NeuralNetworkData:
+    pair_indices: torch.Tensor
+    d_ij: torch.Tensor
+    r_ij: torch.Tensor
+    atomic_numbers: torch.Tensor
+    number_of_atoms: int
+    positions: torch.Tensor
+    atomic_subsystem_indices: torch.Tensor
+    total_charge: torch.Tensor
+
+
+@dataclass
+class NNPInput:
+    """
+    A dataclass to structure the inputs for neural network potentials.
+
+    Attributes
+    ----------
+    atomic_numbers : torch.Tensor
+        A 1D tensor containing atomic numbers for each atom in the system(s).
+        Shape: [num_atoms], where `num_atoms` is the total number of atoms across all systems.
+    positions : torch.Tensor
+        A 2D tensor of shape [num_atoms, 3], representing the XYZ coordinates of each atom.
+    atomic_subsystem_indices : torch.Tensor
+        A 1D tensor mapping each atom to its respective subsystem or molecule.
+        This allows for calculations involving multiple molecules or subsystems within the same batch.
+        Shape: [num_atoms].
+    total_charge : torch.Tensor
+        A tensor with the total charge of molecule.
+        Shape: [num_systems], where `num_systems` is the number of molecules.
+    """
+
+    atomic_numbers: torch.Tensor
+    positions: Any  # Temporarily use Any to allow for openff.units.unit.Quantity
+    atomic_subsystem_indices: torch.Tensor
+    total_charge: torch.Tensor
+
+    def to(self, device: torch.device):
+        """Move all tensors in this instance to the specified device."""
+        self.atomic_numbers = self.atomic_numbers.to(device)
+        self.positions = self.positions.to(device)
+        self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(device)
+        self.total_charge = self.total_charge.to(device)
+        return self
+
+    def __post_init__(self):
+        # Set dtype and convert units if necessary
+        self.atomic_numbers = self.atomic_numbers.to(torch.int32)
+        self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(torch.int32)
+        self.total_charge = self.total_charge.to(torch.int32)
+
+        # Unit conversion for positions
+        if isinstance(self.positions, unit.Quantity):
+            positions = self.positions.to(unit.nanometer).m
+            self.positions = torch.tensor(
+                positions, dtype=torch.float32, requires_grad=True
+            )
+
+        # Validate inputs
+        self._validate_inputs()
+
+    def _validate_inputs(self):
+        if self.atomic_numbers.dim() != 1:
+            raise ValueError("atomic_numbers must be a 1D tensor")
+        if self.positions.dim() != 2 or self.positions.size(1) != 3:
+            raise ValueError("positions must be a 2D tensor with shape [num_atoms, 3]")
+        if self.atomic_subsystem_indices.dim() != 1:
+            raise ValueError("atomic_subsystem_indices must be a 1D tensor")
+        if self.total_charge.dim() != 1:
+            raise ValueError("total_charge must be a 1D tensor")
+
+        # Optionally, check that the lengths match if required
+        if len(self.positions) != len(self.atomic_numbers):
+            raise ValueError(
+                "The size of atomic_numbers and the first dimension of positions must match"
+            )
+        if len(self.positions) != len(self.atomic_subsystem_indices):
+            raise ValueError(
+                "The size of atomic_subsystem_indices and the first dimension of positions must match"
+            )
+
+
+@dataclass(frozen=False)
+class Metadata:
+    """
+    A NamedTuple to structure the inputs for neural network potentials.
+
+    Parameters
+    ----------
+    """
+
+    E: torch.Tensor
+    atomic_subsystem_counts: torch.Tensor
+    atomic_subsystem_indices_referencing_dataset: torch.Tensor
+    number_of_atoms: int
+
+    def to(self, device: torch.device):
+        """Move all tensors in this instance to the specified device."""
+        self.E = self.E.to(device)
+        self.atomic_subsystem_counts = self.atomic_subsystem_counts.to(device)
+        self.atomic_subsystem_indices_referencing_dataset = (
+            self.atomic_subsystem_indices_referencing_dataset.to(device)
+        )
+        return self
+
+
+@dataclass
+class BatchData:
+    nnp_input: NNPInput
+    metadata: Metadata
+
+    def to(self, device: torch.device):
+        self.nnp_input = self.nnp_input.to(device)
+        self.metadata = self.metadata.to(device)
+        return self
+
 
 ATOMIC_NUMBER_TO_INDEX_MAP = {
     1: 0,  # H
@@ -149,7 +270,7 @@ class Dense(nn.Linear):
         in_features: int,
         out_features: int,
         bias: bool = True,
-        activation: Union[Callable, nn.Module] = None,
+        activation: Optional[nn.Module] = None,
         weight_init: Callable = xavier_uniform_,
         bias_init: Callable = zeros_,
     ):
@@ -185,9 +306,7 @@ from openff.units import unit
 
 
 class CosineCutoff(nn.Module):
-    def __init__(
-        self, cutoff: unit.Quantity, device: torch.device = torch.device("cpu")
-    ):
+    def __init__(self, cutoff: unit.Quantity):
         """
         Behler-style cosine cutoff module.
 
@@ -199,7 +318,7 @@ class CosineCutoff(nn.Module):
         """
         super().__init__()
         cutoff = cutoff.to(unit.nanometer).m
-        self.register_buffer("cutoff", torch.tensor([cutoff], device=device))
+        self.register_buffer("cutoff", torch.tensor([cutoff]))
 
     def forward(self, d_ij: torch.Tensor):
         """
@@ -230,50 +349,38 @@ from typing import Dict
 
 class FromAtomToMoleculeReduction(nn.Module):
 
-    def __init__(self, nr_atom_basis: int):
+    def __init__(self):
         """
         Initializes the energy readout module.
         Performs the reduction of 'per_atom' property to 'per_molecule' property.
-
-        Parameters
-        ----------
-        nr_atom_basis : int
-            Number of atom basis.
         """
         super().__init__()
-        self.energy_layer = nn.Sequential(
-            Dense(nr_atom_basis, nr_atom_basis, activation=nn.ReLU()),
-            Dense(
-                nr_atom_basis,
-                1,
-            ),
-        )
 
-    def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
         """
 
         Parameters
         ----------
-        inputs : Dict[str, torch.Tensor],
-            "scalar_representation", shape [nr_of_atoms_in_batch, nr_atom_basis]
-            "atomic_subsystem_indices", shape [nr_of_atoms_in_batch]
+        x, shape [nr_of_atoms, 1]
+        index, shape [nr_of_atoms]
+
         Returns
         -------
-        Tensor, shape [nr_of_moleculs_in_batch, 1]
+        Tensor, shape [nr_of_moleculs, 1]
             The total energy tensor.
         """
-        x = self.energy_layer(inputs["scalar_representation"])
-        atomic_subsystem_indices = inputs["atomic_subsystem_indices"]
 
         # Perform scatter add operation
-        indices = atomic_subsystem_indices.unsqueeze(1).to(torch.int64)
+        indices = index.to(torch.int64)
         total_energy_per_molecule = torch.zeros(
-            len(atomic_subsystem_indices.unique()), 1, dtype=x.dtype, device=x.device
-        ).scatter_add(0, indices, x)
+            len(index.unique()), dtype=x.dtype, device=x.device
+        )
+
+        total_energy_per_molecule = total_energy_per_molecule.scatter_add(0, indices, x)
 
         # Sum across feature dimension to get final tensor of shape (num_molecules, 1)
         # total_energy_per_molecule = result.sum(dim=1, keepdim=True)
-        return total_energy_per_molecule.squeeze(1)
+        return total_energy_per_molecule
 
 
 from dataclasses import dataclass, field
@@ -437,9 +544,6 @@ class ShiftedSoftplus(nn.Module):
         return functional.softplus(x) - self.log_2
 
 
-from typing import Optional
-
-
 class AngularSymmetryFunction(nn.Module):
     """
     Initialize AngularSymmetryFunction module.
@@ -454,7 +558,6 @@ class AngularSymmetryFunction(nn.Module):
         angle_sections: int = 4,
         trainable: bool = False,
         dtype: Optional[torch.dtype] = None,
-        device: torch.device = torch.device("cpu"),
     ) -> None:
         """
         Parameters
@@ -470,14 +573,14 @@ class AngularSymmetryFunction(nn.Module):
 
         self.number_of_gaussians_asf = number_of_gaussians_for_asf
         self.angular_cutoff = angular_cutoff
-        self.cosine_cutoff = CosineCutoff(self.angular_cutoff, device=device)
+        self.cosine_cutoff = CosineCutoff(self.angular_cutoff)
         _unitless_angular_cutoff = angular_cutoff.to(unit.nanometer).m
         self.angular_start = angular_start
         _unitless_angular_start = angular_start.to(unit.nanometer).m
 
         # save constants
-        EtaA = angular_eta = 19.7 * 100  # FIXME hardcoded eta
-        Zeta = 32.0  # FIXME hardcoded zeta
+        EtaA = angular_eta = 12.5 * 100  # FIXME hardcoded eta
+        Zeta = 14.1000  # FIXME hardcoded zeta
 
         if trainable:
             self.EtaA = torch.tensor([EtaA], dtype=dtype)
@@ -520,6 +623,7 @@ class AngularSymmetryFunction(nn.Module):
 RadialSymmetryFunction: 
 Rca={_unitless_angular_cutoff} 
 ShfZ={ShfZ}, 
+ShFa={ShfA}, 
 eta={EtaA}"""
         )
 
@@ -566,119 +670,264 @@ eta={EtaA}"""
         return ret.flatten(start_dim=-4)
 
 
-class RadialSymmetryFunction(nn.Module):
-    """
-    Gaussian Radial Basis Function module.
-    """
+from abc import ABC, abstractmethod
 
+
+class RadialBasisFunction(ABC):
+    @abstractmethod
+    def compute(self, distances, centers, scale_factors):
+        pass
+
+
+class GaussianRadialBasisFunction(RadialBasisFunction):
+    def compute(
+        self,
+        distances: torch.Tensor,
+        centers: torch.Tensor,
+        scale_factors: torch.Tensor,
+    ) -> torch.Tensor:
+        diff = distances - centers
+        return torch.exp((-1 * scale_factors) * diff**2)
+
+
+class DoubleExponentialRadialBasisFunction(RadialBasisFunction):
+    def compute(
+        self,
+        distances: torch.Tensor,
+        centers: torch.Tensor,
+        scale_factors: torch.Tensor,
+    ) -> torch.Tensor:
+        diff = distances - centers
+        return torch.exp(-torch.abs(diff / scale_factors))
+
+
+class RadialSymmetryFunction(nn.Module):
     def __init__(
         self,
-        number_of_gaussians: int,
-        radial_cutoff: unit.Quantity,
-        radial_start: unit.Quantity = 0.0 * unit.nanometer,
+        number_of_radial_basis_functions: int,
+        max_distance: unit.Quantity,
+        min_distance: unit.Quantity = 0.0 * unit.nanometer,
         dtype: Optional[torch.dtype] = None,
         trainable: bool = False,
-        ani_style: bool = False,
+        radial_basis_function: RadialBasisFunction = GaussianRadialBasisFunction(),
     ):
-        """
-        Initialize the RadialSymmetryFunction class.
+        """RadialSymmetryFunction class.
+
+        Initializes and contains the logic for computing radial symmetry functions.
 
         Parameters
-        ----------
-        number_of_gaussians : int
-            Number of radial basis functions.
-        radial_cutoff : unit.Quantity
-            The cutoff distance.
-        radial_start: unit.Quantity
-            center of first Gaussian function.
+        ---------
+        number_of_radial_basis_functions: int
+            Number of radial basis functions to use.
+        max_distance: unit.Quantity
+            Maximum distance to consider for symmetry functions.
+        min_distance: unit.Quantity
+            Minimum distance to consider.
+        dtype:
+            Data type for computations.
+        trainable: bool, default False
+            Whether parameters are trainable.
+        radial_basis_function: RadialBasisFunction, default GaussianRadialBasisFunction()
 
+        Subclasses must implement the forward() method to compute the actual
+        symmetry function output given an input distance matrix.
         """
-        from loguru import logger as log
 
-        log.info(f"RadialSymmetryFunction: ani-style: {ani_style}")
         super().__init__()
-        self.number_of_gaussians = number_of_gaussians
-        self.radial_cutoff = radial_cutoff
-        _unitless_radial_cutoff = radial_cutoff.to(unit.nanometer).m
-        self.radial_start = radial_start
-        _unitless_radial_start = radial_start.to(unit.nanometer).m
-        # calculate offsets
-        # ===============
-        if ani_style:
-            offsets = torch.linspace(
-                _unitless_radial_start,
-                _unitless_radial_cutoff,
-                number_of_gaussians + 1,
-                dtype=dtype,
-            )[:-1]
-        else:
-            offsets = torch.linspace(
-                _unitless_radial_start,
-                _unitless_radial_cutoff,
-                number_of_gaussians,
-                dtype=dtype,
-            )  # R_s
-        # calculate EtaR
-        # ===============
-        if ani_style:
-            EtaR = (torch.tensor([19.7]) * torch.ones_like(offsets)).to(
-                dtype
-            )  # since we are in nanometer
-            EtaR = (
-                EtaR * 100
-            )  # NOTE: this is a hack to get EtaR to be in the right range
-            # FIXME EtaR is for now hardcoded
-            prefactor = torch.tensor([0.25], dtype=dtype)
-        else:
-            widths = (torch.abs(offsets[1] - offsets[0]) * torch.ones_like(offsets)).to(
-                dtype
-            )
-            EtaR = 0.5 / torch.pow(widths, 2)  # EtaR
-            prefactor = torch.tensor([1.0], dtype=dtype)
-        # ===============
-
-        if trainable:
-            self.R_s = offsets
-            self.prefactor = prefactor
-            self.EtaR = EtaR
-        else:
-            self.register_buffer("R_s", offsets)
-            self.register_buffer("prefactor", prefactor)
-            self.register_buffer("EtaR", EtaR)
-
+        self.number_of_radial_basis_functions = number_of_radial_basis_functions
+        self.max_distance = max_distance
+        self.min_distance = min_distance
+        self.dtype = dtype
+        self.trainable = trainable
+        self.radial_basis_function = radial_basis_function
+        self.initialize_parameters()
         # The length of radial subaev of a single species
-        self.radial_sublength = self.R_s.numel()
+        self.radial_sublength = self.radial_basis_centers.numel()
 
-        log.info(
-            f"""
-RadialSymmetryFunction: 
-cutoff={self.radial_cutoff} 
-number_of_gaussians={self.number_of_gaussians} 
-"""
+    def initialize_parameters(self):
+        # convert to nanometer
+        _unitless_max_distance = self.max_distance.to(unit.nanometer).m
+        _unitless_min_distance = self.min_distance.to(unit.nanometer).m
+
+        # calculate radial basis centers
+        radial_basis_centers = self.calculate_radial_basis_centers(
+            _unitless_min_distance,
+            _unitless_max_distance,
+            self.number_of_radial_basis_functions,
+            self.dtype,
         )
+        # calculate scale factors
+        radial_scale_factor = self.calculate_radial_scale_factor(
+            _unitless_min_distance,
+            _unitless_max_distance,
+            self.number_of_radial_basis_functions,
+        )
+
+        # either add as parameters or register buffers
+        if self.trainable:
+            self.radial_basis_centers = radial_basis_centers
+            self.radial_scale_factor = radial_scale_factor
+            self.prefactor = nn.Parameter(torch.tensor([1.0]))
+        else:
+            self.register_buffer("radial_basis_centers", radial_basis_centers)
+            self.register_buffer("radial_scale_factor", radial_scale_factor)
+            self.register_buffer("prefactor", torch.tensor([1.0]))
+
+    def calculate_radial_basis_centers(
+        self,
+        _unitless_min_distance,
+        _unitless_max_distance,
+        number_of_radial_basis_functions,
+        dtype,
+    ):
+        # the default approach to calculate radial basis centers
+        # can be overwritten by subclasses
+        centers = torch.linspace(
+            _unitless_min_distance,
+            _unitless_max_distance,
+            number_of_radial_basis_functions,
+            dtype=dtype,
+        )
+        return centers
+
+    def calculate_radial_scale_factor(
+        self,
+        _unitless_min_distance,
+        _unitless_max_distance,
+        number_of_radial_basis_functions,
+    ):
+        # the default approach to calculate radial scale factors (each of them are scaled by the same value)
+        # can be overwritten by subclasses
+        scale_factors = torch.full(
+            (number_of_radial_basis_functions,),
+            (_unitless_min_distance - _unitless_max_distance)
+            / number_of_radial_basis_functions,
+        )
+        scale_factors = scale_factors * -15_000
+        return scale_factors
 
     def forward(self, d_ij: torch.Tensor) -> torch.Tensor:
         """
-        Computes the radial symmetry functions for the pairwise distance tensor.
-        This computes the terms of the following equation
-        G_{m}^{R} = \sum_{j!=i}^{N} exp(-EtaR(|R_{ij} - R_s|)^2))
-        (NOTE: sum is not performed)
+        Compute the radial symmetry function values for each distance in d_ij.
+
         Parameters
         ----------
-        d_ij : torch.Tensor, size (nr_of_atoms, 1)
-            Pairwise distances.
+        d_ij: torch.Tensor
+            pairwise distances with shape [N, 1] where N is the number of pairs.
 
-        Returns
-        -------
-        torch.Tensor
-            The radial basis functions. Shape: [pairs, number_of_gaussians]
+        Returns:
+        torch.Tensor,
+            tensor of radial symmetry function values with shape [N, num_basis_functions].
         """
-        assert d_ij.ndim == 2
-        assert d_ij.shape[1] == 1
+        features = self.radial_basis_function.compute(
+            d_ij, self.radial_basis_centers, self.radial_scale_factor
+        )
+        return self.prefactor * features
 
-        diff = d_ij[..., None] - self.R_s  # d_ij - R_s
-        y = self.prefactor * torch.exp((-1 * self.EtaR) * torch.pow(diff, 2))
-        return y
+
+class SchnetRadialSymmetryFunction(RadialSymmetryFunction):
+    def __init__(
+        self,
+        number_of_radial_basis_functions: int,
+        max_distance: unit.Quantity,
+        min_distance: unit.Quantity = 0.0 * unit.nanometer,
+        dtype: Optional[torch.dtype] = None,
+        trainable: bool = False,
+        radial_basis_function: RadialBasisFunction = GaussianRadialBasisFunction(),
+    ):
+        """RadialSymmetryFunction class.
+
+        Initializes and contains the logic for computing radial symmetry functions.
+
+        Parameters
+        ---------
+        """
+
+        super().__init__(
+            number_of_radial_basis_functions,
+            max_distance,
+            min_distance,
+            dtype,
+            trainable,
+            radial_basis_function,
+        )
+        self.prefactor = torch.tensor([1.0])
+
+    def calculate_radial_scale_factor(
+        self,
+        _unitless_min_distance,
+        _unitless_max_distance,
+        number_of_radial_basis_functions,
+    ):
+
+        scale_factors = torch.linspace(
+            _unitless_min_distance,
+            _unitless_max_distance,
+            number_of_radial_basis_functions,
+        )
+
+        widths = (
+            torch.abs(scale_factors[1] - scale_factors[0])
+            * torch.ones_like(scale_factors)
+        ).to(self.dtype)
+
+        scale_factors = 0.5 / torch.square_(widths)
+        return scale_factors
+
+
+class AniRadialSymmetryFunction(RadialSymmetryFunction):
+    def __init__(
+        self,
+        number_of_radial_basis_functions: int,
+        max_distance: unit.Quantity,
+        min_distance: unit.Quantity = 0.0 * unit.nanometer,
+        dtype: Optional[torch.dtype] = None,
+        trainable: bool = False,
+        radial_basis_function: RadialBasisFunction = GaussianRadialBasisFunction(),
+    ):
+        """RadialSymmetryFunction class.
+
+        Initializes and contains the logic for computing radial symmetry functions.
+
+        Parameters
+        ---------
+        """
+
+        super().__init__(
+            number_of_radial_basis_functions,
+            max_distance,
+            min_distance,
+            dtype,
+            trainable,
+            radial_basis_function,
+        )
+        self.prefactor = torch.tensor([0.25])
+
+    def calculate_radial_basis_centers(
+        self,
+        _unitless_min_distance,
+        _unitless_max_distance,
+        number_of_radial_basis_functions,
+        dtype,
+    ):
+        centers = torch.linspace(
+            _unitless_min_distance,
+            _unitless_max_distance,
+            number_of_radial_basis_functions + 1,
+            dtype=dtype,
+        )[:-1]
+        log.info(f'{centers=}')
+        return centers
+
+    def calculate_radial_scale_factor(
+        self,
+        _unitless_min_distance,
+        _unitless_max_distance,
+        number_of_radial_basis_functions,
+    ):
+        # ANI uses a predefined scaling factor
+        scale_factors = torch.full((number_of_radial_basis_functions,), (19.7 * 100))
+        return scale_factors
 
 
 def pair_list(

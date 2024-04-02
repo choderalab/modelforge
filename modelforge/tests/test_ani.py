@@ -25,19 +25,22 @@ def setup_methane():
     atomic_subsystem_indices = torch.tensor(
         [0, 0, 0, 0, 0], dtype=torch.int32, device=device
     )
-    mf_input = {
-        "atomic_numbers": species,
-        "positions": coordinates.squeeze() / 10,
-        "atomic_subsystem_indices": atomic_subsystem_indices,
-    }
 
-    return species, coordinates, device, mf_input
+    from modelforge.potential.utils import NNPInput
+
+    nnp_input = NNPInput(
+        atomic_numbers=torch.tensor([6, 1, 1, 1, 1], device=device),
+        positions=coordinates.squeeze(0) / 10,
+        atomic_subsystem_indices=atomic_subsystem_indices,
+        total_charge=torch.tensor([0.0]),
+    )
+
+    return species, coordinates, device, nnp_input
 
 
 @pytest.fixture
 def setup_two_methanes():
     import torch
-    from modelforge.potential.utils import ATOMIC_NUMBER_TO_INDEX_MAP
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -62,22 +65,22 @@ def setup_two_methanes():
         device=device,
     )
     # In periodic table, C = 6 and H = 1
-    species = torch.tensor([[6, 1, 1, 1, 1], [6, 1, 1, 1, 1]], device=device)
+    mf_species = torch.tensor([6, 1, 1, 1, 1, 6, 1, 1, 1, 1], device=device)
+    ani_species = torch.tensor([[1, 0, 0, 0, 0], [1, 0, 0, 0, 0]], device=device)
     atomic_subsystem_indices = torch.tensor(
         [0, 0, 0, 0, 0, 1, 1, 1, 1, 1], dtype=torch.int32, device=device
     )
-    mf_input = {
-        "atomic_numbers": torch.cat((species[0], species[1]), dim=0),
-        "positions": torch.cat((coordinates[0], coordinates[1]), dim=0) / 10,
-        "atomic_subsystem_indices": atomic_subsystem_indices,
-    }
-    mf_input["atomic_index"] = torch.tensor(
-        [
-            ATOMIC_NUMBER_TO_INDEX_MAP[atomic_number]
-            for atomic_number in list(mf_input["atomic_numbers"].numpy())
-        ]
-    ).flatten()
-    return species, coordinates, device, mf_input
+
+    atomic_numbers = mf_species
+    from modelforge.potential.utils import NNPInput
+
+    nnp_input = NNPInput(
+        atomic_numbers=atomic_numbers,
+        positions=torch.cat((coordinates[0], coordinates[1]), dim=0) / 10,
+        atomic_subsystem_indices=atomic_subsystem_indices,
+        total_charge=torch.tensor([0.0, 0.0]),
+    )
+    return ani_species, coordinates, device, nnp_input
 
 
 def test_torchani_ani(setup_two_methanes):
@@ -104,7 +107,7 @@ def test_compare_radial_symmetry_features():
     # Compare the ANI radial symmetry function
     # agsint the output of the Modelforge radial symmetry function
     import torch
-    from modelforge.potential.utils import RadialSymmetryFunction, CosineCutoff
+    from modelforge.potential.utils import AniRadialSymmetryFunction, CosineCutoff
     from openff.units import unit
 
     # generate a random list of distances, all < 5
@@ -118,11 +121,10 @@ def test_compare_radial_symmetry_features():
     ShfR = torch.linspace(radial_start, radial_cutoff, radial_dist_divisions + 1)[:-1]
 
     # NOTE: we pass in Angstrom to ANI and in nanometer to mf
-    rsf = RadialSymmetryFunction(
-        radial_dist_divisions,
-        radial_cutoff * unit.angstrom,
-        radial_start * unit.angstrom,
-        ani_style=True,
+    rsf = AniRadialSymmetryFunction(
+        number_of_radial_basis_functions=radial_dist_divisions,
+        max_distance=radial_cutoff * unit.angstrom,
+        min_distance=radial_start * unit.angstrom,
     )
     r_mf = rsf(d_ij / 10)  # torch.Size([5,1, 8]) # NOTE: nanometer
     cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom)
@@ -130,14 +132,14 @@ def test_compare_radial_symmetry_features():
 
     rcut_ij = cutoff_module(d_ij / 10)  # torch.Size([5]) # NOTE: nanometer
 
-    r_mf = r_mf * rcut_ij[:, None]
+    r_mf = r_mf * rcut_ij
     r_ani = radial_terms(5, EtaR, ShfR, d_ij)  # torch.Size([5,8]) # NOTE: Angstrom
-    assert torch.allclose(r_mf.squeeze(1), r_ani)
+    assert torch.allclose(r_mf, r_ani)
 
 
 def test_radial_with_diagonal_batching(setup_two_methanes):
     import torch
-    from modelforge.potential.utils import RadialSymmetryFunction, CosineCutoff
+    from modelforge.potential.utils import AniRadialSymmetryFunction, CosineCutoff
     from openff.units import unit
     from modelforge.potential.models import Pairlist
     from torchani.aev import neighbor_pairs_nopbc
@@ -146,11 +148,11 @@ def test_radial_with_diagonal_batching(setup_two_methanes):
     ani_species, ani_coordinates, _, mf_input = setup_two_methanes
     pairlist = Pairlist()
     pairs = pairlist(
-        mf_input["positions"],
-        mf_input["atomic_subsystem_indices"],
+        mf_input.positions,
+        mf_input.atomic_subsystem_indices,
         only_unique_pairs=True,
     )
-    d_ij = pairs["d_ij"]
+    d_ij = pairs.d_ij
 
     # ANI constants
     radial_cutoff = 5.1  # radial_cutoff
@@ -172,20 +174,17 @@ def test_radial_with_diagonal_batching(setup_two_methanes):
     distances = vec.norm(2, -1)
     # ------------ Modelforge calculation ----------#
 
-    radial_symmetry_function = RadialSymmetryFunction(
+    radial_symmetry_function = AniRadialSymmetryFunction(
         radial_dist_divisions,
         radial_cutoff * unit.angstrom,
         radial_start * unit.angstrom,
-        ani_style=True,
     )
 
     cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom)
     rcut_ij = cutoff_module(d_ij)
 
     radial_symmetry_feature_vector_mf = radial_symmetry_function(d_ij)
-    radial_symmetry_feature_vector_mf = (
-        radial_symmetry_feature_vector_mf * rcut_ij[:, None]
-    )
+    radial_symmetry_feature_vector_mf = radial_symmetry_feature_vector_mf * rcut_ij
     # ------------ ANI calculation ----------#
     from torchani.aev import radial_terms
 
@@ -195,11 +194,11 @@ def test_radial_with_diagonal_batching(setup_two_methanes):
     )
     # test that both ANI and MF obtain the same radial symmetry outpu
     assert torch.allclose(
-        radial_symmetry_feature_vector_mf.squeeze(1), radial_symmetry_feature_vector_ani
+        radial_symmetry_feature_vector_mf, radial_symmetry_feature_vector_ani
     )
 
     assert radial_symmetry_feature_vector_mf.shape == torch.Size(
-        [20, 1, radial_dist_divisions]
+        [20, radial_dist_divisions]
     )
 
 
@@ -217,18 +216,18 @@ def test_compare_angular_symmetry_features(setup_methane):
     species, r, _, _ = setup_methane
     pairlist = Pairlist()
     pairs = pairlist(r[0], torch.tensor([0, 0, 0, 0, 0]), only_unique_pairs=True)
-    d_ij = pairs["d_ij"].squeeze(1)
-    r_ij = pairs["r_ij"].squeeze(1)
+    d_ij = pairs.d_ij.squeeze(1)
+    r_ij = pairs.r_ij.squeeze(1)
 
     # reformat for input
     species = species.flatten()
-    atom_index12 = pairs["pair_indices"]
+    atom_index12 = pairs.pair_indices
     species12 = species[atom_index12]
     # ANI constants
     # for angular features
     angular_cutoff = Rca = 3.5  # angular_cutoff
     angular_start = 0.8
-    EtaA = angular_eta = 19.7
+    EtaA = angular_eta = 12.5
     angular_dist_divisions = 8
     ShfA = torch.linspace(angular_start, angular_cutoff, angular_dist_divisions + 1)[
         :-1
@@ -239,7 +238,7 @@ def test_compare_angular_symmetry_features(setup_methane):
     ShfZ = (torch.linspace(0, math.pi, angle_sections + 1) + angle_start)[:-1]
 
     # other constants
-    Zeta = 32.0
+    Zeta = 14.1
 
     # get index in right order
     even_closer_indices = (d_ij <= Rca).nonzero().flatten()
@@ -277,3 +276,38 @@ def test_compare_angular_symmetry_features(setup_methane):
     # make sure that the output is the same
     assert angular_feature_vector_ani.size() == angular_feature_vector_mf.size()
     assert torch.allclose(angular_feature_vector_ani, angular_feature_vector_mf)
+
+
+def test_representation(setup_methane):
+    # Compare the Modelforge angular symmetry function
+    # against the original torchani implementation
+
+    # methane input
+    species, coordinates, device, mf_input = setup_methane
+
+    # generate torchani representation
+    import torchani
+    import torch
+
+    torchani_model = torchani.models.ANI2x(periodic_table_index=False)
+
+    # calculate aev
+    (species, tochani_aev) = torchani_model.aev_computer(
+        (species, coordinates), cell=None, pbc=None
+    )
+
+    # generate modelforge ani representation
+    from modelforge.potential import ANI2x
+
+    mf_model = ANI2x()
+    mf_model._set_dtype()
+    # perform input checks
+    mf_model._input_checks(mf_input)
+    # prepare the input for the forward pass
+    data = mf_model.prepare_inputs(mf_input, True)
+    representation = mf_model.ani_representation_module(data)
+    tochani_aev = tochani_aev.squeeze(0)
+
+    # test for equivalenc
+    assert tochani_aev.shape == representation.aevs.shape
+    assert torch.allclose(tochani_aev, representation.aevs, atol=1e-4)

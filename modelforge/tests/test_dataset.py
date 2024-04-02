@@ -6,9 +6,9 @@ import pytest
 import torch
 
 from modelforge.dataset.dataset import DatasetFactory, TorchDataset
-from loguru import logger
+from modelforge.dataset import QM9Dataset
 
-from .helper_functions import initialize_dataset, DATASETS
+DATASETS = [QM9Dataset]
 from ..utils import PropertyNames
 
 
@@ -42,12 +42,6 @@ def cleanup_files():
     _cleanup()
 
 
-def generate_torch_dataset(dataset) -> TorchDataset:
-    factory = DatasetFactory()
-    data = dataset(for_unit_testing=True)
-    return factory.create_dataset(data)
-
-
 def test_dataset_imported():
     """Sample test, will always pass so long as import statement worked."""
 
@@ -74,12 +68,11 @@ def test_dataset_basic_operations():
         ),
         "atomic_subsystem_counts": atomic_subsystem_counts,
         "n_confs": n_confs,
+        "charges": torch.randint(-1, 2, torch.Size([total_confs])).numpy(),
     }
 
     property_names = PropertyNames(
-        "atomic_numbers",
-        "geometry",
-        "internal_energy_at_0K",
+        "atomic_numbers", "geometry", "internal_energy_at_0K", "charges"
     )
     dataset = TorchDataset(input_data, property_names)
     assert len(dataset) == total_confs
@@ -118,7 +111,7 @@ def test_dataset_basic_operations():
         assert np.array_equal(
             conf_data["atomic_numbers"], atomic_numbers_true[conf_idx]
         )
-        assert np.array_equal(conf_data["E_label"], energy_true[conf_idx])
+        assert np.array_equal(conf_data["E"], energy_true[conf_idx])
 
     for rec_idx in range(dataset.record_len()):
         assert np.array_equal(
@@ -134,12 +127,13 @@ def test_different_properties_of_interest(dataset):
         "geometry",
         "atomic_numbers",
         "internal_energy_at_0K",
+        "charges",
     ]
 
     dataset = factory.create_dataset(data)
     raw_data_item = dataset[0]
     assert isinstance(raw_data_item, dict)
-    assert len(raw_data_item) == 6
+    assert len(raw_data_item) == 7
 
     data.properties_of_interest = ["internal_energy_at_0K", "geometry"]
     assert data.properties_of_interest == [
@@ -185,20 +179,15 @@ def test_different_scenarios_of_file_availability(dataset):
     assert os.path.exists(data.processed_data_file)
 
 
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_data_item_format(dataset):
+def test_data_item_format(initialized_dataset):
     """Test the format of individual data items in the dataset."""
     from typing import Dict
 
-    dataset = initialize_dataset(
-        dataset, split_file="modelforge/tests/qm9tut/split.npz"
-    )
-
-    raw_data_item = dataset.torch_dataset[0]
+    raw_data_item = initialized_dataset.torch_dataset[0]
     assert isinstance(raw_data_item, Dict)
     assert isinstance(raw_data_item["atomic_numbers"], torch.Tensor)
     assert isinstance(raw_data_item["positions"], torch.Tensor)
-    assert isinstance(raw_data_item["E_label"], torch.Tensor)
+    assert isinstance(raw_data_item["E"], torch.Tensor)
     print(raw_data_item)
 
     assert (
@@ -206,11 +195,10 @@ def test_data_item_format(dataset):
     )
 
 
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_dataset_generation(dataset):
+def test_dataset_generation(initialized_dataset):
     """Test the splitting of the dataset."""
 
-    dataset = initialize_dataset(dataset)
+    dataset = initialized_dataset
     train_dataloader = dataset.train_dataloader()
     val_dataloader = dataset.val_dataloader()
 
@@ -224,75 +212,62 @@ def test_dataset_generation(dataset):
     # for the training set it batches the 80 datapoints in
     # a batch of 64 and a batch of 16 samples
     assert len(train_dataloader) == 2  # nr of batches
-    v = [v_ for v_ in train_dataloader]
-    assert len(v[0]["atomic_subsystem_counts"]) == 64
-    assert len(v[1]["atomic_subsystem_counts"]) == 16
+    batch_data = [v_ for v_ in train_dataloader]
+    assert len(batch_data[0].metadata.atomic_subsystem_counts) == 64
+    assert len(batch_data[1].metadata.atomic_subsystem_counts) == 16
 
 
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_dataset_splitting(dataset):
+from modelforge.dataset.utils import (
+    RandomRecordSplittingStrategy,
+    FirstComeFirstServeSplittingStrategy,
+)
+
+
+@pytest.mark.parametrize(
+    "splitting_strategy",
+    [RandomRecordSplittingStrategy, FirstComeFirstServeSplittingStrategy],
+)
+def test_dataset_splitting(splitting_strategy, datasets_to_test):
     """Test random_split on the the dataset."""
-    from modelforge.dataset.utils import RandomRecordSplittingStrategy
+    from modelforge.dataset import DatasetFactory
 
-    dataset = generate_torch_dataset(dataset)
-    train_dataset, val_dataset, test_dataset = RandomRecordSplittingStrategy().split(
-        dataset
-    )
+    dataset = DatasetFactory.create_dataset(datasets_to_test)
+    train_dataset, val_dataset, test_dataset = splitting_strategy().split(dataset)
 
-    energy = train_dataset[0]["E_label"].item()
-    assert np.isclose(energy, -412509.9375)
-    print(energy)
+    energy = train_dataset[0]["E"].item()
+
+    assert np.isclose(energy, -412509.9375) or np.isclose(energy, -106277.4161215308)
 
     try:
-        RandomRecordSplittingStrategy(split=[0.2, 0.1, 0.1])
-    except AssertionError as e:
-        print(f"AssertionError raised: {e}")
-        logger.debug(e)
+        splitting_strategy(split=[0.2, 0.1, 0.1])
+    except AssertionError as excinfo:
+        print(f"AssertionError raised: {excinfo}")
 
-    train_dataset, val_dataset, test_dataset = RandomRecordSplittingStrategy(
+    train_dataset, val_dataset, test_dataset = splitting_strategy(
         split=[0.6, 0.3, 0.1]
     ).split(dataset)
 
     assert len(train_dataset) == 60
+    assert len(val_dataset) == 30
+    assert len(test_dataset) == 10
 
 
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_file_cache_methods(dataset):
-    """
-    Test the FileCache methods to ensure data is cached and loaded correctly.
-    """
 
-    # generate files to test _from_hdf5()
-
-    _ = initialize_dataset(dataset)
-
-    data = dataset(for_unit_testing=True)
-
-    data._from_hdf5()
-
-    data._to_file_cache()
-    data._from_file_cache()
-    assert len(data.numpy_data["atomic_subsystem_counts"]) == 100
-
-
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_dataset_downloader(dataset):
+def test_dataset_downloader(datasets_to_test):
     """
     Test the DatasetDownloader functionality.
     """
-    data = dataset(for_unit_testing=True)
-    data._download()
-    assert os.path.exists(data.raw_data_file)
+    datasets_to_test._download()
+    assert os.path.exists(datasets_to_test.raw_data_file)
 
 
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_numpy_dataset_assignment(dataset):
+def test_numpy_dataset_assignment(datasets_to_test):
     """
     Test if the numpy_dataset attribute is correctly assigned after processing or loading.
     """
 
     factory = DatasetFactory()
-    data = dataset(for_unit_testing=True)
+    data = datasets_to_test
     factory._load_or_process_data(data)
 
     assert hasattr(data, "numpy_data")
@@ -310,17 +285,17 @@ def test_self_energy():
     # prepare reference value
     data = QM9Dataset(for_unit_testing=True)
     dataset = TorchDataModule(
-        data, batch_size=32, split=FirstComeFirstServeSplittingStrategy()
+        data, batch_size=32, splitting_strategy=FirstComeFirstServeSplittingStrategy()
     )
     dataset.prepare_data(
         remove_self_energies=False, normalize=False, regression_ase=False
     )
-    methane_energy_reference = float(dataset.torch_dataset[0]["E_label"])
+    methane_energy_reference = float(dataset.torch_dataset[0]["E"])
     assert np.isclose(methane_energy_reference, -106277.4161)
 
     data = QM9Dataset(for_unit_testing=True)
     dataset = TorchDataModule(
-        data, batch_size=32, split=FirstComeFirstServeSplittingStrategy()
+        data, batch_size=32, splitting_strategy=FirstComeFirstServeSplittingStrategy()
     )
 
     # Scenario 1: dataset contains self energies
@@ -328,7 +303,7 @@ def test_self_energy():
     dataset.prepare_data(remove_self_energies=True, normalize=False)
     # it is saved in the dataset statistics
     assert dataset.dataset_statistics
-    self_energies = dataset.dataset_statistics["atomic_self_energies"]
+    self_energies = dataset.dataset_statistics.atomic_self_energies
     # 5 elements present in the QM9 dataset
     assert len(self_energies) == 5
     # H: -1313.4668615546
@@ -344,14 +319,14 @@ def test_self_energy():
     # but user wants to use least square regression to calculate the energies
     data = QM9Dataset(for_unit_testing=True)
     dataset = TorchDataModule(
-        data, batch_size=32, split=FirstComeFirstServeSplittingStrategy()
+        data, batch_size=32, splitting_strategy=FirstComeFirstServeSplittingStrategy()
     )
     dataset.prepare_data(
         remove_self_energies=True, normalize=False, regression_ase=True
     )
     # it is saved in the dataset statistics
     assert dataset.dataset_statistics
-    self_energies = dataset.dataset_statistics["atomic_self_energies"]
+    self_energies = dataset.dataset_statistics.atomic_self_energies
     # 5 elements present in the total QM9 dataset
     # but only 4 in the reduced QM9 dataset
     assert len(self_energies) == 4
@@ -369,29 +344,32 @@ def test_self_energy():
     )
     # it is saved in the dataset statistics
     assert dataset.dataset_statistics
-    self_energies = dataset.dataset_statistics["atomic_self_energies"]
+    self_energies = dataset.dataset_statistics.atomic_self_energies
 
     # Test that self energies are correctly removed
     for regression in [True, False]:
         data = QM9Dataset(for_unit_testing=True)
         dataset = TorchDataModule(
-            data, batch_size=32, split=FirstComeFirstServeSplittingStrategy()
+            data,
+            batch_size=32,
+            splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         )
         dataset.prepare_data(
             remove_self_energies=True, normalize=False, regression_ase=regression
         )
         # Extract the first molecule (methane)
         # double check that it is methane
+        k = dataset.torch_dataset[0]
         methane_atomic_indices = dataset.torch_dataset[0]["atomic_numbers"]
         # extract energy
-        methane_energy_offset = dataset.torch_dataset[0]["E_label"]
+        methane_energy_offset = dataset.torch_dataset[0]["E"]
         if regression is False:
             # checking that the offset energy is actually correct for methane
             assert torch.isclose(
                 methane_energy_offset, torch.tensor([-1656.8412], dtype=torch.float64)
             )
         # extract the ase offset
-        self_energies = dataset.dataset_statistics["atomic_self_energies"]
+        self_energies = dataset.dataset_statistics.atomic_self_energies
         methane_ase = sum(
             [
                 self_energies[int(index)]

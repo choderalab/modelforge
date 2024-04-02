@@ -22,10 +22,10 @@ def normalize_energies(dataset, stats: Dict[str, float]) -> None:
     from tqdm import tqdm
 
     for i in tqdm(range(len(dataset)), desc="Adjusting Energies"):
-        energy = dataset[i]["E_label"]
+        energy = dataset[i]["E"]
         # Normalize using the computed mean and std
         modified_energy = (energy - stats["mean"]) / stats["stddev"]
-        dataset[i] = {"E_label": modified_energy}
+        dataset[i] = {"E": modified_energy}
 
     return dataset
 
@@ -54,8 +54,8 @@ def calculate_mean_and_variance(
     )
     log.info("Calculating mean and variance for normalization")
     nr_of_atoms = 0
-    for batch in dataloader:
-        online_estimator.update(batch["E_label"])
+    for batch_data in dataloader:
+        online_estimator.update(batch_data.metadata.E)
 
     stats = {
         "mean": online_estimator.mean / torch_dataset.number_of_atoms,
@@ -90,10 +90,11 @@ def calculate_self_energies(torch_dataset, collate_fn) -> Dict[int, float]:
     for batch in DataLoader(
         torch_dataset, batch_size=batch_size, collate_fn=collate_fn
     ):
+        a = 7
         energies, atomic_numbers, molecules_id = (
-            batch["E_label"].squeeze(),
-            batch["atomic_numbers"].squeeze(-1).to(torch.int64),
-            batch["atomic_subsystem_indices"].to(torch.int16),
+            batch.metadata.E.squeeze(),
+            batch.nnp_input.atomic_numbers.squeeze(-1).to(torch.int64),
+            batch.nnp_input.atomic_subsystem_indices.to(torch.int16),
         )
 
         # Update the energy array and unique atomic numbers set
@@ -128,7 +129,8 @@ def calculate_self_energies(torch_dataset, collate_fn) -> Dict[int, float]:
     # Perform least squares regression
     least_squares_fit, _, _, _ = np.linalg.lstsq(A, y, rcond=None)
     self_energies = {
-        idx: energy for idx, energy in zip(unique_atomic_numbers, least_squares_fit)
+        int(idx): energy
+        for idx, energy in zip(unique_atomic_numbers, least_squares_fit)
     }
 
     log.debug("Calculated self energies for elements.")
@@ -151,21 +153,20 @@ class SplittingStrategy(ABC):
 
     def __init__(
         self,
+        split: List[float],
         seed: Optional[int] = None,
     ):
         self.seed = seed
         if self.seed is not None:
             self.generator = torch.Generator().manual_seed(self.seed)
 
-    @abstractmethod
-    def split():
-        """
-        Split the dataset.
+        self.train_size, self.val_size, self.test_size = split[0], split[1], split[2]
+        assert np.isclose(sum(split), 1.0), "Splits must sum to 1.0"
 
-        Returns
-        -------
-        List[List[int]]
-            List of indices for each split.
+    @abstractmethod
+    def split(self, dataset: "TorchDataset") -> Tuple[Subset, Subset, Subset]:
+        """
+        Split the dataset according to the subclassed strategy.
         """
 
         raise NotImplementedError
@@ -208,9 +209,7 @@ class RandomSplittingStrategy(SplittingStrategy):
         >>> random_strategy_custom = RandomSplittingStrategy(seed=123, split=[0.7, 0.2, 0.1])
         """
 
-        super().__init__(seed)
-        self.train_size, self.val_size, self.test_size = split[0], split[1], split[2]
-        assert np.isclose(sum(split), 1.0), "Splits must sum to 1.0"
+        super().__init__(seed=seed, split=split)
 
     def split(self, dataset: "TorchDataset") -> Tuple[Subset, Subset, Subset]:
         """
@@ -287,9 +286,7 @@ class RandomRecordSplittingStrategy(SplittingStrategy):
         >>> random_strategy_custom = RandomRecordSplittingStrategy(seed=123, split=[0.7, 0.2, 0.1])
         """
 
-        super().__init__(seed)
-        self.train_size, self.val_size, self.test_size = split[0], split[1], split[2]
-        assert np.isclose(sum(split), 1.0), "Splits must sum to 1.0"
+        super().__init__(split=split, seed=seed)
 
     def split(self, dataset: "TorchDataset") -> Tuple[Subset, Subset, Subset]:
         """
@@ -426,9 +423,7 @@ class FirstComeFirstServeSplittingStrategy(SplittingStrategy):
     """
 
     def __init__(self, split: List[float] = [0.8, 0.1, 0.1]):
-        super().__init__(42)
-        self.train_size, self.val_size, self.test_size = split[0], split[1], split[2]
-        assert np.isclose(sum(split), 1.0), "Splits must sum to 1.0"
+        super().__init__(seed=42, split=split)
 
     def split(self, dataset: "TorchDataset") -> Tuple[Subset, Subset, Subset]:
         logger.debug(f"Using first come/first serve splitting strategy ...")
@@ -438,12 +433,12 @@ class FirstComeFirstServeSplittingStrategy(SplittingStrategy):
 
         len_dataset = len(dataset)
         first_split_on = int(len_dataset * self.train_size)
-        second_split_on = int(len_dataset * self.val_size)
+        second_split_on = first_split_on + int(len_dataset * self.val_size)
         indices = np.arange(len_dataset, dtype=int)
         train_d, val_d, test_d = (
-            Subset(dataset, indices[0:first_split_on]),
-            Subset(dataset, indices[first_split_on:second_split_on]),
-            Subset(dataset, indices[second_split_on:]),
+            Subset(dataset, list(indices[0:first_split_on])),
+            Subset(dataset, list(indices[first_split_on:second_split_on])),
+            Subset(dataset, list(indices[second_split_on:])),
         )
 
         return (train_d, val_d, test_d)

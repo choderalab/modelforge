@@ -1,5 +1,3 @@
-
-
 """Module for querying and fetching datafiles from remote sources"""
 
 from typing import Optional, List, Dict
@@ -39,6 +37,7 @@ def is_url(query: str, hostname: str) -> bool:
         return False
     return True
 
+
 def fetch_url_from_doi(doi: str, timeout: Optional[int] = 10) -> str:
     """Retrieve URL associated with a DOI.
 
@@ -60,8 +59,10 @@ def fetch_url_from_doi(doi: str, timeout: Optional[int] = 10) -> str:
     """
     import requests
 
-    # force to use ipv4; my ubuntu machine is timing out when it first tries ipv6
-    #requests.packages.urllib3.util.connection.HAS_IPV6 = False
+    # force to use ipv4; my ubuntu machine was timing out when it first tries ipv6
+    # but that seemed to be a config issue on my machine and was resolved
+    # will leave this import in here as well commented out, in case it is needed in the future
+    # requests.packages.urllib3.util.connection.HAS_IPV6 = False
 
     doi_org_url = "https://dx.doi.org/"
 
@@ -93,7 +94,9 @@ def calculate_md5_checksum(file_name: str, file_path: str) -> str:
 
 
 # Figshare helper functions
-def download_from_figshare(url: str, output_path: str, force_download=False) -> str:
+def download_from_figshare(
+    url: str, md5_checksum: str, output_path: str, force_download=False
+) -> str:
     """
     Downloads a dataset from figshare for a given ndownloader url.
 
@@ -101,6 +104,8 @@ def download_from_figshare(url: str, output_path: str, force_download=False) -> 
     ----------
     url: str, required
         Figshare ndownloader url (i.e., link to the data downloader)
+    md5_checksum: str, required
+        Expected md5 checksum of the downloaded file.
     output_path: str, required
         Location to download the file to.
     force_download: str, default=False
@@ -125,7 +130,7 @@ def download_from_figshare(url: str, output_path: str, force_download=False) -> 
     from tqdm import tqdm
 
     # force to use ipv4; my ubuntu machine is timing out when it first tries ipv6
-    #requests.packages.urllib3.util.connection.HAS_IPV6 = False
+    # requests.packages.urllib3.util.connection.HAS_IPV6 = False
 
     chunk_size = 512
     # check to make sure the url we are given is hosted by figshare.com
@@ -141,34 +146,63 @@ def download_from_figshare(url: str, output_path: str, force_download=False) -> 
     # and then get the head info from this link to fetch the length.
     # This is not actually necessary, but useful for updating the download status bar.
     # We also fetch the name of the file from the header of the download link
+
     temp_url = head.headers["location"].split("?")[0]
     name = head.headers["X-Filename"].split("/")[-1]
 
-    logger.debug(f"Downloading datafile from figshare to {output_path}/{name}.")
+    # We need to check to make sure that the file that is stored in the output path
+    # has the correct checksum, e.g., to avoid a case where we have a partially downloaded file
+    # or to make sure we don't have two files with the same name, but different content.
+    if os.path.isfile(f"{output_path}/{name}"):
+        calculated_checksum = calculate_md5_checksum(
+            file_name=name, file_path=output_path
+        )
+        if calculated_checksum != md5_checksum:
+            force_download = True
+            logger.debug(
+                "Checksum of existing file does not match expected checksum, re-downloading."
+            )
 
     if not os.path.isfile(f"{output_path}/{name}") or force_download:
+        logger.debug(f"Downloading datafile from figshare to {output_path}/{name}.")
+
         temp_url_headers = requests.head(temp_url)
-        length = int(temp_url_headers.headers["Content-Length"])
-        figshare_md5_checksum = temp_url_headers.headers["ETag"].strip('"')
-        r = requests.get(url, stream=True)
 
         os.makedirs(output_path, exist_ok=True)
+        try:
+            length = int(temp_url_headers.headers["Content-Length"])
+        except:
+            print(
+                "Could not determine the length of the file to download. The download bar will not be accurate."
+            )
+            length = -1
+        r = requests.get(url, stream=True)
 
         with open(f"{output_path}/{name}", "wb") as fd:
-            for chunk in tqdm(
-                r.iter_content(chunk_size=chunk_size),
-                ascii=True,
-                desc="downloading",
-                total=(int(length / chunk_size) + 1),
-            ):
-                fd.write(chunk)
+            # if we couldn't fetch the length from figshare, which seems to happen for some records
+            # we just don't know how long the tqdm bar will be.
+            if length == -1:
+                for chunk in tqdm(
+                    r.iter_content(chunk_size=chunk_size),
+                    ascii=True,
+                    desc="downloading",
+                ):
+                    fd.write(chunk)
+            else:
+                for chunk in tqdm(
+                    r.iter_content(chunk_size=chunk_size),
+                    ascii=True,
+                    desc="downloading",
+                    total=(int(length / chunk_size) + 1),
+                ):
+                    fd.write(chunk)
 
         calculated_checksum = calculate_md5_checksum(
             file_name=name, file_path=output_path
         )
-        if calculated_checksum != figshare_md5_checksum:
+        if calculated_checksum != md5_checksum:
             raise Exception(
-                "Checksum of downloaded file does not match expected checksum"
+                f"Checksum of downloaded file {calculated_checksum} does not match expected checksum {md5_checksum}"
             )
     else:  # if the file exists and we don't set force_download to True, just use the cached version
         logger.debug(f"Datafile {name} already exists in {output_path}.")
@@ -180,7 +214,7 @@ def download_from_figshare(url: str, output_path: str, force_download=False) -> 
 
 
 def download_from_zenodo(
-    url: str, zenodo_md5_checksum: str, output_path: str, force_download=False
+    url: str, md5_checksum: str, output_path: str, force_download=False
 ) -> str:
     """
     Downloads a dataset from zenodo for a given url.
@@ -191,6 +225,8 @@ def download_from_zenodo(
     ----------
     url : str, required
         Direct link to datafile to download.
+    md5_checksum: str, required
+        Expected md5 checksum of the downloaded file.
     output_path: str, required
         Location to download the file to.
     force_download: str, default=False
@@ -206,7 +242,8 @@ def download_from_zenodo(
     --------
     >>> url = "https://zenodo.org/records/3401581/files/PTC-CMC/atools_ml-v0.1.zip"
     >>> output_path = '/path/to/directory'
-    >>> downloaded_file_name = download_from_zenodo(url, output_path)
+    >>> md5_checksum = "d41d8cd98f00b204e9800998ecf8427e"
+    >>> downloaded_file_name = download_from_zenodo(url, md5_checksum, output_path)
 
     """
 
@@ -215,7 +252,7 @@ def download_from_zenodo(
     from tqdm import tqdm
 
     # force to use ipv4; my ubuntu machine is timing out when it first tries ipv6
-    #requests.packages.urllib3.util.connection.HAS_IPV6 = False
+    # requests.packages.urllib3.util.connection.HAS_IPV6 = False
 
     chunk_size = 512
     # check to make sure the url we are given is hosted by figshare.com
@@ -235,6 +272,20 @@ def download_from_zenodo(
     name = head.headers["Content-Disposition"].split("filename=")[-1]
     length = int(head.headers["Content-Length"])
 
+    # We need to check to make sure that the file that is stored in the output path
+    # has the correct checksum, e.g., to avoid a case where we have a partially downloaded file
+    # or to make sure we don't have two files with the same name, but different content.
+
+    if os.path.isfile(f"{output_path}/{name}"):
+        calculated_checksum = calculate_md5_checksum(
+            file_name=name, file_path=output_path
+        )
+        if calculated_checksum != md5_checksum:
+            force_download = True
+            logger.debug(
+                "Checksum of existing file does not match expected checksum, re-downloading."
+            )
+
     if not os.path.isfile(f"{output_path}/{name}") or force_download:
         logger.debug(f"Downloading datafile from zenodo to {output_path}/{name}.")
 
@@ -253,9 +304,9 @@ def download_from_zenodo(
         calculated_checksum = calculate_md5_checksum(
             file_name=name, file_path=output_path
         )
-        if calculated_checksum != zenodo_md5_checksum:
+        if calculated_checksum != md5_checksum:
             raise Exception(
-                "Checksum of downloaded file does not match expected checksum"
+                f"Checksum of downloaded file {calculated_checksum} does not match expected checksum {md5_checksum}."
             )
 
     else:  # if the file exists and we don't set force_download to True, just use the cached version

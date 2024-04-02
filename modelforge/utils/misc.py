@@ -48,7 +48,6 @@ class Welford:
 
     @property
     def stddev(self) -> torch.Tensor:
-
         return torch.sqrt(self.variance)
 
     @property
@@ -117,3 +116,40 @@ def str_to_float(x: str) -> float:
 
     xf = float(x.replace("*^", "e"))
     return xf
+
+
+def extract_tarred_file(
+    input_path_dir: str,
+    file_name: str,
+    output_path_dir: str,
+    mode: str = "r:gz",
+) -> None:
+    """
+    Extract the contents of the tar file.
+    Supports extracting gz and bz compressed files as well via the mode argument.
+
+    Parameters
+    ----------
+    input_path_dir: str, required
+        Path to the directory that contains the tar file.
+    file_name: str, required
+        Name of the tar file.
+    output_path_dir: str, required
+        Path to the directory to extract the tar file to.
+    mode: str, optional, default='r:gz'
+        Mode to open the tar file. options are 'r:gz', 'r:bz2', 'r'
+
+    Examples
+    --------
+    from modelforge.utils.misc import extract_tarred_file
+    >>> extract_tarred_file('test_directory', 'test.tar.gz', 'output_directory')
+
+    """
+
+    import tarfile
+
+    logger.debug(f"Extracting tarred file {input_path_dir}/{file_name}")
+
+    tar = tarfile.open(f"{input_path_dir}/{file_name}", mode)
+    tar.extractall(output_path_dir)
+    tar.close()

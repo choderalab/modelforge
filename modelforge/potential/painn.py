@@ -219,12 +219,13 @@ class PaiNN(BaseNeuralNetworkPotential):
         }
     
     def _config_prior(self):
+        log.info('Configuring PaiNN model hyperparameter prior distribution')
         from ray import tune
         from .utils import get_default_prior
         prior = {
             "embedding_dimensions": tune.lograndint(2, 256),
             "nr_interaction_blocks": tune.randint(1, 5),
-            "cutoff": tune.uniform(2, 10),
+            "cutoff": tune.uniform(5, 10),
             "number_of_gaussians_basis_functions": tune.randint(8, 32),
             "shared_filters": tune.choice([True, False]),
             "shared_interactions": tune.choice([True, False]),

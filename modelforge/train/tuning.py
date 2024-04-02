@@ -1,16 +1,16 @@
 import torch
-import ray
 from ray import tune, air
 from ray.tune.schedulers import ASHAScheduler
 
-def tune(
+
+def tune_model(
     model: torch.nn.Module,
     dataset: torch.utils.data.Dataset,
     num_samples: int = 100,
     name: str = "tune",
 ):
     """A function to tune a model.
-    
+
     Parameters
     ----------
     model : torch.nn.Module
@@ -31,9 +31,9 @@ def tune(
         raise NotImplementedError
 
     scheduler = ASHAScheduler(
-        time_attr='training_iteration',
-        metric='rmse_vl',
-        mode='max',
+        time_attr="training_iteration",
+        metric="rmse_vl",
+        mode="max",
         max_t=100,
         grace_period=10,
         reduction_factor=3,
@@ -45,8 +45,6 @@ def tune(
         num_samples=1000,
     )
 
-    import os
-    
     run_config = air.RunConfig(
         name=name,
         verbose=1,

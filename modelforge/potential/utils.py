@@ -7,6 +7,7 @@ from typing import Any
 from dataclasses import dataclass, field
 from loguru import logger as log
 
+
 @dataclass
 class NeuralNetworkData:
     pair_indices: torch.Tensor
@@ -138,14 +139,15 @@ ATOMIC_NUMBER_TO_INDEX_MAP = {
     53: 9,  # I
 }
 
+
 def shared_config_prior():
     import ray
     from ray import tune
+
     return {
         "lr": tune.loguniform(1e-5, 1e-1),
         "weight_decay": tune.loguniform(1e-5, 1e-1),
         "batch_size": tune.choice([32, 64, 128, 256, 512]),
-        
     }
 
 
@@ -552,8 +554,8 @@ class AngularSymmetryFunction(nn.Module):
 
     def __init__(
         self,
-        angular_cutoff: unit.Quantity,
-        angular_start: unit.Quantity,
+        max_distance: unit.Quantity,
+        min_distance: unit.Quantity,
         number_of_gaussians_for_asf: int = 8,
         angle_sections: int = 4,
         trainable: bool = False,
@@ -572,11 +574,11 @@ class AngularSymmetryFunction(nn.Module):
         from loguru import logger as log
 
         self.number_of_gaussians_asf = number_of_gaussians_for_asf
-        self.angular_cutoff = angular_cutoff
+        self.angular_cutoff = max_distance
         self.cosine_cutoff = CosineCutoff(self.angular_cutoff)
-        _unitless_angular_cutoff = angular_cutoff.to(unit.nanometer).m
-        self.angular_start = angular_start
-        _unitless_angular_start = angular_start.to(unit.nanometer).m
+        _unitless_angular_cutoff = max_distance.to(unit.nanometer).m
+        self.angular_start = min_distance
+        _unitless_angular_start = min_distance.to(unit.nanometer).m
 
         # save constants
         EtaA = angular_eta = 12.5 * 100  # FIXME hardcoded eta
@@ -916,7 +918,7 @@ class AniRadialSymmetryFunction(RadialSymmetryFunction):
             number_of_radial_basis_functions + 1,
             dtype=dtype,
         )[:-1]
-        log.info(f'{centers=}')
+        log.info(f"{centers=}")
         return centers
 
     def calculate_radial_scale_factor(

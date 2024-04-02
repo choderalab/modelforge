@@ -262,9 +262,7 @@ class NeuralNetworkPotentialFactory:
         def _return_specific_version_of_nnp(use: str, nnp_class):
             if use == "training":
                 nnp_instance = nnp_class(**nnp_parameters)
-                trainer = TrainingAdapter(
-                    base_model=nnp_instance, **training_parameters
-                )
+                trainer = TrainingAdapter(model=nnp_instance, **training_parameters)
                 return trainer
             elif use == "inference":
                 return nnp_class(**nnp_parameters)
@@ -661,6 +659,7 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
             molecular_ase=processed_energy["molecular_ase"],
         )
 
+class TuneAdapter()
 
 class TrainingAdapter(pl.LightningModule):
     """
@@ -680,7 +679,7 @@ class TrainingAdapter(pl.LightningModule):
 
     def __init__(
         self,
-        base_model: BaseNeuralNetworkPotential,
+        model: BaseNeuralNetworkPotential,
         loss: Callable = F.mse_loss,
         optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
         lr: float = 1e-3,
@@ -690,7 +689,7 @@ class TrainingAdapter(pl.LightningModule):
 
         Parameters
         ----------
-        base_model : BaseNeuralNetworkPotential
+        model : BaseNeuralNetworkPotential
             The neural network potential model to be trained.
         loss : Callable, optional
             The loss function for training, by default F.mse_loss.
@@ -702,7 +701,7 @@ class TrainingAdapter(pl.LightningModule):
 
         super().__init__()
 
-        self.base_model = base_model
+        self.model = model
         self.loss_function = loss
         self.optimizer = optimizer
         self.learning_rate = lr
@@ -724,11 +723,16 @@ class TrainingAdapter(pl.LightningModule):
         nnp_input = batch.nnp_input
         E_true = batch.metadata.E.to(torch.float32).squeeze(1)
         self.batch_size = self._log_batch_size(E_true)
-        E_predict = self.base_model.forward(nnp_input).E
+        E_predict = self.model.forward(nnp_input).E
         return E_true, E_predict
 
     def _config_prior(self):
-        return {}
+
+        if hasattr(self.model, "_config_prior"):
+            return self.model._config_prior()
+
+        log.warning("Model does not implement _config_prior().")
+        raise NotImplementedError()
 
     def _log_batch_size(self, y: torch.Tensor) -> int:
         """
@@ -850,7 +854,7 @@ class TrainingAdapter(pl.LightningModule):
             to be used within the PyTorch Lightning training process.
         """
 
-        optimizer = self.optimizer(self.base_model.parameters(), lr=self.learning_rate)
+        optimizer = self.optimizer(self.model.parameters(), lr=self.learning_rate)
         scheduler = {
             "scheduler": ReduceLROnPlateau(
                 optimizer, mode="min", factor=0.1, patience=5, verbose=True

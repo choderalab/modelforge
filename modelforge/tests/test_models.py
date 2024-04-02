@@ -362,6 +362,10 @@ def test_equivariant_energies_and_forces(batch, inference_model, equivariance_ut
         translation_nnp_input.positions,
     )[0]
 
+    for t, r in zip(translation_forces, reference_forces):
+        if not torch.allclose(t, r, atol=atol):
+            print(t, r)
+
     assert torch.allclose(
         translation_forces,
         reference_forces,
@@ -375,8 +379,9 @@ def test_equivariant_energies_and_forces(batch, inference_model, equivariance_ut
     ).double()
     rotation_result = model(rotation_input_data).E
 
-    print(rotation_result)
-    print(reference_result, flush=True)
+    for t, r in zip(rotation_result, reference_result):
+        if not torch.allclose(t, r, atol=atol):
+            print(t, r)
 
     assert torch.allclose(
         rotation_result,
@@ -410,6 +415,9 @@ def test_equivariant_energies_and_forces(batch, inference_model, equivariance_ut
         create_graph=True,
         retain_graph=True,
     )[0]
+    for t, r in zip(reflection_result, reference_result):
+        if not torch.allclose(t, r, atol=atol):
+            print(t, r)
 
     assert torch.allclose(
         reflection_result,

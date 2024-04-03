@@ -33,6 +33,9 @@ dependencies:
   - requests
   - torchani
   - pytorch_scatter
+  - "ray-tune"
+  - "ray-train"
+
 
   # pip installs
   - pip:

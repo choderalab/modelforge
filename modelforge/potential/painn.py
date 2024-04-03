@@ -14,10 +14,11 @@ if TYPE_CHECKING:
     from modelforge.potential.utils import NNPInput
 
 from dataclasses import dataclass, field
+from modelforge.potential.utils import NeuralNetworkData
 
 
 @dataclass
-class PaiNNNeuralNetworkInput:
+class PaiNNNeuralNetworkData(NeuralNetworkData):
     """
     A dataclass designed to structure the inputs for PaiNN neural network potentials, ensuring
     an efficient and structured representation of atomic systems for energy computation and
@@ -53,7 +54,7 @@ class PaiNNNeuralNetworkInput:
 
     Examples
     --------
-    >>> painn_input = PaiNNNeuralNetworkInput(
+    >>> painn_input = PaiNNNeuralNetworkData(
     ...     atomic_numbers=torch.tensor([1, 6, 6, 8]),
     ...     positions=torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]),
     ...     atomic_subsystem_indices=torch.tensor([0, 0, 0, 0]),
@@ -66,14 +67,6 @@ class PaiNNNeuralNetworkInput:
     ... )
     """
 
-    pair_indices: torch.Tensor
-    d_ij: torch.Tensor
-    r_ij: torch.Tensor
-    number_of_atoms: int
-    positions: torch.Tensor
-    atomic_numbers: torch.Tensor
-    atomic_subsystem_indices: torch.Tensor
-    total_charge: torch.Tensor
     atomic_embedding: torch.Tensor
 
 
@@ -145,14 +138,31 @@ class PaiNN(BaseNeuralNetworkPotential):
             ),
         )
 
+    def _config_prior(self):
+        log.info("Configuring PaiNN model hyperparameter prior distribution")
+        from ray import tune
+        from modelforge.potential.utils import shared_config_prior
+
+        prior = {
+            "number_of_atom_features": tune.randint(2, 256),
+            "number_of_interaction_modules": tune.randint(1, 5),
+            "cutoff": tune.uniform(5, 10),
+            "number_of_radial_basis_functions": tune.randint(8, 32),
+            "shared_filters": tune.choice([True, False]),
+            "shared_interactions": tune.choice([True, False]),
+        }
+        prior.update(shared_config_prior())
+        return prior
+
+
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
-    ) -> PaiNNNeuralNetworkInput:
+    ) -> PaiNNNeuralNetworkData:
         # Perform atomic embedding
 
         number_of_atoms = data.atomic_numbers.shape[0]
 
-        nnp_input = PaiNNNeuralNetworkInput(
+        nnp_input = PaiNNNeuralNetworkData(
             pair_indices=pairlist_output.pair_indices,
             d_ij=pairlist_output.d_ij,
             r_ij=pairlist_output.r_ij,
@@ -170,7 +180,7 @@ class PaiNN(BaseNeuralNetworkPotential):
 
     def _forward(
         self,
-        data: PaiNNNeuralNetworkInput,
+        data: PaiNNNeuralNetworkData,
     ):
         """
         Compute atomic representations/embeddings.
@@ -218,21 +228,6 @@ class PaiNN(BaseNeuralNetworkPotential):
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
 
-    def _config_prior(self):
-        log.info("Configuring PaiNN model hyperparameter prior distribution")
-        from ray import tune
-        from modelforge.potential.utils import shared_config_prior
-
-        prior = {
-            "embedding_dimensions": tune.lograndint(2, 256),
-            "nr_interaction_blocks": tune.randint(1, 5),
-            "cutoff": tune.uniform(5, 10),
-            "number_of_gaussians_basis_functions": tune.randint(8, 32),
-            "shared_filters": tune.choice([True, False]),
-            "shared_interactions": tune.choice([True, False]),
-        }
-        prior.update(shared_config_prior())
-        return prior
 
 
 from openff.units import unit
@@ -243,7 +238,7 @@ class PaiNNRepresentation(nn.Module):
 
     def __init__(
         self,
-        cutoff: unit = 5 * unit.angstrom,
+        cutoff: unit.Quantity = 5 * unit.angstrom,
         number_of_radial_basis_functions: int = 16,
         nr_interaction_blocks: int = 3,
         nr_atom_basis: int = 8,
@@ -285,7 +280,7 @@ class PaiNNRepresentation(nn.Module):
         self.nr_interaction_blocks = nr_interaction_blocks
         self.nr_atom_basis = nr_atom_basis
 
-    def forward(self, data: PaiNNNeuralNetworkInput):
+    def forward(self, data: PaiNNNeuralNetworkData):
         """
         Transforms the input data for the PAInn potential model.
 

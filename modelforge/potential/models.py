@@ -659,7 +659,6 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
             molecular_ase=processed_energy["molecular_ase"],
         )
 
-class TuneAdapter()
 
 class TrainingAdapter(pl.LightningModule):
     """
@@ -698,6 +697,7 @@ class TrainingAdapter(pl.LightningModule):
         lr : float, optional
             The learning rate for the optimizer, by default 1e-3.
         """
+        from typing import List
 
         super().__init__()
 
@@ -705,6 +705,7 @@ class TrainingAdapter(pl.LightningModule):
         self.loss_function = loss
         self.optimizer = optimizer
         self.learning_rate = lr
+        self.eval_loss: List[float] = []
 
     def _get_energies(self, batch: BatchData) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -726,7 +727,7 @@ class TrainingAdapter(pl.LightningModule):
         E_predict = self.model.forward(nnp_input).E
         return E_true, E_predict
 
-    def _config_prior(self):
+    def config_prior(self):
 
         if hasattr(self.model, "_config_prior"):
             return self.model._config_prior()
@@ -774,7 +775,7 @@ class TrainingAdapter(pl.LightningModule):
         # time.sleep(1)
         loss = self.loss_function(E_true, E_predict)
         self.log(
-            "train_loss",
+            "ptl/train_loss",
             loss,
             on_epoch=True,
             on_step=True,
@@ -805,7 +806,7 @@ class TrainingAdapter(pl.LightningModule):
 
         test_loss = F.mse_loss(E_true, E_predict)
         self.log(
-            "test_loss",
+            "ptl/test_loss",
             test_loss,
             batch_size=self.batch_size,
             on_epoch=True,
@@ -841,7 +842,13 @@ class TrainingAdapter(pl.LightningModule):
             on_epoch=True,
             prog_bar=True,
         )
+        self.eval_loss.append(float(val_loss.detach().to("cpu")))
         return val_loss
+
+    def on_validation_epoch_end(self):
+        avg_loss = torch.stack(self.eval_loss).mean()
+        self.log("ptl/val_loss", avg_loss, sync_dist=True)
+        self.eval_loss.clear()
 
     def configure_optimizers(self) -> Dict[str, Any]:
         """
@@ -864,6 +871,111 @@ class TrainingAdapter(pl.LightningModule):
             "frequency": 1,
         }
         return {"optimizer": optimizer, "lr_scheduler": scheduler}
+
+    def get_trainer(self):
+        from pytorch_lightning.loggers import TensorBoardLogger
+        from lightning import Trainer
+
+        # set up tensor board logger
+        logger = TensorBoardLogger("tb_logs", name="training")
+        # set up traininer
+        from lightning.pytorch.callbacks.early_stopping import EarlyStopping
+
+        return Trainer(
+            max_epochs=10_000,
+            num_nodes=1,
+            devices="auto",
+            accelerator="auto",
+            logger=logger,  # Add the logger here
+            callbacks=[
+                EarlyStopping(
+                    monitor="val_loss", min_delta=0.05, patience=20, verbose=True
+                )
+            ],
+        )
+
+    def train_func(self):
+        from ray.train.lightning import (
+            RayDDPStrategy,
+            RayLightningEnvironment,
+            RayTrainReportCallback,
+            prepare_trainer,
+        )
+
+        trainer = pl.Trainer(
+            devices="auto",
+            accelerator="auto",
+            strategy=RayDDPStrategy(),
+            callbacks=[RayTrainReportCallback()],
+            plugins=[RayLightningEnvironment()],
+            enable_progress_bar=False,
+        )
+        trainer = prepare_trainer(trainer)
+        trainer.fit(self, self.train_dataloader, self.val_dataloader)
+
+    def get_ray_trainer(self, gpu: bool = False):
+        from ray.train import RunConfig, ScalingConfig, CheckpointConfig
+
+        if gpu:
+            scaling_config = ScalingConfig(
+                num_workers=2, use_gpu=True, resources_per_worker={"CPU": 1, "GPU": 1}
+            )
+        else:
+            scaling_config = ScalingConfig(
+                num_workers=2,
+                use_gpu=False,
+                resources_per_worker={"CPU": 1},
+            )
+
+        run_config = RunConfig(
+            checkpoint_config=CheckpointConfig(
+                num_to_keep=2,
+                checkpoint_score_attribute="ptl/val_loss",
+                checkpoint_score_order="min",
+            ),
+        )
+        from ray.train.torch import TorchTrainer
+
+        # Define a TorchTrainer without hyper-parameters for Tuner
+        ray_trainer = TorchTrainer(
+            self.train_func,
+            scaling_config=scaling_config,
+            run_config=run_config,
+        )
+
+        return ray_trainer
+
+    def tune_with_ray(
+        self,
+        train_dataloader,
+        val_dataloader,
+        number_of_epochs: int = 5,
+        number_of_samples: int = 10,
+    ):
+        from ray import tune
+        from ray.tune.schedulers import ASHAScheduler
+
+        self.train_dataloader = train_dataloader
+        self.val_dataloader = val_dataloader
+
+        ray_trainer = self.get_ray_trainer()
+        scheduler = ASHAScheduler(
+            max_t=number_of_epochs, grace_period=1, reduction_factor=2
+        )
+
+        tune_config = tune.TuneConfig(
+            metric="ptl/val_loss",
+            mode="min",
+            scheduler=scheduler,
+            num_samples=number_of_samples,
+        )
+
+        tuner = tune.Tuner(
+            ray_trainer,
+            param_space={"train_loop_config": self.config_prior()},
+            tune_config=tune_config,
+        )
+        return tuner.fit()
 
 
 class SingleTopologyAlchemicalBaseNNPModel(BaseNeuralNetworkPotential):

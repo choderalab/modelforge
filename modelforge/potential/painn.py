@@ -217,11 +217,12 @@ class PaiNN(BaseNeuralNetworkPotential):
             "q": q,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
-    
+
     def _config_prior(self):
-        log.info('Configuring PaiNN model hyperparameter prior distribution')
+        log.info("Configuring PaiNN model hyperparameter prior distribution")
         from ray import tune
-        from .utils import get_default_prior
+        from modelforge.potential.utils import shared_config_prior
+
         prior = {
             "embedding_dimensions": tune.lograndint(2, 256),
             "nr_interaction_blocks": tune.randint(1, 5),
@@ -230,7 +231,7 @@ class PaiNN(BaseNeuralNetworkPotential):
             "shared_filters": tune.choice([True, False]),
             "shared_interactions": tune.choice([True, False]),
         }
-        prior.update(get_default_prior())
+        prior.update(shared_config_prior())
         return prior
 
 

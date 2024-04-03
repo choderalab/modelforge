@@ -9,3 +9,12 @@ from .utils import (
     AngularSymmetryFunction,
     FromAtomToMoleculeReduction,
 )
+from .models import TrainingAdapter
+from .models import NeuralNetworkPotentialFactory
+
+_IMPLEMENTED_NNPS = {
+    "ANI2x": ANI2x,
+    "SchNet": SchNet,
+    "PaiNN": PaiNN,
+    "PhysNet": PhysNet,
+}

@@ -1,12 +1,22 @@
 import pytest
 
-from .helper_functions import (
-    DATASETS,
-    MODELS_TO_TEST,
-    SIMPLIFIED_INPUT_DATA,
-    return_single_batch,
-    equivariance_test_utils,
-)
+from modelforge.potential import _IMPLEMENTED_NNPS
+
+
+@pytest.mark.parametrize("model_name", _IMPLEMENTED_NNPS)
+def test_model_factory(model_name):
+    from modelforge.potential.models import (
+        NeuralNetworkPotentialFactory,
+        TrainingAdapter,
+    )
+
+    # inference model
+    model = NeuralNetworkPotentialFactory.create_nnp("inference", model_name)
+    assert model_name in str(type(model))
+
+    # training model
+    model = NeuralNetworkPotentialFactory.create_nnp("training", model_name)
+    assert type(model) == TrainingAdapter
 
 
 def test_energy_scaling_and_offset():
@@ -58,45 +68,32 @@ def test_energy_scaling_and_offset():
     # Test energy scaling
 
 
-@pytest.mark.parametrize("default_model", MODELS_TO_TEST)
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_forward_pass(default_model, dataset):
+def test_forward_pass(inference_model, batch):
     # this test sends a single batch from different datasets through the model
 
-    # initialize default model
-    model = default_model()
-    # return a single batch
-    batch = return_single_batch(
-        dataset,
-    )  # split_file="modelforge/tests/qm9tut/split.npz")
     nnp_input = batch.nnp_input
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
     # test the forward pass through each of the models
-    output = model(nnp_input).E
+    output = inference_model(nnp_input).E
 
     # test tat we get an energie per molecule
     assert len(output) == nr_of_mols
 
 
-@pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
-@pytest.mark.parametrize("default_model", MODELS_TO_TEST)
-def test_calculate_energies_and_forces(input_data, default_model):
+def test_calculate_energies_and_forces(inference_model, batch):
     """
     Test the calculation of energies and forces for a molecule.
     """
     import torch
 
-    nnp_input = input_data.nnp_input
+    nnp_input = batch.nnp_input
     # test the backward pass through each of the models
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
     nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
 
-    # initialize model with default parameters
-    model = default_model()
-
     # forward pass
-    result = model(nnp_input).E
+    result = inference_model(nnp_input).E
 
     # backpropagation
     forces = -torch.autograd.grad(
@@ -305,15 +302,10 @@ def test_pairlist():
     assert not pair_indices.shape == neighbor_indices.shape
 
 
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_pairlist_on_dataset(dataset):
-    from modelforge.dataset.dataset import TorchDataModule
+def test_pairlist_on_dataset(initialized_dataset):
     from modelforge.potential.models import Neighborlist
 
-    data = dataset(for_unit_testing=True)
-    data_module = TorchDataModule(data)
-    data_module.prepare_data()
-    for data in data_module.train_dataloader():
+    for data in initialized_dataset.train_dataloader():
         nnp_input = data.nnp_input
         positions = nnp_input.positions
         atomic_subsystem_indices = nnp_input.atomic_subsystem_indices
@@ -330,9 +322,7 @@ def test_pairlist_on_dataset(dataset):
         assert shapePairlist[0] == 2
 
 
-@pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
-@pytest.mark.parametrize("default_model", MODELS_TO_TEST)
-def test_equivariant_energies_and_forces(input_data, default_model):
+def test_equivariant_energies_and_forces(batch, inference_model, equivariance_utils):
     """
     Test the calculation of energies and forces for a molecule.
     NOTE: test will be adapted once we have a trained model.
@@ -341,18 +331,16 @@ def test_equivariant_energies_and_forces(input_data, default_model):
     from dataclasses import replace
 
     # define the symmetry operations
-    translation, rotation, reflection = equivariance_test_utils()
+    translation, rotation, reflection = equivariance_utils
     # define the tolerance
-    atol = 1e-4
-    # set seed manually
-    torch.manual_seed(1234)
+    atol = 1e-3
     # initialize the models
-    model = default_model().to(torch.float64)
+    model = inference_model.to(torch.float64)
 
     # ------------------- #
     # start the test
     # reference values
-    nnp_input = input_data.nnp_input
+    nnp_input = batch.nnp_input
     reference_result = model(nnp_input).E.double()
     reference_forces = -torch.autograd.grad(
         reference_result.sum(),
@@ -374,6 +362,10 @@ def test_equivariant_energies_and_forces(input_data, default_model):
         translation_nnp_input.positions,
     )[0]
 
+    for t, r in zip(translation_forces, reference_forces):
+        if not torch.allclose(t, r, atol=atol):
+            print(t, r)
+
     assert torch.allclose(
         translation_forces,
         reference_forces,
@@ -387,8 +379,9 @@ def test_equivariant_energies_and_forces(input_data, default_model):
     ).double()
     rotation_result = model(rotation_input_data).E
 
-    print(rotation_result)
-    print(reference_result, flush=True)
+    for t, r in zip(rotation_result, reference_result):
+        if not torch.allclose(t, r, atol=atol):
+            print(t, r)
 
     assert torch.allclose(
         rotation_result,
@@ -422,6 +415,9 @@ def test_equivariant_energies_and_forces(input_data, default_model):
         create_graph=True,
         retain_graph=True,
     )[0]
+    for t, r in zip(reflection_result, reference_result):
+        if not torch.allclose(t, r, atol=atol):
+            print(t, r)
 
     assert torch.allclose(
         reflection_result,

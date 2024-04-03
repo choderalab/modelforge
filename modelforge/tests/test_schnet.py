@@ -1,9 +1,6 @@
 from modelforge.potential.schnet import SchNet
 
 import pytest
-from .helper_functions import (
-    SIMPLIFIED_INPUT_DATA,
-)
 
 
 def test_Schnet_init():
@@ -17,7 +14,6 @@ def test_Schnet_init():
 from openff.units import unit
 
 
-@pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
 @pytest.mark.parametrize(
     "model_parameter",
     (
@@ -26,7 +22,7 @@ from openff.units import unit
         [128, 120, 64, unit.Quantity(5.0, unit.angstrom), 3],
     ),
 )
-def test_schnet_forward(input_data, model_parameter):
+def test_schnet_forward(batch, model_parameter):
     """
     Test the forward pass of the Schnet model.
     """
@@ -45,8 +41,8 @@ def test_schnet_forward(input_data, model_parameter):
         cutoff=cutoff,
         number_of_interaction_modules=nr_interaction_blocks,
     )
-    energy = schnet(input_data.nnp_input).E
-    nr_of_mols = input_data.nnp_input.atomic_subsystem_indices.unique().shape[0]
+    energy = schnet(batch.nnp_input).E
+    nr_of_mols = batch.nnp_input.atomic_subsystem_indices.unique().shape[0]
 
     assert (
         len(energy) == nr_of_mols

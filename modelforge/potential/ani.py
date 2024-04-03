@@ -485,7 +485,7 @@ class ANI2x(BaseNeuralNetworkPotential):
         self.register_buffer("lookup_tensor", lookup_tensor)
 
     def _config_prior(self):
-        log.info("Configuring PaiNN model hyperparameter prior distribution")
+        log.info("Configuring ANI2x model hyperparameter prior distribution")
         from ray import tune
         from modelforge.train.utils import shared_config_prior
 

@@ -700,7 +700,7 @@ class TrainingAdapter(pl.LightningModule):
         self,
         model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet"],
         loss: Callable = F.mse_loss,
-        optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
+        optimizer: Any = torch.optim.Adam,
         lr: float = 1e-3,
     ):
         """
@@ -880,7 +880,7 @@ class TrainingAdapter(pl.LightningModule):
             to be used within the PyTorch Lightning training process.
         """
 
-        optimizer = self.optimizer(self.model.parameters(), {"lr": self.learning_rate})
+        optimizer = self.optimizer(self.model.parameters(), lr=self.learning_rate)
         scheduler = {
             "scheduler": ReduceLROnPlateau(
                 optimizer, mode="min", factor=0.1, patience=20, verbose=True
@@ -952,7 +952,7 @@ class TrainingAdapter(pl.LightningModule):
         trainer = prepare_trainer(trainer)
         trainer.fit(self, self.train_dataloader, self.val_dataloader)
 
-    def get_ray_trainer(self, number_of_workers: int = 2, gpu: bool = False):
+    def get_ray_trainer(self, number_of_workers: int = 2, use_gpu: bool = False):
         """
         Initializes and returns a Ray Trainer for distributed training.
 
@@ -1041,7 +1041,7 @@ class TrainingAdapter(pl.LightningModule):
         self.val_dataloader = val_dataloader
 
         ray_trainer = self.get_ray_trainer(
-            number_of_workers=number_of_ray_workers, gpu=train_on_gpu
+            number_of_workers=number_of_ray_workers, use_gpu=train_on_gpu
         )
         scheduler = ASHAScheduler(
             max_t=number_of_epochs, grace_period=1, reduction_factor=2

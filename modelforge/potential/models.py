@@ -705,7 +705,7 @@ class TrainingAdapter(pl.LightningModule):
         self.loss_function = loss
         self.optimizer = optimizer
         self.learning_rate = lr
-        self.eval_loss: List[float] = []
+        self.eval_loss: List[torch.Tensor] = []
 
     def _get_energies(self, batch: BatchData) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -842,7 +842,7 @@ class TrainingAdapter(pl.LightningModule):
             on_epoch=True,
             prog_bar=True,
         )
-        self.eval_loss.append(float(val_loss.detach().to("cpu")))
+        self.eval_loss.append(val_loss.detach())
         return val_loss
 
     def on_validation_epoch_end(self):
@@ -905,7 +905,7 @@ class TrainingAdapter(pl.LightningModule):
         trainer = pl.Trainer(
             devices="auto",
             accelerator="auto",
-            strategy=RayDDPStrategy(),
+            strategy=RayDDPStrategy(find_unused_parameters=True),
             callbacks=[RayTrainReportCallback()],
             plugins=[RayLightningEnvironment()],
             enable_progress_bar=False,

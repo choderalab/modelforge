@@ -26,4 +26,6 @@ model = model.to(torch.float32)
 model.tune_with_ray(
     train_dataloader=dataset.train_dataloader(),
     val_dataloader=dataset.val_dataloader(),
+    number_of_ray_workers=2,
+    train_on_gpu=False,
 )

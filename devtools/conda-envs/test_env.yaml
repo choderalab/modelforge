@@ -23,6 +23,9 @@ dependencies:
   - rdkit
   - retry
   - sqlitedict
+  - pytorch_scatter
+  - "ray-tune"
+  - "ray-train"
 
   # Testing
   - pytest>=2.1
@@ -32,9 +35,6 @@ dependencies:
   - qcportal>=0.50
   - requests
   - torchani
-  - pytorch_scatter
-  - "ray-tune"
-  - "ray-train"
 
 
   # pip installs

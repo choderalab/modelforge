@@ -913,16 +913,22 @@ class TrainingAdapter(pl.LightningModule):
         trainer = prepare_trainer(trainer)
         trainer.fit(self, self.train_dataloader, self.val_dataloader)
 
-    def get_ray_trainer(self, gpu: bool = False):
+    def get_ray_trainer(self, number_of_workers: int = 2, gpu: bool = False):
         from ray.train import RunConfig, ScalingConfig, CheckpointConfig
 
         if gpu:
             scaling_config = ScalingConfig(
-                num_workers=2, use_gpu=True, resources_per_worker={"CPU": 1, "GPU": 1}
+                # Number of distributed workers.
+                num_workers=number_of_workers,
+                # Turn on/off GPU.
+                use_gpu=True,
+                resources_per_worker={"CPU": 1, "GPU": 1},
             )
         else:
             scaling_config = ScalingConfig(
-                num_workers=2,
+                # Number of distributed workers.
+                num_workers=number_of_workers,
+                # Turn on/off GPU.
                 use_gpu=False,
                 resources_per_worker={"CPU": 1},
             )
@@ -951,6 +957,8 @@ class TrainingAdapter(pl.LightningModule):
         val_dataloader,
         number_of_epochs: int = 5,
         number_of_samples: int = 10,
+        number_of_ray_workers: int = 2,
+        train_on_gpu: bool = False,
     ):
         from ray import tune
         from ray.tune.schedulers import ASHAScheduler
@@ -958,7 +966,9 @@ class TrainingAdapter(pl.LightningModule):
         self.train_dataloader = train_dataloader
         self.val_dataloader = val_dataloader
 
-        ray_trainer = self.get_ray_trainer()
+        ray_trainer = self.get_ray_trainer(
+            number_of_workers=number_of_ray_workers, gpu=train_on_gpu
+        )
         scheduler = ASHAScheduler(
             max_t=number_of_epochs, grace_period=1, reduction_factor=2
         )

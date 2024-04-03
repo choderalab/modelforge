@@ -20,6 +20,10 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 if TYPE_CHECKING:
     from modelforge.dataset.dataset import DatasetStatistics
+    from modelforge.potential.painn import PaiNNNeuralNetworkData
+    from modelforge.potential.schnet import SchnetNeuralNetworkData
+    from modelforge.potential.ani import AniNeuralNetworkData
+    from modelforge.potential.physnet import PhysNetNeuralNetworkData
 
 
 # Define NamedTuple for the outputs of Pairlist and Neighborlist forward method
@@ -326,7 +330,12 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
     @abstractmethod
     def _model_specific_input_preparation(
         self, data: NNPInput, pairlist: PairListOutputs
-    ) -> NeuralNetworkData:
+    ) -> Union[
+        "PhysNetNeuralNetworkData",
+        "PaiNNNeuralNetworkData",
+        "SchnetNeuralNetworkData",
+        "AniNeuralNetworkData",
+    ]:
         """
         Prepares model-specific inputs before the forward pass.
 
@@ -349,7 +358,15 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
         pass
 
     @abstractmethod
-    def _forward(self, data: NeuralNetworkData):
+    def _forward(
+        self,
+        data: Union[
+            "PhysNetNeuralNetworkData",
+            "PaiNNNeuralNetworkData",
+            "SchnetNeuralNetworkData",
+            "AniNeuralNetworkData",
+        ],
+    ):
         """
         Defines the forward pass of the model.
 
@@ -777,7 +794,6 @@ class TrainingAdapter(pl.LightningModule):
         self.log(
             "ptl/train_loss",
             loss,
-            on_epoch=True,
             on_step=True,
             prog_bar=True,
             batch_size=self.batch_size,
@@ -841,6 +857,7 @@ class TrainingAdapter(pl.LightningModule):
             batch_size=self.batch_size,
             on_epoch=True,
             prog_bar=True,
+            sync_dist=True,
         )
         self.eval_loss.append(val_loss.detach())
         return val_loss

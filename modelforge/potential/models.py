@@ -20,10 +20,10 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 if TYPE_CHECKING:
     from modelforge.dataset.dataset import DatasetStatistics
-    from modelforge.potential.painn import PaiNNNeuralNetworkData
-    from modelforge.potential.schnet import SchnetNeuralNetworkData
-    from modelforge.potential.ani import AniNeuralNetworkData
-    from modelforge.potential.physnet import PhysNetNeuralNetworkData
+    from modelforge.potential.painn import PaiNNNeuralNetworkData, PaiNN
+    from modelforge.potential.schnet import SchnetNeuralNetworkData, SchNet
+    from modelforge.potential.ani import AniNeuralNetworkData, ANI2x
+    from modelforge.potential.physnet import PhysNetNeuralNetworkData, PhysNet
 
 
 # Define NamedTuple for the outputs of Pairlist and Neighborlist forward method
@@ -233,7 +233,7 @@ class NeuralNetworkPotentialFactory:
         nnp_type: Literal["ANI2x", "SchNet", "PaiNN", "SAKE", "PhysNet"],
         nnp_parameters: Optional[Dict[str, Union[int, float]]] = {},
         training_parameters: Dict[str, Any] = {},
-    ) -> Union["BaseNeuralNetworkPotential", "TrainingAdapter"]:
+    ) -> Union[Union["ANI2x", "SchNet", "PaiNN", "PhysNet"], "TrainingAdapter"]:
         """
         Creates an NNP instance of the specified type, configured either for training or inference.
 
@@ -250,7 +250,7 @@ class NeuralNetworkPotentialFactory:
 
         Returns
         -------
-        Union[BaseNeuralNetworkPotential, TrainingAdapter]
+        Union[Union[ANI2x, SchNet, PaiNN, PhysNet], TrainingAdapter]
             An instantiated NNP model.
 
         Raises
@@ -681,9 +681,12 @@ class TrainingAdapter(pl.LightningModule):
     """
     Adapter class for training neural network potentials using PyTorch Lightning.
 
+    This class wraps around the base neural network potential model, facilitating training
+    and validation steps, optimization, and logging.
+
     Attributes
     ----------
-    base_model : BaseNeuralNetworkPotential
+    base_model : Union[ANI2x, SchNet, PaiNN, PhysNet]
         The underlying neural network potential model.
     loss_function : torch.nn.modules.loss._Loss
         Loss function used during training.
@@ -695,17 +698,17 @@ class TrainingAdapter(pl.LightningModule):
 
     def __init__(
         self,
-        model: BaseNeuralNetworkPotential,
+        model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet"],
         loss: Callable = F.mse_loss,
         optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
         lr: float = 1e-3,
     ):
         """
-        Initializes the training adapter with the specified model and training configuration.
+        Initializes the TrainingAdapter with the specified model and training configuration.
 
         Parameters
         ----------
-        model : BaseNeuralNetworkPotential
+        model : Union[ANI2x, SchNet, PaiNN, PhysNet]
             The neural network potential model to be trained.
         loss : Callable, optional
             The loss function for training, by default F.mse_loss.
@@ -724,7 +727,7 @@ class TrainingAdapter(pl.LightningModule):
         self.learning_rate = lr
         self.eval_loss: List[torch.Tensor] = []
 
-    def _get_energies(self, batch: BatchData) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _get_energies(self, batch: BatchData) -> Dict[str, torch.Tensor]:
         """
         Extracts and computes the energies from a given batch during training or evaluation.
 
@@ -735,14 +738,14 @@ class TrainingAdapter(pl.LightningModule):
 
         Returns
         -------
-        Tuple[torch.Tensor, torch.Tensor]
+        Tuple[str, torch.Tensor]
             The true energies from the dataset and the predicted energies by the model.
         """
         nnp_input = batch.nnp_input
         E_true = batch.metadata.E.to(torch.float32).squeeze(1)
         self.batch_size = self._log_batch_size(E_true)
         E_predict = self.model.forward(nnp_input).E
-        return E_true, E_predict
+        return {"E_true": E_true, "E_predict": E_predict}
 
     def config_prior(self):
 
@@ -771,7 +774,7 @@ class TrainingAdapter(pl.LightningModule):
 
     def training_step(self, batch: BatchData, batch_idx: int) -> torch.Tensor:
         """
-        Executes a single training step.
+        Performs a training step using the given batch.
 
         Parameters
         ----------
@@ -785,42 +788,41 @@ class TrainingAdapter(pl.LightningModule):
         torch.Tensor
             The loss tensor computed for the current training step.
         """
-        E_true, E_predict = self._get_energies(batch)
+        energies = self._get_energies(batch)
 
-        import math
-
-        # time.sleep(1)
-        loss = self.loss_function(E_true, E_predict)
+        loss = self.loss_function(energies["E_true"], energies["E_predict"])
         self.log(
             "ptl/train_loss",
             loss,
             on_step=True,
-            prog_bar=True,
             batch_size=self.batch_size,
         )
 
         return loss
 
-    def test_step(self, batch: BatchData, batch_idx: int):
+    def test_step(self, batch: BatchData, batch_idx: int) -> None:
         """
-        Executes a single test step.
+        Executes a test step using the given batch of data.
+
+        This method is called automatically during the test loop of the training process. It computes
+        the loss on a batch of test data and logs the results for analysis.
 
         Parameters
         ----------
         batch : BatchData
-            The batch of data provided for testing.
+            The batch of data to test the model on.
         batch_idx : int
-            The index of the current batch.
+            The index of the batch within the test dataset.
 
         Returns
         -------
         None
+            The results are logged and not directly returned.
         """
-        from torch.nn import functional as F
 
-        E_true, E_predict = self._get_energies(batch)
+        energies = self._get_energies(batch)
 
-        test_loss = F.mse_loss(E_true, E_predict)
+        test_loss = F.l1_loss(energies["E_true"], energies["E_predict"])
         self.log(
             "ptl/test_loss",
             test_loss,
@@ -848,9 +850,9 @@ class TrainingAdapter(pl.LightningModule):
 
         from torch.nn import functional as F
 
-        E_true, E_predict = self._get_energies(batch)
+        energies = self._get_energies(batch)
 
-        val_loss = F.l1_loss(E_true, E_predict)
+        val_loss = F.l1_loss(energies["E_true"], energies["E_predict"])
         self.log(
             "val_loss",
             val_loss,
@@ -878,10 +880,10 @@ class TrainingAdapter(pl.LightningModule):
             to be used within the PyTorch Lightning training process.
         """
 
-        optimizer = self.optimizer(self.model.parameters(), lr=self.learning_rate)
+        optimizer = self.optimizer(self.model.parameters(), {"lr": self.learning_rate})
         scheduler = {
             "scheduler": ReduceLROnPlateau(
-                optimizer, mode="min", factor=0.1, patience=5, verbose=True
+                optimizer, mode="min", factor=0.1, patience=20, verbose=True
             ),
             "monitor": "val_loss",  # Name of the metric to monitor
             "interval": "epoch",
@@ -890,13 +892,27 @@ class TrainingAdapter(pl.LightningModule):
         return {"optimizer": optimizer, "lr_scheduler": scheduler}
 
     def get_trainer(self):
+        """
+        Sets up and returns a PyTorch Lightning Trainer instance with configured logger and callbacks.
+
+        The trainer is configured with TensorBoard logging and an EarlyStopping callback to halt
+        the training process when the validation loss stops improving.
+
+        Returns
+        -------
+        Trainer
+            The configured PyTorch Lightning Trainer instance.
+        """
+
         from pytorch_lightning.loggers import TensorBoardLogger
         from lightning import Trainer
+        from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
         # set up tensor board logger
         logger = TensorBoardLogger("tb_logs", name="training")
-        # set up traininer
-        from lightning.pytorch.callbacks.early_stopping import EarlyStopping
+        early_stopping = EarlyStopping(
+            monitor="val_loss", min_delta=0.05, patience=20, verbose=True
+        )
 
         return Trainer(
             max_epochs=10_000,
@@ -904,14 +920,20 @@ class TrainingAdapter(pl.LightningModule):
             devices="auto",
             accelerator="auto",
             logger=logger,  # Add the logger here
-            callbacks=[
-                EarlyStopping(
-                    monitor="val_loss", min_delta=0.05, patience=20, verbose=True
-                )
-            ],
+            callbacks=[early_stopping],
         )
 
     def train_func(self):
+        """
+        Defines the training function to be used with Ray for distributed training.
+
+        This function configures a PyTorch Lightning trainer with the Ray Distributed Data Parallel
+        (DDP) strategy for efficient distributed training. The training process utilizes a custom
+        training loop and environment setup provided by Ray.
+
+        Note: This function should be passed to a Ray Trainer or directly used with Ray tasks.
+        """
+
         from ray.train.lightning import (
             RayDDPStrategy,
             RayLightningEnvironment,
@@ -931,24 +953,32 @@ class TrainingAdapter(pl.LightningModule):
         trainer.fit(self, self.train_dataloader, self.val_dataloader)
 
     def get_ray_trainer(self, number_of_workers: int = 2, gpu: bool = False):
+        """
+        Initializes and returns a Ray Trainer for distributed training.
+
+        Configures a Ray Trainer with a specified number of workers and GPU usage settings. This trainer
+        is prepared for distributed training using Ray, with support for checkpointing.
+
+        Parameters
+        ----------
+        number_of_workers : int, optional
+            The number of distributed workers to use, by default 2.
+        use_gpu : bool, optional
+            Specifies whether to use GPUs for training, by default False.
+
+        Returns
+        -------
+        Ray Trainer
+            The configured Ray Trainer for distributed training.
+        """
+
         from ray.train import RunConfig, ScalingConfig, CheckpointConfig
 
-        if gpu:
-            scaling_config = ScalingConfig(
-                # Number of distributed workers.
-                num_workers=number_of_workers,
-                # Turn on/off GPU.
-                use_gpu=True,
-                resources_per_worker={"CPU": 1, "GPU": 1},
-            )
-        else:
-            scaling_config = ScalingConfig(
-                # Number of distributed workers.
-                num_workers=number_of_workers,
-                # Turn on/off GPU.
-                use_gpu=False,
-                resources_per_worker={"CPU": 1},
-            )
+        scaling_config = ScalingConfig(
+            num_workers=number_of_workers,
+            use_gpu=use_gpu,
+            resources_per_worker={"CPU": 1, "GPU": 1} if use_gpu else {"CPU": 1},
+        )
 
         run_config = RunConfig(
             checkpoint_config=CheckpointConfig(
@@ -977,6 +1007,33 @@ class TrainingAdapter(pl.LightningModule):
         number_of_ray_workers: int = 2,
         train_on_gpu: bool = False,
     ):
+        """
+        Performs hyperparameter tuning using Ray Tune.
+
+        This method sets up and starts a Ray Tune hyperparameter tuning session, utilizing the ASHA scheduler
+        for efficient trial scheduling and early stopping.
+
+        Parameters
+        ----------
+        train_dataloader : DataLoader
+            The DataLoader for training data.
+        val_dataloader : DataLoader
+            The DataLoader for validation data.
+        number_of_epochs : int, optional
+            The maximum number of epochs for training, by default 5.
+        number_of_samples : int, optional
+            The number of samples (trial runs) to perform, by default 10.
+        number_of_ray_workers : int, optional
+            The number of Ray workers to use for distributed training, by default 2.
+        use_gpu : bool, optional
+            Whether to use GPUs for training, by default False.
+
+        Returns
+        -------
+        Tune experiment analysis object
+            The result of the hyperparameter tuning session, containing performance metrics and the best hyperparameters found.
+        """
+
         from ray import tune
         from ray.tune.schedulers import ASHAScheduler
 

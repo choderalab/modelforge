@@ -487,7 +487,7 @@ class ANI2x(BaseNeuralNetworkPotential):
     def _config_prior(self):
         log.info("Configuring PaiNN model hyperparameter prior distribution")
         from ray import tune
-        from modelforge.train.utils import get_default_prior
+        from modelforge.train.utils import shared_config_prior
 
         prior = {
             "radial_max_distance": tune.uniform(5, 10),
@@ -497,7 +497,7 @@ class ANI2x(BaseNeuralNetworkPotential):
             "angular_min_distance": tune.uniform(0.6, 1.4),
             "angle_sections": tune.randint(3, 8),
         }
-        prior.update(get_default_prior())
+        prior.update(shared_config_prior())
         return prior
 
     def _model_specific_input_preparation(

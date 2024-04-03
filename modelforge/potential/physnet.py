@@ -6,6 +6,7 @@ from typing import Dict, TYPE_CHECKING, Optional
 from torch import nn
 from torch_scatter import scatter_add
 from dataclasses import dataclass, field
+from modelforge.potential.utils import NeuralNetworkData
 
 if TYPE_CHECKING:
     from .models import PairListOutputs
@@ -13,7 +14,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class PhysNetNeuralNetworkInput:
+class PhysNetNeuralNetworkData(NeuralNetworkData):
     """
     A dataclass to structure the inputs for PhysNet-based neural network potentials,
     facilitating the efficient and structured representation of atomic systems for
@@ -21,20 +22,6 @@ class PhysNetNeuralNetworkInput:
 
     Attributes
     ----------
-    atomic_numbers : torch.Tensor
-        A 1D tensor of atomic numbers for each atom in the system(s). Shape: [num_atoms].
-    positions : torch.Tensor
-        A 2D tensor representing the XYZ coordinates of each atom. Shape: [num_atoms, 3].
-    atomic_subsystem_indices : torch.Tensor
-        A 1D tensor mapping each atom to its respective subsystem or molecule. Shape: [num_atoms].
-    total_charge : torch.Tensor
-        A tensor with the total charge of each system or molecule. Shape: [num_systems].
-    pair_indices : torch.Tensor
-        A 2D tensor indicating the indices of atom pairs. Shape: [2, num_pairs].
-    d_ij : torch.Tensor
-        A 1D tensor containing distances between each pair of atoms. Shape: [num_pairs, 1].
-    r_ij : torch.Tensor
-        A 2D tensor representing displacement vectors between atom pairs. Shape: [num_pairs, 3].
     f_ij : Optional[torch.Tensor]
         A tensor representing the radial basis function (RBF) expansion applied to distances between atom pairs,
         capturing the local chemical environment. Will be added after initialization. Shape: [num_pairs, num_rbf].
@@ -68,14 +55,6 @@ class PhysNetNeuralNetworkInput:
     ... )
     """
 
-    pair_indices: torch.Tensor
-    d_ij: torch.Tensor
-    r_ij: torch.Tensor
-    number_of_atoms: int
-    positions: torch.Tensor
-    atomic_numbers: torch.Tensor
-    atomic_subsystem_indices: torch.Tensor
-    total_charge: torch.Tensor
     atomic_embedding: torch.Tensor
     f_ij: Optional[torch.Tensor] = field(default=None)
 
@@ -290,7 +269,7 @@ class PhysNetInteractionModule(nn.Module):
         # Gating Module
         self.gating_module = GatingModule(number_of_atom_features)
 
-    def forward(self, data: PhysNetNeuralNetworkInput) -> torch.Tensor:
+    def forward(self, data: PhysNetNeuralNetworkData) -> torch.Tensor:
         """
         Processes input tensors through the interaction module, applying
         Gaussian Logarithm Attention to modulate the influence of pairwise distances
@@ -464,7 +443,8 @@ class PhysNet(BaseNeuralNetworkPotential):
         cutoff: unit.Quantity = 5 * unit.angstrom,
         number_of_atom_features: int = 64,
         number_of_radial_basis_functions: int = 16,
-        nr_of_modules: int = 5,
+        number_of_interaction_residual: int = 3,
+        number_of_modules: int = 5,
     ) -> None:
         """
         Implementation of the PhysNet neural network potential.
@@ -477,7 +457,7 @@ class PhysNet(BaseNeuralNetworkPotential):
             Dimension of the embedding vectors for atomic numbers.
         cutoff : openff.units.unit.Quantity, default=5*unit.angstrom
             The cutoff distance for interactions.
-        nr_of_modules : int, default=2
+        number_of_modules : int, default=2
             Number of PhysNet modules to be stacked in the network.
         """
 
@@ -501,17 +481,36 @@ class PhysNet(BaseNeuralNetworkPotential):
 
         self.physnet_module = ModuleList(
             [
-                PhysNetModule(number_of_atom_features, number_of_radial_basis_functions)
-                for _ in range(nr_of_modules)
+                PhysNetModule(
+                    number_of_atom_features,
+                    number_of_radial_basis_functions,
+                    number_of_interaction_residual,
+                )
+                for _ in range(number_of_modules)
             ]
         )
 
         self.atomic_scale = nn.Parameter(torch.ones(max_Z, 2))
         self.atomic_shift = nn.Parameter(torch.ones(max_Z, 2))
 
+    def _config_prior(self):
+        log.info("Configuring SchNet model hyperparameter prior distribution")
+        from ray import tune
+        from modelforge.potential.utils import shared_config_prior
+
+        prior = {
+            "number_of_atom_features": tune.randint(2, 256),
+            "number_of_modules": tune.randint(3, 8),
+            "number_of_interaction_residual": tune.randint(2, 5),
+            "cutoff": tune.uniform(5, 10),
+            "number_of_radial_basis_functions": tune.randint(8, 32),
+        }
+        prior.update(shared_config_prior())
+        return prior
+
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
-    ) -> PhysNetNeuralNetworkInput:
+    ) -> PhysNetNeuralNetworkData:
 
         # Perform atomic embedding
         atomic_embedding = self.embedding_module(data.atomic_numbers)
@@ -525,7 +524,7 @@ class PhysNet(BaseNeuralNetworkPotential):
 
         number_of_atoms = data.atomic_numbers.shape[0]
 
-        nnp_input = PhysNetNeuralNetworkInput(
+        nnp_input = PhysNetNeuralNetworkData(
             pair_indices=pairlist_output.pair_indices,
             d_ij=pairlist_output.d_ij,
             r_ij=pairlist_output.r_ij,
@@ -540,7 +539,7 @@ class PhysNet(BaseNeuralNetworkPotential):
 
         return nnp_input
 
-    def _forward(self, data: PhysNetNeuralNetworkInput) -> Dict[str, torch.Tensor]:
+    def _forward(self, data: PhysNetNeuralNetworkData) -> Dict[str, torch.Tensor]:
         """
         Calculate the energy for a given input batch.
         Parameters

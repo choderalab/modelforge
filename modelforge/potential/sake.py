@@ -469,7 +469,7 @@ class SAKEInteraction(nn.Module):
         zeros = torch.zeros(out_shape, dtype=h_ij_semantic.dtype, device=h_ij_semantic.device)
         return zeros.scatter_add(0, expanded_idx_i, h_ij_semantic)
 
-    def get_semantic_attention(self, h_ij_edge, idx_i, d_ij, nr_atoms):
+    def get_semantic_attention(self, h_ij_edge, idx_i, idx_j, d_ij, nr_atoms):
         """Compute semantic attention. Softmax is over all senders connected to a receiver.
 
         Wang and Chodera (2023) Sec. 5 Eq. 9-10.
@@ -480,6 +480,8 @@ class SAKEInteraction(nn.Module):
             Edge features. Shape [nr_pairs, nr_edge_basis].
         idx_i : torch.Tensor
             Indices of the receiver nodes. Shape [nr_pairs, ].
+        idx_j : torch.Tensor
+            Indices of the sender nodes. Shape [nr_pairs, ].
         d_ij : torch.Tensor
             Distance between senders and receivers. Shape [nr_pairs, ].
         nr_atoms : int
@@ -490,7 +492,7 @@ class SAKEInteraction(nn.Module):
         torch.Tensor
             Semantic attention. Shape [nr_pairs, nr_heads * nr_edge_basis].
         """
-        h_ij_att_weights = self.semantic_attention_mlp(h_ij_edge)
+        h_ij_att_weights = self.semantic_attention_mlp(h_ij_edge) - (torch.eq(idx_i, idx_j) * 1e5).unsqueeze(-1)
         expanded_idx_i = idx_i.view(-1, 1).expand_as(h_ij_att_weights)
         h_ij_att_before_cutoff = scatter_softmax(h_ij_att_weights, expanded_idx_i, dim=0, dim_size=nr_atoms,
                                                  device=h_ij_edge.device)
@@ -535,16 +537,16 @@ class SAKEInteraction(nn.Module):
         dir_ij = r_ij / (d_ij.unsqueeze(-1) + self.epsilon)
 
         h_ij_edge = self.update_edge(h[idx_j], h[idx_i], d_ij)
-        h_ij_semantic = self.get_semantic_attention(h_ij_edge, idx_i, d_ij, nr_of_atoms_in_all_systems)
+        h_ij_semantic = self.get_semantic_attention(h_ij_edge, idx_i, idx_j, d_ij, nr_of_atoms_in_all_systems)
         del h_ij_edge
         h_i_semantic = self.aggregate(h_ij_semantic, idx_i, nr_of_atoms_in_all_systems)
         combinations = self.get_combinations(h_ij_semantic, dir_ij)
         del h_ij_semantic
         h_i_spatial = self.get_spatial_attention(combinations, idx_i, nr_of_atoms_in_all_systems)
         h_updated = self.update_node(h, h_i_semantic, h_i_spatial)
-        del h_i_semantic, h_i_spatial
-        v_updated = self.update_velocity(v, h, combinations, idx_i)
-        del h, v
+        del h, h_i_semantic, h_i_spatial
+        v_updated = self.update_velocity(v, h_updated, combinations, idx_i)
+        del v
         x_updated = x + v_updated
 
         return h_updated, x_updated, v_updated

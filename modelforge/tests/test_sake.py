@@ -306,7 +306,9 @@ def test_make_equivalent_pairlists():
     assert pairlist.shape == (2, nr_pairs)
     assert mask.shape == (nr_atoms, nr_atoms)
 
-def test_update_edge_against_reference():
+
+@pytest.mark.parametrize("include_self_pairs", [True, False])
+def test_update_edge_against_reference(include_self_pairs):
     from modelforge.potential import CosineCutoff
     from modelforge.potential.sake import ExpNormalSmearing
 
@@ -356,7 +358,7 @@ def test_update_edge_against_reference():
     x_minus_xt = get_x_minus_xt(x_jax)
     x_minus_xt_norm = get_x_minus_xt_norm(x_minus_xt)
 
-    pairlist, mask = make_equivalent_pairlist_mask(pairlist_key, nr_atoms, nr_pairs, include_self_pairs=False)
+    pairlist, mask = make_equivalent_pairlist_mask(pairlist_key, nr_atoms, nr_pairs, include_self_pairs=include_self_pairs)
     idx_i, idx_j = pairlist
 
     # Convert the input tensors from JAX to torch and reshape to diagonal batching
@@ -409,19 +411,21 @@ def compare_equivalent_edge_features(jax_array, torch_array, mask, pairlist, ato
                 onp.array(jax_array[pairlist[0, i].item(), pairlist[1, i].item()])), atol=atol)
 
 
-def test_semantic_attention_against_reference():
+@pytest.mark.parametrize("include_self_pairs", [True, False])
+def test_semantic_attention_against_reference(include_self_pairs):
     from modelforge.potential.utils import scatter_softmax
 
     nr_atoms = 7
     out_features = 11
     hidden_features = 6
     nr_heads = 4
-    nr_pairs = 5
+    nr_pairs = 12
     key = jax.random.PRNGKey(1884)
     nr_edge_basis = hidden_features
 
     pairlist_key, input_key = jax.random.split(key, 2)
-    pairlist, mask = make_equivalent_pairlist_mask(pairlist_key, nr_atoms, nr_pairs, include_self_pairs=False)
+    pairlist, mask = make_equivalent_pairlist_mask(pairlist_key, nr_atoms, nr_pairs,
+                                                   include_self_pairs=include_self_pairs)
     idx_i, idx_j = pairlist
     mf_sake_block, ref_sake_interaction = make_reference_equivalent_sake_interaction(out_features, hidden_features,
                                                                                      nr_heads)
@@ -469,13 +473,14 @@ def test_exp_normal_smearing_against_reference():
     assert torch.allclose(mf_rbf, torch.from_numpy(onp.array(ref_rbf)).reshape(nr_atoms ** 2, nr_rbf))
 
 
-def test_combined_attention_against_reference():
+@pytest.mark.parametrize("include_self_pairs", [True, False])
+def test_combined_attention_against_reference(include_self_pairs):
     nr_atoms = 5
     out_features = 11
     hidden_features = 7
     geometry_basis = 3
-    nr_heads = 1
-    nr_pairs = 2
+    nr_heads = 13
+    nr_pairs = 17
     key = jax.random.PRNGKey(1884)
     torch.manual_seed(1884)
     nr_edge_basis = hidden_features
@@ -483,7 +488,8 @@ def test_combined_attention_against_reference():
     mf_sake_block, ref_sake_interaction = make_reference_equivalent_sake_interaction(out_features, hidden_features,
                                                                                      nr_heads)
     pairlist_key, input_key = jax.random.split(key, 2)
-    pairlist, mask = make_equivalent_pairlist_mask(pairlist_key, nr_atoms, nr_pairs, include_self_pairs=False)
+    pairlist, mask = make_equivalent_pairlist_mask(pairlist_key, nr_atoms, nr_pairs,
+                                                   include_self_pairs=include_self_pairs)
     idx_i, idx_j = pairlist
 
     h_key, x_key = jax.random.split(input_key, 2)
@@ -493,7 +499,7 @@ def test_combined_attention_against_reference():
     x_minus_xt_norm = jnp.linalg.norm(x_minus_xt, axis=-1, keepdims=True)
     d_ij = torch.norm(x_minus_xt_torch, dim=-1)
 
-    mf_h_ij_semantic = mf_sake_block.get_semantic_attention(h_ij_edge, idx_i, d_ij, nr_atoms)
+    mf_h_ij_semantic = mf_sake_block.get_semantic_attention(h_ij_edge, idx_i, idx_j, d_ij, nr_atoms)
 
     variables = ref_sake_interaction.init(key, x_minus_xt_norm, h_e_mtx, mask,
                                           method=ref_sake_interaction.combined_attention)
@@ -512,7 +518,8 @@ def test_combined_attention_against_reference():
     compare_equivalent_edge_features(ref_h_ij_semantic, mf_h_ij_semantic, mask, pairlist)
 
 
-def test_spatial_attention_against_reference():
+@pytest.mark.parametrize("include_self_pairs", [True, False])
+def test_spatial_attention_against_reference(include_self_pairs):
     nr_atoms = 7
     out_features = 2
     hidden_features = 2
@@ -526,7 +533,8 @@ def test_spatial_attention_against_reference():
     mf_sake_block, ref_sake_interaction = make_reference_equivalent_sake_interaction(out_features, hidden_features,
                                                                                      nr_heads)
     pairlist_key, input_key = jax.random.split(key, 2)
-    pairlist, mask = make_equivalent_pairlist_mask(pairlist_key, nr_atoms, nr_pairs, include_self_pairs=False)
+    pairlist, mask = make_equivalent_pairlist_mask(pairlist_key, nr_atoms, nr_pairs,
+                                                   include_self_pairs=include_self_pairs)
     idx_i, idx_j = pairlist
 
     h_key, x_key = jax.random.split(input_key, 2)
@@ -554,32 +562,34 @@ def test_spatial_attention_against_reference():
     assert torch.allclose(mf_result, torch.from_numpy(onp.array(ref_spatial)))
 
 
-def test_sake_layer_against_reference():
+@pytest.mark.parametrize("include_self_pairs", [True, False])
+def test_sake_layer_against_reference(include_self_pairs):
     nr_atoms = 13
     out_features = 11
     hidden_features = 7
     geometry_basis = 3
     nr_heads = 5
     nr_atom_basis = out_features
+    nr_pairs = 17
     key = jax.random.PRNGKey(1884)
+    torch.manual_seed(1884)
 
-    pairlist = torch.cartesian_prod(torch.arange(nr_atoms), torch.arange(nr_atoms))
-    pairlist = pairlist.T
+    pairlist, mask = make_equivalent_pairlist_mask(key, nr_atoms, nr_pairs, include_self_pairs=include_self_pairs)
 
     mf_sake_block, ref_sake_interaction = make_reference_equivalent_sake_interaction(out_features, hidden_features,
                                                                                      nr_heads)
     # Generate random input data in JAX
-    h_jax = jax.random.normal(key, (nr_atoms, nr_atom_basis))
-    x_jax = jax.random.normal(key, (nr_atoms, geometry_basis))
-    v_jax = jax.random.normal(key, (nr_atoms, geometry_basis))
+    h_key, x_key, v_key, init_key = jax.random.split(key, 4)
+    h_jax = jax.random.normal(h_key, (nr_atoms, nr_atom_basis))
+    x_jax = jax.random.normal(x_key, (nr_atoms, geometry_basis))
+    v_jax = jax.random.normal(v_key, (nr_atoms, geometry_basis))
 
     # Convert the input tensors from JAX to torch and reshape to diagonal batching
     h = torch.from_numpy(onp.array(h_jax))
     x = torch.from_numpy(onp.array(x_jax))
     v = torch.from_numpy(onp.array(v_jax))
 
-    variables = ref_sake_interaction.init(key, h_jax, x_jax, v_jax)
-    print(variables["params"].keys())
+    variables = ref_sake_interaction.init(init_key, h_jax, x_jax, v_jax, mask)
 
     variables["params"]["edge_model"]["mlp_in"]["kernel"] = mf_sake_block.edge_mlp_in.weight.detach().numpy().T
     variables["params"]["edge_model"]["mlp_in"]["bias"] = mf_sake_block.edge_mlp_in.bias.detach().numpy().T
@@ -611,9 +621,8 @@ def test_sake_layer_against_reference():
 
     mf_h, mf_x, mf_v = mf_sake_block(h, x, v, pairlist)
 
-    ref_h, ref_x, ref_v = ref_sake_interaction.apply(variables, h_jax, x_jax, v_jax)
+    ref_h, ref_x, ref_v = ref_sake_interaction.apply(variables, h_jax, x_jax, v_jax, mask)
 
-    print(mf_h, torch.from_numpy(onp.array(ref_h)))
-    assert torch.allclose(mf_h, torch.from_numpy(onp.array(ref_h)), atol=1e-1)
-    assert torch.allclose(mf_x, torch.from_numpy(onp.array(ref_x)), atol=1e-1)
-    assert torch.allclose(mf_v, torch.from_numpy(onp.array(ref_v)), atol=1e-1)
+    assert torch.allclose(mf_h, torch.from_numpy(onp.array(ref_h)))
+    assert torch.allclose(mf_x, torch.from_numpy(onp.array(ref_x)))
+    assert torch.allclose(mf_v, torch.from_numpy(onp.array(ref_v)))

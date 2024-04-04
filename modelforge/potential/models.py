@@ -710,8 +710,6 @@ class TrainingAdapter(pl.LightningModule):
         ----------
         model : Union[ANI2x, SchNet, PaiNN, PhysNet]
             The neural network potential model to be trained.
-        loss : Callable, optional
-            The loss function for training, by default F.mse_loss.
         optimizer : Type[torch.optim.Optimizer], optional
             The optimizer class to use for training, by default torch.optim.Adam.
         lr : float, optional
@@ -722,10 +720,51 @@ class TrainingAdapter(pl.LightningModule):
         super().__init__()
 
         self.model = model
-        self.loss_function = loss
         self.optimizer = optimizer
         self.learning_rate = lr
         self.eval_loss: List[torch.Tensor] = []
+
+    def compute_loss(
+        self,
+        energies: Dict[str, torch.Tensor],
+        forces: Optional[Dict[str, torch.Tensor]],
+    ) -> torch.Tensor:
+        """
+        Computes the combined loss from energies and forces.
+
+        """
+        # Compute MSE of energies
+        L_E = F.mse_loss(energies["E_predcit"], energies["E_true"])
+        if forces:
+            # Assuming forces_true and forces_predict are already negative gradients of the potential energy w.r.t positions
+            L_F = F.mse_loss(forces["F_predcit"], forces["F_true"])
+        else:
+            L_F = torch.tensor(0.0)
+
+        return L_E + L_F
+
+    def _get_forces(self, batch: BatchData) -> Dict[str, torch.Tensor]:
+        """
+        Extracts and computes the forces from a given batch during training or evaluation.
+
+        Parameters
+        ----------
+        batch : BatchData
+            A single batch of data, including input features and target energies.
+
+        Returns
+        -------
+        Tuple[str, torch.Tensor]
+            The true forces from the dataset and the predicted forces by the model.
+        """
+        nnp_input = batch.nnp_input
+        F_true = batch.metadata.F.to(torch.float32)
+        E_predict = self.model.forward(nnp_input).E
+        F_predict = -torch.autograd.grad(
+            E_predict.sum(), nnp_input.positions, create_graph=False, retain_graph=False
+        )[0]
+
+        return {"F_true": F_true, "F_predict": F_predict}
 
     def _get_energies(self, batch: BatchData) -> Dict[str, torch.Tensor]:
         """
@@ -789,8 +828,12 @@ class TrainingAdapter(pl.LightningModule):
             The loss tensor computed for the current training step.
         """
         energies = self._get_energies(batch)
+        if hasattr(batch.metadata, "F"):
+            forces = self._get_forces(batch)
+        else:
+            forces = None
+        loss = self.compute_loss(energies, forces)
 
-        loss = self.loss_function(energies["E_true"], energies["E_predict"])
         self.log(
             "ptl/train_loss",
             loss,

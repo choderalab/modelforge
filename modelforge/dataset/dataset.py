@@ -226,7 +226,7 @@ class HDF5Dataset:
     """
 
     def __init__(
-        self, raw_data_file: str, processed_data_file: str, local_cache_dir: str
+        self,  # raw_data_file: str, processed_data_file: str,  local_cache_dir: str
     ):
         """
         Initializes the HDF5Dataset with paths to raw and processed data files.
@@ -241,11 +241,25 @@ class HDF5Dataset:
             Directory to store temporary processing files.
         """
 
-        self.raw_data_file = raw_data_file
-        self.processed_data_file = processed_data_file
+        # self.raw_data_file = raw_data_file
+        # self.processed_data_file = processed_data_file
         self.hdf5data: Optional[Dict[str, List[np.ndarray]]] = None
         self.numpy_data: Optional[np.ndarray] = None
-        self.local_cache_dir = local_cache_dir
+        # self.local_cache_dir = local_cache_dir
+
+    def _ungzip_hdf5(self) -> None:
+        """
+        Unzips an HDF5.gz file.
+
+        Examples
+        -------
+        """
+        import gzip
+        import shutil
+
+        with gzip.open(self.raw_data_file, "rb") as gz_file:
+            with open(self.unzipped_data_file, "wb") as out_file:
+                shutil.copyfileobj(gz_file, out_file)
 
     def _from_hdf5(self) -> None:
         """
@@ -257,24 +271,27 @@ class HDF5Dataset:
         >>> processed_data = hdf5_data._from_hdf5()
 
         """
-        import gzip
         from collections import OrderedDict
         import h5py
         import tqdm
-        import shutil
-
-        log.debug(f"Processing and extracting data from {self.raw_data_file}")
 
         # this will create an unzipped file which we can then load in
         # this is substantially faster than passing gz_file directly to h5py.File()
         # by avoiding data chunking issues.
 
-        temp_hdf5_file = f"{self.local_cache_dir}/temp_unzipped.hdf5"
-        with gzip.open(self.raw_data_file, "rb") as gz_file:
-            with open(temp_hdf5_file, "wb") as out_file:
-                shutil.copyfileobj(gz_file, out_file)
+        temp_hdf5_file = f"{self.local_cache_dir}/{self.unzipped_data_file}"
 
         log.debug("Reading in and processing hdf5 file ...")
+        from modelforge.utils.remote import calculate_md5_checksum
+
+        # add in a check to make sure the checksum matches before loading the file
+        # this also appears in the dataset factory, but having this also here is good if used as a standalone function
+        checksum = calculate_md5_checksum(self.unzipped_data_file, self.local_cache_dir)
+
+        if checksum != self.md5_unzipped_checksum:
+            raise ValueError(
+                f"Checksum mismatch for unzipped data file {temp_hdf5_file}. Found {checksum}, Expected {self.md5_unzipped_checksum}"
+            )
 
         with h5py.File(temp_hdf5_file, "r") as hf:
             # create dicts to store data for each format type
@@ -408,6 +425,15 @@ class HDF5Dataset:
         >>> hdf5_data = HDF5Dataset("raw_data.hdf5", "processed_data.npz")
         >>> processed_data = hdf5_data._from_file_cache()
         """
+        from modelforge.utils.remote import calculate_md5_checksum
+
+        checksum = calculate_md5_checksum(
+            self.processed_data_file, self.local_cache_dir
+        )
+        if checksum != self.md5_processed_checksum:
+            raise ValueError(
+                f"Checksum mismatch for processed data file {self.processed_data_file}.Found {checksum}, expected {self.md5_processed_checksum}"
+            )
         log.debug(f"Loading processed data from {self.processed_data_file}")
         self.numpy_data = np.load(self.processed_data_file)
 
@@ -466,15 +492,68 @@ class DatasetFactory:
             The HDF5 dataset instance to use.
         """
 
-        # if not cached, download and process
-        if not os.path.exists(data.processed_data_file):
-            if not os.path.exists(data.raw_data_file):
-                data._download()
-            # load from hdf5 and process
+        import os
+        from modelforge.utils.remote import calculate_md5_checksum
+
+        # if the dataset was initialize with force_download, we will skip all other checking and just download and process
+        if data.force_download:
+            data._download()
+            data._ungzip_hdf5()
             data._from_hdf5()
-            # save to cache
             data._to_file_cache()
-        # load from cache
+        else:
+            file_loaded = False
+            if os.path.exists(data.processed_data_file):
+                checksum = calculate_md5_checksum(
+                    data.processed_data_file, data.local_cache_dir
+                )
+                if checksum != data.md5_processed_checksum:
+
+                    log.warning(
+                        f"Checksum mismatch for processed data file {data.processed_data_file}. Re-processing."
+                    )
+                    log.debug(
+                        f"Checksum mismatch, found {checksum}, expected {data.md5_processed_checksum}"
+                    )
+                else:
+                    data._from_file_cache()
+                    file_loaded = True
+
+            if os.path.exists(data.unzipped_data_file) and not file_loaded:
+                checksum = calculate_md5_checksum(
+                    data.unzipped_data_file, data.local_cache_dir
+                )
+                if checksum != data.md5_unzipped_checksum:
+                    log.warning(
+                        f"Checksum mismatch for unzipped data file {data.unzipped_data_file}. Re-processing."
+                    )
+                    log.debug(
+                        f"Checksum mismatch, found {checksum}, expected {data.md5_unzipped_checksum}"
+                    )
+
+                    # the download function automatically checks if the file is already downloaded and if the checksum matches
+                    # if either are false, it will redownload the file
+                    data._download()
+                    data._ungzip_hdf5()
+                    checksum = calculate_md5_checksum(
+                        data.unzipped_data_file, data.local_cache_dir
+                    )
+                    if checksum != data.md5_unzipped_checksum:
+                        raise ValueError(
+                            f"Checksum mismatch for unzipped data file {data.unzipped_data_file}. Expected {data.md5_unzipped_checksum}, found {checksum}. Please check the raw gzipped file or try running with force_download."
+                        )
+
+                    data._from_hdf5()
+                    data._to_file_cache()
+                else:
+                    data._from_hdf5()
+                    data._to_file_cache()
+            else:
+                data._download()
+                data._ungzip_hdf5()
+                data._from_hdf5()
+                data._to_file_cache()
+
         data._from_file_cache()
 
     @staticmethod

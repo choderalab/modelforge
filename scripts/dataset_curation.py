@@ -183,6 +183,7 @@ def QM9(
     output_file_dir: str,
     local_cache_dir: str,
     force_download: bool = False,
+    unit_testing_max_records=None,
 ):
     """
     This fetches and process the QM9 dataset into a curated hdf5 file.
@@ -218,7 +219,13 @@ def QM9(
         output_file_dir=output_file_dir,
         local_cache_dir=local_cache_dir,
     )
-    qm9.process(force_download=force_download)
+    if unit_testing_max_records is None:
+        qm9.process(force_download=force_download)
+    else:
+        qm9.process(
+            force_download=force_download,
+            unit_testing_max_records=unit_testing_max_records,
+        )
 
 
 def ANI1x(
@@ -320,28 +327,41 @@ Download the various datasets and process them into curated hdf5 files.
 
 # define the local path prefix
 local_prefix = "/Users/cri/Documents/Projects-msk/datasets"
-
-# we will save all the files to a central location
 output_file_dir = f"{local_prefix}/hdf5_files"
 
-# SPICE 2 dataset
-local_cache_dir = f"{local_prefix}/spice2_dataset"
-hdf5_file_name = "spice_2_dataset.hdf5"
+# # QM9 dataset
+local_cache_dir = f"{local_prefix}/qm9_dataset"
+hdf5_file_name = "qm9_dataset.hdf5"
+QM9(
+    hdf5_file_name,
+    output_file_dir,
+    local_cache_dir,
+    force_download=False,
+    unit_testing_max_records=100,
+)
 
-SPICE_2(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)
 
-# SPICE 1.1.4 OpenFF dataset
-local_cache_dir = f"{local_prefix}/spice_openff_dataset"
-hdf5_file_name = "spice_114_openff_dataset.hdf5"
-
-SPICE_114_OpenFF(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)
-
-# SPICE 1.1.4 dataset
-local_cache_dir = f"{local_prefix}/spice_114_dataset"
-hdf5_file_name = "spice_114_dataset.hdf5"
-
-SPICE_114(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)
+# we will save all the files to a central location
+# output_file_dir = f"{local_prefix}/hdf5_files"
 #
+# # SPICE 2 dataset
+# local_cache_dir = f"{local_prefix}/spice2_dataset"
+# hdf5_file_name = "spice_2_dataset.hdf5"
+#
+# SPICE_2(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)
+#
+# # SPICE 1.1.4 OpenFF dataset
+# local_cache_dir = f"{local_prefix}/spice_openff_dataset"
+# hdf5_file_name = "spice_114_openff_dataset.hdf5"
+#
+# SPICE_114_OpenFF(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)
+#
+# # SPICE 1.1.4 dataset
+# local_cache_dir = f"{local_prefix}/spice_114_dataset"
+# hdf5_file_name = "spice_114_dataset.hdf5"
+#
+# SPICE_114(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)
+# #
 # # QM9 dataset
 # local_cache_dir = f"{local_prefix}/qm9_dataset"
 # hdf5_file_name = "qm9_dataset.hdf5"

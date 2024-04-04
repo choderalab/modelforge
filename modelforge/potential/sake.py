@@ -499,7 +499,7 @@ class SAKEInteraction(nn.Module):
         combined_ij_att_prenorm = torch.einsum("ph,p->ph", h_ij_att_before_cutoff, d_ij_att_weights)
         zeros = torch.zeros((nr_atoms, self.nr_heads), dtype=h_ij_edge.dtype, device=h_ij_edge.device)
         combined_ij_att = combined_ij_att_prenorm / (
-                zeros.scatter_add(0, expanded_idx_i, combined_ij_att_prenorm) + self.epsilon)[idx_i]
+                zeros.scatter_add(0, expanded_idx_i, combined_ij_att_prenorm))[idx_i]
         # p: nr_pairs, f: nr_edge_basis, h: nr_heads
         return torch.reshape(torch.einsum("pf,ph->pfh", h_ij_edge, combined_ij_att),
                              (len(idx_i), self.nr_edge_basis * self.nr_heads))

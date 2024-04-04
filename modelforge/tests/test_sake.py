@@ -227,7 +227,7 @@ def test_cutoff_against_reference():
                                                                                      nr_heads)
     mf_cutoff = mf_sake_block.cutoff_module(d_ij)
     ref_cutoff = ref_sake_interaction.cutoff.apply({}, x_minus_xt_norm)
-    assert torch.allclose(mf_cutoff, torch.from_numpy(onp.array(ref_cutoff).reshape(nr_pairs, )), atol=1e-4)
+    assert torch.allclose(mf_cutoff, torch.from_numpy(onp.array(ref_cutoff).reshape(nr_pairs, )))
 
 
 def test_x_minus_xt_against_reference():
@@ -247,7 +247,7 @@ def test_x_minus_xt_against_reference():
     r_ij = x[idx_j] - x[idx_i]
 
     assert torch.allclose(torch.from_numpy(onp.array(x_minus_xt.reshape(nr_atoms ** 2, geometry_basis, order='C'))),
-                          r_ij, atol=1e-4)
+                          r_ij)
 
     x_minus_xt_norm = get_x_minus_xt_norm(x_minus_xt)
     d_ij = torch.sqrt((r_ij ** 2).sum(dim=1) + 1e-5)

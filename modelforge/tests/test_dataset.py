@@ -12,6 +12,12 @@ from .helper_functions import initialize_dataset, DATASETS
 from ..utils import PropertyNames
 
 
+@pytest.fixture(scope="session")
+def prep_temp_dir(tmp_path_factory):
+    fn = tmp_path_factory.mktemp("dataset_test")
+    return fn
+
+
 @pytest.fixture(
     autouse=True,
 )
@@ -155,34 +161,151 @@ def test_different_properties_of_interest(dataset):
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
-def test_file_existence_after_initialization(dataset):
+def test_file_existence_after_initialization(dataset, prep_temp_dir):
     """Test if files are created after dataset initialization."""
-    factory = DatasetFactory()
-    data = dataset(for_unit_testing=True)
 
-    assert not os.path.exists(data.raw_data_file)
-    assert not os.path.exists(data.processed_data_file)
+    local_cache_dir = str(prep_temp_dir)
+
+    factory = DatasetFactory()
+    data = dataset(for_unit_testing=True, local_cache_dir=local_cache_dir)
+
+    assert not os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
+    assert not os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
+    assert not os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
 
     dataset = factory.create_dataset(data)
-    assert os.path.exists(data.raw_data_file)
-    assert os.path.exists(data.processed_data_file)
+    assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
+    assert os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
+    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
+
+
+def test_caching(prep_temp_dir):
+    local_cache_dir = str(prep_temp_dir)
+    local_cache_dir = local_cache_dir + "/data_test"
+    from modelforge.dataset.qm9 import QM9Dataset
+
+    data = QM9Dataset(for_unit_testing=True, local_cache_dir=local_cache_dir)
+
+    # first test that no file exists
+    assert not os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
+    # the _file_validation method also checks the path in addition to the checksum
+    assert (
+        data._file_validation(
+            data.gz_data_file["name"], local_cache_dir, data.gz_data_file["md5"]
+        )
+        == False
+    )
+
+    data._download()
+    # check that the file exists
+    assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
+    # check that the file is there and has the right checksum
+    assert (
+        data._file_validation(
+            data.gz_data_file["name"], local_cache_dir, data.gz_data_file["md5"]
+        )
+        == True
+    )
+
+    # give a random checksum to see this is false
+    assert (
+        data._file_validation(
+            data.gz_data_file["name"], local_cache_dir, "madeupcheckusm"
+        )
+        == False
+    )
+    # make sure that if we run again we don't fail
+    data._download()
+    # remove the file and check that it is downloaded again
+    os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
+    data._download()
+
+    # check that the file is unzipped
+    data._ungzip_hdf5()
+    assert os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
+    assert (
+        data._file_validation(
+            data.hdf5_data_file["name"], local_cache_dir, data.hdf5_data_file["md5"]
+        )
+        == True
+    )
+    data._from_hdf5()
+
+    data._to_file_cache()
+
+    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
+    assert (
+        data._file_validation(
+            data.processed_data_file["name"],
+            local_cache_dir,
+            data.processed_data_file["md5"],
+        )
+        == True
+    )
+
+    data._from_file_cache()
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
-def test_different_scenarios_of_file_availability(dataset):
+def test_different_scenarios_of_file_availability(dataset, prep_temp_dir):
     """Test the behavior when raw and processed dataset files are removed."""
+
+    local_cache_dir = str(prep_temp_dir) + "/test_diff_secnarios"
+
     factory = DatasetFactory()
-    data = dataset(for_unit_testing=True)
+    data = dataset(for_unit_testing=True, local_cache_dir=local_cache_dir)
 
+    # this will download the .gz, the .hdf5 and the .npz files
     factory.create_dataset(data)
 
-    os.remove(data.raw_data_file)
+    # first check if we remote the npz file, rerunning it will regenerated it
+    os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
     factory.create_dataset(data)
 
-    os.remove(data.processed_data_file)
+    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
+
+    # now remove the  npz and hdf5 files, rerunning will generate it
+
+    os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
+    os.remove(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
     factory.create_dataset(data)
-    assert os.path.exists(data.raw_data_file)
-    assert os.path.exists(data.processed_data_file)
+
+    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
+    assert os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
+
+    # now remove the gz file; rerunning should NOT download, it will use the npz
+    os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
+
+    factory.create_dataset(data)
+    assert not os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
+
+    # now let us remove the hdf5 file, it should use the npz file
+    os.remove(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
+    factory.create_dataset(data)
+    assert not os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
+
+    # now if we remove the npz, it will redownload the gz file and unzip it, then process it
+    os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
+    factory.create_dataset(data)
+    assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
+    assert os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
+    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
+
+    # now we will remove the gz file, and set force_download to True
+    # this should now regenerate the gz file, even though others are present
+
+    data = dataset(
+        for_unit_testing=True, local_cache_dir=local_cache_dir, force_download=True
+    )
+    factory.create_dataset(data)
+    assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
+    assert os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
+    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
+
+    # now we will remove the gz file and run it again
+    os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
+    factory.create_dataset(data)
+    assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
@@ -284,13 +407,15 @@ def test_file_cache_methods(dataset):
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
-def test_dataset_downloader(dataset):
+def test_dataset_downloader(dataset, prep_temp_dir):
     """
     Test the DatasetDownloader functionality.
     """
-    data = dataset(for_unit_testing=True)
+    local_cache_dir = str(prep_temp_dir)
+
+    data = dataset(for_unit_testing=True, local_cache_dir=local_cache_dir)
     data._download()
-    assert os.path.exists(data.raw_data_file)
+    assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
 
 
 @pytest.mark.parametrize("dataset", DATASETS)

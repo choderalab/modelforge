@@ -280,6 +280,39 @@ class HDF5Dataset:
             ) as out_file:
                 shutil.copyfileobj(gz_file, out_file)
 
+    def _file_validation(self, file_name: str, file_path: str, checksum: str) -> bool:
+        """
+        Validates if the file exists, and if the calculated checksum matches the expected checksum.
+
+        Parameters
+        ----------
+        file_name : str
+            Name of the file to validate.
+        file_path : str
+            Path to the file.
+        checksum : str
+            Expected checksum of the file.
+
+        Returns
+        -------
+        bool
+            True if the file exists and the checksum matches, False otherwise.
+        """
+        full_file_path = f"{file_path}/{file_name}"
+        if not os.path.exists(full_file_path):
+            log.debug(f"File {full_file_path} does not exist.")
+            return False
+        else:
+            from modelforge.utils.remote import calculate_md5_checksum
+
+            calculated_checksum = calculate_md5_checksum(file_name, file_path)
+            if calculated_checksum != checksum:
+                log.warning(
+                    f"Checksum mismatch for file {file_path}/{file_name}. Expected {calculated_checksum}, found {checksum}."
+                )
+                return False
+            return True
+
     def _from_hdf5(self) -> None:
         """
         Processes and extracts data from an hdf5 file.
@@ -300,16 +333,18 @@ class HDF5Dataset:
 
         temp_hdf5_file = f"{self.local_cache_dir}/{self.hdf5_data_file['name']}"
 
-        log.debug("Reading in and processing hdf5 file ...")
-        from modelforge.utils.remote import calculate_md5_checksum
+        if self._file_validation(
+            self.hdf5_data_file["name"],
+            self.local_cache_dir,
+            self.hdf5_data_file["md5"],
+        ):
+            log.debug(f"Loading unzipped hdf5 file from {temp_hdf5_file}")
+        else:
+            from modelforge.utils.remote import calculate_md5_checksum
 
-        # add in a check to make sure the checksum matches before loading the file
-        # this also appears in the dataset factory, but having this also here is good if used as a standalone function
-        checksum = calculate_md5_checksum(
-            self.hdf5_data_file["name"], self.local_cache_dir
-        )
-
-        if checksum != self.hdf5_data_file["md5"]:
+            checksum = calculate_md5_checksum(
+                self.hdf5_data_file["name"], self.local_cache_dir
+            )
             raise ValueError(
                 f"Checksum mismatch for unzipped data file {temp_hdf5_file}. Found {checksum}, Expected {self.hdf5_data_file['md5']}"
             )
@@ -446,15 +481,23 @@ class HDF5Dataset:
         >>> hdf5_data = HDF5Dataset("raw_data.hdf5", "processed_data.npz")
         >>> processed_data = hdf5_data._from_file_cache()
         """
-        from modelforge.utils.remote import calculate_md5_checksum
+        if self._file_validation(
+            self.processed_data_file["name"],
+            self.local_cache_dir,
+            self.processed_data_file["md5"],
+        ):
+            log.debug(f"Loading processed data from {self.processed_data_file['name']}")
 
-        checksum = calculate_md5_checksum(
-            self.processed_data_file["name"], self.local_cache_dir
-        )
-        if checksum != self.processed_data_file["md5"]:
+        else:
+            from modelforge.utils.remote import calculate_md5_checksum
+
+            checksum = calculate_md5_checksum(
+                self.processed_data_file["name"], self.local_cache_dir
+            )
             raise ValueError(
                 f"Checksum mismatch for processed data file {self.processed_data_file}.Found {checksum}, expected {self.processed_data_file['md5']}"
             )
+
         log.debug(f"Loading processed data from {self.processed_data_file['name']}")
         self.numpy_data = np.load(
             f"{self.local_cache_dir}/{self.processed_data_file['name']}"
@@ -517,69 +560,37 @@ class DatasetFactory:
             The HDF5 dataset instance to use.
         """
 
-        import os
-        from modelforge.utils.remote import calculate_md5_checksum
-
-        # if the dataset was initialize with force_download, we will skip all other checking and just download and process
-        if data.force_download:
+        # check to see if we can load from the npz file.  This also validates the checksum
+        if (
+            data._file_validation(
+                data.processed_data_file["name"],
+                data.local_cache_dir,
+                data.processed_data_file["md5"],
+            )
+            and not data.force_download
+        ):
+            data._from_file_cache()
+        # check to see if the hdf5 file exists and the checksum matches
+        elif (
+            data._file_validation(
+                data.hdf5_data_file["name"],
+                data.local_cache_dir,
+                data.hdf5_data_file["md5"],
+            )
+            and not data.force_download
+        ):
+            data._from_hdf5()
+            data._to_file_cache()
+            data._from_file_cache()
+        # if the npz or hdf5 files don't exist/match checksums, call download
+        # download will check if the gz file exists and matches the checksum
+        # or will use force_download.
+        else:
             data._download()
             data._ungzip_hdf5()
             data._from_hdf5()
             data._to_file_cache()
-        else:
-            file_loaded = False
-            if os.path.exists(data.processed_data_file):
-                checksum = calculate_md5_checksum(
-                    data.processed_data_file, data.local_cache_dir
-                )
-                if checksum != data.md5_processed_checksum:
-
-                    log.warning(
-                        f"Checksum mismatch for processed data file {data.processed_data_file}. Re-processing."
-                    )
-                    log.debug(
-                        f"Checksum mismatch, found {checksum}, expected {data.md5_processed_checksum}"
-                    )
-                else:
-                    data._from_file_cache()
-                    file_loaded = True
-
-            if os.path.exists(data.unzipped_data_file) and not file_loaded:
-                checksum = calculate_md5_checksum(
-                    data.unzipped_data_file, data.local_cache_dir
-                )
-                if checksum != data.md5_unzipped_checksum:
-                    log.warning(
-                        f"Checksum mismatch for unzipped data file {data.unzipped_data_file}. Re-processing."
-                    )
-                    log.debug(
-                        f"Checksum mismatch, found {checksum}, expected {data.md5_unzipped_checksum}"
-                    )
-
-                    # the download function automatically checks if the file is already downloaded and if the checksum matches
-                    # if either are false, it will redownload the file
-                    data._download()
-                    data._ungzip_hdf5()
-                    checksum = calculate_md5_checksum(
-                        data.unzipped_data_file, data.local_cache_dir
-                    )
-                    if checksum != data.md5_unzipped_checksum:
-                        raise ValueError(
-                            f"Checksum mismatch for unzipped data file {data.unzipped_data_file}. Expected {data.md5_unzipped_checksum}, found {checksum}. Please check the raw gzipped file or try running with force_download."
-                        )
-
-                    data._from_hdf5()
-                    data._to_file_cache()
-                else:
-                    data._from_hdf5()
-                    data._to_file_cache()
-            else:
-                data._download()
-                data._ungzip_hdf5()
-                data._from_hdf5()
-                data._to_file_cache()
-
-        data._from_file_cache()
+            data._from_file_cache()
 
     @staticmethod
     def create_dataset(

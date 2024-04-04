@@ -59,8 +59,9 @@ def test_download_from_url(prep_temp_dir):
     assert os.path.isfile(file_name_path)
 
     # let us change the expected checksum to cause a failure
+    # this will see this as not matching and will redownload,
+    # but since the new file doesn't match it will raise an exception
     with pytest.raises(Exception):
-        url = "https://choderalab.com/modelforge.py"
         download_from_url(
             url,
             md5_checksum="checksum_garbage",

@@ -226,26 +226,41 @@ class HDF5Dataset:
     """
 
     def __init__(
-        self,  # raw_data_file: str, processed_data_file: str,  local_cache_dir: str
+        self,
+        url: str,
+        gz_data_file: Dict[str, str],
+        hdf5_data_file: Dict[str, str],
+        processed_data_file: Dict[str, str],
+        local_cache_dir: str,
+        force_download: bool = False,
     ):
         """
         Initializes the HDF5Dataset with paths to raw and processed data files.
 
         Parameters
         ----------
-        raw_data_file : str
-            Path to the raw HDF5 data file.
-        processed_data_file : str
-            Path to the processed data file.
+        url : str
+            URL of the hdf5.gz data file.
+        gz_data_file : Dict[str, str]
+            Name of the gzipped data file (name) and checksum (md5).
+        hdf5_data_file : Dict[str, str]
+            Name of the hdf5 data file (name) and checksum (md5).
+        processed_data_file : Dict[str, str]
+            Name of the processed npz data file (name) and checksum (md5).
         local_cache_dir : str
-            Directory to store temporary processing files.
+            Directory to store the files.
+        force_download : bool, optional
+            If set to True, the data will be downloaded even if it already exists. Default is False.
         """
+        self.url = url
+        self.gz_data_file = gz_data_file
+        self.hdf5_data_file = hdf5_data_file
+        self.processed_data_file = processed_data_file
+        self.local_cache_dir = local_cache_dir
+        self.force_download = force_download
 
-        # self.raw_data_file = raw_data_file
-        # self.processed_data_file = processed_data_file
         self.hdf5data: Optional[Dict[str, List[np.ndarray]]] = None
         self.numpy_data: Optional[np.ndarray] = None
-        # self.local_cache_dir = local_cache_dir
 
     def _ungzip_hdf5(self) -> None:
         """
@@ -257,8 +272,12 @@ class HDF5Dataset:
         import gzip
         import shutil
 
-        with gzip.open(self.raw_data_file, "rb") as gz_file:
-            with open(self.unzipped_data_file, "wb") as out_file:
+        with gzip.open(
+            f"{self.local_cache_dir}/{self.gz_data_file['name']}", "rb"
+        ) as gz_file:
+            with open(
+                f"{self.local_cache_dir}/{self.hdf5_data_file['name']}", "wb"
+            ) as out_file:
                 shutil.copyfileobj(gz_file, out_file)
 
     def _from_hdf5(self) -> None:
@@ -279,18 +298,20 @@ class HDF5Dataset:
         # this is substantially faster than passing gz_file directly to h5py.File()
         # by avoiding data chunking issues.
 
-        temp_hdf5_file = f"{self.local_cache_dir}/{self.unzipped_data_file}"
+        temp_hdf5_file = f"{self.local_cache_dir}/{self.hdf5_data_file['name']}"
 
         log.debug("Reading in and processing hdf5 file ...")
         from modelforge.utils.remote import calculate_md5_checksum
 
         # add in a check to make sure the checksum matches before loading the file
         # this also appears in the dataset factory, but having this also here is good if used as a standalone function
-        checksum = calculate_md5_checksum(self.unzipped_data_file, self.local_cache_dir)
+        checksum = calculate_md5_checksum(
+            self.hdf5_data_file["name"], self.local_cache_dir
+        )
 
-        if checksum != self.md5_unzipped_checksum:
+        if checksum != self.hdf5_data_file["md5"]:
             raise ValueError(
-                f"Checksum mismatch for unzipped data file {temp_hdf5_file}. Found {checksum}, Expected {self.md5_unzipped_checksum}"
+                f"Checksum mismatch for unzipped data file {temp_hdf5_file}. Found {checksum}, Expected {self.hdf5_data_file['md5']}"
             )
 
         with h5py.File(temp_hdf5_file, "r") as hf:
@@ -428,14 +449,16 @@ class HDF5Dataset:
         from modelforge.utils.remote import calculate_md5_checksum
 
         checksum = calculate_md5_checksum(
-            self.processed_data_file, self.local_cache_dir
+            self.processed_data_file["name"], self.local_cache_dir
         )
-        if checksum != self.md5_processed_checksum:
+        if checksum != self.processed_data_file["md5"]:
             raise ValueError(
-                f"Checksum mismatch for processed data file {self.processed_data_file}.Found {checksum}, expected {self.md5_processed_checksum}"
+                f"Checksum mismatch for processed data file {self.processed_data_file}.Found {checksum}, expected {self.processed_data_file['md5']}"
             )
-        log.debug(f"Loading processed data from {self.processed_data_file}")
-        self.numpy_data = np.load(self.processed_data_file)
+        log.debug(f"Loading processed data from {self.processed_data_file['name']}")
+        self.numpy_data = np.load(
+            f"{self.local_cache_dir}/{self.processed_data_file['name']}"
+        )
 
     def _to_file_cache(
         self,
@@ -450,10 +473,12 @@ class HDF5Dataset:
                 >>> hdf5_data = HDF5Dataset("raw_data.hdf5", "processed_data.npz")
                 >>> hdf5_data._to_file_cache()
         """
-        log.debug(f"Writing data cache to {self.processed_data_file}")
+        log.debug(
+            f"Writing npz file to {self.local_cache_dir}/{self.processed_data_file['name']}"
+        )
 
         np.savez(
-            self.processed_data_file,
+            f"{self.local_cache_dir}/{self.processed_data_file['name']}",
             atomic_subsystem_counts=self.atomic_subsystem_counts,
             n_confs=self.n_confs,
             **self.hdf5data,

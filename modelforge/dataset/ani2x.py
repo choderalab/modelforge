@@ -89,13 +89,19 @@ class ANI2xDataset(HDF5Dataset):
         self.dataset_name = dataset_name
         self.for_unit_testing = for_unit_testing
 
-        # self._ase = {
-        #     "H": -1313.4668615546,
-        #     "C": -99366.70745535441,
-        #     "N": -143309.9379722722,
-        #     "O": -197082.0671774158,
-        #     "F": -261811.54555874597,
-        # }
+        from openff.units import unit
+
+        # these come from the ANI-2x paper generated via linear fittingh of the data
+        # https://github.com/isayev/ASE_ANI/blob/master/ani_models/ani-2x_8x/sae_linfit.dat
+        self._ase = {
+            "H": -0.5978583943827134 * unit.hartree,
+            "C": -38.08933878049795 * unit.hartree,
+            "N": -54.711968298621066 * unit.hartree,
+            "O": -75.19106774742086 * unit.hartree,
+            "S": -398.1577125334925 * unit.hartree,
+            "F": -99.80348506781634 * unit.hartree,
+            "Cl": -460.1681939421027 * unit.hartree,
+        }
         from loguru import logger
 
         # We need to define the checksums for the various files that we will be dealing with to load up the data
@@ -155,7 +161,7 @@ class ANI2xDataset(HDF5Dataset):
     def atomic_self_energies(self):
         from modelforge.potential.utils import AtomicSelfEnergies
 
-        return AtomicSelfEnergies(element_energies=self._ase)
+        return AtomicSelfEnergies(energies=self._ase)
 
     @property
     def properties_of_interest(self) -> List[str]:

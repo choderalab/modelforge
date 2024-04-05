@@ -92,13 +92,15 @@ class QM9Dataset(HDF5Dataset):
 
         self.dataset_name = dataset_name
         self.for_unit_testing = for_unit_testing
+        from openff.units import unit
 
+        # atomic self energies
         self._ase = {
-            "H": -1313.4668615546,
-            "C": -99366.70745535441,
-            "N": -143309.9379722722,
-            "O": -197082.0671774158,
-            "F": -261811.54555874597,
+            "H": -1313.4668615546 * unit.kilojoule_per_mole,
+            "C": -99366.70745535441 * unit.kilojoule_per_mole,
+            "N": -143309.9379722722 * unit.kilojoule_per_mole,
+            "O": -197082.0671774158 * unit.kilojoule_per_mole,
+            "F": -261811.54555874597 * unit.kilojoule_per_mole,
         }
         from loguru import logger
 

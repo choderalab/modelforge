@@ -6,6 +6,8 @@ import torch.nn as nn
 from typing import Any
 from dataclasses import dataclass, field
 from loguru import logger as log
+from modelforge.utils.units import *
+
 
 @dataclass
 class NeuralNetworkData:
@@ -390,7 +392,7 @@ class AtomicSelfEnergies:
 
     # We provide a dictionary with {str:float} of element name to atomic self-energy,
     # which can then be accessed by atomic index or element name
-    energies: Dict[str, float] = field(default_factory=dict)
+    energies: Dict[str, unit.Quantity] = field(default_factory=dict)
     # Example mapping, replace or extend as necessary
     atomic_number_to_element: Dict[int, str] = field(
         default_factory=lambda: {
@@ -455,12 +457,17 @@ class AtomicSelfEnergies:
             element = self.atomic_number_to_element.get(key)
             if element is None:
                 raise KeyError(f"Atomic number {key} not found.")
-            return self.energies.get(element)
+            if self.energies.get(element) is None:
+                return None
+            return self.energies.get(element).to(unit.kilojoule_per_mole, "chem").m
         elif isinstance(key, str):
             # Directly access by element symbol
             if key not in self.energies:
                 raise KeyError(f"Element {key} not found.")
-            return self.energies[key]
+            if self.energies[key] is None:
+                return None
+
+            return self.energies[key].to(unit.kilojoule_per_mole, "chem").m
         else:
             raise TypeError(
                 "Key must be an integer (atomic number) or string (element name)."
@@ -470,7 +477,7 @@ class AtomicSelfEnergies:
         """Iterate over the energies dictionary."""
         for element, energy in self.energies.items():
             atomic_number = self.element_to_atomic_number(element)
-            yield (atomic_number, energy)
+            yield (atomic_number, energy.to(unit.kilojoule_per_mole, "chem").m)
 
     def __len__(self) -> int:
         """Return the number of element-energy pairs."""
@@ -906,7 +913,7 @@ class AniRadialSymmetryFunction(RadialSymmetryFunction):
             number_of_radial_basis_functions + 1,
             dtype=dtype,
         )[:-1]
-        log.info(f'{centers=}')
+        log.info(f"{centers=}")
         return centers
 
     def calculate_radial_scale_factor(
@@ -976,7 +983,7 @@ def pair_list(
     return pair_indices.to(device)
 
 
-from openff.units import unit
+# from openff.units import unit
 
 
 def neighbor_list_with_cutoff(

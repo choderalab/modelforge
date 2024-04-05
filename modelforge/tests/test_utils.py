@@ -7,10 +7,15 @@ from modelforge.potential.utils import CosineCutoff, RadialSymmetryFunction
 
 def test_ase_dataclass():
     from modelforge.potential.utils import AtomicSelfEnergies
+    from openff.units import unit
 
     # Example usage
     atomic_self_energies = AtomicSelfEnergies(
-        energies={"H": 13.6, "He": 24.6, "Li": 5.4}
+        energies={
+            "H": 13.6 * unit.kilojoule_per_mole,
+            "He": 24.6 * unit.kilojoule_per_mole,
+            "Li": 5.4 * unit.kilojoule_per_mole,
+        }
     )
 
     # Access by element name

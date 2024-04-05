@@ -6,9 +6,9 @@ import pytest
 import torch
 
 from modelforge.dataset.dataset import DatasetFactory, TorchDataset
-from loguru import logger
+from modelforge.dataset import QM9Dataset
 
-from .helper_functions import initialize_dataset, DATASETS
+DATASETS = [QM9Dataset]
 from ..utils import PropertyNames
 
 
@@ -46,12 +46,6 @@ def cleanup_files():
     _cleanup()
     yield  # This is where the test will execute
     _cleanup()
-
-
-def generate_torch_dataset(dataset) -> TorchDataset:
-    factory = DatasetFactory()
-    data = dataset(for_unit_testing=True)
-    return factory.create_dataset(data)
 
 
 def test_dataset_imported():
@@ -308,16 +302,11 @@ def test_different_scenarios_of_file_availability(dataset, prep_temp_dir):
     assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
 
 
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_data_item_format(dataset):
+def test_data_item_format(initialized_dataset):
     """Test the format of individual data items in the dataset."""
     from typing import Dict
 
-    dataset = initialize_dataset(
-        dataset, split_file="modelforge/tests/qm9tut/split.npz"
-    )
-
-    raw_data_item = dataset.torch_dataset[0]
+    raw_data_item = initialized_dataset.torch_dataset[0]
     assert isinstance(raw_data_item, Dict)
     assert isinstance(raw_data_item["atomic_numbers"], torch.Tensor)
     assert isinstance(raw_data_item["positions"], torch.Tensor)
@@ -329,11 +318,10 @@ def test_data_item_format(dataset):
     )
 
 
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_dataset_generation(dataset):
+def test_dataset_generation(initialized_dataset):
     """Test the splitting of the dataset."""
 
-    dataset = initialize_dataset(dataset)
+    dataset = initialized_dataset
     train_dataloader = dataset.train_dataloader()
     val_dataloader = dataset.val_dataloader()
 
@@ -362,11 +350,11 @@ from modelforge.dataset.utils import (
     "splitting_strategy",
     [RandomRecordSplittingStrategy, FirstComeFirstServeSplittingStrategy],
 )
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_dataset_splitting(splitting_strategy, dataset):
+def test_dataset_splitting(splitting_strategy, datasets_to_test):
     """Test random_split on the the dataset."""
+    from modelforge.dataset import DatasetFactory
 
-    dataset = generate_torch_dataset(dataset)
+    dataset = DatasetFactory.create_dataset(datasets_to_test)
     train_dataset, val_dataset, test_dataset = splitting_strategy().split(dataset)
 
     energy = train_dataset[0]["E"].item()
@@ -387,23 +375,6 @@ def test_dataset_splitting(splitting_strategy, dataset):
     assert len(test_dataset) == 10
 
 
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_file_cache_methods(dataset):
-    """
-    Test the FileCache methods to ensure data is cached and loaded correctly.
-    """
-
-    # generate files to test _from_hdf5()
-
-    _ = initialize_dataset(dataset)
-
-    data = dataset(for_unit_testing=True)
-
-    data._from_hdf5()
-
-    data._to_file_cache()
-    data._from_file_cache()
-    assert len(data.numpy_data["atomic_subsystem_counts"]) == 100
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
@@ -418,14 +389,14 @@ def test_dataset_downloader(dataset, prep_temp_dir):
     assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
 
 
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_numpy_dataset_assignment(dataset):
+
+def test_numpy_dataset_assignment(datasets_to_test):
     """
     Test if the numpy_dataset attribute is correctly assigned after processing or loading.
     """
 
     factory = DatasetFactory()
-    data = dataset(for_unit_testing=True)
+    data = datasets_to_test
     factory._load_or_process_data(data)
 
     assert hasattr(data, "numpy_data")

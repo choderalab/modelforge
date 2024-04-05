@@ -155,7 +155,7 @@ class ANI2xDataset(HDF5Dataset):
     def atomic_self_energies(self):
         from modelforge.potential.utils import AtomicSelfEnergies
 
-        return AtomicSelfEnergies()
+        return AtomicSelfEnergies(element_energies=self._ase)
 
     @property
     def properties_of_interest(self) -> List[str]:

@@ -68,14 +68,31 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             dataset[property_name.R]
         )
         self.properties_of_interest["E"] = torch.from_numpy(dataset[property_name.E])
+
         if property_name.Q is not None:
             self.properties_of_interest["Q"] = torch.from_numpy(
                 dataset[property_name.Q]
             )
+        else:
+            # this is a per atom property, so it will match atomic_numbers
+            self.properties_of_interest["Q"] = torch.zeros(
+                dataset[property_name.Z].shape
+            )
+
         if property_name.F is not None:
             self.properties_of_interest["F"] = torch.from_numpy(
                 dataset[property_name.F]
             )
+        else:
+            # a per atom property in each direction, so it will match geometry
+            self.properties_of_interest["F"] = torch.zeros(
+                dataset[property_name.R].shape
+            )
+
+        print("Z ", dataset[property_name.Z].shape)
+        print("R ", dataset[property_name.R].shape)
+        print("E ", dataset[property_name.E].shape)
+        print("Q ", dataset[property_name.Q].shape)
 
         self.number_of_records = len(dataset["atomic_subsystem_counts"])
         self.number_of_atoms = len(dataset["atomic_numbers"])

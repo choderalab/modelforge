@@ -59,12 +59,23 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             If set to True, properties are preloaded as PyTorch tensors. Default is False.
         """
 
-        self.properties_of_interest = {
-            "atomic_numbers": torch.from_numpy(dataset[property_name.Z]),
-            "positions": torch.from_numpy(dataset[property_name.R]),
-            "E": torch.from_numpy(dataset[property_name.E]),
-            "Q": torch.from_numpy(dataset[property_name.Q]),
-        }
+        self.properties_of_interest = {}
+
+        self.properties_of_interest["atomic_numbers"] = torch.from_numpy(
+            dataset[property_name.Z]
+        )
+        self.properties_of_interest["positions"] = torch.from_numpy(
+            dataset[property_name.R]
+        )
+        self.properties_of_interest["E"] = torch.from_numpy(dataset[property_name.E])
+        if property_name.Q is not None:
+            self.properties_of_interest["Q"] = torch.from_numpy(
+                dataset[property_name.Q]
+            )
+        if property_name.F is not None:
+            self.properties_of_interest["F"] = torch.from_numpy(
+                dataset[property_name.F]
+            )
 
         self.number_of_records = len(dataset["atomic_subsystem_counts"])
         self.number_of_atoms = len(dataset["atomic_numbers"])
@@ -360,7 +371,7 @@ class HDF5Dataset:
             series_atom_data: Dict[str, List[np.ndarray]] = OrderedDict()
             # value shapes: (n_confs, n_atoms, *)
 
-            # intialize each relevant value in data dicts to empty list
+            # initialize each relevant value in data dicts to empty list
             for value in self.properties_of_interest:
                 value_format = hf[next(iter(hf.keys()))][value].attrs["format"]
                 if value_format == "single_rec":
@@ -495,7 +506,7 @@ class HDF5Dataset:
                 self.processed_data_file["name"], self.local_cache_dir
             )
             raise ValueError(
-                f"Checksum mismatch for processed data file {self.processed_data_file}.Found {checksum}, expected {self.processed_data_file['md5']}"
+                f"Checksum mismatch for processed data file {self.processed_data_file['name']}. Found {checksum}, expected {self.processed_data_file['md5']}"
             )
 
         log.debug(f"Loading processed data from {self.processed_data_file['name']}")

@@ -465,28 +465,6 @@ def _download_from_gdrive(id: str, raw_dataset_file: str):
     gdown.download(url, raw_dataset_file, quiet=False)
 
 
-def _download_from_url(url: str, raw_dataset_file: str):
-    """
-    Downloads a dataset from a specified URLS.
-
-    Parameters
-    ----------
-    url : str
-        raw link address.
-    raw_dataset_file : str
-        Path to save the downloaded dataset.
-
-    Examples
-    --------
-    >>> _download_from_url(url, "data_file.hdf5.gz")
-    """
-    import requests
-
-    r = requests.get(url)
-    with open(raw_dataset_file, "wb") as f:
-        f.write(r.content)
-
-
 def _to_file_cache(
     data: OrderedDict[str, List[np.ndarray]], processed_dataset_file: str
 ) -> None:

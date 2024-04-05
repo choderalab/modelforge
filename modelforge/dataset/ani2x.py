@@ -3,57 +3,53 @@ from typing import List
 from .dataset import HDF5Dataset
 
 
-class QM9Dataset(HDF5Dataset):
+class ANI2xDataset(HDF5Dataset):
     """
-    Data class for handling QM9 data.
+    Data class for handling ANI2x data.
 
-    This class provides utilities for processing and interacting with QM9 data
-    stored in HDF5 format.
+    This class provides utilities for processing the ANI2x dataset stored in the modelforge HDF5 format.
+
+    The ANI-2x data set includes properties for small organic molecules that contain
+    H, C, N, O, S, F, and Cl.  This dataset contains 9651712 conformers for nearly 200,000 molecules.
+    This will fetch data generated with the wB97X/631Gd level of theory used in the original ANI-2x paper,
+    calculated using Gaussian 09. See ani2x_curation.py for more details on the dataset curation.
+
+    Citation: Devereux, C, Zubatyuk, R., Smith, J. et al.
+                "Extending the applicability of the ANI deep learning molecular potential to sulfur and halogens."
+                Journal of Chemical Theory and Computation 16.7 (2020): 4192-4202.
+                https://doi.org/10.1021/acs.jctc.0c00121
+
+    DOI for dataset: 10.5281/zenodo.10108941
 
     Attributes
     ----------
     dataset_name : str
-        Name of the dataset, default is "QM9".
+        Name of the dataset, default is "ANI2x".
     for_unit_testing : bool
         If set to True, a subset of the dataset is used for unit testing purposes; by default False.
     local_cache_dir: str, optional
             Path to the local cache directory, by default ".".
     Examples
     --------
-    >>> data = QM9Dataset()
-    >>> data._download()
+
     """
 
     from modelforge.utils import PropertyNames
 
     _property_names = PropertyNames(
-        Z="atomic_numbers", R="geometry", E="internal_energy_at_0K", Q="charges"
+        Z="atomic_numbers", R="geometry", E="energies", F="forces"
     )
 
     _available_properties = [
         "geometry",
         "atomic_numbers",
-        "internal_energy_at_0K",
-        "internal_energy_at_298.15K",
-        "enthalpy_at_298.15K",
-        "free_energy_at_298.15K",
-        "heat_capacity_at_298.15K",
-        "zero_point_vibrational_energy",
-        "electronic_spatial_extent",
-        "lumo-homo_gap",
-        "energy_of_homo",
-        "energy_of_lumo",
-        "rotational_constant_A",
-        "rotational_constant_B",
-        "rotational_constant_C",
-        "dipole_moment",
-        "isotropic_polarizability",
-        "charges",
+        "energies",
+        "forces",
     ]  # All properties within the datafile, aside from SMILES/inchi.
 
     def __init__(
         self,
-        dataset_name: str = "QM9",
+        dataset_name: str = "ANI2x",
         for_unit_testing: bool = False,
         local_cache_dir: str = ".",
         force_download: bool = False,
@@ -65,7 +61,7 @@ class QM9Dataset(HDF5Dataset):
         Parameters
         ----------
         data_name : str, optional
-            Name of the dataset, by default "QM9".
+            Name of the dataset, by default "ANI2x".
         for_unit_testing : bool, optional
             If set to True, a subset of the dataset is used for unit testing purposes; by default False.
         local_cache_dir: str, optional
@@ -75,15 +71,15 @@ class QM9Dataset(HDF5Dataset):
 
         Examples
         --------
-        >>> data = QM9Dataset()  # Default dataset
-        >>> test_data = QM9Dataset(for_unit_testing=True)  # Testing subset
+        >>> data = ANI2xDataset()  # Default dataset
+        >>> test_data = ANI2xDataset(for_unit_testing=True)  # Testing subset
         """
 
         _default_properties_of_interest = [
             "geometry",
             "atomic_numbers",
-            "internal_energy_at_0K",
-            "charges",
+            "energies",
+            "forces",
         ]  # NOTE: Default values
 
         self._properties_of_interest = _default_properties_of_interest
@@ -93,35 +89,35 @@ class QM9Dataset(HDF5Dataset):
         self.dataset_name = dataset_name
         self.for_unit_testing = for_unit_testing
 
-        self._ase = {
-            "H": -1313.4668615546,
-            "C": -99366.70745535441,
-            "N": -143309.9379722722,
-            "O": -197082.0671774158,
-            "F": -261811.54555874597,
-        }
+        # self._ase = {
+        #     "H": -1313.4668615546,
+        #     "C": -99366.70745535441,
+        #     "N": -143309.9379722722,
+        #     "O": -197082.0671774158,
+        #     "F": -261811.54555874597,
+        # }
         from loguru import logger
 
         # We need to define the checksums for the various files that we will be dealing with to load up the data
         # There are 3 files types that need name/checksum defined, of extensions hdf5.gz, hdf5, and npz.
 
         # note, need to change the end of the url to dl=1 instead of dl=0 (the default when you grab the share list), to ensure the same checksum each time we download
-        self.test_url = "https://www.dropbox.com/scl/fi/9jeselknatcw9xi0qp940/qm9_dataset_n100.hdf5.gz?rlkey=50of7gn2s12i65c6j06r73c97&dl=1"
-        self.full_url = "https://www.dropbox.com/scl/fi/4wu7zlpuuixttp0u741rv/qm9_dataset.hdf5.gz?rlkey=nszkqt2t4kmghih5mt4ssppvo&dl=1"
+        self.test_url = "https://www.dropbox.com/scl/fi/okv311e9yvh94owbiypcm/ani2x_dataset_n100.hdf5.gz?rlkey=pz7gnlncabtzr3b82lblr3yas&dl=1"
+        self.full_url = "https://www.dropbox.com/scl/fi/egg04dmtho7l1ghqiwn1z/ani2x_dataset.hdf5.gz?rlkey=wq5qjyph5q2k0bn6vza735n19&dl=1"
 
         if self.for_unit_testing:
             url = self.test_url
             gz_data_file = {
-                "name": "qm9_dataset_n100.hdf5.gz",
-                "md5": "af3afda5c3265c9c096935ab060f537a",
+                "name": "ani2x_dataset_n100.hdf5.gz",
+                "md5": "093fa23aeb8f8813abd1ec08e9ff83ad",
             }
             hdf5_data_file = {
-                "name": "qm9_dataset_n100.hdf5",
-                "md5": "77df0e1df7a5ec5629be52181e82a7d7",
+                "name": "ani2x_dataset_n100.hdf5",
+                "md5": "4f54caf79e4c946dc3d6d53722d2b966",
             }
             processed_data_file = {
-                "name": "qm9_dataset_n100_processed.npz",
-                "md5": "9d671b54f7b9d454db9a3dd7f4ef2020",
+                "name": "ani2x_dataset_n100_processed.npz",
+                "md5": "c1481fe9a6b15fb07b961d15411c0ddd",
             }
 
             logger.info("Using test dataset")
@@ -129,18 +125,18 @@ class QM9Dataset(HDF5Dataset):
         else:
             url = self.full_url
             gz_data_file = {
-                "name": "qm9_dataset.hdf5.gz",
-                "md5": "d172127848de114bd9cc47da2bc72566",
+                "name": "ani2x_dataset.hdf5.gz",
+                "md5": "8daf9a7d8bbf9bcb1e9cea13b4df9270",
             }
 
             hdf5_data_file = {
-                "name": "qm9_dataset.hdf5",
-                "md5": "0b22dc048f3361875889f832527438db",
+                "name": "ani2x_dataset.hdf5",
+                "md5": "86bb855cb8df54e082506088e949518e",
             }
 
             processed_data_file = {
-                "name": "qm9_dataset_processed.npz",
-                "md5": "62d98cf38bcf02966e1fa2d9e44b3fa0",
+                "name": "ani2x_dataset_processed.npz",
+                "md5": "268438d8e1660728ba892bc7c3cd4339",
             }
 
             logger.info("Using full dataset")
@@ -159,7 +155,7 @@ class QM9Dataset(HDF5Dataset):
     def atomic_self_energies(self):
         from modelforge.potential.utils import AtomicSelfEnergies
 
-        return AtomicSelfEnergies(energies=self._ase)
+        return AtomicSelfEnergies()
 
     @property
     def properties_of_interest(self) -> List[str]:
@@ -188,9 +184,7 @@ class QM9Dataset(HDF5Dataset):
 
         Examples
         --------
-        >>> data = QM9Dataset()
-        >>> data.available_properties
-        ['geometry', 'atomic_numbers', 'return_energy']
+
         """
         return self._available_properties
 
@@ -208,8 +202,7 @@ class QM9Dataset(HDF5Dataset):
 
         Examples
         --------
-        >>> data = QM9Dataset()
-        >>> data.properties_of_interest = ["geometry", "atomic_numbers", "return_energy"]
+
         """
         if not set(properties_of_interest).issubset(self._available_properties):
             raise ValueError(
@@ -223,8 +216,7 @@ class QM9Dataset(HDF5Dataset):
 
         Examples
         --------
-        >>> data = QM9Dataset()
-        >>> data.download()  # Downloads the dataset from Google Drive
+
 
         """
         # Right now this function needs to be defined for each dataset.
@@ -238,7 +230,3 @@ class QM9Dataset(HDF5Dataset):
             output_filename=self.gz_data_file["name"],
             force_download=self.force_download,
         )
-        # from modelforge.dataset.utils import _download_from_url
-        #
-        # url = self.test_url if self.for_unit_testing else self.full_url
-        # _download_from_url(url, self.raw_data_file)

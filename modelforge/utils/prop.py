@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import torch
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 from loguru import logger
 
 
@@ -9,7 +9,8 @@ class PropertyNames:
     Z: str
     R: str
     E: str
-    Q: str
+    F: Optional[str] = None
+    Q: Optional[str] = None
 
 
 class SpeciesEnergies(NamedTuple):

@@ -1,29 +1,23 @@
-from typing import Dict, Tuple, Any, NamedTuple, TYPE_CHECKING, Type
+from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING, Any, Dict, NamedTuple, Tuple, Type
 
 import lightning as pl
 import torch
 import torch.nn as nn
-from torch.optim import AdamW
-from torch.nn import functional as F
-
 from loguru import logger as log
-
-from abc import ABC, abstractmethod
-from modelforge.potential.utils import (
-    AtomicSelfEnergies,
-    NNPInput,
-    BatchData,
-)
 from openff.units import unit
+from torch.nn import functional as F
+from torch.optim import AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
+from modelforge.potential.utils import AtomicSelfEnergies, BatchData, NNPInput
 
 if TYPE_CHECKING:
     from modelforge.dataset.dataset import DatasetStatistics
-    from modelforge.potential.painn import PaiNNNeuralNetworkData, PaiNN
-    from modelforge.potential.schnet import SchnetNeuralNetworkData, SchNet
-    from modelforge.potential.ani import AniNeuralNetworkData, ANI2x
-    from modelforge.potential.physnet import PhysNetNeuralNetworkData, PhysNet
+    from modelforge.potential.ani import ANI2x, AniNeuralNetworkData
+    from modelforge.potential.painn import PaiNN, PaiNNNeuralNetworkData
+    from modelforge.potential.physnet import PhysNet, PhysNetNeuralNetworkData
+    from modelforge.potential.schnet import SchNet, SchnetNeuralNetworkData
 
 
 # Define NamedTuple for the outputs of Pairlist and Neighborlist forward method
@@ -211,7 +205,7 @@ class Neighborlist(Pairlist):
         )
 
 
-from typing import Callable, Optional, Union, Literal
+from typing import Callable, Literal, Optional, Union
 
 
 class NeuralNetworkPotentialFactory:
@@ -313,8 +307,9 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
         cutoff : openff.units.unit.Quantity
             Cutoff distance for the neighbor list calculations.
         """
-        from .models import Neighborlist
         from modelforge.dataset.dataset import DatasetStatistics
+
+        from .models import Neighborlist
 
         super().__init__()
         self.calculate_distances_and_pairlist = Neighborlist(cutoff)
@@ -734,10 +729,10 @@ class TrainingAdapter(pl.LightningModule):
 
         """
         # Compute MSE of energies
-        L_E = F.mse_loss(energies["E_predcit"], energies["E_true"])
+        L_E = F.mse_loss(energies["E_predict"], energies["E_true"])
         if forces:
             # Assuming forces_true and forces_predict are already negative gradients of the potential energy w.r.t positions
-            L_F = F.mse_loss(forces["F_predcit"], forces["F_true"])
+            L_F = F.mse_loss(forces["F_predict"], forces["F_true"])
         else:
             L_F = torch.tensor(0.0)
 
@@ -947,9 +942,9 @@ class TrainingAdapter(pl.LightningModule):
             The configured PyTorch Lightning Trainer instance.
         """
 
-        from pytorch_lightning.loggers import TensorBoardLogger
         from lightning import Trainer
         from lightning.pytorch.callbacks.early_stopping import EarlyStopping
+        from pytorch_lightning.loggers import TensorBoardLogger
 
         # set up tensor board logger
         logger = TensorBoardLogger("tb_logs", name="training")
@@ -1015,7 +1010,7 @@ class TrainingAdapter(pl.LightningModule):
             The configured Ray Trainer for distributed training.
         """
 
-        from ray.train import RunConfig, ScalingConfig, CheckpointConfig
+        from ray.train import CheckpointConfig, RunConfig, ScalingConfig
 
         scaling_config = ScalingConfig(
             num_workers=number_of_workers,

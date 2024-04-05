@@ -1,16 +1,20 @@
-from .models import BaseNeuralNetworkPotential
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Dict, Optional
+
+import torch
 from loguru import logger as log
 from openff.units import unit
-import torch
-from typing import Dict, TYPE_CHECKING, Optional
 from torch import nn
 from torch_scatter import scatter_add
-from dataclasses import dataclass, field
+
 from modelforge.potential.utils import NeuralNetworkData
 
+from .models import BaseNeuralNetworkPotential
+
 if TYPE_CHECKING:
-    from .models import PairListOutputs
     from modelforge.potential.utils import NNPInput
+
+    from .models import PairListOutputs
 
 
 @dataclass
@@ -496,6 +500,7 @@ class PhysNet(BaseNeuralNetworkPotential):
     def _config_prior(self):
         log.info("Configuring SchNet model hyperparameter prior distribution")
         from ray import tune
+
         from modelforge.potential.utils import shared_config_prior
 
         prior = {

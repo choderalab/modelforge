@@ -1,5 +1,5 @@
 import torch
-from ray import tune, air
+from ray import air, tune
 from ray.tune.schedulers import ASHAScheduler
 
 

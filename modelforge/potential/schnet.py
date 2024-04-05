@@ -1,13 +1,12 @@
-from typing import Dict, Optional
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Dict, Optional
 
 import torch
-from loguru import logger as log
 import torch.nn as nn
+from loguru import logger as log
+from openff.units import unit
 
 from .models import BaseNeuralNetworkPotential
-from openff.units import unit
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .models import PairListOutputs
@@ -110,7 +109,7 @@ class SchNet(BaseNeuralNetworkPotential):
         cutoff : openff.units.unit.Quantity, default=5*unit.angstrom
             The cutoff distance for interactions.
         """
-        from .utils import ShiftedSoftplus, Dense
+        from .utils import Dense, ShiftedSoftplus
 
         log.debug("Initializing SchNet model.")
         self.only_unique_pairs = False  # NOTE: for pairlist
@@ -161,6 +160,7 @@ class SchNet(BaseNeuralNetworkPotential):
     def _config_prior(self):
         log.info("Configuring SchNet model hyperparameter prior distribution")
         from ray import tune
+
         from modelforge.potential.utils import shared_config_prior
 
         prior = {
@@ -253,7 +253,7 @@ class SchNETInteractionModule(nn.Module):
             Number of radial basis functions.
         """
         super().__init__()
-        from .utils import ShiftedSoftplus, Dense
+        from .utils import Dense, ShiftedSoftplus
 
         assert (
             number_of_radial_basis_functions > 4

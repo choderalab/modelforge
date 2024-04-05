@@ -1,8 +1,9 @@
 import os
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, Literal, List, Optional
+import pytorch_lightning as pl
+
 
 import numpy as np
-import pytorch_lightning as pl
 import torch
 from loguru import logger as log
 from torch.utils.data import DataLoader
@@ -13,14 +14,14 @@ from modelforge.dataset.utils import RandomRecordSplittingStrategy, SplittingStr
 from dataclasses import dataclass
 
 if TYPE_CHECKING:
-    from modelforge.potential.utils import BatchData
+    from modelforge.potential.utils import BatchData, AtomicSelfEnergies
 
 
 @dataclass
 class DatasetStatistics:
     scaling_mean: float
     scaling_stddev: float
-    atomic_self_energies: Dict[int, float]
+    atomic_self_energies: "AtomicSelfEnergies"
 
 
 class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):

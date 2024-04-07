@@ -1,10 +1,9 @@
-from typing import Callable, Tuple, Optional
+from dataclasses import dataclass, field
+from typing import Any, Callable, Optional, Tuple
 
 import numpy as np
 import torch
 import torch.nn as nn
-from typing import Any
-from dataclasses import dataclass, field
 from loguru import logger as log
 
 
@@ -91,6 +90,9 @@ class NNPInput:
             )
 
 
+import torch
+
+
 @dataclass(frozen=False)
 class Metadata:
     """
@@ -104,10 +106,12 @@ class Metadata:
     atomic_subsystem_counts: torch.Tensor
     atomic_subsystem_indices_referencing_dataset: torch.Tensor
     number_of_atoms: int
+    F: torch.Tensor = torch.tensor([], dtype=torch.float32)
 
     def to(self, device: torch.device):
         """Move all tensors in this instance to the specified device."""
         self.E = self.E.to(device)
+        self.F = self.F.to(device)
         self.atomic_subsystem_counts = self.atomic_subsystem_counts.to(device)
         self.atomic_subsystem_indices_referencing_dataset = (
             self.atomic_subsystem_indices_referencing_dataset.to(device)
@@ -255,10 +259,8 @@ class Embedding(nn.Module):
         return self.embedding(x)
 
 
-from torch.nn.init import xavier_uniform_
-
-from torch.nn.init import zeros_
 import torch.nn.functional as F
+from torch.nn.init import xavier_uniform_, zeros_
 
 
 class Dense(nn.Linear):

@@ -1,17 +1,18 @@
-import torch
-from torch import nn
-from loguru import logger as log
-from modelforge.potential.models import BaseNeuralNetworkPotential
-from typing import Dict, Tuple
-from openff.units import unit
-from modelforge.utils.prop import SpeciesAEV, SpeciesEnergies
-from typing import TYPE_CHECKING, NamedTuple
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Dict, NamedTuple, Tuple
 
+import torch
+from loguru import logger as log
+from openff.units import unit
+from torch import nn
+
+from modelforge.potential.models import BaseNeuralNetworkPotential
+from modelforge.utils.prop import SpeciesAEV, SpeciesEnergies
 
 if TYPE_CHECKING:
-    from .models import PairListOutputs
     from modelforge.potential.utils import NNPInput
+
+    from .models import PairListOutputs
 
 
 def triu_index(num_species: int) -> torch.Tensor:
@@ -487,6 +488,7 @@ class ANI2x(BaseNeuralNetworkPotential):
     def _config_prior(self):
         log.info("Configuring ANI2x model hyperparameter prior distribution")
         from ray import tune
+
         from modelforge.train.utils import shared_config_prior
 
         prior = {

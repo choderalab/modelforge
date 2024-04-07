@@ -1,19 +1,20 @@
+from typing import TYPE_CHECKING, Callable, Dict, Optional, Tuple
+
+import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from loguru import logger as log
-from typing import Dict, Callable, Tuple
+from openff.units import unit
 
 from .models import BaseNeuralNetworkPotential
 from .utils import Dense
-import torch
-import torch.nn.functional as F
-from openff.units import unit
-from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from .models import PairListOutputs
     from modelforge.potential.utils import NNPInput
 
 from dataclasses import dataclass, field
+
 from modelforge.potential.utils import NeuralNetworkData
 
 
@@ -141,6 +142,7 @@ class PaiNN(BaseNeuralNetworkPotential):
     def _config_prior(self):
         log.info("Configuring PaiNN model hyperparameter prior distribution")
         from ray import tune
+
         from modelforge.potential.utils import shared_config_prior
 
         prior = {
@@ -205,6 +207,9 @@ class PaiNN(BaseNeuralNetworkPotential):
         mu = transformed_input["mu"]
         dir_ij = transformed_input["dir_ij"]
 
+        for i in [1,2,3]:
+            print(i)
+        
         for i, (interaction_mod, mixing_mod) in enumerate(
             zip(self.interaction_modules, self.mixing_modules)
         ):

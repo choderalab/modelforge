@@ -672,6 +672,101 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
         )
 
 
+class Loss:
+
+    @staticmethod
+    def _get_forces(model, batch: BatchData) -> Dict[str, torch.Tensor]:
+        """
+        Extracts and computes the forces from a given batch during training or evaluation.
+
+        Parameters
+        ----------
+        batch : BatchData
+            A single batch of data, including input features and target energies.
+
+        Returns
+        -------
+        Tuple[str, torch.Tensor]
+            The true forces from the dataset and the predicted forces by the model.
+        """
+        nnp_input = batch.nnp_input
+        F_true = batch.metadata.F.to(torch.float32)
+        E_predict = model.forward(nnp_input).E
+        F_predict = -torch.autograd.grad(
+            E_predict.sum(), nnp_input.positions, create_graph=False, retain_graph=False
+        )[0]
+
+        return {"F_true": F_true, "F_predict": F_predict}
+
+    @staticmethod
+    def _get_energies(model, batch: BatchData) -> Dict[str, torch.Tensor]:
+        """
+        Extracts and computes the energies from a given batch during training or evaluation.
+
+        Parameters
+        ----------
+        batch : BatchData
+            A single batch of data, including input features and target energies.
+
+        Returns
+        -------
+        Tuple[str, torch.Tensor]
+            The true energies from the dataset and the predicted energies by the model.
+        """
+        nnp_input = batch.nnp_input
+        E_true = batch.metadata.E.to(torch.float32).squeeze(1)
+        E_predict = model.forward(nnp_input).E
+        return {"E_true": E_true, "E_predict": E_predict}
+
+
+class EnergyLoss(Loss):
+
+    def __init__(self) -> None:
+        log.info("Initializing EnergyAndForceLoss")
+
+    def compute_mse_loss(self, model, batch: BatchData) -> torch.Tensor:
+        """
+        Computes the loss from energies.
+
+        """
+        energies = self._get_energies(model, batch)
+        # Compute MSE of energies
+        L_E = F.mse_loss(energies["E_predict"], energies["E_true"])
+
+        return L_E
+
+    def compute_rmse_loss(self, model, batch: BatchData) -> torch.Tensor:
+        """
+        Computes the RMSE loss from energies.
+
+        """
+        energies = self._get_energies(model, batch)
+        # Compute RMSE of energies
+        L_E = torch.sqrt(F.mse_loss(energies["E_predict"], energies["E_true"]))
+
+        return L_E
+
+
+class EnergyAndForceLoss(EnergyLoss):
+
+    def __init__(self) -> None:
+        log.info("Initializing EnergyAndForceLoss")
+
+    def compute_mse_loss(self, model, batch: BatchData) -> torch.Tensor:
+        """
+        Computes the combined loss from energies and forces.
+
+        """
+        energies = self._get_energies(model, batch)
+        forces = self._get_forces(model, batch)
+        # Compute MSE of energies
+        L_E = F.mse_loss(energies["E_predict"], energies["E_true"])
+        # Assuming forces_true and forces_predict are already negative gradients of the potential energy w.r.t positions
+        L_F = F.mse_loss(forces["F_predict"], forces["F_true"])
+
+        return L_E + L_F
+
+
 class TrainingAdapter(pl.LightningModule):
     """
     Adapter class for training neural network potentials using PyTorch Lightning.
@@ -694,7 +789,7 @@ class TrainingAdapter(pl.LightningModule):
     def __init__(
         self,
         model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet"],
-        loss: Callable = F.mse_loss,
+        include_force: bool = False,
         optimizer: Any = torch.optim.Adam,
         lr: float = 1e-3,
     ):
@@ -717,69 +812,8 @@ class TrainingAdapter(pl.LightningModule):
         self.model = model
         self.optimizer = optimizer
         self.learning_rate = lr
+        self.loss = EnergyAndForceLoss() if include_force else EnergyLoss()
         self.eval_loss: List[torch.Tensor] = []
-
-    def compute_loss(
-        self,
-        energies: Dict[str, torch.Tensor],
-        forces: Optional[Dict[str, torch.Tensor]],
-    ) -> torch.Tensor:
-        """
-        Computes the combined loss from energies and forces.
-
-        """
-        # Compute MSE of energies
-        L_E = F.mse_loss(energies["E_predict"], energies["E_true"])
-        if forces:
-            # Assuming forces_true and forces_predict are already negative gradients of the potential energy w.r.t positions
-            L_F = F.mse_loss(forces["F_predict"], forces["F_true"])
-        else:
-            L_F = torch.tensor(0.0)
-
-        return L_E + L_F
-
-    def _get_forces(self, batch: BatchData) -> Dict[str, torch.Tensor]:
-        """
-        Extracts and computes the forces from a given batch during training or evaluation.
-
-        Parameters
-        ----------
-        batch : BatchData
-            A single batch of data, including input features and target energies.
-
-        Returns
-        -------
-        Tuple[str, torch.Tensor]
-            The true forces from the dataset and the predicted forces by the model.
-        """
-        nnp_input = batch.nnp_input
-        F_true = batch.metadata.F.to(torch.float32)
-        E_predict = self.model.forward(nnp_input).E
-        F_predict = -torch.autograd.grad(
-            E_predict.sum(), nnp_input.positions, create_graph=False, retain_graph=False
-        )[0]
-
-        return {"F_true": F_true, "F_predict": F_predict}
-
-    def _get_energies(self, batch: BatchData) -> Dict[str, torch.Tensor]:
-        """
-        Extracts and computes the energies from a given batch during training or evaluation.
-
-        Parameters
-        ----------
-        batch : BatchData
-            A single batch of data, including input features and target energies.
-
-        Returns
-        -------
-        Tuple[str, torch.Tensor]
-            The true energies from the dataset and the predicted energies by the model.
-        """
-        nnp_input = batch.nnp_input
-        E_true = batch.metadata.E.to(torch.float32).squeeze(1)
-        self.batch_size = self._log_batch_size(E_true)
-        E_predict = self.model.forward(nnp_input).E
-        return {"E_true": E_true, "E_predict": E_predict}
 
     def config_prior(self):
 
@@ -822,12 +856,9 @@ class TrainingAdapter(pl.LightningModule):
         torch.Tensor
             The loss tensor computed for the current training step.
         """
-        energies = self._get_energies(batch)
-        if hasattr(batch.metadata, "F"):
-            forces = self._get_forces(batch)
-        else:
-            forces = None
-        loss = self.compute_loss(energies, forces)
+
+        loss = self.loss.compute_mse_loss(self.model, batch)
+        self.batch_size = self._log_batch_size(loss)
 
         self.log(
             "ptl/train_loss",
@@ -857,13 +888,12 @@ class TrainingAdapter(pl.LightningModule):
         None
             The results are logged and not directly returned.
         """
+        loss = self.loss.compute_rmse_loss(self.model, batch)
+        self.batch_size = self._log_batch_size(loss)
 
-        energies = self._get_energies(batch)
-
-        test_loss = F.l1_loss(energies["E_true"], energies["E_predict"])
         self.log(
             "ptl/test_loss",
-            test_loss,
+            loss,
             batch_size=self.batch_size,
             on_epoch=True,
             prog_bar=True,
@@ -886,21 +916,19 @@ class TrainingAdapter(pl.LightningModule):
             The loss tensor computed for the current validation step.
         """
 
-        from torch.nn import functional as F
+        loss = self.loss.compute_rmse_loss(self.model, batch)
+        self.batch_size = self._log_batch_size(loss)
 
-        energies = self._get_energies(batch)
-
-        val_loss = F.l1_loss(energies["E_true"], energies["E_predict"])
         self.log(
             "val_loss",
-            val_loss,
+            loss,
             batch_size=self.batch_size,
             on_epoch=True,
             prog_bar=True,
             sync_dist=True,
         )
-        self.eval_loss.append(val_loss.detach())
-        return val_loss
+        self.eval_loss.append(loss.detach())
+        return loss
 
     def on_validation_epoch_end(self):
         avg_loss = torch.stack(self.eval_loss).mean()

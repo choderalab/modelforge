@@ -13,7 +13,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 logger = TensorBoardLogger("tb_logs", name="training")
 
 # Set up dataset
-data = ANI2xDataset(force_download=False, for_unit_testing=False)
+data = ANI2xDataset(force_download=False, for_unit_testing=True)
 
 dataset = TorchDataModule(
     data, batch_size=512, splitting_strategy=RandomRecordSplittingStrategy()

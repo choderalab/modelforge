@@ -9,8 +9,6 @@ class SPICE2Curation(DatasetCuration):
     """
     Fetches the SPICE 2 dataset from MOLSSI QCArchive and processes it into a curated hdf5 file.
 
-    March 2004: Note this is still the preliminary release; a subset of calculations are still being performed.
-
     The SPICE dataset contains onformations for a diverse set of small molecules,
     dimers, dipeptides, and solvated amino acids. It includes 15 elements, charged and
     uncharged molecules, and a wide range of covalent and non-covalent interactions.
@@ -43,6 +41,9 @@ class SPICE2Curation(DatasetCuration):
       - 'SPICE Water Clusters v1.0'
       - 'SPICE Amino Acid Ligand v1.0
 
+
+    SPICE 2 zenodo release:ls
+    https://zenodo.org/records/10835749
 
     Reference to original SPICE publication:
     Eastman, P., Behara, P.K., Dotson, D.L. et al. SPICE,
@@ -112,7 +113,7 @@ class SPICE2Curation(DatasetCuration):
                 "u_in": unit.hartree / unit.bohr,
                 "u_out": unit.kilojoule_per_mole / unit.angstrom,
             },
-            "dispersion_corrected_dft_total_gradient": {
+            "dft_total_force": {
                 "u_in": unit.hartree / unit.bohr,
                 "u_out": unit.kilojoule_per_mole / unit.angstrom,
             },
@@ -181,6 +182,7 @@ class SPICE2Curation(DatasetCuration):
             "geometry": "series_atom",
             "dft_total_energy": "series_mol",
             "dft_total_gradient": "series_atom",
+            "dft_total_force": "series_atom",
             "formation_energy": "series_mol",
             "mbis_charges": "series_atom",
             "scf_dipole": "series_atom",
@@ -638,11 +640,28 @@ class SPICE2Curation(DatasetCuration):
                         self.data[index][quantity_o] = np.array(
                             val["properties"][quantity]
                         ).reshape(1, -1, 3)
+
                     else:
                         self.data[index][quantity_o] = np.vstack(
                             (
                                 self.data[index][quantity_o],
                                 np.array(val["properties"][quantity]).reshape(1, -1, 3),
+                            )
+                        )
+                    # we will store force along with gradient
+                    quantity = "dft total gradient"
+                    quantity_o = "dft_total_force"
+                    if quantity_o not in self.data[index].keys():
+                        self.data[index][quantity_o] = -np.array(
+                            val["properties"][quantity]
+                        ).reshape(1, -1, 3)
+                    else:
+                        self.data[index][quantity_o] = np.vstack(
+                            (
+                                self.data[index][quantity_o],
+                                -np.array(val["properties"][quantity]).reshape(
+                                    1, -1, 3
+                                ),
                             )
                         )
 

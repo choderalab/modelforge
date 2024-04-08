@@ -3,6 +3,7 @@ def SPICE_2(
     output_file_dir: str,
     local_cache_dir: str,
     force_download: bool = False,
+    unit_testing_max_records=None,
 ):
     """
      This Fetches the SPICE 2 dataset from MOLSSI QCArchive and processes it into a curated hdf5 file.
@@ -63,7 +64,14 @@ def SPICE_2(
         output_file_dir=output_file_dir,
         local_cache_dir=local_cache_dir,
     )
-    spice_2_data.process(force_download=force_download, n_threads=4)
+    if unit_testing_max_records is None:
+        spice_2_data.process(force_download=force_download, n_threads=4)
+    else:
+        spice_2_data.process(
+            force_download=force_download,
+            n_threads=4,
+            unit_testing_max_records=unit_testing_max_records,
+        )
 
 
 def SPICE_114_OpenFF(
@@ -330,15 +338,15 @@ local_prefix = "/Users/cri/Documents/Projects-msk/datasets"
 output_file_dir = f"{local_prefix}/hdf5_files"
 
 # # QM9 dataset
-local_cache_dir = f"{local_prefix}/qm9_dataset"
-hdf5_file_name = "qm9_dataset.hdf5"
-QM9(
-    hdf5_file_name,
-    output_file_dir,
-    local_cache_dir,
-    force_download=False,
-    unit_testing_max_records=100,
-)
+# local_cache_dir = f"{local_prefix}/qm9_dataset"
+# hdf5_file_name = "qm9_dataset.hdf5"
+# QM9(
+#     hdf5_file_name,
+#     output_file_dir,
+#     local_cache_dir,
+#     force_download=False,
+#     unit_testing_max_records=100,
+# )
 
 
 # we will save all the files to a central location
@@ -349,7 +357,7 @@ QM9(
 # hdf5_file_name = "spice_2_dataset.hdf5"
 #
 # SPICE_2(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)
-#
+
 # # SPICE 1.1.4 OpenFF dataset
 # local_cache_dir = f"{local_prefix}/spice_openff_dataset"
 # hdf5_file_name = "spice_114_openff_dataset.hdf5"

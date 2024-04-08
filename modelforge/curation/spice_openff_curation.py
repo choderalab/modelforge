@@ -100,6 +100,10 @@ class SPICEOpenFFCuration(DatasetCuration):
                 "u_in": unit.hartree / unit.bohr,
                 "u_out": unit.kilojoule_per_mole / unit.angstrom,
             },
+            "dft_total_force": {
+                "u_in": unit.hartree / unit.bohr,
+                "u_out": unit.kilojoule_per_mole / unit.angstrom,
+            },
             "dispersion_corrected_dft_total_gradient": {
                 "u_in": unit.hartree / unit.bohr,
                 "u_out": unit.kilojoule_per_mole / unit.angstrom,
@@ -169,6 +173,7 @@ class SPICEOpenFFCuration(DatasetCuration):
             "geometry": "series_atom",
             "dft_total_energy": "series_mol",
             "dft_total_gradient": "series_atom",
+            "dft_total_force": "series_atom",
             "formation_energy": "series_mol",
             "mbis_charges": "series_atom",
             "scf_dipole": "series_atom",
@@ -667,6 +672,7 @@ class SPICEOpenFFCuration(DatasetCuration):
                 datapoint["dft_total_gradient"]
                 + datapoint["dispersion_correction_gradient"]
             )
+            datapoint["dft_total_force"] = -datapoint["dft_total_gradient"]
             # we only want to write the dispersion corrected gradient to the file to avoid confusion
             datapoint.pop("dispersion_correction_gradient")
 

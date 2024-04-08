@@ -67,6 +67,10 @@ class SPICE114Curation(DatasetCuration):
                 "u_in": unit.hartree / unit.bohr,
                 "u_out": unit.kilojoule_per_mole / unit.angstrom,
             },
+            "dft_total_force": {
+                "u_in": unit.hartree / unit.bohr,
+                "u_out": unit.kilojoule_per_mole / unit.angstrom,
+            },
             "mbis_charges": {
                 "u_in": unit.elementary_charge,
                 "u_out": unit.elementary_charge,
@@ -136,6 +140,7 @@ class SPICE114Curation(DatasetCuration):
             "geometry": "series_atom",
             "dft_total_energy": "series_mol",
             "dft_total_gradient": "series_atom",
+            "dft_total_force": "series_atom",
             "formation_energy": "series_mol",
             "mayer_indices": "series_atom",
             "mbis_charges": "series_atom",
@@ -249,6 +254,7 @@ class SPICE114Curation(DatasetCuration):
                 ds_temp["total_charge"] = self._calculate_reference_charge(
                     ds_temp["smiles"]
                 )
+                ds_temp["dft_total_force"] = -ds_temp["dft_total_gradient"]
                 self.data.append(ds_temp)
         if self.convert_units:
             self._convert_units()

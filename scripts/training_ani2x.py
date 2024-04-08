@@ -4,7 +4,7 @@ import torch
 
 # import the models implemented in modelforge, for now SchNet, PaiNN, ANI2x or PhysNet
 from modelforge.potential import NeuralNetworkPotentialFactory
-from modelforge.dataset.ani2x import ANI2xDataset
+from modelforge.dataset.ani2x_test import ANI2xTestDataset
 from modelforge.dataset.dataset import TorchDataModule
 from modelforge.dataset.utils import RandomRecordSplittingStrategy
 from pytorch_lightning.loggers import TensorBoardLogger
@@ -13,7 +13,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 logger = TensorBoardLogger("tb_logs", name="training")
 
 # Set up dataset
-data = ANI2xDataset(force_download=False, for_unit_testing=True)
+data = ANI2xTestDataset(force_download=False, for_unit_testing=True)
 
 dataset = TorchDataModule(
     data, batch_size=512, splitting_strategy=RandomRecordSplittingStrategy()

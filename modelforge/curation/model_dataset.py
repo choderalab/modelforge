@@ -356,9 +356,10 @@ class ModelDataset(DatasetCuration):
 
     def process(
         self,
-        input_data_path="./",
-        input_data_file="molecule_data.hdf5",
-        data_combination="pure_MM",
+        # input_data_path="./",
+        # input_data_file="molecule_data.hdf5",
+        force_download=False,
+        data_combination="PURE_MM",
     ) -> None:
         """
         Process the dataset into a curated hdf5 file.
@@ -367,14 +368,29 @@ class ModelDataset(DatasetCuration):
         ----------
         force_download : Optional[bool], optional
             Force download of the dataset, by default False
-        unit_testing_max_records : Optional[int], optional
-            Maximum number of records to process, by default None
+        data_combination : str, optional
+            The type of data combination to use, by default "pure_MM"
+            Options, PURE_MM_low_temp_correction, PURE_MM, PURE_ML
+
 
         """
+        from modelforge.utils.remote import download_from_url
+
+        # download the data
+        url = "https://www.dropbox.com/scl/fi/c23o54ckovnz6umd3why2/molecule_data.hdf5?rlkey=384kd8zo9w1iv34lzp3c2y3n3&dl=1"
+        checksum = "77a76f7005249aebe61b57a560a818f4"
+
+        download_from_url(
+            url,
+            md5_checksum=checksum,
+            output_path=self.local_cache_dir,
+            output_filename="molecule_data.hdf5",
+            force_download=force_download,
+        )
         self.data_combination = data_combination
         self._clear_data()
         self._process_downloaded(
-            input_data_path, input_data_file, self.data_combination
+            self.local_cache_dir, "molecule_data.hdf5", self.data_combination
         )
         if self.convert_units:
             self._convert_units()

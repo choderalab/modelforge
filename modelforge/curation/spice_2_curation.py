@@ -42,7 +42,7 @@ class SPICE2Curation(DatasetCuration):
       - 'SPICE Amino Acid Ligand v1.0
 
 
-    SPICE 2 zenodo release:ls
+    SPICE 2 zenodo release:
     https://zenodo.org/records/10835749
 
     Reference to original SPICE publication:

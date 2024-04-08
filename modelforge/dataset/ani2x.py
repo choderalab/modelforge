@@ -56,7 +56,7 @@ class ANI2xDataset(HDF5Dataset):
         regenerate_cache: bool = False,
     ) -> None:
         """
-        Initialize the QM9Data class.
+        Initialize the ANI2xDataset class.
 
         Parameters
         ----------

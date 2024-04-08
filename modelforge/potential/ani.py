@@ -20,6 +20,7 @@ def triu_index(num_species: int) -> torch.Tensor:
     ret = torch.zeros(num_species, num_species, dtype=torch.long)
     ret[species1, species2] = pair_index
     ret[species2, species1] = pair_index
+
     return ret
 
 
@@ -151,6 +152,7 @@ class ANIRepresentation(nn.Module):
 
         # ----------------- Radial symmetry vector ---------------- #
         # compute radial aev
+
         radial_feature_vector = self.radial_symmetry_functions(data.d_ij)
         # cutoff
         rcut_ij = self.cutoff_module(data.d_ij)
@@ -209,6 +211,7 @@ class ANIRepresentation(nn.Module):
         angular_aev = angular_terms_.new_zeros(
             (number_of_atoms * num_species_pairs, angular_sublength)
         )
+
         index = (
             central_atom_index * num_species_pairs
             + self.triu_index[angular_species12[0], angular_species12[1]]
@@ -227,6 +230,7 @@ class ANIRepresentation(nn.Module):
         number_of_atoms = data.number_of_atoms
         radial_sublength = self.radial_symmetry_functions.radial_sublength
         radial_length = radial_sublength * self.nr_of_supported_elements
+
         radial_aev = radial_feature_vector.new_zeros(
             (
                 number_of_atoms * self.nr_of_supported_elements,

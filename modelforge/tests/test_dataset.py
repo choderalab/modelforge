@@ -227,12 +227,14 @@ def test_caching(prep_temp_dir):
 
     data._to_file_cache()
 
+    # npz files saved with different versions of python lead to different checksums
+    # we will skip checking the checksums for these files, only seeing if they exist
     assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
     assert (
         data._file_validation(
             data.processed_data_file["name"],
             local_cache_dir,
-            data.processed_data_file["md5"],
+            None,
         )
         == True
     )
@@ -375,8 +377,6 @@ def test_dataset_splitting(splitting_strategy, datasets_to_test):
     assert len(test_dataset) == 10
 
 
-
-
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_dataset_downloader(dataset, prep_temp_dir):
     """
@@ -387,7 +387,6 @@ def test_dataset_downloader(dataset, prep_temp_dir):
     data = dataset(for_unit_testing=True, local_cache_dir=local_cache_dir)
     data._download()
     assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
-
 
 
 def test_numpy_dataset_assignment(datasets_to_test):

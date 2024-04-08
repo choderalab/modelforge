@@ -8,14 +8,12 @@ dependencies:
   - python
   - pip
   - h5py
-  - requests
   - tqdm
   - qcelemental=0.25.1
   - qcportal>=0.50
   - pytorch>=2.1
   - loguru
-  - gdown>=5.0.0
-  - lightning=2.0.8
+  - lightning>=2.0.8
   - tensorboard
   - torchvision
   - openff-units
@@ -24,20 +22,17 @@ dependencies:
   - retry
   - sqlitedict
   - pytorch_scatter
-  - "ray-tune"
-  - "ray-train"
+  - requests
+  - ray-data
+  - ray-train
+  - ray-tune
 
   # Testing
   - pytest>=2.1
   - pytest-cov
   - codecov
-  - qcelemental=0.25.1
-  - qcportal>=0.50
-  - requests
   - torchani
-
 
   # pip installs
   - pip:
       - schnetpack>=2.0.0
-      - pyro-ppl

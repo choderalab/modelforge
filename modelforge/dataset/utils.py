@@ -444,27 +444,6 @@ class FirstComeFirstServeSplittingStrategy(SplittingStrategy):
         return (train_d, val_d, test_d)
 
 
-def _download_from_gdrive(id: str, raw_dataset_file: str):
-    """
-    Downloads a dataset from Google Drive.
-
-    Parameters
-    ----------
-    id : str
-        Google Drive ID for the dataset.
-    raw_dataset_file : str
-        Path to save the downloaded dataset.
-
-    Examples
-    --------
-    >>> _download_from_gdrive("1v2gV3sG9JhMZ5QZn3gFB9j5ZIs0Xjxz8", "data_file.hdf5.gz")
-    """
-    import gdown
-
-    url = f"https://drive.google.com/uc?id={id}"
-    gdown.download(url, raw_dataset_file, quiet=False)
-
-
 def _download_from_url(url: str, raw_dataset_file: str):
     """
     Downloads a dataset from a specified URLS.

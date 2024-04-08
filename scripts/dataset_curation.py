@@ -8,7 +8,6 @@ def SPICE_2(
     """
      This Fetches the SPICE 2 dataset from MOLSSI QCArchive and processes it into a curated hdf5 file.
 
-     March 2004: Note this is still the preliminary release; a subset of calculations are still being performed.
 
      It provides both forces and energies calculated at the ωB97M-D3(BJ)/def2-TZVPPD level of theory,
      using Psi4.
@@ -53,6 +52,8 @@ def SPICE_2(
         note, this will check to ensure that all records on qcarchive exist in the local database,
         and will be downloaded if missing.
         If True, the entire dataset will be redownloaded.
+    unit_testing_max_records: int, optional, default=None
+        If set, only the first n records will be processed; this is useful for unit testing.
 
     Returns
     -------
@@ -69,8 +70,8 @@ def SPICE_2(
     else:
         spice_2_data.process(
             force_download=force_download,
-            n_threads=4,
             unit_testing_max_records=unit_testing_max_records,
+            n_threads=4,
         )
 
 
@@ -303,6 +304,7 @@ def ANI2x(
     output_file_dir: str,
     local_cache_dir: str,
     force_download: bool = False,
+    unit_testing_max_records=None,
 ):
     """
     This fetches and processes the ANI2x dataset into a curated hdf5 file.
@@ -326,7 +328,13 @@ def ANI2x(
         output_file_dir=output_file_dir,
         local_cache_dir=local_cache_dir,
     )
-    ani2x.process(force_download=force_download)
+    if unit_testing_max_records is None:
+        ani2x.process(force_download=force_download)
+    else:
+        ani2x.process(
+            force_download=force_download,
+            unit_testing_max_records=unit_testing_max_records,
+        )
 
 
 """
@@ -335,11 +343,26 @@ Download the various datasets and process them into curated hdf5 files.
 
 # define the local path prefix
 local_prefix = "/Users/cri/Documents/Projects-msk/datasets"
+
+# we will save all the files to a central location
 output_file_dir = f"{local_prefix}/hdf5_files"
+
+# ANI2x test dataset
+# local_cache_dir = f"{local_prefix}/ani2x_dataset"
+# hdf5_file_name = "ani2x_dataset.hdf5"
+#
+# ANI2x(
+#     hdf5_file_name,
+#     output_file_dir,
+#     local_cache_dir,
+#     force_download=False,
+#     # unit_testing_max_records=100,
+# )
 
 # # QM9 dataset
 # local_cache_dir = f"{local_prefix}/qm9_dataset"
-# hdf5_file_name = "qm9_dataset.hdf5"
+# hdf5_file_name = "qm9_dataset_n100.hdf5"
+#
 # QM9(
 #     hdf5_file_name,
 #     output_file_dir,
@@ -348,15 +371,11 @@ output_file_dir = f"{local_prefix}/hdf5_files"
 #     unit_testing_max_records=100,
 # )
 
-
-# we will save all the files to a central location
-# output_file_dir = f"{local_prefix}/hdf5_files"
-#
 # # SPICE 2 dataset
-# local_cache_dir = f"{local_prefix}/spice2_dataset"
-# hdf5_file_name = "spice_2_dataset.hdf5"
-#
-# SPICE_2(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)
+local_cache_dir = f"{local_prefix}/spice2_dataset"
+hdf5_file_name = "spice_2_dataset.hdf5"
+
+SPICE_2(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)
 
 # # SPICE 1.1.4 OpenFF dataset
 # local_cache_dir = f"{local_prefix}/spice_openff_dataset"

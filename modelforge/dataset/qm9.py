@@ -27,7 +27,9 @@ class QM9Dataset(HDF5Dataset):
     from modelforge.utils import PropertyNames
 
     _property_names = PropertyNames(
-        Z="atomic_numbers", R="geometry", E="internal_energy_at_0K", Q="charges"
+        Z="atomic_numbers",
+        R="geometry",
+        E="internal_energy_at_0K",  # Q="charges"
     )
 
     _available_properties = [
@@ -57,7 +59,7 @@ class QM9Dataset(HDF5Dataset):
         for_unit_testing: bool = False,
         local_cache_dir: str = ".",
         force_download: bool = False,
-        overwrite: bool = False,
+        regenerate_cache=False,
     ) -> None:
         """
         Initialize the QM9Data class.
@@ -72,7 +74,9 @@ class QM9Dataset(HDF5Dataset):
             Path to the local cache directory, by default ".".
         force_download: bool, optional
             If set to True, we will download the dataset even if it already exists; by default False.
-
+        regenerate_cache: bool, optional
+            If set to True, we will regenerate the npz cache file even if it already exists, using
+            previously downloaded files, if available; by default False.
         Examples
         --------
         >>> data = QM9Dataset()  # Default dataset
@@ -123,6 +127,8 @@ class QM9Dataset(HDF5Dataset):
             }
             processed_data_file = {
                 "name": "qm9_dataset_n100_processed.npz",
+                # checksum of otherwise identical npz files are different if using 3.11 vs 3.9/10
+                # we will therefore skip checking these files
                 "md5": "9d671b54f7b9d454db9a3dd7f4ef2020",
             }
 
@@ -155,6 +161,7 @@ class QM9Dataset(HDF5Dataset):
             processed_data_file=processed_data_file,
             local_cache_dir=local_cache_dir,
             force_download=force_download,
+            regenerate_cache=regenerate_cache,
         )
 
     @property

@@ -262,6 +262,7 @@ class HDF5Dataset:
         processed_data_file: Dict[str, str],
         local_cache_dir: str,
         force_download: bool = False,
+        regenerate_cache: bool = False,
     ):
         """
         Initializes the HDF5Dataset with paths to raw and processed data files.
@@ -287,6 +288,7 @@ class HDF5Dataset:
         self.processed_data_file = processed_data_file
         self.local_cache_dir = local_cache_dir
         self.force_download = force_download
+        self.regenerate_cache = regenerate_cache
 
         self.hdf5data: Optional[Dict[str, List[np.ndarray]]] = None
         self.numpy_data: Optional[np.ndarray] = None
@@ -309,7 +311,9 @@ class HDF5Dataset:
             ) as out_file:
                 shutil.copyfileobj(gz_file, out_file)
 
-    def _file_validation(self, file_name: str, file_path: str, checksum: str) -> bool:
+    def _file_validation(
+        self, file_name: str, file_path: str, checksum: str = None
+    ) -> bool:
         """
         Validates if the file exists, and if the calculated checksum matches the expected checksum.
 
@@ -320,7 +324,8 @@ class HDF5Dataset:
         file_path : str
             Path to the file.
         checksum : str
-            Expected checksum of the file.
+            Expected checksum of the file. Default=None
+            If None, checksum will not be validated.
 
         Returns
         -------
@@ -331,7 +336,7 @@ class HDF5Dataset:
         if not os.path.exists(full_file_path):
             log.debug(f"File {full_file_path} does not exist.")
             return False
-        else:
+        elif checksum is not None:
             from modelforge.utils.remote import calculate_md5_checksum
 
             calculated_checksum = calculate_md5_checksum(file_name, file_path)
@@ -340,6 +345,8 @@ class HDF5Dataset:
                     f"Checksum mismatch for file {file_path}/{file_name}. Expected {calculated_checksum}, found {checksum}."
                 )
                 return False
+            return True
+        else:
             return True
 
     def _from_hdf5(self) -> None:
@@ -510,27 +517,38 @@ class HDF5Dataset:
         >>> hdf5_data = HDF5Dataset("raw_data.hdf5", "processed_data.npz")
         >>> processed_data = hdf5_data._from_file_cache()
         """
+        # if self._file_validation(
+        #     self.processed_data_file["name"],
+        #     self.local_cache_dir,
+        #     self.processed_data_file["md5"],
+        # ):
+        #     log.debug(f"Loading processed data from {self.processed_data_file['name']}")
+        #
+        # else:
+        #     from modelforge.utils.remote import calculate_md5_checksum
+        #
+        #     checksum = calculate_md5_checksum(
+        #         self.processed_data_file["name"], self.local_cache_dir
+        #     )
+        #     raise ValueError(
+        #         f"Checksum mismatch for processed data file {self.processed_data_file['name']}. Found {checksum}, expected {self.processed_data_file['md5']}"
+        #     )
+        import os
+
+        # skip validating the checksum, as the npz file checksum of otherwise identical data differs between python 3.11 and 3.9/10
         if self._file_validation(
-            self.processed_data_file["name"],
-            self.local_cache_dir,
-            self.processed_data_file["md5"],
+            self.processed_data_file["name"], self.local_cache_dir, checksum=None
         ):
-            log.debug(f"Loading processed data from {self.processed_data_file['name']}")
-
+            log.debug(
+                f"Loading processed data from {self.local_cache_dir}/{self.processed_data_file['name']}"
+            )
+            self.numpy_data = np.load(
+                f"{self.local_cache_dir}/{self.processed_data_file['name']}"
+            )
         else:
-            from modelforge.utils.remote import calculate_md5_checksum
-
-            checksum = calculate_md5_checksum(
-                self.processed_data_file["name"], self.local_cache_dir
-            )
             raise ValueError(
-                f"Checksum mismatch for processed data file {self.processed_data_file['name']}. Found {checksum}, expected {self.processed_data_file['md5']}"
+                f"Processed data file {self.local_cache_dir}/{self.processed_data_file['name']} not found."
             )
-
-        log.debug(f"Loading processed data from {self.processed_data_file['name']}")
-        self.numpy_data = np.load(
-            f"{self.local_cache_dir}/{self.processed_data_file['name']}"
-        )
 
     def _to_file_cache(
         self,
@@ -594,9 +612,10 @@ class DatasetFactory:
             data._file_validation(
                 data.processed_data_file["name"],
                 data.local_cache_dir,
-                data.processed_data_file["md5"],
+                None,
             )
             and not data.force_download
+            and not data.regenerate_cache
         ):
             data._from_file_cache()
         # check to see if the hdf5 file exists and the checksum matches

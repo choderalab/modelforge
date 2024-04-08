@@ -53,7 +53,7 @@ class ANI2xDataset(HDF5Dataset):
         for_unit_testing: bool = False,
         local_cache_dir: str = ".",
         force_download: bool = False,
-        overwrite: bool = False,
+        regenerate_cache: bool = False,
     ) -> None:
         """
         Initialize the QM9Data class.
@@ -68,7 +68,9 @@ class ANI2xDataset(HDF5Dataset):
             Path to the local cache directory, by default ".".
         force_download: bool, optional
             If set to True, we will download the dataset even if it already exists; by default False.
-
+        regenerate_cache: bool, optional
+            If set to True, we will regenerate the npz cache file even if it already exists, using
+            the data from the hdf5 file; by default False.
         Examples
         --------
         >>> data = ANI2xDataset()  # Default dataset
@@ -155,6 +157,7 @@ class ANI2xDataset(HDF5Dataset):
             processed_data_file=processed_data_file,
             local_cache_dir=local_cache_dir,
             force_download=force_download,
+            regenerate_cache=regenerate_cache,
         )
 
     @property

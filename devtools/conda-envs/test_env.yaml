@@ -22,16 +22,16 @@ dependencies:
   - retry
   - sqlitedict
   - pytorch_scatter
-  - ray-tune
-  - ray-train
 
   # Testing
   - pytest>=2.1
   - pytest-cov
   - codecov
   - requests
+  - ray-data
+  - ray-train
+  - ray-tune
   - torchani
-
 
   # pip installs
   - pip:

@@ -64,10 +64,6 @@ def test_energy_scaling_and_offset():
         output_with_ase.molecular_ase,
     )
 
-    # -------------------------------#
-    # Test energy scaling
-
-
 def test_forward_pass(inference_model, batch):
     # this test sends a single batch from different datasets through the model
 

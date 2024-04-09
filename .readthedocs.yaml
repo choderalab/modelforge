@@ -5,5 +5,15 @@ build:
   tools:
     python: "mambaforge-22.9"
 
+sphinx:
+  configuration: docs/conf.py
+  fail_on_warning: true
+
 conda:
   environment: devtools/conda-envs/test_env.yaml
+
+python:
+  # Install our python package before building the docs
+  install:
+    - method: pip
+      path: .

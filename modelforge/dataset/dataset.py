@@ -172,8 +172,6 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             - atomic_subsystem_counts: torch.Tensor, shape [1]
                 Number of atoms in the conformer. Length one if __getitem__ is called with a single index, length batch_size if collate_conformers is used with DataLoader
         """
-        from modelforge.potential.utils import ATOMIC_NUMBER_TO_INDEX_MAP
-
         series_atom_start_idx = self.series_atom_start_idxs_by_conf[idx]
         series_atom_end_idx = self.series_atom_start_idxs_by_conf[idx + 1]
         single_atom_start_idx = self.single_atom_start_idxs_by_conf[idx]
@@ -205,12 +203,6 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             "E": E,
             "atomic_subsystem_counts": torch.tensor([atomic_numbers.shape[0]]),
             "idx": idx,
-            "atomic_index": torch.tensor(
-                [
-                    ATOMIC_NUMBER_TO_INDEX_MAP.get(atomic_number, -1)
-                    for atomic_number in list(atomic_numbers.numpy())
-                ]
-            ),
         }
 
 

@@ -48,7 +48,7 @@ class ModelDataset(HDF5Dataset):
             Name of the dataset, by default "ANI2x".
         data_combination : str, optional
             The type of data combination to use, by default "PURE_MM"
-            Options, PURE_MM_low_temp_correction, PURE_MM, PURE_ML
+            Options, MM_low_temp_correction, PURE_MM, PURE_ML
         local_cache_dir: str, optional
             Path to the local cache directory, by default ".".
         force_download: bool, optional
@@ -69,7 +69,7 @@ class ModelDataset(HDF5Dataset):
         ]  # NOTE: Default values
 
         self._properties_of_interest = _default_properties_of_interest
-        dataset_name = f"{dataset_name}_{data_combination}"
+        self.dataset_name = f"{dataset_name}_{data_combination}"
 
         self.data_combination = data_combination
         from openff.units import unit
@@ -91,42 +91,57 @@ class ModelDataset(HDF5Dataset):
         # There are 3 files types that need name/checksum defined, of extensions hdf5.gz, hdf5, and npz.
 
         # note, need to change the end of the url to dl=1 instead of dl=0 (the default when you grab the share list), to ensure the same checksum each time we download
-        self.PURE_MM_url = "https://www.dropbox.com/scl/fi/0642s2ilwwmu4cyb36ttm/PURE_MM.hdf5?rlkey=n2hzkoqtchrdxtfzbybxeu2lm&dl=1"
-        self.PURE_ML_url = "https://www.dropbox.com/scl/fi/lx2ets7ghw7abjbhyhvtd/PURE_ML.hdf5?rlkey=s7t0dtlab2rmt7j9bd9utx1lx&dl=1"
-        self.PURE_MM_low_temp_correction_url = "https://www.dropbox.com/scl/fi/2rhc1m2ta420wgtgde9qz/MM_low_e_correction.hdf5?rlkey=bpt3t6uqo8194vl2l133nm001&dl=1"
+        self.PURE_MM_url = "https://www.dropbox.com/scl/fi/pq6d2px51o29pegi19z7m/PURE_MM.hdf5.gz?rlkey=9tjbdsvthj9f5zfar4zfb9joo&dl=1"
+        self.PURE_ML_url = "https://www.dropbox.com/scl/fi/6mf8recfxd10zf1za9xjq/PURE_ML.hdf5.gz?rlkey=2xvvrcd2nbeiw7ma70hq4nui4&dl=1"
+        self.MM_low_temp_correction_url = "https://www.dropbox.com/scl/fi/h7xowf0v63yszfstsftpc/MM_low_e_correction.hdf5.gz?rlkey=c8u5q212lv2ikre6pukzdakzp&dl=1"
 
         if self.data_combination == "PURE_MM":
             url = self.PURE_MM_url
             gz_data_file = {
-                "name": "ani2x_dataset_n100.hdf5.gz",
-                "md5": "093fa23aeb8f8813abd1ec08e9ff83ad",
+                "name": "PURE_MM_dataset.hdf5.gz",
+                "md5": "869441523f826fcc4af7e1ecaca13772",
             }
             hdf5_data_file = {
-                "name": "ani2x_dataset_n100.hdf5",
-                "md5": "4f54caf79e4c946dc3d6d53722d2b966",
+                "name": "PURE_MM_dataset.hdf5",
+                "md5": "3921bd738d963cc5d26d581faa9bbd36",
             }
-            processed_data_file = {
-                "name": "ani2x_dataset_n100_processed.npz",
-                "md5": "c1481fe9a6b15fb07b961d15411c0ddd",
-            }
+            processed_data_file = {"name": "PURE_MM_dataset_processed.npz", "md5": None}
 
             logger.info("Using test dataset")
 
-        else:
-            url = self.full_url
+        elif self.data_combination == "PURE_ML":
+            url = self.PURE_ML_url
             gz_data_file = {
-                "name": "ani2x_dataset.hdf5.gz",
-                "md5": "8daf9a7d8bbf9bcb1e9cea13b4df9270",
+                "name": "PURE_ML_dataset.hdf5.gz",
+                "md5": "ff0ab16f4503e2537ed4bb10a0a6f465",
             }
 
             hdf5_data_file = {
-                "name": "ani2x_dataset.hdf5",
-                "md5": "86bb855cb8df54e082506088e949518e",
+                "name": "PURE_ML_dataset.hdf5",
+                "md5": "a968d6ee74a0dbcede25c98aaa7a33e7",
             }
 
             processed_data_file = {
-                "name": "ani2x_dataset_processed.npz",
-                "md5": "268438d8e1660728ba892bc7c3cd4339",
+                "name": "PURE_ML_dataset_processed.npz",
+                "md5": None,
+            }
+
+            logger.info("Using full dataset")
+        elif self.data_combination == "MM_low_temp_correction":
+            url = self.MM_low_temp_correction_url
+            gz_data_file = {
+                "name": "MM_LTC_dataset.hdf5.gz",
+                "md5": "0c7dbc7636afe845f128c57dbc99f581",
+            }
+
+            hdf5_data_file = {
+                "name": "MM_LTC_dataset.hdf5",
+                "md5": "fb448ea4eaaafaadcce62a2123cb8c1f",
+            }
+
+            processed_data_file = {
+                "name": "MM_LTC_dataset_processed.npz",
+                "md5": None,
             }
 
             logger.info("Using full dataset")

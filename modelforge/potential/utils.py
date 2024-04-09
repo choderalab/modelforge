@@ -130,18 +130,6 @@ class BatchData:
         return self
 
 
-ATOMIC_NUMBER_TO_INDEX_MAP = {
-    1: 0,  # H
-    6: 1,  # C
-    7: 2,  # N
-    8: 3,  # O
-    9: 4,  # F
-    15: 5,  # P
-    16: 6,  # S
-    17: 7,  # Cl
-    35: 8,  # Br
-    53: 9,  # I
-}
 
 
 def shared_config_prior():

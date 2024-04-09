@@ -7,7 +7,7 @@ from openff.units import unit
 from torch import nn
 
 from modelforge.potential.models import BaseNeuralNetworkPotential
-from modelforge.utils.prop import SpeciesAEV, SpeciesEnergies
+from modelforge.utils.prop import SpeciesAEV
 
 if TYPE_CHECKING:
     from modelforge.potential.utils import NNPInput
@@ -25,6 +25,16 @@ def triu_index(num_species: int) -> torch.Tensor:
 
 
 from modelforge.potential.utils import NeuralNetworkData
+
+ATOMIC_NUMBER_TO_INDEX_MAP = {
+    1: 0,  # H
+    6: 1,  # C
+    7: 2,  # N
+    8: 3,  # O
+    9: 4,  # F
+    16: 5,  # S
+    17: 6,  # Cl
+}
 
 
 @dataclass
@@ -474,7 +484,6 @@ class ANI2x(BaseNeuralNetworkPotential):
         # ----- ATOMIC NUMBER LOOKUP --------
         # Create a tensor for direct lookup. The size of this tensor will be
         # # the max atomic number in map. Initialize with a default value (e.g., -1 for not found).
-        from modelforge.potential.utils import ATOMIC_NUMBER_TO_INDEX_MAP
 
         max_atomic_number = max(ATOMIC_NUMBER_TO_INDEX_MAP.keys())
         lookup_tensor = torch.full((max_atomic_number + 1,), -1, dtype=torch.long)

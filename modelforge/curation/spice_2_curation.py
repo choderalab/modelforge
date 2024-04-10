@@ -282,7 +282,7 @@ class SPICE2Curation(DatasetCuration):
                         specification_names=[specification_name],
                         force_refetch=force_download,
                     ):
-                        spice_db[record[0]] = record[2]
+                        spice_db[record[0]] = record[2].dict()
                         if pbar is not None:
                             pbar.update(1)
 
@@ -548,7 +548,7 @@ class SPICE2Curation(DatasetCuration):
                 spec_keys = list(spice_db.keys())
 
                 for key in spec_keys:
-                    if spice_db[key].status.value == "complete":
+                    if spice_db[key]["status"].value == "complete":
                         non_error_keys.append(key)
 
             sorted_keys, original_keys, molecule_names = self._sort_keys(non_error_keys)
@@ -619,7 +619,7 @@ class SPICE2Curation(DatasetCuration):
 
                 for key in tqdm(sorted_keys):
                     name = molecule_names[key]
-                    val = spice_db[original_keys[key]].dict()
+                    val = spice_db[original_keys[key]]
 
                     index = self.molecule_names[name]
 

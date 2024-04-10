@@ -268,7 +268,7 @@ class SPICEOpenFFCuration(DatasetCuration):
                         specification_names=[specification_name],
                         force_refetch=force_download,
                     ):
-                        spice_db[record[0]] = record[2]
+                        spice_db[record[0]] = record[2].dict()
                         if pbar is not None:
                             pbar.update(1)
 
@@ -469,8 +469,8 @@ class SPICEOpenFFCuration(DatasetCuration):
                 ) as spice_db_spec6:
                     for key in spec2_keys:
                         if (
-                            spice_db_spec2[key].status.value == "complete"
-                            and spice_db_spec6[key].status.value == "complete"
+                            spice_db_spec2[key]["status"].value == "complete"
+                            and spice_db_spec6[key].["status"].value == "complete"
                         ):
                             non_error_keys.append(key)
 
@@ -542,7 +542,7 @@ class SPICEOpenFFCuration(DatasetCuration):
 
                 for key in tqdm(sorted_keys):
                     name = key.split("-")[0]
-                    val = spice_db[original_name[key]].dict()
+                    val = spice_db[original_name[key]]
 
                     index = self.molecule_names[name]
 
@@ -609,7 +609,7 @@ class SPICEOpenFFCuration(DatasetCuration):
 
                 for key in tqdm(sorted_keys):
                     name = key.split("-")[0]
-                    val = spice_db[original_name[key]].dict()
+                    val = spice_db[original_name[key]]
                     index = self.molecule_names[name]
 
                     # typecasting issue in there

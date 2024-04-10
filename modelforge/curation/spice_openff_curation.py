@@ -470,7 +470,7 @@ class SPICEOpenFFCuration(DatasetCuration):
                     for key in spec2_keys:
                         if (
                             spice_db_spec2[key]["status"].value == "complete"
-                            and spice_db_spec6[key].["status"].value == "complete"
+                            and spice_db_spec6[key]["status"].value == "complete"
                         ):
                             non_error_keys.append(key)
 

@@ -120,10 +120,10 @@ class SAKE(BaseNeuralNetworkPotential):
             nr_atom_basis: int = 64,
             nr_interaction_blocks: int = 2,
             nr_heads: int = 4,
-            radial_basis_module: nn.Module = ExpNormalSmearing(),
-            cutoff=5 * unit.angstrom,
+            radial_basis_module: nn.Module = ExpNormalSmearing(n_rbf=50),
+            cutoff: object = 5 * unit.angstrom,
             epsilon: float = 1e-8,
-    ):
+    ) -> object:
         """
         Parameters
             ----------

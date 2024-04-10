@@ -222,7 +222,7 @@ class SPICEOpenFFCuration(DatasetCuration):
         client = PortalClient(self.qcarchive_server)
 
         ds = client.get_dataset(dataset_type=dataset_type, dataset_name=dataset_name)
-
+        ds.fetch_entry_names()
         entry_names = ds.entry_names
         if unit_testing_max_records is None:
             unit_testing_max_records = len(entry_names)

@@ -235,6 +235,8 @@ class SPICE2Curation(DatasetCuration):
 
         ds = client.get_dataset(dataset_type=dataset_type, dataset_name=dataset_name)
         logger.debug(f"Fetching {dataset_name} from the QCArchive.")
+        ds.fetch_entry_names()
+
         entry_names = ds.entry_names
         if unit_testing_max_records is None:
             unit_testing_max_records = len(entry_names)

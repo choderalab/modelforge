@@ -1,13 +1,12 @@
 from dataclasses import dataclass
 
-from torch._tensor import Tensor
 import torch.nn as nn
 from loguru import logger as log
-from typing import Dict, Type, Callable, Optional, Tuple
+from typing import Dict, Callable, Tuple
 from openff.units import unit
 
 from .models import BaseNeuralNetworkPotential, PairListOutputs
-from .utils import Dense, scatter_softmax, CosineCutoff, NNPInput
+from .utils import Dense, scatter_softmax, NNPInput
 import torch
 import torch.nn.functional as F
 
@@ -198,13 +197,13 @@ class SAKE(BaseNeuralNetworkPotential):
 
         Parameters
         ----------
-        inputs: Dict[str, torch.Tensor]
-            Dictionary containing pairlist information.
+        data: SAKENeuralNetworkInput
+            Dataclass containing atomic properties, embeddings, and pairlist.
 
         Returns
         -------
         Dict[str, torch.Tensor]
-            Dictionary containing scalar and vector representations.
+            Dictionary containing per-atom energy predictions and atomic subsystem indices.
         """
 
         # extract properties from pairlist

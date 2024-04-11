@@ -227,6 +227,7 @@ class NeuralNetworkPotentialFactory:
         nnp_type: Literal["ANI2x", "SchNet", "PaiNN", "SAKE", "PhysNet"],
         nnp_parameters: Optional[Dict[str, Union[int, float]]] = {},
         training_parameters: Dict[str, Any] = {},
+        compile_model: bool = False,
     ) -> Union[Union["ANI2x", "SchNet", "PaiNN", "PhysNet"], "TrainingAdapter"]:
         """
         Creates an NNP instance of the specified type, configured either for training or inference.
@@ -241,6 +242,8 @@ class NeuralNetworkPotentialFactory:
             Parameters specific to the NNP model, by default {}.
         training_parameters : dict, optional
             Parameters for configuring the training, by default {}.
+        compile_model : bool, optional
+            Whether to compile the model, by default False
 
         Returns
         -------
@@ -260,10 +263,22 @@ class NeuralNetworkPotentialFactory:
         def _return_specific_version_of_nnp(use: str, nnp_class):
             if use == "training":
                 nnp_instance = nnp_class(**nnp_parameters)
+
+                nnp_instance = (
+                    torch.compile(nnp_instance, mode="max-autotune")
+                    if compile_model
+                    else nnp_instance
+                )
                 trainer = TrainingAdapter(model=nnp_instance, **training_parameters)
                 return trainer
             elif use == "inference":
-                return nnp_class(**nnp_parameters)
+                nnp_instance = nnp_class(**nnp_parameters)
+                nnp_instance = (
+                    torch.compile(nnp_instance, mode="max-autotune")
+                    if compile_model
+                    else nnp_instance
+                )
+                return nnp_instance
             else:
                 raise ValueError("Unknown NNP type requested.")
 
@@ -607,7 +622,7 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
 
         self._dtype = dtypes[0]
 
-    def _input_checks(self, data: NNPInput):
+    def _input_checks(self, data: NamedTuple):
         """
         Performs input validation checks.
 

@@ -411,3 +411,80 @@ def test_welford():
         assert np.isclose(online_estimator.mean / target_mean, 1.0, rtol=1e-1)
         assert np.isclose(online_estimator.variance / target_variance, 1.0, rtol=1e-1)
         assert np.isclose(online_estimator.stddev / target_stddev, 1.0, rtol=1e-1)
+
+
+def test_torchscript_script():
+    # Convert model to torchscript using torch.jit.script
+    import torch
+
+    # import the models implemented in modelforge, for now SchNet, PaiNN, ANI2x or PhysNet
+    from modelforge.potential import NeuralNetworkPotentialFactory
+    from modelforge.dataset.qm9 import QM9Dataset
+    from modelforge.dataset.dataset import TorchDataModule
+    from modelforge.dataset.utils import RandomRecordSplittingStrategy
+
+    # Set up and prepare dataset
+    data = QM9Dataset()
+    dataset = TorchDataModule(
+        data, batch_size=512, splitting_strategy=RandomRecordSplittingStrategy()
+    )
+
+    dataset.prepare_data(remove_self_energies=True, normalize=False)
+
+    single_batch = next(iter(dataset.train_dataloader()))
+
+    model = NeuralNetworkPotentialFactory.create_nnp("inference", "ANI2x")
+    model = model.to(torch.float32)
+
+    traced_cell = torch.jit.trace(model, (single_batch.nnp_input,))
+    my_script_module = torch.jit.script(model())
+
+
+def test_torchscript_trace():
+    # Convert model to torchscript using torch.jit.trace
+    import torch
+
+    # import the models implemented in modelforge, for now SchNet, PaiNN, ANI2x or PhysNet
+    from modelforge.potential import NeuralNetworkPotentialFactory
+    from modelforge.dataset.qm9 import QM9Dataset
+    from modelforge.dataset.dataset import TorchDataModule
+    from modelforge.dataset.utils import RandomRecordSplittingStrategy
+
+    # Set up and prepare dataset
+    data = QM9Dataset()
+    dataset = TorchDataModule(
+        data, batch_size=512, splitting_strategy=RandomRecordSplittingStrategy()
+    )
+
+    dataset.prepare_data(remove_self_energies=True, normalize=False)
+
+    single_batch = next(iter(dataset.train_dataloader()))
+
+    model = NeuralNetworkPotentialFactory.create_nnp("inference", "ANI2x")
+    model = model.to(torch.float32)
+
+    traced_cell = torch.jit.trace(model, (single_batch.nnp_input,))
+
+
+def test_torchscript_compile():
+    # Compile model using torch.compile
+    import torch
+
+    # import the models implemented in modelforge, for now SchNet, PaiNN, ANI2x or PhysNet
+    from modelforge.potential import NeuralNetworkPotentialFactory
+    from modelforge.dataset.qm9 import QM9Dataset
+    from modelforge.dataset.dataset import TorchDataModule
+    from modelforge.dataset.utils import RandomRecordSplittingStrategy
+
+    # Set up and prepare dataset
+    data = QM9Dataset()
+    dataset = TorchDataModule(
+        data, batch_size=512, splitting_strategy=RandomRecordSplittingStrategy()
+    )
+
+    dataset.prepare_data(remove_self_energies=True, normalize=False)
+
+    single_batch = next(iter(dataset.train_dataloader()))
+
+    model = NeuralNetworkPotentialFactory.create_nnp("inference", "ANI2x")
+    model = model.to(torch.float32)

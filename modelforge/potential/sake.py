@@ -13,7 +13,7 @@ import torch.nn.functional as F
 
 
 class ExpNormalSmearing(torch.nn.Module):
-    def __init__(self, cutoff_lower=0.0, cutoff_upper=5.0, n_rbf=50, trainable=True):
+    def __init__(self, cutoff_lower, cutoff_upper, n_rbf, trainable=True):
         super(ExpNormalSmearing, self).__init__()
         self.cutoff_lower = cutoff_lower
         self.cutoff_upper = cutoff_upper
@@ -117,64 +117,55 @@ class SAKE(BaseNeuralNetworkPotential):
 
     def __init__(
             self,
-            nr_atom_basis: int = 64,
-            nr_interaction_blocks: int = 2,
-            nr_heads: int = 4,
-            radial_basis_module: nn.Module = ExpNormalSmearing(n_rbf=50),
-            cutoff: object = 5 * unit.angstrom,
+            max_Z: int = 100,
+            number_of_atom_features: int = 64,
+            number_of_interaction_modules: int = 6,
+            number_of_spatial_attention_heads: int = 4,
+            number_of_radial_basis_functions: int = 50,
+            cutoff: unit.Quantity = 5.0 * unit.angstrom,
             epsilon: float = 1e-8,
-    ) -> object:
-        """
-        Parameters
-            ----------
-            nr_atom_basis : int
-                Number of features in atomic embeddings. Must be at least the maximum atomic number.
-            nr_interaction_blocks : int
-                Number of interaction blocks.
-            radial_basis_module : torch.Module
-                radial basis functions.
-            nr_heads: int
-                Number of heads for spatial attention.
-            cutoff_module : torch.Module
-                Cutoff function for the radial basis.
-            epsilon : float, optional
-                Stability constant to prevent numerical instabilities (default is 1e-8).
-        """
+    ):
         from .utils import FromAtomToMoleculeReduction
 
         log.debug("Initializing SAKE model.")
         super().__init__(cutoff=cutoff)
         print("self.cutoff", self.calculate_distances_and_pairlist.cutoff)
-        self.nr_interaction_blocks = nr_interaction_blocks
-        self.nr_heads = nr_heads
-        self.radial_basis_module = radial_basis_module
-        self.nr_atom_basis = nr_atom_basis
+        self.nr_interaction_blocks = number_of_interaction_modules
+        self.nr_heads = number_of_spatial_attention_heads
+        self.max_Z = max_Z
+        self.radial_basis_module = ExpNormalSmearing(
+            cutoff_lower=0.0,
+            cutoff_upper=cutoff.magnitude, #TODO: dealing with units correctly?
+            n_rbf=number_of_radial_basis_functions,
+            trainable=True
+        )
 
         self.only_unique_pairs = False  # NOTE: for pairlist
 
-        self.cutoff_module = CosineCutoff(cutoff)
+        self.embedding_in = Dense(max_Z, number_of_atom_features)
         self.energy_layer = nn.Sequential(
-            Dense(self.nr_atom_basis, self.nr_atom_basis, activation=torch.nn.SiLU()),
-            Dense(self.nr_atom_basis, self.nr_atom_basis, activation=torch.nn.SiLU()),
-            Dense(self.nr_atom_basis, 1, activation=None),
+                Dense(number_of_atom_features, number_of_atom_features),
+                nn.SiLU(),
+                Dense(number_of_atom_features, 1),
         )
         self.readout_module = FromAtomToMoleculeReduction()
 
         # initialize the interaction networks
         self.interaction_modules = nn.ModuleList(
-            SAKEInteraction(nr_atom_basis=self.nr_atom_basis,
-                            nr_edge_basis=self.nr_atom_basis,
-                            nr_edge_basis_hidden=self.nr_atom_basis,
-                            nr_atom_basis_hidden=self.nr_atom_basis,
-                            nr_atom_basis_spatial_hidden=self.nr_atom_basis,
-                            nr_atom_basis_spatial=self.nr_atom_basis,
-                            nr_atom_basis_velocity=self.nr_atom_basis,
-                            nr_coefficients=(self.nr_heads * self.nr_atom_basis),
-                            nr_heads=self.nr_heads,
-                            activation=torch.nn.SiLU(),
-                            radial_basis_module=self.radial_basis_module,
-                            cutoff_module=self.cutoff_module,
-                            epsilon=epsilon)
+            SAKEInteraction(
+                nr_atom_basis=number_of_atom_features,
+                nr_edge_basis=number_of_atom_features,
+                nr_edge_basis_hidden=number_of_atom_features,
+                nr_atom_basis_hidden=number_of_atom_features,
+                nr_atom_basis_spatial_hidden=number_of_atom_features,
+                nr_atom_basis_spatial=number_of_atom_features,
+                nr_atom_basis_velocity=number_of_atom_features,
+                nr_coefficients=(self.nr_heads * number_of_atom_features),
+                nr_heads=self.nr_heads,
+                activation=torch.nn.SiLU(),
+                radial_basis_module=self.radial_basis_module,
+                epsilon=epsilon
+            )
             for _ in range(self.nr_interaction_blocks)
         )
 
@@ -185,14 +176,15 @@ class SAKE(BaseNeuralNetworkPotential):
 
         number_of_atoms = data.atomic_numbers.shape[0]
 
+        atomic_embedding = self.embedding_in(F.one_hot(data.atomic_numbers.long(), num_classes=self.max_Z).float())
+
         nnp_input = SAKENeuralNetworkInput(
             pair_indices=pairlist_output.pair_indices,
             number_of_atoms=number_of_atoms,
             positions=data.positions,
             atomic_numbers=data.atomic_numbers,
             atomic_subsystem_indices=data.atomic_subsystem_indices,
-            atomic_embedding=F.one_hot(data.atomic_numbers.long(),
-                                       num_classes=self.nr_atom_basis).float()
+            atomic_embedding=atomic_embedding
         )
 
         return nnp_input
@@ -224,8 +216,6 @@ class SAKE(BaseNeuralNetworkPotential):
             h, x, v = interaction_mod(h, x, v, data.pair_indices)
 
         # Use squeeze to remove dimensions of size 1
-        h = h.squeeze(dim=1)
-
         E_i = self.energy_layer(h).squeeze(1)
 
         return {
@@ -253,7 +243,8 @@ class SAKEInteraction(nn.Module):
                  nr_heads: int,
                  activation: Callable,
                  radial_basis_module: nn.Module,
-                 cutoff_module: nn.Module, epsilon: float):
+                 epsilon: float,
+                 ):
         """
         Parameters
         ----------
@@ -293,7 +284,6 @@ class SAKEInteraction(nn.Module):
         self.nr_heads = nr_heads
         self.epsilon = epsilon
         self.radial_basis_module = radial_basis_module
-        self.cutoff_module = cutoff_module
 
         self.node_mlp = nn.Sequential(
             Dense(self.nr_atom_basis + self.nr_heads * self.nr_edge_basis + self.nr_atom_basis_spatial,
@@ -494,14 +484,8 @@ class SAKEInteraction(nn.Module):
         """
         h_ij_att_weights = self.semantic_attention_mlp(h_ij_edge) - (torch.eq(idx_i, idx_j) * 1e5).unsqueeze(-1)
         expanded_idx_i = idx_i.view(-1, 1).expand_as(h_ij_att_weights)
-        h_ij_att_before_cutoff = scatter_softmax(h_ij_att_weights, expanded_idx_i, dim=0, dim_size=nr_atoms,
+        combined_ij_att = scatter_softmax(h_ij_att_weights, expanded_idx_i, dim=0, dim_size=nr_atoms,
                                                  device=h_ij_edge.device)
-        d_ij_att_weights = self.cutoff_module(d_ij)
-        # p: nr_pairs, h: nr_heads
-        combined_ij_att_prenorm = torch.einsum("ph,p->ph", h_ij_att_before_cutoff, d_ij_att_weights)
-        zeros = torch.zeros((nr_atoms, self.nr_heads), dtype=h_ij_edge.dtype, device=h_ij_edge.device)
-        combined_ij_att = combined_ij_att_prenorm / (
-                zeros.scatter_add(0, expanded_idx_i, combined_ij_att_prenorm))[idx_i]
         # p: nr_pairs, f: nr_edge_basis, h: nr_heads
         return torch.reshape(torch.einsum("pf,ph->pfh", h_ij_edge, combined_ij_att),
                              (len(idx_i), self.nr_edge_basis * self.nr_heads))

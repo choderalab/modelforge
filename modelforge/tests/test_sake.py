@@ -5,8 +5,6 @@ import jax.numpy as jnp
 import pytest
 import torch
 import numpy as onp
-from jax import Array
-import flax
 
 from modelforge.potential.sake import SAKE, SAKEInteraction
 import sake as reference_sake
@@ -238,7 +236,6 @@ def test_make_equivalent_pairlists():
 
 @pytest.mark.parametrize("include_self_pairs", [True, False])
 def test_update_edge_against_reference(include_self_pairs):
-    from modelforge.potential import CosineCutoff
     from modelforge.potential.sake import ExpNormalSmearing
 
     from sake.layers import ContinuousFilterConvolutionWithConcatenation
@@ -579,7 +576,7 @@ def test_sake_model_against_reference():
     for i in range(prepared_methane.pair_indices.shape[1]):
         mask = mask.at[prepared_methane.pair_indices[0, i].item(), prepared_methane.pair_indices[1, i].item()].set(1)
 
-    h = prepared_methane.atomic_embedding.detach().numpy()
+    h = jax.nn.one_hot(prepared_methane.atomic_numbers.detach().numpy(), max_Z)
     x = prepared_methane.positions.detach().numpy()
     variables = ref_sake.init(key, h, x, mask=mask)
 
@@ -622,6 +619,7 @@ def test_sake_model_against_reference():
             1].weight.detach().numpy().T
 
     ref_out = ref_sake.apply(variables, h, x, mask=mask)[0].sum(-2)
+    # ref_out is nan, so we can't compare it to the modelforge output
     mf_out = mf_sake(methane)
 
     # assert torch.allclose(mf_out.E, torch.from_numpy(onp.array(ref_out[0])))

@@ -3,9 +3,38 @@ from typing import List
 from .dataset import HDF5Dataset
 
 
-class ModelDataset(HDF5Dataset):
+class ANI1xDataset(HDF5Dataset):
     """
-    Data class for handling the model data generated for the AlkEthOH dataset.
+    Data class for handling ANI1x data.
+
+    This dataset includes ~5 million density function theory calculations
+    for small organic molecules containing H, C, N, and O.
+    A subset of ~500k are computed with accurate coupled cluster methods.
+
+    References:
+
+    ANI-1x dataset:
+    Smith, J. S.; Nebgen, B.; Lubbers, N.; Isayev, O.; Roitberg, A. E.
+    Less Is More: Sampling Chemical Space with Active Learning.
+    J. Chem. Phys. 2018, 148 (24), 241733.
+    https://doi.org/10.1063/1.5023802
+    https://arxiv.org/abs/1801.09319
+
+    ANI-1ccx dataset:
+    Smith, J. S.; Nebgen, B. T.; Zubatyuk, R.; Lubbers, N.; Devereux, C.; Barros, K.; Tretiak, S.; Isayev, O.; Roitberg, A. E.
+    Approaching Coupled Cluster Accuracy with a General-Purpose Neural Network Potential through Transfer Learning. N
+    at. Commun. 2019, 10 (1), 2903.
+    https://doi.org/10.1038/s41467-019-10827-4
+
+    wB97x/def2-TZVPP data:
+    Zubatyuk, R.; Smith, J. S.; Leszczynski, J.; Isayev, O.
+    Accurate and Transferable Multitask Prediction of Chemical Properties with an Atoms-in-Molecules Neural Network.
+    Sci. Adv. 2019, 5 (8), eaav6490.
+    https://doi.org/10.1126/sciadv.aav6490
+
+
+    Dataset DOI:
+    https://doi.org/10.6084/m9.figshare.c.4712477.v1
 
     Attributes
     ----------
@@ -22,19 +51,26 @@ class ModelDataset(HDF5Dataset):
 
     from modelforge.utils import PropertyNames
 
-    _property_names = PropertyNames(Z="atomic_numbers", R="geometry", E="energy")
+    _property_names = PropertyNames(
+        Z="atomic_numbers",
+        R="geometry",
+        E="wb97x_dz.energy",
+        F="wb97x_dz.forces",
+        Q="wb97x_dz.cm5_charges",
+    )
 
     _available_properties = [
         "geometry",
         "atomic_numbers",
-        "energy",
+        "wb97x_dz.energy",
+        "wb97x_dz.forces",
+        "wb97x_dz.cm5_charges",
     ]  # All properties within the datafile, aside from SMILES/inchi.
 
     def __init__(
         self,
-        dataset_name: str = "ModelDataset",
-        # for_unit_testing: bool = False,
-        data_combination: str = "PURE_MM",
+        dataset_name: str = "ANI1x",
+        for_unit_testing: bool = False,
         local_cache_dir: str = ".",
         force_download: bool = False,
         regenerate_cache: bool = False,
@@ -45,10 +81,9 @@ class ModelDataset(HDF5Dataset):
         Parameters
         ----------
         data_name : str, optional
-            Name of the dataset, by default "ANI2x".
-        data_combination : str, optional
-            The type of data combination to use, by default "PURE_MM"
-            Options, MM_low_temp_correction, PURE_MM, PURE_ML
+            Name of the dataset, by default "ANI1x".
+        for_unit_testing : bool, optional
+            If set to True, a subset of the dataset is used for unit testing purposes; by default False.
         local_cache_dir: str, optional
             Path to the local cache directory, by default ".".
         force_download: bool, optional
@@ -58,20 +93,25 @@ class ModelDataset(HDF5Dataset):
             the data from the hdf5 file; by default False.
         Examples
         --------
-        >>> data = ModelDataset()  # Default dataset
-        >>> test_data = ModelDataset()
+        >>> data = ANI1xDataset()  # Default dataset
+        >>> test_data = ANI2xDataset(for_unit_testing=True)  # Testing subset
         """
 
         _default_properties_of_interest = [
             "geometry",
             "atomic_numbers",
-            "energy",
+            "wb97x_dz.energy",
+            "wb97x_dz.forces",
+            "wb97x_dz.cm5_charges",
         ]  # NOTE: Default values
 
         self._properties_of_interest = _default_properties_of_interest
-        self.dataset_name = f"{dataset_name}_{data_combination}"
+        if for_unit_testing:
+            dataset_name = f"{dataset_name}_subset"
 
-        self.data_combination = data_combination
+        self.dataset_name = dataset_name
+        self.for_unit_testing = for_unit_testing
+
         from openff.units import unit
 
         # these come from the ANI-2x paper generated via linear fittingh of the data
@@ -91,60 +131,41 @@ class ModelDataset(HDF5Dataset):
         # There are 3 files types that need name/checksum defined, of extensions hdf5.gz, hdf5, and npz.
 
         # note, need to change the end of the url to dl=1 instead of dl=0 (the default when you grab the share list), to ensure the same checksum each time we download
-        self.PURE_MM_url = "https://www.dropbox.com/scl/fi/pq6d2px51o29pegi19z7m/PURE_MM.hdf5.gz?rlkey=9tjbdsvthj9f5zfar4zfb9joo&dl=1"
-        self.PURE_ML_url = "https://www.dropbox.com/scl/fi/6mf8recfxd10zf1za9xjq/PURE_ML.hdf5.gz?rlkey=2xvvrcd2nbeiw7ma70hq4nui4&dl=1"
-        self.MM_low_temp_correction_url = "https://www.dropbox.com/scl/fi/h7xowf0v63yszfstsftpc/MM_low_e_correction.hdf5.gz?rlkey=c8u5q212lv2ikre6pukzdakzp&dl=1"
+        self.test_url = "https://www.dropbox.com/scl/fi/rqjc6pcv9jjzoq08hc5ao/ani1x_dataset_n100.hdf5.gz?rlkey=kgg0xvq9aac5sp3or9oh61igj&dl=1"
+        self.full_url = " "
 
-        if self.data_combination == "PURE_MM":
-            url = self.PURE_MM_url
+        if self.for_unit_testing:
+            url = self.test_url
             gz_data_file = {
-                "name": "PURE_MM_dataset.hdf5.gz",
-                "md5": "869441523f826fcc4af7e1ecaca13772",
+                "name": "ani1x_dataset_n100.hdf5.gz",
+                "md5": "51e2491e3c5b7b5a432e2012892cfcbb",
             }
             hdf5_data_file = {
-                "name": "PURE_MM_dataset.hdf5",
-                "md5": "3921bd738d963cc5d26d581faa9bbd36",
+                "name": "ani1x_dataset_n100.hdf5",
+                "md5": "f3c934b79f035ecc3addf88c027f5e46",
             }
-            processed_data_file = {"name": "PURE_MM_dataset_processed.npz", "md5": None}
-
-            logger.info("Using PURE MM dataset")
-
-        elif self.data_combination == "PURE_ML":
-            url = self.PURE_ML_url
-            gz_data_file = {
-                "name": "PURE_ML_dataset.hdf5.gz",
-                "md5": "ff0ab16f4503e2537ed4bb10a0a6f465",
-            }
-
-            hdf5_data_file = {
-                "name": "PURE_ML_dataset.hdf5",
-                "md5": "a968d6ee74a0dbcede25c98aaa7a33e7",
-            }
-
             processed_data_file = {
-                "name": "PURE_ML_dataset_processed.npz",
+                "name": "ani1x_dataset_n100_processed.npz",
                 "md5": None,
             }
 
-            logger.info("Using PURE ML dataset")
-        elif self.data_combination == "MM_low_temp_correction":
-            url = self.MM_low_temp_correction_url
+            logger.info("Using test dataset")
+
+        else:
+            url = self.full_url
             gz_data_file = {
-                "name": "MM_LTC_dataset.hdf5.gz",
-                "md5": "0c7dbc7636afe845f128c57dbc99f581",
+                "name": "ani1x_dataset.hdf5.gz",
+                "md5": "",
             }
 
             hdf5_data_file = {
-                "name": "MM_LTC_dataset.hdf5",
-                "md5": "fb448ea4eaaafaadcce62a2123cb8c1f",
+                "name": "ani1x_dataset.hdf5",
+                "md5": "",
             }
 
-            processed_data_file = {
-                "name": "MM_LTC_dataset_processed.npz",
-                "md5": None,
-            }
+            processed_data_file = {"name": "ani1x_dataset_processed.npz", "md5": None}
 
-            logger.info("Using MM low temperature correction dataset")
+            logger.info("Using full dataset")
 
         # to ensure that that we are consistent in our naming, we need to set all the names and checksums in the HDF5Dataset class constructor
         super().__init__(

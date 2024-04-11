@@ -9,16 +9,16 @@ class SPICE2Curation(DatasetCuration):
     """
     Fetches the SPICE 2 dataset from MOLSSI QCArchive and processes it into a curated hdf5 file.
 
-    The SPICE dataset contains onformations for a diverse set of small molecules,
+    The SPICE dataset contains conformations for a diverse set of small molecules,
     dimers, dipeptides, and solvated amino acids. It includes 15 elements, charged and
     uncharged molecules, and a wide range of covalent and non-covalent interactions.
     It provides both forces and energies calculated at the ωB97M-D3(BJ)/def2-TZVPPD level of theory,
     using Psi4 along with other useful quantities such as multipole moments and bond orders.
 
     This includes the following collections from qcarchive. Collections included in SPICE 1.1.4 are annotated with
-    along with the version used in  SPICE 1.1.4; while the underlying molecules are the same in a given collection,
-    newer versions may have had some calculations redone, e.g., rerun calculations that failed or reru with
-    a patched version Psi4
+    along with the version used in  SPICE 1.1.4; while the underlying molecules are typically the same in a given collection,
+    newer versions may have had some calculations redone, e.g., rerun calculations that failed or rerun with
+    a newer version Psi4
 
       - 'SPICE Solvated Amino Acids Single Points Dataset v1.1'     * (SPICE 1.1.4 at v1.1)
       - 'SPICE Dipeptides Single Points Dataset v1.3'               * (SPICE 1.1.4 at v1.2)
@@ -102,10 +102,6 @@ class SPICE2Curation(DatasetCuration):
                 "u_out": unit.nanometer,
             },
             "dft_total_energy": {
-                "u_in": unit.hartree,
-                "u_out": unit.kilojoule_per_mole,
-            },
-            "dispersion_corrected_dft_total_energy": {
                 "u_in": unit.hartree,
                 "u_out": unit.kilojoule_per_mole,
             },
@@ -237,6 +233,8 @@ class SPICE2Curation(DatasetCuration):
 
         ds = client.get_dataset(dataset_type=dataset_type, dataset_name=dataset_name)
         logger.debug(f"Fetching {dataset_name} from the QCArchive.")
+        ds.fetch_entry_names()
+
         entry_names = ds.entry_names
         if unit_testing_max_records is None:
             unit_testing_max_records = len(entry_names)
@@ -282,7 +280,7 @@ class SPICE2Curation(DatasetCuration):
                         specification_names=[specification_name],
                         force_refetch=force_download,
                     ):
-                        spice_db[record[0]] = record[2]
+                        spice_db[record[0]] = record[2].dict()
                         if pbar is not None:
                             pbar.update(1)
 
@@ -548,7 +546,7 @@ class SPICE2Curation(DatasetCuration):
                 spec_keys = list(spice_db.keys())
 
                 for key in spec_keys:
-                    if spice_db[key].status.value == "complete":
+                    if spice_db[key]["status"].value == "complete":
                         non_error_keys.append(key)
 
             sorted_keys, original_keys, molecule_names = self._sort_keys(non_error_keys)
@@ -619,7 +617,7 @@ class SPICE2Curation(DatasetCuration):
 
                 for key in tqdm(sorted_keys):
                     name = molecule_names[key]
-                    val = spice_db[original_keys[key]].dict()
+                    val = spice_db[original_keys[key]]
 
                     index = self.molecule_names[name]
 

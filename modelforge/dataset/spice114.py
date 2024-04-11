@@ -3,9 +3,25 @@ from typing import List
 from .dataset import HDF5Dataset
 
 
-class ModelDataset(HDF5Dataset):
+class SPICE114Dataset(HDF5Dataset):
     """
-    Data class for handling the model data generated for the AlkEthOH dataset.
+    Data class for handling SPICE 1.1.4 dataset.
+
+    The SPICE dataset contains 1.1 million conformations for a diverse set of small molecules,
+    dimers, dipeptides, and solvated amino acids. It includes 15 elements, charged and
+    uncharged molecules, and a wide range of covalent and non-covalent interactions.
+    It provides both forces and energies calculated at the ωB97M-D3(BJ)/def2-TZVPPD level of theory,
+    using Psi4 1.4.1 along with other useful quantities such as multipole moments and bond orders.
+
+    Reference:
+    Eastman, P., Behara, P.K., Dotson, D.L. et al. SPICE,
+    A Dataset of Drug-like Molecules and Peptides for Training Machine Learning Potentials.
+    Sci Data 10, 11 (2023). https://doi.org/10.1038/s41597-022-01882-6
+
+    Dataset DOI:
+    https://doi.org/10.5281/zenodo.8222043
+
+
 
     Attributes
     ----------
@@ -22,33 +38,46 @@ class ModelDataset(HDF5Dataset):
 
     from modelforge.utils import PropertyNames
 
-    _property_names = PropertyNames(Z="atomic_numbers", R="geometry", E="energy")
+    _property_names = PropertyNames(
+        Z="atomic_numbers",
+        R="geometry",
+        E="dft_total_energy",
+        F="dft_total_force",
+        Q="mbis_charges",
+    )
 
     _available_properties = [
         "geometry",
         "atomic_numbers",
-        "energy",
+        "dft_total_energy",
+        "dft_total_force",
+        "mbis_charges",
+        "mbis_multipoles",
+        "mbis_octopoles",
+        "formation_energy",
+        "scf_dipole",
+        "scf_quadrupole",
+        "total_charge",
+        "reference_energy",
     ]  # All properties within the datafile, aside from SMILES/inchi.
 
     def __init__(
         self,
-        dataset_name: str = "ModelDataset",
-        # for_unit_testing: bool = False,
-        data_combination: str = "PURE_MM",
+        dataset_name: str = "SPICE114",
+        for_unit_testing: bool = False,
         local_cache_dir: str = ".",
         force_download: bool = False,
         regenerate_cache: bool = False,
     ) -> None:
         """
-        Initialize the ANI2xDataset class.
+        Initialize the SPICE2Dataset class.
 
         Parameters
         ----------
         data_name : str, optional
-            Name of the dataset, by default "ANI2x".
-        data_combination : str, optional
-            The type of data combination to use, by default "PURE_MM"
-            Options, MM_low_temp_correction, PURE_MM, PURE_ML
+            Name of the dataset, by default "SPICE114".
+        for_unit_testing : bool, optional
+            If set to True, a subset of the dataset is used for unit testing purposes; by default False.
         local_cache_dir: str, optional
             Path to the local cache directory, by default ".".
         force_download: bool, optional
@@ -58,32 +87,57 @@ class ModelDataset(HDF5Dataset):
             the data from the hdf5 file; by default False.
         Examples
         --------
-        >>> data = ModelDataset()  # Default dataset
-        >>> test_data = ModelDataset()
+        >>> data = SPICE2Dataset()  # Default dataset
+        >>> test_data = SPICE2Dataset(for_unit_testing=True)  # Testing subset
         """
 
         _default_properties_of_interest = [
             "geometry",
             "atomic_numbers",
-            "energy",
+            "dft_total_energy",
+            "dft_total_force",
+            "mbis_charges",
         ]  # NOTE: Default values
 
         self._properties_of_interest = _default_properties_of_interest
-        self.dataset_name = f"{dataset_name}_{data_combination}"
+        if for_unit_testing:
+            dataset_name = f"{dataset_name}_subset"
 
-        self.data_combination = data_combination
+        self.dataset_name = dataset_name
+        self.for_unit_testing = for_unit_testing
+
         from openff.units import unit
 
-        # these come from the ANI-2x paper generated via linear fittingh of the data
-        # https://github.com/isayev/ASE_ANI/blob/master/ani_models/ani-2x_8x/sae_linfit.dat
+        # SPICE provides reference values that depend upon charge, as charged molecules are included in the dataset.
+        # The reference_energy (i.e., sum of the value of isolated atoms with appropriate charge considerations)
+        # are included in the dataset, along with the formation_energy, which is the difference between
+        # the dft_total_energy and the reference_energy.
+
+        # To be able to use the dataset for training in a consistent way with the ANI datasets, we will only consider
+        # the ase values for the uncharged isolated atoms, if available. Ions will use the values Ca 2+, K 1+, Li 1+, Mg 2+, Na 1+.
+        # See spice_2_curation.py for more details.
+
+        # We will need to address this further later to see how we best want to handle this; the ASE are just meant to bring everything
+        # roughly to the same scale, and values do not vary substantially by charge state.
+
+        # Reference energies, in hartrees, computed with Psi4 1.5 wB97M-D3BJ/def2-TZVPPD.
+
         self._ase = {
-            "H": -0.5978583943827134 * unit.hartree,
-            "C": -38.08933878049795 * unit.hartree,
-            "N": -54.711968298621066 * unit.hartree,
-            "O": -75.19106774742086 * unit.hartree,
-            "S": -398.1577125334925 * unit.hartree,
-            "F": -99.80348506781634 * unit.hartree,
-            "Cl": -460.1681939421027 * unit.hartree,
+            "Br": -2574.1167240829964 * unit.hartree,
+            "C": -37.87264507233593 * unit.hartree,
+            "Ca": -676.9528465198214 * unit.hartree,  # 2+
+            "Cl": -460.1988762285739 * unit.hartree,
+            "F": -99.78611622985483 * unit.hartree,
+            "H": -0.498760510048753 * unit.hartree,
+            "I": -297.76228914445625 * unit.hartree,
+            "K": -599.8025677513111 * unit.hartree,  # 1+
+            "Li": -7.285254714046546 * unit.hartree,  # 1+
+            "Mg": -199.2688420040449 * unit.hartree,  # 2+
+            "N": -54.62327513368922 * unit.hartree,
+            "Na": -162.11366478783253 * unit.hartree,  # 1+
+            "O": -75.11317840410095 * unit.hartree,
+            "P": -341.3059197024934 * unit.hartree,
+            "S": -398.1599636677874 * unit.hartree,
         }
         from loguru import logger
 
@@ -91,60 +145,45 @@ class ModelDataset(HDF5Dataset):
         # There are 3 files types that need name/checksum defined, of extensions hdf5.gz, hdf5, and npz.
 
         # note, need to change the end of the url to dl=1 instead of dl=0 (the default when you grab the share list), to ensure the same checksum each time we download
-        self.PURE_MM_url = "https://www.dropbox.com/scl/fi/pq6d2px51o29pegi19z7m/PURE_MM.hdf5.gz?rlkey=9tjbdsvthj9f5zfar4zfb9joo&dl=1"
-        self.PURE_ML_url = "https://www.dropbox.com/scl/fi/6mf8recfxd10zf1za9xjq/PURE_ML.hdf5.gz?rlkey=2xvvrcd2nbeiw7ma70hq4nui4&dl=1"
-        self.MM_low_temp_correction_url = "https://www.dropbox.com/scl/fi/h7xowf0v63yszfstsftpc/MM_low_e_correction.hdf5.gz?rlkey=c8u5q212lv2ikre6pukzdakzp&dl=1"
+        self.test_url = "https://www.dropbox.com/scl/fi/16g7n0f7qgzjhi02g3qce/spice_114_dataset_n100.hdf5.gz?rlkey=gyyc1cd3u8p64icpb450y44qv&dl=1"
+        self.full_url = " "
 
-        if self.data_combination == "PURE_MM":
-            url = self.PURE_MM_url
+        if self.for_unit_testing:
+            url = self.test_url
             gz_data_file = {
-                "name": "PURE_MM_dataset.hdf5.gz",
-                "md5": "869441523f826fcc4af7e1ecaca13772",
+                "name": "SPICE114_dataset_n100.hdf5.gz",
+                "md5": "ee7406aaf587340190e90e365ba9ba7b",
             }
             hdf5_data_file = {
-                "name": "PURE_MM_dataset.hdf5",
-                "md5": "3921bd738d963cc5d26d581faa9bbd36",
+                "name": "SPICE114_dataset_n100.hdf5",
+                "md5": "88bd3fca0809ca47339c52edda155d6d",
             }
-            processed_data_file = {"name": "PURE_MM_dataset_processed.npz", "md5": None}
-
-            logger.info("Using PURE MM dataset")
-
-        elif self.data_combination == "PURE_ML":
-            url = self.PURE_ML_url
-            gz_data_file = {
-                "name": "PURE_ML_dataset.hdf5.gz",
-                "md5": "ff0ab16f4503e2537ed4bb10a0a6f465",
-            }
-
-            hdf5_data_file = {
-                "name": "PURE_ML_dataset.hdf5",
-                "md5": "a968d6ee74a0dbcede25c98aaa7a33e7",
-            }
-
+            # npz file checksums may vary with different versions of python/numpy
             processed_data_file = {
-                "name": "PURE_ML_dataset_processed.npz",
+                "name": "SPICE114_dataset_n100_processed.npz",
                 "md5": None,
             }
 
-            logger.info("Using PURE ML dataset")
-        elif self.data_combination == "MM_low_temp_correction":
-            url = self.MM_low_temp_correction_url
+            logger.info("Using test dataset")
+
+        else:
+            url = self.full_url
             gz_data_file = {
-                "name": "MM_LTC_dataset.hdf5.gz",
-                "md5": "0c7dbc7636afe845f128c57dbc99f581",
+                "name": "SPICE114_dataset.hdf5.gz",
+                "md5": "",
             }
 
             hdf5_data_file = {
-                "name": "MM_LTC_dataset.hdf5",
-                "md5": "fb448ea4eaaafaadcce62a2123cb8c1f",
+                "name": "SPICE114_dataset.hdf5",
+                "md5": "",
             }
 
             processed_data_file = {
-                "name": "MM_LTC_dataset_processed.npz",
+                "name": "SPICE114_dataset_processed.npz",
                 "md5": None,
             }
 
-            logger.info("Using MM low temperature correction dataset")
+            logger.info("Using full dataset")
 
         # to ensure that that we are consistent in our naming, we need to set all the names and checksums in the HDF5Dataset class constructor
         super().__init__(

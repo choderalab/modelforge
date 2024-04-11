@@ -222,37 +222,41 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none):
     x = torch.from_numpy(onp.array(x_jax))
 
     variables = ref_sake_interaction.init(init_key, h_jax, x_jax, v_jax, mask)
-
-    variables["params"]["edge_model"]["mlp_in"]["kernel"] = mf_sake_block.edge_mlp_in.weight.detach().numpy().T
-    variables["params"]["edge_model"]["mlp_in"]["bias"] = mf_sake_block.edge_mlp_in.bias.detach().numpy().T
-    variables["params"]["edge_model"]["mlp_out"]["layers_0"]["kernel"] = mf_sake_block.edge_mlp_out[
-        0].weight.detach().numpy().T
-    variables["params"]["edge_model"]["mlp_out"]["layers_0"]["bias"] = mf_sake_block.edge_mlp_out[
+    layer = variables["params"]
+    layer["edge_model"]["kernel"]["betas"] = mf_sake_block.radial_basis_module.betas.detach().numpy().T
+    layer["edge_model"]["kernel"]["means"] = mf_sake_block.radial_basis_module.means.detach().numpy().T
+    layer["edge_model"]["mlp_in"]["bias"] = mf_sake_block.edge_mlp_in.bias.detach().numpy().T
+    layer["edge_model"]["mlp_in"]["kernel"] = mf_sake_block.edge_mlp_in.weight.detach().numpy().T
+    layer["edge_model"]["mlp_out"]["layers_0"]["bias"] = mf_sake_block.edge_mlp_out[
         0].bias.detach().numpy().T
-    variables["params"]["edge_model"]["mlp_out"]["layers_2"]["kernel"] = mf_sake_block.edge_mlp_out[
-        1].weight.detach().numpy().T
-    variables["params"]["edge_model"]["mlp_out"]["layers_2"]["bias"] = mf_sake_block.edge_mlp_out[
-        1].bias.detach().numpy().T
-    variables['params']["edge_model"]["kernel"]["means"] = mf_sake_block.radial_basis_module.means.detach().numpy().T
-    variables['params']["edge_model"]["kernel"]["betas"] = mf_sake_block.radial_basis_module.betas.detach().numpy().T
-    variables["params"]["node_mlp"]["layers_0"]["kernel"] = mf_sake_block.node_mlp[0].weight.detach().numpy().T
-    variables["params"]["node_mlp"]["layers_2"]["kernel"] = mf_sake_block.node_mlp[1].weight.detach().numpy().T
-    if not v_is_none:
-        variables["params"]["velocity_mlp"]["layers_0"]["kernel"] = mf_sake_block.velocity_mlp[
-            0].weight.detach().numpy().T
-        variables["params"]["velocity_mlp"]["layers_0"]["bias"] = mf_sake_block.velocity_mlp[0].bias.detach().numpy().T
-        variables["params"]["velocity_mlp"]["layers_2"]["kernel"] = mf_sake_block.velocity_mlp[
-            1].weight.detach().numpy().T
-    variables["params"]["semantic_attention_mlp"]["layers_0"][
-        "kernel"] = mf_sake_block.semantic_attention_mlp.weight.detach().numpy().T
-    variables["params"]["semantic_attention_mlp"]["layers_0"][
-        "bias"] = mf_sake_block.semantic_attention_mlp.bias.detach().numpy().T
-    variables["params"]["v_mixing"]["kernel"] = mf_sake_block.v_mixing_mlp.weight.detach().numpy().T
-    variables["params"]["x_mixing"]["layers_0"]["kernel"] = mf_sake_block.x_mixing_mlp.weight.detach().numpy().T
-    variables["params"]["post_norm_mlp"]["layers_0"]["kernel"] = mf_sake_block.post_norm_mlp[
+    layer["edge_model"]["mlp_out"]["layers_0"]["kernel"] = mf_sake_block.edge_mlp_out[
         0].weight.detach().numpy().T
-    variables["params"]["post_norm_mlp"]["layers_2"]["kernel"] = mf_sake_block.post_norm_mlp[
+    layer["edge_model"]["mlp_out"]["layers_2"]["bias"] = mf_sake_block.edge_mlp_out[
+        1].bias.detach().numpy().T
+    layer["edge_model"]["mlp_out"]["layers_2"]["kernel"] = mf_sake_block.edge_mlp_out[
         1].weight.detach().numpy().T
+    layer["node_mlp"]["layers_0"]["bias"] = mf_sake_block.node_mlp[0].bias.detach().numpy().T
+    layer["node_mlp"]["layers_0"]["kernel"] = mf_sake_block.node_mlp[0].weight.detach().numpy().T
+    layer["node_mlp"]["layers_2"]["bias"] = mf_sake_block.node_mlp[1].bias.detach().numpy().T
+    layer["node_mlp"]["layers_2"]["kernel"] = mf_sake_block.node_mlp[1].weight.detach().numpy().T
+    layer["post_norm_mlp"]["layers_0"]["bias"] = mf_sake_block.post_norm_mlp[
+        0].bias.detach().numpy().T
+    layer["post_norm_mlp"]["layers_0"]["kernel"] = mf_sake_block.post_norm_mlp[
+        0].weight.detach().numpy().T
+    layer["post_norm_mlp"]["layers_2"]["bias"] = mf_sake_block.post_norm_mlp[
+        1].bias.detach().numpy().T
+    layer["post_norm_mlp"]["layers_2"]["kernel"] = mf_sake_block.post_norm_mlp[
+        1].weight.detach().numpy().T
+    layer["semantic_attention_mlp"]["layers_0"][
+        "bias"] = mf_sake_block.semantic_attention_mlp.bias.detach().numpy().T
+    layer["semantic_attention_mlp"]["layers_0"][
+        "kernel"] = mf_sake_block.semantic_attention_mlp.weight.detach().numpy().T
+    if not v_is_none:
+        layer["velocity_mlp"]["layers_0"]["kernel"] = mf_sake_block.velocity_mlp[0].weight.detach().numpy().T
+        layer["velocity_mlp"]["layers_0"]["bias"] = mf_sake_block.velocity_mlp[0].bias.detach().numpy().T
+        layer["velocity_mlp"]["layers_2"]["kernel"] = mf_sake_block.velocity_mlp[1].weight.detach().numpy().T
+    layer["v_mixing"]["kernel"] = mf_sake_block.v_mixing_mlp.weight.detach().numpy().T
+    layer["x_mixing"]["layers_0"]["kernel"] = mf_sake_block.x_mixing_mlp.weight.detach().numpy().T
 
     mf_h, mf_x, mf_v = mf_sake_block(h, x, v, pairlist)
 
@@ -328,36 +332,42 @@ def test_sake_model_against_reference():
     layers = ((layer_name, variables["params"][layer_name]) for layer_name in variables["params"].keys() if
               layer_name.startswith("d"))
     for (layer_name, layer), mf_sake_block in zip(layers, mf_sake.interaction_modules.children()):
-        layer["edge_model"]["mlp_in"]["kernel"] = mf_sake_block.edge_mlp_in.weight.detach().numpy().T
+        layer["edge_model"]["kernel"]["betas"] = mf_sake_block.radial_basis_module.betas.detach().numpy().T
+        layer["edge_model"]["kernel"]["means"] = mf_sake_block.radial_basis_module.means.detach().numpy().T
         layer["edge_model"]["mlp_in"]["bias"] = mf_sake_block.edge_mlp_in.bias.detach().numpy().T
-        layer["edge_model"]["mlp_out"]["layers_0"]["kernel"] = mf_sake_block.edge_mlp_out[
-            0].weight.detach().numpy().T
+        layer["edge_model"]["mlp_in"]["kernel"] = mf_sake_block.edge_mlp_in.weight.detach().numpy().T
         layer["edge_model"]["mlp_out"]["layers_0"]["bias"] = mf_sake_block.edge_mlp_out[
             0].bias.detach().numpy().T
-        layer["edge_model"]["mlp_out"]["layers_2"]["kernel"] = mf_sake_block.edge_mlp_out[
-            1].weight.detach().numpy().T
+        layer["edge_model"]["mlp_out"]["layers_0"]["kernel"] = mf_sake_block.edge_mlp_out[
+            0].weight.detach().numpy().T
         layer["edge_model"]["mlp_out"]["layers_2"]["bias"] = mf_sake_block.edge_mlp_out[
             1].bias.detach().numpy().T
-        layer["edge_model"]["kernel"]["means"] = mf_sake_block.radial_basis_module.means.detach().numpy().T
-        layer["edge_model"]["kernel"]["betas"] = mf_sake_block.radial_basis_module.betas.detach().numpy().T
+        layer["edge_model"]["mlp_out"]["layers_2"]["kernel"] = mf_sake_block.edge_mlp_out[
+            1].weight.detach().numpy().T
+        layer["node_mlp"]["layers_0"]["bias"] = mf_sake_block.node_mlp[0].bias.detach().numpy().T
         layer["node_mlp"]["layers_0"]["kernel"] = mf_sake_block.node_mlp[0].weight.detach().numpy().T
+        layer["node_mlp"]["layers_2"]["bias"] = mf_sake_block.node_mlp[1].bias.detach().numpy().T
         layer["node_mlp"]["layers_2"]["kernel"] = mf_sake_block.node_mlp[1].weight.detach().numpy().T
+        layer["post_norm_mlp"]["layers_0"]["bias"] = mf_sake_block.post_norm_mlp[
+            0].bias.detach().numpy().T
+        layer["post_norm_mlp"]["layers_0"]["kernel"] = mf_sake_block.post_norm_mlp[
+            0].weight.detach().numpy().T
+        layer["post_norm_mlp"]["layers_2"]["bias"] = mf_sake_block.post_norm_mlp[
+            1].bias.detach().numpy().T
+        layer["post_norm_mlp"]["layers_2"]["kernel"] = mf_sake_block.post_norm_mlp[
+            1].weight.detach().numpy().T
+        layer["semantic_attention_mlp"]["layers_0"][
+            "bias"] = mf_sake_block.semantic_attention_mlp.bias.detach().numpy().T
+        layer["semantic_attention_mlp"]["layers_0"][
+            "kernel"] = mf_sake_block.semantic_attention_mlp.weight.detach().numpy().T
         if layer_name != "d0":
             layer["velocity_mlp"]["layers_0"]["kernel"] = mf_sake_block.velocity_mlp[0].weight.detach().numpy().T
             layer["velocity_mlp"]["layers_0"]["bias"] = mf_sake_block.velocity_mlp[0].bias.detach().numpy().T
             layer["velocity_mlp"]["layers_2"]["kernel"] = mf_sake_block.velocity_mlp[1].weight.detach().numpy().T
-        layer["semantic_attention_mlp"]["layers_0"][
-            "kernel"] = mf_sake_block.semantic_attention_mlp.weight.detach().numpy().T
-        layer["semantic_attention_mlp"]["layers_0"][
-            "bias"] = mf_sake_block.semantic_attention_mlp.bias.detach().numpy().T
         layer["v_mixing"]["kernel"] = mf_sake_block.v_mixing_mlp.weight.detach().numpy().T
         layer["x_mixing"]["layers_0"]["kernel"] = mf_sake_block.x_mixing_mlp.weight.detach().numpy().T
-        layer["post_norm_mlp"]["layers_0"]["kernel"] = mf_sake_block.post_norm_mlp[
-            0].weight.detach().numpy().T
-        layer["post_norm_mlp"]["layers_2"]["kernel"] = mf_sake_block.post_norm_mlp[
-            1].weight.detach().numpy().T
 
-    print("number of leaves", len(jax.tree_util.tree_leaves(variables)))
+    # jax.tree_util.tree_map_with_path(lambda path, leaf: print(path, leaf.shape), variables)
 
     mf_out = mf_sake(methane)
     ref_out = ref_sake.apply(variables, h, x, mask=mask)[0].sum(-2)

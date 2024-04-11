@@ -212,7 +212,7 @@ class SAKE(BaseNeuralNetworkPotential):
         x = data.positions
         v = torch.zeros_like(x)
 
-        for i, interaction_mod in enumerate(self.interaction_modules):
+        for interaction_mod in self.interaction_modules:
             h, x, v = interaction_mod(h, x, v, data.pair_indices)
 
         # Use squeeze to remove dimensions of size 1

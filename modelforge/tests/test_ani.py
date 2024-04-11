@@ -84,6 +84,9 @@ def setup_two_methanes():
 
 
 def test_torchani_ani(setup_two_methanes):
+    # Test torchani ANI implementation
+    # Test forward pass and backpropagation through network
+
     import torch
     import torchani
 
@@ -96,16 +99,21 @@ def test_torchani_ani(setup_two_methanes):
 
 
 def test_modelforge_ani(setup_two_methanes):
+    # Test modelforge ANI implementation
+    # Test forward pass and backpropagation through network
     from modelforge.potential.ani import ANI2x as mf_ANI2x
+    import torch
 
     _, _, _, mf_input = setup_two_methanes
     model = mf_ANI2x()
-    model(mf_input)
+    energy = model(mf_input)
+    derivative = torch.autograd.grad(energy.E.sum(), mf_input.positions)[0]
+    force = -derivative
 
 
 def test_compare_radial_symmetry_features():
     # Compare the ANI radial symmetry function
-    # agsint the output of the Modelforge radial symmetry function
+    # to the output of the modelforge radial symmetry function
     import torch
     from modelforge.potential.utils import AniRadialSymmetryFunction, CosineCutoff
     from openff.units import unit

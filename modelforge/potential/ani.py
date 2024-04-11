@@ -1,17 +1,18 @@
-import torch
-from torch import nn
-from loguru import logger as log
-from modelforge.potential.models import BaseNeuralNetworkPotential
-from typing import Dict, Tuple
-from openff.units import unit
-from modelforge.utils.prop import SpeciesAEV, SpeciesEnergies
-from typing import TYPE_CHECKING, NamedTuple
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Dict, NamedTuple, Tuple
 
+import torch
+from loguru import logger as log
+from openff.units import unit
+from torch import nn
+
+from modelforge.potential.models import BaseNeuralNetworkPotential
+from modelforge.utils.prop import SpeciesAEV
 
 if TYPE_CHECKING:
-    from .models import PairListOutputs
     from modelforge.potential.utils import NNPInput
+
+    from .models import PairListOutputs
 
 
 def triu_index(num_species: int) -> torch.Tensor:
@@ -24,6 +25,16 @@ def triu_index(num_species: int) -> torch.Tensor:
 
 
 from modelforge.potential.utils import NeuralNetworkData
+
+ATOMIC_NUMBER_TO_INDEX_MAP = {
+    1: 0,  # H
+    6: 1,  # C
+    7: 2,  # N
+    8: 3,  # O
+    9: 4,  # F
+    16: 5,  # S
+    17: 6,  # Cl
+}
 
 
 @dataclass
@@ -79,14 +90,22 @@ class AniNeuralNetworkData(NeuralNetworkData):
     atom_index: torch.Tensor
 
 
+from openff.units import unit
+
+
 class ANIRepresentation(nn.Module):
     # calculate the atomic environment vectors
     # used for the ANI architecture of NNPs
 
     def __init__(
         self,
-        radial_cutoff: unit.Quantity,
-        angular_cutoff: unit.Quantity,
+        radial_max_distance: unit.Quantity,
+        radial_min_distanc: unit.Quantity,
+        number_of_radial_basis_functions: int,
+        angular_max_distance: unit.Quantity,
+        angular_min_distance: unit.Quantity,
+        angular_dist_divisions: int,
+        angle_sections: int,
         nr_of_supported_elements: int = 7,
     ):
         # radial symmetry functions
@@ -94,15 +113,19 @@ class ANIRepresentation(nn.Module):
         super().__init__()
         from modelforge.potential.utils import CosineCutoff
 
-        self.radial_cutoff = radial_cutoff
-        self.angular_cutoff = angular_cutoff
+        self.angular_max_distance = angular_max_distance
         self.nr_of_supported_elements = nr_of_supported_elements
-        self.cutoff_module = CosineCutoff(radial_cutoff)
+
+        self.cutoff_module = CosineCutoff(radial_max_distance)
+
         self.radial_symmetry_functions = self._setup_radial_symmetry_functions(
-            self.radial_cutoff
+            radial_max_distance, radial_min_distanc, number_of_radial_basis_functions
         )
         self.angular_symmetry_functions = self._setup_angular_symmetry_functions(
-            self.angular_cutoff
+            angular_max_distance,
+            angular_min_distance,
+            angular_dist_divisions,
+            angle_sections,
         )
         # generate indices
         from modelforge.potential.utils import triple_by_molecule
@@ -110,13 +133,13 @@ class ANIRepresentation(nn.Module):
         self.triple_by_molecule = triple_by_molecule
         self.register_buffer("triu_index", triu_index(self.nr_of_supported_elements))
 
-    def _setup_radial_symmetry_functions(self, max_distance: unit.Quantity):
-        from openff.units import unit
+    def _setup_radial_symmetry_functions(
+        self,
+        max_distance: unit.Quantity,
+        min_distance: unit.Quantity,
+        number_of_radial_basis_functions: int,
+    ):
         from .utils import AniRadialSymmetryFunction
-
-        # ANI constants
-        min_distance = 0.8 * unit.angstrom
-        number_of_radial_basis_functions = 16
 
         radial_symmetry_function = AniRadialSymmetryFunction(
             number_of_radial_basis_functions,
@@ -126,19 +149,19 @@ class ANIRepresentation(nn.Module):
         )
         return radial_symmetry_function
 
-    def _setup_angular_symmetry_functions(self, angular_cutoff: unit.Quantity):
+    def _setup_angular_symmetry_functions(
+        self,
+        max_distance: unit.Quantity,
+        min_distance: unit.Quantity,
+        angular_dist_divisions,
+        angle_sections,
+    ):
         from .utils import AngularSymmetryFunction
-        from openff.units import unit
-
-        # ANI constants for angular features
-        angular_start = 0.8 * unit.angstrom
-        angular_dist_divisions = 8
-        angle_sections = 4
 
         # set up modelforge angular features
         return AngularSymmetryFunction(
-            angular_cutoff,
-            angular_start,
+            max_distance,
+            min_distance,
             angular_dist_divisions,
             angle_sections,
             dtype=torch.float32,
@@ -219,9 +242,9 @@ class ANIRepresentation(nn.Module):
 
     def _postprocess_radial_aev(
         self,
-        radial_feature_vector: Dict[str, torch.Tensor],
+        radial_feature_vector: torch.Tensor,
         data: AniNeuralNetworkData,
-    ):
+    ) -> Dict[str, torch.tensor]:
 
         radial_feature_vector = radial_feature_vector.squeeze(1)
         number_of_atoms = data.number_of_atoms
@@ -246,7 +269,9 @@ class ANIRepresentation(nn.Module):
         # compute new neighbors with radial_cutoff
         distances = data.d_ij.T.flatten()
         even_closer_indices = (
-            (distances <= self.angular_cutoff.to(unit.nanometer).m).nonzero().flatten()
+            (distances <= self.angular_max_distance.to(unit.nanometer).m)
+            .nonzero()
+            .flatten()
         )
         r_ij = data.r_ij
         atom_index12 = atom_index12.index_select(1, even_closer_indices)
@@ -405,8 +430,13 @@ class ANI2x(BaseNeuralNetworkPotential):
 
     def __init__(
         self,
-        radial_cutoff: unit.Quantity = 5.1 * unit.angstrom,
-        angular_cutoff: unit.Quantity = 3.5 * unit.angstrom,
+        radial_max_distance: unit.Quantity = 5.1 * unit.angstrom,
+        radial_min_distanc: unit.Quantity = 0.8 * unit.angstrom,
+        number_of_radial_basis_functions: int = 16,
+        angular_max_distance: unit.Quantity = 3.5 * unit.angstrom,
+        angular_min_distance: unit.Quantity = 0.8 * unit.angstrom,
+        angular_dist_divisions: int = 8,
+        angle_sections: int = 4,
     ) -> None:
         """
         Initialize the ANi NNP architeture.
@@ -420,12 +450,18 @@ class ANI2x(BaseNeuralNetworkPotential):
 
         log.debug("Initializing ANI model.")
         super().__init__(
-            cutoff=radial_cutoff,
+            cutoff=radial_max_distance,
         )
 
         # Initialize representation block
         self.ani_representation_module = ANIRepresentation(
-            radial_cutoff, angular_cutoff
+            radial_max_distance,
+            radial_min_distanc,
+            number_of_radial_basis_functions,
+            angular_max_distance,
+            angular_min_distance,
+            angular_dist_divisions,
+            angle_sections,
         )
         # The length of radial aev
         self.radial_length = (
@@ -448,7 +484,6 @@ class ANI2x(BaseNeuralNetworkPotential):
         # ----- ATOMIC NUMBER LOOKUP --------
         # Create a tensor for direct lookup. The size of this tensor will be
         # # the max atomic number in map. Initialize with a default value (e.g., -1 for not found).
-        from modelforge.potential.utils import ATOMIC_NUMBER_TO_INDEX_MAP
 
         max_atomic_number = max(ATOMIC_NUMBER_TO_INDEX_MAP.keys())
         lookup_tensor = torch.full((max_atomic_number + 1,), -1, dtype=torch.long)
@@ -458,6 +493,23 @@ class ANI2x(BaseNeuralNetworkPotential):
             lookup_tensor[atomic_number] = index
 
         self.register_buffer("lookup_tensor", lookup_tensor)
+
+    def _config_prior(self):
+        log.info("Configuring ANI2x model hyperparameter prior distribution")
+        from ray import tune
+
+        from modelforge.train.utils import shared_config_prior
+
+        prior = {
+            "radial_max_distance": tune.uniform(5, 10),
+            "radial_min_distance": tune.uniform(0.6, 1.4),
+            "number_of_radial_basis_functions": tune.randint(12, 20),
+            "angular_max_distance": tune.uniform(2.5, 4.5),
+            "angular_min_distance": tune.uniform(0.6, 1.4),
+            "angle_sections": tune.randint(3, 8),
+        }
+        prior.update(shared_config_prior())
+        return prior
 
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"

@@ -133,7 +133,7 @@ def test_different_properties_of_interest(dataset):
     dataset = factory.create_dataset(data)
     raw_data_item = dataset[0]
     assert isinstance(raw_data_item, dict)
-    assert len(raw_data_item) == 7
+    assert len(raw_data_item) == 6 # 6 properties are returned
 
     data.properties_of_interest = ["internal_energy_at_0K", "geometry"]
     assert data.properties_of_interest == [

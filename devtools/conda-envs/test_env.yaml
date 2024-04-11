@@ -8,14 +8,12 @@ dependencies:
   - python
   - pip
   - h5py
-  - requests
   - tqdm
   - qcelemental=0.25.1
   - qcportal>=0.50
   - pytorch>=2.1
   - loguru
-  - gdown>=5.0.0
-  - lightning=2.0.8
+  - lightning>=2.0.8
   - tensorboard
   - torchvision
   - openff-units
@@ -23,19 +21,20 @@ dependencies:
   - rdkit
   - retry
   - sqlitedict
+  - pytorch_scatter
 
   # Testing
   - pytest>=2.1
   - pytest-cov
   - codecov
-  - qcelemental=0.25.1
-  - qcportal>=0.50
   - requests
   - jax
   - flax
   - versioneer
+  - ray-data
+  - ray-train
+  - ray-tune
   - torchani
-  - pytorch_scatter
 
   # pip installs
   - pip:

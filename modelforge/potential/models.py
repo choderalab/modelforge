@@ -1,25 +1,23 @@
-from typing import Dict, Tuple, Any, NamedTuple, TYPE_CHECKING, Type
+from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING, Any, Dict, NamedTuple, Tuple, Type
 
 import lightning as pl
 import torch
 import torch.nn as nn
-from torch.optim import AdamW
-from torch.nn import functional as F
-
 from loguru import logger as log
-
-from abc import ABC, abstractmethod
-from modelforge.potential.utils import (
-    AtomicSelfEnergies,
-    NNPInput,
-    BatchData,
-)
 from openff.units import unit
+from torch.nn import functional as F
+from torch.optim import AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
+from modelforge.potential.utils import AtomicSelfEnergies, BatchData, NNPInput
 
 if TYPE_CHECKING:
     from modelforge.dataset.dataset import DatasetStatistics
+    from modelforge.potential.ani import ANI2x, AniNeuralNetworkData
+    from modelforge.potential.painn import PaiNN, PaiNNNeuralNetworkData
+    from modelforge.potential.physnet import PhysNet, PhysNetNeuralNetworkData
+    from modelforge.potential.schnet import SchNet, SchnetNeuralNetworkData
 
 
 # Define NamedTuple for the outputs of Pairlist and Neighborlist forward method
@@ -207,7 +205,7 @@ class Neighborlist(Pairlist):
         )
 
 
-from typing import Callable, Optional, Union, Literal
+from typing import Callable, Literal, Optional, Union
 
 
 class NeuralNetworkPotentialFactory:
@@ -229,7 +227,7 @@ class NeuralNetworkPotentialFactory:
         nnp_type: Literal["ANI2x", "SchNet", "PaiNN", "SAKE", "PhysNet"],
         nnp_parameters: Optional[Dict[str, Union[int, float]]] = {},
         training_parameters: Dict[str, Any] = {},
-    ) -> Union["BaseNeuralNetworkPotential", "TrainingAdapter"]:
+    ) -> Union[Union["ANI2x", "SchNet", "PaiNN", "PhysNet"], "TrainingAdapter"]:
         """
         Creates an NNP instance of the specified type, configured either for training or inference.
 
@@ -246,7 +244,7 @@ class NeuralNetworkPotentialFactory:
 
         Returns
         -------
-        Union[BaseNeuralNetworkPotential, TrainingAdapter]
+        Union[Union[ANI2x, SchNet, PaiNN, PhysNet], TrainingAdapter]
             An instantiated NNP model.
 
         Raises
@@ -262,9 +260,7 @@ class NeuralNetworkPotentialFactory:
         def _return_specific_version_of_nnp(use: str, nnp_class):
             if use == "training":
                 nnp_instance = nnp_class(**nnp_parameters)
-                trainer = TrainingAdapter(
-                    base_model=nnp_instance, **training_parameters
-                )
+                trainer = TrainingAdapter(model=nnp_instance, **training_parameters)
                 return trainer
             elif use == "inference":
                 return nnp_class(**nnp_parameters)
@@ -311,8 +307,9 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
         cutoff : openff.units.unit.Quantity
             Cutoff distance for the neighbor list calculations.
         """
-        from .models import Neighborlist
         from modelforge.dataset.dataset import DatasetStatistics
+
+        from .models import Neighborlist
 
         super().__init__()
         self.calculate_distances_and_pairlist = Neighborlist(cutoff)
@@ -328,7 +325,12 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
     @abstractmethod
     def _model_specific_input_preparation(
         self, data: NNPInput, pairlist: PairListOutputs
-    ) -> NeuralNetworkData:
+    ) -> Union[
+        "PhysNetNeuralNetworkData",
+        "PaiNNNeuralNetworkData",
+        "SchnetNeuralNetworkData",
+        "AniNeuralNetworkData",
+    ]:
         """
         Prepares model-specific inputs before the forward pass.
 
@@ -351,7 +353,15 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
         pass
 
     @abstractmethod
-    def _forward(self, data: NeuralNetworkData):
+    def _forward(
+        self,
+        data: Union[
+            "PhysNetNeuralNetworkData",
+            "PaiNNNeuralNetworkData",
+            "SchnetNeuralNetworkData",
+            "AniNeuralNetworkData",
+        ],
+    ):
         """
         Defines the forward pass of the model.
 
@@ -662,13 +672,129 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
         )
 
 
+class Loss:
+    """
+    Base class for loss computations, designed to be overridden by subclasses for specific types of losses.
+    Initializes with a model to compute predictions for energies and forces.
+    """
+
+    def __init__(self, model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet"]) -> None:
+        self.model = model
+
+    def _get_forces(self, batch: BatchData) -> Dict[str, torch.Tensor]:
+        """
+        Extracts and computes the forces from a given batch during training or evaluation, if forces are available.
+        Handles cases gracefully where F might not be present in the batch.
+
+        Parameters
+        ----------
+        batch : BatchData
+            A single batch of data, including input features and target energies.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The true forces from the dataset and the predicted forces by the model.
+        """
+        nnp_input = batch.nnp_input
+        F_true = batch.metadata.F.to(torch.float32)
+        E_predict = self.model.forward(nnp_input).E
+        F_predict = -torch.autograd.grad(
+            E_predict.sum(), nnp_input.positions, create_graph=False, retain_graph=False
+        )[0]
+
+        return {"F_true": F_true, "F_predict": F_predict}
+
+    def _get_energies(self, batch: BatchData) -> Dict[str, torch.Tensor]:
+        """
+        Extracts and computes the energies from a given batch during training or evaluation.
+
+        Parameters
+        ----------
+        batch : BatchData
+            A single batch of data, including input features and target energies.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The true energies from the dataset and the predicted energies by the model.
+        """
+        nnp_input = batch.nnp_input
+        E_true = batch.metadata.E.to(torch.float32).squeeze(1)
+        E_predict = self.model.forward(nnp_input).E
+        return {"E_true": E_true, "E_predict": E_predict}
+
+
+class EnergyLoss(Loss):
+    """
+    Computes loss based on energy predictions.
+    """
+
+    def __init__(self, model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet"]):
+        super().__init__(model)
+        log.info("Initializing EnergyLoss")
+
+    def compute_mse_loss(self, batch: BatchData) -> torch.Tensor:
+        """
+        Computes the MSE loss from energies.
+        """
+        energies = self._get_energies(batch)
+        # Compute MSE of energies
+        L_E = F.mse_loss(energies["E_predict"], energies["E_true"])
+
+        return L_E
+
+    def compute_rmse_loss(self, batch: BatchData) -> torch.Tensor:
+        """
+        Computes the RMSE loss from energies.
+        """
+        energies = self._get_energies(batch)
+        # Compute RMSE of energies
+        L_E = torch.sqrt(F.mse_loss(energies["E_predict"], energies["E_true"]))
+
+        return L_E
+
+
+class EnergyAndForceLoss(EnergyLoss):
+    """
+    Computes combined loss from energies and forces, with adjustable weighting.
+    """
+
+    def __init__(
+        self,
+        model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet"],
+        force_weight: float = 1.0,
+        energy_weight: float = 1.0,
+    ) -> None:
+        super().__init__(model)
+        log.info("Initializing EnergyAndForceLoss")
+        self.force_weight = force_weight
+        self.energy_weight = energy_weight
+
+    def compute_mse_loss(self, batch: BatchData) -> torch.Tensor:
+        """
+        Computes the combined MSE loss from energies and forces, considering the available data.
+        """
+        energies = self._get_energies(batch)
+        forces = self._get_forces(batch)
+        # Compute MSE of energies
+        L_E = F.mse_loss(energies["E_predict"], energies["E_true"])
+        # Assuming forces_true and forces_predict are already negative gradients of the potential energy w.r.t positions
+        L_F = F.mse_loss(forces["F_predict"], forces["F_true"])
+
+        return self.energy_weight * L_E + self.force_weight * L_F
+
+
 class TrainingAdapter(pl.LightningModule):
     """
     Adapter class for training neural network potentials using PyTorch Lightning.
 
+    This class wraps around the base neural network potential model, facilitating training
+    and validation steps, optimization, and logging.
+
     Attributes
     ----------
-    base_model : BaseNeuralNetworkPotential
+    base_model : Union[ANI2x, SchNet, PaiNN, PhysNet]
         The underlying neural network potential model.
     loss_function : torch.nn.modules.loss._Loss
         Loss function used during training.
@@ -680,53 +806,44 @@ class TrainingAdapter(pl.LightningModule):
 
     def __init__(
         self,
-        base_model: BaseNeuralNetworkPotential,
-        loss: Callable = F.mse_loss,
-        optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam,
+        model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet"],
+        include_force: bool = False,
+        optimizer: Any = torch.optim.Adam,
         lr: float = 1e-3,
     ):
         """
-        Initializes the training adapter with the specified model and training configuration.
+        Initializes the TrainingAdapter with the specified model and training configuration.
 
         Parameters
         ----------
-        base_model : BaseNeuralNetworkPotential
+        model : Union[ANI2x, SchNet, PaiNN, PhysNet]
             The neural network potential model to be trained.
-        loss : Callable, optional
-            The loss function for training, by default F.mse_loss.
         optimizer : Type[torch.optim.Optimizer], optional
             The optimizer class to use for training, by default torch.optim.Adam.
         lr : float, optional
             The learning rate for the optimizer, by default 1e-3.
         """
+        from typing import List
 
         super().__init__()
 
-        self.base_model = base_model
-        self.loss_function = loss
+        self.model = model
         self.optimizer = optimizer
         self.learning_rate = lr
+        self.loss = (
+            EnergyAndForceLoss(model=self.model)
+            if include_force
+            else EnergyLoss(model=self.model)
+        )
+        self.eval_loss: List[torch.Tensor] = []
 
-    def _get_energies(self, batch: BatchData) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Extracts and computes the energies from a given batch during training or evaluation.
+    def config_prior(self):
 
-        Parameters
-        ----------
-        batch : BatchData
-            A single batch of data, including input features and target energies.
+        if hasattr(self.model, "_config_prior"):
+            return self.model._config_prior()
 
-        Returns
-        -------
-        Tuple[torch.Tensor, torch.Tensor]
-            The true energies from the dataset and the predicted energies by the model.
-        """
-        nnp_input = batch.nnp_input
-        E_true = batch.metadata.E.to(torch.float32).squeeze(1)
-        self.batch_size = self._log_batch_size(E_true)
-
-        E_predict = self.base_model.forward(nnp_input).E
-        return E_true, E_predict
+        log.warning("Model does not implement _config_prior().")
+        raise NotImplementedError()
 
     def _log_batch_size(self, y: torch.Tensor) -> int:
         """
@@ -747,7 +864,7 @@ class TrainingAdapter(pl.LightningModule):
 
     def training_step(self, batch: BatchData, batch_idx: int) -> torch.Tensor:
         """
-        Executes a single training step.
+        Performs a training step using the given batch.
 
         Parameters
         ----------
@@ -761,46 +878,44 @@ class TrainingAdapter(pl.LightningModule):
         torch.Tensor
             The loss tensor computed for the current training step.
         """
-        E_true, E_predict = self._get_energies(batch)
 
-        import math
+        loss = self.loss.compute_mse_loss(batch)
+        self.batch_size = self._log_batch_size(loss)
 
-        # time.sleep(1)
-        loss = self.loss_function(E_true, E_predict)
         self.log(
-            "train_loss",
+            "ptl/train_loss",
             loss,
-            on_epoch=True,
             on_step=True,
-            prog_bar=True,
             batch_size=self.batch_size,
         )
 
         return loss
 
-    def test_step(self, batch: BatchData, batch_idx: int):
+    def test_step(self, batch: BatchData, batch_idx: int) -> None:
         """
-        Executes a single test step.
+        Executes a test step using the given batch of data.
+
+        This method is called automatically during the test loop of the training process. It computes
+        the loss on a batch of test data and logs the results for analysis.
 
         Parameters
         ----------
         batch : BatchData
-            The batch of data provided for testing.
+            The batch of data to test the model on.
         batch_idx : int
-            The index of the current batch.
+            The index of the batch within the test dataset.
 
         Returns
         -------
         None
+            The results are logged and not directly returned.
         """
-        from torch.nn import functional as F
+        loss = self.loss.compute_rmse_loss(batch)
+        self.batch_size = self._log_batch_size(loss)
 
-        E_true, E_predict = self._get_energies(batch)
-
-        test_loss = F.mse_loss(E_true, E_predict)
         self.log(
-            "test_loss",
-            test_loss,
+            "ptl/test_loss",
+            loss,
             batch_size=self.batch_size,
             on_epoch=True,
             prog_bar=True,
@@ -823,19 +938,24 @@ class TrainingAdapter(pl.LightningModule):
             The loss tensor computed for the current validation step.
         """
 
-        from torch.nn import functional as F
+        loss = self.loss.compute_rmse_loss(batch)
+        self.batch_size = self._log_batch_size(loss)
 
-        E_true, E_predict = self._get_energies(batch)
-
-        val_loss = F.l1_loss(E_true, E_predict)
         self.log(
             "val_loss",
-            val_loss,
+            loss,
             batch_size=self.batch_size,
             on_epoch=True,
             prog_bar=True,
+            sync_dist=True,
         )
-        return val_loss
+        self.eval_loss.append(loss.detach())
+        return loss
+
+    def on_validation_epoch_end(self):
+        avg_loss = torch.stack(self.eval_loss).mean()
+        self.log("ptl/val_loss", avg_loss, sync_dist=True)
+        self.eval_loss.clear()
 
     def configure_optimizers(self) -> Dict[str, Any]:
         """
@@ -848,16 +968,186 @@ class TrainingAdapter(pl.LightningModule):
             to be used within the PyTorch Lightning training process.
         """
 
-        optimizer = self.optimizer(self.base_model.parameters(), lr=self.learning_rate)
+        optimizer = self.optimizer(self.model.parameters(), lr=self.learning_rate)
         scheduler = {
             "scheduler": ReduceLROnPlateau(
-                optimizer, mode="min", factor=0.1, patience=5, verbose=True
+                optimizer, mode="min", factor=0.1, patience=20, verbose=True
             ),
             "monitor": "val_loss",  # Name of the metric to monitor
             "interval": "epoch",
             "frequency": 1,
         }
         return {"optimizer": optimizer, "lr_scheduler": scheduler}
+
+    def get_trainer(self):
+        """
+        Sets up and returns a PyTorch Lightning Trainer instance with configured logger and callbacks.
+
+        The trainer is configured with TensorBoard logging and an EarlyStopping callback to halt
+        the training process when the validation loss stops improving.
+
+        Returns
+        -------
+        Trainer
+            The configured PyTorch Lightning Trainer instance.
+        """
+
+        from lightning import Trainer
+        from lightning.pytorch.callbacks.early_stopping import EarlyStopping
+        from pytorch_lightning.loggers import TensorBoardLogger
+
+        # set up tensor board logger
+        logger = TensorBoardLogger("tb_logs", name="training")
+        early_stopping = EarlyStopping(
+            monitor="val_loss", min_delta=0.05, patience=20, verbose=True
+        )
+
+        return Trainer(
+            max_epochs=10_000,
+            num_nodes=1,
+            devices="auto",
+            accelerator="auto",
+            logger=logger,  # Add the logger here
+            callbacks=[early_stopping],
+        )
+
+    def train_func(self):
+        """
+        Defines the training function to be used with Ray for distributed training.
+
+        This function configures a PyTorch Lightning trainer with the Ray Distributed Data Parallel
+        (DDP) strategy for efficient distributed training. The training process utilizes a custom
+        training loop and environment setup provided by Ray.
+
+        Note: This function should be passed to a Ray Trainer or directly used with Ray tasks.
+        """
+
+        from ray.train.lightning import (
+            RayDDPStrategy,
+            RayLightningEnvironment,
+            RayTrainReportCallback,
+            prepare_trainer,
+        )
+
+        trainer = pl.Trainer(
+            devices="auto",
+            accelerator="auto",
+            strategy=RayDDPStrategy(find_unused_parameters=True),
+            callbacks=[RayTrainReportCallback()],
+            plugins=[RayLightningEnvironment()],
+            enable_progress_bar=False,
+        )
+        trainer = prepare_trainer(trainer)
+        trainer.fit(self, self.train_dataloader, self.val_dataloader)
+
+    def get_ray_trainer(self, number_of_workers: int = 2, use_gpu: bool = False):
+        """
+        Initializes and returns a Ray Trainer for distributed training.
+
+        Configures a Ray Trainer with a specified number of workers and GPU usage settings. This trainer
+        is prepared for distributed training using Ray, with support for checkpointing.
+
+        Parameters
+        ----------
+        number_of_workers : int, optional
+            The number of distributed workers to use, by default 2.
+        use_gpu : bool, optional
+            Specifies whether to use GPUs for training, by default False.
+
+        Returns
+        -------
+        Ray Trainer
+            The configured Ray Trainer for distributed training.
+        """
+
+        from ray.train import CheckpointConfig, RunConfig, ScalingConfig
+
+        scaling_config = ScalingConfig(
+            num_workers=number_of_workers,
+            use_gpu=use_gpu,
+            resources_per_worker={"CPU": 1, "GPU": 1} if use_gpu else {"CPU": 1},
+        )
+
+        run_config = RunConfig(
+            checkpoint_config=CheckpointConfig(
+                num_to_keep=2,
+                checkpoint_score_attribute="ptl/val_loss",
+                checkpoint_score_order="min",
+            ),
+        )
+        from ray.train.torch import TorchTrainer
+
+        # Define a TorchTrainer without hyper-parameters for Tuner
+        ray_trainer = TorchTrainer(
+            self.train_func,
+            scaling_config=scaling_config,
+            run_config=run_config,
+        )
+
+        return ray_trainer
+
+    def tune_with_ray(
+        self,
+        train_dataloader,
+        val_dataloader,
+        number_of_epochs: int = 5,
+        number_of_samples: int = 10,
+        number_of_ray_workers: int = 2,
+        train_on_gpu: bool = False,
+    ):
+        """
+        Performs hyperparameter tuning using Ray Tune.
+
+        This method sets up and starts a Ray Tune hyperparameter tuning session, utilizing the ASHA scheduler
+        for efficient trial scheduling and early stopping.
+
+        Parameters
+        ----------
+        train_dataloader : DataLoader
+            The DataLoader for training data.
+        val_dataloader : DataLoader
+            The DataLoader for validation data.
+        number_of_epochs : int, optional
+            The maximum number of epochs for training, by default 5.
+        number_of_samples : int, optional
+            The number of samples (trial runs) to perform, by default 10.
+        number_of_ray_workers : int, optional
+            The number of Ray workers to use for distributed training, by default 2.
+        use_gpu : bool, optional
+            Whether to use GPUs for training, by default False.
+
+        Returns
+        -------
+        Tune experiment analysis object
+            The result of the hyperparameter tuning session, containing performance metrics and the best hyperparameters found.
+        """
+
+        from ray import tune
+        from ray.tune.schedulers import ASHAScheduler
+
+        self.train_dataloader = train_dataloader
+        self.val_dataloader = val_dataloader
+
+        ray_trainer = self.get_ray_trainer(
+            number_of_workers=number_of_ray_workers, use_gpu=train_on_gpu
+        )
+        scheduler = ASHAScheduler(
+            max_t=number_of_epochs, grace_period=1, reduction_factor=2
+        )
+
+        tune_config = tune.TuneConfig(
+            metric="ptl/val_loss",
+            mode="min",
+            scheduler=scheduler,
+            num_samples=number_of_samples,
+        )
+
+        tuner = tune.Tuner(
+            ray_trainer,
+            param_space={"train_loop_config": self.config_prior()},
+            tune_config=tune_config,
+        )
+        return tuner.fit()
 
 
 class SingleTopologyAlchemicalBaseNNPModel(BaseNeuralNetworkPotential):

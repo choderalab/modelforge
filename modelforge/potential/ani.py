@@ -450,7 +450,7 @@ class ANI2x(BaseNeuralNetworkPotential):
 
         log.debug("Initializing ANI model.")
         super().__init__(
-            cutoff=radial_max_distance,
+            cutoff=radial_max_distance, only_unique_pairs=self.only_unique_pairs
         )
 
         # Initialize representation block

@@ -113,7 +113,7 @@ class SchNet(BaseNeuralNetworkPotential):
 
         log.debug("Initializing SchNet model.")
         self.only_unique_pairs = False  # NOTE: for pairlist
-        super().__init__(cutoff=cutoff)
+        super().__init__(cutoff=cutoff, only_unique_pairs=self.only_unique_pairs)
         self.number_of_atom_features = number_of_atom_features
         self.number_of_filters = number_of_filters or self.number_of_atom_features
         self.number_of_radial_basis_functions = number_of_radial_basis_functions

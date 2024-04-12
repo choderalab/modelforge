@@ -93,11 +93,11 @@ class PaiNN(BaseNeuralNetworkPotential):
     ):
 
         log.debug("Initializing PaiNN model.")
-        super().__init__(cutoff=cutoff)
+        self.only_unique_pairs = False  # NOTE: for pairlist
+        super().__init__(cutoff=cutoff, only_unique_pairs=self.only_unique_pairs)
 
         self.number_of_interaction_modules = number_of_interaction_modules
         self.number_of_atom_features = number_of_atom_features
-        self.only_unique_pairs = False  # NOTE: for pairlist
         self.shared_filters = shared_filters
 
         # embedding

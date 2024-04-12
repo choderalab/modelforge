@@ -468,7 +468,7 @@ class PhysNet(BaseNeuralNetworkPotential):
         log.debug("Initializing PhysNet model.")
 
         self.only_unique_pairs = False  # NOTE: for pairlist
-        super().__init__(cutoff=cutoff)
+        super().__init__(cutoff=cutoff, only_unique_pairs=self.only_unique_pairs)
 
         # embedding
         from modelforge.potential.utils import Embedding

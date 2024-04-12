@@ -221,8 +221,8 @@ def test_compare_angular_symmetry_features(setup_methane):
 
     # set up relevant system properties
     species, r, _, _ = setup_methane
-    pairlist = Pairlist()
-    pairs = pairlist(r[0], torch.tensor([0, 0, 0, 0, 0]), only_unique_pairs=True)
+    pairlist = Pairlist(only_unique_pairs=True)
+    pairs = pairlist(r[0], torch.tensor([0, 0, 0, 0, 0]))
     d_ij = pairs.d_ij.squeeze(1)
     r_ij = pairs.r_ij.squeeze(1)
 
@@ -311,7 +311,7 @@ def test_representation(setup_methane):
     # perform input checks
     mf_model._input_checks(mf_input)
     # prepare the input for the forward pass
-    data = mf_model.prepare_inputs(mf_input, True)
+    data = mf_model.prepare_inputs(mf_input)
     representation = mf_model.ani_representation_module(data)
     tochani_aev = tochani_aev.squeeze(0)
 

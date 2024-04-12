@@ -243,7 +243,7 @@ class Neighborlist(Pairlist):
         # Find pairs within the cutoff
         in_cutoff = (d_ij <= self.cutoff).squeeze()
         # Get the atom indices within the cutoff
-        pair_indices_within_cutoff = pair_indices[:,in_cutoff]
+        pair_indices_within_cutoff = pair_indices[:, in_cutoff]
 
         return PairListOutputs(
             pair_indices=pair_indices_within_cutoff,
@@ -506,10 +506,7 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
         Module for reading out per molecule properties from atomic properties.
     """
 
-    def __init__(
-        self,
-        cutoff: unit.Quantity,
-    ):
+    def __init__(self, cutoff: unit.Quantity, only_unique_pairs: bool = False):
         """
         Initializes the neural network potential class with specified parameters.
 
@@ -522,7 +519,9 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
         from .models import Neighborlist
 
         super().__init__()
-        self.calculate_distances_and_pairlist = Neighborlist(cutoff)
+        self.calculate_distances_and_pairlist = Neighborlist(
+            cutoff, only_unique_pairs=only_unique_pairs
+        )
         self._dtype: Optional[bool] = None  # set at runtime
         self._log_message_dtype = False
         self._log_message_units = False
@@ -621,7 +620,7 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
         """
         return self.readout_module(atom_specific_values, index)
 
-    def prepare_inputs(self, data: NNPInput, only_unique_pairs: bool = True):
+    def prepare_inputs(self, data: NNPInput):
         """
         Prepares the input tensors for passing to the model.
 
@@ -646,7 +645,7 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
         atomic_subsystem_indices = data.atomic_subsystem_indices
 
         pairlist_output = self.calculate_distances_and_pairlist(
-            positions, atomic_subsystem_indices, only_unique_pairs
+            positions, atomic_subsystem_indices
         )
 
         # ---------------------------
@@ -720,7 +719,7 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
         # perform input checks
         self._input_checks(data)
         # prepare the input for the forward pass
-        inputs = self.prepare_inputs(data, self.only_unique_pairs)
+        inputs = self.prepare_inputs(data)
         # perform the forward pass implemented in the subclass
         outputs = self._forward(inputs)
         # sum over atomic properties to generate per molecule properties

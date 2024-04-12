@@ -993,7 +993,7 @@ from openff.units import unit
 def neighbor_list_with_cutoff(
     coordinates: torch.Tensor,  # in nanometer
     atomic_subsystem_indices: torch.Tensor,
-    cutoff: unit.Quantity,
+    cutoff: torch.Tensor,
     only_unique_pairs: bool = False,
 ) -> torch.Tensor:
     """Compute all pairs of atoms and their distances.
@@ -1003,8 +1003,8 @@ def neighbor_list_with_cutoff(
     coordinates : torch.Tensor, shape (nr_atoms_per_systems, 3), in nanometer
     atomic_subsystem_indices : torch.Tensor, shape (nr_atoms_per_systems)
         Atom indices to indicate which atoms belong to which molecule
-    cutoff : unit.Quantity
-        The cutoff distance.
+    cutoff : torch.Tensor
+        The cutoff distance in nanometer.
     """
     positions = coordinates.detach()
     pair_indices = pair_list(
@@ -1021,7 +1021,6 @@ def neighbor_list_with_cutoff(
     )
 
     # Find pairs within the cutoff
-    cutoff = cutoff.to(unit.nanometer).m
     in_cutoff = (distances <= cutoff).nonzero(as_tuple=False).squeeze()
 
     # Get the atom indices within the cutoff

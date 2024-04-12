@@ -163,7 +163,7 @@ class Neighborlist(Pairlist):
         from .utils import neighbor_list_with_cutoff
 
         self.calculate_pairs = neighbor_list_with_cutoff
-        self.cutoff = cutoff
+        self.register_buffer("cutoff", torch.tensor(cutoff.to(unit.nanometer).m))
 
     def forward(
         self,

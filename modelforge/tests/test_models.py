@@ -434,9 +434,7 @@ def test_pairlist_calculate_r_ij_and_d_ij():
     # --------------------------- #
     # Only unique pairs
     pairlist = Neighborlist(cutoff, only_unique_pairs=True)
-    pair_indices = pairlist.calculate_pairs(
-        positions, atomic_subsystem_indices, pairlist.cutoff
-    )
+    pair_indices = pairlist.enumerate_all_pairs(atomic_subsystem_indices)
 
     # Calculate r_ij and d_ij
     r_ij = pairlist.calculate_r_ij(pair_indices, positions)
@@ -457,10 +455,8 @@ def test_pairlist_calculate_r_ij_and_d_ij():
 
     # --------------------------- #
     # ALL pairs
-    pairlist = Neighborlist(cutoff)
-    pair_indices = pairlist.calculate_pairs(
-        positions, atomic_subsystem_indices, pairlist.cutoff, only_unique_pairs=False
-    )
+    pairlist = Neighborlist(cutoff, only_unique_pairs=False)
+    pair_indices = pairlist.enumerate_all_pairs(atomic_subsystem_indices)
 
     # Calculate r_ij and d_ij
     r_ij = pairlist.calculate_r_ij(pair_indices, positions)

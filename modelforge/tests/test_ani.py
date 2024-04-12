@@ -154,11 +154,10 @@ def test_radial_with_diagonal_batching(setup_two_methanes):
 
     # ------------ general setup -------------#
     ani_species, ani_coordinates, _, mf_input = setup_two_methanes
-    pairlist = Pairlist()
+    pairlist = Pairlist(only_unique_pairs=True)
     pairs = pairlist(
         mf_input.positions,
         mf_input.atomic_subsystem_indices,
-        only_unique_pairs=True,
     )
     d_ij = pairs.d_ij
 

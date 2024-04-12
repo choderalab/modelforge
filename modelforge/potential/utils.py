@@ -91,6 +91,17 @@ class NNPInput:
                 "The size of atomic_subsystem_indices and the first dimension of positions must match"
             )
 
+    def as_namedtuple(self):
+        """Export the dataclass fields and values as a named tuple."""
+
+        from dataclasses import dataclass, fields
+        import collections
+
+        NNPInputTuple = collections.namedtuple(
+            "NNPInputTuple", [field.name for field in fields(self)]
+        )
+        return NNPInputTuple(*[getattr(self, field.name) for field in fields(self)])
+
 
 import torch
 
@@ -130,20 +141,6 @@ class BatchData:
         self.nnp_input = self.nnp_input.to(device)
         self.metadata = self.metadata.to(device)
         return self
-
-
-ATOMIC_NUMBER_TO_INDEX_MAP = {
-    1: 0,  # H
-    6: 1,  # C
-    7: 2,  # N
-    8: 3,  # O
-    9: 4,  # F
-    15: 5,  # P
-    16: 6,  # S
-    17: 7,  # Cl
-    35: 8,  # Br
-    53: 9,  # I
-}
 
 
 def shared_config_prior():
@@ -629,7 +626,7 @@ class AngularSymmetryFunction(nn.Module):
             self.register_buffer("ShfZ", ShfZ)
             self.register_buffer("ShfA", ShfA)
 
-        log.info(
+        log.debug(
             f"""
 RadialSymmetryFunction: 
 Rca={_unitless_angular_cutoff} 
@@ -927,7 +924,7 @@ class AniRadialSymmetryFunction(RadialSymmetryFunction):
             number_of_radial_basis_functions + 1,
             dtype=dtype,
         )[:-1]
-        log.info(f"{centers=}")
+        log.debug(f"{centers=}")
         return centers
 
     def calculate_radial_scale_factor(

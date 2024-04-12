@@ -416,3 +416,5 @@ def test_welford():
         assert np.isclose(online_estimator.mean / target_mean, 1.0, rtol=1e-1)
         assert np.isclose(online_estimator.variance / target_variance, 1.0, rtol=1e-1)
         assert np.isclose(online_estimator.stddev / target_stddev, 1.0, rtol=1e-1)
+
+

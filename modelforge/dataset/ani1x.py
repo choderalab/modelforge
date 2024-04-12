@@ -5,7 +5,7 @@ from .dataset import HDF5Dataset
 
 class ANI1xDataset(HDF5Dataset):
     """
-    Data class for handling ANI1x data.
+    Data class for handling ANI1x dataset.
 
     This dataset includes ~5 million density function theory calculations
     for small organic molecules containing H, C, N, and O.

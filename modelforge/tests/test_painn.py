@@ -82,7 +82,7 @@ def test_painn_interaction_equivariance(methane):
     )
 
     perturbed_prepared_input = painn.prepare_inputs(
-        perturbed_methane_input, only_unique_pairs=False
+        perturbed_methane_input
     )
     perturbed_d_ij = perturbed_prepared_input.d_ij
     perturbed_r_ij = perturbed_prepared_input.r_ij

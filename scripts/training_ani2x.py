@@ -5,6 +5,7 @@ import torch
 # import the models implemented in modelforge, for now SchNet, PaiNN, ANI2x or PhysNet
 from modelforge.potential import NeuralNetworkPotentialFactory
 from modelforge.dataset.ani2x import ANI2xDataset
+
 from modelforge.dataset.dataset import TorchDataModule
 from modelforge.dataset.utils import RandomRecordSplittingStrategy
 from pytorch_lightning.loggers import TensorBoardLogger

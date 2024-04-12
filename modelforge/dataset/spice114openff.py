@@ -163,6 +163,7 @@ class SPICE114OpenFFDataset(HDF5Dataset):
             gz_data_file = {
                 "name": "SPICE114OpenFF_dataset_n100.hdf5.gz",
                 "md5": "8a99718246c178b8f318025ffe0e5560",
+                "length": 306289237,
             }
             hdf5_data_file = {
                 "name": "SPICE114OpenFF_dataset_n100.hdf5",
@@ -181,6 +182,7 @@ class SPICE114OpenFFDataset(HDF5Dataset):
             gz_data_file = {
                 "name": "SPICE114OpenFF_dataset.hdf5.gz",
                 "md5": "3aca534133ebff8dba9ff859c89e18d1",
+                "length": 2540106767,
             }
 
             hdf5_data_file = {
@@ -283,5 +285,6 @@ class SPICE114OpenFFDataset(HDF5Dataset):
             md5_checksum=self.gz_data_file["md5"],
             output_path=self.local_cache_dir,
             output_filename=self.gz_data_file["name"],
+            length=self.gz_data_file["length"],
             force_download=self.force_download,
         )

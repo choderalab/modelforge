@@ -171,13 +171,14 @@ class SPICE2Dataset(HDF5Dataset):
 
         # note, need to change the end of the url to dl=1 instead of dl=0 (the default when you grab the share list), to ensure the same checksum each time we download
         self.test_url = "https://www.dropbox.com/scl/fi/08u7e400qvrq2aklxw2yo/spice_2_dataset_n100.hdf5.gz?rlkey=ifv7hfzqnwl2faef8xxr5ggj2&dl=1"
-        self.full_url = " "
+        self.full_url = "https://www.dropbox.com/scl/fi/udoc3jj7wa7du8jgqiat0/spice_2_dataset.hdf5.gz?rlkey=csgwqa237m002n54jnld5pfgy&dl=1"
 
         if self.for_unit_testing:
             url = self.test_url
             gz_data_file = {
                 "name": "SPICE2_dataset_n100.hdf5.gz",
                 "md5": "6f3f2931d4eb59f7a54f0a11c72bb604",
+                "length": 315275240,  # the number of bytes to be able to display the download progress bar correctly
             }
             hdf5_data_file = {
                 "name": "SPICE2_dataset_n100.hdf5",
@@ -195,12 +196,13 @@ class SPICE2Dataset(HDF5Dataset):
             url = self.full_url
             gz_data_file = {
                 "name": "SPICE2_dataset.hdf5.gz",
-                "md5": "",
+                "md5": "244a559a6062bbec5c9cb49af036ff7d",
+                "length": 5532866319,
             }
 
             hdf5_data_file = {
                 "name": "SPICE2_dataset.hdf5",
-                "md5": "",
+                "md5": "9659a0f18050b9e7b122c0046b705480",
             }
 
             processed_data_file = {
@@ -298,5 +300,6 @@ class SPICE2Dataset(HDF5Dataset):
             md5_checksum=self.gz_data_file["md5"],
             output_path=self.local_cache_dir,
             output_filename=self.gz_data_file["name"],
+            length=self.gz_data_file["length"],
             force_download=self.force_download,
         )

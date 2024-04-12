@@ -118,6 +118,7 @@ class ANI2xDataset(HDF5Dataset):
             gz_data_file = {
                 "name": "ani2x_dataset_n100.hdf5.gz",
                 "md5": "093fa23aeb8f8813abd1ec08e9ff83ad",
+                "length": 22254528,
             }
             hdf5_data_file = {
                 "name": "ani2x_dataset_n100.hdf5",
@@ -135,6 +136,7 @@ class ANI2xDataset(HDF5Dataset):
             gz_data_file = {
                 "name": "ani2x_dataset.hdf5.gz",
                 "md5": "8daf9a7d8bbf9bcb1e9cea13b4df9270",
+                "length": 5085941907,
             }
 
             hdf5_data_file = {
@@ -237,5 +239,6 @@ class ANI2xDataset(HDF5Dataset):
             md5_checksum=self.gz_data_file["md5"],
             output_path=self.local_cache_dir,
             output_filename=self.gz_data_file["name"],
+            length=self.gz_data_file["length"],
             force_download=self.force_download,
         )

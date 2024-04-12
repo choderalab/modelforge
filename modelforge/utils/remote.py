@@ -98,6 +98,7 @@ def download_from_url(
     md5_checksum: str,
     output_path: str,
     output_filename: str,
+    length: Optional[int] = None,
     force_download=False,
 ) -> str:
 
@@ -125,14 +126,19 @@ def download_from_url(
         r = requests.get(url, stream=True)
 
         os.makedirs(output_path, exist_ok=True)
-
+        if length is not None:
+            total = int(length / chunk_size) + 1
+        else:
+            total = None
         with open(f"{output_path}/{output_filename}", "wb") as fd:
             for chunk in tqdm(
                 r.iter_content(chunk_size=chunk_size),
                 ascii=True,
                 desc="downloading",
+                total=total,
             ):
                 fd.write(chunk)
+
         calculated_checksum = calculate_md5_checksum(
             file_name=output_filename, file_path=output_path
         )

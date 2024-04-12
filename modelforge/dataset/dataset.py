@@ -311,6 +311,72 @@ class HDF5Dataset:
             ) as out_file:
                 shutil.copyfileobj(gz_file, out_file)
 
+    def _check_lists(self, list_1: List, list_2: List) -> bool:
+        """
+        Check to see if all elements in the lists match and the length is the same.
+
+        Note the order of the lists do not matter.
+
+        Parameters
+        ----------
+        list_1 : List
+            First list to compare
+        list_2 : List
+            Second list to compare
+
+        Returns
+        -------
+        bool
+            True if all elements of sub_list are in containing_list, False otherwise
+        """
+        if len(list_1) != len(list_2):
+            return False
+        for a in list_1:
+            if a not in list_2:
+                return False
+        return True
+
+    def _metadata_validation(self, file_name: str, file_path: str) -> bool:
+        """
+        Validates the metadata file for the npz file.
+
+        Parameters
+        ----------
+        file_name : str
+            Name of the metadata file.
+        file_path : str
+            Path to the metadata file.
+
+        Returns
+        -------
+        bool
+            True if the metadata file exists, False otherwise.
+        """
+        if not os.path.exists(f"{file_path}/{file_name}"):
+            log.debug(f"Metadata file {file_path}/{file_name} does not exist.")
+            return False
+        else:
+            import json
+
+            with open(f"{file_path}/{file_name}", "r") as f:
+                self._npz_metadata = json.load(f)
+
+                if not self._check_lists(
+                    self._npz_metadata["data_keys"], self.properties_of_interest
+                ):
+                    log.warning(
+                        f"Data keys used to generate {file_path}/{file_name} ({self._npz_metadata['data_keys']}) do not match data loader ({self.properties_of_interest}) ."
+                    )
+                    return False
+
+                if self._npz_metadata["hdf5_checksum"] != self.hdf5_data_file["md5"]:
+                    log.warning(
+                        f"Checksum for hdf5 file used to generate npz file does not match current file in dataloader."
+                    )
+                    return False
+
+        return True
+
     def _file_validation(
         self, file_name: str, file_path: str, checksum: str = None
     ) -> bool:
@@ -514,37 +580,25 @@ class HDF5Dataset:
 
         Examples
         --------
-        >>> hdf5_data = HDF5Dataset("raw_data.hdf5", "processed_data.npz")
-        >>> processed_data = hdf5_data._from_file_cache()
         """
-        # if self._file_validation(
-        #     self.processed_data_file["name"],
-        #     self.local_cache_dir,
-        #     self.processed_data_file["md5"],
-        # ):
-        #     log.debug(f"Loading processed data from {self.processed_data_file['name']}")
-        #
-        # else:
-        #     from modelforge.utils.remote import calculate_md5_checksum
-        #
-        #     checksum = calculate_md5_checksum(
-        #         self.processed_data_file["name"], self.local_cache_dir
-        #     )
-        #     raise ValueError(
-        #         f"Checksum mismatch for processed data file {self.processed_data_file['name']}. Found {checksum}, expected {self.processed_data_file['md5']}"
-        #     )
-        import os
-
         # skip validating the checksum, as the npz file checksum of otherwise identical data differs between python 3.11 and 3.9/10
+        # we have a metadatafile we validate separately instead
         if self._file_validation(
             self.processed_data_file["name"], self.local_cache_dir, checksum=None
         ):
-            log.debug(
-                f"Loading processed data from {self.local_cache_dir}/{self.processed_data_file['name']}"
-            )
-            self.numpy_data = np.load(
-                f"{self.local_cache_dir}/{self.processed_data_file['name']}"
-            )
+            if self._metadata_validation(
+                self.processed_data_file["name"].replace(".npz", ".json"),
+                self.local_cache_dir,
+            ):
+                log.debug(
+                    f"Loading processed data from {self.local_cache_dir}/{self.processed_data_file['name']} generated on {self._npz_metadata['date_generated']}"
+                )
+                log.debug(
+                    f"Properties of Interes in .npz file: {self._npz_metadata['data_keys']}"
+                )
+                self.numpy_data = np.load(
+                    f"{self.local_cache_dir}/{self.processed_data_file['name']}"
+                )
         else:
             raise ValueError(
                 f"Processed data file {self.local_cache_dir}/{self.processed_data_file['name']} not found."
@@ -573,6 +627,25 @@ class HDF5Dataset:
             n_confs=self.n_confs,
             **self.hdf5data,
         )
+        import datetime
+
+        # we will generate a simple metadata file to list which data keys were used to generate the npz file
+        # and the checksum of the hdf5 file used to create the npz
+        # we can also add in the date of generation so we can report on when the datafile was generated when we load the npz
+        metadata = {
+            "data_keys": list(self.hdf5data.keys()),
+            "hdf5_checksum": self.hdf5_data_file["md5"],
+            "hdf5_gz_checkusm": self.gz_data_file["md5"],
+            "date_generated": str(datetime.datetime.now()),
+        }
+        import json
+
+        with open(
+            f"{self.local_cache_dir}/{self.processed_data_file['name'].replace('.npz', '.json')}",
+            "w",
+        ) as f:
+            json.dump(metadata, f)
+
         del self.hdf5data
 
 
@@ -607,16 +680,26 @@ class DatasetFactory:
             The HDF5 dataset instance to use.
         """
 
-        # check to see if we can load from the npz file.  This also validates the checksum
-        if (
-            data._file_validation(
-                data.processed_data_file["name"],
+        # For efficiency purposes, we first want to see if there is an npz file available before reprocessing the hdf5
+        # file, expanding the gzziped archive or download the file.
+        # Saving to cache will create an npz file and metadata file.
+        # The metadata file will contain the keys used to generate the npz file, the checksum of the hdf5 and gz
+        # file used to generate the npz file.  We will look at the metadata file and compare this to the
+        # variables saved in the HDF5Dataset class to determine if the npz file is valid.
+        # It is important to check the keys used to generate the npz file, as these are allowed to be changed by the user.
+
+        if data._file_validation(
+            data.processed_data_file["name"],
+            data.local_cache_dir,
+        ) and (
+            data._metadata_validation(
+                data.processed_data_file["name"].replace(".npz", ".json"),
                 data.local_cache_dir,
-                None,
             )
             and not data.force_download
             and not data.regenerate_cache
         ):
+
             data._from_file_cache()
         # check to see if the hdf5 file exists and the checksum matches
         elif (

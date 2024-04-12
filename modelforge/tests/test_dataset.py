@@ -141,10 +141,15 @@ def test_different_properties_of_interest(dataset):
     assert isinstance(raw_data_item, dict)
     assert len(raw_data_item) == 7
 
-    data.properties_of_interest = ["internal_energy_at_0K", "geometry"]
+    data.properties_of_interest = [
+        "internal_energy_at_0K",
+        "geometry",
+        "atomic_numbers",
+    ]
     assert data.properties_of_interest == [
         "internal_energy_at_0K",
         "geometry",
+        "atomic_numbers",
     ]
 
     dataset = factory.create_dataset(data)
@@ -242,11 +247,59 @@ def test_caching(prep_temp_dir):
     data._from_file_cache()
 
 
+def test_metadata_validation(prep_temp_dir):
+    local_cache_dir = str(prep_temp_dir)
+
+    from modelforge.dataset.qm9 import QM9Dataset
+
+    data = QM9Dataset(for_unit_testing=True, local_cache_dir=local_cache_dir)
+
+    a = ["energy", "force", "atomic_numbers"]
+    b = ["energy", "atomic_numbers", "force"]
+    assert data._check_lists(a, b) == True
+
+    a = ["energy", "force"]
+
+    assert data._check_lists(a, b) == False
+
+    a = ["energy", "force", "atomic_numbers", "charges"]
+
+    assert data._check_lists(a, b) == False
+
+    # we do not have a metadata files so this will fail
+    assert data._metadata_validation("qm9_test.json", local_cache_dir) == False
+
+    metadata = {
+        "data_keys": ["atomic_numbers", "internal_energy_at_0K", "geometry", "charges"],
+        "hdf5_checksum": "77df0e1df7a5ec5629be52181e82a7d7",
+        "hdf5_gz_checkusm": "af3afda5c3265c9c096935ab060f537a",
+        "date_generated": "2024-04-11 14:05:14.297305",
+    }
+
+    import json
+
+    with open(
+        f"{local_cache_dir}/qm9_test.json",
+        "w",
+    ) as f:
+        json.dump(metadata, f)
+
+    assert data._metadata_validation("qm9_test.json", local_cache_dir) == True
+
+    metadata["hdf5_checksum"] = "wrong_checksum"
+    with open(
+        f"{local_cache_dir}/qm9_test.json",
+        "w",
+    ) as f:
+        json.dump(metadata, f)
+    assert data._metadata_validation("qm9_test.json", local_cache_dir) == False
+
+
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_different_scenarios_of_file_availability(dataset, prep_temp_dir):
     """Test the behavior when raw and processed dataset files are removed."""
 
-    local_cache_dir = str(prep_temp_dir) + "/test_diff_secnarios"
+    local_cache_dir = str(prep_temp_dir) + "/test_diff_scenarios"
 
     factory = DatasetFactory()
     data = dataset(for_unit_testing=True, local_cache_dir=local_cache_dir)
@@ -254,11 +307,20 @@ def test_different_scenarios_of_file_availability(dataset, prep_temp_dir):
     # this will download the .gz, the .hdf5 and the .npz files
     factory.create_dataset(data)
 
-    # first check if we remote the npz file, rerunning it will regenerated it
+    # first check if we remove the npz file, rerunning it will regenerate it
     os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
     factory.create_dataset(data)
 
     assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
+
+    # now remove metadata file, rerunning will regenerate the npz file
+    os.remove(
+        f"{local_cache_dir}/{data.processed_data_file['name'].replace('npz', 'json')}"
+    )
+    factory.create_dataset(data)
+    assert os.path.exists(
+        f"{local_cache_dir}/{data.processed_data_file['name'].replace('npz', 'json')}"
+    )
 
     # now remove the  npz and hdf5 files, rerunning will generate it
 

@@ -56,7 +56,6 @@ class ANI1xDataset(HDF5Dataset):
         R="geometry",
         E="wb97x_dz.energy",
         F="wb97x_dz.forces",
-        Q="wb97x_dz.cm5_charges",
     )
 
     _available_properties = [
@@ -102,7 +101,6 @@ class ANI1xDataset(HDF5Dataset):
             "atomic_numbers",
             "wb97x_dz.energy",
             "wb97x_dz.forces",
-            "wb97x_dz.cm5_charges",
         ]  # NOTE: Default values
 
         self._properties_of_interest = _default_properties_of_interest
@@ -132,13 +130,14 @@ class ANI1xDataset(HDF5Dataset):
 
         # note, need to change the end of the url to dl=1 instead of dl=0 (the default when you grab the share list), to ensure the same checksum each time we download
         self.test_url = "https://www.dropbox.com/scl/fi/rqjc6pcv9jjzoq08hc5ao/ani1x_dataset_n100.hdf5.gz?rlkey=kgg0xvq9aac5sp3or9oh61igj&dl=1"
-        self.full_url = " "
+        self.full_url = "https://www.dropbox.com/scl/fi/d98h9kt4pl40qeapqzu00/ani1x_dataset.hdf5.gz?rlkey=7q1o8hh9qzbxehsobjurcksit&dl=1"
 
         if self.for_unit_testing:
             url = self.test_url
             gz_data_file = {
                 "name": "ani1x_dataset_n100.hdf5.gz",
                 "md5": "51e2491e3c5b7b5a432e2012892cfcbb",
+                "length": 85445473,
             }
             hdf5_data_file = {
                 "name": "ani1x_dataset_n100.hdf5",
@@ -155,12 +154,13 @@ class ANI1xDataset(HDF5Dataset):
             url = self.full_url
             gz_data_file = {
                 "name": "ani1x_dataset.hdf5.gz",
-                "md5": "",
+                "md5": "408cdcf9768ac96a8ae8ade9f078c51b",
+                "length": 4510287721,
             }
 
             hdf5_data_file = {
                 "name": "ani1x_dataset.hdf5",
-                "md5": "",
+                "md5": "361b7c4b9a4dfeece70f0fe6a893e76a",
             }
 
             processed_data_file = {"name": "ani1x_dataset_processed.npz", "md5": None}
@@ -255,5 +255,6 @@ class ANI1xDataset(HDF5Dataset):
             md5_checksum=self.gz_data_file["md5"],
             output_path=self.local_cache_dir,
             output_filename=self.gz_data_file["name"],
+            length=self.gz_data_file["length"],
             force_download=self.force_download,
         )

@@ -211,7 +211,7 @@ from typing import Callable, Literal, Optional, Union
 
 class NeuralNetworkPotentialFactory:
     """
-    Factory class for creating instances of neural network potentials (NNP).
+    Factory class for creating instances of neural network potentials (NNP) that are traceable/scriptable and can be exported to torchscript.
 
     This factory allows for the creation of specific NNP instances configured for either
     training or inference purposes based on the given parameters.

@@ -931,99 +931,48 @@ class AniRadialSymmetryFunction(RadialSymmetryFunction):
         return scale_factors
 
 
-def pair_list(
-    atomic_subsystem_indices: torch.Tensor,
-    only_unique_pairs: bool = False,
-) -> torch.Tensor:
-    """Compute all pairs of atoms and their distances.
-
-    Parameters
-    ----------
-    atomic_subsystem_indices : torch.Tensor, shape (nr_atoms_per_systems)
-        Atom indices to indicate which atoms belong to which molecule
-    only_unique_pairs : bool, optional
-        If True, only unique pairs are returned (default is False).
-        Otherwise, all pairs are returned.
-    """
-    # generate index grid
-    n = len(atomic_subsystem_indices)
-
-    # get device that passed tensors lives on, initialize on the same device
-    device = atomic_subsystem_indices.device
-
-    if only_unique_pairs:
-        i_indices, j_indices = torch.triu_indices(n, n, 1, device=device)
-    else:
-        # Repeat each number n-1 times for i_indices
-        i_indices = torch.repeat_interleave(
-            torch.arange(n, device=device), repeats=n - 1
-        )
-
-        # Correctly construct j_indices
-        j_indices = torch.cat(
-            [
-                torch.cat(
-                    (
-                        torch.arange(i, device=device),
-                        torch.arange(i + 1, n, device=device),
-                    )
-                )
-                for i in range(n)
-            ]
-        )
-
-    # filter pairs to only keep those belonging to the same molecule
-    same_molecule_mask = (
-        atomic_subsystem_indices[i_indices] == atomic_subsystem_indices[j_indices]
-    )
-
-    # Apply mask to get final pair indices
-    i_final_pairs = i_indices[same_molecule_mask]
-    j_final_pairs = j_indices[same_molecule_mask]
-
-    # concatenate to form final (2, n_pairs) tensor
-    pair_indices = torch.stack((i_final_pairs, j_final_pairs))
-
-    return pair_indices.to(device)
-
-
 from openff.units import unit
 
 
-def neighbor_list_with_cutoff(
-    coordinates: torch.Tensor,  # in nanometer
-    atomic_subsystem_indices: torch.Tensor,
-    cutoff: torch.Tensor,
-    only_unique_pairs: bool = False,
-) -> torch.Tensor:
-    """Compute all pairs of atoms and their distances.
+class NeighborListWithCutoff(torch.nn.Module):
+    def __init__(
+        self,
+        cutoff,
+        only_unique_pairs: bool = False,
+    ):
+        super().__init__()
+        self.register_buffer("cutoff", torch.tensor(cutoff, dtype=torch.float32))
+        self.pair_list = PairList(only_unique_pairs=only_unique_pairs)
 
-    Parameters
-    ----------
-    coordinates : torch.Tensor, shape (nr_atoms_per_systems, 3), in nanometer
-    atomic_subsystem_indices : torch.Tensor, shape (nr_atoms_per_systems)
-        Atom indices to indicate which atoms belong to which molecule
-    cutoff : torch.Tensor
-        The cutoff distance in nanometer.
-    """
-    positions = coordinates.detach()
-    pair_indices = pair_list(
-        atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
-    )
+    def forward(
+        self,
+        coordinates: torch.Tensor,  # in nanometer
+        atomic_subsystem_indices: torch.Tensor,
+    ) -> torch.Tensor:
+        """Compute all pairs of atoms and their distances.
 
-    # create pair_coordinates tensor
-    pair_coordinates = positions[pair_indices.T]
-    pair_coordinates = pair_coordinates.view(-1, 2, 3)
+        Parameters
+        ----------
+        coordinates : torch.Tensor, shape (nr_atoms_per_systems, 3), in nanometer
+        atomic_subsystem_indices : torch.Tensor, shape (nr_atoms_per_systems)
+            Atom indices to indicate which atoms belong to which molecule
+        """
+        positions = coordinates
+        pair_indices = self.pair_list(atomic_subsystem_indices)
 
-    # Calculate distances
-    distances = (pair_coordinates[:, 0, :] - pair_coordinates[:, 1, :]).norm(
-        p=2, dim=-1
-    )
+        # create pair_coordinates tensor
+        pair_coordinates = positions[pair_indices.T]
+        pair_coordinates = pair_coordinates.view(-1, 2, 3)
 
-    # Find pairs within the cutoff
-    in_cutoff = (distances <= cutoff).nonzero(as_tuple=False).squeeze()
+        # Calculate distances
+        distances = (pair_coordinates[:, 0, :] - pair_coordinates[:, 1, :]).norm(
+            p=2, dim=-1
+        )
 
-    # Get the atom indices within the cutoff
-    pair_indices_within_cutoff = pair_indices[:, in_cutoff]
+        # Find pairs within the cutoff
+        in_cutoff = (distances <= self.cutoff).nonzero(as_tuple=False).squeeze()
 
-    return pair_indices_within_cutoff
+        # Get the atom indices within the cutoff
+        pair_indices_within_cutoff = pair_indices[:, in_cutoff]
+
+        return pair_indices_within_cutoff

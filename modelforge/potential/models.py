@@ -53,14 +53,65 @@ class Pairlist(nn.Module):
         Forward pass to compute pair indices, distances, and displacement vectors.
     """
 
-    def __init__(self):
+    def __init__(self, only_unique_pairs: bool = False):
         """
-        Initialize PairList.
+        Parameters
+        ----------
+        only_unique_pairs : bool, optional
+            If True, only unique pairs are returned (default is False).
+            Otherwise, all pairs are returned.
         """
         super().__init__()
-        from .utils import pair_list
+        self.only_unique_pairs = only_unique_pairs
 
-        self.calculate_pairs = pair_list
+    def enumerate_all_pairs(self, atomic_subsystem_indices: torch.Tensor):
+        """Compute all pairs of atoms and their distances.
+
+        Parameters
+        ----------
+        atomic_subsystem_indices : torch.Tensor, shape (nr_atoms_per_systems)
+            Atom indices to indicate which atoms belong to which molecule
+        """
+        # generate index grid
+        n = len(atomic_subsystem_indices)
+
+        # get device that passed tensors lives on, initialize on the same device
+        device = atomic_subsystem_indices.device
+
+        if self.only_unique_pairs:
+            i_indices, j_indices = torch.triu_indices(n, n, 1, device=device)
+        else:
+            # Repeat each number n-1 times for i_indices
+            i_indices = torch.repeat_interleave(
+                torch.arange(n, device=device), repeats=n - 1
+            )
+
+            # Correctly construct j_indices
+            j_indices = torch.cat(
+                [
+                    torch.cat(
+                        (
+                            torch.arange(i, device=device),
+                            torch.arange(i + 1, n, device=device),
+                        )
+                    )
+                    for i in range(n)
+                ]
+            )
+
+        # filter pairs to only keep those belonging to the same molecule
+        same_molecule_mask = (
+            atomic_subsystem_indices[i_indices] == atomic_subsystem_indices[j_indices]
+        )
+
+        # Apply mask to get final pair indices
+        i_final_pairs = i_indices[same_molecule_mask]
+        j_final_pairs = j_indices[same_molecule_mask]
+
+        # concatenate to form final (2, n_pairs) tensor
+        pair_indices = torch.stack((i_final_pairs, j_final_pairs))
+
+        return pair_indices.to(device)
 
     def calculate_r_ij(
         self, pair_indices: torch.Tensor, positions: torch.Tensor
@@ -104,7 +155,6 @@ class Pairlist(nn.Module):
         self,
         positions: torch.Tensor,
         atomic_subsystem_indices: torch.Tensor,
-        only_unique_pairs: bool = False,
     ) -> PairListOutputs:
         """
         Compute interacting pairs, distances, and displacement vectors.
@@ -123,9 +173,8 @@ class Pairlist(nn.Module):
         PairListOutputs
             A NamedTuple containing 'pair_indices', 'd_ij' (distances), and 'r_ij' (displacement vectors).
         """
-        pair_indices = self.calculate_pairs(
+        pair_indices = self.enumerate_all_pairs(
             atomic_subsystem_indices,
-            only_unique_pairs=only_unique_pairs,
         )
         r_ij = self.calculate_r_ij(pair_indices, positions)
 
@@ -134,9 +183,6 @@ class Pairlist(nn.Module):
             d_ij=self.calculate_d_ij(r_ij),
             r_ij=r_ij,
         )
-
-
-from openff.units import unit
 
 
 class Neighborlist(Pairlist):
@@ -150,7 +196,7 @@ class Neighborlist(Pairlist):
         Cutoff distance for neighbor list calculations.
     """
 
-    def __init__(self, cutoff: unit.Quantity):
+    def __init__(self, cutoff: unit.Quantity, only_unique_pairs: bool = False):
         """
         Initialize the Neighborlist with a specific cutoff distance.
 
@@ -159,10 +205,7 @@ class Neighborlist(Pairlist):
         cutoff : unit.Quantity
             Cutoff distance for neighbor calculations.
         """
-        super().__init__()
-        from .utils import neighbor_list_with_cutoff
-
-        self.calculate_pairs = neighbor_list_with_cutoff
+        super().__init__(only_unique_pairs=only_unique_pairs)
         self.register_buffer("cutoff", torch.tensor(cutoff.to(unit.nanometer).m))
 
     def forward(
@@ -191,22 +234,25 @@ class Neighborlist(Pairlist):
             A NamedTuple containing 'pair_indices', 'd_ij' (distances), and 'r_ij' (displacement vectors).
         """
 
-        pair_indices = self.calculate_pairs(
-            positions,
+        pair_indices = self.enumerate_all_pairs(
             atomic_subsystem_indices,
-            cutoff=self.cutoff,
-            only_unique_pairs=only_unique_pairs,
         )
         r_ij = self.calculate_r_ij(pair_indices, positions)
+        d_ij = self.calculate_d_ij(r_ij)
+
+        # Find pairs within the cutoff
+        in_cutoff = (d_ij <= self.cutoff).squeeze()
+        # Get the atom indices within the cutoff
+        pair_indices_within_cutoff = pair_indices[:,in_cutoff]
 
         return PairListOutputs(
-            pair_indices=pair_indices,
-            d_ij=self.calculate_d_ij(r_ij),
-            r_ij=r_ij,
+            pair_indices=pair_indices_within_cutoff,
+            d_ij=d_ij[in_cutoff],
+            r_ij=r_ij[in_cutoff],
         )
 
 
-from typing import Callable, Literal, Optional, Union
+from typing import Literal, Optional, Union
 
 
 class NeuralNetworkPotentialFactory:

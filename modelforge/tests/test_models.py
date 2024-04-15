@@ -4,18 +4,25 @@ from modelforge.potential import _IMPLEMENTED_NNPS
 
 
 @pytest.mark.parametrize("model_name", _IMPLEMENTED_NNPS)
-def test_model_factory(model_name):
+@pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
+def test_model_factory(model_name, simulation_environment):
     from modelforge.potential.models import (
         NeuralNetworkPotentialFactory,
         TrainingAdapter,
     )
 
     # inference model
-    model = NeuralNetworkPotentialFactory.create_nnp("inference", model_name)
-    assert model_name in str(type(model))
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        use="inference",
+        nnp_type=model_name,
+        simulation_environment=simulation_environment,
+    )
+    assert model_name in str(type(model)) or "JAX" in str(type(model))
 
     # training model
-    model = NeuralNetworkPotentialFactory.create_nnp("training", model_name)
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        "training", model_name, simulation_environment
+    )
     assert type(model) == TrainingAdapter
 
 

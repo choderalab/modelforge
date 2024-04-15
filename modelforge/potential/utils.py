@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional, Tuple
+from typing import Any, Callable, Optional, Tuple, NamedTuple
 
 import numpy as np
 import torch
@@ -99,6 +99,21 @@ class NNPInput:
             "NNPInputTuple", [field.name for field in fields(self)]
         )
         return NNPInputTuple(*[getattr(self, field.name) for field in fields(self)])
+
+    def as_jax_namedtuple(self) -> NamedTuple:
+        """Export the dataclass fields and values as a named tuple.
+        Convert pytorch tensors to jax arrays."""
+
+        from dataclasses import dataclass, fields
+        import collections
+        from pytorch2jax.pytorch2jax import convert_to_jax
+
+        NNPInputTuple = collections.namedtuple(
+            "NNPInputTuple", [field.name for field in fields(self)]
+        )
+        return NNPInputTuple(
+            *[convert_to_jax(getattr(self, field.name)) for field in fields(self)]
+        )
 
 
 import torch

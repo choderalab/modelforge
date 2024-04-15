@@ -3,14 +3,14 @@ from typing import TYPE_CHECKING, Any, Dict, NamedTuple, Tuple, Type
 
 import lightning as pl
 import torch
-import torch.nn as nn
 from loguru import logger as log
 from openff.units import unit
+from torch.nn import Module
 from torch.nn import functional as F
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from modelforge.dataset.dataset import DatasetStatistics
 
+from modelforge.dataset.dataset import DatasetStatistics
 from modelforge.potential.utils import AtomicSelfEnergies, BatchData, NNPInput
 
 if TYPE_CHECKING:
@@ -35,7 +35,7 @@ class EnergyOutput(NamedTuple):
     molecular_ase: torch.Tensor
 
 
-class Pairlist(nn.Module):
+class Pairlist(Module):
     """Handle pair list calculations for atoms, returning atom indices pairs and displacement vectors.
 
     Attributes
@@ -255,6 +255,81 @@ class Neighborlist(Pairlist):
 from typing import Literal, Optional, Union
 
 
+class JAXModel:
+
+    def __init__(self, jax_fn, parameter, buffer, name: str):
+        self.jax_fn = jax_fn
+        self.parameter = parameter
+        self.buffer = buffer
+        self.name = name
+
+    def __call__(self, data: NamedTuple):
+
+        return self.jax_fn(self.parameter, self.buffer, data)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__} wrapping {self.name}"
+
+
+class PyTorch2JAXConverter:
+
+    def convert_to_jax_model(self, nnp_instance) -> JAXModel:
+        jax_fn, params, buffers = self._convert_pytnn_to_jax(nnp_instance)
+        return JAXModel(jax_fn, params, buffers, nnp_instance.__class__.__name__)
+
+    @staticmethod
+    def _convert_pytnn_to_jax(nnp_instance):
+        import jax
+        from jax import custom_vjp
+        from pytorch2jax.pytorch2jax import convert_to_jax, convert_to_pyt
+        import functorch
+        from functorch import make_functional_with_buffers
+
+        # Convert the PyTorch model to a functional representation and extract the model function and parameters
+        model_fn, model_params, model_buffer = make_functional_with_buffers(
+            nnp_instance
+        )
+
+        # Convert the model parameters from PyTorch to JAX representations
+        model_params = jax.tree_map(convert_to_jax, model_params)
+        # Convert the model buffer from PyTorch to JAX representations
+        model_buffer = jax.tree_map(convert_to_jax, model_buffer)
+
+        # Define the apply function using a custom VJP
+        @custom_vjp
+        def apply(params, *args, **kwargs):
+            # Convert the input data from PyTorch to JAX representations
+            params = jax.tree_map(convert_to_pyt, params)
+            args = jax.tree_map(convert_to_pyt, args)
+            kwargs = jax.tree_map(convert_to_pyt, kwargs)
+            # Apply the model function to the input data
+            out = model_fn(params, *args, **kwargs)
+            # Convert the output data from JAX to PyTorch representations
+            out = jax.tree_map(convert_to_jax, out)
+            return out
+
+        # Define the forward and backward passes for the VJP
+        def apply_fwd(params, *args, **kwargs):
+            return apply(params, *args, **kwargs), (params, args, kwargs)
+
+        def apply_bwd(res, grads):
+            params, args, kwargs = res
+            # Convert the input data and gradients from PyTorch to JAX representations
+            params = jax.tree_map(convert_to_pyt, params)
+            args = jax.tree_map(convert_to_pyt, args)
+            kwargs = jax.tree_map(convert_to_pyt, kwargs)
+            grads = jax.tree_map(convert_to_pyt, grads)
+            # Compute the gradients using the model function and convert them from JAX to PyTorch representations
+            grads = functorch.vjp(model_fn, params, *args, **kwargs)[1](grads)
+            grads = jax.tree_map(convert_to_jax, grads)
+            return grads
+
+        apply.defvjp(apply_fwd, apply_bwd)
+
+        # Return the apply function and the converted model parameters
+        return apply, model_params, model_buffer
+
+
 class NeuralNetworkPotentialFactory:
     """
     Factory class for creating instances of neural network potentials (NNP) that are traceable/scriptable and can be exported to torchscript.
@@ -272,10 +347,13 @@ class NeuralNetworkPotentialFactory:
     def create_nnp(
         use: Literal["training", "inference"],
         nnp_type: Literal["ANI2x", "SchNet", "PaiNN", "SAKE", "PhysNet"],
+        simulation_environment: Literal["PyTorch", "JAX"],
         nnp_parameters: Optional[Dict[str, Union[int, float]]] = {},
         training_parameters: Dict[str, Any] = {},
         compile_model: bool = False,
-    ) -> Union[Union["ANI2x", "SchNet", "PaiNN", "PhysNet"], "TrainingAdapter"]:
+    ) -> Union[
+        Union["ANI2x", "SchNet", "PaiNN", "PhysNet"], "TrainingAdapter", "JAXModel"
+    ]:
         """
         Creates an NNP instance of the specified type, configured either for training or inference.
 
@@ -307,7 +385,9 @@ class NeuralNetworkPotentialFactory:
 
         from modelforge.potential import _IMPLEMENTED_NNPS
 
-        def _return_specific_version_of_nnp(use: str, nnp_class):
+        def _return_specific_version_of_nnp(
+            use: str, nnp_class, simulation_environment: str
+        ):
             if use == "training":
                 nnp_instance = nnp_class(**nnp_parameters)
 
@@ -325,20 +405,18 @@ class NeuralNetworkPotentialFactory:
                     if compile_model
                     else nnp_instance
                 )
+                nnp_instance = (
+                    PyTorch2JAXConverter().convert_to_jax_model(nnp_instance)
+                    if simulation_environment == "JAX"
+                    else nnp_instance
+                )
                 return nnp_instance
             else:
                 raise ValueError("Unknown NNP type requested.")
 
-        if nnp_type == "ANI2x":
-            return _return_specific_version_of_nnp(use, _IMPLEMENTED_NNPS[nnp_type])
-        elif nnp_type == "SchNet":
-            return _return_specific_version_of_nnp(use, _IMPLEMENTED_NNPS[nnp_type])
-        elif nnp_type == "PaiNN":
-            return _return_specific_version_of_nnp(use, _IMPLEMENTED_NNPS[nnp_type])
-        elif nnp_type == "PhysNet":
-            return _return_specific_version_of_nnp(use, _IMPLEMENTED_NNPS[nnp_type])
-        else:
-            raise NotImplementedError("Unknown NNP type requested.")
+        return _return_specific_version_of_nnp(
+            use, _IMPLEMENTED_NNPS[nnp_type], simulation_environment
+        )
 
 
 from modelforge.potential.utils import NeuralNetworkData
@@ -493,7 +571,7 @@ class Postprocessing:
                 log.warning(f"{key} is not a valid field of DatasetStatistics.")
 
 
-class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
+class BaseNeuralNetworkPotential(Module, ABC):
     """Abstract base class for neural network potentials.
 
     Attributes
@@ -506,7 +584,12 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
         Module for reading out per molecule properties from atomic properties.
     """
 
-    def __init__(self, cutoff: unit.Quantity, only_unique_pairs: bool = False):
+    def __init__(
+        self,
+        cutoff: unit.Quantity,
+        only_unique_pairs: bool = False,
+        mode: Literal["training", "inference"] = "training",
+    ):
         """
         Initializes the neural network potential class with specified parameters.
 
@@ -518,6 +601,7 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
 
         from .models import Neighborlist
 
+        self.mode = mode
         super().__init__()
         self.calculate_distances_and_pairlist = Neighborlist(
             cutoff, only_unique_pairs=only_unique_pairs

@@ -740,7 +740,7 @@ class BaseNeuralNetworkPotential(Module, ABC):
 
         return nnp_input
 
-    def _input_checks(self, data: NamedTuple):
+    def _input_checks(self, data: Union[NamedTuple, NNPInput]):
         """
         Performs input validation checks.
 
@@ -757,7 +757,7 @@ class BaseNeuralNetworkPotential(Module, ABC):
             If the input data does not meet the expected criteria.
         """
         # check that the input is instance of NNPInput
-        assert isinstance(data, NNPInput)
+        assert isinstance(data, NNPInput) or isinstance(data, Tuple)
 
         nr_of_atoms = data.atomic_numbers.shape[0]
         assert data.atomic_numbers.shape == torch.Size([nr_of_atoms])

@@ -15,7 +15,7 @@ def train_model(request):
     model_name = request.param
     # Assuming NeuralNetworkPotentialFactory.create_nnp
     model = NeuralNetworkPotentialFactory.create_nnp(
-        use="training", nnp_type=model_name
+        use="training", nnp_type=model_name, simulation_environment="PyTorch"
     )
     return model
 

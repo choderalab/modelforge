@@ -95,14 +95,19 @@ def test_energy_scaling_and_offset():
     )
 
 
-def test_forward_pass(inference_model, batch):
+@pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
+def test_forward_pass(simulation_environment, inference_model, batch):
     # this test sends a single batch from different datasets through the model
 
     nnp_input = batch.nnp_input
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
     # test the forward pass through each of the models
-    output = inference_model(nnp_input).E
+    model = inference_model(simulation_environment)
+    if "JAX" in str(type(model)):
+        nnp_input = nnp_input.as_jax_namedtuple()
+
+    output = model(nnp_input).E
 
     # test tat we get an energie per molecule
     assert len(output) == nr_of_mols
@@ -350,7 +355,10 @@ def test_pairlist_on_dataset(initialized_dataset):
         assert shapePairlist[0] == 2
 
 
-def test_equivariant_energies_and_forces(batch, inference_model, equivariance_utils):
+@pytest.mark.parametrize("simulation_environment", ["PyTorch"])
+def test_equivariant_energies_and_forces(
+    simulation_environment, batch, inference_model, equivariance_utils
+):
     """
     Test the calculation of energies and forces for a molecule.
     NOTE: test will be adapted once we have a trained model.
@@ -362,13 +370,15 @@ def test_equivariant_energies_and_forces(batch, inference_model, equivariance_ut
     translation, rotation, reflection = equivariance_utils
     # define the tolerance
     atol = 1e-3
+    nnp_input = batch.nnp_input
+
     # initialize the models
-    model = inference_model.to(torch.float64)
+    model = inference_model(simulation_environment)
+    model = model.to(torch.float64)
 
     # ------------------- #
     # start the test
     # reference values
-    nnp_input = batch.nnp_input
     reference_result = model(nnp_input).E.double()
     reference_forces = -torch.autograd.grad(
         reference_result.sum(),

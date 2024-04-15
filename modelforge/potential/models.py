@@ -781,7 +781,7 @@ class BaseNeuralNetworkPotential(Module, ABC):
             The calculated energies and other properties from the forward pass.
         """
         # perform input checks
-        if self.mode == "safe":
+        if self.mode == "fast":
             self._input_checks(data)
         # prepare the input for the forward pass
         inputs = self.prepare_inputs(data)

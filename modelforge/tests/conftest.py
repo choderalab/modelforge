@@ -23,11 +23,13 @@ def train_model(request):
 @pytest.fixture(params=_MODELS_TO_TEST)
 def inference_model(request):
     model_name = request.param
-    # Assuming NeuralNetworkPotentialFactory.create_nnp
-    model = NeuralNetworkPotentialFactory.create_nnp(
-        use="inference", nnp_type=model_name
+    # simulation_environment needs to be taken from another parameter, not defined here.
+    # Assuming you pass simulation_environment to create_nnp in some way
+    return lambda env: NeuralNetworkPotentialFactory.create_nnp(
+        use="inference",
+        nnp_type=model_name,
+        simulation_environment=env,
     )
-    return model
 
 
 @pytest.fixture(params=_DATASETS_TO_TEST)
@@ -198,7 +200,7 @@ def equivariance_test_utils():
     """
 
     # Define translation function
-    #torch.manual_seed(12345)
+    # torch.manual_seed(12345)
     x_translation = torch.randn(
         size=(1, 3),
     )

@@ -307,7 +307,6 @@ def test_representation(setup_methane):
     from modelforge.potential import ANI2x
 
     mf_model = ANI2x()
-    mf_model._set_dtype()
     # perform input checks
     mf_model._input_checks(mf_input)
     # prepare the input for the forward pass

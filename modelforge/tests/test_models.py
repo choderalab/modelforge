@@ -4,6 +4,29 @@ from modelforge.potential import _IMPLEMENTED_NNPS
 
 
 @pytest.mark.parametrize("model_name", _IMPLEMENTED_NNPS)
+def test_JAX_wrapping(model_name, batch):
+    from modelforge.potential.models import (
+        NeuralNetworkPotentialFactory,
+    )
+
+    # inference model
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        use="inference",
+        nnp_type=model_name,
+        simulation_environment="JAX",
+    )
+    assert "JAX" in str(type(model))
+    nnp_input = batch.nnp_input.as_jax_namedtuple()
+    out = model(nnp_input).E
+    import jax
+
+    grad_fn = jax.grad(lambda pos: out.sum())  # Create a gradient function
+    forces = -grad_fn(
+        nnp_input.positions
+    )  # Evaluate gradient function and apply negative sign
+
+
+@pytest.mark.parametrize("model_name", _IMPLEMENTED_NNPS)
 @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
 def test_model_factory(model_name, simulation_environment):
     from modelforge.potential.models import (
@@ -85,7 +108,8 @@ def test_forward_pass(inference_model, batch):
     assert len(output) == nr_of_mols
 
 
-def test_calculate_energies_and_forces(inference_model, batch):
+@pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
+def test_calculate_energies_and_forces(simulation_environment, inference_model, batch):
     """
     Test the calculation of energies and forces for a molecule.
     """
@@ -96,13 +120,25 @@ def test_calculate_energies_and_forces(inference_model, batch):
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
     nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
 
-    # forward pass
-    result = inference_model(nnp_input).E
+    # The inference_model fixture now returns a function that expects an environment
+    model = inference_model(simulation_environment)
+    if "JAX" in str(type(model)):
+        nnp_input = nnp_input.as_jax_namedtuple()
 
-    # backpropagation
-    forces = -torch.autograd.grad(
-        result.sum(), nnp_input.positions, create_graph=True, retain_graph=True
-    )[0]
+    result = model(nnp_input).E
+
+    import jax
+
+    if "JAX" in str(type(model)):
+        grad_fn = jax.grad(lambda pos: result.sum())  # Create a gradient function
+        forces = -grad_fn(
+            nnp_input.positions
+        )  # Evaluate gradient function and apply negative sign
+    else:
+        # backpropagation
+        forces = -torch.autograd.grad(
+            result.sum(), nnp_input.positions, create_graph=True, retain_graph=True
+        )[0]
 
     assert result.shape == torch.Size([nr_of_mols])  #  only one molecule
     assert forces.shape == (nr_of_atoms_per_batch, 3)  #  only one molecule

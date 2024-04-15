@@ -221,7 +221,6 @@ def test_painn_representation_implementation():
     mf_nnp_input = input["modelforge_methane_input"]
 
     schnetpack_results = schnetpack_painn(spk_input)
-    modelforge_painn._set_dtype()
     modelforge_painn._input_checks(mf_nnp_input)
     pain_nn_input_mf = modelforge_painn.prepare_inputs(
         mf_nnp_input
@@ -578,7 +577,6 @@ def test_schnet_representation_implementation():
     mf_nnp_input = input["modelforge_methane_input"]
 
     schnetpack_results = schnetpack_schnet(spk_input)
-    modelforge_schnet._set_dtype()
     modelforge_schnet._input_checks(mf_nnp_input)
     schnet_nn_input_mf = modelforge_schnet.prepare_inputs(
         mf_nnp_input

@@ -212,7 +212,6 @@ class Neighborlist(Pairlist):
         self,
         positions: torch.Tensor,
         atomic_subsystem_indices: torch.Tensor,
-        only_unique_pairs: bool = False,
     ) -> PairListOutputs:
         """
         Forward pass to compute neighbor list considering a cutoff distance.
@@ -284,6 +283,9 @@ class PyTorch2JAXConverter:
         from pytorch2jax.pytorch2jax import convert_to_jax, convert_to_pyt
         import functorch
         from functorch import make_functional_with_buffers
+
+        # skip input checks
+        nnp_instance.mode = "fast"
 
         # Convert the PyTorch model to a functional representation and extract the model function and parameters
         model_fn, model_params, model_buffer = make_functional_with_buffers(
@@ -588,7 +590,7 @@ class BaseNeuralNetworkPotential(Module, ABC):
         self,
         cutoff: unit.Quantity,
         only_unique_pairs: bool = False,
-        mode: Literal["training", "inference"] = "training",
+        mode: Literal["safe", "fast"] = "safe",
     ):
         """
         Initializes the neural network potential class with specified parameters.
@@ -738,26 +740,6 @@ class BaseNeuralNetworkPotential(Module, ABC):
 
         return nnp_input
 
-    def _set_dtype(self):
-        """
-        Sets the data type for the model based on its parameters.
-
-        Ensures consistency in data types across the model's parameters.
-        """
-
-        dtypes = list({p.dtype for p in self.parameters()})
-        assert len(dtypes) == 1, f"Multiple dtypes: {dtypes}"
-
-        if not self._log_message_dtype:
-            log.debug(f"Setting dtype to {dtypes[0]}.")
-            self._log_message_dtype = True
-
-        if self._dtype is not None and self._dtype != dtypes[0]:
-            log.warning(f"Setting dtype to {dtypes[0]}.")
-            log.warning(f"This is new, be carful. You are resetting the dtype!")
-
-        self._dtype = dtypes[0]
-
     def _input_checks(self, data: NamedTuple):
         """
         Performs input validation checks.
@@ -798,10 +780,9 @@ class BaseNeuralNetworkPotential(Module, ABC):
         EnergyOutput
             The calculated energies and other properties from the forward pass.
         """
-        # adjust the dtype of the input tensors to match the model parameters
-        self._set_dtype()
         # perform input checks
-        self._input_checks(data)
+        if self.mode == "safe":
+            self._input_checks(data)
         # prepare the input for the forward pass
         inputs = self.prepare_inputs(data)
         # perform the forward pass implemented in the subclass

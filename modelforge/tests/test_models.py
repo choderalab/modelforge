@@ -95,6 +95,27 @@ def test_energy_scaling_and_offset():
     )
 
 
+def test_energy_between_simulation_environments(inference_model, batch):
+    # compare that the energy is the same for the JAX and PyTorch Model
+    import numpy as np
+    import torch
+
+    nnp_input = batch.nnp_input
+    # test the forward pass through each of the models
+    torch.manual_seed(42)
+    model = inference_model("PyTorch")
+
+    output_torch = model(nnp_input).E
+
+    torch.manual_seed(42)
+    model = inference_model("JAX")
+    nnp_input = nnp_input.as_jax_namedtuple()
+    output_jax = model(nnp_input).E
+
+    # test tat we get an energie per molecule
+    assert np.isclose(output_torch.sum().detach().numpy(), output_jax.sum())
+
+
 @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
 def test_forward_pass(simulation_environment, inference_model, batch):
     # this test sends a single batch from different datasets through the model

@@ -251,18 +251,46 @@ class Neighborlist(Pairlist):
         )
 
 
-from typing import Literal, Optional, Union
+from typing import Literal, Optional, Union, Callable
+import numpy as np
 
 
 class JAXModel:
+    """A model wrapper that facilitates calling a JAX function with predefined parameters and buffers.
 
-    def __init__(self, jax_fn, parameter, buffer, name: str):
+    Attributes
+    ----------
+    jax_fn : Callable
+        The JAX function to be called.
+    parameter : jax.
+        Parameters required by the JAX function.
+    buffer : Any
+        Buffers required by the JAX function.
+    name : str
+        Name of the model.
+    """
+
+    def __init__(
+        self, jax_fn: Callable, parameter: np.ndarray, buffer: np.ndarray, name: str
+    ):
         self.jax_fn = jax_fn
         self.parameter = parameter
         self.buffer = buffer
         self.name = name
 
     def __call__(self, data: NamedTuple):
+        """Calls the JAX function using the stored parameters and buffers along with additional data.
+
+        Parameters
+        ----------
+        data : NamedTuple
+            Data to be passed to the JAX function.
+
+        Returns
+        -------
+        Any
+            The result of the JAX function.
+        """
 
         return self.jax_fn(self.parameter, self.buffer, data)
 
@@ -273,11 +301,37 @@ class JAXModel:
 class PyTorch2JAXConverter:
 
     def convert_to_jax_model(self, nnp_instance) -> JAXModel:
+        """Converts a PyTorch neural network potential instance to a JAXModel.
+
+        Parameters
+        ----------
+        nnp_instance : Any
+            The neural network potential instance to convert.
+
+        Returns
+        -------
+        JAXModel
+            The converted JAX model.
+        """
+
         jax_fn, params, buffers = self._convert_pytnn_to_jax(nnp_instance)
         return JAXModel(jax_fn, params, buffers, nnp_instance.__class__.__name__)
 
     @staticmethod
-    def _convert_pytnn_to_jax(nnp_instance):
+    def _convert_pytnn_to_jax(nnp_instance) -> Tuple[Callable, np.ndarray, np.ndarray]:
+        """Internal method to convert PyTorch neural network parameters and buffers to JAX format.
+
+        Parameters
+        ----------
+        nnp_instance : Any
+            The PyTorch neural network instance.
+
+        Returns
+        -------
+        Tuple[Callable, Any, Any]
+            A tuple containing the JAX function, parameters, and buffers.
+        """
+
         import jax
         from jax import custom_vjp
         from pytorch2jax.pytorch2jax import convert_to_jax, convert_to_pyt
@@ -301,9 +355,9 @@ class PyTorch2JAXConverter:
         @custom_vjp
         def apply(params, *args, **kwargs):
             # Convert the input data from PyTorch to JAX representations
-            params = jax.tree_map(convert_to_pyt, params)
-            args = jax.tree_map(convert_to_pyt, args)
-            kwargs = jax.tree_map(convert_to_pyt, kwargs)
+            params, args, kwargs = map(
+                lambda x: jax.tree_map(convert_to_pyt, x), (params, args, kwargs)
+            )
             # Apply the model function to the input data
             out = model_fn(params, *args, **kwargs)
             # Convert the output data from JAX to PyTorch representations
@@ -316,15 +370,13 @@ class PyTorch2JAXConverter:
 
         def apply_bwd(res, grads):
             params, args, kwargs = res
-            # Convert the input data and gradients from PyTorch to JAX representations
-            params = jax.tree_map(convert_to_pyt, params)
-            args = jax.tree_map(convert_to_pyt, args)
-            kwargs = jax.tree_map(convert_to_pyt, kwargs)
+            params, args, kwargs = map(
+                lambda x: jax.tree_map(convert_to_pyt, x), (params, args, kwargs)
+            )
             grads = jax.tree_map(convert_to_pyt, grads)
             # Compute the gradients using the model function and convert them from JAX to PyTorch representations
             grads = functorch.vjp(model_fn, params, *args, **kwargs)[1](grads)
-            grads = jax.tree_map(convert_to_jax, grads)
-            return grads
+            return jax.tree_map(convert_to_jax, grads)
 
         apply.defvjp(apply_fwd, apply_bwd)
 

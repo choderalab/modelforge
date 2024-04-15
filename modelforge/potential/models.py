@@ -300,7 +300,9 @@ class JAXModel:
 
 class PyTorch2JAXConverter:
 
-    def convert_to_jax_model(self, nnp_instance) -> JAXModel:
+    def convert_to_jax_model(
+        self, nnp_instance: Union["ANI2x", "SchNet", "PaiNN", "PhysNet"]
+    ) -> JAXModel:
         """Converts a PyTorch neural network potential instance to a JAXModel.
 
         Parameters
@@ -318,7 +320,9 @@ class PyTorch2JAXConverter:
         return JAXModel(jax_fn, params, buffers, nnp_instance.__class__.__name__)
 
     @staticmethod
-    def _convert_pytnn_to_jax(nnp_instance) -> Tuple[Callable, np.ndarray, np.ndarray]:
+    def _convert_pytnn_to_jax(
+        nnp_instance: Union["ANI2x", "SchNet", "PaiNN", "PhysNet"]
+    ) -> Tuple[Callable, np.ndarray, np.ndarray]:
         """Internal method to convert PyTorch neural network parameters and buffers to JAX format.
 
         Parameters
@@ -402,8 +406,8 @@ class NeuralNetworkPotentialFactory:
         use: Literal["training", "inference"],
         nnp_type: Literal["ANI2x", "SchNet", "PaiNN", "SAKE", "PhysNet"],
         simulation_environment: Literal["PyTorch", "JAX"],
-        nnp_parameters: Optional[Dict[str, Union[int, float]]] = {},
-        training_parameters: Dict[str, Any] = {},
+        nnp_parameters: Optional[Dict[str, Union[int, float]]] = None,
+        training_parameters: Optional[Dict[str, Any]] = None,
         compile_model: bool = False,
     ) -> Union[
         Union["ANI2x", "SchNet", "PaiNN", "PhysNet"], "TrainingAdapter", "JAXModel"
@@ -413,10 +417,12 @@ class NeuralNetworkPotentialFactory:
 
         Parameters
         ----------
-        use : {'training', 'inference'}
+        use : str
             The use case for the NNP instance.
-        nnp_type : {'ANI2x', 'SchNet', 'PaiNN', 'SAKE', 'PhysNet'}
+        nnp_type : str
             The type of NNP to instantiate.
+        simulation_environment : str
+            The environment to use, either 'PyTorch' or 'JAX'.
         nnp_parameters : dict, optional
             Parameters specific to the NNP model, by default {}.
         training_parameters : dict, optional
@@ -439,38 +445,31 @@ class NeuralNetworkPotentialFactory:
 
         from modelforge.potential import _IMPLEMENTED_NNPS
 
-        def _return_specific_version_of_nnp(
-            use: str, nnp_class, simulation_environment: str
-        ):
-            if use == "training":
-                nnp_instance = nnp_class(**nnp_parameters)
+        nnp_parameters = nnp_parameters or {}
+        training_parameters = training_parameters or {}
 
-                nnp_instance = (
-                    torch.compile(nnp_instance, mode="max-autotune")
-                    if compile_model
-                    else nnp_instance
-                )
-                trainer = TrainingAdapter(model=nnp_instance, **training_parameters)
-                return trainer
-            elif use == "inference":
-                nnp_instance = nnp_class(**nnp_parameters)
-                nnp_instance = (
-                    torch.compile(nnp_instance, mode="max-autotune")
-                    if compile_model
-                    else nnp_instance
-                )
-                nnp_instance = (
-                    PyTorch2JAXConverter().convert_to_jax_model(nnp_instance)
-                    if simulation_environment == "JAX"
-                    else nnp_instance
-                )
-                return nnp_instance
+        # get NNP
+        nnp_class: Type = _IMPLEMENTED_NNPS.get(nnp_type)
+        if nnp_class is None:
+            raise NotImplementedError(f"NNP type {nnp_type} is not implemented.")
+
+        nnp_instance = nnp_class(**nnp_parameters)
+        
+        # add modifications to NNP if requested
+        
+        if compile_model:
+            nnp_instance = torch.compile(nnp_instance, mode="max-autotune")
+
+        if use == "training":
+            trainer = TrainingAdapter(model=nnp_instance, **training_parameters)
+            return trainer
+        elif use == "inference":
+            if simulation_environment == "JAX":
+                return PyTorch2JAXConverter().convert_to_jax_model(nnp_instance)
             else:
-                raise ValueError("Unknown NNP type requested.")
-
-        return _return_specific_version_of_nnp(
-            use, _IMPLEMENTED_NNPS[nnp_type], simulation_environment
-        )
+                return nnp_instance
+        else:
+            raise ValueError(f"Unsupported 'use' value: {use}")
 
 
 from modelforge.potential.utils import NeuralNetworkData

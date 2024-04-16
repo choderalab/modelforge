@@ -29,6 +29,9 @@ def test_train_with_lightning(train_model, initialized_dataset):
         initialized_dataset.train_dataloader(),
         initialized_dataset.val_dataloader(),
     )
+    # save checkpoint
+    trainer.save_checkpoint("test.chp")
+    model1 = model.load_from_checkpoint("test.chp")
 
 
 def test_hypterparameter_tuning_with_ray(train_model, initialized_dataset):

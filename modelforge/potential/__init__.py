@@ -8,7 +8,6 @@ from .utils import (
     AngularSymmetryFunction,
     FromAtomToMoleculeReduction,
 )
-from .models import TrainingAdapter
 from .models import NeuralNetworkPotentialFactory
 
 _IMPLEMENTED_NNPS = {

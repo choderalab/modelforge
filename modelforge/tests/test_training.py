@@ -32,7 +32,8 @@ def test_train_with_lightning(train_model, initialized_dataset):
     )
     # save checkpoint
     trainer.save_checkpoint("test.chp")
-    model1 = TrainingAdapter.load_from_checkpoint("test.chp")
+    model = TrainingAdapter.load_from_checkpoint("test.chp")
+    assert type(model) is not None
 
 
 def test_hypterparameter_tuning_with_ray(train_model, initialized_dataset):

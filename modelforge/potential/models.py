@@ -461,6 +461,10 @@ class NeuralNetworkPotentialFactory:
             nnp_instance = torch.compile(nnp_instance, mode="max-autotune")
 
         if use == "training":
+            if simulation_environment == "JAX":
+                log.warning(
+                    "Training in JAX is not availalbe. Falling back to PyTorch."
+                )
             trainer = TrainingAdapter(model=nnp_instance, **training_parameters)
             return trainer
         elif use == "inference":

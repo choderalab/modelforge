@@ -405,7 +405,7 @@ class NeuralNetworkPotentialFactory:
     def create_nnp(
         use: Literal["training", "inference"],
         nnp_type: Literal["ANI2x", "SchNet", "PaiNN", "SAKE", "PhysNet"],
-        simulation_environment: Literal["PyTorch", "JAX"],
+        simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
         nnp_parameters: Optional[Dict[str, Union[int, float]]] = None,
         training_parameters: Optional[Dict[str, Any]] = None,
         compile_model: bool = False,

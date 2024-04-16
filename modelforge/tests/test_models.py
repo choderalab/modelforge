@@ -95,6 +95,18 @@ def test_energy_scaling_and_offset():
     )
 
 
+@pytest.mark.parametrize("model_name", _IMPLEMENTED_NNPS)
+def test_state_dict_saving_and_loading(model_name):
+    from modelforge.potential import NeuralNetworkPotentialFactory
+    import torch
+
+    model = NeuralNetworkPotentialFactory.create_nnp("training", model_name, "PyTorch")
+    torch.save(model.state_dict(), "model.pth")
+
+    model = NeuralNetworkPotentialFactory.create_nnp("inference", model_name, "PyTorch")
+    model.load_state_dict(torch.load("model.pth"))
+
+
 def test_energy_between_simulation_environments(inference_model, batch):
     # compare that the energy is the same for the JAX and PyTorch Model
     import numpy as np

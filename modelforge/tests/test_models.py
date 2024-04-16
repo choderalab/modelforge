@@ -12,7 +12,7 @@ def test_JAX_wrapping(model_name, batch):
     # inference model
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="inference",
-        nnp_type=model_name,
+        nnp_name=model_name,
         simulation_environment="JAX",
     )
     assert "JAX" in str(type(model))
@@ -31,13 +31,13 @@ def test_JAX_wrapping(model_name, batch):
 def test_model_factory(model_name, simulation_environment):
     from modelforge.potential.models import (
         NeuralNetworkPotentialFactory,
-        TrainingAdapter,
     )
+    from modelforge.train.training import TrainingAdapter
 
     # inference model
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="inference",
-        nnp_type=model_name,
+        nnp_name=model_name,
         simulation_environment=simulation_environment,
     )
     assert model_name in str(type(model)) or "JAX" in str(type(model))

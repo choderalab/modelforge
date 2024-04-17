@@ -650,7 +650,6 @@ class BaseNeuralNetworkPotential(Module, ABC):
         self.calculate_distances_and_pairlist = Neighborlist(
             cutoff, only_unique_pairs=only_unique_pairs
         )
-        self._dtype: Optional[bool] = None  # set at runtime
         self._log_message_dtype = False
         self._log_message_units = False
         # initialize the per molecule readout module

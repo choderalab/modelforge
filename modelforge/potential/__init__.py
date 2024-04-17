@@ -8,6 +8,7 @@ from .utils import (
     AngularSymmetryFunction,
     FromAtomToMoleculeReduction,
 )
+
 from .models import NeuralNetworkPotentialFactory
 
 _IMPLEMENTED_NNPS = {
@@ -16,3 +17,8 @@ _IMPLEMENTED_NNPS = {
     "PaiNN": PaiNN,
     "PhysNet": PhysNet,
 }
+
+from typing import Literal, Union
+
+AllModelNames = Literal["ANI2x", "SchNet", "PaiNN", "PhysNet"]
+AllModelClasses = Union[ANI2x, SchNet, PaiNN, PhysNet]

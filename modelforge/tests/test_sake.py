@@ -327,8 +327,8 @@ def test_sake_model_against_reference():
     x = prepared_methane.positions.detach().numpy()
     variables = ref_sake.init(key, h, x, mask=mask)
 
-    variables["params"]["embedding_in"]["kernel"] = mf_sake.embedding_in.weight.detach().numpy().T
-    variables["params"]["embedding_in"]["bias"] = mf_sake.embedding_in.bias.detach().numpy().T
+    variables["params"]["embedding_in"]["kernel"] = mf_sake.embedding.weight.detach().numpy().T
+    variables["params"]["embedding_in"]["bias"] = mf_sake.embedding.bias.detach().numpy().T
     variables["params"]["embedding_out"]["layers_0"]["kernel"] = mf_sake.energy_layer[0].weight.detach().numpy().T
     variables["params"]["embedding_out"]["layers_0"]["bias"] = mf_sake.energy_layer[0].bias.detach().numpy().T
     variables["params"]["embedding_out"]["layers_2"]["kernel"] = mf_sake.energy_layer[2].weight.detach().numpy().T

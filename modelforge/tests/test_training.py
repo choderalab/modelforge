@@ -17,6 +17,7 @@ def test_train_with_lightning(train_model, initialized_dataset):
 
     from lightning import Trainer
     import torch
+    from modelforge.train.training import TrainingAdapter
 
     # Initialize PyTorch Lightning Trainer
     trainer = Trainer(max_epochs=2)
@@ -29,6 +30,10 @@ def test_train_with_lightning(train_model, initialized_dataset):
         initialized_dataset.train_dataloader(),
         initialized_dataset.val_dataloader(),
     )
+    # save checkpoint
+    trainer.save_checkpoint("test.chp")
+    model = TrainingAdapter.load_from_checkpoint("test.chp")
+    assert type(model) is not None
 
 
 def test_hypterparameter_tuning_with_ray(train_model, initialized_dataset):

@@ -15,7 +15,7 @@ def train_model(request):
     model_name = request.param
     # Assuming NeuralNetworkPotentialFactory.create_nnp
     model = NeuralNetworkPotentialFactory.create_nnp(
-        use="training", nnp_type=model_name, simulation_environment="PyTorch"
+        use="training", nnp_name=model_name, simulation_environment="PyTorch"
     )
     return model
 
@@ -27,7 +27,7 @@ def inference_model(request):
     # Assuming you pass simulation_environment to create_nnp in some way
     return lambda env: NeuralNetworkPotentialFactory.create_nnp(
         use="inference",
-        nnp_type=model_name,
+        nnp_name=model_name,
         simulation_environment=env,
     )
 

@@ -12,7 +12,7 @@ def test_JAX_wrapping(model_name, batch):
     # inference model
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="inference",
-        nnp_type=model_name,
+        nnp_name=model_name,
         simulation_environment="JAX",
     )
     assert "JAX" in str(type(model))
@@ -31,13 +31,13 @@ def test_JAX_wrapping(model_name, batch):
 def test_model_factory(model_name, simulation_environment):
     from modelforge.potential.models import (
         NeuralNetworkPotentialFactory,
-        TrainingAdapter,
     )
+    from modelforge.train.training import TrainingAdapter
 
     # inference model
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="inference",
-        nnp_type=model_name,
+        nnp_name=model_name,
         simulation_environment=simulation_environment,
     )
     assert model_name in str(type(model)) or "JAX" in str(type(model))
@@ -93,6 +93,18 @@ def test_energy_scaling_and_offset():
         output_with_ase.E - output_no_postprocessing.E,
         output_with_ase.molecular_ase,
     )
+
+
+@pytest.mark.parametrize("model_name", _IMPLEMENTED_NNPS)
+def test_state_dict_saving_and_loading(model_name):
+    from modelforge.potential import NeuralNetworkPotentialFactory
+    import torch
+
+    model = NeuralNetworkPotentialFactory.create_nnp("training", model_name, "PyTorch")
+    torch.save(model.state_dict(), "model.pth")
+
+    model = NeuralNetworkPotentialFactory.create_nnp("inference", model_name, "PyTorch")
+    model.load_state_dict(torch.load("model.pth"))
 
 
 def test_energy_between_simulation_environments(inference_model, batch):

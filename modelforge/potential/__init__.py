@@ -17,4 +17,5 @@ _IMPLEMENTED_NNPS = {
     "SchNet": SchNet,
     "PaiNN": PaiNN,
     "PhysNet": PhysNet,
+    "SAKE": SAKE,
 }

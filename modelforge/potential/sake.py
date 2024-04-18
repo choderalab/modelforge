@@ -83,14 +83,13 @@ class SAKE(BaseNeuralNetworkPotential):
 
         log.debug("Initializing SAKE model.")
         super().__init__(cutoff=cutoff)
-        print("self.cutoff", self.calculate_distances_and_pairlist.cutoff)
         self.nr_interaction_blocks = number_of_interaction_modules
         self.nr_heads = number_of_spatial_attention_heads
         self.max_Z = max_Z
 
         self.only_unique_pairs = False  # NOTE: for pairlist
 
-        self.embedding_in = Dense(max_Z, number_of_atom_features)
+        self.embedding = Dense(max_Z, number_of_atom_features)
         self.energy_layer = nn.Sequential(
             Dense(number_of_atom_features, number_of_atom_features),
             nn.SiLU(),
@@ -125,12 +124,13 @@ class SAKE(BaseNeuralNetworkPotential):
 
         number_of_atoms = data.atomic_numbers.shape[0]
 
-        atomic_embedding = self.embedding_in(F.one_hot(data.atomic_numbers.long(), num_classes=self.max_Z).float())
+        atomic_embedding = self.embedding(
+            F.one_hot(data.atomic_numbers.long(), num_classes=self.max_Z).to(self.embedding.weight.dtype))
 
         nnp_input = SAKENeuralNetworkInput(
             pair_indices=pairlist_output.pair_indices,
             number_of_atoms=number_of_atoms,
-            positions=data.positions,
+            positions=data.positions.to(self.embedding.weight.dtype),
             atomic_numbers=data.atomic_numbers,
             atomic_subsystem_indices=data.atomic_subsystem_indices,
             atomic_embedding=atomic_embedding
@@ -233,11 +233,12 @@ class SAKEInteraction(nn.Module):
         self.nr_coefficients = nr_coefficients
         self.nr_heads = nr_heads
         self.epsilon = epsilon
-        self.radial_symmetry_function_module = SAKERadialSymmetryFunction(number_of_radial_basis_functions=number_of_radial_basis_functions,
-                                                                          max_distance=cutoff,
-                                                                          dtype=torch.float32, trainable=True,
-                                                                          radial_basis_function=SAKERadialBasisFunction(
-                                                         cutoff, 0.0 * unit.nanometer))
+        self.radial_symmetry_function_module = SAKERadialSymmetryFunction(
+            number_of_radial_basis_functions=number_of_radial_basis_functions,
+            max_distance=cutoff,
+            dtype=torch.float32, trainable=True,
+            radial_basis_function=SAKERadialBasisFunction(
+                cutoff, 0.0 * unit.nanometer))
 
         self.node_mlp = nn.Sequential(
             Dense(self.nr_atom_basis + self.nr_heads * self.nr_edge_basis + self.nr_atom_basis_spatial,

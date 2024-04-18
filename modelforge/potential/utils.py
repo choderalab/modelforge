@@ -931,6 +931,60 @@ class AniRadialSymmetryFunction(RadialSymmetryFunction):
         return scale_factors
 
 
+class SAKERadialSymmetryFunction(RadialSymmetryFunction):
+    def calculate_radial_basis_centers(
+            self,
+            _unitless_min_distance,
+            _unitless_max_distance,
+            number_of_radial_basis_functions,
+            dtype,
+    ):
+        # initialize means and betas according to the default values in PhysNet
+        # https://pubs.acs.org/doi/10.1021/acs.jctc.9b00181
+
+        start_value = torch.exp(
+            torch.scalar_tensor(-_unitless_max_distance + _unitless_min_distance, dtype=dtype)
+        )
+        centers = torch.linspace(start_value, 1, number_of_radial_basis_functions, dtype=dtype)
+        return centers
+
+    def calculate_radial_scale_factor(
+            self,
+            _unitless_min_distance,
+            _unitless_max_distance,
+            number_of_radial_basis_functions,
+    ):
+        start_value = torch.exp(
+            torch.scalar_tensor(-_unitless_max_distance + _unitless_min_distance)
+        )
+        radial_scale_factor = torch.tensor(
+            [(2 / number_of_radial_basis_functions * (1 - start_value)) ** -2] * number_of_radial_basis_functions
+        )
+        return radial_scale_factor
+
+
+class SAKERadialBasisFunction(RadialBasisFunction):
+
+    def __init__(self, max_distance, min_distance):
+        super().__init__()
+        self._unitless_min_distance = min_distance.to(unit.nanometer).m
+        self.alpha = (5.0 * unit.nanometer / (max_distance - min_distance)).to_base_units().m  # check units
+
+    def compute(
+            self,
+            distances: torch.Tensor,
+            centers: torch.Tensor,
+            scale_factors: torch.Tensor,
+    ) -> torch.Tensor:
+        return torch.exp(
+            -scale_factors *
+            (torch.exp(
+                self.alpha *
+                (-distances.unsqueeze(-1) + self._unitless_min_distance))
+             - centers) ** 2
+        )
+
+
 def pair_list(
     atomic_subsystem_indices: torch.Tensor,
     only_unique_pairs: bool = False,

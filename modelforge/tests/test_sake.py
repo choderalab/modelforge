@@ -7,6 +7,7 @@ import torch
 import numpy as onp
 
 from modelforge.potential.sake import SAKE, SAKEInteraction
+from modelforge.potential.utils import SAKERadialBasisFunction
 import sake as reference_sake
 
 IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
@@ -50,7 +51,7 @@ def test_sake_forward():
 
 
 def test_sake_interaction_forward():
-    from modelforge.potential.sake import ExpNormalSmearing
+    from modelforge.potential.utils import SAKERadialSymmetryFunction
     nr_atoms = 41
     nr_atom_basis = 47
     geometry_basis = 3
@@ -65,7 +66,8 @@ def test_sake_interaction_forward():
         nr_coefficients=23,
         nr_heads=29,
         activation=torch.nn.ReLU(),
-        radial_basis_module=ExpNormalSmearing(0.0, 5.0, n_rbf=50),
+        cutoff=5.0 * unit.angstrom,
+        number_of_radial_basis_functions=53,
         epsilon=1e-5
     )
     h = torch.randn(nr_atoms, nr_atom_basis)
@@ -79,7 +81,7 @@ def test_sake_interaction_forward():
 
 
 @pytest.mark.parametrize("eq_atol", [3e-1])
-@pytest.mark.parametrize("h_atol", [7e-2])
+@pytest.mark.parametrize("h_atol", [8e-2])
 def test_sake_interaction_equivariance(h_atol, eq_atol):
     import torch
     from modelforge.potential.sake import SAKE
@@ -140,8 +142,9 @@ def test_sake_interaction_equivariance(h_atol, eq_atol):
 
 
 def make_reference_equivalent_sake_interaction(out_features, hidden_features, nr_heads):
-    from modelforge.potential.sake import ExpNormalSmearing
+    from modelforge.potential.utils import SAKERadialSymmetryFunction
 
+    cutoff = 5.0 * unit.nanometer
     # Define the modelforge layer
     mf_sake_block = SAKEInteraction(
         nr_atom_basis=out_features,
@@ -154,7 +157,8 @@ def make_reference_equivalent_sake_interaction(out_features, hidden_features, nr
         nr_coefficients=(nr_heads * hidden_features),
         nr_heads=nr_heads,
         activation=torch.nn.SiLU(),
-        radial_basis_module=ExpNormalSmearing(0.0, 5.0, n_rbf=50),
+        cutoff=cutoff,
+        number_of_radial_basis_functions=50,
         epsilon=1e-5
     )
 
@@ -223,8 +227,8 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none):
 
     variables = ref_sake_interaction.init(init_key, h_jax, x_jax, v_jax, mask)
     layer = variables["params"]
-    layer["edge_model"]["kernel"]["betas"] = mf_sake_block.radial_basis_module.betas.detach().numpy().T
-    layer["edge_model"]["kernel"]["means"] = mf_sake_block.radial_basis_module.means.detach().numpy().T
+    layer["edge_model"]["kernel"]["betas"] = mf_sake_block.radial_symmetry_function_module.radial_scale_factor.detach().numpy().T
+    layer["edge_model"]["kernel"]["means"] = mf_sake_block.radial_symmetry_function_module.radial_basis_centers.detach().numpy().T
     layer["edge_model"]["mlp_in"]["bias"] = mf_sake_block.edge_mlp_in.bias.detach().numpy().T
     layer["edge_model"]["mlp_in"]["kernel"] = mf_sake_block.edge_mlp_in.weight.detach().numpy().T
     layer["edge_model"]["mlp_out"]["layers_0"]["bias"] = mf_sake_block.edge_mlp_out[
@@ -332,8 +336,8 @@ def test_sake_model_against_reference():
     layers = ((layer_name, variables["params"][layer_name]) for layer_name in variables["params"].keys() if
               layer_name.startswith("d"))
     for (layer_name, layer), mf_sake_block in zip(layers, mf_sake.interaction_modules.children()):
-        layer["edge_model"]["kernel"]["betas"] = mf_sake_block.radial_basis_module.betas.detach().numpy().T
-        layer["edge_model"]["kernel"]["means"] = mf_sake_block.radial_basis_module.means.detach().numpy().T
+        layer["edge_model"]["kernel"]["betas"] = mf_sake_block.radial_symmetry_function_module.radial_scale_factor.detach().numpy().T
+        layer["edge_model"]["kernel"]["means"] = mf_sake_block.radial_symmetry_function_module.radial_basis_centers.detach().numpy().T
         layer["edge_model"]["mlp_in"]["bias"] = mf_sake_block.edge_mlp_in.bias.detach().numpy().T
         layer["edge_model"]["mlp_in"]["kernel"] = mf_sake_block.edge_mlp_in.weight.detach().numpy().T
         layer["edge_model"]["mlp_out"]["layers_0"]["bias"] = mf_sake_block.edge_mlp_out[

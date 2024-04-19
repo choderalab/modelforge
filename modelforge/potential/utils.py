@@ -45,12 +45,21 @@ class NNPInput:
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
 
-    def to(self, device: torch.device):
-        """Move all tensors in this instance to the specified device."""
-        self.atomic_numbers = self.atomic_numbers.to(device)
-        self.positions = self.positions.to(device)
-        self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(device)
-        self.total_charge = self.total_charge.to(device)
+    def to(
+        self,
+        *,
+        device: Optional[torch.device] = None,
+        dtype: Optional[torch.dtype] = None,
+    ):
+        """Move all tensors in this instance to the specified device/dtype."""
+
+        if device:
+            self.atomic_numbers = self.atomic_numbers.to(device)
+            self.positions = self.positions.to(device)
+            self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(device)
+            self.total_charge = self.total_charge.to(device)
+        if dtype:
+            self.positions = self.positions.to(dtype)
         return self
 
     def __post_init__(self):

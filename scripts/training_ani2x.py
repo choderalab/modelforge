@@ -1,8 +1,8 @@
-# This is an example script that trains an implemented model on the QM9 dataset.
+# This is an example script that trains the ANI2x model on the ANI2x dataset.
 from lightning import Trainer
 import torch
 
-# import the models implemented in modelforge, for now SchNet, PaiNN, ANI2x or PhysNet
+# import the dataset and model factory
 from modelforge.potential import NeuralNetworkPotentialFactory
 from modelforge.dataset.ani2x import ANI2xDataset
 
@@ -24,9 +24,6 @@ dataset.prepare_data(remove_self_energies=True, normalize=False)
 
 # Set up model
 model = NeuralNetworkPotentialFactory.create_nnp("training", "ANI2x")
-model = model.to(torch.float32)
-
-print(model)
 
 # set up traininer
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping

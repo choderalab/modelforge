@@ -47,7 +47,6 @@ class NNPInput:
 
     def to(
         self,
-        *,
         device: Optional[torch.device] = None,
         dtype: Optional[torch.dtype] = None,
     ):
@@ -128,14 +127,18 @@ class Metadata:
     number_of_atoms: int
     F: torch.Tensor = torch.tensor([], dtype=torch.float32)
 
-    def to(self, device: torch.device):
+    def to(self, device: Optional[torch.device], dtype: Optional[torch.dtype]):
         """Move all tensors in this instance to the specified device."""
-        self.E = self.E.to(device)
-        self.F = self.F.to(device)
-        self.atomic_subsystem_counts = self.atomic_subsystem_counts.to(device)
-        self.atomic_subsystem_indices_referencing_dataset = (
-            self.atomic_subsystem_indices_referencing_dataset.to(device)
-        )
+        if device:
+            self.E = self.E.to(device)
+            self.F = self.F.to(device)
+            self.atomic_subsystem_counts = self.atomic_subsystem_counts.to(device)
+            self.atomic_subsystem_indices_referencing_dataset = (
+                self.atomic_subsystem_indices_referencing_dataset.to(device)
+            )
+        if dtype:
+            self.E = self.E.to(dtype)
+            self.F = self.F.to(dtype)
         return self
 
 
@@ -144,9 +147,13 @@ class BatchData:
     nnp_input: NNPInput
     metadata: Metadata
 
-    def to(self, device: torch.device):
-        self.nnp_input = self.nnp_input.to(device)
-        self.metadata = self.metadata.to(device)
+    def to(
+        self,
+        device: Optional[torch.device] = None,
+        dtype: Optional[torch.dtype] = None,
+    ):
+        self.nnp_input = self.nnp_input.to(device=device, dtype=dtype)
+        self.metadata = self.metadata.to(device=device, dtype=dtype)
         return self
 
 

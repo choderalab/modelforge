@@ -64,6 +64,7 @@ def test_energy_scaling_and_offset():
         output_with_ase.molecular_ase,
     )
 
+
 def test_forward_pass(inference_model, batch):
     # this test sends a single batch from different datasets through the model
 
@@ -331,12 +332,12 @@ def test_equivariant_energies_and_forces(batch, inference_model, equivariance_ut
     # define the tolerance
     atol = 1e-3
     # initialize the models
-    model = inference_model.to(torch.float64)
+    model = inference_model.double()
 
     # ------------------- #
     # start the test
     # reference values
-    nnp_input = batch.nnp_input
+    nnp_input = batch.nnp_input.to(dtype=torch.float64)
     reference_result = model(nnp_input).E.double()
     reference_forces = -torch.autograd.grad(
         reference_result.sum(),

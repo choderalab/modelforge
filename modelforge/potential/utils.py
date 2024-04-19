@@ -127,7 +127,9 @@ class Metadata:
     number_of_atoms: int
     F: torch.Tensor = torch.tensor([], dtype=torch.float32)
 
-    def to(self, device: Optional[torch.device], dtype: Optional[torch.dtype]):
+    def to(
+        self, device: Optional[torch.device] = None, dtype: Optional[torch.dtype] = None
+    ):
         """Move all tensors in this instance to the specified device."""
         if device:
             self.E = self.E.to(device)

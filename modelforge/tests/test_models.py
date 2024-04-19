@@ -319,6 +319,34 @@ def test_pairlist_on_dataset(initialized_dataset):
         assert shapePairlist[0] == 2
 
 
+def test_casting(batch, inference_model):
+    # test dtype casting
+    import torch
+
+    batch_ = batch.to(dtype=torch.float64)
+    assert batch_.nnp_input.positions.dtype == torch.float64
+    batch_ = batch_.to(dtype=torch.float32)
+    assert batch_.nnp_input.positions.dtype == torch.float32
+
+    nnp_input = batch.nnp_input.to(dtype=torch.float64)
+    assert nnp_input.positions.dtype == torch.float64
+    nnp_input = batch.nnp_input.to(dtype=torch.float32)
+    assert nnp_input.positions.dtype == torch.float32
+    nnp_input = batch.metadata.to(dtype=torch.float64)
+
+    # cast input and model to torch.float64
+    model = inference_model.to(dtype=torch.float64)
+    nnp_input = batch.nnp_input.to(dtype=torch.float64)
+
+    model(nnp_input)
+
+    # cast input and model to torch.float64
+    model = inference_model.to(dtype=torch.float32)
+    nnp_input = batch.nnp_input.to(dtype=torch.float32)
+
+    model(nnp_input)
+
+
 def test_equivariant_energies_and_forces(batch, inference_model, equivariance_utils):
     """
     Test the calculation of energies and forces for a molecule.

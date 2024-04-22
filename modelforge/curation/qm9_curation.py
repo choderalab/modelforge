@@ -4,6 +4,7 @@ import numpy as np
 
 from typing import Optional, List
 from loguru import logger
+from openff.units import unit
 
 
 class QM9Curation(DatasetCuration):

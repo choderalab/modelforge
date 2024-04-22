@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 
 from typing import Dict, List, Optional
 from loguru import logger
+from openff.units import unit
 
 
 def dict_to_hdf5(

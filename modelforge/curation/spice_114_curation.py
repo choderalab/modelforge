@@ -1,6 +1,7 @@
 from modelforge.curation.curation_baseclass import DatasetCuration
 from typing import Optional
 from loguru import logger
+from openff.units import unit
 
 
 class SPICE114Curation(DatasetCuration):

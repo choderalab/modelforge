@@ -3,6 +3,7 @@ from typing import List, Tuple, Dict, Optional
 from modelforge.curation.curation_baseclass import *
 from retry import retry
 from tqdm import tqdm
+from openff.units import unit
 
 
 class SPICEOpenFFCuration(DatasetCuration):

@@ -1,8 +1,11 @@
 from typing import List, Optional, Dict, Tuple
 
-from modelforge.curation.curation_baseclass import *
+from modelforge.curation.curation_baseclass import DatasetCuration
 from retry import retry
 from tqdm import tqdm
+from openff.units import unit
+
+from loguru import logger
 
 
 class SPICE2Curation(DatasetCuration):

@@ -949,6 +949,60 @@ class AniRadialSymmetryFunction(RadialSymmetryFunction):
         return scale_factors
 
 
+class SAKERadialSymmetryFunction(RadialSymmetryFunction):
+    def calculate_radial_basis_centers(
+            self,
+            _unitless_min_distance,
+            _unitless_max_distance,
+            number_of_radial_basis_functions,
+            dtype,
+    ):
+        # initialize means and betas according to the default values in PhysNet
+        # https://pubs.acs.org/doi/10.1021/acs.jctc.9b00181
+
+        start_value = torch.exp(
+            torch.scalar_tensor(-_unitless_max_distance + _unitless_min_distance, dtype=dtype)
+        )
+        centers = torch.linspace(start_value, 1, number_of_radial_basis_functions, dtype=dtype)
+        return centers
+
+    def calculate_radial_scale_factor(
+            self,
+            _unitless_min_distance,
+            _unitless_max_distance,
+            number_of_radial_basis_functions,
+    ):
+        start_value = torch.exp(
+            torch.scalar_tensor(-_unitless_max_distance + _unitless_min_distance)
+        )
+        radial_scale_factor = torch.tensor(
+            [(2 / number_of_radial_basis_functions * (1 - start_value)) ** -2] * number_of_radial_basis_functions
+        )
+        return radial_scale_factor
+
+
+class SAKERadialBasisFunction(RadialBasisFunction):
+
+    def __init__(self, max_distance, min_distance):
+        super().__init__()
+        self._unitless_min_distance = min_distance.to(unit.nanometer).m
+        self.alpha = (5.0 * unit.nanometer / (max_distance - min_distance)).to_base_units().m  # check units
+
+    def compute(
+            self,
+            distances: torch.Tensor,
+            centers: torch.Tensor,
+            scale_factors: torch.Tensor,
+    ) -> torch.Tensor:
+        return torch.exp(
+            -scale_factors *
+            (torch.exp(
+                self.alpha *
+                (-distances.unsqueeze(-1) + self._unitless_min_distance))
+             - centers) ** 2
+        )
+
+
 def pair_list(
     atomic_subsystem_indices: torch.Tensor,
     only_unique_pairs: bool = False,
@@ -1046,3 +1100,58 @@ def neighbor_list_with_cutoff(
     pair_indices_within_cutoff = pair_indices[:, in_cutoff]
 
     return pair_indices_within_cutoff
+
+
+def scatter_softmax(
+        src: torch.Tensor, index: torch.Tensor, dim: int, dim_size: Optional[int] = None, device: Optional[torch.device] = None
+) -> torch.Tensor:
+    """
+    Softmax operation over all values in :attr:`src` tensor that share indices
+    specified in the :attr:`index` tensor along a given axis :attr:`dim`.
+
+    For one-dimensional tensors, the operation computes
+
+    .. math::
+        \mathrm{out}_i = {\textrm{softmax}(\mathrm{src})}_i =
+        \frac{\exp(\mathrm{src}_i)}{\sum_j \exp(\mathrm{src}_j)}
+
+    where :math:`\sum_j` is over :math:`j` such that
+    :math:`\mathrm{index}_j = i`.
+
+    Args:
+        src (Tensor): The source tensor.
+        index (LongTensor): The indices of elements to scatter.
+        dim (int, optional): The axis along which to index.
+            (default: :obj:`-1`)
+        dim_size: The number of classes, i.e. the number of unique indices in `index`.
+
+    :rtype: :class:`Tensor`
+
+    Adapted from: https://github.com/rusty1s/pytorch_scatter/blob/c31915e1c4ceb27b2e7248d21576f685dc45dd01/torch_scatter/composite/softmax.py
+    """
+    if not torch.is_floating_point(src):
+        raise ValueError('`scatter_softmax` can only be computed over tensors '
+                         'with floating point data types.')
+
+    assert dim >= 0, f"dim must be non-negative, got {dim}"
+    assert dim < src.dim(), f"dim must be less than the number of dimensions of src {src.dim()}, got {dim}"
+
+    out_shape = [
+        other_dim_size
+        if (other_dim != dim)
+        else dim_size
+        for (other_dim, other_dim_size)
+        in enumerate(src.shape)
+    ]
+
+    zeros = torch.zeros(out_shape, dtype=src.dtype, device=device)
+    max_value_per_index = zeros.scatter_reduce(dim, index, src, "amax", include_self=False)
+    max_per_src_element = max_value_per_index.gather(dim, index)
+
+    recentered_scores = src - max_per_src_element
+    recentered_scores_exp = recentered_scores.exp()
+
+    sum_per_index = torch.zeros(out_shape, dtype=src.dtype, device=device).scatter_add(dim, index, recentered_scores_exp)
+    normalizing_constants = sum_per_index.gather(dim, index)
+
+    return recentered_scores_exp.div(normalizing_constants)

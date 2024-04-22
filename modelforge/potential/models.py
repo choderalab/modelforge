@@ -291,6 +291,8 @@ class NeuralNetworkPotentialFactory:
             return _return_specific_version_of_nnp(use, _IMPLEMENTED_NNPS[nnp_type])
         elif nnp_type == "PhysNet":
             return _return_specific_version_of_nnp(use, _IMPLEMENTED_NNPS[nnp_type])
+        elif nnp_type == "SAKE":
+            return _return_specific_version_of_nnp(use, _IMPLEMENTED_NNPS[nnp_type])
         else:
             raise NotImplementedError("Unknown NNP type requested.")
 

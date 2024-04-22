@@ -1,5 +1,5 @@
 from modelforge.curation.curation_baseclass import DatasetCuration
-from modelforge.utils.units import *
+from modelforge.utils.units import chem_context
 import numpy as np
 
 from typing import Optional, List

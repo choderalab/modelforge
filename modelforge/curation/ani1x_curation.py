@@ -1,5 +1,4 @@
 from modelforge.curation.curation_baseclass import DatasetCuration
-from modelforge.utils.units import *
 from typing import Optional
 from loguru import logger
 

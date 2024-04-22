@@ -5,8 +5,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 from loguru import logger as log
-from modelforge.utils.units import *
-
 
 
 @dataclass
@@ -463,6 +461,8 @@ class AtomicSelfEnergies:
     _ase_tensor_for_indexing = None
 
     def __getitem__(self, key):
+        from modelforge.utils.units import chem_context
+
         if isinstance(key, int):
             # Convert atomic number to element symbol
             element = self.atomic_number_to_element.get(key)
@@ -486,6 +486,8 @@ class AtomicSelfEnergies:
 
     def __iter__(self) -> Iterator[Dict[str, float]]:
         """Iterate over the energies dictionary."""
+        from modelforge.utils.units import chem_context
+
         for element, energy in self.energies.items():
             atomic_number = self.element_to_atomic_number(element)
             yield (atomic_number, energy.to(unit.kilojoule_per_mole, "chem").m)

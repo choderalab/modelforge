@@ -90,11 +90,6 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
                 dataset[property_name.R].shape
             )
 
-        print("Z", self.properties_of_interest["atomic_numbers"].shape)
-        print("R", self.properties_of_interest["positions"].shape)
-        print("E", self.properties_of_interest["E"].shape)
-        print("Q", self.properties_of_interest["Q"].shape)
-        print("F", self.properties_of_interest["F"].shape)
         self.number_of_records = len(dataset["atomic_subsystem_counts"])
         self.number_of_atoms = len(dataset["atomic_numbers"])
         single_atom_start_idxs_by_rec = np.concatenate(
@@ -869,6 +864,7 @@ class TorchDataModule(pl.LightningDataModule):
 
             # remove self energies
             self.subtract_self_energies(torch_dataset, self_energies)
+
             # write the self energies that are removed from the dataset to disk
             import toml
 

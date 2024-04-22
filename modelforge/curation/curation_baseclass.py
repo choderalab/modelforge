@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 
 from typing import Dict, List, Optional
 from loguru import logger
-from modelforge.utils.units import *
 
 
 def dict_to_hdf5(
@@ -150,6 +149,9 @@ class DatasetCuration(ABC):
 
         """
         import pint
+
+        # this is needed for the "chem" context to convert hartrees to kj/mol
+        from modelforge.utils.units import chem_context
 
         for datapoint in self.data:
             for key, val in datapoint.items():

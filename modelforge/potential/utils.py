@@ -934,17 +934,17 @@ class AniRadialSymmetryFunction(RadialSymmetryFunction):
 class SAKERadialSymmetryFunction(RadialSymmetryFunction):
     def calculate_radial_basis_centers(
             self,
-            _unitless_min_distance,
-            _unitless_max_distance,
-            number_of_radial_basis_functions,
-            dtype,
+            _unitless_min_distance: float,
+            _unitless_max_distance: float,
+            number_of_radial_basis_functions: int,
+            dtype: torch.dtype,
     ):
         # initialize means and betas according to the default values in PhysNet
         # https://pubs.acs.org/doi/10.1021/acs.jctc.9b00181
 
         start_value = torch.exp(
             torch.scalar_tensor(-_unitless_max_distance + _unitless_min_distance, dtype=dtype)
-        )
+        ).item()
         centers = torch.linspace(start_value, 1, number_of_radial_basis_functions, dtype=dtype)
         return centers
 
@@ -968,7 +968,7 @@ class SAKERadialBasisFunction(RadialBasisFunction):
     def __init__(self, max_distance, min_distance):
         super().__init__()
         self._unitless_min_distance = min_distance.to(unit.nanometer).m
-        self.alpha = (5.0 * unit.nanometer / (max_distance - min_distance)).to_base_units().m  # check units
+        self.alpha = (5 * unit.angstrom / (max_distance - min_distance)).to_base_units().m  # check units
 
     def compute(
             self,
@@ -976,6 +976,9 @@ class SAKERadialBasisFunction(RadialBasisFunction):
             centers: torch.Tensor,
             scale_factors: torch.Tensor,
     ) -> torch.Tensor:
+        print("self.alpha", self.alpha)
+        print("self._unitless_min_distance", self._unitless_min_distance)
+        print("distances", distances)
         return torch.exp(
             -scale_factors *
             (torch.exp(

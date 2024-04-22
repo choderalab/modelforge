@@ -142,9 +142,8 @@ def test_sake_interaction_equivariance(h_atol, eq_atol):
 
 
 def make_reference_equivalent_sake_interaction(out_features, hidden_features, nr_heads):
-    from modelforge.potential.utils import SAKERadialSymmetryFunction
 
-    cutoff = 5.0 * unit.nanometer
+    cutoff = 5.0 * unit.angstrom
     # Define the modelforge layer
     mf_sake_block = SAKEInteraction(
         nr_atom_basis=out_features,
@@ -212,8 +211,10 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none):
                                                                                      nr_heads)
     # Generate random input data in JAX
     h_key, x_key, v_key, init_key = jax.random.split(key, 4)
-    h_jax = jax.random.normal(h_key, (nr_atoms, nr_atom_basis))
-    x_jax = jax.random.normal(x_key, (nr_atoms, geometry_basis))
+    h_bohr_mag = jax.random.normal(h_key, (nr_atoms, nr_atom_basis))
+    x_bohr_mag = jax.random.normal(x_key, (nr_atoms, geometry_basis))
+    h_jax = (h_bohr_mag * unit.bohr).to(unit.angstrom).m
+    x_jax = (x_bohr_mag * unit.bohr).to(unit.angstrom).m
     if v_is_none:
         v_jax = None
         v = torch.zeros((nr_atoms, geometry_basis))
@@ -222,8 +223,8 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none):
         v = torch.from_numpy(onp.array(v_jax))
 
     # Convert the input tensors from JAX to torch and reshape to diagonal batching
-    h = torch.from_numpy(onp.array(h_jax))
-    x = torch.from_numpy(onp.array(x_jax))
+    h = (torch.from_numpy(onp.array(h_bohr_mag)) * unit.bohr).to(unit.nanometer).m
+    x = (torch.from_numpy(onp.array(x_bohr_mag)) * unit.bohr).to(unit.nanometer).m
 
     variables = ref_sake_interaction.init(init_key, h_jax, x_jax, v_jax, mask)
     layer = variables["params"]
@@ -285,7 +286,7 @@ def test_sake_model_against_reference():
     key = jax.random.PRNGKey(1884)
     torch.manual_seed(1884)
     nr_interaction_blocks = 3
-    cutoff = 5.0 * unit.nanometer
+    cutoff = 5.0 * unit.angstrom
 
     mf_sake = SAKE(
         max_Z=max_Z,
@@ -406,5 +407,9 @@ def test_model_invariance():
     perturbed_out = model(perturbed_methane_input)
 
     assert torch.allclose(reference_out.E, perturbed_out.E)
+
+def test_jax_units():
+    bohr_array = jnp.arange(12) * unit.bohr
+    print(bohr_array.to(unit.angstrom))
 
 

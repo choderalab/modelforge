@@ -628,26 +628,6 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
 
         return nnp_input
 
-    def _set_dtype(self):
-        """
-        Sets the data type for the model based on its parameters.
-
-        Ensures consistency in data types across the model's parameters.
-        """
-
-        dtypes = list({p.dtype for p in self.parameters()})
-        assert len(dtypes) == 1, f"Multiple dtypes: {dtypes}"
-
-        if not self._log_message_dtype:
-            log.debug(f"Setting dtype to {dtypes[0]}.")
-            self._log_message_dtype = True
-
-        if self._dtype is not None and self._dtype != dtypes[0]:
-            log.warning(f"Setting dtype to {dtypes[0]}.")
-            log.warning(f"This is new, be carful. You are resetting the dtype!")
-
-        self._dtype = dtypes[0]
-
     def _input_checks(self, data: NamedTuple):
         """
         Performs input validation checks.
@@ -688,8 +668,6 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
         EnergyOutput
             The calculated energies and other properties from the forward pass.
         """
-        # adjust the dtype of the input tensors to match the model parameters
-        self._set_dtype()
         # perform input checks
         self._input_checks(data)
         # prepare the input for the forward pass

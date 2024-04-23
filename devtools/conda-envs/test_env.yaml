@@ -22,6 +22,7 @@ dependencies:
   - retry
   - sqlitedict
   - pytorch_scatter
+  - jax
 
   # Testing
   - pytest>=2.1
@@ -32,6 +33,7 @@ dependencies:
   - ray-train
   - ray-tune
   - torchani
+  - versioneer
 
   # Docs
   - sphinx_rtd_theme
@@ -39,3 +41,6 @@ dependencies:
   # pip installs
   - pip:
       - schnetpack>=2.0.0
+      - pytorch2jax
+      - flax
+      - git+https://github.com/ArnNag/sake.git@update_versioneer

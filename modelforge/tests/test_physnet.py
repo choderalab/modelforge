@@ -30,37 +30,51 @@ def test_rbf_equivalence():
     import tensorflow as tf
     import numpy as np
     import torch
+    from openff.units import unit
 
     number_of_radial_basis_functions = K = 20
-    cutoff = _unitless_max_distance = 5.0
+    cutoff = _unitless_max_distance = 0.5
     _unitless_min_distance = 0.0
 
-    # PhysNet implementation
+    #############################
+    # RBF
+    #############################
     # width
+    #################
+    # PhysNet implementation
     def softplus_inverse(x):
         return x + np.log(-np.expm1(-x))
 
-    widths = [softplus_inverse((0.5 / ((1.0 - np.exp(-cutoff)) / K)) ** 2)] * K
-    _widths = tf.nn.softplus(tf.Variable(np.asarray(widths), name="widths"))
-    pn_widths = _widths.numpy()
+    pn_widths = [softplus_inverse((0.5 / ((1.0 - np.exp(-cutoff)) / K)) ** 2)] * K
+    pn_widths = tf.nn.softplus(
+        tf.Variable(np.asarray(pn_widths), name="widths", dtype=tf.float32)
+    )
+    pn_widths_np = pn_widths.numpy()
 
     # Modelforge implementation
-    # width
     start_value = torch.exp(
         torch.scalar_tensor(-_unitless_max_distance + _unitless_min_distance)
     )
-    radial_scale_factor = torch.tensor(
+    mf_widths = torch.tensor(
         [(2 / number_of_radial_basis_functions * (1 - start_value)) ** -2]
         * number_of_radial_basis_functions
     )
-    mf_widths = radial_scale_factor.numpy()
+    mf_widths_np = mf_widths.numpy()
 
-    assert np.allclose(pn_widths, mf_widths)
+    assert np.allclose(pn_widths_np, mf_widths_np)
 
-    # PhysNet implementation
+    mf_widths_np = mf_rbf.calculate_radial_scale_factor(
+        _unitless_min_distance, _unitless_max_distance, number_of_radial_basis_functions
+    )
+    assert np.allclose(pn_widths_np, mf_widths_np)
+
     # center_position
+    #################
+    # PhysNet implementation
     centers = softplus_inverse(np.linspace(1.0, np.exp(-cutoff), K))
-    _centers = tf.nn.softplus(tf.Variable(np.asarray(centers), name="centers"))
+    _centers = tf.nn.softplus(
+        tf.Variable(np.asarray(centers), name="centers", dtype=tf.float32)
+    )
     pn_centers = _centers.numpy()
 
     start_value = torch.exp(
@@ -72,3 +86,34 @@ def test_rbf_equivalence():
     assert np.allclose(
         np.flip(pn_centers), mf_centers
     )  # NOTE: The PhysNet implementation uses the reverse order of the centers
+    mf_centers = mf_rbf.calculate_radial_basis_centers(
+        _unitless_min_distance,
+        _unitless_max_distance,
+        number_of_radial_basis_functions,
+        dtype=torch.float32,
+    )
+    assert np.allclose(
+        np.flip(pn_centers), mf_centers
+    )  # NOTE: The PhysNet implementation uses the reverse order of the centers
+
+    # rbf output
+    #################
+    # PhysNet implementation
+    D = random_tensor = tf.random.uniform(shape=(6, 1), minval=0, maxval=5)
+    D = tf.expand_dims(D, -1)  # necessary for proper broadcasting behaviour
+    pn_rbf_output = tf.exp(-pn_widths * (tf.exp(-D) - pn_centers) ** 2)
+
+    from modelforge.potential.utils import PhysNetRadialSymmetryFunction
+
+    mf_rbf = PhysNetRadialSymmetryFunction(
+        number_of_radial_basis_functions,
+        max_distance=_unitless_max_distance * unit.nanometer,
+    )
+
+    mf_rbf_output = mf_rbf(torch.tensor(D.numpy() / 10).squeeze())
+
+    assert np.allclose(pn_rbf_output.numpy().squeeze(), mf_rbf_output.numpy())
+
+    # test cutoff function
+    #################
+    # Physnet implementation

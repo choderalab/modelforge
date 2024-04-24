@@ -264,7 +264,6 @@ class NeuralNetworkPotentialFactory:
         def _return_specific_version_of_nnp(use: str, nnp_class):
             if use == "training":
                 nnp_instance = nnp_class(**nnp_parameters)
-
                 nnp_instance = (
                     torch.compile(nnp_instance, mode="max-autotune")
                     if compile_model

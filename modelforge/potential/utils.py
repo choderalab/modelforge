@@ -766,20 +766,20 @@ class RadialSymmetryFunction(nn.Module):
 
     def initialize_parameters(self):
         # convert to nanometer
-        _unitless_max_distance = self.max_distance.to(unit.nanometer).m
-        _unitless_min_distance = self.min_distance.to(unit.nanometer).m
+        _max_distance_in_nanometer = self.max_distance.to(unit.nanometer).m
+        _min_distance_in_nanometer = self.min_distance.to(unit.nanometer).m
 
         # calculate radial basis centers
         radial_basis_centers = self.calculate_radial_basis_centers(
-            _unitless_min_distance,
-            _unitless_max_distance,
+            _min_distance_in_nanometer,
+            _max_distance_in_nanometer,
             self.number_of_radial_basis_functions,
             self.dtype,
         )
         # calculate scale factors
         radial_scale_factor = self.calculate_radial_scale_factor(
-            _unitless_min_distance,
-            _unitless_max_distance,
+            _min_distance_in_nanometer,
+            _max_distance_in_nanometer,
             self.number_of_radial_basis_functions,
         )
 
@@ -795,16 +795,16 @@ class RadialSymmetryFunction(nn.Module):
 
     def calculate_radial_basis_centers(
         self,
-        _unitless_min_distance,
-        _unitless_max_distance,
+        _min_distance_in_nanometer,
+        _max_distance_in_nanometer,
         number_of_radial_basis_functions,
         dtype,
     ):
         # the default approach to calculate radial basis centers
         # can be overwritten by subclasses
         centers = torch.linspace(
-            _unitless_min_distance,
-            _unitless_max_distance,
+            _min_distance_in_nanometer,
+            _max_distance_in_nanometer,
             number_of_radial_basis_functions,
             dtype=dtype,
         )
@@ -812,15 +812,15 @@ class RadialSymmetryFunction(nn.Module):
 
     def calculate_radial_scale_factor(
         self,
-        _unitless_min_distance,
-        _unitless_max_distance,
+        _min_distance_in_nanometer,
+        _max_distance_in_nanometer,
         number_of_radial_basis_functions,
     ):
         # the default approach to calculate radial scale factors (each of them are scaled by the same value)
         # can be overwritten by subclasses
         scale_factors = torch.full(
             (number_of_radial_basis_functions,),
-            (_unitless_min_distance - _unitless_max_distance)
+            (_min_distance_in_nanometer - _max_distance_in_nanometer)
             / number_of_radial_basis_functions,
         )
         scale_factors = scale_factors * -15_000
@@ -875,14 +875,14 @@ class SchnetRadialSymmetryFunction(RadialSymmetryFunction):
 
     def calculate_radial_scale_factor(
         self,
-        _unitless_min_distance,
-        _unitless_max_distance,
+        _min_distance_in_nanometer,
+        _max_distance_in_nanometer,
         number_of_radial_basis_functions,
     ):
 
         scale_factors = torch.linspace(
-            _unitless_min_distance,
-            _unitless_max_distance,
+            _min_distance_in_nanometer,
+            _max_distance_in_nanometer,
             number_of_radial_basis_functions,
         )
 
@@ -925,14 +925,14 @@ class AniRadialSymmetryFunction(RadialSymmetryFunction):
 
     def calculate_radial_basis_centers(
         self,
-        _unitless_min_distance,
-        _unitless_max_distance,
+        _min_distance_in_nanometer,
+        _max_distance_in_nanometer,
         number_of_radial_basis_functions,
         dtype,
     ):
         centers = torch.linspace(
-            _unitless_min_distance,
-            _unitless_max_distance,
+            _min_distance_in_nanometer,
+            _max_distance_in_nanometer,
             number_of_radial_basis_functions + 1,
             dtype=dtype,
         )[:-1]
@@ -941,8 +941,8 @@ class AniRadialSymmetryFunction(RadialSymmetryFunction):
 
     def calculate_radial_scale_factor(
         self,
-        _unitless_min_distance,
-        _unitless_max_distance,
+        _min_distance_in_nanometer,
+        _max_distance_in_nanometer,
         number_of_radial_basis_functions,
     ):
         # ANI uses a predefined scaling factor
@@ -953,8 +953,8 @@ class AniRadialSymmetryFunction(RadialSymmetryFunction):
 class SAKERadialSymmetryFunction(RadialSymmetryFunction):
     def calculate_radial_basis_centers(
         self,
-        _unitless_min_distance,
-        _unitless_max_distance,
+        _min_distance_in_nanometer,
+        _max_distance_in_nanometer,
         number_of_radial_basis_functions,
         dtype,
     ):
@@ -963,7 +963,7 @@ class SAKERadialSymmetryFunction(RadialSymmetryFunction):
 
         start_value = torch.exp(
             torch.scalar_tensor(
-                -_unitless_max_distance + _unitless_min_distance, dtype=dtype
+                -_max_distance_in_nanometer + _min_distance_in_nanometer, dtype=dtype
             )
         )
         centers = torch.linspace(
@@ -973,12 +973,14 @@ class SAKERadialSymmetryFunction(RadialSymmetryFunction):
 
     def calculate_radial_scale_factor(
         self,
-        _unitless_min_distance,
-        _unitless_max_distance,
+        _min_distance_in_nanometer,
+        _max_distance_in_nanometer,
         number_of_radial_basis_functions,
     ):
         start_value = torch.exp(
-            torch.scalar_tensor(-_unitless_max_distance + _unitless_min_distance)
+            torch.scalar_tensor(
+                -_max_distance_in_nanometer + _min_distance_in_nanometer
+            )
         )
         radial_scale_factor = torch.tensor(
             [(2 / number_of_radial_basis_functions * (1 - start_value)) ** -2]
@@ -991,7 +993,7 @@ class SAKERadialBasisFunction(RadialBasisFunction):
 
     def __init__(self, max_distance, min_distance):
         super().__init__()
-        self._unitless_min_distance = min_distance.to(unit.nanometer).m
+        self._min_distance_in_nanometer = min_distance.to(unit.nanometer).m
         self.alpha = (
             (5.0 * unit.nanometer / (max_distance - min_distance)).to_base_units().m
         )  # check units
@@ -1007,7 +1009,7 @@ class SAKERadialBasisFunction(RadialBasisFunction):
             * (
                 torch.exp(
                     self.alpha
-                    * (-distances.unsqueeze(-1) + self._unitless_min_distance)
+                    * (-distances.unsqueeze(-1) + self._min_distance_in_nanometer)
                 )
                 - centers
             )

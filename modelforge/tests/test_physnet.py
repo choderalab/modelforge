@@ -33,8 +33,8 @@ def test_rbf_equivalence():
     from openff.units import unit
 
     number_of_radial_basis_functions = K = 20
-    cutoff = _unitless_max_distance = 0.5
-    _unitless_min_distance = 0.0
+    cutoff = _max_distance_in_nanometer = 0.5
+    _min_distance_in_nanometer = 0.0
 
     #############################
     # RBF
@@ -53,7 +53,7 @@ def test_rbf_equivalence():
 
     # Modelforge implementation
     start_value = torch.exp(
-        torch.scalar_tensor(-_unitless_max_distance + _unitless_min_distance)
+        torch.scalar_tensor(-_max_distance_in_nanometer + _min_distance_in_nanometer)
     )
     mf_widths = torch.tensor(
         [(2 / number_of_radial_basis_functions * (1 - start_value)) ** -2]
@@ -64,7 +64,9 @@ def test_rbf_equivalence():
     assert np.allclose(pn_widths_np, mf_widths_np)
 
     mf_widths_np = mf_rbf.calculate_radial_scale_factor(
-        _unitless_min_distance, _unitless_max_distance, number_of_radial_basis_functions
+        _min_distance_in_nanometer,
+        _max_distance_in_nanometer,
+        number_of_radial_basis_functions,
     )
     assert np.allclose(pn_widths_np, mf_widths_np)
 
@@ -78,7 +80,7 @@ def test_rbf_equivalence():
     pn_centers = _centers.numpy()
 
     start_value = torch.exp(
-        torch.scalar_tensor(-_unitless_max_distance + _unitless_min_distance)
+        torch.scalar_tensor(-_max_distance_in_nanometer + _min_distance_in_nanometer)
     )
     centers = torch.linspace(start_value, 1, number_of_radial_basis_functions)
 
@@ -87,8 +89,8 @@ def test_rbf_equivalence():
         np.flip(pn_centers), mf_centers
     )  # NOTE: The PhysNet implementation uses the reverse order of the centers
     mf_centers = mf_rbf.calculate_radial_basis_centers(
-        _unitless_min_distance,
-        _unitless_max_distance,
+        _min_distance_in_nanometer,
+        _max_distance_in_nanometer,
         number_of_radial_basis_functions,
         dtype=torch.float32,
     )
@@ -107,7 +109,7 @@ def test_rbf_equivalence():
 
     mf_rbf = PhysNetRadialSymmetryFunction(
         number_of_radial_basis_functions,
-        max_distance=_unitless_max_distance * unit.nanometer,
+        max_distance=_max_distance_in_nanometer * unit.nanometer,
     )
 
     mf_rbf_output = mf_rbf(torch.tensor(D.numpy() / 10).squeeze())

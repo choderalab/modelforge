@@ -229,7 +229,7 @@ def test_radial_symmetry_function_against_reference():
 
 @pytest.mark.parametrize("include_self_pairs", [True, False])
 @pytest.mark.parametrize("v_is_none", [True, False])
-@pytest.mark.parametrize("atol", [9e-7])
+@pytest.mark.parametrize("atol", [1e-4, 1e-5, 1e-6, 1e-7, 9e-7])
 def test_sake_layer_against_reference(include_self_pairs, v_is_none, atol):
     nr_atoms = 13
     out_features = 11

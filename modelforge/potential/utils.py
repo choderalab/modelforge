@@ -983,8 +983,7 @@ class SAKERadialSymmetryFunction(RadialSymmetryFunction):
             )
         )  # NOTE: this is defined in Angstrom
         radial_scale_factor = torch.tensor(
-            [(2 / number_of_radial_basis_functions * (1 - start_value)) ** -2]
-            * number_of_radial_basis_functions  # FIXME: replace with torch.full
+            torch.full((number_of_radial_basis_functions, ), (2 / number_of_radial_basis_functions * (1 - start_value)) ** -2)
         )
         return radial_scale_factor
 
@@ -994,12 +993,6 @@ class SAKERadialBasisFunction(RadialBasisFunction):
     def __init__(self, min_distance):
         super().__init__()
         self._min_distance_in_nanometer = min_distance.to(unit.nanometer).m
-        # self.alpha = (
-        #    (5.0 * unit.nanometer / (max_distance - min_distance)).to_base_units().m
-        # )  # check units
-        self.alpha = (
-            1  # NOTE: FIXME: this variable is not present in the PhysNet RBF function
-        )
 
     def compute(
             self,
@@ -1011,8 +1004,7 @@ class SAKERadialBasisFunction(RadialBasisFunction):
             -scale_factors
             * (
                     torch.exp(
-                        self.alpha
-                        * (-distances.unsqueeze(-1) + self._min_distance_in_nanometer)
+                        (-distances.unsqueeze(-1) + self._min_distance_in_nanometer)
                         * 10
                     )
                     - centers

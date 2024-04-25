@@ -198,6 +198,8 @@ def test_radial_symmetry_function_against_reference():
     number_of_radial_basis_functions = 11
     cutoff_upper = 6.0 * unit.bohr
     cutoff_lower = 2.0 * unit.bohr
+    mf_unit = unit.nanometer
+    ref_unit = unit.nanometer
 
     radial_symmetry_function_module = SAKERadialSymmetryFunction(
         number_of_radial_basis_functions=number_of_radial_basis_functions,
@@ -206,13 +208,13 @@ def test_radial_symmetry_function_against_reference():
         dtype=torch.float32, trainable=False,
         radial_basis_function=SAKERadialBasisFunction(
             cutoff_lower))
-    ref_radial_basis_module = RefExpNormalSmearing(num_rbf=number_of_radial_basis_functions, cutoff_upper=cutoff_upper.to(unit.angstrom).m, cutoff_lower=cutoff_lower.to(unit.angstrom).m)
+    ref_radial_basis_module = RefExpNormalSmearing(num_rbf=number_of_radial_basis_functions, cutoff_upper=cutoff_upper.to(ref_unit).m, cutoff_lower=cutoff_lower.to(ref_unit).m)
     key = jax.random.PRNGKey(1884)
 
     # Generate random input data in JAX
     d_ij_bohr_mag = jax.random.normal(key, (nr_atoms, nr_atoms, 1))
-    d_ij_jax = (d_ij_bohr_mag * unit.bohr).to(unit.angstrom).m
-    d_ij = torch.from_numpy(onp.array((d_ij_bohr_mag * unit.bohr).to(unit.nanometer).m)).reshape(nr_atoms ** 2)
+    d_ij_jax = (d_ij_bohr_mag * unit.bohr).to(ref_unit).m
+    d_ij = torch.from_numpy(onp.array((d_ij_bohr_mag * unit.bohr).to(mf_unit).m)).reshape(nr_atoms ** 2)
 
     mf_rbf = radial_symmetry_function_module(d_ij)
     variables = ref_radial_basis_module.init(key, d_ij_jax)
@@ -227,7 +229,7 @@ def test_radial_symmetry_function_against_reference():
 
 @pytest.mark.parametrize("include_self_pairs", [True, False])
 @pytest.mark.parametrize("v_is_none", [True, False])
-@pytest.mark.parametrize("atol", [1e-1, 1e-2, 1e-3, 1e-4, 1e-5])
+@pytest.mark.parametrize("atol", [9e-7])
 def test_sake_layer_against_reference(include_self_pairs, v_is_none, atol):
     nr_atoms = 13
     out_features = 11
@@ -236,6 +238,8 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none, atol):
     nr_heads = 5
     nr_atom_basis = out_features
     nr_pairs = 17
+    mf_unit = unit.nanometer
+    ref_unit = unit.nanometer
     key = jax.random.PRNGKey(1884)
     torch.manual_seed(1884)
 
@@ -247,20 +251,22 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none, atol):
     h_key, x_key, v_key, init_key = jax.random.split(key, 4)
     h_jax = jax.random.normal(h_key, (nr_atoms, nr_atom_basis))
     x_bohr_mag = jax.random.normal(x_key, (nr_atoms, geometry_basis))
-    x_jax = (x_bohr_mag * unit.bohr).to(unit.angstrom).m
+    x_jax = (x_bohr_mag * unit.bohr).to(ref_unit).m
     if v_is_none:
         v_jax = None
         v = torch.zeros((nr_atoms, geometry_basis))
     else:
-        v_jax = jax.random.normal(v_key, (nr_atoms, geometry_basis))
-        v = torch.from_numpy(onp.array(v_jax))
+        v_bohr_mag = jax.random.normal(v_key, (nr_atoms, geometry_basis))
+        v_jax = (v_bohr_mag * unit.bohr).to(ref_unit).m
+        v = torch.from_numpy(onp.array((v_bohr_mag * unit.bohr).to(mf_unit).m))
 
     # Convert the input tensors from JAX to torch and reshape to diagonal batching
     h = (torch.from_numpy(onp.array(h_jax)))
-    x = (torch.from_numpy(onp.array(x_bohr_mag)) * unit.bohr).to(unit.nanometer).m
+    x = (torch.from_numpy(onp.array(x_bohr_mag)) * unit.bohr).to(ref_unit).m
 
     variables = ref_sake_interaction.init(init_key, h_jax, x_jax, v_jax, mask)
     layer = variables["params"]
+
     assert torch.allclose(torch.from_numpy(onp.array(layer["edge_model"]["kernel"]["betas"])),
                           mf_sake_block.radial_symmetry_function_module.radial_scale_factor.detach().T)
     assert torch.allclose(torch.from_numpy(onp.array(layer["edge_model"]["kernel"]["means"])),
@@ -306,15 +312,15 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none, atol):
     ref_x_is_nan = torch.from_numpy(onp.isnan(ref_x))
     ref_v_is_nan = torch.from_numpy(onp.isnan(ref_v))
 
-    print(f"{ref_x=}")
-    print(f"{mf_x=}")
-    print("quotient", torch.div(torch.from_numpy(onp.array(ref_x)), mf_x))
+    print(f"{ref_h_is_nan.sum()} NaNs in ref_h")
+    print(f"{ref_x_is_nan.sum()} NaNs in ref_x")
+    print(f"{ref_v_is_nan.sum()} NaNs in ref_v")
     assert torch.allclose(torch.nan_to_num(mf_h, nan=0.0) * ~ref_h_is_nan,
-                          torch.nan_to_num(torch.from_numpy(onp.array(ref_h)), nan=0.0), atol=atol)
+                          torch.nan_to_num(torch.from_numpy(onp.array(ref_h)), nan=0.0))
     assert torch.allclose(torch.nan_to_num(mf_x, nan=0.0) * ~ref_x_is_nan,
-                          torch.nan_to_num(torch.from_numpy(onp.array((ref_x * unit.angstrom).to(unit.nanometer).m)), nan=0.0), atol=atol)
+                          torch.nan_to_num(torch.from_numpy(onp.array((ref_x * ref_unit).to(mf_unit).m)), nan=0.0))
     assert torch.allclose(torch.nan_to_num(mf_v, nan=0.0) * ~ref_v_is_nan,
-                          torch.nan_to_num(torch.from_numpy(onp.array((ref_v * unit.angstrom).to(unit.nanometer).m)), nan=0.0), atol=atol)
+                          torch.nan_to_num(torch.from_numpy(onp.array((ref_v * ref_unit).to(mf_unit).m)), nan=0.0), atol=atol)
 
 
 def test_sake_model_against_reference():

@@ -43,4 +43,4 @@ dependencies:
       - schnetpack>=2.0.0
       - pytorch2jax
       - flax
-      - git+https://github.com/ArnNag/sake.git@remove_alpha
+      - git+https://github.com/ArnNag/sake.git@nanometer

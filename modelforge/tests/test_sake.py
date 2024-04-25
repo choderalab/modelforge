@@ -51,7 +51,6 @@ def test_sake_forward():
 
 
 def test_sake_interaction_forward():
-    from modelforge.potential.utils import SAKERadialSymmetryFunction
     nr_atoms = 41
     nr_atom_basis = 47
     geometry_basis = 3
@@ -82,7 +81,7 @@ def test_sake_interaction_forward():
 
 @pytest.mark.parametrize("eq_atol", [3e-1])
 @pytest.mark.parametrize("h_atol", [8e-2])
-def test_sake_interaction_equivariance(h_atol, eq_atol):
+def test_sake_layer_equivariance(h_atol, eq_atol):
     import torch
     from modelforge.potential.sake import SAKE
     from dataclasses import replace
@@ -142,9 +141,7 @@ def test_sake_interaction_equivariance(h_atol, eq_atol):
 
 
 def make_reference_equivalent_sake_interaction(out_features, hidden_features, nr_heads):
-    from modelforge.potential.utils import SAKERadialSymmetryFunction
-
-    cutoff = 5.0 * unit.nanometer
+    cutoff = 5.0 * unit.angstrom
     # Define the modelforge layer
     mf_sake_block = SAKEInteraction(
         nr_atom_basis=out_features,
@@ -193,9 +190,45 @@ def make_equivalent_pairlist_mask(key, nr_atoms, nr_pairs, include_self_pairs):
     return pairlist, mask
 
 
+def test_radial_symmetry_function_against_reference():
+    from modelforge.potential.utils import SAKERadialSymmetryFunction, SAKERadialBasisFunction
+    from sake.utils import ExpNormalSmearing as RefExpNormalSmearing
+
+    nr_atoms = 13
+    number_of_radial_basis_functions = 11
+    cutoff_upper = 6.0 * unit.bohr
+    cutoff_lower = 2.0 * unit.bohr
+
+    radial_symmetry_function_module = SAKERadialSymmetryFunction(
+        number_of_radial_basis_functions=number_of_radial_basis_functions,
+        max_distance=cutoff_upper,
+        min_distance=cutoff_lower,
+        dtype=torch.float32, trainable=False,
+        radial_basis_function=SAKERadialBasisFunction(
+            cutoff_lower))
+    ref_radial_basis_module = RefExpNormalSmearing(num_rbf=number_of_radial_basis_functions, cutoff_upper=cutoff_upper.to(unit.angstrom).m, cutoff_lower=cutoff_lower.to(unit.angstrom).m)
+    key = jax.random.PRNGKey(1884)
+
+    # Generate random input data in JAX
+    d_ij_bohr_mag = jax.random.normal(key, (nr_atoms, nr_atoms, 1))
+    d_ij_jax = (d_ij_bohr_mag * unit.bohr).to(unit.angstrom).m
+    d_ij = torch.from_numpy(onp.array((d_ij_bohr_mag * unit.bohr).to(unit.nanometer).m)).reshape(nr_atoms ** 2)
+
+    mf_rbf = radial_symmetry_function_module(d_ij)
+    variables = ref_radial_basis_module.init(key, d_ij_jax)
+
+    assert torch.allclose(torch.from_numpy(onp.array(variables["params"]["means"])), radial_symmetry_function_module.radial_basis_centers.detach().T)
+    assert torch.allclose(torch.from_numpy(onp.array(variables["params"]["betas"])), radial_symmetry_function_module.radial_scale_factor.detach().T)
+
+    ref_rbf = ref_radial_basis_module.apply(variables, d_ij_jax)
+
+    assert torch.allclose(mf_rbf, torch.from_numpy(onp.array(ref_rbf)).reshape(nr_atoms ** 2, number_of_radial_basis_functions))
+
+
 @pytest.mark.parametrize("include_self_pairs", [True, False])
 @pytest.mark.parametrize("v_is_none", [True, False])
-def test_sake_layer_against_reference(include_self_pairs, v_is_none):
+@pytest.mark.parametrize("atol", [1e-1, 1e-2, 1e-3, 1e-4, 1e-5])
+def test_sake_layer_against_reference(include_self_pairs, v_is_none, atol):
     nr_atoms = 13
     out_features = 11
     hidden_features = 7
@@ -213,7 +246,8 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none):
     # Generate random input data in JAX
     h_key, x_key, v_key, init_key = jax.random.split(key, 4)
     h_jax = jax.random.normal(h_key, (nr_atoms, nr_atom_basis))
-    x_jax = jax.random.normal(x_key, (nr_atoms, geometry_basis))
+    x_bohr_mag = jax.random.normal(x_key, (nr_atoms, geometry_basis))
+    x_jax = (x_bohr_mag * unit.bohr).to(unit.angstrom).m
     if v_is_none:
         v_jax = None
         v = torch.zeros((nr_atoms, geometry_basis))
@@ -222,13 +256,15 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none):
         v = torch.from_numpy(onp.array(v_jax))
 
     # Convert the input tensors from JAX to torch and reshape to diagonal batching
-    h = torch.from_numpy(onp.array(h_jax))
-    x = torch.from_numpy(onp.array(x_jax))
+    h = (torch.from_numpy(onp.array(h_jax)))
+    x = (torch.from_numpy(onp.array(x_bohr_mag)) * unit.bohr).to(unit.nanometer).m
 
     variables = ref_sake_interaction.init(init_key, h_jax, x_jax, v_jax, mask)
     layer = variables["params"]
-    layer["edge_model"]["kernel"]["betas"] = mf_sake_block.radial_symmetry_function_module.radial_scale_factor.detach().numpy().T
-    layer["edge_model"]["kernel"]["means"] = mf_sake_block.radial_symmetry_function_module.radial_basis_centers.detach().numpy().T
+    assert torch.allclose(torch.from_numpy(onp.array(layer["edge_model"]["kernel"]["betas"])),
+                          mf_sake_block.radial_symmetry_function_module.radial_scale_factor.detach().T)
+    assert torch.allclose(torch.from_numpy(onp.array(layer["edge_model"]["kernel"]["means"])),
+                          mf_sake_block.radial_symmetry_function_module.radial_basis_centers.detach().T)
     layer["edge_model"]["mlp_in"]["bias"] = mf_sake_block.edge_mlp_in.bias.detach().numpy().T
     layer["edge_model"]["mlp_in"]["kernel"] = mf_sake_block.edge_mlp_in.weight.detach().numpy().T
     layer["edge_model"]["mlp_out"]["layers_0"]["bias"] = mf_sake_block.edge_mlp_out[
@@ -270,12 +306,15 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none):
     ref_x_is_nan = torch.from_numpy(onp.isnan(ref_x))
     ref_v_is_nan = torch.from_numpy(onp.isnan(ref_v))
 
+    print(f"{ref_x=}")
+    print(f"{mf_x=}")
+    print("quotient", torch.div(torch.from_numpy(onp.array(ref_x)), mf_x))
     assert torch.allclose(torch.nan_to_num(mf_h, nan=0.0) * ~ref_h_is_nan,
-                          torch.nan_to_num(torch.from_numpy(onp.array(ref_h)), nan=0.0))
+                          torch.nan_to_num(torch.from_numpy(onp.array(ref_h)), nan=0.0), atol=atol)
     assert torch.allclose(torch.nan_to_num(mf_x, nan=0.0) * ~ref_x_is_nan,
-                          torch.nan_to_num(torch.from_numpy(onp.array(ref_x)), nan=0.0))
+                          torch.nan_to_num(torch.from_numpy(onp.array(ref_x)), nan=0.0), atol=atol)
     assert torch.allclose(torch.nan_to_num(mf_v, nan=0.0) * ~ref_v_is_nan,
-                          torch.nan_to_num(torch.from_numpy(onp.array(ref_v)), nan=0.0))
+                          torch.nan_to_num(torch.from_numpy(onp.array(ref_v)), nan=0.0), atol=atol)
 
 
 def test_sake_model_against_reference():
@@ -285,7 +324,7 @@ def test_sake_model_against_reference():
     key = jax.random.PRNGKey(1884)
     torch.manual_seed(1884)
     nr_interaction_blocks = 3
-    cutoff = 5.0 * unit.nanometer
+    cutoff = 5.0 * unit.angstrom
 
     mf_sake = SAKE(
         max_Z=max_Z,
@@ -336,8 +375,10 @@ def test_sake_model_against_reference():
     layers = ((layer_name, variables["params"][layer_name]) for layer_name in variables["params"].keys() if
               layer_name.startswith("d"))
     for (layer_name, layer), mf_sake_block in zip(layers, mf_sake.interaction_modules.children()):
-        layer["edge_model"]["kernel"]["betas"] = mf_sake_block.radial_symmetry_function_module.radial_scale_factor.detach().numpy().T
-        layer["edge_model"]["kernel"]["means"] = mf_sake_block.radial_symmetry_function_module.radial_basis_centers.detach().numpy().T
+        layer["edge_model"]["kernel"][
+            "betas"] = mf_sake_block.radial_symmetry_function_module.radial_scale_factor.detach().numpy().T
+        layer["edge_model"]["kernel"][
+            "means"] = mf_sake_block.radial_symmetry_function_module.radial_basis_centers.detach().numpy().T
         layer["edge_model"]["mlp_in"]["bias"] = mf_sake_block.edge_mlp_in.bias.detach().numpy().T
         layer["edge_model"]["mlp_in"]["kernel"] = mf_sake_block.edge_mlp_in.weight.detach().numpy().T
         layer["edge_model"]["mlp_out"]["layers_0"]["bias"] = mf_sake_block.edge_mlp_out[
@@ -406,5 +447,3 @@ def test_model_invariance():
     perturbed_out = model(perturbed_methane_input)
 
     assert torch.allclose(reference_out.E, perturbed_out.E)
-
-

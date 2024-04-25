@@ -183,6 +183,128 @@ import torch
 import math
 
 
+def generate_uniform_quaternion(u=None):
+    """
+    Generates a uniform normalized quaternion.
+
+    Adapted from numpy implementation in openmm-tools
+    https://github.com/choderalab/openmmtools/blob/main/openmmtools/mcmc.py
+
+    Parameters
+    ----------
+    u : torch.Tensor
+        Tensor of shape (3,). Optional, default is None.
+        If not provided, a random tensor is generated.
+
+    References
+    ----------
+    [1] K. Shoemake. Uniform random rotations. In D. Kirk, editor,
+    Graphics Gems III, pages 124-132. Academic, New York, 1992.
+    [2] Described briefly here: http://planning.cs.uiuc.edu/node198.html
+    """
+    import torch
+
+    if u is None:
+        u = torch.rand(3)
+    # import numpy for pi
+    import numpy as np
+
+    q = torch.tensor(
+        [
+            torch.sqrt(1 - u[0]) * torch.sin(2 * np.pi * u[1]),
+            torch.sqrt(1 - u[0]) * torch.cos(2 * np.pi * u[1]),
+            torch.sqrt(u[0]) * torch.sin(2 * np.pi * u[2]),
+            torch.sqrt(u[0]) * torch.cos(2 * np.pi * u[2]),
+        ]
+    )
+    return q
+
+
+def rotation_matrix_from_quaternion(quaternion):
+    """Compute a 3x3 rotation matrix from a given quaternion (4-vector).
+
+    Adapted from the numpy implementation in openmm-tools
+
+    https://github.com/choderalab/openmmtools/blob/main/openmmtools/mcmc.py
+
+    Parameters
+    ----------
+    q : torch.Tensor
+        Quaternion tensor of shape (4,).
+
+    Returns
+    -------
+    torch.Tensor
+        Rotation matrix tensor of shape (3, 3).
+
+    References
+    ----------
+    [1] http://en.wikipedia.org/wiki/Rotation_matrix#Quaternion
+    """
+
+    w, x, y, z = quaternion.unbind()
+    Nq = (quaternion**2).sum()  # Squared norm.
+    if Nq > 0.0:
+        s = 2.0 / Nq
+    else:
+        s = 0.0
+
+    X = x * s
+    Y = y * s
+    Z = z * s
+    wX = w * X
+    wY = w * Y
+    wZ = w * Z
+    xX = x * X
+    xY = x * Y
+    xZ = x * Z
+    yY = y * Y
+    yZ = y * Z
+    zZ = z * Z
+
+    rotation_matrix = torch.tensor(
+        [
+            [1.0 - (yY + zZ), xY - wZ, xZ + wY],
+            [xY + wZ, 1.0 - (xX + zZ), yZ - wX],
+            [xZ - wY, yZ + wX, 1.0 - (xX + yY)],
+        ]
+    )
+    return rotation_matrix
+
+
+def apply_rotation_matrix(coordinates, rotation_matrix, use_center_of_mass=True):
+    """
+    Rotate the coordinates using the rotation matrix.
+
+    Parameters
+    ----------
+    coordinates : torch.Tensor
+        The coordinates to rotate.
+    rotation_matrix : torch.Tensor
+        The rotation matrix.
+    use_center_of_mass : bool
+        If True, the coordinates are rotated around the center of mass, not the origin.
+
+    Returns
+    -------
+    torch.Tensor
+        The rotated coordinates.
+    """
+
+    if use_center_of_mass:
+        coordinates_com = torch.mean(coordinates, 0)
+    else:
+        coordinates_com = torch.zeros(3)
+
+    coordinates_proposed = (
+        torch.matmul(
+            rotation_matrix, (coordinates - coordinates_com).transpose(0, -1)
+        ).transpose(0, -1)
+    ) + coordinates_com
+
+    return coordinates_proposed
+
+
 def equivariance_test_utils():
     """
     Generates random tensors for testing equivariance of a neural network.
@@ -198,42 +320,23 @@ def equivariance_test_utils():
     """
 
     # Define translation function
-    #torch.manual_seed(12345)
+    # CRI: Let us manually seed the random number generator to ensure that we perfrom the same tests each time.
+    # While our tests of translation and rotation should ALWAYS pass regardless of the seed,
+    # if the code is correctly implemented, there may be instances where the tolerance we set is not
+    # sufficient to pass the test, and without the workflow being deterministic, it may be hard to
+    # debug if it is an underlying issue with the code or just the tolerance.
+
+    torch.manual_seed(12345)
     x_translation = torch.randn(
         size=(1, 3),
     )
     translation = lambda x: x + x_translation
 
-    # Define rotation function
-    alpha = torch.distributions.Uniform(-math.pi, math.pi).sample()
-    beta = torch.distributions.Uniform(-math.pi, math.pi).sample()
-    gamma = torch.distributions.Uniform(-math.pi, math.pi).sample()
+    # generate random quaternion and rotation matrix
+    q = generate_uniform_quaternion()
+    rotation_matrix = rotation_matrix_from_quaternion(q)
 
-    rz = torch.tensor(
-        [
-            [math.cos(alpha), -math.sin(alpha), 0],
-            [math.sin(alpha), math.cos(alpha), 0],
-            [0, 0, 1],
-        ]
-    )
-
-    ry = torch.tensor(
-        [
-            [math.cos(beta), 0, math.sin(beta)],
-            [0, 1, 0],
-            [-math.sin(beta), 0, math.cos(beta)],
-        ]
-    )
-
-    rx = torch.tensor(
-        [
-            [1, 0, 0],
-            [0, math.cos(gamma), -math.sin(gamma)],
-            [0, math.sin(gamma), math.cos(gamma)],
-        ]
-    )
-
-    rotation = lambda x: x @ rz @ ry @ rx
+    rotation = lambda x: apply_rotation_matrix(x, rotation_matrix)
 
     # Define reflection function
     alpha = torch.distributions.Uniform(-math.pi, math.pi).sample()

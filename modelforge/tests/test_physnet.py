@@ -1,4 +1,3 @@
-import pytest
 def test_physnet_init():
 
     from modelforge.potential.physnet import PhysNet
@@ -27,8 +26,7 @@ def test_physnet_forward():
     model(methane)
 
 
-@pytest.mark.parametrize("atol", [1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8])
-def test_rbf(atol):
+def test_rbf():
     # This test compares the RBF calculation of the original
     # PhysNet implemntation agains the SAKE/PhysNet implementation in modelforge
     # NOTE: input in PhysNet is expected in angstrom, in contrast to modelforge which
@@ -90,7 +88,7 @@ def test_rbf(atol):
 
     mf_centers = mf_rbf.get_buffer("radial_basis_centers").numpy()
     assert np.allclose(
-        np.flip(pn_centers), mf_centers, atol=atol
+        np.flip(pn_centers), mf_centers
     )  # NOTE: The PhysNet implementation uses the reverse order of the centers
 
     # compare the full output
@@ -102,5 +100,5 @@ def test_rbf(atol):
 
     mf_rbf_output = mf_rbf(torch.tensor(D.numpy() / 10).squeeze())
     assert np.allclose(
-        np.flip(pn_rbf_output.numpy().squeeze(), axis=1), mf_rbf_output.numpy(), atol=atol
+        np.flip(pn_rbf_output.numpy().squeeze(), axis=1), mf_rbf_output.numpy()
     )

@@ -44,3 +44,4 @@ dependencies:
       - pytorch2jax
       - flax
       - git+https://github.com/ArnNag/sake.git@nanometer
+      - tensorflow

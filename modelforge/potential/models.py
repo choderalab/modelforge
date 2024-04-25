@@ -295,6 +295,69 @@ class NeuralNetworkPotentialFactory:
             raise NotImplementedError("Unknown NNP type requested.")
 
 
+class Neighborlist(torch.nn.Module):
+    def __init__(self, cutoff: unit.Quantity):
+        from .models import Neighborlist
+
+        self.calculate_distances_and_pairlist = Neighborlist(cutoff)
+
+    def prepare_inputs(self, data: NNPInput, only_unique_pairs: bool = True):
+        """
+        Prepares the input tensors for passing to the model.
+
+        This method handles general input manipulation, such as calculating distances
+        and generating the pair list. It also calls the model-specific input preparation.
+
+        Parameters
+        ----------
+        data : NNPInput
+            The input data provided by the dataset, containing atomic numbers, positions,
+            and other necessary information.
+        only_unique_pairs : bool, optional
+            Whether to only use unique pairs in the pair list calculation, by default True.
+
+        Returns
+        -------
+        The processed input data, ready for the model's forward pass.
+        """
+        # ---------------------------
+        # general input manipulation
+        positions = data.positions
+        atomic_subsystem_indices = data.atomic_subsystem_indices
+
+        pairlist_output = self.calculate_distances_and_pairlist(
+            positions, atomic_subsystem_indices, only_unique_pairs
+        )
+
+        return pairlist_output
+
+    def _input_checks(self, data: NamedTuple):
+        """
+        Performs input validation checks.
+
+        Ensures the input data conforms to expected shapes and types.
+
+        Parameters
+        ----------
+        data : NNPInput
+            The input data to be validated.
+
+        Raises
+        ------
+        ValueError
+            If the input data does not meet the expected criteria.
+        """
+        # check that the input is instance of NNPInput
+        assert isinstance(data, NNPInput)
+
+        nr_of_atoms = data.atomic_numbers.shape[0]
+        assert data.atomic_numbers.shape == torch.Size([nr_of_atoms])
+        assert data.atomic_subsystem_indices.shape == torch.Size([nr_of_atoms])
+        nr_of_molecules = torch.unique(data.atomic_subsystem_indices).numel()
+        assert data.total_charge.shape == torch.Size([nr_of_molecules])
+        assert data.positions.shape == torch.Size([nr_of_atoms, 3])
+
+
 class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
     """Abstract base class for neural network potentials.
 
@@ -315,16 +378,9 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
         """
         Initializes the neural network potential class with specified parameters.
 
-        Parameters
-        ----------
-        cutoff : openff.units.unit.Quantity
-            Cutoff distance for the neighbor list calculations.
         """
 
-        from .models import Neighborlist
-
         super().__init__()
-        self.calculate_distances_and_pairlist = Neighborlist(cutoff)
         self._dtype: Optional[bool] = None  # set at runtime
         self._log_message_dtype = False
         self._log_message_units = False
@@ -423,67 +479,7 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
         """
         return self.readout_module(atom_specific_values, index)
 
-    def prepare_inputs(self, data: NNPInput, only_unique_pairs: bool = True):
-        """
-        Prepares the input tensors for passing to the model.
-
-        This method handles general input manipulation, such as calculating distances
-        and generating the pair list. It also calls the model-specific input preparation.
-
-        Parameters
-        ----------
-        data : NNPInput
-            The input data provided by the dataset, containing atomic numbers, positions,
-            and other necessary information.
-        only_unique_pairs : bool, optional
-            Whether to only use unique pairs in the pair list calculation, by default True.
-
-        Returns
-        -------
-        The processed input data, ready for the model's forward pass.
-        """
-        # ---------------------------
-        # general input manipulation
-        positions = data.positions
-        atomic_subsystem_indices = data.atomic_subsystem_indices
-
-        pairlist_output = self.calculate_distances_and_pairlist(
-            positions, atomic_subsystem_indices, only_unique_pairs
-        )
-
-        # ---------------------------
-        # perform model specific modifications
-        nnp_input = self._model_specific_input_preparation(data, pairlist_output)
-
-        return nnp_input
-
-    def _input_checks(self, data: NamedTuple):
-        """
-        Performs input validation checks.
-
-        Ensures the input data conforms to expected shapes and types.
-
-        Parameters
-        ----------
-        data : NNPInput
-            The input data to be validated.
-
-        Raises
-        ------
-        ValueError
-            If the input data does not meet the expected criteria.
-        """
-        # check that the input is instance of NNPInput
-        assert isinstance(data, NNPInput)
-
-        nr_of_atoms = data.atomic_numbers.shape[0]
-        assert data.atomic_numbers.shape == torch.Size([nr_of_atoms])
-        assert data.atomic_subsystem_indices.shape == torch.Size([nr_of_atoms])
-        nr_of_molecules = torch.unique(data.atomic_subsystem_indices).numel()
-        assert data.total_charge.shape == torch.Size([nr_of_molecules])
-        assert data.positions.shape == torch.Size([nr_of_atoms, 3])
-
-    def forward(self, data: NNPInput) -> EnergyOutput:
+    def forward(self, data: NNPInput, pairlist_output) -> EnergyOutput:
         """
         Defines the forward pass of the neural network potential.
 
@@ -497,10 +493,9 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
         EnergyOutput
             The calculated energies and other properties from the forward pass.
         """
-        # perform input checks
-        self._input_checks(data)
-        # prepare the input for the forward pass
-        inputs = self.prepare_inputs(data, self.only_unique_pairs)
+        # ---------------------------
+        # perform model specific modifications
+        nnp_input = self._model_specific_input_preparation(data, pairlist_output)
         # perform the forward pass implemented in the subclass
         outputs = self._forward(inputs)
         # sum over atomic properties to generate per molecule properties

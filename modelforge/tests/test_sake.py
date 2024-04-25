@@ -312,9 +312,9 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none, atol):
     assert torch.allclose(torch.nan_to_num(mf_h, nan=0.0) * ~ref_h_is_nan,
                           torch.nan_to_num(torch.from_numpy(onp.array(ref_h)), nan=0.0), atol=atol)
     assert torch.allclose(torch.nan_to_num(mf_x, nan=0.0) * ~ref_x_is_nan,
-                          torch.nan_to_num(torch.from_numpy(onp.array(ref_x)), nan=0.0), atol=atol)
+                          torch.nan_to_num(torch.from_numpy(onp.array((ref_x * unit.angstrom).to(unit.nanometer).m)), nan=0.0), atol=atol)
     assert torch.allclose(torch.nan_to_num(mf_v, nan=0.0) * ~ref_v_is_nan,
-                          torch.nan_to_num(torch.from_numpy(onp.array(ref_v)), nan=0.0), atol=atol)
+                          torch.nan_to_num(torch.from_numpy(onp.array((ref_v * unit.angstrom).to(unit.nanometer).m)), nan=0.0), atol=atol)
 
 
 def test_sake_model_against_reference():

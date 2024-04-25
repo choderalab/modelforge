@@ -7,11 +7,9 @@ import torch.nn as nn
 from loguru import logger as log
 from openff.units import unit
 from torch.nn import functional as F
-from torch.optim import AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from modelforge.dataset.dataset import DatasetStatistics
-
-from modelforge.potential.utils import AtomicSelfEnergies, BatchData, NNPInput
+from modelforge.potential.utils import BatchData, NNPInput
+from modelforge.potential.processing import AtomicSelfEnergies
 
 if TYPE_CHECKING:
     from modelforge.dataset.dataset import DatasetStatistics
@@ -297,158 +295,6 @@ class NeuralNetworkPotentialFactory:
             raise NotImplementedError("Unknown NNP type requested.")
 
 
-from modelforge.potential.utils import NeuralNetworkData
-
-
-class Postprocessing:
-
-    def __init__(self) -> None:
-        from modelforge.dataset.dataset import DatasetStatistics
-
-        self._dataset_statistics = DatasetStatistics(0.0, 1.0, AtomicSelfEnergies())
-
-    def _calculate_molecular_self_energy(
-        self, data: NeuralNetworkData, number_of_molecules: int
-    ) -> torch.Tensor:
-        """
-        Calculates the molecular self energy.
-
-        Parameters
-        ----------
-        data : NNPInput
-            The input data for the model, including atomic numbers and subsystem indices.
-        number_of_molecules : int
-            The number of molecules in the batch.
-
-        Returns
-        -------
-        torch.Tensor
-            The tensor containing the molecular self energy for each molecule.
-        """
-
-        atomic_numbers = data.atomic_numbers
-        atomic_subsystem_indices = data.atomic_subsystem_indices.to(
-            dtype=torch.long, device=atomic_numbers.device
-        )
-
-        # atomic_number_to_energy
-        atomic_self_energies = self.dataset_statistics.atomic_self_energies
-        ase_tensor_for_indexing = atomic_self_energies.ase_tensor_for_indexing.to(
-            device=atomic_numbers.device
-        )
-
-        # first, we need to use the atomic numbers to generate a tensor that
-        # contains the atomic self energy for each atomic number
-        ase_tensor = ase_tensor_for_indexing[atomic_numbers]
-
-        # then, we use the atomic_subsystem_indices to scatter add the atomic self
-        # energies in the ase_tensor to generate the molecular self energies
-        ase_tensor_zeros = torch.zeros((number_of_molecules,)).to(
-            device=atomic_numbers.device
-        )
-        ase_tensor = ase_tensor_zeros.scatter_add(
-            0, atomic_subsystem_indices, ase_tensor
-        )
-
-        return ase_tensor
-
-    def _rescale_energy(self, energies: torch.Tensor) -> torch.Tensor:
-        """
-        Rescales energies using the dataset statistics.
-
-        Parameters
-        ----------
-        energies : torch.Tensor
-            The tensor of energies to be rescaled.
-
-        Returns
-        -------
-        torch.Tensor
-            The rescaled energies.
-        """
-
-        return (
-            energies * self.dataset_statistics.scaling_stddev
-            + self.dataset_statistics.scaling_mean
-        )
-
-    def _energy_postprocessing(
-        self, properties_per_molecule: torch.Tensor, inputs: NeuralNetworkData
-    ) -> Dict[str, torch.Tensor]:
-        """
-        Postprocesses the energies by rescaling and adding molecular self energy.
-
-        Parameters
-        ----------
-        properties_per_molecule : The properties computed per molecule.
-        inputs : The original input data to the model.
-
-        Returns
-        -------
-        Dict[str, torch.Tensor]
-            The dictionary containing the postprocessed energy tensors.
-        """
-
-        # first, resale the energies
-        processed_energy = {}
-        processed_energy["raw_E"] = properties_per_molecule.clone().detach()
-        properties_per_molecule = self._rescale_energy(properties_per_molecule)
-        processed_energy["rescaled_E"] = properties_per_molecule.clone().detach()
-        # then, calculate the molecular self energy
-        molecular_ase = self._calculate_molecular_self_energy(
-            inputs, properties_per_molecule.numel()
-        )
-        processed_energy["molecular_ase"] = molecular_ase.clone().detach()
-        # add the molecular self energy to the rescaled energies
-        processed_energy["E"] = properties_per_molecule + molecular_ase
-        return processed_energy
-
-    @property
-    def dataset_statistics(self):
-        """
-        Property for accessing the model's dataset statistics.
-
-        Returns
-        -------
-        DatasetStatistics
-            The dataset statistics associated with the model.
-        """
-
-        return self._dataset_statistics
-
-    @dataset_statistics.setter
-    def dataset_statistics(self, value: "DatasetStatistics"):
-        """
-        Sets the dataset statistics for the model.
-
-        Parameters
-        ----------
-        value : DatasetStatistics
-            The new dataset statistics to be set for the model.
-        """
-
-        if not isinstance(value, DatasetStatistics):
-            raise ValueError("Value must be an instance of DatasetStatistics.")
-
-        self._dataset_statistics = value
-
-    def update_dataset_statistics(self, **kwargs):
-        """
-        Updates specific fields of the model's dataset statistics.
-
-        Parameters
-        ----------
-        **kwargs
-            Fields and their new values to update in the dataset statistics.
-        """
-
-        for key, value in kwargs.items():
-            if hasattr(self.dataset_statistics, key):
-                setattr(self.dataset_statistics, key, value)
-            else:
-                log.warning(f"{key} is not a valid field of DatasetStatistics.")
-
-
 class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
     """Abstract base class for neural network potentials.
 
@@ -483,9 +329,9 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
         self._log_message_dtype = False
         self._log_message_units = False
         # initialize the per molecule readout module
-        from .utils import FromAtomToMoleculeReduction
+        from .processing import FromAtomToMoleculeReduction, EnergyScaling
 
-        self.postprocessing = Postprocessing()
+        self.postprocessing = EnergyScaling()
 
         self.readout_module = FromAtomToMoleculeReduction()
 

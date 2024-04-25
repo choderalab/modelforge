@@ -106,7 +106,7 @@ class PaiNN(BaseNeuralNetworkPotential):
         self.embedding_module = Embedding(max_Z, number_of_atom_features)
 
         # initialize the energy readout
-        from .utils import FromAtomToMoleculeReduction
+        from .processing import FromAtomToMoleculeReduction
 
         self.readout_module = FromAtomToMoleculeReduction()
 

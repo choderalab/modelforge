@@ -79,7 +79,7 @@ class SAKE(BaseNeuralNetworkPotential):
             cutoff: unit.Quantity = 5.0 * unit.angstrom,
             epsilon: float = 1e-8,
     ):
-        from .utils import FromAtomToMoleculeReduction
+        from .processing import FromAtomToMoleculeReduction
 
         log.debug("Initializing SAKE model.")
         super().__init__(cutoff=cutoff)

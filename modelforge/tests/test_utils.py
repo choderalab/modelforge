@@ -379,7 +379,7 @@ def test_embedding():
 
 
 def test_energy_readout():
-    from modelforge.potential.utils import FromAtomToMoleculeReduction
+    from modelforge.potential.processing import FromAtomToMoleculeReduction
     import torch
 
     # the EnergyReadout module performs a linear pass to reduce the nr_of_atom_basis to 1

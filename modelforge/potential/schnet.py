@@ -93,6 +93,7 @@ class SchNetCore(BaseNeuralNetworkPotential):
         number_of_interaction_modules: int = 3,
         number_of_filters: int = 64,
         shared_interactions: bool = False,
+        cutoff: unit.Quantity = 5.0 * unit.angstrom,
     ) -> None:
         """
         Initialize the SchNet class.
@@ -111,8 +112,7 @@ class SchNetCore(BaseNeuralNetworkPotential):
         from .utils import Dense, ShiftedSoftplus
 
         log.debug("Initializing SchNet model.")
-        self.only_unique_pairs = False  # NOTE: for pairlist
-        super().__init__()
+        super().__init__(cutoff)
         self.number_of_atom_features = number_of_atom_features
         self.number_of_filters = number_of_filters or self.number_of_atom_features
         self.number_of_radial_basis_functions = number_of_radial_basis_functions
@@ -391,10 +391,10 @@ class SchNETRepresentation(nn.Module):
 
 from typing import NamedTuple
 
-from .models import Neighborlist, NNPInput
+from .models import InputPreparation, NNPInput
 
 
-class SchNet:
+class SchNet(torch.nn.Module):
     def __init__(
         self,
         max_Z: int = 100,
@@ -419,7 +419,7 @@ class SchNet:
         cutoff : openff.units.unit.Quantity, default=5*unit.angstrom
             The cutoff distance for interactions.
         """
-
+        super().__init__()
         self.model = SchNetCore(
             max_Z=max_Z,
             number_of_atom_features=number_of_atom_features,
@@ -428,13 +428,14 @@ class SchNet:
             number_of_filters=number_of_filters,
             shared_interactions=shared_interactions,
         )
-        self.neighbor_list = Neighborlist(cutoff=cutoff)
+        self.only_unique_pairs = False  # NOTE: for pairlist
+        self.input_preparation = InputPreparation(cutoff=cutoff)
 
     def forward(self, data: NNPInput):
         # perform input checks
-        self.neighbor_list._input_checks(data)
+        self.input_preparation._input_checks(data)
         # prepare the input for the forward pass
-        pairlist_output = self.neighbor_list.prepare_inputs(
+        pairlist_output = self.input_preparation.prepare_inputs(
             data, self.only_unique_pairs
         )
-        self.model(data, pairlist_output)
+        return self.model(data, pairlist_output)

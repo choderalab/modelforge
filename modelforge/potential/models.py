@@ -295,8 +295,9 @@ class NeuralNetworkPotentialFactory:
             raise NotImplementedError("Unknown NNP type requested.")
 
 
-class Neighborlist(torch.nn.Module):
+class InputPreparation(torch.nn.Module):
     def __init__(self, cutoff: unit.Quantity):
+        super().__init__()
         from .models import Neighborlist
 
         self.calculate_distances_and_pairlist = Neighborlist(cutoff)
@@ -497,7 +498,7 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
         # perform model specific modifications
         nnp_input = self._model_specific_input_preparation(data, pairlist_output)
         # perform the forward pass implemented in the subclass
-        outputs = self._forward(inputs)
+        outputs = self._forward(nnp_input)
         # sum over atomic properties to generate per molecule properties
         E = self._readout(
             atom_specific_values=outputs["E_i"],
@@ -505,7 +506,7 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
         )
         # postprocess energies: add atomic self energies,
         # and other constant factors used to optionally normalize the data range of the training dataset
-        processed_energy = self.postprocessing._energy_postprocessing(E, inputs)
+        processed_energy = self.postprocessing._energy_postprocessing(E, nnp_input)
         # return energies
         return EnergyOutput(
             E=processed_energy["E"],

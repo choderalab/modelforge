@@ -404,7 +404,7 @@ class SchNet(torch.nn.Module):
             The cutoff distance for interactions.
         """
         super().__init__()
-        self.model = SchNetCore(
+        self.schnet_core = SchNetCore(
             max_Z=max_Z,
             number_of_atom_features=number_of_atom_features,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
@@ -422,7 +422,7 @@ class SchNet(torch.nn.Module):
         pairlist_output = self.input_preparation.prepare_inputs(
             data, self.only_unique_pairs
         )
-        return self.model(data, pairlist_output)
+        return self.schnet_core(data, pairlist_output)
 
     def _config_prior(self):
         log.info("Configuring SchNet model hyperparameter prior distribution")

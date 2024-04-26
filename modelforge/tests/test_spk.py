@@ -586,9 +586,15 @@ def test_schnet_representation_implementation():
     mf_nnp_input = input["modelforge_methane_input"]
 
     schnetpack_results = schnetpack_schnet(spk_input)
-    modelforge_schnet.painn_core._input_checks(mf_nnp_input)
-    schnet_nn_input_mf = modelforge_schnet.prepare_inputs(
+    modelforge_schnet.input_preparation._input_checks(mf_nnp_input)
+
+    pairlist_output = modelforge_schnet.input_preparation.prepare_inputs(
         mf_nnp_input, only_unique_pairs=False
+    )
+    schnet_nn_input_mf = (
+        modelforge_schnet.schnet_core._model_specific_input_preparation(
+            mf_nnp_input, pairlist_output
+        )
     )
 
     # ---------------------------------------- #
@@ -607,7 +613,7 @@ def test_schnet_representation_implementation():
     d_ij = torch.norm(r_ij, dim=1, keepdim=True)
     schnetpack_phi_ij = schnetpack_schnet.radial_basis(d_ij)
     modelforge_phi_ij = (
-        modelforge_schnet.schnet_representation_module.radial_symmetry_function_module(
+        modelforge_schnet.schnet_core.schnet_representation_module.radial_symmetry_function_module(
             d_ij.unsqueeze(1) / 10
         )
     )  # NOTE: converting to nm
@@ -618,7 +624,7 @@ def test_schnet_representation_implementation():
     # test cutoff
     # ---------------------------------------- #
     fcut_spk = schnetpack_schnet.cutoff_fn(d_ij)
-    fcut_mf = modelforge_schnet.schnet_representation_module.cutoff_module(
+    fcut_mf = modelforge_schnet.schnet_core.schnet_representation_module.cutoff_module(
         d_ij / 10
     )  # NOTE: converting to nm
     assert torch.allclose(fcut_spk, fcut_mf)
@@ -633,7 +639,7 @@ def test_schnet_representation_implementation():
         schnet_nn_input_mf.atomic_numbers.squeeze(),
     )
     embedding_spk = schnetpack_schnet.embedding(spk_input[properties.Z])
-    embedding_mf = modelforge_schnet.embedding_module(schnet_nn_input_mf.atomic_numbers)
+    embedding_mf = modelforge_schnet.schnet_core.embedding_module(schnet_nn_input_mf.atomic_numbers)
 
     assert torch.allclose(embedding_spk, embedding_mf)
 
@@ -641,11 +647,11 @@ def test_schnet_representation_implementation():
     # test representation
     # --------------------------------------- #
     f_ij_mf = (
-        modelforge_schnet.schnet_representation_module.radial_symmetry_function_module(
+        modelforge_schnet.schnet_core.schnet_representation_module.radial_symmetry_function_module(
             d_ij.unsqueeze(1) / 10
         )
     )
-    r_cut_ij_mf = modelforge_schnet.schnet_representation_module.cutoff_module(
+    r_cut_ij_mf = modelforge_schnet.schnet_core.schnet_representation_module.cutoff_module(
         d_ij / 10
     )
 
@@ -673,37 +679,37 @@ def test_schnet_representation_implementation():
 
     torch.manual_seed(1234)
     for i in range(nr_of_interactions):
-        modelforge_schnet.interaction_modules[i].intput_to_feature.reset_parameters()
+        modelforge_schnet.schnet_core.interaction_modules[i].intput_to_feature.reset_parameters()
         for j in range(2):
-            modelforge_schnet.interaction_modules[i].feature_to_output[
+            modelforge_schnet.schnet_core.interaction_modules[i].feature_to_output[
                 j
             ].reset_parameters()
-            modelforge_schnet.interaction_modules[i].filter_network[
+            modelforge_schnet.schnet_core.interaction_modules[i].filter_network[
                 j
             ].reset_parameters()
 
     assert torch.allclose(
         schnetpack_schnet.interactions[0].filter_network[0].weight,
-        modelforge_schnet.interaction_modules[0].filter_network[0].weight,
+        modelforge_schnet.schnet_core.interaction_modules[0].filter_network[0].weight,
     )
     assert torch.allclose(
         schnetpack_schnet.interactions[0].filter_network[0].bias,
-        modelforge_schnet.interaction_modules[0].filter_network[0].bias,
+        modelforge_schnet.schnet_core.interaction_modules[0].filter_network[0].bias,
     )
 
     assert torch.allclose(
         schnetpack_schnet.interactions[0].filter_network[1].weight,
-        modelforge_schnet.interaction_modules[0].filter_network[1].weight,
+        modelforge_schnet.schnet_core.interaction_modules[0].filter_network[1].weight,
     )
     assert torch.allclose(
         schnetpack_schnet.interactions[0].filter_network[1].bias,
-        modelforge_schnet.interaction_modules[0].filter_network[1].bias,
+        modelforge_schnet.schnet_core.interaction_modules[0].filter_network[1].bias,
     )
 
     assert torch.allclose(embedding_spk, embedding_mf)
 
     for mf_interaction, spk_interaction in zip(
-        modelforge_schnet.interaction_modules, schnetpack_schnet.interactions
+        modelforge_schnet.schnet_core.interaction_modules, schnetpack_schnet.interactions
     ):
         v_spk = spk_interaction(
             embedding_spk,
@@ -719,7 +725,7 @@ def test_schnet_representation_implementation():
         assert torch.allclose(v_spk, v_mf)
 
     # Check full pass
-    modelforge_results = modelforge_schnet._forward(schnet_nn_input_mf)
+    modelforge_results = modelforge_schnet.schnet_core._forward(schnet_nn_input_mf)
     schnetpack_results = schnetpack_schnet(spk_input)
 
     assert (

@@ -302,7 +302,9 @@ class InputPreparation(torch.nn.Module):
 
         self.calculate_distances_and_pairlist = Neighborlist(cutoff)
 
-    def prepare_inputs(self, data: NNPInput, only_unique_pairs: bool = True):
+    def prepare_inputs(
+        self, data: Union[NNPInput, NamedTuple], only_unique_pairs: bool = True
+    ):
         """
         Prepares the input tensors for passing to the model.
 
@@ -332,7 +334,7 @@ class InputPreparation(torch.nn.Module):
 
         return pairlist_output
 
-    def _input_checks(self, data: NamedTuple):
+    def _input_checks(self, data: Union[NNPInput, NamedTuple]):
         """
         Performs input validation checks.
 
@@ -349,7 +351,7 @@ class InputPreparation(torch.nn.Module):
             If the input data does not meet the expected criteria.
         """
         # check that the input is instance of NNPInput
-        assert isinstance(data, NNPInput)
+        assert isinstance(data, NNPInput) or isinstance(data, Tuple)
 
         nr_of_atoms = data.atomic_numbers.shape[0]
         assert data.atomic_numbers.shape == torch.Size([nr_of_atoms])

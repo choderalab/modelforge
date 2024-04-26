@@ -584,7 +584,7 @@ class ANI2x(torch.nn.Module):
             angular_dist_divisions,
             angle_sections,
         )
-        self.only_unique_pairs = False  # NOTE: for pairlist
+        self.only_unique_pairs = True  # NOTE: for pairlist
         self.input_preparation = InputPreparation(cutoff=radial_max_distance)
 
     def forward(self, data: NNPInput):

@@ -497,22 +497,6 @@ class PhysNetCore(BaseNeuralNetworkPotential):
         self.atomic_scale = nn.Parameter(torch.ones(max_Z, 2))
         self.atomic_shift = nn.Parameter(torch.ones(max_Z, 2))
 
-    def _config_prior(self):
-        log.info("Configuring SchNet model hyperparameter prior distribution")
-        from ray import tune
-
-        from modelforge.potential.utils import shared_config_prior
-
-        prior = {
-            "number_of_atom_features": tune.randint(2, 256),
-            "number_of_modules": tune.randint(3, 8),
-            "number_of_interaction_residual": tune.randint(2, 5),
-            "cutoff": tune.uniform(5, 10),
-            "number_of_radial_basis_functions": tune.randint(8, 32),
-        }
-        prior.update(shared_config_prior())
-        return prior
-
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
     ) -> PhysNetNeuralNetworkData:
@@ -658,3 +642,19 @@ class PhysNet(torch.nn.Module):
             data, self.only_unique_pairs
         )
         return self.physnet_core(data, pairlist_output)
+
+    def _config_prior(self):
+        log.info("Configuring SchNet model hyperparameter prior distribution")
+        from ray import tune
+
+        from modelforge.potential.utils import shared_config_prior
+
+        prior = {
+            "number_of_atom_features": tune.randint(2, 256),
+            "number_of_modules": tune.randint(3, 8),
+            "number_of_interaction_residual": tune.randint(2, 5),
+            "cutoff": tune.uniform(5, 10),
+            "number_of_radial_basis_functions": tune.randint(8, 32),
+        }
+        prior.update(shared_config_prior())
+        return prior

@@ -144,22 +144,6 @@ class SAKECore(BaseNeuralNetworkPotential):
 
         return nnp_input
 
-    def _config_prior(self):
-        log.info("Configuring SAKE model hyperparameter prior distribution")
-        from ray import tune
-
-        from modelforge.potential.utils import shared_config_prior
-
-        prior = {
-            "number_of_atom_features": tune.randint(2, 256),
-            "number_of_modules": tune.randint(3, 8),
-            "number_of_spatial_attention_heads": tune.randint(2, 5),
-            "cutoff": tune.uniform(5, 10),
-            "number_of_radial_basis_functions": tune.randint(8, 32),
-        }
-        prior.update(shared_config_prior())
-        return prior
-
     def _forward(self, data: SAKENeuralNetworkInput):
         """
         Compute atomic representations/embeddings.
@@ -595,4 +579,20 @@ class SAKE(torch.nn.Module):
         pairlist_output = self.input_preparation.prepare_inputs(
             data, self.only_unique_pairs
         )
-        return self.ani2x_core(data, pairlist_output)
+        return self.sake_core(data, pairlist_output)
+
+    def _config_prior(self):
+        log.info("Configuring SAKE model hyperparameter prior distribution")
+        from ray import tune
+
+        from modelforge.potential.utils import shared_config_prior
+
+        prior = {
+            "number_of_atom_features": tune.randint(2, 256),
+            "number_of_modules": tune.randint(3, 8),
+            "number_of_spatial_attention_heads": tune.randint(2, 5),
+            "cutoff": tune.uniform(5, 10),
+            "number_of_radial_basis_functions": tune.randint(8, 32),
+        }
+        prior.update(shared_config_prior())
+        return prior

@@ -156,22 +156,6 @@ class SchNetCore(BaseNeuralNetworkPotential):
             ),
         )
 
-    def _config_prior(self):
-        log.info("Configuring SchNet model hyperparameter prior distribution")
-        from ray import tune
-
-        from modelforge.potential.utils import shared_config_prior
-
-        prior = {
-            "number_of_atom_features": tune.randint(2, 256),
-            "number_of_interaction_modules": tune.randint(1, 5),
-            "cutoff": tune.uniform(5, 10),
-            "number_of_radial_basis_functions": tune.randint(8, 32),
-            "number_of_filters": tune.randint(32, 128),
-            "shared_interactions": tune.choice([True, False]),
-        }
-        prior.update(shared_config_prior())
-        return prior
 
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
@@ -439,3 +423,20 @@ class SchNet(torch.nn.Module):
             data, self.only_unique_pairs
         )
         return self.model(data, pairlist_output)
+
+    def _config_prior(self):
+        log.info("Configuring SchNet model hyperparameter prior distribution")
+        from ray import tune
+
+        from modelforge.potential.utils import shared_config_prior
+
+        prior = {
+            "number_of_atom_features": tune.randint(2, 256),
+            "number_of_interaction_modules": tune.randint(1, 5),
+            "cutoff": tune.uniform(5, 10),
+            "number_of_radial_basis_functions": tune.randint(8, 32),
+            "number_of_filters": tune.randint(32, 128),
+            "shared_interactions": tune.choice([True, False]),
+        }
+        prior.update(shared_config_prior())
+        return prior

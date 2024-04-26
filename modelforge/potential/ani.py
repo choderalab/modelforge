@@ -494,23 +494,6 @@ class ANI2xCore(BaseNeuralNetworkPotential):
 
         self.register_buffer("lookup_tensor", lookup_tensor)
 
-    def _config_prior(self):
-        log.info("Configuring ANI2x model hyperparameter prior distribution")
-        from ray import tune
-
-        from modelforge.train.utils import shared_config_prior
-
-        prior = {
-            "radial_max_distance": tune.uniform(5, 10),
-            "radial_min_distance": tune.uniform(0.6, 1.4),
-            "number_of_radial_basis_functions": tune.randint(12, 20),
-            "angular_max_distance": tune.uniform(2.5, 4.5),
-            "angular_min_distance": tune.uniform(0.6, 1.4),
-            "angle_sections": tune.randint(3, 8),
-        }
-        prior.update(shared_config_prior())
-        return prior
-
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
     ) -> AniNeuralNetworkData:
@@ -595,3 +578,20 @@ class ANI2x(torch.nn.Module):
             data, self.only_unique_pairs
         )
         return self.ani2x_core(data, pairlist_output)
+
+    def _config_prior(self):
+        log.info("Configuring ANI2x model hyperparameter prior distribution")
+        from ray import tune
+
+        from modelforge.train.utils import shared_config_prior
+
+        prior = {
+            "radial_max_distance": tune.uniform(5, 10),
+            "radial_min_distance": tune.uniform(0.6, 1.4),
+            "number_of_radial_basis_functions": tune.randint(12, 20),
+            "angular_max_distance": tune.uniform(2.5, 4.5),
+            "angular_min_distance": tune.uniform(0.6, 1.4),
+            "angle_sections": tune.randint(3, 8),
+        }
+        prior.update(shared_config_prior())
+        return prior

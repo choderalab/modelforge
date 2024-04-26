@@ -426,7 +426,7 @@ class ANIInteraction(nn.Module):
         return output.view_as(species)
 
 
-class ANI2x(BaseNeuralNetworkPotential):
+class ANI2xCore(BaseNeuralNetworkPotential):
 
     def __init__(
         self,
@@ -558,3 +558,40 @@ class ANI2x(BaseNeuralNetworkPotential):
             "E_i": E_i,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
+
+
+from .models import InputPreparation, NNPInput
+
+
+class ANI2x(torch.nn.Module):
+    def __init__(
+        self,
+        radial_max_distance: unit.Quantity = 5.1 * unit.angstrom,
+        radial_min_distanc: unit.Quantity = 0.8 * unit.angstrom,
+        number_of_radial_basis_functions: int = 16,
+        angular_max_distance: unit.Quantity = 3.5 * unit.angstrom,
+        angular_min_distance: unit.Quantity = 0.8 * unit.angstrom,
+        angular_dist_divisions: int = 8,
+        angle_sections: int = 4,
+    ) -> None:
+        super().__init__()
+        self.ani2x_core = ANI2xCore(
+            radial_max_distance,
+            radial_min_distanc,
+            number_of_radial_basis_functions,
+            angular_max_distance,
+            angular_min_distance,
+            angular_dist_divisions,
+            angle_sections,
+        )
+        self.only_unique_pairs = False  # NOTE: for pairlist
+        self.input_preparation = InputPreparation(cutoff=radial_max_distance)
+
+    def forward(self, data: NNPInput):
+        # perform input checks
+        self.input_preparation._input_checks(data)
+        # prepare the input for the forward pass
+        pairlist_output = self.input_preparation.prepare_inputs(
+            data, self.only_unique_pairs
+        )
+        return self.ani2x_core(data, pairlist_output)

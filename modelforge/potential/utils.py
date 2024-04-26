@@ -21,6 +21,9 @@ class NeuralNetworkData:
     total_charge: torch.Tensor
 
 
+from typing import NamedTuple
+
+
 @dataclass
 class NNPInput:
     """
@@ -99,7 +102,7 @@ class NNPInput:
                 "The size of atomic_subsystem_indices and the first dimension of positions must match"
             )
 
-    def as_namedtuple(self):
+    def as_namedtuple(self) -> NamedTuple:
         """Export the dataclass fields and values as a named tuple."""
 
         from dataclasses import dataclass, fields
@@ -366,7 +369,6 @@ class CosineCutoff(nn.Module):
 
 
 from typing import Dict
-
 
 
 class ShiftedSoftplus(nn.Module):

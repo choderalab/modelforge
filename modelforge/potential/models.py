@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from modelforge.potential.painn import PaiNN, PaiNNNeuralNetworkData
     from modelforge.potential.physnet import PhysNet, PhysNetNeuralNetworkData
     from modelforge.potential.schnet import SchNet, SchnetNeuralNetworkData
+    from modelforge.potential.sake import SAKE, SAKENeuralNetworkInput
 
 
 # Define NamedTuple for the outputs of Pairlist and Neighborlist forward method
@@ -227,7 +228,7 @@ class NeuralNetworkPotentialFactory:
         nnp_parameters: Optional[Dict[str, Union[int, float]]] = {},
         training_parameters: Dict[str, Any] = {},
         compile_model: bool = False,
-    ) -> Union[Union["ANI2x", "SchNet", "PaiNN", "PhysNet"], "TrainingAdapter"]:
+    ) -> Union[Union["ANI2x", "SchNet", "PaiNN", "PhysNet", "SAKE"], "TrainingAdapter"]:
         """
         Creates an NNP instance of the specified type, configured either for training or inference.
 
@@ -402,6 +403,7 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
         "PaiNNNeuralNetworkData",
         "SchnetNeuralNetworkData",
         "AniNeuralNetworkData",
+        "SAKENeuralNetworkInput",
     ]:
         """
         Prepares model-specific inputs before the forward pass.
@@ -432,6 +434,7 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
             "PaiNNNeuralNetworkData",
             "SchnetNeuralNetworkData",
             "AniNeuralNetworkData",
+            "SAKENeuralNetworkInput",
         ],
     ):
         """
@@ -524,7 +527,9 @@ class Loss:
     Initializes with a model to compute predictions for energies and forces.
     """
 
-    def __init__(self, model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet"]) -> None:
+    def __init__(
+        self, model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet", "SAKE"]
+    ) -> None:
         self.model = model
 
     def _get_forces(self, batch: BatchData) -> Dict[str, torch.Tensor]:
@@ -576,7 +581,7 @@ class EnergyLoss(Loss):
     Computes loss based on energy predictions.
     """
 
-    def __init__(self, model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet"]):
+    def __init__(self, model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet", "SAKE"]):
         super().__init__(model)
         log.info("Initializing EnergyLoss")
 
@@ -608,7 +613,7 @@ class EnergyAndForceLoss(EnergyLoss):
 
     def __init__(
         self,
-        model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet"],
+        model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet", "SAKE"],
         force_weight: float = 1.0,
         energy_weight: float = 1.0,
     ) -> None:
@@ -640,7 +645,7 @@ class TrainingAdapter(pl.LightningModule):
 
     Attributes
     ----------
-    base_model : Union[ANI2x, SchNet, PaiNN, PhysNet]
+    base_model : Union[ANI2x, SchNet, PaiNN, PhysNet, SAKE]
         The underlying neural network potential model.
     loss_function : torch.nn.modules.loss._Loss
         Loss function used during training.
@@ -652,7 +657,7 @@ class TrainingAdapter(pl.LightningModule):
 
     def __init__(
         self,
-        model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet"],
+        model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet", "SAKE"],
         include_force: bool = False,
         optimizer: Any = torch.optim.Adam,
         lr: float = 1e-3,
@@ -662,7 +667,7 @@ class TrainingAdapter(pl.LightningModule):
 
         Parameters
         ----------
-        model : Union[ANI2x, SchNet, PaiNN, PhysNet]
+        model : Union[ANI2x, SchNet, PaiNN, PhysNet, SAKE]
             The neural network potential model to be trained.
         optimizer : Type[torch.optim.Optimizer], optional
             The optimizer class to use for training, by default torch.optim.Adam.

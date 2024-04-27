@@ -115,17 +115,25 @@ def test_sake_interaction_equivariance(h_atol, eq_atol):
     perturbed_methane_input.positions = torch.matmul(methane.positions, rotation_matrix)
 
     # prepare reference and perturbed inputs
-    reference_prepared_input = sake.prepare_inputs(methane, only_unique_pairs=False)
+    pairlist_output = sake.input_preparation.prepare_inputs(
+        methane, only_unique_pairs=False
+    )
+    reference_prepared_input = sake.sake_core._model_specific_input_preparation(
+        methane, pairlist_output
+    )
     reference_v_torch = torch.randn_like(reference_prepared_input.positions)
 
-    perturbed_prepared_input = sake.prepare_inputs(perturbed_methane_input)
+    pairlist_output = sake.input_preparation.prepare_inputs(perturbed_methane_input)
+    perturbed_prepared_input = sake.sake_core._model_specific_input_preparation(
+        perturbed_methane_input, pairlist_output
+    )
     perturbed_v_torch = torch.matmul(reference_v_torch, rotation_matrix)
 
     (
         reference_h_out_torch,
         reference_x_out_torch,
         reference_v_out_torch,
-    ) = sake.interaction_modules[0](
+    ) = sake.sake_core.interaction_modules[0](
         reference_prepared_input.atomic_embedding,
         reference_prepared_input.positions,
         reference_v_torch,
@@ -135,7 +143,7 @@ def test_sake_interaction_equivariance(h_atol, eq_atol):
         perturbed_h_out_torch,
         perturbed_x_out_torch,
         perturbed_v_out_torch,
-    ) = sake.interaction_modules[0](
+    ) = sake.sake_core.interaction_modules[0](
         perturbed_prepared_input.atomic_embedding,
         perturbed_prepared_input.positions,
         perturbed_v_torch,

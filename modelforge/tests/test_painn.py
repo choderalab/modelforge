@@ -5,9 +5,6 @@ import pytest
 from modelforge.potential.painn import PaiNN
 
 
-IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
-
-
 def test_PaiNN_init():
     """Test initialization of the PaiNN neural network potential."""
 

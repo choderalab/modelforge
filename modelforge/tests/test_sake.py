@@ -229,8 +229,12 @@ def test_radial_symmetry_function_against_reference():
 
 @pytest.mark.parametrize("include_self_pairs", [True, False])
 @pytest.mark.parametrize("v_is_none", [True, False])
-@pytest.mark.parametrize("atol", [1e-4, 1e-5, 1e-6, 1e-7, 9e-7])
+@pytest.mark.parametrize("atol", [1e0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 9e-7])
 def test_sake_layer_against_reference(include_self_pairs, v_is_none, atol):
+    import inspect
+    print(f"{jax.__version__=}")
+    print(f"{torch.__version__=}")
+
     nr_atoms = 13
     out_features = 11
     hidden_features = 7
@@ -247,6 +251,8 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none, atol):
 
     mf_sake_block, ref_sake_interaction = make_reference_equivalent_sake_interaction(out_features, hidden_features,
                                                                                      nr_heads)
+    kernel = reference_sake.utils.ExpNormalSmearing()
+    print(f"{inspect.getsource(kernel.__call__)}")
     # Generate random input data in JAX
     h_key, x_key, v_key, init_key = jax.random.split(key, 4)
     h_jax = jax.random.normal(h_key, (nr_atoms, nr_atom_basis))
@@ -424,7 +430,9 @@ def test_sake_model_against_reference():
     ref_out = ref_sake.apply(variables, h, x, mask=mask)[0].sum(-2)
     # ref_out is nan, so we can't compare it to the modelforge output
 
-    # assert torch.allclose(mf_out.E, torch.from_numpy(onp.array(ref_out[0])))
+    print(f"{mf_out.E=}")
+    print(f"{ref_out=}")
+    assert torch.allclose(mf_out.E, torch.from_numpy(onp.array(ref_out[0])))
 
 
 def test_model_invariance():

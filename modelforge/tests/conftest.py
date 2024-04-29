@@ -216,7 +216,8 @@ def equivariance_test_utils():
             [math.cos(alpha), -math.sin(alpha), 0],
             [math.sin(alpha), math.cos(alpha), 0],
             [0, 0, 1],
-        ]
+        ],
+        dtype=torch.float64,
     )
 
     ry = torch.tensor(
@@ -224,7 +225,8 @@ def equivariance_test_utils():
             [math.cos(beta), 0, math.sin(beta)],
             [0, 1, 0],
             [-math.sin(beta), 0, math.cos(beta)],
-        ]
+        ],
+        dtype=torch.float64,
     )
 
     rx = torch.tensor(
@@ -232,7 +234,8 @@ def equivariance_test_utils():
             [1, 0, 0],
             [0, math.cos(gamma), -math.sin(gamma)],
             [0, math.sin(gamma), math.cos(gamma)],
-        ]
+        ],
+        dtype=torch.float64,
     )
 
     rotation = lambda x: x @ rz @ ry @ rx
@@ -241,7 +244,7 @@ def equivariance_test_utils():
     alpha = torch.distributions.Uniform(-math.pi, math.pi).sample()
     beta = torch.distributions.Uniform(-math.pi, math.pi).sample()
     gamma = torch.distributions.Uniform(-math.pi, math.pi).sample()
-    v = torch.tensor([[alpha, beta, gamma]])
+    v = torch.tensor([[alpha, beta, gamma]], dtype=torch.float64)
     v /= (v**2).sum() ** 0.5
 
     p = torch.eye(3) - 2 * v.T @ v

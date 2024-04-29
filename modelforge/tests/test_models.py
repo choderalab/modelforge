@@ -475,9 +475,7 @@ def test_equivariant_energies_and_forces(
 
     # rotation test
     rotation_input_data = replace(nnp_input)
-    rotation_input_data.positions = rotation(
-        rotation_input_data.positions.to(torch.float32)
-    ).double()
+    rotation_input_data.positions = rotation(rotation_input_data.positions)
     rotation_result = model(rotation_input_data).E
 
     for t, r in zip(rotation_result, reference_result):
@@ -497,7 +495,7 @@ def test_equivariant_energies_and_forces(
         retain_graph=True,
     )[0]
 
-    rotate_reference = rotation(reference_forces.to(torch.float32)).double()
+    rotate_reference = rotation(reference_forces)
     assert torch.allclose(
         rotation_forces,
         rotate_reference,
@@ -506,9 +504,7 @@ def test_equivariant_energies_and_forces(
 
     # reflection test
     reflection_input_data = replace(nnp_input)
-    reflection_input_data.positions = reflection(
-        reflection_input_data.positions.to(torch.float32)
-    ).double()
+    reflection_input_data.positions = reflection(reflection_input_data.positions)
     reflection_result = model(reflection_input_data).E
     reflection_forces = -torch.autograd.grad(
         reflection_result.sum(),
@@ -528,7 +524,7 @@ def test_equivariant_energies_and_forces(
 
     assert torch.allclose(
         reflection_forces,
-        reflection(reference_forces.to(torch.float32)).double(),
+        reflection(reference_forces),
         atol=atol,
     )
 

@@ -33,6 +33,7 @@ dependencies:
   - ray-train
   - ray-tune
   - torchani
+  - versioneer
 
   # Docs
   - sphinx_rtd_theme
@@ -41,4 +42,6 @@ dependencies:
   - pip:
       - schnetpack>=2.0.0
       - pytorch2jax
+      - versioneer
       - flax
+      - git+https://github.com/ArnNag/sake.git@update_versioneer

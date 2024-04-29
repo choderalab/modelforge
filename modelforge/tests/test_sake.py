@@ -116,7 +116,7 @@ def test_sake_interaction_equivariance(h_atol, eq_atol):
     )
 
     # prepare reference and perturbed inputs
-    reference_prepared_input = sake.prepare_inputs(methane, only_unique_pairs=False)
+    reference_prepared_input = sake.prepare_inputs(methane)
     reference_v_torch = torch.randn_like(reference_prepared_input.positions)
 
     perturbed_prepared_input = sake.prepare_inputs(perturbed_methane_input)

@@ -45,7 +45,7 @@ class Pairlist(Module):
         Computes the displacement vector between atom pairs.
     calculate_d_ij(r_ij)
         Computes the Euclidean distance between atoms in a pair.
-    forward(positions, atomic_subsystem_indices, only_unique_pairs=False)
+    forward(positions, atomic_subsystem_indices)
         Forward pass to compute pair indices, distances, and displacement vectors.
     """
 
@@ -778,8 +778,6 @@ class BaseNeuralNetworkPotential(Module, ABC):
         data : NNPInput
             The input data provided by the dataset, containing atomic numbers, positions,
             and other necessary information.
-        only_unique_pairs : bool, optional
-            Whether to only use unique pairs in the pair list calculation, by default True.
 
         Returns
         -------

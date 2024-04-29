@@ -404,6 +404,7 @@ def test_casting(batch, inference_model):
     nnp_input = batch.metadata.to(dtype=torch.float64)
 
     # cast input and model to torch.float64
+    inference_model = inference_model("PyTorch")
     model = inference_model.to(dtype=torch.float64)
     nnp_input = batch.nnp_input.to(dtype=torch.float64)
 
@@ -434,6 +435,7 @@ def test_equivariant_energies_and_forces(
     nnp_input = batch.nnp_input
 
     # initialize the models
+    inference_model = inference_model(simulation_environment)
     model = inference_model.to(dtype=torch.float64)
 
     # ------------------- #

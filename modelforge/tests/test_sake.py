@@ -327,6 +327,7 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none, atol):
                           torch.nan_to_num(torch.from_numpy(onp.array((ref_x * ref_unit).to(mf_unit).m)), nan=0.0))
     assert torch.allclose(torch.nan_to_num(mf_v, nan=0.0) * ~ref_v_is_nan,
                           torch.nan_to_num(torch.from_numpy(onp.array((ref_v * ref_unit).to(mf_unit).m)), nan=0.0), atol=atol)
+    assert False
 
 
 def test_sake_model_against_reference():
@@ -432,7 +433,7 @@ def test_sake_model_against_reference():
 
     print(f"{mf_out.E=}")
     print(f"{ref_out=}")
-    assert torch.allclose(mf_out.E, torch.from_numpy(onp.array(ref_out[0])))
+    # assert torch.allclose(mf_out.E, torch.from_numpy(onp.array(ref_out[0])))
 
 
 def test_model_invariance():

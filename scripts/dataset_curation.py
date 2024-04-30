@@ -80,6 +80,9 @@ def SPICE_114_OpenFF(
     output_file_dir: str,
     local_cache_dir: str,
     force_download: bool = False,
+    max_records=None,
+    max_conformers_per_record=None,
+    total_conformers=None,
 ):
     """
     This fetches the SPICE 1.1.4 dataset from MOLSSI QCArchive using the OpenFF level of theory.
@@ -132,7 +135,14 @@ def SPICE_114_OpenFF(
         output_file_dir=output_file_dir,
         local_cache_dir=local_cache_dir,
     )
-    spice_dataset.process(force_download=force_download)
+    spice_dataset.process(
+        force_download=force_download,
+        max_records=max_records,
+        max_conformers_per_record=max_conformers_per_record,
+        total_conformers=total_conformers,
+    )
+    print(f"Total records: {spice_dataset.total_records}")
+    print(f"Total conformers: {spice_dataset.total_conformers}")
 
 
 def SPICE_114(
@@ -140,6 +150,9 @@ def SPICE_114(
     output_file_dir: str,
     local_cache_dir: str,
     force_download: bool = False,
+    max_records=None,
+    max_conformers_per_record=None,
+    total_conformers=None,
 ):
     """
     This fetches the SPICE 1.1.4 dataset from Zenodo and saves it as curated hdf5 file.
@@ -184,7 +197,14 @@ def SPICE_114(
         output_file_dir=output_file_dir,
         local_cache_dir=local_cache_dir,
     )
-    spice_114.process(force_download=force_download)
+    spice_114.process(
+        force_download=force_download,
+        max_records=max_records,
+        max_conformers_per_record=max_conformers_per_record,
+        total_conformers=total_conformers,
+    )
+    print(f"Total records: {spice_114.total_records}")
+    print(f"Total conformers: {spice_114.total_conformers}")
 
 
 def QM9(
@@ -192,7 +212,9 @@ def QM9(
     output_file_dir: str,
     local_cache_dir: str,
     force_download: bool = False,
-    unit_testing_max_records=None,
+    max_records=None,
+    max_conformers_per_record=None,
+    total_conformers=None,
 ):
     """
     This fetches and process the QM9 dataset into a curated hdf5 file.
@@ -228,13 +250,15 @@ def QM9(
         output_file_dir=output_file_dir,
         local_cache_dir=local_cache_dir,
     )
-    if unit_testing_max_records is None:
-        qm9.process(force_download=force_download)
-    else:
-        qm9.process(
-            force_download=force_download,
-            unit_testing_max_records=unit_testing_max_records,
-        )
+
+    qm9.process(
+        force_download=force_download,
+        max_records=max_records,
+        max_conformers_per_record=max_conformers_per_record,
+        total_conformers=total_conformers,
+    )
+    print(f"Total records: {qm9.total_records}")
+    print(f"Total conformers: {qm9.total_conformers}")
 
 
 def ANI1x(
@@ -242,6 +266,9 @@ def ANI1x(
     output_file_dir: str,
     local_cache_dir: str,
     force_download: bool = False,
+    max_records=None,
+    max_conformers_per_record=None,
+    total_conformers=None,
 ):
     """
     This fetches and processes the ANI1x dataset into a curated hdf5 file.
@@ -296,7 +323,14 @@ def ANI1x(
         output_file_dir=output_file_dir,
         local_cache_dir=local_cache_dir,
     )
-    ani1x.process(force_download=force_download)
+    ani1x.process(
+        force_download=force_download,
+        max_records=max_records,
+        max_conformers_per_record=max_conformers_per_record,
+        total_conformers=total_conformers,
+    )
+    print(f"Total records: {ani1x.total_records}")
+    print(f"Total conformers: {ani1x.total_conformers}")
 
 
 def ANI2x(
@@ -304,7 +338,9 @@ def ANI2x(
     output_file_dir: str,
     local_cache_dir: str,
     force_download: bool = False,
-    unit_testing_max_records=None,
+    max_records=None,
+    max_conformers_per_record=None,
+    total_conformers=None,
 ):
     """
     This fetches and processes the ANI2x dataset into a curated hdf5 file.
@@ -328,13 +364,15 @@ def ANI2x(
         output_file_dir=output_file_dir,
         local_cache_dir=local_cache_dir,
     )
-    if unit_testing_max_records is None:
-        ani2x.process(force_download=force_download)
-    else:
-        ani2x.process(
-            force_download=force_download,
-            unit_testing_max_records=unit_testing_max_records,
-        )
+
+    ani2x.process(
+        force_download=force_download,
+        max_records=max_records,
+        max_conformers_per_record=max_conformers_per_record,
+        total_conformers=total_conformers,
+    )
+    print(f"Total records: {ani2x.total_records}")
+    print(f"Total conformers: {ani2x.total_conformers}")
 
 
 """
@@ -342,52 +380,72 @@ Download the various datasets and process them into curated hdf5 files.
 """
 
 # define the local path prefix
-local_prefix = "/Users/cri/Documents/Projects-msk/datasets"
+local_prefix = "/home/cri/Documents/datasets"
 
 # we will save all the files to a central location
 output_file_dir = f"{local_prefix}/hdf5_files"
 
 # ANI2x test dataset
 # local_cache_dir = f"{local_prefix}/ani2x_dataset"
-# hdf5_file_name = "ani2x_dataset.hdf5"
+# hdf5_file_name = "ani2x_dataset_ntc_1000.hdf5"
 #
 # ANI2x(
 #     hdf5_file_name,
 #     output_file_dir,
 #     local_cache_dir,
 #     force_download=False,
-#     # unit_testing_max_records=100,
+#     # max_records=100,
+#     max_conformers_per_record=10,
+#     total_conformers=1000,
 # )
 
-# # QM9 dataset
+# QM9 dataset
 # local_cache_dir = f"{local_prefix}/qm9_dataset"
-# hdf5_file_name = "qm9_dataset_n100.hdf5"
+# hdf5_file_name = "qm9_dataset_ntc_1000.hdf5"
 #
 # QM9(
 #     hdf5_file_name,
 #     output_file_dir,
 #     local_cache_dir,
 #     force_download=False,
-#     unit_testing_max_records=100,
+#     max_records=1000,
+#     max_conformers_per_record=1,
+#     total_conformers=1000,
 # )
 
 # # SPICE 2 dataset
-local_cache_dir = f"{local_prefix}/spice2_dataset"
-hdf5_file_name = "spice_2_dataset.hdf5"
-
-SPICE_2(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)
+# local_cache_dir = f"{local_prefix}/spice2_dataset"
+# hdf5_file_name = "spice_2_dataset.hdf5"
+#
+# SPICE_2(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)
 
 # # SPICE 1.1.4 OpenFF dataset
-# local_cache_dir = f"{local_prefix}/spice_openff_dataset"
-# hdf5_file_name = "spice_114_openff_dataset.hdf5"
-#
-# SPICE_114_OpenFF(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)
-#
+local_cache_dir = f"{local_prefix}/spice_openff_dataset"
+hdf5_file_name = "spice_114_openff_dataset_ntc_1000.hdf5"
+
+SPICE_114_OpenFF(
+    hdf5_file_name,
+    output_file_dir,
+    local_cache_dir,
+    force_download=False,
+    max_records=10000,
+    total_conformers=1000,
+    max_conformers_per_record=10,
+)
+
 # # SPICE 1.1.4 dataset
 # local_cache_dir = f"{local_prefix}/spice_114_dataset"
-# hdf5_file_name = "spice_114_dataset.hdf5"
+# hdf5_file_name = "spice_114_dataset_ntc_1000.hdf5"
 #
-# SPICE_114(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)
+# SPICE_114(
+#     hdf5_file_name,
+#     output_file_dir,
+#     local_cache_dir,
+#     force_download=False,
+#     # max_records=100,
+#     max_conformers_per_record=10,
+#     total_conformers=1000,
+# )
 # #
 # # QM9 dataset
 # local_cache_dir = f"{local_prefix}/qm9_dataset"
@@ -397,10 +455,17 @@ SPICE_2(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)
 #
 # # ANI-1x dataset
 # local_cache_dir = f"{local_prefix}/ani1x_dataset"
-# hdf5_file_name = "ani1x_dataset.hdf5"
+# hdf5_file_name = "ani1x_dataset_ntc_1000.hdf5"
 #
-# ANI1x(hdf5_file_name, output_file_dir, local_cache_dir, force_download=True)
-#
+# ANI1x(
+#     hdf5_file_name,
+#     output_file_dir,
+#     local_cache_dir,
+#     force_download=False,
+#     total_conformers=1000,
+#     max_conformers_per_record=10,
+# )
+
 # # ANI-2x dataset
 # local_cache_dir = f"{local_prefix}/ani2x_dataset"
 # hdf5_file_name = "ani2x_dataset.hdf5"

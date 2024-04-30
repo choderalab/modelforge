@@ -189,7 +189,7 @@ class SPICEOpenFFCuration(DatasetCuration):
         local_database_name: str,
         local_path_dir: str,
         force_download: bool,
-        unit_testing_max_records: Optional[int] = None,
+        max_records: Optional[int] = None,
         pbar: Optional[tqdm] = None,
     ):
         """
@@ -231,8 +231,8 @@ class SPICEOpenFFCuration(DatasetCuration):
 
         ds.fetch_entry_names()
         entry_names = ds.entry_names
-        if unit_testing_max_records is None:
-            unit_testing_max_records = len(entry_names)
+        if max_records is None:
+            max_records = len(entry_names)
         with SqliteDict(
             f"{local_path_dir}/{local_database_name}",
             tablename=specification_name,
@@ -243,10 +243,10 @@ class SPICEOpenFFCuration(DatasetCuration):
             db_keys = set(spice_db.keys())
             to_fetch = []
             if force_download:
-                for name in entry_names[0:unit_testing_max_records]:
+                for name in entry_names[0:max_records]:
                     to_fetch.append(name)
             else:
-                for name in entry_names[0:unit_testing_max_records]:
+                for name in entry_names[0:max_records]:
                     if name not in db_keys:
                         to_fetch.append(name)
             if pbar is not None:
@@ -439,6 +439,8 @@ class SPICEOpenFFCuration(DatasetCuration):
         local_path_dir: str,
         filenames: List[str],
         dataset_names: List[str],
+        max_conformers_per_record: Optional[int] = None,
+        total_conformers: Optional[int] = None,
     ):
         """
         Processes a downloaded dataset: extracts relevant information.
@@ -687,10 +689,47 @@ class SPICEOpenFFCuration(DatasetCuration):
         if self.convert_units:
             self._convert_units()
 
+        if total_conformers is not None or max_conformers_per_record is not None:
+            conformers_count = 0
+
+            for datapoint in self.data:
+                if total_conformers is not None:
+                    if conformers_count >= total_conformers:
+                        break
+                n_conformers = datapoint["n_configs"]
+                if max_conformers_per_record is not None:
+                    n_conformers = min(n_conformers, max_conformers_per_record)
+
+                if total_conformers is not None:
+                    n_conformers = min(
+                        n_conformers, total_conformers - conformers_count
+                    )
+
+                datapoint["n_configs"] = n_conformers
+                datapoint["geometry"] = datapoint["geometry"][0:n_conformers]
+                datapoint["dft_total_energy"] = datapoint["dft_total_energy"][
+                    0:n_conformers
+                ]
+                datapoint["dft_total_gradient"] = datapoint["dft_total_gradient"][
+                    0:n_conformers
+                ]
+                datapoint["dft_total_force"] = datapoint["dft_total_force"][
+                    0:n_conformers
+                ]
+                datapoint["formation_energy"] = datapoint["formation_energy"][
+                    0:n_conformers
+                ]
+                datapoint["mbis_charges"] = datapoint["mbis_charges"][0:n_conformers]
+                datapoint["scf_dipole"] = datapoint["scf_dipole"][0:n_conformers]
+
+                conformers_count += n_conformers
+
     def process(
         self,
         force_download: bool = False,
-        unit_testing_max_records: Optional[int] = None,
+        max_records: Optional[int] = None,
+        max_conformers_per_record: Optional[int] = None,
+        total_conformers: Optional[int] = None,
         n_threads=6,
     ) -> None:
         """
@@ -701,11 +740,17 @@ class SPICEOpenFFCuration(DatasetCuration):
         force_download: bool, optional, default=False
             If the raw data_file is present in the local_cache_dir, the local copy will be used.
             If True, this will force the software to download the data again, even if present.
-        unit_testing_max_records: int, optional, default=None
-            If set to an integer, 'n', the routine will only process the first 'n' records, useful for unit tests.
-            Note, that in SPICE, conformers are stored as separate records, and are combined within this routine.
-            As such the number of molecules in 'data' may be less than unit_testing_max_records, if the records fetched
-            are all conformers of the same molecule.
+        max_records: int, optional, default=None
+            If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
+            Can be used in conjunction with max_conformers_per_record and total_conformers.
+            Note defining this will only fetch from the "SPICE PubChem Set 1 Single Points Dataset v1.2"
+        max_conformers_per_record: int, optional, default=None
+            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
+            Can be used in conjunction with max_records and total_conformers.
+        total_conformers: int, optional, default=None
+            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
+            Can be used in conjunction with max_records and max_conformers_per_record.
+            Note defining this will only fetch from the "SPICE PubChem Set 1 Single Points Dataset v1.2"
         n_threads, int, default=6
             Number of concurrent threads for retrieving data from QCArchive
         Examples
@@ -715,6 +760,11 @@ class SPICEOpenFFCuration(DatasetCuration):
         >>> spice_openff_data.process()
 
         """
+        # if max_records is not None and total_conformers is not None:
+        #     raise ValueError(
+        #         "max_records and total_conformers cannot be set at the same time."
+        #     )
+
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         if self.release_version == "1.1.4":
@@ -740,8 +790,8 @@ class SPICEOpenFFCuration(DatasetCuration):
         specification_names = ["spec_2", "spec_6", "entry"]
 
         # if we specify the number of records, restrict to only the first subset
-        # so we don't do this 6 times.
-        if unit_testing_max_records is not None:
+        # so we don't download multiple collections.
+        if max_records is not None or total_conformers is not None:
             dataset_names = ["SPICE PubChem Set 1 Single Points Dataset v1.2"]
         threads = []
         local_database_names = []
@@ -761,7 +811,7 @@ class SPICEOpenFFCuration(DatasetCuration):
                                 local_database_name=local_database_name,
                                 local_path_dir=self.local_cache_dir,
                                 force_download=force_download,
-                                unit_testing_max_records=unit_testing_max_records,
+                                max_records=max_records,
                                 pbar=pbar,
                             )
                         )
@@ -774,6 +824,8 @@ class SPICEOpenFFCuration(DatasetCuration):
             self.local_cache_dir,
             local_database_names,
             dataset_names,
+            max_conformers_per_record=max_conformers_per_record,
+            total_conformers=total_conformers,
         )
 
         self._generate_hdf5()

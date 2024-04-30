@@ -1,13 +1,21 @@
 import torch
 import pytest
 from modelforge.dataset import TorchDataModule, _IMPLEMENTED_DATASETS
+from modelforge.dataset.dataset import HDF5Dataset
+
 from typing import Optional, Dict
 from modelforge.potential import NeuralNetworkPotentialFactory, _IMPLEMENTED_NNPS
-
+from dataclasses import dataclass
 
 _DATASETS_TO_TEST = [name for name in _IMPLEMENTED_DATASETS]
 _MODELS_TO_TEST = [name for name in _IMPLEMENTED_NNPS]
 from modelforge.potential.utils import BatchData
+
+
+@pytest.fixture(scope="session")
+def prep_temp_dir(tmp_path_factory):
+    fn = tmp_path_factory.mktemp("dataset_testing")
+    return fn
 
 
 @pytest.fixture(params=_MODELS_TO_TEST)
@@ -30,32 +38,147 @@ def inference_model(request):
     return model
 
 
+@dataclass
+class DataSetContainer:
+    dataset: HDF5Dataset
+    name: str
+    expected_properties_of_interest: list
+    expected_E_random_split: float
+    expected_E_fcfs_split: float
+
+
 @pytest.fixture(params=_DATASETS_TO_TEST)
-def datasets_to_test(request):
+def datasets_to_test(request, prep_temp_dir):
     dataset_name = request.param
     if dataset_name == "QM9":
-        from modelforge.dataset import QM9Dataset
+        from modelforge.dataset.qm9 import QM9Dataset
 
-        dataset = QM9Dataset(for_unit_testing=True)
-        return dataset
+        datasetDC = DataSetContainer(
+            dataset=QM9Dataset(
+                for_unit_testing=True, local_cache_dir=str(prep_temp_dir)
+            ),
+            name=dataset_name,
+            expected_properties_of_interest=[
+                "geometry",
+                "atomic_numbers",
+                "internal_energy_at_0K",
+                "charges",
+            ],
+            expected_E_random_split=-412509.93109875394,
+            expected_E_fcfs_split=-106277.4161215308,
+        )
+        return datasetDC
+    elif dataset_name == "ANI1X":
+        from modelforge.dataset.ani1x import ANI1xDataset
+
+        datasetDC = DataSetContainer(
+            dataset=ANI1xDataset(
+                for_unit_testing=True, local_cache_dir=str(prep_temp_dir)
+            ),
+            name=dataset_name,
+            expected_properties_of_interest=[
+                "geometry",
+                "atomic_numbers",
+                "wb97x_dz.energy",
+                "wb97x_dz.forces",
+            ],
+            expected_E_random_split=-1739101.9014184382,
+            expected_E_fcfs_split=-1015736.8142089575,
+        )
+        return datasetDC
+    elif dataset_name == "ANI2X":
+        from modelforge.dataset.ani2x import ANI2xDataset
+
+        datasetDC = DataSetContainer(
+            dataset=ANI2xDataset(
+                for_unit_testing=True, local_cache_dir=str(prep_temp_dir)
+            ),
+            name=dataset_name,
+            expected_properties_of_interest=[
+                "geometry",
+                "atomic_numbers",
+                "energies",
+                "forces",
+            ],
+            expected_E_random_split=-2614282.09174506,
+            expected_E_fcfs_split=-2096692.258327173,
+        )
+        return datasetDC
+    elif dataset_name == "SPICE114":
+        from modelforge.dataset.spice114 import SPICE114Dataset
+
+        datasetDC = DataSetContainer(
+            dataset=SPICE114Dataset(
+                for_unit_testing=True, local_cache_dir=str(prep_temp_dir)
+            ),
+            name=dataset_name,
+            expected_properties_of_interest=[
+                "geometry",
+                "atomic_numbers",
+                "dft_total_energy",
+                "dft_total_force",
+                "mbis_charges",
+            ],
+            expected_E_random_split=-4289211.145285763,
+            expected_E_fcfs_split=-972574.265833225,
+        )
+        return datasetDC
+    elif dataset_name == "SPICE2":
+        from modelforge.dataset.spice2 import SPICE2Dataset
+
+        datasetDC = DataSetContainer(
+            dataset=SPICE2Dataset(
+                for_unit_testing=True, local_cache_dir=str(prep_temp_dir)
+            ),
+            name=dataset_name,
+            expected_properties_of_interest=[
+                "geometry",
+                "atomic_numbers",
+                "dft_total_energy",
+                "dft_total_force",
+                "mbis_charges",
+            ],
+            expected_E_random_split=-2293275.9758066307,
+            expected_E_fcfs_split=-1517627.6999202403,
+        )
+        return datasetDC
+    elif dataset_name == "SPICE114_OPENFF":
+        from modelforge.dataset.spice114openff import SPICE114OpenFFDataset
+
+        datasetDC = DataSetContainer(
+            dataset=SPICE114OpenFFDataset(
+                for_unit_testing=True, local_cache_dir=str(prep_temp_dir)
+            ),
+            name=dataset_name,
+            expected_properties_of_interest=[
+                "geometry",
+                "atomic_numbers",
+                "dft_total_energy",
+                "dft_total_force",
+                "mbis_charges",
+            ],
+            expected_E_random_split=-2011114.830087605,
+            expected_E_fcfs_split=-1516718.0904709378,
+        )
+        return datasetDC
     else:
         raise NotImplementedError(f"Dataset {dataset_name} is not implemented.")
 
 
 @pytest.fixture(params=_DATASETS_TO_TEST)
-def initialized_dataset(request):
-    dataset_name = request.param
-    if dataset_name == "QM9":
-        from modelforge.dataset import QM9Dataset
-
-        dataset = QM9Dataset(for_unit_testing=True)
-
+def initialized_dataset(datasets_to_test):
+    # dataset_name = request.param
+    # if dataset_name == "QM9":
+    #     from modelforge.dataset import QM9Dataset
+    #
+    #     dataset = QM9Dataset(for_unit_testing=True)
+    dataset = datasets_to_test.dataset
     return initialize_dataset(dataset)
 
 
 @pytest.fixture(params=_DATASETS_TO_TEST)
 def batch(initialized_dataset, request):
-    """
+    """py
     Fixture to obtain a single batch from an initialized dataset.
 
     This fixture depends on the `initialized_dataset` fixture for the dataset instance.

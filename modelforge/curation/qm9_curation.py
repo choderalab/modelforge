@@ -502,7 +502,9 @@ class QM9Curation(DatasetCuration):
     def _process_downloaded(
         self,
         local_path_dir: str,
-        unit_testing_max_records: Optional[int] = None,
+        max_records: Optional[int] = None,
+        max_conformers_per_record: Optional[int] = None,
+        total_conformers: Optional[int] = None,
     ):
         """
         Processes a downloaded dataset: extracts relevant information into a list of dicts.
@@ -511,8 +513,16 @@ class QM9Curation(DatasetCuration):
         ----------
         local_path_dir: str, required
             Path to the directory that contains the tar.bz2 file.
-        unit_testing_max_records: int, optional, default=None
-            If set to an integer, 'n', the routine will only process the first 'n' records, useful for unit tests.
+        max_records: int, optional, default=None
+            If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
+            Can be used in conjunction with umax_conformers_per_record and total_conformers.
+        max_conformers_per_record: int, optional, default=None
+            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
+            Can be used in conjunction with max_records and total_conformers.
+        total_conformers: int, optional, default=None
+            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
+            Can be used in conjunction with max_records and max_conformers_per_record.
+
 
         Examples
         --------
@@ -523,10 +533,33 @@ class QM9Curation(DatasetCuration):
 
         # list the files in the directory to examine
         files = list_files(directory=local_path_dir, extension=".xyz")
-        if unit_testing_max_records is None:
+
+        # qm9 only has a single conformer in it, so unit_test_max_records and unit_testing_max_conformers_per_record behave the same way
+
+        if max_records is None and total_conformers is None:
             n_max = len(files)
-        else:
-            n_max = unit_testing_max_records
+        elif max_records is not None and total_conformers is None:
+            if max_records > len(files):
+                n_max = len(files)
+                logger.warning(
+                    f"max_records ({max_records})is greater than the number of records in the dataset {len(files)}. Using {len(files)}."
+                )
+            else:
+                n_max = max_records
+        elif max_records is None and total_conformers is not None:
+            if total_conformers > len(files):
+                n_max = len(files)
+                logger.warning(
+                    f"total_conformers ({total_conformers}) is greater than the number of records in the dataset {len(files)}. Using {len(files)}."
+                )
+            else:
+                n_max = total_conformers
+
+        # we do not need to do anything check unit_testing_max_conformers_per_record because qm9 only has a single conformer per record
+        if max_conformers_per_record is not None:
+            logger.warning(
+                "max_conformers_per_record is not used for QM9 dataset as there is only one conformer per record. Using a value of 1"
+            )
 
         for i, file in enumerate(
             tqdm(files[0:n_max], desc="processing", total=len(files))
@@ -546,7 +579,9 @@ class QM9Curation(DatasetCuration):
     def process(
         self,
         force_download: bool = False,
-        unit_testing_max_records: Optional[int] = None,
+        max_records: Optional[int] = None,
+        max_conformers_per_record: Optional[int] = None,
+        total_conformers: Optional[int] = None,
     ) -> None:
         """
         Downloads the dataset, extracts relevant information, and writes an hdf5 file.
@@ -556,8 +591,18 @@ class QM9Curation(DatasetCuration):
         force_download: bool, optional, default=False
             If the raw data_file is present in the local_cache_dir, the local copy will be used.
             If True, this will force the software to download the data again, even if present.
-        unit_testing_max_records: int, optional, default=None
-            If set to an integer, 'n', the routine will only process the first 'n' records, useful for unit tests.
+        max_records: int, optional, default=None
+            If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
+            Can be used in conjunction with max_conformers_per_record and total_conformers.
+        max_conformers_per_record: int, optional, default=None
+            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
+            Can be used in conjunction with max_records and total_conformers.
+        total_conformers: int, optional, default=None
+            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
+            Can be used in conjunction with max_records and max_conformers_per_record.
+
+        Note for qm9, only a single conformer is present per record, so max_records and total_conformers behave the same way,
+        and max_conformers_per_record does not alter the behavior (i.e., it is always 1).
 
         Examples
         --------
@@ -565,6 +610,11 @@ class QM9Curation(DatasetCuration):
         >>> qm9_data.process()
 
         """
+        if max_records is not None and total_conformers is not None:
+            raise ValueError(
+                "max_records and total_conformers cannot be set at the same time."
+            )
+
         from modelforge.utils.remote import download_from_figshare
 
         url = self.dataset_download_url
@@ -597,7 +647,9 @@ class QM9Curation(DatasetCuration):
 
         self._process_downloaded(
             f"{self.local_cache_dir}/qm9_xyz_files",
-            unit_testing_max_records,
+            max_records,
+            max_conformers_per_record,
+            total_conformers,
         )
 
         # generate the hdf5 file

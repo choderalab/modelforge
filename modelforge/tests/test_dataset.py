@@ -9,7 +9,7 @@ from modelforge.dataset.dataset import DatasetFactory, TorchDataset
 from modelforge.dataset import QM9Dataset
 
 DATASETS = [QM9Dataset]
-from ..utils import PropertyNames
+from modelforge.utils.prop import PropertyNames
 
 
 @pytest.fixture(scope="session")
@@ -18,34 +18,34 @@ def prep_temp_dir(tmp_path_factory):
     return fn
 
 
-@pytest.fixture(
-    autouse=True,
-)
-def cleanup_files():
-    """Fixture to clean up temporary files before and after test execution."""
-
-    def _cleanup():
-        for dataset in DATASETS:
-            dataset_name = dataset().dataset_name
-
-            files = [
-                f"{dataset_name}_cache.hdf5",
-                f"{dataset_name}_cache.hdf5.gz",
-                f"{dataset_name}_processed.npz",
-                f"{dataset_name}_subset_cache.hdf5",
-                f"{dataset_name}_subset_cache.hdf5.gz",
-                f"{dataset_name}_subset_processed.npz",
-            ]
-            for f in files:
-                try:
-                    os.remove(f)
-                    print(f"Deleted {f}")
-                except FileNotFoundError:
-                    print(f"{f} not found")
-
-    _cleanup()
-    yield  # This is where the test will execute
-    _cleanup()
+# @pytest.fixture(
+#     autouse=True,
+# )
+# def cleanup_files():
+#     """Fixture to clean up temporary files before and after test execution."""
+#
+#     def _cleanup():
+#         for dataset in DATASETS:
+#             dataset_name = dataset().dataset_name
+#
+#             files = [
+#                 f"{dataset_name}_cache.hdf5",
+#                 f"{dataset_name}_cache.hdf5.gz",
+#                 f"{dataset_name}_processed.npz",
+#                 f"{dataset_name}_subset_cache.hdf5",
+#                 f"{dataset_name}_subset_cache.hdf5.gz",
+#                 f"{dataset_name}_subset_processed.npz",
+#             ]
+#             for f in files:
+#                 try:
+#                     os.remove(f)
+#                     print(f"Deleted {f}")
+#                 except FileNotFoundError:
+#                     print(f"{f} not found")
+#
+#     _cleanup()
+#     yield  # This is where the test will execute
+#     _cleanup()
 
 
 def test_dataset_imported():
@@ -128,7 +128,7 @@ def test_dataset_basic_operations():
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_different_properties_of_interest(dataset):
     factory = DatasetFactory()
-    data = dataset(for_unit_testing=True)
+    data = dataset(for_unit_testing=True, regenerate_cache=True)
     assert data.properties_of_interest == [
         "geometry",
         "atomic_numbers",
@@ -139,7 +139,7 @@ def test_different_properties_of_interest(dataset):
     dataset = factory.create_dataset(data)
     raw_data_item = dataset[0]
     assert isinstance(raw_data_item, dict)
-    assert len(raw_data_item) == 6 # 6 properties are returned
+    assert len(raw_data_item) == 6  # 6 properties are returned
 
     data.properties_of_interest = [
         "internal_energy_at_0K",
@@ -370,7 +370,8 @@ def test_data_item_format(initialized_dataset):
     """Test the format of individual data items in the dataset."""
     from typing import Dict
 
-    raw_data_item = initialized_dataset.torch_dataset[0]
+    dataset = initialized_dataset
+    raw_data_item = dataset.torch_dataset[0]
     assert isinstance(raw_data_item, Dict)
     assert isinstance(raw_data_item["atomic_numbers"], torch.Tensor)
     assert isinstance(raw_data_item["positions"], torch.Tensor)
@@ -418,25 +419,34 @@ def test_dataset_splitting(splitting_strategy, datasets_to_test):
     """Test random_split on the the dataset."""
     from modelforge.dataset import DatasetFactory
 
-    dataset = DatasetFactory.create_dataset(datasets_to_test)
+    dataset = DatasetFactory.create_dataset(datasets_to_test.dataset)
     train_dataset, val_dataset, test_dataset = splitting_strategy().split(dataset)
-
+    print("local cache dir, ", datasets_to_test.dataset.local_cache_dir)
     energy = train_dataset[0]["E"].item()
 
-    assert np.isclose(energy, -412509.9375) or np.isclose(energy, -106277.4161215308)
+    if splitting_strategy == RandomRecordSplittingStrategy:
+        assert np.isclose(energy, datasets_to_test.expected_E_random_split)
+    elif splitting_strategy == FirstComeFirstServeSplittingStrategy:
+        assert np.isclose(energy, datasets_to_test.expected_E_fcfs_split)
 
+    train_dataset2, val_dataset2, test_dataset2 = splitting_strategy(
+        split=[0.6, 0.3, 0.1]
+    ).split(dataset)
+
+    # since not all datasets will ultimately have 100 records, since some may include multiple conformers
+    # associated with each record, we will look at the ratio
+    total = len(train_dataset2) + len(val_dataset2) + len(test_dataset2)
+    assert np.isclose(len(train_dataset2) / total / 0.6, 1.0, rtol=0.1)
+    assert np.isclose(len(val_dataset2) / total / 0.3, 1.0, rtol=0.1)
+    assert np.isclose(len(test_dataset2) / total / 0.1, 1.0, rtol=0.1)
+
+    # assert len(train_dataset) == 60
+    # assert len(val_dataset) == 30
+    # assert len(test_dataset) == 10
     try:
         splitting_strategy(split=[0.2, 0.1, 0.1])
     except AssertionError as excinfo:
         print(f"AssertionError raised: {excinfo}")
-
-    train_dataset, val_dataset, test_dataset = splitting_strategy(
-        split=[0.6, 0.3, 0.1]
-    ).split(dataset)
-
-    assert len(train_dataset) == 60
-    assert len(val_dataset) == 30
-    assert len(test_dataset) == 10
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
@@ -457,7 +467,7 @@ def test_numpy_dataset_assignment(datasets_to_test):
     """
 
     factory = DatasetFactory()
-    data = datasets_to_test
+    data = datasets_to_test.dataset
     factory._load_or_process_data(data)
 
     assert hasattr(data, "numpy_data")

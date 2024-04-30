@@ -581,7 +581,7 @@ class HDF5Dataset:
                     f"Loading processed data from {self.local_cache_dir}/{self.processed_data_file['name']} generated on {self._npz_metadata['date_generated']}"
                 )
                 log.debug(
-                    f"Properties of Interes in .npz file: {self._npz_metadata['data_keys']}"
+                    f"Properties of Interest in .npz file: {self._npz_metadata['data_keys']}"
                 )
                 self.numpy_data = np.load(
                     f"{self.local_cache_dir}/{self.processed_data_file['name']}"

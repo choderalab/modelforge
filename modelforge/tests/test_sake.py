@@ -229,11 +229,7 @@ def test_radial_symmetry_function_against_reference():
 
 @pytest.mark.parametrize("include_self_pairs", [True, False])
 @pytest.mark.parametrize("v_is_none", [True, False])
-@pytest.mark.parametrize("atol", [1e0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 9e-7])
-def test_sake_layer_against_reference(include_self_pairs, v_is_none, atol):
-    import inspect
-    print(f"{jax.__version__=}")
-    print(f"{torch.__version__=}")
+def test_sake_layer_against_reference(include_self_pairs, v_is_none):
 
     nr_atoms = 13
     out_features = 11
@@ -242,8 +238,6 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none, atol):
     nr_heads = 5
     nr_atom_basis = out_features
     nr_pairs = 17
-    mf_unit = unit.nanometer
-    ref_unit = unit.nanometer
     key = jax.random.PRNGKey(1884)
     torch.manual_seed(1884)
 
@@ -251,24 +245,20 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none, atol):
 
     mf_sake_block, ref_sake_interaction = make_reference_equivalent_sake_interaction(out_features, hidden_features,
                                                                                      nr_heads)
-    kernel = reference_sake.utils.ExpNormalSmearing()
-    print(f"{inspect.getsource(kernel.__call__)}")
     # Generate random input data in JAX
     h_key, x_key, v_key, init_key = jax.random.split(key, 4)
     h_jax = jax.random.normal(h_key, (nr_atoms, nr_atom_basis))
-    x_bohr_mag = jax.random.normal(x_key, (nr_atoms, geometry_basis))
-    x_jax = (x_bohr_mag * unit.bohr).to(ref_unit).m
+    x_jax = jax.random.normal(x_key, (nr_atoms, geometry_basis))
     if v_is_none:
         v_jax = None
         v = torch.zeros((nr_atoms, geometry_basis))
     else:
-        v_bohr_mag = jax.random.normal(v_key, (nr_atoms, geometry_basis))
-        v_jax = (v_bohr_mag * unit.bohr).to(ref_unit).m
-        v = torch.from_numpy(onp.array((v_bohr_mag * unit.bohr).to(mf_unit).m))
+        v_jax = jax.random.normal(v_key, (nr_atoms, geometry_basis))
+        v = torch.from_numpy(onp.array(v_jax))
 
     # Convert the input tensors from JAX to torch and reshape to diagonal batching
     h = (torch.from_numpy(onp.array(h_jax)))
-    x = (torch.from_numpy(onp.array(x_bohr_mag)) * unit.bohr).to(ref_unit).m
+    x = (torch.from_numpy(onp.array(x_jax)))
 
     variables = ref_sake_interaction.init(init_key, h_jax, x_jax, v_jax, mask)
     layer = variables["params"]
@@ -318,16 +308,12 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none, atol):
     ref_x_is_nan = torch.from_numpy(onp.isnan(ref_x))
     ref_v_is_nan = torch.from_numpy(onp.isnan(ref_v))
 
-    print(f"{ref_h_is_nan.sum()} NaNs in ref_h")
-    print(f"{ref_x_is_nan.sum()} NaNs in ref_x")
-    print(f"{ref_v_is_nan.sum()} NaNs in ref_v")
     assert torch.allclose(torch.nan_to_num(mf_h, nan=0.0) * ~ref_h_is_nan,
                           torch.nan_to_num(torch.from_numpy(onp.array(ref_h)), nan=0.0))
     assert torch.allclose(torch.nan_to_num(mf_x, nan=0.0) * ~ref_x_is_nan,
-                          torch.nan_to_num(torch.from_numpy(onp.array((ref_x * ref_unit).to(mf_unit).m)), nan=0.0))
+                          torch.nan_to_num(torch.from_numpy(onp.array(ref_x)), nan=0.0))
     assert torch.allclose(torch.nan_to_num(mf_v, nan=0.0) * ~ref_v_is_nan,
-                          torch.nan_to_num(torch.from_numpy(onp.array((ref_v * ref_unit).to(mf_unit).m)), nan=0.0), atol=atol)
-    assert False
+                          torch.nan_to_num(torch.from_numpy(onp.array(ref_v)), nan=0.0))
 
 
 def test_sake_model_against_reference():

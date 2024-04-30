@@ -190,8 +190,6 @@ class PaiNNCore(BaseNeuralNetworkPotential):
         mu = transformed_input["mu"]
         dir_ij = transformed_input["dir_ij"]
 
-        for i in [1, 2, 3]:
-            print(i)
 
         for i, (interaction_mod, mixing_mod) in enumerate(
             zip(self.interaction_modules, self.mixing_modules)

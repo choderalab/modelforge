@@ -7,36 +7,37 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
 
     def __init__(self):
         """
-        Initializes the energy readout module.
+        Initializes the per-atom property readout module.
         Performs the reduction of 'per_atom' property to 'per_molecule' property.
         """
         super().__init__()
 
-    def forward(self, x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, atomic_subsystem_indices: torch.Tensor
+    ) -> torch.Tensor:
         """
 
         Parameters
         ----------
-        x, shape [nr_of_atoms, 1]
-        index, shape [nr_of_atoms]
+        x: torch.Tensor, shape [nr_of_atoms, 1]. The per-atom property that will be reduced to per-molecule property.
+        atomic_subsystem_indices: torch.Tensor, shape [nr_of_atoms]. The atomic subsystem indices
 
         Returns
         -------
-        Tensor, shape [nr_of_moleculs, 1]
-            The total energy tensor.
+        Tensor, shape [nr_of_moleculs, 1], the per-molecule property.
         """
 
-        # Perform scatter add operation
-        indices = index.to(torch.int64)
-        total_energy_per_molecule = torch.zeros(
-            len(index.unique()), dtype=x.dtype, device=x.device
+        # Perform scatter add operation for atoms belonging to the same molecule
+        indices = atomic_subsystem_indices.to(torch.int64)
+        property_per_molecule_zeros = torch.zeros(
+            len(atomic_subsystem_indices.unique()), dtype=x.dtype, device=x.device
         )
 
-        total_energy_per_molecule = total_energy_per_molecule.scatter_add(0, indices, x)
+        property_per_molecule = property_per_molecule_zeros.scatter_add(0, indices, x)
 
         # Sum across feature dimension to get final tensor of shape (num_molecules, 1)
-        # total_energy_per_molecule = result.sum(dim=1, keepdim=True)
-        return total_energy_per_molecule
+        # property_per_molecule = result.sum(dim=1, keepdim=True)
+        return property_per_molecule
 
 
 from dataclasses import dataclass, field

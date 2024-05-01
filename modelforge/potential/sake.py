@@ -239,7 +239,7 @@ class SAKEInteraction(nn.Module):
             max_distance=cutoff,
             dtype=torch.float32,
             trainable=True,
-            radial_basis_function=SAKERadialBasisFunction(cutoff, 0.0 * unit.nanometer),
+            radial_basis_function=SAKERadialBasisFunction(0.0 * unit.nanometer),
         )
 
         self.node_mlp = nn.Sequential(

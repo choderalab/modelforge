@@ -7,8 +7,8 @@ from .utils import (
     CosineCutoff,
     RadialSymmetryFunction,
     AngularSymmetryFunction,
-    FromAtomToMoleculeReduction,
 )
+from .processing import FromAtomToMoleculeReduction
 from .models import TrainingAdapter
 from .models import NeuralNetworkPotentialFactory
 

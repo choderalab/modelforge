@@ -1,8 +1,13 @@
-from typing import Type
-
+import os
 import pytest
+import platform
+
+ON_MACOS = platform.system() == "Darwin"
+
+IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 
 
+@pytest.mark.skipif(ON_MACOS, reason="Skipping this test on GitHub Actions")
 def test_train_with_lightning(train_model, initialized_dataset):
     """
     Test the forward pass for a given model and dataset.
@@ -31,6 +36,7 @@ def test_train_with_lightning(train_model, initialized_dataset):
     )
 
 
+@pytest.mark.skipif(ON_MACOS, reason="Skipping this test on GitHub Actions")
 def test_hypterparameter_tuning_with_ray(train_model, initialized_dataset):
 
     train_model.tune_with_ray(

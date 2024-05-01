@@ -6,7 +6,7 @@ from modelforge.potential.utils import CosineCutoff, RadialSymmetryFunction
 
 
 def test_ase_dataclass():
-    from modelforge.potential.utils import AtomicSelfEnergies
+    from modelforge.potential.processing import AtomicSelfEnergies
 
     # Example usage
     atomic_self_energies = AtomicSelfEnergies(
@@ -347,8 +347,12 @@ def test_scatter_softmax():
     src = 1.1 ** torch.arange(10).reshape(2, 5)
     expanded_index = index.expand_as(src)
     util_out = scatter_softmax(src, expanded_index, dim=1, dim_size=3)
-    correct_out = torch.tensor([[0.4750208259, 0.5249791741, 0.4697868228, 0.5302131772, 1.0000000000],
-                                [0.4598240554, 0.5401759744, 0.4514355958, 0.5485643744, 1.0000000000]])
+    correct_out = torch.tensor(
+        [
+            [0.4750208259, 0.5249791741, 0.4697868228, 0.5302131772, 1.0000000000],
+            [0.4598240554, 0.5401759744, 0.4514355958, 0.5485643744, 1.0000000000],
+        ]
+    )
     assert torch.allclose(util_out, correct_out)
 
 
@@ -375,7 +379,7 @@ def test_embedding():
 
 
 def test_energy_readout():
-    from modelforge.potential.utils import FromAtomToMoleculeReduction
+    from modelforge.potential.processing import FromAtomToMoleculeReduction
     import torch
 
     # the EnergyReadout module performs a linear pass to reduce the nr_of_atom_basis to 1
@@ -423,5 +427,3 @@ def test_welford():
         assert np.isclose(online_estimator.mean / target_mean, 1.0, rtol=1e-1)
         assert np.isclose(online_estimator.variance / target_variance, 1.0, rtol=1e-1)
         assert np.isclose(online_estimator.stddev / target_stddev, 1.0, rtol=1e-1)
-
-

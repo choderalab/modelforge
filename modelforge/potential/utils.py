@@ -6,6 +6,8 @@ import torch
 import torch.nn as nn
 from loguru import logger as log
 from openff.units import unit
+from pint import Quantity
+from typing import Union
 
 
 @dataclass
@@ -18,6 +20,9 @@ class NeuralNetworkData:
     positions: torch.Tensor
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
+
+
+from typing import NamedTuple
 
 
 @dataclass
@@ -42,7 +47,7 @@ class NNPInput:
     """
 
     atomic_numbers: torch.Tensor
-    positions: Any  # Temporarily use Any to allow for openff.units.unit.Quantity
+    positions: Union[torch.Tensor, Quantity]
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
 
@@ -69,7 +74,7 @@ class NNPInput:
         self.total_charge = self.total_charge.to(torch.int32)
 
         # Unit conversion for positions
-        if isinstance(self.positions, unit.Quantity):
+        if isinstance(self.positions, Quantity):
             positions = self.positions.to(unit.nanometer).m
             self.positions = torch.tensor(
                 positions, dtype=torch.float32, requires_grad=True
@@ -98,7 +103,7 @@ class NNPInput:
                 "The size of atomic_subsystem_indices and the first dimension of positions must match"
             )
 
-    def as_namedtuple(self):
+    def as_namedtuple(self) -> NamedTuple:
         """Export the dataclass fields and values as a named tuple."""
 
         import collections
@@ -365,176 +370,6 @@ class CosineCutoff(nn.Module):
 
 
 from typing import Dict
-
-
-class FromAtomToMoleculeReduction(nn.Module):
-
-    def __init__(self):
-        """
-        Initializes the energy readout module.
-        Performs the reduction of 'per_atom' property to 'per_molecule' property.
-        """
-        super().__init__()
-
-    def forward(self, x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
-        """
-
-        Parameters
-        ----------
-        x, shape [nr_of_atoms, 1]
-        index, shape [nr_of_atoms]
-
-        Returns
-        -------
-        Tensor, shape [nr_of_moleculs, 1]
-            The total energy tensor.
-        """
-
-        # Perform scatter add operation
-        indices = index.to(torch.int64)
-        total_energy_per_molecule = torch.zeros(
-            len(index.unique()), dtype=x.dtype, device=x.device
-        )
-
-        total_energy_per_molecule = total_energy_per_molecule.scatter_add(0, indices, x)
-
-        # Sum across feature dimension to get final tensor of shape (num_molecules, 1)
-        # total_energy_per_molecule = result.sum(dim=1, keepdim=True)
-        return total_energy_per_molecule
-
-
-from dataclasses import dataclass, field
-from typing import Dict, Iterator
-
-
-@dataclass
-class AtomicSelfEnergies:
-    """
-    AtomicSelfEnergies stores a mapping of atomic elements to their self energies.
-
-    Provides lookup by atomic number or symbol, iteration over the mapping,
-    and utilities to convert between atomic number and symbol.
-
-    Intended as a base class to be extended with specific element-energy values.
-    """
-
-    # We provide a dictionary with {str:float} of element name to atomic self-energy,
-    # which can then be accessed by atomic index or element name
-    energies: Dict[str, float] = field(default_factory=dict)
-    # Example mapping, replace or extend as necessary
-    atomic_number_to_element: Dict[int, str] = field(
-        default_factory=lambda: {
-            1: "H",
-            2: "He",
-            3: "Li",
-            4: "Be",
-            5: "B",
-            6: "C",
-            7: "N",
-            8: "O",
-            9: "F",
-            10: "Ne",
-            11: "Na",
-            12: "Mg",
-            13: "Al",
-            14: "Si",
-            15: "P",
-            16: "S",
-            17: "Cl",
-            18: "Ar",
-            19: "K",
-            20: "Ca",
-            21: "Sc",
-            22: "Ti",
-            23: "V",
-            24: "Cr",
-            25: "Mn",
-            26: "Fe",
-            27: "Co",
-            28: "Ni",
-            29: "Cu",
-            30: "Zn",
-            31: "Ga",
-            32: "Ge",
-            33: "As",
-            34: "Se",
-            35: "Br",
-            36: "Kr",
-            37: "Rb",
-            38: "Sr",
-            39: "Y",
-            40: "Zr",
-            41: "Nb",
-            42: "Mo",
-            43: "Tc",
-            44: "Ru",
-            45: "Rh",
-            46: "Pd",
-            47: "Ag",
-            48: "Cd",
-            49: "In",
-            50: "Sn",
-            # Add more elements as needed
-        }
-    )
-    _ase_tensor_for_indexing = None
-
-    def __getitem__(self, key):
-        if isinstance(key, int):
-            # Convert atomic number to element symbol
-            element = self.atomic_number_to_element.get(key)
-            if element is None:
-                raise KeyError(f"Atomic number {key} not found.")
-            return self.energies.get(element)
-        elif isinstance(key, str):
-            # Directly access by element symbol
-            if key not in self.energies:
-                raise KeyError(f"Element {key} not found.")
-            return self.energies[key]
-        else:
-            raise TypeError(
-                "Key must be an integer (atomic number) or string (element name)."
-            )
-
-    def __iter__(self) -> Iterator[Dict[str, float]]:
-        """Iterate over the energies dictionary."""
-        for element, energy in self.energies.items():
-            atomic_number = self.element_to_atomic_number(element)
-            yield (atomic_number, energy)
-
-    def __len__(self) -> int:
-        """Return the number of element-energy pairs."""
-        return len(self.energies)
-
-    def element_to_atomic_number(self, element: str) -> int:
-        """Return the atomic number for a given element symbol."""
-        for atomic_number, elem_symbol in self.atomic_number_to_element.items():
-            if elem_symbol == element:
-                return atomic_number
-        raise ValueError(f"Element symbol '{element}' not found in the mapping.")
-
-    @property
-    def atomic_number_to_energy(self) -> Dict[int, float]:
-        """Return a dictionary mapping atomic numbers to their energies."""
-        return {
-            atomic_number: self[atomic_number]
-            for atomic_number in self.atomic_number_to_element.keys()
-            if self[atomic_number] is not None
-        }
-
-    @property
-    def ase_tensor_for_indexing(self) -> torch.Tensor:
-        if self._ase_tensor_for_indexing is None:
-            max_z = max(self.atomic_number_to_element.keys()) + 1
-            ase_tensor_for_indexing = torch.zeros(max_z)
-            for idx in self.atomic_number_to_element:
-                if self[idx]:
-                    ase_tensor_for_indexing[idx] = self[idx]
-                else:
-                    ase_tensor_for_indexing[idx] = 0.0
-            self._ase_tensor_for_indexing = ase_tensor_for_indexing
-
-        return self._ase_tensor_for_indexing
 
 
 class ShiftedSoftplus(nn.Module):
@@ -995,10 +830,10 @@ class SAKERadialBasisFunction(RadialBasisFunction):
         self._min_distance_in_nanometer = min_distance.to(unit.nanometer).m
 
     def compute(
-            self,
-            distances: torch.Tensor,
-            centers: torch.Tensor,
-            scale_factors: torch.Tensor,
+        self,
+        distances: torch.Tensor,
+        centers: torch.Tensor,
+        scale_factors: torch.Tensor,
     ) -> torch.Tensor:
         return torch.exp(
             -scale_factors

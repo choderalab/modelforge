@@ -71,7 +71,7 @@ class PaiNNNeuralNetworkData(NeuralNetworkData):
     atomic_embedding: torch.Tensor
 
 
-class PaiNN(BaseNeuralNetworkPotential):
+class PaiNNCore(BaseNeuralNetworkPotential):
     """PaiNN - polarizable interaction neural network
 
     References:
@@ -106,7 +106,7 @@ class PaiNN(BaseNeuralNetworkPotential):
         self.embedding_module = Embedding(max_Z, number_of_atom_features)
 
         # initialize the energy readout
-        from .utils import FromAtomToMoleculeReduction
+        from .processing import FromAtomToMoleculeReduction
 
         self.readout_module = FromAtomToMoleculeReduction()
 
@@ -138,23 +138,6 @@ class PaiNN(BaseNeuralNetworkPotential):
                 1,
             ),
         )
-
-    def _config_prior(self):
-        log.info("Configuring PaiNN model hyperparameter prior distribution")
-        from ray import tune
-
-        from modelforge.potential.utils import shared_config_prior
-
-        prior = {
-            "number_of_atom_features": tune.randint(2, 256),
-            "number_of_interaction_modules": tune.randint(1, 5),
-            "cutoff": tune.uniform(5, 10),
-            "number_of_radial_basis_functions": tune.randint(8, 32),
-            "shared_filters": tune.choice([True, False]),
-            "shared_interactions": tune.choice([True, False]),
-        }
-        prior.update(shared_config_prior())
-        return prior
 
 
     def _model_specific_input_preparation(
@@ -207,9 +190,7 @@ class PaiNN(BaseNeuralNetworkPotential):
         mu = transformed_input["mu"]
         dir_ij = transformed_input["dir_ij"]
 
-        for i in [1,2,3]:
-            print(i)
-        
+
         for i, (interaction_mod, mixing_mod) in enumerate(
             zip(self.interaction_modules, self.mixing_modules)
         ):
@@ -232,7 +213,6 @@ class PaiNN(BaseNeuralNetworkPotential):
             "q": q,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
-
 
 
 from openff.units import unit
@@ -491,3 +471,60 @@ class PaiNNMixing(nn.Module):
         q = q + dq_intra + dqmu_intra
         mu = mu + dmu_intra
         return q, mu
+
+
+from .models import InputPreparation, NNPInput
+
+
+class PaiNN(torch.nn.Module):
+    def __init__(
+        self,
+        max_Z: int = 100,
+        number_of_atom_features: int = 64,
+        number_of_radial_basis_functions: int = 16,
+        cutoff: unit.Quantity = 5 * unit.angstrom,
+        number_of_interaction_modules: int = 2,
+        shared_interactions: bool = False,
+        shared_filters: bool = False,
+        epsilon: float = 1e-8,
+    ):
+        super().__init__()
+
+        self.painn_core = PaiNNCore(
+            max_Z=max_Z,
+            number_of_atom_features=number_of_atom_features,
+            number_of_radial_basis_functions=number_of_radial_basis_functions,
+            cutoff=cutoff,
+            number_of_interaction_modules=number_of_interaction_modules,
+            shared_interactions=shared_interactions,
+            shared_filters=shared_filters,
+            epsilon=epsilon,
+        )
+        self.only_unique_pairs = False  # NOTE: for pairlist
+        self.input_preparation = InputPreparation(cutoff=cutoff)
+
+    def forward(self, data: NNPInput):
+        # perform input checks
+        self.input_preparation._input_checks(data)
+        # prepare the input for the forward pass
+        pairlist_output = self.input_preparation.prepare_inputs(
+            data, self.only_unique_pairs
+        )
+        return self.painn_core(data, pairlist_output)
+
+    def _config_prior(self):
+        log.info("Configuring PaiNN model hyperparameter prior distribution")
+        from ray import tune
+
+        from modelforge.potential.utils import shared_config_prior
+
+        prior = {
+            "number_of_atom_features": tune.randint(2, 256),
+            "number_of_interaction_modules": tune.randint(1, 5),
+            "cutoff": tune.uniform(5, 10),
+            "number_of_radial_basis_functions": tune.randint(8, 32),
+            "shared_filters": tune.choice([True, False]),
+            "shared_interactions": tune.choice([True, False]),
+        }
+        prior.update(shared_config_prior())
+        return prior

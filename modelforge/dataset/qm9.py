@@ -108,7 +108,7 @@ class QM9Dataset(HDF5Dataset):
 
     @property
     def atomic_self_energies(self):
-        from modelforge.potential.utils import AtomicSelfEnergies
+        from modelforge.potential.processing import AtomicSelfEnergies
 
         return AtomicSelfEnergies(energies=self._ase)
 

@@ -425,15 +425,15 @@ def test_sake_model_against_reference():
     x = prepared_methane.positions.detach().numpy()
     variables = ref_sake.init(key, h, x, mask=mask)
 
-    variables["params"]["embedding_in"]["kernel"] = mf_sake.embedding.weight.detach().numpy().T
-    variables["params"]["embedding_in"]["bias"] = mf_sake.embedding.bias.detach().numpy().T
-    variables["params"]["embedding_out"]["layers_0"]["kernel"] = mf_sake.energy_layer[0].weight.detach().numpy().T
-    variables["params"]["embedding_out"]["layers_0"]["bias"] = mf_sake.energy_layer[0].bias.detach().numpy().T
-    variables["params"]["embedding_out"]["layers_2"]["kernel"] = mf_sake.energy_layer[2].weight.detach().numpy().T
-    variables["params"]["embedding_out"]["layers_2"]["bias"] = mf_sake.energy_layer[2].bias.detach().numpy().T
+    variables["params"]["embedding_in"]["kernel"] = mf_sake.sake_core.embedding.weight.detach().numpy().T
+    variables["params"]["embedding_in"]["bias"] = mf_sake.sake_core.embedding.bias.detach().numpy().T
+    variables["params"]["embedding_out"]["layers_0"]["kernel"] = mf_sake.sake_core.energy_layer[0].weight.detach().numpy().T
+    variables["params"]["embedding_out"]["layers_0"]["bias"] = mf_sake.sake_core.energy_layer[0].bias.detach().numpy().T
+    variables["params"]["embedding_out"]["layers_2"]["kernel"] = mf_sake.sake_core.energy_layer[2].weight.detach().numpy().T
+    variables["params"]["embedding_out"]["layers_2"]["bias"] = mf_sake.sake_core.energy_layer[2].bias.detach().numpy().T
     layers = ((layer_name, variables["params"][layer_name]) for layer_name in variables["params"].keys() if
               layer_name.startswith("d"))
-    for (layer_name, layer), mf_sake_block in zip(layers, mf_sake.interaction_modules.children()):
+    for (layer_name, layer), mf_sake_block in zip(layers, mf_sake.sake_core.interaction_modules.children()):
         layer["edge_model"]["kernel"][
             "betas"] = mf_sake_block.radial_symmetry_function_module.radial_scale_factor.detach().numpy().T
         layer["edge_model"]["kernel"][

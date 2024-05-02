@@ -295,21 +295,39 @@ class JAXModel:
 
 
 class PyTorch2JAXConverter:
+    """
+    Wraps a PyTorch neural network potential instance in a Flax module using the
+    `pytorch2jax` library (https://github.com/subho406/Pytorch2Jax).
+    The converted model uses dlpack to convert between Pytorch and Jax tensors
+    in-memory and executes Pytorch backend inside Jax wrapped functions.
+    The wrapped modules are compatible with Jax backward-mode autodiff.
+
+    Parameters
+    ----------
+    nnp_instance : Any
+        The neural network potential instance to convert.
+
+    Returns
+    -------
+    JAXModel
+        The converted JAX model.
+    """
 
     def convert_to_jax_model(
         self, nnp_instance: Union["ANI2x", "SchNet", "PaiNN", "PhysNet"]
     ) -> JAXModel:
-        """Converts a PyTorch neural network potential instance to a JAXModel.
+        """
+        Convert a PyTorch neural network instance to a JAX model.
 
         Parameters
         ----------
-        nnp_instance : Any
-            The neural network potential instance to convert.
+        nnp_instance : Union["ANI2x", "SchNet", "PaiNN", "PhysNet"]
+            The PyTorch neural network instance to be converted.
 
         Returns
         -------
         JAXModel
-            The converted JAX model.
+            A JAX model containing the converted neural network function, parameters, and buffers.
         """
 
         jax_fn, params, buffers = self._convert_pytnn_to_jax(nnp_instance)
@@ -338,9 +356,6 @@ class PyTorch2JAXConverter:
         import functorch
         from functorch import make_functional_with_buffers
 
-        # skip input checks
-        nnp_instance.mode = "fast"
-
         # Convert the PyTorch model to a functional representation and extract the model function and parameters
         model_fn, model_params, model_buffer = make_functional_with_buffers(
             nnp_instance
@@ -354,13 +369,13 @@ class PyTorch2JAXConverter:
         # Define the apply function using a custom VJP
         @custom_vjp
         def apply(params, *args, **kwargs):
-            # Convert the input data from PyTorch to JAX representations
+            # Convert the input data from JAX to PyTorch
             params, args, kwargs = map(
                 lambda x: jax.tree_map(convert_to_pyt, x), (params, args, kwargs)
             )
             # Apply the model function to the input data
             out = model_fn(params, *args, **kwargs)
-            # Convert the output data from JAX to PyTorch representations
+            # Convert the output data from PyTorch to JAX
             out = jax.tree_map(convert_to_jax, out)
             return out
 

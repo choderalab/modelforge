@@ -176,8 +176,7 @@ def initialized_dataset(datasets_to_test):
     return initialize_dataset(dataset)
 
 
-@pytest.fixture(params=_DATASETS_TO_TEST)
-def batch(initialized_dataset, request):
+def batch(initialized_dataset):
     """py
     Fixture to obtain a single batch from an initialized dataset.
 

@@ -189,10 +189,10 @@ def batch(initialized_dataset):
 
 # Fixture for initializing QM9Dataset
 @pytest.fixture
-def qm9_dataset():
+def qm9_dataset(prep_temp_dir):
     from modelforge.dataset import QM9Dataset
 
-    dataset = QM9Dataset(for_unit_testing=True)
+    dataset = QM9Dataset(for_unit_testing=True, local_cache_dir=str(prep_temp_dir))
     return dataset
 
 

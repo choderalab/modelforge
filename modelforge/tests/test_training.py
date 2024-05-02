@@ -32,8 +32,8 @@ def test_train_with_lightning(train_model, qm9_dataset):
     # Run training loop and validate
     trainer.fit(
         model,
-        initialized_dataset.train_dataloader(),
-        initialized_dataset.val_dataloader(),
+        qm9_dataset.train_dataloader(),
+        qm9_dataset.val_dataloader(),
     )
 
 
@@ -41,8 +41,8 @@ def test_train_with_lightning(train_model, qm9_dataset):
 def test_hypterparameter_tuning_with_ray(train_model, qm9_dataset):
 
     train_model.tune_with_ray(
-        train_dataloader=initialized_dataset.train_dataloader(),
-        val_dataloader=initialized_dataset.val_dataloader(),
+        train_dataloader=qm9_dataset.train_dataloader(),
+        val_dataloader=qm9_dataset.val_dataloader(),
         number_of_ray_workers=1,
         number_of_epochs=1,
         number_of_samples=1,

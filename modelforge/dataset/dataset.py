@@ -14,7 +14,7 @@ from modelforge.dataset.utils import RandomRecordSplittingStrategy, SplittingStr
 from dataclasses import dataclass
 
 if TYPE_CHECKING:
-    from modelforge.potential.utils import BatchData, AtomicSelfEnergies
+    from modelforge.potential.processing import AtomicSelfEnergies
 
 
 @dataclass

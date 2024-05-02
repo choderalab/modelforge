@@ -248,6 +248,9 @@ def test_caching(prep_temp_dir):
 
 
 def test_metadata_validation(prep_temp_dir):
+    """When we generate an .npz file, we also write out metadata in a .json file which is used
+    to validate if we can use .npz file, or we need to regenerate it."""
+
     local_cache_dir = str(prep_temp_dir)
 
     from modelforge.dataset.qm9 import QM9Dataset
@@ -271,8 +274,8 @@ def test_metadata_validation(prep_temp_dir):
 
     metadata = {
         "data_keys": ["atomic_numbers", "internal_energy_at_0K", "geometry", "charges"],
-        "hdf5_checksum": "77df0e1df7a5ec5629be52181e82a7d7",
-        "hdf5_gz_checkusm": "af3afda5c3265c9c096935ab060f537a",
+        "hdf5_checksum": "305a0602860f181fafa75f7c7e3e6de4",
+        "hdf5_gz_checkusm": "dc8ada0d808d02c699daf2000aff1fe9",
         "date_generated": "2024-04-11 14:05:14.297305",
     }
 
@@ -389,7 +392,7 @@ def test_dataset_generation(initialized_dataset):
     dataset = initialized_dataset
     train_dataloader = dataset.train_dataloader()
     val_dataloader = dataset.val_dataloader()
-
+    test_dataloader = dataset.test_dataloader()
     try:
         dataset.test_dataloader()
     except AttributeError:
@@ -397,23 +400,39 @@ def test_dataset_generation(initialized_dataset):
         pass
 
     # the dataloader automatically splits and batches the dataset
-    # for the training set it batches the 80 datapoints in
-    # a batch of 64 and a batch of 16 samples
-    assert len(train_dataloader) == 2  # nr of batches
+    # for the training set it batches the 800 training datapoints (of 1000 total) in 13 batches
+    # all with 64 points until the last which has 32
+
+    assert len(train_dataloader) == 13  # nr of batches
     batch_data = [v_ for v_ in train_dataloader]
+    val_data = [v_ for v_ in val_dataloader]
+    sum_batch = sum([len(b.metadata.atomic_subsystem_counts) for b in batch_data])
+    sum_val = sum([len(b.metadata.atomic_subsystem_counts) for b in val_data])
+    sum_test = sum([len(b.metadata.atomic_subsystem_counts) for b in test_dataloader])
+
+    assert sum_batch == 800
+    assert sum_val == 100
+    assert sum_test == 100
+
     assert len(batch_data[0].metadata.atomic_subsystem_counts) == 64
-    assert len(batch_data[1].metadata.atomic_subsystem_counts) == 16
+    assert len(batch_data[1].metadata.atomic_subsystem_counts) == 64
+    assert len(batch_data[-1].metadata.atomic_subsystem_counts) == 32
 
 
 from modelforge.dataset.utils import (
     RandomRecordSplittingStrategy,
+    RandomSplittingStrategy,
     FirstComeFirstServeSplittingStrategy,
 )
 
 
 @pytest.mark.parametrize(
     "splitting_strategy",
-    [RandomRecordSplittingStrategy, FirstComeFirstServeSplittingStrategy],
+    [
+        RandomSplittingStrategy,
+        FirstComeFirstServeSplittingStrategy,
+        RandomRecordSplittingStrategy,
+    ],
 )
 def test_dataset_splitting(splitting_strategy, datasets_to_test):
     """Test random_split on the the dataset."""
@@ -424,7 +443,7 @@ def test_dataset_splitting(splitting_strategy, datasets_to_test):
     print("local cache dir, ", datasets_to_test.dataset.local_cache_dir)
     energy = train_dataset[0]["E"].item()
 
-    if splitting_strategy == RandomRecordSplittingStrategy:
+    if splitting_strategy == RandomSplittingStrategy:
         assert np.isclose(energy, datasets_to_test.expected_E_random_split)
     elif splitting_strategy == FirstComeFirstServeSplittingStrategy:
         assert np.isclose(energy, datasets_to_test.expected_E_fcfs_split)
@@ -433,16 +452,24 @@ def test_dataset_splitting(splitting_strategy, datasets_to_test):
         split=[0.6, 0.3, 0.1]
     ).split(dataset)
 
-    # since not all datasets will ultimately have 100 records, since some may include multiple conformers
-    # associated with each record, we will look at the ratio
-    total = len(train_dataset2) + len(val_dataset2) + len(test_dataset2)
-    assert np.isclose(len(train_dataset2) / total / 0.6, 1.0, rtol=0.1)
-    assert np.isclose(len(val_dataset2) / total / 0.3, 1.0, rtol=0.1)
-    assert np.isclose(len(test_dataset2) / total / 0.1, 1.0, rtol=0.1)
+    if (
+        splitting_strategy == RandomSplittingStrategy
+        or splitting_strategy == FirstComeFirstServeSplittingStrategy
+    ):
+        total = len(train_dataset2) + len(val_dataset2) + len(test_dataset2)
+        print(len(train_dataset2), len(val_dataset2), len(test_dataset2), total)
+        assert np.isclose(len(train_dataset2) / total, 0.6, atol=0.01)
+        assert np.isclose(len(val_dataset2) / total, 0.3, atol=0.01)
+        assert np.isclose(len(test_dataset2) / total, 0.1, atol=0.01)
+    elif splitting_strategy == RandomRecordSplittingStrategy:
+        # for the random record splitting we need to have a larger tolerance
+        # as we are not guaranteed to get the exact split since the number of conformers per record is not fixed
+        total = len(train_dataset2) + len(val_dataset2) + len(test_dataset2)
 
-    # assert len(train_dataset) == 60
-    # assert len(val_dataset) == 30
-    # assert len(test_dataset) == 10
+        assert np.isclose(len(train_dataset2) / total, 0.6, atol=0.05)
+        assert np.isclose(len(val_dataset2) / total, 0.3, atol=0.05)
+        assert np.isclose(len(test_dataset2) / total, 0.1, atol=0.05)
+
     try:
         splitting_strategy(split=[0.2, 0.1, 0.1])
     except AssertionError as excinfo:
@@ -528,16 +555,31 @@ def test_self_energy():
     assert dataset.dataset_statistics
     self_energies = dataset.dataset_statistics.atomic_self_energies
     # 5 elements present in the total QM9 dataset
-    # but only 4 in the reduced QM9 dataset
-    assert len(self_energies) == 4
+    assert len(self_energies) == 5
+    # value from DFT calculation
     # H: -1313.4668615546
-    assert np.isclose(self_energies[1], -1584.5087457646314)
+    assert np.isclose(
+        self_energies[1],
+        -1577.0870687452618,
+    )
+    # value from DFT calculation
     # C: -99366.70745535441
-    assert np.isclose(self_energies[6], -99960.8894178209)
+    assert np.isclose(
+        self_energies[6],
+        -99977.40806211969,
+    )
+    # value from DFT calculation
     # N: -143309.9379722722
-    assert np.isclose(self_energies[7], -143754.02638655982)
+    assert np.isclose(
+        self_energies[7],
+        -143742.7416655554,
+    )
+    # value from DFT calculation
     # O: -197082.0671774158
-    assert np.isclose(self_energies[8], -197495.00132926635)
+    assert np.isclose(
+        self_energies[8],
+        -197492.33270235246,
+    )
 
     dataset.prepare_data(
         remove_self_energies=True, normalize=False, regression_ase=True

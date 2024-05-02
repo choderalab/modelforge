@@ -129,22 +129,22 @@ class ANI1xDataset(HDF5Dataset):
         # There are 3 files types that need name/checksum defined, of extensions hdf5.gz, hdf5, and npz.
 
         # note, need to change the end of the url to dl=1 instead of dl=0 (the default when you grab the share list), to ensure the same checksum each time we download
-        self.test_url = "https://www.dropbox.com/scl/fi/rqjc6pcv9jjzoq08hc5ao/ani1x_dataset_n100.hdf5.gz?rlkey=kgg0xvq9aac5sp3or9oh61igj&dl=1"
+        self.test_url = "https://www.dropbox.com/scl/fi/26expl20116cqacdk9l1t/ani1x_dataset_ntc_1000.hdf5.gz?rlkey=swciz9dfr7suia6nrsznwbk6i&st=ryqysch3&dl=1"
         self.full_url = "https://www.dropbox.com/scl/fi/d98h9kt4pl40qeapqzu00/ani1x_dataset.hdf5.gz?rlkey=7q1o8hh9qzbxehsobjurcksit&dl=1"
 
         if self.for_unit_testing:
             url = self.test_url
             gz_data_file = {
-                "name": "ani1x_dataset_n100.hdf5.gz",
-                "md5": "51e2491e3c5b7b5a432e2012892cfcbb",
-                "length": 85445473,
+                "name": "ani1x_dataset_nc_1000.hdf5.gz",
+                "md5": "f47a92bf4791607d9fc92a4cf16cd096",
+                "length": 1761417,
             }
             hdf5_data_file = {
-                "name": "ani1x_dataset_n100.hdf5",
-                "md5": "f3c934b79f035ecc3addf88c027f5e46",
+                "name": "ani1x_dataset_nc_1000.hdf5",
+                "md5": "776d38c18f3aa37b00360556cf8d78cc",
             }
             processed_data_file = {
-                "name": "ani1x_dataset_n100_processed.npz",
+                "name": "ani1x_dataset_nc_1000_processed.npz",
                 "md5": None,
             }
 

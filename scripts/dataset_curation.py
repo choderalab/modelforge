@@ -3,7 +3,9 @@ def SPICE_2(
     output_file_dir: str,
     local_cache_dir: str,
     force_download: bool = False,
-    unit_testing_max_records=None,
+    max_records=None,
+    max_conformers_per_record=None,
+    total_conformers=None,
 ):
     """
      This Fetches the SPICE 2 dataset from MOLSSI QCArchive and processes it into a curated hdf5 file.
@@ -65,14 +67,15 @@ def SPICE_2(
         output_file_dir=output_file_dir,
         local_cache_dir=local_cache_dir,
     )
-    if unit_testing_max_records is None:
-        spice_2_data.process(force_download=force_download, n_threads=4)
-    else:
-        spice_2_data.process(
-            force_download=force_download,
-            unit_testing_max_records=unit_testing_max_records,
-            n_threads=4,
-        )
+
+    spice_2_data.process(
+        force_download=force_download,
+        max_records=max_records,
+        max_conformers_per_record=max_conformers_per_record,
+        total_conformers=total_conformers,
+    )
+    print(f"Total records: {spice_2_data.total_records}")
+    print(f"Total conformers: {spice_2_data.total_conformers}")
 
 
 def SPICE_114_OpenFF(
@@ -140,6 +143,7 @@ def SPICE_114_OpenFF(
         max_records=max_records,
         max_conformers_per_record=max_conformers_per_record,
         total_conformers=total_conformers,
+        n_threads=1,
     )
     print(f"Total records: {spice_dataset.total_records}")
     print(f"Total conformers: {spice_dataset.total_conformers}")
@@ -415,23 +419,39 @@ output_file_dir = f"{local_prefix}/hdf5_files"
 
 # # SPICE 2 dataset
 # local_cache_dir = f"{local_prefix}/spice2_dataset"
+# hdf5_file_name = "spice_2_dataset_ntc_1000.hdf5"
+#
+# SPICE_2(
+#     hdf5_file_name,
+#     output_file_dir,
+#     local_cache_dir,
+#     force_download=False,
+#     max_conformers_per_record=10,
+#     total_conformers=1000,
+# )
+
 # hdf5_file_name = "spice_2_dataset.hdf5"
 #
-# SPICE_2(hdf5_file_name, output_file_dir, local_cache_dir, force_download=False)
+# SPICE_2(
+#     hdf5_file_name,
+#     output_file_dir,
+#     local_cache_dir,
+#     force_download=False,
+# )
 
 # # SPICE 1.1.4 OpenFF dataset
-local_cache_dir = f"{local_prefix}/spice_openff_dataset"
-hdf5_file_name = "spice_114_openff_dataset_ntc_1000.hdf5"
-
-SPICE_114_OpenFF(
-    hdf5_file_name,
-    output_file_dir,
-    local_cache_dir,
-    force_download=False,
-    max_records=10000,
-    total_conformers=1000,
-    max_conformers_per_record=10,
-)
+# local_cache_dir = f"{local_prefix}/spice_openff_dataset"
+# hdf5_file_name = "spice_114_openff_dataset_ntc_1000.hdf5"
+#
+# SPICE_114_OpenFF(
+#     hdf5_file_name,
+#     output_file_dir,
+#     local_cache_dir,
+#     force_download=False,
+#     max_records=10000,
+#     total_conformers=1000,
+#     max_conformers_per_record=10,
+# )
 
 # # SPICE 1.1.4 dataset
 # local_cache_dir = f"{local_prefix}/spice_114_dataset"

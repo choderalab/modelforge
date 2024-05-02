@@ -110,23 +110,23 @@ class ANI2xDataset(HDF5Dataset):
         # There are 3 files types that need name/checksum defined, of extensions hdf5.gz, hdf5, and npz.
 
         # note, need to change the end of the url to dl=1 instead of dl=0 (the default when you grab the share list), to ensure the same checksum each time we download
-        self.test_url = "https://www.dropbox.com/scl/fi/okv311e9yvh94owbiypcm/ani2x_dataset_n100.hdf5.gz?rlkey=pz7gnlncabtzr3b82lblr3yas&dl=1"
+        self.test_url = "https://www.dropbox.com/scl/fi/7zhgtcbaoyw3lnnwy3l4j/ani2x_dataset_ntc_1000.hdf5.gz?rlkey=uqcgl687lfxe4dmpe6tboje7e&st=ui5n77nj&dl=1"
         self.full_url = "https://www.dropbox.com/scl/fi/egg04dmtho7l1ghqiwn1z/ani2x_dataset.hdf5.gz?rlkey=wq5qjyph5q2k0bn6vza735n19&dl=1"
 
         if self.for_unit_testing:
             url = self.test_url
             gz_data_file = {
-                "name": "ani2x_dataset_n100.hdf5.gz",
-                "md5": "093fa23aeb8f8813abd1ec08e9ff83ad",
-                "length": 22254528,
+                "name": "ani2x_dataset_nc_1000.hdf5.gz",
+                "md5": "9f043115c38db3739f7c529f900c0e07",
+                "length": 174189,
             }
             hdf5_data_file = {
-                "name": "ani2x_dataset_n100.hdf5",
-                "md5": "4f54caf79e4c946dc3d6d53722d2b966",
+                "name": "ani2x_dataset_nc_1000.hdf5",
+                "md5": "bed8b011c080078c15c3e7d79dfa99a3",
             }
             processed_data_file = {
-                "name": "ani2x_dataset_n100_processed.npz",
-                "md5": "c1481fe9a6b15fb07b961d15411c0ddd",
+                "name": "ani2x_dataset_nc_1000_processed.npz",
+                "md5": None,
             }
 
             logger.info("Using test dataset")
@@ -146,7 +146,7 @@ class ANI2xDataset(HDF5Dataset):
 
             processed_data_file = {
                 "name": "ani2x_dataset_processed.npz",
-                "md5": "268438d8e1660728ba892bc7c3cd4339",
+                "md5": None,
             }
 
             logger.info("Using full dataset")

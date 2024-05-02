@@ -115,7 +115,7 @@ class SPICE114Dataset(HDF5Dataset):
 
         # To be able to use the dataset for training in a consistent way with the ANI datasets, we will only consider
         # the ase values for the uncharged isolated atoms, if available. Ions will use the values Ca 2+, K 1+, Li 1+, Mg 2+, Na 1+.
-        # See spice_2_curation.py for more details.
+        # See spice_2_from_qcarchive_curation.py for more details.
 
         # We will need to address this further later to see how we best want to handle this; the ASE are just meant to bring everything
         # roughly to the same scale, and values do not vary substantially by charge state.
@@ -145,23 +145,23 @@ class SPICE114Dataset(HDF5Dataset):
         # There are 3 files types that need name/checksum defined, of extensions hdf5.gz, hdf5, and npz.
 
         # note, need to change the end of the url to dl=1 instead of dl=0 (the default when you grab the share list), to ensure the same checksum each time we download
-        self.test_url = "https://www.dropbox.com/scl/fi/16g7n0f7qgzjhi02g3qce/spice_114_dataset_n100.hdf5.gz?rlkey=gyyc1cd3u8p64icpb450y44qv&dl=1"
+        self.test_url = "https://www.dropbox.com/scl/fi/vh05bql1fza8jyj7ibyk2/spice_114_dataset_ntc_1000.hdf5.gz?rlkey=dqx0eq0wcux0ez48n2et35dow&st=hafqe5sv&dl=1"
         self.full_url = "https://www.dropbox.com/scl/fi/zfh4sq2kiz250bvd9oshr/spice_114_dataset.hdf5.gz?rlkey=q3sp7p8ir21o0y0224bt75aw7&dl=1"
 
         if self.for_unit_testing:
             url = self.test_url
             gz_data_file = {
-                "name": "SPICE114_dataset_n100.hdf5.gz",
-                "md5": "ee7406aaf587340190e90e365ba9ba7b",
-                "length": 72001865,
+                "name": "SPICE114_dataset_nc_1000.hdf5.gz",
+                "md5": "f7027814a98a5393272c45b4cf97f4e9",
+                "length": 15166190,
             }
             hdf5_data_file = {
-                "name": "SPICE114_dataset_n100.hdf5",
-                "md5": "88bd3fca0809ca47339c52edda155d6d",
+                "name": "SPICE114_dataset_nc_1000.hdf5",
+                "md5": "885e17826e65011559ff6fae2b2b44e3",
             }
             # npz file checksums may vary with different versions of python/numpy
             processed_data_file = {
-                "name": "SPICE114_dataset_n100_processed.npz",
+                "name": "SPICE114_dataset_nc_1000_processed.npz",
                 "md5": None,
             }
 

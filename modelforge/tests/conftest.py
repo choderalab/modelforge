@@ -64,7 +64,7 @@ def datasets_to_test(request, prep_temp_dir):
                 "internal_energy_at_0K",
                 "charges",
             ],
-            expected_E_random_split=-412509.93109875394,
+            expected_E_random_split=-622027.790147837,
             expected_E_fcfs_split=-106277.4161215308,
         )
         return datasetDC
@@ -82,7 +82,7 @@ def datasets_to_test(request, prep_temp_dir):
                 "wb97x_dz.energy",
                 "wb97x_dz.forces",
             ],
-            expected_E_random_split=-1739101.9014184382,
+            expected_E_random_split=-1652066.552014041,
             expected_E_fcfs_split=-1015736.8142089575,
         )
         return datasetDC
@@ -100,7 +100,7 @@ def datasets_to_test(request, prep_temp_dir):
                 "energies",
                 "forces",
             ],
-            expected_E_random_split=-2614282.09174506,
+            expected_E_random_split=-148410.43286007023,
             expected_E_fcfs_split=-2096692.258327173,
         )
         return datasetDC
@@ -119,7 +119,7 @@ def datasets_to_test(request, prep_temp_dir):
                 "dft_total_force",
                 "mbis_charges",
             ],
-            expected_E_random_split=-4289211.145285763,
+            expected_E_random_split=-1922185.3358204272,
             expected_E_fcfs_split=-972574.265833225,
         )
         return datasetDC
@@ -138,8 +138,8 @@ def datasets_to_test(request, prep_temp_dir):
                 "dft_total_force",
                 "mbis_charges",
             ],
-            expected_E_random_split=-2293275.9758066307,
-            expected_E_fcfs_split=-1517627.6999202403,
+            expected_E_random_split=-5844365.936898948,
+            expected_E_fcfs_split=-3418985.278140791,
         )
         return datasetDC
     elif dataset_name == "SPICE114_OPENFF":
@@ -157,7 +157,7 @@ def datasets_to_test(request, prep_temp_dir):
                 "dft_total_force",
                 "mbis_charges",
             ],
-            expected_E_random_split=-2011114.830087605,
+            expected_E_random_split=-2263605.616072006,
             expected_E_fcfs_split=-1516718.0904709378,
         )
         return datasetDC
@@ -165,7 +165,7 @@ def datasets_to_test(request, prep_temp_dir):
         raise NotImplementedError(f"Dataset {dataset_name} is not implemented.")
 
 
-@pytest.fixture(params=_DATASETS_TO_TEST)
+@pytest.fixture()
 def initialized_dataset(datasets_to_test):
     # dataset_name = request.param
     # if dataset_name == "QM9":
@@ -250,8 +250,15 @@ def initialize_dataset(
     TorchDataModule
         Initialized TorchDataModule.
     """
+    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
-    data_module = TorchDataModule(dataset, split_file=split_file)
+    # we need to use the first come first serve splitting strategy, as random is default
+    # using random would make it hard to validate the expected values in the tests
+    data_module = TorchDataModule(
+        dataset,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        split_file=split_file,
+    )
     data_module.prepare_data()
     return data_module
 

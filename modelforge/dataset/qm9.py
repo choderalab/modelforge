@@ -112,24 +112,25 @@ class QM9Dataset(HDF5Dataset):
         # There are 3 files types that need name/checksum defined, of extensions hdf5.gz, hdf5, and npz.
 
         # note, need to change the end of the url to dl=1 instead of dl=0 (the default when you grab the share list), to ensure the same checksum each time we download
-        self.test_url = "https://www.dropbox.com/scl/fi/9jeselknatcw9xi0qp940/qm9_dataset_n100.hdf5.gz?rlkey=50of7gn2s12i65c6j06r73c97&dl=1"
+        self.test_url = "https://www.dropbox.com/scl/fi/oe2tooxwrkget75zwrfey/qm9_dataset_ntc_1000.hdf5.gz?rlkey=6hfb8ge0pqf4tly15rmdsthmw&st=tusk38vt&dl=1"
         self.full_url = "https://www.dropbox.com/scl/fi/4wu7zlpuuixttp0u741rv/qm9_dataset.hdf5.gz?rlkey=nszkqt2t4kmghih5mt4ssppvo&dl=1"
 
         if self.for_unit_testing:
             url = self.test_url
             gz_data_file = {
-                "name": "qm9_dataset_n100.hdf5.gz",
-                "md5": "af3afda5c3265c9c096935ab060f537a",
+                "name": "qm9_dataset_nc_1000.hdf5.gz",
+                "md5": "dc8ada0d808d02c699daf2000aff1fe9",
+                "length": 1697917,
             }
             hdf5_data_file = {
-                "name": "qm9_dataset_n100.hdf5",
-                "md5": "77df0e1df7a5ec5629be52181e82a7d7",
+                "name": "qm9_dataset_nc_1000.hdf5",
+                "md5": "305a0602860f181fafa75f7c7e3e6de4",
             }
             processed_data_file = {
-                "name": "qm9_dataset_n100_processed.npz",
+                "name": "qm9_dataset_nc_1000_processed.npz",
                 # checksum of otherwise identical npz files are different if using 3.11 vs 3.9/10
                 # we will therefore skip checking these files
-                "md5": "9d671b54f7b9d454db9a3dd7f4ef2020",
+                "md5": None,
             }
 
             logger.info("Using test dataset")
@@ -139,6 +140,7 @@ class QM9Dataset(HDF5Dataset):
             gz_data_file = {
                 "name": "qm9_dataset.hdf5.gz",
                 "md5": "d172127848de114bd9cc47da2bc72566",
+                "length": 267228348,
             }
 
             hdf5_data_file = {
@@ -148,7 +150,7 @@ class QM9Dataset(HDF5Dataset):
 
             processed_data_file = {
                 "name": "qm9_dataset_processed.npz",
-                "md5": "62d98cf38bcf02966e1fa2d9e44b3fa0",
+                "md5": None,
             }
 
             logger.info("Using full dataset")

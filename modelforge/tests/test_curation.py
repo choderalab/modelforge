@@ -11,7 +11,7 @@ from modelforge.curation.qm9_curation import QM9Curation
 from modelforge.curation.ani1x_curation import ANI1xCuration
 from modelforge.curation.spice_114_curation import SPICE114Curation
 from modelforge.curation.spice_openff_curation import SPICEOpenFFCuration
-from modelforge.curation.spice_2_curation import SPICE2Curation
+from modelforge.curation.spice_2_from_qcarchive_curation import SPICE2Curation
 
 from modelforge.curation.curation_baseclass import dict_to_hdf5
 

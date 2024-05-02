@@ -138,7 +138,7 @@ class SPICE2Dataset(HDF5Dataset):
 
         # To be able to use the dataset for training in a consistent way with the ANI datasets, we will only consider
         # the ase values for the uncharged isolated atoms, if available. Ions will use the values Ca 2+, K 1+, Li 1+, Mg 2+, Na 1+.
-        # See spice_2_curation.py for more details.
+        # See spice_2_from_qcarchive_curation.py for more details.
 
         # We will need to address this further later to see how we best want to handle this; the ASE are just meant to bring everything
         # roughly to the same scale, and values do not vary substantially by charge state.
@@ -170,23 +170,23 @@ class SPICE2Dataset(HDF5Dataset):
         # There are 3 files types that need name/checksum defined, of extensions hdf5.gz, hdf5, and npz.
 
         # note, need to change the end of the url to dl=1 instead of dl=0 (the default when you grab the share list), to ensure the same checksum each time we download
-        self.test_url = "https://www.dropbox.com/scl/fi/08u7e400qvrq2aklxw2yo/spice_2_dataset_n100.hdf5.gz?rlkey=ifv7hfzqnwl2faef8xxr5ggj2&dl=1"
+        self.test_url = "https://www.dropbox.com/scl/fi/1jawffjrh17r796g76udi/spice_2_dataset_ntc_1000.hdf5.gz?rlkey=r0crabvyg7xdgapv2qk3hk6t9&st=0ro9na0c&dl=1"
         self.full_url = "https://www.dropbox.com/scl/fi/udoc3jj7wa7du8jgqiat0/spice_2_dataset.hdf5.gz?rlkey=csgwqa237m002n54jnld5pfgy&dl=1"
 
         if self.for_unit_testing:
             url = self.test_url
             gz_data_file = {
-                "name": "SPICE2_dataset_n100.hdf5.gz",
-                "md5": "6f3f2931d4eb59f7a54f0a11c72bb604",
-                "length": 315275240,  # the number of bytes to be able to display the download progress bar correctly
+                "name": "SPICE2_dataset_nc_1000.hdf5.gz",
+                "md5": "04063f08a7ec93abfc661c22b12ceeb0",
+                "length": 26751220,  # the number of bytes to be able to display the download progress bar correctly
             }
             hdf5_data_file = {
-                "name": "SPICE2_dataset_n100.hdf5",
-                "md5": "ff89646eab99e31447be1697de8b7208",
+                "name": "SPICE2_dataset_nc_1000.hdf5",
+                "md5": "0a2554d0dba4f289dd93670686e4842e",
             }
             # npz file checksums may vary with different versions of python/numpy
             processed_data_file = {
-                "name": "SPICE2_dataset_n100_processed.npz",
+                "name": "SPICE2_dataset_nc_1000_processed.npz",
                 "md5": None,
             }
 
@@ -197,7 +197,7 @@ class SPICE2Dataset(HDF5Dataset):
             gz_data_file = {
                 "name": "SPICE2_dataset.hdf5.gz",
                 "md5": "244a559a6062bbec5c9cb49af036ff7d",
-                "length": 5532866319,
+                "length": 26313472231,
             }
 
             hdf5_data_file = {

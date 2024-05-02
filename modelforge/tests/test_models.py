@@ -65,7 +65,7 @@ def test_energy_scaling_and_offset():
     )
 
 
-def test_forward_pass(inference_model, batch):
+def test_forward_pass(inference_model, batch_QM9_ANI2x):
     # this test sends a single batch from different datasets through the model
 
     nnp_input = batch.nnp_input
@@ -78,7 +78,7 @@ def test_forward_pass(inference_model, batch):
     assert len(output) == nr_of_mols
 
 
-def test_calculate_energies_and_forces(inference_model, batch):
+def test_calculate_energies_and_forces(inference_model, batch_QM9_ANI2x):
     """
     Test the calculation of energies and forces for a molecule.
     """
@@ -347,7 +347,9 @@ def test_casting(batch, inference_model):
     model(nnp_input)
 
 
-def test_equivariant_energies_and_forces(batch, inference_model, equivariance_utils):
+def test_equivariant_energies_and_forces(
+    batch_QM9_ANI2x, inference_model, equivariance_utils
+):
     """
     Test the calculation of energies and forces for a molecule.
     NOTE: test will be adapted once we have a trained model.

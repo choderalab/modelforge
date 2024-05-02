@@ -8,6 +8,7 @@ from modelforge.potential import NeuralNetworkPotentialFactory, _IMPLEMENTED_NNP
 from dataclasses import dataclass
 
 _DATASETS_TO_TEST = [name for name in _IMPLEMENTED_DATASETS]
+_DATASETS_TO_TEST_QM9_ANI2X = ["QM9", "ANI2X"]
 _MODELS_TO_TEST = [name for name in _IMPLEMENTED_NNPS]
 from modelforge.potential.utils import BatchData
 
@@ -188,7 +189,32 @@ def batch(initialized_dataset):
     return batch
 
 
-# Fixture for initializing QM9Dataset
+@pytest.fixture(params=_DATASETS_TO_TEST_QM9_ANI2X)
+def QM9_ANI2X_to_test(request, prep_temp_dir):
+    dataset_name = request.param
+    if dataset_name == "QM9":
+        from modelforge.dataset.qm9 import QM9Dataset
+
+        return QM9Dataset(for_unit_testing=True, local_cache_dir=str(prep_temp_dir))
+
+    elif dataset_name == "ANI2X":
+        from modelforge.dataset.ani2x import ANI2xDataset
+
+        return ANI2xDataset(for_unit_testing=True, local_cache_dir=str(prep_temp_dir))
+
+
+@pytest.fixture()
+def initialized_QM9_ANI2X_dataset(QM9_ANI2X_to_test):
+    return initialize_dataset(QM9_ANI2X_to_test)
+
+
+@pytest.fixture()
+def batch_QM9_ANI2x(initialized_QM9_ANI2X_dataset):
+    batch = return_single_batch(initialized_QM9_ANI2X_dataset)
+    return batch
+
+
+# Fixture for setting up QM9Dataset
 @pytest.fixture
 def qm9_dataset(prep_temp_dir):
     from modelforge.dataset import QM9Dataset
@@ -197,6 +223,7 @@ def qm9_dataset(prep_temp_dir):
     return dataset
 
 
+# fixture for initializing QM9Dataset
 @pytest.fixture
 def initialized_qm9_dataset(qm9_dataset):
     return initialize_dataset(qm9_dataset)

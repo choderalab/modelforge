@@ -196,6 +196,11 @@ def qm9_dataset(prep_temp_dir):
     return dataset
 
 
+@pytest.fixture
+def initialized_qm9_dataset(qm9_dataset):
+    return initialize_dataset(qm9_dataset)
+
+
 # Fixture for generating simplified input data
 @pytest.fixture(params=["methane", "qm9_batch"])
 def simplified_input_data(request, qm9_batch):

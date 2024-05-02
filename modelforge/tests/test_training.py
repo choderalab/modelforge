@@ -9,7 +9,7 @@ IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 
 
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
-def test_train_with_lightning(train_model, qm9_dataset):
+def test_train_with_lightning(train_model, initialized_qm9_dataset):
     """
     Test the forward pass for a given model and dataset.
 
@@ -32,17 +32,17 @@ def test_train_with_lightning(train_model, qm9_dataset):
     # Run training loop and validate
     trainer.fit(
         model,
-        qm9_dataset.train_dataloader(),
-        qm9_dataset.val_dataloader(),
+        initialized_qm9_dataset.train_dataloader(),
+        initialized_qm9_dataset.val_dataloader(),
     )
 
 
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
-def test_hypterparameter_tuning_with_ray(train_model, qm9_dataset):
+def test_hypterparameter_tuning_with_ray(train_model, initialized_qm9_dataset):
 
     train_model.tune_with_ray(
-        train_dataloader=qm9_dataset.train_dataloader(),
-        val_dataloader=qm9_dataset.val_dataloader(),
+        train_dataloader=initialized_qm9_dataset.train_dataloader(),
+        val_dataloader=initialized_qm9_dataset.val_dataloader(),
         number_of_ray_workers=1,
         number_of_epochs=1,
         number_of_samples=1,

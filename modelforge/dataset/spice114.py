@@ -3,25 +3,37 @@ from typing import List
 from .dataset import HDF5Dataset
 
 
-class QM9Dataset(HDF5Dataset):
+class SPICE114Dataset(HDF5Dataset):
     """
-    Data class for handling QM9 data.
+    Data class for handling SPICE 1.1.4 dataset.
 
-    This class provides utilities for processing and interacting with QM9 data
-    stored in HDF5 format.
+    The SPICE dataset contains 1.1 million conformations for a diverse set of small molecules,
+    dimers, dipeptides, and solvated amino acids. It includes 15 elements, charged and
+    uncharged molecules, and a wide range of covalent and non-covalent interactions.
+    It provides both forces and energies calculated at the ωB97M-D3(BJ)/def2-TZVPPD level of theory,
+    using Psi4 1.4.1 along with other useful quantities such as multipole moments and bond orders.
+
+    Reference:
+    Eastman, P., Behara, P.K., Dotson, D.L. et al. SPICE,
+    A Dataset of Drug-like Molecules and Peptides for Training Machine Learning Potentials.
+    Sci Data 10, 11 (2023). https://doi.org/10.1038/s41597-022-01882-6
+
+    Dataset DOI:
+    https://doi.org/10.5281/zenodo.8222043
+
+
 
     Attributes
     ----------
     dataset_name : str
-        Name of the dataset, default is "QM9".
+        Name of the dataset, default is "ANI2x".
     for_unit_testing : bool
         If set to True, a subset of the dataset is used for unit testing purposes; by default False.
     local_cache_dir: str, optional
             Path to the local cache directory, by default ".".
     Examples
     --------
-    >>> data = QM9Dataset()
-    >>> data._download()
+
     """
 
     from modelforge.utils import PropertyNames
@@ -29,45 +41,41 @@ class QM9Dataset(HDF5Dataset):
     _property_names = PropertyNames(
         Z="atomic_numbers",
         R="geometry",
-        E="internal_energy_at_0K",  # Q="charges"
+        E="dft_total_energy",
+        F="dft_total_force",
+        Q="mbis_charges",
     )
 
     _available_properties = [
         "geometry",
         "atomic_numbers",
-        "internal_energy_at_0K",
-        "internal_energy_at_298.15K",
-        "enthalpy_at_298.15K",
-        "free_energy_at_298.15K",
-        "heat_capacity_at_298.15K",
-        "zero_point_vibrational_energy",
-        "electronic_spatial_extent",
-        "lumo-homo_gap",
-        "energy_of_homo",
-        "energy_of_lumo",
-        "rotational_constant_A",
-        "rotational_constant_B",
-        "rotational_constant_C",
-        "dipole_moment",
-        "isotropic_polarizability",
-        "charges",
+        "dft_total_energy",
+        "dft_total_force",
+        "mbis_charges",
+        "mbis_multipoles",
+        "mbis_octopoles",
+        "formation_energy",
+        "scf_dipole",
+        "scf_quadrupole",
+        "total_charge",
+        "reference_energy",
     ]  # All properties within the datafile, aside from SMILES/inchi.
 
     def __init__(
         self,
-        dataset_name: str = "QM9",
+        dataset_name: str = "SPICE114",
         for_unit_testing: bool = False,
         local_cache_dir: str = ".",
         force_download: bool = False,
-        regenerate_cache=False,
+        regenerate_cache: bool = False,
     ) -> None:
         """
-        Initialize the QM9Data class.
+        Initialize the SPICE2Dataset class.
 
         Parameters
         ----------
         data_name : str, optional
-            Name of the dataset, by default "QM9".
+            Name of the dataset, by default "SPICE114".
         for_unit_testing : bool, optional
             If set to True, a subset of the dataset is used for unit testing purposes; by default False.
         local_cache_dir: str, optional
@@ -76,18 +84,19 @@ class QM9Dataset(HDF5Dataset):
             If set to True, we will download the dataset even if it already exists; by default False.
         regenerate_cache: bool, optional
             If set to True, we will regenerate the npz cache file even if it already exists, using
-            previously downloaded files, if available; by default False.
+            the data from the hdf5 file; by default False.
         Examples
         --------
-        >>> data = QM9Dataset()  # Default dataset
-        >>> test_data = QM9Dataset(for_unit_testing=True)  # Testing subset
+        >>> data = SPICE2Dataset()  # Default dataset
+        >>> test_data = SPICE2Dataset(for_unit_testing=True)  # Testing subset
         """
 
         _default_properties_of_interest = [
             "geometry",
             "atomic_numbers",
-            "internal_energy_at_0K",
-            "charges",
+            "dft_total_energy",
+            "dft_total_force",
+            "mbis_charges",
         ]  # NOTE: Default values
 
         self._properties_of_interest = _default_properties_of_interest
@@ -96,15 +105,39 @@ class QM9Dataset(HDF5Dataset):
 
         self.dataset_name = dataset_name
         self.for_unit_testing = for_unit_testing
+
         from openff.units import unit
 
-        # atomic self energies
+        # SPICE provides reference values that depend upon charge, as charged molecules are included in the dataset.
+        # The reference_energy (i.e., sum of the value of isolated atoms with appropriate charge considerations)
+        # are included in the dataset, along with the formation_energy, which is the difference between
+        # the dft_total_energy and the reference_energy.
+
+        # To be able to use the dataset for training in a consistent way with the ANI datasets, we will only consider
+        # the ase values for the uncharged isolated atoms, if available. Ions will use the values Ca 2+, K 1+, Li 1+, Mg 2+, Na 1+.
+        # See spice_2_from_qcarchive_curation.py for more details.
+
+        # We will need to address this further later to see how we best want to handle this; the ASE are just meant to bring everything
+        # roughly to the same scale, and values do not vary substantially by charge state.
+
+        # Reference energies, in hartrees, computed with Psi4 1.5 wB97M-D3BJ/def2-TZVPPD.
+
         self._ase = {
-            "H": -1313.4668615546 * unit.kilojoule_per_mole,
-            "C": -99366.70745535441 * unit.kilojoule_per_mole,
-            "N": -143309.9379722722 * unit.kilojoule_per_mole,
-            "O": -197082.0671774158 * unit.kilojoule_per_mole,
-            "F": -261811.54555874597 * unit.kilojoule_per_mole,
+            "Br": -2574.1167240829964 * unit.hartree,
+            "C": -37.87264507233593 * unit.hartree,
+            "Ca": -676.9528465198214 * unit.hartree,  # 2+
+            "Cl": -460.1988762285739 * unit.hartree,
+            "F": -99.78611622985483 * unit.hartree,
+            "H": -0.498760510048753 * unit.hartree,
+            "I": -297.76228914445625 * unit.hartree,
+            "K": -599.8025677513111 * unit.hartree,  # 1+
+            "Li": -7.285254714046546 * unit.hartree,  # 1+
+            "Mg": -199.2688420040449 * unit.hartree,  # 2+
+            "N": -54.62327513368922 * unit.hartree,
+            "Na": -162.11366478783253 * unit.hartree,  # 1+
+            "O": -75.11317840410095 * unit.hartree,
+            "P": -341.3059197024934 * unit.hartree,
+            "S": -398.1599636677874 * unit.hartree,
         }
         from loguru import logger
 
@@ -112,24 +145,23 @@ class QM9Dataset(HDF5Dataset):
         # There are 3 files types that need name/checksum defined, of extensions hdf5.gz, hdf5, and npz.
 
         # note, need to change the end of the url to dl=1 instead of dl=0 (the default when you grab the share list), to ensure the same checksum each time we download
-        self.test_url = "https://www.dropbox.com/scl/fi/oe2tooxwrkget75zwrfey/qm9_dataset_ntc_1000.hdf5.gz?rlkey=6hfb8ge0pqf4tly15rmdsthmw&st=tusk38vt&dl=1"
-        self.full_url = "https://www.dropbox.com/scl/fi/4wu7zlpuuixttp0u741rv/qm9_dataset.hdf5.gz?rlkey=nszkqt2t4kmghih5mt4ssppvo&dl=1"
+        self.test_url = "https://www.dropbox.com/scl/fi/vh05bql1fza8jyj7ibyk2/spice_114_dataset_ntc_1000.hdf5.gz?rlkey=dqx0eq0wcux0ez48n2et35dow&st=hafqe5sv&dl=1"
+        self.full_url = "https://www.dropbox.com/scl/fi/zfh4sq2kiz250bvd9oshr/spice_114_dataset.hdf5.gz?rlkey=q3sp7p8ir21o0y0224bt75aw7&dl=1"
 
         if self.for_unit_testing:
             url = self.test_url
             gz_data_file = {
-                "name": "qm9_dataset_nc_1000.hdf5.gz",
-                "md5": "dc8ada0d808d02c699daf2000aff1fe9",
-                "length": 1697917,
+                "name": "SPICE114_dataset_nc_1000.hdf5.gz",
+                "md5": "f7027814a98a5393272c45b4cf97f4e9",
+                "length": 15166190,
             }
             hdf5_data_file = {
-                "name": "qm9_dataset_nc_1000.hdf5",
-                "md5": "305a0602860f181fafa75f7c7e3e6de4",
+                "name": "SPICE114_dataset_nc_1000.hdf5",
+                "md5": "885e17826e65011559ff6fae2b2b44e3",
             }
+            # npz file checksums may vary with different versions of python/numpy
             processed_data_file = {
-                "name": "qm9_dataset_nc_1000_processed.npz",
-                # checksum of otherwise identical npz files are different if using 3.11 vs 3.9/10
-                # we will therefore skip checking these files
+                "name": "SPICE114_dataset_nc_1000_processed.npz",
                 "md5": None,
             }
 
@@ -138,18 +170,18 @@ class QM9Dataset(HDF5Dataset):
         else:
             url = self.full_url
             gz_data_file = {
-                "name": "qm9_dataset.hdf5.gz",
-                "md5": "d172127848de114bd9cc47da2bc72566",
-                "length": 267228348,
+                "name": "SPICE114_dataset.hdf5.gz",
+                "md5": "ad4722574dd820d7eb7b7db64a763bb2",
+                "length": 11193528261,
             }
 
             hdf5_data_file = {
-                "name": "qm9_dataset.hdf5",
-                "md5": "0b22dc048f3361875889f832527438db",
+                "name": "SPICE114_dataset.hdf5",
+                "md5": "943a3df3bef247c8cffbb55d913c0bba",
             }
 
             processed_data_file = {
-                "name": "qm9_dataset_processed.npz",
+                "name": "SPICE114_dataset_processed.npz",
                 "md5": None,
             }
 
@@ -199,9 +231,7 @@ class QM9Dataset(HDF5Dataset):
 
         Examples
         --------
-        >>> data = QM9Dataset()
-        >>> data.available_properties
-        ['geometry', 'atomic_numbers', 'return_energy']
+
         """
         return self._available_properties
 
@@ -219,8 +249,7 @@ class QM9Dataset(HDF5Dataset):
 
         Examples
         --------
-        >>> data = QM9Dataset()
-        >>> data.properties_of_interest = ["geometry", "atomic_numbers", "return_energy"]
+
         """
         if not set(properties_of_interest).issubset(self._available_properties):
             raise ValueError(
@@ -234,8 +263,7 @@ class QM9Dataset(HDF5Dataset):
 
         Examples
         --------
-        >>> data = QM9Dataset()
-        >>> data.download()  # Downloads the dataset from Google Drive
+
 
         """
         # Right now this function needs to be defined for each dataset.
@@ -247,9 +275,6 @@ class QM9Dataset(HDF5Dataset):
             md5_checksum=self.gz_data_file["md5"],
             output_path=self.local_cache_dir,
             output_filename=self.gz_data_file["name"],
+            length=self.gz_data_file["length"],
             force_download=self.force_download,
         )
-        # from modelforge.dataset.utils import _download_from_url
-        #
-        # url = self.test_url if self.for_unit_testing else self.full_url
-        # _download_from_url(url, self.raw_data_file)

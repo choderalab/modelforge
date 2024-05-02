@@ -1,7 +1,7 @@
 from modelforge.curation.curation_baseclass import DatasetCuration
-from modelforge.utils.units import *
 from typing import Optional
 from loguru import logger
+from openff.units import unit
 
 
 class ANI1xCuration(DatasetCuration):
@@ -223,7 +223,9 @@ class ANI1xCuration(DatasetCuration):
         self,
         local_path_dir: str,
         name: str,
-        unit_testing_max_records: Optional[int] = None,
+        max_records: Optional[int] = None,
+        max_conformers_per_record: Optional[int] = None,
+        total_conformers: Optional[int] = None,
     ):
         """
         Processes a downloaded dataset: extracts relevant information.
@@ -234,8 +236,15 @@ class ANI1xCuration(DatasetCuration):
             Path to the directory that contains the raw hdf5 datafile
         name: str, required
             Name of the raw hdf5 file,
-        unit_testing_max_records: int, optional, default=None
-            If set to an integer ('n') the routine will only process the first 'n' records; useful for unit tests.
+        max_records: int, optional, default=None
+            If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
+            Can be used in conjunction with max_conformers_per_record and total_conformers.
+        max_conformers_per_record: int, optional, default=None
+            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
+            Can be used in conjunction with max_records and total_conformers.
+        total_conformers: int, optional, default=None
+            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
+            Can be used in conjunction with max_records and max_conformers_per_record.
 
         Examples
         --------
@@ -269,14 +278,32 @@ class ANI1xCuration(DatasetCuration):
         }
         with h5py.File(input_file_name, "r") as hf:
             names = list(hf.keys())
-            if unit_testing_max_records is None:
+            if max_records is None:
                 n_max = len(names)
-            else:
-                n_max = unit_testing_max_records
+            elif max_records is not None:
+                n_max = max_records
+
+            conformers_counter = 0
 
             for i, name in tqdm(enumerate(names[0:n_max]), total=n_max):
+                if total_conformers is not None:
+                    if conformers_counter >= total_conformers:
+                        break
+
                 # Extract the total number of configurations for a given molecule
-                n_configs = hf[name]["coordinates"].shape[0]
+
+                if max_conformers_per_record is not None:
+                    conformers_per_molecule = min(
+                        hf[name]["coordinates"].shape[0], max_conformers_per_record
+                    )
+                else:
+                    conformers_per_molecule = hf[name]["coordinates"].shape[0]
+
+                if total_conformers is not None:
+                    if conformers_counter + conformers_per_molecule > total_conformers:
+                        conformers_per_molecule = total_conformers - conformers_counter
+
+                n_configs = conformers_per_molecule
 
                 keys_list = list(hf[name].keys())
 
@@ -300,6 +327,8 @@ class ANI1xCuration(DatasetCuration):
                     if param_in in add_new_axis:
                         temp = temp[..., newaxis]
 
+                    temp = temp[0:conformers_per_molecule]
+
                     param_unit = param_data["u_in"]
                     if param_unit is not None:
                         ani1x_temp[param_out] = temp * param_unit
@@ -307,6 +336,8 @@ class ANI1xCuration(DatasetCuration):
                         ani1x_temp[param_out] = temp
 
                 self.data.append(ani1x_temp)
+                conformers_counter += conformers_per_molecule
+
         if self.convert_units:
             self._convert_units()
         # From documentation: By default, objects inside group are iterated in alphanumeric order.
@@ -318,7 +349,9 @@ class ANI1xCuration(DatasetCuration):
     def process(
         self,
         force_download: bool = False,
-        unit_testing_max_records: Optional[int] = None,
+        max_records: Optional[int] = None,
+        max_conformers_per_record: Optional[int] = None,
+        total_conformers: Optional[int] = None,
     ) -> None:
         """
         Downloads the dataset, extracts relevant information, and writes an hdf5 file.
@@ -328,8 +361,15 @@ class ANI1xCuration(DatasetCuration):
         force_download: bool, optional, default=False
             If the raw data_file is present in the local_cache_dir, the local copy will be used.
             If True, this will force the software to download the data again, even if present.
-        unit_testing_max_records: int, optional, default=None
-            If set to an integer, 'n', the routine will only process the first 'n' records, useful for unit tests.
+        max_records: int, optional, default=None
+            If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
+            Can be used in conjunction with max_conformers_per_record and total_conformers.
+        max_conformers_per_record: int, optional, default=None
+            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
+            Can be used in conjunction with max_records and total_conformers.
+        total_conformers: int, optional, default=None
+            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
+            Can be used in conjunction with max_records and max_conformers_per_record.
 
         Examples
         --------
@@ -338,6 +378,11 @@ class ANI1xCuration(DatasetCuration):
         >>> ani1_data.process()
 
         """
+        if max_records is not None and total_conformers is not None:
+            raise Exception(
+                "max_records and total_conformers cannot be set at the same time."
+            )
+
         from modelforge.utils.remote import download_from_figshare
 
         url = self.dataset_download_url
@@ -356,7 +401,11 @@ class ANI1xCuration(DatasetCuration):
         if self.name is None:
             raise Exception("Failed to retrieve name of file from figshare.")
         self._process_downloaded(
-            self.local_cache_dir, self.name, unit_testing_max_records
+            self.local_cache_dir,
+            self.name,
+            max_records=max_records,
+            max_conformers_per_record=max_conformers_per_record,
+            total_conformers=total_conformers,
         )
 
         self._generate_hdf5()

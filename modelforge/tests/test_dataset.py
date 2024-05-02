@@ -9,37 +9,43 @@ from modelforge.dataset.dataset import DatasetFactory, TorchDataset
 from modelforge.dataset import QM9Dataset
 
 DATASETS = [QM9Dataset]
-from ..utils import PropertyNames
+from modelforge.utils.prop import PropertyNames
 
 
-@pytest.fixture(
-    autouse=True,
-)
-def cleanup_files():
-    """Fixture to clean up temporary files before and after test execution."""
+@pytest.fixture(scope="session")
+def prep_temp_dir(tmp_path_factory):
+    fn = tmp_path_factory.mktemp("dataset_test")
+    return fn
 
-    def _cleanup():
-        for dataset in DATASETS:
-            dataset_name = dataset().dataset_name
 
-            files = [
-                f"{dataset_name}_cache.hdf5",
-                f"{dataset_name}_cache.hdf5.gz",
-                f"{dataset_name}_processed.npz",
-                f"{dataset_name}_subset_cache.hdf5",
-                f"{dataset_name}_subset_cache.hdf5.gz",
-                f"{dataset_name}_subset_processed.npz",
-            ]
-            for f in files:
-                try:
-                    os.remove(f)
-                    print(f"Deleted {f}")
-                except FileNotFoundError:
-                    print(f"{f} not found")
-
-    _cleanup()
-    yield  # This is where the test will execute
-    _cleanup()
+# @pytest.fixture(
+#     autouse=True,
+# )
+# def cleanup_files():
+#     """Fixture to clean up temporary files before and after test execution."""
+#
+#     def _cleanup():
+#         for dataset in DATASETS:
+#             dataset_name = dataset().dataset_name
+#
+#             files = [
+#                 f"{dataset_name}_cache.hdf5",
+#                 f"{dataset_name}_cache.hdf5.gz",
+#                 f"{dataset_name}_processed.npz",
+#                 f"{dataset_name}_subset_cache.hdf5",
+#                 f"{dataset_name}_subset_cache.hdf5.gz",
+#                 f"{dataset_name}_subset_processed.npz",
+#             ]
+#             for f in files:
+#                 try:
+#                     os.remove(f)
+#                     print(f"Deleted {f}")
+#                 except FileNotFoundError:
+#                     print(f"{f} not found")
+#
+#     _cleanup()
+#     yield  # This is where the test will execute
+#     _cleanup()
 
 
 def test_dataset_imported():
@@ -122,7 +128,7 @@ def test_dataset_basic_operations():
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_different_properties_of_interest(dataset):
     factory = DatasetFactory()
-    data = dataset(for_unit_testing=True)
+    data = dataset(for_unit_testing=True, regenerate_cache=True)
     assert data.properties_of_interest == [
         "geometry",
         "atomic_numbers",
@@ -133,12 +139,17 @@ def test_different_properties_of_interest(dataset):
     dataset = factory.create_dataset(data)
     raw_data_item = dataset[0]
     assert isinstance(raw_data_item, dict)
-    assert len(raw_data_item) == 6 # 6 properties are returned
+    assert len(raw_data_item) == 6  # 6 properties are returned
 
-    data.properties_of_interest = ["internal_energy_at_0K", "geometry"]
+    data.properties_of_interest = [
+        "internal_energy_at_0K",
+        "geometry",
+        "atomic_numbers",
+    ]
     assert data.properties_of_interest == [
         "internal_energy_at_0K",
         "geometry",
+        "atomic_numbers",
     ]
 
     dataset = factory.create_dataset(data)
@@ -149,41 +160,221 @@ def test_different_properties_of_interest(dataset):
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
-def test_file_existence_after_initialization(dataset):
+def test_file_existence_after_initialization(dataset, prep_temp_dir):
     """Test if files are created after dataset initialization."""
-    factory = DatasetFactory()
-    data = dataset(for_unit_testing=True)
 
-    assert not os.path.exists(data.raw_data_file)
-    assert not os.path.exists(data.processed_data_file)
+    local_cache_dir = str(prep_temp_dir)
+
+    factory = DatasetFactory()
+    data = dataset(for_unit_testing=True, local_cache_dir=local_cache_dir)
+
+    assert not os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
+    assert not os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
+    assert not os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
 
     dataset = factory.create_dataset(data)
-    assert os.path.exists(data.raw_data_file)
-    assert os.path.exists(data.processed_data_file)
+    assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
+    assert os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
+    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
+
+
+def test_caching(prep_temp_dir):
+    local_cache_dir = str(prep_temp_dir)
+    local_cache_dir = local_cache_dir + "/data_test"
+    from modelforge.dataset.qm9 import QM9Dataset
+
+    data = QM9Dataset(for_unit_testing=True, local_cache_dir=local_cache_dir)
+
+    # first test that no file exists
+    assert not os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
+    # the _file_validation method also checks the path in addition to the checksum
+    assert (
+        data._file_validation(
+            data.gz_data_file["name"], local_cache_dir, data.gz_data_file["md5"]
+        )
+        == False
+    )
+
+    data._download()
+    # check that the file exists
+    assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
+    # check that the file is there and has the right checksum
+    assert (
+        data._file_validation(
+            data.gz_data_file["name"], local_cache_dir, data.gz_data_file["md5"]
+        )
+        == True
+    )
+
+    # give a random checksum to see this is false
+    assert (
+        data._file_validation(
+            data.gz_data_file["name"], local_cache_dir, "madeupcheckusm"
+        )
+        == False
+    )
+    # make sure that if we run again we don't fail
+    data._download()
+    # remove the file and check that it is downloaded again
+    os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
+    data._download()
+
+    # check that the file is unzipped
+    data._ungzip_hdf5()
+    assert os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
+    assert (
+        data._file_validation(
+            data.hdf5_data_file["name"], local_cache_dir, data.hdf5_data_file["md5"]
+        )
+        == True
+    )
+    data._from_hdf5()
+
+    data._to_file_cache()
+
+    # npz files saved with different versions of python lead to different checksums
+    # we will skip checking the checksums for these files, only seeing if they exist
+    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
+    assert (
+        data._file_validation(
+            data.processed_data_file["name"],
+            local_cache_dir,
+            None,
+        )
+        == True
+    )
+
+    data._from_file_cache()
+
+
+def test_metadata_validation(prep_temp_dir):
+    """When we generate an .npz file, we also write out metadata in a .json file which is used
+    to validate if we can use .npz file, or we need to regenerate it."""
+
+    local_cache_dir = str(prep_temp_dir)
+
+    from modelforge.dataset.qm9 import QM9Dataset
+
+    data = QM9Dataset(for_unit_testing=True, local_cache_dir=local_cache_dir)
+
+    a = ["energy", "force", "atomic_numbers"]
+    b = ["energy", "atomic_numbers", "force"]
+    assert data._check_lists(a, b) == True
+
+    a = ["energy", "force"]
+
+    assert data._check_lists(a, b) == False
+
+    a = ["energy", "force", "atomic_numbers", "charges"]
+
+    assert data._check_lists(a, b) == False
+
+    # we do not have a metadata files so this will fail
+    assert data._metadata_validation("qm9_test.json", local_cache_dir) == False
+
+    metadata = {
+        "data_keys": ["atomic_numbers", "internal_energy_at_0K", "geometry", "charges"],
+        "hdf5_checksum": "305a0602860f181fafa75f7c7e3e6de4",
+        "hdf5_gz_checkusm": "dc8ada0d808d02c699daf2000aff1fe9",
+        "date_generated": "2024-04-11 14:05:14.297305",
+    }
+
+    import json
+
+    with open(
+        f"{local_cache_dir}/qm9_test.json",
+        "w",
+    ) as f:
+        json.dump(metadata, f)
+
+    assert data._metadata_validation("qm9_test.json", local_cache_dir) == True
+
+    metadata["hdf5_checksum"] = "wrong_checksum"
+    with open(
+        f"{local_cache_dir}/qm9_test.json",
+        "w",
+    ) as f:
+        json.dump(metadata, f)
+    assert data._metadata_validation("qm9_test.json", local_cache_dir) == False
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
-def test_different_scenarios_of_file_availability(dataset):
+def test_different_scenarios_of_file_availability(dataset, prep_temp_dir):
     """Test the behavior when raw and processed dataset files are removed."""
+
+    local_cache_dir = str(prep_temp_dir) + "/test_diff_scenarios"
+
     factory = DatasetFactory()
-    data = dataset(for_unit_testing=True)
+    data = dataset(for_unit_testing=True, local_cache_dir=local_cache_dir)
 
+    # this will download the .gz, the .hdf5 and the .npz files
     factory.create_dataset(data)
 
-    os.remove(data.raw_data_file)
+    # first check if we remove the npz file, rerunning it will regenerate it
+    os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
     factory.create_dataset(data)
 
-    os.remove(data.processed_data_file)
+    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
+
+    # now remove metadata file, rerunning will regenerate the npz file
+    os.remove(
+        f"{local_cache_dir}/{data.processed_data_file['name'].replace('npz', 'json')}"
+    )
     factory.create_dataset(data)
-    assert os.path.exists(data.raw_data_file)
-    assert os.path.exists(data.processed_data_file)
+    assert os.path.exists(
+        f"{local_cache_dir}/{data.processed_data_file['name'].replace('npz', 'json')}"
+    )
+
+    # now remove the  npz and hdf5 files, rerunning will generate it
+
+    os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
+    os.remove(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
+    factory.create_dataset(data)
+
+    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
+    assert os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
+
+    # now remove the gz file; rerunning should NOT download, it will use the npz
+    os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
+
+    factory.create_dataset(data)
+    assert not os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
+
+    # now let us remove the hdf5 file, it should use the npz file
+    os.remove(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
+    factory.create_dataset(data)
+    assert not os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
+
+    # now if we remove the npz, it will redownload the gz file and unzip it, then process it
+    os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
+    factory.create_dataset(data)
+    assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
+    assert os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
+    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
+
+    # now we will remove the gz file, and set force_download to True
+    # this should now regenerate the gz file, even though others are present
+
+    data = dataset(
+        for_unit_testing=True, local_cache_dir=local_cache_dir, force_download=True
+    )
+    factory.create_dataset(data)
+    assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
+    assert os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
+    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
+
+    # now we will remove the gz file and run it again
+    os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
+    factory.create_dataset(data)
+    assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
 
 
 def test_data_item_format(initialized_dataset):
     """Test the format of individual data items in the dataset."""
     from typing import Dict
 
-    raw_data_item = initialized_dataset.torch_dataset[0]
+    dataset = initialized_dataset
+    raw_data_item = dataset.torch_dataset[0]
     assert isinstance(raw_data_item, Dict)
     assert isinstance(raw_data_item["atomic_numbers"], torch.Tensor)
     assert isinstance(raw_data_item["positions"], torch.Tensor)
@@ -201,7 +392,7 @@ def test_dataset_generation(initialized_dataset):
     dataset = initialized_dataset
     train_dataloader = dataset.train_dataloader()
     val_dataloader = dataset.val_dataloader()
-
+    test_dataloader = dataset.test_dataloader()
     try:
         dataset.test_dataloader()
     except AttributeError:
@@ -209,56 +400,92 @@ def test_dataset_generation(initialized_dataset):
         pass
 
     # the dataloader automatically splits and batches the dataset
-    # for the training set it batches the 80 datapoints in
-    # a batch of 64 and a batch of 16 samples
-    assert len(train_dataloader) == 2  # nr of batches
+    # for the training set it batches the 800 training datapoints (of 1000 total) in 13 batches
+    # all with 64 points until the last which has 32
+
+    assert len(train_dataloader) == 13  # nr of batches
     batch_data = [v_ for v_ in train_dataloader]
+    val_data = [v_ for v_ in val_dataloader]
+    sum_batch = sum([len(b.metadata.atomic_subsystem_counts) for b in batch_data])
+    sum_val = sum([len(b.metadata.atomic_subsystem_counts) for b in val_data])
+    sum_test = sum([len(b.metadata.atomic_subsystem_counts) for b in test_dataloader])
+
+    assert sum_batch == 800
+    assert sum_val == 100
+    assert sum_test == 100
+
     assert len(batch_data[0].metadata.atomic_subsystem_counts) == 64
-    assert len(batch_data[1].metadata.atomic_subsystem_counts) == 16
+    assert len(batch_data[1].metadata.atomic_subsystem_counts) == 64
+    assert len(batch_data[-1].metadata.atomic_subsystem_counts) == 32
 
 
 from modelforge.dataset.utils import (
     RandomRecordSplittingStrategy,
+    RandomSplittingStrategy,
     FirstComeFirstServeSplittingStrategy,
 )
 
 
 @pytest.mark.parametrize(
     "splitting_strategy",
-    [RandomRecordSplittingStrategy, FirstComeFirstServeSplittingStrategy],
+    [
+        RandomSplittingStrategy,
+        FirstComeFirstServeSplittingStrategy,
+        RandomRecordSplittingStrategy,
+    ],
 )
 def test_dataset_splitting(splitting_strategy, datasets_to_test):
     """Test random_split on the the dataset."""
     from modelforge.dataset import DatasetFactory
 
-    dataset = DatasetFactory.create_dataset(datasets_to_test)
+    dataset = DatasetFactory.create_dataset(datasets_to_test.dataset)
     train_dataset, val_dataset, test_dataset = splitting_strategy().split(dataset)
-
+    print("local cache dir, ", datasets_to_test.dataset.local_cache_dir)
     energy = train_dataset[0]["E"].item()
 
-    assert np.isclose(energy, -412509.9375) or np.isclose(energy, -106277.4161215308)
+    if splitting_strategy == RandomSplittingStrategy:
+        assert np.isclose(energy, datasets_to_test.expected_E_random_split)
+    elif splitting_strategy == FirstComeFirstServeSplittingStrategy:
+        assert np.isclose(energy, datasets_to_test.expected_E_fcfs_split)
+
+    train_dataset2, val_dataset2, test_dataset2 = splitting_strategy(
+        split=[0.6, 0.3, 0.1]
+    ).split(dataset)
+
+    if (
+        splitting_strategy == RandomSplittingStrategy
+        or splitting_strategy == FirstComeFirstServeSplittingStrategy
+    ):
+        total = len(train_dataset2) + len(val_dataset2) + len(test_dataset2)
+        print(len(train_dataset2), len(val_dataset2), len(test_dataset2), total)
+        assert np.isclose(len(train_dataset2) / total, 0.6, atol=0.01)
+        assert np.isclose(len(val_dataset2) / total, 0.3, atol=0.01)
+        assert np.isclose(len(test_dataset2) / total, 0.1, atol=0.01)
+    elif splitting_strategy == RandomRecordSplittingStrategy:
+        # for the random record splitting we need to have a larger tolerance
+        # as we are not guaranteed to get the exact split since the number of conformers per record is not fixed
+        total = len(train_dataset2) + len(val_dataset2) + len(test_dataset2)
+
+        assert np.isclose(len(train_dataset2) / total, 0.6, atol=0.05)
+        assert np.isclose(len(val_dataset2) / total, 0.3, atol=0.05)
+        assert np.isclose(len(test_dataset2) / total, 0.1, atol=0.05)
 
     try:
         splitting_strategy(split=[0.2, 0.1, 0.1])
     except AssertionError as excinfo:
         print(f"AssertionError raised: {excinfo}")
 
-    train_dataset, val_dataset, test_dataset = splitting_strategy(
-        split=[0.6, 0.3, 0.1]
-    ).split(dataset)
 
-    assert len(train_dataset) == 60
-    assert len(val_dataset) == 30
-    assert len(test_dataset) == 10
-
-
-
-def test_dataset_downloader(datasets_to_test):
+@pytest.mark.parametrize("dataset", DATASETS)
+def test_dataset_downloader(dataset, prep_temp_dir):
     """
     Test the DatasetDownloader functionality.
     """
-    datasets_to_test._download()
-    assert os.path.exists(datasets_to_test.raw_data_file)
+    local_cache_dir = str(prep_temp_dir)
+
+    data = dataset(for_unit_testing=True, local_cache_dir=local_cache_dir)
+    data._download()
+    assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
 
 
 def test_numpy_dataset_assignment(datasets_to_test):
@@ -267,7 +494,7 @@ def test_numpy_dataset_assignment(datasets_to_test):
     """
 
     factory = DatasetFactory()
-    data = datasets_to_test
+    data = datasets_to_test.dataset
     factory._load_or_process_data(data)
 
     assert hasattr(data, "numpy_data")
@@ -328,16 +555,31 @@ def test_self_energy():
     assert dataset.dataset_statistics
     self_energies = dataset.dataset_statistics.atomic_self_energies
     # 5 elements present in the total QM9 dataset
-    # but only 4 in the reduced QM9 dataset
-    assert len(self_energies) == 4
+    assert len(self_energies) == 5
+    # value from DFT calculation
     # H: -1313.4668615546
-    assert np.isclose(self_energies[1], -1584.5087457646314)
+    assert np.isclose(
+        self_energies[1],
+        -1577.0870687452618,
+    )
+    # value from DFT calculation
     # C: -99366.70745535441
-    assert np.isclose(self_energies[6], -99960.8894178209)
+    assert np.isclose(
+        self_energies[6],
+        -99977.40806211969,
+    )
+    # value from DFT calculation
     # N: -143309.9379722722
-    assert np.isclose(self_energies[7], -143754.02638655982)
+    assert np.isclose(
+        self_energies[7],
+        -143742.7416655554,
+    )
+    # value from DFT calculation
     # O: -197082.0671774158
-    assert np.isclose(self_energies[8], -197495.00132926635)
+    assert np.isclose(
+        self_energies[8],
+        -197492.33270235246,
+    )
 
     dataset.prepare_data(
         remove_self_energies=True, normalize=False, regression_ase=True

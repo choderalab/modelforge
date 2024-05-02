@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Dict, NamedTuple, Tuple, Type
+from typing import TYPE_CHECKING, Any, Dict, NamedTuple, Tuple, Type, Mapping, Union
 
 import lightning as pl
 import torch
@@ -451,6 +451,25 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
         The model's output as computed from the inputs.
         """
         pass
+
+    def load_state_dict(
+        self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False
+    ):
+        # Prefix to remove
+        prefix = "model."
+
+        # check if prefix is present
+        if any(key.startswith(prefix) for key in state_dict.keys()):
+            # Create a new dictionary without the prefix in the keys if prefix exists
+            new_d = {
+                key[len(prefix) :] if key.startswith(prefix) else key: value
+                for key, value in state_dict.items()
+            }
+            log.debug(f"Removed prefix: {prefix}")
+        else:
+            log.debug("No prefix found. No modifications to keys in state loading.")
+
+        super().load_state_dict(new_d, strict=strict, assign=assign)
 
     def load_pretrained_weights(self, path: str):
         """

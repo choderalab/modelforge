@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 
 from typing import Dict, List, Optional
 from loguru import logger
-from modelforge.utils.units import *
+from openff.units import unit
 
 
 def dict_to_hdf5(
@@ -151,6 +151,9 @@ class DatasetCuration(ABC):
         """
         import pint
 
+        # this is needed for the "chem" context to convert hartrees to kj/mol
+        from modelforge.utils.units import chem_context
+
         for datapoint in self.data:
             for key, val in datapoint.items():
                 if isinstance(val, pint.Quantity):
@@ -164,11 +167,42 @@ class DatasetCuration(ABC):
                             f"could not convert {key} with unit {val.u} to {self.qm_parameters[key]['u_out']}"
                         )
 
+    @property
+    def total_conformers(self) -> int:
+        """
+        Returns the total number of conformers in the dataset.
+
+        Returns
+        -------
+        int
+            Total number of conformers in the dataset.
+
+        """
+        total = 0
+        for record in self.data:
+            total += record["n_configs"]
+        return total
+
+    @property
+    def total_records(self) -> int:
+        """
+        Returns the total number of records in the dataset.
+
+        Returns
+        -------
+        int
+            Total number of records in the dataset.
+
+        """
+        return len(self.data)
+
     @abstractmethod
     def process(
         self,
         force_download: bool = False,
-        unit_testing_max_records: Optional[int] = None,
+        max_records: Optional[int] = None,
+        max_conformers_per_record: Optional[int] = None,
+        total_conformers: Optional[int] = None,
     ) -> None:
         """
         Downloads the dataset, extracts relevant information, and writes an hdf5 file.
@@ -178,8 +212,15 @@ class DatasetCuration(ABC):
         force_download: bool, optional, default=False
             If the raw data_file is present in the local_cache_dir, the local copy will be used.
             If True, this will force the software to download the data again, even if present.
-        unit_testing_max_records: int, optional, default=None
-            If set to an integer, 'n', the routine will only process the first 'n' records, useful for unit tests.
+        max_records: int, optional, default=None
+            If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
+            Can be used in conjunction with max_conformers_per_record.
+        max_conformers_per_record: int, optional, default=None
+            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
+            Can be used in conjunction with max_records or total_conformers.
+        total_conformers: int, optional, default=None
+            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
+            Can be used in conjunction with  max_conformers_per_record.
 
         Examples
         --------

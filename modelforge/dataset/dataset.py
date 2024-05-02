@@ -14,7 +14,7 @@ from modelforge.dataset.utils import RandomRecordSplittingStrategy, SplittingStr
 from dataclasses import dataclass
 
 if TYPE_CHECKING:
-    from modelforge.potential.utils import BatchData, AtomicSelfEnergies
+    from modelforge.potential.processing import AtomicSelfEnergies
 
 
 @dataclass
@@ -60,12 +60,35 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             If set to True, properties are preloaded as PyTorch tensors. Default is False.
         """
 
-        self.properties_of_interest = {
-            "atomic_numbers": torch.from_numpy(dataset[property_name.Z]),
-            "positions": torch.from_numpy(dataset[property_name.R]),
-            "E": torch.from_numpy(dataset[property_name.E]),
-            "Q": torch.from_numpy(dataset[property_name.Q]),
-        }
+        self.properties_of_interest = {}
+
+        self.properties_of_interest["atomic_numbers"] = torch.from_numpy(
+            dataset[property_name.Z]
+        )
+        self.properties_of_interest["positions"] = torch.from_numpy(
+            dataset[property_name.R]
+        )
+        self.properties_of_interest["E"] = torch.from_numpy(dataset[property_name.E])
+
+        if property_name.Q is not None:
+            self.properties_of_interest["Q"] = torch.from_numpy(
+                dataset[property_name.Q]
+            )
+        else:
+            # this is a per atom property, so it will match the first dimension of the geometry
+            self.properties_of_interest["Q"] = torch.zeros(
+                (dataset[property_name.R].shape[0], 1)
+            )
+
+        if property_name.F is not None:
+            self.properties_of_interest["F"] = torch.from_numpy(
+                dataset[property_name.F]
+            )
+        else:
+            # a per atom property in each direction, so it will match geometry
+            self.properties_of_interest["F"] = torch.zeros(
+                dataset[property_name.R].shape
+            )
 
         self.number_of_records = len(dataset["atomic_subsystem_counts"])
         self.number_of_atoms = len(dataset["atomic_numbers"])
@@ -219,26 +242,165 @@ class HDF5Dataset:
     """
 
     def __init__(
-        self, raw_data_file: str, processed_data_file: str, local_cache_dir: str
+        self,
+        url: str,
+        gz_data_file: Dict[str, str],
+        hdf5_data_file: Dict[str, str],
+        processed_data_file: Dict[str, str],
+        local_cache_dir: str,
+        force_download: bool = False,
+        regenerate_cache: bool = False,
     ):
         """
         Initializes the HDF5Dataset with paths to raw and processed data files.
 
         Parameters
         ----------
-        raw_data_file : str
-            Path to the raw HDF5 data file.
-        processed_data_file : str
-            Path to the processed data file.
+        url : str
+            URL of the hdf5.gz data file.
+        gz_data_file : Dict[str, str]
+            Name of the gzipped data file (name) and checksum (md5).
+        hdf5_data_file : Dict[str, str]
+            Name of the hdf5 data file (name) and checksum (md5).
+        processed_data_file : Dict[str, str]
+            Name of the processed npz data file (name) and checksum (md5).
         local_cache_dir : str
-            Directory to store temporary processing files.
+            Directory to store the files.
+        force_download : bool, optional
+            If set to True, the data will be downloaded even if it already exists. Default is False.
         """
-
-        self.raw_data_file = raw_data_file
+        self.url = url
+        self.gz_data_file = gz_data_file
+        self.hdf5_data_file = hdf5_data_file
         self.processed_data_file = processed_data_file
+        self.local_cache_dir = local_cache_dir
+        self.force_download = force_download
+        self.regenerate_cache = regenerate_cache
+
         self.hdf5data: Optional[Dict[str, List[np.ndarray]]] = None
         self.numpy_data: Optional[np.ndarray] = None
-        self.local_cache_dir = local_cache_dir
+
+    def _ungzip_hdf5(self) -> None:
+        """
+        Unzips an HDF5.gz file.
+
+        Examples
+        -------
+        """
+        import gzip
+        import shutil
+
+        with gzip.open(
+            f"{self.local_cache_dir}/{self.gz_data_file['name']}", "rb"
+        ) as gz_file:
+            with open(
+                f"{self.local_cache_dir}/{self.hdf5_data_file['name']}", "wb"
+            ) as out_file:
+                shutil.copyfileobj(gz_file, out_file)
+
+    def _check_lists(self, list_1: List, list_2: List) -> bool:
+        """
+        Check to see if all elements in the lists match and the length is the same.
+
+        Note the order of the lists do not matter.
+
+        Parameters
+        ----------
+        list_1 : List
+            First list to compare
+        list_2 : List
+            Second list to compare
+
+        Returns
+        -------
+        bool
+            True if all elements of sub_list are in containing_list, False otherwise
+        """
+        if len(list_1) != len(list_2):
+            return False
+        for a in list_1:
+            if a not in list_2:
+                return False
+        return True
+
+    def _metadata_validation(self, file_name: str, file_path: str) -> bool:
+        """
+        Validates the metadata file for the npz file.
+
+        Parameters
+        ----------
+        file_name : str
+            Name of the metadata file.
+        file_path : str
+            Path to the metadata file.
+
+        Returns
+        -------
+        bool
+            True if the metadata file exists, False otherwise.
+        """
+        if not os.path.exists(f"{file_path}/{file_name}"):
+            log.debug(f"Metadata file {file_path}/{file_name} does not exist.")
+            return False
+        else:
+            import json
+
+            with open(f"{file_path}/{file_name}", "r") as f:
+                self._npz_metadata = json.load(f)
+
+                if not self._check_lists(
+                    self._npz_metadata["data_keys"], self.properties_of_interest
+                ):
+                    log.warning(
+                        f"Data keys used to generate {file_path}/{file_name} ({self._npz_metadata['data_keys']}) do not match data loader ({self.properties_of_interest}) ."
+                    )
+                    return False
+
+                if self._npz_metadata["hdf5_checksum"] != self.hdf5_data_file["md5"]:
+                    log.warning(
+                        f"Checksum for hdf5 file used to generate npz file does not match current file in dataloader."
+                    )
+                    return False
+
+        return True
+
+    def _file_validation(
+        self, file_name: str, file_path: str, checksum: str = None
+    ) -> bool:
+        """
+        Validates if the file exists, and if the calculated checksum matches the expected checksum.
+
+        Parameters
+        ----------
+        file_name : str
+            Name of the file to validate.
+        file_path : str
+            Path to the file.
+        checksum : str
+            Expected checksum of the file. Default=None
+            If None, checksum will not be validated.
+
+        Returns
+        -------
+        bool
+            True if the file exists and the checksum matches, False otherwise.
+        """
+        full_file_path = f"{file_path}/{file_name}"
+        if not os.path.exists(full_file_path):
+            log.debug(f"File {full_file_path} does not exist.")
+            return False
+        elif checksum is not None:
+            from modelforge.utils.remote import calculate_md5_checksum
+
+            calculated_checksum = calculate_md5_checksum(file_name, file_path)
+            if calculated_checksum != checksum:
+                log.warning(
+                    f"Checksum mismatch for file {file_path}/{file_name}. Expected {calculated_checksum}, found {checksum}."
+                )
+                return False
+            return True
+        else:
+            return True
 
     def _from_hdf5(self) -> None:
         """
@@ -250,24 +412,31 @@ class HDF5Dataset:
         >>> processed_data = hdf5_data._from_hdf5()
 
         """
-        import gzip
         from collections import OrderedDict
         import h5py
         import tqdm
-        import shutil
-
-        log.debug(f"Processing and extracting data from {self.raw_data_file}")
 
         # this will create an unzipped file which we can then load in
         # this is substantially faster than passing gz_file directly to h5py.File()
         # by avoiding data chunking issues.
 
-        temp_hdf5_file = f"{self.local_cache_dir}/temp_unzipped.hdf5"
-        with gzip.open(self.raw_data_file, "rb") as gz_file:
-            with open(temp_hdf5_file, "wb") as out_file:
-                shutil.copyfileobj(gz_file, out_file)
+        temp_hdf5_file = f"{self.local_cache_dir}/{self.hdf5_data_file['name']}"
 
-        log.debug("Reading in and processing hdf5 file ...")
+        if self._file_validation(
+            self.hdf5_data_file["name"],
+            self.local_cache_dir,
+            self.hdf5_data_file["md5"],
+        ):
+            log.debug(f"Loading unzipped hdf5 file from {temp_hdf5_file}")
+        else:
+            from modelforge.utils.remote import calculate_md5_checksum
+
+            checksum = calculate_md5_checksum(
+                self.hdf5_data_file["name"], self.local_cache_dir
+            )
+            raise ValueError(
+                f"Checksum mismatch for unzipped data file {temp_hdf5_file}. Found {checksum}, Expected {self.hdf5_data_file['md5']}"
+            )
 
         with h5py.File(temp_hdf5_file, "r") as hf:
             # create dicts to store data for each format type
@@ -280,7 +449,7 @@ class HDF5Dataset:
             series_atom_data: Dict[str, List[np.ndarray]] = OrderedDict()
             # value shapes: (n_confs, n_atoms, *)
 
-            # intialize each relevant value in data dicts to empty list
+            # initialize each relevant value in data dicts to empty list
             for value in self.properties_of_interest:
                 value_format = hf[next(iter(hf.keys()))][value].attrs["format"]
                 if value_format == "single_rec":
@@ -398,11 +567,29 @@ class HDF5Dataset:
 
         Examples
         --------
-        >>> hdf5_data = HDF5Dataset("raw_data.hdf5", "processed_data.npz")
-        >>> processed_data = hdf5_data._from_file_cache()
         """
-        log.debug(f"Loading processed data from {self.processed_data_file}")
-        self.numpy_data = np.load(self.processed_data_file)
+        # skip validating the checksum, as the npz file checksum of otherwise identical data differs between python 3.11 and 3.9/10
+        # we have a metadatafile we validate separately instead
+        if self._file_validation(
+            self.processed_data_file["name"], self.local_cache_dir, checksum=None
+        ):
+            if self._metadata_validation(
+                self.processed_data_file["name"].replace(".npz", ".json"),
+                self.local_cache_dir,
+            ):
+                log.debug(
+                    f"Loading processed data from {self.local_cache_dir}/{self.processed_data_file['name']} generated on {self._npz_metadata['date_generated']}"
+                )
+                log.debug(
+                    f"Properties of Interest in .npz file: {self._npz_metadata['data_keys']}"
+                )
+                self.numpy_data = np.load(
+                    f"{self.local_cache_dir}/{self.processed_data_file['name']}"
+                )
+        else:
+            raise ValueError(
+                f"Processed data file {self.local_cache_dir}/{self.processed_data_file['name']} not found."
+            )
 
     def _to_file_cache(
         self,
@@ -417,14 +604,35 @@ class HDF5Dataset:
                 >>> hdf5_data = HDF5Dataset("raw_data.hdf5", "processed_data.npz")
                 >>> hdf5_data._to_file_cache()
         """
-        log.debug(f"Writing data cache to {self.processed_data_file}")
+        log.debug(
+            f"Writing npz file to {self.local_cache_dir}/{self.processed_data_file['name']}"
+        )
 
         np.savez(
-            self.processed_data_file,
+            f"{self.local_cache_dir}/{self.processed_data_file['name']}",
             atomic_subsystem_counts=self.atomic_subsystem_counts,
             n_confs=self.n_confs,
             **self.hdf5data,
         )
+        import datetime
+
+        # we will generate a simple metadata file to list which data keys were used to generate the npz file
+        # and the checksum of the hdf5 file used to create the npz
+        # we can also add in the date of generation so we can report on when the datafile was generated when we load the npz
+        metadata = {
+            "data_keys": list(self.hdf5data.keys()),
+            "hdf5_checksum": self.hdf5_data_file["md5"],
+            "hdf5_gz_checkusm": self.gz_data_file["md5"],
+            "date_generated": str(datetime.datetime.now()),
+        }
+        import json
+
+        with open(
+            f"{self.local_cache_dir}/{self.processed_data_file['name'].replace('.npz', '.json')}",
+            "w",
+        ) as f:
+            json.dump(metadata, f)
+
         del self.hdf5data
 
 
@@ -459,16 +667,48 @@ class DatasetFactory:
             The HDF5 dataset instance to use.
         """
 
-        # if not cached, download and process
-        if not os.path.exists(data.processed_data_file):
-            if not os.path.exists(data.raw_data_file):
-                data._download()
-            # load from hdf5 and process
+        # For efficiency purposes, we first want to see if there is an npz file available before reprocessing the hdf5
+        # file, expanding the gzziped archive or download the file.
+        # Saving to cache will create an npz file and metadata file.
+        # The metadata file will contain the keys used to generate the npz file, the checksum of the hdf5 and gz
+        # file used to generate the npz file.  We will look at the metadata file and compare this to the
+        # variables saved in the HDF5Dataset class to determine if the npz file is valid.
+        # It is important to check the keys used to generate the npz file, as these are allowed to be changed by the user.
+
+        if data._file_validation(
+            data.processed_data_file["name"],
+            data.local_cache_dir,
+        ) and (
+            data._metadata_validation(
+                data.processed_data_file["name"].replace(".npz", ".json"),
+                data.local_cache_dir,
+            )
+            and not data.force_download
+            and not data.regenerate_cache
+        ):
+
+            data._from_file_cache()
+        # check to see if the hdf5 file exists and the checksum matches
+        elif (
+            data._file_validation(
+                data.hdf5_data_file["name"],
+                data.local_cache_dir,
+                data.hdf5_data_file["md5"],
+            )
+            and not data.force_download
+        ):
             data._from_hdf5()
-            # save to cache
             data._to_file_cache()
-        # load from cache
-        data._from_file_cache()
+            data._from_file_cache()
+        # if the npz or hdf5 files don't exist/match checksums, call download
+        # download will check if the gz file exists and matches the checksum
+        # or will use force_download.
+        else:
+            data._download()
+            data._ungzip_hdf5()
+            data._from_hdf5()
+            data._to_file_cache()
+            data._from_file_cache()
 
     @staticmethod
     def create_dataset(
@@ -624,6 +864,7 @@ class TorchDataModule(pl.LightningDataModule):
 
             # remove self energies
             self.subtract_self_energies(torch_dataset, self_energies)
+
             # write the self energies that are removed from the dataset to disk
             import toml
 

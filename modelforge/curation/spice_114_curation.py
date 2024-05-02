@@ -1,7 +1,7 @@
 from modelforge.curation.curation_baseclass import DatasetCuration
-from modelforge.utils.units import *
 from typing import Optional
 from loguru import logger
+from openff.units import unit
 
 
 class SPICE114Curation(DatasetCuration):
@@ -64,6 +64,10 @@ class SPICE114Curation(DatasetCuration):
                 "u_out": unit.kilojoule_per_mole,
             },
             "dft_total_gradient": {
+                "u_in": unit.hartree / unit.bohr,
+                "u_out": unit.kilojoule_per_mole / unit.angstrom,
+            },
+            "dft_total_force": {
                 "u_in": unit.hartree / unit.bohr,
                 "u_out": unit.kilojoule_per_mole / unit.angstrom,
             },
@@ -136,6 +140,7 @@ class SPICE114Curation(DatasetCuration):
             "geometry": "series_atom",
             "dft_total_energy": "series_mol",
             "dft_total_gradient": "series_atom",
+            "dft_total_force": "series_atom",
             "formation_energy": "series_mol",
             "mayer_indices": "series_atom",
             "mbis_charges": "series_atom",
@@ -171,7 +176,9 @@ class SPICE114Curation(DatasetCuration):
         self,
         local_path_dir: str,
         name: str,
-        unit_testing_max_records: Optional[int] = None,
+        max_records: Optional[int] = None,
+        max_conformers_per_record: Optional[int] = None,
+        total_conformers: Optional[int] = None,
     ):
         """
         Processes a downloaded dataset: extracts relevant information.
@@ -182,8 +189,15 @@ class SPICE114Curation(DatasetCuration):
             Path to the directory that contains the raw hdf5 datafile
         name: str, required
             Name of the raw hdf5 file,
-        unit_testing_max_records: int, optional, default=None
-            If set to an integer ('n') the routine will only process the first 'n' records; useful for unit tests.
+        max_records: int, optional, default=None
+            If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
+            Can be used in conjunction with max_conformers_per_record and total_conformers.
+        max_conformers_per_record: int, optional, default=None
+            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
+            Can be used in conjunction with max_records and total_conformers.
+        total_conformers: int, optional, default=None
+            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
+            Can be used in conjunction with max_records and max_conformers_per_record.
 
         Examples
         --------
@@ -196,14 +210,20 @@ class SPICE114Curation(DatasetCuration):
         need_to_reshape = {"formation_energy": True, "dft_total_energy": True}
         with h5py.File(input_file_name, "r") as hf:
             names = list(hf.keys())
-            if unit_testing_max_records is None:
+            if max_records is None:
                 n_max = len(names)
-            else:
-                n_max = unit_testing_max_records
+            elif max_records is not None:
+                n_max = max_records
+
+            conformers_counter = 0
 
             for i, name in tqdm(enumerate(names[0:n_max]), total=n_max):
+                if total_conformers is not None:
+                    if conformers_counter >= total_conformers:
+                        break
+
                 # Extract the total number of conformations for a given molecule
-                n_configs = hf[name]["conformations"].shape[0]
+                conformers_per_record = hf[name]["conformations"].shape[0]
 
                 keys_list = list(hf[name].keys())
 
@@ -215,7 +235,17 @@ class SPICE114Curation(DatasetCuration):
                 ds_temp["atomic_numbers"] = hf[name]["atomic_numbers"][()].reshape(
                     -1, 1
                 )
-                ds_temp["n_configs"] = n_configs
+                if max_conformers_per_record is not None:
+                    conformers_per_record = min(
+                        conformers_per_record,
+                        max_conformers_per_record,
+                    )
+                if total_conformers is not None:
+                    conformers_per_record = min(
+                        conformers_per_record, total_conformers - conformers_counter
+                    )
+
+                ds_temp["n_configs"] = conformers_per_record
 
                 # param_in is the name of the entry, param_data contains input (u_in) and output (u_out) units
                 for param_in, param_data in self.qm_parameters.items():
@@ -229,6 +259,7 @@ class SPICE114Curation(DatasetCuration):
                         if param_in in need_to_reshape:
                             temp = temp.reshape(-1, 1)
 
+                        temp = temp[0:conformers_per_record]
                         param_unit = param_data["u_in"]
                         if param_unit is not None:
                             # check that units in the hdf5 file match those we have defined in self.qm_parameters
@@ -249,7 +280,10 @@ class SPICE114Curation(DatasetCuration):
                 ds_temp["total_charge"] = self._calculate_reference_charge(
                     ds_temp["smiles"]
                 )
+                ds_temp["dft_total_force"] = -ds_temp["dft_total_gradient"]
                 self.data.append(ds_temp)
+                conformers_counter += conformers_per_record
+
         if self.convert_units:
             self._convert_units()
 
@@ -262,7 +296,9 @@ class SPICE114Curation(DatasetCuration):
     def process(
         self,
         force_download: bool = False,
-        unit_testing_max_records: Optional[int] = None,
+        max_records: Optional[int] = None,
+        max_conformers_per_record: Optional[int] = None,
+        total_conformers: Optional[int] = None,
     ) -> None:
         """
         Downloads the dataset, extracts relevant information, and writes an hdf5 file.
@@ -272,8 +308,15 @@ class SPICE114Curation(DatasetCuration):
         force_download: bool, optional, default=False
             If the raw data_file is present in the local_cache_dir, the local copy will be used.
             If True, this will force the software to download the data again, even if present.
-        unit_testing_max_records: int, optional, default=None
-            If set to an integer, 'n', the routine will only process the first 'n' records, useful for unit tests.
+        max_records: int, optional, default=None
+            If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
+            Can be used in conjunction with max_conformers_per_record.
+        max_conformers_per_record: int, optional, default=None
+            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
+            Can be used in conjunction with max_records or total_conformers.
+        total_conformers: int, optional, default=None
+            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
+            Can be used in conjunction with  max_conformers_per_record.
 
         Examples
         --------
@@ -282,6 +325,10 @@ class SPICE114Curation(DatasetCuration):
         >>> spice114_data.process()
 
         """
+        if max_records is not None and total_conformers is not None:
+            raise Exception(
+                "max_records and total_conformers cannot be set at the same time."
+            )
         from modelforge.utils.remote import download_from_zenodo
 
         url = self.dataset_download_url
@@ -300,7 +347,11 @@ class SPICE114Curation(DatasetCuration):
         if self.name is None:
             raise Exception("Failed to retrieve name of file from zenodo.")
         self._process_downloaded(
-            self.local_cache_dir, self.name, unit_testing_max_records
+            self.local_cache_dir,
+            self.name,
+            max_records,
+            max_conformers_per_record,
+            total_conformers,
         )
 
         self._generate_hdf5()

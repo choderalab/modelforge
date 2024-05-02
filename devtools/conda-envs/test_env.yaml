@@ -44,4 +44,5 @@ dependencies:
       - pytorch2jax
       - versioneer
       - flax
-      - git+https://github.com/ArnNag/sake.git@update_versioneer
+      - git+https://github.com/ArnNag/sake.git@nanometer
+      - tensorflow

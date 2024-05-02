@@ -1,38 +1,52 @@
-from typing import List, Tuple, Dict, Optional
+from typing import List, Optional, Dict, Tuple
 
-from modelforge.curation.curation_baseclass import *
+from modelforge.curation.curation_baseclass import DatasetCuration
 from retry import retry
 from tqdm import tqdm
 from openff.units import unit
 
+from loguru import logger
 
-class SPICEOpenFFCuration(DatasetCuration):
+
+class SPICE2Curation(DatasetCuration):
     """
-    Fetches the SPICE 1.1.4 dataset from MOLSSI QCArchive and processes it into a curated hdf5 file.
+    Fetches the SPICE 2 dataset from MOLSSI QCArchive and processes it into a curated hdf5 file.
 
-    All QM datapoints retrieved were generated using B3LYP-D3BJ/DZVP level of theory.
-    This is the default theory used for force field development by the Open Force Field Initiative.
-    This data appears as two separate records in QCArchive: ('spec_2'  and 'spec_6'),
-    where 'spec_6' provides the dispersion corrections for energy and gradient.
+    The SPICE dataset contains conformations for a diverse set of small molecules,
+    dimers, dipeptides, and solvated amino acids. It includes 15 elements, charged and
+    uncharged molecules, and a wide range of covalent and non-covalent interactions.
+    It provides both forces and energies calculated at the ωB97M-D3(BJ)/def2-TZVPPD level of theory,
+    using Psi4 along with other useful quantities such as multipole moments and bond orders.
 
-    This includes the following collections from qcarchive:
+    This includes the following collections from qcarchive. Collections included in SPICE 1.1.4 are annotated with
+    along with the version used in  SPICE 1.1.4; while the underlying molecules are typically the same in a given collection,
+    newer versions may have had some calculations redone, e.g., rerun calculations that failed or rerun with
+    a newer version Psi4
 
-    "SPICE Solvated Amino Acids Single Points Dataset v1.1",
-    "SPICE Dipeptides Single Points Dataset v1.2",
-    "SPICE DES Monomers Single Points Dataset v1.1",
-    "SPICE DES370K Single Points Dataset v1.0",
-    "SPICE PubChem Set 1 Single Points Dataset v1.2",
-    "SPICE PubChem Set 2 Single Points Dataset v1.2",
-    "SPICE PubChem Set 3 Single Points Dataset v1.2",
-    "SPICE PubChem Set 4 Single Points Dataset v1.2",
-    "SPICE PubChem Set 5 Single Points Dataset v1.2",
-    "SPICE PubChem Set 6 Single Points Dataset v1.2",
+      - 'SPICE Solvated Amino Acids Single Points Dataset v1.1'     * (SPICE 1.1.4 at v1.1)
+      - 'SPICE Dipeptides Single Points Dataset v1.3'               * (SPICE 1.1.4 at v1.2)
+      - 'SPICE DES Monomers Single Points Dataset v1.1'             * (SPICE 1.1.4 at v1.1)
+      - 'SPICE DES370K Single Points Dataset v1.0'                  * (SPICE 1.1.4 at v1.0)
+      - 'SPICE DES370K Single Points Dataset Supplement v1.1'       * (SPICE 1.1.4 at v1.0)
+      - 'SPICE PubChem Set 1 Single Points Dataset v1.3'            * (SPICE 1.1.4 at v1.2)
+      - 'SPICE PubChem Set 2 Single Points Dataset v1.3'            * (SPICE 1.1.4 at v1.2)
+      - 'SPICE PubChem Set 3 Single Points Dataset v1.3'            * (SPICE 1.1.4 at v1.2)
+      - 'SPICE PubChem Set 4 Single Points Dataset v1.3'            * (SPICE 1.1.4 at v1.2)
+      - 'SPICE PubChem Set 5 Single Points Dataset v1.3'            * (SPICE 1.1.4 at v1.2)
+      - 'SPICE PubChem Set 6 Single Points Dataset v1.3'            * (SPICE 1.1.4 at v1.2)
+      - 'SPICE PubChem Set 7 Single Points Dataset v1.0'
+      - 'SPICE PubChem Set 8 Single Points Dataset v1.0'
+      - 'SPICE PubChem Set 9 Single Points Dataset v1.0'
+      - 'SPICE PubChem Set 10 Single Points Dataset v1.0'
+      - 'SPICE Ion Pairs Single Points Dataset v1.2'                * (SPICE 1.1.4 at v1.1)
+      - 'SPICE PubChem Boron Silicon v1.0'
+      - 'SPICE Solvated PubChem Set 1 v1.0'
+      - 'SPICE Water Clusters v1.0'
+      - 'SPICE Amino Acid Ligand v1.0
 
-    It does not include the following datasets that are part of the official 1.1.4 release of SPICE (calculated
-    at the ωB97M-D3(BJ)/def2-TZVPPD level of theory), as the openff level of theory was not used for these datasets:
 
-    "SPICE Ion Pairs Single Points Dataset v1.1",
-    "SPICE DES370K Single Points Dataset Supplement v1.0",
+    SPICE 2 zenodo release:
+    https://zenodo.org/records/10835749
 
     Reference to original SPICE publication:
     Eastman, P., Behara, P.K., Dotson, D.L. et al. SPICE,
@@ -51,13 +65,14 @@ class SPICEOpenFFCuration(DatasetCuration):
     convert_units: bool, optional, default=True
         Convert from the source units (e.g., angstrom, bohr, hartree)
         to [nanometer, kJ/mol] (i.e., target units)
-    release_version: str, optional, default='1.1.4'
+    release_version: str, optional, default='2'
         Version of the SPICE dataset to fetch from the MOLSSI QCArchive.
+        Currently doesn't do anything
     Examples
     --------
-    >>> spice_openff_data = SPICEOpenFFCuration(hdf5_file_name='spice114_openff_dataset.hdf5',
-    >>>                             local_cache_dir='~/datasets/spice114_openff_dataset')
-    >>> spice_openff_data.process()
+    >>> spice2_data = SPICE2Curation(hdf5_file_name='spice2_dataset.hdf5',
+    >>>                             local_cache_dir='~/datasets/spice2_dataset')
+    >>> spice2_data.process()
 
     """
 
@@ -67,7 +82,7 @@ class SPICEOpenFFCuration(DatasetCuration):
         output_file_dir: str,
         local_cache_dir: str,
         convert_units: bool = True,
-        release_version: str = "1.1.4",
+        release_version: str = "2",
     ):
         super().__init__(
             hdf5_file_name=hdf5_file_name,
@@ -93,19 +108,11 @@ class SPICEOpenFFCuration(DatasetCuration):
                 "u_in": unit.hartree,
                 "u_out": unit.kilojoule_per_mole,
             },
-            "dispersion_corrected_dft_total_energy": {
-                "u_in": unit.hartree,
-                "u_out": unit.kilojoule_per_mole,
-            },
             "dft_total_gradient": {
                 "u_in": unit.hartree / unit.bohr,
                 "u_out": unit.kilojoule_per_mole / unit.angstrom,
             },
             "dft_total_force": {
-                "u_in": unit.hartree / unit.bohr,
-                "u_out": unit.kilojoule_per_mole / unit.angstrom,
-            },
-            "dispersion_corrected_dft_total_gradient": {
                 "u_in": unit.hartree / unit.bohr,
                 "u_out": unit.kilojoule_per_mole / unit.angstrom,
             },
@@ -165,8 +172,8 @@ class SPICEOpenFFCuration(DatasetCuration):
             "name": "single_rec",
             "dataset_name": "single_rec",
             "source": "single_rec",
-            "total_charge": "single_rec",
             "atomic_numbers": "single_atom",
+            "total_charge": "single_rec",
             "n_configs": "single_rec",
             "reference_energy": "single_rec",
             "molecular_formula": "single_rec",
@@ -207,7 +214,7 @@ class SPICEOpenFFCuration(DatasetCuration):
             Path to the directory to store the local sqlite database
         force_download: bool, required
             If True, this will force the software to download the data again, even if present.
-        unit_testing_max_records: Optional[int], optional, default=None
+        max_records: Optional[int], optional, default=None
             If set to an integer, 'n', the routine will only process the first 'n' records, useful for unit tests.
             Note, conformers of the same molecule are saved in separate records, and thus the number of molecules
             that end up in the 'data' list after _process_downloaded is called  may be less than unit_testing_max_records.
@@ -228,8 +235,9 @@ class SPICEOpenFFCuration(DatasetCuration):
         client = PortalClient(self.qcarchive_server)
 
         ds = client.get_dataset(dataset_type=dataset_type, dataset_name=dataset_name)
-
+        logger.debug(f"Fetching {dataset_name} from the QCArchive.")
         ds.fetch_entry_names()
+
         entry_names = ds.entry_names
         if max_records is None:
             max_records = len(entry_names)
@@ -286,7 +294,7 @@ class SPICEOpenFFCuration(DatasetCuration):
         Calculate the reference energy for a given molecule, as defined by the SMILES string.
 
         This routine is taken from
-        https://github.com/openmm/spice-dataset/blob/df7f5a2c8bf1ce0db225715a81f32897cc3a8988/downloader/downloader-openff-default.py
+        https://github.com/openmm/spice-dataset/blob/f20d4887fa86d8875688d2dfe9bb2a2fc51dd98c/downloader/downloader.py
         Reference energies for individual atoms are computed with Psi4 1.5 wB97M-D3BJ/def2-TZVPPD.
 
         Parameters
@@ -296,7 +304,7 @@ class SPICEOpenFFCuration(DatasetCuration):
 
         Returns
         -------
-        unit.Quantity
+        Tuple[unit.Quantity, unit.Quantity]
             Returns the reference energy of for the atoms in the molecule (in hartrees)
             and the total charge of the molecule (in elementary charge).
         """
@@ -307,6 +315,11 @@ class SPICEOpenFFCuration(DatasetCuration):
         # Reference energies, in hartrees, computed with Psi4 1.5 wB97M-D3BJ/def2-TZVPPD.
 
         atom_energy = {
+            "B": {
+                -1: -24.677421752684776,
+                0: -24.671520535482145,
+                1: -24.364648707125294,
+            },
             "Br": {-1: -2574.2451510945853, 0: -2574.1167240829964},
             "C": {-1: -37.91424135791358, 0: -37.87264507233593, 1: -37.45349214963933},
             "Ca": {2: -676.9528465198214},
@@ -326,6 +339,11 @@ class SPICEOpenFFCuration(DatasetCuration):
             "O": {-1: -75.17101657391741, 0: -75.11317840410095, 1: -74.60241514396725},
             "P": {0: -341.3059197024934, 1: -340.9258392474849},
             "S": {-1: -398.2405387031612, 0: -398.1599636677874, 1: -397.7746615977658},
+            "Si": {
+                -1: -289.4540686037408,
+                0: -289.4131352299586,
+                1: -289.1189404777897,
+            },
         }
         default_charge = {}
         for symbol in atom_energy:
@@ -360,12 +378,38 @@ class SPICEOpenFFCuration(DatasetCuration):
             int(total_charge) * unit.elementary_charge,
         )
 
-    def _sort_keys(self, non_error_keys: List[str]) -> Tuple[List[str], Dict[str, str]]:
+    def _check_name_format(self, name: str):
+        """
+        Check if the name of the molecule conforms to the form {name}-{conformer_number}.
+        If not, we will return false
+
+        Parameters
+        ----------
+        name: str, required
+            Name of the molecule to check.
+
+        Returns
+        -------
+        bool
+            True if the name conforms to the form {name}-{conformer_number}, False otherwise.
+
+        """
+        import re
+
+        if len(re.findall(r"-[0-9]+", name)) > 0:
+            # if re.match(r"^[a-zA-Z0-9-_()]+-[0-9]+$", name):
+            return True
+        else:
+            return False
+
+    def _sort_keys(
+        self, non_error_keys: List[str]
+    ) -> Tuple[List[str], Dict[str, str], Dict[str, str]]:
         """
         This will sort record identifiers such that conformers are listed in numerical order.
 
-        This will, if necessarily also sanitize the names of the molecule, to ensure that we have the following
-        form {name}-{conformer_number}. In some cases, the original name has a "-" which would causes issues
+        This will, if necessarily also sanitize the key of the molecule, to ensure that we have the following
+        form {name}-{conformer_number}. In some cases, the original name has a hyphen which would causes issues
         with simply splitting based upon a "-" to either get the name or the conformer number.
 
         The function is called by _process_downloaded.
@@ -373,9 +417,13 @@ class SPICEOpenFFCuration(DatasetCuration):
         Parameters
         ----------
         non_error_keys
+            List of keys that do not have errors that will be sorted.  These need to be of the form of {name}-{conformer_number}.
 
         Returns
         -------
+        Tuple[List[str], Dict[str, str], Dict[str, str]]
+            List of sorted keys, dictionary that maps the sanitized key to the original key, and a dictionary that maps the
+            sorted keys to the molecule name (i.e., drops any conformer numbers from the end).
 
         """
         # we need to sanitize the names of the molecule, as
@@ -385,15 +433,22 @@ class SPICEOpenFFCuration(DatasetCuration):
         # we will create a simple dictionary that maps the sanitized name to the original name.
 
         non_error_keys_sanitized = []
-        original_name = {}
+        original_keys = {}
 
         for key in non_error_keys:
-            s = "_"
-            d = "-"
-            temp = key.split("-")
-            name = d.join([s.join(temp[0:-1]), temp[-1]])
-            non_error_keys_sanitized.append(name)
-            original_name[name] = key
+            # check if we have a name of the form {name}-{conformer_number}
+            if self._check_name_format(key):
+                s = "_"
+                d = "-"
+                temp = key.split("-")
+                # replace all but the last hyphens with an underscore
+                temp_key = d.join([s.join(temp[0:-1]), temp[-1]])
+            # if we do not have a conformer number at the end of the name, we will simply replace ANY hyphens with an underscore
+            else:
+                temp_key = key.replace("-", "_")
+
+            non_error_keys_sanitized.append(temp_key)
+            original_keys[temp_key] = key
 
         # We will sort the keys such that conformers are listed in numerical order.
         # This is not strictly necessary, but will help to better retain
@@ -407,9 +462,9 @@ class SPICEOpenFFCuration(DatasetCuration):
 
         sorted_keys = []
 
-        # names of the molecules are of form  {name}-{conformer_number}
-        # first sort by name
-        s = "_"
+        # often names are of the format {name}-{conformer_number}
+        # we will first sort by name
+        # note, if we don't have a conformer number, this will still work
         pre_sort = sorted(non_error_keys_sanitized, key=lambda x: (x.split("-")[0]))
 
         # then sort each molecule by conformer_number
@@ -424,21 +479,39 @@ class SPICEOpenFFCuration(DatasetCuration):
             if name == current_val:
                 temp_list.append(val)
             else:
-                sorted_keys += sorted(temp_list, key=lambda x: int(x.split("-")[-1]))
+                # we need to check to see if the name actually has a conformer id, otherwise this will fail
+                # we are going to assume the first entry in the list means the entire list has the right format
+                if self._check_name_format(temp_list[0]):
+                    sorted_keys += sorted(
+                        temp_list, key=lambda x: int(x.split("-")[-1])
+                    )
+                else:
+                    sorted_keys += temp_list
+
+                # clear out the list and restart
                 temp_list = []
                 current_val = name
                 temp_list.append(val)
 
         # sort the final batch
-        sorted_keys += sorted(temp_list, key=lambda x: int(x.split("-")[-1]))
+        # we need to check to see if the name actually has a conformer id, otherwise this will fail
+        if self._check_name_format(temp_list[0]):
+            sorted_keys += sorted(temp_list, key=lambda x: int(x.split("-")[-1]))
 
-        return sorted_keys, original_name
+        names = {}
+
+        # store the name in a dictionary
+        for key in sorted_keys:
+            name = key.split("-")[0]
+            names[key] = name
+
+        return sorted_keys, original_keys, names
 
     def _process_downloaded(
         self,
         local_path_dir: str,
         filenames: List[str],
-        dataset_names: List[str],
+        dataset_sources: List[Dict],
         max_conformers_per_record: Optional[int] = None,
         total_conformers: Optional[int] = None,
     ):
@@ -451,8 +524,9 @@ class SPICEOpenFFCuration(DatasetCuration):
             Path to the directory that contains the raw hdf5 datafile
         filenames: List[str], required
             Names of the raw sqlite files to process,
-        dataset_names: List[str], required
-            List of names of the sqlite datasets to process.
+        dataset_sources: List[Dict], required
+            List of Dicts, where each Dict provides the names of the sqlite file to process ( accessed with key 'name')
+             and specification where data is stored on qcarchive (accessible with key 'specifications').
 
         """
         from tqdm import tqdm
@@ -462,28 +536,25 @@ class SPICEOpenFFCuration(DatasetCuration):
         import qcelemental as qcel
         from numpy import newaxis
 
-        for filename, dataset_name in zip(filenames, dataset_names):
+        for filename, dataset_info in zip(filenames, dataset_sources):
             input_file_name = f"{local_path_dir}/{filename}"
+            dataset_name = dataset_info["name"]
+            specifications = dataset_info["specifications"]
+            spec = [s for i, s in enumerate(specifications) if s != "entry"]
 
             non_error_keys = []
 
             # identify the set of molecules that do not have errors
             with SqliteDict(
-                input_file_name, tablename="spec_2", autocommit=False
-            ) as spice_db_spec2:
-                spec2_keys = list(spice_db_spec2.keys())
+                input_file_name, tablename=spec[0], autocommit=False
+            ) as spice_db:
+                spec_keys = list(spice_db.keys())
 
-                with SqliteDict(
-                    input_file_name, tablename="spec_6", autocommit=False
-                ) as spice_db_spec6:
-                    for key in spec2_keys:
-                        if (
-                            spice_db_spec2[key]["status"].value == "complete"
-                            and spice_db_spec6[key]["status"].value == "complete"
-                        ):
-                            non_error_keys.append(key)
+                for key in spec_keys:
+                    if spice_db[key]["status"].value == "complete":
+                        non_error_keys.append(key)
 
-            sorted_keys, original_name = self._sort_keys(non_error_keys)
+            sorted_keys, original_keys, molecule_names = self._sort_keys(non_error_keys)
 
             # first read in molecules from entry
             with SqliteDict(
@@ -491,8 +562,8 @@ class SPICEOpenFFCuration(DatasetCuration):
             ) as spice_db:
                 logger.debug(f"Processing {filename} entries.")
                 for key in tqdm(sorted_keys):
-                    val = spice_db[original_name[key]].dict()
-                    name = key.split("-")[0]
+                    val = spice_db[original_keys[key]].dict()
+                    name = molecule_names[key]
                     # if we haven't processed a molecule with this name yet
                     # we will add to the molecule_names dictionary
                     if name not in self.molecule_names.keys():
@@ -545,13 +616,13 @@ class SPICEOpenFFCuration(DatasetCuration):
                         )
 
             with SqliteDict(
-                input_file_name, tablename="spec_2", autocommit=False
+                input_file_name, tablename=spec[0], autocommit=False
             ) as spice_db:
-                logger.debug(f"Processing {filename} spec_2.")
+                logger.debug(f"Processing {filename} {spec[0]}.")
 
                 for key in tqdm(sorted_keys):
-                    name = key.split("-")[0]
-                    val = spice_db[original_name[key]]
+                    name = molecule_names[key]
+                    val = spice_db[original_keys[key]]
 
                     index = self.molecule_names[name]
 
@@ -572,6 +643,7 @@ class SPICEOpenFFCuration(DatasetCuration):
                         self.data[index][quantity_o] = np.array(
                             val["properties"][quantity]
                         ).reshape(1, -1, 3)
+
                     else:
                         self.data[index][quantity_o] = np.vstack(
                             (
@@ -579,13 +651,30 @@ class SPICEOpenFFCuration(DatasetCuration):
                                 np.array(val["properties"][quantity]).reshape(1, -1, 3),
                             )
                         )
+                    # we will store force along with gradient
+                    quantity = "dft total gradient"
+                    quantity_o = "dft_total_force"
+                    if quantity_o not in self.data[index].keys():
+                        self.data[index][quantity_o] = -np.array(
+                            val["properties"][quantity]
+                        ).reshape(1, -1, 3)
+                    else:
+                        self.data[index][quantity_o] = np.vstack(
+                            (
+                                self.data[index][quantity_o],
+                                -np.array(val["properties"][quantity]).reshape(
+                                    1, -1, 3
+                                ),
+                            )
+                        )
 
                     quantity = "mbis charges"
                     quantity_o = "mbis_charges"
                     if quantity_o not in self.data[index].keys():
-                        self.data[index][quantity_o] = np.array(
-                            val["properties"][quantity]
-                        ).reshape(1, -1)[..., newaxis]
+                        if quantity in val["properties"].keys():
+                            self.data[index][quantity_o] = np.array(
+                                val["properties"][quantity]
+                            ).reshape(1, -1)[..., newaxis]
 
                     else:
                         self.data[index][quantity_o] = np.vstack(
@@ -611,25 +700,14 @@ class SPICEOpenFFCuration(DatasetCuration):
                             )
                         )
 
-            with SqliteDict(
-                input_file_name, tablename="spec_6", autocommit=False
-            ) as spice_db:
-                logger.debug(f"Processing {filename} spec_6.")
-
-                for key in tqdm(sorted_keys):
-                    name = key.split("-")[0]
-                    val = spice_db[original_name[key]]
-                    index = self.molecule_names[name]
-
                     # typecasting issue in there
 
                     quantity = "dispersion correction energy"
                     quantity_o = "dispersion_correction_energy"
-                    # Note need to typecast here because of a bug in the
-                    # qcarchive entry: see issue: https://github.com/MolSSI/QCFractal/issues/766
+
                     if quantity_o not in self.data[index].keys():
                         self.data[index][quantity_o] = np.array(
-                            float(val["properties"][quantity])
+                            val["properties"][quantity]
                         ).reshape(1, 1)
                     else:
                         self.data[index][quantity_o] = np.vstack(
@@ -676,7 +754,6 @@ class SPICEOpenFFCuration(DatasetCuration):
                 datapoint["dft_total_gradient"]
                 + datapoint["dispersion_correction_gradient"]
             )
-            datapoint["dft_total_force"] = -datapoint["dft_total_gradient"]
             # we only want to write the dispersion corrected gradient to the file to avoid confusion
             datapoint.pop("dispersion_correction_gradient")
 
@@ -757,51 +834,118 @@ class SPICEOpenFFCuration(DatasetCuration):
             Number of concurrent threads for retrieving data from QCArchive
         Examples
         --------
-        >>> spice_openff_data = SPICEOpenFFCuration(hdf5_file_name='spice114_openff_dataset.hdf5',
-        >>>                             local_cache_dir='~/datasets/spice114_openff_dataset')
-        >>> spice_openff_data.process()
+        >>> spice2_data = SPICE2Curation(hdf5_file_name='spice2_dataset.hdf5',
+        >>>                             local_cache_dir='~/datasets/spice2_dataset')
+        >>> spice2_data.process()
 
         """
-        # if max_records is not None and total_conformers is not None:
-        #     raise ValueError(
-        #         "max_records and total_conformers cannot be set at the same time."
-        #     )
-
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
-        if self.release_version == "1.1.4":
+        if self.release_version == "2":
             # The SPICE dataset is available in the MOLSSI QCArchive
             # This will need to load from various datasets, as described on the spice-dataset github page
-            # see https://github.com/openmm/spice-dataset/blob/1.1.4/downloader/config.yaml
+            # see https://github.com/openmm/spice-dataset/blob/f20d4887fa86d8875688d2dfe9bb2a2fc51dd98c/downloader/downloader.py
 
-            dataset_names = [
-                "SPICE Solvated Amino Acids Single Points Dataset v1.1",
-                "SPICE Dipeptides Single Points Dataset v1.2",
-                "SPICE DES Monomers Single Points Dataset v1.1",
-                "SPICE DES370K Single Points Dataset v1.0",
-                # "SPICE DES370K Single Points Dataset Supplement v1.0", # this does not have spec 2 or spec 6
-                "SPICE PubChem Set 1 Single Points Dataset v1.2",
-                "SPICE PubChem Set 2 Single Points Dataset v1.2",
-                "SPICE PubChem Set 3 Single Points Dataset v1.2",
-                "SPICE PubChem Set 4 Single Points Dataset v1.2",
-                "SPICE PubChem Set 5 Single Points Dataset v1.2",
-                "SPICE PubChem Set 6 Single Points Dataset v1.2",
-                # "SPICE Ion Pairs Single Points Dataset v1.1", #this does not have spec 6 data for dispersion corrections
+            dataset_sources = [
+                {
+                    "name": "SPICE Solvated Amino Acids Single Points Dataset v1.1",
+                    "specifications": ["entry", "spec_4"],
+                },
+                {
+                    "name": "SPICE Dipeptides Single Points Dataset v1.3",
+                    "specifications": ["entry", "spec_3"],
+                },
+                {
+                    "name": "SPICE DES Monomers Single Points Dataset v1.1",
+                    "specifications": ["entry", "spec_4"],
+                },
+                {
+                    "name": "SPICE DES370K Single Points Dataset v1.0",
+                    "specifications": ["entry", "spec_3"],
+                },
+                {
+                    "name": "SPICE DES370K Single Points Dataset Supplement v1.1",
+                    "specifications": ["entry", "spec_1"],
+                },
+                {
+                    "name": "SPICE PubChem Set 1 Single Points Dataset v1.3",
+                    "specifications": ["entry", "spec_3"],
+                },
+                {
+                    "name": "SPICE PubChem Set 2 Single Points Dataset v1.3",
+                    "specifications": ["entry", "spec_3"],
+                },
+                {
+                    "name": "SPICE PubChem Set 3 Single Points Dataset v1.3",
+                    "specifications": ["entry", "spec_3"],
+                },
+                {
+                    "name": "SPICE PubChem Set 4 Single Points Dataset v1.3",
+                    "specifications": ["entry", "spec_3"],
+                },
+                {
+                    "name": "SPICE PubChem Set 5 Single Points Dataset v1.3",
+                    "specifications": ["entry", "spec_3"],
+                },
+                {
+                    "name": "SPICE PubChem Set 6 Single Points Dataset v1.3",
+                    "specifications": ["entry", "spec_3"],
+                },
+                {
+                    "name": "SPICE PubChem Set 7 Single Points Dataset v1.0",
+                    "specifications": ["entry", "wb97m-d3bj/def2-tzvppd"],
+                },
+                {
+                    "name": "SPICE PubChem Set 8 Single Points Dataset v1.0",
+                    "specifications": ["entry", "wb97m-d3bj/def2-tzvppd"],
+                },
+                {
+                    "name": "SPICE PubChem Set 9 Single Points Dataset v1.0",
+                    "specifications": ["entry", "wb97m-d3bj/def2-tzvppd"],
+                },
+                {
+                    "name": "SPICE PubChem Set 10 Single Points Dataset v1.0",
+                    "specifications": ["entry", "wb97m-d3bj/def2-tzvppd"],
+                },
+                {
+                    "name": "SPICE Ion Pairs Single Points Dataset v1.2",
+                    "specifications": ["entry", "spec_3"],
+                },
+                {
+                    "name": "SPICE PubChem Boron Silicon v1.0",
+                    "specifications": ["entry", "wb97m-d3bj/def2-tzvppd"],
+                },
+                {
+                    "name": "SPICE Solvated PubChem Set 1 v1.0",
+                    "specifications": ["entry", "wb97m-d3bj/def2-tzvppd"],
+                },
+                {
+                    "name": "SPICE Water Clusters v1.0",
+                    "specifications": ["entry", "wb97m-d3bj/def2-tzvppd"],
+                },
+                {
+                    "name": "SPICE Amino Acid Ligand v1.0",
+                    "specifications": ["entry", "wb97m-d3bj/def2-tzvppd"],
+                },
             ]
 
-        specification_names = ["spec_2", "spec_6", "entry"]
-
-        # if we specify the number of records, restrict to only the first subset
-        # so we don't download multiple collections.
-        if max_records is not None or total_conformers is not None:
-            dataset_names = ["SPICE PubChem Set 1 Single Points Dataset v1.2"]
+        # if we specify the number of records, restrict to a subset so we don't try to access multiple datasets
+        if max_records is not None:
+            dataset_sources = [
+                {
+                    "name": "SPICE PubChem Set 1 Single Points Dataset v1.3",
+                    "specifications": ["entry", "spec_3"],
+                },
+            ]
         threads = []
         local_database_names = []
 
         with tqdm() as pbar:
             pbar.total = 0
             with ThreadPoolExecutor(max_workers=n_threads) as e:
-                for i, dataset_name in enumerate(dataset_names):
+                for i, dataset_info in enumerate(dataset_sources):
+                    dataset_name = dataset_info["name"]
+                    specification_names = dataset_info["specifications"]
                     local_database_name = f"{dataset_name}.sqlite"
                     local_database_names.append(local_database_name)
                     for specification_name in specification_names:
@@ -825,7 +969,7 @@ class SPICEOpenFFCuration(DatasetCuration):
         self._process_downloaded(
             self.local_cache_dir,
             local_database_names,
-            dataset_names,
+            dataset_sources,
             max_conformers_per_record=max_conformers_per_record,
             total_conformers=total_conformers,
         )

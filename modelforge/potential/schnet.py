@@ -84,16 +84,16 @@ class SchnetNeuralNetworkData(NeuralNetworkData):
     f_cutoff: Optional[torch.Tensor] = field(default=None)
 
 
-class SchNet(BaseNeuralNetworkPotential):
+class SchNetCore(BaseNeuralNetworkPotential):
     def __init__(
         self,
         max_Z: int = 100,
         number_of_atom_features: int = 64,
         number_of_radial_basis_functions: int = 20,
         number_of_interaction_modules: int = 3,
-        cutoff: unit.Quantity = 5 * unit.angstrom,
         number_of_filters: int = 64,
         shared_interactions: bool = False,
+        cutoff: unit.Quantity = 5.0 * unit.angstrom,
     ) -> None:
         """
         Initialize the SchNet class.
@@ -112,8 +112,7 @@ class SchNet(BaseNeuralNetworkPotential):
         from .utils import Dense, ShiftedSoftplus
 
         log.debug("Initializing SchNet model.")
-        self.only_unique_pairs = False  # NOTE: for pairlist
-        super().__init__(cutoff=cutoff, only_unique_pairs=self.only_unique_pairs)
+        super().__init__(cutoff)
         self.number_of_atom_features = number_of_atom_features
         self.number_of_filters = number_of_filters or self.number_of_atom_features
         self.number_of_radial_basis_functions = number_of_radial_basis_functions
@@ -124,7 +123,7 @@ class SchNet(BaseNeuralNetworkPotential):
         self.embedding_module = Embedding(max_Z, number_of_atom_features)
 
         # initialize the energy readout
-        from .utils import FromAtomToMoleculeReduction
+        from .processing import FromAtomToMoleculeReduction
 
         self.readout_module = FromAtomToMoleculeReduction()
 
@@ -157,22 +156,6 @@ class SchNet(BaseNeuralNetworkPotential):
             ),
         )
 
-    def _config_prior(self):
-        log.info("Configuring SchNet model hyperparameter prior distribution")
-        from ray import tune
-
-        from modelforge.potential.utils import shared_config_prior
-
-        prior = {
-            "number_of_atom_features": tune.randint(2, 256),
-            "number_of_interaction_modules": tune.randint(1, 5),
-            "cutoff": tune.uniform(5, 10),
-            "number_of_radial_basis_functions": tune.randint(8, 32),
-            "number_of_filters": tune.randint(32, 128),
-            "shared_interactions": tune.choice([True, False]),
-        }
-        prior.update(shared_config_prior())
-        return prior
 
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
@@ -388,3 +371,72 @@ class SchNETRepresentation(nn.Module):
         f_cutoff = self.cutoff_module(d_ij)  # shape (n_pairs, 1)
 
         return {"f_ij": f_ij, "f_cutoff": f_cutoff}
+
+
+from typing import NamedTuple, Union
+
+from .models import InputPreparation, NNPInput
+
+
+class SchNet(torch.nn.Module):
+    def __init__(
+        self,
+        max_Z: int = 100,
+        number_of_atom_features: int = 64,
+        number_of_radial_basis_functions: int = 20,
+        number_of_interaction_modules: int = 3,
+        cutoff: unit.Quantity = 5 * unit.angstrom,
+        number_of_filters: int = 64,
+        shared_interactions: bool = False,
+    ) -> None:
+        """
+        Initialize the SchNet class with neighborlist.
+
+        Parameters
+        ----------
+        max_Z : int, default=100
+            Maximum atomic number to be embedded.
+        number_of_atom_features : int, default=64
+            Dimension of the embedding vectors for atomic numbers.
+        number_of_radial_basis_functions:int, default=16
+        number_of_interaction_modules : int, default=2
+        cutoff : openff.units.unit.Quantity, default=5*unit.angstrom
+            The cutoff distance for interactions.
+        """
+        super().__init__()
+        self.schnet_core = SchNetCore(
+            max_Z=max_Z,
+            number_of_atom_features=number_of_atom_features,
+            number_of_radial_basis_functions=number_of_radial_basis_functions,
+            number_of_interaction_modules=number_of_interaction_modules,
+            number_of_filters=number_of_filters,
+            shared_interactions=shared_interactions,
+        )
+        self.only_unique_pairs = False  # NOTE: for pairlist
+        self.input_preparation = InputPreparation(cutoff=cutoff)
+
+    def forward(self, data: NNPInput):
+        # perform input checks
+        self.input_preparation._input_checks(data)
+        # prepare the input for the forward pass
+        pairlist_output = self.input_preparation.prepare_inputs(
+            data, self.only_unique_pairs
+        )
+        return self.schnet_core(data, pairlist_output)
+
+    def _config_prior(self):
+        log.info("Configuring SchNet model hyperparameter prior distribution")
+        from ray import tune
+
+        from modelforge.potential.utils import shared_config_prior
+
+        prior = {
+            "number_of_atom_features": tune.randint(2, 256),
+            "number_of_interaction_modules": tune.randint(1, 5),
+            "cutoff": tune.uniform(5, 10),
+            "number_of_radial_basis_functions": tune.randint(8, 32),
+            "number_of_filters": tune.randint(32, 128),
+            "shared_interactions": tune.choice([True, False]),
+        }
+        prior.update(shared_config_prior())
+        return prior

@@ -1,10 +1,11 @@
-# This is an example script that trains an implemented model on the QM9 dataset.
+# This is an example script that trains the ANI2x model on the ANI2x dataset.
 from lightning import Trainer
 import torch
 
-# import the models implemented in modelforge, for now SchNet, PaiNN, ANI2x or PhysNet
+# import the dataset and model factory
 from modelforge.potential import NeuralNetworkPotentialFactory
-from modelforge.dataset.qm9 import QM9Dataset
+from modelforge.dataset.ani2x import ANI2xDataset
+
 from modelforge.dataset.dataset import TorchDataModule
 from modelforge.dataset.utils import RandomRecordSplittingStrategy
 from pytorch_lightning.loggers import TensorBoardLogger
@@ -13,7 +14,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 logger = TensorBoardLogger("tb_logs", name="training")
 
 # Set up dataset
-data = QM9Dataset(force_download=True, for_unit_testing=True)
+data = ANI2xDataset(force_download=False, for_unit_testing=False)
 
 dataset = TorchDataModule(
     data, batch_size=512, splitting_strategy=RandomRecordSplittingStrategy()
@@ -23,9 +24,6 @@ dataset.prepare_data(remove_self_energies=True, normalize=False)
 
 # Set up model
 model = NeuralNetworkPotentialFactory.create_nnp("training", "ANI2x")
-model = model.to(torch.float32)
-
-print(model)
 
 # set up traininer
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping

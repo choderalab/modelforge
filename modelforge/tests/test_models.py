@@ -132,6 +132,7 @@ def test_energy_between_simulation_environments(inference_model, batch):
 def test_forward_pass(simulation_environment, inference_model, batch):
     # this test sends a single batch from different datasets through the model
 
+    batch = batch_QM9_ANI2x
     nnp_input = batch.nnp_input
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
@@ -151,6 +152,7 @@ def test_calculate_energies_and_forces(simulation_environment, inference_model, 
     """
     Test the calculation of energies and forces for a molecule.
     """
+    batch = batch_QM9_ANI2x
     import torch
 
     nnp_input = batch.nnp_input
@@ -388,10 +390,11 @@ def test_pairlist_on_dataset(initialized_dataset):
         assert shapePairlist[0] == 2
 
 
-def test_casting(batch, inference_model):
+def test_casting(batch_QM9_ANI2x, inference_model):
     # test dtype casting
     import torch
 
+    batch = batch_QM9_ANI2x
     batch_ = batch.to(dtype=torch.float64)
     assert batch_.nnp_input.positions.dtype == torch.float64
     batch_ = batch_.to(dtype=torch.float32)
@@ -425,6 +428,7 @@ def test_equivariant_energies_and_forces(
     Test the calculation of energies and forces for a molecule.
     NOTE: test will be adapted once we have a trained model.
     """
+    batch = batch_QM9_ANI2x
     import torch
     from dataclasses import replace
 

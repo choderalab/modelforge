@@ -21,6 +21,7 @@ def triu_index(num_species: int) -> torch.Tensor:
     ret = torch.zeros(num_species, num_species, dtype=torch.long)
     ret[species1, species2] = pair_index
     ret[species2, species1] = pair_index
+
     return ret
 
 
@@ -174,6 +175,7 @@ class ANIRepresentation(nn.Module):
 
         # ----------------- Radial symmetry vector ---------------- #
         # compute radial aev
+
         radial_feature_vector = self.radial_symmetry_functions(data.d_ij)
         # cutoff
         rcut_ij = self.cutoff_module(data.d_ij)
@@ -232,6 +234,7 @@ class ANIRepresentation(nn.Module):
         angular_aev = angular_terms_.new_zeros(
             (number_of_atoms * num_species_pairs, angular_sublength)
         )
+
         index = (
             central_atom_index * num_species_pairs
             + self.triu_index[angular_species12[0], angular_species12[1]]
@@ -250,6 +253,7 @@ class ANIRepresentation(nn.Module):
         number_of_atoms = data.number_of_atoms
         radial_sublength = self.radial_symmetry_functions.radial_sublength
         radial_length = radial_sublength * self.nr_of_supported_elements
+
         radial_aev = radial_feature_vector.new_zeros(
             (
                 number_of_atoms * self.nr_of_supported_elements,
@@ -426,7 +430,7 @@ class ANIInteraction(nn.Module):
         return output.view_as(species)
 
 
-class ANI2x(BaseNeuralNetworkPotential):
+class ANI2xCore(BaseNeuralNetworkPotential):
 
     def __init__(
         self,
@@ -494,23 +498,6 @@ class ANI2x(BaseNeuralNetworkPotential):
 
         self.register_buffer("lookup_tensor", lookup_tensor)
 
-    def _config_prior(self):
-        log.info("Configuring ANI2x model hyperparameter prior distribution")
-        from ray import tune
-
-        from modelforge.train.utils import shared_config_prior
-
-        prior = {
-            "radial_max_distance": tune.uniform(5, 10),
-            "radial_min_distance": tune.uniform(0.6, 1.4),
-            "number_of_radial_basis_functions": tune.randint(12, 20),
-            "angular_max_distance": tune.uniform(2.5, 4.5),
-            "angular_min_distance": tune.uniform(0.6, 1.4),
-            "angle_sections": tune.randint(3, 8),
-        }
-        prior.update(shared_config_prior())
-        return prior
-
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
     ) -> AniNeuralNetworkData:
@@ -558,3 +545,57 @@ class ANI2x(BaseNeuralNetworkPotential):
             "E_i": E_i,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
+
+
+from .models import InputPreparation, NNPInput
+
+
+class ANI2x(torch.nn.Module):
+    def __init__(
+        self,
+        radial_max_distance: unit.Quantity = 5.1 * unit.angstrom,
+        radial_min_distanc: unit.Quantity = 0.8 * unit.angstrom,
+        number_of_radial_basis_functions: int = 16,
+        angular_max_distance: unit.Quantity = 3.5 * unit.angstrom,
+        angular_min_distance: unit.Quantity = 0.8 * unit.angstrom,
+        angular_dist_divisions: int = 8,
+        angle_sections: int = 4,
+    ) -> None:
+        super().__init__()
+        self.ani2x_core = ANI2xCore(
+            radial_max_distance,
+            radial_min_distanc,
+            number_of_radial_basis_functions,
+            angular_max_distance,
+            angular_min_distance,
+            angular_dist_divisions,
+            angle_sections,
+        )
+        self.only_unique_pairs = True  # NOTE: for pairlist
+        self.input_preparation = InputPreparation(cutoff=radial_max_distance)
+
+    def forward(self, data: NNPInput):
+        # perform input checks
+        self.input_preparation._input_checks(data)
+        # prepare the input for the forward pass
+        pairlist_output = self.input_preparation.prepare_inputs(
+            data, self.only_unique_pairs
+        )
+        return self.ani2x_core(data, pairlist_output)
+
+    def _config_prior(self):
+        log.info("Configuring ANI2x model hyperparameter prior distribution")
+        from ray import tune
+
+        from modelforge.train.utils import shared_config_prior
+
+        prior = {
+            "radial_max_distance": tune.uniform(5, 10),
+            "radial_min_distance": tune.uniform(0.6, 1.4),
+            "number_of_radial_basis_functions": tune.randint(12, 20),
+            "angular_max_distance": tune.uniform(2.5, 4.5),
+            "angular_min_distance": tune.uniform(0.6, 1.4),
+            "angle_sections": tune.randint(3, 8),
+        }
+        prior.update(shared_config_prior())
+        return prior

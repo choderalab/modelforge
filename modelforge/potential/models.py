@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Dict, NamedTuple, Tuple, Type, Mapping
+from typing import TYPE_CHECKING, Any, Dict, NamedTuple, Tuple, Type, Mapping, Union
 
 import torch
 from loguru import logger as log
@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from modelforge.potential.painn import PaiNN, PaiNNNeuralNetworkData
     from modelforge.potential.physnet import PhysNet, PhysNetNeuralNetworkData
     from modelforge.potential.schnet import SchNet, SchnetNeuralNetworkData
+    from modelforge.potential.sake import SAKE, SAKENeuralNetworkInput
 
 
 # Define NamedTuple for the outputs of Pairlist and Neighborlist forward method
@@ -478,156 +479,70 @@ class NeuralNetworkPotentialFactory:
             raise ValueError(f"Unsupported 'use' value: {use}")
 
 
-from modelforge.potential.utils import NeuralNetworkData
+class InputPreparation(torch.nn.Module):
+    def __init__(self, cutoff: unit.Quantity):
+        super().__init__()
+        from .models import Neighborlist
 
+        self.calculate_distances_and_pairlist = Neighborlist(cutoff)
 
-class Postprocessing:
-
-    def __init__(self) -> None:
-        from modelforge.dataset.dataset import DatasetStatistics
-
-        self._dataset_statistics = DatasetStatistics(0.0, 1.0, AtomicSelfEnergies())
-
-    def _calculate_molecular_self_energy(
-        self, data: NeuralNetworkData, number_of_molecules: int
-    ) -> torch.Tensor:
+    def prepare_inputs(
+        self, data: Union[NNPInput, NamedTuple], only_unique_pairs: bool = True
+    ):
         """
-        Calculates the molecular self energy.
+        Prepares the input tensors for passing to the model.
+
+        This method handles general input manipulation, such as calculating distances
+        and generating the pair list. It also calls the model-specific input preparation.
 
         Parameters
         ----------
         data : NNPInput
-            The input data for the model, including atomic numbers and subsystem indices.
-        number_of_molecules : int
-            The number of molecules in the batch.
+            The input data provided by the dataset, containing atomic numbers, positions,
+            and other necessary information.
+        only_unique_pairs : bool, optional
+            Whether to only use unique pairs in the pair list calculation, by default True.
 
         Returns
         -------
-        torch.Tensor
-            The tensor containing the molecular self energy for each molecule.
+        The processed input data, ready for the model's forward pass.
         """
+        # ---------------------------
+        # general input manipulation
+        positions = data.positions
+        atomic_subsystem_indices = data.atomic_subsystem_indices
 
-        atomic_numbers = data.atomic_numbers
-        atomic_subsystem_indices = data.atomic_subsystem_indices.to(
-            dtype=torch.long, device=atomic_numbers.device
+        pairlist_output = self.calculate_distances_and_pairlist(
+            positions, atomic_subsystem_indices, only_unique_pairs
         )
 
-        # atomic_number_to_energy
-        atomic_self_energies = self.dataset_statistics.atomic_self_energies
-        ase_tensor_for_indexing = atomic_self_energies.ase_tensor_for_indexing.to(
-            device=atomic_numbers.device
-        )
+        return pairlist_output
 
-        # first, we need to use the atomic numbers to generate a tensor that
-        # contains the atomic self energy for each atomic number
-        ase_tensor = ase_tensor_for_indexing[atomic_numbers]
-
-        # then, we use the atomic_subsystem_indices to scatter add the atomic self
-        # energies in the ase_tensor to generate the molecular self energies
-        ase_tensor_zeros = torch.zeros((number_of_molecules,)).to(
-            device=atomic_numbers.device
-        )
-        ase_tensor = ase_tensor_zeros.scatter_add(
-            0, atomic_subsystem_indices, ase_tensor
-        )
-
-        return ase_tensor
-
-    def _rescale_energy(self, energies: torch.Tensor) -> torch.Tensor:
+    def _input_checks(self, data: Union[NNPInput, NamedTuple]):
         """
-        Rescales energies using the dataset statistics.
+        Performs input validation checks.
+
+        Ensures the input data conforms to expected shapes and types.
 
         Parameters
         ----------
-        energies : torch.Tensor
-            The tensor of energies to be rescaled.
+        data : NNPInput
+            The input data to be validated.
 
-        Returns
-        -------
-        torch.Tensor
-            The rescaled energies.
+        Raises
+        ------
+        ValueError
+            If the input data does not meet the expected criteria.
         """
+        # check that the input is instance of NNPInput
+        assert isinstance(data, NNPInput) or isinstance(data, Tuple)
 
-        return (
-            energies * self.dataset_statistics.scaling_stddev
-            + self.dataset_statistics.scaling_mean
-        )
-
-    def _energy_postprocessing(
-        self, properties_per_molecule: torch.Tensor, inputs: NeuralNetworkData
-    ) -> Dict[str, torch.Tensor]:
-        """
-        Postprocesses the energies by rescaling and adding molecular self energy.
-
-        Parameters
-        ----------
-        properties_per_molecule : The properties computed per molecule.
-        inputs : The original input data to the model.
-
-        Returns
-        -------
-        Dict[str, torch.Tensor]
-            The dictionary containing the postprocessed energy tensors.
-        """
-
-        # first, resale the energies
-        processed_energy = {}
-        processed_energy["raw_E"] = properties_per_molecule.clone().detach()
-        properties_per_molecule = self._rescale_energy(properties_per_molecule)
-        processed_energy["rescaled_E"] = properties_per_molecule.clone().detach()
-        # then, calculate the molecular self energy
-        molecular_ase = self._calculate_molecular_self_energy(
-            inputs, properties_per_molecule.numel()
-        )
-        processed_energy["molecular_ase"] = molecular_ase.clone().detach()
-        # add the molecular self energy to the rescaled energies
-        processed_energy["E"] = properties_per_molecule + molecular_ase
-        return processed_energy
-
-    @property
-    def dataset_statistics(self):
-        """
-        Property for accessing the model's dataset statistics.
-
-        Returns
-        -------
-        DatasetStatistics
-            The dataset statistics associated with the model.
-        """
-
-        return self._dataset_statistics
-
-    @dataset_statistics.setter
-    def dataset_statistics(self, value: "DatasetStatistics"):
-        """
-        Sets the dataset statistics for the model.
-
-        Parameters
-        ----------
-        value : DatasetStatistics
-            The new dataset statistics to be set for the model.
-        """
-
-        if not isinstance(value, DatasetStatistics):
-            raise ValueError("Value must be an instance of DatasetStatistics.")
-
-        self._dataset_statistics = value
-
-    def update_dataset_statistics(self, **kwargs):
-        """
-        Updates specific fields of the model's dataset statistics.
-
-        Parameters
-        ----------
-        **kwargs
-            Fields and their new values to update in the dataset statistics.
-        """
-
-        for key, value in kwargs.items():
-            if hasattr(self.dataset_statistics, key):
-                setattr(self.dataset_statistics, key, value)
-            else:
-                log.warning(f"{key} is not a valid field of DatasetStatistics.")
+        nr_of_atoms = data.atomic_numbers.shape[0]
+        assert data.atomic_numbers.shape == torch.Size([nr_of_atoms])
+        assert data.atomic_subsystem_indices.shape == torch.Size([nr_of_atoms])
+        nr_of_molecules = torch.unique(data.atomic_subsystem_indices).numel()
+        assert data.total_charge.shape == torch.Size([nr_of_molecules])
+        assert data.positions.shape == torch.Size([nr_of_atoms, 3])
 
 
 class BaseNeuralNetworkPotential(Module, ABC):
@@ -652,25 +567,16 @@ class BaseNeuralNetworkPotential(Module, ABC):
         """
         Initializes the neural network potential class with specified parameters.
 
-        Parameters
-        ----------
-        cutoff : openff.units.unit.Quantity
-            Cutoff distance for the neighbor list calculations.
         """
 
-        from .models import Neighborlist
-
-        self.mode = mode
         super().__init__()
-        self.calculate_distances_and_pairlist = Neighborlist(
-            cutoff, only_unique_pairs=only_unique_pairs
-        )
+        self._dtype: Optional[bool] = None  # set at runtime
         self._log_message_dtype = False
         self._log_message_units = False
         # initialize the per molecule readout module
-        from .utils import FromAtomToMoleculeReduction
+        from .processing import FromAtomToMoleculeReduction, EnergyScaling
 
-        self.postprocessing = Postprocessing()
+        self.postprocessing = EnergyScaling()
 
         self.readout_module = FromAtomToMoleculeReduction()
 
@@ -682,6 +588,7 @@ class BaseNeuralNetworkPotential(Module, ABC):
         "PaiNNNeuralNetworkData",
         "SchnetNeuralNetworkData",
         "AniNeuralNetworkData",
+        "SAKENeuralNetworkInput",
     ]:
         """
         Prepares model-specific inputs before the forward pass.
@@ -712,6 +619,7 @@ class BaseNeuralNetworkPotential(Module, ABC):
             "PaiNNNeuralNetworkData",
             "SchnetNeuralNetworkData",
             "AniNeuralNetworkData",
+            "SAKENeuralNetworkInput",
         ],
     ):
         """
@@ -781,65 +689,8 @@ class BaseNeuralNetworkPotential(Module, ABC):
         """
         return self.readout_module(atom_specific_values, index)
 
-    def prepare_inputs(self, data: NNPInput):
-        """
-        Prepares the input tensors for passing to the model.
 
-        This method handles general input manipulation, such as calculating distances
-        and generating the pair list. It also calls the model-specific input preparation.
-
-        Parameters
-        ----------
-        data : NNPInput
-            The input data provided by the dataset, containing atomic numbers, positions,
-            and other necessary information.
-
-        Returns
-        -------
-        The processed input data, ready for the model's forward pass.
-        """
-        # ---------------------------
-        # general input manipulation
-        positions = data.positions
-        atomic_subsystem_indices = data.atomic_subsystem_indices
-
-        pairlist_output = self.calculate_distances_and_pairlist(
-            positions, atomic_subsystem_indices
-        )
-
-        # ---------------------------
-        # perform model specific modifications
-        nnp_input = self._model_specific_input_preparation(data, pairlist_output)
-
-        return nnp_input
-
-    def _input_checks(self, data: Union[NamedTuple, NNPInput]):
-        """
-        Performs input validation checks.
-
-        Ensures the input data conforms to expected shapes and types.
-
-        Parameters
-        ----------
-        data : NNPInput
-            The input data to be validated.
-
-        Raises
-        ------
-        ValueError
-            If the input data does not meet the expected criteria.
-        """
-        # check that the input is instance of NNPInput
-        assert isinstance(data, NNPInput) or isinstance(data, Tuple)
-
-        nr_of_atoms = data.atomic_numbers.shape[0]
-        assert data.atomic_numbers.shape == torch.Size([nr_of_atoms])
-        assert data.atomic_subsystem_indices.shape == torch.Size([nr_of_atoms])
-        nr_of_molecules = torch.unique(data.atomic_subsystem_indices).numel()
-        assert data.total_charge.shape == torch.Size([nr_of_molecules])
-        assert data.positions.shape == torch.Size([nr_of_atoms, 3])
-
-    def forward(self, data: NNPInput) -> EnergyOutput:
+    def forward(self, data: NNPInput, pairlist_output) -> EnergyOutput:
         """
         Defines the forward pass of the neural network potential.
 
@@ -853,13 +704,11 @@ class BaseNeuralNetworkPotential(Module, ABC):
         EnergyOutput
             The calculated energies and other properties from the forward pass.
         """
-        # perform input checks
-        if self.mode == "fast":
-            self._input_checks(data)
-        # prepare the input for the forward pass
-        inputs = self.prepare_inputs(data)
+        # ---------------------------
+        # perform model specific modifications
+        nnp_input = self._model_specific_input_preparation(data, pairlist_output)
         # perform the forward pass implemented in the subclass
-        outputs = self._forward(inputs)
+        outputs = self._forward(nnp_input)
         # sum over atomic properties to generate per molecule properties
         E = self._readout(
             atom_specific_values=outputs["E_i"],
@@ -867,7 +716,7 @@ class BaseNeuralNetworkPotential(Module, ABC):
         )
         # postprocess energies: add atomic self energies,
         # and other constant factors used to optionally normalize the data range of the training dataset
-        processed_energy = self.postprocessing._energy_postprocessing(E, inputs)
+        processed_energy = self.postprocessing._energy_postprocessing(E, nnp_input)
         # return energies
         return EnergyOutput(
             E=processed_energy["E"],
@@ -875,6 +724,486 @@ class BaseNeuralNetworkPotential(Module, ABC):
             rescaled_E=processed_energy["rescaled_E"],
             molecular_ase=processed_energy["molecular_ase"],
         )
+
+
+class Loss:
+    """
+    Base class for loss computations, designed to be overridden by subclasses for specific types of losses.
+    Initializes with a model to compute predictions for energies and forces.
+    """
+
+    def __init__(
+        self, model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet", "SAKE"]
+    ) -> None:
+        self.model = model
+
+    def _get_forces(self, batch: BatchData) -> Dict[str, torch.Tensor]:
+        """
+        Extracts and computes the forces from a given batch during training or evaluation, if forces are available.
+        Handles cases gracefully where F might not be present in the batch.
+
+        Parameters
+        ----------
+        batch : BatchData
+            A single batch of data, including input features and target energies.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The true forces from the dataset and the predicted forces by the model.
+        """
+        nnp_input = batch.nnp_input
+        F_true = batch.metadata.F.to(torch.float32)
+        E_predict = self.model.forward(nnp_input).E
+        F_predict = -torch.autograd.grad(
+            E_predict.sum(), nnp_input.positions, create_graph=False, retain_graph=False
+        )[0]
+
+        return {"F_true": F_true, "F_predict": F_predict}
+
+    def _get_energies(self, batch: BatchData) -> Dict[str, torch.Tensor]:
+        """
+        Extracts and computes the energies from a given batch during training or evaluation.
+
+        Parameters
+        ----------
+        batch : BatchData
+            A single batch of data, including input features and target energies.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The true energies from the dataset and the predicted energies by the model.
+        """
+        nnp_input = batch.nnp_input
+        E_true = batch.metadata.E.to(torch.float32).squeeze(1)
+        E_predict = self.model.forward(nnp_input).E
+        return {"E_true": E_true, "E_predict": E_predict}
+
+
+class EnergyLoss(Loss):
+    """
+    Computes loss based on energy predictions.
+    """
+
+    def __init__(self, model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet", "SAKE"]):
+        super().__init__(model)
+        log.info("Initializing EnergyLoss")
+
+    def compute_mse_loss(self, batch: BatchData) -> torch.Tensor:
+        """
+        Computes the MSE loss from energies.
+        """
+        energies = self._get_energies(batch)
+        # Compute MSE of energies
+        L_E = F.mse_loss(energies["E_predict"], energies["E_true"])
+
+        return L_E
+
+    def compute_rmse_loss(self, batch: BatchData) -> torch.Tensor:
+        """
+        Computes the RMSE loss from energies.
+        """
+        energies = self._get_energies(batch)
+        # Compute RMSE of energies
+        L_E = torch.sqrt(F.mse_loss(energies["E_predict"], energies["E_true"]))
+
+        return L_E
+
+
+class EnergyAndForceLoss(EnergyLoss):
+    """
+    Computes combined loss from energies and forces, with adjustable weighting.
+    """
+
+    def __init__(
+        self,
+        model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet", "SAKE"],
+        force_weight: float = 1.0,
+        energy_weight: float = 1.0,
+    ) -> None:
+        super().__init__(model)
+        log.info("Initializing EnergyAndForceLoss")
+        self.force_weight = force_weight
+        self.energy_weight = energy_weight
+
+    def compute_mse_loss(self, batch: BatchData) -> torch.Tensor:
+        """
+        Computes the combined MSE loss from energies and forces, considering the available data.
+        """
+        energies = self._get_energies(batch)
+        forces = self._get_forces(batch)
+        # Compute MSE of energies
+        L_E = F.mse_loss(energies["E_predict"], energies["E_true"])
+        # Assuming forces_true and forces_predict are already negative gradients of the potential energy w.r.t positions
+        L_F = F.mse_loss(forces["F_predict"], forces["F_true"])
+
+        return self.energy_weight * L_E + self.force_weight * L_F
+
+
+class TrainingAdapter(pl.LightningModule):
+    """
+    Adapter class for training neural network potentials using PyTorch Lightning.
+
+    This class wraps around the base neural network potential model, facilitating training
+    and validation steps, optimization, and logging.
+
+    Attributes
+    ----------
+    base_model : Union[ANI2x, SchNet, PaiNN, PhysNet, SAKE]
+        The underlying neural network potential model.
+    loss_function : torch.nn.modules.loss._Loss
+        Loss function used during training.
+    optimizer : torch.optim.Optimizer
+        Optimizer used for training.
+    learning_rate : float
+        Learning rate for the optimizer.
+    """
+
+    def __init__(
+        self,
+        model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet", "SAKE"],
+        include_force: bool = False,
+        optimizer: Any = torch.optim.Adam,
+        lr: float = 1e-3,
+    ):
+        """
+        Initializes the TrainingAdapter with the specified model and training configuration.
+
+        Parameters
+        ----------
+        model : Union[ANI2x, SchNet, PaiNN, PhysNet, SAKE]
+            The neural network potential model to be trained.
+        optimizer : Type[torch.optim.Optimizer], optional
+            The optimizer class to use for training, by default torch.optim.Adam.
+        lr : float, optional
+            The learning rate for the optimizer, by default 1e-3.
+        """
+        from typing import List
+
+        super().__init__()
+
+        self.model = model
+        self.optimizer = optimizer
+        self.learning_rate = lr
+        self.loss = (
+            EnergyAndForceLoss(model=self.model)
+            if include_force
+            else EnergyLoss(model=self.model)
+        )
+        self.eval_loss: List[torch.Tensor] = []
+
+    def config_prior(self):
+
+        if hasattr(self.model, "_config_prior"):
+            return self.model._config_prior()
+
+        log.warning("Model does not implement _config_prior().")
+        raise NotImplementedError()
+
+    def _log_batch_size(self, y: torch.Tensor) -> int:
+        """
+        Logs the size of the batch and returns it. Useful for logging and debugging.
+
+        Parameters
+        ----------
+        y : torch.Tensor
+            The tensor containing the target values of the batch.
+
+        Returns
+        -------
+        int
+            The size of the batch.
+        """
+        batch_size = int(y.numel())
+        return batch_size
+
+    def training_step(self, batch: BatchData, batch_idx: int) -> torch.Tensor:
+        """
+        Performs a training step using the given batch.
+
+        Parameters
+        ----------
+        batch : BatchData
+            The batch of data provided for the training.
+        batch_idx : int
+            The index of the current batch.
+
+        Returns
+        -------
+        torch.Tensor
+            The loss tensor computed for the current training step.
+        """
+
+        loss = self.loss.compute_mse_loss(batch)
+        self.batch_size = self._log_batch_size(loss)
+
+        self.log(
+            "ptl/train_loss",
+            loss,
+            on_step=True,
+            batch_size=self.batch_size,
+        )
+
+        return loss
+
+    def test_step(self, batch: BatchData, batch_idx: int) -> None:
+        """
+        Executes a test step using the given batch of data.
+
+        This method is called automatically during the test loop of the training process. It computes
+        the loss on a batch of test data and logs the results for analysis.
+
+        Parameters
+        ----------
+        batch : BatchData
+            The batch of data to test the model on.
+        batch_idx : int
+            The index of the batch within the test dataset.
+
+        Returns
+        -------
+        None
+            The results are logged and not directly returned.
+        """
+        loss = self.loss.compute_rmse_loss(batch)
+        self.batch_size = self._log_batch_size(loss)
+
+        self.log(
+            "ptl/test_loss",
+            loss,
+            batch_size=self.batch_size,
+            on_epoch=True,
+            prog_bar=True,
+        )
+
+    def validation_step(self, batch: BatchData, batch_idx: int) -> torch.Tensor:
+        """
+        Executes a single validation step.
+
+        Parameters
+        ----------
+        batch : BatchData
+            The batch of data provided for validation.
+        batch_idx : int
+            The index of the current batch.
+
+        Returns
+        -------
+        torch.Tensor
+            The loss tensor computed for the current validation step.
+        """
+
+        loss = self.loss.compute_rmse_loss(batch)
+        self.batch_size = self._log_batch_size(loss)
+
+        self.log(
+            "val_loss",
+            loss,
+            batch_size=self.batch_size,
+            on_epoch=True,
+            prog_bar=True,
+            sync_dist=True,
+        )
+        self.eval_loss.append(loss.detach())
+        return loss
+
+    def on_validation_epoch_end(self):
+        avg_loss = torch.stack(self.eval_loss).mean()
+        self.log("ptl/val_loss", avg_loss, sync_dist=True)
+        self.eval_loss.clear()
+
+    def configure_optimizers(self) -> Dict[str, Any]:
+        """
+        Configures the model's optimizers (and optionally schedulers).
+
+        Returns
+        -------
+        Dict[str, Any]
+            A dictionary containing the optimizer and optionally the learning rate scheduler
+            to be used within the PyTorch Lightning training process.
+        """
+
+        optimizer = self.optimizer(self.model.parameters(), lr=self.learning_rate)
+        scheduler = {
+            "scheduler": ReduceLROnPlateau(
+                optimizer, mode="min", factor=0.1, patience=20, verbose=True
+            ),
+            "monitor": "val_loss",  # Name of the metric to monitor
+            "interval": "epoch",
+            "frequency": 1,
+        }
+        return {"optimizer": optimizer, "lr_scheduler": scheduler}
+
+    def get_trainer(self):
+        """
+        Sets up and returns a PyTorch Lightning Trainer instance with configured logger and callbacks.
+
+        The trainer is configured with TensorBoard logging and an EarlyStopping callback to halt
+        the training process when the validation loss stops improving.
+
+        Returns
+        -------
+        Trainer
+            The configured PyTorch Lightning Trainer instance.
+        """
+
+        from lightning import Trainer
+        from lightning.pytorch.callbacks.early_stopping import EarlyStopping
+        from pytorch_lightning.loggers import TensorBoardLogger
+
+        # set up tensor board logger
+        logger = TensorBoardLogger("tb_logs", name="training")
+        early_stopping = EarlyStopping(
+            monitor="val_loss", min_delta=0.05, patience=20, verbose=True
+        )
+
+        return Trainer(
+            max_epochs=10_000,
+            num_nodes=1,
+            devices="auto",
+            accelerator="auto",
+            logger=logger,  # Add the logger here
+            callbacks=[early_stopping],
+        )
+
+    def train_func(self):
+        """
+        Defines the training function to be used with Ray for distributed training.
+
+        This function configures a PyTorch Lightning trainer with the Ray Distributed Data Parallel
+        (DDP) strategy for efficient distributed training. The training process utilizes a custom
+        training loop and environment setup provided by Ray.
+
+        Note: This function should be passed to a Ray Trainer or directly used with Ray tasks.
+        """
+
+        from ray.train.lightning import (
+            RayDDPStrategy,
+            RayLightningEnvironment,
+            RayTrainReportCallback,
+            prepare_trainer,
+        )
+
+        trainer = pl.Trainer(
+            devices="auto",
+            accelerator="auto",
+            strategy=RayDDPStrategy(find_unused_parameters=True),
+            callbacks=[RayTrainReportCallback()],
+            plugins=[RayLightningEnvironment()],
+            enable_progress_bar=False,
+        )
+        trainer = prepare_trainer(trainer)
+        trainer.fit(self, self.train_dataloader, self.val_dataloader)
+
+    def get_ray_trainer(self, number_of_workers: int = 2, use_gpu: bool = False):
+        """
+        Initializes and returns a Ray Trainer for distributed training.
+
+        Configures a Ray Trainer with a specified number of workers and GPU usage settings. This trainer
+        is prepared for distributed training using Ray, with support for checkpointing.
+
+        Parameters
+        ----------
+        number_of_workers : int, optional
+            The number of distributed workers to use, by default 2.
+        use_gpu : bool, optional
+            Specifies whether to use GPUs for training, by default False.
+
+        Returns
+        -------
+        Ray Trainer
+            The configured Ray Trainer for distributed training.
+        """
+
+        from ray.train import CheckpointConfig, RunConfig, ScalingConfig
+
+        scaling_config = ScalingConfig(
+            num_workers=number_of_workers,
+            use_gpu=use_gpu,
+            resources_per_worker={"CPU": 1, "GPU": 1} if use_gpu else {"CPU": 1},
+        )
+
+        run_config = RunConfig(
+            checkpoint_config=CheckpointConfig(
+                num_to_keep=2,
+                checkpoint_score_attribute="ptl/val_loss",
+                checkpoint_score_order="min",
+            ),
+        )
+        from ray.train.torch import TorchTrainer
+
+        # Define a TorchTrainer without hyper-parameters for Tuner
+        ray_trainer = TorchTrainer(
+            self.train_func,
+            scaling_config=scaling_config,
+            run_config=run_config,
+        )
+
+        return ray_trainer
+
+    def tune_with_ray(
+        self,
+        train_dataloader,
+        val_dataloader,
+        number_of_epochs: int = 5,
+        number_of_samples: int = 10,
+        number_of_ray_workers: int = 2,
+        train_on_gpu: bool = False,
+    ):
+        """
+        Performs hyperparameter tuning using Ray Tune.
+
+        This method sets up and starts a Ray Tune hyperparameter tuning session, utilizing the ASHA scheduler
+        for efficient trial scheduling and early stopping.
+
+        Parameters
+        ----------
+        train_dataloader : DataLoader
+            The DataLoader for training data.
+        val_dataloader : DataLoader
+            The DataLoader for validation data.
+        number_of_epochs : int, optional
+            The maximum number of epochs for training, by default 5.
+        number_of_samples : int, optional
+            The number of samples (trial runs) to perform, by default 10.
+        number_of_ray_workers : int, optional
+            The number of Ray workers to use for distributed training, by default 2.
+        use_gpu : bool, optional
+            Whether to use GPUs for training, by default False.
+
+        Returns
+        -------
+        Tune experiment analysis object
+            The result of the hyperparameter tuning session, containing performance metrics and the best hyperparameters found.
+        """
+
+        from ray import tune
+        from ray.tune.schedulers import ASHAScheduler
+
+        self.train_dataloader = train_dataloader
+        self.val_dataloader = val_dataloader
+
+        ray_trainer = self.get_ray_trainer(
+            number_of_workers=number_of_ray_workers, use_gpu=train_on_gpu
+        )
+        scheduler = ASHAScheduler(
+            max_t=number_of_epochs, grace_period=1, reduction_factor=2
+        )
+
+        tune_config = tune.TuneConfig(
+            metric="ptl/val_loss",
+            mode="min",
+            scheduler=scheduler,
+            num_samples=number_of_samples,
+        )
+
+        tuner = tune.Tuner(
+            ray_trainer,
+            param_space={"train_loop_config": self.config_prior()},
+            tune_config=tune_config,
+        )
+        return tuner.fit()
 
 
 class SingleTopologyAlchemicalBaseNNPModel(BaseNeuralNetworkPotential):

@@ -5,6 +5,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 from loguru import logger as log
+from openff.units import unit
+from pint import Quantity
+from typing import Union
 
 
 @dataclass
@@ -17,6 +20,9 @@ class NeuralNetworkData:
     positions: torch.Tensor
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
+
+
+from typing import NamedTuple
 
 
 @dataclass
@@ -41,14 +47,14 @@ class NNPInput:
     """
 
     atomic_numbers: torch.Tensor
-    positions: Any  # Temporarily use Any to allow for openff.units.unit.Quantity
+    positions: Union[torch.Tensor, Quantity]
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
 
     def to(
-        self,
-        device: Optional[torch.device] = None,
-        dtype: Optional[torch.dtype] = None,
+            self,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
     ):
         """Move all tensors in this instance to the specified device/dtype."""
 
@@ -68,7 +74,7 @@ class NNPInput:
         self.total_charge = self.total_charge.to(torch.int32)
 
         # Unit conversion for positions
-        if isinstance(self.positions, unit.Quantity):
+        if isinstance(self.positions, Quantity):
             positions = self.positions.to(unit.nanometer).m
             self.positions = torch.tensor(
                 positions, dtype=torch.float32, requires_grad=True
@@ -97,11 +103,11 @@ class NNPInput:
                 "The size of atomic_subsystem_indices and the first dimension of positions must match"
             )
 
-    def as_namedtuple(self):
+    def as_namedtuple(self) -> NamedTuple:
         """Export the dataclass fields and values as a named tuple."""
 
-        from dataclasses import dataclass, fields
         import collections
+        from dataclasses import dataclass, fields
 
         NNPInputTuple = collections.namedtuple(
             "NNPInputTuple", [field.name for field in fields(self)]
@@ -128,7 +134,7 @@ class Metadata:
     F: torch.Tensor = torch.tensor([], dtype=torch.float32)
 
     def to(
-        self, device: Optional[torch.device] = None, dtype: Optional[torch.dtype] = None
+            self, device: Optional[torch.device] = None, dtype: Optional[torch.dtype] = None
     ):
         """Move all tensors in this instance to the specified device."""
         if device:
@@ -150,9 +156,9 @@ class BatchData:
     metadata: Metadata
 
     def to(
-        self,
-        device: Optional[torch.device] = None,
-        dtype: Optional[torch.dtype] = None,
+            self,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
     ):
         self.nnp_input = self.nnp_input.to(device=device, dtype=dtype)
         self.metadata = self.metadata.to(device=device, dtype=dtype)
@@ -171,7 +177,7 @@ def shared_config_prior():
 
 
 def triple_by_molecule(
-    atom_pairs: torch.Tensor,
+        atom_pairs: torch.Tensor,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Input: indices for pairs of atoms that are close to each other.
     each pair only appear once, i.e. only one of the pairs (1, 2) and
@@ -207,8 +213,8 @@ def triple_by_molecule(
         torch.tril_indices(m, m, -1, device=ai1.device).unsqueeze(1).expand(-1, n, -1)
     )
     mask = (
-        torch.arange(intra_pair_indices.shape[2], device=ai1.device)
-        < pair_sizes.unsqueeze(1)
+            torch.arange(intra_pair_indices.shape[2], device=ai1.device)
+            < pair_sizes.unsqueeze(1)
     ).flatten()
     sorted_local_index12 = intra_pair_indices.flatten(1, 2)[:, mask]
     sorted_local_index12 += cumsum_from_zero(counts).index_select(0, pair_indices)
@@ -285,13 +291,13 @@ class Dense(nn.Linear):
     """
 
     def __init__(
-        self,
-        in_features: int,
-        out_features: int,
-        bias: bool = True,
-        activation: Optional[nn.Module] = None,
-        weight_init: Callable = xavier_uniform_,
-        bias_init: Callable = zeros_,
+            self,
+            in_features: int,
+            out_features: int,
+            bias: bool = True,
+            activation: Optional[nn.Module] = None,
+            weight_init: Callable = xavier_uniform_,
+            bias_init: Callable = zeros_,
     ):
         """
         Args:
@@ -356,7 +362,7 @@ class CosineCutoff(nn.Module):
         """
         # Compute values of cutoff function
         input_cut = 0.5 * (
-            torch.cos(d_ij * np.pi / self.cutoff) + 1.0
+                torch.cos(d_ij * np.pi / self.cutoff) + 1.0
         )  # NOTE: ANI adds 0.5 instead of 1.
         # Remove contributions beyond the cutoff radius
         input_cut *= (d_ij < self.cutoff).float()
@@ -365,190 +371,6 @@ class CosineCutoff(nn.Module):
 
 from typing import Dict
 
-
-class FromAtomToMoleculeReduction(nn.Module):
-
-    def __init__(self):
-        """
-        Initializes the energy readout module.
-        Performs the reduction of 'per_atom' property to 'per_molecule' property.
-        """
-        super().__init__()
-
-    def forward(self, x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
-        """
-
-        Parameters
-        ----------
-        x, shape [nr_of_atoms, 1]
-        index, shape [nr_of_atoms]
-
-        Returns
-        -------
-        Tensor, shape [nr_of_moleculs, 1]
-            The total energy tensor.
-        """
-
-        # Perform scatter add operation
-        indices = index.to(torch.int64)
-        total_energy_per_molecule = torch.zeros(
-            len(index.unique()), dtype=x.dtype, device=x.device
-        )
-
-        total_energy_per_molecule = total_energy_per_molecule.scatter_add(0, indices, x)
-
-        # Sum across feature dimension to get final tensor of shape (num_molecules, 1)
-        # total_energy_per_molecule = result.sum(dim=1, keepdim=True)
-        return total_energy_per_molecule
-
-
-from dataclasses import dataclass, field
-from typing import Dict, Iterator
-
-
-@dataclass
-class AtomicSelfEnergies:
-    """
-    AtomicSelfEnergies stores a mapping of atomic elements to their self energies.
-
-    Provides lookup by atomic number or symbol, iteration over the mapping,
-    and utilities to convert between atomic number and symbol.
-
-    Intended as a base class to be extended with specific element-energy values.
-    """
-
-    # We provide a dictionary with {str:float} of element name to atomic self-energy,
-    # which can then be accessed by atomic index or element name
-    energies: Dict[str, unit.Quantity] = field(default_factory=dict)
-    # Example mapping, replace or extend as necessary
-    atomic_number_to_element: Dict[int, str] = field(
-        default_factory=lambda: {
-            1: "H",
-            2: "He",
-            3: "Li",
-            4: "Be",
-            5: "B",
-            6: "C",
-            7: "N",
-            8: "O",
-            9: "F",
-            10: "Ne",
-            11: "Na",
-            12: "Mg",
-            13: "Al",
-            14: "Si",
-            15: "P",
-            16: "S",
-            17: "Cl",
-            18: "Ar",
-            19: "K",
-            20: "Ca",
-            21: "Sc",
-            22: "Ti",
-            23: "V",
-            24: "Cr",
-            25: "Mn",
-            26: "Fe",
-            27: "Co",
-            28: "Ni",
-            29: "Cu",
-            30: "Zn",
-            31: "Ga",
-            32: "Ge",
-            33: "As",
-            34: "Se",
-            35: "Br",
-            36: "Kr",
-            37: "Rb",
-            38: "Sr",
-            39: "Y",
-            40: "Zr",
-            41: "Nb",
-            42: "Mo",
-            43: "Tc",
-            44: "Ru",
-            45: "Rh",
-            46: "Pd",
-            47: "Ag",
-            48: "Cd",
-            49: "In",
-            50: "Sn",
-            51: "Sb",
-            52: "Te",
-            53: "I",
-            54: "Xe",
-            55: "Cs",
-            56: "Ba",
-            # Add more elements as needed
-        }
-    )
-    _ase_tensor_for_indexing = None
-
-    def __getitem__(self, key):
-        from modelforge.utils.units import chem_context
-
-        if isinstance(key, int):
-            # Convert atomic number to element symbol
-            element = self.atomic_number_to_element.get(key)
-            if element is None:
-                raise KeyError(f"Atomic number {key} not found.")
-            if self.energies.get(element) is None:
-                return None
-            return self.energies.get(element).to(unit.kilojoule_per_mole, "chem").m
-        elif isinstance(key, str):
-            # Directly access by element symbol
-            if key not in self.energies:
-                raise KeyError(f"Element {key} not found.")
-            if self.energies[key] is None:
-                return None
-
-            return self.energies[key].to(unit.kilojoule_per_mole, "chem").m
-        else:
-            raise TypeError(
-                "Key must be an integer (atomic number) or string (element name)."
-            )
-
-    def __iter__(self) -> Iterator[Dict[str, float]]:
-        """Iterate over the energies dictionary."""
-        from modelforge.utils.units import chem_context
-
-        for element, energy in self.energies.items():
-            atomic_number = self.element_to_atomic_number(element)
-            yield (atomic_number, energy.to(unit.kilojoule_per_mole, "chem").m)
-
-    def __len__(self) -> int:
-        """Return the number of element-energy pairs."""
-        return len(self.energies)
-
-    def element_to_atomic_number(self, element: str) -> int:
-        """Return the atomic number for a given element symbol."""
-        for atomic_number, elem_symbol in self.atomic_number_to_element.items():
-            if elem_symbol == element:
-                return atomic_number
-        raise ValueError(f"Element symbol '{element}' not found in the mapping.")
-
-    @property
-    def atomic_number_to_energy(self) -> Dict[int, float]:
-        """Return a dictionary mapping atomic numbers to their energies."""
-        return {
-            atomic_number: self[atomic_number]
-            for atomic_number in self.atomic_number_to_element.keys()
-            if self[atomic_number] is not None
-        }
-
-    @property
-    def ase_tensor_for_indexing(self) -> torch.Tensor:
-        if self._ase_tensor_for_indexing is None:
-            max_z = max(self.atomic_number_to_element.keys()) + 1
-            ase_tensor_for_indexing = torch.zeros(max_z)
-            for idx in self.atomic_number_to_element:
-                if self[idx]:
-                    ase_tensor_for_indexing[idx] = self[idx]
-                else:
-                    ase_tensor_for_indexing[idx] = 0.0
-            self._ase_tensor_for_indexing = ase_tensor_for_indexing
-
-        return self._ase_tensor_for_indexing
 
 
 class ShiftedSoftplus(nn.Module):
@@ -585,13 +407,13 @@ class AngularSymmetryFunction(nn.Module):
     """
 
     def __init__(
-        self,
-        max_distance: unit.Quantity,
-        min_distance: unit.Quantity,
-        number_of_gaussians_for_asf: int = 8,
-        angle_sections: int = 4,
-        trainable: bool = False,
-        dtype: Optional[torch.dtype] = None,
+            self,
+            max_distance: unit.Quantity,
+            min_distance: unit.Quantity,
+            number_of_gaussians_for_asf: int = 8,
+            angle_sections: int = 4,
+            trainable: bool = False,
+            dtype: Optional[torch.dtype] = None,
     ) -> None:
         """
         Parameters
@@ -715,21 +537,21 @@ class RadialBasisFunction(ABC):
 
 class GaussianRadialBasisFunction(RadialBasisFunction):
     def compute(
-        self,
-        distances: torch.Tensor,
-        centers: torch.Tensor,
-        scale_factors: torch.Tensor,
+            self,
+            distances: torch.Tensor,
+            centers: torch.Tensor,
+            scale_factors: torch.Tensor,
     ) -> torch.Tensor:
         diff = distances - centers
-        return torch.exp((-1 * scale_factors) * diff**2)
+        return torch.exp((-1 * scale_factors) * diff ** 2)
 
 
 class DoubleExponentialRadialBasisFunction(RadialBasisFunction):
     def compute(
-        self,
-        distances: torch.Tensor,
-        centers: torch.Tensor,
-        scale_factors: torch.Tensor,
+            self,
+            distances: torch.Tensor,
+            centers: torch.Tensor,
+            scale_factors: torch.Tensor,
     ) -> torch.Tensor:
         diff = distances - centers
         return torch.exp(-torch.abs(diff / scale_factors))
@@ -737,13 +559,13 @@ class DoubleExponentialRadialBasisFunction(RadialBasisFunction):
 
 class RadialSymmetryFunction(nn.Module):
     def __init__(
-        self,
-        number_of_radial_basis_functions: int,
-        max_distance: unit.Quantity,
-        min_distance: unit.Quantity = 0.0 * unit.nanometer,
-        dtype: Optional[torch.dtype] = None,
-        trainable: bool = False,
-        radial_basis_function: RadialBasisFunction = GaussianRadialBasisFunction(),
+            self,
+            number_of_radial_basis_functions: int,
+            max_distance: unit.Quantity,
+            min_distance: unit.Quantity = 0.0 * unit.nanometer,
+            dtype: Optional[torch.dtype] = None,
+            trainable: bool = False,
+            radial_basis_function: RadialBasisFunction = GaussianRadialBasisFunction(),
     ):
         """RadialSymmetryFunction class.
 
@@ -780,20 +602,20 @@ class RadialSymmetryFunction(nn.Module):
 
     def initialize_parameters(self):
         # convert to nanometer
-        _unitless_max_distance = self.max_distance.to(unit.nanometer).m
-        _unitless_min_distance = self.min_distance.to(unit.nanometer).m
+        _max_distance_in_nanometer = self.max_distance.to(unit.nanometer).m
+        _min_distance_in_nanometer = self.min_distance.to(unit.nanometer).m
 
         # calculate radial basis centers
         radial_basis_centers = self.calculate_radial_basis_centers(
-            _unitless_min_distance,
-            _unitless_max_distance,
+            _min_distance_in_nanometer,
+            _max_distance_in_nanometer,
             self.number_of_radial_basis_functions,
             self.dtype,
         )
         # calculate scale factors
         radial_scale_factor = self.calculate_radial_scale_factor(
-            _unitless_min_distance,
-            _unitless_max_distance,
+            _min_distance_in_nanometer,
+            _max_distance_in_nanometer,
             self.number_of_radial_basis_functions,
         )
 
@@ -808,33 +630,33 @@ class RadialSymmetryFunction(nn.Module):
             self.register_buffer("prefactor", torch.tensor([1.0]))
 
     def calculate_radial_basis_centers(
-        self,
-        _unitless_min_distance,
-        _unitless_max_distance,
-        number_of_radial_basis_functions,
-        dtype,
+            self,
+            _min_distance_in_nanometer,
+            _max_distance_in_nanometer,
+            number_of_radial_basis_functions,
+            dtype,
     ):
         # the default approach to calculate radial basis centers
         # can be overwritten by subclasses
         centers = torch.linspace(
-            _unitless_min_distance,
-            _unitless_max_distance,
+            _min_distance_in_nanometer,
+            _max_distance_in_nanometer,
             number_of_radial_basis_functions,
             dtype=dtype,
         )
         return centers
 
     def calculate_radial_scale_factor(
-        self,
-        _unitless_min_distance,
-        _unitless_max_distance,
-        number_of_radial_basis_functions,
+            self,
+            _min_distance_in_nanometer,
+            _max_distance_in_nanometer,
+            number_of_radial_basis_functions,
     ):
         # the default approach to calculate radial scale factors (each of them are scaled by the same value)
         # can be overwritten by subclasses
         scale_factors = torch.full(
             (number_of_radial_basis_functions,),
-            (_unitless_min_distance - _unitless_max_distance)
+            (_min_distance_in_nanometer - _max_distance_in_nanometer)
             / number_of_radial_basis_functions,
         )
         scale_factors = scale_factors * -15_000
@@ -861,13 +683,13 @@ class RadialSymmetryFunction(nn.Module):
 
 class SchnetRadialSymmetryFunction(RadialSymmetryFunction):
     def __init__(
-        self,
-        number_of_radial_basis_functions: int,
-        max_distance: unit.Quantity,
-        min_distance: unit.Quantity = 0.0 * unit.nanometer,
-        dtype: Optional[torch.dtype] = None,
-        trainable: bool = False,
-        radial_basis_function: RadialBasisFunction = GaussianRadialBasisFunction(),
+            self,
+            number_of_radial_basis_functions: int,
+            max_distance: unit.Quantity,
+            min_distance: unit.Quantity = 0.0 * unit.nanometer,
+            dtype: Optional[torch.dtype] = None,
+            trainable: bool = False,
+            radial_basis_function: RadialBasisFunction = GaussianRadialBasisFunction(),
     ):
         """RadialSymmetryFunction class.
 
@@ -888,21 +710,20 @@ class SchnetRadialSymmetryFunction(RadialSymmetryFunction):
         self.prefactor = torch.tensor([1.0])
 
     def calculate_radial_scale_factor(
-        self,
-        _unitless_min_distance,
-        _unitless_max_distance,
-        number_of_radial_basis_functions,
+            self,
+            _min_distance_in_nanometer,
+            _max_distance_in_nanometer,
+            number_of_radial_basis_functions,
     ):
-
         scale_factors = torch.linspace(
-            _unitless_min_distance,
-            _unitless_max_distance,
+            _min_distance_in_nanometer,
+            _max_distance_in_nanometer,
             number_of_radial_basis_functions,
         )
 
         widths = (
-            torch.abs(scale_factors[1] - scale_factors[0])
-            * torch.ones_like(scale_factors)
+                torch.abs(scale_factors[1] - scale_factors[0])
+                * torch.ones_like(scale_factors)
         ).to(self.dtype)
 
         scale_factors = 0.5 / torch.square_(widths)
@@ -911,13 +732,13 @@ class SchnetRadialSymmetryFunction(RadialSymmetryFunction):
 
 class AniRadialSymmetryFunction(RadialSymmetryFunction):
     def __init__(
-        self,
-        number_of_radial_basis_functions: int,
-        max_distance: unit.Quantity,
-        min_distance: unit.Quantity = 0.0 * unit.nanometer,
-        dtype: Optional[torch.dtype] = None,
-        trainable: bool = False,
-        radial_basis_function: RadialBasisFunction = GaussianRadialBasisFunction(),
+            self,
+            number_of_radial_basis_functions: int,
+            max_distance: unit.Quantity,
+            min_distance: unit.Quantity = 0.0 * unit.nanometer,
+            dtype: Optional[torch.dtype] = None,
+            trainable: bool = False,
+            radial_basis_function: RadialBasisFunction = GaussianRadialBasisFunction(),
     ):
         """RadialSymmetryFunction class.
 
@@ -938,15 +759,15 @@ class AniRadialSymmetryFunction(RadialSymmetryFunction):
         self.prefactor = torch.tensor([0.25])
 
     def calculate_radial_basis_centers(
-        self,
-        _unitless_min_distance,
-        _unitless_max_distance,
-        number_of_radial_basis_functions,
-        dtype,
+            self,
+            _min_distance_in_nanometer,
+            _max_distance_in_nanometer,
+            number_of_radial_basis_functions,
+            dtype,
     ):
         centers = torch.linspace(
-            _unitless_min_distance,
-            _unitless_max_distance,
+            _min_distance_in_nanometer,
+            _max_distance_in_nanometer,
             number_of_radial_basis_functions + 1,
             dtype=dtype,
         )[:-1]
@@ -954,10 +775,10 @@ class AniRadialSymmetryFunction(RadialSymmetryFunction):
         return centers
 
     def calculate_radial_scale_factor(
-        self,
-        _unitless_min_distance,
-        _unitless_max_distance,
-        number_of_radial_basis_functions,
+            self,
+            _min_distance_in_nanometer,
+            _max_distance_in_nanometer,
+            number_of_radial_basis_functions,
     ):
         # ANI uses a predefined scaling factor
         scale_factors = torch.full((number_of_radial_basis_functions,), (19.7 * 100))
@@ -966,49 +787,49 @@ class AniRadialSymmetryFunction(RadialSymmetryFunction):
 
 class SAKERadialSymmetryFunction(RadialSymmetryFunction):
     def calculate_radial_basis_centers(
-        self,
-        _unitless_min_distance,
-        _unitless_max_distance,
-        number_of_radial_basis_functions,
-        dtype,
+            self,
+            _min_distance_in_nanometer,
+            _max_distance_in_nanometer,
+            number_of_radial_basis_functions,
+            dtype,
     ):
         # initialize means and betas according to the default values in PhysNet
         # https://pubs.acs.org/doi/10.1021/acs.jctc.9b00181
 
         start_value = torch.exp(
             torch.scalar_tensor(
-                -_unitless_max_distance + _unitless_min_distance, dtype=dtype
+                (-_max_distance_in_nanometer + _min_distance_in_nanometer) * 10,
+                dtype=dtype,
             )
-        )
+        )  # NOTE: this is defined in Angstrom
         centers = torch.linspace(
             start_value, 1, number_of_radial_basis_functions, dtype=dtype
         )
         return centers
 
     def calculate_radial_scale_factor(
-        self,
-        _unitless_min_distance,
-        _unitless_max_distance,
-        number_of_radial_basis_functions,
+            self,
+            _min_distance_in_nanometer,
+            _max_distance_in_nanometer,
+            number_of_radial_basis_functions,
     ):
         start_value = torch.exp(
-            torch.scalar_tensor(-_unitless_max_distance + _unitless_min_distance)
-        )
+            torch.scalar_tensor(
+                (-_max_distance_in_nanometer + _min_distance_in_nanometer) * 10
+            )
+        )  # NOTE: this is defined in Angstrom
         radial_scale_factor = torch.tensor(
-            [(2 / number_of_radial_basis_functions * (1 - start_value)) ** -2]
-            * number_of_radial_basis_functions
+            torch.full((number_of_radial_basis_functions, ), (2 / number_of_radial_basis_functions * (1 - start_value)) ** -2)
         )
         return radial_scale_factor
 
 
 class SAKERadialBasisFunction(RadialBasisFunction):
 
-    def __init__(self, max_distance, min_distance):
+    def __init__(self, min_distance):
         super().__init__()
-        self._unitless_min_distance = min_distance.to(unit.nanometer).m
-        self.alpha = (
-            (5.0 * unit.nanometer / (max_distance - min_distance)).to_base_units().m
-        )  # check units
+)  # check units
+        self._min_distance_in_nanometer = min_distance.to(unit.nanometer).m
 
     def compute(
         self,
@@ -1019,19 +840,52 @@ class SAKERadialBasisFunction(RadialBasisFunction):
         return torch.exp(
             -scale_factors
             * (
-                torch.exp(
-                    self.alpha
-                    * (-distances.unsqueeze(-1) + self._unitless_min_distance)
-                )
-                - centers
+                    torch.exp(
+                        (-distances.unsqueeze(-1) + self._min_distance_in_nanometer)
+                        * 10
+                    )
+                    - centers
             )
             ** 2
         )
 
 
+class PhysNetRadialSymmetryFunction(SAKERadialSymmetryFunction):
+
+    def __init__(
+            self,
+            number_of_radial_basis_functions: int,
+            max_distance: unit.Quantity,
+            min_distance: unit.Quantity = 0.0 * unit.nanometer,
+            dtype: Optional[torch.dtype] = None,
+            trainable: bool = False,
+            radial_basis_function: Optional[SAKERadialBasisFunction] = None,
+    ):
+        """RadialSymmetryFunction class.
+
+        Initializes and contains the logic for computing radial symmetry functions.
+
+        Parameters
+        ---------
+        """
+        # Create the radial_basis_function if not provided
+        if radial_basis_function is None:
+            radial_basis_function = SAKERadialBasisFunction(min_distance)
+
+        super().__init__(
+            number_of_radial_basis_functions,
+            max_distance,
+            min_distance,
+            dtype,
+            trainable,
+            radial_basis_function,
+        )
+        self.prefactor = torch.tensor([1.0])
+
+
 def pair_list(
-    atomic_subsystem_indices: torch.Tensor,
-    only_unique_pairs: bool = False,
+        atomic_subsystem_indices: torch.Tensor,
+        only_unique_pairs: bool = False,
 ) -> torch.Tensor:
     """Compute all pairs of atoms and their distances.
 
@@ -1072,7 +926,7 @@ def pair_list(
 
     # filter pairs to only keep those belonging to the same molecule
     same_molecule_mask = (
-        atomic_subsystem_indices[i_indices] == atomic_subsystem_indices[j_indices]
+            atomic_subsystem_indices[i_indices] == atomic_subsystem_indices[j_indices]
     )
 
     # Apply mask to get final pair indices
@@ -1085,14 +939,11 @@ def pair_list(
     return pair_indices.to(device)
 
 
-# from openff.units import unit
-
-
 def neighbor_list_with_cutoff(
-    coordinates: torch.Tensor,  # in nanometer
-    atomic_subsystem_indices: torch.Tensor,
-    cutoff: unit.Quantity,
-    only_unique_pairs: bool = False,
+        coordinates: torch.Tensor,  # in nanometer
+        atomic_subsystem_indices: torch.Tensor,
+        cutoff: unit.Quantity,
+        only_unique_pairs: bool = False,
 ) -> torch.Tensor:
     """Compute all pairs of atoms and their distances.
 
@@ -1129,11 +980,11 @@ def neighbor_list_with_cutoff(
 
 
 def scatter_softmax(
-    src: torch.Tensor,
-    index: torch.Tensor,
-    dim: int,
-    dim_size: Optional[int] = None,
-    device: Optional[torch.device] = None,
+        src: torch.Tensor,
+        index: torch.Tensor,
+        dim: int,
+        dim_size: Optional[int] = None,
+        device: Optional[torch.device] = None,
 ) -> torch.Tensor:
     """
     Softmax operation over all values in :attr:`src` tensor that share indices
@@ -1167,7 +1018,7 @@ def scatter_softmax(
 
     assert dim >= 0, f"dim must be non-negative, got {dim}"
     assert (
-        dim < src.dim()
+            dim < src.dim()
     ), f"dim must be less than the number of dimensions of src {src.dim()}, got {dim}"
 
     out_shape = [

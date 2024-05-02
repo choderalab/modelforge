@@ -309,10 +309,14 @@ def test_representation(setup_methane):
 
     mf_model = ANI2x()
     # perform input checks
-    mf_model._input_checks(mf_input)
+    mf_model.input_preparation._input_checks(mf_input)
     # prepare the input for the forward pass
-    data = mf_model.prepare_inputs(mf_input, True)
-    representation = mf_model.ani_representation_module(data)
+    pairlist_output = mf_model.input_preparation.prepare_inputs(mf_input, True)
+    nnp_input = mf_model.ani2x_core._model_specific_input_preparation(
+        mf_input, pairlist_output
+    )
+    representation = mf_model.ani2x_core.ani_representation_module(nnp_input)
+
     tochani_aev = tochani_aev.squeeze(0)
 
     # test for equivalenc

@@ -12,6 +12,7 @@ from modelforge.curation.ani1x_curation import ANI1xCuration
 from modelforge.curation.spice_114_curation import SPICE114Curation
 from modelforge.curation.spice_openff_curation import SPICEOpenFFCuration
 from modelforge.curation.spice_2_from_qcarchive_curation import SPICE2Curation
+from modelforge.curation.spice_2_curation import SPICE2Curation as SPICE2CurationH5
 
 from modelforge.curation.curation_baseclass import dict_to_hdf5
 
@@ -464,14 +465,13 @@ def test_qm9_local_archive(prep_temp_dir):
     qm9_data._clear_data()
     qm9_data._process_downloaded(
         str(prep_temp_dir),
-        max_records=2,
         total_conformers=5,
     )
     assert qm9_data.total_conformers == 5
     assert len(qm9_data.data) == 5
 
 
-def test_an1_process_download_short(prep_temp_dir):
+def test_ani1_process_download_short(prep_temp_dir):
     # first check where we don't convert units
     ani1_data = ANI1xCuration(
         hdf5_file_name="test_dataset.hdf5",
@@ -516,9 +516,28 @@ def test_an1_process_download_short(prep_temp_dir):
     # test max records exclusion
     ani1_data._process_downloaded(str(local_data_path), hdf5_file, max_records=2)
     assert len(ani1_data.data) == 2
+    ani1_data._clear_data()
+    ani1_data._process_downloaded(
+        str(local_data_path), hdf5_file, max_records=2, max_conformers_per_record=1
+    )
+    assert ani1_data.total_conformers == 2
+
+    ani1_data._clear_data()
+    ani1_data._process_downloaded(
+        str(local_data_path), hdf5_file, max_records=3, max_conformers_per_record=2
+    )
+    assert ani1_data.total_conformers > 3
+
+    ani1_data._clear_data()
+    ani1_data._process_downloaded(
+        str(local_data_path), hdf5_file, total_conformers=5, max_conformers_per_record=2
+    )
+    assert ani1_data.total_conformers == 5
+    with pytest.raises(Exception):
+        ani1_data.process(max_records=10, total_conformers=5)
 
 
-def test_an1_process_download_no_conversion(prep_temp_dir):
+def test_ani1_process_download_no_conversion(prep_temp_dir):
     from numpy import array, float32, uint8
     from openff.units import unit
 
@@ -1481,6 +1500,34 @@ def test_spice114_process_download_conversion(prep_temp_dir):
             * unit.parse_expression("elementary_charge * nanometer ** 2"),
         )
     )
+    spice_data._clear_data()
+    spice_data._process_downloaded(
+        str(local_data_path), hdf5_file, max_records=1, max_conformers_per_record=1
+    )
+    assert spice_data.total_conformers == 1
+
+    spice_data._clear_data()
+    spice_data._process_downloaded(
+        str(local_data_path), hdf5_file, max_records=2, max_conformers_per_record=1
+    )
+    assert spice_data.total_conformers == 2
+
+    spice_data._clear_data()
+    spice_data._process_downloaded(
+        str(local_data_path), hdf5_file, total_conformers=4, max_conformers_per_record=2
+    )
+    assert spice_data.total_conformers == 4
+    assert spice_data.total_records == 2
+
+    spice_data._clear_data()
+
+    spice_data._process_downloaded(
+        str(local_data_path), hdf5_file, max_records=1, max_conformers_per_record=1
+    )
+    assert spice_data.total_conformers == 1
+
+    with pytest.raises(Exception):
+        spice_data.process(max_records=2, total_conformers=1)
 
 
 def test_ani2x(prep_temp_dir):
@@ -1538,6 +1585,17 @@ def test_ani2x(prep_temp_dir):
             [[0.0, 0.0, -0.08543934673070908], [0.0, 0.0, 0.009493260644376278]]
         )
     )
+    ani2x_dataset._clear_data()
+    ani2x_dataset._process_downloaded(local_data_path, filename, total_conformers=10)
+    assert ani2x_dataset.total_conformers == 10
+
+    ani2x_dataset._clear_data()
+    ani2x_dataset._process_downloaded(
+        local_data_path, filename, max_records=2, max_conformers_per_record=2
+    )
+    assert ani2x_dataset.total_conformers > 2
+    with pytest.raises(Exception):
+        ani2x_dataset.process(max_records=2, total_conformers=1)
 
 
 def test_spice114_openff_test_fetching(prep_temp_dir):
@@ -1741,7 +1799,7 @@ def test_spice114_openff_test_process_downloaded(prep_temp_dir):
             local_database_name=local_database_name,
             local_path_dir=local_path_dir,
             force_download=True,
-            umax_records=2,
+            max_records=2,
         )
 
     spice_openff_data._process_downloaded(

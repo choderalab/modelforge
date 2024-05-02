@@ -379,7 +379,7 @@ class ANI1xCuration(DatasetCuration):
 
         """
         if max_records is not None and total_conformers is not None:
-            raise ValueError(
+            raise Exception(
                 "max_records and total_conformers cannot be set at the same time."
             )
 

@@ -111,6 +111,12 @@ class AtomicSelfEnergies:
             48: "Cd",
             49: "In",
             50: "Sn",
+            51: "Sb",
+            52: "Te",
+            53: "I",
+            54: "Xe",
+            55: "Cs",
+            56: "Ba",
             # Add more elements as needed
         }
     )

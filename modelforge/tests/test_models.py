@@ -426,7 +426,6 @@ def test_equivariant_energies_and_forces(
     Test the calculation of energies and forces for a molecule.
     NOTE: test will be adapted once we have a trained model.
     """
-    batch = batch_QM9_ANI2x
     import torch
     from dataclasses import replace
 

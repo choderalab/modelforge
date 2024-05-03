@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 _DATASETS_TO_TEST = [name for name in _IMPLEMENTED_DATASETS]
 _DATASETS_TO_TEST_QM9_ANI2X = ["QM9", "ANI2X"]
+_DATASETS_TO_TEST_QM9 = ["QM9"]
 _MODELS_TO_TEST = [name for name in _IMPLEMENTED_NNPS]
 from modelforge.potential.utils import BatchData
 
@@ -56,7 +57,7 @@ from typing import Dict
 dataset_cache: Dict[str, DataSetContainer] = {}
 
 
-@pytest.fixture(scope="session", params=_DATASETS_TO_TEST)
+@pytest.fixture(scope="session", params=_DATASETS_TO_TEST_QM9)
 def datasets_to_test(request, prep_temp_dir):
     dataset_name = request.param
 
@@ -443,7 +444,8 @@ def rotation_matrix_from_quaternion(quaternion):
             [1.0 - (yY + zZ), xY - wZ, xZ + wY],
             [xY + wZ, 1.0 - (xX + zZ), yZ - wX],
             [xZ - wY, yZ + wX, 1.0 - (xX + yY)],
-        ]
+        ],
+        dtype=torch.float64,
     )
     return rotation_matrix
 

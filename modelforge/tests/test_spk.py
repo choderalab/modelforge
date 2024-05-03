@@ -223,7 +223,7 @@ def test_painn_representation_implementation():
     schnetpack_results = schnetpack_painn(spk_input)
     modelforge_painn.input_preparation._input_checks(mf_nnp_input)
     pairlist_output = modelforge_painn.input_preparation.prepare_inputs(
-        mf_nnp_input, only_unique_pairs=False
+        mf_nnp_input
     )
     pain_nn_input_mf = modelforge_painn.core_module._model_specific_input_preparation(
         mf_nnp_input, pairlist_output
@@ -591,7 +591,7 @@ def test_schnet_representation_implementation():
     modelforge_schnet.input_preparation._input_checks(mf_nnp_input)
 
     pairlist_output = modelforge_schnet.input_preparation.prepare_inputs(
-        mf_nnp_input, only_unique_pairs=False
+        mf_nnp_input
     )
     schnet_nn_input_mf = (
         modelforge_schnet.core_module._model_specific_input_preparation(

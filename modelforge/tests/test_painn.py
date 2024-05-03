@@ -58,19 +58,19 @@ def test_painn_interaction_equivariance(methane):
 
     # define a rotation matrix in 3D that rotates by 90 degrees around the z-axis
     # (clockwise when looking along the z-axis towards the origin)
-    rotation_matrix = torch.tensor([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
+    rotation_matrix = torch.tensor(
+        [[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]], dtype=torch.float64
+    )
 
-    painn = PaiNN()
-    methane_input = methane.nnp_input
+    painn = PaiNN().to(torch.float64)
+    methane_input = methane.nnp_input.to(dtype=torch.float64)
     perturbed_methane_input = replace(methane_input)
     perturbed_methane_input.positions = torch.matmul(
         methane_input.positions, rotation_matrix
     )
 
     # prepare reference and perturbed inputs
-    pairlist_output = painn.input_preparation.prepare_inputs(
-        methane_input, only_unique_pairs=False
-    )
+    pairlist_output = painn.input_preparation.prepare_inputs(methane_input)
     reference_prepared_input = painn.core_module._model_specific_input_preparation(
         methane_input, pairlist_output
     )
@@ -84,8 +84,8 @@ def test_painn_interaction_equivariance(methane):
         )
     )
 
-    perturbed_prepared_input = painn.input_preparation.prepare_inputs(
-        perturbed_methane_input, only_unique_pairs=False
+    pairlist_output = painn.input_preparation.prepare_inputs(
+        perturbed_methane_input
     )
     perturbed_prepared_input = painn.core_module._model_specific_input_preparation(
         perturbed_methane_input, pairlist_output

@@ -53,6 +53,7 @@ class NNPInput:
 
     def to(
         self,
+        *,
         device: Optional[torch.device] = None,
         dtype: Optional[torch.dtype] = None,
     ):

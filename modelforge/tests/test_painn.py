@@ -71,7 +71,7 @@ def test_painn_interaction_equivariance(methane):
     pairlist_output = painn.input_preparation.prepare_inputs(
         methane_input, only_unique_pairs=False
     )
-    reference_prepared_input = painn.painn_core._model_specific_input_preparation(
+    reference_prepared_input = painn.core_module._model_specific_input_preparation(
         methane_input, pairlist_output
     )
 
@@ -79,7 +79,7 @@ def test_painn_interaction_equivariance(methane):
     reference_r_ij = reference_prepared_input.r_ij
     reference_dir_ij = reference_r_ij / reference_d_ij
     reference_f_ij = (
-        painn.painn_core.representation_module.radial_symmetry_function_module(
+        painn.core_module.representation_module.radial_symmetry_function_module(
             reference_d_ij
         )
     )
@@ -87,7 +87,7 @@ def test_painn_interaction_equivariance(methane):
     perturbed_prepared_input = painn.input_preparation.prepare_inputs(
         perturbed_methane_input, only_unique_pairs=False
     )
-    perturbed_prepared_input = painn.painn_core._model_specific_input_preparation(
+    perturbed_prepared_input = painn.core_module._model_specific_input_preparation(
         perturbed_methane_input, pairlist_output
     )
 
@@ -95,7 +95,7 @@ def test_painn_interaction_equivariance(methane):
     perturbed_r_ij = perturbed_prepared_input.r_ij
     perturbed_dir_ij = perturbed_r_ij / perturbed_d_ij
     perturbed_f_ij = (
-        painn.painn_core.representation_module.radial_symmetry_function_module(
+        painn.core_module.representation_module.radial_symmetry_function_module(
             perturbed_d_ij
         )
     )
@@ -117,10 +117,10 @@ def test_painn_interaction_equivariance(methane):
 
     # Test that the interaction block is equivariant
     # First we test the transformed inputs
-    reference_tranformed_inputs = painn.painn_core.representation_module(
+    reference_tranformed_inputs = painn.core_module.representation_module(
         reference_prepared_input
     )
-    perturbed_tranformed_inputs = painn.painn_core.representation_module(
+    perturbed_tranformed_inputs = painn.core_module.representation_module(
         perturbed_prepared_input
     )
 
@@ -131,7 +131,7 @@ def test_painn_interaction_equivariance(methane):
         reference_tranformed_inputs["mu"], perturbed_tranformed_inputs["mu"]
     )
 
-    painn_interaction = painn.painn_core.interaction_modules[0]
+    painn_interaction = painn.core_module.interaction_modules[0]
 
     reference_r = painn_interaction(
         reference_tranformed_inputs["q"],
@@ -156,10 +156,10 @@ def test_painn_interaction_equivariance(methane):
     assert torch.allclose(reference_q, perturbed_q)
     assert not torch.allclose(reference_mu, perturbed_mu)
 
-    mixed_reference_q, mixed_reference_mu = painn.painn_core.mixing_modules[0](
+    mixed_reference_q, mixed_reference_mu = painn.core_module.mixing_modules[0](
         reference_q, reference_mu
     )
-    mixed_perturbed_q, mixed_perturbed_mu = painn.painn_core.mixing_modules[0](
+    mixed_perturbed_q, mixed_perturbed_mu = painn.core_module.mixing_modules[0](
         perturbed_q, perturbed_mu
     )
 

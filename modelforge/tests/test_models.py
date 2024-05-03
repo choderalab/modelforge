@@ -100,11 +100,11 @@ def test_state_dict_saving_and_loading(model_name):
     from modelforge.potential import NeuralNetworkPotentialFactory
     import torch
 
-    model = NeuralNetworkPotentialFactory.create_nnp("training", model_name, "PyTorch")
-    torch.save(model.state_dict(), "model.pth")
+    model1 = NeuralNetworkPotentialFactory.create_nnp("training", model_name, "PyTorch")
+    torch.save(model1.state_dict(), "model.pth")
 
-    model = NeuralNetworkPotentialFactory.create_nnp("inference", model_name, "PyTorch")
-    model.load_state_dict(torch.load("model.pth"))
+    model2 = NeuralNetworkPotentialFactory.create_nnp("inference", model_name, "PyTorch")
+    model2.load_state_dict(torch.load("model.pth"))
 
 
 def test_energy_between_simulation_environments(inference_model, batch):
@@ -132,7 +132,6 @@ def test_energy_between_simulation_environments(inference_model, batch):
 def test_forward_pass(simulation_environment, inference_model, batch):
     # this test sends a single batch from different datasets through the model
 
-    batch = batch_QM9_ANI2x
     nnp_input = batch.nnp_input
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
@@ -152,7 +151,6 @@ def test_calculate_energies_and_forces(simulation_environment, inference_model, 
     """
     Test the calculation of energies and forces for a molecule.
     """
-    batch = batch_QM9_ANI2x
     import torch
 
     nnp_input = batch.nnp_input

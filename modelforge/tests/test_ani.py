@@ -310,7 +310,7 @@ def test_representation(setup_methane):
     # perform input checks
     mf_model.input_preparation._input_checks(mf_input)
     # prepare the input for the forward pass
-    pairlist_output = mf_model.input_preparation.prepare_inputs(mf_input, True)
+    pairlist_output = mf_model.input_preparation.prepare_inputs(mf_input)
     nnp_input = mf_model.ani2x_core._model_specific_input_preparation(
         mf_input, pairlist_output
     )

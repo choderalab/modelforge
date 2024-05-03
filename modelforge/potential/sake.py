@@ -5,7 +5,7 @@ from loguru import logger as log
 from typing import Dict, Tuple
 from openff.units import unit
 
-from .models import BaseNeuralNetworkPotential, PairListOutputs
+from .models import CoreNetwork, PairListOutputs
 from .utils import (
     Dense,
     scatter_softmax,
@@ -66,7 +66,7 @@ class SAKENeuralNetworkInput:
     atomic_embedding: torch.Tensor
 
 
-class SAKECore(BaseNeuralNetworkPotential):
+class SAKECore(CoreNetwork):
     """SAKE - spatial attention kinetic networks with E(n) equivariance.
 
     Reference:
@@ -543,10 +543,10 @@ class SAKEInteraction(nn.Module):
         return h_updated, x_updated, v_updated
 
 
-from .models import InputPreparation, NNPInput
+from .models import InputPreparation, NNPInput, BaseNetwork
 
 
-class SAKE(torch.nn.Module):
+class SAKE(BaseNetwork):
 
     def __init__(
         self,
@@ -559,7 +559,7 @@ class SAKE(torch.nn.Module):
         epsilon: float = 1e-8,
     ):
         super().__init__()
-        self.sake_core = SAKECore(
+        self.core_module = SAKECore(
             max_Z=max_Z,
             number_of_atom_features=number_of_atom_features,
             number_of_interaction_modules=number_of_interaction_modules,
@@ -573,13 +573,6 @@ class SAKE(torch.nn.Module):
         self.input_preparation = InputPreparation(
             cutoff=cutoff, only_unique_pairs=self.only_unique_pairs
         )
-
-    def forward(self, data: NNPInput):
-        # perform input checks
-        self.input_preparation._input_checks(data)
-        # prepare the input for the forward pass
-        pairlist_output = self.input_preparation.prepare_inputs(data)
-        return self.sake_core(data, pairlist_output)
 
     def _config_prior(self):
         log.info("Configuring SAKE model hyperparameter prior distribution")

@@ -548,7 +548,36 @@ class InputPreparation(torch.nn.Module):
         assert data.positions.shape == torch.Size([nr_of_atoms, 3])
 
 
-class BaseNeuralNetworkPotential(Module, ABC):
+class BaseNetwork(Module):
+
+    def load_state_dict(
+        self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False
+    ):
+        # Prefix to remove
+        prefix = "model."
+
+        # check if prefix is present
+        if any(key.startswith(prefix) for key in state_dict.keys()):
+            # Create a new dictionary without the prefix in the keys if prefix exists
+            new_d = {
+                key[len(prefix) :] if key.startswith(prefix) else key: value
+                for key, value in state_dict.items()
+            }
+            log.debug(f"Removed prefix: {prefix}")
+        else:
+            log.debug("No prefix found. No modifications to keys in state loading.")
+
+        super().load_state_dict(new_d, strict=strict, assign=assign)
+
+    def forward(self, data: NNPInput):
+        # perform input checks
+        self.input_preparation._input_checks(data)
+        # prepare the input for the forward pass
+        pairlist_output = self.input_preparation.prepare_inputs(data)
+        return self.core_module(data, pairlist_output)
+
+
+class CoreNetwork(Module, ABC):
     """Abstract base class for neural network potentials.
 
     Attributes
@@ -641,25 +670,6 @@ class BaseNeuralNetworkPotential(Module, ABC):
         """
         pass
 
-    def load_state_dict(
-        self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False
-    ):
-        # Prefix to remove
-        prefix = "model."
-
-        # check if prefix is present
-        if any(key.startswith(prefix) for key in state_dict.keys()):
-            # Create a new dictionary without the prefix in the keys if prefix exists
-            new_d = {
-                key[len(prefix) :] if key.startswith(prefix) else key: value
-                for key, value in state_dict.items()
-            }
-            log.debug(f"Removed prefix: {prefix}")
-        else:
-            log.debug("No prefix found. No modifications to keys in state loading.")
-
-        super().load_state_dict(new_d, strict=strict, assign=assign)
-
     def load_pretrained_weights(self, path: str):
         """
         Loads pretrained weights into the model from the specified path.
@@ -728,7 +738,7 @@ class BaseNeuralNetworkPotential(Module, ABC):
         )
 
 
-class SingleTopologyAlchemicalBaseNNPModel(BaseNeuralNetworkPotential):
+class SingleTopologyAlchemicalBaseNNPModel(CoreNetwork):
     """
     Subclass for handling alchemical energy calculations.
 

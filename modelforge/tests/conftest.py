@@ -50,9 +50,19 @@ class DataSetContainer:
     expected_E_fcfs_split: float
 
 
-@pytest.fixture(params=_DATASETS_TO_TEST)
+from typing import Dict
+
+# This will store the cached datasets
+dataset_cache: Dict[str, DataSetContainer] = {}
+
+
+@pytest.fixture(scope="session", params=_DATASETS_TO_TEST)
 def datasets_to_test(request, prep_temp_dir):
     dataset_name = request.param
+
+    if datasetDC := dataset_cache.get(dataset_name, None):
+        return datasetDC
+
     if dataset_name == "QM9":
         from modelforge.dataset.qm9 import QM9Dataset
 
@@ -70,6 +80,7 @@ def datasets_to_test(request, prep_temp_dir):
             expected_E_random_split=-622027.790147837,
             expected_E_fcfs_split=-106277.4161215308,
         )
+        dataset_cache[dataset_name] = datasetDC
         return datasetDC
     elif dataset_name == "ANI1X":
         from modelforge.dataset.ani1x import ANI1xDataset
@@ -88,6 +99,7 @@ def datasets_to_test(request, prep_temp_dir):
             expected_E_random_split=-1652066.552014041,
             expected_E_fcfs_split=-1015736.8142089575,
         )
+        dataset_cache[dataset_name] = datasetDC
         return datasetDC
     elif dataset_name == "ANI2X":
         from modelforge.dataset.ani2x import ANI2xDataset
@@ -106,6 +118,7 @@ def datasets_to_test(request, prep_temp_dir):
             expected_E_random_split=-148410.43286007023,
             expected_E_fcfs_split=-2096692.258327173,
         )
+        dataset_cache[dataset_name] = datasetDC
         return datasetDC
     elif dataset_name == "SPICE114":
         from modelforge.dataset.spice114 import SPICE114Dataset
@@ -125,6 +138,7 @@ def datasets_to_test(request, prep_temp_dir):
             expected_E_random_split=-1922185.3358204272,
             expected_E_fcfs_split=-972574.265833225,
         )
+        dataset_cache[dataset_name] = datasetDC
         return datasetDC
     elif dataset_name == "SPICE2":
         from modelforge.dataset.spice2 import SPICE2Dataset
@@ -144,7 +158,9 @@ def datasets_to_test(request, prep_temp_dir):
             expected_E_random_split=-5844365.936898948,
             expected_E_fcfs_split=-3418985.278140791,
         )
+        dataset_cache[dataset_name] = datasetDC
         return datasetDC
+
     elif dataset_name == "SPICE114_OPENFF":
         from modelforge.dataset.spice114openff import SPICE114OpenFFDataset
 
@@ -163,6 +179,7 @@ def datasets_to_test(request, prep_temp_dir):
             expected_E_random_split=-2263605.616072006,
             expected_E_fcfs_split=-1516718.0904709378,
         )
+        dataset_cache[dataset_name] = datasetDC
         return datasetDC
     else:
         raise NotImplementedError(f"Dataset {dataset_name} is not implemented.")
@@ -170,11 +187,6 @@ def datasets_to_test(request, prep_temp_dir):
 
 @pytest.fixture()
 def initialized_dataset(datasets_to_test):
-    # dataset_name = request.param
-    # if dataset_name == "QM9":
-    #     from modelforge.dataset import QM9Dataset
-    #
-    #     dataset = QM9Dataset(for_unit_testing=True)
     dataset = datasets_to_test.dataset
     return initialize_dataset(dataset)
 
@@ -495,7 +507,6 @@ def equivariance_test_utils():
         size=(1, 3),
     )
     translation = lambda x: x + x_translation
-
 
     # generate random quaternion and rotation matrix
     q = generate_uniform_quaternion()

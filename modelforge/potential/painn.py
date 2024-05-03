@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from loguru import logger as log
 from openff.units import unit
 
-from .models import BaseNeuralNetworkPotential
+from .models import CoreNetwork
 from .utils import Dense
 
 if TYPE_CHECKING:
@@ -71,7 +71,7 @@ class PaiNNNeuralNetworkData(NeuralNetworkData):
     atomic_embedding: torch.Tensor
 
 
-class PaiNNCore(BaseNeuralNetworkPotential):
+class PaiNNCore(CoreNetwork):
     """PaiNN - polarizable interaction neural network
 
     References:
@@ -470,10 +470,10 @@ class PaiNNMixing(nn.Module):
         return q, mu
 
 
-from .models import InputPreparation, NNPInput
+from .models import InputPreparation, NNPInput, BaseNetwork
 
 
-class PaiNN(torch.nn.Module):
+class PaiNN(BaseNetwork):
     def __init__(
         self,
         max_Z: int = 100,
@@ -487,7 +487,7 @@ class PaiNN(torch.nn.Module):
     ):
         super().__init__()
 
-        self.painn_core = PaiNNCore(
+        self.core_module = PaiNNCore(
             max_Z=max_Z,
             number_of_atom_features=number_of_atom_features,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
@@ -501,13 +501,6 @@ class PaiNN(torch.nn.Module):
         self.input_preparation = InputPreparation(
             cutoff=cutoff, only_unique_pairs=self.only_unique_pairs
         )
-
-    def forward(self, data: NNPInput):
-        # perform input checks
-        self.input_preparation._input_checks(data)
-        # prepare the input for the forward pass
-        pairlist_output = self.input_preparation.prepare_inputs(data)
-        return self.painn_core(data, pairlist_output)
 
     def _config_prior(self):
         log.info("Configuring PaiNN model hyperparameter prior distribution")

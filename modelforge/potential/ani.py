@@ -6,7 +6,7 @@ from loguru import logger as log
 from openff.units import unit
 from torch import nn
 
-from modelforge.potential.models import BaseNeuralNetworkPotential
+from modelforge.potential.models import CoreNetwork
 from modelforge.utils.prop import SpeciesAEV
 
 if TYPE_CHECKING:
@@ -430,7 +430,7 @@ class ANIInteraction(nn.Module):
         return output.view_as(species)
 
 
-class ANI2xCore(BaseNeuralNetworkPotential):
+class ANI2xCore(CoreNetwork):
 
     def __init__(
         self,
@@ -547,10 +547,10 @@ class ANI2xCore(BaseNeuralNetworkPotential):
         }
 
 
-from .models import InputPreparation, NNPInput
+from .models import InputPreparation, NNPInput, BaseNetwork
 
 
-class ANI2x(torch.nn.Module):
+class ANI2x(BaseNetwork):
     def __init__(
         self,
         radial_max_distance: unit.Quantity = 5.1 * unit.angstrom,
@@ -562,7 +562,7 @@ class ANI2x(torch.nn.Module):
         angle_sections: int = 4,
     ) -> None:
         super().__init__()
-        self.ani2x_core = ANI2xCore(
+        self.core_module = ANI2xCore(
             radial_max_distance,
             radial_min_distanc,
             number_of_radial_basis_functions,
@@ -575,13 +575,6 @@ class ANI2x(torch.nn.Module):
         self.input_preparation = InputPreparation(
             cutoff=radial_max_distance, only_unique_pairs=self.only_unique_pairs
         )
-
-    def forward(self, data: NNPInput):
-        # perform input checks
-        self.input_preparation._input_checks(data)
-        # prepare the input for the forward pass
-        pairlist_output = self.input_preparation.prepare_inputs(data)
-        return self.ani2x_core(data, pairlist_output)
 
     def _config_prior(self):
         log.info("Configuring ANI2x model hyperparameter prior distribution")

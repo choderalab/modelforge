@@ -115,9 +115,7 @@ def test_sake_layer_equivariance(h_atol, eq_atol):
     perturbed_methane_input.positions = torch.matmul(methane.positions, rotation_matrix)
 
     # prepare reference and perturbed inputs
-    pairlist_output = sake.input_preparation.prepare_inputs(
-        methane, only_unique_pairs=False
-    )
+    pairlist_output = sake.input_preparation.prepare_inputs(methane)
     reference_prepared_input = sake.core_module._model_specific_input_preparation(
         methane, pairlist_output
     )

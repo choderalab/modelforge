@@ -156,7 +156,6 @@ class SchNetCore(BaseNeuralNetworkPotential):
             ),
         )
 
-
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
     ) -> SchnetNeuralNetworkData:
@@ -413,15 +412,15 @@ class SchNet(torch.nn.Module):
             shared_interactions=shared_interactions,
         )
         self.only_unique_pairs = False  # NOTE: for pairlist
-        self.input_preparation = InputPreparation(cutoff=cutoff)
+        self.input_preparation = InputPreparation(
+            cutoff=cutoff, only_unique_pairs=self.only_unique_pairs
+        )
 
     def forward(self, data: NNPInput):
         # perform input checks
         self.input_preparation._input_checks(data)
         # prepare the input for the forward pass
-        pairlist_output = self.input_preparation.prepare_inputs(
-            data, self.only_unique_pairs
-        )
+        pairlist_output = self.input_preparation.prepare_inputs(data)
         return self.schnet_core(data, pairlist_output)
 
     def _config_prior(self):

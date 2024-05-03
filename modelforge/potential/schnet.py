@@ -6,7 +6,7 @@ import torch.nn as nn
 from loguru import logger as log
 from openff.units import unit
 
-from .models import BaseNeuralNetworkPotential
+from .models import CoreNetwork
 
 if TYPE_CHECKING:
     from .models import PairListOutputs
@@ -84,7 +84,7 @@ class SchnetNeuralNetworkData(NeuralNetworkData):
     f_cutoff: Optional[torch.Tensor] = field(default=None)
 
 
-class SchNetCore(BaseNeuralNetworkPotential):
+class SchNetCore(CoreNetwork):
     def __init__(
         self,
         max_Z: int = 100,
@@ -155,7 +155,6 @@ class SchNetCore(BaseNeuralNetworkPotential):
                 1,
             ),
         )
-
 
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
@@ -375,10 +374,10 @@ class SchNETRepresentation(nn.Module):
 
 from typing import NamedTuple, Union
 
-from .models import InputPreparation, NNPInput
+from .models import InputPreparation, NNPInput, BaseNetwork
 
 
-class SchNet(torch.nn.Module):
+class SchNet(BaseNetwork):
     def __init__(
         self,
         max_Z: int = 100,
@@ -404,7 +403,7 @@ class SchNet(torch.nn.Module):
             The cutoff distance for interactions.
         """
         super().__init__()
-        self.schnet_core = SchNetCore(
+        self.core_module = SchNetCore(
             max_Z=max_Z,
             number_of_atom_features=number_of_atom_features,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
@@ -413,16 +412,9 @@ class SchNet(torch.nn.Module):
             shared_interactions=shared_interactions,
         )
         self.only_unique_pairs = False  # NOTE: for pairlist
-        self.input_preparation = InputPreparation(cutoff=cutoff)
-
-    def forward(self, data: NNPInput):
-        # perform input checks
-        self.input_preparation._input_checks(data)
-        # prepare the input for the forward pass
-        pairlist_output = self.input_preparation.prepare_inputs(
-            data, self.only_unique_pairs
+        self.input_preparation = InputPreparation(
+            cutoff=cutoff, only_unique_pairs=self.only_unique_pairs
         )
-        return self.schnet_core(data, pairlist_output)
 
     def _config_prior(self):
         log.info("Configuring SchNet model hyperparameter prior distribution")

@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional, Tuple
+from typing import Any, Callable, Optional, Tuple, NamedTuple
 
 import numpy as np
 import torch
@@ -53,6 +53,7 @@ class NNPInput:
 
     def to(
         self,
+        *,
         device: Optional[torch.device] = None,
         dtype: Optional[torch.dtype] = None,
     ):
@@ -113,6 +114,21 @@ class NNPInput:
             "NNPInputTuple", [field.name for field in fields(self)]
         )
         return NNPInputTuple(*[getattr(self, field.name) for field in fields(self)])
+
+    def as_jax_namedtuple(self) -> NamedTuple:
+        """Export the dataclass fields and values as a named tuple.
+        Convert pytorch tensors to jax arrays."""
+
+        from dataclasses import dataclass, fields
+        import collections
+        from pytorch2jax.pytorch2jax import convert_to_jax
+
+        NNPInputTuple = collections.namedtuple(
+            "NNPInputTuple", [field.name for field in fields(self)]
+        )
+        return NNPInputTuple(
+            *[convert_to_jax(getattr(self, field.name)) for field in fields(self)]
+        )
 
 
 import torch
@@ -938,45 +954,38 @@ def pair_list(
 
     return pair_indices.to(device)
 
+    def forward(
+        self,
+        coordinates: torch.Tensor,  # in nanometer
+        atomic_subsystem_indices: torch.Tensor,
+    ) -> torch.Tensor:
+        """Compute all pairs of atoms and their distances.
 
-def neighbor_list_with_cutoff(
-    coordinates: torch.Tensor,  # in nanometer
-    atomic_subsystem_indices: torch.Tensor,
-    cutoff: unit.Quantity,
-    only_unique_pairs: bool = False,
-) -> torch.Tensor:
-    """Compute all pairs of atoms and their distances.
+        Parameters
+        ----------
+        coordinates : torch.Tensor, shape (nr_atoms_per_systems, 3), in nanometer
+        atomic_subsystem_indices : torch.Tensor, shape (nr_atoms_per_systems)
+            Atom indices to indicate which atoms belong to which molecule
+        """
+        positions = coordinates
+        pair_indices = self.pair_list(atomic_subsystem_indices)
 
-    Parameters
-    ----------
-    coordinates : torch.Tensor, shape (nr_atoms_per_systems, 3), in nanometer
-    atomic_subsystem_indices : torch.Tensor, shape (nr_atoms_per_systems)
-        Atom indices to indicate which atoms belong to which molecule
-    cutoff : unit.Quantity
-        The cutoff distance.
-    """
-    positions = coordinates.detach()
-    pair_indices = pair_list(
-        atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
-    )
+        # create pair_coordinates tensor
+        pair_coordinates = positions[pair_indices.T]
+        pair_coordinates = pair_coordinates.view(-1, 2, 3)
 
-    # create pair_coordinates tensor
-    pair_coordinates = positions[pair_indices.T]
-    pair_coordinates = pair_coordinates.view(-1, 2, 3)
+        # Calculate distances
+        distances = (pair_coordinates[:, 0, :] - pair_coordinates[:, 1, :]).norm(
+            p=2, dim=-1
+        )
 
-    # Calculate distances
-    distances = (pair_coordinates[:, 0, :] - pair_coordinates[:, 1, :]).norm(
-        p=2, dim=-1
-    )
+        # Find pairs within the cutoff
+        in_cutoff = (distances <= self.cutoff).nonzero(as_tuple=False).squeeze()
 
-    # Find pairs within the cutoff
-    cutoff = cutoff.to(unit.nanometer).m
-    in_cutoff = (distances <= cutoff).nonzero(as_tuple=False).squeeze()
+        # Get the atom indices within the cutoff
+        pair_indices_within_cutoff = pair_indices[:, in_cutoff]
 
-    # Get the atom indices within the cutoff
-    pair_indices_within_cutoff = pair_indices[:, in_cutoff]
-
-    return pair_indices_within_cutoff
+        return pair_indices_within_cutoff
 
 
 def scatter_softmax(

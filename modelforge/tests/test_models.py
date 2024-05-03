@@ -4,18 +4,48 @@ from modelforge.potential import _IMPLEMENTED_NNPS
 
 
 @pytest.mark.parametrize("model_name", _IMPLEMENTED_NNPS)
-def test_model_factory(model_name):
+def test_JAX_wrapping(model_name, batch):
     from modelforge.potential.models import (
         NeuralNetworkPotentialFactory,
-        TrainingAdapter,
     )
 
     # inference model
-    model = NeuralNetworkPotentialFactory.create_nnp("inference", model_name)
-    assert model_name in str(type(model))
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        use="inference",
+        nnp_name=model_name,
+        simulation_environment="JAX",
+    )
+    assert "JAX" in str(type(model))
+    nnp_input = batch.nnp_input.as_jax_namedtuple()
+    out = model(nnp_input).E
+    import jax
+
+    grad_fn = jax.grad(lambda pos: out.sum())  # Create a gradient function
+    forces = -grad_fn(
+        nnp_input.positions
+    )  # Evaluate gradient function and apply negative sign
+
+
+@pytest.mark.parametrize("model_name", _IMPLEMENTED_NNPS)
+@pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
+def test_model_factory(model_name, simulation_environment):
+    from modelforge.potential.models import (
+        NeuralNetworkPotentialFactory,
+    )
+    from modelforge.train.training import TrainingAdapter
+
+    # inference model
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        use="inference",
+        nnp_name=model_name,
+        simulation_environment=simulation_environment,
+    )
+    assert model_name in str(type(model)) or "JAX" in str(type(model))
 
     # training model
-    model = NeuralNetworkPotentialFactory.create_nnp("training", model_name)
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        "training", model_name, simulation_environment
+    )
     assert type(model) == TrainingAdapter
 
 
@@ -65,25 +95,62 @@ def test_energy_scaling_and_offset():
     )
 
 
-def test_forward_pass(inference_model, batch_QM9_ANI2x):
+@pytest.mark.parametrize("model_name", _IMPLEMENTED_NNPS)
+def test_state_dict_saving_and_loading(model_name):
+    from modelforge.potential import NeuralNetworkPotentialFactory
+    import torch
+
+    model1 = NeuralNetworkPotentialFactory.create_nnp("training", model_name, "PyTorch")
+    torch.save(model1.state_dict(), "model.pth")
+
+    model2 = NeuralNetworkPotentialFactory.create_nnp("inference", model_name, "PyTorch")
+    model2.load_state_dict(torch.load("model.pth"))
+
+
+def test_energy_between_simulation_environments(inference_model, batch):
+    # compare that the energy is the same for the JAX and PyTorch Model
+    import numpy as np
+    import torch
+
+    nnp_input = batch.nnp_input
+    # test the forward pass through each of the models
+    torch.manual_seed(42)
+    model = inference_model("PyTorch")
+
+    output_torch = model(nnp_input).E
+
+    torch.manual_seed(42)
+    model = inference_model("JAX")
+    nnp_input = nnp_input.as_jax_namedtuple()
+    output_jax = model(nnp_input).E
+
+    # test tat we get an energie per molecule
+    assert np.isclose(output_torch.sum().detach().numpy(), output_jax.sum())
+
+
+@pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
+def test_forward_pass(simulation_environment, inference_model, batch):
     # this test sends a single batch from different datasets through the model
 
-    batch = batch_QM9_ANI2x
     nnp_input = batch.nnp_input
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
     # test the forward pass through each of the models
-    output = inference_model(nnp_input).E
+    model = inference_model(simulation_environment)
+    if "JAX" in str(type(model)):
+        nnp_input = nnp_input.as_jax_namedtuple()
+
+    output = model(nnp_input).E
 
     # test tat we get an energie per molecule
     assert len(output) == nr_of_mols
 
 
-def test_calculate_energies_and_forces(inference_model, batch_QM9_ANI2x):
+@pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
+def test_calculate_energies_and_forces(simulation_environment, inference_model, batch):
     """
     Test the calculation of energies and forces for a molecule.
     """
-    batch = batch_QM9_ANI2x
     import torch
 
     nnp_input = batch.nnp_input
@@ -91,13 +158,25 @@ def test_calculate_energies_and_forces(inference_model, batch_QM9_ANI2x):
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
     nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
 
-    # forward pass
-    result = inference_model(nnp_input).E
+    # The inference_model fixture now returns a function that expects an environment
+    model = inference_model(simulation_environment)
+    if "JAX" in str(type(model)):
+        nnp_input = nnp_input.as_jax_namedtuple()
 
-    # backpropagation
-    forces = -torch.autograd.grad(
-        result.sum(), nnp_input.positions, create_graph=True, retain_graph=True
-    )[0]
+    result = model(nnp_input).E
+
+    import jax
+
+    if "JAX" in str(type(model)):
+        grad_fn = jax.grad(lambda pos: result.sum())  # Create a gradient function
+        forces = -grad_fn(
+            nnp_input.positions
+        )  # Evaluate gradient function and apply negative sign
+    else:
+        # backpropagation
+        forces = -torch.autograd.grad(
+            result.sum(), nnp_input.positions, create_graph=True, retain_graph=True
+        )[0]
 
     assert result.shape == torch.Size([nr_of_mols])  #  only one molecule
     assert forces.shape == (nr_of_atoms_per_batch, 3)  #  only one molecule
@@ -189,8 +268,8 @@ def test_pairlist():
     from openff.units import unit
 
     cutoff = 5.0 * unit.nanometer  # no relevant cutoff
-    pairlist = Neighborlist(cutoff)
-    r = pairlist(positions, atomic_subsystem_indices, only_unique_pairs=True)
+    pairlist = Neighborlist(cutoff, only_unique_pairs=True)
+    r = pairlist(positions, atomic_subsystem_indices)
     pair_indices = r.pair_indices
 
     # pairlist describes the pairs of interacting atoms within a batch
@@ -219,8 +298,8 @@ def test_pairlist():
 
     # test with cutoff
     cutoff = 2.0 * unit.nanometer
-    pairlist = Neighborlist(cutoff)
-    r = pairlist(positions, atomic_subsystem_indices, only_unique_pairs=True)
+    pairlist = Neighborlist(cutoff, only_unique_pairs=True)
+    r = pairlist(positions, atomic_subsystem_indices)
     pair_indices = r.pair_indices
 
     assert torch.equal(pair_indices, torch.tensor([[0, 1, 3, 4], [1, 2, 4, 5]]))
@@ -243,8 +322,8 @@ def test_pairlist():
 
     # test with complete pairlist
     cutoff = 2.0 * unit.nanometer
-    pairlist = Neighborlist(cutoff)
-    r = pairlist(positions, atomic_subsystem_indices, only_unique_pairs=False)
+    pairlist = Neighborlist(cutoff, only_unique_pairs=False)
+    r = pairlist(positions, atomic_subsystem_indices)
     pair_indices = r.pair_indices
 
     print(pair_indices, flush=True)
@@ -255,15 +334,11 @@ def test_pairlist():
     # make sure that Pairlist and Neighborlist behave the same for large cutoffs
     cutoff = 10.0 * unit.nanometer
     only_unique_pairs = False
-    neighborlist = Neighborlist(cutoff)
-    pairlist = Pairlist()
-    r = pairlist(
-        positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
-    )
+    neighborlist = Neighborlist(cutoff, only_unique_pairs=only_unique_pairs)
+    pairlist = Pairlist(only_unique_pairs=only_unique_pairs)
+    r = pairlist(positions, atomic_subsystem_indices)
     pair_indices = r.pair_indices
-    r = neighborlist(
-        positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
-    )
+    r = neighborlist(positions, atomic_subsystem_indices)
     neighbor_indices = r.pair_indices
 
     assert torch.equal(pair_indices, neighbor_indices)
@@ -271,15 +346,11 @@ def test_pairlist():
     # make sure that they are the same also for non-redundant pairs
     cutoff = 10.0 * unit.nanometer
     only_unique_pairs = True
-    neighborlist = Neighborlist(cutoff)
-    pairlist = Pairlist()
-    r = pairlist(
-        positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
-    )
+    neighborlist = Neighborlist(cutoff, only_unique_pairs=only_unique_pairs)
+    pairlist = Pairlist(only_unique_pairs=only_unique_pairs)
+    r = pairlist(positions, atomic_subsystem_indices)
     pair_indices = r.pair_indices
-    r = neighborlist(
-        positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
-    )
+    r = neighborlist(positions, atomic_subsystem_indices)
     neighbor_indices = r.pair_indices
 
     assert torch.equal(pair_indices, neighbor_indices)
@@ -287,15 +358,11 @@ def test_pairlist():
     # this should fail
     cutoff = 2.0 * unit.nanometer
     only_unique_pairs = True
-    neighborlist = Neighborlist(cutoff)
-    pairlist = Pairlist()
-    r = pairlist(
-        positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
-    )
+    neighborlist = Neighborlist(cutoff, only_unique_pairs=only_unique_pairs)
+    pairlist = Pairlist(only_unique_pairs=only_unique_pairs)
+    r = pairlist(positions, atomic_subsystem_indices)
     pair_indices = r.pair_indices
-    r = neighborlist(
-        positions, atomic_subsystem_indices, only_unique_pairs=only_unique_pairs
-    )
+    r = neighborlist(positions, atomic_subsystem_indices)
     neighbor_indices = r.pair_indices
 
     assert not pair_indices.shape == neighbor_indices.shape
@@ -338,6 +405,7 @@ def test_casting(batch_QM9_ANI2x, inference_model):
     nnp_input = batch.metadata.to(dtype=torch.float64)
 
     # cast input and model to torch.float64
+    inference_model = inference_model("PyTorch")
     model = inference_model.to(dtype=torch.float64)
     nnp_input = batch.nnp_input.to(dtype=torch.float64)
 
@@ -350,14 +418,14 @@ def test_casting(batch_QM9_ANI2x, inference_model):
     model(nnp_input)
 
 
+@pytest.mark.parametrize("simulation_environment", ["PyTorch"])
 def test_equivariant_energies_and_forces(
-    batch_QM9_ANI2x, inference_model, equivariance_utils
+    simulation_environment, batch, inference_model, equivariance_utils
 ):
     """
     Test the calculation of energies and forces for a molecule.
     NOTE: test will be adapted once we have a trained model.
     """
-    batch = batch_QM9_ANI2x
     import torch
     from dataclasses import replace
 
@@ -365,14 +433,17 @@ def test_equivariant_energies_and_forces(
     translation, rotation, reflection = equivariance_utils
     # define the tolerance
     atol = 1e-3
+    nnp_input = batch.nnp_input
+
     # initialize the models
-    model = inference_model.double()
+    inference_model = inference_model(simulation_environment)
+    model = inference_model.to(dtype=torch.float64)
 
     # ------------------- #
     # start the test
     # reference values
     nnp_input = batch.nnp_input.to(dtype=torch.float64)
-    reference_result = model(nnp_input).E.double()
+    reference_result = model(nnp_input).E.to(dtype=torch.float64)
     reference_forces = -torch.autograd.grad(
         reference_result.sum(),
         nnp_input.positions,
@@ -405,9 +476,7 @@ def test_equivariant_energies_and_forces(
 
     # rotation test
     rotation_input_data = replace(nnp_input)
-    rotation_input_data.positions = rotation(
-        rotation_input_data.positions.to(torch.float32)
-    ).double()
+    rotation_input_data.positions = rotation(rotation_input_data.positions)
     rotation_result = model(rotation_input_data).E
 
     for t, r in zip(rotation_result, reference_result):
@@ -427,7 +496,7 @@ def test_equivariant_energies_and_forces(
         retain_graph=True,
     )[0]
 
-    rotate_reference = rotation(reference_forces.to(torch.float32)).double()
+    rotate_reference = rotation(reference_forces)
     assert torch.allclose(
         rotation_forces,
         rotate_reference,
@@ -436,9 +505,7 @@ def test_equivariant_energies_and_forces(
 
     # reflection test
     reflection_input_data = replace(nnp_input)
-    reflection_input_data.positions = reflection(
-        reflection_input_data.positions.to(torch.float32)
-    ).double()
+    reflection_input_data.positions = reflection(reflection_input_data.positions)
     reflection_result = model(reflection_input_data).E
     reflection_forces = -torch.autograd.grad(
         reflection_result.sum(),
@@ -458,14 +525,14 @@ def test_equivariant_energies_and_forces(
 
     assert torch.allclose(
         reflection_forces,
-        reflection(reference_forces.to(torch.float32)).double(),
+        reflection(reference_forces),
         atol=atol,
     )
 
 
-def testPairlist_calculate_r_ij_and_d_ij():
+def test_pairlist_calculate_r_ij_and_d_ij():
     # Define inputs
-    from modelforge.potential.models import Pairlist, Neighborlist
+    from modelforge.potential.models import Neighborlist
     import torch
 
     positions = torch.tensor(
@@ -479,10 +546,8 @@ def testPairlist_calculate_r_ij_and_d_ij():
     # Create Pairlist instance
     # --------------------------- #
     # Only unique pairs
-    pairlist = Neighborlist(cutoff)
-    pair_indices = pairlist.calculate_pairs(
-        positions, atomic_subsystem_indices, pairlist.cutoff, only_unique_pairs=True
-    )
+    pairlist = Neighborlist(cutoff, only_unique_pairs=True)
+    pair_indices = pairlist.enumerate_all_pairs(atomic_subsystem_indices)
 
     # Calculate r_ij and d_ij
     r_ij = pairlist.calculate_r_ij(pair_indices, positions)
@@ -503,10 +568,8 @@ def testPairlist_calculate_r_ij_and_d_ij():
 
     # --------------------------- #
     # ALL pairs
-    pairlist = Neighborlist(cutoff)
-    pair_indices = pairlist.calculate_pairs(
-        positions, atomic_subsystem_indices, pairlist.cutoff, only_unique_pairs=False
-    )
+    pairlist = Neighborlist(cutoff, only_unique_pairs=False)
+    pair_indices = pairlist.enumerate_all_pairs(atomic_subsystem_indices)
 
     # Calculate r_ij and d_ij
     r_ij = pairlist.calculate_r_ij(pair_indices, positions)

@@ -9,7 +9,7 @@ from torch_scatter import scatter_add
 
 from modelforge.potential.utils import NeuralNetworkData
 
-from .models import BaseNeuralNetworkPotential
+from .models import CoreNetwork
 
 if TYPE_CHECKING:
     from modelforge.potential.utils import NNPInput
@@ -440,7 +440,7 @@ class PhysNetModule(nn.Module):
         }
 
 
-class PhysNetCore(BaseNeuralNetworkPotential):
+class PhysNetCore(CoreNetwork):
     def __init__(
         self,
         max_Z: int = 100,
@@ -468,7 +468,7 @@ class PhysNetCore(BaseNeuralNetworkPotential):
         log.debug("Initializing PhysNet model.")
 
         self.only_unique_pairs = False  # NOTE: for pairlist
-        super().__init__(cutoff=cutoff)
+        super().__init__(cutoff=cutoff, only_unique_pairs=self.only_unique_pairs)
 
         # embedding
         from modelforge.potential.utils import Embedding
@@ -609,10 +609,10 @@ class PhysNetCore(BaseNeuralNetworkPotential):
         return output
 
 
-from .models import InputPreparation, NNPInput
+from .models import InputPreparation, NNPInput, BaseNetwork
 
 
-class PhysNet(torch.nn.Module):
+class PhysNet(BaseNetwork):
     def __init__(
         self,
         max_Z: int = 100,
@@ -623,7 +623,7 @@ class PhysNet(torch.nn.Module):
         number_of_modules: int = 5,
     ) -> None:
         super().__init__()
-        self.physnet_core = PhysNetCore(
+        self.core_module = PhysNetCore(
             max_Z=max_Z,
             cutoff=cutoff,
             number_of_atom_features=number_of_atom_features,
@@ -632,16 +632,9 @@ class PhysNet(torch.nn.Module):
             number_of_modules=number_of_modules,
         )
         self.only_unique_pairs = True  # NOTE: for pairlist
-        self.input_preparation = InputPreparation(cutoff=cutoff)
-
-    def forward(self, data: NNPInput):
-        # perform input checks
-        self.input_preparation._input_checks(data)
-        # prepare the input for the forward pass
-        pairlist_output = self.input_preparation.prepare_inputs(
-            data, self.only_unique_pairs
+        self.input_preparation = InputPreparation(
+            cutoff=cutoff, only_unique_pairs=self.only_unique_pairs
         )
-        return self.physnet_core(data, pairlist_output)
 
     def _config_prior(self):
         log.info("Configuring SchNet model hyperparameter prior distribution")

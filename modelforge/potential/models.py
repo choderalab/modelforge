@@ -1,15 +1,13 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Dict, NamedTuple, Tuple, Type, Mapping, Union
 
-import lightning as pl
 import torch
-import torch.nn as nn
 from loguru import logger as log
 from openff.units import unit
-from torch.nn import functional as F
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-from modelforge.potential.utils import BatchData, NNPInput
-from modelforge.potential.processing import AtomicSelfEnergies
+from torch.nn import Module
+
+from modelforge.dataset.dataset import DatasetStatistics
+from modelforge.potential.utils import NNPInput
 
 if TYPE_CHECKING:
     from modelforge.dataset.dataset import DatasetStatistics
@@ -34,7 +32,7 @@ class EnergyOutput(NamedTuple):
     molecular_ase: torch.Tensor
 
 
-class Pairlist(nn.Module):
+class Pairlist(Module):
     """Handle pair list calculations for atoms, returning atom indices pairs and displacement vectors.
 
     Attributes
@@ -48,18 +46,69 @@ class Pairlist(nn.Module):
         Computes the displacement vector between atom pairs.
     calculate_d_ij(r_ij)
         Computes the Euclidean distance between atoms in a pair.
-    forward(positions, atomic_subsystem_indices, only_unique_pairs=False)
+    forward(positions, atomic_subsystem_indices)
         Forward pass to compute pair indices, distances, and displacement vectors.
     """
 
-    def __init__(self):
+    def __init__(self, only_unique_pairs: bool = False):
         """
-        Initialize PairList.
+        Parameters
+        ----------
+        only_unique_pairs : bool, optional
+            If True, only unique pairs are returned (default is False).
+            Otherwise, all pairs are returned.
         """
         super().__init__()
-        from .utils import pair_list
+        self.only_unique_pairs = only_unique_pairs
 
-        self.calculate_pairs = pair_list
+    def enumerate_all_pairs(self, atomic_subsystem_indices: torch.Tensor):
+        """Compute all pairs of atoms and their distances.
+
+        Parameters
+        ----------
+        atomic_subsystem_indices : torch.Tensor, shape (nr_atoms_per_systems)
+            Atom indices to indicate which atoms belong to which molecule
+        """
+        # generate index grid
+        n = len(atomic_subsystem_indices)
+
+        # get device that passed tensors lives on, initialize on the same device
+        device = atomic_subsystem_indices.device
+
+        if self.only_unique_pairs:
+            i_indices, j_indices = torch.triu_indices(n, n, 1, device=device)
+        else:
+            # Repeat each number n-1 times for i_indices
+            i_indices = torch.repeat_interleave(
+                torch.arange(n, device=device), repeats=n - 1
+            )
+
+            # Correctly construct j_indices
+            j_indices = torch.cat(
+                [
+                    torch.cat(
+                        (
+                            torch.arange(i, device=device),
+                            torch.arange(i + 1, n, device=device),
+                        )
+                    )
+                    for i in range(n)
+                ]
+            )
+
+        # filter pairs to only keep those belonging to the same molecule
+        same_molecule_mask = (
+            atomic_subsystem_indices[i_indices] == atomic_subsystem_indices[j_indices]
+        )
+
+        # Apply mask to get final pair indices
+        i_final_pairs = i_indices[same_molecule_mask]
+        j_final_pairs = j_indices[same_molecule_mask]
+
+        # concatenate to form final (2, n_pairs) tensor
+        pair_indices = torch.stack((i_final_pairs, j_final_pairs))
+
+        return pair_indices.to(device)
 
     def calculate_r_ij(
         self, pair_indices: torch.Tensor, positions: torch.Tensor
@@ -103,7 +152,6 @@ class Pairlist(nn.Module):
         self,
         positions: torch.Tensor,
         atomic_subsystem_indices: torch.Tensor,
-        only_unique_pairs: bool = False,
     ) -> PairListOutputs:
         """
         Compute interacting pairs, distances, and displacement vectors.
@@ -122,9 +170,8 @@ class Pairlist(nn.Module):
         PairListOutputs
             A NamedTuple containing 'pair_indices', 'd_ij' (distances), and 'r_ij' (displacement vectors).
         """
-        pair_indices = self.calculate_pairs(
+        pair_indices = self.enumerate_all_pairs(
             atomic_subsystem_indices,
-            only_unique_pairs=only_unique_pairs,
         )
         r_ij = self.calculate_r_ij(pair_indices, positions)
 
@@ -133,9 +180,6 @@ class Pairlist(nn.Module):
             d_ij=self.calculate_d_ij(r_ij),
             r_ij=r_ij,
         )
-
-
-from openff.units import unit
 
 
 class Neighborlist(Pairlist):
@@ -149,7 +193,7 @@ class Neighborlist(Pairlist):
         Cutoff distance for neighbor list calculations.
     """
 
-    def __init__(self, cutoff: unit.Quantity):
+    def __init__(self, cutoff: unit.Quantity, only_unique_pairs: bool = False):
         """
         Initialize the Neighborlist with a specific cutoff distance.
 
@@ -158,17 +202,13 @@ class Neighborlist(Pairlist):
         cutoff : unit.Quantity
             Cutoff distance for neighbor calculations.
         """
-        super().__init__()
-        from .utils import neighbor_list_with_cutoff
-
-        self.calculate_pairs = neighbor_list_with_cutoff
-        self.cutoff = cutoff
+        super().__init__(only_unique_pairs=only_unique_pairs)
+        self.register_buffer("cutoff", torch.tensor(cutoff.to(unit.nanometer).m))
 
     def forward(
         self,
         positions: torch.Tensor,
         atomic_subsystem_indices: torch.Tensor,
-        only_unique_pairs: bool = False,
     ) -> PairListOutputs:
         """
         Forward pass to compute neighbor list considering a cutoff distance.
@@ -190,27 +230,179 @@ class Neighborlist(Pairlist):
             A NamedTuple containing 'pair_indices', 'd_ij' (distances), and 'r_ij' (displacement vectors).
         """
 
-        pair_indices = self.calculate_pairs(
-            positions,
+        pair_indices = self.enumerate_all_pairs(
             atomic_subsystem_indices,
-            cutoff=self.cutoff,
-            only_unique_pairs=only_unique_pairs,
         )
         r_ij = self.calculate_r_ij(pair_indices, positions)
+        d_ij = self.calculate_d_ij(r_ij)
+
+        # Find pairs within the cutoff
+        in_cutoff = (d_ij <= self.cutoff).squeeze()
+        # Get the atom indices within the cutoff
+        pair_indices_within_cutoff = pair_indices[:, in_cutoff]
 
         return PairListOutputs(
-            pair_indices=pair_indices,
-            d_ij=self.calculate_d_ij(r_ij),
-            r_ij=r_ij,
+            pair_indices=pair_indices_within_cutoff,
+            d_ij=d_ij[in_cutoff],
+            r_ij=r_ij[in_cutoff],
         )
 
 
-from typing import Callable, Literal, Optional, Union
+from typing import Literal, Optional, Union, Callable
+import numpy as np
+
+
+class JAXModel:
+    """A model wrapper that facilitates calling a JAX function with predefined parameters and buffers.
+
+    Attributes
+    ----------
+    jax_fn : Callable
+        The JAX function to be called.
+    parameter : jax.
+        Parameters required by the JAX function.
+    buffer : Any
+        Buffers required by the JAX function.
+    name : str
+        Name of the model.
+    """
+
+    def __init__(
+        self, jax_fn: Callable, parameter: np.ndarray, buffer: np.ndarray, name: str
+    ):
+        self.jax_fn = jax_fn
+        self.parameter = parameter
+        self.buffer = buffer
+        self.name = name
+
+    def __call__(self, data: NamedTuple):
+        """Calls the JAX function using the stored parameters and buffers along with additional data.
+
+        Parameters
+        ----------
+        data : NamedTuple
+            Data to be passed to the JAX function.
+
+        Returns
+        -------
+        Any
+            The result of the JAX function.
+        """
+
+        return self.jax_fn(self.parameter, self.buffer, data)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__} wrapping {self.name}"
+
+
+class PyTorch2JAXConverter:
+    """
+    Wraps a PyTorch neural network potential instance in a Flax module using the
+    `pytorch2jax` library (https://github.com/subho406/Pytorch2Jax).
+    The converted model uses dlpack to convert between Pytorch and Jax tensors
+    in-memory and executes Pytorch backend inside Jax wrapped functions.
+    The wrapped modules are compatible with Jax backward-mode autodiff.
+
+    Parameters
+    ----------
+    nnp_instance : Any
+        The neural network potential instance to convert.
+
+    Returns
+    -------
+    JAXModel
+        The converted JAX model.
+    """
+
+    def convert_to_jax_model(
+        self, nnp_instance: Union["ANI2x", "SchNet", "PaiNN", "PhysNet"]
+    ) -> JAXModel:
+        """
+        Convert a PyTorch neural network instance to a JAX model.
+
+        Parameters
+        ----------
+        nnp_instance : Union["ANI2x", "SchNet", "PaiNN", "PhysNet"]
+            The PyTorch neural network instance to be converted.
+
+        Returns
+        -------
+        JAXModel
+            A JAX model containing the converted neural network function, parameters, and buffers.
+        """
+
+        jax_fn, params, buffers = self._convert_pytnn_to_jax(nnp_instance)
+        return JAXModel(jax_fn, params, buffers, nnp_instance.__class__.__name__)
+
+    @staticmethod
+    def _convert_pytnn_to_jax(
+        nnp_instance: Union["ANI2x", "SchNet", "PaiNN", "PhysNet"]
+    ) -> Tuple[Callable, np.ndarray, np.ndarray]:
+        """Internal method to convert PyTorch neural network parameters and buffers to JAX format.
+
+        Parameters
+        ----------
+        nnp_instance : Any
+            The PyTorch neural network instance.
+
+        Returns
+        -------
+        Tuple[Callable, Any, Any]
+            A tuple containing the JAX function, parameters, and buffers.
+        """
+
+        import jax
+        from jax import custom_vjp
+        from pytorch2jax.pytorch2jax import convert_to_jax, convert_to_pyt
+        import functorch
+        from functorch import make_functional_with_buffers
+
+        # Convert the PyTorch model to a functional representation and extract the model function and parameters
+        model_fn, model_params, model_buffer = make_functional_with_buffers(
+            nnp_instance
+        )
+
+        # Convert the model parameters from PyTorch to JAX representations
+        model_params = jax.tree_map(convert_to_jax, model_params)
+        # Convert the model buffer from PyTorch to JAX representations
+        model_buffer = jax.tree_map(convert_to_jax, model_buffer)
+
+        # Define the apply function using a custom VJP
+        @custom_vjp
+        def apply(params, *args, **kwargs):
+            # Convert the input data from JAX to PyTorch
+            params, args, kwargs = map(
+                lambda x: jax.tree_map(convert_to_pyt, x), (params, args, kwargs)
+            )
+            # Apply the model function to the input data
+            out = model_fn(params, *args, **kwargs)
+            # Convert the output data from PyTorch to JAX
+            out = jax.tree_map(convert_to_jax, out)
+            return out
+
+        # Define the forward and backward passes for the VJP
+        def apply_fwd(params, *args, **kwargs):
+            return apply(params, *args, **kwargs), (params, args, kwargs)
+
+        def apply_bwd(res, grads):
+            params, args, kwargs = res
+            params, args, kwargs = map(
+                lambda x: jax.tree_map(convert_to_pyt, x), (params, args, kwargs)
+            )
+            grads = jax.tree_map(convert_to_pyt, grads)
+            # Compute the gradients using the model function and convert them from JAX to PyTorch representations
+            grads = functorch.vjp(model_fn, params, *args, **kwargs)[1](grads)
+            return jax.tree_map(convert_to_jax, grads)
+
+        apply.defvjp(apply_fwd, apply_bwd)
+
+        # Return the apply function and the converted model parameters
+        return apply, model_params, model_buffer
 
 
 class NeuralNetworkPotentialFactory:
     """
-    Factory class for creating instances of neural network potentials (NNP).
+    Factory class for creating instances of neural network potentials (NNP) that are traceable/scriptable and can be exported to torchscript.
 
     This factory allows for the creation of specific NNP instances configured for either
     training or inference purposes based on the given parameters.
@@ -224,26 +416,26 @@ class NeuralNetworkPotentialFactory:
     @staticmethod
     def create_nnp(
         use: Literal["training", "inference"],
-        nnp_type: Literal["ANI2x", "SchNet", "PaiNN", "SAKE", "PhysNet"],
-        nnp_parameters: Optional[Dict[str, Union[int, float]]] = {},
-        training_parameters: Dict[str, Any] = {},
-        compile_model: bool = False,
-    ) -> Union[Union["ANI2x", "SchNet", "PaiNN", "PhysNet", "SAKE"], "TrainingAdapter"]:
+        nnp_name: Literal["ANI2x", "SchNet", "PaiNN", "SAKE", "PhysNet"],
+        simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
+        nnp_parameters: Optional[Dict[str, Union[int, float, str]]] = None,
+        training_parameters: Optional[Dict[str, Any]] = None,
+    ) -> Union[Type[torch.nn.Module], Type[JAXModel]]:
         """
         Creates an NNP instance of the specified type, configured either for training or inference.
 
         Parameters
         ----------
-        use : {'training', 'inference'}
+        use : str
             The use case for the NNP instance.
-        nnp_type : {'ANI2x', 'SchNet', 'PaiNN', 'SAKE', 'PhysNet'}
+        nnp_name : str
             The type of NNP to instantiate.
+        simulation_environment : str
+            The environment to use, either 'PyTorch' or 'JAX'.
         nnp_parameters : dict, optional
             Parameters specific to the NNP model, by default {}.
         training_parameters : dict, optional
             Parameters for configuring the training, by default {}.
-        compile_model : bool, optional
-            Whether to compile the model, by default False
 
         Returns
         -------
@@ -259,52 +451,49 @@ class NeuralNetworkPotentialFactory:
         """
 
         from modelforge.potential import _IMPLEMENTED_NNPS
+        from modelforge.train.training import TrainingAdapter
 
-        def _return_specific_version_of_nnp(use: str, nnp_class):
-            if use == "training":
-                nnp_instance = nnp_class(**nnp_parameters)
-                nnp_instance = (
-                    torch.compile(nnp_instance, mode="max-autotune")
-                    if compile_model
-                    else nnp_instance
+        nnp_parameters = nnp_parameters or {}
+        training_parameters = training_parameters or {}
+
+        # get NNP
+        nnp_class: Type = _IMPLEMENTED_NNPS.get(nnp_name)
+        if nnp_class is None:
+            raise NotImplementedError(f"NNP type {nnp_name} is not implemented.")
+
+        # add modifications to NNP if requested
+        if use == "training":
+            if simulation_environment == "JAX":
+                log.warning(
+                    "Training in JAX is not availalbe. Falling back to PyTorch."
                 )
-                trainer = TrainingAdapter(model=nnp_instance, **training_parameters)
-                return trainer
-            elif use == "inference":
-                nnp_instance = nnp_class(**nnp_parameters)
-                nnp_instance = (
-                    torch.compile(nnp_instance, mode="max-autotune")
-                    if compile_model
-                    else nnp_instance
-                )
-                return nnp_instance
+            nnp_parameters["nnp_name"] = nnp_name
+            return TrainingAdapter(nnp_parameters=nnp_parameters, **training_parameters)
+        elif use == "inference":
+            nnp_instance = nnp_class(**nnp_parameters)
+            if simulation_environment == "JAX":
+                return PyTorch2JAXConverter().convert_to_jax_model(nnp_instance)
             else:
-                raise ValueError("Unknown NNP type requested.")
-
-        if nnp_type == "ANI2x":
-            return _return_specific_version_of_nnp(use, _IMPLEMENTED_NNPS[nnp_type])
-        elif nnp_type == "SchNet":
-            return _return_specific_version_of_nnp(use, _IMPLEMENTED_NNPS[nnp_type])
-        elif nnp_type == "PaiNN":
-            return _return_specific_version_of_nnp(use, _IMPLEMENTED_NNPS[nnp_type])
-        elif nnp_type == "PhysNet":
-            return _return_specific_version_of_nnp(use, _IMPLEMENTED_NNPS[nnp_type])
-        elif nnp_type == "SAKE":
-            return _return_specific_version_of_nnp(use, _IMPLEMENTED_NNPS[nnp_type])
+                return nnp_instance
         else:
-            raise NotImplementedError("Unknown NNP type requested.")
+            raise ValueError(f"Unsupported 'use' value: {use}")
 
 
 class InputPreparation(torch.nn.Module):
-    def __init__(self, cutoff: unit.Quantity):
+    def __init__(self, cutoff: unit.Quantity, only_unique_pairs: bool = True):
+        """
+        Parameters
+        ----------
+        only_unique_pairs : bool, optional
+            Whether to only use unique pairs in the pair list calculation, by default True.
+        """
+
         super().__init__()
         from .models import Neighborlist
 
-        self.calculate_distances_and_pairlist = Neighborlist(cutoff)
+        self.calculate_distances_and_pairlist = Neighborlist(cutoff, only_unique_pairs)
 
-    def prepare_inputs(
-        self, data: Union[NNPInput, NamedTuple], only_unique_pairs: bool = True
-    ):
+    def prepare_inputs(self, data: Union[NNPInput, NamedTuple]):
         """
         Prepares the input tensors for passing to the model.
 
@@ -316,12 +505,10 @@ class InputPreparation(torch.nn.Module):
         data : NNPInput
             The input data provided by the dataset, containing atomic numbers, positions,
             and other necessary information.
-        only_unique_pairs : bool, optional
-            Whether to only use unique pairs in the pair list calculation, by default True.
 
         Returns
         -------
-        The processed input data, ready for the model's forward pass.
+        The processed input data, ready for the models forward pass.
         """
         # ---------------------------
         # general input manipulation
@@ -329,7 +516,7 @@ class InputPreparation(torch.nn.Module):
         atomic_subsystem_indices = data.atomic_subsystem_indices
 
         pairlist_output = self.calculate_distances_and_pairlist(
-            positions, atomic_subsystem_indices, only_unique_pairs
+            positions, atomic_subsystem_indices
         )
 
         return pairlist_output
@@ -361,7 +548,36 @@ class InputPreparation(torch.nn.Module):
         assert data.positions.shape == torch.Size([nr_of_atoms, 3])
 
 
-class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
+class BaseNetwork(Module):
+
+    def load_state_dict(
+        self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False
+    ):
+        # Prefix to remove
+        prefix = "model."
+
+        # check if prefix is present
+        if any(key.startswith(prefix) for key in state_dict.keys()):
+            # Create a new dictionary without the prefix in the keys if prefix exists
+            new_d = {
+                key[len(prefix) :] if key.startswith(prefix) else key: value
+                for key, value in state_dict.items()
+            }
+            log.debug(f"Removed prefix: {prefix}")
+        else:
+            log.debug("No prefix found. No modifications to keys in state loading.")
+
+        super().load_state_dict(new_d, strict=strict, assign=assign)
+
+    def forward(self, data: NNPInput):
+        # perform input checks
+        self.input_preparation._input_checks(data)
+        # prepare the input for the forward pass
+        pairlist_output = self.input_preparation.prepare_inputs(data)
+        return self.core_module(data, pairlist_output)
+
+
+class CoreNetwork(Module, ABC):
     """Abstract base class for neural network potentials.
 
     Attributes
@@ -377,6 +593,8 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
     def __init__(
         self,
         cutoff: unit.Quantity,
+        only_unique_pairs: bool = False,
+        mode: Literal["safe", "fast"] = "safe",
     ):
         """
         Initializes the neural network potential class with specified parameters.
@@ -452,25 +670,6 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
         """
         pass
 
-    def load_state_dict(
-        self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False
-    ):
-        # Prefix to remove
-        prefix = "model."
-
-        # check if prefix is present
-        if any(key.startswith(prefix) for key in state_dict.keys()):
-            # Create a new dictionary without the prefix in the keys if prefix exists
-            new_d = {
-                key[len(prefix) :] if key.startswith(prefix) else key: value
-                for key, value in state_dict.items()
-            }
-            log.debug(f"Removed prefix: {prefix}")
-        else:
-            log.debug("No prefix found. No modifications to keys in state loading.")
-
-        super().load_state_dict(new_d, strict=strict, assign=assign)
-
     def load_pretrained_weights(self, path: str):
         """
         Loads pretrained weights into the model from the specified path.
@@ -539,487 +738,7 @@ class BaseNeuralNetworkPotential(torch.nn.Module, ABC):
         )
 
 
-class Loss:
-    """
-    Base class for loss computations, designed to be overridden by subclasses for specific types of losses.
-    Initializes with a model to compute predictions for energies and forces.
-    """
-
-    def __init__(
-        self, model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet", "SAKE"]
-    ) -> None:
-        self.model = model
-
-    def _get_forces(self, batch: BatchData) -> Dict[str, torch.Tensor]:
-        """
-        Extracts and computes the forces from a given batch during training or evaluation, if forces are available.
-        Handles cases gracefully where F might not be present in the batch.
-
-        Parameters
-        ----------
-        batch : BatchData
-            A single batch of data, including input features and target energies.
-
-        Returns
-        -------
-        Dict[str, torch.Tensor]
-            The true forces from the dataset and the predicted forces by the model.
-        """
-        nnp_input = batch.nnp_input
-        F_true = batch.metadata.F.to(torch.float32)
-        E_predict = self.model.forward(nnp_input).E
-        F_predict = -torch.autograd.grad(
-            E_predict.sum(), nnp_input.positions, create_graph=False, retain_graph=False
-        )[0]
-
-        return {"F_true": F_true, "F_predict": F_predict}
-
-    def _get_energies(self, batch: BatchData) -> Dict[str, torch.Tensor]:
-        """
-        Extracts and computes the energies from a given batch during training or evaluation.
-
-        Parameters
-        ----------
-        batch : BatchData
-            A single batch of data, including input features and target energies.
-
-        Returns
-        -------
-        Dict[str, torch.Tensor]
-            The true energies from the dataset and the predicted energies by the model.
-        """
-        nnp_input = batch.nnp_input
-        E_true = batch.metadata.E.to(torch.float32).squeeze(1)
-        E_predict = self.model.forward(nnp_input).E
-        return {"E_true": E_true, "E_predict": E_predict}
-
-
-class EnergyLoss(Loss):
-    """
-    Computes loss based on energy predictions.
-    """
-
-    def __init__(self, model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet", "SAKE"]):
-        super().__init__(model)
-        log.info("Initializing EnergyLoss")
-
-    def compute_mse_loss(self, batch: BatchData) -> torch.Tensor:
-        """
-        Computes the MSE loss from energies.
-        """
-        energies = self._get_energies(batch)
-        # Compute MSE of energies
-        L_E = F.mse_loss(energies["E_predict"], energies["E_true"])
-
-        return L_E
-
-    def compute_rmse_loss(self, batch: BatchData) -> torch.Tensor:
-        """
-        Computes the RMSE loss from energies.
-        """
-        energies = self._get_energies(batch)
-        # Compute RMSE of energies
-        L_E = torch.sqrt(F.mse_loss(energies["E_predict"], energies["E_true"]))
-
-        return L_E
-
-
-class EnergyAndForceLoss(EnergyLoss):
-    """
-    Computes combined loss from energies and forces, with adjustable weighting.
-    """
-
-    def __init__(
-        self,
-        model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet", "SAKE"],
-        force_weight: float = 1.0,
-        energy_weight: float = 1.0,
-    ) -> None:
-        super().__init__(model)
-        log.info("Initializing EnergyAndForceLoss")
-        self.force_weight = force_weight
-        self.energy_weight = energy_weight
-
-    def compute_mse_loss(self, batch: BatchData) -> torch.Tensor:
-        """
-        Computes the combined MSE loss from energies and forces, considering the available data.
-        """
-        energies = self._get_energies(batch)
-        forces = self._get_forces(batch)
-        # Compute MSE of energies
-        L_E = F.mse_loss(energies["E_predict"], energies["E_true"])
-        # Assuming forces_true and forces_predict are already negative gradients of the potential energy w.r.t positions
-        L_F = F.mse_loss(forces["F_predict"], forces["F_true"])
-
-        return self.energy_weight * L_E + self.force_weight * L_F
-
-
-class TrainingAdapter(pl.LightningModule):
-    """
-    Adapter class for training neural network potentials using PyTorch Lightning.
-
-    This class wraps around the base neural network potential model, facilitating training
-    and validation steps, optimization, and logging.
-
-    Attributes
-    ----------
-    base_model : Union[ANI2x, SchNet, PaiNN, PhysNet, SAKE]
-        The underlying neural network potential model.
-    loss_function : torch.nn.modules.loss._Loss
-        Loss function used during training.
-    optimizer : torch.optim.Optimizer
-        Optimizer used for training.
-    learning_rate : float
-        Learning rate for the optimizer.
-    """
-
-    def __init__(
-        self,
-        model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet", "SAKE"],
-        include_force: bool = False,
-        optimizer: Any = torch.optim.Adam,
-        lr: float = 1e-3,
-    ):
-        """
-        Initializes the TrainingAdapter with the specified model and training configuration.
-
-        Parameters
-        ----------
-        model : Union[ANI2x, SchNet, PaiNN, PhysNet, SAKE]
-            The neural network potential model to be trained.
-        optimizer : Type[torch.optim.Optimizer], optional
-            The optimizer class to use for training, by default torch.optim.Adam.
-        lr : float, optional
-            The learning rate for the optimizer, by default 1e-3.
-        """
-        from typing import List
-
-        super().__init__()
-
-        self.model = model
-        self.optimizer = optimizer
-        self.learning_rate = lr
-        self.loss = (
-            EnergyAndForceLoss(model=self.model)
-            if include_force
-            else EnergyLoss(model=self.model)
-        )
-        self.eval_loss: List[torch.Tensor] = []
-
-    def config_prior(self):
-
-        if hasattr(self.model, "_config_prior"):
-            return self.model._config_prior()
-
-        log.warning("Model does not implement _config_prior().")
-        raise NotImplementedError()
-
-    def _log_batch_size(self, y: torch.Tensor) -> int:
-        """
-        Logs the size of the batch and returns it. Useful for logging and debugging.
-
-        Parameters
-        ----------
-        y : torch.Tensor
-            The tensor containing the target values of the batch.
-
-        Returns
-        -------
-        int
-            The size of the batch.
-        """
-        batch_size = int(y.numel())
-        return batch_size
-
-    def training_step(self, batch: BatchData, batch_idx: int) -> torch.Tensor:
-        """
-        Performs a training step using the given batch.
-
-        Parameters
-        ----------
-        batch : BatchData
-            The batch of data provided for the training.
-        batch_idx : int
-            The index of the current batch.
-
-        Returns
-        -------
-        torch.Tensor
-            The loss tensor computed for the current training step.
-        """
-
-        loss = self.loss.compute_mse_loss(batch)
-        self.batch_size = self._log_batch_size(loss)
-
-        self.log(
-            "ptl/train_loss",
-            loss,
-            on_step=True,
-            batch_size=self.batch_size,
-        )
-
-        return loss
-
-    def test_step(self, batch: BatchData, batch_idx: int) -> None:
-        """
-        Executes a test step using the given batch of data.
-
-        This method is called automatically during the test loop of the training process. It computes
-        the loss on a batch of test data and logs the results for analysis.
-
-        Parameters
-        ----------
-        batch : BatchData
-            The batch of data to test the model on.
-        batch_idx : int
-            The index of the batch within the test dataset.
-
-        Returns
-        -------
-        None
-            The results are logged and not directly returned.
-        """
-        loss = self.loss.compute_rmse_loss(batch)
-        self.batch_size = self._log_batch_size(loss)
-
-        self.log(
-            "ptl/test_loss",
-            loss,
-            batch_size=self.batch_size,
-            on_epoch=True,
-            prog_bar=True,
-        )
-
-    def validation_step(self, batch: BatchData, batch_idx: int) -> torch.Tensor:
-        """
-        Executes a single validation step.
-
-        Parameters
-        ----------
-        batch : BatchData
-            The batch of data provided for validation.
-        batch_idx : int
-            The index of the current batch.
-
-        Returns
-        -------
-        torch.Tensor
-            The loss tensor computed for the current validation step.
-        """
-
-        loss = self.loss.compute_rmse_loss(batch)
-        self.batch_size = self._log_batch_size(loss)
-
-        self.log(
-            "val_loss",
-            loss,
-            batch_size=self.batch_size,
-            on_epoch=True,
-            prog_bar=True,
-            sync_dist=True,
-        )
-        self.eval_loss.append(loss.detach())
-        return loss
-
-    def on_validation_epoch_end(self):
-        avg_loss = torch.stack(self.eval_loss).mean()
-        self.log("ptl/val_loss", avg_loss, sync_dist=True)
-        self.eval_loss.clear()
-
-    def configure_optimizers(self) -> Dict[str, Any]:
-        """
-        Configures the model's optimizers (and optionally schedulers).
-
-        Returns
-        -------
-        Dict[str, Any]
-            A dictionary containing the optimizer and optionally the learning rate scheduler
-            to be used within the PyTorch Lightning training process.
-        """
-
-        optimizer = self.optimizer(self.model.parameters(), lr=self.learning_rate)
-        scheduler = {
-            "scheduler": ReduceLROnPlateau(
-                optimizer, mode="min", factor=0.1, patience=20, verbose=True
-            ),
-            "monitor": "val_loss",  # Name of the metric to monitor
-            "interval": "epoch",
-            "frequency": 1,
-        }
-        return {"optimizer": optimizer, "lr_scheduler": scheduler}
-
-    def get_trainer(self):
-        """
-        Sets up and returns a PyTorch Lightning Trainer instance with configured logger and callbacks.
-
-        The trainer is configured with TensorBoard logging and an EarlyStopping callback to halt
-        the training process when the validation loss stops improving.
-
-        Returns
-        -------
-        Trainer
-            The configured PyTorch Lightning Trainer instance.
-        """
-
-        from lightning import Trainer
-        from lightning.pytorch.callbacks.early_stopping import EarlyStopping
-        from pytorch_lightning.loggers import TensorBoardLogger
-
-        # set up tensor board logger
-        logger = TensorBoardLogger("tb_logs", name="training")
-        early_stopping = EarlyStopping(
-            monitor="val_loss", min_delta=0.05, patience=20, verbose=True
-        )
-
-        return Trainer(
-            max_epochs=10_000,
-            num_nodes=1,
-            devices="auto",
-            accelerator="auto",
-            logger=logger,  # Add the logger here
-            callbacks=[early_stopping],
-        )
-
-    def train_func(self):
-        """
-        Defines the training function to be used with Ray for distributed training.
-
-        This function configures a PyTorch Lightning trainer with the Ray Distributed Data Parallel
-        (DDP) strategy for efficient distributed training. The training process utilizes a custom
-        training loop and environment setup provided by Ray.
-
-        Note: This function should be passed to a Ray Trainer or directly used with Ray tasks.
-        """
-
-        from ray.train.lightning import (
-            RayDDPStrategy,
-            RayLightningEnvironment,
-            RayTrainReportCallback,
-            prepare_trainer,
-        )
-
-        trainer = pl.Trainer(
-            devices="auto",
-            accelerator="auto",
-            strategy=RayDDPStrategy(find_unused_parameters=True),
-            callbacks=[RayTrainReportCallback()],
-            plugins=[RayLightningEnvironment()],
-            enable_progress_bar=False,
-        )
-        trainer = prepare_trainer(trainer)
-        trainer.fit(self, self.train_dataloader, self.val_dataloader)
-
-    def get_ray_trainer(self, number_of_workers: int = 2, use_gpu: bool = False):
-        """
-        Initializes and returns a Ray Trainer for distributed training.
-
-        Configures a Ray Trainer with a specified number of workers and GPU usage settings. This trainer
-        is prepared for distributed training using Ray, with support for checkpointing.
-
-        Parameters
-        ----------
-        number_of_workers : int, optional
-            The number of distributed workers to use, by default 2.
-        use_gpu : bool, optional
-            Specifies whether to use GPUs for training, by default False.
-
-        Returns
-        -------
-        Ray Trainer
-            The configured Ray Trainer for distributed training.
-        """
-
-        from ray.train import CheckpointConfig, RunConfig, ScalingConfig
-
-        scaling_config = ScalingConfig(
-            num_workers=number_of_workers,
-            use_gpu=use_gpu,
-            resources_per_worker={"CPU": 1, "GPU": 1} if use_gpu else {"CPU": 1},
-        )
-
-        run_config = RunConfig(
-            checkpoint_config=CheckpointConfig(
-                num_to_keep=2,
-                checkpoint_score_attribute="ptl/val_loss",
-                checkpoint_score_order="min",
-            ),
-        )
-        from ray.train.torch import TorchTrainer
-
-        # Define a TorchTrainer without hyper-parameters for Tuner
-        ray_trainer = TorchTrainer(
-            self.train_func,
-            scaling_config=scaling_config,
-            run_config=run_config,
-        )
-
-        return ray_trainer
-
-    def tune_with_ray(
-        self,
-        train_dataloader,
-        val_dataloader,
-        number_of_epochs: int = 5,
-        number_of_samples: int = 10,
-        number_of_ray_workers: int = 2,
-        train_on_gpu: bool = False,
-    ):
-        """
-        Performs hyperparameter tuning using Ray Tune.
-
-        This method sets up and starts a Ray Tune hyperparameter tuning session, utilizing the ASHA scheduler
-        for efficient trial scheduling and early stopping.
-
-        Parameters
-        ----------
-        train_dataloader : DataLoader
-            The DataLoader for training data.
-        val_dataloader : DataLoader
-            The DataLoader for validation data.
-        number_of_epochs : int, optional
-            The maximum number of epochs for training, by default 5.
-        number_of_samples : int, optional
-            The number of samples (trial runs) to perform, by default 10.
-        number_of_ray_workers : int, optional
-            The number of Ray workers to use for distributed training, by default 2.
-        use_gpu : bool, optional
-            Whether to use GPUs for training, by default False.
-
-        Returns
-        -------
-        Tune experiment analysis object
-            The result of the hyperparameter tuning session, containing performance metrics and the best hyperparameters found.
-        """
-
-        from ray import tune
-        from ray.tune.schedulers import ASHAScheduler
-
-        self.train_dataloader = train_dataloader
-        self.val_dataloader = val_dataloader
-
-        ray_trainer = self.get_ray_trainer(
-            number_of_workers=number_of_ray_workers, use_gpu=train_on_gpu
-        )
-        scheduler = ASHAScheduler(
-            max_t=number_of_epochs, grace_period=1, reduction_factor=2
-        )
-
-        tune_config = tune.TuneConfig(
-            metric="ptl/val_loss",
-            mode="min",
-            scheduler=scheduler,
-            num_samples=number_of_samples,
-        )
-
-        tuner = tune.Tuner(
-            ray_trainer,
-            param_space={"train_loop_config": self.config_prior()},
-            tune_config=tune_config,
-        )
-        return tuner.fit()
-
-
-class SingleTopologyAlchemicalBaseNNPModel(BaseNeuralNetworkPotential):
+class SingleTopologyAlchemicalBaseNNPModel(CoreNetwork):
     """
     Subclass for handling alchemical energy calculations.
 

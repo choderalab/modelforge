@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from loguru import logger as log
 from openff.units import unit
 
-from .models import BaseNeuralNetworkPotential
+from .models import CoreNetwork
 from .utils import Dense
 
 if TYPE_CHECKING:
@@ -71,7 +71,7 @@ class PaiNNNeuralNetworkData(NeuralNetworkData):
     atomic_embedding: torch.Tensor
 
 
-class PaiNNCore(BaseNeuralNetworkPotential):
+class PaiNNCore(CoreNetwork):
     """PaiNN - polarizable interaction neural network
 
     References:
@@ -97,7 +97,6 @@ class PaiNNCore(BaseNeuralNetworkPotential):
 
         self.number_of_interaction_modules = number_of_interaction_modules
         self.number_of_atom_features = number_of_atom_features
-        self.only_unique_pairs = False  # NOTE: for pairlist
         self.shared_filters = shared_filters
 
         # embedding
@@ -138,7 +137,6 @@ class PaiNNCore(BaseNeuralNetworkPotential):
                 1,
             ),
         )
-
 
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
@@ -189,7 +187,6 @@ class PaiNNCore(BaseNeuralNetworkPotential):
         q = transformed_input["q"]
         mu = transformed_input["mu"]
         dir_ij = transformed_input["dir_ij"]
-
 
         for i, (interaction_mod, mixing_mod) in enumerate(
             zip(self.interaction_modules, self.mixing_modules)
@@ -473,10 +470,10 @@ class PaiNNMixing(nn.Module):
         return q, mu
 
 
-from .models import InputPreparation, NNPInput
+from .models import InputPreparation, NNPInput, BaseNetwork
 
 
-class PaiNN(torch.nn.Module):
+class PaiNN(BaseNetwork):
     def __init__(
         self,
         max_Z: int = 100,
@@ -490,7 +487,7 @@ class PaiNN(torch.nn.Module):
     ):
         super().__init__()
 
-        self.painn_core = PaiNNCore(
+        self.core_module = PaiNNCore(
             max_Z=max_Z,
             number_of_atom_features=number_of_atom_features,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
@@ -501,16 +498,9 @@ class PaiNN(torch.nn.Module):
             epsilon=epsilon,
         )
         self.only_unique_pairs = False  # NOTE: for pairlist
-        self.input_preparation = InputPreparation(cutoff=cutoff)
-
-    def forward(self, data: NNPInput):
-        # perform input checks
-        self.input_preparation._input_checks(data)
-        # prepare the input for the forward pass
-        pairlist_output = self.input_preparation.prepare_inputs(
-            data, self.only_unique_pairs
+        self.input_preparation = InputPreparation(
+            cutoff=cutoff, only_unique_pairs=self.only_unique_pairs
         )
-        return self.painn_core(data, pairlist_output)
 
     def _config_prior(self):
         log.info("Configuring PaiNN model hyperparameter prior distribution")

@@ -9,7 +9,7 @@ from .utils import (
     AngularSymmetryFunction,
 )
 from .processing import FromAtomToMoleculeReduction
-from .models import TrainingAdapter
+from modelforge.train.training import TrainingAdapter
 from .models import NeuralNetworkPotentialFactory
 
 _IMPLEMENTED_NNPS = {

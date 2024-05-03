@@ -42,6 +42,7 @@ dependencies:
   - pip:
       - schnetpack>=2.0.0
       - pytorch2jax
+      - versioneer
       - flax
       - git+https://github.com/ArnNag/sake.git@nanometer
       - tensorflow

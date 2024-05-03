@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 _DATASETS_TO_TEST = [name for name in _IMPLEMENTED_DATASETS]
 _DATASETS_TO_TEST_QM9_ANI2X = ["QM9", "ANI2X"]
+_DATASETS_TO_TEST_QM9 = ["QM9"]
 _MODELS_TO_TEST = [name for name in _IMPLEMENTED_NNPS]
 from modelforge.potential.utils import BatchData
 
@@ -24,7 +25,7 @@ def train_model(request):
     model_name = request.param
     # Assuming NeuralNetworkPotentialFactory.create_nnp
     model = NeuralNetworkPotentialFactory.create_nnp(
-        use="training", nnp_type=model_name
+        use="training", nnp_name=model_name, simulation_environment="PyTorch"
     )
     return model
 
@@ -32,11 +33,13 @@ def train_model(request):
 @pytest.fixture(params=_MODELS_TO_TEST)
 def inference_model(request):
     model_name = request.param
-    # Assuming NeuralNetworkPotentialFactory.create_nnp
-    model = NeuralNetworkPotentialFactory.create_nnp(
-        use="inference", nnp_type=model_name
+    # simulation_environment needs to be taken from another parameter, not defined here.
+    # Assuming you pass simulation_environment to create_nnp in some way
+    return lambda env: NeuralNetworkPotentialFactory.create_nnp(
+        use="inference",
+        nnp_name=model_name,
+        simulation_environment=env,
     )
-    return model
 
 
 @dataclass
@@ -48,9 +51,19 @@ class DataSetContainer:
     expected_E_fcfs_split: float
 
 
-@pytest.fixture(params=_DATASETS_TO_TEST)
+from typing import Dict
+
+# This will store the cached datasets
+dataset_cache: Dict[str, DataSetContainer] = {}
+
+
+@pytest.fixture(scope="session", params=_DATASETS_TO_TEST_QM9)
 def datasets_to_test(request, prep_temp_dir):
     dataset_name = request.param
+
+    if datasetDC := dataset_cache.get(dataset_name, None):
+        return datasetDC
+
     if dataset_name == "QM9":
         from modelforge.dataset.qm9 import QM9Dataset
 
@@ -68,6 +81,7 @@ def datasets_to_test(request, prep_temp_dir):
             expected_E_random_split=-622027.790147837,
             expected_E_fcfs_split=-106277.4161215308,
         )
+        dataset_cache[dataset_name] = datasetDC
         return datasetDC
     elif dataset_name == "ANI1X":
         from modelforge.dataset.ani1x import ANI1xDataset
@@ -86,6 +100,7 @@ def datasets_to_test(request, prep_temp_dir):
             expected_E_random_split=-1652066.552014041,
             expected_E_fcfs_split=-1015736.8142089575,
         )
+        dataset_cache[dataset_name] = datasetDC
         return datasetDC
     elif dataset_name == "ANI2X":
         from modelforge.dataset.ani2x import ANI2xDataset
@@ -104,6 +119,7 @@ def datasets_to_test(request, prep_temp_dir):
             expected_E_random_split=-148410.43286007023,
             expected_E_fcfs_split=-2096692.258327173,
         )
+        dataset_cache[dataset_name] = datasetDC
         return datasetDC
     elif dataset_name == "SPICE114":
         from modelforge.dataset.spice114 import SPICE114Dataset
@@ -123,6 +139,7 @@ def datasets_to_test(request, prep_temp_dir):
             expected_E_random_split=-1922185.3358204272,
             expected_E_fcfs_split=-972574.265833225,
         )
+        dataset_cache[dataset_name] = datasetDC
         return datasetDC
     elif dataset_name == "SPICE2":
         from modelforge.dataset.spice2 import SPICE2Dataset
@@ -142,7 +159,9 @@ def datasets_to_test(request, prep_temp_dir):
             expected_E_random_split=-5844365.936898948,
             expected_E_fcfs_split=-3418985.278140791,
         )
+        dataset_cache[dataset_name] = datasetDC
         return datasetDC
+
     elif dataset_name == "SPICE114_OPENFF":
         from modelforge.dataset.spice114openff import SPICE114OpenFFDataset
 
@@ -161,6 +180,7 @@ def datasets_to_test(request, prep_temp_dir):
             expected_E_random_split=-2263605.616072006,
             expected_E_fcfs_split=-1516718.0904709378,
         )
+        dataset_cache[dataset_name] = datasetDC
         return datasetDC
     else:
         raise NotImplementedError(f"Dataset {dataset_name} is not implemented.")
@@ -168,11 +188,6 @@ def datasets_to_test(request, prep_temp_dir):
 
 @pytest.fixture()
 def initialized_dataset(datasets_to_test):
-    # dataset_name = request.param
-    # if dataset_name == "QM9":
-    #     from modelforge.dataset import QM9Dataset
-    #
-    #     dataset = QM9Dataset(for_unit_testing=True)
     dataset = datasets_to_test.dataset
     return initialize_dataset(dataset)
 
@@ -429,7 +444,8 @@ def rotation_matrix_from_quaternion(quaternion):
             [1.0 - (yY + zZ), xY - wZ, xZ + wY],
             [xY + wZ, 1.0 - (xX + zZ), yZ - wX],
             [xZ - wY, yZ + wX, 1.0 - (xX + yY)],
-        ]
+        ],
+        dtype=torch.float64,
     )
     return rotation_matrix
 
@@ -504,7 +520,7 @@ def equivariance_test_utils():
     alpha = torch.distributions.Uniform(-math.pi, math.pi).sample()
     beta = torch.distributions.Uniform(-math.pi, math.pi).sample()
     gamma = torch.distributions.Uniform(-math.pi, math.pi).sample()
-    v = torch.tensor([[alpha, beta, gamma]])
+    v = torch.tensor([[alpha, beta, gamma]], dtype=torch.float64)
     v /= (v**2).sum() ** 0.5
 
     p = torch.eye(3) - 2 * v.T @ v

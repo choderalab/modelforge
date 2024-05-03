@@ -154,11 +154,10 @@ def test_radial_with_diagonal_batching(setup_two_methanes):
 
     # ------------ general setup -------------#
     ani_species, ani_coordinates, _, mf_input = setup_two_methanes
-    pairlist = Pairlist()
+    pairlist = Pairlist(only_unique_pairs=True)
     pairs = pairlist(
         mf_input.positions,
         mf_input.atomic_subsystem_indices,
-        only_unique_pairs=True,
     )
     d_ij = pairs.d_ij
 
@@ -222,8 +221,8 @@ def test_compare_angular_symmetry_features(setup_methane):
 
     # set up relevant system properties
     species, r, _, _ = setup_methane
-    pairlist = Pairlist()
-    pairs = pairlist(r[0], torch.tensor([0, 0, 0, 0, 0]), only_unique_pairs=True)
+    pairlist = Pairlist(only_unique_pairs=True)
+    pairs = pairlist(r[0], torch.tensor([0, 0, 0, 0, 0]))
     d_ij = pairs.d_ij.squeeze(1)
     r_ij = pairs.r_ij.squeeze(1)
 
@@ -311,11 +310,11 @@ def test_representation(setup_methane):
     # perform input checks
     mf_model.input_preparation._input_checks(mf_input)
     # prepare the input for the forward pass
-    pairlist_output = mf_model.input_preparation.prepare_inputs(mf_input, True)
-    nnp_input = mf_model.ani2x_core._model_specific_input_preparation(
+    pairlist_output = mf_model.input_preparation.prepare_inputs(mf_input)
+    nnp_input = mf_model.core_module._model_specific_input_preparation(
         mf_input, pairlist_output
     )
-    representation = mf_model.ani2x_core.ani_representation_module(nnp_input)
+    representation = mf_model.core_module.ani_representation_module(nnp_input)
 
     tochani_aev = tochani_aev.squeeze(0)
 

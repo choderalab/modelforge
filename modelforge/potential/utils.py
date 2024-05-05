@@ -339,8 +339,7 @@ class Dense(nn.Linear):
 
     def forward(self, input: torch.Tensor):
         y = F.linear(input, self.weight, self.bias)
-        y = self.activation(y)
-        return y
+        return self.activation(y)
 
 
 from openff.units import unit

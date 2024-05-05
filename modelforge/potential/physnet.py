@@ -174,9 +174,8 @@ class PhysNetResidual(nn.Module):
 
     def __init__(self, input_dim: int, output_dim: int):
         super().__init__()
-        self.linear1 = nn.Linear(input_dim, output_dim)
-        self.linear2 = nn.Linear(output_dim, output_dim)
-        self.activation = ShiftedSoftplus()
+        self.dense = Dense(input_dim, output_dim, activation=ShiftedSoftplus())
+        self.residual = Dense(output_dim, output_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -192,13 +191,8 @@ class PhysNetResidual(nn.Module):
         torch.Tensor
             Output tensor after applying the residual block operations.
         """
-        # Apply the first linear transformation and activation
-        residual = self.activation(self.linear1(x))
-        # Apply the second linear transformation
-        residual = self.linear2(residual)
-        # Add the input x (identity) to the output of the second linear layer
-        out = x + residual
-        return out
+        # update x with residual
+        return x + self.residual(self.dense(x))
 
 
 class PhysNetInteractionModule(nn.Module):
@@ -334,8 +328,8 @@ class PhysNetOutput(nn.Module):
         self, number_of_atom_features: int, number_of_atomic_properties: int = 2
     ):
         from .utils import ShiftedSoftplus, Dense
+        from torch.nn import Tanh
 
-        # import relu activation function module
         super().__init__()
         self.residual = PhysNetResidual(
             number_of_atom_features, number_of_atom_features
@@ -343,7 +337,8 @@ class PhysNetOutput(nn.Module):
         self.output = Dense(
             number_of_atom_features,
             number_of_atomic_properties,
-            # activation=ShiftedSoftplus(),
+            weight_init=torch.nn.init.zeros_,
+            bias=False,
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

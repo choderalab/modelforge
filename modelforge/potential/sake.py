@@ -569,7 +569,7 @@ class SAKE(BaseNetwork):
             epsilon=epsilon,
         )
 
-        self.only_unique_pairs = True  # NOTE: for pairlist
+        self.only_unique_pairs = False  # NOTE: for pairlist
         self.input_preparation = InputPreparation(
             cutoff=cutoff, only_unique_pairs=self.only_unique_pairs
         )

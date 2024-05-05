@@ -728,7 +728,7 @@ class CoreNetwork(Module, ABC):
         # postprocess energies: add atomic self energies,
         # and other constant factors used to optionally normalize the data range of the training dataset
         processed_energy = self.postprocessing._energy_postprocessing(E, nnp_input)
-        from icecream import ic
+        # from icecream import ic
 
         # ic(processed_energy["E"])
         # return energies

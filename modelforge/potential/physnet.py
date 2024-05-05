@@ -294,19 +294,20 @@ class PhysNetInteractionModule(nn.Module):
         x_i_prime = self.interaction_i(x_i_embedding)
 
         # embedding for neighbor atom j
-        x_j_embedding = xa[idx_j]  # shape (nr_of_pairs, number_of_atom_features)
+        x_j_embedding = xa  # shape (number_of_atoms, number_of_atom_features)
 
         # Calculate contribution of neighbor atom
-        x_j_prime = self.interaction_j(x_j_embedding)
+        x_j_embedding = self.interaction_j(x_j_embedding)
+        # Gather the results according to idx_j
+        x_j_embedding = x_j_embedding[idx_j]
         # Compute sum_over_j(x_j_prime * f_ij_prime)
-        x_j_modulated = torch.mul(x_j_prime, f_ij_prime)
+        # Multiply the gathered features by f_ij_prime (equivalent to 'g' in TensorFlow code)
+        x_j_modulated = x_j_embedding * f_ij_prime
 
         # Aggregate modulated contributions for each atom i
-        summed_contributions = scatter_add(
-            x_j_modulated, idx_i, dim=0, dim_size=x.shape[0]
-        )
+        x_j_prime = scatter_add(x_j_modulated, idx_i, dim=0, dim_size=x.shape[0])
         # Draft proto message v_tilde
-        v_tilde = x_i_prime + summed_contributions
+        v_tilde = x_i_prime + x_j_prime
         # shape of v_tilde (nr_of_atoms_in_batch, 1)
         # Equation 4: Preactivation Residual Block Implementation
         # xl+2_i = xl_i + Wl+1 * sigma(Wl * xl_i + bl) + bl+1
@@ -315,11 +316,7 @@ class PhysNetInteractionModule(nn.Module):
                 v_tilde
             )  # shape (nr_of_atoms_in_batch, number_of_radial_basis_functions)
 
-        m = self.process_v(
-            v_tilde
-        )  # shape (nr_of_atoms_in_batch, number_of_atom_features)
-
-        return self.gate * x + m
+        return self.gate * x + self.process_v(v_tilde)
 
 
 class PhysNetOutput(nn.Module):
@@ -327,8 +324,7 @@ class PhysNetOutput(nn.Module):
     def __init__(
         self, number_of_atom_features: int, number_of_atomic_properties: int = 2
     ):
-        from .utils import ShiftedSoftplus, Dense
-        from torch.nn import Tanh
+        from .utils import Dense
 
         super().__init__()
         self.residual = PhysNetResidual(
@@ -352,7 +348,7 @@ class PhysNetModule(nn.Module):
         self,
         number_of_atom_features: int = 64,
         number_of_radial_basis_functions: int = 16,
-        number_of_interaction_residual: int = 3,
+        number_of_interaction_residual: int = 2,
     ):
         """
         Wrapper module that combines the PhysNetInteraction, PhysNetResidual, and

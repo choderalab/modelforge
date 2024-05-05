@@ -593,7 +593,6 @@ class CoreNetwork(Module, ABC):
     def __init__(
         self,
         cutoff: unit.Quantity,
-        only_unique_pairs: bool = False,
         mode: Literal["safe", "fast"] = "safe",
     ):
         """
@@ -729,6 +728,9 @@ class CoreNetwork(Module, ABC):
         # postprocess energies: add atomic self energies,
         # and other constant factors used to optionally normalize the data range of the training dataset
         processed_energy = self.postprocessing._energy_postprocessing(E, nnp_input)
+        from icecream import ic
+
+        # ic(processed_energy["E"])
         # return energies
         return EnergyOutput(
             E=processed_energy["E"],

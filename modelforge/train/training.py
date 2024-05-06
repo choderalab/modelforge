@@ -304,7 +304,7 @@ class TrainingAdapter(pl.LightningModule):
             "scheduler": ReduceLROnPlateau(
                 optimizer, mode="min", factor=0.1, patience=20, verbose=True
             ),
-            "monitor": "acu_rmse_val_loss",  # Name of the metric to monitor
+            "monitor": "epoch_rmse_val_loss",  # Name of the metric to monitor
             "interval": "epoch",
             "frequency": 1,
         }
@@ -330,7 +330,7 @@ class TrainingAdapter(pl.LightningModule):
         # set up tensor board logger
         logger = TensorBoardLogger("tb_logs", name="training")
         early_stopping = EarlyStopping(
-            monitor="acu_rmse_val_loss", min_delta=0.05, patience=20, verbose=True
+            monitor="epoch_rmse_val_loss", min_delta=0.05, patience=20, verbose=True
         )
 
         return Trainer(

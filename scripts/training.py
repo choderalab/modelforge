@@ -36,7 +36,7 @@ trainer = Trainer(
     logger=logger,  # Add the logger here
     callbacks=[
         EarlyStopping(
-            monitor="acu_rmse_val_loss", min_delta=0.05, patience=20, verbose=True
+            monitor="epoch_rmse_val_loss", min_delta=0.05, patience=20, verbose=True
         )
     ],
 )

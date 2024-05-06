@@ -13,7 +13,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 logger = TensorBoardLogger("tb_logs", name="training")
 
 # Set up dataset
-data = QM9Dataset(force_download=True, for_unit_testing=True)
+data = QM9Dataset(force_download=True, for_unit_testing=False)
 
 dataset = TorchDataModule(
     data, batch_size=512, splitting_strategy=RandomRecordSplittingStrategy()
@@ -22,22 +22,22 @@ dataset = TorchDataModule(
 dataset.prepare_data(remove_self_energies=True, normalize=False)
 
 # Set up model
-model = NeuralNetworkPotentialFactory.create_nnp("training", "ANI2x")
-model = model.to(torch.float32)
+model = NeuralNetworkPotentialFactory.create_nnp("training", "PhysNet")
 
-print(model)
 
 # set up traininer
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
 trainer = Trainer(
-    max_epochs=10_000,
+    max_epochs=1000,
     num_nodes=1,
     devices=1,
     accelerator="cpu",
     logger=logger,  # Add the logger here
     callbacks=[
-        EarlyStopping(monitor="val_loss", min_delta=0.05, patience=20, verbose=True)
+        EarlyStopping(
+            monitor="acu_rmse_val_loss", min_delta=0.05, patience=20, verbose=True
+        )
     ],
 )
 

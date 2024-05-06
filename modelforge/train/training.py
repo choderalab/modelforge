@@ -86,9 +86,23 @@ class EnergyAndForceLoss(Loss):
         self.energy_weight = energy_weight
         self.include_force = include_force
 
+    def compute_mae_loss(self, batch: BatchData) -> torch.Tensor:
+        """
+        Computes the combined mean absolut loss from energies and forces.
+        """
+        energies = self._get_energies(batch)
+        L_E = F.l1_loss(energies["E_predict"], energies["E_true"])
+        if self.include_force:
+            # FIXME: repeats energy calculation
+            forces = self._get_forces(batch)
+            L_F = F.l1_loss(forces["F_predict"], forces["F_true"])
+            return self.energy_weight * L_E + self.force_weight * L_F
+        else:
+            return L_E
+
     def compute_mse_loss(self, batch: BatchData) -> torch.Tensor:
         """
-        Computes the combined MSE loss from energies and forces, considering the available data.
+        Computes the combined MSE loss from energies and forces.
         """
         energies = self._get_energies(batch)
         # Compute MSE of energies
@@ -212,10 +226,11 @@ class TrainingAdapter(pl.LightningModule):
         """
 
         loss = self.loss.compute_mse_loss(batch)
+        # print(self.loss.compute_mae_loss(batch))
         self.batch_size = self._log_batch_size(loss)
 
         self.log(
-            "ptl/train_loss",
+            "mse_train_loss",
             loss,
             on_step=True,
             batch_size=self.batch_size,
@@ -246,7 +261,7 @@ class TrainingAdapter(pl.LightningModule):
         self.batch_size = self._log_batch_size(loss)
 
         self.log(
-            "ptl/test_loss",
+            "rmse_test_loss",
             loss,
             batch_size=self.batch_size,
             on_epoch=True,
@@ -274,19 +289,23 @@ class TrainingAdapter(pl.LightningModule):
         self.batch_size = self._log_batch_size(loss)
 
         self.log(
-            "val_loss",
+            "rmse_val_loss",
             loss,
             batch_size=self.batch_size,
             on_epoch=True,
             prog_bar=True,
             sync_dist=True,
         )
-        self.eval_loss.append(loss.detach())
+        mae_to_accumulate = self.loss.compute_mae_loss(batch)
+
+        self.eval_loss.append(mae_to_accumulate.detach())
         return loss
 
     def on_validation_epoch_end(self):
-        avg_loss = torch.stack(self.eval_loss).mean()
-        self.log("ptl/val_loss", avg_loss, sync_dist=True)
+        avg_loss = torch.tensor(self.eval_loss).squeeze().mean()
+        self.log(
+            "acu_rmse_val_loss", torch.sqrt(torch.square(avg_loss)), sync_dist=True
+        )
         self.eval_loss.clear()
 
     def configure_optimizers(self) -> Dict[str, Any]:
@@ -305,7 +324,7 @@ class TrainingAdapter(pl.LightningModule):
             "scheduler": ReduceLROnPlateau(
                 optimizer, mode="min", factor=0.1, patience=20, verbose=True
             ),
-            "monitor": "val_loss",  # Name of the metric to monitor
+            "monitor": "acu_rmse_val_loss",  # Name of the metric to monitor
             "interval": "epoch",
             "frequency": 1,
         }
@@ -331,7 +350,7 @@ class TrainingAdapter(pl.LightningModule):
         # set up tensor board logger
         logger = TensorBoardLogger("tb_logs", name="training")
         early_stopping = EarlyStopping(
-            monitor="val_loss", min_delta=0.05, patience=20, verbose=True
+            monitor="acu_rmse_val_loss", min_delta=0.05, patience=20, verbose=True
         )
 
         return Trainer(

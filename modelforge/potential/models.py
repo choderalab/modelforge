@@ -593,7 +593,6 @@ class CoreNetwork(Module, ABC):
     def __init__(
         self,
         cutoff: unit.Quantity,
-        only_unique_pairs: bool = False,
         mode: Literal["safe", "fast"] = "safe",
     ):
         """
@@ -729,6 +728,9 @@ class CoreNetwork(Module, ABC):
         # postprocess energies: add atomic self energies,
         # and other constant factors used to optionally normalize the data range of the training dataset
         processed_energy = self.postprocessing._energy_postprocessing(E, nnp_input)
+        # from icecream import ic
+
+        # ic(processed_energy["E"])
         # return energies
         return EnergyOutput(
             E=processed_energy["E"],
@@ -736,39 +738,3 @@ class CoreNetwork(Module, ABC):
             rescaled_E=processed_energy["rescaled_E"],
             molecular_ase=processed_energy["molecular_ase"],
         )
-
-
-class SingleTopologyAlchemicalBaseNNPModel(CoreNetwork):
-    """
-    Subclass for handling alchemical energy calculations.
-
-    Methods
-    -------
-    forward(data: NNPInput) -> torch.Tensor
-        Calculate the alchemical energy for a given input batch.
-    """
-
-    def forward(self, data: NNPInput):
-        """
-        Calculate the alchemical energy for a given input batch.
-
-        Parameters
-        ----------
-        data : NNPInput
-            Inputs containing atomic numbers ('atomic_numbers'), coordinates ('positions') and pairlist ('pairlist').
-            - 'atomic_numbers': shape (nr_of_atoms_in_batch, *, *), 0 indicates non-interacting atoms that will be masked
-            - 'total_charge' : shape (nr_of_atoms_in_batch)
-            - (only for alchemical transformation) 'alchemical_atomic_number': shape (nr_of_atoms_in_batch)
-            - (only for alchemical transformation) 'lamb': float
-            - 'positions': shape (nr_of_atoms_in_batch, 3)
-
-        Returns
-        -------
-        torch.Tensor
-            Calculated energies; shape (n_systems,).
-        """
-
-        # emb = nn.Embedding(1,200)
-        # lamb_emb = (1 - lamb) * emb(input['Z1']) + lamb * emb(input['Z2'])	def __init__():
-        self._input_checks(data)
-        raise NotImplementedError

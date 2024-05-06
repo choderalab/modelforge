@@ -328,9 +328,7 @@ class Dense(nn.Linear):
         self.bias_init = bias_init
         super().__init__(in_features, out_features, bias)
 
-        self.activation = activation
-        if self.activation is None:
-            self.activation = nn.Identity()
+        self.activation = activation or nn.Identity()
 
     def reset_parameters(self):
         self.weight_init(self.weight)
@@ -339,8 +337,7 @@ class Dense(nn.Linear):
 
     def forward(self, input: torch.Tensor):
         y = F.linear(input, self.weight, self.bias)
-        y = self.activation(y)
-        return y
+        return self.activation(y)
 
 
 from openff.units import unit

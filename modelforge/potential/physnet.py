@@ -90,9 +90,9 @@ class PhysNetRepresentation(nn.Module):
         self.cutoff_module = CosineCutoff(cutoff)
 
         # radial symmetry function
-        from .utils import SchnetRadialSymmetryFunction
+        from .utils import PhysNetRadialSymmetryFunction
 
-        self.radial_symmetry_function_module = SchnetRadialSymmetryFunction(
+        self.radial_symmetry_function_module = PhysNetRadialSymmetryFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             max_distance=cutoff,
             dtype=torch.float32,
@@ -114,16 +114,17 @@ class PhysNetRepresentation(nn.Module):
             shape (n_pairs, n_gaussians), after applying the cutoff function.
         """
 
-        rbf = self.radial_symmetry_function_module(d_ij)
+        f_ij = self.radial_symmetry_function_module(d_ij).squeeze()
         cutoff = self.cutoff_module(d_ij)
-        f_ij = torch.mul(rbf, cutoff)
+        f_ij = torch.mul(f_ij, cutoff)
         return f_ij
 
 
 class GatingModule(nn.Module):
     def __init__(self, number_of_atom_basis: int):
         """
-        Initializes a gating module that applies a sigmoid gating mechanism to input features.
+        Initializes a gating module that
+        optionally applies a sigmoid gating mechanism to input features.
 
         Parameters:
         -----------
@@ -131,9 +132,9 @@ class GatingModule(nn.Module):
             The dimensionality of the input (and output) features.
         """
         super().__init__()
-        self.gate = nn.Parameter(torch.randn(number_of_atom_basis))
+        self.gate = nn.Parameter(torch.ones(number_of_atom_basis))
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, activation_fn: bool = False) -> torch.Tensor:
         """
         Apply gating to the input tensor.
 
@@ -151,25 +152,7 @@ class GatingModule(nn.Module):
         return gating_signal * x
 
 
-class AttentionMask(nn.Module):
-    def __init__(
-        self, number_of_radial_basis_functions: int, number_of_atom_features: int
-    ):
-        super().__init__()
-
-        # Learnable matrix for the attention mask
-        self.G = nn.Parameter(
-            torch.randn(number_of_atom_features, number_of_radial_basis_functions)
-        )
-
-    def forward(self, f_ij: torch.Tensor) -> torch.Tensor:
-        """
-        Apply the attention mask to the radial symmetry function outputs.
-        f_ij: Tensor of shape (number_of_pairs, number_of_radial_basis_functions) containing RBF applied distances.
-        """
-        # Apply the attention mask
-        attention_output = torch.matmul(f_ij, self.G.t())
-        return attention_output
+from .utils import ShiftedSoftplus, Dense
 
 
 class PhysNetResidual(nn.Module):
@@ -191,9 +174,8 @@ class PhysNetResidual(nn.Module):
 
     def __init__(self, input_dim: int, output_dim: int):
         super().__init__()
-        self.linear1 = nn.Linear(input_dim, output_dim)
-        self.linear2 = nn.Linear(output_dim, output_dim)
-        self.activation = nn.Softplus()
+        self.dense = Dense(input_dim, output_dim, activation=ShiftedSoftplus())
+        self.residual = Dense(output_dim, output_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -209,13 +191,8 @@ class PhysNetResidual(nn.Module):
         torch.Tensor
             Output tensor after applying the residual block operations.
         """
-        # Apply the first linear transformation and activation
-        residual = self.activation(self.linear1(x))
-        # Apply the second linear transformation
-        residual = self.linear2(residual)
-        # Add the input x (identity) to the output of the second linear layer
-        out = x + residual
-        return out
+        # update x with residual
+        return x + self.residual(self.dense(x))
 
 
 class PhysNetInteractionModule(nn.Module):
@@ -239,28 +216,29 @@ class PhysNetInteractionModule(nn.Module):
         """
 
         super().__init__()
-        from .utils import ShiftedSoftplus
+        from .utils import ShiftedSoftplus, Dense
 
-        self.attention_mask = AttentionMask(
-            number_of_radial_basis_functions=number_of_radial_basis_functions,
-            number_of_atom_features=number_of_atom_features,
+        self.attention_mask = Dense(
+            number_of_radial_basis_functions,
+            number_of_atom_features,
+            bias=False,
+            weight_init=torch.nn.init.zeros_,
         )
         self.activation_function = ShiftedSoftplus()
 
         # Networks for processing atomic embeddings of i and j atoms
-        self.interaction_i = nn.Sequential(
-            nn.Linear(number_of_atom_features, number_of_atom_features),
-            nn.Softplus(),
+        self.interaction_i = Dense(
+            number_of_atom_features,
+            number_of_atom_features,
+            activation=self.activation_function,
         )
-        self.interaction_j = nn.Sequential(
-            nn.Linear(number_of_atom_features, number_of_atom_features),
-            nn.Softplus(),
+        self.interaction_j = Dense(
+            number_of_atom_features,
+            number_of_atom_features,
+            activation=self.activation_function,
         )
 
-        self.process_v = nn.Sequential(
-            nn.Softplus(),
-            nn.Linear(number_of_atom_features, number_of_atom_features),
-        )
+        self.process_v = Dense(number_of_atom_features, number_of_atom_features)
 
         # Residual block
         self.residuals = nn.ModuleList(
@@ -270,8 +248,8 @@ class PhysNetInteractionModule(nn.Module):
             ]
         )
 
-        # Gating Module
-        self.gating_module = GatingModule(number_of_atom_features)
+        # Gating
+        self.gate = nn.Parameter(torch.ones(number_of_atom_features))
 
     def forward(self, data: PhysNetNeuralNetworkData) -> torch.Tensor:
         """
@@ -288,21 +266,6 @@ class PhysNetInteractionModule(nn.Module):
         torch.Tensor
             Updated atomic feature representations incorporating interaction information.
         """
-
-        # extract relevant variables
-        idx_i, idx_j = data.pair_indices
-        f_ij = data.f_ij
-        d_ij = data.d_ij
-        atom_embedding = data.atomic_embedding
-
-        # Apply activation to atomic embeddings
-        x = self.activation_function(atom_embedding)
-
-        # extract all interaction partners for atom i
-        x_j_embedding = x[idx_j]  # shape (nr_of_pairs, number_of_atom_features)
-        # extract all atoms i
-        x_i_embedding = x  # shape (nr_of_atoms, number_of_atom_features)
-
         # Equation 6: Formation of the Proto-Message ṽ_i for an Atom i
         # ṽ_i = σ(Wl_I * x_i^l + bl_I) + Σ_j (G_g * Wl * (σ(σl_J * x_j^l + bl_J)) * g(r_ij))
         # Equation 6 implementation overview:
@@ -311,21 +274,40 @@ class PhysNetInteractionModule(nn.Module):
         # - x_i_prime and x_j_prime are the features of atoms i and j, respectively, processed through separate networks.
         # - f_ij_prime represents the modulated radial basis functions (f_ij) by the Gaussian Logarithm Attention weights.
 
-        # Draft proto message v_tilde
+        # extract relevant variables
+        idx_i, idx_j = data.pair_indices
+        f_ij = data.f_ij
+        x = data.atomic_embedding
+
+        # calculate attention weights and
+        # transform to
+        # input shape: (number_of_pairs, number_of_radial_basis_functions)
+        # output shape: (number_of_pairs, number_of_atom_features)
+        f_ij_prime = self.attention_mask(f_ij)
+
+        # # Apply activation to atomic embeddings
+        xa = self.activation_function(x)
+
+        # embedding for central atoms i
+        x_i_embedding = xa  # shape (number_of_atoms, number_of_atom_features)
+        # Calculate contribution of central atom
         x_i_prime = self.interaction_i(x_i_embedding)
-        x_j_prime = self.interaction_j(x_j_embedding)
 
-        f_ij_prime = self.attention_mask(
-            f_ij
-        )  # shape: (number_of_pairs, number_of_atom_features)
+        # embedding for neighbor atom j
+        x_j_embedding = xa  # shape (number_of_atoms, number_of_atom_features)
 
+        # Calculate contribution of neighbor atom
+        x_j_embedding = self.interaction_j(x_j_embedding)
+        # Gather the results according to idx_j
+        x_j_embedding = x_j_embedding[idx_j]
         # Compute sum_over_j(x_j_prime * f_ij_prime)
-        x_j_modulated = torch.mul(x_j_prime, f_ij_prime)
+        # Multiply the gathered features by f_ij_prime (equivalent to 'g' in TensorFlow code)
+        x_j_modulated = x_j_embedding * f_ij_prime
+
         # Aggregate modulated contributions for each atom i
-        summed_contributions = scatter_add(
-            x_j_modulated, idx_i, dim=0, dim_size=atom_embedding.shape[0]
-        )
-        v_tilde = x_i_prime + summed_contributions
+        x_j_prime = scatter_add(x_j_modulated, idx_i, dim=0, dim_size=x.shape[0])
+        # Draft proto message v_tilde
+        v_tilde = x_i_prime + x_j_prime
         # shape of v_tilde (nr_of_atoms_in_batch, 1)
         # Equation 4: Preactivation Residual Block Implementation
         # xl+2_i = xl_i + Wl+1 * sigma(Wl * xl_i + bl) + bl+1
@@ -334,11 +316,7 @@ class PhysNetInteractionModule(nn.Module):
                 v_tilde
             )  # shape (nr_of_atoms_in_batch, number_of_radial_basis_functions)
 
-        # FIXME: add gated vector
-        v = self.process_v(
-            v_tilde
-        )  # shape (nr_of_atoms_in_batch, number_of_atom_features)
-        return v
+        return self.gate * x + self.process_v(v_tilde)
 
 
 class PhysNetOutput(nn.Module):
@@ -346,15 +324,17 @@ class PhysNetOutput(nn.Module):
     def __init__(
         self, number_of_atom_features: int, number_of_atomic_properties: int = 2
     ):
-        from .utils import ShiftedSoftplus
+        from .utils import Dense
 
         super().__init__()
         self.residual = PhysNetResidual(
             number_of_atom_features, number_of_atom_features
         )
-        self.output = nn.Sequential(
-            nn.Linear(number_of_atom_features, number_of_atomic_properties),
-            ShiftedSoftplus(),
+        self.output = Dense(
+            number_of_atom_features,
+            number_of_atomic_properties,
+            weight_init=torch.nn.init.zeros_,
+            bias=False,
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -368,7 +348,7 @@ class PhysNetModule(nn.Module):
         self,
         number_of_atom_features: int = 64,
         number_of_radial_basis_functions: int = 16,
-        number_of_interaction_residual: int = 3,
+        number_of_interaction_residual: int = 2,
     ):
         """
         Wrapper module that combines the PhysNetInteraction, PhysNetResidual, and
@@ -388,21 +368,14 @@ class PhysNetModule(nn.Module):
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             number_of_interaction_residual=number_of_interaction_residual,
         )
-        self.residuals = nn.ModuleList(
-            [
-                PhysNetResidual(number_of_atom_features, number_of_atom_features)
-                for _ in range(number_of_interaction_residual)
-            ]
-        )
         self.output = PhysNetOutput(
             number_of_atom_features=number_of_atom_features,
             number_of_atomic_properties=2,
         )
 
-    def forward(self, inputs: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def forward(self, data: PhysNetNeuralNetworkData) -> Dict[str, torch.Tensor]:
         """
-        Forward pass for the PhysNet module. Currently, a placeholder that
-        needs further implementation.
+        Forward pass for the PhysNet module.
         """
 
         # The PhysNet module is a sequence of interaction modules and residual modules.
@@ -426,16 +399,12 @@ class PhysNetModule(nn.Module):
         #                    v
 
         # calculate the interaction
-        v = self.interaction(inputs)
-
-        # add the atomic residual blocks
-        for residual in self.residuals:
-            v = residual(v)
+        v = self.interaction(data)
 
         # calculate the module output
-        module_output = self.output(v)
+        prediction = self.output(v)
         return {
-            "prediction": module_output,
+            "prediction": prediction,
             "updated_embedding": v,  # input for next module
         }
 
@@ -461,14 +430,12 @@ class PhysNetCore(CoreNetwork):
             Dimension of the embedding vectors for atomic numbers.
         cutoff : openff.units.unit.Quantity, default=5*unit.angstrom
             The cutoff distance for interactions.
-        number_of_modules : int, default=2
-            Number of PhysNet modules to be stacked in the network.
+        number_of_modules : int, default=2(
         """
 
         log.debug("Initializing PhysNet model.")
 
-        self.only_unique_pairs = False  # NOTE: for pairlist
-        super().__init__(cutoff=cutoff, only_unique_pairs=self.only_unique_pairs)
+        super().__init__(cutoff=cutoff)
 
         # embedding
         from modelforge.potential.utils import Embedding
@@ -494,7 +461,7 @@ class PhysNetCore(CoreNetwork):
             ]
         )
 
-        self.atomic_scale = nn.Parameter(torch.ones(max_Z, 2))
+        self.atomic_scale = nn.Parameter(torch.zeros(max_Z, 2))
         self.atomic_shift = nn.Parameter(torch.ones(max_Z, 2))
 
     def _model_specific_input_preparation(
@@ -620,7 +587,7 @@ class PhysNet(BaseNetwork):
         number_of_atom_features: int = 64,
         number_of_radial_basis_functions: int = 16,
         number_of_interaction_residual: int = 3,
-        number_of_modules: int = 5,
+        number_of_modules: int = 2,
     ) -> None:
         super().__init__()
         self.core_module = PhysNetCore(
@@ -631,7 +598,7 @@ class PhysNet(BaseNetwork):
             number_of_interaction_residual=number_of_interaction_residual,
             number_of_modules=number_of_modules,
         )
-        self.only_unique_pairs = True  # NOTE: for pairlist
+        self.only_unique_pairs = False  # NOTE: for pairlist
         self.input_preparation = InputPreparation(
             cutoff=cutoff, only_unique_pairs=self.only_unique_pairs
         )
@@ -644,7 +611,7 @@ class PhysNet(BaseNetwork):
 
         prior = {
             "number_of_atom_features": tune.randint(2, 256),
-            "number_of_modules": tune.randint(3, 8),
+            "number_of_modules": tune.randint(2, 8),
             "number_of_interaction_residual": tune.randint(2, 5),
             "cutoff": tune.uniform(5, 10),
             "number_of_radial_basis_functions": tune.randint(8, 32),

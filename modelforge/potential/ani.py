@@ -450,11 +450,10 @@ class ANI2xCore(CoreNetwork):
         """
         # number of elements in ANI2x
         self.num_species = 7
-        self.only_unique_pairs = True
 
         log.debug("Initializing ANI model.")
         super().__init__(
-            cutoff=radial_max_distance, only_unique_pairs=self.only_unique_pairs
+            cutoff=radial_max_distance
         )
 
         # Initialize representation block

@@ -91,10 +91,11 @@ class EnergyAndForceLoss(Loss):
         Computes the combined MSE loss from energies and forces, considering the available data.
         """
         energies = self._get_energies(batch)
-        forces = self._get_forces(batch)
         # Compute MSE of energies
         L_E = F.mse_loss(energies["E_predict"], energies["E_true"])
         if self.include_force:
+            # FIXME: repeats energy calculation
+            forces = self._get_forces(batch)
             L_F = F.mse_loss(forces["F_predict"], forces["F_true"])
             return self.energy_weight * L_E + self.force_weight * L_F
         else:
@@ -158,9 +159,7 @@ class TrainingAdapter(pl.LightningModule):
         self.save_hyperparameters()
         nnp_name = nnp_parameters["nnp_name"]
         nnp_parameters_ = nnp_parameters.copy()  # Make a copy of the dictionary
-        nnp_parameters_.pop(
-            "nnp_name", None
-        )  
+        nnp_parameters_.pop("nnp_name", None)
 
         nnp_class: Type = _IMPLEMENTED_NNPS.get(nnp_name)
 

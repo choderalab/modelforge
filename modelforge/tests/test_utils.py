@@ -5,6 +5,44 @@ import pytest
 from modelforge.potential.utils import CosineCutoff, RadialSymmetryFunction
 
 
+def test_dense_layer():
+    from modelforge.potential.utils import Dense
+    import torch
+
+    # random 2x3 torch.Tensor
+    x = torch.randn(2, 3)
+
+    # create a Dense layer with 3 input features and 2 output features
+    dense_layer = Dense(in_features=3, out_features=2)
+    out = dense_layer(x)
+
+    # create a Dense layer with 3 input features and 2 output features
+    for weight_init_fn, bias_init_fn in zip(
+        [torch.nn.init.zeros_, torch.nn.init.xavier_normal_],
+        [torch.nn.init.zeros_, torch.nn.init.ones_],
+    ):
+        # test the weight initialization and correct weight multiplication
+        dense_layer = Dense(
+            in_features=3, out_features=2, bias=False, weight_init=weight_init_fn
+        )
+
+        # test that weights are handeled correctly
+        out = dense_layer(x)
+        manuel_out = dense_layer.weight @ x.T
+        assert torch.allclose(out, manuel_out.T)
+        # test bias
+        dense_layer = Dense(
+            in_features=3,
+            out_features=2,
+            bias=True,
+            weight_init=weight_init_fn,
+            bias_init=bias_init_fn,
+        )
+        out = dense_layer(x)
+        manuel_out = dense_layer.weight @ x.T + dense_layer.bias
+        assert torch.allclose(out, manuel_out.T)
+
+
 def test_ase_dataclass():
 
     from modelforge.potential.processing import AtomicSelfEnergies

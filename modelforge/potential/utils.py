@@ -328,9 +328,7 @@ class Dense(nn.Linear):
         self.bias_init = bias_init
         super().__init__(in_features, out_features, bias)
 
-        self.activation = activation
-        if self.activation is None:
-            self.activation = nn.Identity()
+        self.activation = activation or nn.Identity()
 
     def reset_parameters(self):
         self.weight_init(self.weight)

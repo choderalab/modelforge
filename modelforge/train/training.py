@@ -285,7 +285,7 @@ class TrainingAdapter(pl.LightningModule):
         """
         if self.eval_loss:
             avg_loss = torch.stack(self.eval_loss).mean()
-            self.log("avg_rmse_val_loss", avg_loss**0.5, sync_dist=True)
+            self.log("epoch_rmse_val_loss", avg_loss**0.5, sync_dist=True)
             self.eval_loss.clear()
 
     def configure_optimizers(self) -> Dict[str, Any]:

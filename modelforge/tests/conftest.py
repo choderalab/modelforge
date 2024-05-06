@@ -7,7 +7,7 @@ from typing import Optional, Dict
 from modelforge.potential import NeuralNetworkPotentialFactory, _IMPLEMENTED_NNPS
 from dataclasses import dataclass
 
-_DATASETS_TO_TEST = [name for name in _IMPLEMENTED_DATASETS]
+_DATASETS_TO_TEST = [name for name in _IMPLEMENTED_DATASETS.keys()]
 _DATASETS_TO_TEST_QM9_ANI2X = ["QM9", "ANI2X"]
 _DATASETS_TO_TEST_QM9 = ["QM9"]
 _MODELS_TO_TEST = [name for name in _IMPLEMENTED_NNPS]

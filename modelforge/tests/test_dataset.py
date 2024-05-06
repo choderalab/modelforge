@@ -425,6 +425,20 @@ from modelforge.dataset.utils import (
     FirstComeFirstServeSplittingStrategy,
 )
 
+@pytest.mark.parametrize(
+    "splitting_strategy",
+    [
+        RandomSplittingStrategy,
+        FirstComeFirstServeSplittingStrategy,
+        RandomRecordSplittingStrategy,
+    ],
+)
+def test_splitting_loading_saving(splitting_strategy, datasets_to_test):
+    from modelforge.dataset import DatasetFactory
+
+    dataset = DatasetFactory.create_dataset(datasets_to_test.dataset)
+    train_dataset, val_dataset, test_dataset = splitting_strategy().split(dataset)
+
 
 @pytest.mark.parametrize(
     "splitting_strategy",

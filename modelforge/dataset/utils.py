@@ -161,6 +161,9 @@ class SplittingStrategy(ABC):
             self.generator = torch.Generator().manual_seed(self.seed)
 
         self.train_size, self.val_size, self.test_size = split[0], split[1], split[2]
+        self.train_indices: List[int] = []
+        self.val_indices: List[int] = []
+        self.test_indices: List[int] = []
         assert np.isclose(sum(split), 1.0), "Splits must sum to 1.0"
 
     @abstractmethod
@@ -170,7 +173,6 @@ class SplittingStrategy(ABC):
         """
 
         raise NotImplementedError
-
 
 class RandomSplittingStrategy(SplittingStrategy):
     """
@@ -245,7 +247,11 @@ class RandomSplittingStrategy(SplittingStrategy):
             lengths=[self.train_size, self.val_size, self.test_size],
             generator=self.generator,
         )
-
+        self.train_indices, self.val_indices, self.test_indices = (
+            list(train_d.indices),
+            list(val_d.indices),
+            list(test_d.indices),
+        )
         return (train_d, val_d, test_d)
 
 
@@ -464,7 +470,6 @@ def _download_from_gdrive(id: str, raw_dataset_file: str):
 
     url = f"https://drive.google.com/uc?id={id}"
     gdown.download(url, raw_dataset_file, quiet=False)
-
 
 
 def _to_file_cache(

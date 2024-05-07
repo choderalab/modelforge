@@ -124,7 +124,10 @@ def calculate_mean_and_variance(
     return stats
 
 
-def calculate_self_energies(torch_dataset, collate_fn) -> Dict[str, float]:
+from openff.units import unit
+
+
+def calculate_self_energies(torch_dataset, collate_fn) -> Dict[str, unit.Quantity]:
     from torch.utils.data import DataLoader
     import torch
     from loguru import logger as log
@@ -188,9 +191,9 @@ def calculate_self_energies(torch_dataset, collate_fn) -> Dict[str, float]:
     # Perform least squares regression
     least_squares_fit, _, _, _ = np.linalg.lstsq(A, y, rcond=None)
     self_energies = {
-        _ATOMIC_NUMBER_TO_ELEMENT[int(idx)]: energy
+        _ATOMIC_NUMBER_TO_ELEMENT[int(idx)]: energy * unit.kilojoule_per_mole
         for idx, energy in zip(unique_atomic_numbers, least_squares_fit)
-    }
+    }  # NOTE: we are assinging units here without check that the dataset is in unit system
 
     log.debug("Calculated self energies for elements.")
 

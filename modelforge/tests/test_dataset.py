@@ -526,6 +526,7 @@ def test_numpy_dataset_assignment(datasets_to_test):
 def test_self_energy(datasets_to_test):
 
     from modelforge.dataset.dataset import DataModule
+
     # test the self energy calculation on the QM9 dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
@@ -536,6 +537,7 @@ def test_self_energy(datasets_to_test):
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         normalize=False,
         remove_self_energies=False,
+        for_unit_testing=True,
     )
     dm.prepare_data()
     dm.setup()
@@ -574,6 +576,7 @@ def test_self_energy(datasets_to_test):
         normalize=False,
         regression_ase=True,
         remove_self_energies=True,
+        for_unit_testing=True,
     )
     dm.prepare_data()
     dm.setup()
@@ -608,37 +611,46 @@ def test_self_energy(datasets_to_test):
         -197492.33270235246,
     )
 
-    dataset.prepare_data(
-        remove_self_energies=True, normalize=False, regression_ase=True
+    dm = DataModule(
+        name=datasets_to_test.name,
+        batch_size=512,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        normalize=False,
+        regression_ase=True,
+        remove_self_energies=True,
+        for_unit_testing=True,
     )
+    dm.prepare_data()
+    dm.setup()
     # it is saved in the dataset statistics
-    assert dataset.dataset_statistics
-    self_energies = dataset.dataset_statistics.atomic_self_energies
-
+    assert dm.train_dataset
+    self_energies = dm.dataset_statistics.atomic_self_energies
     # Test that self energies are correctly removed
     for regression in [True, False]:
-        data = QM9Dataset(for_unit_testing=True)
-        dataset = DataModule(
-            data,
-            batch_size=32,
+        dm = DataModule(
+            name=datasets_to_test.name,
+            batch_size=512,
             splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+            normalize=False,
+            regression_ase=regression,
+            remove_self_energies=True,
+            for_unit_testing=True,
         )
-        dataset.prepare_data(
-            remove_self_energies=True, normalize=False, regression_ase=regression
-        )
+        dm.prepare_data()
+        dm.setup()
         # Extract the first molecule (methane)
         # double check that it is methane
-        k = dataset.torch_dataset[0]
-        methane_atomic_indices = dataset.torch_dataset[0]["atomic_numbers"]
+        k = dm.train_dataset[0]
+        methane_atomic_indices = dm.train_dataset[0]["atomic_numbers"]
         # extract energy
-        methane_energy_offset = dataset.torch_dataset[0]["E"]
+        methane_energy_offset = dm.train_dataset[0]["E"]
         if regression is False:
             # checking that the offset energy is actually correct for methane
             assert torch.isclose(
                 methane_energy_offset, torch.tensor([-1656.8412], dtype=torch.float64)
             )
         # extract the ase offset
-        self_energies = dataset.dataset_statistics.atomic_self_energies
+        self_energies = dm.dataset_statistics.atomic_self_energies
         methane_ase = sum(
             [
                 self_energies[int(index)]

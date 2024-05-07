@@ -436,21 +436,42 @@ from modelforge.dataset.utils import (
 )
 def test_dataset_splitting(splitting_strategy, datasets_to_test):
     """Test random_split on the the dataset."""
-    from modelforge.dataset import DatasetFactory
+    from modelforge.dataset import DataModule
 
-    dataset = DatasetFactory.create_dataset(datasets_to_test.dataset)
-    train_dataset, val_dataset, test_dataset = splitting_strategy().split(dataset)
-    print("local cache dir, ", datasets_to_test.dataset.local_cache_dir)
+    dm = DataModule(
+        name=datasets_to_test.name,
+        batch_size=512,
+        splitting_strategy=splitting_strategy(),
+        normalize=False,
+    )
+    dm.prepare_data()
+    dm.setup()
+    train_dataset, val_dataset, test_dataset = (
+        dm.train_dataset,
+        dm.val_dataset,
+        dm.test_dataset,
+    )
+
     energy = train_dataset[0]["E"].item()
 
     if splitting_strategy == RandomSplittingStrategy:
         assert np.isclose(energy, datasets_to_test.expected_E_random_split)
     elif splitting_strategy == FirstComeFirstServeSplittingStrategy:
         assert np.isclose(energy, datasets_to_test.expected_E_fcfs_split)
+    dm = DataModule(
+        name=datasets_to_test.name,
+        batch_size=512,
+        splitting_strategy=splitting_strategy(split=[0.6, 0.3, 0.1]),
+        normalize=False,
+    )
+    dm.prepare_data()
+    dm.setup()
 
-    train_dataset2, val_dataset2, test_dataset2 = splitting_strategy(
-        split=[0.6, 0.3, 0.1]
-    ).split(dataset)
+    train_dataset2, val_dataset2, test_dataset2 = (
+        dm.train_dataset,
+        dm.val_dataset,
+        dm.test_dataset,
+    )
 
     if (
         splitting_strategy == RandomSplittingStrategy
@@ -492,45 +513,47 @@ def test_numpy_dataset_assignment(datasets_to_test):
     """
     Test if the numpy_dataset attribute is correctly assigned after processing or loading.
     """
+    from modelforge.dataset import _IMPLEMENTED_DATASETS
 
     factory = DatasetFactory()
-    data = datasets_to_test.dataset
+    data = _IMPLEMENTED_DATASETS[datasets_to_test.name]()
     factory._load_or_process_data(data)
 
     assert hasattr(data, "numpy_data")
     assert isinstance(data.numpy_data, np.lib.npyio.NpzFile)
 
 
-def test_self_energy():
+def test_self_energy(datasets_to_test):
 
     from modelforge.dataset.dataset import DataModule
-
     # test the self energy calculation on the QM9 dataset
-    from modelforge.dataset.qm9 import QM9Dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
     # prepare reference value
-    data = QM9Dataset(for_unit_testing=True)
-    dataset = DataModule(
-        data, batch_size=32, splitting_strategy=FirstComeFirstServeSplittingStrategy()
+    dm = DataModule(
+        name=datasets_to_test.name,
+        batch_size=512,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        normalize=False,
+        remove_self_energies=False,
     )
-    dataset.prepare_data(
-        remove_self_energies=False, normalize=False, regression_ase=False
-    )
-    methane_energy_reference = float(dataset.torch_dataset[0]["E"])
+    dm.prepare_data()
+    dm.setup()
+    methane_energy_reference = float(dm.train_dataset[0]["E"])
     assert np.isclose(methane_energy_reference, -106277.4161)
 
-    data = QM9Dataset(for_unit_testing=True)
-    dataset = DataModule(
-        data, batch_size=32, splitting_strategy=FirstComeFirstServeSplittingStrategy()
-    )
-
     # Scenario 1: dataset contains self energies
-    # self energy is obtained in prepare_data if `remove_self_energies` is True
-    dataset.prepare_data(remove_self_energies=True, normalize=False)
+    dm = DataModule(
+        name=datasets_to_test.name,
+        batch_size=512,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        normalize=False,
+    )
+    dm.prepare_data()
+    dm.setup()
     # it is saved in the dataset statistics
-    assert dataset.dataset_statistics
-    self_energies = dataset.dataset_statistics.atomic_self_energies
+    assert dm.dataset_statistics
+    self_energies = dm.dataset_statistics.atomic_self_energies
     # 5 elements present in the QM9 dataset
     assert len(self_energies) == 5
     # H: -1313.4668615546
@@ -544,16 +567,20 @@ def test_self_energy():
 
     # Scenario 2: dataset may or may not contain self energies
     # but user wants to use least square regression to calculate the energies
-    data = QM9Dataset(for_unit_testing=True)
-    dataset = DataModule(
-        data, batch_size=32, splitting_strategy=FirstComeFirstServeSplittingStrategy()
+    dm = DataModule(
+        name=datasets_to_test.name,
+        batch_size=512,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        normalize=False,
+        regression_ase=True,
+        remove_self_energies=True,
     )
-    dataset.prepare_data(
-        remove_self_energies=True, normalize=False, regression_ase=True
-    )
+    dm.prepare_data()
+    dm.setup()
+
     # it is saved in the dataset statistics
-    assert dataset.dataset_statistics
-    self_energies = dataset.dataset_statistics.atomic_self_energies
+    assert dm.dataset_statistics
+    self_energies = dm.dataset_statistics.atomic_self_energies
     # 5 elements present in the total QM9 dataset
     assert len(self_energies) == 5
     # value from DFT calculation

@@ -845,7 +845,9 @@ class DataModule(pl.LightningDataModule):
         """Create a PyTorch dataset from the provided dataset instance."""
         return DatasetFactory().create_dataset(dataset)
 
-    def _process_self_energies(self, torch_dataset, atomic_self_energies) -> None:
+    def _process_self_energies(
+        self, torch_dataset: TorchDataset, atomic_self_energies: "AtomicSelfEnergies"
+    ) -> None:
         """Calculate and subtract self energies from the dataset."""
         atomic_self_energies = self.dict_atomic_self_energies or atomic_self_energies
         if self.regression_ase and not self.dict_atomic_self_energies:
@@ -878,6 +880,7 @@ class DataModule(pl.LightningDataModule):
 
         """
         from modelforge.dataset.utils import calculate_mean_and_variance
+        from modelforge.potential.processing import AtomicSelfEnergies
 
         # Use provided ase dictionary
         if self.dict_atomic_self_energies:
@@ -909,10 +912,10 @@ class DataModule(pl.LightningDataModule):
     def setup(self, stage: Optional[str] = None) -> None:
         """Sets up datasets for the train, validation, and test stages based on the stage argument."""
 
-        torch_dataset = torch.load("torch_dataset.pt")
+        self.torch_dataset = torch.load("torch_dataset.pt")
         self.dataset_statistics = torch.load("dataset_statistics.pt")
         self.train_dataset, self.val_dataset, self.test_dataset = (
-            self.splitting_strategy.split(torch_dataset)
+            self.splitting_strategy.split(self.torch_dataset)
         )
 
     def _save_self_energies(self, self_energies):

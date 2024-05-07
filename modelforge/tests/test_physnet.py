@@ -9,12 +9,12 @@ def test_physnet_forward():
     import torch
     from modelforge.potential.physnet import PhysNet
     from modelforge.dataset.qm9 import QM9Dataset
-    from modelforge.dataset.dataset import TorchDataModule
+    from modelforge.dataset.dataset import DataModule
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
     # Set up dataset
     data = QM9Dataset(for_unit_testing=True)
-    dataset = TorchDataModule(
+    dataset = DataModule(
         data, batch_size=1, splitting_strategy=FirstComeFirstServeSplittingStrategy()
     )
 
@@ -31,7 +31,7 @@ def test_physnet_forward():
 def test_physnet_training():
 
     from modelforge.dataset.qm9 import QM9Dataset
-    from modelforge.dataset.dataset import TorchDataModule, collate_conformers
+    from modelforge.dataset.dataset import DataModule, collate_conformers
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
     from modelforge.potential import NeuralNetworkPotentialFactory
 
@@ -39,7 +39,7 @@ def test_physnet_training():
 
     # Set up dataset
     data = QM9Dataset(for_unit_testing=True)
-    dataset = TorchDataModule(
+    dataset = DataModule(
         data, batch_size=1, splitting_strategy=FirstComeFirstServeSplittingStrategy()
     )
 

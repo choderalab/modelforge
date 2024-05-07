@@ -1,11 +1,7 @@
 # This is an example script that trains an implemented model on the QM9 dataset.
 from lightning import Trainer
-import torch
-
-# import the models implemented in modelforge, for now SchNet, PaiNN, ANI2x or PhysNet
 from modelforge.potential import NeuralNetworkPotentialFactory
-from modelforge.dataset.qm9 import QM9Dataset
-from modelforge.dataset.dataset import TorchDataModule
+from modelforge.dataset.dataset import DataModule
 from modelforge.dataset.utils import RandomRecordSplittingStrategy
 from pytorch_lightning.loggers import TensorBoardLogger
 
@@ -13,13 +9,14 @@ from pytorch_lightning.loggers import TensorBoardLogger
 logger = TensorBoardLogger("tb_logs", name="training")
 
 # Set up dataset
-data = QM9Dataset(force_download=True, for_unit_testing=False)
 
-dataset = TorchDataModule(
-    data, batch_size=512, splitting_strategy=RandomRecordSplittingStrategy()
+dm = DataModule(
+    name="QM9",
+    batch_size=512,
+    splitting_strategy=RandomRecordSplittingStrategy(),
+    normalize=False,
 )
 
-dataset.prepare_data(remove_self_energies=True, normalize=False)
 
 # Set up model
 model = NeuralNetworkPotentialFactory.create_nnp("training", "PhysNet")
@@ -43,6 +40,6 @@ trainer = Trainer(
 
 
 # Run training loop and validate
-trainer.fit(model, dataset.train_dataloader(), dataset.val_dataloader())
+trainer.fit(model, datamodule=dm)
 
 # tensorboard --logdir tb_logs

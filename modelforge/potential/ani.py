@@ -555,7 +555,7 @@ class ANI2x(BaseNetwork):
     def __init__(
         self,
         radial_max_distance: unit.Quantity = 5.1 * unit.angstrom,
-        radial_min_distanc: unit.Quantity = 0.8 * unit.angstrom,
+        radial_min_distanc: unit.Quantity = 0.8 * unit.angstrom, #NOTE: min distance? #FIXME
         number_of_radial_basis_functions: int = 16,
         angular_max_distance: unit.Quantity = 3.5 * unit.angstrom,
         angular_min_distance: unit.Quantity = 0.8 * unit.angstrom,

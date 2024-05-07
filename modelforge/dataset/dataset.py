@@ -768,7 +768,7 @@ class DataModule(pl.LightningDataModule):
         splitting_strategy: Optional[SplittingStrategy] = None,
         batch_size: int = 64,
         remove_self_energies: bool = True,
-        normalize: bool = True,
+        normalize: bool = False,
         atomic_self_energies: Optional[Dict[str, float]] = None,
         regression_ase: bool = False,
         force_download: bool = False,
@@ -855,6 +855,11 @@ class DataModule(pl.LightningDataModule):
 
     def _normalize_dataset(self, torch_dataset) -> None:
         """Normalize the dataset if self energies have been removed."""
+        from modelforge.dataset.utils import (
+            calculate_mean_and_variance,
+            normalize_energies,
+        )
+
         if not self.remove_self_energies:
             raise RuntimeError(
                 "Cannot normalize dataset if self energies are not removed."

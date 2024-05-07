@@ -1,6 +1,6 @@
 import torch
 import pytest
-from modelforge.dataset import TorchDataModule, _IMPLEMENTED_DATASETS
+from modelforge.dataset import DataModule, _IMPLEMENTED_DATASETS
 from modelforge.dataset.dataset import HDF5Dataset
 
 from typing import Optional, Dict
@@ -44,7 +44,6 @@ def inference_model(request):
 
 @dataclass
 class DataSetContainer:
-    dataset: HDF5Dataset
     name: str
     expected_properties_of_interest: list
     expected_E_random_split: float
@@ -68,9 +67,6 @@ def datasets_to_test(request, prep_temp_dir):
         from modelforge.dataset.qm9 import QM9Dataset
 
         datasetDC = DataSetContainer(
-            dataset=QM9Dataset(
-                for_unit_testing=True, local_cache_dir=str(prep_temp_dir)
-            ),
             name=dataset_name,
             expected_properties_of_interest=[
                 "geometry",
@@ -87,9 +83,6 @@ def datasets_to_test(request, prep_temp_dir):
         from modelforge.dataset.ani1x import ANI1xDataset
 
         datasetDC = DataSetContainer(
-            dataset=ANI1xDataset(
-                for_unit_testing=True, local_cache_dir=str(prep_temp_dir)
-            ),
             name=dataset_name,
             expected_properties_of_interest=[
                 "geometry",
@@ -106,9 +99,6 @@ def datasets_to_test(request, prep_temp_dir):
         from modelforge.dataset.ani2x import ANI2xDataset
 
         datasetDC = DataSetContainer(
-            dataset=ANI2xDataset(
-                for_unit_testing=True, local_cache_dir=str(prep_temp_dir)
-            ),
             name=dataset_name,
             expected_properties_of_interest=[
                 "geometry",
@@ -125,9 +115,6 @@ def datasets_to_test(request, prep_temp_dir):
         from modelforge.dataset.spice114 import SPICE114Dataset
 
         datasetDC = DataSetContainer(
-            dataset=SPICE114Dataset(
-                for_unit_testing=True, local_cache_dir=str(prep_temp_dir)
-            ),
             name=dataset_name,
             expected_properties_of_interest=[
                 "geometry",
@@ -145,9 +132,6 @@ def datasets_to_test(request, prep_temp_dir):
         from modelforge.dataset.spice2 import SPICE2Dataset
 
         datasetDC = DataSetContainer(
-            dataset=SPICE2Dataset(
-                for_unit_testing=True, local_cache_dir=str(prep_temp_dir)
-            ),
             name=dataset_name,
             expected_properties_of_interest=[
                 "geometry",
@@ -166,9 +150,6 @@ def datasets_to_test(request, prep_temp_dir):
         from modelforge.dataset.spice114openff import SPICE114OpenFFDataset
 
         datasetDC = DataSetContainer(
-            dataset=SPICE114OpenFFDataset(
-                for_unit_testing=True, local_cache_dir=str(prep_temp_dir)
-            ),
             name=dataset_name,
             expected_properties_of_interest=[
                 "geometry",
@@ -188,8 +169,7 @@ def datasets_to_test(request, prep_temp_dir):
 
 @pytest.fixture()
 def initialized_dataset(datasets_to_test):
-    dataset = datasets_to_test.dataset
-    return initialize_dataset(dataset)
+    return initialize_dataset(datasets_to_test.name)
 
 
 @pytest.fixture()
@@ -218,9 +198,10 @@ def QM9_ANI2X_to_test(request, prep_temp_dir):
         return ANI2xDataset(for_unit_testing=True, local_cache_dir=str(prep_temp_dir))
 
 
-@pytest.fixture()
-def initialized_QM9_ANI2X_dataset(QM9_ANI2X_to_test):
-    return initialize_dataset(QM9_ANI2X_to_test)
+@pytest.fixture(params=_DATASETS_TO_TEST_QM9_ANI2X)
+def initialized_QM9_ANI2X_dataset(request):
+    dataset_name = request.param
+    return initialize_dataset(dataset_name)
 
 
 @pytest.fixture()
@@ -282,31 +263,30 @@ def return_single_batch(data_module) -> BatchData:
     return batch
 
 
-def initialize_dataset(
-    dataset, split_file: Optional[str] = None, for_unit_testing: bool = True
-) -> TorchDataModule:
+def initialize_dataset(dataset_name, for_unit_testing: bool = True) -> DataModule:
     """
     Initialize a dataset for a given mode.
 
     Parameters
     ----------
-    dataset : class
-        Dataset class.
+    dataset_name : str
+        Dataset class name.
     Returns
     -------
-    TorchDataModule
-        Initialized TorchDataModule.
+    DataModule
+        Initialized DataModule.
     """
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
     # we need to use the first come first serve splitting strategy, as random is default
     # using random would make it hard to validate the expected values in the tests
-    data_module = TorchDataModule(
-        dataset,
+    data_module = DataModule(
+        dataset_name,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        split_file=split_file,
+        for_unit_testing=for_unit_testing,
     )
     data_module.prepare_data()
+    data_module.setup()
     return data_module
 
 

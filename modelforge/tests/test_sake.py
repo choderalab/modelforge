@@ -30,12 +30,12 @@ def test_sake_forward():
     Test the forward pass of the SAKE model.
     """
     from modelforge.dataset.qm9 import QM9Dataset
-    from modelforge.dataset.dataset import TorchDataModule
+    from modelforge.dataset.dataset import DataModule
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
     # Set up dataset
     data = QM9Dataset(for_unit_testing=True)
-    dataset = TorchDataModule(
+    dataset = DataModule(
         data, batch_size=1, splitting_strategy=FirstComeFirstServeSplittingStrategy()
     )
 
@@ -99,12 +99,12 @@ def test_sake_layer_equivariance(h_atol, eq_atol):
     sake = SAKE(number_of_atom_features=nr_atom_basis)  # only for preparing inputs
 
     from modelforge.dataset.qm9 import QM9Dataset
-    from modelforge.dataset.dataset import TorchDataModule
+    from modelforge.dataset.dataset import DataModule
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
     # Set up dataset
     data = QM9Dataset(for_unit_testing=True)
-    dataset = TorchDataModule(
+    dataset = DataModule(
         data, batch_size=1, splitting_strategy=FirstComeFirstServeSplittingStrategy()
     )
 
@@ -441,11 +441,11 @@ def test_sake_model_against_reference():
     )
 
     from modelforge.dataset import QM9Dataset
-    from modelforge.dataset import TorchDataModule
+    from modelforge.dataset import DataModule
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
     data = QM9Dataset(for_unit_testing=True)
-    dataset = TorchDataModule(
+    dataset = DataModule(
         data, batch_size=1, splitting_strategy=FirstComeFirstServeSplittingStrategy()
     )
 
@@ -585,13 +585,13 @@ def test_sake_model_against_reference():
 
 def test_model_invariance():
     from modelforge.dataset import QM9Dataset
-    from modelforge.dataset import TorchDataModule
+    from modelforge.dataset import DataModule
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
     from dataclasses import replace
 
     model = SAKE()
     data = QM9Dataset(for_unit_testing=True)
-    dataset = TorchDataModule(
+    dataset = DataModule(
         data, batch_size=1, splitting_strategy=FirstComeFirstServeSplittingStrategy()
     )
 

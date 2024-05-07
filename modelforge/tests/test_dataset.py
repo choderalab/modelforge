@@ -425,20 +425,6 @@ from modelforge.dataset.utils import (
     FirstComeFirstServeSplittingStrategy,
 )
 
-@pytest.mark.parametrize(
-    "splitting_strategy",
-    [
-        RandomSplittingStrategy,
-        FirstComeFirstServeSplittingStrategy,
-        RandomRecordSplittingStrategy,
-    ],
-)
-def test_splitting_loading_saving(splitting_strategy, datasets_to_test):
-    from modelforge.dataset import DatasetFactory
-
-    dataset = DatasetFactory.create_dataset(datasets_to_test.dataset)
-    train_dataset, val_dataset, test_dataset = splitting_strategy().split(dataset)
-
 
 @pytest.mark.parametrize(
     "splitting_strategy",
@@ -517,7 +503,7 @@ def test_numpy_dataset_assignment(datasets_to_test):
 
 def test_self_energy():
 
-    from modelforge.dataset.dataset import TorchDataModule
+    from modelforge.dataset.dataset import DataModule
 
     # test the self energy calculation on the QM9 dataset
     from modelforge.dataset.qm9 import QM9Dataset
@@ -525,7 +511,7 @@ def test_self_energy():
 
     # prepare reference value
     data = QM9Dataset(for_unit_testing=True)
-    dataset = TorchDataModule(
+    dataset = DataModule(
         data, batch_size=32, splitting_strategy=FirstComeFirstServeSplittingStrategy()
     )
     dataset.prepare_data(
@@ -535,7 +521,7 @@ def test_self_energy():
     assert np.isclose(methane_energy_reference, -106277.4161)
 
     data = QM9Dataset(for_unit_testing=True)
-    dataset = TorchDataModule(
+    dataset = DataModule(
         data, batch_size=32, splitting_strategy=FirstComeFirstServeSplittingStrategy()
     )
 
@@ -559,7 +545,7 @@ def test_self_energy():
     # Scenario 2: dataset may or may not contain self energies
     # but user wants to use least square regression to calculate the energies
     data = QM9Dataset(for_unit_testing=True)
-    dataset = TorchDataModule(
+    dataset = DataModule(
         data, batch_size=32, splitting_strategy=FirstComeFirstServeSplittingStrategy()
     )
     dataset.prepare_data(
@@ -605,7 +591,7 @@ def test_self_energy():
     # Test that self energies are correctly removed
     for regression in [True, False]:
         data = QM9Dataset(for_unit_testing=True)
-        dataset = TorchDataModule(
+        dataset = DataModule(
             data,
             batch_size=32,
             splitting_strategy=FirstComeFirstServeSplittingStrategy(),

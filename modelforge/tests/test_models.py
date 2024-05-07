@@ -51,28 +51,30 @@ def test_model_factory(model_name, simulation_environment):
 
 def test_energy_scaling_and_offset():
     # setup test dataset
-    from modelforge.dataset.dataset import TorchDataModule
+    from modelforge.dataset.dataset import DataModule
     from modelforge.potential.ani import ANI2x
 
     # test the self energy calculation on the QM9 dataset
-    from modelforge.dataset.qm9 import QM9Dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
     # prepare reference value
-    data = QM9Dataset(for_unit_testing=True)
-    dataset = TorchDataModule(
-        data, batch_size=1, splitting_strategy=FirstComeFirstServeSplittingStrategy()
+    dataset = DataModule(
+        name="QM9",
+        batch_size=1,
+        for_unit_testing=True,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        remove_self_energies=True,
+        normalize=False,
+        regression_ase=False,
     )
-
+    dataset.prepare_data()
+    dataset.setup()
     # -------------------------------#
     # initialize model
     model = ANI2x()
 
     # -------------------------------#
     # Test that we can add the reference energy correctly
-    dataset.prepare_data(
-        remove_self_energies=True, normalize=False, regression_ase=False
-    )
     # get methane input
     methane = next(iter(dataset.train_dataloader())).nnp_input
 
@@ -103,7 +105,9 @@ def test_state_dict_saving_and_loading(model_name):
     model1 = NeuralNetworkPotentialFactory.create_nnp("training", model_name, "PyTorch")
     torch.save(model1.state_dict(), "model.pth")
 
-    model2 = NeuralNetworkPotentialFactory.create_nnp("inference", model_name, "PyTorch")
+    model2 = NeuralNetworkPotentialFactory.create_nnp(
+        "inference", model_name, "PyTorch"
+    )
     model2.load_state_dict(torch.load("model.pth"))
 
 

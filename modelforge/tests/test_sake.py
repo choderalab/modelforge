@@ -551,12 +551,12 @@ def test_sake_model_against_reference(single_data_point):
     # assert torch.allclose(mf_out.E, torch.from_numpy(onp.array(ref_out[0])))
 
 
-def test_model_invariance(initialized_dataset_with_batch_size_one):
+def test_model_invariance(single_data_point):
     from dataclasses import replace
 
     model = SAKE()
     # get methane input
-    methane = initialized_dataset_with_batch_size_one
+    methane = single_data_point.nnp_input
 
     rotation_matrix = torch.tensor([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
     perturbed_methane_input = replace(methane)

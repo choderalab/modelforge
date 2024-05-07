@@ -215,19 +215,10 @@ def batch_QM9_ANI2x(initialized_QM9_ANI2X_dataset):
     return batch
 
 
-# Fixture for setting up QM9Dataset
-@pytest.fixture
-def qm9_dataset(prep_temp_dir):
-    from modelforge.dataset import QM9Dataset
-
-    dataset = QM9Dataset(for_unit_testing=True, local_cache_dir=str(prep_temp_dir))
-    return dataset
-
-
 # fixture for initializing QM9Dataset
 @pytest.fixture
-def initialized_qm9_dataset(qm9_dataset):
-    return initialize_dataset(qm9_dataset)
+def initialized_QM9_dataset():
+    return initialize_dataset("QM9")
 
 
 # Fixture for generating simplified input data
@@ -302,7 +293,7 @@ def initialize_dataset(dataset_name, for_unit_testing: bool = True) -> DataModul
     # we need to use the first come first serve splitting strategy, as random is default
     # using random would make it hard to validate the expected values in the tests
     data_module = DataModule(
-        dataset_name,
+        name=dataset_name,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         for_unit_testing=for_unit_testing,
     )

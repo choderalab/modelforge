@@ -156,7 +156,7 @@ def test_forward_pass(simulation_environment, inference_model, batch):
 
         yhat = model(nnp_input)
         make_dot(yhat, params=dict(list(model.named_parameters()))).render(
-            f"{model.__class__.__name__}_torchviz", format="png"
+            f"compute_graph_{model.__class__.__name__}", format="png"
         )
 
 

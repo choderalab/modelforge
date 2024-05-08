@@ -153,7 +153,6 @@ class TrainingAdapter(pl.LightningModule):
         """
         from typing import List
         from modelforge.potential import _IMPLEMENTED_NNPS
-        from icecream import ic
 
         print(f"{nnp_parameters=}")
         super().__init__()

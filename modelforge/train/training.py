@@ -153,11 +153,14 @@ class TrainingAdapter(pl.LightningModule):
         """
         from typing import List
         from modelforge.potential import _IMPLEMENTED_NNPS
+        from icecream import ic
 
+        print(f"{nnp_parameters=}")
         super().__init__()
         self.save_hyperparameters()
         # Extracting and instantiating the model from parameters
-        nnp_name = nnp_parameters.pop("nnp_name", None)
+        nnp_parameters_ = nnp_parameters.copy()
+        nnp_name = nnp_parameters_.pop("nnp_name", None)
         if nnp_name is None:
             raise ValueError(
                 "NNP name must be specified in nnp_parameters with key 'nnp_name'."
@@ -166,7 +169,7 @@ class TrainingAdapter(pl.LightningModule):
         if nnp_class is None:
             raise ValueError(f"Specified NNP name '{nnp_name}' is not implemented.")
 
-        self.model = nnp_class(**nnp_parameters)
+        self.model = nnp_class(**nnp_parameters_)
         self.optimizer = optimizer
         self.learning_rate = lr
         self.loss = EnergyAndForceLoss(model=self.model, include_force=include_force)

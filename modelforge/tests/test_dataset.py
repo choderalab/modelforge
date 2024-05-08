@@ -442,7 +442,8 @@ def test_dataset_splitting(splitting_strategy, datasets_to_test):
         name=datasets_to_test.name,
         batch_size=512,
         splitting_strategy=splitting_strategy(),
-        normalize=False,
+        for_unit_testing=True,
+        remove_self_energies=False,
     )
     dm.prepare_data()
     dm.setup()
@@ -462,7 +463,8 @@ def test_dataset_splitting(splitting_strategy, datasets_to_test):
         name=datasets_to_test.name,
         batch_size=512,
         splitting_strategy=splitting_strategy(split=[0.6, 0.3, 0.1]),
-        normalize=False,
+        for_unit_testing=True,
+        remove_self_energies=False,
     )
     dm.prepare_data()
     dm.setup()

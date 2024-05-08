@@ -896,6 +896,19 @@ class PhysNetRadialSymmetryFunction(SAKERadialSymmetryFunction):
         self.prefactor = torch.tensor([1.0])
 
 
+class TensorNetRadialSymmetryFunction(RadialSymmetryFunction):
+    def __init__(
+        self,
+        number_of_radial_basis_functions: int,
+        max_distance: unit.Quantity,
+        min_distance: unit.Quantity = 0.0 * unit.nanometer,
+        dtype: Optional[torch.dtype] = None,
+        trainable: bool = False,
+        radial_basis_function: RadialBasisFunction = \
+            GaussianRadialBasisFunction(),
+     ):
+        pass
+
 def pair_list(
     atomic_subsystem_indices: torch.Tensor,
     only_unique_pairs: bool = False,

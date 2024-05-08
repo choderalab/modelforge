@@ -5,6 +5,7 @@ from openff.units import unit
 
 from modelforge.potential.models import InputPreparation
 from modelforge.potential.models import BaseNetwork, CoreNetwork
+from modelforge.potential.utils import TensorNetRadialSymmetryFunction
 from modelforge.potential.utils import NeuralNetworkData, NNPInput
 
 
@@ -64,6 +65,23 @@ class TensorNetRepresentation(torch.nn.Module):
         radial_min_distanc,
         number_of_radial_basis_functions,
     ):
+        pass
+
+    def _setup_radial_symmetry_functions(
+        self,
+        max_distance: unit.Quantity,
+        min_distance: unit.Quantity,
+        number_of_radial_basis_functions: int,
+    ):
+        radial_symmetry_function = TensorNetRadialSymmetryFunction(
+            number_of_radial_basis_functions,
+            max_distance,
+            min_distance,
+            dtype=torch.float32,
+        )
+        return radial_symmetry_function
+
+    def forward(self, data: TensorNetNeuralNetworkData):
         pass
 
 

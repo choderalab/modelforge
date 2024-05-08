@@ -1,17 +1,15 @@
 import os
-from typing import TYPE_CHECKING, Dict, Literal, List, Optional, Union
-import pytorch_lightning as pl
-
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Dict, List, Literal, Optional, Union
 
 import numpy as np
+import pytorch_lightning as pl
 import torch
 from loguru import logger as log
 from torch.utils.data import DataLoader
 
-from modelforge.utils.prop import PropertyNames
-
 from modelforge.dataset.utils import RandomRecordSplittingStrategy, SplittingStrategy
-from dataclasses import dataclass
+from modelforge.utils.prop import PropertyNames
 
 if TYPE_CHECKING:
     from modelforge.potential.processing import AtomicSelfEnergies
@@ -414,6 +412,7 @@ class HDF5Dataset:
 
         """
         from collections import OrderedDict
+
         import h5py
         import tqdm
 
@@ -738,29 +737,6 @@ from torch import nn
 
 
 class DataModule(pl.LightningDataModule):
-    """
-    Data module for PyTorch Lightning, handling data preparation and loading.
-
-    Parameters
-    ----------
-    data : HDF5Dataset
-        The dataset to use.
-    split : SplittingStrategy, optional
-        The strategy for splitting data into training,
-        validation, and test sets. Defaults to RandomRecordSplittingStrategy.
-    batch_size : int, optional
-        Defaul is 64
-    split_file : str, optional
-        Path to a file containing pre-computed split indices.
-
-    Examples
-    --------
-    >>> data = QM9Dataset()
-    >>> data_module = DataModule(data)
-    >>> data_module.prepare_data()
-    >>> data_module.setup()
-    >>> train_loader = data_module.train_dataloader()
-    """
 
     def __init__(
         self,
@@ -775,6 +751,7 @@ class DataModule(pl.LightningDataModule):
         for_unit_testing: bool = False,
     ):
         """
+        Data module for PyTorch Lightning, handling data preparation and loading.
         Parameters
         ----------
         remove_self_energies : bool, optional
@@ -913,6 +890,7 @@ class DataModule(pl.LightningDataModule):
         """Sets up datasets for the train, validation, and test stages based on the stage argument."""
 
         self.torch_dataset = torch.load("torch_dataset.pt")
+
         self.dataset_statistics = torch.load("dataset_statistics.pt")
         self.train_dataset, self.val_dataset, self.test_dataset = (
             self.splitting_strategy.split(self.torch_dataset)
@@ -1033,7 +1011,7 @@ from typing import Tuple
 def collate_conformers(conf_list: List[Dict[str, torch.Tensor]]) -> "BatchData":
     # TODO: once TorchDataset is reimplemented for general properties, reimplement this function using formats too.
     """Concatenate the Z, R, and E tensors from a list of molecules into a single tensor each, and return a new dictionary with the concatenated tensors."""
-    from modelforge.potential.utils import NNPInput, BatchData, Metadata
+    from modelforge.potential.utils import BatchData, Metadata, NNPInput
 
     Z_list = []  # nuclear charges/atomic numbers
     R_list = []  # positions

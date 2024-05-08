@@ -94,7 +94,7 @@ from torch.utils.data import Dataset, DataLoader
 
 def calculate_mean_and_variance(
     torch_dataset: Dataset, batch_size: int = 512
-) -> Dict[str, float]:
+) -> Dict[str, torch.Tensor]:
     """
     Calculates the mean and variance of the dataset.
 
@@ -112,13 +112,12 @@ def calculate_mean_and_variance(
         num_workers=4,
     )
     log.info("Calculating mean and variance for normalization")
-    nr_of_atoms = 0
     for batch_data in dataloader:
         online_estimator.update(batch_data.metadata.E)
 
     stats = {
-        "mean": online_estimator.mean / torch_dataset.number_of_atoms,
-        "stddev": online_estimator.stddev / torch_dataset.number_of_atoms,
+        "mean": online_estimator.mean,
+        "stddev": online_estimator.stddev,
     }
     log.info(f"Mean and standard deviation of the dataset:{stats}")
     return stats

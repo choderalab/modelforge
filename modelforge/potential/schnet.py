@@ -372,8 +372,6 @@ class SchNETRepresentation(nn.Module):
         return {"f_ij": f_ij, "f_cutoff": f_cutoff}
 
 
-from typing import NamedTuple, Union
-
 from .models import InputPreparation, NNPInput, BaseNetwork
 
 

@@ -103,7 +103,9 @@ def test_state_dict_saving_and_loading(model_name):
     model1 = NeuralNetworkPotentialFactory.create_nnp("training", model_name, "PyTorch")
     torch.save(model1.state_dict(), "model.pth")
 
-    model2 = NeuralNetworkPotentialFactory.create_nnp("inference", model_name, "PyTorch")
+    model2 = NeuralNetworkPotentialFactory.create_nnp(
+        "inference", model_name, "PyTorch"
+    )
     model2.load_state_dict(torch.load("model.pth"))
 
 
@@ -131,6 +133,7 @@ def test_energy_between_simulation_environments(inference_model, batch):
 @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
 def test_forward_pass(simulation_environment, inference_model, batch):
     # this test sends a single batch from different datasets through the model
+    import torch
 
     nnp_input = batch.nnp_input
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
@@ -140,10 +143,20 @@ def test_forward_pass(simulation_environment, inference_model, batch):
     if "JAX" in str(type(model)):
         nnp_input = nnp_input.as_jax_namedtuple()
 
-    output = model(nnp_input).E
+    output = model(nnp_input)
 
     # test tat we get an energie per molecule
-    assert len(output) == nr_of_mols
+    assert len(output.E) == nr_of_mols
+
+    # the batch consists of methane (CH4) and amamonium (NH3)
+    # which has symmetric hydrogens.
+    # This has to be reflected in the atomic energies E_i, which
+    # has to be equal for all hydrogens
+    if "JAX" not in str(type(model)):
+
+        # assert that the following tensor has equal values for dim=0 index 1 to 4 and 6 to 8
+        assert torch.allclose(output.E_i[1:4], output.E_i[1])
+        assert torch.allclose(output.E_i[6:8], output.E_i[6])
 
 
 @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])

@@ -305,6 +305,7 @@ def initialize_dataset(
         dataset,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         split_file=split_file,
+        batch_size=2,
     )
     data_module.prepare_data()
     return data_module

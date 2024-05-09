@@ -26,6 +26,7 @@ class PairListOutputs(NamedTuple):
 
 
 class EnergyOutput(NamedTuple):
+    E_i: torch.Tensor
     E: torch.Tensor
     raw_E: torch.Tensor
     rescaled_E: torch.Tensor
@@ -733,6 +734,7 @@ class CoreNetwork(Module, ABC):
         # ic(processed_energy["E"])
         # return energies
         return EnergyOutput(
+            E_i=outputs["E_i"],
             E=processed_energy["E"],
             raw_E=processed_energy["raw_E"],
             rescaled_E=processed_energy["rescaled_E"],

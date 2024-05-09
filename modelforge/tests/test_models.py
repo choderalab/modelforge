@@ -149,17 +149,6 @@ def test_forward_pass(simulation_environment, inference_model, batch):
     # test tat we get an energie per molecule
     assert len(output) == nr_of_mols
 
-    # visualize the compute graph
-    from torchviz import make_dot
-
-    if "JAX" not in str(type(model)):
-
-        yhat = model(nnp_input)
-        make_dot(yhat, params=dict(list(model.named_parameters()))).render(
-            f"compute_graph_{model.__class__.__name__}", format="png"
-        )
-
-
 @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
 def test_calculate_energies_and_forces(simulation_environment, inference_model, batch):
     """

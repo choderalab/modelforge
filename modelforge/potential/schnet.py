@@ -215,6 +215,9 @@ class SchNetCore(CoreNetwork):
         }
 
 
+from torch_scatter import scatter_add
+
+
 class SchNETInteractionModule(nn.Module):
     def __init__(
         self,
@@ -288,30 +291,21 @@ class SchNETInteractionModule(nn.Module):
         torch.Tensor, shape [nr_of_atoms_in_systems, nr_atom_basis]
             Updated feature tensor after interaction block.
         """
+        idx_i, idx_j = pairlist[0], pairlist[1]
 
         # Map input features to the filter space
         x = self.intput_to_feature(x)
 
         # Generate interaction filters based on radial basis functions
-        Wij = self.filter_network(f_ij.squeeze(1))
-
-        idx_i, idx_j = pairlist[0], pairlist[1]
-        x_j = x[idx_j]
+        W_ij = self.filter_network(f_ij.squeeze(1))
+        W_ij = W_ij * f_ij_cutoff
 
         # Perform continuous-filter convolution
-        x_ij = x_j * Wij * f_ij_cutoff
+        x_j = x[idx_j]
+        x_ij = x_j * W_ij
+        x = scatter_add(x_ij, idx_i, dim=0, dim_size=x.size(0))
 
-        # Initialize a tensor to gather the results
-        x_ = torch.zeros_like(x, dtype=x.dtype, device=x.device)
-
-        # Sum contributions to update atom features
-        # x shape: torch.Size([nr_of_atoms_in_batch, 64])
-        # x_ij shape: torch.Size([nr_of_pairs, 64])
-        idx_i_expand = idx_i.unsqueeze(1).expand_as(x_ij)
-        x_.scatter_add_(0, idx_i_expand, x_ij)
-        # Map back to the original feature space and reshape
-        x = self.feature_to_output(x_)
-        return x
+        return self.feature_to_output(x)
 
 
 class SchNETRepresentation(nn.Module):
@@ -371,8 +365,6 @@ class SchNETRepresentation(nn.Module):
 
         return {"f_ij": f_ij, "f_cutoff": f_cutoff}
 
-
-from typing import NamedTuple, Union
 
 from .models import InputPreparation, NNPInput, BaseNetwork
 

@@ -548,7 +548,8 @@ class ANI2xCore(CoreNetwork):
         }
 
 
-from .models import InputPreparation, NNPInput, BaseNetwork
+from .models import InputPreparation, BaseNetwork
+from .utils import NNPInput
 
 
 class ANI2x(BaseNetwork):

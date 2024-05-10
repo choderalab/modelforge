@@ -6,9 +6,8 @@ import pytest
 import torch
 
 from modelforge.dataset.dataset import DatasetFactory, TorchDataset
-from modelforge.dataset import QM9Dataset
+from modelforge.dataset import _ImplementedDatasets
 
-DATASETS = [QM9Dataset]
 from modelforge.utils.prop import PropertyNames
 
 
@@ -125,34 +124,33 @@ def test_dataset_basic_operations():
         )
 
 
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_different_properties_of_interest(dataset):
-    factory = DatasetFactory()
-    data = dataset(for_unit_testing=True, regenerate_cache=True)
-    assert data.properties_of_interest == [
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+def test_different_properties_of_interest(dataset_name, initialize_dataset):
+    # This test checks the DatasetFactory and PyTorch dataset
+
+    dataset = initialize_dataset(dataset_name)
+    assert dataset.data.properties_of_interest == [
         "geometry",
         "atomic_numbers",
         "internal_energy_at_0K",
         "charges",
     ]
 
-    dataset = factory.create_dataset(data)
     raw_data_item = dataset[0]
     assert isinstance(raw_data_item, dict)
     assert len(raw_data_item) == 6  # 6 properties are returned
 
-    data.properties_of_interest = [
+    dataset.data.properties_of_interest = [
         "internal_energy_at_0K",
         "geometry",
         "atomic_numbers",
     ]
-    assert data.properties_of_interest == [
+    assert dataset.data.properties_of_interest == [
         "internal_energy_at_0K",
         "geometry",
         "atomic_numbers",
     ]
 
-    dataset = factory.create_dataset(data)
     raw_data_item = dataset[0]
     print(raw_data_item)
     assert isinstance(raw_data_item, dict)
@@ -386,10 +384,11 @@ def test_data_item_format(initialized_dataset):
     )
 
 
-def test_dataset_generation(initialized_dataset):
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+def test_dataset_generation(dataset_name, datamodule_factory):
     """Test the splitting of the dataset."""
 
-    dataset = initialized_dataset
+    dataset = datamodule_factory(dataset_name)
     train_dataloader = dataset.train_dataloader()
     val_dataloader = dataset.val_dataloader()
     test_dataloader = dataset.test_dataloader()

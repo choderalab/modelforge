@@ -1,48 +1,85 @@
 import torch
 import pytest
-from modelforge.dataset import DataModule, _ImplementedDatasets
+from modelforge.dataset import DataModule
 
 from typing import Optional, Dict
-from modelforge.potential import (
-    NeuralNetworkPotentialFactory,
-    _Implemented_NNPs,
-)
 from dataclasses import dataclass
 
-_DATASETS_TO_TEST = _ImplementedDatasets.get_all_dataset_names()
-_DATASETS_TO_TEST_QM9_ANI2X = ["QM9", "ANI2X"]
-_DATASETS_TO_TEST_QM9 = ["QM9"]
-_MODELS_TO_TEST = _Implemented_NNPs.get_all_neural_network_names()
 
 from modelforge.potential.utils import BatchData
+
+
+# datamodule fixture
+@pytest.fixture
+def datamodule_factory():
+    def create_datamodule(
+        dataset_name: str, for_unit_testing: bool = True, batch_size=64
+    ):
+        return initialize_datamodule(
+            dataset_name, for_unit_testing=for_unit_testing, batch_size=batch_size
+        )
+
+    return create_datamodule
+
+
+from modelforge.dataset.utils import (
+    FirstComeFirstServeSplittingStrategy,
+    SplittingStrategy,
+)
+
+
+def initialize_datamodule(
+    dataset_name: str,
+    for_unit_testing: bool = True,
+    batch_size: int = 64,
+    splitting_strategy: SplittingStrategy = FirstComeFirstServeSplittingStrategy(),
+) -> DataModule:
+    """
+    Initialize a dataset for a given mode.
+    """
+
+    data_module = DataModule(
+        dataset_name,
+        splitting_strategy=splitting_strategy,
+        batch_size=batch_size,
+        for_unit_testing=for_unit_testing,
+    )
+    data_module.prepare_data()
+    data_module.setup()
+    return data_module
+
+
+# dataset fixture
+@pytest.fixture
+def dataset_factory():
+    def create_dataset(dataset_name: str):
+        return initialize_dataset(dataset_name)
+
+    return create_dataset
+
+
+from modelforge.dataset.dataset import DatasetFactory, TorchDataset
+from modelforge.dataset import _ImplementedDatasets
+
+
+def initialize_dataset(
+    dataset_name: str,
+) -> DataModule:
+    """
+    Initialize a dataset for a given mode.
+    """
+
+    factory = DatasetFactory()
+    data = _ImplementedDatasets.get_dataset_class(dataset_name)()
+    dataset = factory.create_dataset(data)
+
+    return dataset
 
 
 @pytest.fixture(scope="session")
 def prep_temp_dir(tmp_path_factory):
     fn = tmp_path_factory.mktemp("dataset_testing")
     return fn
-
-
-@pytest.fixture(params=_MODELS_TO_TEST)
-def train_model(request):
-    model_name = request.param
-    # Assuming NeuralNetworkPotentialFactory.create_nnp
-    model = NeuralNetworkPotentialFactory.create_nnp(
-        use="training", nnp_name=model_name, simulation_environment="PyTorch"
-    )
-    return model
-
-
-@pytest.fixture(params=_MODELS_TO_TEST)
-def inference_model(request):
-    model_name = request.param
-    # simulation_environment needs to be taken from another parameter, not defined here.
-    # Assuming you pass simulation_environment to create_nnp in some way
-    return lambda env: NeuralNetworkPotentialFactory.create_nnp(
-        use="inference",
-        nnp_name=model_name,
-        simulation_environment=env,
-    )
 
 
 @dataclass
@@ -58,9 +95,11 @@ from typing import Dict
 # This will store the cached datasets
 dataset_cache: Dict[str, DataSetContainer] = {}
 
+from modelforge.dataset import _ImplementedDatasets
 
-@pytest.fixture(scope="session", params=_DATASETS_TO_TEST_QM9)
-def datasets_to_test(request, prep_temp_dir):
+
+@pytest.fixture(scope="session", params=_ImplementedDatasets.get_all_dataset_names())
+def datasets_to_test(request):
     dataset_name = request.param
 
     if datasetDC := dataset_cache.get(dataset_name, None):
@@ -170,69 +209,6 @@ def datasets_to_test(request, prep_temp_dir):
         raise NotImplementedError(f"Dataset {dataset_name} is not implemented.")
 
 
-@pytest.fixture()
-def initialized_dataset(datasets_to_test):
-    return initialize_dataset(datasets_to_test.name)
-
-
-@pytest.fixture()
-def initialized_dataset_with_batch_size_one(datasets_to_test):
-    return initialize_dataset_with_batch_size_one(datasets_to_test.name)
-
-
-@pytest.fixture()
-def batch(initialized_dataset):
-    """py
-    Fixture to obtain a single batch from an initialized dataset.
-
-    This fixture depends on the `initialized_dataset` fixture for the dataset instance.
-    The `request` parameter is automatically provided by pytest but is not used directly in this fixture.
-    """
-    batch = return_single_batch(initialized_dataset)
-    return batch
-
-
-@pytest.fixture(params=_DATASETS_TO_TEST_QM9_ANI2X)
-def QM9_ANI2X_to_test(request, prep_temp_dir):
-    dataset_name = request.param
-    if dataset_name == "QM9":
-        from modelforge.dataset.qm9 import QM9Dataset
-
-        return QM9Dataset(for_unit_testing=True, local_cache_dir=str(prep_temp_dir))
-
-    elif dataset_name == "ANI2X":
-        from modelforge.dataset.ani2x import ANI2xDataset
-
-        return ANI2xDataset(for_unit_testing=True, local_cache_dir=str(prep_temp_dir))
-
-
-@pytest.fixture(params=_DATASETS_TO_TEST_QM9_ANI2X)
-def initialized_QM9_ANI2X_dataset(request):
-    dataset_name = request.param
-    return initialize_dataset(dataset_name)
-
-
-@pytest.fixture()
-def batch_QM9_ANI2x(initialized_QM9_ANI2X_dataset):
-    batch = return_single_batch(initialized_QM9_ANI2X_dataset)
-    return batch
-
-
-# fixture for initializing QM9Dataset
-@pytest.fixture
-def initialized_QM9_dataset():
-    return initialize_dataset("QM9")
-
-
-# Fixture for generating simplified input data
-@pytest.fixture(params=["methane", "qm9_batch"])
-def simplified_input_data(request, qm9_batch):
-    if request.param == "methane":
-        return generate_methane_input()
-    elif request.param == "qm9_batch":
-        return qm9_batch
-
-
 # Fixture for equivariance test utilities
 @pytest.fixture
 def equivariance_utils():
@@ -242,98 +218,6 @@ def equivariance_utils():
 # ----------------------------------------------------------- #
 # helper functions
 # ----------------------------------------------------------- #
-def return_single_nnp_input(data_module) -> BatchData:
-    """
-    Return a single batch from a dataset.
-
-    Parameters
-    ----------
-    dataset : class
-        Dataset class.
-    Returns
-    -------
-    Dict[str, Tensor]
-        A single batch from the dataset.
-    """
-
-    batch = next(iter(data_module.train_dataloader()))
-    return batch
-
-
-def return_single_batch(data_module) -> BatchData:
-    """
-    Return a single batch from a dataset.
-
-    Parameters
-    ----------
-    dataset : class
-        Dataset class.
-    Returns
-    -------
-    Dict[str, Tensor]
-        A single batch from the dataset.
-    """
-
-    batch = next(iter(data_module.train_dataloader()))
-    return batch
-
-
-def initialize_dataset(dataset_name, for_unit_testing: bool = True) -> DataModule:
-    """
-    Initialize a dataset for a given mode.
-
-    Parameters
-    ----------
-    dataset_name : str
-        Dataset class name.
-    Returns
-    -------
-    DataModule
-        Initialized DataModule.
-    """
-    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
-
-    # we need to use the first come first serve splitting strategy, as random is default
-    # using random would make it hard to validate the expected values in the tests
-    data_module = DataModule(
-        name=dataset_name,
-        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        for_unit_testing=for_unit_testing,
-    )
-    data_module.prepare_data()
-    data_module.setup()
-    return data_module
-
-
-def initialize_dataset_with_batch_size_one(
-    dataset_name, for_unit_testing: bool = True
-) -> DataModule:
-    """
-    Initialize a dataset for a given mode.
-
-    Parameters
-    ----------
-    dataset_name : str
-        Dataset class name.
-    Returns
-    -------
-    DataModule
-        Initialized DataModule.
-    """
-    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
-
-    # we need to use the first come first serve splitting strategy, as random is default
-    # using random would make it hard to validate the expected values in the tests
-    data_module = DataModule(
-        dataset_name,
-        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        for_unit_testing=for_unit_testing,
-        batch_size=1,
-    )
-    data_module.prepare_data()
-    data_module.setup()
-    return data_module
-
 
 from modelforge.potential.utils import Metadata, NNPInput, BatchData
 
@@ -553,15 +437,3 @@ def equivariance_test_utils():
     reflection = lambda x: x @ p
 
     return translation, rotation, reflection
-
-
-@pytest.fixture()
-def single_data_point(initialized_dataset_with_batch_size_one):
-    """py
-    Fixture to obtain a single batch from an initialized dataset.
-
-    This fixture depends on the `initialized_dataset` fixture for the dataset instance.
-    The `request` parameter is automatically provided by pytest but is not used directly in this fixture.
-    """
-    batch = return_single_batch(initialized_dataset_with_batch_size_one)
-    return batch

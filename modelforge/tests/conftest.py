@@ -1,16 +1,19 @@
 import torch
 import pytest
-from modelforge.dataset import TorchDataModule, _IMPLEMENTED_DATASETS
-from modelforge.dataset.dataset import HDF5Dataset
+from modelforge.dataset import DataModule, _ImplementedDatasets
 
 from typing import Optional, Dict
-from modelforge.potential import NeuralNetworkPotentialFactory, _IMPLEMENTED_NNPS
+from modelforge.potential import (
+    NeuralNetworkPotentialFactory,
+    _Implemented_NNPs,
+)
 from dataclasses import dataclass
 
-_DATASETS_TO_TEST = [name for name in _IMPLEMENTED_DATASETS]
+_DATASETS_TO_TEST = _ImplementedDatasets.get_all_dataset_names()
 _DATASETS_TO_TEST_QM9_ANI2X = ["QM9", "ANI2X"]
 _DATASETS_TO_TEST_QM9 = ["QM9"]
-_MODELS_TO_TEST = [name for name in _IMPLEMENTED_NNPS]
+_MODELS_TO_TEST = _Implemented_NNPs.get_all_neural_network_names()
+
 from modelforge.potential.utils import BatchData
 
 
@@ -44,7 +47,6 @@ def inference_model(request):
 
 @dataclass
 class DataSetContainer:
-    dataset: HDF5Dataset
     name: str
     expected_properties_of_interest: list
     expected_E_random_split: float
@@ -68,9 +70,6 @@ def datasets_to_test(request, prep_temp_dir):
         from modelforge.dataset.qm9 import QM9Dataset
 
         datasetDC = DataSetContainer(
-            dataset=QM9Dataset(
-                for_unit_testing=True, local_cache_dir=str(prep_temp_dir)
-            ),
             name=dataset_name,
             expected_properties_of_interest=[
                 "geometry",
@@ -87,9 +86,6 @@ def datasets_to_test(request, prep_temp_dir):
         from modelforge.dataset.ani1x import ANI1xDataset
 
         datasetDC = DataSetContainer(
-            dataset=ANI1xDataset(
-                for_unit_testing=True, local_cache_dir=str(prep_temp_dir)
-            ),
             name=dataset_name,
             expected_properties_of_interest=[
                 "geometry",
@@ -106,9 +102,6 @@ def datasets_to_test(request, prep_temp_dir):
         from modelforge.dataset.ani2x import ANI2xDataset
 
         datasetDC = DataSetContainer(
-            dataset=ANI2xDataset(
-                for_unit_testing=True, local_cache_dir=str(prep_temp_dir)
-            ),
             name=dataset_name,
             expected_properties_of_interest=[
                 "geometry",
@@ -125,9 +118,6 @@ def datasets_to_test(request, prep_temp_dir):
         from modelforge.dataset.spice114 import SPICE114Dataset
 
         datasetDC = DataSetContainer(
-            dataset=SPICE114Dataset(
-                for_unit_testing=True, local_cache_dir=str(prep_temp_dir)
-            ),
             name=dataset_name,
             expected_properties_of_interest=[
                 "geometry",
@@ -145,9 +135,6 @@ def datasets_to_test(request, prep_temp_dir):
         from modelforge.dataset.spice2 import SPICE2Dataset
 
         datasetDC = DataSetContainer(
-            dataset=SPICE2Dataset(
-                for_unit_testing=True, local_cache_dir=str(prep_temp_dir)
-            ),
             name=dataset_name,
             expected_properties_of_interest=[
                 "geometry",
@@ -166,9 +153,6 @@ def datasets_to_test(request, prep_temp_dir):
         from modelforge.dataset.spice114openff import SPICE114OpenFFDataset
 
         datasetDC = DataSetContainer(
-            dataset=SPICE114OpenFFDataset(
-                for_unit_testing=True, local_cache_dir=str(prep_temp_dir)
-            ),
             name=dataset_name,
             expected_properties_of_interest=[
                 "geometry",
@@ -188,8 +172,12 @@ def datasets_to_test(request, prep_temp_dir):
 
 @pytest.fixture()
 def initialized_dataset(datasets_to_test):
-    dataset = datasets_to_test.dataset
-    return initialize_dataset(dataset)
+    return initialize_dataset(datasets_to_test.name)
+
+
+@pytest.fixture()
+def initialized_dataset_with_batch_size_one(datasets_to_test):
+    return initialize_dataset_with_batch_size_one(datasets_to_test.name)
 
 
 @pytest.fixture()
@@ -218,9 +206,10 @@ def QM9_ANI2X_to_test(request, prep_temp_dir):
         return ANI2xDataset(for_unit_testing=True, local_cache_dir=str(prep_temp_dir))
 
 
-@pytest.fixture()
-def initialized_QM9_ANI2X_dataset(QM9_ANI2X_to_test):
-    return initialize_dataset(QM9_ANI2X_to_test)
+@pytest.fixture(params=_DATASETS_TO_TEST_QM9_ANI2X)
+def initialized_QM9_ANI2X_dataset(request):
+    dataset_name = request.param
+    return initialize_dataset(dataset_name)
 
 
 @pytest.fixture()
@@ -229,19 +218,10 @@ def batch_QM9_ANI2x(initialized_QM9_ANI2X_dataset):
     return batch
 
 
-# Fixture for setting up QM9Dataset
-@pytest.fixture
-def qm9_dataset(prep_temp_dir):
-    from modelforge.dataset import QM9Dataset
-
-    dataset = QM9Dataset(for_unit_testing=True, local_cache_dir=str(prep_temp_dir))
-    return dataset
-
-
 # fixture for initializing QM9Dataset
 @pytest.fixture
-def initialized_qm9_dataset(qm9_dataset):
-    return initialize_dataset(qm9_dataset)
+def initialized_QM9_dataset():
+    return initialize_dataset("QM9")
 
 
 # Fixture for generating simplified input data
@@ -262,6 +242,22 @@ def equivariance_utils():
 # ----------------------------------------------------------- #
 # helper functions
 # ----------------------------------------------------------- #
+def return_single_nnp_input(data_module) -> BatchData:
+    """
+    Return a single batch from a dataset.
+
+    Parameters
+    ----------
+    dataset : class
+        Dataset class.
+    Returns
+    -------
+    Dict[str, Tensor]
+        A single batch from the dataset.
+    """
+
+    batch = next(iter(data_module.train_dataloader()))
+    return batch
 
 
 def return_single_batch(data_module) -> BatchData:
@@ -282,31 +278,60 @@ def return_single_batch(data_module) -> BatchData:
     return batch
 
 
-def initialize_dataset(
-    dataset, split_file: Optional[str] = None, for_unit_testing: bool = True
-) -> TorchDataModule:
+def initialize_dataset(dataset_name, for_unit_testing: bool = True) -> DataModule:
     """
     Initialize a dataset for a given mode.
 
     Parameters
     ----------
-    dataset : class
-        Dataset class.
+    dataset_name : str
+        Dataset class name.
     Returns
     -------
-    TorchDataModule
-        Initialized TorchDataModule.
+    DataModule
+        Initialized DataModule.
     """
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
     # we need to use the first come first serve splitting strategy, as random is default
     # using random would make it hard to validate the expected values in the tests
-    data_module = TorchDataModule(
-        dataset,
+    data_module = DataModule(
+        name=dataset_name,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        split_file=split_file,
+        for_unit_testing=for_unit_testing,
     )
     data_module.prepare_data()
+    data_module.setup()
+    return data_module
+
+
+def initialize_dataset_with_batch_size_one(
+    dataset_name, for_unit_testing: bool = True
+) -> DataModule:
+    """
+    Initialize a dataset for a given mode.
+
+    Parameters
+    ----------
+    dataset_name : str
+        Dataset class name.
+    Returns
+    -------
+    DataModule
+        Initialized DataModule.
+    """
+    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
+
+    # we need to use the first come first serve splitting strategy, as random is default
+    # using random would make it hard to validate the expected values in the tests
+    data_module = DataModule(
+        dataset_name,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        for_unit_testing=for_unit_testing,
+        batch_size=1,
+    )
+    data_module.prepare_data()
+    data_module.setup()
     return data_module
 
 
@@ -528,3 +553,15 @@ def equivariance_test_utils():
     reflection = lambda x: x @ p
 
     return translation, rotation, reflection
+
+
+@pytest.fixture()
+def single_data_point(initialized_dataset_with_batch_size_one):
+    """py
+    Fixture to obtain a single batch from an initialized dataset.
+
+    This fixture depends on the `initialized_dataset` fixture for the dataset instance.
+    The `request` parameter is automatically provided by pytest but is not used directly in this fixture.
+    """
+    batch = return_single_batch(initialized_dataset_with_batch_size_one)
+    return batch

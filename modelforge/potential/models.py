@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Dict, NamedTuple, Tuple, Type, Mapping, Union
+from typing import TYPE_CHECKING, Any, Dict, Mapping, NamedTuple, Tuple, Type, Union
 
+import lightning as pl
 import torch
 from loguru import logger as log
 from openff.units import unit
@@ -14,8 +15,8 @@ if TYPE_CHECKING:
     from modelforge.potential.ani import ANI2x, AniNeuralNetworkData
     from modelforge.potential.painn import PaiNN, PaiNNNeuralNetworkData
     from modelforge.potential.physnet import PhysNet, PhysNetNeuralNetworkData
-    from modelforge.potential.schnet import SchNet, SchnetNeuralNetworkData
     from modelforge.potential.sake import SAKE, SAKENeuralNetworkInput
+    from modelforge.potential.schnet import SchNet, SchnetNeuralNetworkData
 
 
 # Define NamedTuple for the outputs of Pairlist and Neighborlist forward method
@@ -248,7 +249,8 @@ class Neighborlist(Pairlist):
         )
 
 
-from typing import Literal, Optional, Union, Callable
+from typing import Callable, Literal, Optional, Union
+
 import numpy as np
 
 
@@ -351,11 +353,11 @@ class PyTorch2JAXConverter:
             A tuple containing the JAX function, parameters, and buffers.
         """
 
+        import functorch
         import jax
+        from functorch import make_functional_with_buffers
         from jax import custom_vjp
         from pytorch2jax.pytorch2jax import convert_to_jax, convert_to_pyt
-        import functorch
-        from functorch import make_functional_with_buffers
 
         # Convert the PyTorch model to a functional representation and extract the model function and parameters
         model_fn, model_params, model_buffer = make_functional_with_buffers(
@@ -420,7 +422,7 @@ class NeuralNetworkPotentialFactory:
         simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
         nnp_parameters: Optional[Dict[str, Union[int, float, str]]] = None,
         training_parameters: Optional[Dict[str, Any]] = None,
-    ) -> Union[Type[torch.nn.Module], Type[JAXModel]]:
+    ) -> Union[Type[torch.nn.Module], Type[JAXModel], Type[pl.LightningModule]]:
         """
         Creates an NNP instance of the specified type, configured either for training or inference.
 
@@ -450,14 +452,14 @@ class NeuralNetworkPotentialFactory:
             If the requested NNP type is not implemented.
         """
 
-        from modelforge.potential import _IMPLEMENTED_NNPS
+        from modelforge.potential import _Implemented_NNPs
         from modelforge.train.training import TrainingAdapter
 
         nnp_parameters = nnp_parameters or {}
         training_parameters = training_parameters or {}
 
         # get NNP
-        nnp_class: Type = _IMPLEMENTED_NNPS.get(nnp_name)
+        nnp_class: Type = _Implemented_NNPs.get_neural_network_class(nnp_name)
         if nnp_class is None:
             raise NotImplementedError(f"NNP type {nnp_name} is not implemented.")
 
@@ -605,7 +607,7 @@ class CoreNetwork(Module, ABC):
         self._log_message_dtype = False
         self._log_message_units = False
         # initialize the per molecule readout module
-        from .processing import FromAtomToMoleculeReduction, EnergyScaling
+        from .processing import EnergyScaling, FromAtomToMoleculeReduction
 
         self.postprocessing = EnergyScaling()
 

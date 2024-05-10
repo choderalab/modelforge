@@ -15,7 +15,7 @@ class SPICE2Curation(DatasetCuration):
     It provides both forces and energies calculated at the ωB97M-D3(BJ)/def2-TZVPPD level of theory,
     using Psi4 1.4.1 along with other useful quantities such as multipole moments and bond orders.
 
-    Reference to the SPICE 1 dataset publication:
+    Reference to the original SPICE 1 dataset publication:
     Eastman, P., Behara, P.K., Dotson, D.L. et al. SPICE,
     A Dataset of Drug-like Molecules and Peptides for Training Machine Learning Potentials.
     Sci Data 10, 11 (2023). https://doi.org/10.1038/s41597-022-01882-6
@@ -37,19 +37,26 @@ class SPICE2Curation(DatasetCuration):
 
     Examples
     --------
-    >>> spice114_data = SPICE114Curation(hdf5_file_name='spice114_dataset.hdf5',
-    >>>                             local_cache_dir='~/datasets/spice114_dataset')
-    >>> spice114_data.process()
+    >>> spice2_data = SPICE2Curation(hdf5_file_name='spice12_dataset.hdf5',
+    >>>                             local_cache_dir='~/datasets/spice2_dataset')
+    >>> spice2_data.process()
 
     """
 
     def _init_dataset_parameters(self):
-        self.dataset_download_url = (
-            "https://zenodo.org/records/10975225/files/SPICE-2.0.1.hdf5"
-        )
-        self.dataset_md5_checksum = "bfba2224b6540e1390a579569b475510"
-        # the spice dataset includes openff compatible unit definitions in the hdf5 file
-        # these values were used to generate this dictionary
+        from importlib import resources
+        from modelforge.curation import yaml_files
+        import yaml
+
+        yaml_file = resources.files(yaml_files) / "spice2_curation.yaml"
+        logger.debug(f"Loading config data from {yaml_file}")
+        with open(yaml_file, "r") as file:
+            data_inputs = yaml.safe_load(file)
+
+        assert data_inputs["dataset_name"] == "spice2"
+        self.dataset_download_url = data_inputs["dataset_download_url"]
+        self.dataset_md5_checksum = data_inputs["dataset_md5_checksum"]
+
         self.qm_parameters = {
             "geometry": {
                 "u_in": unit.bohr,

@@ -44,10 +44,22 @@ class SPICE114Curation(DatasetCuration):
     """
 
     def _init_dataset_parameters(self):
-        self.dataset_download_url = (
-            "https://zenodo.org/records/8222043/files/SPICE-1.1.4.hdf5"
-        )
-        self.dataset_md5_checksum = "f27d4c81da0e37d6547276bf6b4ae6a1"
+        # read in the yaml file that defines the dataset download url and md5 checksum
+        # this yaml file should be stored along with the curated dataset
+
+        from importlib import resources
+        from modelforge.curation import yaml_files
+        import yaml
+
+        yaml_file = resources.files(yaml_files) / "spice114_curation.yaml"
+        logger.debug(f"Loading config data from {yaml_file}")
+        with open(yaml_file, "r") as file:
+            data_inputs = yaml.safe_load(file)
+
+        assert data_inputs["dataset_name"] == "spice114"
+        self.dataset_download_url = data_inputs["dataset_download_url"]
+        self.dataset_md5_checksum = data_inputs["dataset_md5_checksum"]
+
         # the spice dataset includes openff compatible unit definitions in the hdf5 file
         # these values were used to generate this dictionary
         self.qm_parameters = {

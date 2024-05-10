@@ -768,33 +768,31 @@ class SPICEOpenFFCuration(DatasetCuration):
         #     )
 
         from concurrent.futures import ThreadPoolExecutor, as_completed
+        from importlib import resources
+        from modelforge.curation import yaml_files
+        import yaml
 
         if self.release_version == "1.1.4":
             # The SPICE dataset is available in the MOLSSI QCArchive
             # This will need to load from various datasets, as described on the spice-dataset github page
             # see https://github.com/openmm/spice-dataset/blob/1.1.4/downloader/config.yaml
 
-            dataset_names = [
-                "SPICE Solvated Amino Acids Single Points Dataset v1.1",
-                "SPICE Dipeptides Single Points Dataset v1.2",
-                "SPICE DES Monomers Single Points Dataset v1.1",
-                "SPICE DES370K Single Points Dataset v1.0",
-                # "SPICE DES370K Single Points Dataset Supplement v1.0", # this does not have spec 2 or spec 6
-                "SPICE PubChem Set 1 Single Points Dataset v1.2",
-                "SPICE PubChem Set 2 Single Points Dataset v1.2",
-                "SPICE PubChem Set 3 Single Points Dataset v1.2",
-                "SPICE PubChem Set 4 Single Points Dataset v1.2",
-                "SPICE PubChem Set 5 Single Points Dataset v1.2",
-                "SPICE PubChem Set 6 Single Points Dataset v1.2",
-                # "SPICE Ion Pairs Single Points Dataset v1.1", #this does not have spec 6 data for dispersion corrections
-            ]
+            yaml_file = resources.files(yaml_files) / "spice114_openff_curation.yaml"
+            logger.debug(f"Loading config data from {yaml_file}")
+            with open(yaml_file, "r") as file:
+                data_inputs = yaml.safe_load(file)
+
+            assert data_inputs["dataset_name"] == "spice114openff"
+
+            if max_records is not None or total_conformers is not None:
+                # if we specify the number of records, restrict to only a subset
+                # so we don't download multiple collections.
+                dataset_names = data_inputs["dataset_test_name"]
+            else:
+                dataset_names = data_inputs["dataset_names"]
 
         specification_names = ["spec_2", "spec_6", "entry"]
 
-        # if we specify the number of records, restrict to only the first subset
-        # so we don't download multiple collections.
-        if max_records is not None or total_conformers is not None:
-            dataset_names = ["SPICE PubChem Set 1 Single Points Dataset v1.2"]
         threads = []
         local_database_names = []
 

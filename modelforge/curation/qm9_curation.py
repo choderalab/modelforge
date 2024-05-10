@@ -44,10 +44,21 @@ class QM9Curation(DatasetCuration):
         """
         Define the key parameters for the QM9 dataset.
         """
-        self.dataset_download_url = (
-            "https://springernature.figshare.com/ndownloader/files/3195389"
-        )
-        self.dataset_md5_checksum = "ad1ebd51ee7f5b3a6e32e974e5d54012"
+        # read in the yaml file that defines the dataset download url and md5 checksum
+        # this yaml file should be stored along with the curated dataset
+
+        from importlib import resources
+        from modelforge.curation import yaml_files
+        import yaml
+
+        yaml_file = resources.files(yaml_files) / "qm9_curation.yaml"
+        logger.debug(f"Loading config data from {yaml_file}")
+        with open(yaml_file, "r") as file:
+            data_inputs = yaml.safe_load(file)
+
+        assert data_inputs["dataset_name"] == "qm9"
+        self.dataset_download_url = data_inputs["dataset_download_url"]
+        self.dataset_md5_checksum = data_inputs["dataset_md5_checksum"]
 
         # Below, we define key pieces of information related to the dataset in the form of a dict.
         # Metadata will be used to generate a README to go along with the HDF5 dataset.

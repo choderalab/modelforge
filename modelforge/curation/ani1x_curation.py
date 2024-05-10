@@ -58,10 +58,22 @@ class ANI1xCuration(DatasetCuration):
     """
 
     def _init_dataset_parameters(self):
-        self.dataset_download_url = (
-            "https://springernature.figshare.com/ndownloader/files/18112775"
-        )
-        self.dataset_md5_checksum = "98090dd6679106da861f52bed825ffb7"
+
+        # read in the yaml file that defines the dataset download url and md5 checksum
+        # this yaml file should be stored along with the curated dataset
+
+        from importlib import resources
+        from modelforge.curation import yaml_files
+        import yaml
+
+        yaml_file = resources.files(yaml_files) / "ani1x_curation.yaml"
+        logger.debug(f"Loading config data from {yaml_file}")
+        with open(yaml_file, "r") as file:
+            data_inputs = yaml.safe_load(file)
+
+        assert data_inputs["dataset_name"] == "ani1x"
+        self.dataset_download_url = data_inputs["dataset_download_url"]
+        self.dataset_md5_checksum = data_inputs["dataset_md5_checksum"]
 
         self.qm_parameters = {
             "geometry": {

@@ -129,13 +129,16 @@ class ANI1xDataset(HDF5Dataset):
         # for the full dataset and the test dataset
         # using yaml files should make these easier to extended and maintain
         from importlib import resources
-        from modelforge import dataset
+        from modelforge.dataset import yaml_files
         import yaml
 
-        yaml_file = resources.files(dataset) / "ani1x.yaml"
+        yaml_file = resources.files(yaml_files) / "ani1x.yaml"
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
 
+        # refactor this to take in a generic parameter that will set "mode" via the constructor
+        # e.g., dataset_select = "unit_testing_nc_1000" or "full_dataset" or any other combination
+        # we might need in the future
         if self.for_unit_testing:
             mode = "unit_testing_nc_1000"
             logger.info("Using unit test dataset with 1000 conformers")

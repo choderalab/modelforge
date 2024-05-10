@@ -167,10 +167,10 @@ class SPICE2Dataset(HDF5Dataset):
         from loguru import logger
 
         from importlib import resources
-        from modelforge import dataset
+        from modelforge.dataset import yaml_files
         import yaml
 
-        yaml_file = resources.files(dataset) / "spice2.yaml"
+        yaml_file = resources.files(yaml_files) / "spice2.yaml"
         logger.debug(f"Loading config data from {yaml_file}")
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)

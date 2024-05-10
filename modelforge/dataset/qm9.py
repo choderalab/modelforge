@@ -108,52 +108,29 @@ class QM9Dataset(HDF5Dataset):
         }
         from loguru import logger
 
-        # We need to define the checksums for the various files that we will be dealing with to load up the data
-        # There are 3 files types that need name/checksum defined, of extensions hdf5.gz, hdf5, and npz.
+        from importlib import resources
+        from modelforge import dataset
+        import yaml
 
-        # note, need to change the end of the url to dl=1 instead of dl=0 (the default when you grab the share list), to ensure the same checksum each time we download
-        self.test_url = "https://www.dropbox.com/scl/fi/oe2tooxwrkget75zwrfey/qm9_dataset_ntc_1000.hdf5.gz?rlkey=6hfb8ge0pqf4tly15rmdsthmw&st=tusk38vt&dl=1"
-        self.full_url = "https://www.dropbox.com/scl/fi/4wu7zlpuuixttp0u741rv/qm9_dataset.hdf5.gz?rlkey=nszkqt2t4kmghih5mt4ssppvo&dl=1"
+        yaml_file = resources.files(dataset) / "qm9.yaml"
+        logger.debug(f"Loading config data from {yaml_file}")
+        with open(yaml_file, "r") as file:
+            data_inputs = yaml.safe_load(file)
 
         if self.for_unit_testing:
-            url = self.test_url
-            gz_data_file = {
-                "name": "qm9_dataset_nc_1000.hdf5.gz",
-                "md5": "dc8ada0d808d02c699daf2000aff1fe9",
-                "length": 1697917,
-            }
-            hdf5_data_file = {
-                "name": "qm9_dataset_nc_1000.hdf5",
-                "md5": "305a0602860f181fafa75f7c7e3e6de4",
-            }
-            processed_data_file = {
-                "name": "qm9_dataset_nc_1000_processed.npz",
-                # checksum of otherwise identical npz files are different if using 3.11 vs 3.9/10
-                # we will therefore skip checking these files
-                "md5": None,
-            }
-
-            logger.info("Using test dataset")
-
+            mode = "unit_testing_nc_1000"
+            logger.info("Using unit test dataset with 1000 conformers")
         else:
-            url = self.full_url
-            gz_data_file = {
-                "name": "qm9_dataset.hdf5.gz",
-                "md5": "d172127848de114bd9cc47da2bc72566",
-                "length": 267228348,
-            }
-
-            hdf5_data_file = {
-                "name": "qm9_dataset.hdf5",
-                "md5": "0b22dc048f3361875889f832527438db",
-            }
-
-            processed_data_file = {
-                "name": "qm9_dataset_processed.npz",
-                "md5": None,
-            }
-
+            mode = "full_dataset"
             logger.info("Using full dataset")
+
+        # make sure that the yaml file is for the correct dataset before we grab data
+        assert data_inputs["dataset"] == "qm9"
+
+        url = data_inputs[mode]["url"]
+        gz_data_file = data_inputs[mode]["gz_data_file"]
+        hdf5_data_file = data_inputs[mode]["hdf5_data_file"]
+        processed_data_file = data_inputs[mode]["processed_data_file"]
 
         # to ensure that that we are consistent in our naming, we need to set all the names and checksums in the HDF5Dataset class constructor
         super().__init__(

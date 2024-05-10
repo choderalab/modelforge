@@ -93,7 +93,7 @@ class ANI1xDataset(HDF5Dataset):
         Examples
         --------
         >>> data = ANI1xDataset()  # Default dataset
-        >>> test_data = ANI2xDataset(for_unit_testing=True)  # Testing subset
+        >>> test_data = ANI1xDataset(for_unit_testing=True)  # Testing subset
         """
 
         _default_properties_of_interest = [
@@ -125,47 +125,31 @@ class ANI1xDataset(HDF5Dataset):
         }
         from loguru import logger
 
-        # We need to define the checksums for the various files that we will be dealing with to load up the data
-        # There are 3 files types that need name/checksum defined, of extensions hdf5.gz, hdf5, and npz.
+        # we store the urls, filenames and checksums in a yaml file
+        # for the full dataset and the test dataset
+        # using yaml files should make these easier to extended and maintain
+        from importlib import resources
+        from modelforge import dataset
+        import yaml
 
-        # note, need to change the end of the url to dl=1 instead of dl=0 (the default when you grab the share list), to ensure the same checksum each time we download
-        self.test_url = "https://www.dropbox.com/scl/fi/26expl20116cqacdk9l1t/ani1x_dataset_ntc_1000.hdf5.gz?rlkey=swciz9dfr7suia6nrsznwbk6i&st=ryqysch3&dl=1"
-        self.full_url = "https://www.dropbox.com/scl/fi/d98h9kt4pl40qeapqzu00/ani1x_dataset.hdf5.gz?rlkey=7q1o8hh9qzbxehsobjurcksit&dl=1"
+        yaml_file = resources.files(dataset) / "ani1x.yaml"
+        with open(yaml_file, "r") as file:
+            data_inputs = yaml.safe_load(file)
 
         if self.for_unit_testing:
-            url = self.test_url
-            gz_data_file = {
-                "name": "ani1x_dataset_nc_1000.hdf5.gz",
-                "md5": "f47a92bf4791607d9fc92a4cf16cd096",
-                "length": 1761417,
-            }
-            hdf5_data_file = {
-                "name": "ani1x_dataset_nc_1000.hdf5",
-                "md5": "776d38c18f3aa37b00360556cf8d78cc",
-            }
-            processed_data_file = {
-                "name": "ani1x_dataset_nc_1000_processed.npz",
-                "md5": None,
-            }
-
-            logger.info("Using test dataset")
-
+            mode = "unit_testing_nc_1000"
+            logger.info("Using unit test dataset with 1000 conformers")
         else:
-            url = self.full_url
-            gz_data_file = {
-                "name": "ani1x_dataset.hdf5.gz",
-                "md5": "408cdcf9768ac96a8ae8ade9f078c51b",
-                "length": 4510287721,
-            }
-
-            hdf5_data_file = {
-                "name": "ani1x_dataset.hdf5",
-                "md5": "361b7c4b9a4dfeece70f0fe6a893e76a",
-            }
-
-            processed_data_file = {"name": "ani1x_dataset_processed.npz", "md5": None}
-
+            mode = "full_dataset"
             logger.info("Using full dataset")
+
+        # make sure that the yaml file is for the correct dataset before we grab data
+        assert data_inputs["dataset"] == "ani1x"
+
+        url = data_inputs[mode]["url"]
+        gz_data_file = data_inputs[mode]["gz_data_file"]
+        hdf5_data_file = data_inputs[mode]["hdf5_data_file"]
+        processed_data_file = data_inputs[mode]["processed_data_file"]
 
         # to ensure that that we are consistent in our naming, we need to set all the names and checksums in the HDF5Dataset class constructor
         super().__init__(

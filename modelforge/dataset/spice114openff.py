@@ -151,51 +151,29 @@ class SPICE114OpenFFDataset(HDF5Dataset):
         }
         from loguru import logger
 
-        # We need to define the checksums for the various files that we will be dealing with to load up the data
-        # There are 3 files types that need name/checksum defined, of extensions hdf5.gz, hdf5, and npz.
+        from importlib import resources
+        from modelforge import dataset
+        import yaml
 
-        # note, need to change the end of the url to dl=1 instead of dl=0 (the default when you grab the share list), to ensure the same checksum each time we download
-        self.test_url = "https://www.dropbox.com/scl/fi/bwk83meoeishr16g8s5bt/spice_114_openff_dataset_ntc_1000.hdf5.gz?rlkey=pd9seffp63xe5f1uenddh3ug1&st=3b9zdhct&dl=1"
-        self.full_url = "https://www.dropbox.com/scl/fi/kmdk4d6hntga7bk7wdqs6/spice_114_openff_dataset.hdf5.gz?rlkey=2mf954dswat4sbpus6vhj9pvz&dl=1"
+        yaml_file = resources.files(dataset) / "spice114openff.yaml"
+        logger.debug(f"Loading config data from {yaml_file}")
+        with open(yaml_file, "r") as file:
+            data_inputs = yaml.safe_load(file)
 
         if self.for_unit_testing:
-            url = self.test_url
-            gz_data_file = {
-                "name": "SPICE114OpenFF_dataset_nc_1000.hdf5.gz",
-                "md5": "d1cb65eff7fa7dc182188731e5ec6bf9",
-                "length": 2508982,
-            }
-            hdf5_data_file = {
-                "name": "SPICE114OpenFF_dataset_nc_1000.hdf5",
-                "md5": "cb7c69b9aca9e836642f78716aea665b",
-            }
-            # npz file checksums may vary with different versions of python/numpy
-            processed_data_file = {
-                "name": "SPICE114OpenFF_dataset_nc_1000_processed.npz",
-                "md5": None,
-            }
-
-            logger.info("Using test dataset")
-
+            mode = "unit_testing_nc_1000"
+            logger.info("Using unit test dataset with 1000 conformers")
         else:
-            url = self.full_url
-            gz_data_file = {
-                "name": "SPICE114OpenFF_dataset.hdf5.gz",
-                "md5": "3aca534133ebff8dba9ff859c89e18d1",
-                "length": 2540106767,
-            }
-
-            hdf5_data_file = {
-                "name": "SPICE114OpenFF_dataset.hdf5",
-                "md5": "d78e185ada6d1be26e6bc1a4bf6320fb",
-            }
-
-            processed_data_file = {
-                "name": "SPICE114OpenFF_dataset_processed.npz",
-                "md5": None,
-            }
-
+            mode = "full_dataset"
             logger.info("Using full dataset")
+
+        # make sure that the yaml file is for the correct dataset before we grab data
+        assert data_inputs["dataset"] == "spice114openff"
+
+        url = data_inputs[mode]["url"]
+        gz_data_file = data_inputs[mode]["gz_data_file"]
+        hdf5_data_file = data_inputs[mode]["hdf5_data_file"]
+        processed_data_file = data_inputs[mode]["processed_data_file"]
 
         # to ensure that that we are consistent in our naming, we need to set all the names and checksums in the HDF5Dataset class constructor
         super().__init__(

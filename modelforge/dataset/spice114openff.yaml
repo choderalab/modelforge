@@ -1,0 +1,25 @@
+dataset: spice114openff
+full_dataset:
+  gz_data_file:
+    length: 2540106767
+    md5: 3aca534133ebff8dba9ff859c89e18d1
+    name: SPICE114OpenFF_dataset.hdf5.gz
+  hdf5_data_file:
+    md5: d78e185ada6d1be26e6bc1a4bf6320fb
+    name: SPICE114OpenFF_dataset.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE114OpenFF_dataset_processed.npz
+  url: https://www.dropbox.com/scl/fi/kmdk4d6hntga7bk7wdqs6/spice_114_openff_dataset.hdf5.gz?rlkey=2mf954dswat4sbpus6vhj9pvz&dl=1
+unit_testing_nc_1000:
+  gz_data_file:
+    length: 2508982
+    md5: d1cb65eff7fa7dc182188731e5ec6bf9
+    name: SPICE114OpenFF_dataset_nc_1000.hdf5.gz
+  hdf5_data_file:
+    md5: cb7c69b9aca9e836642f78716aea665b
+    name: SPICE114OpenFF_dataset_nc_1000.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE114OpenFF_dataset_nc_1000_processed.npz
+  url: https://www.dropbox.com/scl/fi/bwk83meoeishr16g8s5bt/spice_114_openff_dataset_ntc_1000.hdf5.gz?rlkey=pd9seffp63xe5f1uenddh3ug1&st=3b9zdhct&dl=1

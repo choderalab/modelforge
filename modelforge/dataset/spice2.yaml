@@ -1,0 +1,25 @@
+dataset: spice2
+full_dataset:
+  gz_data_file:
+    length: 26313472231
+    md5: 244a559a6062bbec5c9cb49af036ff7d
+    name: SPICE2_dataset.hdf5.gz
+  hdf5_data_file:
+    md5: 9659a0f18050b9e7b122c0046b705480
+    name: SPICE2_dataset.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE2_dataset_processed.npz
+  url: https://www.dropbox.com/scl/fi/udoc3jj7wa7du8jgqiat0/spice_2_dataset.hdf5.gz?rlkey=csgwqa237m002n54jnld5pfgy&dl=1
+unit_testing_nc_1000:
+  gz_data_file:
+    length: 26751220
+    md5: 04063f08a7ec93abfc661c22b12ceeb0
+    name: SPICE2_dataset_nc_1000.hdf5.gz
+  hdf5_data_file:
+    md5: 0a2554d0dba4f289dd93670686e4842e
+    name: SPICE2_dataset_nc_1000.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE2_dataset_nc_1000_processed.npz
+  url: https://www.dropbox.com/scl/fi/1jawffjrh17r796g76udi/spice_2_dataset_ntc_1000.hdf5.gz?rlkey=r0crabvyg7xdgapv2qk3hk6t9&st=0ro9na0c&dl=1

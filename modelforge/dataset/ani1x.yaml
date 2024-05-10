@@ -1,0 +1,25 @@
+dataset: ani1x
+full_dataset:
+  gz_data_file:
+    length: 4510287721
+    md5: 408cdcf9768ac96a8ae8ade9f078c51b
+    name: ani1x_dataset.hdf5.gz
+  hdf5_data_file:
+    md5: 361b7c4b9a4dfeece70f0fe6a893e76a
+    name: ani1x_dataset.hdf5
+  processed_data_file:
+    md5: null
+    name: ani1x_dataset_processed.npz
+  url: https://www.dropbox.com/scl/fi/d98h9kt4pl40qeapqzu00/ani1x_dataset.hdf5.gz?rlkey=7q1o8hh9qzbxehsobjurcksit&dl=1
+unit_testing_nc_1000:
+  gz_data_file:
+    length: 1761417
+    md5: f47a92bf4791607d9fc92a4cf16cd096
+    name: ani1x_dataset_nc_1000.hdf5.gz
+  hdf5_data_file:
+    md5: 776d38c18f3aa37b00360556cf8d78cc
+    name: ani1x_dataset_nc_1000.hdf5
+  processed_data_file:
+    md5: null
+    name: ani1x_dataset_nc_1000_processed.npz
+  url: https://www.dropbox.com/scl/fi/26expl20116cqacdk9l1t/ani1x_dataset_ntc_1000.hdf5.gz?rlkey=swciz9dfr7suia6nrsznwbk6i&st=ryqysch3&dl=1

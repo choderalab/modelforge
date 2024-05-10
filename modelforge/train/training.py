@@ -123,7 +123,7 @@ class EnergyAndForceLoss(Loss):
 from torch.optim import Optimizer
 
 if TYPE_CHECKING:
-    from modelforge.potential import _IMPLEMENTED_NNPS
+    from modelforge.potential import _Implemented_NNPs
 
 
 class TrainingAdapter(pl.LightningModule):
@@ -152,7 +152,7 @@ class TrainingAdapter(pl.LightningModule):
             The learning rate for the optimizer, by default 1e-3.
         """
         from typing import List
-        from modelforge.potential import _IMPLEMENTED_NNPS
+        from modelforge.potential import _Implemented_NNPs
 
         print(f"{nnp_parameters=}")
         super().__init__()
@@ -164,7 +164,7 @@ class TrainingAdapter(pl.LightningModule):
             raise ValueError(
                 "NNP name must be specified in nnp_parameters with key 'nnp_name'."
             )
-        nnp_class: Type = _IMPLEMENTED_NNPS.get(nnp_name)
+        nnp_class: Type = _Implemented_NNPs.get_neural_network_class(nnp_name)
         if nnp_class is None:
             raise ValueError(f"Specified NNP name '{nnp_name}' is not implemented.")
 

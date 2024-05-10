@@ -452,14 +452,14 @@ class NeuralNetworkPotentialFactory:
             If the requested NNP type is not implemented.
         """
 
-        from modelforge.potential import _IMPLEMENTED_NNPS
+        from modelforge.potential import _Implemented_NNPs
         from modelforge.train.training import TrainingAdapter
 
         nnp_parameters = nnp_parameters or {}
         training_parameters = training_parameters or {}
 
         # get NNP
-        nnp_class: Type = _IMPLEMENTED_NNPS.get(nnp_name)
+        nnp_class: Type = _Implemented_NNPs.get_neural_network_class(nnp_name)
         if nnp_class is None:
             raise NotImplementedError(f"NNP type {nnp_name} is not implemented.")
 

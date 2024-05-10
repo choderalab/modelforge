@@ -1,15 +1,18 @@
 import torch
 import pytest
-from modelforge.dataset import DataModule, _IMPLEMENTED_DATASETS
+from modelforge.dataset import DataModule, _ImplementedDatasets
 
 from typing import Optional, Dict
-from modelforge.potential import NeuralNetworkPotentialFactory, _IMPLEMENTED_NNPS
+from modelforge.potential import (
+    NeuralNetworkPotentialFactory,
+    _Implemented_NNPs,
+)
 from dataclasses import dataclass
 
-_DATASETS_TO_TEST = [name for name in _IMPLEMENTED_DATASETS.keys()]
+_DATASETS_TO_TEST = _ImplementedDatasets.get_all_dataset_names()
 _DATASETS_TO_TEST_QM9_ANI2X = ["QM9", "ANI2X"]
 _DATASETS_TO_TEST_QM9 = ["QM9"]
-_MODELS_TO_TEST = [name for name in _IMPLEMENTED_NNPS.keys()]
+_MODELS_TO_TEST = _Implemented_NNPs.get_all_neural_network_names()
 
 from modelforge.potential.utils import BatchData
 

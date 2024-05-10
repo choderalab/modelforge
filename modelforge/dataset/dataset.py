@@ -741,7 +741,7 @@ class DataModule(pl.LightningDataModule):
     def __init__(
         self,
         name: Literal["QM9", "ANI1X", "ANI2X", "SPICE114", "SPICE2", "SPICE114_OPENFF"],
-        splitting_strategy: Optional[SplittingStrategy] = None,
+        splitting_strategy: SplittingStrategy = RandomRecordSplittingStrategy(),
         batch_size: int = 64,
         remove_self_energies: bool = True,
         normalize: bool = False,
@@ -751,28 +751,38 @@ class DataModule(pl.LightningDataModule):
         for_unit_testing: bool = False,
     ):
         """
-        Data module for PyTorch Lightning, handling data preparation and loading.
-        Parameters
-        ----------
-        remove_self_energies : bool, optional
-            Whether to remove self energies from the dataset. Defaults to True.
-        normalize : bool, optional
-            Whether to normalize the dataset. Defaults to True.
-        atomic_self_energies : Dict[str, float], optional
-            A dictionary mapping atomic numbers to their calculated self energies. Defaults to None.
-        regression_ase : bool, optional
-            If regression_ase is True, atomic self energies are calculated using linear regression
+        Initializes adData module for PyTorch Lightning handling data preparation and loading object with the specified configuration.
+        If `remove_self_energies` is `True` and:
+        - `self_energies` are passed as a dictionary, these will be used
+        - `self_energies` are `None`, `self._ase` will be used
+        - `regression_ase` is `True`, self_energies will be calculated
 
-        if remove_self_energies is True and
-            - self_energies are passed as dictionary, these will be used
-            - self_energies are None, self._ase will be used
-            - regression_ase is True, self_energies will be calculated
+        Parameters
+        ---------
+            name: Literal["QM9", "ANI1X", "ANI2X", "SPICE114", "SPICE2", "SPICE114_OPENFF"]
+                The name of the dataset to use.
+            splitting_strategy : SplittingStrategy, defaults to RandomRecordSplittingStrategy
+                The strategy to use for splitting the dataset into train, test, and validation sets. .
+            batch_size : int, defaults to 64.
+                The batch size to use for the dataset.
+            remove_self_energies : bool, defaults to True
+                Whether to remove the self energies from the dataset.
+            normalize : bool, defaults to False
+                Whether to normalize the dataset after removing the self energies.
+            atomic_self_energies : Optional[Dict[str, float]]
+                A dictionary mapping element names to their self energies. If not provided, the self energies will be calculated.
+            regression_ase: bool, defaults to False
+                Whether to use the calculated self energies for regression.
+            force_download : bool,  defaults to False
+                Whether to force the dataset to be downloaded, even if it is already cached.
+            for_unit_testing : bool, defaults to False
+                Whether the dataset is being used for unit testing.
         """
         super().__init__()
 
         self.name = name
         self.batch_size = batch_size
-        self.splitting_strategy = splitting_strategy or RandomRecordSplittingStrategy()
+        self.splitting_strategy = splitting_strategy
         self.dataset_statistics: Optional[DatasetStatistics] = None
         self.remove_self_energies = remove_self_energies
         self.normalize = normalize
@@ -794,9 +804,9 @@ class DataModule(pl.LightningDataModule):
         the data such as calculating self energies, normalizing, and splitting. It is executed
         only once per node.
         """
-        from modelforge.dataset import _IMPLEMENTED_DATASETS
+        from modelforge.dataset import _ImplementedDatasets
 
-        dataset_class = _IMPLEMENTED_DATASETS[self.name]
+        dataset_class = _ImplementedDatasets.get_dataset_class(self.name)
         dataset = dataset_class(
             force_download=self.force_download, for_unit_testing=self.for_unit_testing
         )
@@ -849,13 +859,7 @@ class DataModule(pl.LightningDataModule):
     def _create_dataset_statistics(
         self, torch_dataset, dataset_ase
     ) -> DatasetStatistics:
-        """Create and return dataset statistics based on the processed dataset.
-        - self_energies are passed as dictionary, these will be used
-        - self_energies are None, self._ase will be used
-        - regression_ase is True, self_energies will be calculated
 
-
-        """
         from modelforge.dataset.utils import calculate_mean_and_variance
         from modelforge.potential.processing import AtomicSelfEnergies
 

@@ -11,11 +11,28 @@ from .utils import (
 from .processing import FromAtomToMoleculeReduction
 from modelforge.train.training import TrainingAdapter
 from .models import NeuralNetworkPotentialFactory
+from enum import Enum
 
-_IMPLEMENTED_NNPS = {
-    "ANI2x": ANI2x,
-    "SchNet": SchNet,
-    "PaiNN": PaiNN,
-    "PhysNet": PhysNet,
-    "SAKE": SAKE,
-}
+
+class _Implemented_NNPs(Enum):
+    ANI2X = ANI2x
+    SCHNET = SchNet
+    PAINN = PaiNN
+    PHYSNET = PhysNet
+    SAKE = SAKE
+
+    @classmethod
+    def get_neural_network_class(cls, neural_network_name: str):
+        try:
+            print(neural_network_name.upper())
+            # Normalize the input and get the class directly from the Enum
+            return cls[neural_network_name.upper()].value
+        except KeyError:
+            available_datasets = ", ".join([d.name for d in cls])
+            raise ValueError(
+                f"Dataset {neural_network_name} is not implemented. Available datasets are: {available_datasets}"
+            )
+
+    @staticmethod
+    def get_all_neural_network_names():
+        return [neural_network.name for neural_network in _Implemented_NNPs]

@@ -515,10 +515,10 @@ def test_numpy_dataset_assignment(datasets_to_test):
     """
     Test if the numpy_dataset attribute is correctly assigned after processing or loading.
     """
-    from modelforge.dataset import _IMPLEMENTED_DATASETS
+    from modelforge.dataset import _ImplementedDatasets
 
     factory = DatasetFactory()
-    data = _IMPLEMENTED_DATASETS[datasets_to_test.name]()
+    data = _ImplementedDatasets.get_dataset_class(datasets_to_test.name)()
     factory._load_or_process_data(data)
 
     assert hasattr(data, "numpy_data")

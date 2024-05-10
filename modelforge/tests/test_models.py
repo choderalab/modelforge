@@ -1,9 +1,9 @@
 import pytest
 
-from modelforge.potential import _IMPLEMENTED_NNPS
+from modelforge.potential import _Implemented_NNPs
 
 
-@pytest.mark.parametrize("model_name", _IMPLEMENTED_NNPS)
+@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 def test_JAX_wrapping(model_name, batch):
     from modelforge.potential.models import (
         NeuralNetworkPotentialFactory,
@@ -26,7 +26,7 @@ def test_JAX_wrapping(model_name, batch):
     )  # Evaluate gradient function and apply negative sign
 
 
-@pytest.mark.parametrize("model_name", _IMPLEMENTED_NNPS)
+@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
 def test_model_factory(model_name, simulation_environment):
     from modelforge.potential.models import (
@@ -40,7 +40,10 @@ def test_model_factory(model_name, simulation_environment):
         nnp_name=model_name,
         simulation_environment=simulation_environment,
     )
-    assert model_name in str(type(model)) or "JAX" in str(type(model))
+    assert (
+        model_name.upper() in str(type(model)).upper()
+        or "JAX" in str(type(model)).upper()
+    )
 
     # training model
     model = NeuralNetworkPotentialFactory.create_nnp(
@@ -97,7 +100,7 @@ def test_energy_scaling_and_offset():
     )
 
 
-@pytest.mark.parametrize("model_name", _IMPLEMENTED_NNPS)
+@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 def test_state_dict_saving_and_loading(model_name):
     from modelforge.potential import NeuralNetworkPotentialFactory
     import torch
@@ -148,6 +151,7 @@ def test_forward_pass(simulation_environment, inference_model, batch):
 
     # test tat we get an energie per molecule
     assert len(output) == nr_of_mols
+
 
 @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
 def test_calculate_energies_and_forces(simulation_environment, inference_model, batch):

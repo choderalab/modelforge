@@ -10,6 +10,65 @@ import torch
 from loguru import logger
 from torch.utils.data import Subset, random_split
 
+_ATOMIC_NUMBER_TO_ELEMENT: Dict[int, str] = {
+    1: "H",
+    2: "He",
+    3: "Li",
+    4: "Be",
+    5: "B",
+    6: "C",
+    7: "N",
+    8: "O",
+    9: "F",
+    10: "Ne",
+    11: "Na",
+    12: "Mg",
+    13: "Al",
+    14: "Si",
+    15: "P",
+    16: "S",
+    17: "Cl",
+    18: "Ar",
+    19: "K",
+    20: "Ca",
+    21: "Sc",
+    22: "Ti",
+    23: "V",
+    24: "Cr",
+    25: "Mn",
+    26: "Fe",
+    27: "Co",
+    28: "Ni",
+    29: "Cu",
+    30: "Zn",
+    31: "Ga",
+    32: "Ge",
+    33: "As",
+    34: "Se",
+    35: "Br",
+    36: "Kr",
+    37: "Rb",
+    38: "Sr",
+    39: "Y",
+    40: "Zr",
+    41: "Nb",
+    42: "Mo",
+    43: "Tc",
+    44: "Ru",
+    45: "Rh",
+    46: "Pd",
+    47: "Ag",
+    48: "Cd",
+    49: "In",
+    50: "Sn",
+    51: "Sb",
+    52: "Te",
+    53: "I",
+    54: "Xe",
+    55: "Cs",
+    56: "Ba",
+}
+
 
 if TYPE_CHECKING:
     from modelforge.dataset.dataset import TorchDataset
@@ -35,7 +94,7 @@ from torch.utils.data import Dataset, DataLoader
 
 def calculate_mean_and_variance(
     torch_dataset: Dataset, batch_size: int = 512
-) -> Dict[str, float]:
+) -> Dict[str, torch.Tensor]:
     """
     Calculates the mean and variance of the dataset.
 
@@ -53,19 +112,21 @@ def calculate_mean_and_variance(
         num_workers=4,
     )
     log.info("Calculating mean and variance for normalization")
-    nr_of_atoms = 0
     for batch_data in dataloader:
         online_estimator.update(batch_data.metadata.E)
 
     stats = {
-        "mean": online_estimator.mean / torch_dataset.number_of_atoms,
-        "stddev": online_estimator.stddev / torch_dataset.number_of_atoms,
+        "mean": online_estimator.mean,
+        "stddev": online_estimator.stddev,
     }
     log.info(f"Mean and standard deviation of the dataset:{stats}")
     return stats
 
 
-def calculate_self_energies(torch_dataset, collate_fn) -> Dict[int, float]:
+from openff.units import unit
+
+
+def calculate_self_energies(torch_dataset, collate_fn) -> Dict[str, unit.Quantity]:
     from torch.utils.data import DataLoader
     import torch
     from loguru import logger as log
@@ -129,9 +190,9 @@ def calculate_self_energies(torch_dataset, collate_fn) -> Dict[int, float]:
     # Perform least squares regression
     least_squares_fit, _, _, _ = np.linalg.lstsq(A, y, rcond=None)
     self_energies = {
-        int(idx): energy
+        _ATOMIC_NUMBER_TO_ELEMENT[int(idx)]: energy * unit.kilojoule_per_mole
         for idx, energy in zip(unique_atomic_numbers, least_squares_fit)
-    }
+    }  # NOTE: we are assinging units here without check that the dataset is in unit system
 
     log.debug("Calculated self energies for elements.")
 
@@ -161,6 +222,9 @@ class SplittingStrategy(ABC):
             self.generator = torch.Generator().manual_seed(self.seed)
 
         self.train_size, self.val_size, self.test_size = split[0], split[1], split[2]
+        self.train_indices: List[int] = []
+        self.val_indices: List[int] = []
+        self.test_indices: List[int] = []
         assert np.isclose(sum(split), 1.0), "Splits must sum to 1.0"
 
     @abstractmethod
@@ -245,7 +309,11 @@ class RandomSplittingStrategy(SplittingStrategy):
             lengths=[self.train_size, self.val_size, self.test_size],
             generator=self.generator,
         )
-
+        self.train_indices, self.val_indices, self.test_indices = (
+            list(train_d.indices),
+            list(val_d.indices),
+            list(test_d.indices),
+        )
         return (train_d, val_d, test_d)
 
 
@@ -464,7 +532,6 @@ def _download_from_gdrive(id: str, raw_dataset_file: str):
 
     url = f"https://drive.google.com/uc?id={id}"
     gdown.download(url, raw_dataset_file, quiet=False)
-
 
 
 def _to_file_cache(

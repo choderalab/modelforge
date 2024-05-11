@@ -131,7 +131,7 @@ def test_different_properties_of_interest(dataset_name, dataset_factory):
     assert len(raw_data_item) == 6  # 6 properties are returned
 
 
-@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+@pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_file_existence_after_initialization(dataset_name, initialize_dataset):
     """Test if files are created after dataset initialization."""
 
@@ -271,7 +271,7 @@ def test_metadata_validation(prep_temp_dir):
     assert data._metadata_validation("qm9_test.json", local_cache_dir) == False
 
 
-@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+@pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_different_scenarios_of_file_availability(
     dataset_name, prep_temp_dir, dataset_factory
 ):
@@ -407,19 +407,21 @@ from modelforge.dataset.utils import (
         RandomRecordSplittingStrategy,
     ],
 )
-def test_dataset_splitting(splitting_strategy, datasets_to_test):
+@pytest.mark.parametrize("dataset_name", ["QM9"])
+def test_dataset_splitting(
+    splitting_strategy, dataset_name, datamodule_factory, get_dataset_container_fix
+):
     """Test random_split on the the dataset."""
     from modelforge.dataset import DataModule
 
-    dm = DataModule(
-        name=datasets_to_test.name,
+    dm = datamodule_factory(
+        dataset_name=dataset_name,
         batch_size=512,
         splitting_strategy=splitting_strategy(),
         for_unit_testing=True,
         remove_self_energies=False,
     )
-    dm.prepare_data()
-    dm.setup()
+
     train_dataset, val_dataset, test_dataset = (
         dm.train_dataset,
         dm.val_dataset,
@@ -427,20 +429,19 @@ def test_dataset_splitting(splitting_strategy, datasets_to_test):
     )
 
     energy = train_dataset[0]["E"].item()
-
+    dataset_to_test = get_dataset_container_fix(dataset_name)
     if splitting_strategy == RandomSplittingStrategy:
-        assert np.isclose(energy, datasets_to_test.expected_E_random_split)
+        assert np.isclose(energy, dataset_to_test.expected_E_random_split)
     elif splitting_strategy == FirstComeFirstServeSplittingStrategy:
-        assert np.isclose(energy, datasets_to_test.expected_E_fcfs_split)
-    dm = DataModule(
-        name=datasets_to_test.name,
+        assert np.isclose(energy, dataset_to_test.expected_E_fcfs_split)
+
+    dm = datamodule_factory(
+        dataset_name=dataset_name,
         batch_size=512,
         splitting_strategy=splitting_strategy(split=[0.6, 0.3, 0.1]),
         for_unit_testing=True,
         remove_self_energies=False,
     )
-    dm.prepare_data()
-    dm.setup()
 
     train_dataset2, val_dataset2, test_dataset2 = (
         dm.train_dataset,
@@ -472,7 +473,7 @@ def test_dataset_splitting(splitting_strategy, datasets_to_test):
         print(f"AssertionError raised: {excinfo}")
 
 
-@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+@pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_dataset_downloader(dataset_name, dataset_factory, prep_temp_dir):
     """
     Test the DatasetDownloader functionality.

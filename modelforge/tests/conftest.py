@@ -12,12 +12,8 @@ from modelforge.potential.utils import BatchData
 # datamodule fixture
 @pytest.fixture
 def datamodule_factory():
-    def create_datamodule(
-        dataset_name: str, for_unit_testing: bool = True, batch_size=64
-    ):
-        return initialize_datamodule(
-            dataset_name, for_unit_testing=for_unit_testing, batch_size=batch_size
-        )
+    def create_datamodule(**kwargs):
+        return initialize_datamodule(**kwargs)
 
     return create_datamodule
 
@@ -33,6 +29,7 @@ def initialize_datamodule(
     for_unit_testing: bool = True,
     batch_size: int = 64,
     splitting_strategy: SplittingStrategy = FirstComeFirstServeSplittingStrategy(),
+    remove_self_energies: bool = True,
 ) -> DataModule:
     """
     Initialize a dataset for a given mode.
@@ -43,6 +40,7 @@ def initialize_datamodule(
         splitting_strategy=splitting_strategy,
         batch_size=batch_size,
         for_unit_testing=for_unit_testing,
+        remove_self_energies=remove_self_energies,
     )
     data_module.prepare_data()
     data_module.setup()
@@ -52,10 +50,8 @@ def initialize_datamodule(
 # dataset fixture
 @pytest.fixture
 def dataset_factory():
-    def create_dataset(
-        dataset_name: str, local_cache_dir: str, for_unit_testing: bool = True
-    ):
-        return initialize_dataset(dataset_name, local_cache_dir, for_unit_testing)
+    def create_dataset(**kwargs):
+        return initialize_dataset(**kwargs)
 
     return create_dataset
 
@@ -102,115 +98,92 @@ dataset_cache: Dict[str, DataSetContainer] = {}
 from modelforge.dataset import _ImplementedDatasets
 
 
-@pytest.fixture(scope="session", params=_ImplementedDatasets.get_all_dataset_names())
-def datasets_to_test(request):
-    dataset_name = request.param
+dataset_container: Dict[str, DataSetContainer] = {
+    "QM9": DataSetContainer(
+        name="QM9",
+        expected_properties_of_interest=[
+            "geometry",
+            "atomic_numbers",
+            "internal_energy_at_0K",
+            "charges",
+        ],
+        expected_E_random_split=-622027.790147837,
+        expected_E_fcfs_split=-106277.4161215308,
+    ),
+    "ANI1X": DataSetContainer(
+        name="ANI1x",
+        expected_properties_of_interest=[
+            "geometry",
+            "atomic_numbers",
+            "wb97x_dz.energy",
+            "wb97x_dz.forces",
+        ],
+        expected_E_random_split=-1652066.552014041,
+        expected_E_fcfs_split=-1015736.8142089575,
+    ),
+    "ANI2x": DataSetContainer(
+        name="ANI2x",
+        expected_properties_of_interest=[
+            "geometry",
+            "atomic_numbers",
+            "energies",
+            "forces",
+        ],
+        expected_E_random_split=-148410.43286007023,
+        expected_E_fcfs_split=-2096692.258327173,
+    ),
+    "SPICE114": DataSetContainer(
+        name="SPICE114",
+        expected_properties_of_interest=[
+            "geometry",
+            "atomic_numbers",
+            "dft_total_energy",
+            "dft_total_force",
+            "mbis_charges",
+        ],
+        expected_E_random_split=-1922185.3358204272,
+        expected_E_fcfs_split=-972574.265833225,
+    ),
+    "SPICE2": DataSetContainer(
+        name="SPICE2",
+        expected_properties_of_interest=[
+            "geometry",
+            "atomic_numbers",
+            "dft_total_energy",
+            "dft_total_force",
+            "mbis_charges",
+        ],
+        expected_E_random_split=-5844365.936898948,
+        expected_E_fcfs_split=-3418985.278140791,
+    ),
+    "SPICE114_OPENFF": DataSetContainer(
+        name="SPICE114_OPENFF",
+        expected_properties_of_interest=[
+            "geometry",
+            "atomic_numbers",
+            "dft_total_energy",
+            "dft_total_force",
+            "mbis_charges",
+        ],
+        expected_E_random_split=-2263605.616072006,
+        expected_E_fcfs_split=-1516718.0904709378,
+    ),
+}
 
-    if datasetDC := dataset_cache.get(dataset_name, None):
-        return datasetDC
 
-    if dataset_name == "QM9":
-        from modelforge.dataset.qm9 import QM9Dataset
+def get_dataset_container(dataset_name: str) -> DataSetContainer:
+    datasetDC = dataset_cache.get(dataset_name, None)
 
-        datasetDC = DataSetContainer(
-            name=dataset_name,
-            expected_properties_of_interest=[
-                "geometry",
-                "atomic_numbers",
-                "internal_energy_at_0K",
-                "charges",
-            ],
-            expected_E_random_split=-622027.790147837,
-            expected_E_fcfs_split=-106277.4161215308,
-        )
-        dataset_cache[dataset_name] = datasetDC
-        return datasetDC
-    elif dataset_name == "ANI1X":
-        from modelforge.dataset.ani1x import ANI1xDataset
+    if datasetDC is None:
+        datasetDC = dataset_container[dataset_name]
 
-        datasetDC = DataSetContainer(
-            name=dataset_name,
-            expected_properties_of_interest=[
-                "geometry",
-                "atomic_numbers",
-                "wb97x_dz.energy",
-                "wb97x_dz.forces",
-            ],
-            expected_E_random_split=-1652066.552014041,
-            expected_E_fcfs_split=-1015736.8142089575,
-        )
-        dataset_cache[dataset_name] = datasetDC
-        return datasetDC
-    elif dataset_name == "ANI2X":
-        from modelforge.dataset.ani2x import ANI2xDataset
+    return datasetDC
 
-        datasetDC = DataSetContainer(
-            name=dataset_name,
-            expected_properties_of_interest=[
-                "geometry",
-                "atomic_numbers",
-                "energies",
-                "forces",
-            ],
-            expected_E_random_split=-148410.43286007023,
-            expected_E_fcfs_split=-2096692.258327173,
-        )
-        dataset_cache[dataset_name] = datasetDC
-        return datasetDC
-    elif dataset_name == "SPICE114":
-        from modelforge.dataset.spice114 import SPICE114Dataset
 
-        datasetDC = DataSetContainer(
-            name=dataset_name,
-            expected_properties_of_interest=[
-                "geometry",
-                "atomic_numbers",
-                "dft_total_energy",
-                "dft_total_force",
-                "mbis_charges",
-            ],
-            expected_E_random_split=-1922185.3358204272,
-            expected_E_fcfs_split=-972574.265833225,
-        )
-        dataset_cache[dataset_name] = datasetDC
-        return datasetDC
-    elif dataset_name == "SPICE2":
-        from modelforge.dataset.spice2 import SPICE2Dataset
+@pytest.fixture
+def get_dataset_container_fix():
 
-        datasetDC = DataSetContainer(
-            name=dataset_name,
-            expected_properties_of_interest=[
-                "geometry",
-                "atomic_numbers",
-                "dft_total_energy",
-                "dft_total_force",
-                "mbis_charges",
-            ],
-            expected_E_random_split=-5844365.936898948,
-            expected_E_fcfs_split=-3418985.278140791,
-        )
-        dataset_cache[dataset_name] = datasetDC
-        return datasetDC
-
-    elif dataset_name == "SPICE114_OPENFF":
-        from modelforge.dataset.spice114openff import SPICE114OpenFFDataset
-
-        datasetDC = DataSetContainer(
-            name=dataset_name,
-            expected_properties_of_interest=[
-                "geometry",
-                "atomic_numbers",
-                "dft_total_energy",
-                "dft_total_force",
-                "mbis_charges",
-            ],
-            expected_E_random_split=-2263605.616072006,
-            expected_E_fcfs_split=-1516718.0904709378,
-        )
-        dataset_cache[dataset_name] = datasetDC
-        return datasetDC
-    else:
-        raise NotImplementedError(f"Dataset {dataset_name} is not implemented.")
+    return get_dataset_container
 
 
 # Fixture for equivariance test utilities

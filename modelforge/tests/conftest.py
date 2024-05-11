@@ -30,6 +30,7 @@ def initialize_datamodule(
     batch_size: int = 64,
     splitting_strategy: SplittingStrategy = FirstComeFirstServeSplittingStrategy(),
     remove_self_energies: bool = True,
+    regression_ase: bool = False,
 ) -> DataModule:
     """
     Initialize a dataset for a given mode.
@@ -41,6 +42,7 @@ def initialize_datamodule(
         batch_size=batch_size,
         for_unit_testing=for_unit_testing,
         remove_self_energies=remove_self_energies,
+        regression_ase=regression_ase,
     )
     data_module.prepare_data()
     data_module.setup()
@@ -61,7 +63,7 @@ from modelforge.dataset import _ImplementedDatasets
 
 
 def initialize_dataset(
-    dataset_name: str, local_cache_dir: str, for_unit_testing
+    dataset_name: str, local_cache_dir: str, for_unit_testing: bool = True
 ) -> DataModule:
     """
     Initialize a dataset for a given mode.
@@ -91,9 +93,6 @@ class DataSetContainer:
 
 
 from typing import Dict
-
-# This will store the cached datasets
-dataset_cache: Dict[str, DataSetContainer] = {}
 
 from modelforge.dataset import _ImplementedDatasets
 
@@ -172,11 +171,7 @@ dataset_container: Dict[str, DataSetContainer] = {
 
 
 def get_dataset_container(dataset_name: str) -> DataSetContainer:
-    datasetDC = dataset_cache.get(dataset_name, None)
-
-    if datasetDC is None:
-        datasetDC = dataset_container[dataset_name]
-
+    datasetDC = dataset_container[dataset_name]
     return datasetDC
 
 

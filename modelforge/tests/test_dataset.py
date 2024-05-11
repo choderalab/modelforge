@@ -125,10 +125,10 @@ def test_dataset_basic_operations():
 
 
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
-def test_different_properties_of_interest(dataset_name, initialize_dataset):
+def test_different_properties_of_interest(dataset_name, dataset_factory):
     # This test checks the DatasetFactory and PyTorch dataset
 
-    dataset = initialize_dataset(dataset_name)
+    dataset = dataset_factory(dataset_name)
     assert dataset.data.properties_of_interest == [
         "geometry",
         "atomic_numbers",
@@ -157,11 +157,12 @@ def test_different_properties_of_interest(dataset_name, initialize_dataset):
     assert len(raw_data_item) != 3
 
 
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_file_existence_after_initialization(dataset, prep_temp_dir):
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+def test_file_existence_after_initialization(dataset_name, initialize_dataset):
     """Test if files are created after dataset initialization."""
 
     local_cache_dir = str(prep_temp_dir)
+    dataset = initialize_dataset(dataset_name)
 
     factory = DatasetFactory()
     data = dataset(for_unit_testing=True, local_cache_dir=local_cache_dir)
@@ -296,13 +297,14 @@ def test_metadata_validation(prep_temp_dir):
     assert data._metadata_validation("qm9_test.json", local_cache_dir) == False
 
 
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_different_scenarios_of_file_availability(dataset, prep_temp_dir):
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+def test_different_scenarios_of_file_availability(dataset_name, prep_temp_dir):
     """Test the behavior when raw and processed dataset files are removed."""
 
     local_cache_dir = str(prep_temp_dir) + "/test_diff_scenarios"
 
     factory = DatasetFactory()
+    dataset = _ImplementedDatasets[dataset_name]
     data = dataset(for_unit_testing=True, local_cache_dir=local_cache_dir)
 
     # this will download the .gz, the .hdf5 and the .npz files
@@ -498,15 +500,16 @@ def test_dataset_splitting(splitting_strategy, datasets_to_test):
         print(f"AssertionError raised: {excinfo}")
 
 
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_dataset_downloader(dataset, prep_temp_dir):
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+def test_dataset_downloader(dataset_name, dataset_factory, prep_temp_dir):
     """
     Test the DatasetDownloader functionality.
     """
     local_cache_dir = str(prep_temp_dir)
-
-    data = dataset(for_unit_testing=True, local_cache_dir=local_cache_dir)
-    data._download()
+    dataset = dataset_factory(dataset_name, local_cache_dir)
+    data = _ImplementedDatasets.get_dataset_class(dataset_name)(
+        local_cache_dir=local_cache_dir, for_unit_testing=True
+    )
     assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
 
 

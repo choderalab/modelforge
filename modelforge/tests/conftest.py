@@ -52,8 +52,10 @@ def initialize_datamodule(
 # dataset fixture
 @pytest.fixture
 def dataset_factory():
-    def create_dataset(dataset_name: str):
-        return initialize_dataset(dataset_name)
+    def create_dataset(
+        dataset_name: str, local_cache_dir: str, for_unit_testing: bool = True
+    ):
+        return initialize_dataset(dataset_name, local_cache_dir, for_unit_testing)
 
     return create_dataset
 
@@ -63,14 +65,16 @@ from modelforge.dataset import _ImplementedDatasets
 
 
 def initialize_dataset(
-    dataset_name: str,
+    dataset_name: str, local_cache_dir: str, for_unit_testing
 ) -> DataModule:
     """
     Initialize a dataset for a given mode.
     """
 
     factory = DatasetFactory()
-    data = _ImplementedDatasets.get_dataset_class(dataset_name)()
+    data = _ImplementedDatasets.get_dataset_class(dataset_name)(
+        local_cache_dir=local_cache_dir, for_unit_testing=for_unit_testing
+    )
     dataset = factory.create_dataset(data)
 
     return dataset

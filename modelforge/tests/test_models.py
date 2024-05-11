@@ -114,7 +114,8 @@ def test_state_dict_saving_and_loading(model_name):
     model2.load_state_dict(torch.load("model.pth"))
 
 
-def test_energy_between_simulation_environments(inference_model, batch):
+@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
+def test_energy_between_simulation_environments(model_name, batch):
     # compare that the energy is the same for the JAX and PyTorch Model
     import numpy as np
     import torch
@@ -122,12 +123,12 @@ def test_energy_between_simulation_environments(inference_model, batch):
     nnp_input = batch.nnp_input
     # test the forward pass through each of the models
     torch.manual_seed(42)
-    model = inference_model("PyTorch")
+    model = NeuralNetworkPotentialFactory.create_nnp("inference", model_name, "PyTorch")
 
     output_torch = model(nnp_input).E
 
     torch.manual_seed(42)
-    model = inference_model("JAX")
+    model = NeuralNetworkPotentialFactory.create_nnp("inference", model_name, "JAX")
     nnp_input = nnp_input.as_jax_namedtuple()
     output_jax = model(nnp_input).E
 
@@ -135,15 +136,18 @@ def test_energy_between_simulation_environments(inference_model, batch):
     assert np.isclose(output_torch.sum().detach().numpy(), output_jax.sum())
 
 
+@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
-def test_forward_pass(simulation_environment, inference_model, batch):
+def test_forward_pass(model_name, simulation_environment, batch):
     # this test sends a single batch from different datasets through the model
 
     nnp_input = batch.nnp_input
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
     # test the forward pass through each of the models
-    model = inference_model(simulation_environment)
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        "inference", model_name, simulation_environment
+    )
     if "JAX" in str(type(model)):
         nnp_input = nnp_input.as_jax_namedtuple()
 
@@ -153,20 +157,36 @@ def test_forward_pass(simulation_environment, inference_model, batch):
     assert len(output) == nr_of_mols
 
 
+from modelforge.dataset import _ImplementedDatasets
+from modelforge.potential import NeuralNetworkPotentialFactory
+
+
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
-def test_calculate_energies_and_forces(simulation_environment, inference_model, batch):
+def test_calculate_energies_and_forces(
+    dataset_name, model_name, simulation_environment, datamodule_factory
+):
     """
     Test the calculation of energies and forces for a molecule.
     """
     import torch
 
-    nnp_input = batch.nnp_input
+    dm = datamodule_factory(
+        dataset_name=dataset_name,
+        batch_size=512,
+    )
+
+    nnp_input = next(iter(dm.train_dataloader())).nnp_input
     # test the backward pass through each of the models
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
     nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
 
     # The inference_model fixture now returns a function that expects an environment
-    model = inference_model(simulation_environment)
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        "inference", model_name, simulation_environment=simulation_environment
+    )
+
     if "JAX" in str(type(model)):
         nnp_input = nnp_input.as_jax_namedtuple()
 
@@ -375,10 +395,16 @@ def test_pairlist():
     assert not pair_indices.shape == neighbor_indices.shape
 
 
-def test_pairlist_on_dataset(initialized_dataset):
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+def test_pairlist_on_dataset(dataset_name, datamodule_factory):
     from modelforge.potential.models import Neighborlist
 
-    for data in initialized_dataset.train_dataloader():
+    dm = datamodule_factory(
+        dataset_name=dataset_name,
+        batch_size=512,
+    )
+
+    for data in dm.train_dataloader():
         nnp_input = data.nnp_input
         positions = nnp_input.positions
         atomic_subsystem_indices = nnp_input.atomic_subsystem_indices

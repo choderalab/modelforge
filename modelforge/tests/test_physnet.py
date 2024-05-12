@@ -5,13 +5,13 @@ def test_physnet_init():
     model = PhysNet()
 
 
-def test_physnet_forward(batch):
+def test_physnet_forward(single_batch_with_batchsize_64):
     import torch
     from modelforge.potential.physnet import PhysNet
 
     model = PhysNet(number_of_modules=1, number_of_interaction_residual=1)
     print(model)
-    yhat = model(batch.nnp_input)
+    yhat = model(single_batch_with_batchsize_64.nnp_input)
 
 
 def test_rbf():

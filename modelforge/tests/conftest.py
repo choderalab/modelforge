@@ -82,6 +82,14 @@ def single_batch_with_batchsize_64():
     return single_batch(batch_size=64)
 
 
+@pytest.fixture(scope="session")
+def single_batch_with_batchsize_1():
+    """
+    Utility fixture to create a single batch of data for testing.
+    """
+    return single_batch(batch_size=1)
+
+
 def initialize_dataset(
     dataset_name: str, local_cache_dir: str, for_unit_testing: bool = True
 ) -> DataModule:

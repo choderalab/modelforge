@@ -99,7 +99,7 @@ def test_different_properties_of_interest(dataset_name, dataset_factory):
 
     local_cache_dir = str(prep_temp_dir)
 
-    data = _ImplementedDatasets.get_dataset_class(dataset_name)(
+    data = _ImplementedDatasets.get_dataset_class(dataset_name,)(
         for_unit_testing=True, local_cache_dir=local_cache_dir
     )
     assert data.properties_of_interest == [
@@ -509,7 +509,7 @@ def test_numpy_dataset_assignment(dataset_name):
 
     factory = DatasetFactory()
     data = _ImplementedDatasets.get_dataset_class(dataset_name)(
-        for_unit_testing=for_unit_testing
+        for_unit_testing=True
     )
     factory._load_or_process_data(data)
 

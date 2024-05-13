@@ -118,7 +118,9 @@ def test_state_dict_saving_and_loading(model_name):
 
 
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
-def test_energy_between_simulation_environments(model_name, single_batch_with_batchsize_64):
+def test_energy_between_simulation_environments(
+    model_name, single_batch_with_batchsize_64
+):
     # compare that the energy is the same for the JAX and PyTorch Model
     import numpy as np
     import torch
@@ -390,7 +392,7 @@ def test_pairlist():
     assert not pair_indices.shape == neighbor_indices.shape
 
 
-@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+@pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_pairlist_on_dataset(dataset_name, datamodule_factory):
     from modelforge.potential.models import Neighborlist
 

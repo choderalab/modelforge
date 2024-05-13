@@ -12,7 +12,7 @@ def test_physnet_forward(single_batch_with_batchsize_64):
     model = PhysNet(number_of_modules=1, number_of_interaction_residual=1)
     model = model.to(torch.float32)
     print(model)
-    yhat = model(single_batch_with_batchsize_64.nnp_input)
+    yhat = model(single_batch_with_batchsize_64.nnp_input.to(torch.float32))
 
 
 def test_rbf():

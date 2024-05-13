@@ -10,6 +10,7 @@ def test_physnet_forward(single_batch_with_batchsize_64):
     from modelforge.potential.physnet import PhysNet
 
     model = PhysNet(number_of_modules=1, number_of_interaction_residual=1)
+    model.to(torch.float32)
     print(model)
     yhat = model(single_batch_with_batchsize_64.nnp_input)
 

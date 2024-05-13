@@ -508,7 +508,9 @@ def test_numpy_dataset_assignment(dataset_name):
     from modelforge.dataset import _ImplementedDatasets
 
     factory = DatasetFactory()
-    data = _ImplementedDatasets.get_dataset_class(dataset_name)()
+    data = _ImplementedDatasets.get_dataset_class(dataset_name)(
+        for_unit_testing=for_unit_testing
+    )
     factory._load_or_process_data(data)
 
     assert hasattr(data, "numpy_data")

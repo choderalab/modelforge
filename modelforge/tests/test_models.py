@@ -1,9 +1,9 @@
 import pytest
 
-from modelforge.potential import _IMPLEMENTED_NNPS
+from modelforge.potential import _Implemented_NNPs
 
 
-@pytest.mark.parametrize("model_name", _IMPLEMENTED_NNPS)
+@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 def test_JAX_wrapping(model_name, batch):
     from modelforge.potential.models import (
         NeuralNetworkPotentialFactory,
@@ -26,7 +26,7 @@ def test_JAX_wrapping(model_name, batch):
     )  # Evaluate gradient function and apply negative sign
 
 
-@pytest.mark.parametrize("model_name", _IMPLEMENTED_NNPS)
+@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
 def test_model_factory(model_name, simulation_environment):
     from modelforge.potential.models import (
@@ -40,7 +40,10 @@ def test_model_factory(model_name, simulation_environment):
         nnp_name=model_name,
         simulation_environment=simulation_environment,
     )
-    assert model_name in str(type(model)) or "JAX" in str(type(model))
+    assert (
+        model_name.upper() in str(type(model)).upper()
+        or "JAX" in str(type(model)).upper()
+    )
 
     # training model
     model = NeuralNetworkPotentialFactory.create_nnp(
@@ -51,28 +54,30 @@ def test_model_factory(model_name, simulation_environment):
 
 def test_energy_scaling_and_offset():
     # setup test dataset
-    from modelforge.dataset.dataset import TorchDataModule
+    from modelforge.dataset.dataset import DataModule
     from modelforge.potential.ani import ANI2x
 
     # test the self energy calculation on the QM9 dataset
-    from modelforge.dataset.qm9 import QM9Dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
     # prepare reference value
-    data = QM9Dataset(for_unit_testing=True)
-    dataset = TorchDataModule(
-        data, batch_size=1, splitting_strategy=FirstComeFirstServeSplittingStrategy()
+    dataset = DataModule(
+        name="QM9",
+        batch_size=1,
+        for_unit_testing=True,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        remove_self_energies=True,
+        normalize=False,
+        regression_ase=False,
     )
-
+    dataset.prepare_data()
+    dataset.setup()
     # -------------------------------#
     # initialize model
     model = ANI2x()
 
     # -------------------------------#
     # Test that we can add the reference energy correctly
-    dataset.prepare_data(
-        remove_self_energies=True, normalize=False, regression_ase=False
-    )
     # get methane input
     methane = next(iter(dataset.train_dataloader())).nnp_input
 
@@ -95,7 +100,7 @@ def test_energy_scaling_and_offset():
     )
 
 
-@pytest.mark.parametrize("model_name", _IMPLEMENTED_NNPS)
+@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 def test_state_dict_saving_and_loading(model_name):
     from modelforge.potential import NeuralNetworkPotentialFactory
     import torch

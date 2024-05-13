@@ -1,17 +1,15 @@
 import os
-from typing import TYPE_CHECKING, Dict, Literal, List, Optional
-import pytorch_lightning as pl
-
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Dict, List, Literal, Optional, Union
 
 import numpy as np
+import pytorch_lightning as pl
 import torch
 from loguru import logger as log
 from torch.utils.data import DataLoader
 
-from modelforge.utils.prop import PropertyNames
-
 from modelforge.dataset.utils import RandomRecordSplittingStrategy, SplittingStrategy
-from dataclasses import dataclass
+from modelforge.utils.prop import PropertyNames
 
 if TYPE_CHECKING:
     from modelforge.potential.processing import AtomicSelfEnergies
@@ -61,6 +59,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         """
 
         self.properties_of_interest = {}
+        self.dataset_statistics: Dict[str, float] = {}
 
         self.properties_of_interest["atomic_numbers"] = torch.from_numpy(
             dataset[property_name.Z]
@@ -413,6 +412,7 @@ class HDF5Dataset:
 
         """
         from collections import OrderedDict
+
         import h5py
         import tqdm
 
@@ -736,47 +736,182 @@ class DatasetFactory:
 from torch import nn
 
 
-class TorchDataModule(pl.LightningDataModule):
-    """
-    Data module for PyTorch Lightning, handling data preparation and loading.
-
-    Parameters
-    ----------
-    data : HDF5Dataset
-        The dataset to use.
-    split : SplittingStrategy, optional
-        The strategy for splitting data into training,
-        validation, and test sets. Defaults to RandomRecordSplittingStrategy.
-    batch_size : int,
-
-    Examples
-    --------
-    >>> data = QM9Dataset()
-    >>> data_module = TorchDataModule(data)
-    >>> data_module.prepare_data()
-    >>> train_loader = data_module.train_dataloader()
-    """
+class DataModule(pl.LightningDataModule):
 
     def __init__(
         self,
-        data: HDF5Dataset,
+        name: Literal["QM9", "ANI1X", "ANI2X", "SPICE114", "SPICE2", "SPICE114_OPENFF"],
         splitting_strategy: SplittingStrategy = RandomRecordSplittingStrategy(),
         batch_size: int = 64,
-        split_file: Optional[str] = None,
-        transform: Optional[nn.Module] = None,
+        remove_self_energies: bool = True,
+        normalize: bool = False,
+        atomic_self_energies: Optional[Dict[str, float]] = None,
+        regression_ase: bool = False,
+        force_download: bool = False,
+        for_unit_testing: bool = False,
     ):
+        """
+        Initializes adData module for PyTorch Lightning handling data preparation and loading object with the specified configuration.
+        If `remove_self_energies` is `True` and:
+        - `self_energies` are passed as a dictionary, these will be used
+        - `self_energies` are `None`, `self._ase` will be used
+        - `regression_ase` is `True`, self_energies will be calculated
+
+        Parameters
+        ---------
+            name: Literal["QM9", "ANI1X", "ANI2X", "SPICE114", "SPICE2", "SPICE114_OPENFF"]
+                The name of the dataset to use.
+            splitting_strategy : SplittingStrategy, defaults to RandomRecordSplittingStrategy
+                The strategy to use for splitting the dataset into train, test, and validation sets. .
+            batch_size : int, defaults to 64.
+                The batch size to use for the dataset.
+            remove_self_energies : bool, defaults to True
+                Whether to remove the self energies from the dataset.
+            normalize : bool, defaults to False
+                Whether to normalize the dataset after removing the self energies.
+            atomic_self_energies : Optional[Dict[str, float]]
+                A dictionary mapping element names to their self energies. If not provided, the self energies will be calculated.
+            regression_ase: bool, defaults to False
+                Whether to use the calculated self energies for regression.
+            force_download : bool,  defaults to False
+                Whether to force the dataset to be downloaded, even if it is already cached.
+            for_unit_testing : bool, defaults to False
+                Whether the dataset is being used for unit testing.
+        """
         super().__init__()
-        self.data = data
+
+        self.name = name
         self.batch_size = batch_size
-        self.split_idxs = None
+        self.splitting_strategy = splitting_strategy
+        self.dataset_statistics: Optional[DatasetStatistics] = None
+        self.remove_self_energies = remove_self_energies
+        self.normalize = normalize
+        self.dict_atomic_self_energies = (
+            atomic_self_energies  # element name (e.g., 'H') maps to self energies
+        )
+        self.regression_ase = regression_ase
+        self.force_download = force_download
+        self.for_unit_testing = for_unit_testing
         self.train_dataset = None
         self.test_dataset = None
         self.val_dataset = None
-        self.transform = transform
-        self.splitting_strategy = splitting_strategy
-        self.split_file = split_file
-        self.dataset_statistics: Optional[DatasetStatistics] = None
-        self._ase = data.atomic_self_energies  # atomic self energies
+
+    def prepare_data(
+        self,
+    ) -> None:
+        """
+        Prepares the dataset for use. This method is responsible for the initial processing of
+        the data such as calculating self energies, normalizing, and splitting. It is executed
+        only once per node.
+        """
+        from modelforge.dataset import _ImplementedDatasets
+
+        dataset_class = _ImplementedDatasets.get_dataset_class(self.name)
+        dataset = dataset_class(
+            force_download=self.force_download, for_unit_testing=self.for_unit_testing
+        )
+
+        dataset_ase = dataset.atomic_self_energies
+        torch_dataset = self._create_torch_dataset(dataset)
+        self.dataset_statistics = self._create_dataset_statistics(
+            torch_dataset, dataset_ase
+        )
+
+        if self.remove_self_energies:
+            self._process_self_energies(
+                torch_dataset, self.dataset_statistics.atomic_self_energies
+            )
+
+        if self.normalize:
+            self._normalize_dataset(torch_dataset)
+
+        # Save processed dataset and statistics for later use in setup
+        self._cache_dataset(torch_dataset)
+
+    def _create_torch_dataset(self, dataset):
+        """Create a PyTorch dataset from the provided dataset instance."""
+        return DatasetFactory().create_dataset(dataset)
+
+    def _process_self_energies(
+        self, torch_dataset: TorchDataset, atomic_self_energies: "AtomicSelfEnergies"
+    ) -> None:
+        """Calculate and subtract self energies from the dataset."""
+        atomic_self_energies = self.dict_atomic_self_energies or atomic_self_energies
+        if self.regression_ase and not self.dict_atomic_self_energies:
+            self_energies = self.calculate_self_energies(torch_dataset)
+        self._subtract_self_energies(torch_dataset, atomic_self_energies)
+        self._save_self_energies(atomic_self_energies)
+
+    def _normalize_dataset(self, torch_dataset) -> None:
+        """Normalize the dataset if self energies have been removed."""
+        from modelforge.dataset.utils import (
+            calculate_mean_and_variance,
+            normalize_energies,
+        )
+
+        if not self.remove_self_energies:
+            raise RuntimeError(
+                "Cannot normalize dataset if self energies are not removed."
+            )
+        stats = calculate_mean_and_variance(torch_dataset)
+        normalize_energies(torch_dataset, stats)
+
+    def _create_dataset_statistics(
+        self, torch_dataset, dataset_ase
+    ) -> DatasetStatistics:
+
+        from modelforge.dataset.utils import calculate_mean_and_variance
+        from modelforge.potential.processing import AtomicSelfEnergies
+
+        # Use provided ase dictionary
+        if self.dict_atomic_self_energies:
+            atomic_self_energies = AtomicSelfEnergies(self.dict_atomic_self_energies)
+
+        # Use regression to calculate ase
+        elif self.dict_atomic_self_energies is None and self.regression_ase is True:
+            atomic_self_energies = AtomicSelfEnergies(
+                energies=self.calculate_self_energies(torch_dataset)
+            )
+        # use self energies provided by the dataset (this should be the DEFAULT option)
+        elif self.dict_atomic_self_energies is None and self.regression_ase is False:
+            atomic_self_energies = dataset_ase
+        else:
+            raise RuntimeError()
+
+        stats = calculate_mean_and_variance(torch_dataset)
+        return DatasetStatistics(
+            scaling_stddev=stats["stddev"],
+            scaling_mean=stats["mean"],
+            atomic_self_energies=atomic_self_energies,
+        )
+
+    def _cache_dataset(self, torch_dataset):
+        """Cache the dataset and its statistics using PyTorch's serialization."""
+        torch.save(torch_dataset, "torch_dataset.pt")
+        torch.save(self.dataset_statistics, "dataset_statistics.pt")
+
+    def setup(self, stage: Optional[str] = None) -> None:
+        """Sets up datasets for the train, validation, and test stages based on the stage argument."""
+
+        self.torch_dataset = torch.load("torch_dataset.pt")
+
+        self.dataset_statistics = torch.load("dataset_statistics.pt")
+        self.train_dataset, self.val_dataset, self.test_dataset = (
+            self.splitting_strategy.split(self.torch_dataset)
+        )
+
+    def _save_self_energies(self, self_energies):
+        """Save self energies to a file."""
+        import toml
+
+        with open("ase.toml", "w") as f:
+            toml.dump(
+                {
+                    str(idx): energy.m
+                    for (idx, energy) in self_energies.energies.items()
+                },
+                f,
+            )
 
     def calculate_self_energies(
         self, torch_dataset: TorchDataset, collate: bool = True
@@ -805,98 +940,7 @@ class TorchDataModule(pl.LightningDataModule):
             torch_dataset=torch_dataset, collate_fn=collate_fn
         )
 
-    def prepare_data(
-        self,
-        remove_self_energies: bool = True,
-        normalize: bool = True,
-        self_energies: Dict[int, float] = None,
-        regression_ase: bool = False,
-    ) -> None:
-        """
-        Prepares the dataset for use by calculating self energies, normalizing data, and splitting the dataset.
-
-        Parameters
-        ----------
-        remove_self_energies : bool, optional
-            Whether to remove self energies from the dataset. Defaults to True.
-        normalize : bool, optional
-            Whether to normalize the dataset. Defaults to True.
-        self_energies : Dict[str, float], optional
-            A dictionary mapping atomic numbers to their calculated self energies. Defaults to None.
-        regression_ase : bool, optional
-            If regression_ase is True, atomic self energies are calculated using linear regression
-
-        if remove_self_energies is True and
-            - self_energies are passed as dictionary, these will be used
-            - self_energies are None, self._ase will be used
-            - regression_ase is True, self_energies will be calculated
-        """
-        if self.split_file and os.path.exists(self.split_file):
-            self.split_idxs = np.load(self.split_file, allow_pickle=True)
-            log.debug(f"Loaded split indices from {self.split_file}")
-        else:
-            log.debug("Splitting strategy will be applied")
-
-        # generate dataset
-        factory = DatasetFactory()
-        torch_dataset = factory.create_dataset(self.data)
-        dataset_statistics = {
-            "scaling_stddev": 1,
-            "scaling_mean": 0,
-            "atomic_self_energies": {},
-        }
-
-        if remove_self_energies:
-            # calculate self energies, and then remove them from the dataset
-
-            log.debug("Self energies are removed ...")
-            if not self_energies:
-                if regression_ase:
-                    log.debug(
-                        "Using linear regression to calculate atomic self energies..."
-                    )
-                    self_energies = self.calculate_self_energies(
-                        torch_dataset=torch_dataset
-                    )
-                else:
-                    log.debug("Using atomic self energies from the dataset...")
-                    self_energies = self._ase
-
-            # remove self energies
-            self.subtract_self_energies(torch_dataset, self_energies)
-
-            # write the self energies that are removed from the dataset to disk
-            import toml
-
-            with open("ase.toml", "w") as f:
-                self_energies_ = {str(idx): energy for (idx, energy) in self._ase}
-                toml.dump(self_energies_, f)
-
-            # store self energies
-            dataset_statistics["atomic_self_energies"] = self_energies
-
-        if normalize:
-            # calculate average and variance
-            if not remove_self_energies:
-                raise RuntimeError(
-                    "Cannot normalize the dataset if self energies are not removed."
-                )
-
-            log.debug("Normalizing energies...")
-            from modelforge.dataset.utils import (
-                calculate_mean_and_variance,
-                normalize_energies,
-            )
-
-            stats = calculate_mean_and_variance(torch_dataset)
-            normalize_energies(torch_dataset, stats)
-            dataset_statistics["scaling_stddev"] = stats["stddev"]
-            dataset_statistics["scaling_mean"] = stats["mean"]
-
-        self.dataset_statistics = DatasetStatistics(**dataset_statistics)
-        self.setup(torch_dataset)
-
-    def subtract_self_energies(self, dataset, self_energies: Dict[int, float]) -> None:
+    def _subtract_self_energies(self, dataset, self_energies: Dict[int, float]) -> None:
         """
         Removes the self energies from the total energies for each molecule in the dataset .
 
@@ -918,52 +962,6 @@ class TorchDataModule(pl.LightningDataModule):
             dataset[i] = {"E": E}
 
         return dataset
-
-    @classmethod
-    def preprocess_dataset(
-        cls,
-        dataset: TorchDataset,
-        normalize: bool,
-        dataset_mean: float,
-        dataset_std: Optional[float] = None,
-    ) -> TorchDataset:
-        from tqdm import tqdm
-
-        log.info(f"Adjusting energies by subtracting global mean {dataset_mean}")
-
-        if normalize:
-            log.info("Normalizing energies using computed mean and std")
-        for i in tqdm(range(len(dataset)), desc="Adjusting Energies"):
-            energy = dataset[i]["E"]
-            if normalize:
-                # Normalize using the computed mean and std
-                modified_energy = (energy - dataset_mean) / dataset_std
-            else:
-                # Only adjust by subtracting the mean
-                modified_energy = energy - dataset_mean
-            dataset[i] = {"E": modified_energy}
-
-        return dataset
-
-    def setup(self, torch_dataset) -> None:
-        """
-        Sets up datasets for the train, validation, and test stages.
-
-        """
-        from torch.utils.data import Subset
-
-        # saving the raw dataset
-        self.torch_dataset = torch_dataset  # FIXME: is this necessary?
-        # Create subsets for training, validation, and testing
-        if self.split_idxs and os.path.exists(self.split_file):
-            self.train_dataset = Subset(torch_dataset, self.split_idxs["train_idx"])
-            self.val_dataset = Subset(torch_dataset, self.split_idxs["val_idx"])
-            self.test_dataset = Subset(torch_dataset, self.split_idxs["test_idx"])
-        else:
-            # Fallback to manual splitting if split_idxs is not available
-            self.train_dataset, self.val_dataset, self.test_dataset = (
-                self.splitting_strategy.split(torch_dataset)
-            )
 
     def train_dataloader(self) -> DataLoader:
         """
@@ -1017,7 +1015,7 @@ from typing import Tuple
 def collate_conformers(conf_list: List[Dict[str, torch.Tensor]]) -> "BatchData":
     # TODO: once TorchDataset is reimplemented for general properties, reimplement this function using formats too.
     """Concatenate the Z, R, and E tensors from a list of molecules into a single tensor each, and return a new dictionary with the concatenated tensors."""
-    from modelforge.potential.utils import NNPInput, BatchData, Metadata
+    from modelforge.potential.utils import BatchData, Metadata, NNPInput
 
     Z_list = []  # nuclear charges/atomic numbers
     R_list = []  # positions

@@ -322,13 +322,19 @@ class PhysNetInteractionModule(nn.Module):
 class PhysNetOutput(nn.Module):
 
     def __init__(
-        self, number_of_atom_features: int, number_of_atomic_properties: int = 2
+        self,
+        number_of_atom_features: int,
+        number_of_atomic_properties: int = 2,
+        number_of_residuals_in_output: int = 2,
     ):
         from .utils import Dense
 
         super().__init__()
-        self.residual = PhysNetResidual(
-            number_of_atom_features, number_of_atom_features
+        self.residuals = nn.ModuleList(
+            [
+                PhysNetResidual(number_of_atom_features, number_of_atom_features)
+                for _ in range(number_of_residuals_in_output)
+            ]
         )
         self.output = Dense(
             number_of_atom_features,
@@ -582,13 +588,19 @@ from .models import InputPreparation, NNPInput, BaseNetwork
 class PhysNet(BaseNetwork):
     def __init__(
         self,
-        max_Z: int = 100,
+        max_Z: int = 101,
         cutoff: unit.Quantity = 5 * unit.angstrom,
-        number_of_atom_features: int = 64,
-        number_of_radial_basis_functions: int = 16,
+        number_of_atom_features: int = 128,
+        number_of_radial_basis_functions: int = 64,
         number_of_interaction_residual: int = 3,
-        number_of_modules: int = 2,
+        number_of_modules: int = 5,
     ) -> None:
+        """
+        Unke, O. T. and Meuwly, M. "PhysNet: A Neural Network for Predicting Energies,
+        Forces, Dipole Moments and Partial Charges" arxiv:1902.08408 (2019).
+
+
+        """
         super().__init__()
         self.core_module = PhysNetCore(
             max_Z=max_Z,

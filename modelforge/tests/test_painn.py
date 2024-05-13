@@ -27,6 +27,8 @@ def test_painn_forward(model_parameter, single_batch_with_batchsize_64):
     """
     Test the forward pass of the Schnet model.
     """
+    import torch
+
     print(f"model_parameter: {model_parameter}")
     (
         max_Z,
@@ -42,7 +44,7 @@ def test_painn_forward(model_parameter, single_batch_with_batchsize_64):
         cutoff=cutoff,
         number_of_interaction_modules=nr_interaction_blocks,
     )
-    nnp_input = single_batch_with_batchsize_64.nnp_input
+    nnp_input = single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float32)
     energy = painn(nnp_input).E
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 

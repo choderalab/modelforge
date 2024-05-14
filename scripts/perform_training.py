@@ -34,8 +34,8 @@ def perform_training(
         logger=logger,  # Add the logger here
         callbacks=[
             EarlyStopping(
-                monitor="epoch_rmse_val_loss", min_delta=0.05, patience=20, verbose=True
-            )
+                monitor="epoch_rmse_val_loss", min_delta=0.05, patience=25, verbose=True
+            ) # NOTE: patience must be > than 20, since this is the patience set for the reduction of the learning rate
         ],
     )
 
@@ -52,7 +52,8 @@ def perform_training(
         train_dataloaders=dm.train_dataloader(),
         val_dataloaders=dm.val_dataloader(),
     )
-    trainer.test(model, dataloaders=dm.test_dataloader())
+    trainer.validate(model, dataloaders=dm.val_dataloader())
+    trainer.test(dataloaders=dm.test_dataloader())
 
 # tensorboard --logdir tb_logs
 

@@ -18,7 +18,6 @@ def perform_training(
         batch_size=512,
         splitting_strategy=RandomRecordSplittingStrategy(),
         remove_self_energies=True,
-        for_unit_testing=True,
     )
     # Set up model
     model = NeuralNetworkPotentialFactory.create_nnp("training", model_name)

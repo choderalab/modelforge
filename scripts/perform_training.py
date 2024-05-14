@@ -52,17 +52,21 @@ def perform_training(
         train_dataloaders=dm.train_dataloader(),
         val_dataloaders=dm.val_dataloader(),
     )
-
+    trainer.test(model, dataloaders=dm.test_dataloader())
 
 # tensorboard --logdir tb_logs
 
 
 if __name__ == "__main__":
+    from modelforge.potential import _Implemented_NNPs
 
-    model_name = "PhysNet"
-    dataset_name = "QM9"
-    nr_of_repeats = 5
-    # Run training loop and validate
-    for i in range(nr_of_repeats):
-        print("Running training iteration:", i)
-        perform_training(model_name, dataset_name, nr_of_epochs=1000, accelerator="gpu")
+    for model_name in _Implemented_NNPs.get_all_neural_network_names():
+
+        dataset_name = "QM9"
+        nr_of_repeats = 5
+        # Run training loop and validate
+        for i in range(nr_of_repeats):
+            print("Running training iteration:", i)
+            perform_training(
+                model_name, dataset_name, nr_of_epochs=1000, accelerator="gpu"
+            )

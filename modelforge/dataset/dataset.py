@@ -749,6 +749,8 @@ class DataModule(pl.LightningDataModule):
         regression_ase: bool = False,
         force_download: bool = False,
         for_unit_testing: bool = False,
+        local_cache_dir: str = "./",
+        regenerate_cache: bool = False,
     ):
         """
         Initializes adData module for PyTorch Lightning handling data preparation and loading object with the specified configuration.
@@ -777,6 +779,10 @@ class DataModule(pl.LightningDataModule):
                 Whether to force the dataset to be downloaded, even if it is already cached.
             for_unit_testing : bool, defaults to False
                 Whether the dataset is being used for unit testing.
+            local_cache_dir : str, defaults to "./"
+                Directory to store the files.
+            regenerate_cache : bool, defaults to False
+                Whether to regenerate the cache.
         """
         super().__init__()
 
@@ -795,6 +801,8 @@ class DataModule(pl.LightningDataModule):
         self.train_dataset = None
         self.test_dataset = None
         self.val_dataset = None
+        self.local_cache_dir = local_cache_dir
+        self.regenerate_cache = regenerate_cache
 
     def prepare_data(
         self,
@@ -808,7 +816,10 @@ class DataModule(pl.LightningDataModule):
 
         dataset_class = _ImplementedDatasets.get_dataset_class(self.name)
         dataset = dataset_class(
-            force_download=self.force_download, for_unit_testing=self.for_unit_testing
+            force_download=self.force_download,
+            for_unit_testing=self.for_unit_testing,
+            local_cache_dir=self.local_cache_dir,
+            regenerate_cache=self.regenerate_cache,
         )
 
         dataset_ase = dataset.atomic_self_energies
@@ -953,13 +964,21 @@ class DataModule(pl.LightningDataModule):
         """
         from tqdm import tqdm
 
+        stashed_values = {}
         log.info("Removing self energies from the dataset")
         for i in tqdm(range(len(dataset)), desc="Removing Self Energies"):
+
             atomic_numbers = list(dataset[i]["atomic_numbers"])
+            name = " ".join([str(int(x)) for x in atomic_numbers])
+
+            if name not in stashed_values.keys():
+                energy = np.array([self_energies[int(Z)] for Z in atomic_numbers]).sum()
+                stashed_values[name] = energy
+            else:
+                energy = stashed_values[name]
+
             E = dataset[i]["E"]
-            for Z in atomic_numbers:
-                E -= self_energies[int(Z)]
-            dataset[i] = {"E": E}
+            dataset[i] = {"E": E - energy}
 
         return dataset
 

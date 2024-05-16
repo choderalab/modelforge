@@ -330,8 +330,8 @@ class PhysNetOutput(nn.Module):
         from .utils import Dense
 
         super().__init__()
-        self.residuals = nn.ModuleList(
-            [
+        self.residuals = nn.Sequential(
+            *[
                 PhysNetResidual(number_of_atom_features, number_of_atom_features)
                 for _ in range(number_of_residuals_in_output)
             ]

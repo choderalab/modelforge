@@ -344,7 +344,7 @@ class PhysNetOutput(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.output(self.residual(x))
+        x = self.output(self.residuals(x))
         return x
 
 

@@ -749,6 +749,8 @@ class DataModule(pl.LightningDataModule):
         regression_ase: bool = False,
         force_download: bool = False,
         for_unit_testing: bool = False,
+        local_cache_dir: str = "./",
+        regenerate_cache: bool = False,
     ):
         """
         Initializes adData module for PyTorch Lightning handling data preparation and loading object with the specified configuration.
@@ -777,6 +779,10 @@ class DataModule(pl.LightningDataModule):
                 Whether to force the dataset to be downloaded, even if it is already cached.
             for_unit_testing : bool, defaults to False
                 Whether the dataset is being used for unit testing.
+            local_cache_dir : str, defaults to "./"
+                Directory to store the files.
+            regenerate_cache : bool, defaults to False
+                Whether to regenerate the cache.
         """
         super().__init__()
 
@@ -795,6 +801,8 @@ class DataModule(pl.LightningDataModule):
         self.train_dataset = None
         self.test_dataset = None
         self.val_dataset = None
+        self.local_cache_dir = local_cache_dir
+        self.regenerate_cache = regenerate_cache
 
     def prepare_data(
         self,
@@ -808,7 +816,10 @@ class DataModule(pl.LightningDataModule):
 
         dataset_class = _ImplementedDatasets.get_dataset_class(self.name)
         dataset = dataset_class(
-            force_download=self.force_download, for_unit_testing=self.for_unit_testing
+            force_download=self.force_download,
+            for_unit_testing=self.for_unit_testing,
+            local_cache_dir=self.local_cache_dir,
+            regenerate_cache=self.regenerate_cache,
         )
 
         dataset_ase = dataset.atomic_self_energies
@@ -865,15 +876,18 @@ class DataModule(pl.LightningDataModule):
 
         # Use provided ase dictionary
         if self.dict_atomic_self_energies:
+            log.info("Using provided atomic self energies from the provided ictionary.")
             atomic_self_energies = AtomicSelfEnergies(self.dict_atomic_self_energies)
 
         # Use regression to calculate ase
         elif self.dict_atomic_self_energies is None and self.regression_ase is True:
+            log.info("Calculating atomic self energies using regression.")
             atomic_self_energies = AtomicSelfEnergies(
                 energies=self.calculate_self_energies(torch_dataset)
             )
         # use self energies provided by the dataset (this should be the DEFAULT option)
         elif self.dict_atomic_self_energies is None and self.regression_ase is False:
+            log.info("Using atomic self energies provided by the dataset.")
             atomic_self_energies = dataset_ase
         else:
             raise RuntimeError()
@@ -951,15 +965,15 @@ class DataModule(pl.LightningDataModule):
         self_energies : Dict[int, float]
             Dictionary containing the self energies for each element in the dataset.
         """
+
         from tqdm import tqdm
 
         log.info("Removing self energies from the dataset")
         for i in tqdm(range(len(dataset)), desc="Removing Self Energies"):
-            atomic_numbers = list(dataset[i]["atomic_numbers"])
-            E = dataset[i]["E"]
-            for Z in atomic_numbers:
-                E -= self_energies[int(Z)]
-            dataset[i] = {"E": E}
+            energy = torch.sum(
+                self_energies.ase_tensor_for_indexing[dataset[i]["atomic_numbers"]]
+            )
+            dataset[i] = {"E": dataset[i]["E"] - energy}
 
         return dataset
 

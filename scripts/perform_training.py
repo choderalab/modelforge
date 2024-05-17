@@ -18,7 +18,6 @@ def perform_training(
         batch_size=512,
         splitting_strategy=RandomRecordSplittingStrategy(),
         remove_self_energies=True,
-        for_unit_testing=True,
     )
     # Set up model
     model = NeuralNetworkPotentialFactory.create_nnp("training", model_name)
@@ -34,8 +33,8 @@ def perform_training(
         logger=logger,  # Add the logger here
         callbacks=[
             EarlyStopping(
-                monitor="epoch_rmse_val_loss", min_delta=0.05, patience=20, verbose=True
-            )
+                monitor="epoch_rmse_val_loss", min_delta=0.05, patience=25, verbose=True
+            ) # NOTE: patience must be > than 20, since this is the patience set for the reduction of the learning rate
         ],
     )
 
@@ -52,17 +51,22 @@ def perform_training(
         train_dataloaders=dm.train_dataloader(),
         val_dataloaders=dm.val_dataloader(),
     )
-
+    trainer.validate(model, dataloaders=dm.val_dataloader())
+    trainer.test(dataloaders=dm.test_dataloader())
 
 # tensorboard --logdir tb_logs
 
 
 if __name__ == "__main__":
+    from modelforge.potential import _Implemented_NNPs
 
-    model_name = "PhysNet"
-    dataset_name = "QM9"
-    nr_of_repeats = 5
-    # Run training loop and validate
-    for i in range(nr_of_repeats):
-        print("Running training iteration:", i)
-        perform_training(model_name, dataset_name, nr_of_epochs=1000, accelerator="gpu")
+    for model_name in _Implemented_NNPs.get_all_neural_network_names():
+
+        dataset_name = "QM9"
+        nr_of_repeats = 5
+        # Run training loop and validate
+        for i in range(nr_of_repeats):
+            print("Running training iteration:", i)
+            perform_training(
+                model_name, dataset_name, nr_of_epochs=1000, accelerator="gpu"
+            )

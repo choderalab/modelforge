@@ -241,13 +241,14 @@ class TrainingAdapter(pl.LightningModule):
         None
             The results are logged and not directly returned.
         """
-        loss = self.loss.compute_loss(batch, F.mse_loss) ** 0.5
+        mse_loss = self.loss.compute_loss(batch, F.mse_loss)
+        rmse_loss = mse_loss**0.5
         self.log(
             "rmse_test_loss",
-            loss,
+            rmse_loss,
             on_epoch=True,
             prog_bar=True,
-            batch_size=int(loss.numel()),
+            batch_size=int(rmse_loss.numel()),
         )
 
     def validation_step(self, batch: BatchData, batch_idx: int) -> torch.Tensor:
@@ -267,7 +268,7 @@ class TrainingAdapter(pl.LightningModule):
             The loss tensor computed for the current validation step.
         """
 
-        mse_loss = self.loss.compute_loss(batch, F.mse_loss) ** 0.5
+        mse_loss = self.loss.compute_loss(batch, F.mse_loss)
         rmse_loss = mse_loss**0.5
         self.log(
             "rmse_val_loss",

@@ -978,8 +978,7 @@ class DataModule(pl.LightningDataModule):
                     dataset.properties_of_interest["atomic_numbers"][start_idx:end_idx]
                 ]
             )
-            dataset[i] = {"E": dataset[i]["E"] - energy}
-
+            dataset[i] = {"E": dataset.properties_of_interest["E"][i] - energy}
         return dataset
 
     def train_dataloader(self) -> DataLoader:

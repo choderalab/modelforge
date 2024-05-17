@@ -876,15 +876,18 @@ class DataModule(pl.LightningDataModule):
 
         # Use provided ase dictionary
         if self.dict_atomic_self_energies:
+            log.info("Using provided atomic self energies from the provided ictionary.")
             atomic_self_energies = AtomicSelfEnergies(self.dict_atomic_self_energies)
 
         # Use regression to calculate ase
         elif self.dict_atomic_self_energies is None and self.regression_ase is True:
+            log.info("Calculating atomic self energies using regression.")
             atomic_self_energies = AtomicSelfEnergies(
                 energies=self.calculate_self_energies(torch_dataset)
             )
         # use self energies provided by the dataset (this should be the DEFAULT option)
         elif self.dict_atomic_self_energies is None and self.regression_ase is False:
+            log.info("Using atomic self energies provided by the dataset.")
             atomic_self_energies = dataset_ase
         else:
             raise RuntimeError()
@@ -962,23 +965,48 @@ class DataModule(pl.LightningDataModule):
         self_energies : Dict[int, float]
             Dictionary containing the self energies for each element in the dataset.
         """
+
         from tqdm import tqdm
 
-        stashed_values = {}
         log.info("Removing self energies from the dataset")
+
+        # For efficiency, this will batch conformers with the same number of atoms,
+        # creating a 2d tensor of atomic numbers with shape (N_conf, N_atoms).
+        # The cost of performing this calculation on a tensor of shape (N_conf,N_atoms) is
+        # less the total cost of performing a calculation on a tensor of shape (N_atoms,) N_conf times.
+        # For the tested datasets, this works out to about a 25% savings.
+
+        last_shape = dataset[0]["atomic_numbers"].shape[0]
+        batch = []
         for i in tqdm(range(len(dataset)), desc="Removing Self Energies"):
 
-            atomic_numbers = list(dataset[i]["atomic_numbers"])
-            name = " ".join([str(int(x)) for x in atomic_numbers])
-
-            if name not in stashed_values.keys():
-                energy = np.array([self_energies[int(Z)] for Z in atomic_numbers]).sum()
-                stashed_values[name] = energy
+            if dataset[i]["atomic_numbers"].shape[0] == last_shape:
+                batch.append(i)
             else:
-                energy = stashed_values[name]
 
-            E = dataset[i]["E"]
-            dataset[i] = {"E": E - energy}
+                atomic_numbers_batch = torch.stack(
+                    [dataset[j]["atomic_numbers"] for j in batch]
+                )
+
+                energies = torch.sum(
+                    self_energies.ase_tensor_for_indexing[atomic_numbers_batch], dim=1
+                )
+                for c, j in enumerate(batch):
+                    dataset[j] = {"E": dataset[j]["E"] - energies[c]}
+
+                last_shape = dataset[i]["atomic_numbers"].shape[0]
+                batch = [i]
+
+            if i == len(dataset) - 1:
+                atomic_numbers_batch = torch.stack(
+                    [dataset[j]["atomic_numbers"] for j in batch]
+                )
+
+                energies = torch.sum(
+                    self_energies.ase_tensor_for_indexing[atomic_numbers_batch], dim=1
+                )
+                for c, j in enumerate(batch):
+                    dataset[j] = {"E": dataset[j]["E"] - energies[c]}
 
         return dataset
 

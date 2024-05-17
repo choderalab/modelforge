@@ -969,44 +969,11 @@ class DataModule(pl.LightningDataModule):
         from tqdm import tqdm
 
         log.info("Removing self energies from the dataset")
-
-        # For efficiency, this will batch conformers with the same number of atoms,
-        # creating a 2d tensor of atomic numbers with shape (N_conf, N_atoms).
-        # The cost of performing this calculation on a tensor of shape (N_conf,N_atoms) is
-        # less the total cost of performing a calculation on a tensor of shape (N_atoms,) N_conf times.
-        # For the tested datasets, this works out to about a 25% savings.
-
-        last_shape = dataset[0]["atomic_numbers"].shape[0]
-        batch = []
         for i in tqdm(range(len(dataset)), desc="Removing Self Energies"):
-
-            if dataset[i]["atomic_numbers"].shape[0] == last_shape:
-                batch.append(i)
-            else:
-
-                atomic_numbers_batch = torch.stack(
-                    [dataset[j]["atomic_numbers"] for j in batch]
-                )
-
-                energies = torch.sum(
-                    self_energies.ase_tensor_for_indexing[atomic_numbers_batch], dim=1
-                )
-                for c, j in enumerate(batch):
-                    dataset[j] = {"E": dataset[j]["E"] - energies[c]}
-
-                last_shape = dataset[i]["atomic_numbers"].shape[0]
-                batch = [i]
-
-            if i == len(dataset) - 1:
-                atomic_numbers_batch = torch.stack(
-                    [dataset[j]["atomic_numbers"] for j in batch]
-                )
-
-                energies = torch.sum(
-                    self_energies.ase_tensor_for_indexing[atomic_numbers_batch], dim=1
-                )
-                for c, j in enumerate(batch):
-                    dataset[j] = {"E": dataset[j]["E"] - energies[c]}
+            energy = torch.sum(
+                self_energies.ase_tensor_for_indexing[dataset[i]["atomic_numbers"]]
+            )
+            dataset[i] = {"E": dataset[i]["E"] - energy}
 
         return dataset
 

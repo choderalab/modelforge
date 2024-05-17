@@ -954,6 +954,48 @@ class DataModule(pl.LightningDataModule):
             torch_dataset=torch_dataset, collate_fn=collate_fn
         )
 
+    # def _subtract_self_energies(self, dataset, self_energies: Dict[int, float]) -> None:
+    #     """
+    #     Removes the self energies from the total energies for each molecule in the dataset .
+
+    #     Parameters
+    #     ----------
+    #     dataset: torch.Dataset
+    #         The dataset from which to remove the self energies.
+    #     self_energies : Dict[int, float]
+    #         Dictionary containing the self energies for each element in the dataset.
+    #     """
+
+    #     def _subtract_self_energies(
+    #         dataset, self_energies: Dict[int, float], idx: int
+    #     ) -> None:
+    #         energy = torch.sum(
+    #             self_energies.ase_tensor_for_indexing[dataset[idx]["atomic_numbers"]]
+    #         )
+    #         dataset[idx] = {"E": dataset[idx]["E"] - energy}
+
+    #     from tqdm import tqdm
+    #     import torch.multiprocessing as mp
+    #     from itertools import repeat
+
+    #     dataset = dataset.share_memory_()
+    #     log.info("Removing self energies from the dataset")
+
+    #     with mp.Pool(20) as p:
+    #         p.starmap(
+    #             _subtract_self_energies,
+    #             repeat(dataset),
+    #             repeat(self_energies),
+    #             range(len(dataset)),
+    #         )
+    #     # for i in tqdm(range(len(dataset)), desc="Removing Self Energies"):
+    #     #     energy = torch.sum(
+    #     #         self_energies.ase_tensor_for_indexing[dataset[i]["atomic_numbers"]]
+    #     #     )
+    #     #     dataset[i] = {"E": dataset[i]["E"] - energy}
+
+    #     return dataset
+
     def _subtract_self_energies(self, dataset, self_energies: Dict[int, float]) -> None:
         """
         Removes the self energies from the total energies for each molecule in the dataset .
@@ -969,11 +1011,18 @@ class DataModule(pl.LightningDataModule):
         from tqdm import tqdm
 
         log.info("Removing self energies from the dataset")
-        for i in tqdm(range(len(dataset)), desc="Removing Self Energies"):
+        for idx in tqdm(range(len(dataset)), desc="Removing Self Energies"):
+            single_atom_start_idx = dataset.single_atom_start_idxs_by_conf[idx]
+            single_atom_end_idx = dataset.single_atom_end_idxs_by_conf[idx]
+
             energy = torch.sum(
-                self_energies.ase_tensor_for_indexing[dataset[i]["atomic_numbers"]]
+                self_energies.ase_tensor_for_indexing[
+                    dataset.properties_of_interest["atomic_numbers"][
+                        single_atom_start_idx:single_atom_end_idx
+                    ].squeeze(1)
+                ]
             )
-            dataset[i] = {"E": dataset[i]["E"] - energy}
+            dataset[idx] = {"E": dataset.properties_of_interest["E"][idx] - energy}
 
         return dataset
 

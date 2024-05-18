@@ -99,26 +99,71 @@ def test_different_properties_of_interest(dataset_name, dataset_factory):
 
     local_cache_dir = str(prep_temp_dir)
 
-    data = _ImplementedDatasets.get_dataset_class(dataset_name,)(
-        for_unit_testing=True, local_cache_dir=local_cache_dir
-    )
-    assert data.properties_of_interest == [
-        "geometry",
-        "atomic_numbers",
-        "internal_energy_at_0K",
-        "charges",
-    ]
+    data = _ImplementedDatasets.get_dataset_class(
+        dataset_name,
+    )(for_unit_testing=True, local_cache_dir=local_cache_dir)
+    if dataset_name == "QM9":
+        assert data.properties_of_interest == [
+            "geometry",
+            "atomic_numbers",
+            "internal_energy_at_0K",
+            "charges",
+        ]
 
-    data.properties_of_interest = [
-        "internal_energy_at_0K",
-        "geometry",
-        "atomic_numbers",
-    ]
-    assert data.properties_of_interest == [
-        "internal_energy_at_0K",
-        "geometry",
-        "atomic_numbers",
-    ]
+        data.properties_of_interest = [
+            "internal_energy_at_0K",
+            "geometry",
+            "atomic_numbers",
+        ]
+        assert data.properties_of_interest == [
+            "internal_energy_at_0K",
+            "geometry",
+            "atomic_numbers",
+        ]
+
+    elif dataset_name == "ANI1x" or dataset_name == "ANI2x":
+        assert data.properties_of_interest == [
+            "geometry",
+            "atomic_numbers",
+            "wb97x_dz.energy",
+            "wb97x_dz.forces",
+        ]
+
+        data.properties_of_interest = [
+            "internal_energy_at_0K",
+            "geometry",
+            "atomic_numbers",
+            "wb97x_dz.energy",
+            "wb97x_dz.forces",
+        ]
+        assert data.properties_of_interest == [
+            "internal_energy_at_0K",
+            "geometry",
+            "atomic_numbers",
+            "wb97x_dz.energy",
+            "wb97x_dz.forces",
+        ]
+    elif dataset_name == "SPICE2":
+        assert data.properties_of_interest == [
+            "geometry",
+            "atomic_numbers",
+            "dft_total_energy",
+            "dft_total_force",
+            "mbis_charges",
+        ]
+
+        data.properties_of_interest = [
+            "dft_total_energy",
+            "geometry",
+            "atomic_numbers",
+            "mbis_charges",
+        ]
+        assert data.properties_of_interest == [
+            "dft_total_energy",
+            "geometry",
+            "atomic_numbers",
+            "mbis_charges",
+        ]
 
     dataset = dataset_factory(
         dataset_name=dataset_name, local_cache_dir=local_cache_dir
@@ -508,9 +553,7 @@ def test_numpy_dataset_assignment(dataset_name):
     from modelforge.dataset import _ImplementedDatasets
 
     factory = DatasetFactory()
-    data = _ImplementedDatasets.get_dataset_class(dataset_name)(
-        for_unit_testing=True
-    )
+    data = _ImplementedDatasets.get_dataset_class(dataset_name)(for_unit_testing=True)
     factory._load_or_process_data(data)
 
     assert hasattr(data, "numpy_data")

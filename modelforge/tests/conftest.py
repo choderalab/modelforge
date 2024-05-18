@@ -91,7 +91,10 @@ def single_batch_with_batchsize_1():
 
 
 def initialize_dataset(
-    dataset_name: str, local_cache_dir: str, for_unit_testing: bool = True
+    dataset_name: str,
+    local_cache_dir: str,
+    for_unit_testing: bool = True,
+    force_download: bool = False,
 ) -> DataModule:
     """
     Initialize a dataset for a given mode.
@@ -99,7 +102,9 @@ def initialize_dataset(
 
     factory = DatasetFactory()
     data = _ImplementedDatasets.get_dataset_class(dataset_name)(
-        local_cache_dir=local_cache_dir, for_unit_testing=for_unit_testing
+        local_cache_dir=local_cache_dir,
+        for_unit_testing=for_unit_testing,
+        force_download=force_download,
     )
     dataset = factory.create_dataset(data)
 

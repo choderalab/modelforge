@@ -338,7 +338,7 @@ def test_different_scenarios_of_file_availability(
 
     # first check if we remove the npz file, rerunning it will regenerate it
     os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
-    dataset_factory(dataset_name, local_cache_dir)
+    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
 
     assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
 
@@ -388,7 +388,9 @@ def test_different_scenarios_of_file_availability(
 
     # now we will remove the gz file and run it again
     os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
-    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
+    dataset_factory(
+        dataset_name=dataset_name, local_cache_dir=local_cache_dir, force_download=True
+    )
     assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
 
 

@@ -183,6 +183,8 @@ def test_file_existence_after_initialization(dataset_name, dataset_factory):
     """Test if files are created after dataset initialization."""
 
     local_cache_dir = str(prep_temp_dir)
+    if os.path.exists(f"{local_cache_dir}"):
+        os.rmdir(local_cache_dir)
 
     data = _ImplementedDatasets.get_dataset_class(dataset_name)(
         local_cache_dir=local_cache_dir, for_unit_testing=True

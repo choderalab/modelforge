@@ -970,11 +970,15 @@ class DataModule(pl.LightningDataModule):
 
         log.info("Removing self energies from the dataset")
         for i in tqdm(range(len(dataset)), desc="Removing Self Energies"):
-            energy = torch.sum(
-                self_energies.ase_tensor_for_indexing[dataset[i]["atomic_numbers"]]
-            )
-            dataset[i] = {"E": dataset[i]["E"] - energy}
+            start_idx = dataset.single_atom_start_idxs_by_conf[i]
+            end_idx = dataset.single_atom_end_idxs_by_conf[i]
 
+            energy = torch.sum(
+                self_energies.ase_tensor_for_indexing[
+                    dataset.properties_of_interest["atomic_numbers"][start_idx:end_idx]
+                ]
+            )
+            dataset[i] = {"E": dataset.properties_of_interest["E"][i] - energy}
         return dataset
 
     def train_dataloader(self) -> DataLoader:

@@ -462,7 +462,7 @@ def random_record_split(
     record_indices = torch.randperm(sum(lengths), generator=generator).tolist()  # type: ignore[arg-type, call-overload]
 
     indices_by_split: List[List[int]] = []
-    for offset, length in zip(torch._utils._accumulate(lengths), lengths):
+    for offset, length in zip(np.cumsum(lengths), lengths):
         indices = []
         for record_idx in record_indices[offset - length : offset]:
             indices.extend(dataset.get_series_mol_idxs(record_idx))

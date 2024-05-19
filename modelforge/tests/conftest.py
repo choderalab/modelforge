@@ -113,7 +113,11 @@ def initialize_dataset(
 
 @pytest.fixture(scope="session")
 def prep_temp_dir(tmp_path_factory):
-    fn = tmp_path_factory.mktemp("dataset_testing")
+    import uuid
+
+    filename = str(uuid.uuid4())
+
+    fn = tmp_path_factory.mktemp(f"dataset_test_{filename}")
     return fn
 
 

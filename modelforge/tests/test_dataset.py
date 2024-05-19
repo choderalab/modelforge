@@ -11,12 +11,6 @@ from modelforge.dataset import _ImplementedDatasets
 from modelforge.utils.prop import PropertyNames
 
 
-@pytest.fixture(scope="session")
-def prep_temp_dir(tmp_path_factory):
-    tmp_path_factory.mktemp("dataset_test")
-    return "dataset_test"
-
-
 def test_dataset_imported():
     """Sample test, will always pass so long as import statement worked."""
 
@@ -179,7 +173,9 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
-def test_file_existence_after_initialization(dataset_name, dataset_factory, prep_temp_dir):
+def test_file_existence_after_initialization(
+    dataset_name, dataset_factory, prep_temp_dir
+):
     """Test if files are created after dataset initialization."""
 
     local_cache_dir = str(prep_temp_dir)
@@ -189,9 +185,7 @@ def test_file_existence_after_initialization(dataset_name, dataset_factory, prep
     )
 
     if os.path.exists(f"{local_cache_dir}"):
-        os.rmdir(f"{local_cache_dir}/{data.gz_data_file['name']}")
-        os.rmdir(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
-        os.rmdir(f"{local_cache_dir}/{data.processed_data_file['name']}")
+        os.rmdir(f"{local_cache_dir}")
     assert not os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
     assert not os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
     assert not os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
@@ -399,7 +393,9 @@ def test_different_scenarios_of_file_availability(
 
 
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
-def test_data_item_format_of_datamodule(dataset_name, datamodule_factory, prep_temp_dir):
+def test_data_item_format_of_datamodule(
+    dataset_name, datamodule_factory, prep_temp_dir
+):
     """Test the format of individual data items in the dataset."""
     from typing import Dict
 

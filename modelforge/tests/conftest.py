@@ -117,8 +117,8 @@ def prep_temp_dir(tmp_path_factory):
 
     filename = str(uuid.uuid4())
 
-    fn = tmp_path_factory.mktemp(f"dataset_test_{filename}")
-    return fn
+    tmp_path_factory.mktemp(f"dataset_test/")
+    return f"dataset_test"
 
 
 @dataclass

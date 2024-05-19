@@ -91,7 +91,7 @@ def test_dataset_basic_operations():
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_different_properties_of_interest(dataset_name, dataset_factory, prep_temp_dir):
 
-    local_cache_dir = str(prep_temp_dir)
+    local_cache_dir = str(prep_temp_dir) + "/data_test"
 
     data = _ImplementedDatasets.get_dataset_class(
         dataset_name,
@@ -177,18 +177,20 @@ def test_file_existence_after_initialization(
     dataset_name, dataset_factory, prep_temp_dir
 ):
     """Test if files are created after dataset initialization."""
+    import contextlib
 
-    local_cache_dir = str(prep_temp_dir)
+    local_cache_dir = str(prep_temp_dir) + "/data_test"
 
     data = _ImplementedDatasets.get_dataset_class(dataset_name)(
         local_cache_dir=local_cache_dir, for_unit_testing=True
     )
 
-    if os.path.exists(f"{local_cache_dir}"):
-        os.rmdir(f"{local_cache_dir}")
-    assert not os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
-    assert not os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
-    assert not os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
+    with contextlib.suppress(FileNotFoundError):
+
+        os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
+        os.remove(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
+        os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
+
     dataset = dataset_factory(
         dataset_name=dataset_name,
         for_unit_testing=True,
@@ -201,13 +203,18 @@ def test_file_existence_after_initialization(
 
 
 def test_caching(prep_temp_dir):
-    local_cache_dir = str(prep_temp_dir)
-    local_cache_dir = local_cache_dir + "/data_test"
+    import contextlib
+
+    local_cache_dir = str(prep_temp_dir) + "/data_test"
     from modelforge.dataset.qm9 import QM9Dataset
 
     data = QM9Dataset(for_unit_testing=True, local_cache_dir=local_cache_dir)
 
     # first test that no file exists
+    with contextlib.suppress(FileNotFoundError):
+        os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
+        os.remove(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
+        os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
     assert not os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
     # the _file_validation method also checks the path in addition to the checksum
     assert (
@@ -273,7 +280,7 @@ def test_metadata_validation(prep_temp_dir):
     """When we generate an .npz file, we also write out metadata in a .json file which is used
     to validate if we can use .npz file, or we need to regenerate it."""
 
-    local_cache_dir = str(prep_temp_dir)
+    local_cache_dir = str(prep_temp_dir) + "/data_test"
 
     from modelforge.dataset.qm9 import QM9Dataset
 
@@ -325,7 +332,7 @@ def test_different_scenarios_of_file_availability(
     dataset_name, prep_temp_dir, dataset_factory
 ):
     """Test the behavior when raw and processed dataset files are removed."""
-    local_cache_dir = str(prep_temp_dir) + "/test_diff_scenarios"
+    local_cache_dir = str(prep_temp_dir) + "/test_diff_scenario"
 
     # this will download the .gz, the .hdf5 and the .npz files
     dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
@@ -399,7 +406,8 @@ def test_data_item_format_of_datamodule(
     """Test the format of individual data items in the dataset."""
     from typing import Dict
 
-    local_cache_dir = str(prep_temp_dir)
+    local_cache_dir = str(prep_temp_dir) + "/data_test"
+
     dm = datamodule_factory(
         dataset_name=dataset_name,
         batch_size=512,
@@ -537,7 +545,8 @@ def test_dataset_downloader(dataset_name, dataset_factory, prep_temp_dir):
     """
     Test the DatasetDownloader functionality.
     """
-    local_cache_dir = str(prep_temp_dir)
+    local_cache_dir = str(prep_temp_dir) + "/data_test"
+
     dataset = dataset_factory(
         dataset_name=dataset_name, local_cache_dir=local_cache_dir
     )

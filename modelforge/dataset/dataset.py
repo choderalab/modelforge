@@ -62,22 +62,24 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         self.dataset_statistics: Dict[str, float] = {}
 
         self.properties_of_interest["atomic_numbers"] = torch.from_numpy(
-            dataset[property_name.Z]
-        )
+            dataset[property_name.Z].flatten()
+        ).to(torch.int32)
         self.properties_of_interest["positions"] = torch.from_numpy(
             dataset[property_name.R]
-        )
-        self.properties_of_interest["E"] = torch.from_numpy(dataset[property_name.E])
+        ).to(torch.float32)
+        self.properties_of_interest["E"] = torch.from_numpy(
+            dataset[property_name.E]
+        ).to(torch.float64)
 
         if property_name.Q is not None:
             self.properties_of_interest["Q"] = torch.from_numpy(
                 dataset[property_name.Q]
-            )
+            ).to(torch.int32)
         else:
             # this is a per atom property, so it will match the first dimension of the geometry
             self.properties_of_interest["Q"] = torch.zeros(
                 (dataset[property_name.R].shape[0], 1)
-            )
+            ).to(torch.int32)
 
         if property_name.F is not None:
             self.properties_of_interest["F"] = torch.from_numpy(
@@ -198,25 +200,16 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         series_atom_end_idx = self.series_atom_start_idxs_by_conf[idx + 1]
         single_atom_start_idx = self.single_atom_start_idxs_by_conf[idx]
         single_atom_end_idx = self.single_atom_end_idxs_by_conf[idx]
-        atomic_numbers = (
-            self.properties_of_interest["atomic_numbers"][
-                single_atom_start_idx:single_atom_end_idx
-            ]
-            .clone()
-            .detach()
-            .squeeze(1)
-        ).to(torch.int64)
-        positions = (
-            self.properties_of_interest["positions"][
-                series_atom_start_idx:series_atom_end_idx
-            ]
-            .clone()
-            .detach()
-        ).to(torch.float32)
-        E = (
-            (self.properties_of_interest["E"][idx]).clone().detach().to(torch.float64)
-        )  # NOTE: upgrading to float64 to avoid precision issues
-        Q = (self.properties_of_interest["Q"][idx]).clone().detach().to(torch.int32)
+        atomic_numbers = self.properties_of_interest["atomic_numbers"][
+            single_atom_start_idx:single_atom_end_idx
+        ]
+        positions = self.properties_of_interest["positions"][
+            series_atom_start_idx:series_atom_end_idx
+        ]
+        E = self.properties_of_interest["E"][
+            idx
+        ]  # NOTE: upgrading to float64 to avoid precision issues
+        Q = self.properties_of_interest["Q"][idx]
 
         return {
             "atomic_numbers": atomic_numbers,

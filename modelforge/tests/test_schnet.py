@@ -22,7 +22,7 @@ from openff.units import unit
         [128, 120, 64, unit.Quantity(5.0, unit.angstrom), 3],
     ),
 )
-def test_schnet_forward(batch, model_parameter):
+def test_schnet_forward(single_batch_with_batchsize_64, model_parameter):
     """
     Test the forward pass of the Schnet model.
     """
@@ -41,8 +41,10 @@ def test_schnet_forward(batch, model_parameter):
         cutoff=cutoff,
         number_of_interaction_modules=nr_interaction_blocks,
     )
-    energy = schnet(batch.nnp_input).E
-    nr_of_mols = batch.nnp_input.atomic_subsystem_indices.unique().shape[0]
+    energy = schnet(single_batch_with_batchsize_64.nnp_input).E
+    nr_of_mols = single_batch_with_batchsize_64.nnp_input.atomic_subsystem_indices.unique().shape[
+        0
+    ]
 
     assert (
         len(energy) == nr_of_mols

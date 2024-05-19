@@ -46,6 +46,8 @@ class Loss:
         """
         nnp_input = batch.nnp_input
         F_true = batch.metadata.F.to(torch.float32)
+        if F_true.numel() < 1:
+            raise RuntimeError("No force can be calculated.")
         E_predict = energies["E_predict"]
         F_predict = -torch.autograd.grad(
             E_predict.sum(), nnp_input.positions, create_graph=False, retain_graph=False
@@ -154,7 +156,6 @@ class TrainingAdapter(pl.LightningModule):
         from typing import List
         from modelforge.potential import _Implemented_NNPs
 
-        print(f"{nnp_parameters=}")
         super().__init__()
         self.save_hyperparameters()
         # Extracting and instantiating the model from parameters

@@ -14,20 +14,13 @@ from modelforge.potential import NeuralNetworkPotentialFactory
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 @pytest.mark.parametrize("dataset_name", ["QM9"])
-def test_train_with_lightning(model_name, dataset_name):
+@pytest.mark.parametrize("include_force", [False, True])
+def test_train_with_lightning(model_name, dataset_name, include_force):
     """
     Test the forward pass for a given model and dataset.
-
-    Parameters
-    ----------
-    dataset : Type[BaseNNP]
-        The dataset class to be used in the test.
-    model : str
-        The model to be used in the test.
     """
 
     from lightning import Trainer
-    import torch
     from modelforge.train.training import TrainingAdapter
     from modelforge.dataset.dataset import DataModule
 
@@ -40,7 +33,10 @@ def test_train_with_lightning(model_name, dataset_name):
     dm.prepare_data()
     dm.setup()
     # Set up model
-    model = NeuralNetworkPotentialFactory.create_nnp("training", model_name)
+    training_parameters = {"include_force": include_force}
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        "training", model_name, training_parameters=training_parameters
+    )
 
     # Initialize PyTorch Lightning Trainer
     trainer = Trainer(max_epochs=2)
@@ -55,6 +51,34 @@ def test_train_with_lightning(model_name, dataset_name):
     trainer.save_checkpoint("test.chp")
     model = TrainingAdapter.load_from_checkpoint("test.chp")
     assert type(model) is not None
+
+
+@pytest.mark.parametrize("model_name", ["ANI2x"])
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+def test_loss(model_name, dataset_name):
+
+    from modelforge.dataset.dataset import DataModule
+
+    dm = DataModule(
+        name=dataset_name,
+        batch_size=512,
+        remove_self_energies=True,
+        for_unit_testing=True,
+    )
+    dm.prepare_data()
+    dm.setup()
+    model = NeuralNetworkPotentialFactory.create_nnp("inference", model_name)
+
+    from modelforge.train.training import EnergyAndForceLoss
+    import torch
+
+    loss = EnergyAndForceLoss(model)
+
+    r = loss.compute_loss(next(iter(dm.train_dataloader())))
+
+    loss = EnergyAndForceLoss(model, include_force=True)
+
+    r = loss.compute_loss(next(iter(dm.train_dataloader())))
 
 
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")

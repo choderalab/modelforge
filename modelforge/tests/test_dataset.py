@@ -418,7 +418,6 @@ def test_data_item_format_of_datamodule(
     assert isinstance(raw_data_item["atomic_numbers"], torch.Tensor)
     assert isinstance(raw_data_item["positions"], torch.Tensor)
     assert isinstance(raw_data_item["E"], torch.Tensor)
-    print(raw_data_item)
 
     assert (
         raw_data_item["atomic_numbers"].shape[0] == raw_data_item["positions"].shape[0]

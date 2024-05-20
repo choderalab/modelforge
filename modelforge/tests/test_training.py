@@ -13,7 +13,7 @@ from modelforge.potential import NeuralNetworkPotentialFactory
 
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
-@pytest.mark.parametrize("dataset_name", ["QM9"])
+@pytest.mark.parametrize("dataset_name", ["ANI2x"])
 @pytest.mark.parametrize("include_force", [False, True])
 def test_train_with_lightning(model_name, dataset_name, include_force):
     """
@@ -40,12 +40,12 @@ def test_train_with_lightning(model_name, dataset_name, include_force):
 
     # Initialize PyTorch Lightning Trainer
     trainer = Trainer(max_epochs=2)
-
+    
     # Run training loop and validate
     trainer.fit(
         model,
-        dm.train_dataloader(),
-        dm.val_dataloader(),
+        train_dataloaders=dm.train_dataloader(),
+        val_dataloaders=dm.val_dataloader(),
     )
     # save checkpoint
     trainer.save_checkpoint("test.chp")

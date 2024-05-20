@@ -55,18 +55,9 @@ def test_train_with_lightning(model_name, dataset_name, include_force):
 
 @pytest.mark.parametrize("model_name", ["ANI2x"])
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
-def test_loss(model_name, dataset_name):
+def test_loss(model_name, dataset_name, datamodule_factory):
 
-    from modelforge.dataset.dataset import DataModule
-
-    dm = DataModule(
-        name=dataset_name,
-        batch_size=512,
-        remove_self_energies=True,
-        for_unit_testing=True,
-    )
-    dm.prepare_data()
-    dm.setup()
+    dm = datamodule_factory(dataset_name=dataset_name)
     model = NeuralNetworkPotentialFactory.create_nnp("inference", model_name)
 
     from modelforge.train.training import EnergyAndForceLoss

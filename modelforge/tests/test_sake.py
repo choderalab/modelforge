@@ -25,12 +25,12 @@ def test_SAKE_init():
 from openff.units import unit
 
 
-def test_sake_forward(single_data_point):
+def test_sake_forward(single_batch_with_batchsize_64):
     """
     Test the forward pass of the SAKE model.
     """
     # get methane input
-    methane = single_data_point.nnp_input
+    methane = single_batch_with_batchsize_64.nnp_input
 
     sake = SAKE()
     energy = sake(methane).E
@@ -72,7 +72,7 @@ def test_sake_interaction_forward():
 
 @pytest.mark.parametrize("eq_atol", [3e-1])
 @pytest.mark.parametrize("h_atol", [8e-2])
-def test_sake_layer_equivariance(h_atol, eq_atol, single_data_point):
+def test_sake_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize_64):
     import torch
     from modelforge.potential.sake import SAKE
     from dataclasses import replace
@@ -88,7 +88,7 @@ def test_sake_layer_equivariance(h_atol, eq_atol, single_data_point):
     sake = SAKE(number_of_atom_features=nr_atom_basis)  # only for preparing inputs
 
     # get methane input
-    methane = single_data_point.nnp_input
+    methane = single_batch_with_batchsize_64.nnp_input
     perturbed_methane_input = replace(methane)
     perturbed_methane_input.positions = torch.matmul(methane.positions, rotation_matrix)
 
@@ -391,7 +391,7 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none):
     )
 
 
-def test_sake_model_against_reference(single_data_point):
+def test_sake_model_against_reference(single_batch_with_batchsize_1):
     nr_heads = 5
     nr_atom_basis = 11
     max_Z = 13
@@ -419,7 +419,7 @@ def test_sake_model_against_reference(single_data_point):
     )
 
     # get methane input
-    methane = single_data_point.nnp_input
+    methane = single_batch_with_batchsize_1.nnp_input
     pairlist_output = mf_sake.input_preparation.prepare_inputs(methane)
     prepared_methane = mf_sake.core_module._model_specific_input_preparation(
         methane, pairlist_output
@@ -551,12 +551,12 @@ def test_sake_model_against_reference(single_data_point):
     # assert torch.allclose(mf_out.E, torch.from_numpy(onp.array(ref_out[0])))
 
 
-def test_model_invariance(single_data_point):
+def test_model_invariance(single_batch_with_batchsize_1):
     from dataclasses import replace
 
     model = SAKE()
     # get methane input
-    methane = single_data_point.nnp_input
+    methane = single_batch_with_batchsize_1.nnp_input
 
     rotation_matrix = torch.tensor([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
     perturbed_methane_input = replace(methane)

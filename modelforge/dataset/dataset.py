@@ -62,22 +62,24 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         self.dataset_statistics: Dict[str, float] = {}
 
         self.properties_of_interest["atomic_numbers"] = torch.from_numpy(
-            dataset[property_name.Z]
-        )
+            dataset[property_name.Z].flatten()
+        ).to(torch.int32)
         self.properties_of_interest["positions"] = torch.from_numpy(
             dataset[property_name.R]
-        )
-        self.properties_of_interest["E"] = torch.from_numpy(dataset[property_name.E])
+        ).to(torch.float32)
+        self.properties_of_interest["E"] = torch.from_numpy(
+            dataset[property_name.E]
+        ).to(torch.float64)
 
         if property_name.Q is not None:
             self.properties_of_interest["Q"] = torch.from_numpy(
                 dataset[property_name.Q]
-            )
+            ).to(torch.int32)
         else:
             # this is a per atom property, so it will match the first dimension of the geometry
             self.properties_of_interest["Q"] = torch.zeros(
                 (dataset[property_name.R].shape[0], 1)
-            )
+            ).to(torch.int32)
 
         if property_name.F is not None:
             self.properties_of_interest["F"] = torch.from_numpy(
@@ -198,25 +200,16 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         series_atom_end_idx = self.series_atom_start_idxs_by_conf[idx + 1]
         single_atom_start_idx = self.single_atom_start_idxs_by_conf[idx]
         single_atom_end_idx = self.single_atom_end_idxs_by_conf[idx]
-        atomic_numbers = (
-            self.properties_of_interest["atomic_numbers"][
-                single_atom_start_idx:single_atom_end_idx
-            ]
-            .clone()
-            .detach()
-            .squeeze(1)
-        ).to(torch.int64)
-        positions = (
-            self.properties_of_interest["positions"][
-                series_atom_start_idx:series_atom_end_idx
-            ]
-            .clone()
-            .detach()
-        ).to(torch.float32)
-        E = (
-            (self.properties_of_interest["E"][idx]).clone().detach().to(torch.float64)
-        )  # NOTE: upgrading to float64 to avoid precision issues
-        Q = (self.properties_of_interest["Q"][idx]).clone().detach().to(torch.int32)
+        atomic_numbers = self.properties_of_interest["atomic_numbers"][
+            single_atom_start_idx:single_atom_end_idx
+        ]
+        positions = self.properties_of_interest["positions"][
+            series_atom_start_idx:series_atom_end_idx
+        ]
+        E = self.properties_of_interest["E"][
+            idx
+        ]  # NOTE: upgrading to float64 to avoid precision issues
+        Q = self.properties_of_interest["Q"][idx]
 
         return {
             "atomic_numbers": atomic_numbers,
@@ -749,6 +742,8 @@ class DataModule(pl.LightningDataModule):
         regression_ase: bool = False,
         force_download: bool = False,
         for_unit_testing: bool = False,
+        local_cache_dir: str = "./",
+        regenerate_cache: bool = False,
     ):
         """
         Initializes adData module for PyTorch Lightning handling data preparation and loading object with the specified configuration.
@@ -777,6 +772,10 @@ class DataModule(pl.LightningDataModule):
                 Whether to force the dataset to be downloaded, even if it is already cached.
             for_unit_testing : bool, defaults to False
                 Whether the dataset is being used for unit testing.
+            local_cache_dir : str, defaults to "./"
+                Directory to store the files.
+            regenerate_cache : bool, defaults to False
+                Whether to regenerate the cache.
         """
         super().__init__()
 
@@ -795,6 +794,8 @@ class DataModule(pl.LightningDataModule):
         self.train_dataset = None
         self.test_dataset = None
         self.val_dataset = None
+        self.local_cache_dir = local_cache_dir
+        self.regenerate_cache = regenerate_cache
 
     def prepare_data(
         self,
@@ -808,7 +809,10 @@ class DataModule(pl.LightningDataModule):
 
         dataset_class = _ImplementedDatasets.get_dataset_class(self.name)
         dataset = dataset_class(
-            force_download=self.force_download, for_unit_testing=self.for_unit_testing
+            force_download=self.force_download,
+            for_unit_testing=self.for_unit_testing,
+            local_cache_dir=self.local_cache_dir,
+            regenerate_cache=self.regenerate_cache,
         )
 
         dataset_ase = dataset.atomic_self_energies
@@ -865,15 +869,18 @@ class DataModule(pl.LightningDataModule):
 
         # Use provided ase dictionary
         if self.dict_atomic_self_energies:
+            log.info("Using provided atomic self energies from the provided ictionary.")
             atomic_self_energies = AtomicSelfEnergies(self.dict_atomic_self_energies)
 
         # Use regression to calculate ase
         elif self.dict_atomic_self_energies is None and self.regression_ase is True:
+            log.info("Calculating atomic self energies using regression.")
             atomic_self_energies = AtomicSelfEnergies(
                 energies=self.calculate_self_energies(torch_dataset)
             )
         # use self energies provided by the dataset (this should be the DEFAULT option)
         elif self.dict_atomic_self_energies is None and self.regression_ase is False:
+            log.info("Using atomic self energies provided by the dataset.")
             atomic_self_energies = dataset_ase
         else:
             raise RuntimeError()
@@ -951,16 +958,20 @@ class DataModule(pl.LightningDataModule):
         self_energies : Dict[int, float]
             Dictionary containing the self energies for each element in the dataset.
         """
+
         from tqdm import tqdm
 
         log.info("Removing self energies from the dataset")
         for i in tqdm(range(len(dataset)), desc="Removing Self Energies"):
-            atomic_numbers = list(dataset[i]["atomic_numbers"])
-            E = dataset[i]["E"]
-            for Z in atomic_numbers:
-                E -= self_energies[int(Z)]
-            dataset[i] = {"E": E}
+            start_idx = dataset.single_atom_start_idxs_by_conf[i]
+            end_idx = dataset.single_atom_end_idxs_by_conf[i]
 
+            energy = torch.sum(
+                self_energies.ase_tensor_for_indexing[
+                    dataset.properties_of_interest["atomic_numbers"][start_idx:end_idx]
+                ]
+            )
+            dataset[i] = {"E": dataset.properties_of_interest["E"][i] - energy}
         return dataset
 
     def train_dataloader(self) -> DataLoader:

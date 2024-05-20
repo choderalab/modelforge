@@ -6,46 +6,9 @@ import pytest
 import torch
 
 from modelforge.dataset.dataset import DatasetFactory, TorchDataset
-from modelforge.dataset import QM9Dataset
+from modelforge.dataset import _ImplementedDatasets
 
-DATASETS = [QM9Dataset]
 from modelforge.utils.prop import PropertyNames
-
-
-@pytest.fixture(scope="session")
-def prep_temp_dir(tmp_path_factory):
-    fn = tmp_path_factory.mktemp("dataset_test")
-    return fn
-
-
-# @pytest.fixture(
-#     autouse=True,
-# )
-# def cleanup_files():
-#     """Fixture to clean up temporary files before and after test execution."""
-#
-#     def _cleanup():
-#         for dataset in DATASETS:
-#             dataset_name = dataset().dataset_name
-#
-#             files = [
-#                 f"{dataset_name}_cache.hdf5",
-#                 f"{dataset_name}_cache.hdf5.gz",
-#                 f"{dataset_name}_processed.npz",
-#                 f"{dataset_name}_subset_cache.hdf5",
-#                 f"{dataset_name}_subset_cache.hdf5.gz",
-#                 f"{dataset_name}_subset_processed.npz",
-#             ]
-#             for f in files:
-#                 try:
-#                     os.remove(f)
-#                     print(f"Deleted {f}")
-#                 except FileNotFoundError:
-#                     print(f"{f} not found")
-#
-#     _cleanup()
-#     yield  # This is where the test will execute
-#     _cleanup()
 
 
 def test_dataset_imported():
@@ -125,67 +88,133 @@ def test_dataset_basic_operations():
         )
 
 
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_different_properties_of_interest(dataset):
-    factory = DatasetFactory()
-    data = dataset(for_unit_testing=True, regenerate_cache=True)
-    assert data.properties_of_interest == [
-        "geometry",
-        "atomic_numbers",
-        "internal_energy_at_0K",
-        "charges",
-    ]
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+def test_different_properties_of_interest(dataset_name, dataset_factory, prep_temp_dir):
 
-    dataset = factory.create_dataset(data)
+    local_cache_dir = str(prep_temp_dir) + "/data_test"
+
+    data = _ImplementedDatasets.get_dataset_class(
+        dataset_name,
+    )(for_unit_testing=True, local_cache_dir=local_cache_dir)
+    if dataset_name == "QM9":
+        assert data.properties_of_interest == [
+            "geometry",
+            "atomic_numbers",
+            "internal_energy_at_0K",
+            "charges",
+        ]
+
+        data.properties_of_interest = [
+            "internal_energy_at_0K",
+            "geometry",
+            "atomic_numbers",
+        ]
+        assert data.properties_of_interest == [
+            "internal_energy_at_0K",
+            "geometry",
+            "atomic_numbers",
+        ]
+
+    elif dataset_name == "ANI1x" or dataset_name == "ANI2x":
+        assert data.properties_of_interest == [
+            "geometry",
+            "atomic_numbers",
+            "wb97x_dz.energy",
+            "wb97x_dz.forces",
+        ]
+
+        data.properties_of_interest = [
+            "internal_energy_at_0K",
+            "geometry",
+            "atomic_numbers",
+            "wb97x_dz.energy",
+            "wb97x_dz.forces",
+        ]
+        assert data.properties_of_interest == [
+            "internal_energy_at_0K",
+            "geometry",
+            "atomic_numbers",
+            "wb97x_dz.energy",
+            "wb97x_dz.forces",
+        ]
+    elif dataset_name == "SPICE2":
+        assert data.properties_of_interest == [
+            "geometry",
+            "atomic_numbers",
+            "dft_total_energy",
+            "dft_total_force",
+            "mbis_charges",
+        ]
+
+        data.properties_of_interest = [
+            "dft_total_energy",
+            "geometry",
+            "atomic_numbers",
+            "mbis_charges",
+        ]
+        assert data.properties_of_interest == [
+            "dft_total_energy",
+            "geometry",
+            "atomic_numbers",
+            "mbis_charges",
+        ]
+
+    dataset = dataset_factory(
+        dataset_name=dataset_name, local_cache_dir=local_cache_dir
+    )
+
     raw_data_item = dataset[0]
     assert isinstance(raw_data_item, dict)
     assert len(raw_data_item) == 6  # 6 properties are returned
 
-    data.properties_of_interest = [
-        "internal_energy_at_0K",
-        "geometry",
-        "atomic_numbers",
-    ]
-    assert data.properties_of_interest == [
-        "internal_energy_at_0K",
-        "geometry",
-        "atomic_numbers",
-    ]
-
-    dataset = factory.create_dataset(data)
     raw_data_item = dataset[0]
-    print(raw_data_item)
     assert isinstance(raw_data_item, dict)
-    assert len(raw_data_item) != 3
+    assert len(raw_data_item) == 6  # 6 properties are returned
 
 
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_file_existence_after_initialization(dataset, prep_temp_dir):
+@pytest.mark.parametrize("dataset_name", ["QM9"])
+def test_file_existence_after_initialization(
+    dataset_name, dataset_factory, prep_temp_dir
+):
     """Test if files are created after dataset initialization."""
+    import contextlib
 
-    local_cache_dir = str(prep_temp_dir)
+    local_cache_dir = str(prep_temp_dir) + "/data_test"
 
-    factory = DatasetFactory()
-    data = dataset(for_unit_testing=True, local_cache_dir=local_cache_dir)
+    data = _ImplementedDatasets.get_dataset_class(dataset_name)(
+        local_cache_dir=local_cache_dir, for_unit_testing=True
+    )
 
-    assert not os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
-    assert not os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
-    assert not os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
+    with contextlib.suppress(FileNotFoundError):
 
-    dataset = factory.create_dataset(data)
+        os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
+        os.remove(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
+        os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
+
+    dataset = dataset_factory(
+        dataset_name=dataset_name,
+        for_unit_testing=True,
+        local_cache_dir=local_cache_dir,
+    )
+
     assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
     assert os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
     assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
 
 
 def test_caching(prep_temp_dir):
-    local_cache_dir = str(prep_temp_dir)
-    local_cache_dir = local_cache_dir + "/data_test"
+    import contextlib
+
+    local_cache_dir = str(prep_temp_dir) + "/data_test"
     from modelforge.dataset.qm9 import QM9Dataset
 
     data = QM9Dataset(for_unit_testing=True, local_cache_dir=local_cache_dir)
 
     # first test that no file exists
+    with contextlib.suppress(FileNotFoundError):
+        os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
+        os.remove(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
+        os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
     assert not os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
     # the _file_validation method also checks the path in addition to the checksum
     assert (
@@ -251,7 +280,7 @@ def test_metadata_validation(prep_temp_dir):
     """When we generate an .npz file, we also write out metadata in a .json file which is used
     to validate if we can use .npz file, or we need to regenerate it."""
 
-    local_cache_dir = str(prep_temp_dir)
+    local_cache_dir = str(prep_temp_dir) + "/data_test"
 
     from modelforge.dataset.qm9 import QM9Dataset
 
@@ -298,21 +327,23 @@ def test_metadata_validation(prep_temp_dir):
     assert data._metadata_validation("qm9_test.json", local_cache_dir) == False
 
 
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_different_scenarios_of_file_availability(dataset, prep_temp_dir):
+@pytest.mark.parametrize("dataset_name", ["QM9"])
+def test_different_scenarios_of_file_availability(
+    dataset_name, prep_temp_dir, dataset_factory
+):
     """Test the behavior when raw and processed dataset files are removed."""
-
-    local_cache_dir = str(prep_temp_dir) + "/test_diff_scenarios"
-
-    factory = DatasetFactory()
-    data = dataset(for_unit_testing=True, local_cache_dir=local_cache_dir)
+    local_cache_dir = str(prep_temp_dir) + "/test_diff_scenario"
 
     # this will download the .gz, the .hdf5 and the .npz files
-    factory.create_dataset(data)
+    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
+    # we initialize this so that we have the correct parameters to compare against
+    data = _ImplementedDatasets.get_dataset_class(dataset_name)(
+        for_unit_testing=True, local_cache_dir=local_cache_dir
+    )
 
     # first check if we remove the npz file, rerunning it will regenerate it
     os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
-    factory.create_dataset(data)
+    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
 
     assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
 
@@ -320,7 +351,7 @@ def test_different_scenarios_of_file_availability(dataset, prep_temp_dir):
     os.remove(
         f"{local_cache_dir}/{data.processed_data_file['name'].replace('npz', 'json')}"
     )
-    factory.create_dataset(data)
+    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
     assert os.path.exists(
         f"{local_cache_dir}/{data.processed_data_file['name'].replace('npz', 'json')}"
     )
@@ -329,7 +360,7 @@ def test_different_scenarios_of_file_availability(dataset, prep_temp_dir):
 
     os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
     os.remove(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
-    factory.create_dataset(data)
+    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
 
     assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
     assert os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
@@ -337,17 +368,17 @@ def test_different_scenarios_of_file_availability(dataset, prep_temp_dir):
     # now remove the gz file; rerunning should NOT download, it will use the npz
     os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
 
-    factory.create_dataset(data)
+    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
     assert not os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
 
     # now let us remove the hdf5 file, it should use the npz file
     os.remove(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
-    factory.create_dataset(data)
+    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
     assert not os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
 
     # now if we remove the npz, it will redownload the gz file and unzip it, then process it
     os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
-    factory.create_dataset(data)
+    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
     assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
     assert os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
     assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
@@ -355,26 +386,34 @@ def test_different_scenarios_of_file_availability(dataset, prep_temp_dir):
     # now we will remove the gz file, and set force_download to True
     # this should now regenerate the gz file, even though others are present
 
-    data = dataset(
-        for_unit_testing=True, local_cache_dir=local_cache_dir, force_download=True
-    )
-    factory.create_dataset(data)
+    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
     assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
     assert os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
     assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
 
     # now we will remove the gz file and run it again
     os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
-    factory.create_dataset(data)
+    dataset_factory(
+        dataset_name=dataset_name, local_cache_dir=local_cache_dir, force_download=True
+    )
     assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
 
 
-def test_data_item_format(initialized_dataset):
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+def test_data_item_format_of_datamodule(
+    dataset_name, datamodule_factory, prep_temp_dir
+):
     """Test the format of individual data items in the dataset."""
     from typing import Dict
 
-    dataset = initialized_dataset
-    raw_data_item = dataset.torch_dataset[0]
+    local_cache_dir = str(prep_temp_dir) + "/data_test"
+
+    dm = datamodule_factory(
+        dataset_name=dataset_name,
+        batch_size=512,
+    )
+
+    raw_data_item = dm.torch_dataset[0]
     assert isinstance(raw_data_item, Dict)
     assert isinstance(raw_data_item["atomic_numbers"], torch.Tensor)
     assert isinstance(raw_data_item["positions"], torch.Tensor)
@@ -386,10 +425,11 @@ def test_data_item_format(initialized_dataset):
     )
 
 
-def test_dataset_generation(initialized_dataset):
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+def test_dataset_generation(dataset_name, datamodule_factory):
     """Test the splitting of the dataset."""
 
-    dataset = initialized_dataset
+    dataset = datamodule_factory(dataset_name=dataset_name)
     train_dataloader = dataset.train_dataloader()
     val_dataloader = dataset.val_dataloader()
     test_dataloader = dataset.test_dataloader()
@@ -434,19 +474,21 @@ from modelforge.dataset.utils import (
         RandomRecordSplittingStrategy,
     ],
 )
-def test_dataset_splitting(splitting_strategy, datasets_to_test):
+@pytest.mark.parametrize("dataset_name", ["QM9"])
+def test_dataset_splitting(
+    splitting_strategy, dataset_name, datamodule_factory, get_dataset_container_fix
+):
     """Test random_split on the the dataset."""
     from modelforge.dataset import DataModule
 
-    dm = DataModule(
-        name=datasets_to_test.name,
+    dm = datamodule_factory(
+        dataset_name=dataset_name,
         batch_size=512,
         splitting_strategy=splitting_strategy(),
         for_unit_testing=True,
         remove_self_energies=False,
     )
-    dm.prepare_data()
-    dm.setup()
+
     train_dataset, val_dataset, test_dataset = (
         dm.train_dataset,
         dm.val_dataset,
@@ -454,20 +496,19 @@ def test_dataset_splitting(splitting_strategy, datasets_to_test):
     )
 
     energy = train_dataset[0]["E"].item()
-
+    dataset_to_test = get_dataset_container_fix(dataset_name)
     if splitting_strategy == RandomSplittingStrategy:
-        assert np.isclose(energy, datasets_to_test.expected_E_random_split)
+        assert np.isclose(energy, dataset_to_test.expected_E_random_split)
     elif splitting_strategy == FirstComeFirstServeSplittingStrategy:
-        assert np.isclose(energy, datasets_to_test.expected_E_fcfs_split)
-    dm = DataModule(
-        name=datasets_to_test.name,
+        assert np.isclose(energy, dataset_to_test.expected_E_fcfs_split)
+
+    dm = datamodule_factory(
+        dataset_name=dataset_name,
         batch_size=512,
         splitting_strategy=splitting_strategy(split=[0.6, 0.3, 0.1]),
         for_unit_testing=True,
         remove_self_energies=False,
     )
-    dm.prepare_data()
-    dm.setup()
 
     train_dataset2, val_dataset2, test_dataset2 = (
         dm.train_dataset,
@@ -499,62 +540,61 @@ def test_dataset_splitting(splitting_strategy, datasets_to_test):
         print(f"AssertionError raised: {excinfo}")
 
 
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_dataset_downloader(dataset, prep_temp_dir):
+@pytest.mark.parametrize("dataset_name", ["QM9"])
+def test_dataset_downloader(dataset_name, dataset_factory, prep_temp_dir):
     """
     Test the DatasetDownloader functionality.
     """
-    local_cache_dir = str(prep_temp_dir)
+    local_cache_dir = str(prep_temp_dir) + "/data_test"
 
-    data = dataset(for_unit_testing=True, local_cache_dir=local_cache_dir)
-    data._download()
+    dataset = dataset_factory(
+        dataset_name=dataset_name, local_cache_dir=local_cache_dir
+    )
+    data = _ImplementedDatasets.get_dataset_class(dataset_name)(
+        local_cache_dir=local_cache_dir, for_unit_testing=True
+    )
     assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
 
 
-def test_numpy_dataset_assignment(datasets_to_test):
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+def test_numpy_dataset_assignment(dataset_name):
     """
     Test if the numpy_dataset attribute is correctly assigned after processing or loading.
     """
     from modelforge.dataset import _ImplementedDatasets
 
     factory = DatasetFactory()
-    data = _ImplementedDatasets.get_dataset_class(datasets_to_test.name)()
+    data = _ImplementedDatasets.get_dataset_class(dataset_name)(for_unit_testing=True)
     factory._load_or_process_data(data)
 
     assert hasattr(data, "numpy_data")
     assert isinstance(data.numpy_data, np.lib.npyio.NpzFile)
 
 
-def test_self_energy(datasets_to_test):
-
-    from modelforge.dataset.dataset import DataModule
+@pytest.mark.parametrize("dataset_name", ["QM9"])
+def test_self_energy(dataset_name, datamodule_factory):
 
     # test the self energy calculation on the QM9 dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
     # prepare reference value
-    dm = DataModule(
-        name=datasets_to_test.name,
+    dm = datamodule_factory(
+        dataset_name=dataset_name,
         batch_size=512,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        normalize=False,
-        remove_self_energies=False,
         for_unit_testing=True,
+        remove_self_energies=False,
     )
-    dm.prepare_data()
-    dm.setup()
+
     methane_energy_reference = float(dm.train_dataset[0]["E"])
     assert np.isclose(methane_energy_reference, -106277.4161)
 
     # Scenario 1: dataset contains self energies
-    dm = DataModule(
-        name=datasets_to_test.name,
+    dm = datamodule_factory(
+        dataset_name=dataset_name,
         batch_size=512,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        normalize=False,
     )
-    dm.prepare_data()
-    dm.setup()
     # it is saved in the dataset statistics
     assert dm.dataset_statistics
     self_energies = dm.dataset_statistics.atomic_self_energies
@@ -571,17 +611,14 @@ def test_self_energy(datasets_to_test):
 
     # Scenario 2: dataset may or may not contain self energies
     # but user wants to use least square regression to calculate the energies
-    dm = DataModule(
-        name=datasets_to_test.name,
+    dm = datamodule_factory(
+        dataset_name=dataset_name,
         batch_size=512,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        normalize=False,
         regression_ase=True,
         remove_self_energies=True,
         for_unit_testing=True,
     )
-    dm.prepare_data()
-    dm.setup()
 
     # it is saved in the dataset statistics
     assert dm.dataset_statistics
@@ -613,33 +650,27 @@ def test_self_energy(datasets_to_test):
         -197492.33270235246,
     )
 
-    dm = DataModule(
-        name=datasets_to_test.name,
+    dm = datamodule_factory(
+        dataset_name=dataset_name,
         batch_size=512,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        normalize=False,
         regression_ase=True,
         remove_self_energies=True,
         for_unit_testing=True,
     )
-    dm.prepare_data()
-    dm.setup()
     # it is saved in the dataset statistics
     assert dm.train_dataset
     self_energies = dm.dataset_statistics.atomic_self_energies
     # Test that self energies are correctly removed
     for regression in [True, False]:
-        dm = DataModule(
-            name=datasets_to_test.name,
+        dm = datamodule_factory(
+            dataset_name=dataset_name,
             batch_size=512,
             splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-            normalize=False,
             regression_ase=regression,
             remove_self_energies=True,
             for_unit_testing=True,
         )
-        dm.prepare_data()
-        dm.setup()
         # Extract the first molecule (methane)
         # double check that it is methane
         k = dm.train_dataset[0]

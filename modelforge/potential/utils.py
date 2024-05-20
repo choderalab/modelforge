@@ -486,14 +486,6 @@ class AngularSymmetryFunction(nn.Module):
             self.register_buffer("ShfZ", ShfZ)
             self.register_buffer("ShfA", ShfA)
 
-        log.debug(
-            f"""
-RadialSymmetryFunction: 
-Rca={_unitless_angular_cutoff} 
-ShfZ={ShfZ}, 
-ShFa={ShfA}, 
-eta={EtaA}"""
-        )
 
         # The length of angular subaev of a single species
         self.angular_sublength = self.ShfA.numel() * self.ShfZ.numel()
@@ -851,6 +843,7 @@ class SAKERadialBasisFunction(RadialBasisFunction):
         centers: torch.Tensor,
         scale_factors: torch.Tensor,
     ) -> torch.Tensor:
+        
         return torch.exp(
             -scale_factors
             * (

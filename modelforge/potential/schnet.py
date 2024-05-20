@@ -372,7 +372,7 @@ from .models import InputPreparation, NNPInput, BaseNetwork
 class SchNet(BaseNetwork):
     def __init__(
         self,
-        max_Z: int = 100,
+        max_Z: int = 101,
         number_of_atom_features: int = 64,
         number_of_radial_basis_functions: int = 20,
         number_of_interaction_modules: int = 3,
@@ -381,7 +381,11 @@ class SchNet(BaseNetwork):
         shared_interactions: bool = False,
     ) -> None:
         """
-        Initialize the SchNet class with neighborlist.
+        Initialize the SchNet network.
+        
+        Schütt, Kindermans, Sauceda, Chmiela, Tkatchenko, Müller:
+        SchNet: A continuous-filter convolutional neural network for modeling quantum
+        interactions.
 
         Parameters
         ----------

@@ -238,7 +238,7 @@ class SAKEInteraction(nn.Module):
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             max_distance=cutoff,
             dtype=torch.float32,
-            trainable=True,
+            trainable=False,
             radial_basis_function=SAKERadialBasisFunction(0.0 * unit.nanometer),
         )
 

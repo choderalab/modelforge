@@ -66,13 +66,11 @@ def test_loss(model_name, dataset_name, datamodule_factory):
 
     loss = EnergyAndForceLoss(model)
 
-    try:
-        r = loss.compute_loss(next(iter(dm.train_dataloader())))
-    except IndexError as excinfo:
-        log.warning(f"IndexError raised: {excinfo}")
-    loss = EnergyAndForceLoss(model, include_force=True)
-
     r = loss.compute_loss(next(iter(dm.train_dataloader())))
+
+    if dataset_name != "QM9":
+        loss = EnergyAndForceLoss(model, include_force=True)
+        r = loss.compute_loss(next(iter(dm.train_dataloader())))
 
 
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")

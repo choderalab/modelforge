@@ -816,17 +816,37 @@ class DataModule(pl.LightningDataModule):
             regenerate_cache=self.regenerate_cache,
         )
 
+        # obtain the atomic self energies from the dataset
         dataset_ase = dataset.atomic_self_energies
         torch_dataset = self._create_torch_dataset(dataset)
-        self.dataset_statistics = self._create_dataset_statistics(
+
+        # depending on the control flow that is set in the __init__,
+        # either use the atomic self energies of the dataset, recalculate it on the fly
+        # or use the provided dictionary
+        atomic_self_energies = self._calculate_atomic_self_energies(
             torch_dataset, dataset_ase
         )
 
+        # remove the self energies if requested
         if self.remove_self_energies:
+            log.debug("Remove self energies ...")
             self._process_self_energies(
-                torch_dataset, self.dataset_statistics.atomic_self_energies
+                torch_dataset, atomic_self_energies
             )
 
+        # calculate the dataset statistic of the dataset
+        # This is done __after__ self energies are removed (if requested)
+
+        from modelforge.dataset.utils import calculate_mean_and_variance
+
+        stats = calculate_mean_and_variance(torch_dataset)
+        self.dataset_statistics = DatasetStatistics(
+            scaling_stddev=stats["stddev"],
+            scaling_mean=stats["mean"],
+            atomic_self_energies=atomic_self_energies,
+        )
+
+        # normalize dataset
         if self.normalize:
             self._normalize_dataset(torch_dataset)
 
@@ -839,11 +859,11 @@ class DataModule(pl.LightningDataModule):
 
     def _process_self_energies(
         self, torch_dataset: TorchDataset, atomic_self_energies: "AtomicSelfEnergies"
-    ) -> None:
+    ):
         """Calculate and subtract self energies from the dataset."""
         atomic_self_energies = self.dict_atomic_self_energies or atomic_self_energies
         if self.regression_ase and not self.dict_atomic_self_energies:
-            self_energies = self.calculate_self_energies(torch_dataset)
+            atomic_self_energies = self.calculate_self_energies(torch_dataset)
         self._subtract_self_energies(torch_dataset, atomic_self_energies)
         self._save_self_energies(atomic_self_energies)
 
@@ -861,9 +881,9 @@ class DataModule(pl.LightningDataModule):
         stats = calculate_mean_and_variance(torch_dataset)
         normalize_energies(torch_dataset, stats)
 
-    def _create_dataset_statistics(
+    def _calculate_atomic_self_energies(
         self, torch_dataset, dataset_ase
-    ) -> DatasetStatistics:
+    ) -> "AtomicSelfEnergies":
 
         from modelforge.dataset.utils import calculate_mean_and_variance
         from modelforge.potential.processing import AtomicSelfEnergies
@@ -871,27 +891,20 @@ class DataModule(pl.LightningDataModule):
         # Use provided ase dictionary
         if self.dict_atomic_self_energies:
             log.info("Using provided atomic self energies from the provided ictionary.")
-            atomic_self_energies = AtomicSelfEnergies(self.dict_atomic_self_energies)
+            return AtomicSelfEnergies(self.dict_atomic_self_energies)
 
         # Use regression to calculate ase
         elif self.dict_atomic_self_energies is None and self.regression_ase is True:
             log.info("Calculating atomic self energies using regression.")
-            atomic_self_energies = AtomicSelfEnergies(
+            return AtomicSelfEnergies(
                 energies=self.calculate_self_energies(torch_dataset)
             )
         # use self energies provided by the dataset (this should be the DEFAULT option)
         elif self.dict_atomic_self_energies is None and self.regression_ase is False:
             log.info("Using atomic self energies provided by the dataset.")
-            atomic_self_energies = dataset_ase
+            return dataset_ase
         else:
             raise RuntimeError()
-
-        stats = calculate_mean_and_variance(torch_dataset)
-        return DatasetStatistics(
-            scaling_stddev=stats["stddev"],
-            scaling_mean=stats["mean"],
-            atomic_self_energies=atomic_self_energies,
-        )
 
     def _cache_dataset(self, torch_dataset):
         """Cache the dataset and its statistics using PyTorch's serialization."""
@@ -973,7 +986,6 @@ class DataModule(pl.LightningDataModule):
                 ]
             )
             dataset[i] = {"E": dataset.properties_of_interest["E"][i] - energy}
-        return dataset
 
     def train_dataloader(self) -> DataLoader:
         """

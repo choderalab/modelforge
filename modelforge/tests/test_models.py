@@ -55,6 +55,84 @@ def test_model_factory(model_name, simulation_environment):
     assert type(model) == TrainingAdapter
 
 
+def test_energy_postprocessing():
+    # setup test dataset
+    from modelforge.dataset.dataset import DataModule
+    from modelforge.potential.ani import ANI2x
+
+    # test the self energy calculation on the QM9 dataset
+    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
+
+    # -------------------------------#
+    # Test that we can calculate the normalize energies correctly
+
+    dm = DataModule(
+        name="QM9",
+        batch_size=10,
+        for_unit_testing=True,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        remove_self_energies=True,
+        normalize=False,
+    )
+    dm.prepare_data()
+    dm.setup()
+
+    batch = next(iter(dm.train_dataloader()))
+    unnormalized_E = batch.metadata.E.numpy()
+    import numpy as np
+
+    mean = np.average(unnormalized_E)
+    stddev = np.std(unnormalized_E)
+
+    # get methane input
+    batch = next(iter(dm.train_dataloader()))
+    import torch
+
+    # prepare reference value
+    dm = DataModule(
+        name="QM9",
+        batch_size=10,
+        for_unit_testing=True,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        remove_self_energies=True,
+        normalize=True,
+    )
+    dm.prepare_data()
+    dm.setup()
+
+    # check that normalized energies are correct
+    torch.allclose(
+        batch.metadata.E,
+        torch.tensor(
+            [
+                [3.3802],
+                [3.8950],
+                [4.1706],
+                [3.4256],
+                [3.7872],
+                [3.5412],
+                [2.1927],
+                [3.0125],
+                [2.1950],
+                [2.5427],
+            ],
+            dtype=torch.float64,
+        ),
+    )
+
+    dataset_statistics = dm.dataset_statistics
+
+    torch.isclose(
+        dataset_statistics.scaling_mean,
+        torch.tensor(-1817.4701091224313, dtype=torch.float64),
+    )
+
+    torch.isclose(
+        dataset_statistics.scaling_stddev,
+        torch.tensor(646.5618628515705, dtype=torch.float64),
+    )
+
+
 def test_energy_scaling_and_offset():
     # setup test dataset
     from modelforge.dataset.dataset import DataModule

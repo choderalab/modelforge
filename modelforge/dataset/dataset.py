@@ -1051,7 +1051,7 @@ def collate_conformers(conf_list: List[Dict[str, torch.Tensor]]) -> "BatchData":
     atomic_numbers_cat = torch.cat(Z_list)
     total_charge_cat = torch.cat(Q_list)
     positions_cat = torch.cat(R_list).requires_grad_(True)
-    forces_cat = torch.cat(F_list)
+    F_cat = torch.cat(F_list).to(torch.float64)
     E_stack = torch.stack(E_list)
     nnp_input = NNPInput(
         atomic_numbers=atomic_numbers_cat,
@@ -1063,7 +1063,7 @@ def collate_conformers(conf_list: List[Dict[str, torch.Tensor]]) -> "BatchData":
     )
     metadata = Metadata(
         E=E_stack,
-        F=torch.tensor(forces_cat, dtype=torch.float64),
+        F=F_cat,
         atomic_subsystem_counts=torch.tensor(
             atomic_subsystem_counts, dtype=torch.int32
         ),

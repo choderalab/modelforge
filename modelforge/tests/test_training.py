@@ -13,7 +13,7 @@ from modelforge.potential import NeuralNetworkPotentialFactory
 
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
-@pytest.mark.parametrize("dataset_name", ["ANI2x"])
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 @pytest.mark.parametrize("include_force", [False, True])
 def test_train_with_lightning(model_name, dataset_name, include_force):
     """
@@ -28,7 +28,6 @@ def test_train_with_lightning(model_name, dataset_name, include_force):
         name=dataset_name,
         batch_size=512,
         remove_self_energies=True,
-        for_unit_testing=True,
     )
     dm.prepare_data()
     dm.setup()
@@ -39,8 +38,8 @@ def test_train_with_lightning(model_name, dataset_name, include_force):
     )
 
     # Initialize PyTorch Lightning Trainer
-    trainer = Trainer(max_epochs=2)
-    
+    trainer = Trainer(max_epochs=2, limit_train_batches=0.1, limit_val_batches=0.05)
+
     # Run training loop and validate
     trainer.fit(
         model,

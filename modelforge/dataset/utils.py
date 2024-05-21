@@ -126,7 +126,7 @@ def calculate_mean_and_variance(
 from openff.units import unit
 
 
-def calculate_self_energies(torch_dataset, collate_fn) -> Dict[str, unit.Quantity]:
+def _calculate_self_energies(torch_dataset, collate_fn) -> Dict[str, unit.Quantity]:
     from torch.utils.data import DataLoader
     import torch
     from loguru import logger as log

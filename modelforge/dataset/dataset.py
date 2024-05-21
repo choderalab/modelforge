@@ -817,7 +817,7 @@ class DataModule(pl.LightningDataModule):
         )
 
         # obtain the atomic self energies from the dataset
-        dataset_ase = dataset.atomic_self_energies
+        dataset_ase = dataset.atomic_self_energies.energies
         torch_dataset = self._create_torch_dataset(dataset)
 
         # depending on the control flow that is set in the __init__,
@@ -827,12 +827,15 @@ class DataModule(pl.LightningDataModule):
             torch_dataset, dataset_ase
         )
 
+        # wrap them in the AtomicSelfEnergy class
+        from modelforge.potential.processing import AtomicSelfEnergies
+
+        atomic_self_energies = AtomicSelfEnergies(atomic_self_energies)
+
         # remove the self energies if requested
         if self.remove_self_energies:
             log.debug("Remove self energies ...")
-            self._process_self_energies(
-                torch_dataset, atomic_self_energies
-            )
+            self._process_self_energies(torch_dataset, atomic_self_energies)
 
         # calculate the dataset statistic of the dataset
         # This is done __after__ self energies are removed (if requested)
@@ -861,9 +864,13 @@ class DataModule(pl.LightningDataModule):
         self, torch_dataset: TorchDataset, atomic_self_energies: "AtomicSelfEnergies"
     ):
         """Calculate and subtract self energies from the dataset."""
-        atomic_self_energies = self.dict_atomic_self_energies or atomic_self_energies
+        from modelforge.potential.processing import AtomicSelfEnergies
+
         if self.regression_ase and not self.dict_atomic_self_energies:
-            atomic_self_energies = self.calculate_self_energies(torch_dataset)
+            atomic_self_energies = AtomicSelfEnergies(
+                self.calculate_self_energies(torch_dataset)
+            )
+
         self._subtract_self_energies(torch_dataset, atomic_self_energies)
         self._save_self_energies(atomic_self_energies)
 
@@ -883,22 +890,19 @@ class DataModule(pl.LightningDataModule):
 
     def _calculate_atomic_self_energies(
         self, torch_dataset, dataset_ase
-    ) -> "AtomicSelfEnergies":
+    ) -> Dict[str, float]:
 
         from modelforge.dataset.utils import calculate_mean_and_variance
-        from modelforge.potential.processing import AtomicSelfEnergies
 
         # Use provided ase dictionary
         if self.dict_atomic_self_energies:
             log.info("Using provided atomic self energies from the provided ictionary.")
-            return AtomicSelfEnergies(self.dict_atomic_self_energies)
+            return self.dict_atomic_self_energies
 
         # Use regression to calculate ase
         elif self.dict_atomic_self_energies is None and self.regression_ase is True:
             log.info("Calculating atomic self energies using regression.")
-            return AtomicSelfEnergies(
-                energies=self.calculate_self_energies(torch_dataset)
-            )
+            return self.calculate_self_energies(torch_dataset)
         # use self energies provided by the dataset (this should be the DEFAULT option)
         elif self.dict_atomic_self_energies is None and self.regression_ase is False:
             log.info("Using atomic self energies provided by the dataset.")
@@ -936,7 +940,7 @@ class DataModule(pl.LightningDataModule):
 
     def calculate_self_energies(
         self, torch_dataset: TorchDataset, collate: bool = True
-    ) -> Dict[int, float]:
+    ) -> Dict[str, float]:
         """
         Calculates the self energies for each atomic number in the dataset by performing a least squares regression.
 
@@ -949,19 +953,21 @@ class DataModule(pl.LightningDataModule):
 
         Returns
         -------
-        Dict[int, float]
-            A dictionary mapping atomic numbers to their calculated self energies.
+        Dict
         """
+
         log.info("Computing self energies for elements in the dataset.")
-        from modelforge.dataset.utils import calculate_self_energies
+        from modelforge.dataset.utils import _calculate_self_energies
 
         # Define the collate function based on the `collate` parameter
         collate_fn = collate_conformers if collate else None
-        return calculate_self_energies(
+        return _calculate_self_energies(
             torch_dataset=torch_dataset, collate_fn=collate_fn
         )
 
-    def _subtract_self_energies(self, dataset, self_energies: Dict[int, float]) -> None:
+    def _subtract_self_energies(
+        self, dataset, self_energies: "AtomicSelfEnergy"
+    ) -> None:
         """
         Removes the self energies from the total energies for each molecule in the dataset .
 
@@ -969,8 +975,7 @@ class DataModule(pl.LightningDataModule):
         ----------
         dataset: torch.Dataset
             The dataset from which to remove the self energies.
-        self_energies : Dict[int, float]
-            Dictionary containing the self energies for each element in the dataset.
+        self_energies: AtomicSelfEnergy
         """
 
         from tqdm import tqdm

@@ -457,7 +457,7 @@ class NeuralNetworkPotentialFactory:
 
         nnp_parameters = nnp_parameters or {}
         training_parameters = training_parameters or {}
-
+        log.debug(f"{training_parameters=}")
         # get NNP
         nnp_class: Type = _Implemented_NNPs.get_neural_network_class(nnp_name)
         if nnp_class is None:

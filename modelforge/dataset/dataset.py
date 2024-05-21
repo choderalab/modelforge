@@ -206,9 +206,9 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         positions = self.properties_of_interest["positions"][
             series_atom_start_idx:series_atom_end_idx
         ]
-        E = self.properties_of_interest["E"][
-            idx
-        ]  # NOTE: upgrading to float64 to avoid precision issues
+        E = self.properties_of_interest["E"][idx]
+        F = self.properties_of_interest["F"][series_atom_start_idx:series_atom_end_idx]
+
         Q = self.properties_of_interest["Q"][idx]
 
         return {
@@ -216,6 +216,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             "positions": positions,
             "total_charge": Q,
             "E": E,
+            "F": F,
             "atomic_subsystem_counts": torch.tensor([atomic_numbers.shape[0]]),
             "idx": idx,
         }
@@ -1030,6 +1031,7 @@ def collate_conformers(conf_list: List[Dict[str, torch.Tensor]]) -> "BatchData":
 
     Z_list = []  # nuclear charges/atomic numbers
     R_list = []  # positions
+    F_list = []  # forces
     E_list = []  # total energy
     Q_list = []  # total charge
     atomic_subsystem_counts = []
@@ -1039,6 +1041,7 @@ def collate_conformers(conf_list: List[Dict[str, torch.Tensor]]) -> "BatchData":
         Z_list.append(conf["atomic_numbers"])
         R_list.append(conf["positions"])
         E_list.append(conf["E"])
+        F_list.append(conf["F"])
         Q_list.append(conf["total_charge"])
         atomic_subsystem_counts.extend(conf["atomic_subsystem_counts"])
         atomic_subsystem_indices.extend([idx] * conf["atomic_subsystem_counts"][0])
@@ -1048,6 +1051,7 @@ def collate_conformers(conf_list: List[Dict[str, torch.Tensor]]) -> "BatchData":
     atomic_numbers_cat = torch.cat(Z_list)
     total_charge_cat = torch.cat(Q_list)
     positions_cat = torch.cat(R_list).requires_grad_(True)
+    forces_cat = torch.cat(F_list)
     E_stack = torch.stack(E_list)
     nnp_input = NNPInput(
         atomic_numbers=atomic_numbers_cat,
@@ -1059,6 +1063,7 @@ def collate_conformers(conf_list: List[Dict[str, torch.Tensor]]) -> "BatchData":
     )
     metadata = Metadata(
         E=E_stack,
+        F=torch.tensor(forces_cat, dtype=torch.float64),
         atomic_subsystem_counts=torch.tensor(
             atomic_subsystem_counts, dtype=torch.int32
         ),

@@ -24,7 +24,6 @@ class _Implemented_NNPs(Enum):
     @classmethod
     def get_neural_network_class(cls, neural_network_name: str):
         try:
-            print(neural_network_name.upper())
             # Normalize the input and get the class directly from the Enum
             return cls[neural_network_name.upper()].value
         except KeyError:

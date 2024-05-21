@@ -11,6 +11,7 @@ def perform_training(
 ):
     # set up tensor board logger
     logger = TensorBoardLogger("tb_logs", name="training")
+    from lightning.pytorch.callbacks import ModelSummary
 
     # Set up dataset
     dm = DataModule(
@@ -33,8 +34,9 @@ def perform_training(
         logger=logger,  # Add the logger here
         callbacks=[
             EarlyStopping(
-                monitor="epoch_rmse_val_loss", min_delta=0.05, patience=25, verbose=True
-            ) # NOTE: patience must be > than 20, since this is the patience set for the reduction of the learning rate
+                monitor="rmse_val_loss", min_delta=0.05, patience=25, verbose=True
+            ),  # NOTE: patience must be > than 20, since this is the patience set for the reduction of the learning rate
+            ModelSummary(max_depth=-1),
         ],
     )
 
@@ -54,13 +56,14 @@ def perform_training(
     trainer.validate(model, dataloaders=dm.val_dataloader())
     trainer.test(dataloaders=dm.test_dataloader())
 
+
 # tensorboard --logdir tb_logs
 
 
 if __name__ == "__main__":
     from modelforge.potential import _Implemented_NNPs
 
-    for model_name in _Implemented_NNPs.get_all_neural_network_names():
+    for model_name in ["SchNet"]:
 
         dataset_name = "QM9"
         nr_of_repeats = 5

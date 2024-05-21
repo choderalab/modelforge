@@ -58,7 +58,6 @@ def test_model_factory(model_name, simulation_environment):
 def test_energy_postprocessing():
     # setup test dataset
     from modelforge.dataset.dataset import DataModule
-    from modelforge.potential.ani import ANI2x
 
     # test the self energy calculation on the QM9 dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
@@ -131,6 +130,30 @@ def test_energy_postprocessing():
         dataset_statistics.scaling_stddev,
         torch.tensor(646.5618628515705, dtype=torch.float64),
     )
+
+    # now datamodule and neural network
+    dm = DataModule(
+        name="QM9",
+        batch_size=10,
+        for_unit_testing=True,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        remove_self_energies=True,
+        normalize=True,
+    )
+    dm.prepare_data()
+    dm.setup()
+
+    batch = next(iter(dm.train_dataloader()))
+    # inference model
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        use="inference",
+        nnp_name="SchNet",
+    )
+
+    model.set_scaling_and_normalizing(dm.dataset_statistics)
+
+    out = model(batch.nnp_input)
+    a = 7
 
 
 def test_energy_scaling_and_offset():

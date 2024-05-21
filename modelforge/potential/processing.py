@@ -223,7 +223,7 @@ class EnergyScaling:
             + self.dataset_statistics.scaling_mean
         )
 
-    def _energy_postprocessing(
+    def energy_postprocessing(
         self, properties_per_molecule: torch.Tensor, inputs: NeuralNetworkData
     ) -> Dict[str, torch.Tensor]:
         """
@@ -280,6 +280,9 @@ class EnergyScaling:
 
         if not isinstance(value, DatasetStatistics):
             raise ValueError("Value must be an instance of DatasetStatistics.")
+        log.debug(f"Setting dataset statistics to {value}.")
+        log.debug(f"Normalizing: {value.normalized}.")
+        log.debug(f"Atomic self energies removed: {value.atomic_self_energies_removed}.")
 
         self._dataset_statistics = value
 

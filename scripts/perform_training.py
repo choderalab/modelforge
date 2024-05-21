@@ -19,9 +19,11 @@ def perform_training(
         batch_size=512,
         splitting_strategy=RandomRecordSplittingStrategy(),
         remove_self_energies=True,
+        normalize=True,
     )
     # Set up model
     model = NeuralNetworkPotentialFactory.create_nnp("training", model_name)
+    model.set_scaling_and_normalizing(dm.dataset_statistics)
 
     # set up traininer
     from lightning.pytorch.callbacks.early_stopping import EarlyStopping

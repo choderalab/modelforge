@@ -20,6 +20,8 @@ class DatasetStatistics:
     scaling_mean: float
     scaling_stddev: float
     atomic_self_energies: "AtomicSelfEnergies"
+    normalized: bool = False
+    atomic_self_energies_removed: bool = False
 
 
 class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
@@ -847,6 +849,8 @@ class DataModule(pl.LightningDataModule):
             scaling_stddev=stats["stddev"],
             scaling_mean=stats["mean"],
             atomic_self_energies=atomic_self_energies,
+            atomic_self_energies_removed=self.remove_self_energies,
+            normalized=self.normalize,
         )
 
         # normalize dataset

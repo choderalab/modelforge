@@ -578,6 +578,17 @@ class BaseNetwork(Module):
         pairlist_output = self.input_preparation.prepare_inputs(data)
         return self.core_module(data, pairlist_output)
 
+    def set_scaling_and_normalizing(self, dataset_statistics: DatasetStatistics):
+        """
+        Set the scaling and normalizing factors for the model.
+
+        Parameters
+        ----------
+        dataset_statistics : DatasetStatistics
+            The dataset statistics object containing the scaling and normalizing factors.
+        """
+        self.core_module.postprocessing.dataset_statistics = dataset_statistics
+
 
 class CoreNetwork(Module, ABC):
     """Abstract base class for neural network potentials.
@@ -595,7 +606,6 @@ class CoreNetwork(Module, ABC):
     def __init__(
         self,
         cutoff: unit.Quantity,
-        mode: Literal["safe", "fast"] = "safe",
     ):
         """
         Initializes the neural network potential class with specified parameters.
@@ -610,7 +620,6 @@ class CoreNetwork(Module, ABC):
         from .processing import EnergyScaling, FromAtomToMoleculeReduction
 
         self.postprocessing = EnergyScaling()
-
         self.readout_module = FromAtomToMoleculeReduction()
 
     @abstractmethod
@@ -729,7 +738,7 @@ class CoreNetwork(Module, ABC):
         )
         # postprocess energies: add atomic self energies,
         # and other constant factors used to optionally normalize the data range of the training dataset
-        processed_energy = self.postprocessing._energy_postprocessing(E, nnp_input)
+        processed_energy = self.postprocessing.energy_postprocessing(E, nnp_input)
         # from icecream import ic
 
         # ic(processed_energy["E"])

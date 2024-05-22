@@ -46,9 +46,11 @@ class Loss:
         """
         nnp_input = batch.nnp_input
         F_true = batch.metadata.F.to(torch.float32)
+        if F_true.numel() < 1:
+            raise RuntimeError("No force can be calculated.")
         E_predict = energies["E_predict"]
         F_predict = -torch.autograd.grad(
-            E_predict.sum(), nnp_input.positions, create_graph=False, retain_graph=False
+            E_predict.sum(), nnp_input.positions, create_graph=False, retain_graph=True
         )[0]
 
         return {"F_true": F_true, "F_predict": F_predict}
@@ -112,11 +114,16 @@ class EnergyAndForceLoss(Loss):
         torch.Tensor
             The computed loss as a PyTorch tensor.
         """
-        energies = self._get_energies(batch)
-        loss = self.energy_weight * loss_fn(energies["E_predict"], energies["E_true"])
-        if self.include_force:
-            forces = self._get_forces(batch, energies)
-            loss += self.force_weight * loss_fn(forces["F_predict"], forces["F_true"])
+        with torch.set_grad_enabled(True):
+            energies = self._get_energies(batch)
+            loss = self.energy_weight * loss_fn(
+                energies["E_predict"], energies["E_true"]
+            )
+            if self.include_force:
+                forces = self._get_forces(batch, energies)
+                loss += self.force_weight * loss_fn(
+                    forces["F_predict"], forces["F_true"]
+                )
         return loss
 
 
@@ -154,7 +161,6 @@ class TrainingAdapter(pl.LightningModule):
         from typing import List
         from modelforge.potential import _Implemented_NNPs
 
-        print(f"{nnp_parameters=}")
         super().__init__()
         self.save_hyperparameters()
         # Extracting and instantiating the model from parameters
@@ -267,7 +273,6 @@ class TrainingAdapter(pl.LightningModule):
         torch.Tensor
             The loss tensor computed for the current validation step.
         """
-
         mse_loss = self.loss.compute_loss(batch, F.mse_loss)
         rmse_loss = mse_loss**0.5
         self.log(

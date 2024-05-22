@@ -595,7 +595,6 @@ class CoreNetwork(Module, ABC):
     def __init__(
         self,
         cutoff: unit.Quantity,
-        mode: Literal["safe", "fast"] = "safe",
     ):
         """
         Initializes the neural network potential class with specified parameters.

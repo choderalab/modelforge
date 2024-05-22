@@ -114,16 +114,11 @@ class EnergyAndForceLoss(Loss):
         torch.Tensor
             The computed loss as a PyTorch tensor.
         """
-        with torch.set_grad_enabled(True):
-            energies = self._get_energies(batch)
-            loss = self.energy_weight * loss_fn(
-                energies["E_predict"], energies["E_true"]
-            )
-            if self.include_force:
-                forces = self._get_forces(batch, energies)
-                loss += self.force_weight * loss_fn(
-                    forces["F_predict"], forces["F_true"]
-                )
+        energies = self._get_energies(batch)
+        loss = self.energy_weight * loss_fn(energies["E_predict"], energies["E_true"])
+        if self.include_force:
+            forces = self._get_forces(batch, energies)
+            loss += self.force_weight * loss_fn(forces["F_predict"], forces["F_true"])
         return loss
 
 
@@ -178,7 +173,8 @@ class TrainingAdapter(pl.LightningModule):
         self.optimizer = optimizer
         self.learning_rate = lr
         self.loss = EnergyAndForceLoss(model=self.model, include_force=include_force)
-        self.eval_loss: List[torch.Tensor] = []
+        self.test_mse: List[float] = []
+        self.val_mse: List[float] = []
 
     def config_prior(self):
         """
@@ -225,7 +221,7 @@ class TrainingAdapter(pl.LightningModule):
         """
 
         loss = self.loss.compute_loss(batch, F.mse_loss)
-        self.log("mse_train_loss", loss, on_step=True, batch_size=int(loss.numel()))
+        self.log("mse_train_loss", loss, on_step=True, prog_bar=True)
         return loss
 
     def test_step(self, batch: BatchData, batch_idx: int) -> None:
@@ -247,14 +243,18 @@ class TrainingAdapter(pl.LightningModule):
         None
             The results are logged and not directly returned.
         """
-        mse_loss = self.loss.compute_loss(batch, F.mse_loss)
-        rmse_loss = mse_loss**0.5
+        mse_loss = self.loss.compute_loss(batch, F.mse_loss).detach()
+        self.test_mse.append(float(mse_loss))
+
+    def on_test_epoch_end(self) -> None:
+        import numpy as np
+
+        rmse_loss = np.sqrt(np.mean(np.array(self.test_mse)))
         self.log(
             "rmse_test_loss",
             rmse_loss,
             on_epoch=True,
             prog_bar=True,
-            batch_size=int(rmse_loss.numel()),
         )
 
     def validation_step(self, batch: BatchData, batch_idx: int) -> torch.Tensor:
@@ -274,27 +274,25 @@ class TrainingAdapter(pl.LightningModule):
             The loss tensor computed for the current validation step.
         """
         mse_loss = self.loss.compute_loss(batch, F.mse_loss)
-        rmse_loss = mse_loss**0.5
-        self.log(
-            "rmse_val_loss",
-            rmse_loss,
-            on_epoch=True,
-            prog_bar=True,
-            sync_dist=True,
-            batch_size=int(rmse_loss.numel()),
-        )
-
-        self.eval_loss.append(mse_loss.detach())
-        return rmse_loss
+        self.val_mse.append(float(mse_loss))
+        return mse_loss
 
     def on_validation_epoch_end(self):
         """
         Handles end-of-validation-epoch events to compute and log the average RMSE validation loss.
         """
-        if self.eval_loss:
-            avg_loss = torch.stack(self.eval_loss).mean()
-            self.log("epoch_rmse_val_loss", avg_loss**0.5, sync_dist=True)
-            self.eval_loss.clear()
+        import numpy as np
+
+        rmse_loss = np.sqrt(np.mean(np.array(self.val_mse)))
+        log.debug(self.val_mse)
+        self.log(
+            "rmse_val_loss",
+            rmse_loss,
+            on_epoch=True,
+            prog_bar=True,
+        )
+        self.val_mse.clear()
+        return rmse_loss
 
     def configure_optimizers(self) -> Dict[str, Any]:
         """
@@ -310,9 +308,9 @@ class TrainingAdapter(pl.LightningModule):
         optimizer = self.optimizer(self.model.parameters(), lr=self.learning_rate)
         scheduler = {
             "scheduler": ReduceLROnPlateau(
-                optimizer, mode="min", factor=0.1, patience=20, verbose=True
+                optimizer, mode="min", factor=0.1, patience=15, verbose=True
             ),
-            "monitor": "epoch_rmse_val_loss",  # Name of the metric to monitor
+            "monitor": "rmse_val_loss",  # Name of the metric to monitor
             "interval": "epoch",
             "frequency": 1,
         }
@@ -338,7 +336,7 @@ class TrainingAdapter(pl.LightningModule):
         # set up tensor board logger
         logger = TensorBoardLogger("tb_logs", name="training")
         early_stopping = EarlyStopping(
-            monitor="epoch_rmse_val_loss", min_delta=0.05, patience=20, verbose=True
+            monitor="rmse_val_loss", min_delta=0.05, patience=20, verbose=True
         )
 
         return Trainer(

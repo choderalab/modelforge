@@ -284,7 +284,7 @@ class TrainingAdapter(pl.LightningModule):
         import numpy as np
 
         rmse_loss = np.sqrt(np.mean(np.array(self.val_mse)))
-        log.debug(self.val_mse)
+
         self.log(
             "rmse_val_loss",
             rmse_loss,

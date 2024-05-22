@@ -308,7 +308,15 @@ class TrainingAdapter(pl.LightningModule):
         optimizer = self.optimizer(self.model.parameters(), lr=self.learning_rate)
         scheduler = {
             "scheduler": ReduceLROnPlateau(
-                optimizer, mode="min", factor=0.1, patience=15, verbose=True
+                optimizer,
+                mode="min",
+                factor=0.1,
+                patience=5,
+                verbose=True,
+                cooldown=5,
+                min_lr=1e-8,
+                threshold=0.05,
+                threshold_mode="rel",
             ),
             "monitor": "rmse_val_loss",  # Name of the metric to monitor
             "interval": "epoch",

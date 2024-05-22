@@ -4,6 +4,7 @@ from modelforge.potential import NeuralNetworkPotentialFactory
 from modelforge.dataset.dataset import DataModule
 from modelforge.dataset.utils import RandomRecordSplittingStrategy
 from pytorch_lightning.loggers import TensorBoardLogger
+from lightning.pytorch.callbacks import ModelSummary
 
 
 def perform_training(
@@ -33,8 +34,9 @@ def perform_training(
         logger=logger,  # Add the logger here
         callbacks=[
             EarlyStopping(
-                monitor="epoch_rmse_val_loss", min_delta=0.05, patience=25, verbose=True
-            ) # NOTE: patience must be > than 20, since this is the patience set for the reduction of the learning rate
+                monitor="rmse_val_loss", min_delta=0.05, patience=30, verbose=True
+            ),  # NOTE: patience must be > than 20, since this is the patience set for the reduction of the learning rate
+            ModelSummary(max_depth=-1),
         ],
     )
 
@@ -53,6 +55,7 @@ def perform_training(
     )
     trainer.validate(model, dataloaders=dm.val_dataloader())
     trainer.test(dataloaders=dm.test_dataloader())
+
 
 # tensorboard --logdir tb_logs
 

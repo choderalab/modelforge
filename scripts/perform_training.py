@@ -34,7 +34,7 @@ def perform_training(
         logger=logger,  # Add the logger here
         callbacks=[
             EarlyStopping(
-                monitor="rmse_val_loss", min_delta=0.05, patience=30, verbose=True
+                monitor="rmse_val_loss", min_delta=0.05, patience=50, verbose=True
             ),  # NOTE: patience must be > than 20, since this is the patience set for the reduction of the learning rate
             ModelSummary(max_depth=-1),
         ],
@@ -43,9 +43,9 @@ def perform_training(
     dm.prepare_data()
     dm.setup()
 
-    from modelforge.utils.misc import visualize_model
+    # from modelforge.utils.misc import visualize_model
 
-    visualize_model(dm, model_name)
+    # visualize_model(dm, model_name)
 
     # Run training loop and validate
     trainer.fit(

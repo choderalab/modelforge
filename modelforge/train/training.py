@@ -71,8 +71,13 @@ class Loss:
         """
         nnp_input = batch.nnp_input
         E_true = batch.metadata.E.to(torch.float32).squeeze(1)
-        E_predict = self.model.forward(nnp_input).E
-        return {"E_true": E_true, "E_predict": E_predict}
+        out = self.model.forward(nnp_input)
+        return {
+            "E_true": E_true,
+            "E_predict": out.E,
+            "E_mean": out.scaling_mean,
+            "E_std": out.scaling_stddev,
+        }
 
 
 class EnergyAndForceLoss(Loss):
@@ -94,7 +99,9 @@ class EnergyAndForceLoss(Loss):
         self.include_force = include_force
         self.have_raised_warning = False
 
-    def compute_loss(self, batch: BatchData, loss_fn=F.mse_loss) -> torch.Tensor:
+    def compute_loss(
+        self, batch: BatchData, loss_fn=F.mse_loss, process: bool = False
+    ) -> torch.Tensor:
         """
         Computes the weighted combined loss for energies and optionally forces.
 
@@ -110,16 +117,15 @@ class EnergyAndForceLoss(Loss):
         torch.Tensor
             The computed loss as a PyTorch tensor.
         """
-        with torch.set_grad_enabled(True):
-            energies = self._get_energies(batch)
-            loss = self.energy_weight * loss_fn(
-                energies["E_predict"], energies["E_true"]
-            )
-            if self.include_force:
-                forces = self._get_forces(batch, energies)
-                loss += self.force_weight * loss_fn(
-                    forces["F_predict"], forces["F_true"]
-                )
+        energies = self._get_energies(batch)
+        energy_mean = energies["E_mean"]
+        energy_std = energies["E_std"]
+        E_predict = energies["E_predict"] * energy_std
+        E_true = energies["E_true"] * energy_std
+        loss = self.energy_weight * (loss_fn(E_predict, E_true))
+        if self.include_force:
+            forces = self._get_forces(batch, energies)
+            loss += self.force_weight * loss_fn(forces["F_predict"], forces["F_true"])
         return loss
 
 

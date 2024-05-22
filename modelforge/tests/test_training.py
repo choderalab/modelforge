@@ -29,6 +29,7 @@ def test_train_with_lightning(model_name, dataset_name, include_force):
         batch_size=512,
         remove_self_energies=True,
         for_unit_testing=True,
+        normalize=True,
     )
     dm.prepare_data()
     dm.setup()
@@ -37,6 +38,7 @@ def test_train_with_lightning(model_name, dataset_name, include_force):
     model = NeuralNetworkPotentialFactory.create_nnp(
         "training", model_name, training_parameters=training_parameters
     )
+    model.model.set_scaling_and_normalizing(dm.dataset_statistics)
 
     # Initialize PyTorch Lightning Trainer
     trainer = Trainer(max_epochs=2)

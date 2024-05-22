@@ -855,7 +855,7 @@ class DataModule(pl.LightningDataModule):
 
         # normalize dataset
         if self.normalize:
-            self._normalize_dataset(torch_dataset)
+            self._normalize_dataset(torch_dataset, stats)
 
         # Save processed dataset and statistics for later use in setup
         self._cache_dataset(torch_dataset)
@@ -878,10 +878,9 @@ class DataModule(pl.LightningDataModule):
         self._subtract_self_energies(torch_dataset, atomic_self_energies)
         self._save_self_energies(atomic_self_energies)
 
-    def _normalize_dataset(self, torch_dataset) -> None:
+    def _normalize_dataset(self, torch_dataset, stats: Dict[str, float]) -> None:
         """Normalize the dataset if self energies have been removed."""
         from modelforge.dataset.utils import (
-            calculate_mean_and_variance,
             normalize_energies,
         )
 
@@ -889,7 +888,6 @@ class DataModule(pl.LightningDataModule):
             raise RuntimeError(
                 "Cannot normalize dataset if self energies are not removed."
             )
-        stats = calculate_mean_and_variance(torch_dataset)
         normalize_energies(torch_dataset, stats)
 
     def _calculate_atomic_self_energies(

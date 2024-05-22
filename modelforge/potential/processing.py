@@ -242,16 +242,18 @@ class EnergyScaling:
 
         # first, resale the energies
         processed_energy = {}
-        processed_energy["raw_E"] = properties_per_molecule.clone().detach()
-        properties_per_molecule = self._rescale_energy(properties_per_molecule)
-        processed_energy["rescaled_E"] = properties_per_molecule.clone().detach()
-        # then, calculate the molecular self energy
+
+        # add molecular atomic self energy
         molecular_ase = self._calculate_molecular_self_energy(
             inputs, properties_per_molecule.numel()
         )
         processed_energy["molecular_ase"] = molecular_ase.clone().detach()
         # add the molecular self energy to the rescaled energies
-        processed_energy["E"] = properties_per_molecule + molecular_ase
+        processed_energy["E"] = properties_per_molecule
+        # add scaling factors
+        processed_energy["scaling_mean"] = self.dataset_statistics.scaling_mean
+        processed_energy["scaling_stddev"] = self.dataset_statistics.scaling_stddev
+
         return processed_energy
 
     @property
@@ -282,7 +284,9 @@ class EnergyScaling:
             raise ValueError("Value must be an instance of DatasetStatistics.")
         log.debug(f"Setting dataset statistics to {value}.")
         log.debug(f"Normalizing: {value.normalized}.")
-        log.debug(f"Atomic self energies removed: {value.atomic_self_energies_removed}.")
+        log.debug(
+            f"Atomic self energies removed: {value.atomic_self_energies_removed}."
+        )
 
         self._dataset_statistics = value
 

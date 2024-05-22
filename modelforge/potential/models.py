@@ -28,9 +28,9 @@ class PairListOutputs(NamedTuple):
 
 class EnergyOutput(NamedTuple):
     E: torch.Tensor
-    raw_E: torch.Tensor
-    rescaled_E: torch.Tensor
     molecular_ase: torch.Tensor
+    scaling_mean: torch.Tensor
+    scaling_stddev: torch.Tensor
 
 
 class Pairlist(Module):
@@ -745,7 +745,7 @@ class CoreNetwork(Module, ABC):
         # return energies
         return EnergyOutput(
             E=processed_energy["E"],
-            raw_E=processed_energy["raw_E"],
-            rescaled_E=processed_energy["rescaled_E"],
+            scaling_stddev=processed_energy["scaling_stddev"],
+            scaling_mean=processed_energy["scaling_mean"],
             molecular_ase=processed_energy["molecular_ase"],
         )

@@ -168,7 +168,6 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
     assert len(raw_data_item) == 7  # 7 properties are returned
 
 
-
 @pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_file_existence_after_initialization(
     dataset_name, dataset_factory, prep_temp_dir
@@ -583,7 +582,6 @@ def test_energy_postprocessing():
         for_unit_testing=True,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         remove_self_energies=True,
-        normalize=False,
     )
     dm.prepare_data()
     dm.setup()
@@ -595,37 +593,21 @@ def test_energy_postprocessing():
     mean = np.average(unnormalized_E)
     stddev = np.std(unnormalized_E)
 
-    # get methane input
-    batch = next(iter(dm.train_dataloader()))
-    import torch
-
-    # prepare reference value
-    dm = DataModule(
-        name="QM9",
-        batch_size=10,
-        for_unit_testing=True,
-        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        remove_self_energies=True,
-        normalize=True,
-    )
-    dm.prepare_data()
-    dm.setup()
-
     # check that normalized energies are correct
-    torch.allclose(
+    assert torch.allclose(
         batch.metadata.E,
         torch.tensor(
             [
-                [3.3802],
-                [3.8950],
-                [4.1706],
-                [3.4256],
-                [3.7872],
-                [3.5412],
-                [2.1927],
-                [3.0125],
-                [2.1950],
-                [2.5427],
+                [-4423.2175],
+                [-4157.9672],
+                [-3417.2582],
+                [-4353.2803],
+                [-6079.2958],
+                [-5584.8467],
+                [-4339.9086],
+                [-6683.8416],
+                [-6115.2468],
+                [-4935.2111],
             ],
             dtype=torch.float64,
         ),
@@ -634,15 +616,14 @@ def test_energy_postprocessing():
     dataset_statistics = dm.dataset_statistics
 
     torch.isclose(
-        dataset_statistics.scaling_mean,
-        torch.tensor(-1817.4701091224313, dtype=torch.float64),
+        dataset_statistics.E_i_mean,
+        torch.tensor(-424.8404, dtype=torch.float64),
     )
 
     torch.isclose(
         dataset_statistics.scaling_stddev,
-        torch.tensor(646.5618628515705, dtype=torch.float64),
+        torch.tensor(3438.2806, dtype=torch.float64),
     )
-
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])

@@ -284,6 +284,8 @@ class TrainingAdapter(pl.LightningModule):
         import numpy as np
 
         rmse_loss = np.sqrt(np.mean(np.array(self.val_mse)))
+        sch = self.lr_schedulers()
+        log.info(f"Current learning rate: {sch.get_last_lr()}")
 
         self.log(
             "rmse_val_loss",

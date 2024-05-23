@@ -441,6 +441,7 @@ class SPICEOpenFFCuration(DatasetCuration):
         dataset_names: List[str],
         max_conformers_per_record: Optional[int] = None,
         total_conformers: Optional[int] = None,
+        atomic_numbers_to_limit: Optional[List[int]] = None,
     ):
         """
         Processes a downloaded dataset: extracts relevant information.
@@ -453,7 +454,12 @@ class SPICEOpenFFCuration(DatasetCuration):
             Names of the raw sqlite files to process,
         dataset_names: List[str], required
             List of names of the sqlite datasets to process.
-
+        max_conformers_per_record: Optional[int], optional, default=None
+            If set, this will limit the number of conformers per record to the specified number.
+        total_conformers: Optional[int], optional, default=None
+            If set, this will limit the total number of conformers to the specified number.
+        atomic_numbers_to_limit: Optional[List[int]], optional, default=None
+            If set, this will limit the dataset to only include molecules with atomic numbers in the list.
         """
         from tqdm import tqdm
         import numpy as np
@@ -689,6 +695,17 @@ class SPICEOpenFFCuration(DatasetCuration):
         if self.convert_units:
             self._convert_units()
 
+        # if we want to limit to a subset of elements, we can quickly post process the dataset
+        if atomic_numbers_to_limit is not None:
+            data_temp = []
+            for datapoint in self.data:
+                add_to_record = set(datapoint["atomic_numbers"].flatten()).issubset(
+                    atomic_numbers_to_limit
+                )
+                if add_to_record:
+                    data_temp.append(datapoint)
+            self.data = data_temp
+
         if total_conformers is not None or max_conformers_per_record is not None:
             conformers_count = 0
             temp_data = []
@@ -732,6 +749,7 @@ class SPICEOpenFFCuration(DatasetCuration):
         max_records: Optional[int] = None,
         max_conformers_per_record: Optional[int] = None,
         total_conformers: Optional[int] = None,
+        limit_atomic_species: Optional[list] = None,
         n_threads=6,
     ) -> None:
         """
@@ -753,6 +771,8 @@ class SPICEOpenFFCuration(DatasetCuration):
             If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
             Can be used in conjunction with max_records and max_conformers_per_record.
             Note defining this will only fetch from the "SPICE PubChem Set 1 Single Points Dataset v1.2"
+        limit_atomic_species: Optional[list] = None,
+            If set to a list of element symbols, records that contain any elements not in this list will be ignored.
         n_threads, int, default=6
             Number of concurrent threads for retrieving data from QCArchive
         Examples
@@ -820,12 +840,24 @@ class SPICEOpenFFCuration(DatasetCuration):
         self.molecule_names.clear()
         logger.debug(f"Processing downloaded dataset.")
 
+        if limit_atomic_species is not None:
+            self.atomic_numbers_to_limit = []
+            from openff.units import elements
+
+            for symbol in limit_atomic_species:
+                for num, sym in elements.SYMBOLS.items():
+                    if sym == symbol:
+                        self.atomic_numbers_to_limit.append(num)
+        else:
+            self.atomic_numbers_to_limit = None
+
         self._process_downloaded(
             self.local_cache_dir,
             local_database_names,
             dataset_names,
             max_conformers_per_record=max_conformers_per_record,
             total_conformers=total_conformers,
+            atomic_numbers_to_limit=self.atomic_numbers_to_limit,
         )
 
         self._generate_hdf5()

@@ -9,34 +9,34 @@ from openff.units import unit
 
 class QM9Curation(DatasetCuration):
     """
-    Routines to fetch and process the QM9 dataset into a curated hdf5 file.
+        Routines to fetch and process the QM9 dataset into a curated hdf5 file.
 
-    The QM9 dataset includes 133,885 organic molecules with up to nine heavy atoms (CONF).
-    All properties were calculated at the B3LYP/6-31G(2df,p) level of quantum chemistry.
+    The QM9 dataset includes 133,885 organic molecules with up to nine total heavy atoms (C,O,N,or F; excluding H).
+        All properties were calculated at the B3LYP/6-31G(2df,p) level of quantum chemistry.
 
-    Citation: Ramakrishnan, R., Dral, P., Rupp, M. et al.
-                "Quantum chemistry structures and properties of 134 kilo molecules."
-                Sci Data 1, 140022 (2014).
-                https://doi.org/10.1038/sdata.2014.22
+        Citation: Ramakrishnan, R., Dral, P., Rupp, M. et al.
+                    "Quantum chemistry structures and properties of 134 kilo molecules."
+                    Sci Data 1, 140022 (2014).
+                    https://doi.org/10.1038/sdata.2014.22
 
-    DOI for dataset: 10.6084/m9.figshare.c.978904.v5
+        DOI for dataset: 10.6084/m9.figshare.c.978904.v5
 
-    Parameters
-    ----------
-    hdf5_file_name: str, required
-        Name of the hdf5 file that will be generated.
-    output_file_dir: str, optional, default='./'
-        Location to write the output hdf5 file.
-    local_cache_dir: str, optional, default='./qm9_datafiles'
-        Location to save downloaded dataset.
-    convert_units: bool, optional, default=True
-        Convert from [e.g., angstrom, bohr, hartree] (i.e., source units)
-        to [nanometer, kJ/mol] (i.e., target units)
+        Parameters
+        ----------
+        hdf5_file_name: str, required
+            Name of the hdf5 file that will be generated.
+        output_file_dir: str, optional, default='./'
+            Location to write the output hdf5 file.
+        local_cache_dir: str, optional, default='./qm9_datafiles'
+            Location to save downloaded dataset.
+        convert_units: bool, optional, default=True
+            Convert from [e.g., angstrom, bohr, hartree] (i.e., source units)
+            to [nanometer, kJ/mol] (i.e., target units)
 
-    Examples
-    --------
-    >>> qm9_data = QM9Curation(hdf5_file_name='qm9_dataset.hdf5', local_cache_dir='~/datasets/qm9_dataset')
-    >>> qm9_data.process()
+        Examples
+        --------
+        >>> qm9_data = QM9Curation(hdf5_file_name='qm9_dataset.hdf5', local_cache_dir='~/datasets/qm9_dataset')
+        >>> qm9_data.process()
 
     """
 

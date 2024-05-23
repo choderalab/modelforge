@@ -315,7 +315,7 @@ class TrainingAdapter(pl.LightningModule):
                 verbose=True,
                 cooldown=5,
                 min_lr=1e-8,
-                threshold=0.05,
+                threshold=0.1,
                 threshold_mode="rel",
             ),
             "monitor": "rmse_val_loss",  # Name of the metric to monitor

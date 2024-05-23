@@ -7,7 +7,6 @@ from loguru import logger as log
 from openff.units import unit
 from torch.nn import Module
 
-from modelforge.dataset.dataset import DatasetStatistics
 from modelforge.potential.utils import NNPInput
 
 if TYPE_CHECKING:
@@ -29,7 +28,7 @@ class PairListOutputs(NamedTuple):
 class EnergyOutput(NamedTuple):
     E: torch.Tensor
     raw_E: torch.Tensor
-    rescaled_E: torch.Tensor
+    E_i: torch.Tensor
     molecular_ase: torch.Tensor
 
 
@@ -402,6 +401,9 @@ class PyTorch2JAXConverter:
         return apply, model_params, model_buffer
 
 
+from modelforge.potential.processing import AtomicSelfEnergies
+
+
 class NeuralNetworkPotentialFactory:
     """
     Factory class for creating instances of neural network potentials (NNP) that are traceable/scriptable and can be exported to torchscript.
@@ -457,6 +459,7 @@ class NeuralNetworkPotentialFactory:
 
         nnp_parameters = nnp_parameters or {}
         training_parameters = training_parameters or {}
+
         log.debug(f"{training_parameters=}")
         # get NNP
         nnp_class: Type = _Implemented_NNPs.get_neural_network_class(nnp_name)
@@ -736,6 +739,6 @@ class CoreNetwork(Module, ABC):
         return EnergyOutput(
             E=processed_energy["E"],
             raw_E=processed_energy["raw_E"],
-            rescaled_E=processed_energy["rescaled_E"],
+            E_i=outputs["E_i"],
             molecular_ase=processed_energy["molecular_ase"],
         )

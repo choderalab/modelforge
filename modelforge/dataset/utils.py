@@ -104,20 +104,27 @@ def calculate_mean_and_variance(
     from modelforge.dataset.dataset import collate_conformers
 
     online_estimator = Welford()
-
+    nr_of_atoms = 0
     dataloader = DataLoader(
         torch_dataset,
         batch_size=batch_size,
         collate_fn=collate_conformers,
         num_workers=4,
     )
-    log.info("Calculating mean and variance for normalization")
+
+    # NOTE: while what is shown below works I didn't think this through complelty
+    # NOTE: it might not matter, but revisit this again
+    log.info("Calculating mean and variance of atomic energies")
     for batch_data in dataloader:
-        online_estimator.update(batch_data.metadata.E)
+        E_scaled = (
+            batch_data.metadata.E
+            / batch_data.metadata.atomic_subsystem_counts.view(-1, 1)
+        )
+        online_estimator.update(E_scaled)
 
     stats = {
-        "mean": online_estimator.mean,
-        "stddev": online_estimator.stddev,
+        "Ei_mean": online_estimator.mean,
+        "Ei_stddev": online_estimator.stddev,
     }
     log.info(f"Mean and standard deviation of the dataset:{stats}")
     return stats
@@ -126,7 +133,7 @@ def calculate_mean_and_variance(
 from openff.units import unit
 
 
-def calculate_self_energies(torch_dataset, collate_fn) -> Dict[str, unit.Quantity]:
+def _calculate_self_energies(torch_dataset, collate_fn) -> Dict[str, unit.Quantity]:
     from torch.utils.data import DataLoader
     import torch
     from loguru import logger as log

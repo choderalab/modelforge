@@ -315,8 +315,8 @@ class PhysNetInteractionModule(nn.Module):
             v_tilde = residual(
                 v_tilde
             )  # shape (nr_of_atoms_in_batch, number_of_radial_basis_functions)
-
-        return self.gate * x + self.process_v(v_tilde)
+        v = self.gate * x + self.process_v(v_tilde)
+        return v
 
 
 class PhysNetOutput(nn.Module):
@@ -339,7 +339,7 @@ class PhysNetOutput(nn.Module):
         self.output = Dense(
             number_of_atom_features,
             number_of_atomic_properties,
-            weight_init=torch.nn.init.zeros_,
+            weight_init=torch.nn.init.ones_,
             bias=False,
         )
 
@@ -467,8 +467,8 @@ class PhysNetCore(CoreNetwork):
             ]
         )
 
-        self.atomic_scale = nn.Parameter(torch.zeros(max_Z, 2))
-        self.atomic_shift = nn.Parameter(torch.ones(max_Z, 2))
+        self.atomic_scale = nn.Parameter(torch.ones(max_Z, 2))
+        self.atomic_shift = nn.Parameter(torch.zeros(max_Z, 2))
 
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
@@ -564,8 +564,8 @@ class PhysNetCore(CoreNetwork):
             data.atomic_embedding = output_of_module["updated_embedding"]
 
         prediction_i_shifted_scaled = (
-            self.atomic_shift[data.atomic_numbers] * prediction_i
-            + self.atomic_scale[data.atomic_numbers]
+            self.atomic_shift[data.atomic_numbers]
+            + prediction_i * self.atomic_scale[data.atomic_numbers]
         )
 
         # sum over atom features
@@ -573,7 +573,7 @@ class PhysNetCore(CoreNetwork):
         q_i = prediction_i_shifted_scaled[:, 1]  # shape(nr_of_atoms, 1)
 
         output = {
-            "E_i": E_i,
+            "E_i": E_i.contiguous(),  # reshape memory mapping for JAX/dlpack
             "q_i": q_i,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
             "atomic_numbers": data.atomic_numbers,

@@ -373,11 +373,11 @@ class SchNet(BaseNetwork):
     def __init__(
         self,
         max_Z: int = 101,
-        number_of_atom_features: int = 64,
+        number_of_atom_features: int = 32,
         number_of_radial_basis_functions: int = 20,
         number_of_interaction_modules: int = 3,
         cutoff: unit.Quantity = 5 * unit.angstrom,
-        number_of_filters: int = 64,
+        number_of_filters: int = 32,
         shared_interactions: bool = False,
     ) -> None:
         """

@@ -5,12 +5,16 @@ from loguru import logger as log
 
 class FromAtomToMoleculeReduction(torch.nn.Module):
 
-    def __init__(self):
+    def __init__(
+        self,
+    ):
         """
         Initializes the per-atom property readout module.
         Performs the reduction of 'per_atom' property to 'per_molecule' property.
         """
         super().__init__()
+        self.E_i_mean = torch.tensor([0.0])
+        self.E_i_stddev = torch.tensor([1.0])
 
     def forward(
         self, x: torch.Tensor, atomic_subsystem_indices: torch.Tensor
@@ -26,6 +30,9 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         -------
         Tensor, shape [nr_of_moleculs, 1], the per-molecule property.
         """
+
+        # scale
+        x = x * self.E_i_stddev + self.E_i_mean
 
         # Perform scatter add operation for atoms belonging to the same molecule
         indices = atomic_subsystem_indices.to(torch.int64)
@@ -243,8 +250,7 @@ class EnergyScaling:
         # first, resale the energies
         processed_energy = {}
         processed_energy["raw_E"] = properties_per_molecule.clone().detach()
-        properties_per_molecule = self._rescale_energy(properties_per_molecule)
-        processed_energy["rescaled_E"] = properties_per_molecule.clone().detach()
+
         # then, calculate the molecular self energy
         molecular_ase = self._calculate_molecular_self_energy(
             inputs, properties_per_molecule.numel()

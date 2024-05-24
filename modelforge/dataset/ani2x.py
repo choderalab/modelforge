@@ -25,10 +25,17 @@ class ANI2xDataset(HDF5Dataset):
     ----------
     dataset_name : str
         Name of the dataset, default is "ANI2x".
-    for_unit_testing : bool
-        If set to True, a subset of the dataset is used for unit testing purposes; by default False.
+    version_select : str
+        Select the version of the dataset to use, default will provide the "latest".
+        "latest_test" will select the testing subset of 1000 conformers.
+        A version name can  be specified that corresponds to an entry in the associated yaml file, e.g., "full_dataset_v0".
     local_cache_dir: str, optional
             Path to the local cache directory, by default ".".
+    force_download: bool, optional
+        If set to True, we will download the dataset even if it already exists; by default False.
+    regenerate_cache: bool, optional
+        If set to True, we will regenerate the npz cache file even if it already exists, using
+        previously downloaded files, if available; by default False.
     Examples
     --------
 
@@ -50,7 +57,7 @@ class ANI2xDataset(HDF5Dataset):
     def __init__(
         self,
         dataset_name: str = "ANI2x",
-        for_unit_testing: bool = False,
+        version_select: str = "latest",
         local_cache_dir: str = ".",
         force_download: bool = False,
         regenerate_cache: bool = False,
@@ -62,8 +69,10 @@ class ANI2xDataset(HDF5Dataset):
         ----------
         data_name : str, optional
             Name of the dataset, by default "ANI2x".
-        for_unit_testing : bool, optional
-            If set to True, a subset of the dataset is used for unit testing purposes; by default False.
+        version_select : str
+            Select the version of the dataset to use, default will provide the "latest".
+            "latest_test" will select the testing subset of 1000 conformers.
+            A version name can  be specified that corresponds to an entry in the associated yaml file, e.g., "full_dataset_v0".
         local_cache_dir: str, optional
             Path to the local cache directory, by default ".".
         force_download: bool, optional
@@ -74,7 +83,7 @@ class ANI2xDataset(HDF5Dataset):
         Examples
         --------
         >>> data = ANI2xDataset()  # Default dataset
-        >>> test_data = ANI2xDataset(for_unit_testing=True)  # Testing subset
+        >>> test_data = ANI2xDataset(version_select="latest_test")  # Testing subset
         """
 
         _default_properties_of_interest = [
@@ -89,7 +98,7 @@ class ANI2xDataset(HDF5Dataset):
             dataset_name = f"{dataset_name}_subset"
 
         self.dataset_name = dataset_name
-        self.for_unit_testing = for_unit_testing
+        self.version_select = version_select
 
         from openff.units import unit
 
@@ -115,20 +124,26 @@ class ANI2xDataset(HDF5Dataset):
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
 
-        if self.for_unit_testing:
-            mode = "unit_testing_nc_1000"
-            logger.info("Using unit test dataset with 1000 conformers")
-        else:
-            mode = "full_dataset"
-            logger.info("Using full dataset")
-
         # make sure that the yaml file is for the correct dataset before we grab data
         assert data_inputs["dataset"] == "ani2x"
 
-        url = data_inputs[mode]["url"]
-        gz_data_file = data_inputs[mode]["gz_data_file"]
-        hdf5_data_file = data_inputs[mode]["hdf5_data_file"]
-        processed_data_file = data_inputs[mode]["processed_data_file"]
+        if self.version_select == "latest":
+            # in the yaml file, the entry latest will define the name of the version to use
+            dataset_version = data_inputs["latest"]
+            logger.info(f"Using the latest dataset: {dataset_version}")
+        elif self.version_select == "latest_test":
+            dataset_version = data_inputs["latest_test"]
+            logger.info(f"Using the latest test dataset: {dataset_version}")
+        else:
+            dataset_version = self.version_select
+            logger.info(f"Using dataset version {dataset_version}")
+
+        url = data_inputs[dataset_version]["url"]
+
+        # fetch the dictionaries that defined the size, md5 checksums (if provided) and filenames of the data files
+        gz_data_file = data_inputs[dataset_version]["gz_data_file"]
+        hdf5_data_file = data_inputs[dataset_version]["hdf5_data_file"]
+        processed_data_file = data_inputs[dataset_version]["processed_data_file"]
 
         # to ensure that that we are consistent in our naming, we need to set all the names and checksums in the HDF5Dataset class constructor
         super().__init__(

@@ -586,7 +586,9 @@ def test_energy_postprocessing():
     dm.prepare_data()
     dm.setup()
 
-    batch = next(iter(dm.train_dataloader()))
+    batch = next(
+        iter(dm.val_dataloader())
+    )  # NOTE: using validation dataloader because of random shuffel in training dataloader
     unnormalized_E = batch.metadata.E.numpy()
     import numpy as np
 
@@ -595,19 +597,21 @@ def test_energy_postprocessing():
 
     # check that normalized energies are correct
     assert torch.allclose(
-        batch.metadata.E,
+        batch.metadata.E.squeeze(1),
         torch.tensor(
             [
-                [-4423.2175],
-                [-4157.9672],
-                [-3417.2582],
-                [-4353.2803],
-                [-6079.2958],
-                [-5584.8467],
-                [-4339.9086],
-                [-6683.8416],
-                [-6115.2468],
-                [-4935.2111],
+                [
+                    -5966.9515,
+                    -6157.1063,
+                    -5612.6762,
+                    -5385.5678,
+                    -4396.5738,
+                    -5568.9688,
+                    -4778.9399,
+                    -6732.1988,
+                    -5960.1068,
+                    -6156.9383,
+                ]
             ],
             dtype=torch.float64,
         ),
@@ -621,7 +625,7 @@ def test_energy_postprocessing():
     )
 
     torch.isclose(
-        dataset_statistics.scaling_stddev,
+        dataset_statistics.E_i_stddev,
         torch.tensor(3438.2806, dtype=torch.float64),
     )
 

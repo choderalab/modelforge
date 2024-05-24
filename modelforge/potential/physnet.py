@@ -467,8 +467,8 @@ class PhysNetCore(CoreNetwork):
             ]
         )
 
-        self.atomic_scale = nn.Parameter(torch.zeros(max_Z, 2))
-        self.atomic_shift = nn.Parameter(torch.ones(max_Z, 2))
+        self.atomic_scale = nn.Parameter(torch.ones(max_Z, 2))
+        self.atomic_shift = nn.Parameter(torch.zeros(max_Z, 2))
 
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
@@ -564,8 +564,8 @@ class PhysNetCore(CoreNetwork):
             data.atomic_embedding = output_of_module["updated_embedding"]
 
         prediction_i_shifted_scaled = (
-            self.atomic_shift[data.atomic_numbers] * prediction_i
-            + self.atomic_scale[data.atomic_numbers]
+            self.atomic_shift[data.atomic_numbers]
+            + prediction_i * self.atomic_scale[data.atomic_numbers]
         )
 
         # sum over atom features

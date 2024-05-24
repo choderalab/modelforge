@@ -61,21 +61,21 @@ class SPICEOpenFFCuration(DatasetCuration):
 
     """
 
-    def __init__(
-        self,
-        hdf5_file_name: str,
-        output_file_dir: str,
-        local_cache_dir: str,
-        convert_units: bool = True,
-        release_version: str = "1.1.4",
-    ):
-        super().__init__(
-            hdf5_file_name=hdf5_file_name,
-            output_file_dir=output_file_dir,
-            local_cache_dir=local_cache_dir,
-            convert_units=convert_units,
-        )
-        self.release_version = release_version
+    # def __init__(
+    #     self,
+    #     hdf5_file_name: str,
+    #     output_file_dir: str,
+    #     local_cache_dir: str,
+    #     convert_units: bool = True,
+    #     release_version: str = "1.1.4",
+    # ):
+    #     super().__init__(
+    #         hdf5_file_name=hdf5_file_name,
+    #         output_file_dir=output_file_dir,
+    #         local_cache_dir=local_cache_dir,
+    #         convert_units=convert_units,
+    #     )
+    #     self.release_version = release_version
 
     def _init_dataset_parameters(self):
         self.qcarchive_server = "ml.qcarchive.molssi.org"
@@ -792,26 +792,26 @@ class SPICEOpenFFCuration(DatasetCuration):
         from modelforge.curation import yaml_files
         import yaml
 
-        if self.release_version == "1.1.4":
-            # The SPICE dataset is available in the MOLSSI QCArchive
-            # This will need to load from various datasets, as described on the spice-dataset github page
-            # see https://github.com/openmm/spice-dataset/blob/1.1.4/downloader/config.yaml
+        # if self.release_version == "1.1.4":
+        # The SPICE dataset is available in the MOLSSI QCArchive
+        # This will need to load from various datasets, as described on the spice-dataset github page
+        # see https://github.com/openmm/spice-dataset/blob/1.1.4/downloader/config.yaml
 
-            yaml_file = resources.files(yaml_files) / "spice114_openff_curation.yaml"
-            logger.debug(f"Loading config data from {yaml_file}")
-            with open(yaml_file, "r") as file:
-                data_inputs = yaml.safe_load(file)
+        yaml_file = resources.files(yaml_files) / "spice114_openff_curation.yaml"
+        logger.debug(f"Loading config data from {yaml_file}")
+        with open(yaml_file, "r") as file:
+            data_inputs = yaml.safe_load(file)
 
-            assert data_inputs["dataset_name"] == "spice114openff"
-            if self.version_select == "latest":
-                self.version_select = data_inputs["latest"]
-                logger.debug(f"Using latest version {self.version_select}.")
-            if max_records is not None or total_conformers is not None:
-                # if we specify the number of records, restrict to only a subset
-                # so we don't download multiple collections.
-                dataset_names = data_inputs[self.version_select]["test_collection_name"]
-            else:
-                dataset_names = data_inputs[self.version_select]["collection_names"]
+        assert data_inputs["dataset_name"] == "spice114openff"
+        if self.version_select == "latest":
+            self.version_select = data_inputs["latest"]
+            logger.debug(f"Using latest version {self.version_select}.")
+        if max_records is not None or total_conformers is not None:
+            # if we specify the number of records, restrict to only a subset
+            # so we don't download multiple collections.
+            dataset_names = data_inputs[self.version_select]["test_collection_name"]
+        else:
+            dataset_names = data_inputs[self.version_select]["collection_names"]
 
         specification_names = ["spec_2", "spec_6", "entry"]
 

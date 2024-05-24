@@ -267,7 +267,10 @@ class HDF5Dataset:
         self.gz_data_file = gz_data_file
         self.hdf5_data_file = hdf5_data_file
         self.processed_data_file = processed_data_file
-        self.local_cache_dir = local_cache_dir
+        import os
+
+        # make sure we can handle a path with a ~ in it
+        self.local_cache_dir = os.path.expanduser(local_cache_dir)
         self.force_download = force_download
         self.regenerate_cache = regenerate_cache
 
@@ -794,7 +797,10 @@ class DataModule(pl.LightningDataModule):
         self.train_dataset = None
         self.test_dataset = None
         self.val_dataset = None
-        self.local_cache_dir = local_cache_dir
+        import os
+
+        # make sure we can handle a path with a ~ in it
+        self.local_cache_dir = os.path.expanduser(local_cache_dir)
         self.regenerate_cache = regenerate_cache
 
     def prepare_data(

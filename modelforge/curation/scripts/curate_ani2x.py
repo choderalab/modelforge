@@ -24,6 +24,7 @@ def ani2x_wrapper(
     output_file_dir: str,
     local_cache_dir: str,
     force_download: bool = False,
+    version_select: str = "latest",
     max_records=None,
     max_conformers_per_record=None,
     total_conformers=None,
@@ -55,6 +56,9 @@ def ani2x_wrapper(
     force_download: bool, optional, default=False
         If False, we will use the tarred file that exists in the local_cache_dir (if it exists);
         If True, the tarred file will be downloaded, even if it exists locally.
+    version_select: str, optional, default="latest"
+        The version of the dataset to use as defined in the associated yaml file.
+        If "latest", the most recent version will be used.
     max_records: int, optional, default=None
         The maximum number of records to process.
     max_conformers_per_record: int, optional, default=None
@@ -69,6 +73,7 @@ def ani2x_wrapper(
         hdf5_file_name=hdf5_file_name,
         output_file_dir=output_file_dir,
         local_cache_dir=local_cache_dir,
+        version_select=version_select,
     )
 
     ani2x.process(
@@ -93,6 +98,9 @@ def main():
     # if we make updates to either the underlying dataset, curation modules, or parameters given to the code
     version = "0"
 
+    # version of the dataset to curate
+    version_select = f"v_{version}"
+
     # curate ANI2x test dataset with 1000 total conformers, max of 10 conformers per record
     hdf5_file_name = f"ani2x_dataset_v{version}_ntc_1000.hdf5"
 
@@ -102,6 +110,7 @@ def main():
         local_cache_dir,
         force_download=False,
         max_conformers_per_record=10,
+        version_select=version_select,
         total_conformers=1000,
     )
 
@@ -109,7 +118,11 @@ def main():
     hdf5_file_name = f"ani2x_dataset_v{version}.hdf5"
 
     ani2x_wrapper(
-        hdf5_file_name, output_file_dir, local_cache_dir, force_download=False
+        hdf5_file_name,
+        output_file_dir,
+        local_cache_dir,
+        force_download=False,
+        version_select=version_select,
     )
 
 

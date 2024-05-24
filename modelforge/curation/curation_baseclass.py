@@ -84,6 +84,7 @@ class DatasetCuration(ABC):
         hdf5_file_name: str,
         output_file_dir: Optional[str] = "./",
         local_cache_dir: Optional[str] = "./datasets",
+        version_select: str = "latest",
         convert_units: Optional[bool] = True,
     ):
         """
@@ -105,9 +106,10 @@ class DatasetCuration(ABC):
 
         self.hdf5_file_name = hdf5_file_name
         self.output_file_dir = output_file_dir
-        self.local_cache_dir = local_cache_dir
+        # make sure we can handle a path with a ~ in it
+        self.local_cache_dir = os.path.expanduser(local_cache_dir)
         self.convert_units = convert_units
-
+        self.version_select = version_select
         os.makedirs(self.local_cache_dir, exist_ok=True)
 
         # Overall list that will contain a dictionary for each record

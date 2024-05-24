@@ -2,6 +2,7 @@ dataset: ani2x
 latest: full_dataset_v0
 latest_test: nc_1000_v0
 full_dataset_v0:
+  version: 0
   gz_data_file:
     length: 5085941907
     md5: 8daf9a7d8bbf9bcb1e9cea13b4df9270
@@ -14,6 +15,7 @@ full_dataset_v0:
     name: ani2x_dataset_v0_processed.npz
   url: https://www.dropbox.com/scl/fi/sv1d32wepxfygxe7figp9/ani2x_dataset_v0.hdf5.gz?rlkey=bq4gvhg192qhicf300450a1ci&st=ubeng9h7&dl=1
 nc_1000_v0:
+  version: 0
   gz_data_file:
     length: 174189
     md5: 9f043115c38db3739f7c529f900c0e07

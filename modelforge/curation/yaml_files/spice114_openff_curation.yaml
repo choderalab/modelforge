@@ -1,14 +1,17 @@
 dataset_name: spice114openff
-dataset_names:
-- SPICE Solvated Amino Acids Single Points Dataset v1.1
-- SPICE Dipeptides Single Points Dataset v1.2
-- SPICE DES Monomers Single Points Dataset v1.1
-- SPICE DES370K Single Points Dataset v1.0
-- SPICE PubChem Set 1 Single Points Dataset v1.2
-- SPICE PubChem Set 2 Single Points Dataset v1.2
-- SPICE PubChem Set 3 Single Points Dataset v1.2
-- SPICE PubChem Set 4 Single Points Dataset v1.2
-- SPICE PubChem Set 5 Single Points Dataset v1.2
-- SPICE PubChem Set 6 Single Points Dataset v1.2
-dataset_test_name:
-- SPICE PubChem Set 1 Single Points Dataset v1.2
+latest: v_0
+v_0:
+  version: 0
+  collection_names:
+  - SPICE Solvated Amino Acids Single Points Dataset v1.1
+  - SPICE Dipeptides Single Points Dataset v1.2
+  - SPICE DES Monomers Single Points Dataset v1.1
+  - SPICE DES370K Single Points Dataset v1.0
+  - SPICE PubChem Set 1 Single Points Dataset v1.2
+  - SPICE PubChem Set 2 Single Points Dataset v1.2
+  - SPICE PubChem Set 3 Single Points Dataset v1.2
+  - SPICE PubChem Set 4 Single Points Dataset v1.2
+  - SPICE PubChem Set 5 Single Points Dataset v1.2
+  - SPICE PubChem Set 6 Single Points Dataset v1.2
+  test_collection_name:
+  - SPICE PubChem Set 1 Single Points Dataset v1.2

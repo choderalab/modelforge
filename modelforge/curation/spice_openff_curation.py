@@ -803,13 +803,15 @@ class SPICEOpenFFCuration(DatasetCuration):
                 data_inputs = yaml.safe_load(file)
 
             assert data_inputs["dataset_name"] == "spice114openff"
-
+            if self.version_select == "latest":
+                self.version_select = data_inputs["latest"]
+                logger.debug(f"Using latest version {self.version_select}.")
             if max_records is not None or total_conformers is not None:
                 # if we specify the number of records, restrict to only a subset
                 # so we don't download multiple collections.
-                dataset_names = data_inputs["dataset_test_name"]
+                dataset_names = data_inputs[self.version_select]["test_collection_name"]
             else:
-                dataset_names = data_inputs["dataset_names"]
+                dataset_names = data_inputs[self.version_select]["collection_names"]
 
         specification_names = ["spec_2", "spec_6", "entry"]
 

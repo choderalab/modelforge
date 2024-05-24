@@ -54,8 +54,20 @@ class SPICE2Curation(DatasetCuration):
             data_inputs = yaml.safe_load(file)
 
         assert data_inputs["dataset_name"] == "spice2"
-        self.dataset_download_url = data_inputs["dataset_download_url"]
-        self.dataset_md5_checksum = data_inputs["dataset_md5_checksum"]
+
+        if self.version_select == "latest":
+            self.version_select = data_inputs["latest"]
+            logger.debug(f"Latest version: {self.version_select}")
+
+        self.dataset_download_url = data_inputs[self.version_select][
+            "dataset_download_url"
+        ]
+        self.dataset_md5_checksum = data_inputs[self.version_select][
+            "dataset_md5_checksum"
+        ]
+        logger.debug(
+            f"Dataset: {self.version_select} version: {data_inputs[self.version_select]['version']}"
+        )
 
         self.qm_parameters = {
             "geometry": {

@@ -905,6 +905,10 @@ class DataModule(pl.LightningDataModule):
         """Cache the dataset and its statistics using PyTorch's serialization."""
         torch.save(torch_dataset, "torch_dataset.pt")
         torch.save(self.dataset_statistics, "dataset_statistics.pt")
+        # sleep for 1 second to make sure that the dataset was written to disk
+        import time
+
+        time.sleep(1)
 
     def setup(self, stage: Optional[str] = None) -> None:
         """Sets up datasets for the train, validation, and test stages based on the stage argument."""

@@ -775,7 +775,6 @@ class AniRadialSymmetryFunction(RadialSymmetryFunction):
             number_of_radial_basis_functions + 1,
             dtype=dtype,
         )[:-1]
-        log.debug(f"{centers=}")
         return centers
 
     def calculate_radial_scale_factor(

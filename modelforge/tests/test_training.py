@@ -13,21 +13,14 @@ from modelforge.potential import NeuralNetworkPotentialFactory
 
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
-@pytest.mark.parametrize("dataset_name", ["QM9"])
-def test_train_with_lightning(model_name, dataset_name):
+@pytest.mark.parametrize("dataset_name", ["ANI2x"])
+@pytest.mark.parametrize("include_force", [False, True])
+def test_train_with_lightning(model_name, dataset_name, include_force):
     """
     Test the forward pass for a given model and dataset.
-
-    Parameters
-    ----------
-    dataset : Type[BaseNNP]
-        The dataset class to be used in the test.
-    model : str
-        The model to be used in the test.
     """
 
     from lightning import Trainer
-    import torch
     from modelforge.train.training import TrainingAdapter
     from modelforge.dataset.dataset import DataModule
 
@@ -40,21 +33,44 @@ def test_train_with_lightning(model_name, dataset_name):
     dm.prepare_data()
     dm.setup()
     # Set up model
-    model = NeuralNetworkPotentialFactory.create_nnp("training", model_name)
+    training_parameters = {"include_force": include_force}
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        "training", model_name, training_parameters=training_parameters
+    )
 
     # Initialize PyTorch Lightning Trainer
     trainer = Trainer(max_epochs=2)
-
+    
     # Run training loop and validate
     trainer.fit(
         model,
-        dm.train_dataloader(),
-        dm.val_dataloader(),
+        train_dataloaders=dm.train_dataloader(),
+        val_dataloaders=dm.val_dataloader(),
     )
     # save checkpoint
     trainer.save_checkpoint("test.chp")
     model = TrainingAdapter.load_from_checkpoint("test.chp")
     assert type(model) is not None
+
+
+@pytest.mark.parametrize("model_name", ["SchNet"])
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+def test_loss(model_name, dataset_name, datamodule_factory):
+    from loguru import logger as log
+
+    dm = datamodule_factory(dataset_name=dataset_name)
+    model = NeuralNetworkPotentialFactory.create_nnp("inference", model_name)
+
+    from modelforge.train.training import EnergyAndForceLoss
+    import torch
+
+    loss = EnergyAndForceLoss(model)
+
+    r = loss.compute_loss(next(iter(dm.train_dataloader())))
+
+    if dataset_name != "QM9":
+        loss = EnergyAndForceLoss(model, include_force=True)
+        r = loss.compute_loss(next(iter(dm.train_dataloader())))
 
 
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")

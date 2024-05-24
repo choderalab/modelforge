@@ -165,11 +165,8 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
 
     raw_data_item = dataset[0]
     assert isinstance(raw_data_item, dict)
-    assert len(raw_data_item) == 6  # 6 properties are returned
+    assert len(raw_data_item) == 7  # 7 properties are returned
 
-    raw_data_item = dataset[0]
-    assert isinstance(raw_data_item, dict)
-    assert len(raw_data_item) == 6  # 6 properties are returned
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
@@ -418,7 +415,6 @@ def test_data_item_format_of_datamodule(
     assert isinstance(raw_data_item["atomic_numbers"], torch.Tensor)
     assert isinstance(raw_data_item["positions"], torch.Tensor)
     assert isinstance(raw_data_item["E"], torch.Tensor)
-    print(raw_data_item)
 
     assert (
         raw_data_item["atomic_numbers"].shape[0] == raw_data_item["positions"].shape[0]

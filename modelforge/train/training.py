@@ -114,11 +114,16 @@ class EnergyAndForceLoss(Loss):
         torch.Tensor
             The computed loss as a PyTorch tensor.
         """
-        energies = self._get_energies(batch)
-        loss = self.energy_weight * loss_fn(energies["E_predict"], energies["E_true"])
-        if self.include_force:
-            forces = self._get_forces(batch, energies)
-            loss += self.force_weight * loss_fn(forces["F_predict"], forces["F_true"])
+        with torch.set_grad_enabled(True):
+            energies = self._get_energies(batch)
+            loss = self.energy_weight * loss_fn(
+                energies["E_predict"], energies["E_true"]
+            )
+            if self.include_force:
+                forces = self._get_forces(batch, energies)
+                loss += self.force_weight * loss_fn(
+                    forces["F_predict"], forces["F_true"]
+                )
         return loss
 
 
@@ -285,13 +290,12 @@ class TrainingAdapter(pl.LightningModule):
 
         rmse_loss = np.sqrt(np.mean(np.array(self.val_mse)))
         sch = self.lr_schedulers()
-        log.info(f"Current learning rate: {sch.get_last_lr()}")
-
+        try:
+            log.info(f"Current learning rate: {sch.get_last_lr()}")
+        except AttributeError:
+            pass
         self.log(
-            "rmse_val_loss",
-            rmse_loss,
-            on_epoch=True,
-            prog_bar=True,
+            "rmse_val_loss", rmse_loss, on_epoch=True, prog_bar=True, sync_dist=True
         )
         self.val_mse.clear()
         return rmse_loss
@@ -308,7 +312,7 @@ class TrainingAdapter(pl.LightningModule):
         """
 
         optimizer = self.optimizer(self.model.parameters(), lr=self.learning_rate)
-        scheduler = {
+        lr_scheduler_config = {
             "scheduler": ReduceLROnPlateau(
                 optimizer,
                 mode="min",
@@ -324,7 +328,7 @@ class TrainingAdapter(pl.LightningModule):
             "interval": "epoch",
             "frequency": 1,
         }
-        return {"optimizer": optimizer, "lr_scheduler": scheduler}
+        return {"optimizer": optimizer, "lr_scheduler": lr_scheduler_config}
 
     def get_trainer(self):
         """

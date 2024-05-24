@@ -573,7 +573,7 @@ class PhysNetCore(CoreNetwork):
         q_i = prediction_i_shifted_scaled[:, 1]  # shape(nr_of_atoms, 1)
 
         output = {
-            "E_i": E_i,
+            "E_i": E_i.contiguous(),  # reshape memory mapping for JAX/dlpack
             "q_i": q_i,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
             "atomic_numbers": data.atomic_numbers,

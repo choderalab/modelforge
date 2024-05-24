@@ -168,7 +168,6 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
     assert len(raw_data_item) == 7  # 7 properties are returned
 
 
-
 @pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_file_existence_after_initialization(
     dataset_name, dataset_factory, prep_temp_dir
@@ -565,6 +564,70 @@ def test_numpy_dataset_assignment(dataset_name):
 
     assert hasattr(data, "numpy_data")
     assert isinstance(data.numpy_data, np.lib.npyio.NpzFile)
+
+
+def test_energy_postprocessing():
+    # setup test dataset
+    from modelforge.dataset.dataset import DataModule
+
+    # test the self energy calculation on the QM9 dataset
+    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
+
+    # -------------------------------#
+    # Test that we can calculate the normalize energies correctly
+
+    dm = DataModule(
+        name="QM9",
+        batch_size=10,
+        for_unit_testing=True,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        remove_self_energies=True,
+    )
+    dm.prepare_data()
+    dm.setup()
+
+    batch = next(
+        iter(dm.val_dataloader())
+    )  # NOTE: using validation dataloader because of random shuffel in training dataloader
+    unnormalized_E = batch.metadata.E.numpy()
+    import numpy as np
+
+    mean = np.average(unnormalized_E)
+    stddev = np.std(unnormalized_E)
+
+    # check that normalized energies are correct
+    assert torch.allclose(
+        batch.metadata.E.squeeze(1),
+        torch.tensor(
+            [
+                [
+                    -5966.9515,
+                    -6157.1063,
+                    -5612.6762,
+                    -5385.5678,
+                    -4396.5738,
+                    -5568.9688,
+                    -4778.9399,
+                    -6732.1988,
+                    -5960.1068,
+                    -6156.9383,
+                ]
+            ],
+            dtype=torch.float64,
+        ),
+    )
+
+    dataset_statistics = dm.dataset_statistics
+
+    torch.isclose(
+        dataset_statistics.E_i_mean,
+        torch.tensor(-424.8404, dtype=torch.float64),
+    )
+
+    torch.isclose(
+        dataset_statistics.E_i_stddev,
+        torch.tensor(3438.2806, dtype=torch.float64),
+    )
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])

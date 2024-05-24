@@ -4,6 +4,7 @@ from modelforge.potential import NeuralNetworkPotentialFactory
 from modelforge.dataset.dataset import DataModule
 from modelforge.dataset.utils import RandomRecordSplittingStrategy
 from pytorch_lightning.loggers import TensorBoardLogger
+from lightning.pytorch.callbacks import ModelSummary
 
 
 def perform_training(
@@ -33,17 +34,23 @@ def perform_training(
         logger=logger,  # Add the logger here
         callbacks=[
             EarlyStopping(
-                monitor="epoch_rmse_val_loss", min_delta=0.05, patience=25, verbose=True
-            ) # NOTE: patience must be > than 20, since this is the patience set for the reduction of the learning rate
+                monitor="rmse_val_loss", min_delta=0.05, patience=50, verbose=True
+            ),  # NOTE: patience must be > than 20, since this is the patience set for the reduction of the learning rate
+            ModelSummary(max_depth=-1),
         ],
     )
 
     dm.prepare_data()
     dm.setup()
 
-    from modelforge.utils.misc import visualize_model
 
-    visualize_model(dm, model_name)
+    model.model.core_module.readout_module.E_i_mean = dm.dataset_statistics.E_i_mean
+    model.model.core_module.readout_module.E_i_stddev = dm.dataset_statistics.E_i_stddev
+
+
+    # from modelforge.utils.misc import visualize_model
+
+    # visualize_model(dm, model_name)
 
     # Run training loop and validate
     trainer.fit(
@@ -54,13 +61,14 @@ def perform_training(
     trainer.validate(model, dataloaders=dm.val_dataloader())
     trainer.test(dataloaders=dm.test_dataloader())
 
+
 # tensorboard --logdir tb_logs
 
 
 if __name__ == "__main__":
     from modelforge.potential import _Implemented_NNPs
 
-    for model_name in _Implemented_NNPs.get_all_neural_network_names():
+    for model_name in ['SchNet']:
 
         dataset_name = "QM9"
         nr_of_repeats = 5
@@ -68,5 +76,5 @@ if __name__ == "__main__":
         for i in range(nr_of_repeats):
             print("Running training iteration:", i)
             perform_training(
-                model_name, dataset_name, nr_of_epochs=1000, accelerator="gpu"
+                model_name, dataset_name, nr_of_epochs=1000, accelerator="cpu"
             )

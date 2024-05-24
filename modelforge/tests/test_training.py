@@ -39,8 +39,11 @@ def test_train_with_lightning(model_name, dataset_name, include_force):
     )
 
     # Initialize PyTorch Lightning Trainer
-    trainer = Trainer(max_epochs=2)
-    
+    trainer = Trainer(max_epochs=5)
+
+    model.model.core_module.readout_module.E_i_mean = dm.dataset_statistics.E_i_mean
+    model.model.core_module.readout_module.E_i_stddev = dm.dataset_statistics.E_i_stddev
+
     # Run training loop and validate
     trainer.fit(
         model,

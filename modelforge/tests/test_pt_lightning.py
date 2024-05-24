@@ -7,6 +7,5 @@ def test_datamodule():
     dm = DataModule(
         name="QM9",
         batch_size=512,
-        normalize=False,
     )
 

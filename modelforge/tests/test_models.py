@@ -70,7 +70,6 @@ def test_energy_scaling_and_offset():
         for_unit_testing=True,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         remove_self_energies=True,
-        normalize=False,
         regression_ase=False,
     )
     dataset.prepare_data()

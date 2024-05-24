@@ -315,8 +315,8 @@ class PhysNetInteractionModule(nn.Module):
             v_tilde = residual(
                 v_tilde
             )  # shape (nr_of_atoms_in_batch, number_of_radial_basis_functions)
-
-        return self.gate * x + self.process_v(v_tilde)
+        v = self.gate * x + self.process_v(v_tilde)
+        return v
 
 
 class PhysNetOutput(nn.Module):
@@ -339,7 +339,7 @@ class PhysNetOutput(nn.Module):
         self.output = Dense(
             number_of_atom_features,
             number_of_atomic_properties,
-            weight_init=torch.nn.init.zeros_,
+            weight_init=torch.nn.init.ones_,
             bias=False,
         )
 

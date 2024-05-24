@@ -67,7 +67,7 @@ def test_energy_scaling_and_offset():
     dataset = DataModule(
         name="QM9",
         batch_size=1,
-        for_unit_testing=True,
+        version_select="nc_1000_v0",
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         remove_self_energies=True,
         normalize=False,

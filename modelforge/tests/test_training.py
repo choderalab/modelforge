@@ -28,7 +28,7 @@ def test_train_with_lightning(model_name, dataset_name, include_force):
         name=dataset_name,
         batch_size=512,
         remove_self_energies=True,
-        for_unit_testing=True,
+        version_select="nc_1000_v0",
     )
     dm.prepare_data()
     dm.setup()
@@ -40,7 +40,7 @@ def test_train_with_lightning(model_name, dataset_name, include_force):
 
     # Initialize PyTorch Lightning Trainer
     trainer = Trainer(max_epochs=2)
-    
+
     # Run training loop and validate
     trainer.fit(
         model,

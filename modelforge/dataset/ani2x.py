@@ -94,8 +94,6 @@ class ANI2xDataset(HDF5Dataset):
         ]  # NOTE: Default values
 
         self._properties_of_interest = _default_properties_of_interest
-        if for_unit_testing:
-            dataset_name = f"{dataset_name}_subset"
 
         self.dataset_name = dataset_name
         self.version_select = version_select

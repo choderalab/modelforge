@@ -51,8 +51,7 @@ class SPICEOpenFFCuration(DatasetCuration):
     convert_units: bool, optional, default=True
         Convert from the source units (e.g., angstrom, bohr, hartree)
         to [nanometer, kJ/mol] (i.e., target units)
-    release_version: str, optional, default='1.1.4'
-        Version of the SPICE dataset to fetch from the MOLSSI QCArchive.
+
     Examples
     --------
     >>> spice_openff_data = SPICEOpenFFCuration(hdf5_file_name='spice114_openff_dataset.hdf5',
@@ -60,22 +59,6 @@ class SPICEOpenFFCuration(DatasetCuration):
     >>> spice_openff_data.process()
 
     """
-
-    # def __init__(
-    #     self,
-    #     hdf5_file_name: str,
-    #     output_file_dir: str,
-    #     local_cache_dir: str,
-    #     convert_units: bool = True,
-    #     release_version: str = "1.1.4",
-    # ):
-    #     super().__init__(
-    #         hdf5_file_name=hdf5_file_name,
-    #         output_file_dir=output_file_dir,
-    #         local_cache_dir=local_cache_dir,
-    #         convert_units=convert_units,
-    #     )
-    #     self.release_version = release_version
 
     def _init_dataset_parameters(self):
         self.qcarchive_server = "ml.qcarchive.molssi.org"
@@ -207,7 +190,7 @@ class SPICEOpenFFCuration(DatasetCuration):
             Path to the directory to store the local sqlite database
         force_download: bool, required
             If True, this will force the software to download the data again, even if present.
-        unit_testing_max_records: Optional[int], optional, default=None
+        max_records: Optional[int], optional, default=None
             If set to an integer, 'n', the routine will only process the first 'n' records, useful for unit tests.
             Note, conformers of the same molecule are saved in separate records, and thus the number of molecules
             that end up in the 'data' list after _process_downloaded is called  may be less than unit_testing_max_records.
@@ -792,7 +775,6 @@ class SPICEOpenFFCuration(DatasetCuration):
         from modelforge.curation import yaml_files
         import yaml
 
-        # if self.release_version == "1.1.4":
         # The SPICE dataset is available in the MOLSSI QCArchive
         # This will need to load from various datasets, as described on the spice-dataset github page
         # see https://github.com/openmm/spice-dataset/blob/1.1.4/downloader/config.yaml

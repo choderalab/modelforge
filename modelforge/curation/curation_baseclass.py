@@ -98,6 +98,8 @@ class DatasetCuration(ABC):
             Location to write the output hdf5 file.
         local_cache_dir: str, optional, default='./qm9_datafiles'
             Location to save downloaded dataset.
+        version_select: str, optional, default='latest'
+            Version of the dataset to use as defined in the associated yaml file.
         convert_units: bool, optional, default=True
             Convert from [e.g., angstrom, bohr, hartree] (i.e., source units)
             to [nanometer, kJ/mol] (i.e., target units)

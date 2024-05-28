@@ -103,6 +103,15 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
             "internal_energy_at_0K",
             "charges",
         ]
+        # spot check the processing of the yaml file
+        assert data.gz_data_file["length"] == 1697917
+        assert data.gz_data_file["md5"] == "dc8ada0d808d02c699daf2000aff1fe9"
+        assert data.gz_data_file["name"] == "qm9_dataset_v0_nc_1000.hdf5.gz"
+        assert data.hdf5_data_file["md5"] == "305a0602860f181fafa75f7c7e3e6de4"
+        assert data.hdf5_data_file["name"] == "qm9_dataset_v0_nc_1000.hdf5"
+        assert (
+            data.processed_data_file["name"] == "qm9_dataset_v0_nc_1000_processed.npz"
+        )
 
         data.properties_of_interest = [
             "internal_energy_at_0K",

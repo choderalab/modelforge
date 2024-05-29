@@ -80,7 +80,8 @@ class Pairlist(Module):
         else:
             # Repeat each number n-1 times for i_indices
             i_indices = torch.repeat_interleave(
-                torch.arange(n, device=device), repeats=n - 1
+                torch.arange(n, device=device),
+                repeats=n - 1,
             )
 
             # Correctly construct j_indices

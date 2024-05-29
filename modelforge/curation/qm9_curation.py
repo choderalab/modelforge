@@ -9,34 +9,34 @@ from openff.units import unit
 
 class QM9Curation(DatasetCuration):
     """
-    Routines to fetch and process the QM9 dataset into a curated hdf5 file.
+        Routines to fetch and process the QM9 dataset into a curated hdf5 file.
 
-    The QM9 dataset includes 133,885 organic molecules with up to nine heavy atoms (CONF).
-    All properties were calculated at the B3LYP/6-31G(2df,p) level of quantum chemistry.
+    The QM9 dataset includes 133,885 organic molecules with up to nine total heavy atoms (C,O,N,or F; excluding H).
+        All properties were calculated at the B3LYP/6-31G(2df,p) level of quantum chemistry.
 
-    Citation: Ramakrishnan, R., Dral, P., Rupp, M. et al.
-                "Quantum chemistry structures and properties of 134 kilo molecules."
-                Sci Data 1, 140022 (2014).
-                https://doi.org/10.1038/sdata.2014.22
+        Citation: Ramakrishnan, R., Dral, P., Rupp, M. et al.
+                    "Quantum chemistry structures and properties of 134 kilo molecules."
+                    Sci Data 1, 140022 (2014).
+                    https://doi.org/10.1038/sdata.2014.22
 
-    DOI for dataset: 10.6084/m9.figshare.c.978904.v5
+        DOI for dataset: 10.6084/m9.figshare.c.978904.v5
 
-    Parameters
-    ----------
-    hdf5_file_name: str, required
-        Name of the hdf5 file that will be generated.
-    output_file_dir: str, optional, default='./'
-        Location to write the output hdf5 file.
-    local_cache_dir: str, optional, default='./qm9_datafiles'
-        Location to save downloaded dataset.
-    convert_units: bool, optional, default=True
-        Convert from [e.g., angstrom, bohr, hartree] (i.e., source units)
-        to [nanometer, kJ/mol] (i.e., target units)
+        Parameters
+        ----------
+        hdf5_file_name: str, required
+            Name of the hdf5 file that will be generated.
+        output_file_dir: str, optional, default='./'
+            Location to write the output hdf5 file.
+        local_cache_dir: str, optional, default='./qm9_datafiles'
+            Location to save downloaded dataset.
+        convert_units: bool, optional, default=True
+            Convert from [e.g., angstrom, bohr, hartree] (i.e., source units)
+            to [nanometer, kJ/mol] (i.e., target units)
 
-    Examples
-    --------
-    >>> qm9_data = QM9Curation(hdf5_file_name='qm9_dataset.hdf5', local_cache_dir='~/datasets/qm9_dataset')
-    >>> qm9_data.process()
+        Examples
+        --------
+        >>> qm9_data = QM9Curation(hdf5_file_name='qm9_dataset.hdf5', local_cache_dir='~/datasets/qm9_dataset')
+        >>> qm9_data.process()
 
     """
 
@@ -44,10 +44,33 @@ class QM9Curation(DatasetCuration):
         """
         Define the key parameters for the QM9 dataset.
         """
-        self.dataset_download_url = (
-            "https://springernature.figshare.com/ndownloader/files/3195389"
+        # read in the yaml file that defines the dataset download url and md5 checksum
+        # this yaml file should be stored along with the curated dataset
+
+        from importlib import resources
+        from modelforge.curation import yaml_files
+        import yaml
+
+        yaml_file = resources.files(yaml_files) / "qm9_curation.yaml"
+        logger.debug(f"Loading config data from {yaml_file}")
+        with open(yaml_file, "r") as file:
+            data_inputs = yaml.safe_load(file)
+
+        assert data_inputs["dataset_name"] == "qm9"
+
+        if self.version_select == "latest":
+            self.version_select = data_inputs["latest"]
+            logger.debug(f"Latest version: {self.version_select}")
+
+        self.dataset_download_url = data_inputs[self.version_select][
+            "dataset_download_url"
+        ]
+        self.dataset_md5_checksum = data_inputs[self.version_select][
+            "dataset_md5_checksum"
+        ]
+        logger.debug(
+            f"Dataset: {self.version_select} version: {data_inputs[self.version_select]['version']}"
         )
-        self.dataset_md5_checksum = "ad1ebd51ee7f5b3a6e32e974e5d54012"
 
         # Below, we define key pieces of information related to the dataset in the form of a dict.
         # Metadata will be used to generate a README to go along with the HDF5 dataset.

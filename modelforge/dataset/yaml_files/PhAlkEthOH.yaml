@@ -1,0 +1,29 @@
+dataset: PhAlkEthOH
+latest: full_dataset_v0
+latest_test: nc_1000_v0
+full_dataset_v0:
+  version: 0
+  gz_data_file:
+    length: 907772064
+    md5: 2388c3a924aa0ead6824396603147d68
+    name: PhAlkEthOH_dataset_v0.hdf5.gz
+  hdf5_data_file:
+    md5: 71be4b1f9a5a40f2be3d20220adb3082
+    name: PhAlkEthOH_dataset_v0.hdf5
+  processed_data_file:
+    md5: null
+    name: PhAlkEthOH_dataset_v0_processed.npz
+  url: https://www.dropbox.com/scl/fi/ytn1r5khi5yf852zxpk0i/PhAlkEthOH_openff_dataset_v0.hdf5.gz?rlkey=ffowr5yw1a2n9r2pi0wrwpl6z&st=dem50d85&dl=1
+nc_1000_v0:
+  version: 0
+  gz_data_file:
+    length: 2713690
+    md5: 80004fbbc55ffd2d14d862e06bb5c431
+    name: PhAlkEthOH_dataset_v0_nc_1000.hdf5.gz
+  hdf5_data_file:
+    md5: 244eb8d1b3547b8da229fd1507fb4d4e
+    name: PhAlkEthOH_dataset_v0_nc_1000.hdf5
+  processed_data_file:
+    md5: null
+    name: PhAlkEthOH_dataset_v0_nc_1000_processed.npz
+  url: https://www.dropbox.com/scl/fi/9lpwxglzmzu8xsudugikg/PhAlkEthOH_openff_dataset_v0_ntc_1000.hdf5.gz?rlkey=wivc2tgto1m7nv107vxyla34f&st=8cdifms7&dl=1

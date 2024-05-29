@@ -6,38 +6,19 @@ from tqdm import tqdm
 from openff.units import unit
 
 
-class SPICEOpenFFCuration(DatasetCuration):
+class PhAlkEthOHCuration(DatasetCuration):
     """
-    Fetches the SPICE 1.1.4 dataset from MOLSSI QCArchive and processes it into a curated hdf5 file.
+    Fetches the OpenFF PhAlkEthOH dataset from MOLSSI QCArchive and processes it into a curated hdf5 file.
 
     All QM datapoints retrieved were generated using B3LYP-D3BJ/DZVP level of theory.
     This is the default theory used for force field development by the Open Force Field Initiative.
-    This data appears as two separate records in QCArchive: ('spec_2'  and 'spec_6'),
-    where 'spec_6' provides the dispersion corrections for energy and gradient.
 
-    This includes the following collections from qcarchive:
+    This includes the following collection from qcarchive:
 
-    "SPICE Solvated Amino Acids Single Points Dataset v1.1",
-    "SPICE Dipeptides Single Points Dataset v1.2",
-    "SPICE DES Monomers Single Points Dataset v1.1",
-    "SPICE DES370K Single Points Dataset v1.0",
-    "SPICE PubChem Set 1 Single Points Dataset v1.2",
-    "SPICE PubChem Set 2 Single Points Dataset v1.2",
-    "SPICE PubChem Set 3 Single Points Dataset v1.2",
-    "SPICE PubChem Set 4 Single Points Dataset v1.2",
-    "SPICE PubChem Set 5 Single Points Dataset v1.2",
-    "SPICE PubChem Set 6 Single Points Dataset v1.2",
+    "OpenFF Sandbox CHO PhAlkEthOH v1.0"
 
-    It does not include the following datasets that are part of the official 1.1.4 release of SPICE (calculated
-    at the ωB97M-D3(BJ)/def2-TZVPPD level of theory), as the openff level of theory was not used for these datasets:
-
-    "SPICE Ion Pairs Single Points Dataset v1.1",
-    "SPICE DES370K Single Points Dataset Supplement v1.0",
-
-    Reference to original SPICE publication:
-    Eastman, P., Behara, P.K., Dotson, D.L. et al. SPICE,
-    A Dataset of Drug-like Molecules and Peptides for Training Machine Learning Potentials.
-    Sci Data 10, 11 (2023). https://doi.org/10.1038/s41597-022-01882-6
+    Link to associated github repository:
+    https://github.com/openforcefield/qca-dataset-submission/tree/master/submissions/2020-09-18-OpenFF-Sandbox-CHO-PhAlkEthOH
 
 
     Parameters
@@ -54,14 +35,14 @@ class SPICEOpenFFCuration(DatasetCuration):
 
     Examples
     --------
-    >>> spice_openff_data = SPICEOpenFFCuration(hdf5_file_name='spice114_openff_dataset.hdf5',
-    >>>                             local_cache_dir='~/datasets/spice114_openff_dataset')
-    >>> spice_openff_data.process()
+    >>> PhAlkEthOH_openff_data = PhAlkEthOHOpenFFCuration(hdf5_file_name='PhAlkEthOH_openff_dataset.hdf5',
+    >>>                             local_cache_dir='~/datasets/PhAlkEthOH_openff_dataset')
+    >>> PhAlkEthOH_openff_data.process()
 
     """
 
     def _init_dataset_parameters(self):
-        self.qcarchive_server = "ml.qcarchive.molssi.org"
+        self.qcarchive_server = "https://api.qcarchive.molssi.org"
 
         self.molecule_names = {}
 
@@ -76,10 +57,6 @@ class SPICEOpenFFCuration(DatasetCuration):
                 "u_in": unit.hartree,
                 "u_out": unit.kilojoule_per_mole,
             },
-            "dispersion_corrected_dft_total_energy": {
-                "u_in": unit.hartree,
-                "u_out": unit.kilojoule_per_mole,
-            },
             "dft_total_gradient": {
                 "u_in": unit.hartree / unit.bohr,
                 "u_out": unit.kilojoule_per_mole / unit.angstrom,
@@ -87,22 +64,6 @@ class SPICEOpenFFCuration(DatasetCuration):
             "dft_total_force": {
                 "u_in": unit.hartree / unit.bohr,
                 "u_out": unit.kilojoule_per_mole / unit.angstrom,
-            },
-            "dispersion_corrected_dft_total_gradient": {
-                "u_in": unit.hartree / unit.bohr,
-                "u_out": unit.kilojoule_per_mole / unit.angstrom,
-            },
-            "mbis_charges": {
-                "u_in": unit.elementary_charge,
-                "u_out": unit.elementary_charge,
-            },
-            "total_charge": {
-                "u_in": unit.elementary_charge,
-                "u_out": unit.elementary_charge,
-            },
-            "scf_dipole": {
-                "u_in": unit.elementary_charge * unit.bohr,
-                "u_out": unit.elementary_charge * unit.nanometer,
             },
             "dispersion_correction_energy": {
                 "u_in": unit.hartree,
@@ -112,13 +73,13 @@ class SPICEOpenFFCuration(DatasetCuration):
                 "u_in": unit.hartree / unit.bohr,
                 "u_out": unit.kilojoule_per_mole / unit.angstrom,
             },
-            "reference_energy": {
-                "u_in": unit.hartree,
-                "u_out": unit.kilojoule_per_mole,
+            "scf_dipole": {
+                "u_in": unit.elementary_charge * unit.bohr,
+                "u_out": unit.elementary_charge * unit.nanometer,
             },
-            "formation_energy": {
-                "u_in": unit.hartree,
-                "u_out": unit.kilojoule_per_mole,
+            "total_charge": {
+                "u_in": unit.elementary_charge,
+                "u_out": unit.elementary_charge,
             },
         }
 
@@ -151,20 +112,17 @@ class SPICEOpenFFCuration(DatasetCuration):
             "total_charge": "single_rec",
             "atomic_numbers": "single_atom",
             "n_configs": "single_rec",
-            "reference_energy": "single_rec",
             "molecular_formula": "single_rec",
             "canonical_isomeric_explicit_hydrogen_mapped_smiles": "single_rec",
             "geometry": "series_atom",
             "dft_total_energy": "series_mol",
             "dft_total_gradient": "series_atom",
             "dft_total_force": "series_atom",
-            "formation_energy": "series_mol",
-            "mbis_charges": "series_atom",
-            "scf_dipole": "series_atom",
+            "scf_dipole": "series_mol",
         }
 
     # we will use the retry package to allow us to resume download if we lose connection to the server
-    @retry(delay=1, jitter=1, backoff=2, tries=50, logger=logger, max_delay=10)
+    # @retry(delay=1, jitter=1, backoff=2, tries=50, logger=logger, max_delay=10)
     def _fetch_singlepoint_from_qcarchive(
         self,
         dataset_name: str,
@@ -207,9 +165,9 @@ class SPICEOpenFFCuration(DatasetCuration):
         from loguru import logger
         from qcportal import PortalClient
 
-        dataset_type = "singlepoint"
+        dataset_type = "optimization"
         client = PortalClient(
-            self.qcarchive_server, cache_dir=f"{local_path_dir}/qcarchive_cache"
+            self.qcarchive_server, cache_dir=f"{local_path_dir}/qcarchive_cache1"
         )
 
         ds = client.get_dataset(dataset_type=dataset_type, dataset_name=dataset_name)
@@ -218,6 +176,7 @@ class SPICEOpenFFCuration(DatasetCuration):
         entry_names = ds.entry_names
         if max_records is None:
             max_records = len(entry_names)
+
         with SqliteDict(
             f"{local_path_dir}/{local_database_name}",
             tablename=specification_name,
@@ -255,25 +214,64 @@ class SPICEOpenFFCuration(DatasetCuration):
                     logger.debug(
                         f"Fetching {len(to_fetch)} records for {specification_name} from dataset {dataset_name}."
                     )
+                    # chunks = []
+                    # chunk_size = 100
+                    # for i in range(0, len(to_fetch), chunk_size):
+                    #     chunks.append({"lo": i, "hi": i + chunk_size})
+                    # chunks.append(
+                    #     {
+                    #         "lo": len(to_fetch) - len(to_fetch) % chunk_size,
+                    #         "hi": len(to_fetch) + 1,
+                    #     }
+                    # )
+                    #
+                    # for chunk in chunks:
+                    #     lo = chunk["lo"]
+                    #     hi = chunk["hi"]
+                    #
+                    #     for record in ds.iterate_records(
+                    #         to_fetch[lo:hi],
+                    #         specification_names=[specification_name],
+                    #         force_refetch=force_download,
+                    #         include=["**"],
+                    #     ):
+                    #         # spice_db[record[0]] = [record[2].dict(), record[2].trajectory]
+                    #
+                    #         spice_db[record[0]] = [
+                    #             record[2].dict()["status"].value,
+                    #             [
+                    #                 [traj.dict(), traj.molecule.geometry]
+                    #                 for traj in record[2].trajectory
+                    #             ],
+                    #         ]
+                    #         if pbar is not None:
+                    #             pbar.update(1)
+
                     for record in ds.iterate_records(
                         to_fetch,
                         specification_names=[specification_name],
                         force_refetch=force_download,
+                        include=["**"],
                     ):
-                        spice_db[record[0]] = record[2].dict()
+                        # spice_db[record[0]] = [record[2].dict(), record[2].trajectory]
+
+                        spice_db[record[0]] = [
+                            record[2].dict()["status"].value,
+                            [
+                                [traj.dict(), traj.molecule.geometry]
+                                for traj in record[2].trajectory
+                            ],
+                        ]
                         if pbar is not None:
                             pbar.update(1)
 
-    def _calculate_reference_energy_and_charge(
+    def _calculate_total_charge(
         self, smiles: str
     ) -> Tuple[unit.Quantity, unit.Quantity]:
         """
-        Calculate the reference energy for a given molecule, as defined by the SMILES string.
+        Calculate the  total charge as defined by the SMILES string.
 
-        This routine is taken from
-        https://github.com/openmm/spice-dataset/blob/df7f5a2c8bf1ce0db225715a81f32897cc3a8988/downloader/downloader-openff-default.py
-        Reference energies for individual atoms are computed with Psi4 1.5 wB97M-D3BJ/def2-TZVPPD.
-
+        T
         Parameters
         ----------
         smiles: str, required
@@ -282,142 +280,15 @@ class SPICEOpenFFCuration(DatasetCuration):
         Returns
         -------
         unit.Quantity
-            Returns the reference energy of for the atoms in the molecule (in hartrees)
-            and the total charge of the molecule (in elementary charge).
+            total charge of the molecule (in elementary charge).
         """
 
         from rdkit import Chem
-        import numpy as np
-
-        # Reference energies, in hartrees, computed with Psi4 1.5 wB97M-D3BJ/def2-TZVPPD.
-
-        atom_energy = {
-            "Br": {-1: -2574.2451510945853, 0: -2574.1167240829964},
-            "C": {-1: -37.91424135791358, 0: -37.87264507233593, 1: -37.45349214963933},
-            "Ca": {2: -676.9528465198214},
-            "Cl": {-1: -460.3350243496703, 0: -460.1988762285739},
-            "F": {-1: -99.91298732343974, 0: -99.78611622985483},
-            "H": {-1: -0.5027370838721259, 0: -0.4987605100487531, 1: 0.0},
-            "I": {-1: -297.8813829975981, 0: -297.76228914445625},
-            "K": {1: -599.8025677513111},
-            "Li": {1: -7.285254714046546},
-            "Mg": {2: -199.2688420040449},
-            "N": {
-                -1: -54.602291095426494,
-                0: -54.62327513368922,
-                1: -54.08594142587869,
-            },
-            "Na": {1: -162.11366478783253},
-            "O": {-1: -75.17101657391741, 0: -75.11317840410095, 1: -74.60241514396725},
-            "P": {0: -341.3059197024934, 1: -340.9258392474849},
-            "S": {-1: -398.2405387031612, 0: -398.1599636677874, 1: -397.7746615977658},
-        }
-        default_charge = {}
-        for symbol in atom_energy:
-            energies = [
-                (energy, charge) for charge, energy in atom_energy[symbol].items()
-            ]
-            default_charge[symbol] = sorted(energies)[0][1]
 
         rdmol = Chem.MolFromSmiles(smiles, sanitize=False)
         total_charge = sum(atom.GetFormalCharge() for atom in rdmol.GetAtoms())
-        symbol = [atom.GetSymbol() for atom in rdmol.GetAtoms()]
-        charge = [default_charge[s] for s in symbol]
-        delta = np.sign(total_charge - sum(charge))
-        while delta != 0:
-            best_index = -1
-            best_energy = None
-            for i in range(len(symbol)):
-                s = symbol[i]
-                e = atom_energy[s]
-                new_charge = charge[i] + delta
 
-                if new_charge in e:
-                    if best_index == -1 or e[new_charge] - e[charge[i]] < best_energy:
-                        best_index = i
-                        best_energy = e[new_charge] - e[charge[i]]
-
-            charge[best_index] += delta
-            delta = np.sign(total_charge - sum(charge))
-
-        return (
-            sum(atom_energy[s][c] for s, c in zip(symbol, charge)) * unit.hartree,
-            int(total_charge) * unit.elementary_charge,
-        )
-
-    def _sort_keys(self, non_error_keys: List[str]) -> Tuple[List[str], Dict[str, str]]:
-        """
-        This will sort record identifiers such that conformers are listed in numerical order.
-
-        This will, if necessarily also sanitize the names of the molecule, to ensure that we have the following
-        form {name}-{conformer_number}. In some cases, the original name has a "-" which would causes issues
-        with simply splitting based upon a "-" to either get the name or the conformer number.
-
-        The function is called by _process_downloaded.
-
-        Parameters
-        ----------
-        non_error_keys
-
-        Returns
-        -------
-
-        """
-        # we need to sanitize the names of the molecule, as
-        # some of the names have a dash in them, for example ALA-ALA-1
-        # This will replace any hyphens in the name with an underscore.
-        # To be able to retain the original name, needed for accessing the record in the sqlite file
-        # we will create a simple dictionary that maps the sanitized name to the original name.
-
-        non_error_keys_sanitized = []
-        original_name = {}
-
-        for key in non_error_keys:
-            s = "_"
-            d = "-"
-            temp = key.split("-")
-            name = d.join([s.join(temp[0:-1]), temp[-1]])
-            non_error_keys_sanitized.append(name)
-            original_name[name] = key
-
-        # We will sort the keys such that conformers are listed in numerical order.
-        # This is not strictly necessary, but will help to better retain
-        # connection to the original QCArchive data, where in most cases conformer-id will directly correspond to
-        # the index of the final array constructed here.
-        # Note, if the calculation of an individual conformer failed on qcarchive,
-        # it will have been excluded from the non_error_keys list. As such, in such cases,
-        # the conformer id in the record name will no longer have a one-to-one correspondence with the
-        # index of the conformers in the combined arrays.  This should not be an issue in terms of training,
-        # but could cause some confusion when interrogating a specific set of conformers geometries for a molecule.
-
-        sorted_keys = []
-
-        # names of the molecules are of form  {name}-{conformer_number}
-        # first sort by name
-        s = "_"
-        pre_sort = sorted(non_error_keys_sanitized, key=lambda x: (x.split("-")[0]))
-
-        # then sort each molecule by conformer_number
-        # we'll do this by simple iteration through the list, and when we encounter a new molecule name, we'll sort the
-        # previous temporary list we generated.
-        current_val = pre_sort[0].split("-")[0]
-        temp_list = []
-
-        for val in pre_sort:
-            name = val.split("-")[0]
-
-            if name == current_val:
-                temp_list.append(val)
-            else:
-                sorted_keys += sorted(temp_list, key=lambda x: int(x.split("-")[-1]))
-                temp_list = []
-                current_val = name
-                temp_list.append(val)
-
-        # sort the final batch
-        sorted_keys += sorted(temp_list, key=lambda x: int(x.split("-")[-1]))
-
-        return sorted_keys, original_name
+        return (int(total_charge) * unit.elementary_charge,)
 
     def _process_downloaded(
         self,
@@ -460,30 +331,24 @@ class SPICEOpenFFCuration(DatasetCuration):
 
             # identify the set of molecules that do not have errors
             with SqliteDict(
-                input_file_name, tablename="spec_2", autocommit=False
-            ) as spice_db_spec2:
-                spec2_keys = list(spice_db_spec2.keys())
+                input_file_name, tablename="default", autocommit=False
+            ) as db_default:
+                db_keys = list(db_default.keys())
+                for key in db_keys:
+                    if db_default[key][0] == "complete":
+                        non_error_keys.append(key)
 
-                with SqliteDict(
-                    input_file_name, tablename="spec_6", autocommit=False
-                ) as spice_db_spec6:
-                    for key in spec2_keys:
-                        if (
-                            spice_db_spec2[key]["status"].value == "complete"
-                            and spice_db_spec6[key]["status"].value == "complete"
-                        ):
-                            non_error_keys.append(key)
-
-            sorted_keys, original_name = self._sort_keys(non_error_keys)
+            # sorted_keys, original_name = self._sort_keys(non_error_keys)
 
             # first read in molecules from entry
             with SqliteDict(
                 input_file_name, tablename="entry", autocommit=False
             ) as spice_db:
                 logger.debug(f"Processing {filename} entries.")
-                for key in tqdm(sorted_keys):
-                    val = spice_db[original_name[key]].dict()
-                    name = key.split("-")[0]
+                for key in tqdm(non_error_keys):
+                    val = spice_db[key].dict()
+                    # name = key.split("-")[0]
+                    name = key
                     # if we haven't processed a molecule with this name yet
                     # we will add to the molecule_names dictionary
                     if name not in self.molecule_names.keys():
@@ -493,157 +358,142 @@ class SPICEOpenFFCuration(DatasetCuration):
                         data_temp["name"] = name
                         data_temp["source"] = input_file_name.replace(".sqlite", "")
                         atomic_numbers = []
-                        for element in val["molecule"]["symbols"]:
+                        for element in val["initial_molecule"]["symbols"]:
                             atomic_numbers.append(
                                 qcel.periodictable.to_atomic_number(element)
                             )
                         data_temp["atomic_numbers"] = np.array(atomic_numbers).reshape(
                             -1, 1
                         )
-                        data_temp["molecular_formula"] = val["molecule"]["identifiers"][
-                            "molecular_formula"
-                        ]
+                        data_temp["molecular_formula"] = val["initial_molecule"][
+                            "identifiers"
+                        ]["molecular_formula"]
                         data_temp[
                             "canonical_isomeric_explicit_hydrogen_mapped_smiles"
-                        ] = val["molecule"]["extras"][
+                        ] = val["initial_molecule"]["extras"][
                             "canonical_isomeric_explicit_hydrogen_mapped_smiles"
                         ]
-                        data_temp["n_configs"] = 1
-                        data_temp["geometry"] = val["molecule"]["geometry"].reshape(
-                            1, -1, 3
-                        )
-                        (
-                            data_temp["reference_energy"],
-                            data_temp["total_charge"],
-                        ) = self._calculate_reference_energy_and_charge(
+                        data_temp["n_configs"] = 0
+
+                        (data_temp["total_charge"],) = self._calculate_total_charge(
                             data_temp[
                                 "canonical_isomeric_explicit_hydrogen_mapped_smiles"
                             ]
                         )
                         data_temp["dataset_name"] = dataset_name
                         self.data.append(data_temp)
-                    else:
-                        # if we have already encountered this molecule we need to append to the data
-                        # since we are using numpy we will use vstack to append to the arrays
-                        index = self.molecule_names[name]
 
+            with SqliteDict(
+                input_file_name, tablename="default", autocommit=False
+            ) as spice_db:
+                logger.debug(f"Processing {filename} default spec.")
+
+                for key in tqdm(non_error_keys):
+                    # name = key.split("-")[0]
+                    trajectory = spice_db[key][1]
+                    name = key
+                    index = self.molecule_names[name]
+
+                    for state in trajectory:
+                        properties, config = state
                         self.data[index]["n_configs"] += 1
-                        self.data[index]["geometry"] = np.vstack(
-                            (
-                                self.data[index]["geometry"],
-                                val["molecule"]["geometry"].reshape(1, -1, 3),
+
+                        # note, we will use the convention of names being lowercase
+                        # and spaces denoted by underscore
+                        quantity = "geometry"
+                        quantity_o = "geometry"
+                        if quantity_o not in self.data[index].keys():
+                            self.data[index][quantity_o] = config.reshape(1, -1, 3)
+                        else:
+                            self.data[index][quantity_o] = np.vstack(
+                                (
+                                    self.data[index][quantity_o],
+                                    config.reshape(1, -1, 3),
+                                )
                             )
-                        )
 
-            with SqliteDict(
-                input_file_name, tablename="spec_2", autocommit=False
-            ) as spice_db:
-                logger.debug(f"Processing {filename} spec_2.")
-
-                for key in tqdm(sorted_keys):
-                    name = key.split("-")[0]
-                    val = spice_db[original_name[key]]
-
-                    index = self.molecule_names[name]
-
-                    # note, we will use the convention of names being lowercase
-                    # and spaces denoted by underscore
-                    quantity = "dft total energy"
-                    quantity_o = "dft_total_energy"
-                    if quantity_o not in self.data[index].keys():
-                        self.data[index][quantity_o] = val["properties"][quantity]
-                    else:
-                        self.data[index][quantity_o] = np.vstack(
-                            (self.data[index][quantity_o], val["properties"][quantity])
-                        )
-
-                    quantity = "dft total gradient"
-                    quantity_o = "dft_total_gradient"
-                    if quantity_o not in self.data[index].keys():
-                        self.data[index][quantity_o] = np.array(
-                            val["properties"][quantity]
-                        ).reshape(1, -1, 3)
-                    else:
-                        self.data[index][quantity_o] = np.vstack(
-                            (
-                                self.data[index][quantity_o],
-                                np.array(val["properties"][quantity]).reshape(1, -1, 3),
+                        # note, we will use the convention of names being lowercase
+                        # and spaces denoted by underscore
+                        quantity = "current energy"
+                        quantity_o = "dft_total_energy"
+                        if quantity_o not in self.data[index].keys():
+                            self.data[index][quantity_o] = properties["properties"][
+                                quantity
+                            ]
+                        else:
+                            self.data[index][quantity_o] = np.vstack(
+                                (
+                                    self.data[index][quantity_o],
+                                    properties["properties"][quantity],
+                                )
                             )
-                        )
 
-                    quantity = "mbis charges"
-                    quantity_o = "mbis_charges"
-                    if quantity_o not in self.data[index].keys():
-                        self.data[index][quantity_o] = np.array(
-                            val["properties"][quantity]
-                        ).reshape(1, -1)[..., newaxis]
-
-                    else:
-                        self.data[index][quantity_o] = np.vstack(
-                            (
-                                self.data[index][quantity_o],
-                                np.array(val["properties"][quantity]).reshape(1, -1)[
-                                    ..., newaxis
-                                ],
-                            )
-                        )
-
-                    quantity = "scf dipole"
-                    quantity_o = "scf_dipole"
-                    if quantity_o not in self.data[index].keys():
-                        self.data[index][quantity_o] = np.array(
-                            val["properties"][quantity]
-                        ).reshape(1, 3)
-                    else:
-                        self.data[index][quantity_o] = np.vstack(
-                            (
-                                self.data[index][quantity_o],
-                                np.array(val["properties"][quantity]).reshape(1, 3),
-                            )
-                        )
-
-            with SqliteDict(
-                input_file_name, tablename="spec_6", autocommit=False
-            ) as spice_db:
-                logger.debug(f"Processing {filename} spec_6.")
-
-                for key in tqdm(sorted_keys):
-                    name = key.split("-")[0]
-                    val = spice_db[original_name[key]]
-                    index = self.molecule_names[name]
-
-                    # typecasting issue in there
-
-                    quantity = "dispersion correction energy"
-                    quantity_o = "dispersion_correction_energy"
-                    # Note need to typecast here because of a bug in the
-                    # qcarchive entry: see issue: https://github.com/MolSSI/QCFractal/issues/766
-                    if quantity_o not in self.data[index].keys():
-                        self.data[index][quantity_o] = np.array(
-                            float(val["properties"][quantity])
-                        ).reshape(1, 1)
-                    else:
-                        self.data[index][quantity_o] = np.vstack(
-                            (
-                                self.data[index][quantity_o],
-                                np.array(float(val["properties"][quantity])).reshape(
-                                    1, 1
+                        quantity = "dispersion correction energy"
+                        quantity_o = "dispersion_correction_energy"
+                        # Note need to typecast here because of a bug in the
+                        # qcarchive entry: see issue: https://github.com/MolSSI/QCFractal/issues/766
+                        if quantity_o not in self.data[index].keys():
+                            self.data[index][quantity_o] = np.array(
+                                float(properties["properties"][quantity])
+                            ).reshape(1, 1)
+                        else:
+                            self.data[index][quantity_o] = np.vstack(
+                                (
+                                    self.data[index][quantity_o],
+                                    np.array(
+                                        float(properties["properties"][quantity])
+                                    ).reshape(1, 1),
                                 ),
-                            ),
-                        )
-                    quantity = "dispersion correction gradient"
-                    quantity_o = "dispersion_correction_gradient"
-                    if quantity_o not in self.data[index].keys():
-                        self.data[index][quantity_o] = np.array(
-                            val["properties"][quantity]
-                        ).reshape(1, -1, 3)
-                    else:
-                        self.data[index][quantity_o] = np.vstack(
-                            (
-                                self.data[index][quantity_o],
-                                np.array(val["properties"][quantity]).reshape(1, -1, 3),
                             )
-                        )
+
+                        quantity = "current gradient"
+                        quantity_o = "dft_total_gradient"
+                        if quantity_o not in self.data[index].keys():
+                            self.data[index][quantity_o] = np.array(
+                                properties["properties"][quantity]
+                            ).reshape(1, -1, 3)
+                        else:
+                            self.data[index][quantity_o] = np.vstack(
+                                (
+                                    self.data[index][quantity_o],
+                                    np.array(
+                                        properties["properties"][quantity]
+                                    ).reshape(1, -1, 3),
+                                )
+                            )
+
+                        quantity = "dispersion correction gradient"
+                        quantity_o = "dispersion_correction_gradient"
+                        if quantity_o not in self.data[index].keys():
+                            self.data[index][quantity_o] = np.array(
+                                properties["properties"][quantity]
+                            ).reshape(1, -1, 3)
+                        else:
+                            self.data[index][quantity_o] = np.vstack(
+                                (
+                                    self.data[index][quantity_o],
+                                    np.array(
+                                        properties["properties"][quantity]
+                                    ).reshape(1, -1, 3),
+                                )
+                            )
+
+                        quantity = "scf dipole"
+                        quantity_o = "scf_dipole"
+                        if quantity_o not in self.data[index].keys():
+                            self.data[index][quantity_o] = np.array(
+                                properties["properties"][quantity]
+                            ).reshape(1, 3)
+                        else:
+                            self.data[index][quantity_o] = np.vstack(
+                                (
+                                    self.data[index][quantity_o],
+                                    np.array(
+                                        properties["properties"][quantity]
+                                    ).reshape(1, 3),
+                                )
+                            )
+
         # assign units
         for datapoint in self.data:
             for key in datapoint.keys():
@@ -671,11 +521,11 @@ class SPICEOpenFFCuration(DatasetCuration):
             # we only want to write the dispersion corrected gradient to the file to avoid confusion
             datapoint.pop("dispersion_correction_gradient")
 
-            datapoint["formation_energy"] = (
-                datapoint["dft_total_energy"]
-                - np.array(datapoint["reference_energy"].m * datapoint["n_configs"])
-                * datapoint["reference_energy"].u
-            )
+            # datapoint["formation_energy"] = (
+            #     datapoint["dft_total_energy"]
+            #     - np.array(datapoint["reference_energy"].m * datapoint["n_configs"])
+            #     * datapoint["reference_energy"].u
+            # )
 
         if self.convert_units:
             self._convert_units()
@@ -718,10 +568,6 @@ class SPICEOpenFFCuration(DatasetCuration):
                 datapoint["dft_total_force"] = datapoint["dft_total_force"][
                     0:n_conformers
                 ]
-                datapoint["formation_energy"] = datapoint["formation_energy"][
-                    0:n_conformers
-                ]
-                datapoint["mbis_charges"] = datapoint["mbis_charges"][0:n_conformers]
                 datapoint["scf_dipole"] = datapoint["scf_dipole"][0:n_conformers]
 
                 temp_data.append(datapoint)
@@ -735,7 +581,7 @@ class SPICEOpenFFCuration(DatasetCuration):
         max_conformers_per_record: Optional[int] = None,
         total_conformers: Optional[int] = None,
         limit_atomic_species: Optional[list] = None,
-        n_threads=6,
+        n_threads=2,
     ) -> None:
         """
         Downloads the dataset, extracts relevant information, and writes an hdf5 file.
@@ -748,7 +594,6 @@ class SPICEOpenFFCuration(DatasetCuration):
         max_records: int, optional, default=None
             If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
             Can be used in conjunction with max_conformers_per_record and total_conformers.
-            Note defining this will only fetch from the "SPICE PubChem Set 1 Single Points Dataset v1.2"
         max_conformers_per_record: int, optional, default=None
             If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
             Can be used in conjunction with max_records and total_conformers.
@@ -777,27 +622,19 @@ class SPICEOpenFFCuration(DatasetCuration):
         from modelforge.curation import yaml_files
         import yaml
 
-        # The SPICE dataset is available in the MOLSSI QCArchive
-        # This will need to load from various datasets, as described on the spice-dataset github page
-        # see https://github.com/openmm/spice-dataset/blob/1.1.4/downloader/config.yaml
-
-        yaml_file = resources.files(yaml_files) / "spice114_openff_curation.yaml"
+        yaml_file = resources.files(yaml_files) / "PhAlkEthOH_openff_curation.yaml"
         logger.debug(f"Loading config data from {yaml_file}")
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
 
-        assert data_inputs["dataset_name"] == "spice114openff"
+        assert data_inputs["dataset_name"] == "PhAlkEthOHopenff"
         if self.version_select == "latest":
             self.version_select = data_inputs["latest"]
             logger.debug(f"Using latest version {self.version_select}.")
-        if max_records is not None or total_conformers is not None:
-            # if we specify the number of records, restrict to only a subset
-            # so we don't download multiple collections.
-            dataset_names = data_inputs[self.version_select]["test_collection_name"]
-        else:
-            dataset_names = data_inputs[self.version_select]["collection_names"]
 
-        specification_names = ["spec_2", "spec_6", "entry"]
+        dataset_names = data_inputs[self.version_select]["collection_names"]
+
+        specification_names = ["entry", "default"]
 
         threads = []
         local_database_names = []

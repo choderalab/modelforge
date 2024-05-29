@@ -3,43 +3,17 @@ from typing import List
 from .dataset import HDF5Dataset
 
 
-class ANI1xDataset(HDF5Dataset):
+class PhAlkEthOHDataset(HDF5Dataset):
     """
-    Data class for handling ANI1x dataset.
+    Data class for handling OpenFF Sandbox CHO PhAlkEthOH v1.0 dataset.
 
-    This dataset includes ~5 million density function theory calculations
-    for small organic molecules containing H, C, N, and O.
-    A subset of ~500k are computed with accurate coupled cluster methods.
-
-    References:
-
-    ANI-1x dataset:
-    Smith, J. S.; Nebgen, B.; Lubbers, N.; Isayev, O.; Roitberg, A. E.
-    Less Is More: Sampling Chemical Space with Active Learning.
-    J. Chem. Phys. 2018, 148 (24), 241733.
-    https://doi.org/10.1063/1.5023802
-    https://arxiv.org/abs/1801.09319
-
-    ANI-1ccx dataset:
-    Smith, J. S.; Nebgen, B. T.; Zubatyuk, R.; Lubbers, N.; Devereux, C.; Barros, K.; Tretiak, S.; Isayev, O.; Roitberg, A. E.
-    Approaching Coupled Cluster Accuracy with a General-Purpose Neural Network Potential through Transfer Learning. N
-    at. Commun. 2019, 10 (1), 2903.
-    https://doi.org/10.1038/s41467-019-10827-4
-
-    wB97x/def2-TZVPP data:
-    Zubatyuk, R.; Smith, J. S.; Leszczynski, J.; Isayev, O.
-    Accurate and Transferable Multitask Prediction of Chemical Properties with an Atoms-in-Molecules Neural Network.
-    Sci. Adv. 2019, 5 (8), eaav6490.
-    https://doi.org/10.1126/sciadv.aav6490
-
-
-    Dataset DOI:
-    https://doi.org/10.6084/m9.figshare.c.4712477.v1
+    This class provides utilities for processing and interacting with PhAlkEthOH dataset
+    stored in HDF5 format.
 
     Attributes
     ----------
     dataset_name : str
-        Name of the dataset, default is "ANI2x".
+        Name of the dataset, default is "PhAlkEthOH".
     version_select : str
         Select the version of the dataset to use, default will provide the "latest".
         "latest_test" will select the testing subset of 1000 conformers.
@@ -51,9 +25,11 @@ class ANI1xDataset(HDF5Dataset):
     regenerate_cache: bool, optional
         If set to True, we will regenerate the npz cache file even if it already exists, using
         previously downloaded files, if available; by default False.
+
     Examples
     --------
-
+    >>> data = PhAlkEthOHDataset()
+    >>> data._download()
     """
 
     from modelforge.utils import PropertyNames
@@ -61,34 +37,35 @@ class ANI1xDataset(HDF5Dataset):
     _property_names = PropertyNames(
         Z="atomic_numbers",
         R="geometry",
-        E="wb97x_dz.energy",
-        F="wb97x_dz.forces",
+        E="dft_total_energy",
+        F="dft_total_force",
     )
 
     _available_properties = [
         "geometry",
         "atomic_numbers",
-        "wb97x_dz.energy",
-        "wb97x_dz.forces",
-        "wb97x_dz.cm5_charges",
+        "dft_total_energy",
+        "dft_total_force",
+        "scf_dipole",
+        "total_charge",
     ]  # All properties within the datafile, aside from SMILES/inchi.
 
     def __init__(
         self,
-        dataset_name: str = "ANI1x",
+        dataset_name: str = "PhAlkEthOH",
         version_select: str = "latest",
         local_cache_dir: str = ".",
         force_download: bool = False,
-        regenerate_cache: bool = False,
+        regenerate_cache=False,
     ) -> None:
         """
-        Initialize the ANI2xDataset class.
+        Initialize the PhAlkEthOHData class.
 
         Parameters
         ----------
         data_name : str, optional
-            Name of the dataset, by default "ANI1x".
-        version_select : str
+            Name of the dataset, by default "PhAlkEthOH".
+        version_select : str,optional
             Select the version of the dataset to use, default will provide the "latest".
             "latest_test" will select the testing subset of 1000 conformers.
             A version name can  be specified that corresponds to an entry in the associated yaml file, e.g., "full_dataset_v0".
@@ -98,52 +75,49 @@ class ANI1xDataset(HDF5Dataset):
             If set to True, we will download the dataset even if it already exists; by default False.
         regenerate_cache: bool, optional
             If set to True, we will regenerate the npz cache file even if it already exists, using
-            the data from the hdf5 file; by default False.
+            previously downloaded files, if available; by default False.
         Examples
         --------
-        >>> data = ANI1xDataset()  # Default dataset
-        >>> test_data = ANI1xDataset(version_select="latest_test")  # Testing subset
+        >>> data = PhAlkEthOHDataset()  # Default dataset
+        >>> test_data = PhAlkEthOHDataset(version_select="latest_test")  # Testing subset
         """
 
         _default_properties_of_interest = [
             "geometry",
             "atomic_numbers",
-            "wb97x_dz.energy",
-            "wb97x_dz.forces",
+            "dft_total_energy",
+            "dft_total_force",
+            "total_charge",
         ]  # NOTE: Default values
 
         self._properties_of_interest = _default_properties_of_interest
 
         self.dataset_name = dataset_name
         self.version_select = version_select
-
         from openff.units import unit
 
-        # these come from the ANI-2x paper generated via linear fittingh of the data
-        # https://github.com/isayev/ASE_ANI/blob/master/ani_models/ani-2x_8x/sae_linfit.dat
-        self._ase = {
-            "H": -0.5978583943827134 * unit.hartree,
-            "C": -38.08933878049795 * unit.hartree,
-            "N": -54.711968298621066 * unit.hartree,
-            "O": -75.19106774742086 * unit.hartree,
-            "S": -398.1577125334925 * unit.hartree,
-            "F": -99.80348506781634 * unit.hartree,
-            "Cl": -460.1681939421027 * unit.hartree,
-        }
         from loguru import logger
 
-        # we store the urls, filenames and checksums in a yaml file
-        # for the full dataset and the test dataset
-        # using yaml files should make these easier to extended and maintain
         from importlib import resources
         from modelforge.dataset import yaml_files
         import yaml
 
-        yaml_file = resources.files(yaml_files) / "ani1x.yaml"
+        # Reference energies, in hartrees, computed with Psi4 1.5 wB97M-D3BJ / def2-TZVPPD.
+        # copied from spice 1.1.4
+
+        self._ase = {
+            "C": -37.87264507233593 * unit.hartree,
+            "H": -0.498760510048753 * unit.hartree,
+            "O": -75.11317840410095 * unit.hartree,
+        }
+
+        yaml_file = resources.files(yaml_files) / "PhAlkEthOH.yaml"
+        logger.debug(f"Loading config data from {yaml_file}")
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
 
-        assert data_inputs["dataset"] == "ani1x"
+        # make sure we have the correct yaml file
+        assert data_inputs["dataset"] == "PhAlkEthOH"
 
         if self.version_select == "latest":
             # in the yaml file, the entry latest will define the name of the version to use
@@ -207,7 +181,9 @@ class ANI1xDataset(HDF5Dataset):
 
         Examples
         --------
-
+        >>> data =  PhAlkEthOHDataset()
+        >>> data.available_properties
+        ['geometry', 'atomic_numbers', 'return_energy']
         """
         return self._available_properties
 
@@ -225,7 +201,8 @@ class ANI1xDataset(HDF5Dataset):
 
         Examples
         --------
-
+        >>> data =  PhAlkEthOHDataset()
+        >>> data.properties_of_interest = ["geometry", "atomic_numbers", "dft_total_energy"]
         """
         if not set(properties_of_interest).issubset(self._available_properties):
             raise ValueError(
@@ -239,7 +216,8 @@ class ANI1xDataset(HDF5Dataset):
 
         Examples
         --------
-
+        >>> data =  PhAlkEthOHDataset()
+        >>> data.download()  # Downloads the dataset
 
         """
         # Right now this function needs to be defined for each dataset.

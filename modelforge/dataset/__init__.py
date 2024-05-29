@@ -5,6 +5,7 @@ from .ani2x import ANI2xDataset
 from .spice114 import SPICE114Dataset
 from .spice2 import SPICE2Dataset
 from .spice114openff import SPICE114OpenFFDataset
+from .phalkethoh import PhAlkEthOHDataset
 from .dataset import DatasetFactory, DataModule
 from enum import Enum
 
@@ -16,6 +17,7 @@ class _ImplementedDatasets(Enum):
     SPICE114 = SPICE114Dataset
     SPICE2 = SPICE2Dataset
     SPICE114_OPENFF = SPICE114OpenFFDataset
+    PHALKETHOH = PhAlkEthOHDataset
 
     @classmethod
     def get_dataset_class(cls, dataset_name: str):

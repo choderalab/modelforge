@@ -84,6 +84,10 @@ def fetch_url_from_doi(doi: str, timeout: Optional[int] = 10) -> str:
 
 def calculate_md5_checksum(file_name: str, file_path: str) -> str:
     import hashlib
+    import os
+
+    # make sure we can handle a path with a ~ in it
+    file_path = os.path.expanduser(file_path)
 
     with open(f"{file_path}/{file_name}", "rb") as f:
         file_hash = hashlib.md5()
@@ -107,6 +111,9 @@ def download_from_url(
     from tqdm import tqdm
 
     chunk_size = 512
+
+    # make sure we can handle a path with a ~ in it
+    output_path = os.path.expanduser(output_path)
 
     if os.path.isfile(f"{output_path}/{output_filename}"):
         calculated_checksum = calculate_md5_checksum(
@@ -210,6 +217,9 @@ def download_from_figshare(
 
     temp_url = head.headers["location"].split("?")[0]
     name = head.headers["X-Filename"].split("/")[-1]
+
+    # make sure we can handle a path with a ~ in it
+    output_path = os.path.expanduser(output_path)
 
     # We need to check to make sure that the file that is stored in the output path
     # has the correct checksum, e.g., to avoid a case where we have a partially downloaded file
@@ -332,6 +342,9 @@ def download_from_zenodo(
     # We also fetch the name of the file from the header of the download link
     name = head.headers["Content-Disposition"].split("filename=")[-1]
     length = int(head.headers["Content-Length"])
+
+    # make sure we can handle a path with a ~ in it
+    output_path = os.path.expanduser(output_path)
 
     # We need to check to make sure that the file that is stored in the output path
     # has the correct checksum, e.g., to avoid a case where we have a partially downloaded file

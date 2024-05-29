@@ -22,15 +22,22 @@ class SPICE114Dataset(HDF5Dataset):
     https://doi.org/10.5281/zenodo.8222043
 
 
-
     Attributes
     ----------
     dataset_name : str
         Name of the dataset, default is "ANI2x".
-    for_unit_testing : bool
-        If set to True, a subset of the dataset is used for unit testing purposes; by default False.
+    version_select : str
+        Select the version of the dataset to use, default will provide the "latest".
+        "latest_test" will select the testing subset of 1000 conformers.
+        A version name can  be specified that corresponds to an entry in the associated yaml file, e.g., "full_dataset_v0".
     local_cache_dir: str, optional
             Path to the local cache directory, by default ".".
+    force_download: bool, optional
+        If set to True, we will download the dataset even if it already exists; by default False.
+    regenerate_cache: bool, optional
+        If set to True, we will regenerate the npz cache file even if it already exists, using
+        previously downloaded files, if available; by default False.
+
     Examples
     --------
 
@@ -64,7 +71,7 @@ class SPICE114Dataset(HDF5Dataset):
     def __init__(
         self,
         dataset_name: str = "SPICE114",
-        for_unit_testing: bool = False,
+        version_select: str = "latest",
         local_cache_dir: str = ".",
         force_download: bool = False,
         regenerate_cache: bool = False,
@@ -76,8 +83,10 @@ class SPICE114Dataset(HDF5Dataset):
         ----------
         data_name : str, optional
             Name of the dataset, by default "SPICE114".
-        for_unit_testing : bool, optional
-            If set to True, a subset of the dataset is used for unit testing purposes; by default False.
+        version_select : str
+            Select the version of the dataset to use, default will provide the "latest".
+            "latest_test" will select the testing subset of 1000 conformers.
+            A version name can  be specified that corresponds to an entry in the associated yaml file, e.g., "full_dataset_v0".
         local_cache_dir: str, optional
             Path to the local cache directory, by default ".".
         force_download: bool, optional
@@ -100,11 +109,9 @@ class SPICE114Dataset(HDF5Dataset):
         ]  # NOTE: Default values
 
         self._properties_of_interest = _default_properties_of_interest
-        if for_unit_testing:
-            dataset_name = f"{dataset_name}_subset"
 
         self.dataset_name = dataset_name
-        self.for_unit_testing = for_unit_testing
+        self.version_select = version_select
 
         from openff.units import unit
 
@@ -141,53 +148,37 @@ class SPICE114Dataset(HDF5Dataset):
         }
         from loguru import logger
 
-        # We need to define the checksums for the various files that we will be dealing with to load up the data
-        # There are 3 files types that need name/checksum defined, of extensions hdf5.gz, hdf5, and npz.
+        from importlib import resources
+        from modelforge.dataset import yaml_files
+        import yaml
 
-        # note, need to change the end of the url to dl=1 instead of dl=0 (the default when you grab the share list), to ensure the same checksum each time we download
-        self.test_url = "https://www.dropbox.com/scl/fi/vh05bql1fza8jyj7ibyk2/spice_114_dataset_ntc_1000.hdf5.gz?rlkey=dqx0eq0wcux0ez48n2et35dow&st=hafqe5sv&dl=1"
-        self.full_url = "https://www.dropbox.com/scl/fi/zfh4sq2kiz250bvd9oshr/spice_114_dataset.hdf5.gz?rlkey=q3sp7p8ir21o0y0224bt75aw7&dl=1"
+        yaml_file = resources.files(yaml_files) / "spice114.yaml"
+        logger.debug(f"Loading config data from {yaml_file}")
+        with open(yaml_file, "r") as file:
+            data_inputs = yaml.safe_load(file)
 
-        if self.for_unit_testing:
-            url = self.test_url
-            gz_data_file = {
-                "name": "SPICE114_dataset_nc_1000.hdf5.gz",
-                "md5": "f7027814a98a5393272c45b4cf97f4e9",
-                "length": 15166190,
-            }
-            hdf5_data_file = {
-                "name": "SPICE114_dataset_nc_1000.hdf5",
-                "md5": "885e17826e65011559ff6fae2b2b44e3",
-            }
-            # npz file checksums may vary with different versions of python/numpy
-            processed_data_file = {
-                "name": "SPICE114_dataset_nc_1000_processed.npz",
-                "md5": None,
-            }
+        assert data_inputs["dataset"] == "spice114"
 
-            logger.info("Using test dataset")
-
+        if self.version_select == "latest":
+            # in the yaml file, the entry latest will define the name of the version to use
+            dataset_version = data_inputs["latest"]
+            logger.info(f"Using the latest dataset: {dataset_version}")
+        elif self.version_select == "latest_test":
+            dataset_version = data_inputs["latest_test"]
+            logger.info(f"Using the latest test dataset: {dataset_version}")
         else:
-            url = self.full_url
-            gz_data_file = {
-                "name": "SPICE114_dataset.hdf5.gz",
-                "md5": "ad4722574dd820d7eb7b7db64a763bb2",
-                "length": 11193528261,
-            }
+            dataset_version = self.version_select
+            logger.info(f"Using dataset version {dataset_version}")
 
-            hdf5_data_file = {
-                "name": "SPICE114_dataset.hdf5",
-                "md5": "943a3df3bef247c8cffbb55d913c0bba",
-            }
+        url = data_inputs[dataset_version]["url"]
 
-            processed_data_file = {
-                "name": "SPICE114_dataset_processed.npz",
-                "md5": None,
-            }
-
-            logger.info("Using full dataset")
+        # fetch the dictionaries that defined the size, md5 checksums (if provided) and filenames of the data files
+        gz_data_file = data_inputs[dataset_version]["gz_data_file"]
+        hdf5_data_file = data_inputs[dataset_version]["hdf5_data_file"]
+        processed_data_file = data_inputs[dataset_version]["processed_data_file"]
 
         # to ensure that that we are consistent in our naming, we need to set all the names and checksums in the HDF5Dataset class constructor
+
         super().__init__(
             url=url,
             gz_data_file=gz_data_file,

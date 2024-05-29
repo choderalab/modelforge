@@ -3,6 +3,8 @@ from .physnet import PhysNet
 from .painn import PaiNN
 from .ani import ANI2x
 from .sake import SAKE
+from .spookynet import SpookyNet
+
 from .utils import (
     CosineCutoff,
     RadialSymmetryFunction,
@@ -20,6 +22,7 @@ class _Implemented_NNPs(Enum):
     PAINN = PaiNN
     PHYSNET = PhysNet
     SAKE = SAKE
+    SPOOKYNET = SpookyNet
 
     @classmethod
     def get_neural_network_class(cls, neural_network_name: str):

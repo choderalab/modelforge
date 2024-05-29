@@ -44,10 +44,34 @@ class SPICE114Curation(DatasetCuration):
     """
 
     def _init_dataset_parameters(self):
-        self.dataset_download_url = (
-            "https://zenodo.org/records/8222043/files/SPICE-1.1.4.hdf5"
+        # read in the yaml file that defines the dataset download url and md5 checksum
+        # this yaml file should be stored along with the curated dataset
+
+        from importlib import resources
+        from modelforge.curation import yaml_files
+        import yaml
+
+        yaml_file = resources.files(yaml_files) / "spice114_curation.yaml"
+        logger.debug(f"Loading config data from {yaml_file}")
+        with open(yaml_file, "r") as file:
+            data_inputs = yaml.safe_load(file)
+
+        assert data_inputs["dataset_name"] == "spice114"
+
+        if self.version_select == "latest":
+            self.version_select = data_inputs["latest"]
+            logger.debug(f"Latest version: {self.version_select}")
+
+        self.dataset_download_url = data_inputs[self.version_select][
+            "dataset_download_url"
+        ]
+        self.dataset_md5_checksum = data_inputs[self.version_select][
+            "dataset_md5_checksum"
+        ]
+        logger.debug(
+            f"Dataset: {self.version_select} version: {data_inputs[self.version_select]['version']}"
         )
-        self.dataset_md5_checksum = "f27d4c81da0e37d6547276bf6b4ae6a1"
+
         # the spice dataset includes openff compatible unit definitions in the hdf5 file
         # these values were used to generate this dictionary
         self.qm_parameters = {
@@ -179,6 +203,7 @@ class SPICE114Curation(DatasetCuration):
         max_records: Optional[int] = None,
         max_conformers_per_record: Optional[int] = None,
         total_conformers: Optional[int] = None,
+        atomic_numbers_to_limit=None,
     ):
         """
         Processes a downloaded dataset: extracts relevant information.
@@ -281,8 +306,18 @@ class SPICE114Curation(DatasetCuration):
                     ds_temp["smiles"]
                 )
                 ds_temp["dft_total_force"] = -ds_temp["dft_total_gradient"]
-                self.data.append(ds_temp)
-                conformers_counter += conformers_per_record
+
+                # check if the record contains only the elements we are interested in
+                # if this has been defined
+                add_to_record = True
+                if atomic_numbers_to_limit is not None:
+                    add_to_record = set(ds_temp["atomic_numbers"].flatten()).issubset(
+                        atomic_numbers_to_limit
+                    )
+
+                if add_to_record:
+                    self.data.append(ds_temp)
+                    conformers_counter += conformers_per_record
 
         if self.convert_units:
             self._convert_units()
@@ -299,6 +334,7 @@ class SPICE114Curation(DatasetCuration):
         max_records: Optional[int] = None,
         max_conformers_per_record: Optional[int] = None,
         total_conformers: Optional[int] = None,
+        limit_atomic_species: Optional[list] = None,
     ) -> None:
         """
         Downloads the dataset, extracts relevant information, and writes an hdf5 file.
@@ -317,6 +353,8 @@ class SPICE114Curation(DatasetCuration):
         total_conformers: int, optional, default=None
             If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
             Can be used in conjunction with  max_conformers_per_record.
+        limit_atomic_species: list, optional, default=None
+            If set to a list of element symbols, records that contain any elements not in this list will be ignored.
 
         Examples
         --------
@@ -342,6 +380,16 @@ class SPICE114Curation(DatasetCuration):
         )
 
         self._clear_data()
+        if limit_atomic_species is not None:
+            self.atomic_numbers_to_limit = []
+            from openff.units import elements
+
+            for symbol in limit_atomic_species:
+                for num, sym in elements.SYMBOLS.items():
+                    if sym == symbol:
+                        self.atomic_numbers_to_limit.append(num)
+        else:
+            self.atomic_numbers_to_limit = None
 
         # process the rest of the dataset
         if self.name is None:
@@ -352,6 +400,7 @@ class SPICE114Curation(DatasetCuration):
             max_records,
             max_conformers_per_record,
             total_conformers,
+            self.atomic_numbers_to_limit,
         )
 
         self._generate_hdf5()

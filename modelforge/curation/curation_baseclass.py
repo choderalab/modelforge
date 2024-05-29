@@ -84,6 +84,7 @@ class DatasetCuration(ABC):
         hdf5_file_name: str,
         output_file_dir: Optional[str] = "./",
         local_cache_dir: Optional[str] = "./datasets",
+        version_select: str = "latest",
         convert_units: Optional[bool] = True,
     ):
         """
@@ -97,6 +98,8 @@ class DatasetCuration(ABC):
             Location to write the output hdf5 file.
         local_cache_dir: str, optional, default='./qm9_datafiles'
             Location to save downloaded dataset.
+        version_select: str, optional, default='latest'
+            Version of the dataset to use as defined in the associated yaml file.
         convert_units: bool, optional, default=True
             Convert from [e.g., angstrom, bohr, hartree] (i.e., source units)
             to [nanometer, kJ/mol] (i.e., target units)
@@ -105,9 +108,10 @@ class DatasetCuration(ABC):
 
         self.hdf5_file_name = hdf5_file_name
         self.output_file_dir = output_file_dir
-        self.local_cache_dir = local_cache_dir
+        # make sure we can handle a path with a ~ in it
+        self.local_cache_dir = os.path.expanduser(local_cache_dir)
         self.convert_units = convert_units
-
+        self.version_select = version_select
         os.makedirs(self.local_cache_dir, exist_ok=True)
 
         # Overall list that will contain a dictionary for each record

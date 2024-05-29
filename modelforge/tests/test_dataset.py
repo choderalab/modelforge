@@ -95,7 +95,7 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
 
     data = _ImplementedDatasets.get_dataset_class(
         dataset_name,
-    )(for_unit_testing=True, local_cache_dir=local_cache_dir)
+    )(version_select="nc_1000_v0", local_cache_dir=local_cache_dir)
     if dataset_name == "QM9":
         assert data.properties_of_interest == [
             "geometry",
@@ -103,6 +103,15 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
             "internal_energy_at_0K",
             "charges",
         ]
+        # spot check the processing of the yaml file
+        assert data.gz_data_file["length"] == 1697917
+        assert data.gz_data_file["md5"] == "dc8ada0d808d02c699daf2000aff1fe9"
+        assert data.gz_data_file["name"] == "qm9_dataset_v0_nc_1000.hdf5.gz"
+        assert data.hdf5_data_file["md5"] == "305a0602860f181fafa75f7c7e3e6de4"
+        assert data.hdf5_data_file["name"] == "qm9_dataset_v0_nc_1000.hdf5"
+        assert (
+            data.processed_data_file["name"] == "qm9_dataset_v0_nc_1000_processed.npz"
+        )
 
         data.properties_of_interest = [
             "internal_energy_at_0K",
@@ -158,6 +167,25 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
             "atomic_numbers",
             "mbis_charges",
         ]
+    elif dataset_name == "PhAlkEthOH":
+        assert data.properties_of_interest == [
+            "geometry",
+            "atomic_numbers",
+            "dft_total_energy",
+            "dft_total_force",
+            "total_charge",
+        ]
+
+        data.properties_of_interest = [
+            "dft_total_energy",
+            "geometry",
+            "atomic_numbers",
+        ]
+        assert data.properties_of_interest == [
+            "dft_total_energy",
+            "geometry",
+            "atomic_numbers",
+        ]
 
     dataset = dataset_factory(
         dataset_name=dataset_name, local_cache_dir=local_cache_dir
@@ -178,7 +206,7 @@ def test_file_existence_after_initialization(
     local_cache_dir = str(prep_temp_dir) + "/data_test"
 
     data = _ImplementedDatasets.get_dataset_class(dataset_name)(
-        local_cache_dir=local_cache_dir, for_unit_testing=True
+        local_cache_dir=local_cache_dir, version_select="nc_1000_v0"
     )
 
     with contextlib.suppress(FileNotFoundError):
@@ -189,7 +217,6 @@ def test_file_existence_after_initialization(
 
     dataset = dataset_factory(
         dataset_name=dataset_name,
-        for_unit_testing=True,
         local_cache_dir=local_cache_dir,
     )
 
@@ -204,7 +231,7 @@ def test_caching(prep_temp_dir):
     local_cache_dir = str(prep_temp_dir) + "/data_test"
     from modelforge.dataset.qm9 import QM9Dataset
 
-    data = QM9Dataset(for_unit_testing=True, local_cache_dir=local_cache_dir)
+    data = QM9Dataset(version_select="nc_1000_v0", local_cache_dir=local_cache_dir)
 
     # first test that no file exists
     with contextlib.suppress(FileNotFoundError):
@@ -280,7 +307,7 @@ def test_metadata_validation(prep_temp_dir):
 
     from modelforge.dataset.qm9 import QM9Dataset
 
-    data = QM9Dataset(for_unit_testing=True, local_cache_dir=local_cache_dir)
+    data = QM9Dataset(version_select="nc_1000_v0", local_cache_dir=local_cache_dir)
 
     a = ["energy", "force", "atomic_numbers"]
     b = ["energy", "atomic_numbers", "force"]
@@ -334,7 +361,7 @@ def test_different_scenarios_of_file_availability(
     dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
     # we initialize this so that we have the correct parameters to compare against
     data = _ImplementedDatasets.get_dataset_class(dataset_name)(
-        for_unit_testing=True, local_cache_dir=local_cache_dir
+        version_select="nc_1000_v0", local_cache_dir=local_cache_dir
     )
 
     # first check if we remove the npz file, rerunning it will regenerate it
@@ -480,7 +507,7 @@ def test_dataset_splitting(
         dataset_name=dataset_name,
         batch_size=512,
         splitting_strategy=splitting_strategy(),
-        for_unit_testing=True,
+        version_select="nc_1000_v0",
         remove_self_energies=False,
     )
 
@@ -501,7 +528,7 @@ def test_dataset_splitting(
         dataset_name=dataset_name,
         batch_size=512,
         splitting_strategy=splitting_strategy(split=[0.6, 0.3, 0.1]),
-        for_unit_testing=True,
+        version_select="nc_1000_v0",
         remove_self_energies=False,
     )
 
@@ -546,7 +573,7 @@ def test_dataset_downloader(dataset_name, dataset_factory, prep_temp_dir):
         dataset_name=dataset_name, local_cache_dir=local_cache_dir
     )
     data = _ImplementedDatasets.get_dataset_class(dataset_name)(
-        local_cache_dir=local_cache_dir, for_unit_testing=True
+        local_cache_dir=local_cache_dir, version_select="nc_1000_v0"
     )
     assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
 
@@ -559,7 +586,9 @@ def test_numpy_dataset_assignment(dataset_name):
     from modelforge.dataset import _ImplementedDatasets
 
     factory = DatasetFactory()
-    data = _ImplementedDatasets.get_dataset_class(dataset_name)(for_unit_testing=True)
+    data = _ImplementedDatasets.get_dataset_class(dataset_name)(
+        version_select="nc_1000_v0"
+    )
     factory._load_or_process_data(data)
 
     assert hasattr(data, "numpy_data")
@@ -579,7 +608,7 @@ def test_energy_postprocessing():
     dm = DataModule(
         name="QM9",
         batch_size=10,
-        for_unit_testing=True,
+        version_select="nc_1000_v0",
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         remove_self_energies=True,
     )
@@ -641,7 +670,7 @@ def test_self_energy(dataset_name, datamodule_factory):
         dataset_name=dataset_name,
         batch_size=512,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        for_unit_testing=True,
+        version_select="nc_1000_v0",
         remove_self_energies=False,
     )
 
@@ -676,7 +705,7 @@ def test_self_energy(dataset_name, datamodule_factory):
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         regression_ase=True,
         remove_self_energies=True,
-        for_unit_testing=True,
+        version_select="nc_1000_v0",
     )
 
     # it is saved in the dataset statistics
@@ -715,7 +744,7 @@ def test_self_energy(dataset_name, datamodule_factory):
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         regression_ase=True,
         remove_self_energies=True,
-        for_unit_testing=True,
+        version_select="nc_1000_v0",
     )
     # it is saved in the dataset statistics
     assert dm.train_dataset
@@ -728,7 +757,7 @@ def test_self_energy(dataset_name, datamodule_factory):
             splitting_strategy=FirstComeFirstServeSplittingStrategy(),
             regression_ase=regression,
             remove_self_energies=True,
-            for_unit_testing=True,
+            version_select="nc_1000_v0",
         )
         # Extract the first molecule (methane)
         # double check that it is methane

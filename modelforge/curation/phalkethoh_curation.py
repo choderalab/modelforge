@@ -6,7 +6,7 @@ from tqdm import tqdm
 from openff.units import unit
 
 
-class PhAlkEthOHOpenFFCuration(DatasetCuration):
+class PhAlkEthOHCuration(DatasetCuration):
     """
     Fetches the OpenFF PhAlkEthOH dataset from MOLSSI QCArchive and processes it into a curated hdf5 file.
 

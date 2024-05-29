@@ -52,9 +52,9 @@ def PhAlkEthOH_openff_wrapper(
 
 
     """
-    from modelforge.curation.PhAlkEthOH_curation import PhAlkEthOHOpenFFCuration
+    from modelforge.curation.phalkethoh_curation import PhAlkEthOHCuration
 
-    PhAlkEthOH_dataset = PhAlkEthOHOpenFFCuration(
+    PhAlkEthOH_dataset = PhAlkEthOHCuration(
         hdf5_file_name=hdf5_file_name,
         output_file_dir=output_file_dir,
         local_cache_dir=local_cache_dir,

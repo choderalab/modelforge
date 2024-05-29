@@ -12,6 +12,7 @@ from modelforge.curation.ani1x_curation import ANI1xCuration
 from modelforge.curation.spice_114_curation import SPICE114Curation
 from modelforge.curation.spice_openff_curation import SPICEOpenFFCuration
 from modelforge.curation.spice_2_from_qcarchive_curation import SPICE2Curation
+from modelforge.curation.phalkethoh_curation import PhAlkEthOHCuration
 from modelforge.curation.spice_2_curation import SPICE2Curation as SPICE2CurationH5
 
 from modelforge.curation.curation_baseclass import dict_to_hdf5
@@ -1547,21 +1548,6 @@ def test_spice114_process_download_conversion(prep_temp_dir):
 
     with pytest.raises(Exception):
         spice_data.process(max_records=2, total_conformers=1)
-
-
-def test_PhAlkEthOH(prep_temp_dir):
-    from modelforge.curation.PhAlkEthOH_curation import PhAlkEthOHCuration
-
-    local_path_dir = str(prep_temp_dir)
-
-    dataset = PhAlkEthOHCuration(
-        hd5_file_name="test_PhAlkEthOH_dataset.hdf5",
-        output_file_dir=local_path_dir,
-        local_cache_dir=local_path_dir,
-    )
-    dataset.process(max_records=1, max_conformers_per_record=1, total_conformers=1)
-    assert dataset.total_conformers == 1
-    assert dataset.total_records == 1
 
 
 def test_ani2x(prep_temp_dir):

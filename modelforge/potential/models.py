@@ -106,8 +106,6 @@ class Pairlist(Module):
         i_final_pairs = i_indices[same_molecule_mask]
         j_final_pairs = j_indices[same_molecule_mask]
 
-        print(i_final_pairs.shape, j_final_pairs.shape)
-        wefiojef
         # concatenate to form final (2, n_pairs) tensor
         pair_indices = torch.stack((i_final_pairs, j_final_pairs))
 

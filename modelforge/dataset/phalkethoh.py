@@ -3,17 +3,17 @@ from typing import List
 from .dataset import HDF5Dataset
 
 
-class QM9Dataset(HDF5Dataset):
+class PhAlkEthOHDataset(HDF5Dataset):
     """
-    Data class for handling QM9 data.
+    Data class for handling OpenFF Sandbox CHO PhAlkEthOH v1.0 dataset.
 
-    This class provides utilities for processing and interacting with QM9 data
+    This class provides utilities for processing and interacting with PhAlkEthOH dataset
     stored in HDF5 format.
 
     Attributes
     ----------
     dataset_name : str
-        Name of the dataset, default is "QM9".
+        Name of the dataset, default is "PhAlkEthOH".
     version_select : str
         Select the version of the dataset to use, default will provide the "latest".
         "latest_test" will select the testing subset of 1000 conformers.
@@ -28,7 +28,7 @@ class QM9Dataset(HDF5Dataset):
 
     Examples
     --------
-    >>> data = QM9Dataset()
+    >>> data = PhAlkEthOHDataset()
     >>> data._download()
     """
 
@@ -37,49 +37,38 @@ class QM9Dataset(HDF5Dataset):
     _property_names = PropertyNames(
         Z="atomic_numbers",
         R="geometry",
-        E="internal_energy_at_0K",  # Q="charges"
+        E="dft_total_energy",
+        F="dft_total_force",
     )
 
     _available_properties = [
         "geometry",
         "atomic_numbers",
-        "internal_energy_at_0K",
-        "internal_energy_at_298.15K",
-        "enthalpy_at_298.15K",
-        "free_energy_at_298.15K",
-        "heat_capacity_at_298.15K",
-        "zero_point_vibrational_energy",
-        "electronic_spatial_extent",
-        "lumo-homo_gap",
-        "energy_of_homo",
-        "energy_of_lumo",
-        "rotational_constant_A",
-        "rotational_constant_B",
-        "rotational_constant_C",
-        "dipole_moment",
-        "isotropic_polarizability",
-        "charges",
+        "dft_total_energy",
+        "dft_total_force",
+        "scf_dipole",
+        "total_charge",
     ]  # All properties within the datafile, aside from SMILES/inchi.
 
     def __init__(
         self,
-        dataset_name: str = "QM9",
+        dataset_name: str = "PhAlkEthOH",
         version_select: str = "latest",
         local_cache_dir: str = ".",
         force_download: bool = False,
         regenerate_cache=False,
     ) -> None:
         """
-        Initialize the QM9Data class.
+        Initialize the PhAlkEthOHData class.
 
         Parameters
         ----------
         data_name : str, optional
-            Name of the dataset, by default "QM9".
+            Name of the dataset, by default "PhAlkEthOH".
         version_select : str,optional
             Select the version of the dataset to use, default will provide the "latest".
             "latest_test" will select the testing subset of 1000 conformers.
-        A version name can  be specified that corresponds to an entry in the associated yaml file, e.g., "full_dataset_v0".
+            A version name can  be specified that corresponds to an entry in the associated yaml file, e.g., "full_dataset_v0".
         local_cache_dir: str, optional
             Path to the local cache directory, by default ".".
         force_download: bool, optional
@@ -89,15 +78,16 @@ class QM9Dataset(HDF5Dataset):
             previously downloaded files, if available; by default False.
         Examples
         --------
-        >>> data = QM9Dataset()  # Default dataset
-        >>> test_data = QM9Dataset(version_select="latest_test"))  # Testing subset
+        >>> data = PhAlkEthOHDataset()  # Default dataset
+        >>> test_data = PhAlkEthOHDataset(version_select="latest_test")  # Testing subset
         """
 
         _default_properties_of_interest = [
             "geometry",
             "atomic_numbers",
-            "internal_energy_at_0K",
-            "charges",
+            "dft_total_energy",
+            "dft_total_force",
+            "total_charge",
         ]  # NOTE: Default values
 
         self._properties_of_interest = _default_properties_of_interest
@@ -106,27 +96,28 @@ class QM9Dataset(HDF5Dataset):
         self.version_select = version_select
         from openff.units import unit
 
-        # atomic self energies
-        self._ase = {
-            "H": -1313.4668615546 * unit.kilojoule_per_mole,
-            "C": -99366.70745535441 * unit.kilojoule_per_mole,
-            "N": -143309.9379722722 * unit.kilojoule_per_mole,
-            "O": -197082.0671774158 * unit.kilojoule_per_mole,
-            "F": -261811.54555874597 * unit.kilojoule_per_mole,
-        }
         from loguru import logger
 
         from importlib import resources
         from modelforge.dataset import yaml_files
         import yaml
 
-        yaml_file = resources.files(yaml_files) / "qm9.yaml"
+        # Reference energies, in hartrees, computed with Psi4 1.5 wB97M-D3BJ / def2-TZVPPD.
+        # copied from spice 1.1.4
+
+        self._ase = {
+            "C": -37.87264507233593 * unit.hartree,
+            "H": -0.498760510048753 * unit.hartree,
+            "O": -75.11317840410095 * unit.hartree,
+        }
+
+        yaml_file = resources.files(yaml_files) / "PhAlkEthOH.yaml"
         logger.debug(f"Loading config data from {yaml_file}")
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
 
         # make sure we have the correct yaml file
-        assert data_inputs["dataset"] == "qm9"
+        assert data_inputs["dataset"] == "PhAlkEthOH"
 
         if self.version_select == "latest":
             # in the yaml file, the entry latest will define the name of the version to use
@@ -190,7 +181,7 @@ class QM9Dataset(HDF5Dataset):
 
         Examples
         --------
-        >>> data = QM9Dataset()
+        >>> data =  PhAlkEthOHDataset()
         >>> data.available_properties
         ['geometry', 'atomic_numbers', 'return_energy']
         """
@@ -210,8 +201,8 @@ class QM9Dataset(HDF5Dataset):
 
         Examples
         --------
-        >>> data = QM9Dataset()
-        >>> data.properties_of_interest = ["geometry", "atomic_numbers", "return_energy"]
+        >>> data =  PhAlkEthOHDataset()
+        >>> data.properties_of_interest = ["geometry", "atomic_numbers", "dft_total_energy"]
         """
         if not set(properties_of_interest).issubset(self._available_properties):
             raise ValueError(
@@ -225,7 +216,7 @@ class QM9Dataset(HDF5Dataset):
 
         Examples
         --------
-        >>> data = QM9Dataset()
+        >>> data =  PhAlkEthOHDataset()
         >>> data.download()  # Downloads the dataset
 
         """
@@ -241,7 +232,3 @@ class QM9Dataset(HDF5Dataset):
             length=self.gz_data_file["length"],
             force_download=self.force_download,
         )
-        # from modelforge.dataset.utils import _download_from_url
-        #
-        # url = self.test_url if self.for_unit_testing else self.full_url
-        # _download_from_url(url, self.raw_data_file)

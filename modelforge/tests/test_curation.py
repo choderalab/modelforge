@@ -1549,6 +1549,21 @@ def test_spice114_process_download_conversion(prep_temp_dir):
         spice_data.process(max_records=2, total_conformers=1)
 
 
+def test_PhAlkEthOH(prep_temp_dir):
+    from modelforge.curation.PhAlkEthOH_curation import PhAlkEthOHCuration
+
+    local_path_dir = str(prep_temp_dir)
+
+    dataset = PhAlkEthOHCuration(
+        hd5_file_name="test_PhAlkEthOH_dataset.hdf5",
+        output_file_dir=local_path_dir,
+        local_cache_dir=local_path_dir,
+    )
+    dataset.process(max_records=1, max_conformers_per_record=1, total_conformers=1)
+    assert dataset.total_conformers == 1
+    assert dataset.total_records == 1
+
+
 def test_ani2x(prep_temp_dir):
     from modelforge.curation.ani2x_curation import ANI2xCuration
 
@@ -1792,8 +1807,6 @@ def test_spice114_rename(prep_temp_dir):
 
 
 def test_spice114_openff_test_process_downloaded(prep_temp_dir):
-    from tqdm import tqdm
-    from sqlitedict import SqliteDict
 
     local_path_dir = str(prep_temp_dir)
     local_database_name = "test.sqlite"
@@ -1824,7 +1837,6 @@ def test_spice114_openff_test_process_downloaded(prep_temp_dir):
 
 
 def test_spice_114_openff_process_datasets(prep_temp_dir):
-    from numpy import array, float32
 
     local_path_dir = str(prep_temp_dir)
     hdf5_file_name = "test_dataset.hdf5"
@@ -1989,7 +2001,6 @@ def test_spice2_renaming(prep_temp_dir):
 
 
 def test_spice_2_process_datasets(prep_temp_dir):
-    from numpy import array, float32
 
     local_path_dir = str(prep_temp_dir)
     hdf5_file_name = "test_spice2_dataset.hdf5"

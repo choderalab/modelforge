@@ -204,6 +204,18 @@ dataset_container: Dict[str, DataSetContainer] = {
         expected_E_random_split=-2263605.616072006,
         expected_E_fcfs_split=-1516718.0904709378,
     ),
+    "PHALKETHOH": DataSetContainer(
+        name="PHALKETHOH",
+        expected_properties_of_interest=[
+            "geometry",
+            "atomic_numbers",
+            "dft_total_energy",
+            "dft_total_force",
+            "total_charge",
+        ],
+        expected_E_random_split=-2263605.616072006,
+        expected_E_fcfs_split=-1516718.0904709378,
+    ),
 }
 
 

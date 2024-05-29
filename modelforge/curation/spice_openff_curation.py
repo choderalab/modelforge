@@ -208,7 +208,9 @@ class SPICEOpenFFCuration(DatasetCuration):
         from qcportal import PortalClient
 
         dataset_type = "singlepoint"
-        client = PortalClient(self.qcarchive_server)
+        client = PortalClient(
+            self.qcarchive_server, cache_dir=f"{local_path_dir}/qcarchive_cache"
+        )
 
         ds = client.get_dataset(dataset_type=dataset_type, dataset_name=dataset_name)
 

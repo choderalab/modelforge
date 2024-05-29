@@ -167,6 +167,25 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
             "atomic_numbers",
             "mbis_charges",
         ]
+    elif dataset_name == "PhAlkEthOH":
+        assert data.properties_of_interest == [
+            "geometry",
+            "atomic_numbers",
+            "dft_total_energy",
+            "dft_total_force",
+            "total_charge",
+        ]
+
+        data.properties_of_interest = [
+            "dft_total_energy",
+            "geometry",
+            "atomic_numbers",
+        ]
+        assert data.properties_of_interest == [
+            "dft_total_energy",
+            "geometry",
+            "atomic_numbers",
+        ]
 
     dataset = dataset_factory(
         dataset_name=dataset_name, local_cache_dir=local_cache_dir

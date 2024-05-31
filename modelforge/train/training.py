@@ -4,7 +4,6 @@ import lightning as pl
 from typing import TYPE_CHECKING, Any, Union, Dict, NamedTuple, Tuple, Type, Mapping
 import torch
 from loguru import logger as log
-from modelforge.potential.utils import BatchData, NNPInput
 from torch.nn import functional as F
 
 if TYPE_CHECKING:
@@ -14,6 +13,7 @@ if TYPE_CHECKING:
     from modelforge.potential.physnet import PhysNet, PhysNetNeuralNetworkData
     from modelforge.potential.schnet import SchNet, SchnetNeuralNetworkData
     from modelforge.potential.sake import SAKE
+    from modelforge.potential.utils import BatchData
 
 
 class Loss:
@@ -29,7 +29,7 @@ class Loss:
         self.model = model
 
     def _get_forces(
-        self, batch: BatchData, energies: Dict[str, torch.Tensor]
+        self, batch: "BatchData", energies: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
         """
         Computes the forces from a given batch using the model.
@@ -55,7 +55,7 @@ class Loss:
 
         return {"F_true": F_true, "F_predict": F_predict}
 
-    def _get_energies(self, batch: BatchData) -> Dict[str, torch.Tensor]:
+    def _get_energies(self, batch: "BatchData") -> Dict[str, torch.Tensor]:
         """
         Computes the energies from a given batch using the model.
 
@@ -73,10 +73,6 @@ class Loss:
         E_true = batch.metadata.E.to(torch.float32).squeeze(1)
         E_predict = self.model.forward(nnp_input).E
         return {"E_true": E_true, "E_predict": E_predict}
-
-
-def RMSELoss(yhat, y):
-    return torch.sqrt(torch.mean((yhat - y) ** 2))
 
 
 class EnergyAndForceLoss(Loss):
@@ -98,7 +94,7 @@ class EnergyAndForceLoss(Loss):
         self.include_force = include_force
         self.have_raised_warning = False
 
-    def compute_loss(self, batch: BatchData, loss_fn=F.l1_loss) -> torch.Tensor:
+    def compute_loss(self, batch: "BatchData", loss_fn=F.l1_loss) -> torch.Tensor:
         """
         Computes the weighted combined loss for energies and optionally forces.
 
@@ -208,7 +204,7 @@ class TrainingAdapter(pl.LightningModule):
         batch_size = y.size(0)
         return batch_size
 
-    def training_step(self, batch: BatchData, batch_idx: int) -> torch.Tensor:
+    def training_step(self, batch: "BatchData", batch_idx: int) -> torch.Tensor:
         """
         Training step to compute the MSE loss for a given batch.
 
@@ -229,7 +225,7 @@ class TrainingAdapter(pl.LightningModule):
         self.log("mse_train_loss", loss, on_step=True, prog_bar=True)
         return loss
 
-    def test_step(self, batch: BatchData, batch_idx: int) -> None:
+    def test_step(self, batch: "BatchData", batch_idx: int) -> None:
         """
         Test step to compute the RMSE loss for a given batch.
 
@@ -262,7 +258,7 @@ class TrainingAdapter(pl.LightningModule):
             prog_bar=True,
         )
 
-    def validation_step(self, batch: BatchData, batch_idx: int) -> torch.Tensor:
+    def validation_step(self, batch: "BatchData", batch_idx: int) -> torch.Tensor:
         """
         Validation step to compute the RMSE loss and accumulate L1 loss across epochs.
 
@@ -329,6 +325,13 @@ class TrainingAdapter(pl.LightningModule):
             "frequency": 1,
         }
         return {"optimizer": optimizer, "lr_scheduler": lr_scheduler_config}
+
+    def on_after_backward(self) -> None:
+        print("on_after_backward enter")
+        for name, p in self.named_parameters():
+            if p.grad is None:
+                print(name, p)
+        print("on_after_backward exit")
 
     def get_trainer(self):
         """
@@ -499,3 +502,104 @@ class TrainingAdapter(pl.LightningModule):
             tune_config=tune_config,
         )
         return tuner.fit()
+
+
+def read_config_and_train(config_path: str):
+    """
+    Reads a TOML configuration file and performs training based on the parameters.
+
+    Parameters
+    ----------
+    config_path : str
+        Path to the TOML configuration file.
+    """
+    import toml
+
+    # Read the TOML file
+    config = toml.load(config_path)
+
+    # Extract parameters
+    model_name = config["potential"]["model_name"]
+    dataset_name = config["dataset"]["dataset_name"]
+    nr_of_epochs = config.get("nr_of_epochs")
+    save_dir = config.get("save_dir")
+    experiment_name = config.get("experiment_name")
+    remove_self_energies = config.get("remove_self_energies", True)
+    accelerator = config.get("accelerator", "cpu")
+
+    # Call the perform_training function with extracted parameters
+    perform_training(
+        model_name=model_name,
+        dataset_name=dataset_name,
+        nr_of_epochs=nr_of_epochs,
+        save_dir=save_dir,
+        experiment_name=experiment_name,
+        remove_self_energies=remove_self_energies,
+        accelerator=accelerator,
+    )
+
+
+def perform_training(
+    model_name: str,
+    dataset_name: str,
+    nr_of_epochs: int,
+    save_dir: str,
+    experiment_name: str,
+    remove_self_energies: bool = True,
+    accelerator: str = "cpu",
+):
+    from pytorch_lightning.loggers import TensorBoardLogger
+    from modelforge.dataset.utils import RandomRecordSplittingStrategy
+    from lightning import Trainer
+    from modelforge.potential import NeuralNetworkPotentialFactory
+    from modelforge.dataset.dataset import DataModule
+    from lightning.pytorch.callbacks import ModelSummary
+
+    # set up tensor board logger
+    logger = TensorBoardLogger(save_dir, name=experiment_name)
+
+    # Set up dataset
+    dm = DataModule(
+        name=dataset_name,
+        batch_size=512,
+        splitting_strategy=RandomRecordSplittingStrategy(),
+        remove_self_energies=remove_self_energies,
+    )
+    # Set up model
+    model = NeuralNetworkPotentialFactory.create_nnp("training", model_name)
+
+    # set up traininer
+    from lightning.pytorch.callbacks.early_stopping import EarlyStopping
+
+    trainer = Trainer(
+        max_epochs=nr_of_epochs,
+        num_nodes=1,
+        devices=1,
+        accelerator=accelerator,
+        logger=logger,  # Add the logger here
+        callbacks=[
+            EarlyStopping(
+                monitor="rmse_val_loss", min_delta=0.05, patience=50, verbose=True
+            ),  # NOTE: patience must be > than 20, since this is the patience set for the reduction of the learning rate
+            ModelSummary(max_depth=-1),
+        ],
+    )
+
+    dm.prepare_data()
+    dm.setup()
+
+    model.model.core_module.readout_module.E_i_mean = dm.dataset_statistics.E_i_mean
+    model.model.core_module.readout_module.E_i_stddev = dm.dataset_statistics.E_i_stddev
+
+    # from modelforge.utils.misc import visualize_model
+
+    # visualize_model(dm, model_name)
+
+    # Run training loop and validate
+    trainer.fit(
+        model,
+        train_dataloaders=dm.train_dataloader(),
+        val_dataloaders=dm.val_dataloader(),
+    )
+    trainer.validate(model, dataloaders=dm.val_dataloader())
+    trainer.test(dataloaders=dm.test_dataloader())

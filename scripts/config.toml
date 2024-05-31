@@ -1,0 +1,16 @@
+[potential]
+model_name = "ANI2x"
+potential_parameters = {}
+
+
+[training]
+nr_of_epochs = 50
+save_dir = "test"
+experiment_name = "your_experiment_name"
+remove_self_energies = true
+accelerator = "cpu"
+training_parameters = {}
+
+[dataset]
+dataset_name = "QM9"
+

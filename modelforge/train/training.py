@@ -522,7 +522,7 @@ def read_config_and_train(config_path: str):
     # Extract parameters
     # potential
     model_name = config["potential"]["model_name"]
-    potential_parameters = config["potential"]["potential_parameters"]
+    potential_parameters = config["potential"].get("potential_parameters", {})
 
     # dataset
     dataset_name = config["dataset"]["dataset_name"]
@@ -531,9 +531,16 @@ def read_config_and_train(config_path: str):
     nr_of_epochs = config["training"]["nr_of_epochs"]
     save_dir = config["training"]["save_dir"]
     experiment_name = config["training"]["experiment_name"]
-    remove_self_energies = config["training"]["remove_self_energies"]
     accelerator = config["training"]["accelerator"]
-    training_parameters = config["training"]["training_parameters"]
+    training_parameters = config["training"].get("training_parameters", {})
+    num_nodes = config["training"].get("num_nodes", 1)
+    devices = config["training"].get("devices", 1)
+
+    early_stopping_config = config["training"].get("early_stopping", {})
+
+    # dataset
+    remove_self_energies = config["dataset"].get("remove_self_energies", True)
+    batch_size = config["dataset"].get("batch_size", 512)
 
     # Call the perform_training function with extracted parameters
     perform_training(
@@ -544,6 +551,12 @@ def read_config_and_train(config_path: str):
         experiment_name=experiment_name,
         remove_self_energies=remove_self_energies,
         accelerator=accelerator,
+        potential_parameters=potential_parameters,
+        training_parameters=training_parameters,
+        num_nodes=num_nodes,
+        devices=devices,
+        early_stopping_config=early_stopping_config,
+        batch_size=batch_size,
     )
 
 
@@ -553,8 +566,15 @@ def perform_training(
     nr_of_epochs: int,
     save_dir: str,
     experiment_name: str,
+    num_nodes: int,
     remove_self_energies: bool = True,
     accelerator: str = "cpu",
+    potential_parameters: Dict[str, Any] = {},
+    training_parameters: Dict[str, Any] = {},
+    devices: Any = 1,  # can be an int or list
+    early_stopping_config: Dict[str, Any] = {},
+    batch_size: int = 512,
+    **kwargs,
 ):
     from pytorch_lightning.loggers import TensorBoardLogger
     from modelforge.dataset.utils import RandomRecordSplittingStrategy
@@ -569,28 +589,33 @@ def perform_training(
     # Set up dataset
     dm = DataModule(
         name=dataset_name,
-        batch_size=512,
+        batch_size=batch_size,
         splitting_strategy=RandomRecordSplittingStrategy(),
         remove_self_energies=remove_self_energies,
     )
     # Set up model
-    model = NeuralNetworkPotentialFactory.create_nnp("training", model_name)
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        "training",
+        model_name,
+        nnp_parameters=potential_parameters,
+        training_parameters=training_parameters,
+    )
 
     # set up traininer
     from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
+    # set up trainer
+    callbacks = [ModelSummary(max_depth=-1)]
+    if early_stopping_config:
+        callbacks.append(EarlyStopping(**early_stopping_config))
+
     trainer = Trainer(
         max_epochs=nr_of_epochs,
-        num_nodes=1,
-        devices=1,
+        num_nodes=num_nodes,
+        devices=devices,
         accelerator=accelerator,
         logger=logger,  # Add the logger here
-        callbacks=[
-            EarlyStopping(
-                monitor="rmse_val_loss", min_delta=0.05, patience=50, verbose=True
-            ),  # NOTE: patience must be > than 20, since this is the patience set for the reduction of the learning rate
-            ModelSummary(max_depth=-1),
-        ],
+        callbacks=callbacks,
     )
 
     dm.prepare_data()

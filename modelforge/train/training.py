@@ -517,15 +517,23 @@ def read_config_and_train(config_path: str):
 
     # Read the TOML file
     config = toml.load(config_path)
+    log.info(f"Reading config from : {config_path}")
 
     # Extract parameters
+    # potential
     model_name = config["potential"]["model_name"]
+    potential_parameters = config["potential"]["potential_parameters"]
+
+    # dataset
     dataset_name = config["dataset"]["dataset_name"]
-    nr_of_epochs = config.get("nr_of_epochs")
-    save_dir = config.get("save_dir")
-    experiment_name = config.get("experiment_name")
-    remove_self_energies = config.get("remove_self_energies", True)
-    accelerator = config.get("accelerator", "cpu")
+
+    # training
+    nr_of_epochs = config["training"]["nr_of_epochs"]
+    save_dir = config["training"]["save_dir"]
+    experiment_name = config["training"]["experiment_name"]
+    remove_self_energies = config["training"]["remove_self_energies"]
+    accelerator = config["training"]["accelerator"]
+    training_parameters = config["training"]["training_parameters"]
 
     # Call the perform_training function with extracted parameters
     perform_training(

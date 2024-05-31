@@ -46,5 +46,6 @@ dependencies:
       - flax
       - torchviz
       - git+https://github.com/ArnNag/sake.git@nanometer
+      - git+https://github.com/OUnke/SpookyNet.git
       - tensorflow
       - torchviz

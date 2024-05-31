@@ -1,0 +1,41 @@
+[potential]
+potential_parameters.angle_sections = 4
+potential_parameters.radial_max_distance = "5.1 angstrom"
+potential_parameters.radial_min_distance = "0.8 angstrom"
+potential_parameters.number_of_radial_basis_functions = 16
+potential_parameters.angular_max_distance = "3.5 angstrom"
+potential_parameters.angular_min_distance = "0.8 angstrom"
+potential_parameters.angular_dist_divisions = 8
+model_name = "ANI2x"
+
+[training]
+early_stopping.verbose = true
+lr_scheduler_configfrequency = 1
+
+
+nr_of_epochs = 50
+save_dir = "test"
+experiment_name = "your_experiment_name"
+accelerator = "cpu"
+training_parameters = {}
+num_nodes = 1
+devices = 1                                  #[0,1,2,3]
+early_stopping.monitor = "rmse_val_loss"
+early_stopping.min_delta = 0.001
+early_stopping.patience = 50
+include_forces = false
+lr = 1e-3
+lr_scheduler_config.mode = "min"
+lr_scheduler_configfactor = 0.1
+lr_scheduler_configpatience = 10
+lr_scheduler_configcooldown = 5
+lr_scheduler_configmin_lr = 1e-8
+lr_scheduler_configthreshold = 0.1
+lr_scheduler_configthreshold_mode = "abs"
+lr_scheduler_configmonitor = "rmse_val_loss"
+lr_scheduler_configinterval = "epoch"
+
+[dataset]
+dataset_name = "QM9"
+batch_size = 512
+remove_self_energies = true

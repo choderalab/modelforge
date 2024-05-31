@@ -1048,7 +1048,7 @@ def collate_conformers(conf_list: List[Dict[str, torch.Tensor]]) -> "BatchData":
     E_list = []  # total energy
     Q_list = []  # total charge
     atomic_subsystem_counts = []
-    atomic_subsystem_indices_referencing_dataset = []
+    conf_idxs = []
     for idx, conf in enumerate(conf_list):
         Z_list.append(conf["atomic_numbers"])
         R_list.append(conf["positions"])
@@ -1056,11 +1056,10 @@ def collate_conformers(conf_list: List[Dict[str, torch.Tensor]]) -> "BatchData":
         F_list.append(conf["F"])
         Q_list.append(conf["total_charge"])
         atomic_subsystem_counts.extend(conf["atomic_subsystem_counts"])
-        atomic_subsystem_indices_referencing_dataset.extend(
-            [conf["idx"]] * conf["atomic_subsystem_counts"][0]
-        )
+        conf_idxs.append(conf["idx"])
     atomic_subsystem_counts_tensor = torch.tensor(atomic_subsystem_counts, dtype=torch.int32)
     atomic_subsystem_indices = torch.repeat_interleave(torch.arange(len(conf_list)), atomic_subsystem_counts_tensor)
+    atomic_subsystem_indices_referencing_dataset = torch.tensor(conf_idxs, dtype=torch.int32)[atomic_subsystem_indices]
     atomic_numbers_cat = torch.cat(Z_list)
     total_charge_cat = torch.cat(Q_list)
     positions_cat = torch.cat(R_list).requires_grad_(True)
@@ -1076,9 +1075,7 @@ def collate_conformers(conf_list: List[Dict[str, torch.Tensor]]) -> "BatchData":
         E=E_stack,
         F=F_cat,
         atomic_subsystem_counts=atomic_subsystem_counts_tensor,
-        atomic_subsystem_indices_referencing_dataset=torch.tensor(
-            atomic_subsystem_indices_referencing_dataset, dtype=torch.int32
-        ),
+        atomic_subsystem_indices_referencing_dataset=atomic_subsystem_indices_referencing_dataset,
         number_of_atoms=atomic_numbers_cat.numel(),
     )
     return BatchData(nnp_input, metadata)

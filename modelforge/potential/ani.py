@@ -554,14 +554,13 @@ from typing import Union
 class ANI2x(BaseNetwork):
     def __init__(
         self,
-        radial_max_distance: Union[unit.Quantity, str] = 5.1 * unit.angstrom,
-        radial_min_distance: Union[unit.Quantity, str] = 0.8
-        * unit.angstrom,  # NOTE: min distance? #FIXME
-        number_of_radial_basis_functions: int = 16,
-        angular_max_distance: Union[unit.Quantity, str] = 3.5 * unit.angstrom,
-        angular_min_distance: Union[unit.Quantity, str] = 0.8 * unit.angstrom,
-        angular_dist_divisions: int = 8,
-        angle_sections: int = 4,
+        radial_max_distance: Union[unit.Quantity, str],
+        radial_min_distance: Union[unit.Quantity, str],  # NOTE: min distance? #FIXME
+        number_of_radial_basis_functions: int,
+        angular_max_distance: Union[unit.Quantity, str],
+        angular_min_distance: Union[unit.Quantity, str],
+        angular_dist_divisions: int,
+        angle_sections: int,
     ) -> None:
         super().__init__()
 

@@ -138,9 +138,10 @@ class TrainingAdapter(pl.LightningModule):
         self,
         *,
         nnp_parameters: Dict[str, Any],
+        lr_scheduler_config: Dict[str, Union[str, int, float]],
+        lr: float,
         include_force: bool = False,
-        optimizer: Type[Optimizer] = torch.optim.Adam,
-        lr: float = 1e-3,
+        optimizer: Type[Optimizer] = torch.optim.AdamW,
     ):
         """
         Initializes the TrainingAdapter with the specified model and training configuration.
@@ -172,8 +173,10 @@ class TrainingAdapter(pl.LightningModule):
 
         self.model = nnp_class(**nnp_parameters_)
         self.optimizer = optimizer
+        print(optimizer)
         self.learning_rate = lr
         self.loss = EnergyAndForceLoss(model=self.model, include_force=include_force)
+        self.lr_schedulers_config = lr_scheduler_config
         self.test_mse: List[float] = []
         self.val_mse: List[float] = []
 
@@ -308,18 +311,21 @@ class TrainingAdapter(pl.LightningModule):
         """
 
         optimizer = self.optimizer(self.model.parameters(), lr=self.learning_rate)
+
+        lr_scheduler_config = self.lr_scheduler_config
+        lr_scheduler = ReduceLROnPlateau(
+            optimizer,
+            mode=lr_scheduler_config["mode"],
+            factor=lr_scheduler_config["factor"],
+            patience=lr_scheduler_config["patience"],
+            cooldown=lr_scheduler_config["cooldown"],
+            min_lr=lr_scheduler_config["min_lr"],
+            threshold=lr_scheduler_config["threshold"],
+            threshold_mode="abs",
+        )
+
         lr_scheduler_config = {
-            "scheduler": ReduceLROnPlateau(
-                optimizer,
-                mode="min",
-                factor=0.1,
-                patience=10,
-                verbose=True,
-                cooldown=5,
-                min_lr=1e-8,
-                threshold=0.1,
-                threshold_mode="abs",
-            ),
+            "scheduler": lr_scheduler,
             "monitor": "rmse_val_loss",  # Name of the metric to monitor
             "interval": "epoch",
             "frequency": 1,

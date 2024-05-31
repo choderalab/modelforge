@@ -37,6 +37,13 @@ chem_context.add_transformation(
 )
 
 
+def _convert(val):
+    """Convert a string representation of a openff unit to a unit.Quantity"""
+    if isinstance(val, str):
+        return unit.Quantity(val)
+    return val
+
+
 unit.add_context(chem_context)
 
 

@@ -104,8 +104,17 @@ def test_modelforge_ani(setup_two_methanes):
     from modelforge.potential.ani import ANI2x as mf_ANI2x
     import torch
 
+    # read default parameters
+    from modelforge.train.training import return_toml_config
+
+    config = return_toml_config(
+        f"modelforge/tests/data/potential_defaults/ani2x_defaults.toml"
+    )
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+
     _, _, _, mf_input = setup_two_methanes
-    model = mf_ANI2x()
+    model = mf_ANI2x(**potential_parameters)
     energy = model(mf_input)
     derivative = torch.autograd.grad(energy.E.sum(), mf_input.positions)[0]
     force = -derivative
@@ -306,7 +315,16 @@ def test_representation(setup_methane):
     # generate modelforge ani representation
     from modelforge.potential import ANI2x
 
-    mf_model = ANI2x()
+    # read default parameters
+    from modelforge.train.training import return_toml_config
+
+    config = return_toml_config(
+        f"modelforge/tests/data/potential_defaults/ani2x_defaults.toml"
+    )
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+
+    mf_model = ANI2x(**potential_parameters)
     # perform input checks
     mf_model.input_preparation._input_checks(mf_input)
     # prepare the input for the forward pass

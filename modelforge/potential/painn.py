@@ -476,13 +476,13 @@ from .models import InputPreparation, NNPInput, BaseNetwork
 class PaiNN(BaseNetwork):
     def __init__(
         self,
-        max_Z: int = 101,
-        number_of_atom_features: int = 128,
-        number_of_radial_basis_functions: int = 20,
-        cutoff: unit.Quantity = 5 * unit.angstrom,
-        number_of_interaction_modules: int = 3,
-        shared_interactions: bool = False,
-        shared_filters: bool = False,
+        max_Z: int,
+        number_of_atom_features: int,
+        number_of_radial_basis_functions: int,
+        cutoff: unit.Quantity,
+        number_of_interaction_modules: int,
+        shared_interactions: bool,
+        shared_filters: bool,
         epsilon: float = 1e-8,
     ):
         super().__init__()

@@ -587,12 +587,12 @@ from .models import InputPreparation, NNPInput, BaseNetwork
 class PhysNet(BaseNetwork):
     def __init__(
         self,
-        max_Z: int = 101,
-        cutoff: unit.Quantity = 5 * unit.angstrom,
-        number_of_atom_features: int = 128,
-        number_of_radial_basis_functions: int = 64,
-        number_of_interaction_residual: int = 3,
-        number_of_modules: int = 5,
+        max_Z: int,
+        cutoff: unit.Quantity,
+        number_of_atom_features: int,
+        number_of_radial_basis_functions: int,
+        number_of_interaction_residual: int,
+        number_of_modules: int,
     ) -> None:
         """
         Unke, O. T. and Meuwly, M. "PhysNet: A Neural Network for Predicting Energies,

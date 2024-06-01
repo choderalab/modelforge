@@ -427,10 +427,11 @@ class NeuralNetworkPotentialFactory:
 
     @staticmethod
     def create_nnp(
+        *,
         use: Literal["training", "inference"],
-        nnp_name: Literal["ANI2x", "SchNet", "PaiNN", "SAKE", "PhysNet"],
+        model_type: Literal["ANI2x", "SchNet", "PaiNN", "SAKE", "PhysNet"],
+        model_parameters: Dict[str, Union[int, float, str]],
         simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
-        nnp_parameters: Optional[Dict[str, Union[int, float, str]]] = None,
         training_parameters: Optional[Dict[str, Any]] = None,
     ) -> Union[Type[torch.nn.Module], Type[JAXModel], Type[pl.LightningModule]]:
         """
@@ -465,14 +466,14 @@ class NeuralNetworkPotentialFactory:
         from modelforge.potential import _Implemented_NNPs
         from modelforge.train.training import TrainingAdapter
 
-        nnp_parameters = nnp_parameters or {}
+        model_parameters = model_parameters or {}
         training_parameters = training_parameters or {}
 
         log.debug(f"{training_parameters=}")
         # get NNP
-        nnp_class: Type = _Implemented_NNPs.get_neural_network_class(nnp_name)
+        nnp_class: Type = _Implemented_NNPs.get_neural_network_class(model_type)
         if nnp_class is None:
-            raise NotImplementedError(f"NNP type {nnp_name} is not implemented.")
+            raise NotImplementedError(f"NNP type {model_type} is not implemented.")
 
         # add modifications to NNP if requested
         if use == "training":
@@ -480,10 +481,12 @@ class NeuralNetworkPotentialFactory:
                 log.warning(
                     "Training in JAX is not availalbe. Falling back to PyTorch."
                 )
-            nnp_parameters["nnp_name"] = nnp_name
-            return TrainingAdapter(nnp_parameters=nnp_parameters, **training_parameters)
+            model_parameters["nnp_name"] = model_type
+            return TrainingAdapter(
+                nnp_parameters=model_parameters, **training_parameters
+            )
         elif use == "inference":
-            nnp_instance = nnp_class(**nnp_parameters)
+            nnp_instance = nnp_class(**model_parameters)
             if simulation_environment == "JAX":
                 return PyTorch2JAXConverter().convert_to_jax_model(nnp_instance)
             else:

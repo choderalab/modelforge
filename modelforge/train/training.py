@@ -510,6 +510,15 @@ class TrainingAdapter(pl.LightningModule):
         return tuner.fit()
 
 
+def return_toml_config(config_path: str):
+    import toml
+
+    # Read the TOML file
+    config = toml.load(config_path)
+    log.info(f"Reading config from : {config_path}")
+    return config
+
+
 def read_config_and_train(config_path: str):
     """
     Reads a TOML configuration file and performs training based on the parameters.
@@ -519,11 +528,8 @@ def read_config_and_train(config_path: str):
     config_path : str
         Path to the TOML configuration file.
     """
-    import toml
-
     # Read the TOML file
-    config = toml.load(config_path)
-    log.info(f"Reading config from : {config_path}")
+    config = return_toml_config(config_path)
 
     # Extract parameters
     # potential
@@ -601,9 +607,9 @@ def perform_training(
     )
     # Set up model
     model = NeuralNetworkPotentialFactory.create_nnp(
-        "training",
-        model_name,
-        nnp_parameters=potential_parameters,
+        use="training",
+        model_type=model_name,
+        model_parameters=potential_parameters,
         training_parameters=training_parameters,
     )
 

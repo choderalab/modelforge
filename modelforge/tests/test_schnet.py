@@ -7,7 +7,15 @@ def test_Schnet_init():
     """Test initialization of the Schnet model."""
     from modelforge.potential.schnet import SchNet
 
-    schnet = SchNet()
+    from modelforge.train.training import return_toml_config
+
+    model_name = "SchNet"
+    config = return_toml_config(
+        f"modelforge/tests/data/potential_defaults/{model_name.lower()}_defaults.toml"
+    )
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+    schnet = SchNet(**potential_parameters)
     assert schnet is not None, "Schnet model should be initialized."
 
 
@@ -40,6 +48,8 @@ def test_schnet_forward(single_batch_with_batchsize_64, model_parameter):
         number_of_radial_basis_functions=number_of_gaussians,
         cutoff=cutoff,
         number_of_interaction_modules=nr_interaction_blocks,
+        number_of_filters=3,
+        shared_interactions=False,
     )
     energy = schnet(single_batch_with_batchsize_64.nnp_input).E
     nr_of_mols = single_batch_with_batchsize_64.nnp_input.atomic_subsystem_indices.unique().shape[

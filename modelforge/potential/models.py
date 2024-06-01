@@ -486,6 +486,10 @@ class NeuralNetworkPotentialFactory:
                 nnp_parameters=model_parameters, **training_parameters
             )
         elif use == "inference":
+            # if this model_parameter dictionary ahs already been used
+            # for training the `nnp_name` might have been set
+            if "nnp_name" in model_parameters:
+                del model_parameters["nnp_name"]
             nnp_instance = nnp_class(**model_parameters)
             if simulation_environment == "JAX":
                 return PyTorch2JAXConverter().convert_to_jax_model(nnp_instance)

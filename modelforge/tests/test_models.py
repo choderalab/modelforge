@@ -72,7 +72,7 @@ def test_model_factory(model_name, simulation_environment):
     )
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
-    training_parameters = config["potential"].get("training_parameters", {})
+    training_parameters = config["training"].get("training_parameters", {})
     # training model
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="training",
@@ -105,7 +105,16 @@ def test_energy_scaling_and_offset():
     dataset.setup()
     # -------------------------------#
     # initialize model
-    model = ANI2x()
+    # read default parameters
+    from modelforge.train.training import return_toml_config
+
+    config = return_toml_config(
+        f"modelforge/tests/data/potential_defaults/ani2x_defaults.toml"
+    )
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+
+    model = ANI2x(**potential_parameters)
 
     # -------------------------------#
     # Test that we can add the reference energy correctly
@@ -136,11 +145,30 @@ def test_state_dict_saving_and_loading(model_name):
     from modelforge.potential import NeuralNetworkPotentialFactory
     import torch
 
-    model1 = NeuralNetworkPotentialFactory.create_nnp("training", model_name, "PyTorch")
+    # read default parameters
+    from modelforge.train.training import return_toml_config
+
+    config = return_toml_config(
+        f"modelforge/tests/data/training_defaults/{model_name.lower()}_qm9.toml"
+    )
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+    training_parameters = config["training"].get("training_parameters", {})
+
+    model1 = NeuralNetworkPotentialFactory.create_nnp(
+        use="training",
+        model_type=model_name,
+        simulation_environment="PyTorch",
+        model_parameters=potential_parameters,
+        training_parameters=training_parameters,
+    )
     torch.save(model1.state_dict(), "model.pth")
 
     model2 = NeuralNetworkPotentialFactory.create_nnp(
-        "inference", model_name, "PyTorch"
+        use="inference",
+        model_type=model_name,
+        simulation_environment="PyTorch",
+        model_parameters=potential_parameters,
     )
     model2.load_state_dict(torch.load("model.pth"))
 

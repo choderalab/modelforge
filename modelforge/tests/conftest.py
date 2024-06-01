@@ -6,9 +6,6 @@ from typing import Optional, Dict
 from dataclasses import dataclass
 
 
-from modelforge.potential.utils import BatchData
-
-
 # datamodule fixture
 @pytest.fixture
 def datamodule_factory():
@@ -214,7 +211,6 @@ def get_dataset_container(dataset_name: str) -> DataSetContainer:
 
 @pytest.fixture
 def get_dataset_container_fix():
-
     return get_dataset_container
 
 
@@ -228,7 +224,7 @@ def equivariance_utils():
 # helper functions
 # ----------------------------------------------------------- #
 
-from modelforge.potential.utils import Metadata, NNPInput, BatchData
+from modelforge.dataset.dataset import Metadata, NNPInput, BatchData
 
 
 @pytest.fixture

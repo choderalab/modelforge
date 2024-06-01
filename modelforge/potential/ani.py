@@ -99,15 +99,15 @@ class ANIRepresentation(nn.Module):
     # used for the ANI architecture of NNPs
 
     def __init__(
-        self,
-        radial_max_distance: unit.Quantity,
-        radial_min_distanc: unit.Quantity,
-        number_of_radial_basis_functions: int,
-        angular_max_distance: unit.Quantity,
-        angular_min_distance: unit.Quantity,
-        angular_dist_divisions: int,
-        angle_sections: int,
-        nr_of_supported_elements: int = 7,
+            self,
+            radial_max_distance: unit.Quantity,
+            radial_min_distanc: unit.Quantity,
+            number_of_radial_basis_functions: int,
+            angular_max_distance: unit.Quantity,
+            angular_min_distance: unit.Quantity,
+            angular_dist_divisions: int,
+            angle_sections: int,
+            nr_of_supported_elements: int = 7,
     ):
         # radial symmetry functions
 
@@ -427,7 +427,7 @@ class ANIInteraction(nn.Module):
                 input_ = aev.index_select(0, midx)
                 output[midx] = model(input_).flatten()
 
-                #output.masked_scatter_(mask, model(input_).flatten())
+                # output.masked_scatter_(mask, model(input_).flatten())
 
         return output.view_as(species)
 
@@ -435,14 +435,14 @@ class ANIInteraction(nn.Module):
 class ANI2xCore(CoreNetwork):
 
     def __init__(
-        self,
-        radial_max_distance: unit.Quantity = 5.1 * unit.angstrom,
-        radial_min_distanc: unit.Quantity = 0.8 * unit.angstrom,
-        number_of_radial_basis_functions: int = 16,
-        angular_max_distance: unit.Quantity = 3.5 * unit.angstrom,
-        angular_min_distance: unit.Quantity = 0.8 * unit.angstrom,
-        angular_dist_divisions: int = 8,
-        angle_sections: int = 4,
+            self,
+            radial_max_distance: unit.Quantity = 5.1 * unit.angstrom,
+            radial_min_distanc: unit.Quantity = 0.8 * unit.angstrom,
+            number_of_radial_basis_functions: int = 16,
+            angular_max_distance: unit.Quantity = 3.5 * unit.angstrom,
+            angular_min_distance: unit.Quantity = 0.8 * unit.angstrom,
+            angular_dist_divisions: int = 8,
+            angle_sections: int = 4,
     ) -> None:
         """
         Initialize the ANi NNP architeture.
@@ -549,7 +549,6 @@ class ANI2xCore(CoreNetwork):
 
 
 from .models import InputPreparation, BaseNetwork
-from .utils import NNPInput
 
 
 class ANI2x(BaseNetwork):

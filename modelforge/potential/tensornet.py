@@ -5,7 +5,7 @@ from openff.units import unit
 
 from modelforge.potential.models import InputPreparation
 from modelforge.potential.models import BaseNetwork, CoreNetwork
-from modelforge.potential.utils import NeuralNetworkData, NNPInput
+from modelforge.potential.utils import NeuralNetworkData
 
 
 class TensorNet(BaseNetwork):

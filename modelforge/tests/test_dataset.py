@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 import torch
 
-from modelforge.dataset.dataset import DatasetFactory, TorchDataset
+from modelforge.dataset.dataset import DatasetFactory, TorchDataset, BatchData
 from modelforge.dataset import _ImplementedDatasets
 
 from modelforge.utils.prop import PropertyNames
@@ -76,11 +76,11 @@ def test_dataset_basic_operations():
 
     for conf_idx in range(len(dataset)):
         conf_data = dataset[conf_idx]
-        assert np.array_equal(conf_data["positions"], geom_true[conf_idx])
+        assert np.array_equal(conf_data.nnp_input.positions, geom_true[conf_idx])
         assert np.array_equal(
-            conf_data["atomic_numbers"], atomic_numbers_true[conf_idx]
+            conf_data.nnp_input.atomic_numbers, atomic_numbers_true[conf_idx]
         )
-        assert np.array_equal(conf_data["E"], energy_true[conf_idx])
+        assert np.array_equal(conf_data.metadata.E, energy_true[conf_idx])
 
     for rec_idx in range(dataset.record_len()):
         assert np.array_equal(
@@ -164,8 +164,7 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
     )
 
     raw_data_item = dataset[0]
-    assert isinstance(raw_data_item, dict)
-    assert len(raw_data_item) == 7  # 7 properties are returned
+    assert isinstance(raw_data_item, BatchData)
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
@@ -410,13 +409,13 @@ def test_data_item_format_of_datamodule(
     )
 
     raw_data_item = dm.torch_dataset[0]
-    assert isinstance(raw_data_item, Dict)
-    assert isinstance(raw_data_item["atomic_numbers"], torch.Tensor)
-    assert isinstance(raw_data_item["positions"], torch.Tensor)
-    assert isinstance(raw_data_item["E"], torch.Tensor)
+    assert isinstance(raw_data_item, BatchData)
+    assert isinstance(raw_data_item.nnp_input.atomic_numbers, torch.Tensor)
+    assert isinstance(raw_data_item.nnp_input.positions, torch.Tensor)
+    assert isinstance(raw_data_item.metadata.E, torch.Tensor)
 
     assert (
-        raw_data_item["atomic_numbers"].shape[0] == raw_data_item["positions"].shape[0]
+        raw_data_item.nnp_input.atomic_numbers.shape[0] == raw_data_item.nnp_input.positions.shape[0]
     )
 
 
@@ -490,7 +489,7 @@ def test_dataset_splitting(
         dm.test_dataset,
     )
 
-    energy = train_dataset[0]["E"].item()
+    energy = train_dataset[0].metadata.E.item()
     dataset_to_test = get_dataset_container_fix(dataset_name)
     if splitting_strategy == RandomSplittingStrategy:
         assert np.isclose(energy, dataset_to_test.expected_E_random_split)
@@ -645,7 +644,7 @@ def test_self_energy(dataset_name, datamodule_factory):
         remove_self_energies=False,
     )
 
-    methane_energy_reference = float(dm.train_dataset[0]["E"])
+    methane_energy_reference = float(dm.train_dataset[0].metadata.E)
     assert np.isclose(methane_energy_reference, -106277.4161)
 
     # Scenario 1: dataset contains self energies
@@ -733,9 +732,9 @@ def test_self_energy(dataset_name, datamodule_factory):
         # Extract the first molecule (methane)
         # double check that it is methane
         k = dm.train_dataset[0]
-        methane_atomic_indices = dm.train_dataset[0]["atomic_numbers"]
+        methane_atomic_indices = dm.train_dataset[0].nnp_input.atomic_numbers
         # extract energy
-        methane_energy_offset = dm.train_dataset[0]["E"]
+        methane_energy_offset = dm.train_dataset[0].metadata.E
         if regression is False:
             # checking that the offset energy is actually correct for methane
             assert torch.isclose(

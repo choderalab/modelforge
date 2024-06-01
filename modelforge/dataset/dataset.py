@@ -736,7 +736,7 @@ class HDF5Dataset:
             )
 
     def _to_file_cache(
-            self,
+        self,
     ) -> None:
         """
                 Save processed data to a numpy (.npz) file.
@@ -856,7 +856,7 @@ class DatasetFactory:
 
     @staticmethod
     def create_dataset(
-            data: HDF5Dataset,
+        data: HDF5Dataset,
     ) -> TorchDataset:
         """
         Creates a TorchDataset from an HDF5Dataset, applying optional transformations.
@@ -1003,7 +1003,7 @@ class DataModule(pl.LightningDataModule):
         return DatasetFactory().create_dataset(dataset)
 
     def _process_self_energies(
-            self, torch_dataset: TorchDataset, atomic_self_energies: "AtomicSelfEnergies"
+        self, torch_dataset: TorchDataset, atomic_self_energies: "AtomicSelfEnergies"
     ) -> None:
         """Calculate and subtract self energies from the dataset."""
         from modelforge.potential.processing import AtomicSelfEnergies

@@ -27,20 +27,16 @@ def test_train_with_lightning(model_name, dataset_name, include_force):
     )
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
-    training_parameters = config["training"].get("training_parameters", {})
+    potential_config = config["potential"]
+    training_config = config["training"]
+    dataset_config = config["dataset"]
 
-    training_parameters['include_force'] = include_force
+    training_config["include_force"] = include_force
 
     trainer = perform_training(
-        model_name=model_name,
-        nr_of_epochs=2,
-        dataset_name=dataset_name,
-        potential_parameters=potential_parameters,
-        training_parameters=training_parameters,
-        save_dir="test_training",
-        experiment_name="test_train_with_lightning",
-        num_nodes=1,
+        potential_config=potential_config,
+        training_config=training_config,
+        dataset_config=dataset_config,
     )
     # save checkpoint
     trainer.save_checkpoint("test.chp")
@@ -48,11 +44,12 @@ def test_train_with_lightning(model_name, dataset_name, include_force):
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="training",
         model_type=model_name,
-        model_parameters=potential_parameters,
-        training_parameters=training_parameters,
+        model_parameters=potential_config["potential_parameters"],
+        training_parameters=training_config["training_parameters"],
     )
+    from modelforge.train.training import TrainingAdapter
 
-    model = model.load_from_checkpoint("test.chp")
+    model = TrainingAdapter.load_from_checkpoint("test.chp")
     assert type(model) is not None
 
 
@@ -61,8 +58,23 @@ def test_train_with_lightning(model_name, dataset_name, include_force):
 def test_loss(model_name, dataset_name, datamodule_factory):
     from loguru import logger as log
 
+    # read default parameters
+    from modelforge.train.training import return_toml_config
+
+    config = return_toml_config(
+        f"modelforge/tests/data/training_defaults/{model_name.lower()}_{dataset_name.lower()}.toml"
+    )
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+
+    # inference model
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        use="inference",
+        model_type=model_name,
+        model_parameters=potential_parameters,
+    )
+
     dm = datamodule_factory(dataset_name=dataset_name)
-    model = NeuralNetworkPotentialFactory.create_nnp("inference", model_name)
 
     from modelforge.train.training import EnergyAndForceLoss
     import torch

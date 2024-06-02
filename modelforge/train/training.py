@@ -178,10 +178,9 @@ class TrainingAdapter(pl.LightningModule):
 
         self.model = nnp_class(**nnp_parameters_)
         self.optimizer = optimizer
-        print(optimizer)
         self.learning_rate = lr
         self.loss = EnergyAndForceLoss(model=self.model, include_force=include_force)
-        self.lr_schedulers_config = lr_scheduler_config
+        self.lr_scheduler_config = lr_scheduler_config
         self.test_mse: List[float] = []
         self.val_mse: List[float] = []
 
@@ -557,43 +556,19 @@ def read_config_and_train(config_path: str):
 
     # Extract parameters
     # potential
-    model_name = config["potential"]["model_name"]
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_config = config["potential"]
 
     # dataset
-    dataset_name = config["dataset"]["dataset_name"]
+    dataset_config = config["dataset"]
 
     # training
-    nr_of_epochs = config["training"]["nr_of_epochs"]
-    save_dir = config["training"]["save_dir"]
-    experiment_name = config["training"]["experiment_name"]
-    accelerator = config["training"]["accelerator"]
-    training_parameters = config["training"].get("training_parameters", {})
-    num_nodes = config["training"].get("num_nodes", 1)
-    devices = config["training"].get("devices", 1)
-
-    early_stopping_config = config["training"].get("early_stopping", {})
-
-    # dataset
-    remove_self_energies = config["dataset"].get("remove_self_energies", True)
-    batch_size = config["dataset"].get("batch_size", 512)
+    training_config = config["training"]
 
     # Call the perform_training function with extracted parameters
     perform_training(
-        model_name=model_name,
-        dataset_name=dataset_name,
-        version_select=version_select,
-        nr_of_epochs=nr_of_epochs,
-        save_dir=save_dir,
-        experiment_name=experiment_name,
-        remove_self_energies=remove_self_energies,
-        accelerator=accelerator,
-        potential_parameters=potential_parameters,
-        training_parameters=training_parameters,
-        num_nodes=num_nodes,
-        devices=devices,
-        early_stopping_config=early_stopping_config,
-        batch_size=batch_size,
+        potential_config=potential_config,
+        training_config=training_config,
+        dataset_config=dataset_config,
     )
 
 
@@ -601,54 +576,21 @@ from lightning import Trainer
 
 
 def perform_training(
-    model_name: str,
-    dataset_name: str,
-    nr_of_epochs: int,
-    save_dir: str,
-    experiment_name: str,
-    num_nodes: int,
-    remove_self_energies: bool = True,
-    accelerator: str = "cpu",
-    version_select: str = "latest",
-    potential_parameters: Dict[str, Any] = {},
-    training_parameters: Dict[str, Any] = {},
-    devices: Any = 1,  # can be an int or list
-    early_stopping_config: Dict[str, Any] = {},
-    batch_size: int = 512,
+    potential_config: Dict[str, Any],
+    training_config: Dict[str, Any],
+    dataset_config: Dict[str, Any],
 ) -> Trainer:
     """
     Performs the training process for a neural network potential model.
 
     Parameters
     ----------
-    model_name : str
-        The name of the model to be trained.
-    dataset_name : str
-        The name of the dataset to be used for training.
-    nr_of_epochs : int
-        The number of training epochs.
-    save_dir : str
-        The directory to save the trained model.
-    experiment_name : str
-        The name of the experiment.
-    num_nodes : int
-        The number of nodes to use for training.
-    remove_self_energies : bool, optional
-        Whether to remove self-energies from the dataset. Defaults to True.
-    accelerator : str, optional
-        The accelerator to use for training. Defaults to "cpu".
-    version_select: str, optional
-        Version of the dataset. Defaults to 'latest'.
-    potential_parameters : Dict[str, Any], optional
+    potential_config : Dict[str, Any], optional
         Additional parameters for the potential model.
-    training_parameters : Dict[str, Any], optional
+    training_config : Dict[str, Any], optional
         Additional parameters for the training process.
-    devices : Any, optional
-        The devices to use for training. Can be an int or a list. Defaults to 1.
-    early_stopping_config : Dict[str, Any], optional
-        Configuration for early stopping during training.
-    batch_size : int, optional
-        The batch size for training. Defaults to 512.
+    dataset_config : Dict[str, Any], optional
+        Additional parameters for the dataset.
 
     Returns
     -------
@@ -662,6 +604,19 @@ def perform_training(
     from modelforge.dataset.dataset import DataModule
     from lightning.pytorch.callbacks import ModelSummary
 
+    save_dir = training_config.get("save_dir", "lightning_logs")
+    experiment_name = training_config.get("experiment_name", "exp")
+    model_name = potential_config["model_name"]
+    dataset_name = dataset_config["dataset_name"]
+    version_select = dataset_config.get("version_select", "latest")
+    accelerator = training_config.get("accelerator", "cpu")
+    nr_of_epochs = training_config.get("nr_of_epochs", 10)
+    num_nodes = training_config.get("num_nodes", 1)
+    devices = training_config.get("devices", 1)
+    batch_size = training_config.get("batch_size", 128)
+    remove_self_energies = dataset_config.get("remove_self_energies", False)
+    early_stopping_config = training_config.get("early_stopping", None)
+
     # set up tensor board logger
     logger = TensorBoardLogger(save_dir, name=experiment_name)
 
@@ -673,8 +628,8 @@ Experiments are saved to: {save_dir}/{experiment_name}.
 """
     )
 
-    log.debug(f"Using {potential_parameters} potential parameters")
-    log.debug(f"Using {training_parameters} training parameters")
+    log.debug(f"Using {potential_config} potential config")
+    log.debug(f"Using {training_config} training config")
 
     # Set up dataset
     dm = DataModule(
@@ -688,8 +643,8 @@ Experiments are saved to: {save_dir}/{experiment_name}.
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="training",
         model_type=model_name,
-        model_parameters=potential_parameters,
-        training_parameters=training_parameters,
+        model_parameters=potential_config["potential_parameters"],
+        training_parameters=training_config["training_parameters"],
     )
 
     # set up traininer

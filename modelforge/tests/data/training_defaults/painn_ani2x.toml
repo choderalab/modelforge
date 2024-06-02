@@ -1,0 +1,42 @@
+[potential]
+potential_parameters.max_Z = 101
+potential_parameters.number_of_atom_features = 32
+potential_parameters.number_of_radial_basis_functions = 20
+potential_parameters.cutoff = "5.0 angstrom"
+potential_parameters.number_of_interaction_modules = 3
+potential_parameters.shared_interactions = false
+potential_parameters.shared_filters = false
+model_name = "PaiNN"
+
+[training]
+nr_of_epochs = 50
+save_dir = "test"
+experiment_name = "exp_test"
+accelerator = "cpu"
+num_nodes = 1
+devices = 1                               #[0,1,2,3]
+
+training_parameters.include_force = false
+
+training_parameters.lr = 1e-3
+training_parameters.lr_scheduler_config.frequency = 1
+training_parameters.lr_scheduler_config.mode = "min"
+training_parameters.lr_scheduler_config.factor = 0.1
+training_parameters.lr_scheduler_config.patience = 10
+training_parameters.lr_scheduler_config.cooldown = 5
+training_parameters.lr_scheduler_config.min_lr = 1e-8
+training_parameters.lr_scheduler_config.threshold = 0.1
+training_parameters.lr_scheduler_config.threshold_mode = "abs"
+training_parameters.lr_scheduler_config.monitor = "rmse_val_loss"
+training_parameters.lr_scheduler_config.interval = "epoch"
+
+early_stopping.monitor = "rmse_val_loss"
+early_stopping.min_delta = 0.001
+early_stopping.patience = 50
+early_stopping.verbose = true
+
+[dataset]
+dataset_name = "ANI2x"
+version_select = "nc_1000_v0"
+batch_size = 512
+remove_self_energies = true

@@ -92,9 +92,22 @@ def test_loss(model_name, dataset_name, datamodule_factory):
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 @pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_hypterparameter_tuning_with_ray(model_name, dataset_name, datamodule_factory):
+    from modelforge.train.training import return_toml_config
 
     dm = datamodule_factory(dataset_name=dataset_name)
-    model = NeuralNetworkPotentialFactory.create_nnp("training", model_name)
+    config = return_toml_config(
+        f"modelforge/tests/data/training_defaults/{model_name.lower()}_qm9.toml"
+    )
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+    training_parameters = config["training"].get("training_parameters", {})
+    # training model
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        use="training",
+        model_type=model_name,
+        model_parameters=potential_parameters,
+        training_parameters=training_parameters,
+    )
 
     model.tune_with_ray(
         train_dataloader=dm.train_dataloader(),

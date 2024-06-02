@@ -441,7 +441,7 @@ class TrainingAdapter(pl.LightningModule):
         run_config = RunConfig(
             checkpoint_config=CheckpointConfig(
                 num_to_keep=2,
-                checkpoint_score_attribute="ptl/val_loss",
+                checkpoint_score_attribute="rmse_val_loss",
                 checkpoint_score_order="min",
             ),
         )
@@ -506,7 +506,7 @@ class TrainingAdapter(pl.LightningModule):
         )
 
         tune_config = tune.TuneConfig(
-            metric="ptl/val_loss",
+            metric="rmse_val_loss",
             mode="min",
             scheduler=scheduler,
             num_samples=number_of_samples,

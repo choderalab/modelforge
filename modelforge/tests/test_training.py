@@ -20,40 +20,39 @@ def test_train_with_lightning(model_name, dataset_name, include_force):
     Test the forward pass for a given model and dataset.
     """
 
-    from lightning import Trainer
-    from modelforge.train.training import TrainingAdapter
-    from modelforge.dataset.dataset import DataModule
+    from modelforge.train.training import return_toml_config, perform_training
 
-    dm = DataModule(
-        name=dataset_name,
-        batch_size=512,
-        remove_self_energies=True,
-        version_select="nc_1000_v0",
-    )
-    dm.prepare_data()
-    dm.setup()
-    # Set up model
-    training_parameters = {"include_force": include_force}
-    model = NeuralNetworkPotentialFactory.create_nnp(
-        "training", model_name, training_parameters=training_parameters
+    config = return_toml_config(
+        f"modelforge/tests/data/training_defaults/{model_name.lower()}_{dataset_name.lower()}.toml"
     )
 
-    # Initialize PyTorch Lightning Trainer
-    trainer = Trainer(max_epochs=2)
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+    training_parameters = config["training"].get("training_parameters", {})
 
-    # set mean/stddev for E_i
-    model.model.core_module.readout_module.E_i_mean = dm.dataset_statistics.E_i_mean
-    model.model.core_module.readout_module.E_i_stddev = dm.dataset_statistics.E_i_stddev
+    training_parameters['include_force'] = include_force
 
-    # Run training loop and validate
-    trainer.fit(
-        model,
-        train_dataloaders=dm.train_dataloader(),
-        val_dataloaders=dm.val_dataloader(),
+    trainer = perform_training(
+        model_name=model_name,
+        nr_of_epochs=2,
+        dataset_name=dataset_name,
+        potential_parameters=potential_parameters,
+        training_parameters=training_parameters,
+        save_dir="test_training",
+        experiment_name="test_train_with_lightning",
+        num_nodes=1,
     )
     # save checkpoint
     trainer.save_checkpoint("test.chp")
-    model = TrainingAdapter.load_from_checkpoint("test.chp")
+
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        use="training",
+        model_type=model_name,
+        model_parameters=potential_parameters,
+        training_parameters=training_parameters,
+    )
+
+    model = model.load_from_checkpoint("test.chp")
     assert type(model) is not None
 
 

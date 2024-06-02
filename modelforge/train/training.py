@@ -148,13 +148,18 @@ class TrainingAdapter(pl.LightningModule):
 
         Parameters
         ----------
-        model : Union[ANI2x, SchNet, PaiNN, PhysNet, SAKE]
-            The neural network potential model to be trained.
-        optimizer : Type[torch.optim.Optimizer], optional
-            The optimizer class to use for training, by default torch.optim.Adam.
-        lr : float, optional
-            The learning rate for the optimizer, by default 1e-3.
+        nnp_parameters : Dict[str, Any]
+            The parameters for the neural network potential model.
+        lr_scheduler_config : Dict[str, Union[str, int, float]]
+            The configuration for the learning rate scheduler.
+        lr : float
+            The learning rate for the optimizer.
+        include_force : bool, optional
+            Whether to include force in the loss function, by default False.
+        optimizer : Type[Optimizer], optional
+            The optimizer class to use for training, by default torch.optim.AdamW.
         """
+
         from typing import List
         from modelforge.potential import _Implemented_NNPs
 
@@ -251,6 +256,12 @@ class TrainingAdapter(pl.LightningModule):
         self.test_mse.append(float(mse_loss))
 
     def on_test_epoch_end(self) -> None:
+        """
+        Calculates the root mean squared error (RMSE) of the test set and logs it to the progress bar.
+
+        This method is called at the end of each test epoch during training. It calculates the RMSE of the test set by taking the square root of the mean of the test mean squared error (MSE) values. The RMSE is then logged to the progress bar with the key "rmse_test_loss".
+        """
+
         import numpy as np
 
         rmse_loss = np.sqrt(np.mean(np.array(self.test_mse)))
@@ -511,6 +522,19 @@ class TrainingAdapter(pl.LightningModule):
 
 
 def return_toml_config(config_path: str):
+    """
+    Read a TOML configuration file and return the parsed configuration.
+
+    Parameters
+    ----------
+    config_path : str
+        The path to the TOML configuration file.
+
+    Returns
+    -------
+    dict
+        The parsed configuration from the TOML file.
+    """
     import toml
 
     # Read the TOML file
@@ -558,6 +582,7 @@ def read_config_and_train(config_path: str):
     perform_training(
         model_name=model_name,
         dataset_name=dataset_name,
+        version_select=version_select,
         nr_of_epochs=nr_of_epochs,
         save_dir=save_dir,
         experiment_name=experiment_name,
@@ -572,6 +597,9 @@ def read_config_and_train(config_path: str):
     )
 
 
+from lightning import Trainer
+
+
 def perform_training(
     model_name: str,
     dataset_name: str,
@@ -581,13 +609,52 @@ def perform_training(
     num_nodes: int,
     remove_self_energies: bool = True,
     accelerator: str = "cpu",
+    version_select: str = "latest",
     potential_parameters: Dict[str, Any] = {},
     training_parameters: Dict[str, Any] = {},
     devices: Any = 1,  # can be an int or list
     early_stopping_config: Dict[str, Any] = {},
     batch_size: int = 512,
-    **kwargs,
-):
+) -> Trainer:
+    """
+    Performs the training process for a neural network potential model.
+
+    Parameters
+    ----------
+    model_name : str
+        The name of the model to be trained.
+    dataset_name : str
+        The name of the dataset to be used for training.
+    nr_of_epochs : int
+        The number of training epochs.
+    save_dir : str
+        The directory to save the trained model.
+    experiment_name : str
+        The name of the experiment.
+    num_nodes : int
+        The number of nodes to use for training.
+    remove_self_energies : bool, optional
+        Whether to remove self-energies from the dataset. Defaults to True.
+    accelerator : str, optional
+        The accelerator to use for training. Defaults to "cpu".
+    version_select: str, optional
+        Version of the dataset. Defaults to 'latest'.
+    potential_parameters : Dict[str, Any], optional
+        Additional parameters for the potential model.
+    training_parameters : Dict[str, Any], optional
+        Additional parameters for the training process.
+    devices : Any, optional
+        The devices to use for training. Can be an int or a list. Defaults to 1.
+    early_stopping_config : Dict[str, Any], optional
+        Configuration for early stopping during training.
+    batch_size : int, optional
+        The batch size for training. Defaults to 512.
+
+    Returns
+    -------
+    Trainer
+    """
+
     from pytorch_lightning.loggers import TensorBoardLogger
     from modelforge.dataset.utils import RandomRecordSplittingStrategy
     from lightning import Trainer
@@ -598,12 +665,24 @@ def perform_training(
     # set up tensor board logger
     logger = TensorBoardLogger(save_dir, name=experiment_name)
 
+    log.debug(
+        f"""
+Training {model_name} on {dataset_name}-{version_select} dataset with {accelerator}
+accelerator on {num_nodes} nodes for {nr_of_epochs} epochs.
+Experiments are saved to: {save_dir}/{experiment_name}.
+"""
+    )
+
+    log.debug(f"Using {potential_parameters} potential parameters")
+    log.debug(f"Using {training_parameters} training parameters")
+
     # Set up dataset
     dm = DataModule(
         name=dataset_name,
         batch_size=batch_size,
         splitting_strategy=RandomRecordSplittingStrategy(),
         remove_self_energies=remove_self_energies,
+        version_select=version_select,
     )
     # Set up model
     model = NeuralNetworkPotentialFactory.create_nnp(
@@ -648,3 +727,4 @@ def perform_training(
     )
     trainer.validate(model, dataloaders=dm.val_dataloader())
     trainer.test(dataloaders=dm.test_dataloader())
+    return trainer

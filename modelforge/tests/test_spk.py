@@ -222,9 +222,7 @@ def test_painn_representation_implementation():
 
     schnetpack_results = schnetpack_painn(spk_input)
     modelforge_painn.input_preparation._input_checks(mf_nnp_input)
-    pairlist_output = modelforge_painn.input_preparation.prepare_inputs(
-        mf_nnp_input
-    )
+    pairlist_output = modelforge_painn.input_preparation.prepare_inputs(mf_nnp_input)
     pain_nn_input_mf = modelforge_painn.core_module._model_specific_input_preparation(
         mf_nnp_input, pairlist_output
     )
@@ -555,11 +553,13 @@ def setup_mf_schnet_representation(
     from modelforge.potential.schnet import SchNet as mf_SchNET
 
     return mf_SchNET(
+        max_Z=101,
         number_of_atom_features=number_of_atom_features,
         number_of_interaction_modules=nr_of_interactions,
         number_of_radial_basis_functions=number_of_radial_basis_functions,
         cutoff=cutoff,
         number_of_filters=number_of_atom_features,
+        shared_interactions=False,
     )
 
 
@@ -590,9 +590,7 @@ def test_schnet_representation_implementation():
     schnetpack_results = schnetpack_schnet(spk_input)
     modelforge_schnet.input_preparation._input_checks(mf_nnp_input)
 
-    pairlist_output = modelforge_schnet.input_preparation.prepare_inputs(
-        mf_nnp_input
-    )
+    pairlist_output = modelforge_schnet.input_preparation.prepare_inputs(mf_nnp_input)
     schnet_nn_input_mf = (
         modelforge_schnet.core_module._model_specific_input_preparation(
             mf_nnp_input, pairlist_output

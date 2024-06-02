@@ -37,9 +37,15 @@ def test_train_with_lightning(model_name, dataset_name, include_force):
     model = NeuralNetworkPotentialFactory.create_nnp(
         "training", model_name, training_parameters=training_parameters
     )
+    from pytorch_lightning.loggers import TensorBoardLogger
+
+    logger = TensorBoardLogger("tb_logs", name="training")
 
     # Initialize PyTorch Lightning Trainer
-    trainer = Trainer(max_epochs=2)
+    trainer = Trainer(
+        max_epochs=2,
+        logger=logger,  # Add the logger here
+    )
 
     # set mean/stddev for E_i
     model.model.core_module.readout_module.E_i_mean = dm.dataset_statistics.E_i_mean

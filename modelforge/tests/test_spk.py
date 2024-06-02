@@ -192,6 +192,8 @@ def setup_modelforge_painn_representation(
         number_of_interaction_modules=nr_of_interactions,
         number_of_radial_basis_functions=number_of_gaussians,
         cutoff=cutoff,
+        shared_interactions=False,
+        shared_filters=False,
     )
 
 

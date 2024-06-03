@@ -54,7 +54,7 @@ def setup(model_name: str):
         num_nodes=num_nodes,
         devices=devices,
         accelerator=accelerator,
-        profiler="simple",  # "advanced",
+        profiler="pytorch",  # "advanced",
     )
 
     dm.prepare_data()

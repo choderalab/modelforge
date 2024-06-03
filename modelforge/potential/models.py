@@ -702,14 +702,17 @@ class CoreNetwork(Module, ABC):
         """
         return self.readout_module(atom_specific_values, index)
 
-    def forward(self, data: NNPInput, pairlist_output) -> EnergyOutput:
+    def forward(self, data: NNPInput, pairlist_output: PairListOutputs) -> EnergyOutput:
         """
         Defines the forward pass of the neural network potential.
 
         Parameters
         ----------
         data : NNPInput
-            The input data for the model, containing atomic numbers, positions, and other relevant fields.
+            Contains input data for the batch obtained directly from the dataset, including atomic numbers, positions,
+            and other relevant fields.
+        pairlist_output : PairListOutputs
+            Contains the indices for the selected pairs and their associated distances and displacement vectors.
 
         Returns
         -------

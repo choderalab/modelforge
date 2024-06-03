@@ -49,15 +49,21 @@ def setup(model_name: str):
 
 if __name__ == "__main__":
     from torch.profiler import profile, record_function, ProfilerActivity
+    import torch
 
     model_name = "SchNet"
 
     model, data = setup(model_name)
     with profile(
         activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-        record_shapes=True,
+        # record_shapes=True,
         with_stack=True,
+        experimental_config=torch._C._profiler._ExperimentalConfig(
+            verbose=True
+        ),  # NOTE: https://github.com/pytorch/pytorch/issues/100253
     ) as prof:
         profile_network(model, data)
+        prof.export_stacks("profiler_stacks_sorted_cpu.txt", "self_cpu_time_total")
+        prof.export_stacks("profiler_stacks_sorted_cuda.txt", "self_cuda_time_total")
 
     print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=-1))

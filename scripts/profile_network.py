@@ -54,12 +54,10 @@ if __name__ == "__main__":
 
     model, data = setup(model_name)
     with profile(
-        activities=[ProfilerActivity.CPU], record_shapes=True, with_stack=True
+        activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+        record_shapes=True,
+        with_stack=True,
     ) as prof:
         profile_network(model, data)
 
-    print(
-        prof.key_averages().table(
-            sort_by="cpu_time_total", row_limit=-1
-        )
-    )
+    print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=-1))

@@ -194,11 +194,6 @@ class Neighborlist(Pairlist):
     """Manage neighbor list calculations with a specified cutoff distance.
 
     This class extends Pairlist to consider a cutoff distance for neighbor calculations.
-
-    Attributes
-    ----------
-    cutoff : unit.Quantity
-        Cutoff distance for neighbor list calculations.
     """
 
     def __init__(self, cutoff: unit.Quantity, only_unique_pairs: bool = False):
@@ -229,8 +224,6 @@ class Neighborlist(Pairlist):
             Atom positions. Shape: [nr_systems, nr_atoms, 3].
         atomic_subsystem_indices : torch.Tensor
             Indices identifying atoms in subsystems. Shape: [nr_atoms].
-        only_unique_pairs : bool, optional
-            If True, considers only unique pairs of atoms. Default is False.
 
         Returns
         -------
@@ -414,7 +407,8 @@ from modelforge.potential.processing import AtomicSelfEnergies
 
 class NeuralNetworkPotentialFactory:
     """
-    Factory class for creating instances of neural network potentials (NNP) that are traceable/scriptable and can be exported to torchscript.
+    Factory class for creating instances of neural network potentials (NNP) that are traceable/scriptable and can be
+    exported to torchscript.
 
     This factory allows for the creation of specific NNP instances configured for either
     training or inference purposes based on the given parameters.
@@ -595,18 +589,13 @@ class CoreNetwork(Module, ABC):
 
     Attributes
     ----------
-    cutoff : unit.Quantity
-        Cutoff distance for neighbor list calculations.
-    calculate_distances_and_pairlist : Neighborlist
-        Module for calculating distances and pairlist with a given cutoff.
     readout_module : FromAtomToMoleculeReduction
         Module for reading out per molecule properties from atomic properties.
+    postprocessing : EnergyScaling
+        Module for postprocessing the raw energies computed by the readout module.
     """
 
-    def __init__(
-        self,
-        cutoff: unit.Quantity,
-    ):
+    def __init__(self):
         """
         Initializes the neural network potential class with specified parameters.
 
@@ -619,9 +608,9 @@ class CoreNetwork(Module, ABC):
         # initialize the per molecule readout module
         from .processing import EnergyScaling, FromAtomToMoleculeReduction
 
-        self.postprocessing = EnergyScaling()
-
         self.readout_module = FromAtomToMoleculeReduction()
+
+        self.postprocessing = EnergyScaling()
 
     @abstractmethod
     def _model_specific_input_preparation(
@@ -645,7 +634,7 @@ class CoreNetwork(Module, ABC):
             The initial inputs to the neural network model, including atomic numbers,
             positions, and other relevant data.
         pairlist : PairListOutputs
-            The outputs of a pair list calculation, including pair indices, distances,
+            The outputs of a pairlist calculation, including pair indices, distances,
             and displacement vectors.
 
         Returns
@@ -673,7 +662,7 @@ class CoreNetwork(Module, ABC):
 
         Parameters
         ----------
-        inputs : The processed input data, specific to the model's requirements.
+        data : The processed input data, specific to the model's requirements.
 
         Returns
         -------

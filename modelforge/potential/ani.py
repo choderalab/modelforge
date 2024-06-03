@@ -454,9 +454,7 @@ class ANI2xCore(CoreNetwork):
         self.num_species = 7
 
         log.debug("Initializing ANI model.")
-        super().__init__(
-            cutoff=radial_max_distance
-        )
+        super().__init__()
 
         # Initialize representation block
         self.ani_representation_module = ANIRepresentation(

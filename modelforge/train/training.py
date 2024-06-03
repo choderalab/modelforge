@@ -280,7 +280,7 @@ class TrainingAdapter(pl.LightningModule):
         """
         mse_loss = self.loss.compute_loss(batch, F.mse_loss)
         self.val_mse.append(float(mse_loss))
-        return mse_
+        return mse_loss
 
     def on_after_backward(self):
         # Log histograms of weights and biases after each backward pass

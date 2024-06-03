@@ -343,11 +343,9 @@ class TrainingAdapter(pl.LightningModule):
         return {"optimizer": optimizer, "lr_scheduler": lr_scheduler_config}
 
     def on_after_backward(self) -> None:
-        print("on_after_backward enter")
         for name, p in self.named_parameters():
             if p.grad is None:
                 print(name, p)
-        print("on_after_backward exit")
 
     def get_trainer(self):
         """

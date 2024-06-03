@@ -280,15 +280,17 @@ class TrainingAdapter(pl.LightningModule):
         """
         mse_loss = self.loss.compute_loss(batch, F.mse_loss)
         self.val_mse.append(float(mse_loss))
-        return mse_loss
+        return mse_
 
     def on_after_backward(self):
         # Log histograms of weights and biases after each backward pass
         for name, params in self.named_parameters():
-            self.logger.experiment.add_histogram(name, params, self.current_epoch)
-            self.logger.experiment.add_histogram(
-                f"{name}.grad", params.grad, self.current_epoch
-            )
+            if params is not None:
+                self.logger.experiment.add_histogram(name, params, self.current_epoch)
+            if params.grad is not None:
+                self.logger.experiment.add_histogram(
+                    f"{name}.grad", params.grad, self.current_epoch
+                )
 
     def on_validation_epoch_end(self):
         """

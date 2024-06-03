@@ -63,7 +63,10 @@ if __name__ == "__main__":
         ),  # NOTE: https://github.com/pytorch/pytorch/issues/100253
     ) as prof:
         profile_network(model, data)
-    prof.export_stacks("profiler_stacks_sorted_cpu.txt", "self_cpu_time_total")
-    prof.export_stacks("profiler_stacks_sorted_cuda.txt", "self_cuda_time_total")
 
-    print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=-1))
+    print('######################################')
+    print(prof.key_averages(group_by_stack_n=5).table(sort_by="cuda_time_total", row_limit=10))
+    print('######################################')
+    print('######################################')
+    print(prof.key_averages(group_by_stack_n=5).table(sort_by="cpu_time_total", row_limit=10))
+    print('######################################')

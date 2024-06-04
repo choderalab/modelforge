@@ -52,13 +52,22 @@ class SPICE2Dataset(HDF5Dataset):
     Attributes
     ----------
     dataset_name : str
-        Name of the dataset, default is "SPICE2".
-    for_unit_testing : bool
-        If set to True, a subset of the dataset is used for unit testing purposes; by default False.
+        Name of the dataset, default is "ANI2x".
+    version_select : str
+        Select the version of the dataset to use, default will provide the "latest".
+        "latest_test" will select the testing subset of 1000 conformers.
+        A version name can  be specified that corresponds to an entry in the associated yaml file, e.g., "full_dataset_v0".
     local_cache_dir: str, optional
             Path to the local cache directory, by default ".".
+    force_download: bool, optional
+        If set to True, we will download the dataset even if it already exists; by default False.
+    regenerate_cache: bool, optional
+        If set to True, we will regenerate the npz cache file even if it already exists, using
+        previously downloaded files, if available; by default False.
+
     Examples
     --------
+
 
     """
 
@@ -87,7 +96,7 @@ class SPICE2Dataset(HDF5Dataset):
     def __init__(
         self,
         dataset_name: str = "SPICE2",
-        for_unit_testing: bool = False,
+        version_select: str = "latest",
         local_cache_dir: str = ".",
         force_download: bool = False,
         regenerate_cache: bool = False,
@@ -98,9 +107,11 @@ class SPICE2Dataset(HDF5Dataset):
         Parameters
         ----------
         data_name : str, optional
-            Name of the dataset, by default "ANI2x".
-        for_unit_testing : bool, optional
-            If set to True, a subset of the dataset is used for unit testing purposes; by default False.
+            Name of the dataset, by default "ANI1x".
+        version_select : str
+            Select the version of the dataset to use, default will provide the "latest".
+            "latest_test" will select the testing subset of 1000 conformers.
+            A version name can  be specified that corresponds to an entry in the associated yaml file, e.g., "full_dataset_v0".
         local_cache_dir: str, optional
             Path to the local cache directory, by default ".".
         force_download: bool, optional
@@ -111,7 +122,7 @@ class SPICE2Dataset(HDF5Dataset):
         Examples
         --------
         >>> data = SPICE2Dataset()  # Default dataset
-        >>> test_data = SPICE2Dataset(for_unit_testing=True)  # Testing subset
+        >>> test_data = SPICE2Dataset(version_select="latest_test")  # Testing subset
         """
 
         _default_properties_of_interest = [
@@ -123,11 +134,9 @@ class SPICE2Dataset(HDF5Dataset):
         ]  # NOTE: Default values
 
         self._properties_of_interest = _default_properties_of_interest
-        if for_unit_testing:
-            dataset_name = f"{dataset_name}_subset"
 
         self.dataset_name = dataset_name
-        self.for_unit_testing = for_unit_testing
+        self.version_select = version_select
 
         from openff.units import unit
 
@@ -166,51 +175,35 @@ class SPICE2Dataset(HDF5Dataset):
         }
         from loguru import logger
 
-        # We need to define the checksums for the various files that we will be dealing with to load up the data
-        # There are 3 files types that need name/checksum defined, of extensions hdf5.gz, hdf5, and npz.
+        from importlib import resources
+        from modelforge.dataset import yaml_files
+        import yaml
 
-        # note, need to change the end of the url to dl=1 instead of dl=0 (the default when you grab the share list), to ensure the same checksum each time we download
-        self.test_url = "https://www.dropbox.com/scl/fi/1jawffjrh17r796g76udi/spice_2_dataset_ntc_1000.hdf5.gz?rlkey=r0crabvyg7xdgapv2qk3hk6t9&st=0ro9na0c&dl=1"
-        self.full_url = "https://www.dropbox.com/scl/fi/udoc3jj7wa7du8jgqiat0/spice_2_dataset.hdf5.gz?rlkey=csgwqa237m002n54jnld5pfgy&dl=1"
+        yaml_file = resources.files(yaml_files) / "spice2.yaml"
+        logger.debug(f"Loading config data from {yaml_file}")
+        with open(yaml_file, "r") as file:
+            data_inputs = yaml.safe_load(file)
 
-        if self.for_unit_testing:
-            url = self.test_url
-            gz_data_file = {
-                "name": "SPICE2_dataset_nc_1000.hdf5.gz",
-                "md5": "04063f08a7ec93abfc661c22b12ceeb0",
-                "length": 26751220,  # the number of bytes to be able to display the download progress bar correctly
-            }
-            hdf5_data_file = {
-                "name": "SPICE2_dataset_nc_1000.hdf5",
-                "md5": "0a2554d0dba4f289dd93670686e4842e",
-            }
-            # npz file checksums may vary with different versions of python/numpy
-            processed_data_file = {
-                "name": "SPICE2_dataset_nc_1000_processed.npz",
-                "md5": None,
-            }
+        # make sure that the yaml file is for the correct dataset before we grab data
+        assert data_inputs["dataset"] == "spice2"
 
-            logger.info("Using test dataset")
-
+        if self.version_select == "latest":
+            # in the yaml file, the entry latest will define the name of the version to use
+            dataset_version = data_inputs["latest"]
+            logger.info(f"Using the latest dataset: {dataset_version}")
+        elif self.version_select == "latest_test":
+            dataset_version = data_inputs["latest_test"]
+            logger.info(f"Using the latest test dataset: {dataset_version}")
         else:
-            url = self.full_url
-            gz_data_file = {
-                "name": "SPICE2_dataset.hdf5.gz",
-                "md5": "244a559a6062bbec5c9cb49af036ff7d",
-                "length": 26313472231,
-            }
+            dataset_version = self.version_select
+            logger.info(f"Using dataset version {dataset_version}")
 
-            hdf5_data_file = {
-                "name": "SPICE2_dataset.hdf5",
-                "md5": "9659a0f18050b9e7b122c0046b705480",
-            }
+        url = data_inputs[dataset_version]["url"]
 
-            processed_data_file = {
-                "name": "SPICE2_dataset_processed.npz",
-                "md5": None,
-            }
-
-            logger.info("Using full dataset")
+        # fetch the dictionaries that defined the size, md5 checksums (if provided) and filenames of the data files
+        gz_data_file = data_inputs[dataset_version]["gz_data_file"]
+        hdf5_data_file = data_inputs[dataset_version]["hdf5_data_file"]
+        processed_data_file = data_inputs[dataset_version]["processed_data_file"]
 
         # to ensure that that we are consistent in our naming, we need to set all the names and checksums in the HDF5Dataset class constructor
         super().__init__(

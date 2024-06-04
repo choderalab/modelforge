@@ -1,0 +1,55 @@
+dataset: spice2
+latest: full_dataset_v0
+latest_test: nc_1000_v0
+full_dataset_v0:
+  version: 0
+  gz_data_file:
+    length: 26313472231
+    md5: 244a559a6062bbec5c9cb49af036ff7d
+    name: SPICE2_dataset.hdf5.gz
+  hdf5_data_file:
+    md5: 9659a0f18050b9e7b122c0046b705480
+    name: SPICE2_dataset.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE2_dataset_processed.npz
+  url: https://www.dropbox.com/scl/fi/yvzxsbk2j8z4z5b5ww7rn/spice_2_dataset_v0.hdf5.gz?rlkey=t3ebtgc2ktm45v8mowqlytg6d&st=mw5vq1vf&dl=1
+nc_1000_v0:
+  version: 0
+  gz_data_file:
+    length: 26751220
+    md5: 04063f08a7ec93abfc661c22b12ceeb0
+    name: SPICE2_dataset_nc_1000.hdf5.gz
+  hdf5_data_file:
+    md5: 0a2554d0dba4f289dd93670686e4842e
+    name: SPICE2_dataset_nc_1000.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE2_dataset_nc_1000_processed.npz
+  url: https://www.dropbox.com/scl/fi/feb54dn1y1tvzkl7d6dmi/spice_2_dataset_v0_ntc_1000.hdf5.gz?rlkey=p9uqdgva7k7385sp6udjnoyy4&st=qlkra62d&dl=1
+full_dataset_v0_HCNOFClS:
+  version: 0
+  gz_data_file:
+    length: 21732636430
+    md5: e8c22a7309c61c616efcbac58abe4f53
+    name: SPICE2_dataset_v0_HCNOFClS.hdf5.gz
+  hdf5_data_file:
+    md5: 8bbd0d621e22e41194294af56a7bfd96
+    name: SPICE2_dataset_v0_HCNOFClS.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE2_dataset_v0_HCNOFClS_processed.npz
+  url: https://www.dropbox.com/scl/fi/y688irh2qsqhuvukot8ox/spice_2_dataset_v0_HCNOFClS.hdf5.gz?rlkey=eh1f7ysgqdx5gp7t69hc9rado&st=vev70f7j&dl=1
+nc_1000_v0_HCNOFClS:
+  version: 0
+  gz_data_file:
+    length: 26817386
+    md5: 9084ebf212eda4a83e778ac794bded11
+    name: SPICE2_dataset_v0_nc_1000_HCNOFClS.hdf5.gz
+  hdf5_data_file:
+    md5: 083d28832770c07b555369c553e62fea
+    name: SPICE2_dataset_v0_nc_1000_HCNOFClS.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE2_dataset_v0_nc_1000_HCNOFClS_processed.npz
+  url: https://www.dropbox.com/scl/fi/3qxxhg39ygnfpc0edt7o0/spice_2_dataset_v0_ntc_1000_HCNOFClS.hdf5.gz?rlkey=1d2cimxmfl7iefea9y2pa4dpk&st=lz9ns64m&dl=1

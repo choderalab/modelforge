@@ -1,0 +1,6 @@
+dataset_name: PhAlkEthOHopenff
+latest: v_0
+v_0:
+  version: 0
+  collection_names:
+  - OpenFF Sandbox CHO PhAlkEthOH v1.0

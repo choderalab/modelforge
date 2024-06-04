@@ -416,7 +416,10 @@ class HDF5Dataset:
         self.gz_data_file = gz_data_file
         self.hdf5_data_file = hdf5_data_file
         self.processed_data_file = processed_data_file
-        self.local_cache_dir = local_cache_dir
+        import os
+
+        # make sure we can handle a path with a ~ in it
+        self.local_cache_dir = os.path.expanduser(local_cache_dir)
         self.force_download = force_download
         self.regenerate_cache = regenerate_cache
 
@@ -891,7 +894,7 @@ class DataModule(pl.LightningDataModule):
         atomic_self_energies: Optional[Dict[str, float]] = None,
         regression_ase: bool = False,
         force_download: bool = False,
-        for_unit_testing: bool = False,
+        version_select: str = "latest",
         local_cache_dir: str = "./",
         regenerate_cache: bool = False,
     ):
@@ -918,8 +921,10 @@ class DataModule(pl.LightningDataModule):
                 Whether to use the calculated self energies for regression.
             force_download : bool,  defaults to False
                 Whether to force the dataset to be downloaded, even if it is already cached.
-            for_unit_testing : bool, defaults to False
-                Whether the dataset is being used for unit testing.
+            version_select : str, defaults to "latest"
+                Select the version of the dataset to use. If "latest", the latest version will be used.
+                "latest_test" will use the latest test version. Specific versions can be selected by passing the version name
+                as defined in the yaml files associated with each dataset.
             local_cache_dir : str, defaults to "./"
                 Directory to store the files.
             regenerate_cache : bool, defaults to False
@@ -937,11 +942,14 @@ class DataModule(pl.LightningDataModule):
         )
         self.regression_ase = regression_ase
         self.force_download = force_download
-        self.for_unit_testing = for_unit_testing
+        self.version_select = version_select
         self.train_dataset = None
         self.test_dataset = None
         self.val_dataset = None
-        self.local_cache_dir = local_cache_dir
+        import os
+
+        # make sure we can handle a path with a ~ in it
+        self.local_cache_dir = os.path.expanduser(local_cache_dir)
         self.regenerate_cache = regenerate_cache
 
     def prepare_data(
@@ -957,7 +965,7 @@ class DataModule(pl.LightningDataModule):
         dataset_class = _ImplementedDatasets.get_dataset_class(self.name)
         dataset = dataset_class(
             force_download=self.force_download,
-            for_unit_testing=self.for_unit_testing,
+            version_select=self.version_select,
             local_cache_dir=self.local_cache_dir,
             regenerate_cache=self.regenerate_cache,
         )

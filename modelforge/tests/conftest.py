@@ -23,7 +23,7 @@ from modelforge.dataset.utils import (
 
 def initialize_datamodule(
     dataset_name: str,
-    for_unit_testing: bool = True,
+    version_select: str = "nc_1000_v0",
     batch_size: int = 64,
     splitting_strategy: SplittingStrategy = FirstComeFirstServeSplittingStrategy(),
     remove_self_energies: bool = True,
@@ -37,7 +37,7 @@ def initialize_datamodule(
         dataset_name,
         splitting_strategy=splitting_strategy,
         batch_size=batch_size,
-        for_unit_testing=for_unit_testing,
+        version_select=version_select,
         remove_self_energies=remove_self_energies,
         regression_ase=regression_ase,
     )
@@ -66,7 +66,7 @@ def single_batch(batch_size: int = 64):
     data_module = initialize_datamodule(
         dataset_name="QM9",
         batch_size=batch_size,
-        for_unit_testing=True,
+        version_select="nc_1000_v0",
     )
     return next(iter(data_module.train_dataloader()))
 
@@ -90,7 +90,7 @@ def single_batch_with_batchsize_1():
 def initialize_dataset(
     dataset_name: str,
     local_cache_dir: str,
-    for_unit_testing: bool = True,
+    versions_select: str = "nc_1000_v0",
     force_download: bool = False,
 ) -> DataModule:
     """
@@ -100,7 +100,7 @@ def initialize_dataset(
     factory = DatasetFactory()
     data = _ImplementedDatasets.get_dataset_class(dataset_name)(
         local_cache_dir=local_cache_dir,
-        for_unit_testing=for_unit_testing,
+        version_select=versions_select,
         force_download=force_download,
     )
     dataset = factory.create_dataset(data)
@@ -197,6 +197,18 @@ dataset_container: Dict[str, DataSetContainer] = {
             "dft_total_energy",
             "dft_total_force",
             "mbis_charges",
+        ],
+        expected_E_random_split=-2263605.616072006,
+        expected_E_fcfs_split=-1516718.0904709378,
+    ),
+    "PHALKETHOH": DataSetContainer(
+        name="PHALKETHOH",
+        expected_properties_of_interest=[
+            "geometry",
+            "atomic_numbers",
+            "dft_total_energy",
+            "dft_total_force",
+            "total_charge",
         ],
         expected_E_random_split=-2263605.616072006,
         expected_E_fcfs_split=-1516718.0904709378,

@@ -651,6 +651,9 @@ def perform_training(
         log.info(
             f"Using default number of workers for training data loader: {num_workers}"
         )
+    pin_memory = dataset_config.get("pin_memory", False)
+    if pin_memory == False:
+        log.info(f"Using default value for pinned_memory: {pin_memory}")
 
     # set up tensor board logger
     logger = TensorBoardLogger(save_dir, name=experiment_name)
@@ -712,7 +715,9 @@ Experiments are saved to: {save_dir}/{experiment_name}.
     # Run training loop and validate
     trainer.fit(
         model,
-        train_dataloaders=dm.train_dataloader(num_workers=num_workers),
+        train_dataloaders=dm.train_dataloader(
+            num_workers=num_workers, pin_memory=pin_memory
+        ),
         val_dataloaders=dm.val_dataloader(),
     )
     trainer.validate(model, dataloaders=dm.val_dataloader())

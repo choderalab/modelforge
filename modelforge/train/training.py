@@ -291,6 +291,16 @@ class TrainingAdapter(pl.LightningModule):
         self.val_mse.append(float(mse_loss))
         return mse_loss
 
+    def on_after_backward(self):
+        # Log histograms of weights and biases after each backward pass
+        for name, params in self.named_parameters():
+            if params is not None:
+                self.logger.experiment.add_histogram(name, params, self.current_epoch)
+            if params.grad is not None:
+                self.logger.experiment.add_histogram(
+                    f"{name}.grad", params.grad, self.current_epoch
+                )
+
     def on_validation_epoch_end(self):
         """
         Handles end-of-validation-epoch events to compute and log the average RMSE validation loss.

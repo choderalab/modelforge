@@ -25,6 +25,9 @@ def test_train_with_lightning(model_name, dataset_name, include_force):
     config = return_toml_config(
         f"modelforge/tests/data/training_defaults/{model_name.lower()}_{dataset_name.lower()}.toml"
     )
+    from pytorch_lightning.loggers import TensorBoardLogger
+
+    logger = TensorBoardLogger("tb_logs", name="training")
 
     # Extract parameters
     potential_config = config["potential"]

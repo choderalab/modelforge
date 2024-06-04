@@ -639,7 +639,7 @@ def perform_training(
     if batch_size == 128:
         log.info(f"Using default batch size: {batch_size}")
     remove_self_energies = dataset_config.get("remove_self_energies", False)
-    if remove_self_energies == False:
+    if remove_self_energies is False:
         log.info(
             f"Using default for removing self energies: Self energies are not removed"
         )
@@ -652,7 +652,7 @@ def perform_training(
             f"Using default number of workers for training data loader: {num_workers}"
         )
     pin_memory = dataset_config.get("pin_memory", False)
-    if pin_memory == False:
+    if pin_memory is False:
         log.info(f"Using default value for pinned_memory: {pin_memory}")
 
     # set up tensor board logger

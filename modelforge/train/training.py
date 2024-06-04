@@ -291,6 +291,16 @@ class TrainingAdapter(pl.LightningModule):
         self.val_mse.append(float(mse_loss))
         return mse_loss
 
+    def on_after_backward(self):
+        # Log histograms of weights and biases after each backward pass
+        for name, params in self.named_parameters():
+            if params is not None:
+                self.logger.experiment.add_histogram(name, params, self.current_epoch)
+            if params.grad is not None:
+                self.logger.experiment.add_histogram(
+                    f"{name}.grad", params.grad, self.current_epoch
+                )
+
     def on_validation_epoch_end(self):
         """
         Handles end-of-validation-epoch events to compute and log the average RMSE validation loss.
@@ -603,17 +613,44 @@ def perform_training(
     from lightning.pytorch.callbacks import ModelSummary
 
     save_dir = training_config.get("save_dir", "lightning_logs")
+    if save_dir == "lightning_logs":
+        log.info(f"Saving logs to default location: {save_dir}")
     experiment_name = training_config.get("experiment_name", "exp")
+    if experiment_name == "experiment_name":
+        log.info(f"Saving logs in default dir: {experiment_name}")
     model_name = potential_config["model_name"]
     dataset_name = dataset_config["dataset_name"]
     version_select = dataset_config.get("version_select", "latest")
+    if version_select == "latest":
+        log.info(f"Using default dataset version: {version_select}")
     accelerator = training_config.get("accelerator", "cpu")
+    if accelerator == "cpu":
+        log.info(f"Using default accelerator: {accelerator}")
     nr_of_epochs = training_config.get("nr_of_epochs", 10)
+    if nr_of_epochs == 10:
+        log.info(f"Using default number of epochs: {nr_of_epochs}")
     num_nodes = training_config.get("num_nodes", 1)
+    if num_nodes == 1:
+        log.info(f"Using default number of nodes: {num_nodes}")
     devices = training_config.get("devices", 1)
+    if devices == 1:
+        log.info(f"Using default device index/number: {devices}")
     batch_size = training_config.get("batch_size", 128)
+    if batch_size == 128:
+        log.info(f"Using default batch size: {batch_size}")
     remove_self_energies = dataset_config.get("remove_self_energies", False)
+    if remove_self_energies == False:
+        log.info(
+            f"Using default for removing self energies: Self energies are not removed"
+        )
     early_stopping_config = training_config.get("early_stopping", None)
+    if early_stopping_config is None:
+        log.info(f"Using default: No early stopping performed")
+    num_workers = dataset_config.get("number_of_worker", 4)
+    if num_workers == 4:
+        log.info(
+            f"Using default number of workers for training data loader: {num_workers}"
+        )
 
     # set up tensor board logger
     logger = TensorBoardLogger(save_dir, name=experiment_name)
@@ -675,7 +712,7 @@ Experiments are saved to: {save_dir}/{experiment_name}.
     # Run training loop and validate
     trainer.fit(
         model,
-        train_dataloaders=dm.train_dataloader(),
+        train_dataloaders=dm.train_dataloader(num_workers=num_workers),
         val_dataloaders=dm.val_dataloader(),
     )
     trainer.validate(model, dataloaders=dm.val_dataloader())

@@ -995,7 +995,9 @@ class DataModule(pl.LightningDataModule):
             )
             dataset[i] = {"E": dataset.properties_of_interest["E"][i] - energy}
 
-    def train_dataloader(self) -> DataLoader:
+    def train_dataloader(
+        self, num_workers: int = 4, shuffle: bool = True
+    ) -> DataLoader:
         """
         Create a DataLoader for the training dataset.
 
@@ -1008,11 +1010,11 @@ class DataModule(pl.LightningDataModule):
             self.train_dataset,
             batch_size=self.batch_size,
             collate_fn=collate_conformers,
-            num_workers=4,
-            shuffle=True,
+            num_workers=num_workers,
+            shuffle=shuffle,
         )
 
-    def val_dataloader(self) -> DataLoader:
+    def val_dataloader(self, num_workers: int = 4) -> DataLoader:
         """
         Create a DataLoader for the validation dataset.
 
@@ -1025,7 +1027,7 @@ class DataModule(pl.LightningDataModule):
             self.val_dataset,
             batch_size=self.batch_size,
             collate_fn=collate_conformers,
-            num_workers=4,
+            num_workers=num_workers,
         )
 
     def test_dataloader(self) -> DataLoader:

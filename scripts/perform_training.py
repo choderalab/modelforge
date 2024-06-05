@@ -43,10 +43,8 @@ def perform_training(
     dm.prepare_data()
     dm.setup()
 
-
     model.model.core_module.readout_module.E_i_mean = dm.dataset_statistics.E_i_mean
     model.model.core_module.readout_module.E_i_stddev = dm.dataset_statistics.E_i_stddev
-
 
     # from modelforge.utils.misc import visualize_model
 
@@ -68,7 +66,8 @@ def perform_training(
 if __name__ == "__main__":
     from modelforge.potential import _Implemented_NNPs
 
-    for model_name in ['SchNet']:
+    print(_Implemented_NNPs)
+    for model_name in ["SCHNET"]:
 
         dataset_name = "QM9"
         nr_of_repeats = 5
@@ -76,5 +75,5 @@ if __name__ == "__main__":
         for i in range(nr_of_repeats):
             print("Running training iteration:", i)
             perform_training(
-                model_name, dataset_name, nr_of_epochs=1000, accelerator="cpu"
+                model_name, dataset_name, nr_of_epochs=1000, accelerator="gpu"
             )

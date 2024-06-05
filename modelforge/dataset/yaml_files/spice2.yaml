@@ -4,29 +4,29 @@ latest_test: nc_1000_v0
 full_dataset_v0:
   version: 0
   gz_data_file:
-    length: 26313472231
-    md5: 244a559a6062bbec5c9cb49af036ff7d
-    name: SPICE2_dataset.hdf5.gz
+    length: 26313472234
+    md5: 59d9f80d72ed25bb3b271d5e77994b46
+    name: SPICE2_dataset_v0.hdf5.gz
   hdf5_data_file:
-    md5: 9659a0f18050b9e7b122c0046b705480
-    name: SPICE2_dataset.hdf5
+    md5: 653d430eb42ac631b45a22da45e4026f
+    name: SPICE2_dataset_v0.hdf5
   processed_data_file:
     md5: null
-    name: SPICE2_dataset_processed.npz
-  url: https://www.dropbox.com/scl/fi/yvzxsbk2j8z4z5b5ww7rn/spice_2_dataset_v0.hdf5.gz?rlkey=t3ebtgc2ktm45v8mowqlytg6d&st=mw5vq1vf&dl=1
+    name: SPICE2_dataset_v0_processed.npz
+  url: https://www.dropbox.com/scl/fi/yvzxsbk2j8z4z5b5ww7rn/spice_2_dataset_v0.hdf5.gz?rlkey=t3ebtgc2ktm45v8mowqlytg6d&st=r9zgdiq0&dl=1
 nc_1000_v0:
   version: 0
   gz_data_file:
-    length: 26751220
-    md5: 04063f08a7ec93abfc661c22b12ceeb0
-    name: SPICE2_dataset_nc_1000.hdf5.gz
+    length: 26751223
+    md5: 86579601617309feeb13d30ad130a774
+    name: SPICE2_dataset_v0_nc_1000.hdf5.gz
   hdf5_data_file:
     md5: 0a2554d0dba4f289dd93670686e4842e
-    name: SPICE2_dataset_nc_1000.hdf5
+    name: SPICE2_dataset_v0_nc_1000.hdf5
   processed_data_file:
     md5: null
-    name: SPICE2_dataset_nc_1000_processed.npz
-  url: https://www.dropbox.com/scl/fi/feb54dn1y1tvzkl7d6dmi/spice_2_dataset_v0_ntc_1000.hdf5.gz?rlkey=p9uqdgva7k7385sp6udjnoyy4&st=qlkra62d&dl=1
+    name: SPICE2_dataset_v0_nc_1000_processed.npz
+  url: https://www.dropbox.com/scl/fi/feb54dn1y1tvzkl7d6dmi/spice_2_dataset_v0_ntc_1000.hdf5.gz?rlkey=p9uqdgva7k7385sp6udjnoyy4&st=1ydq2ipd&dl=1
 full_dataset_v0_HCNOFClS:
   version: 0
   gz_data_file:

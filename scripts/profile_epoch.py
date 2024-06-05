@@ -18,9 +18,11 @@ def setup(model_name: str):
     from lightning import Trainer
     from modelforge.potential import NeuralNetworkPotentialFactory
     from modelforge.dataset.dataset import DataModule
+    from importlib import resources
+    from modelforge import tests as modelforge_tests
 
     config = return_toml_config(
-        f"../modelforge/tests/data/training_defaults/{model_name.lower()}_qm9.toml"
+        f"{resources.files(modelforge_tests)}/data/training_defaults/{model_name.lower()}_qm9.toml"
     )
     # Extract parameters
     potential_config = config["potential"]

@@ -13,8 +13,11 @@ def profile_network(model, data):
 
 
 def setup(model_name: str):
+    from importlib import resources
+    from modelforge import tests as modelforge_tests
+
     config = return_toml_config(
-        f"../modelforge/tests/data/training_defaults/{model_name.lower()}_qm9.toml"
+        f"{resources.files(modelforge_tests)}data/training_defaults/{model_name.lower()}_qm9.toml"
     )
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
@@ -64,9 +67,17 @@ if __name__ == "__main__":
     ) as prof:
         profile_network(model, data)
 
-    print('######################################')
-    print(prof.key_averages(group_by_stack_n=5).table(sort_by="cuda_time_total", row_limit=10))
-    print('######################################')
-    print('######################################')
-    print(prof.key_averages(group_by_stack_n=5).table(sort_by="cpu_time_total", row_limit=10))
-    print('######################################')
+    print("######################################")
+    print(
+        prof.key_averages(group_by_stack_n=5).table(
+            sort_by="cuda_time_total", row_limit=10
+        )
+    )
+    print("######################################")
+    print("######################################")
+    print(
+        prof.key_averages(group_by_stack_n=5).table(
+            sort_by="cpu_time_total", row_limit=10
+        )
+    )
+    print("######################################")

@@ -86,3 +86,35 @@ def test_atomic_properties_static():
     Z = torch.randint(1, 100, (nr_atoms,))
     R = torch.rand((nr_atoms, geometry_basis))
     print(ref_spookynet._atomic_properties_static(Z, R, idx_i, idx_j))
+
+
+def test_spookynet_interaction_module_forward():
+    from modelforge.potential.spookynet import SpookyNetInteractionModule
+    N = 5
+    P = 19
+    num_features = 7
+    B = 23
+    spookynet_interaction_module = SpookyNetInteractionModule(
+        num_features=num_features,
+        num_basis_functions=5,
+        num_residual_pre=3,
+        num_residual_local_x=3,
+        num_residual_local_s=3,
+        num_residual_local_p=3,
+        num_residual_local_d=3,
+        num_residual_local=3,
+        num_residual_nonlocal_q=11,
+        num_residual_nonlocal_k=13,
+        num_residual_nonlocal_v=17,
+        num_residual_post=3,
+        num_residual_output=3
+    )
+
+    x = torch.rand((N, num_features))
+    rbf = torch.rand((P, 5))
+    pij = torch.rand((P, 1))
+    dij = torch.rand((P, 1))
+    idx_i, idx_j = make_random_pairlist(N, P, include_self_pairs=False)
+    batch_seg = torch.randint(0, B, (N,))
+    mask = torch.rand((B, N, N))
+    spookynet_interaction_module(x, rbf, pij, dij, idx_i, idx_j, B, batch_seg, mask)

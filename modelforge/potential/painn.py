@@ -93,7 +93,7 @@ class PaiNNCore(CoreNetwork):
     ):
 
         log.debug("Initializing PaiNN model.")
-        super().__init__(cutoff=cutoff)
+        super().__init__()
 
         self.number_of_interaction_modules = number_of_interaction_modules
         self.number_of_atom_features = number_of_atom_features

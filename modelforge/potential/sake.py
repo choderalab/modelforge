@@ -87,7 +87,7 @@ class SAKECore(CoreNetwork):
         from .processing import FromAtomToMoleculeReduction
 
         log.debug("Initializing SAKE model.")
-        super().__init__(cutoff=cutoff)
+        super().__init__()
         self.nr_interaction_blocks = number_of_interaction_modules
         self.nr_heads = number_of_spatial_attention_heads
         self.max_Z = max_Z

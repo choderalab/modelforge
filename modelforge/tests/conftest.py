@@ -6,6 +6,28 @@ from typing import Optional, Dict
 from dataclasses import dataclass
 
 
+# let us setup a few pytest options
+def pytest_addoption(parser):
+    parser.addoption(
+        "--run_data_download",
+        action="store_true",
+        default=False,
+        help="run slow data download tests",
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    if config.getoption("--run_data_download"):
+        # --runslow given in cli: do not skip slow tests
+        return
+    skip_data_download = pytest.mark.skip(
+        reason="need --run_data_download option to run"
+    )
+    for item in items:
+        if "data_download" in item.keywords:
+            item.add_marker(skip_data_download)
+
+
 from modelforge.potential.utils import BatchData
 
 

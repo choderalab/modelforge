@@ -50,6 +50,7 @@ class NNPInput:
     positions: Union[torch.Tensor, Quantity]
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
+    pair_list: torch.Tensor
 
     def to(
         self,
@@ -58,14 +59,16 @@ class NNPInput:
         dtype: Optional[torch.dtype] = None,
     ):
         """Move all tensors in this instance to the specified device/dtype."""
+        from dataclasses import fields
 
-        if device:
-            self.atomic_numbers = self.atomic_numbers.to(device)
-            self.positions = self.positions.to(device)
-            self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(device)
-            self.total_charge = self.total_charge.to(device)
-        if dtype:
-            self.positions = self.positions.to(dtype)
+        for field in fields(self):
+            value = getattr(self, field.name)
+            if isinstance(value, torch.Tensor):
+                setattr(self, field.name, value.to(device=device, dtype=dtype))
+            elif isinstance(
+                value, Quantity
+            ):  # Add logic if Quantity has a to() method or needs special handling
+                setattr(self, field.name, value.to(device=device, dtype=dtype))
         return self
 
     def __post_init__(self):
@@ -73,6 +76,7 @@ class NNPInput:
         self.atomic_numbers = self.atomic_numbers.to(torch.int32)
         self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(torch.int32)
         self.total_charge = self.total_charge.to(torch.int32)
+        self.pair_list = self.pair_list.to(torch.int32)
 
         # Unit conversion for positions
         if isinstance(self.positions, Quantity):
@@ -486,7 +490,6 @@ class AngularSymmetryFunction(nn.Module):
             self.register_buffer("ShfZ", ShfZ)
             self.register_buffer("ShfA", ShfA)
 
-
         # The length of angular subaev of a single species
         self.angular_sublength = self.ShfA.numel() * self.ShfZ.numel()
 
@@ -842,7 +845,7 @@ class SAKERadialBasisFunction(RadialBasisFunction):
         centers: torch.Tensor,
         scale_factors: torch.Tensor,
     ) -> torch.Tensor:
-        
+
         return torch.exp(
             -scale_factors
             * (

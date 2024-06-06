@@ -112,7 +112,7 @@ class SchNetCore(CoreNetwork):
         from .utils import Dense, ShiftedSoftplus
 
         log.debug("Initializing SchNet model.")
-        super().__init__(cutoff)
+        super().__init__()
         self.number_of_atom_features = number_of_atom_features
         self.number_of_filters = number_of_filters or self.number_of_atom_features
         self.number_of_radial_basis_functions = number_of_radial_basis_functions

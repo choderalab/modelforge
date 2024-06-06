@@ -93,7 +93,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             )
 
         self.number_of_records = len(dataset["atomic_subsystem_counts"])
-        self.properties_of_interest["pair_ list"] = None
+        self.properties_of_interest["pair_list"] = None
         self.number_of_atoms = len(dataset["atomic_numbers"])
 
         single_atom_start_idxs_by_rec = np.concatenate(
@@ -211,7 +211,10 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         ]
         E = self.properties_of_interest["E"][idx]
         F = self.properties_of_interest["F"][series_atom_start_idx:series_atom_end_idx]
-        pair_list = self.properties_of_interest["pair_list"][idx]
+        if self.properties_of_interest["pair_list"] is None:
+            pair_list = None
+        else:
+            pair_list = self.properties_of_interest["pair_list"][idx]
         Q = self.properties_of_interest["Q"][idx]
 
         return {
@@ -1129,17 +1132,27 @@ def collate_conformers(conf_list: List[Dict[str, torch.Tensor]]) -> "BatchData":
     atomic_subsystem_indices = []
     atomic_subsystem_indices_referencing_dataset = []
     offset = torch.tensor([0], dtype=torch.int32)
+    pair_list_present = (
+        True
+        if "pair_list" in conf_list[0]
+        and isinstance(conf_list[0]["pair_list"], torch.Tensor)
+        else False
+    )
+
     for idx, conf in enumerate(conf_list):
-        ## pairlist
-        # generate pairlist mask
-        pair_list_mask = conf["pair_list"] != -1
-        # generate pairlist without padded values
-        pair_list = (
-            conf["pair_list"][pair_list_mask].view(2, -1).to(dtype=torch.int32) + offset
-        )
-        # update offset (for making sure the pair_list indices are pointing to the correct molecule)
-        offset += conf["atomic_numbers"].shape[0]
-        ij_list.append(pair_list)
+        if pair_list_present:
+            ## pairlist
+            # generate pairlist mask
+            pair_list_mask = conf["pair_list"] != -1
+            # generate pairlist without padded values
+            pair_list = (
+                conf["pair_list"][pair_list_mask].view(2, -1).to(dtype=torch.int32)
+                + offset
+            )
+            # update offset (for making sure the pair_list indices are pointing to the correct molecule)
+            offset += conf["atomic_numbers"].shape[0]
+            ij_list.append(pair_list)
+
         Z_list.append(conf["atomic_numbers"])
         R_list.append(conf["positions"])
         E_list.append(conf["E"])
@@ -1154,7 +1167,10 @@ def collate_conformers(conf_list: List[Dict[str, torch.Tensor]]) -> "BatchData":
     total_charge_cat = torch.cat(Q_list)
     positions_cat = torch.cat(R_list).requires_grad_(True)
     F_cat = torch.cat(F_list).to(torch.float64)
-    IJ_cat = torch.cat(ij_list, dim=1)
+    if pair_list_present:
+        IJ_cat = torch.cat(ij_list, dim=1).to(torch.int64)
+    else:
+        IJ_cat = None
     E_stack = torch.stack(E_list)
     nnp_input = NNPInput(
         atomic_numbers=atomic_numbers_cat,

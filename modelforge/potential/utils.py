@@ -61,16 +61,16 @@ class NNPInput:
         dtype: Optional[torch.dtype] = None,
     ):
         """Move all tensors in this instance to the specified device/dtype."""
-        from dataclasses import fields
 
-        for field in fields(self):
-            value = getattr(self, field.name)
-            if isinstance(value, torch.Tensor):
-                setattr(self, field.name, value.to(device=device, dtype=dtype))
-            elif isinstance(
-                value, Quantity
-            ):  # Add logic if Quantity has a to() method or needs special handling
-                setattr(self, field.name, value.to(device=device, dtype=dtype))
+        if device:
+            self.atomic_numbers = self.atomic_numbers.to(device)
+            self.positions = self.positions.to(device)
+            self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(device)
+            self.total_charge = self.total_charge.to(device)
+            if self.pair_list is not None:
+                self.pair_list = self.pair_list.to(device)
+        if dtype:
+            self.positions = self.positions.to(dtype)
         return self
 
     def __post_init__(self):
@@ -1027,7 +1027,7 @@ def scatter_softmax(
         other_dim_size if (other_dim != dim) else dim_size
         for (other_dim, other_dim_size) in enumerate(src.shape)
     ]
-
+    index = index.to(torch.int64)
     zeros = torch.zeros(out_shape, dtype=src.dtype, device=device)
     max_value_per_index = zeros.scatter_reduce(
         dim, index, src, "amax", include_self=False

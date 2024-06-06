@@ -447,6 +447,38 @@ def test_data_item_format_of_datamodule(
     )
 
 
+from modelforge.potential import _Implemented_NNPs
+
+
+@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+def test_dataset_neighborlist(model_name, dataset_name, datamodule_factory):
+    """Test the splitting of the dataset."""
+
+    dataset = datamodule_factory(dataset_name=dataset_name)
+    train_dataloader = dataset.train_dataloader()
+    batch = next(iter(train_dataloader))
+
+    # test that the neighborlist is correctly generated
+    # cast input and model to torch.float64
+    from modelforge.train.training import return_toml_config
+
+    config = return_toml_config(
+        f"modelforge/tests/data/potential_defaults/{model_name.lower()}_defaults.toml"
+    )
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+    from modelforge.potential.models import NeuralNetworkPotentialFactory
+
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        use="inference",
+        model_type=model_name,
+        simulation_environment="PyTorch",
+        model_parameters=potential_parameters,
+    )
+    model(batch.nnp_input)
+
+
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_dataset_generation(dataset_name, datamodule_factory):
     """Test the splitting of the dataset."""

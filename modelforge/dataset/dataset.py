@@ -1030,8 +1030,10 @@ class DataModule(pl.LightningDataModule):
 
             # perform pairlist calculation
             pairlist_output = self.calculate_distances_and_pairlist(
-                dataset.properties_of_interest["positions"][start_idx:end_idx],
-                torch.zeros(
+                positions=dataset.properties_of_interest["positions"][
+                    start_idx:end_idx
+                ],
+                atomic_subsystem_indices=torch.zeros(
                     end_idx - start_idx,
                     dtype=torch.float32,
                 ),

@@ -1,5 +1,15 @@
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Dict, Mapping, NamedTuple, Tuple, Type, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    Mapping,
+    NamedTuple,
+    Tuple,
+    Type,
+    Union,
+    Optional,
+)
 
 import lightning as pl
 import torch
@@ -215,7 +225,6 @@ class Neighborlist(Pairlist):
 
     def forward(
         self,
-        *,
         positions: torch.Tensor,
         atomic_subsystem_indices: torch.Tensor,
         pair_indices: Optional[torch.Tensor] = None,
@@ -240,7 +249,7 @@ class Neighborlist(Pairlist):
             A NamedTuple containing 'pair_indices', 'd_ij' (distances), and 'r_ij' (displacement vectors).
         """
 
-        if not pair_indices:
+        if pair_indices is None:
             pair_indices = self.enumerate_all_pairs(
                 atomic_subsystem_indices,
             )

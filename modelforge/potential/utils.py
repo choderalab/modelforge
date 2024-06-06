@@ -44,13 +44,15 @@ class NNPInput:
     total_charge : torch.Tensor
         A tensor with the total charge of molecule.
         Shape: [num_systems], where `num_systems` is the number of molecules.
+    pair_list : Optional[torch.Tensor]
+        An optional tensor containing pairs of indices or other relevant information.
     """
 
     atomic_numbers: torch.Tensor
     positions: Union[torch.Tensor, Quantity]
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
-    pair_list: torch.Tensor
+    pair_list: Optional[torch.Tensor] = None
 
     def to(
         self,

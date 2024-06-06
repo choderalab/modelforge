@@ -215,8 +215,10 @@ class Neighborlist(Pairlist):
 
     def forward(
         self,
+        *,
         positions: torch.Tensor,
         atomic_subsystem_indices: torch.Tensor,
+        pair_indices: Optional[torch.Tensor] = None,
     ) -> PairListOutputs:
         """
         Forward pass to compute neighbor list considering a cutoff distance.
@@ -238,9 +240,11 @@ class Neighborlist(Pairlist):
             A NamedTuple containing 'pair_indices', 'd_ij' (distances), and 'r_ij' (displacement vectors).
         """
 
-        pair_indices = self.enumerate_all_pairs(
-            atomic_subsystem_indices,
-        )
+        if not pair_indices:
+            pair_indices = self.enumerate_all_pairs(
+                atomic_subsystem_indices,
+            )
+
         r_ij = self.calculate_r_ij(pair_indices, positions)
         d_ij = self.calculate_d_ij(r_ij)
 
@@ -536,7 +540,9 @@ class InputPreparation(torch.nn.Module):
         atomic_subsystem_indices = data.atomic_subsystem_indices
 
         pairlist_output = self.calculate_distances_and_pairlist(
-            positions, atomic_subsystem_indices
+            positions=positions,
+            atomic_subsystem_indices=atomic_subsystem_indices,
+            pair_indices=data.pair_list,
         )
 
         return pairlist_output

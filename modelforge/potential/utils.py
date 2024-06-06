@@ -78,7 +78,6 @@ class NNPInput:
         self.atomic_numbers = self.atomic_numbers.to(torch.int32)
         self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(torch.int32)
         self.total_charge = self.total_charge.to(torch.int32)
-        self.pair_list = self.pair_list.to(torch.int32)
 
         # Unit conversion for positions
         if isinstance(self.positions, Quantity):

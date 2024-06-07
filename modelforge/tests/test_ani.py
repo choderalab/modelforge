@@ -42,8 +42,6 @@ def setup_methane():
 def setup_two_methanes():
     import torch
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
     coordinates = torch.tensor(
         [
             [

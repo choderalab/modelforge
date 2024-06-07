@@ -398,7 +398,7 @@ def test_pairlist():
     from modelforge.potential.models import Pairlist, Neighborlist
     import torch
 
-    atomic_subsystem_indices = torch.tensor([80, 80, 80, 11, 11, 11])
+    atomic_subsystem_indices = torch.tensor([0, 0, 0, 1, 1, 1])
     positions = torch.tensor(
         [
             [0.0, 0.0, 0.0],

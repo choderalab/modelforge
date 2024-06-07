@@ -1,5 +1,15 @@
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Dict, Mapping, NamedTuple, Tuple, Type, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    Mapping,
+    NamedTuple,
+    Tuple,
+    Type,
+    Union,
+    Optional,
+)
 
 import lightning as pl
 import torch
@@ -68,50 +78,88 @@ class Pairlist(Module):
         ----------
         atomic_subsystem_indices : torch.Tensor, shape (nr_atoms_per_systems)
             Atom indices to indicate which atoms belong to which molecule
+            Note in all cases, the values in this tensor must be numbered from 0 to n_molecules - 1
+            sequentially, with no gaps in the numbering. E.g., [0,0,0,1,1,2,2,2 ...].
+            This is the case for all internal data structures, and those no validation is performed in
+            this routine. If the data is not structured in this way, the results will be incorrect.
+
         """
-        # generate index grid
-        n = len(atomic_subsystem_indices)
 
         # get device that passed tensors lives on, initialize on the same device
         device = atomic_subsystem_indices.device
 
-        i_final_pairs = torch.tensor([], dtype=torch.int64, device=device)
-        j_final_pairs = torch.tensor([], dtype=torch.int64, device=device)
-
-        # to avoid allocating very large tensors, we will wrap this in a loop where we allocate tensors of size n-1
-        # and concatenate the results, rather than allocating tensors of size n*(n-1).
-
-        for ii in range(0, n):
-            # Repeat each number n-1 times for i_indices
-            i_indices = torch.repeat_interleave(
-                torch.tensor(ii, device=device),
-                repeats=n - 1,
-            )
-
-            # Correctly construct j_indices
-            j_indices = torch.cat(
-                (
-                    torch.arange(ii, device=device),
-                    torch.arange(ii + 1, n, device=device),
+        # if there is only one molecule, we do not need to use additional looping and offsets
+        if torch.sum(atomic_subsystem_indices) == 0:
+            n = len(atomic_subsystem_indices)
+            if self.only_unique_pairs:
+                i_final_pairs, j_final_pairs = torch.triu_indices(
+                    n, n, 1, device=device
                 )
+            else:
+                # Repeat each number n-1 times for i_indices
+                i_final_pairs = torch.repeat_interleave(
+                    torch.arange(n, device=device),
+                    repeats=n - 1,
+                )
+
+                # Correctly construct j_indices
+                j_final_pairs = torch.cat(
+                    [
+                        torch.cat(
+                            (
+                                torch.arange(i, device=device),
+                                torch.arange(i + 1, n, device=device),
+                            )
+                        )
+                        for i in range(n)
+                    ]
+                )
+
+        else:
+            # if we have more than one molecule, we will take into account molecule size and offsets when
+            # calculating pairs, as using the approach above is not memory efficient for datasets with large molecules
+            # and/or larger batch sizes; while not likely a problem on higher end GPUs with large amounts of memory
+            # cheaper commodity and mobile GPUs may have issues
+
+            # atomic_subsystem_indices are always numbered from 0 to n_molecules - 1
+            # e.g., a single molecule will be [0, 0, 0, 0 ... ]
+            # and a batch of molecules will always start at 0 and increment [ 0, 0, 0, 1, 1, 1, ...]
+            # As such, we can use bincount, as there are no gaps in the numbering
+            # Note if the indices are not numbered from 0 to n_molecules - 1, this will not work
+            # E.g., bincount on [3,3,3, 4,4,4, 5,5,5] will return [0,0,0,3,3,3,3,3,3]
+            # as we have no values for 0, 1, 2
+            # using a combination of unique and argsort would make this work for any numbering ordering
+            # but that is not how the data ends up being structured internally, and thus is not needed
+            repeats = torch.bincount(atomic_subsystem_indices)
+            offsets = torch.cat(
+                (torch.tensor([0], device=device), torch.cumsum(repeats, dim=0)[:-1])
             )
 
-            # filter pairs to only keep those belonging to the same molecule
-            same_molecule_mask = (
-                atomic_subsystem_indices[i_indices]
-                == atomic_subsystem_indices[j_indices]
+            i_indices = torch.cat(
+                [
+                    torch.repeat_interleave(
+                        torch.arange(o, o + r, device=device), repeats=r
+                    )
+                    for r, o in zip(repeats, offsets)
+                ]
             )
-            i_final_pairs_temp = i_indices[same_molecule_mask]
-            j_final_pairs_temp = j_indices[same_molecule_mask]
+            j_indices = torch.cat(
+                [
+                    torch.cat([torch.arange(o, o + r, device=device) for _ in range(r)])
+                    for r, o in zip(repeats, offsets)
+                ]
+            )
 
             if self.only_unique_pairs:
                 # filter out pairs that are not unique
-                unique_pairs_mask = i_final_pairs_temp < j_final_pairs_temp
-                i_final_pairs_temp = i_final_pairs_temp[unique_pairs_mask]
-                j_final_pairs_temp = j_final_pairs_temp[unique_pairs_mask]
-
-            i_final_pairs = torch.cat((i_final_pairs, i_final_pairs_temp), dim=0)
-            j_final_pairs = torch.cat((j_final_pairs, j_final_pairs_temp), dim=0)
+                unique_pairs_mask = i_indices < j_indices
+                i_final_pairs = i_indices[unique_pairs_mask]
+                j_final_pairs = j_indices[unique_pairs_mask]
+            else:
+                # filter out identical values
+                unique_pairs_mask = i_indices != j_indices
+                i_final_pairs = i_indices[unique_pairs_mask]
+                j_final_pairs = j_indices[unique_pairs_mask]
 
         # concatenate to form final (2, n_pairs) tensor
         pair_indices = torch.stack((i_final_pairs, j_final_pairs))
@@ -212,6 +260,7 @@ class Neighborlist(Pairlist):
         self,
         positions: torch.Tensor,
         atomic_subsystem_indices: torch.Tensor,
+        pair_indices: Optional[torch.Tensor] = None,
     ) -> PairListOutputs:
         """
         Forward pass to compute neighbor list considering a cutoff distance.
@@ -231,9 +280,11 @@ class Neighborlist(Pairlist):
             A NamedTuple containing 'pair_indices', 'd_ij' (distances), and 'r_ij' (displacement vectors).
         """
 
-        pair_indices = self.enumerate_all_pairs(
-            atomic_subsystem_indices,
-        )
+        if pair_indices is None:
+            pair_indices = self.enumerate_all_pairs(
+                atomic_subsystem_indices,
+            )
+
         r_ij = self.calculate_r_ij(pair_indices, positions)
         d_ij = self.calculate_d_ij(r_ij)
 
@@ -528,10 +579,18 @@ class InputPreparation(torch.nn.Module):
         # general input manipulation
         positions = data.positions
         atomic_subsystem_indices = data.atomic_subsystem_indices
-
-        pairlist_output = self.calculate_distances_and_pairlist(
-            positions, atomic_subsystem_indices
-        )
+        if data.pair_list is None:
+            pairlist_output = self.calculate_distances_and_pairlist(
+                positions=positions,
+                atomic_subsystem_indices=atomic_subsystem_indices,
+                pair_indices=None,
+            )
+        else:
+            pairlist_output = self.calculate_distances_and_pairlist(
+                positions=positions,
+                atomic_subsystem_indices=atomic_subsystem_indices,
+                pair_indices=data.pair_list.to(torch.int64),
+            )
 
         return pairlist_output
 

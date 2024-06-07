@@ -106,15 +106,18 @@ def test_modelforge_ani(setup_two_methanes):
 
     # read default parameters
     from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
 
-    config = return_toml_config(
-        f"modelforge/tests/data/potential_defaults/ani2x_defaults.toml"
-    )
+    file_path = resources.files(potential_defaults) / f"ani2x_defaults.toml"
+    config = return_toml_config(file_path)
+
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
 
     _, _, _, mf_input = setup_two_methanes
-    model = mf_ANI2x(**potential_parameters)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = mf_ANI2x(**potential_parameters).to(device=device)
     energy = model(mf_input)
     derivative = torch.autograd.grad(energy.E.sum(), mf_input.positions)[0]
     force = -derivative
@@ -317,10 +320,12 @@ def test_representation(setup_methane):
 
     # read default parameters
     from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
 
-    config = return_toml_config(
-        f"modelforge/tests/data/potential_defaults/ani2x_defaults.toml"
-    )
+    file_path = resources.files(potential_defaults) / f"ani2x_defaults.toml"
+    config = return_toml_config(file_path)
+
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
 

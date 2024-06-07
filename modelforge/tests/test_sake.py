@@ -18,11 +18,16 @@ IN_MAC = platform == "darwin"
 def test_SAKE_init():
     """Test initialization of the SAKE neural network potential."""
     from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
 
     model_name = "SAKE"
-    config = return_toml_config(
-        f"modelforge/tests/data/potential_defaults/{model_name.lower()}_defaults.toml"
+
+    file_path = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
     )
+    config = return_toml_config(file_path)
+
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
 
@@ -41,11 +46,16 @@ def test_sake_forward(single_batch_with_batchsize_64):
     methane = single_batch_with_batchsize_64.nnp_input
 
     from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
 
     model_name = "SAKE"
-    config = return_toml_config(
-        f"modelforge/tests/data/potential_defaults/{model_name.lower()}_defaults.toml"
+
+    file_path = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
     )
+    config = return_toml_config(file_path)
+
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
 
@@ -103,11 +113,16 @@ def test_sake_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize_64
     rotation_matrix = torch.tensor([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
 
     from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
 
     model_name = "SAKE"
-    config = return_toml_config(
-        f"modelforge/tests/data/potential_defaults/{model_name.lower()}_defaults.toml"
+
+    file_path = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
     )
+    config = return_toml_config(file_path)
+
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
     potential_parameters["number_of_atom_features"] = nr_atom_basis
@@ -581,11 +596,16 @@ def test_model_invariance(single_batch_with_batchsize_1):
     from dataclasses import replace
 
     from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
 
     model_name = "SAKE"
-    config = return_toml_config(
-        f"modelforge/tests/data/potential_defaults/{model_name.lower()}_defaults.toml"
+
+    file_path = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
     )
+    config = return_toml_config(file_path)
+
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
 

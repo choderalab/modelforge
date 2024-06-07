@@ -21,10 +21,15 @@ def test_train_with_lightning(model_name, dataset_name, include_force):
     """
 
     from modelforge.train.training import return_toml_config, perform_training
+    from importlib import resources
+    from modelforge.tests.data import training_defaults
 
-    config = return_toml_config(
-        f"modelforge/tests/data/training_defaults/{model_name.lower()}_{dataset_name.lower()}.toml"
+    file_path = (
+        resources.files(training_defaults)
+        / f"{model_name.lower()}_{dataset_name.lower()}.toml"
     )
+    config = return_toml_config(file_path)
+
     from pytorch_lightning.loggers import TensorBoardLogger
 
     logger = TensorBoardLogger("tb_logs", name="training")
@@ -63,10 +68,14 @@ def test_loss(model_name, dataset_name, datamodule_factory):
 
     # read default parameters
     from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import training_defaults
 
-    config = return_toml_config(
-        f"modelforge/tests/data/training_defaults/{model_name.lower()}_{dataset_name.lower()}.toml"
+    file_path = (
+        resources.files(training_defaults)
+        / f"{model_name.lower()}_{dataset_name.lower()}.toml"
     )
+    config = return_toml_config(file_path)
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
 
@@ -96,11 +105,15 @@ def test_loss(model_name, dataset_name, datamodule_factory):
 @pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_hypterparameter_tuning_with_ray(model_name, dataset_name, datamodule_factory):
     from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import training_defaults
+
+    file_path = resources.files(training_defaults) / f"{model_name.lower()}_qm9.toml"
 
     dm = datamodule_factory(dataset_name=dataset_name)
-    config = return_toml_config(
-        f"modelforge/tests/data/training_defaults/{model_name.lower()}_qm9.toml"
-    )
+
+    config = return_toml_config(file_path)
+
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
     training_parameters = config["training"].get("training_parameters", {})

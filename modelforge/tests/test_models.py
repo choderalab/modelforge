@@ -13,10 +13,15 @@ def test_JAX_wrapping(model_name, single_batch_with_batchsize_64):
 
     # read default parameters
     from modelforge.train.training import return_toml_config
+    from modelforge.tests.data import potential_defaults
+    from importlib import resources
 
-    config = return_toml_config(
-        f"modelforge/tests/data/potential_defaults/{model_name.lower()}_defaults.toml"
+    filename = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
     )
+
+    config = return_toml_config(filename)
+
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
 
@@ -49,10 +54,15 @@ def test_model_factory(model_name, simulation_environment):
 
     # read default parameters
     from modelforge.train.training import return_toml_config
+    from modelforge.tests.data import potential_defaults
+    from importlib import resources
 
-    config = return_toml_config(
-        f"modelforge/tests/data/potential_defaults/{model_name.lower()}_defaults.toml"
+    filename = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
     )
+
+    config = return_toml_config(filename)
+
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
 
@@ -67,9 +77,14 @@ def test_model_factory(model_name, simulation_environment):
         model_name.upper() in str(type(model)).upper()
         or "JAX" in str(type(model)).upper()
     )
-    config = return_toml_config(
-        f"modelforge/tests/data/training_defaults/{model_name.lower()}_qm9.toml"
-    )
+
+    from modelforge.tests.data import training_defaults
+    from importlib import resources
+
+    filename = resources.files(training_defaults) / f"{model_name.lower()}_qm9.toml"
+
+    config = return_toml_config(filename)
+
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
     training_parameters = config["training"].get("training_parameters", {})
@@ -107,10 +122,12 @@ def test_energy_scaling_and_offset():
     # initialize model
     # read default parameters
     from modelforge.train.training import return_toml_config
+    from modelforge.tests.data import potential_defaults
+    from importlib import resources
 
-    config = return_toml_config(
-        f"modelforge/tests/data/potential_defaults/ani2x_defaults.toml"
-    )
+    filename = resources.files(potential_defaults) / "ani2x_defaults.toml"
+    config = return_toml_config(filename)
+
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
 
@@ -147,10 +164,13 @@ def test_state_dict_saving_and_loading(model_name):
 
     # read default parameters
     from modelforge.train.training import return_toml_config
+    from modelforge.tests.data import training_defaults
+    from importlib import resources
 
-    config = return_toml_config(
-        f"modelforge/tests/data/training_defaults/{model_name.lower()}_qm9.toml"
-    )
+    filename = resources.files(training_defaults) / f"{model_name.lower()}_qm9.toml"
+
+    config = return_toml_config(filename)
+
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
     training_parameters = config["training"].get("training_parameters", {})
@@ -185,10 +205,14 @@ def test_energy_between_simulation_environments(
     # test the forward pass through each of the models
     # cast input and model to torch.float64
     from modelforge.train.training import return_toml_config
+    from modelforge.tests.data import potential_defaults
+    from importlib import resources
 
-    config = return_toml_config(
-        f"modelforge/tests/data/potential_defaults/{model_name.lower()}_defaults.toml"
+    filename = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
     )
+    config = return_toml_config(filename)
+
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
 
@@ -222,16 +246,21 @@ def test_forward_pass(
     model_name, simulation_environment, single_batch_with_batchsize_64
 ):
     # this test sends a single batch from different datasets through the model
+    import torch
 
     nnp_input = single_batch_with_batchsize_64.nnp_input
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
     # read default parameters
     from modelforge.train.training import return_toml_config
+    from modelforge.tests.data import potential_defaults
+    from importlib import resources
 
-    config = return_toml_config(
-        f"modelforge/tests/data/potential_defaults/{model_name.lower()}_defaults.toml"
+    filename = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
     )
+    config = return_toml_config(filename)
+
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
 
@@ -245,10 +274,24 @@ def test_forward_pass(
     if "JAX" in str(type(model)):
         nnp_input = nnp_input.as_jax_namedtuple()
 
-    output = model(nnp_input).E
+    output = model(nnp_input)
 
     # test tat we get an energie per molecule
-    assert len(output) == nr_of_mols
+    assert len(output.E) == nr_of_mols
+
+    # the batch consists of methane (CH4) and amamonium (NH3)
+    # which has symmetric hydrogens.
+    # This has to be reflected in the atomic energies E_i, which
+    # has to be equal for all hydrogens
+    if "JAX" not in str(type(model)):
+
+        # assert that the following tensor has equal values for dim=0 index 1 to 4 and 6 to 8
+        assert torch.allclose(output.E_i[1:4], output.E_i[1], atol=1e-5)
+        assert torch.allclose(output.E_i[6:8], output.E_i[6], atol=1e-5)
+
+        # make sure that the total energy is \sum E_i
+        assert torch.allclose(output.E[0], output.E_i[0:5].sum(dim=0), atol=1e-5)
+        assert torch.allclose(output.E[1], output.E_i[5:9].sum(dim=0), atol=1e-5)
 
 
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
@@ -261,10 +304,15 @@ def test_calculate_energies_and_forces(
     """
     import torch
     from modelforge.train.training import return_toml_config
+    from modelforge.tests.data import potential_defaults
+    from importlib import resources
 
-    config = return_toml_config(
-        f"modelforge/tests/data/potential_defaults/{model_name.lower()}_defaults.toml"
+    filename = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
     )
+
+    config = return_toml_config(filename)
+
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
 
@@ -273,14 +321,6 @@ def test_calculate_energies_and_forces(
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
     nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
 
-    # read default parameters
-    from modelforge.train.training import return_toml_config
-
-    config = return_toml_config(
-        f"modelforge/tests/data/potential_defaults/{model_name.lower()}_defaults.toml"
-    )
-    # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
     # The inference_model fixture now returns a function that expects an environment
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="inference",
@@ -383,7 +423,7 @@ def test_pairlist():
     from modelforge.potential.models import Pairlist, Neighborlist
     import torch
 
-    atomic_subsystem_indices = torch.tensor([80, 80, 80, 11, 11, 11])
+    atomic_subsystem_indices = torch.tensor([0, 0, 0, 1, 1, 1])
     positions = torch.tensor(
         [
             [0.0, 0.0, 0.0],
@@ -542,10 +582,15 @@ def test_casting(model_name, single_batch_with_batchsize_64):
 
     # cast input and model to torch.float64
     from modelforge.train.training import return_toml_config
+    from modelforge.tests.data import potential_defaults
+    from importlib import resources
 
-    config = return_toml_config(
-        f"modelforge/tests/data/potential_defaults/{model_name.lower()}_defaults.toml"
+    filename = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
     )
+
+    config = return_toml_config(filename)
+
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
 
@@ -590,10 +635,15 @@ def test_equivariant_energies_and_forces(
 
     # cast input and model to torch.float64
     from modelforge.train.training import return_toml_config
+    from modelforge.tests.data import potential_defaults
+    from importlib import resources
 
-    config = return_toml_config(
-        f"modelforge/tests/data/potential_defaults/{model_name.lower()}_defaults.toml"
+    filename = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
     )
+
+    config = return_toml_config(filename)
+
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
 

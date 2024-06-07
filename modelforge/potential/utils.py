@@ -44,12 +44,15 @@ class NNPInput:
     total_charge : torch.Tensor
         A tensor with the total charge of molecule.
         Shape: [num_systems], where `num_systems` is the number of molecules.
+    pair_list : Optional[torch.Tensor]
+        An optional tensor containing pairs of indices or other relevant information.
     """
 
     atomic_numbers: torch.Tensor
     positions: Union[torch.Tensor, Quantity]
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
+    pair_list: Optional[torch.Tensor] = None
 
     def to(
         self,
@@ -64,6 +67,8 @@ class NNPInput:
             self.positions = self.positions.to(device)
             self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(device)
             self.total_charge = self.total_charge.to(device)
+            if self.pair_list is not None:
+                self.pair_list = self.pair_list.to(device)
         if dtype:
             self.positions = self.positions.to(dtype)
         return self
@@ -486,7 +491,6 @@ class AngularSymmetryFunction(nn.Module):
             self.register_buffer("ShfZ", ShfZ)
             self.register_buffer("ShfA", ShfA)
 
-
         # The length of angular subaev of a single species
         self.angular_sublength = self.ShfA.numel() * self.ShfZ.numel()
 
@@ -842,7 +846,7 @@ class SAKERadialBasisFunction(RadialBasisFunction):
         centers: torch.Tensor,
         scale_factors: torch.Tensor,
     ) -> torch.Tensor:
-        
+
         return torch.exp(
             -scale_factors
             * (
@@ -1023,7 +1027,7 @@ def scatter_softmax(
         other_dim_size if (other_dim != dim) else dim_size
         for (other_dim, other_dim_size) in enumerate(src.shape)
     ]
-
+    index = index.to(torch.int64)
     zeros = torch.zeros(out_shape, dtype=src.dtype, device=device)
     max_value_per_index = zeros.scatter_reduce(
         dim, index, src, "amax", include_self=False

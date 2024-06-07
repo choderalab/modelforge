@@ -193,7 +193,7 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
 
     raw_data_item = dataset[0]
     assert isinstance(raw_data_item, dict)
-    assert len(raw_data_item) == 7  # 7 properties are returned
+    assert len(raw_data_item) == 8  # 8 properties are returned
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
@@ -445,6 +445,49 @@ def test_data_item_format_of_datamodule(
     assert (
         raw_data_item["atomic_numbers"].shape[0] == raw_data_item["positions"].shape[0]
     )
+
+
+from modelforge.potential import _Implemented_NNPs
+
+
+@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+def test_dataset_neighborlist(model_name, dataset_name, datamodule_factory):
+    """Test the splitting of the dataset."""
+
+    if dataset_name.lower().startswith("spice"):
+        print("using subset")
+        dataset = datamodule_factory(
+            dataset_name=dataset_name, version_select="nc_1000_v0_HCNOFClS"
+        )
+    else:
+        dataset = datamodule_factory(dataset_name=dataset_name)
+
+    train_dataloader = dataset.train_dataloader()
+    batch = next(iter(train_dataloader))
+
+    # test that the neighborlist is correctly generated
+    # cast input and model to torch.float64
+    from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
+
+    file_path = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
+    )
+    config = return_toml_config(file_path)
+
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+    from modelforge.potential.models import NeuralNetworkPotentialFactory
+
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        use="inference",
+        model_type=model_name,
+        simulation_environment="PyTorch",
+        model_parameters=potential_parameters,
+    )
+    model(batch.nnp_input)
 
 
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())

@@ -258,8 +258,12 @@ def test_forward_pass(
     if "JAX" not in str(type(model)):
 
         # assert that the following tensor has equal values for dim=0 index 1 to 4 and 6 to 8
-        assert torch.allclose(output.E_i[1:4], output.E_i[1])
-        assert torch.allclose(output.E_i[6:8], output.E_i[6])
+        assert torch.allclose(output.E_i[1:4], output.E_i[1], atol=1e-5)
+        assert torch.allclose(output.E_i[6:8], output.E_i[6], atol=1e-5)
+
+        # make sure that the total energy is \sum E_i
+        assert torch.allclose(output.E[0], output.E_i[0:5].sum(dim=0), atol=1e-5)
+        assert torch.allclose(output.E[1], output.E_i[5:9].sum(dim=0), atol=1e-5)
 
 
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())

@@ -435,7 +435,7 @@ class PhysNetCore(CoreNetwork):
         """
 
         log.debug("Initializing PhysNet model.")
-        super().__init__(cutoff=cutoff)
+        super().__init__()
 
         # embedding
         from modelforge.potential.utils import Embedding

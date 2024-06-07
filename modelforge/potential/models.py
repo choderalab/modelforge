@@ -88,45 +88,78 @@ class Pairlist(Module):
         # get device that passed tensors lives on, initialize on the same device
         device = atomic_subsystem_indices.device
 
-        # atomic_subsystem_indices are always numbered from 0 to n_molecules - 1
-        # e.g., a single molecule will be [0, 0, 0, 0 ... ]
-        # and a batch of molecules will always start at 0 and increment [ 0, 0, 0, 1, 1, 1, ...]
-        # As such, we can use bincount, as there are no gaps in the numbering
-        # Note if the indices are not numbered from 0 to n_molecules - 1, this will not work
-        # E.g., bincount on [3,3,3, 4,4,4, 5,5,5] will return [0,0,0,3,3,3,3,3,3]
-        # as we have no values for 0, 1, 2
-        # using a combination of unique and argsort would make this work for any numbering ordering
-        # but that is not how the data ends up being structured internally, and thus is not needed
-        repeats = torch.bincount(atomic_subsystem_indices)
-        offsets = torch.cat(
-            (torch.tensor([0], device=device), torch.cumsum(repeats, dim=0)[:-1])
-        )
-
-        i_indices = torch.cat(
-            [
-                torch.repeat_interleave(
-                    torch.arange(o, o + r, device=device), repeats=r
+        # if there is only one molecule, we do not need to use additional looping and offsets
+        if torch.sum(atomic_subsystem_indices) == 0:
+            n = len(atomic_subsystem_indices)
+            if self.only_unique_pairs:
+                i_final_pairs, j_final_pairs = torch.triu_indices(
+                    n, n, 1, device=device
                 )
-                for r, o in zip(repeats, offsets)
-            ]
-        )
-        j_indices = torch.cat(
-            [
-                torch.cat([torch.arange(o, o + r, device=device) for _ in range(r)])
-                for r, o in zip(repeats, offsets)
-            ]
-        )
+            else:
+                # Repeat each number n-1 times for i_indices
+                i_final_pairs = torch.repeat_interleave(
+                    torch.arange(n, device=device),
+                    repeats=n - 1,
+                )
 
-        if self.only_unique_pairs:
-            # filter out pairs that are not unique
-            unique_pairs_mask = i_indices < j_indices
-            i_final_pairs = i_indices[unique_pairs_mask]
-            j_final_pairs = j_indices[unique_pairs_mask]
+                # Correctly construct j_indices
+                j_final_pairs = torch.cat(
+                    [
+                        torch.cat(
+                            (
+                                torch.arange(i, device=device),
+                                torch.arange(i + 1, n, device=device),
+                            )
+                        )
+                        for i in range(n)
+                    ]
+                )
+
         else:
-            # filter out identical values
-            unique_pairs_mask = i_indices != j_indices
-            i_final_pairs = i_indices[unique_pairs_mask]
-            j_final_pairs = j_indices[unique_pairs_mask]
+            # if we have more than one molecule, we will take into account molecule size and offsets when
+            # calculating pairs, as using the approach above is not memory efficient for datasets with large molecules
+            # and/or larger batch sizes; while not likely a problem on higher end GPUs with large amounts of memory
+            # cheaper commodity and mobile GPUs may have issues
+
+            # atomic_subsystem_indices are always numbered from 0 to n_molecules - 1
+            # e.g., a single molecule will be [0, 0, 0, 0 ... ]
+            # and a batch of molecules will always start at 0 and increment [ 0, 0, 0, 1, 1, 1, ...]
+            # As such, we can use bincount, as there are no gaps in the numbering
+            # Note if the indices are not numbered from 0 to n_molecules - 1, this will not work
+            # E.g., bincount on [3,3,3, 4,4,4, 5,5,5] will return [0,0,0,3,3,3,3,3,3]
+            # as we have no values for 0, 1, 2
+            # using a combination of unique and argsort would make this work for any numbering ordering
+            # but that is not how the data ends up being structured internally, and thus is not needed
+            repeats = torch.bincount(atomic_subsystem_indices)
+            offsets = torch.cat(
+                (torch.tensor([0], device=device), torch.cumsum(repeats, dim=0)[:-1])
+            )
+
+            i_indices = torch.cat(
+                [
+                    torch.repeat_interleave(
+                        torch.arange(o, o + r, device=device), repeats=r
+                    )
+                    for r, o in zip(repeats, offsets)
+                ]
+            )
+            j_indices = torch.cat(
+                [
+                    torch.cat([torch.arange(o, o + r, device=device) for _ in range(r)])
+                    for r, o in zip(repeats, offsets)
+                ]
+            )
+
+            if self.only_unique_pairs:
+                # filter out pairs that are not unique
+                unique_pairs_mask = i_indices < j_indices
+                i_final_pairs = i_indices[unique_pairs_mask]
+                j_final_pairs = j_indices[unique_pairs_mask]
+            else:
+                # filter out identical values
+                unique_pairs_mask = i_indices != j_indices
+                i_final_pairs = i_indices[unique_pairs_mask]
+                j_final_pairs = j_indices[unique_pairs_mask]
 
         # concatenate to form final (2, n_pairs) tensor
         pair_indices = torch.stack((i_final_pairs, j_final_pairs))

@@ -78,14 +78,25 @@ class Pairlist(Module):
         ----------
         atomic_subsystem_indices : torch.Tensor, shape (nr_atoms_per_systems)
             Atom indices to indicate which atoms belong to which molecule
+            Note in all cases, the values in this tensor must be numbered from 0 to n_molecules - 1
+            sequentially, with no gaps in the numbering. E.g., [0,0,0,1,1,2,2,2 ...].
+            This is the case for all internal data structures, and those no validation is performed in
+            this routine. If the data is not structured in this way, the results will be incorrect.
+
         """
 
         # get device that passed tensors lives on, initialize on the same device
         device = atomic_subsystem_indices.device
 
-        # atomic_subsystem_indices are numbered from 0 to n_molecules - 1
-        #  we can use bincount to get the number of atoms in each molecule
-        # which we can use to construct smaller tensors
+        # atomic_subsystem_indices are always numbered from 0 to n_molecules - 1
+        # e.g., a single molecule will be [0, 0, 0, 0 ... ]
+        # and a batch of molecules will always start at 0 and increment [ 0, 0, 0, 1, 1, 1, ...]
+        # As such, we can use bincount, as there are no gaps in the numbering
+        # Note if the indices are not numbered from 0 to n_molecules - 1, this will not work
+        # E.g., bincount on [3,3,3, 4,4,4, 5,5,5] will return [0,0,0,3,3,3,3,3,3]
+        # as we have no values for 0, 1, 2
+        # using a combination of unique and argsort would make this work for any numbering ordering
+        # but that is not how the data ends up being structured internally, and thus is not needed
         repeats = torch.bincount(atomic_subsystem_indices)
         offsets = torch.cat(
             (torch.tensor([0], device=device), torch.cumsum(repeats, dim=0)[:-1])

@@ -14,8 +14,8 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         """
         super().__init__()
         # turn the following parameters in torch buffer
-        self.register_buffer("E_i_mean", torch.tensor([0.0]))
-        self.register_buffer("E_i_stddev", torch.tensor([1.0]))
+        self.E_i_mean = torch.tensor([0.0])
+        self.E_i_stddev = torch.tensor([1.0])
 
     def forward(
         self, x: torch.Tensor, atomic_subsystem_indices: torch.Tensor

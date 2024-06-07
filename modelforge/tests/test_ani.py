@@ -42,8 +42,6 @@ def setup_methane():
 def setup_two_methanes():
     import torch
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
     coordinates = torch.tensor(
         [
             [
@@ -192,14 +190,15 @@ def test_radial_with_diagonal_batching(setup_two_methanes):
     vec = selected_coordinates[0] - selected_coordinates[1]
     distances = vec.norm(2, -1)
     # ------------ Modelforge calculation ----------#
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     radial_symmetry_function = AniRadialSymmetryFunction(
         radial_dist_divisions,
         radial_cutoff * unit.angstrom,
         radial_start * unit.angstrom,
-    )
+    ).to(device=device)
 
-    cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom)
+    cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom).to(device=device)
     rcut_ij = cutoff_module(d_ij)
 
     radial_symmetry_feature_vector_mf = radial_symmetry_function(d_ij)
@@ -231,10 +230,12 @@ def test_compare_angular_symmetry_features(setup_methane):
     from modelforge.potential.models import Pairlist
     import math
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     # set up relevant system properties
     species, r, _, _ = setup_methane
-    pairlist = Pairlist(only_unique_pairs=True)
-    pairs = pairlist(r[0], torch.tensor([0, 0, 0, 0, 0]))
+    pairlist = Pairlist(only_unique_pairs=True).to(device=device)
+    pairs = pairlist(r[0], torch.tensor([0, 0, 0, 0, 0], device=device))
     d_ij = pairs.d_ij.squeeze(1)
     r_ij = pairs.r_ij.squeeze(1)
 

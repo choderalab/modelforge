@@ -455,7 +455,14 @@ from modelforge.potential import _Implemented_NNPs
 def test_dataset_neighborlist(model_name, dataset_name, datamodule_factory):
     """Test the splitting of the dataset."""
 
-    dataset = datamodule_factory(dataset_name=dataset_name)
+    if dataset_name.lower().startswith("spice"):
+        print("using subset")
+        dataset = datamodule_factory(
+            dataset_name=dataset_name, version_select="nc_1000_v0_HCNOFClS"
+        )
+    else:
+        dataset = datamodule_factory(dataset_name=dataset_name)
+
     train_dataloader = dataset.train_dataloader()
     batch = next(iter(train_dataloader))
 

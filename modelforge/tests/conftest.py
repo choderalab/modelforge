@@ -93,7 +93,7 @@ def single_batch(batch_size: int = 64):
         batch_size=batch_size,
         version_select="nc_1000_v0",
     )
-    return next(iter(data_module.train_dataloader()))
+    return next(iter(data_module.train_dataloader(shuffle=False)))
 
 
 @pytest.fixture(scope="session")

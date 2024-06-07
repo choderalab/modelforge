@@ -435,7 +435,6 @@ class PhysNetCore(CoreNetwork):
         """
 
         log.debug("Initializing PhysNet model.")
-
         super().__init__()
 
         # embedding

@@ -116,7 +116,8 @@ def test_modelforge_ani(setup_two_methanes):
     potential_parameters = config["potential"].get("potential_parameters", {})
 
     _, _, _, mf_input = setup_two_methanes
-    model = mf_ANI2x(**potential_parameters)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = mf_ANI2x(**potential_parameters).to(device=device)
     energy = model(mf_input)
     derivative = torch.autograd.grad(energy.E.sum(), mf_input.positions)[0]
     force = -derivative

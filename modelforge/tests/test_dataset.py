@@ -469,10 +469,14 @@ def test_dataset_neighborlist(model_name, dataset_name, datamodule_factory):
     # test that the neighborlist is correctly generated
     # cast input and model to torch.float64
     from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
 
-    config = return_toml_config(
-        f"modelforge/tests/data/potential_defaults/{model_name.lower()}_defaults.toml"
+    file_path = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
     )
+    config = return_toml_config(file_path)
+
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
     from modelforge.potential.models import NeuralNetworkPotentialFactory

@@ -535,12 +535,18 @@ class InputPreparation(torch.nn.Module):
         # general input manipulation
         positions = data.positions
         atomic_subsystem_indices = data.atomic_subsystem_indices
-
-        pairlist_output = self.calculate_distances_and_pairlist(
-            positions=positions,
-            atomic_subsystem_indices=atomic_subsystem_indices,
-            pair_indices=data.pair_list.to(torch.int64),
-        )
+        if data.pair_list is None:
+            pairlist_output = self.calculate_distances_and_pairlist(
+                positions=positions,
+                atomic_subsystem_indices=atomic_subsystem_indices,
+                pair_indices=None,
+            )
+        else:
+            pairlist_output = self.calculate_distances_and_pairlist(
+                positions=positions,
+                atomic_subsystem_indices=atomic_subsystem_indices,
+                pair_indices=data.pair_list.to(torch.int64),
+            )
 
         return pairlist_output
 

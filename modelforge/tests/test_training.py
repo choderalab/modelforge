@@ -32,8 +32,6 @@ def test_train_with_lightning(model_name, dataset_name, include_force):
 
     from pytorch_lightning.loggers import TensorBoardLogger
 
-    logger = TensorBoardLogger("tb_logs", name="training")
-
     # Extract parameters
     potential_config = config["potential"]
     training_config = config["training"]

@@ -192,13 +192,13 @@ def test_radial_with_diagonal_batching(setup_two_methanes):
     vec = selected_coordinates[0] - selected_coordinates[1]
     distances = vec.norm(2, -1)
     # ------------ Modelforge calculation ----------#
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     radial_symmetry_function = AniRadialSymmetryFunction(
         radial_dist_divisions,
         radial_cutoff * unit.angstrom,
         radial_start * unit.angstrom,
-    )
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    ).to(device=device)
 
     cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom).to(device=device)
     rcut_ij = cutoff_module(d_ij)

@@ -41,6 +41,7 @@ def setup_methane():
 @pytest.fixture
 def setup_two_methanes():
     import torch
+    device = torch.device("cpu")
 
     coordinates = torch.tensor(
         [

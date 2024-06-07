@@ -1038,7 +1038,7 @@ class DataModule(pl.LightningDataModule):
                 ],
                 atomic_subsystem_indices=torch.zeros(
                     end_idx - start_idx,
-                    dtype=torch.float32,
+                    dtype=torch.int16,
                 ),
             )
 

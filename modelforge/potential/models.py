@@ -79,49 +79,43 @@ class Pairlist(Module):
         atomic_subsystem_indices : torch.Tensor, shape (nr_atoms_per_systems)
             Atom indices to indicate which atoms belong to which molecule
         """
-        # generate index grid
-        n = len(atomic_subsystem_indices)
 
         # get device that passed tensors lives on, initialize on the same device
         device = atomic_subsystem_indices.device
 
-        i_final_pairs = torch.tensor([], dtype=torch.int64, device=device)
-        j_final_pairs = torch.tensor([], dtype=torch.int64, device=device)
+        # atomic_subsystem_indices are numbered from 0 to n_molecules - 1
+        #  we can use bincount to get the number of atoms in each molecule
+        # which we can use to construct smaller tensors
+        repeats = torch.bincount(atomic_subsystem_indices)
+        offsets = torch.cat(
+            (torch.tensor([0], device=device), torch.cumsum(repeats, dim=0)[:-1])
+        )
 
-        # to avoid allocating very large tensors, we will wrap this in a loop where we allocate tensors of size n-1
-        # and concatenate the results, rather than allocating tensors of size n*(n-1).
-
-        for ii in range(0, n):
-            # Repeat each number n-1 times for i_indices
-            i_indices = torch.repeat_interleave(
-                torch.tensor(ii, device=device),
-                repeats=n - 1,
-            )
-
-            # Correctly construct j_indices
-            j_indices = torch.cat(
-                (
-                    torch.arange(ii, device=device),
-                    torch.arange(ii + 1, n, device=device),
+        i_indices = torch.cat(
+            [
+                torch.repeat_interleave(
+                    torch.arange(o, o + r, device=device), repeats=r
                 )
-            )
+                for r, o in zip(repeats, offsets)
+            ]
+        )
+        j_indices = torch.cat(
+            [
+                torch.cat([torch.arange(o, o + r, device=device) for _ in range(r)])
+                for r, o in zip(repeats, offsets)
+            ]
+        )
 
-            # filter pairs to only keep those belonging to the same molecule
-            same_molecule_mask = (
-                atomic_subsystem_indices[i_indices]
-                == atomic_subsystem_indices[j_indices]
-            )
-            i_final_pairs_temp = i_indices[same_molecule_mask]
-            j_final_pairs_temp = j_indices[same_molecule_mask]
-
-            if self.only_unique_pairs:
-                # filter out pairs that are not unique
-                unique_pairs_mask = i_final_pairs_temp < j_final_pairs_temp
-                i_final_pairs_temp = i_final_pairs_temp[unique_pairs_mask]
-                j_final_pairs_temp = j_final_pairs_temp[unique_pairs_mask]
-
-            i_final_pairs = torch.cat((i_final_pairs, i_final_pairs_temp), dim=0)
-            j_final_pairs = torch.cat((j_final_pairs, j_final_pairs_temp), dim=0)
+        if self.only_unique_pairs:
+            # filter out pairs that are not unique
+            unique_pairs_mask = i_indices < j_indices
+            i_final_pairs = i_indices[unique_pairs_mask]
+            j_final_pairs = j_indices[unique_pairs_mask]
+        else:
+            # filter out identical values
+            unique_pairs_mask = i_indices != j_indices
+            i_final_pairs = i_indices[unique_pairs_mask]
+            j_final_pairs = j_indices[unique_pairs_mask]
 
         # concatenate to form final (2, n_pairs) tensor
         pair_indices = torch.stack((i_final_pairs, j_final_pairs))

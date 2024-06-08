@@ -907,6 +907,20 @@ class TensorNetRadialSymmetryFunction(RadialSymmetryFunction):
         radial_basis_function: RadialBasisFunction = \
             GaussianRadialBasisFunction(),
      ):
+        super().__init__(
+            number_of_radial_basis_functions,
+            max_distance,
+            min_distance,
+            dtype,
+            trainable,
+            radial_basis_function
+        )
+        self.prefactor = torch.tensor([1.0])
+
+    def calculate_radial_basis_centers():
+        pass
+
+    def calculate_radial_scale_factor():
         pass
 
 def pair_list(

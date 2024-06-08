@@ -37,8 +37,9 @@ dataset_versions = {
 
 dataset_and_version = []
 for name in _ImplementedDatasets.get_all_dataset_names():
-    for version in dataset_versions[name]:
-        dataset_and_version.append((name, version))
+    if name in dataset_versions.keys():
+        for version in dataset_versions[name]:
+            dataset_and_version.append((name, version))
 
 
 @pytest.mark.parametrize("dataset_name, version", dataset_and_version)

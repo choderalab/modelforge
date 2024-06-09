@@ -917,11 +917,36 @@ class TensorNetRadialSymmetryFunction(RadialSymmetryFunction):
         )
         self.prefactor = torch.tensor([1.0])
 
-    def calculate_radial_basis_centers():
-        pass
+    def calculate_radial_basis_centers(
+        self,
+        _min_distance_in_nanometer,
+        _max_distance_in_nanometer,
+        number_of_radial_basis_functions,
+        dtype,
+    ):
+        # TensorNet evenly distribute centers in log space
+        centers = torch.linspace(
+            tensor.exp(-_max_distance_in_nanometer),
+            tensor.exp(-_min_distance_in_nanometer),
+            number_of_radial_basis_functions,
+            dtype=dtype,
+        )
+        return centers
 
-    def calculate_radial_scale_factor():
-        pass
+    def calculate_radial_scale_factor(
+        self,
+        _min_distance_in_nanometer,
+        _max_distance_in_nanometer,
+        number_of_radial_basis_functions,
+    ):
+        scale_factors = torch.full(
+            (number_of_radial_basis_functions,),
+            torch.exp(-_min_distance_in_nanometer) \
+            - torch.exp(-_max_distance_in_nanometer),
+        )
+        scale_factors = scale_factors * 2 / number_of_radial_basis_functions
+        scale_factors = torch.pow(scale_factors, -2)
+        return scale_factors
 
 def pair_list(
     atomic_subsystem_indices: torch.Tensor,

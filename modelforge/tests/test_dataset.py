@@ -484,17 +484,89 @@ def test_dataset_neighborlist(model_name, single_batch_with_batchsize_64):
     # pairlist is in ascending order in row 0
     assert torch.all(pair_list[0, 1:] >= pair_list[0, :-1])
 
-    # first molecule is methane, check if bonds are correct
-    methan_bonds = pair_list[:, :16]
-    assert torch.any(torch.eq(
-        methan_bonds,
-        torch.tensor(
-            [
-                [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3],
-                [1, 2, 3, 4, 0, 2, 3, 4, 0, 1, 3, 4, 0, 1, 2, 3],
-            ]
-        ),
-    ) == False).item()
+    if model_name == "ANI1x":
+        # test the pairlist for the ANI potential (whith non-redundant atom pairs)
+        # TODO
+        pass
+    else:
+        # test the pairlist for message passing networks (with redundant atom pairs)
+        # first molecule is methane, check if bonds are correct
+        methan_bonds = pair_list[:, :20]
+
+        assert (
+            torch.any(
+                torch.eq(
+                    methan_bonds,
+                    torch.tensor(
+                        [
+                            [
+                                0,
+                                0,
+                                0,
+                                0,
+                                1,
+                                1,
+                                1,
+                                1,
+                                2,
+                                2,
+                                2,
+                                2,
+                                3,
+                                3,
+                                3,
+                                3,
+                                4,
+                                4,
+                                4,
+                                4,
+                            ],
+                            [
+                                1,
+                                2,
+                                3,
+                                4,
+                                0,
+                                2,
+                                3,
+                                4,
+                                0,
+                                1,
+                                3,
+                                4,
+                                0,
+                                1,
+                                2,
+                                4,
+                                0,
+                                1,
+                                2,
+                                3,
+                            ],
+                        ]
+                    ),
+                )
+                == False
+            ).item()
+            == False
+        )
+        # second molecule is ammonium, check if bonds are correct
+        ammonium_bonds = pair_list[:, 20:30]
+        assert (
+            torch.any(
+                torch.eq(
+                    ammonium_bonds,
+                    torch.tensor(
+                        [
+                            [5, 5, 5, 6, 6, 6, 7, 7, 7, 8],
+                            [6, 7, 8, 5, 7, 8, 5, 6, 8, 5],
+                        ]
+                    ),
+                )
+                == False
+            ).item()
+            == False
+        )
 
 
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())

@@ -80,7 +80,7 @@ class TensorNetCore(CoreNetwork):
             number_of_radial_basis_functions,
         )
 
-        self.interaction_modules = ANIInteraction()
+        self.interaction_modules = TensorNetInteraction()
 
     def _forward(self):
         pass

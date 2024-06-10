@@ -580,6 +580,7 @@ class InputPreparation(torch.nn.Module):
         # general input manipulation
         positions = data.positions
         atomic_subsystem_indices = data.atomic_subsystem_indices
+        # calculate pairlist if none is provided
         if data.pair_list is None:
             pairlist_output = self.calculate_distances_and_pairlist(
                 positions=positions,
@@ -588,6 +589,7 @@ class InputPreparation(torch.nn.Module):
             )
             pair_list = data.pair_list
         else:
+            # pairlist is provided, remove redundant pairs if requested
             if self.only_unique_pairs:
                 i_indices = data.pair_list[0]
                 j_indices = data.pair_list[1]
@@ -595,7 +597,9 @@ class InputPreparation(torch.nn.Module):
                 i_final_pairs = i_indices[unique_pairs_mask]
                 j_final_pairs = j_indices[unique_pairs_mask]
                 pair_list = torch.stack((i_final_pairs, j_final_pairs))
-
+            else:
+                pair_list = data.pair_list
+            # only calculate d_ij and r_ij
             pairlist_output = self.calculate_distances_and_pairlist(
                 positions=positions,
                 atomic_subsystem_indices=atomic_subsystem_indices,

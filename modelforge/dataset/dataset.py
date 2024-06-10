@@ -80,6 +80,7 @@ class NNPInput:
     positions: Union[torch.Tensor, Quantity]
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
+    pair_list : torch.Tensor
 
     def to(
             self,
@@ -94,6 +95,7 @@ class NNPInput:
             self.positions = self.positions.to(device)
             self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(device)
             self.total_charge = self.total_charge.to(device)
+            self.pair_list = self.pair_list.to(device)
         if dtype:
             self.positions = self.positions.to(dtype)
         return self
@@ -1267,12 +1269,11 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
     positions_list = []
     total_charge_list = []
     E_list = []  # total energy
-
-    Q_list = []  # total charge
+    F_list = []  # forces
     ij_list = []
-    atomic_subsystem_counts = []
-    atomic_subsystem_indices = []
-    atomic_subsystem_indices_referencing_dataset = []
+    atomic_subsystem_counts_list = []
+    atomic_subsystem_indices_referencing_dataset_list = []
+
     offset = torch.tensor([0], dtype=torch.int32)
     pair_list_present = (
         True
@@ -1293,32 +1294,35 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
             offset += conf["atomic_numbers"].shape[0]
             ij_list.append(pair_list)
 
-        Z_list.append(conf["atomic_numbers"])
-        R_list.append(conf["positions"])
-        E_list.append(conf["E"])
-        F_list.append(conf["F"])
-        Q_list.append(conf["total_charge"])
-        atomic_subsystem_counts.extend(conf["atomic_subsystem_counts"])
-        atomic_subsystem_indices.extend([idx] * conf["atomic_subsystem_counts"][0])
-        atomic_subsystem_indices_referencing_dataset.extend(
-            [conf["idx"]] * conf["atomic_subsystem_counts"][0]
-        )
-    atomic_numbers_cat = torch.cat(Z_list)
-    total_charge_cat = torch.cat(Q_list)
-    positions_cat = torch.cat(R_list).requires_grad_(True)
-    F_cat = torch.cat(F_list).to(torch.float64)
+        atomic_numbers_list.append(conf.nnp_input.atomic_numbers)
+        positions_list.append(conf.nnp_input.positions)
+        total_charge_list.append(conf.nnp_input.total_charge)
+        E_list.append(conf.metadata.E)
+        F_list.append(conf.metadata.F)
+        atomic_subsystem_counts_list.append(conf.metadata.atomic_subsystem_counts)
+        atomic_subsystem_indices_referencing_dataset_list.append(
+            conf.metadata.atomic_subsystem_indices_referencing_dataset)
+
+
+
+    atomic_subsystem_counts = torch.cat(atomic_subsystem_counts_list)
+    atomic_subsystem_indices = torch.repeat_interleave(torch.arange(len(conf_list), dtype=torch.int32), atomic_subsystem_counts)
+    atomic_subsystem_indices_referencing_dataset = torch.cat(atomic_subsystem_indices_referencing_dataset_list)
+    atomic_numbers = torch.cat(atomic_numbers_list)
+    total_charge = torch.cat(total_charge_list)
+    positions = torch.cat(positions_list).requires_grad_(True)
+    F = torch.cat(F_list).to(torch.float64)
+    E = torch.stack(E_list)
     if pair_list_present:
         IJ_cat = torch.cat(ij_list, dim=1).to(torch.int64)
     else:
         IJ_cat = None
-    E_stack = torch.stack(E_list)
+
     nnp_input = NNPInput(
-        atomic_numbers=atomic_numbers_cat,
-        positions=positions_cat,
-        total_charge=total_charge_cat,
-        atomic_subsystem_indices=torch.tensor(
-            atomic_subsystem_indices, dtype=torch.int32
-        ),
+        atomic_numbers=atomic_numbers,
+        positions=positions,
+        total_charge=total_charge,
+        atomic_subsystem_indices=atomic_subsystem_indices,
         pair_list=IJ_cat,
     )
     metadata = Metadata(

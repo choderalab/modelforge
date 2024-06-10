@@ -547,7 +547,7 @@ class ANI2xCore(CoreNetwork):
 
 
 from .models import InputPreparation, BaseNetwork
-
+from typing import Union
 class ANI2x(BaseNetwork):
     def __init__(
         self,

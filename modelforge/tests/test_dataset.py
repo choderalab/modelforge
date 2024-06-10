@@ -451,11 +451,32 @@ from modelforge.potential import _Implemented_NNPs
 
 
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
-def test_dataset_neighborlist(model_name, single_batch_with_batchsize_64):
+def test_dataset_processing(model_name, single_batch_with_batchsize_64):
     """Test the neighborlist."""
 
-    nnp_input = single_batch_with_batchsize_64.nnp_input
+    data = single_batch_with_batchsize_64
+
+    # make sure that energies are correct
+    energies = torch.tensor(
+        [[-1656.8302], [-1158.3522], [-891.5176], [-1612.8878], [-1262.7533]],
+        dtype=torch.float64,
+    )
+
+    assert torch.allclose(data.metadata.E[:5], energies, atol=1e-4)
+    # make sure that atomic_subsystem_counts are right
+    assert not torch.any(
+        torch.eq(
+            data.metadata.atomic_subsystem_counts[:5],
+            torch.tensor([5, 4, 3, 4, 3], dtype=torch.int32),
+        )
+        == False
+    )
+
+    nnp_input = data.nnp_input
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
+
+    # test that the ase are always the same
+    a = 7
 
     # test that the neighborlist is correctly generated
     # cast input and model to torch.float64

@@ -214,7 +214,9 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         if self.properties_of_interest["pair_list"] is None:
             pair_list = None
         else:
-            pair_list = self.properties_of_interest["pair_list"][idx]
+            pair_list_indices_start = self.properties_of_interest["number_of_pairs"][idx]
+            pair_list_indices_end = self.properties_of_interest["number_of_pairs"][idx+1]
+            pair_list = self.properties_of_interest["pair_list"][:,pair_list_indices_start:pair_list_indices_end]
         Q = self.properties_of_interest["Q"][idx]
 
         return {
@@ -1017,11 +1019,12 @@ class DataModule(pl.LightningDataModule):
         from tqdm import tqdm
 
         # remove the self energies if requested
+        log.info('Precalculating pairlist for dataset')
         if self.remove_self_energies:
             log.info("Removing self energies from the dataset")
 
         all_pairs = []
-        nr_of_pairs = []
+        nr_of_pairs = torch.zeros(size=(len(dataset.properties_of_interest["E"])+1,1))
         for i in tqdm(range(len(dataset)), desc="Process dataset"):
             start_idx = dataset.single_atom_start_idxs_by_conf[i]
             end_idx = dataset.single_atom_end_idxs_by_conf[i]
@@ -1043,26 +1046,16 @@ class DataModule(pl.LightningDataModule):
             )
 
             pair_list = pairlist_output.pair_indices.to(dtype=torch.int16)
-
-            nr_of_pairs.append(pair_list.shape[1])
+            nr_of_pairs[i+1] = pair_list.shape[1]    # store the number of pairs for each molecule                                # starting at zero for indexing with [nr_of_pairs[i-1]:nr_of_pairs[i]]
             all_pairs.append(pair_list)
 
             if self.remove_self_energies:
                 dataset[i] = {"E": dataset.properties_of_interest["E"][i] - energy}
 
+        nr_of_pairs_in_dataset = torch.cumsum(nr_of_pairs, dim=0, dtype=torch.int64).squeeze(1)
         # Determine N (number of tensors) and K (maximum M)
-        N = len(all_pairs)
-        K = max(nr_of_pairs)
-
-        # Initialize the padded tensor with shape (N, 2, K) filled with -1
-        padded_pair_list = torch.full((N, 2, K), -1, dtype=torch.int16)
-
-        # Copy each tensor into the appropriate slice of the padded tensor
-        for i, ij in enumerate(all_pairs):
-            M = ij.size(1)
-            padded_pair_list[i, :, :M] = ij
-
-        dataset.properties_of_interest["pair_list"] = padded_pair_list
+        dataset.properties_of_interest["pair_list"] = torch.cat(all_pairs, dim=1)
+        dataset.properties_of_interest["number_of_pairs"] = nr_of_pairs_in_dataset
 
     def train_dataloader(
         self, num_workers: int = 4, shuffle: bool = True, pin_memory: bool = False
@@ -1142,11 +1135,9 @@ def collate_conformers(conf_list: List[Dict[str, torch.Tensor]]) -> "BatchData":
     for idx, conf in enumerate(conf_list):
         if pair_list_present:
             ## pairlist
-            # generate pairlist mask
-            pair_list_mask = conf["pair_list"] != -1
             # generate pairlist without padded values
             pair_list = (
-                conf["pair_list"][pair_list_mask].view(2, -1).to(dtype=torch.int32)
+                conf["pair_list"].to(dtype=torch.int32)
                 + offset
             )
             # update offset (for making sure the pair_list indices are pointing to the correct molecule)

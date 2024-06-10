@@ -241,6 +241,51 @@ def test_energy_between_simulation_environments(
 
 
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+def test_forward_pass_with_all_datasets(model_name, dataset_name, datamodule_factory):
+    """Test forward pass with all datasets."""
+    import torch
+    if dataset_name.lower().startswith("spice"):
+        print("using subset")
+        dataset = datamodule_factory(
+            dataset_name=dataset_name, version_select="nc_1000_v0_HCNOFClS"
+        )
+    else:
+        dataset = datamodule_factory(dataset_name=dataset_name)
+
+    train_dataloader = dataset.train_dataloader()
+    batch = next(iter(train_dataloader))
+
+    # test that the neighborlist is correctly generated
+    # cast input and model to torch.float64
+    from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
+
+    file_path = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
+    )
+    config = return_toml_config(file_path)
+
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+    from modelforge.potential.models import NeuralNetworkPotentialFactory
+
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        use="inference",
+        model_type=model_name,
+        simulation_environment="PyTorch",
+        model_parameters=potential_parameters,
+    )
+    model(batch.nnp_input)
+    
+    pair_list = batch.nnp_input.pair_list
+    # pairlist is in ascending order in row 0
+    assert torch.all(pair_list[0, 1:] >= pair_list[0, :-1])
+    
+
+
+@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
 def test_forward_pass(
     model_name, simulation_environment, single_batch_with_batchsize_64

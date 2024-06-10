@@ -451,20 +451,11 @@ from modelforge.potential import _Implemented_NNPs
 
 
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
-@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
-def test_dataset_neighborlist(model_name, dataset_name, datamodule_factory):
-    """Test the splitting of the dataset."""
+def test_dataset_neighborlist(model_name, single_batch_with_batchsize_64):
+    """Test the neighborlist."""
 
-    if dataset_name.lower().startswith("spice"):
-        print("using subset")
-        dataset = datamodule_factory(
-            dataset_name=dataset_name, version_select="nc_1000_v0_HCNOFClS"
-        )
-    else:
-        dataset = datamodule_factory(dataset_name=dataset_name)
-
-    train_dataloader = dataset.train_dataloader()
-    batch = next(iter(train_dataloader))
+    nnp_input = single_batch_with_batchsize_64.nnp_input
+    nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
     # test that the neighborlist is correctly generated
     # cast input and model to torch.float64
@@ -487,7 +478,95 @@ def test_dataset_neighborlist(model_name, dataset_name, datamodule_factory):
         simulation_environment="PyTorch",
         model_parameters=potential_parameters,
     )
-    model(batch.nnp_input)
+    model(nnp_input)
+
+    pair_list = nnp_input.pair_list
+    # pairlist is in ascending order in row 0
+    assert torch.all(pair_list[0, 1:] >= pair_list[0, :-1])
+
+    if model_name == "ANI1x":
+        # test the pairlist for the ANI potential (whith non-redundant atom pairs)
+        # TODO
+        pass
+    else:
+        # test the pairlist for message passing networks (with redundant atom pairs)
+        # first molecule is methane, check if bonds are correct
+        methan_bonds = pair_list[:, :20]
+
+        assert (
+            torch.any(
+                torch.eq(
+                    methan_bonds,
+                    torch.tensor(
+                        [
+                            [
+                                0,
+                                0,
+                                0,
+                                0,
+                                1,
+                                1,
+                                1,
+                                1,
+                                2,
+                                2,
+                                2,
+                                2,
+                                3,
+                                3,
+                                3,
+                                3,
+                                4,
+                                4,
+                                4,
+                                4,
+                            ],
+                            [
+                                1,
+                                2,
+                                3,
+                                4,
+                                0,
+                                2,
+                                3,
+                                4,
+                                0,
+                                1,
+                                3,
+                                4,
+                                0,
+                                1,
+                                2,
+                                4,
+                                0,
+                                1,
+                                2,
+                                3,
+                            ],
+                        ]
+                    ),
+                )
+                == False
+            ).item()
+            == False
+        )
+        # second molecule is ammonium, check if bonds are correct
+        ammonium_bonds = pair_list[:, 20:30]
+        assert (
+            torch.any(
+                torch.eq(
+                    ammonium_bonds,
+                    torch.tensor(
+                        [
+                            [5, 5, 5, 6, 6, 6, 7, 7, 7, 8],
+                            [6, 7, 8, 5, 7, 8, 5, 6, 8, 5],
+                        ]
+                    ),
+                )
+                == False
+            ).item()
+            == False
+        )
 
 
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())

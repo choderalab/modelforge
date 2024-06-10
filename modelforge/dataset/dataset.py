@@ -1099,7 +1099,7 @@ class DataModule(pl.LightningDataModule):
             return {
                 "energy": energies,
                 "idx": torch.tensor([item["idx"] for item in batch]),
-                "pair_list": pair_list,
+                "pair_list": all_pairs,
                 "nr_of_pairs_in_batch": nr_of_pairs,
             }
 
@@ -1124,6 +1124,7 @@ class DataModule(pl.LightningDataModule):
                     dataset[idx] = {"E": E}
             nr_of_pairs.extend(list(batch['nr_of_pairs_in_batch']))
             all_pairs.append(batch['pair_list'])
+            a = 7
 
         
         nr_of_pairs = torch.tensor(nr_of_pairs, dtype=torch.int32)

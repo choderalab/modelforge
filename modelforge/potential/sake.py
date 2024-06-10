@@ -87,7 +87,7 @@ class SAKECore(CoreNetwork):
         from .processing import FromAtomToMoleculeReduction
 
         log.debug("Initializing SAKE model.")
-        super().__init__(cutoff=cutoff)
+        super().__init__()
         self.nr_interaction_blocks = number_of_interaction_modules
         self.nr_heads = number_of_spatial_attention_heads
         self.max_Z = max_Z
@@ -550,28 +550,30 @@ class SAKE(BaseNetwork):
 
     def __init__(
         self,
-        max_Z: int = 100,
-        number_of_atom_features: int = 64,
-        number_of_interaction_modules: int = 6,
-        number_of_spatial_attention_heads: int = 4,
-        number_of_radial_basis_functions: int = 50,
-        cutoff: unit.Quantity = 5.0 * unit.angstrom,
+        max_Z: int,
+        number_of_atom_features: int,
+        number_of_interaction_modules: int,
+        number_of_spatial_attention_heads: int,
+        number_of_radial_basis_functions: int,
+        cutoff: unit.Quantity,
         epsilon: float = 1e-8,
     ):
         super().__init__()
+        from modelforge.utils.units import _convert
+
         self.core_module = SAKECore(
             max_Z=max_Z,
             number_of_atom_features=number_of_atom_features,
             number_of_interaction_modules=number_of_interaction_modules,
             number_of_spatial_attention_heads=number_of_spatial_attention_heads,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
-            cutoff=cutoff,
+            cutoff=_convert(cutoff),
             epsilon=epsilon,
         )
 
         self.only_unique_pairs = False  # NOTE: for pairlist
         self.input_preparation = InputPreparation(
-            cutoff=cutoff, only_unique_pairs=self.only_unique_pairs
+            cutoff=_convert(cutoff), only_unique_pairs=self.only_unique_pairs
         )
 
     def _config_prior(self):

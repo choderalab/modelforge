@@ -17,8 +17,21 @@ IN_MAC = platform == "darwin"
 
 def test_SAKE_init():
     """Test initialization of the SAKE neural network potential."""
+    from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
 
-    sake = SAKE()
+    model_name = "SAKE"
+
+    file_path = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
+    )
+    config = return_toml_config(file_path)
+
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+
+    sake = SAKE(**potential_parameters)
     assert sake is not None, "SAKE model should be initialized."
 
 
@@ -32,7 +45,21 @@ def test_sake_forward(single_batch_with_batchsize_64):
     # get methane input
     methane = single_batch_with_batchsize_64.nnp_input
 
-    sake = SAKE()
+    from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
+
+    model_name = "SAKE"
+
+    file_path = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
+    )
+    config = return_toml_config(file_path)
+
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+
+    sake = SAKE(**potential_parameters)
     energy = sake(methane).E
     nr_of_mols = methane.atomic_subsystem_indices.unique().shape[0]
 
@@ -85,7 +112,21 @@ def test_sake_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize_64
     # (clockwise when looking along the z-axis towards the origin)
     rotation_matrix = torch.tensor([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
 
-    sake = SAKE(number_of_atom_features=nr_atom_basis)  # only for preparing inputs
+    from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
+
+    model_name = "SAKE"
+
+    file_path = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
+    )
+    config = return_toml_config(file_path)
+
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameters["number_of_atom_features"] = nr_atom_basis
+    sake = SAKE(**potential_parameters)
 
     # get methane input
     methane = single_batch_with_batchsize_64.nnp_input
@@ -554,7 +595,21 @@ def test_sake_model_against_reference(single_batch_with_batchsize_1):
 def test_model_invariance(single_batch_with_batchsize_1):
     from dataclasses import replace
 
-    model = SAKE()
+    from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
+
+    model_name = "SAKE"
+
+    file_path = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
+    )
+    config = return_toml_config(file_path)
+
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+
+    model = SAKE(**potential_parameters)
     # get methane input
     methane = single_batch_with_batchsize_1.nnp_input
 

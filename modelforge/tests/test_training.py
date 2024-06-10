@@ -20,45 +20,41 @@ def test_train_with_lightning(model_name, dataset_name, include_force):
     Test the forward pass for a given model and dataset.
     """
 
-    from lightning import Trainer
-    from modelforge.train.training import TrainingAdapter
-    from modelforge.dataset.dataset import DataModule
+    from modelforge.train.training import return_toml_config, perform_training
+    from importlib import resources
+    from modelforge.tests.data import training_defaults
 
-    dm = DataModule(
-        name=dataset_name,
-        batch_size=512,
-        remove_self_energies=True,
-        version_select="nc_1000_v0",
+    file_path = (
+        resources.files(training_defaults)
+        / f"{model_name.lower()}_{dataset_name.lower()}.toml"
     )
-    dm.prepare_data()
-    dm.setup()
-    # Set up model
-    training_parameters = {"include_force": include_force}
-    model = NeuralNetworkPotentialFactory.create_nnp(
-        "training", model_name, training_parameters=training_parameters
-    )
+    config = return_toml_config(file_path)
+
     from pytorch_lightning.loggers import TensorBoardLogger
 
-    logger = TensorBoardLogger("tb_logs", name="training")
+    # Extract parameters
+    potential_config = config["potential"]
+    training_config = config["training"]
+    dataset_config = config["dataset"]
 
-    # Initialize PyTorch Lightning Trainer
-    trainer = Trainer(
-        max_epochs=2,
-        logger=logger,  # Add the logger here
-    )
+    training_config["include_force"] = include_force
 
-    # set mean/stddev for E_i
-    model.model.core_module.readout_module.E_i_mean = dm.dataset_statistics.E_i_mean
-    model.model.core_module.readout_module.E_i_stddev = dm.dataset_statistics.E_i_stddev
-
-    # Run training loop and validate
-    trainer.fit(
-        model,
-        train_dataloaders=dm.train_dataloader(),
-        val_dataloaders=dm.val_dataloader(),
+    trainer = perform_training(
+        potential_config=potential_config,
+        training_config=training_config,
+        dataset_config=dataset_config,
     )
     # save checkpoint
     trainer.save_checkpoint("test.chp")
+
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        use="training",
+        model_type=model_name,
+        model_parameters=potential_config["potential_parameters"],
+        training_parameters=training_config["training_parameters"],
+    )
+    from modelforge.train.training import TrainingAdapter
+
     model = TrainingAdapter.load_from_checkpoint("test.chp")
     assert type(model) is not None
 
@@ -68,8 +64,27 @@ def test_train_with_lightning(model_name, dataset_name, include_force):
 def test_loss(model_name, dataset_name, datamodule_factory):
     from loguru import logger as log
 
+    # read default parameters
+    from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import training_defaults
+
+    file_path = (
+        resources.files(training_defaults)
+        / f"{model_name.lower()}_{dataset_name.lower()}.toml"
+    )
+    config = return_toml_config(file_path)
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+
+    # inference model
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        use="inference",
+        model_type=model_name,
+        model_parameters=potential_parameters,
+    )
+
     dm = datamodule_factory(dataset_name=dataset_name)
-    model = NeuralNetworkPotentialFactory.create_nnp("inference", model_name)
 
     from modelforge.train.training import EnergyAndForceLoss
     import torch
@@ -87,9 +102,26 @@ def test_loss(model_name, dataset_name, datamodule_factory):
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 @pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_hypterparameter_tuning_with_ray(model_name, dataset_name, datamodule_factory):
+    from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import training_defaults
+
+    file_path = resources.files(training_defaults) / f"{model_name.lower()}_qm9.toml"
 
     dm = datamodule_factory(dataset_name=dataset_name)
-    model = NeuralNetworkPotentialFactory.create_nnp("training", model_name)
+
+    config = return_toml_config(file_path)
+
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+    training_parameters = config["training"].get("training_parameters", {})
+    # training model
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        use="training",
+        model_type=model_name,
+        model_parameters=potential_parameters,
+        training_parameters=training_parameters,
+    )
 
     model.tune_with_ray(
         train_dataloader=dm.train_dataloader(),

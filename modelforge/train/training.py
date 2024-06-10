@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from modelforge.potential.physnet import PhysNet, PhysNetNeuralNetworkData
     from modelforge.potential.schnet import SchNet, SchnetNeuralNetworkData
     from modelforge.potential.sake import SAKE
+    from modelforge.potential.utils import BatchData
 
 
 class Loss:
@@ -29,7 +30,7 @@ class Loss:
         self.model = model
 
     def _get_forces(
-        self, batch: BatchData, energies: Dict[str, torch.Tensor]
+        self, batch: "BatchData", energies: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
         """
         Computes the forces from a given batch using the model.
@@ -55,7 +56,7 @@ class Loss:
 
         return {"F_true": F_true, "F_predict": F_predict}
 
-    def _get_energies(self, batch: BatchData) -> Dict[str, torch.Tensor]:
+    def _get_energies(self, batch: "BatchData") -> Dict[str, torch.Tensor]:
         """
         Computes the energies from a given batch using the model.
 
@@ -73,10 +74,6 @@ class Loss:
         E_true = batch.metadata.E.to(torch.float32).squeeze(1)
         E_predict = self.model.forward(nnp_input).E
         return {"E_true": E_true, "E_predict": E_predict}
-
-
-def RMSELoss(yhat, y):
-    return torch.sqrt(torch.mean((yhat - y) ** 2))
 
 
 class EnergyAndForceLoss(Loss):
@@ -98,7 +95,7 @@ class EnergyAndForceLoss(Loss):
         self.include_force = include_force
         self.have_raised_warning = False
 
-    def compute_loss(self, batch: BatchData, loss_fn=F.l1_loss) -> torch.Tensor:
+    def compute_loss(self, batch: "BatchData", loss_fn=F.l1_loss) -> torch.Tensor:
         """
         Computes the weighted combined loss for energies and optionally forces.
 
@@ -142,22 +139,28 @@ class TrainingAdapter(pl.LightningModule):
         self,
         *,
         nnp_parameters: Dict[str, Any],
+        lr_scheduler_config: Dict[str, Union[str, int, float]],
+        lr: float,
         include_force: bool = False,
-        optimizer: Type[Optimizer] = torch.optim.Adam,
-        lr: float = 1e-3,
+        optimizer: Type[Optimizer] = torch.optim.AdamW,
     ):
         """
         Initializes the TrainingAdapter with the specified model and training configuration.
 
         Parameters
         ----------
-        model : Union[ANI2x, SchNet, PaiNN, PhysNet, SAKE]
-            The neural network potential model to be trained.
-        optimizer : Type[torch.optim.Optimizer], optional
-            The optimizer class to use for training, by default torch.optim.Adam.
-        lr : float, optional
-            The learning rate for the optimizer, by default 1e-3.
+        nnp_parameters : Dict[str, Any]
+            The parameters for the neural network potential model.
+        lr_scheduler_config : Dict[str, Union[str, int, float]]
+            The configuration for the learning rate scheduler.
+        lr : float
+            The learning rate for the optimizer.
+        include_force : bool, optional
+            Whether to include force in the loss function, by default False.
+        optimizer : Type[Optimizer], optional
+            The optimizer class to use for training, by default torch.optim.AdamW.
         """
+
         from typing import List
         from modelforge.potential import _Implemented_NNPs
 
@@ -178,6 +181,7 @@ class TrainingAdapter(pl.LightningModule):
         self.optimizer = optimizer
         self.learning_rate = lr
         self.loss = EnergyAndForceLoss(model=self.model, include_force=include_force)
+        self.lr_scheduler_config = lr_scheduler_config
         self.test_mse: List[float] = []
         self.val_mse: List[float] = []
 
@@ -208,7 +212,7 @@ class TrainingAdapter(pl.LightningModule):
         batch_size = y.size(0)
         return batch_size
 
-    def training_step(self, batch: BatchData, batch_idx: int) -> torch.Tensor:
+    def training_step(self, batch: "BatchData", batch_idx: int) -> torch.Tensor:
         """
         Training step to compute the MSE loss for a given batch.
 
@@ -229,7 +233,7 @@ class TrainingAdapter(pl.LightningModule):
         self.log("mse_train_loss", loss, on_step=True, prog_bar=True)
         return loss
 
-    def test_step(self, batch: BatchData, batch_idx: int) -> None:
+    def test_step(self, batch: "BatchData", batch_idx: int) -> None:
         """
         Test step to compute the RMSE loss for a given batch.
 
@@ -252,6 +256,12 @@ class TrainingAdapter(pl.LightningModule):
         self.test_mse.append(float(mse_loss))
 
     def on_test_epoch_end(self) -> None:
+        """
+        Calculates the root mean squared error (RMSE) of the test set and logs it to the progress bar.
+
+        This method is called at the end of each test epoch during training. It calculates the RMSE of the test set by taking the square root of the mean of the test mean squared error (MSE) values. The RMSE is then logged to the progress bar with the key "rmse_test_loss".
+        """
+
         import numpy as np
 
         rmse_loss = np.sqrt(np.mean(np.array(self.test_mse)))
@@ -262,7 +272,7 @@ class TrainingAdapter(pl.LightningModule):
             prog_bar=True,
         )
 
-    def validation_step(self, batch: BatchData, batch_idx: int) -> torch.Tensor:
+    def validation_step(self, batch: "BatchData", batch_idx: int) -> torch.Tensor:
         """
         Validation step to compute the RMSE loss and accumulate L1 loss across epochs.
 
@@ -322,23 +332,31 @@ class TrainingAdapter(pl.LightningModule):
         """
 
         optimizer = self.optimizer(self.model.parameters(), lr=self.learning_rate)
+
+        lr_scheduler_config = self.lr_scheduler_config
+        lr_scheduler = ReduceLROnPlateau(
+            optimizer,
+            mode=lr_scheduler_config["mode"],
+            factor=lr_scheduler_config["factor"],
+            patience=lr_scheduler_config["patience"],
+            cooldown=lr_scheduler_config["cooldown"],
+            min_lr=lr_scheduler_config["min_lr"],
+            threshold=lr_scheduler_config["threshold"],
+            threshold_mode="abs",
+        )
+
         lr_scheduler_config = {
-            "scheduler": ReduceLROnPlateau(
-                optimizer,
-                mode="min",
-                factor=0.1,
-                patience=10,
-                verbose=True,
-                cooldown=5,
-                min_lr=1e-8,
-                threshold=0.1,
-                threshold_mode="abs",
-            ),
+            "scheduler": lr_scheduler,
             "monitor": "rmse_val_loss",  # Name of the metric to monitor
             "interval": "epoch",
             "frequency": 1,
         }
         return {"optimizer": optimizer, "lr_scheduler": lr_scheduler_config}
+
+    def on_after_backward(self) -> None:
+        for name, p in self.named_parameters():
+            if p.grad is None:
+                print(name, p)
 
     def get_trainer(self):
         """
@@ -432,7 +450,7 @@ class TrainingAdapter(pl.LightningModule):
         run_config = RunConfig(
             checkpoint_config=CheckpointConfig(
                 num_to_keep=2,
-                checkpoint_score_attribute="ptl/val_loss",
+                checkpoint_score_attribute="rmse_val_loss",
                 checkpoint_score_order="min",
             ),
         )
@@ -497,7 +515,7 @@ class TrainingAdapter(pl.LightningModule):
         )
 
         tune_config = tune.TuneConfig(
-            metric="ptl/val_loss",
+            metric="rmse_val_loss",
             mode="min",
             scheduler=scheduler,
             num_samples=number_of_samples,
@@ -509,3 +527,207 @@ class TrainingAdapter(pl.LightningModule):
             tune_config=tune_config,
         )
         return tuner.fit()
+
+
+def return_toml_config(config_path: str):
+    """
+    Read a TOML configuration file and return the parsed configuration.
+
+    Parameters
+    ----------
+    config_path : str
+        The path to the TOML configuration file.
+
+    Returns
+    -------
+    dict
+        The parsed configuration from the TOML file.
+    """
+    import toml
+
+    # Read the TOML file
+    config = toml.load(config_path)
+    log.info(f"Reading config from : {config_path}")
+    return config
+
+
+def read_config_and_train(config_path: str):
+    """
+    Reads a TOML configuration file and performs training based on the parameters.
+
+    Parameters
+    ----------
+    config_path : str
+        Path to the TOML configuration file.
+    """
+    # Read the TOML file
+    config = return_toml_config(config_path)
+
+    # Extract parameters
+    # potential
+    potential_config = config["potential"]
+
+    # dataset
+    dataset_config = config["dataset"]
+
+    # training
+    training_config = config["training"]
+
+    # Call the perform_training function with extracted parameters
+    perform_training(
+        potential_config=potential_config,
+        training_config=training_config,
+        dataset_config=dataset_config,
+    )
+
+
+from lightning import Trainer
+
+
+def perform_training(
+    potential_config: Dict[str, Any],
+    training_config: Dict[str, Any],
+    dataset_config: Dict[str, Any],
+) -> Trainer:
+    """
+    Performs the training process for a neural network potential model.
+
+    Parameters
+    ----------
+    potential_config : Dict[str, Any], optional
+        Additional parameters for the potential model.
+    training_config : Dict[str, Any], optional
+        Additional parameters for the training process.
+    dataset_config : Dict[str, Any], optional
+        Additional parameters for the dataset.
+
+    Returns
+    -------
+    Trainer
+    """
+
+    from pytorch_lightning.loggers import TensorBoardLogger
+    from modelforge.dataset.utils import RandomRecordSplittingStrategy
+    from lightning import Trainer
+    from modelforge.potential import NeuralNetworkPotentialFactory
+    from modelforge.dataset.dataset import DataModule
+    from lightning.pytorch.callbacks import ModelSummary
+
+    save_dir = training_config.get("save_dir", "lightning_logs")
+    if save_dir == "lightning_logs":
+        log.info(f"Saving logs to default location: {save_dir}")
+    experiment_name = training_config.get("experiment_name", "exp")
+    if experiment_name == "experiment_name":
+        log.info(f"Saving logs in default dir: {experiment_name}")
+    model_name = potential_config["model_name"]
+    dataset_name = dataset_config["dataset_name"]
+    version_select = dataset_config.get("version_select", "latest")
+    if version_select == "latest":
+        log.info(f"Using default dataset version: {version_select}")
+    accelerator = training_config.get("accelerator", "cpu")
+    if accelerator == "cpu":
+        log.info(f"Using default accelerator: {accelerator}")
+    nr_of_epochs = training_config.get("nr_of_epochs", 10)
+    if nr_of_epochs == 10:
+        log.info(f"Using default number of epochs: {nr_of_epochs}")
+    num_nodes = training_config.get("num_nodes", 1)
+    if num_nodes == 1:
+        log.info(f"Using default number of nodes: {num_nodes}")
+    devices = training_config.get("devices", 1)
+    if devices == 1:
+        log.info(f"Using default device index/number: {devices}")
+    batch_size = training_config.get("batch_size", 128)
+    if batch_size == 128:
+        log.info(f"Using default batch size: {batch_size}")
+    remove_self_energies = dataset_config.get("remove_self_energies", False)
+    if remove_self_energies is False:
+        log.info(
+            f"Using default for removing self energies: Self energies are not removed"
+        )
+    early_stopping_config = training_config.get("early_stopping", None)
+    if early_stopping_config is None:
+        log.info(f"Using default: No early stopping performed")
+    num_workers = dataset_config.get("number_of_worker", 4)
+    if num_workers == 4:
+        log.info(
+            f"Using default number of workers for training data loader: {num_workers}"
+        )
+    pin_memory = dataset_config.get("pin_memory", False)
+    if pin_memory is False:
+        log.info(f"Using default value for pinned_memory: {pin_memory}")
+
+    # set up tensor board logger
+    logger = TensorBoardLogger(save_dir, name=experiment_name)
+
+    log.debug(
+        f"""
+Training {model_name} on {dataset_name}-{version_select} dataset with {accelerator}
+accelerator on {num_nodes} nodes for {nr_of_epochs} epochs.
+Experiments are saved to: {save_dir}/{experiment_name}.
+"""
+    )
+
+    log.debug(f"Using {potential_config} potential config")
+    log.debug(f"Using {training_config} training config")
+
+    # Set up dataset
+    dm = DataModule(
+        name=dataset_name,
+        batch_size=batch_size,
+        splitting_strategy=RandomRecordSplittingStrategy(),
+        remove_self_energies=remove_self_energies,
+        version_select=version_select,
+    )
+    # Set up model
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        use="training",
+        model_type=model_name,
+        model_parameters=potential_config["potential_parameters"],
+        training_parameters=training_config["training_parameters"],
+    )
+
+    # set up traininer
+    from lightning.pytorch.callbacks.early_stopping import EarlyStopping
+
+    # set up trainer
+    callbacks = [ModelSummary(max_depth=-1)]
+    if early_stopping_config:
+        callbacks.append(EarlyStopping(**early_stopping_config))
+
+    trainer = Trainer(
+        max_epochs=nr_of_epochs,
+        num_nodes=num_nodes,
+        devices=devices,
+        accelerator=accelerator,
+        logger=logger,  # Add the logger here
+        callbacks=callbacks,
+    )
+
+    dm.prepare_data()
+    dm.setup()
+
+    log.info(f"Setting E_i_mean and E_i_stddev for {model_name}")
+    log.info(f"E_i_mean: {dm.dataset_statistics.E_i_mean}")
+    log.info(f"E_i_stddev: {dm.dataset_statistics.E_i_stddev}")
+    model.model.core_module.readout_module.E_i_mean = torch.tensor(
+        [dm.dataset_statistics.E_i_mean], dtype=torch.float32
+    )
+    model.model.core_module.readout_module.E_i_stddev = torch.tensor(
+        [dm.dataset_statistics.E_i_stddev], dtype=torch.float32
+    )
+
+    # from modelforge.utils.misc import visualize_model
+
+    # visualize_model(dm, model_name)
+
+    # Run training loop and validate
+    trainer.fit(
+        model,
+        train_dataloaders=dm.train_dataloader(
+            num_workers=num_workers, pin_memory=pin_memory
+        ),
+        val_dataloaders=dm.val_dataloader(),
+    )
+    trainer.validate(model, dataloaders=dm.val_dataloader())
+    trainer.test(dataloaders=dm.test_dataloader())
+    return trainer

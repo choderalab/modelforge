@@ -745,20 +745,19 @@ class DatasetFactory:
         return TorchDataset(data.numpy_data, data._property_names)
 
 
-from torch.multiprocessing import Pool  
+from torch.multiprocessing import Pool
 from openff.units import unit
 
 
-def _process_single_data_point(args):  
-    (
-        i,
-        atomic_numbers,
-        positions,
-        single_atom_start_idxs_by_conf,
-        single_atom_end_idxs_by_conf,
-        self_energies,
-        calculate_distances_and_pairlist,
-    ) = args
+def _process_single_data_point(
+    i,
+    atomic_numbers,
+    positions,
+    single_atom_start_idxs_by_conf,
+    single_atom_end_idxs_by_conf,
+    self_energies,
+    calculate_distances_and_pairlist,
+):
 
     start_idx = single_atom_start_idxs_by_conf[i]
     end_idx = single_atom_end_idxs_by_conf[i]
@@ -777,7 +776,7 @@ def _process_single_data_point(args):
     pair_list = pairlist_output.pair_indices.to(dtype=torch.int16)
     nr_of_pairs = pair_list.shape[1]
 
-    return (pair_list, nr_of_pairs, ase)  
+    return (pair_list, nr_of_pairs, ase)
 
 
 class DataModule(pl.LightningDataModule):
@@ -1024,57 +1023,115 @@ class DataModule(pl.LightningDataModule):
     def _per_datapoint_operations(
         self, dataset, self_energies: "AtomicSelfEnergies"
     ) -> None:
-        from tqdm import tqdm
+        from torch.utils.data import DataLoader
+        from torch.utils.data import Dataset
+
+        class CustomDataset(Dataset):
+            def __init__(
+                self,
+                dataset,
+                self_energies,
+                calculate_distances_and_pairlist,
+                remove_self_energies,
+            ):
+                self.dataset = dataset
+                self.self_energies = self_energies
+                self.calculate_distances_and_pairlist = calculate_distances_and_pairlist
+                self.remove_self_energies = remove_self_energies
+                self.atomic_numbers = dataset.properties_of_interest["atomic_numbers"]
+                self.positions = dataset.properties_of_interest["positions"]
+                self.single_atom_start_idxs_by_conf = (
+                    dataset.single_atom_start_idxs_by_conf
+                )
+                self.single_atom_end_idxs_by_conf = dataset.single_atom_end_idxs_by_conf
+
+            def __len__(self):
+                return len(self.dataset)
+
+            def __getitem__(self, idx):
+                start_idx = self.single_atom_start_idxs_by_conf[idx]
+                end_idx = self.single_atom_end_idxs_by_conf[idx]
+                ase = torch.sum(
+                    self.self_energies.ase_tensor_for_indexing[
+                        self.atomic_numbers[start_idx:end_idx]
+                    ]
+                )
+
+                pairlist_output = self.calculate_distances_and_pairlist(
+                    positions=self.positions[start_idx:end_idx],
+                    atomic_subsystem_indices=torch.zeros(
+                        end_idx - start_idx,
+                        dtype=torch.int16,
+                    ),
+                )
+
+                pair_list = pairlist_output.pair_indices.to(dtype=torch.int16)
+                nr_of_pairs = pair_list.shape[1]
+
+                result = {
+                    "idx": idx,
+                    "pair_list": pair_list,
+                    "nr_of_pairs": nr_of_pairs,
+                    "ase": ase,
+                }
+
+                if self.remove_self_energies:
+                    result["energy"] = (
+                        self.dataset.properties_of_interest["E"][idx] - ase
+                    )
+
+                return result
+
+        def custom_collate_fn(batch):
+            all_pairs = []
+            nr_of_pairs = torch.zeros(size=(len(batch), 1), dtype=torch.int32)
+            energies = torch.zeros(size=(len(batch), 1), dtype=torch.float64)
+
+            for local_idx, item in enumerate(batch):
+                pair_list = item["pair_list"]
+                nr_of_pairs[local_idx] = item["nr_of_pairs"]
+                all_pairs.append(pair_list)
+
+                if "energy" in item:
+                    energies[local_idx] = item["energy"]
+
+
+            return {
+                "energy": energies,
+                "idx": torch.tensor([item["idx"] for item in batch]),
+                "pair_list": pair_list,
+                "nr_of_pairs_in_batch": nr_of_pairs,
+            }
 
         log.info("Precalculating pairlist for dataset")
         if self.remove_self_energies:
             log.info("Removing self energies from the dataset")
 
-        all_pairs = []
-        nr_of_pairs = torch.zeros(
-            size=(len(dataset.properties_of_interest["E"]) + 1, 1)
+        custom_dataset = CustomDataset(
+            dataset,
+            self_energies,
+            self.calculate_distances_and_pairlist,
+            self.remove_self_energies,
         )
-
-        # Collect necessary static data
-        atomic_numbers = dataset.properties_of_interest["atomic_numbers"]
-        positions = dataset.properties_of_interest["positions"]
-        single_atom_start_idxs_by_conf = dataset.single_atom_start_idxs_by_conf
-        single_atom_end_idxs_by_conf = dataset.single_atom_end_idxs_by_conf
-
-        args = [
-            (
-                i,
-                atomic_numbers,
-                positions,
-                single_atom_start_idxs_by_conf,
-                single_atom_end_idxs_by_conf,
-                self_energies,
-                self.calculate_distances_and_pairlist,
-            )
-            for i in range(len(dataset))
-        ] 
-
-        with Pool() as pool:  
-            results = list(
-                tqdm(
-                    pool.imap(_process_single_data_point, args, chunksize=128),
-                    total=len(args),
-                    desc="Process dataset",
-                )
-            ) 
-
-        for i, (pair_list, nr_pairs, ase) in enumerate(
-            results
-        ): 
-            nr_of_pairs[i + 1] = nr_pairs
-            all_pairs.append(pair_list)
+        data_loader = DataLoader(
+            custom_dataset, batch_size=128, num_workers=8, collate_fn=custom_collate_fn
+        )
+        all_pairs = []
+        nr_of_pairs = []
+        for batch in data_loader:
             if self.remove_self_energies:
-                dataset[i] = {"E": dataset.properties_of_interest["E"][i] - ase}
+                for E, idx in zip(batch['energy'], batch['idx']):
+                    dataset[idx] = {"E": E}
+            nr_of_pairs.extend(list(batch['nr_of_pairs_in_batch']))
+            all_pairs.append(batch['pair_list'])
 
+        
+        nr_of_pairs = torch.tensor(nr_of_pairs, dtype=torch.int32)
         nr_of_pairs_in_dataset = torch.cumsum(
             nr_of_pairs, dim=0, dtype=torch.int64
-        ).squeeze(1)
+        )
         dataset.properties_of_interest["pair_list"] = torch.cat(all_pairs, dim=1)
+
         dataset.properties_of_interest["number_of_pairs"] = nr_of_pairs_in_dataset
 
     def train_dataloader(

@@ -73,7 +73,7 @@ class TensorNetRepresentation(torch.nn.Module):
         min_distance: unit.Quantity,
         number_of_radial_basis_functions: int,
     ):
-        radial_symmetry_function = TensorNetRadialSymmetryFunction(
+        radial_symmetry_functizn = TensorNetRadialSymmetryFunction(
             number_of_radial_basis_functions,
             max_distance,
             min_distance,
@@ -85,7 +85,7 @@ class TensorNetRepresentation(torch.nn.Module):
         pass
 
 
-class ANIInteraction(torch.nn.Module):
+class TensorNetInteraction(torch.nn.Module):
     def __init__(self):
         pass
 
@@ -124,3 +124,8 @@ class TensorNetNeuralNetworkData(NeuralNetworkData):
         A 1D tensor containing the atomic numbers for atoms, used for identifying the atom types within the model. Shape: [num_atoms].
 
     """
+    def __init__(self):
+        pass
+
+    def forward(self):
+        pass

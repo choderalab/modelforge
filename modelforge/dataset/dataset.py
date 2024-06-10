@@ -1277,8 +1277,8 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
     offset = torch.tensor([0], dtype=torch.int32)
     pair_list_present = (
         True
-        if "pair_list" in conf_list[0]
-        and isinstance(conf_list[0]["pair_list"], torch.Tensor)
+        if hasattr(conf_list[0].nnp_input, "pair_list" )
+        and isinstance(conf_list[0].nnp_input.pair_list, torch.Tensor)
         else False
     )
 
@@ -1287,11 +1287,11 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
             ## pairlist
             # generate pairlist without padded values
             pair_list = (
-                conf["pair_list"].to(dtype=torch.int32)
+                conf.nnp_input.pair_list.to(dtype=torch.int32)
                 + offset
             )
             # update offset (for making sure the pair_list indices are pointing to the correct molecule)
-            offset += conf["atomic_numbers"].shape[0]
+            offset += conf.nnp_input.atomic_numbers.shape[0]
             ij_list.append(pair_list)
 
         atomic_numbers_list.append(conf.nnp_input.atomic_numbers)

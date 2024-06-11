@@ -8,7 +8,7 @@ from loguru import logger as log
 from openff.units import unit
 from pint import Quantity
 from typing import Union
-
+from modelforge.dataset.dataset import NNPInput
 
 @dataclass
 class NeuralNetworkData:
@@ -21,8 +21,6 @@ class NeuralNetworkData:
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
 
-
-from typing import NamedTuple
 
 
 import torch

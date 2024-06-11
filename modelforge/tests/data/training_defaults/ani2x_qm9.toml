@@ -33,6 +33,8 @@ early_stopping.monitor = "rmse_val_loss"
 early_stopping.min_delta = 0.001
 early_stopping.patience = 50
 
+stochastic_weight_averaging_config.swa_epoch_start=50
+stochastic_weight_averaging_config.swa_lrs=1e-2
 
 [dataset]
 dataset_name = "QM9"

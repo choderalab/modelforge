@@ -79,7 +79,10 @@ class Loss:
         )
         return {"E_true": E_true, "E_predict": E_predict}
 
+
 from typing import Optional
+
+
 class EnergyAndForceLoss(Loss):
     """
     Computes combined loss from energies and forces, with adjustable weighting.
@@ -99,7 +102,14 @@ class EnergyAndForceLoss(Loss):
         self.include_force = include_force
         self.have_raised_warning = False
 
-    def compute_loss(self, batch: "BatchData", loss_fn: Dict[str, torch.nn.Module]= {'energy_loss': F.l1_loss, 'force_loss':F.l1_loss}) -> torch.Tensor:
+    def compute_loss(
+        self,
+        batch: "BatchData",
+        loss_fn: Dict[str, torch.nn.Module] = {
+            "energy_loss": F.l1_loss,
+            "force_loss": F.l1_loss,
+        },
+    ) -> torch.Tensor:
         """
         Computes the weighted combined loss for energies and optionally forces.
 
@@ -122,18 +132,23 @@ class EnergyAndForceLoss(Loss):
             else:
                 forces = None
             loss = self._compute_loss(energies, forces, loss_fn)
-            
+
         return loss
 
-    def _compute_loss(self, energies: Dict[str, torch.Tensor], forces: Optional[Dict[str, torch.Tensor]], loss_fn: Dict[str, torch.nn.Module]) -> torch.Tensor:
-        
-        loss = self.energy_weight * loss_fn['energy_loss'](
-                energies["E_predict"], energies["E_true"]
-            ) 
+    def _compute_loss(
+        self,
+        energies: Dict[str, torch.Tensor],
+        forces: Optional[Dict[str, torch.Tensor]],
+        loss_fn: Dict[str, torch.nn.Module],
+    ) -> torch.Tensor:
+
+        loss = self.energy_weight * loss_fn["energy_loss"](
+            energies["E_predict"], energies["E_true"]
+        )
         if forces is None:
             return loss
-        
-        loss = loss + self.force_weight * loss_fn['force_loss'](
+
+        loss = loss + self.force_weight * loss_fn["force_loss"](
             forces["F_predict"], forces["F_true"]
         )
         return loss
@@ -244,7 +259,7 @@ class TrainingAdapter(pl.LightningModule):
             The loss tensor computed for the current training step.
         """
 
-        loss = self.loss.compute_loss(batch, F.mse_loss)
+        loss = self.loss.compute_loss(batch, { "energy_loss": F.mse_loss,"force_loss": F.mse_loss })
         self.log("mse_train_loss", loss, on_step=True, prog_bar=True)
         return loss
 
@@ -303,7 +318,8 @@ class TrainingAdapter(pl.LightningModule):
         torch.Tensor
             The loss tensor computed for the current validation step.
         """
-        mse_loss = self.loss.compute_loss(batch, F.mse_loss)
+        mse_loss = self.loss.compute_loss(batch, loss_fn = { "energy_loss": F.l1_loss,"force_loss": F.l1_loss }
+)
         self.val_mse.append(float(mse_loss))
         return mse_loss
 
@@ -372,38 +388,6 @@ class TrainingAdapter(pl.LightningModule):
         for name, p in self.named_parameters():
             if p.grad is None:
                 print(name, p)
-
-    def get_trainer(self):
-        """
-        Sets up and returns a PyTorch Lightning Trainer instance with configured logger and callbacks.
-
-        The trainer is configured with TensorBoard logging and an EarlyStopping callback to halt
-        the training process when the validation loss stops improving.
-
-        Returns
-        -------
-        Trainer
-            The configured PyTorch Lightning Trainer instance.
-        """
-
-        from lightning import Trainer
-        from lightning.pytorch.callbacks.early_stopping import EarlyStopping
-        from pytorch_lightning.loggers import TensorBoardLogger
-
-        # set up tensor board logger
-        logger = TensorBoardLogger("tb_logs", name="training")
-        early_stopping = EarlyStopping(
-            monitor="rmse_val_loss", min_delta=0.05, patience=20, verbose=True
-        )
-
-        return Trainer(
-            max_epochs=10_000,
-            num_nodes=1,
-            devices="auto",
-            accelerator="auto",
-            logger=logger,  # Add the logger here
-            callbacks=[early_stopping],
-        )
 
     def train_func(self):
         """
@@ -631,29 +615,38 @@ def perform_training(
     save_dir = training_config.get("save_dir", "lightning_logs")
     if save_dir == "lightning_logs":
         log.info(f"Saving logs to default location: {save_dir}")
+    
     experiment_name = training_config.get("experiment_name", "exp")
     if experiment_name == "experiment_name":
         log.info(f"Saving logs in default dir: {experiment_name}")
+    
     model_name = potential_config["model_name"]
     dataset_name = dataset_config["dataset_name"]
+    
     version_select = dataset_config.get("version_select", "latest")
     if version_select == "latest":
         log.info(f"Using default dataset version: {version_select}")
+    
     accelerator = training_config.get("accelerator", "cpu")
     if accelerator == "cpu":
         log.info(f"Using default accelerator: {accelerator}")
+    
     nr_of_epochs = training_config.get("nr_of_epochs", 10)
     if nr_of_epochs == 10:
         log.info(f"Using default number of epochs: {nr_of_epochs}")
+    
     num_nodes = training_config.get("num_nodes", 1)
     if num_nodes == 1:
         log.info(f"Using default number of nodes: {num_nodes}")
+    
     devices = training_config.get("devices", 1)
     if devices == 1:
         log.info(f"Using default device index/number: {devices}")
+    
     batch_size = training_config.get("batch_size", 128)
     if batch_size == 128:
         log.info(f"Using default batch size: {batch_size}")
+    
     remove_self_energies = dataset_config.get("remove_self_energies", False)
     if remove_self_energies is False:
         log.info(
@@ -662,6 +655,9 @@ def perform_training(
     early_stopping_config = training_config.get("early_stopping", None)
     if early_stopping_config is None:
         log.info(f"Using default: No early stopping performed")
+    
+    stochastic_weight_averaging_config = training_config.get("stochastic_weight_averaging_config", None)
+    
     num_workers = dataset_config.get("number_of_worker", 4)
     if num_workers == 4:
         log.info(
@@ -703,9 +699,14 @@ Experiments are saved to: {save_dir}/{experiment_name}.
 
     # set up traininer
     from lightning.pytorch.callbacks.early_stopping import EarlyStopping
+    from lightning.pytorch.callbacks.stochastic_weight_avg import (
+        StochasticWeightAveraging,
+    )
 
     # set up trainer
     callbacks = [ModelSummary(max_depth=-1)]
+    if stochastic_weight_averaging_config:
+        callbacks.append(StochasticWeightAveraging(**stochastic_weight_averaging_config))
     if early_stopping_config:
         callbacks.append(EarlyStopping(**early_stopping_config))
 

@@ -33,6 +33,9 @@ early_stopping.min_delta = 0.001
 early_stopping.patience = 50
 early_stopping.verbose = true
 
+stochastic_weight_averaging_config.swa_epoch_start=50
+stochastic_weight_averaging_config.swa_lrs=1e-2
+
 [dataset]
 dataset_name = "ANI1x"
 version_select = "nc_1000_v0"

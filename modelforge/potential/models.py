@@ -556,6 +556,7 @@ class InputPreparation(torch.nn.Module):
         super().__init__()
         from .models import Neighborlist
 
+        self.only_unique_pairs = only_unique_pairs
         self.calculate_distances_and_pairlist = Neighborlist(cutoff, only_unique_pairs)
 
     def prepare_inputs(self, data: Union[NNPInput, NamedTuple]):
@@ -579,17 +580,30 @@ class InputPreparation(torch.nn.Module):
         # general input manipulation
         positions = data.positions
         atomic_subsystem_indices = data.atomic_subsystem_indices
+        # calculate pairlist if none is provided
         if data.pair_list is None:
             pairlist_output = self.calculate_distances_and_pairlist(
                 positions=positions,
                 atomic_subsystem_indices=atomic_subsystem_indices,
                 pair_indices=None,
             )
+            pair_list = data.pair_list
         else:
+            # pairlist is provided, remove redundant pairs if requested
+            if self.only_unique_pairs:
+                i_indices = data.pair_list[0]
+                j_indices = data.pair_list[1]
+                unique_pairs_mask = i_indices < j_indices
+                i_final_pairs = i_indices[unique_pairs_mask]
+                j_final_pairs = j_indices[unique_pairs_mask]
+                pair_list = torch.stack((i_final_pairs, j_final_pairs))
+            else:
+                pair_list = data.pair_list
+            # only calculate d_ij and r_ij
             pairlist_output = self.calculate_distances_and_pairlist(
                 positions=positions,
                 atomic_subsystem_indices=atomic_subsystem_indices,
-                pair_indices=data.pair_list.to(torch.int64),
+                pair_indices=pair_list.to(torch.int64),
             )
 
         return pairlist_output

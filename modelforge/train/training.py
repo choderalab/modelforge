@@ -280,9 +280,9 @@ class TrainingAdapter(pl.LightningModule):
         """
 
         loss = self.loss.compute_loss(batch, self.training_and_validation_loss_fn)
-        self.log("E_train_loss", loss["force_loss"], on_step=True, prog_bar=True)
-        self.log("F_train_loss", loss["energy_loss"], on_step=True, prog_bar=True)
-        self.log("combined_loss", loss["combined_loss"], on_step=True, prog_bar=True)
+        self.log("E_train_loss", loss["energy_loss"], on_step=True, prog_bar=True, batch_size=self._log_batch_size(batch.metadata.E))
+        self.log("F_train_loss", loss["force_loss"], on_step=True, prog_bar=True, batch_size=self._log_batch_size(batch.metadata.E))
+        self.log("combined_loss", loss["combined_loss"], on_step=True, prog_bar=True, batch_size=self._log_batch_size(batch.metadata.E))
         return loss["combined_loss"]
 
     def test_step(self, batch: "BatchData", batch_idx: int) -> None:
@@ -351,10 +351,10 @@ class TrainingAdapter(pl.LightningModule):
         loss = self.loss.compute_loss(
             batch, loss_fn=self.training_and_validation_loss_fn
         )
-        self.log("E_val_loss", loss["force_loss"], on_step=True, prog_bar=True)
-        self.log("F_val_loss", loss["energy_loss"], on_step=True, prog_bar=True)
+        self.log("E_val_loss", loss["force_loss"], on_step=True, prog_bar=True, batch_size=self._log_batch_size(batch.metadata.E))
+        self.log("F_val_loss", loss["energy_loss"], on_step=True, prog_bar=True, batch_size=self._log_batch_size(batch.metadata.E))
         self.log(
-            "combined_val_loss", loss["combined_loss"], on_step=True, prog_bar=True
+            "combined_val_loss", loss["combined_loss"], on_step=True, prog_bar=True, batch_size=self._log_batch_size(batch.metadata.E)
         )
 
         self.val_mse.append(float(loss["combined_loss"].item()))

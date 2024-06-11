@@ -9,7 +9,7 @@ potential_parameters.shared_interactions = false
 model_name = "SchNet"
 
 [training]
-nr_of_epochs = 50
+nr_of_epochs = 2
 save_dir = "test"
 experiment_name = "your_experiment_name"
 accelerator = "cpu"

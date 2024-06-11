@@ -9,7 +9,7 @@ potential_parameters.angular_dist_divisions = 8
 model_name = "ANI2x"
 
 [training]
-nr_of_epochs = 50
+nr_of_epochs = 2
 save_dir = "test"
 experiment_name = "your_experiment_name"
 accelerator = "cpu"

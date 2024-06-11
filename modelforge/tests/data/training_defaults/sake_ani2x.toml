@@ -8,7 +8,7 @@ potential_parameters.number_of_spatial_attention_heads = 4
 model_name = "SAKE"
 
 [training]
-nr_of_epochs = 50
+nr_of_epochs = 2
 save_dir = "test"
 experiment_name = "experiment"
 accelerator = "cpu"

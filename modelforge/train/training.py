@@ -301,9 +301,9 @@ class TrainingAdapter(pl.LightningModule):
         None
             The results are logged and not directly returned.
         """
-        loss = self.loss.compute_loss(batch, loss_fn=self.test_loss_fn).detach()
+        loss = self.loss.compute_loss(batch, loss_fn=self.test_loss_fn)
 
-        self.test_mse.append(float(loss["combined_loss"]))
+        self.test_mse.append(float(loss["combined_loss"].detach()))
         self.log("E_test_loss", loss["force_loss"], on_step=True, prog_bar=True)
         self.log("F_test_loss", loss["energy_loss"], on_step=True, prog_bar=True)
         self.log(

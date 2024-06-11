@@ -30,8 +30,6 @@ def test_train_with_lightning(model_name, dataset_name, include_force):
     )
     config = return_toml_config(file_path)
 
-    from pytorch_lightning.loggers import TensorBoardLogger
-
     # Extract parameters
     potential_config = config["potential"]
     training_config = config["training"]

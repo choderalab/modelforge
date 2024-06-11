@@ -9,7 +9,7 @@ potential_parameters.shared_filters = false
 model_name = "PaiNN"
 
 [training]
-nr_of_epochs = 50
+nr_of_epochs = 2
 save_dir = "test"
 experiment_name = "exp_test"
 accelerator = "cpu"

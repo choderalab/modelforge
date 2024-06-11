@@ -73,9 +73,13 @@ class Loss:
         nnp_input = batch.nnp_input
         E_true = batch.metadata.E.to(torch.float32).squeeze(1)
         E_predict = self.model.forward(nnp_input).E
+        assert E_true.shape == E_predict.shape, (
+            f"Shapes of true and predicted energies do not match: "
+            f"{E_true.shape} != {E_predict.shape}"
+        )
         return {"E_true": E_true, "E_predict": E_predict}
 
-
+from typing import Optional
 class EnergyAndForceLoss(Loss):
     """
     Computes combined loss from energies and forces, with adjustable weighting.
@@ -95,7 +99,7 @@ class EnergyAndForceLoss(Loss):
         self.include_force = include_force
         self.have_raised_warning = False
 
-    def compute_loss(self, batch: "BatchData", loss_fn=F.l1_loss) -> torch.Tensor:
+    def compute_loss(self, batch: "BatchData", loss_fn: Dict[str, torch.nn.Module]= {'energy_loss': F.l1_loss, 'force_loss':F.l1_loss}) -> torch.Tensor:
         """
         Computes the weighted combined loss for energies and optionally forces.
 
@@ -113,14 +117,25 @@ class EnergyAndForceLoss(Loss):
         """
         with torch.set_grad_enabled(True):
             energies = self._get_energies(batch)
-            loss = self.energy_weight * loss_fn(
-                energies["E_predict"], energies["E_true"]
-            )
             if self.include_force:
                 forces = self._get_forces(batch, energies)
-                loss += self.force_weight * loss_fn(
-                    forces["F_predict"], forces["F_true"]
-                )
+            else:
+                forces = None
+            loss = self._compute_loss(energies, forces, loss_fn)
+            
+        return loss
+
+    def _compute_loss(self, energies: Dict[str, torch.Tensor], forces: Optional[Dict[str, torch.Tensor]], loss_fn: Dict[str, torch.nn.Module]) -> torch.Tensor:
+        
+        loss = self.energy_weight * loss_fn['energy_loss'](
+                energies["E_predict"], energies["E_true"]
+            ) 
+        if forces is None:
+            return loss
+        
+        loss = loss + self.force_weight * loss_fn['force_loss'](
+            forces["F_predict"], forces["F_true"]
+        )
         return loss
 
 

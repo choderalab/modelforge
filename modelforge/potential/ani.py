@@ -10,7 +10,7 @@ from modelforge.potential.models import CoreNetwork
 from modelforge.utils.prop import SpeciesAEV
 
 if TYPE_CHECKING:
-    from modelforge.potential.utils import NNPInput
+    from modelforge.dataset.dataset import NNPInput
 
     from .models import PairListOutputs
 
@@ -427,7 +427,7 @@ class ANIInteraction(nn.Module):
                 input_ = aev.index_select(0, midx)
                 output[midx] = model(input_).flatten()
 
-                #output.masked_scatter_(mask, model(input_).flatten())
+                # output.masked_scatter_(mask, model(input_).flatten())
 
         return output.view_as(species)
 
@@ -547,33 +547,35 @@ class ANI2xCore(CoreNetwork):
 
 
 from .models import InputPreparation, BaseNetwork
-from .utils import NNPInput
-
-
+from typing import Union
 class ANI2x(BaseNetwork):
     def __init__(
         self,
-        radial_max_distance: unit.Quantity = 5.1 * unit.angstrom,
-        radial_min_distanc: unit.Quantity = 0.8 * unit.angstrom, #NOTE: min distance? #FIXME
-        number_of_radial_basis_functions: int = 16,
-        angular_max_distance: unit.Quantity = 3.5 * unit.angstrom,
-        angular_min_distance: unit.Quantity = 0.8 * unit.angstrom,
-        angular_dist_divisions: int = 8,
-        angle_sections: int = 4,
+        radial_max_distance: Union[unit.Quantity, str],
+        radial_min_distance: Union[unit.Quantity, str],  # NOTE: min distance? #FIXME
+        number_of_radial_basis_functions: int,
+        angular_max_distance: Union[unit.Quantity, str],
+        angular_min_distance: Union[unit.Quantity, str],
+        angular_dist_divisions: int,
+        angle_sections: int,
     ) -> None:
         super().__init__()
+
+        from modelforge.utils.units import _convert
+
         self.core_module = ANI2xCore(
-            radial_max_distance,
-            radial_min_distanc,
+            _convert(radial_max_distance),
+            _convert(radial_min_distance),
             number_of_radial_basis_functions,
-            angular_max_distance,
-            angular_min_distance,
+            _convert(angular_max_distance),
+            _convert(angular_min_distance),
             angular_dist_divisions,
             angle_sections,
         )
         self.only_unique_pairs = True  # NOTE: for pairlist
         self.input_preparation = InputPreparation(
-            cutoff=radial_max_distance, only_unique_pairs=self.only_unique_pairs
+            cutoff=_convert(radial_max_distance),
+            only_unique_pairs=self.only_unique_pairs,
         )
 
     def _config_prior(self):

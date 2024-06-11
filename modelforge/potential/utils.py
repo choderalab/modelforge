@@ -8,7 +8,7 @@ from loguru import logger as log
 from openff.units import unit
 from pint import Quantity
 from typing import Union
-
+from modelforge.dataset.dataset import NNPInput
 
 @dataclass
 class NeuralNetworkData:
@@ -21,114 +21,6 @@ class NeuralNetworkData:
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
 
-
-from typing import NamedTuple
-
-
-@dataclass
-class NNPInput:
-    """
-    A dataclass to structure the inputs for neural network potentials.
-
-    Attributes
-    ----------
-    atomic_numbers : torch.Tensor
-        A 1D tensor containing atomic numbers for each atom in the system(s).
-        Shape: [num_atoms], where `num_atoms` is the total number of atoms across all systems.
-    positions : torch.Tensor
-        A 2D tensor of shape [num_atoms, 3], representing the XYZ coordinates of each atom.
-    atomic_subsystem_indices : torch.Tensor
-        A 1D tensor mapping each atom to its respective subsystem or molecule.
-        This allows for calculations involving multiple molecules or subsystems within the same batch.
-        Shape: [num_atoms].
-    total_charge : torch.Tensor
-        A tensor with the total charge of molecule.
-        Shape: [num_systems], where `num_systems` is the number of molecules.
-    """
-
-    atomic_numbers: torch.Tensor
-    positions: Union[torch.Tensor, Quantity]
-    atomic_subsystem_indices: torch.Tensor
-    total_charge: torch.Tensor
-
-    def to(
-        self,
-        *,
-        device: Optional[torch.device] = None,
-        dtype: Optional[torch.dtype] = None,
-    ):
-        """Move all tensors in this instance to the specified device/dtype."""
-
-        if device:
-            self.atomic_numbers = self.atomic_numbers.to(device)
-            self.positions = self.positions.to(device)
-            self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(device)
-            self.total_charge = self.total_charge.to(device)
-        if dtype:
-            self.positions = self.positions.to(dtype)
-        return self
-
-    def __post_init__(self):
-        # Set dtype and convert units if necessary
-        self.atomic_numbers = self.atomic_numbers.to(torch.int32)
-        self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(torch.int32)
-        self.total_charge = self.total_charge.to(torch.int32)
-
-        # Unit conversion for positions
-        if isinstance(self.positions, Quantity):
-            positions = self.positions.to(unit.nanometer).m
-            self.positions = torch.tensor(
-                positions, dtype=torch.float32, requires_grad=True
-            )
-
-        # Validate inputs
-        self._validate_inputs()
-
-    def _validate_inputs(self):
-        if self.atomic_numbers.dim() != 1:
-            raise ValueError("atomic_numbers must be a 1D tensor")
-        if self.positions.dim() != 2 or self.positions.size(1) != 3:
-            raise ValueError("positions must be a 2D tensor with shape [num_atoms, 3]")
-        if self.atomic_subsystem_indices.dim() != 1:
-            raise ValueError("atomic_subsystem_indices must be a 1D tensor")
-        if self.total_charge.dim() != 1:
-            raise ValueError("total_charge must be a 1D tensor")
-
-        # Optionally, check that the lengths match if required
-        if len(self.positions) != len(self.atomic_numbers):
-            raise ValueError(
-                "The size of atomic_numbers and the first dimension of positions must match"
-            )
-        if len(self.positions) != len(self.atomic_subsystem_indices):
-            raise ValueError(
-                "The size of atomic_subsystem_indices and the first dimension of positions must match"
-            )
-
-    def as_namedtuple(self) -> NamedTuple:
-        """Export the dataclass fields and values as a named tuple."""
-
-        import collections
-        from dataclasses import dataclass, fields
-
-        NNPInputTuple = collections.namedtuple(
-            "NNPInputTuple", [field.name for field in fields(self)]
-        )
-        return NNPInputTuple(*[getattr(self, field.name) for field in fields(self)])
-
-    def as_jax_namedtuple(self) -> NamedTuple:
-        """Export the dataclass fields and values as a named tuple.
-        Convert pytorch tensors to jax arrays."""
-
-        from dataclasses import dataclass, fields
-        import collections
-        from pytorch2jax.pytorch2jax import convert_to_jax
-
-        NNPInputTuple = collections.namedtuple(
-            "NNPInputTuple", [field.name for field in fields(self)]
-        )
-        return NNPInputTuple(
-            *[convert_to_jax(getattr(self, field.name)) for field in fields(self)]
-        )
 
 
 import torch
@@ -486,7 +378,6 @@ class AngularSymmetryFunction(nn.Module):
             self.register_buffer("ShfZ", ShfZ)
             self.register_buffer("ShfA", ShfA)
 
-
         # The length of angular subaev of a single species
         self.angular_sublength = self.ShfA.numel() * self.ShfZ.numel()
 
@@ -842,7 +733,7 @@ class SAKERadialBasisFunction(RadialBasisFunction):
         centers: torch.Tensor,
         scale_factors: torch.Tensor,
     ) -> torch.Tensor:
-        
+
         return torch.exp(
             -scale_factors
             * (
@@ -1023,7 +914,7 @@ def scatter_softmax(
         other_dim_size if (other_dim != dim) else dim_size
         for (other_dim, other_dim_size) in enumerate(src.shape)
     ]
-
+    index = index.to(torch.int64)
     zeros = torch.zeros(out_shape, dtype=src.dtype, device=device)
     max_value_per_index = zeros.scatter_reduce(
         dim, index, src, "amax", include_self=False

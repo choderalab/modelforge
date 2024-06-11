@@ -1,15 +1,45 @@
 def test_physnet_init():
 
     from modelforge.potential.physnet import PhysNet
+    from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
 
-    model = PhysNet()
+    model_name = "PhysNet"
+
+    file_path = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
+    )
+    config = return_toml_config(file_path)
+
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+
+    model = PhysNet(**potential_parameters)
 
 
 def test_physnet_forward(single_batch_with_batchsize_64):
     import torch
     from modelforge.potential.physnet import PhysNet
 
-    model = PhysNet(number_of_modules=1, number_of_interaction_residual=1)
+    # read default parameters
+    from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
+
+    model_name = "PhysNet"
+
+    file_path = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
+    )
+    config = return_toml_config(file_path)
+
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameters["number_of_modules"] = 1
+    potential_parameters["number_of_interaction_residual"] = 1
+
+    model = PhysNet(**potential_parameters)
     model = model.to(torch.float32)
     print(model)
     yhat = model(single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float32))

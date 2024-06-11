@@ -1,11 +1,12 @@
 import os
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, List, Literal, Optional, Union
+from typing import TYPE_CHECKING, Dict, List, Literal, Optional, Union, NamedTuple
 
 import numpy as np
 import pytorch_lightning as pl
 import torch
 from loguru import logger as log
+from openff.units import Quantity
 from torch.utils.data import DataLoader
 
 from modelforge.dataset.utils import RandomRecordSplittingStrategy, SplittingStrategy
@@ -23,6 +24,161 @@ class DatasetStatistics:
     atomic_self_energies_removed: bool = False
 
 
+@dataclass(frozen=False)
+class Metadata:
+    """
+    A NamedTuple to structure the inputs for neural network potentials.
+
+    Parameters
+    ----------
+    """
+
+    E: torch.Tensor
+    atomic_subsystem_counts: torch.Tensor
+    atomic_subsystem_indices_referencing_dataset: torch.Tensor
+    number_of_atoms: int
+    F: torch.Tensor = torch.tensor([], dtype=torch.float32)
+
+    def to(
+            self, device: Optional[torch.device] = None, dtype: Optional[torch.dtype] = None
+    ):
+        """Move all tensors in this instance to the specified device."""
+        if device:
+            self.E = self.E.to(device)
+            self.F = self.F.to(device)
+            self.atomic_subsystem_counts = self.atomic_subsystem_counts.to(device)
+            self.atomic_subsystem_indices_referencing_dataset = (
+                self.atomic_subsystem_indices_referencing_dataset.to(device)
+            )
+        if dtype:
+            self.E = self.E.to(dtype)
+            self.F = self.F.to(dtype)
+        return self
+
+@dataclass
+class NNPInput:
+    """
+    A dataclass to structure the inputs for neural network potentials.
+
+    Attributes
+    ----------
+    atomic_numbers : torch.Tensor
+        A 1D tensor containing atomic numbers for each atom in the system(s).
+        Shape: [num_atoms], where `num_atoms` is the total number of atoms across all systems.
+    positions : torch.Tensor
+        A 2D tensor of shape [num_atoms, 3], representing the XYZ coordinates of each atom.
+    atomic_subsystem_indices : torch.Tensor
+        A 1D tensor mapping each atom to its respective subsystem or molecule.
+        This allows for calculations involving multiple molecules or subsystems within the same batch.
+        Shape: [num_atoms].
+    total_charge : torch.Tensor
+        A tensor with the total charge of molecule.
+        Shape: [num_systems], where `num_systems` is the number of molecules.
+    """
+
+    atomic_numbers: torch.Tensor
+    positions: Union[torch.Tensor, Quantity]
+    atomic_subsystem_indices: torch.Tensor
+    total_charge: torch.Tensor
+    pair_list: Optional[torch.Tensor] = None
+
+    def to(
+            self,
+            *,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+    ):
+        """Move all tensors in this instance to the specified device/dtype."""
+
+        if device:
+            self.atomic_numbers = self.atomic_numbers.to(device)
+            self.positions = self.positions.to(device)
+            self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(device)
+            self.total_charge = self.total_charge.to(device)
+            if self.pair_list is not None:
+                self.pair_list = self.pair_list.to(device)
+        if dtype:
+            self.positions = self.positions.to(dtype)
+        return self
+
+    def __post_init__(self):
+        # Set dtype and convert units if necessary
+        self.atomic_numbers = self.atomic_numbers.to(torch.int32)
+        self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(torch.int32)
+        self.total_charge = self.total_charge.to(torch.int32)
+
+        # Unit conversion for positions
+        if isinstance(self.positions, Quantity):
+            positions = self.positions.to(unit.nanometer).m
+            self.positions = torch.tensor(
+                positions, dtype=torch.float32, requires_grad=True
+            )
+
+        # Validate inputs
+        self._validate_inputs()
+
+    def _validate_inputs(self):
+        if self.atomic_numbers.dim() != 1:
+            raise ValueError("atomic_numbers must be a 1D tensor")
+        if self.positions.dim() != 2 or self.positions.size(1) != 3:
+            raise ValueError("positions must be a 2D tensor with shape [num_atoms, 3]")
+        if self.atomic_subsystem_indices.dim() != 1:
+            raise ValueError("atomic_subsystem_indices must be a 1D tensor")
+        if self.total_charge.dim() != 1:
+            raise ValueError("total_charge must be a 1D tensor")
+
+        # Optionally, check that the lengths match if required
+        if len(self.positions) != len(self.atomic_numbers):
+            raise ValueError(
+                "The size of atomic_numbers and the first dimension of positions must match"
+            )
+        if len(self.positions) != len(self.atomic_subsystem_indices):
+            raise ValueError(
+                "The size of atomic_subsystem_indices and the first dimension of positions must match"
+            )
+
+    def as_namedtuple(self) -> NamedTuple:
+        """Export the dataclass fields and values as a named tuple."""
+
+        import collections
+        from dataclasses import dataclass, fields
+
+        NNPInputTuple = collections.namedtuple(
+            "NNPInputTuple", [field.name for field in fields(self)]
+        )
+        return NNPInputTuple(*[getattr(self, field.name) for field in fields(self)])
+
+    def as_jax_namedtuple(self) -> NamedTuple:
+        """Export the dataclass fields and values as a named tuple.
+        Convert pytorch tensors to jax arrays."""
+
+        from dataclasses import dataclass, fields
+        import collections
+        from pytorch2jax.pytorch2jax import convert_to_jax
+
+        NNPInputTuple = collections.namedtuple(
+            "NNPInputTuple", [field.name for field in fields(self)]
+        )
+        return NNPInputTuple(
+            *[convert_to_jax(getattr(self, field.name)) for field in fields(self)]
+        )
+
+
+@dataclass
+class BatchData:
+    nnp_input: NNPInput
+    metadata: Metadata
+
+    def to(
+            self,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+    ):
+        self.nnp_input = self.nnp_input.to(device=device, dtype=dtype)
+        self.metadata = self.metadata.to(device=device, dtype=dtype)
+        return self
+
+
 class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
     """
     Wraps a numpy dataset to make it compatible with PyTorch DataLoader.
@@ -37,8 +193,6 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         If True, converts properties to PyTorch tensors ahead of time. Default is False.
 
     """
-
-    # TODO: add support for general properties with given formats
 
     def __init__(
         self,
@@ -93,14 +247,16 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             )
 
         self.number_of_records = len(dataset["atomic_subsystem_counts"])
+        self.properties_of_interest["pair_list"] = None
         self.number_of_atoms = len(dataset["atomic_numbers"])
+
         single_atom_start_idxs_by_rec = np.concatenate(
-            [[0], np.cumsum(dataset["atomic_subsystem_counts"])]
+            [np.array([0]), np.cumsum(dataset["atomic_subsystem_counts"])]
         )
         # length: n_records + 1
 
         self.series_mol_start_idxs_by_rec = np.concatenate(
-            [[0], np.cumsum(dataset["n_confs"])]
+            [np.array([0]), np.cumsum(dataset["n_confs"])]
         )
         # length: n_records + 1
 
@@ -120,7 +276,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
 
         self.series_atom_start_idxs_by_conf = np.concatenate(
             [
-                [0],
+                np.array([0]),
                 np.cumsum(
                     np.repeat(dataset["atomic_subsystem_counts"], dataset["n_confs"])
                 ),
@@ -174,7 +330,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         for key, val in value.items():
             self.properties_of_interest[key][idx] = val
 
-    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+    def __getitem__(self, idx: int) -> BatchData:
         """
         Fetch a dictionary of the values for the properties of interest for a given conformer index.
 
@@ -185,17 +341,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
 
         Returns
         -------
-        Dictionary, contains:
-            - atomic_numbers: torch.Tensor, shape [n_atoms]
-                Atomic numbers for each atom in the molecule.
-            - positions: torch.Tensor, shape [n_atoms, 3]
-                Coordinates for each atom in the molecule.
-            - E: torch.Tensor, shape []
-                Scalar energy value for the molecule.
-            - idx: int
-                Index of the conformer in the dataset.
-            - atomic_subsystem_counts: torch.Tensor, shape [1]
-                Number of atoms in the conformer. Length one if __getitem__ is called with a single index, length batch_size if collate_conformers is used with DataLoader
+        BatchData instance representing the data for one conformer.
         """
         series_atom_start_idx = self.series_atom_start_idxs_by_conf[idx]
         series_atom_end_idx = self.series_atom_start_idxs_by_conf[idx + 1]
@@ -209,18 +355,34 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         ]
         E = self.properties_of_interest["E"][idx]
         F = self.properties_of_interest["F"][series_atom_start_idx:series_atom_end_idx]
+        total_charge = self.properties_of_interest["Q"][idx]
+        number_of_atoms = len(atomic_numbers)
+        if self.properties_of_interest["pair_list"] is None:
+            pair_list = None
+        else:
+            pair_list_indices_start = self.properties_of_interest["number_of_pairs"][idx]
+            pair_list_indices_end = self.properties_of_interest["number_of_pairs"][idx+1]
+            pair_list = self.properties_of_interest["pair_list"][:,pair_list_indices_start:pair_list_indices_end]
 
-        Q = self.properties_of_interest["Q"][idx]
+        nnp_input = NNPInput(
+            atomic_numbers=atomic_numbers,
+            positions=positions,
+            pair_list= pair_list,
+            total_charge=total_charge,
+            atomic_subsystem_indices=torch.zeros(number_of_atoms, dtype=torch.int32)
+        )
 
-        return {
-            "atomic_numbers": atomic_numbers,
-            "positions": positions,
-            "total_charge": Q,
-            "E": E,
-            "F": F,
-            "atomic_subsystem_counts": torch.tensor([atomic_numbers.shape[0]]),
-            "idx": idx,
-        }
+        metadata = Metadata(
+            E=E,
+            F=F,
+            atomic_subsystem_counts=torch.tensor([number_of_atoms], dtype=torch.int32),
+            atomic_subsystem_indices_referencing_dataset=torch.repeat_interleave(torch.tensor([idx], dtype=torch.int32),
+                                                                                 number_of_atoms),
+            number_of_atoms=number_of_atoms
+        )
+
+        return BatchData(nnp_input, metadata)
+
 
 
 class HDF5Dataset:
@@ -732,6 +894,7 @@ class DatasetFactory:
 
 
 from torch import nn
+from openff.units import unit
 
 
 class DataModule(pl.LightningDataModule):
@@ -740,6 +903,8 @@ class DataModule(pl.LightningDataModule):
         self,
         name: Literal["QM9", "ANI1X", "ANI2X", "SPICE114", "SPICE2", "SPICE114_OPENFF"],
         splitting_strategy: SplittingStrategy = RandomRecordSplittingStrategy(),
+        neighborlist_cutoff: unit.Quantity = 7.0 * unit.angstrom,
+        unique_pairs:bool = False,
         batch_size: int = 64,
         remove_self_energies: bool = True,
         atomic_self_energies: Optional[Dict[str, float]] = None,
@@ -802,6 +967,11 @@ class DataModule(pl.LightningDataModule):
         # make sure we can handle a path with a ~ in it
         self.local_cache_dir = os.path.expanduser(local_cache_dir)
         self.regenerate_cache = regenerate_cache
+        from modelforge.potential.models import Neighborlist
+
+        self.calculate_distances_and_pairlist = Neighborlist(
+            neighborlist_cutoff, only_unique_pairs=unique_pairs
+        )
 
     def prepare_data(
         self,
@@ -837,15 +1007,16 @@ class DataModule(pl.LightningDataModule):
 
         atomic_self_energies = AtomicSelfEnergies(atomic_self_energies)
 
-        # remove the self energies if requested
-        if self.remove_self_energies:
-            log.debug("Remove self energies ...")
-            self._process_self_energies(torch_dataset, atomic_self_energies)
+        log.debug("Process dataset ...")
+        self._process_dataset(torch_dataset, atomic_self_energies)
 
+        # # calculate neighborlist
+        # self._calculating_pairwise_properties(torch_dataset)
         # calculate the dataset statistic of the dataset
         # This is done __after__ self energies are removed (if requested)
         from modelforge.dataset.utils import calculate_mean_and_variance
 
+        # FIXME: this wont work for a setup on multiple devices
         stats = calculate_mean_and_variance(torch_dataset)
         self.dataset_statistics = DatasetStatistics(
             E_i_stddev=stats["Ei_stddev"],
@@ -861,7 +1032,7 @@ class DataModule(pl.LightningDataModule):
         """Create a PyTorch dataset from the provided dataset instance."""
         return DatasetFactory().create_dataset(dataset)
 
-    def _process_self_energies(
+    def _process_dataset(
         self, torch_dataset: TorchDataset, atomic_self_energies: "AtomicSelfEnergies"
     ) -> None:
         """Calculate and subtract self energies from the dataset."""
@@ -871,7 +1042,7 @@ class DataModule(pl.LightningDataModule):
             atomic_self_energies = AtomicSelfEnergies(
                 self.calculate_self_energies(torch_dataset)
             )
-        self._subtract_self_energies(torch_dataset, atomic_self_energies)
+        self._per_datapoint_operations(torch_dataset, atomic_self_energies)
         self._save_self_energies(atomic_self_energies)
 
     def _normalize_dataset(self, torch_dataset, stats: Dict[str, float]) -> None:
@@ -968,7 +1139,26 @@ class DataModule(pl.LightningDataModule):
             torch_dataset=torch_dataset, collate_fn=collate_fn
         )
 
-    def _subtract_self_energies(
+    # def _calculating_pairwise_properties(self, dataset):
+    #     from tqdm import tqdm
+
+    #     log.info(
+    #         f"Calculate neighborlist with {self.calculate_distances_and_pairlist} cutoff"
+    #     )
+    #     print(dataset.properties_of_interest.keys())
+    #     for i in tqdm(range(len(dataset)), desc="Calculate neighborlist"):
+    #         a = dataset[i]
+    #         start_idx = dataset.single_atom_start_idxs_by_conf[i]
+    #         end_idx = dataset.single_atom_end_idxs_by_conf[i]
+    #         pairlist_output = self.calculate_distances_and_pairlist(
+    #             dataset.properties_of_interest["positions"][start_idx:end_idx],
+    #             torch.zeros(
+    #                 end_idx - start_idx,
+    #                 dtype=torch.float32,
+    #             ),
+    #         )
+
+    def _per_datapoint_operations(
         self, dataset, self_energies: "AtomicSelfEnergies"
     ) -> None:
         """
@@ -983,19 +1173,48 @@ class DataModule(pl.LightningDataModule):
 
         from tqdm import tqdm
 
-        log.info("Removing self energies from the dataset")
-        for i in tqdm(range(len(dataset)), desc="Removing Self Energies"):
+        # remove the self energies if requested
+        log.info('Precalculating pairlist for dataset')
+        if self.remove_self_energies:
+            log.info("Removing self energies from the dataset")
+
+        all_pairs = []
+        nr_of_pairs = torch.zeros(size=(len(dataset.properties_of_interest["E"])+1,1))
+        for i in tqdm(range(len(dataset)), desc="Process dataset"):
             start_idx = dataset.single_atom_start_idxs_by_conf[i]
             end_idx = dataset.single_atom_end_idxs_by_conf[i]
-
             energy = torch.sum(
                 self_energies.ase_tensor_for_indexing[
                     dataset.properties_of_interest["atomic_numbers"][start_idx:end_idx]
                 ]
             )
-            dataset[i] = {"E": dataset.properties_of_interest["E"][i] - energy}
 
-    def train_dataloader(self) -> DataLoader:
+            # perform pairlist calculation
+            pairlist_output = self.calculate_distances_and_pairlist(
+                positions=dataset.properties_of_interest["positions"][
+                    start_idx:end_idx
+                ],
+                atomic_subsystem_indices=torch.zeros(
+                    end_idx - start_idx,
+                    dtype=torch.int16,
+                ),
+            )
+
+            pair_list = pairlist_output.pair_indices.to(dtype=torch.int16)
+            nr_of_pairs[i+1] = pair_list.shape[1]    # store the number of pairs for each molecule                                # starting at zero for indexing with [nr_of_pairs[i-1]:nr_of_pairs[i]]
+            all_pairs.append(pair_list)
+
+            if self.remove_self_energies:
+                dataset[i] = {"E": dataset.properties_of_interest["E"][i] - energy}
+
+        nr_of_pairs_in_dataset = torch.cumsum(nr_of_pairs, dim=0, dtype=torch.int64).squeeze(1)
+        # Determine N (number of tensors) and K (maximum M)
+        dataset.properties_of_interest["pair_list"] = torch.cat(all_pairs, dim=1)
+        dataset.properties_of_interest["number_of_pairs"] = nr_of_pairs_in_dataset
+
+    def train_dataloader(
+        self, num_workers: int = 4, shuffle: bool = True, pin_memory: bool = False
+    ) -> DataLoader:
         """
         Create a DataLoader for the training dataset.
 
@@ -1008,11 +1227,12 @@ class DataModule(pl.LightningDataModule):
             self.train_dataset,
             batch_size=self.batch_size,
             collate_fn=collate_conformers,
-            num_workers=4,
-            shuffle=True,
+            num_workers=num_workers,
+            shuffle=shuffle,
+            pin_memory=pin_memory,
         )
 
-    def val_dataloader(self) -> DataLoader:
+    def val_dataloader(self, num_workers: int = 4) -> DataLoader:
         """
         Create a DataLoader for the validation dataset.
 
@@ -1025,7 +1245,7 @@ class DataModule(pl.LightningDataModule):
             self.val_dataset,
             batch_size=self.batch_size,
             collate_fn=collate_conformers,
-            num_workers=4,
+            num_workers=num_workers,
         )
 
     def test_dataloader(self) -> DataLoader:
@@ -1045,52 +1265,73 @@ class DataModule(pl.LightningDataModule):
 from typing import Tuple
 
 
-def collate_conformers(conf_list: List[Dict[str, torch.Tensor]]) -> "BatchData":
-    # TODO: once TorchDataset is reimplemented for general properties, reimplement this function using formats too.
-    """Concatenate the Z, R, and E tensors from a list of molecules into a single tensor each, and return a new dictionary with the concatenated tensors."""
-    from modelforge.potential.utils import BatchData, Metadata, NNPInput
-
-    Z_list = []  # nuclear charges/atomic numbers
-    R_list = []  # positions
-    F_list = []  # forces
+def collate_conformers(conf_list: List[BatchData]) -> BatchData:
+    """Collate a list of BatchData instances with one conformer each into a single BatchData instance."""
+    atomic_numbers_list = []
+    positions_list = []
+    total_charge_list = []
     E_list = []  # total energy
-    Q_list = []  # total charge
-    atomic_subsystem_counts = []
-    atomic_subsystem_indices = []
-    atomic_subsystem_indices_referencing_dataset = []
+    F_list = []  # forces
+    ij_list = []
+    atomic_subsystem_counts_list = []
+    atomic_subsystem_indices_referencing_dataset_list = []
+
+    offset = torch.tensor([0], dtype=torch.int32)
+    pair_list_present = (
+        True
+        if hasattr(conf_list[0].nnp_input, "pair_list" )
+        and isinstance(conf_list[0].nnp_input.pair_list, torch.Tensor)
+        else False
+    )
+
     for idx, conf in enumerate(conf_list):
-        Z_list.append(conf["atomic_numbers"])
-        R_list.append(conf["positions"])
-        E_list.append(conf["E"])
-        F_list.append(conf["F"])
-        Q_list.append(conf["total_charge"])
-        atomic_subsystem_counts.extend(conf["atomic_subsystem_counts"])
-        atomic_subsystem_indices.extend([idx] * conf["atomic_subsystem_counts"][0])
-        atomic_subsystem_indices_referencing_dataset.extend(
-            [conf["idx"]] * conf["atomic_subsystem_counts"][0]
-        )
-    atomic_numbers_cat = torch.cat(Z_list)
-    total_charge_cat = torch.cat(Q_list)
-    positions_cat = torch.cat(R_list).requires_grad_(True)
-    F_cat = torch.cat(F_list).to(torch.float64)
-    E_stack = torch.stack(E_list)
+        if pair_list_present:
+            ## pairlist
+            # generate pairlist without padded values
+            pair_list = (
+                conf.nnp_input.pair_list.to(dtype=torch.int32)
+                + offset
+            )
+            # update offset (for making sure the pair_list indices are pointing to the correct molecule)
+            offset += conf.nnp_input.atomic_numbers.shape[0]
+            ij_list.append(pair_list)
+
+        atomic_numbers_list.append(conf.nnp_input.atomic_numbers)
+        positions_list.append(conf.nnp_input.positions)
+        total_charge_list.append(conf.nnp_input.total_charge)
+        E_list.append(conf.metadata.E)
+        F_list.append(conf.metadata.F)
+        atomic_subsystem_counts_list.append(conf.metadata.atomic_subsystem_counts)
+        atomic_subsystem_indices_referencing_dataset_list.append(
+            conf.metadata.atomic_subsystem_indices_referencing_dataset)
+
+
+
+    atomic_subsystem_counts = torch.cat(atomic_subsystem_counts_list)
+    atomic_subsystem_indices = torch.repeat_interleave(torch.arange(len(conf_list), dtype=torch.int32), atomic_subsystem_counts)
+    atomic_subsystem_indices_referencing_dataset = torch.cat(atomic_subsystem_indices_referencing_dataset_list)
+    atomic_numbers = torch.cat(atomic_numbers_list)
+    total_charge = torch.cat(total_charge_list)
+    positions = torch.cat(positions_list).requires_grad_(True)
+    F = torch.cat(F_list).to(torch.float64)
+    E = torch.stack(E_list)
+    if pair_list_present:
+        IJ_cat = torch.cat(ij_list, dim=1).to(torch.int64)
+    else:
+        IJ_cat = None
+
     nnp_input = NNPInput(
-        atomic_numbers=atomic_numbers_cat,
-        positions=positions_cat,
-        total_charge=total_charge_cat,
-        atomic_subsystem_indices=torch.tensor(
-            atomic_subsystem_indices, dtype=torch.int32
-        ),
+        atomic_numbers=atomic_numbers,
+        positions=positions,
+        total_charge=total_charge,
+        atomic_subsystem_indices=atomic_subsystem_indices,
+        pair_list=IJ_cat,
     )
     metadata = Metadata(
-        E=E_stack,
-        F=F_cat,
-        atomic_subsystem_counts=torch.tensor(
-            atomic_subsystem_counts, dtype=torch.int32
-        ),
-        atomic_subsystem_indices_referencing_dataset=torch.tensor(
-            atomic_subsystem_indices_referencing_dataset, dtype=torch.int32
-        ),
-        number_of_atoms=atomic_numbers_cat.numel(),
+        E=E,
+        F=F,
+        atomic_subsystem_counts=atomic_subsystem_counts,
+        atomic_subsystem_indices_referencing_dataset=atomic_subsystem_indices_referencing_dataset,
+        number_of_atoms=atomic_numbers.numel(),
     )
     return BatchData(nnp_input, metadata)

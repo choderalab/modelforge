@@ -903,6 +903,7 @@ class DataModule(pl.LightningDataModule):
         name: Literal["QM9", "ANI1X", "ANI2X", "SPICE114", "SPICE2", "SPICE114_OPENFF"],
         splitting_strategy: SplittingStrategy = RandomRecordSplittingStrategy(),
         neighborlist_cutoff: unit.Quantity = 7.0 * unit.angstrom,
+        unique_pairs:bool = False,
         batch_size: int = 64,
         remove_self_energies: bool = True,
         atomic_self_energies: Optional[Dict[str, float]] = None,
@@ -968,7 +969,7 @@ class DataModule(pl.LightningDataModule):
         from modelforge.potential.models import Neighborlist
 
         self.calculate_distances_and_pairlist = Neighborlist(
-            neighborlist_cutoff, only_unique_pairs=False
+            neighborlist_cutoff, only_unique_pairs=unique_pairs
         )
 
     def prepare_data(

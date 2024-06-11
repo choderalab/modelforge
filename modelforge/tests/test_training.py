@@ -91,7 +91,8 @@ def test_energy_loss_only(mock_model, mock_batch_data):
     loss_calculator = EnergyAndForceLoss(model=mock_model, include_force=False)
     loss = loss_calculator.compute_loss(mock_batch_data, loss_fn={ 'energy_loss': F.l1_loss,'force_loss': F.l1_loss })
     expected_loss = torch.tensor(2.0)  # The expected L1 loss between predicted and true energies
-    assert torch.isclose(loss, expected_loss), f"Expected {expected_loss.item()} but got {loss.item()}"
+    assert torch.isclose(loss['combined_loss'], expected_loss), f"Expected {expected_loss.item()} but got {loss.item()}"
+    assert torch.isclose(loss['energy_loss'], expected_loss), f"Expected {expected_loss.item()} but got {loss.item()}"
     
     loss_calculator = EnergyAndForceLoss(model=mock_model, include_force=True)
     energies = {
@@ -99,7 +100,7 @@ def test_energy_loss_only(mock_model, mock_batch_data):
         "E_predict": torch.tensor([[-10.0], [10.0]])
     }
     loss = loss_calculator._compute_loss(energies, None, {'energy_loss': F.l1_loss})
-    assert torch.isclose(loss, expected_loss), f"Expected {expected_loss.item()} but got {loss.item()}"
+    assert torch.isclose(loss['combined_loss'], expected_loss), f"Expected {expected_loss.item()} but got {loss.item()}"
 
 def test_energy_and_force_loss(mock_model):
     from modelforge.train.training import EnergyAndForceLoss
@@ -116,7 +117,7 @@ def test_energy_and_force_loss(mock_model):
     expected_energy_loss = F.mse_loss(energies["E_predict"], energies["E_true"])
     expected_force_loss = F.mse_loss(forces["F_predict"], forces["F_true"])
     expected_total_loss = expected_energy_loss + expected_force_loss
-    assert torch.isclose(loss, expected_total_loss), f"Expected {expected_total_loss.item()} but got {loss.item()}"
+    assert torch.isclose(loss['combined_loss'], expected_total_loss), f"Expected {expected_total_loss.item()} but got {loss.item()}"
 
 @pytest.mark.parametrize("model_name", ["SchNet"])
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())

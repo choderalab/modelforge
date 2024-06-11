@@ -10,7 +10,7 @@ from modelforge.potential.models import CoreNetwork
 from modelforge.utils.prop import SpeciesAEV
 
 if TYPE_CHECKING:
-    from modelforge.potential.utils import NNPInput
+    from modelforge.dataset.dataset import NNPInput
 
     from .models import PairListOutputs
 

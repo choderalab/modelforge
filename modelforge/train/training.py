@@ -140,18 +140,26 @@ class EnergyAndForceLoss(Loss):
         energies: Dict[str, torch.Tensor],
         forces: Optional[Dict[str, torch.Tensor]],
         loss_fn: Dict[str, torch.nn.Module],
-    ) -> torch.Tensor:
+    ) -> Dict[str, torch.Tensor]:
 
-        loss = self.energy_weight * loss_fn["energy_loss"](
+        E_loss = self.energy_weight * loss_fn["energy_loss"](
             energies["E_predict"], energies["E_true"]
         )
         if forces is None:
-            return loss
+            return {"combined_loss": E_loss, "energy_loss": E_loss, "force_loss": 0}
 
-        loss = loss + self.force_weight * loss_fn["force_loss"](
+        F_loss = self.force_weight * loss_fn["force_loss"](
             forces["F_predict"], forces["F_true"]
         )
-        return loss
+
+        # combined loss with weights
+        combined_loss = self.energy_weight * E_loss + self.force_weight * F_loss
+
+        return {
+            "combined_loss": combined_loss,
+            "energy_loss": E_loss,
+            "force_loss": F_loss,
+        }
 
 
 from torch.optim import Optimizer
@@ -214,6 +222,15 @@ class TrainingAdapter(pl.LightningModule):
         self.lr_scheduler_config = lr_scheduler_config
         self.test_mse: List[float] = []
         self.val_mse: List[float] = []
+        self.training_and_validation_loss_fn = {
+            "energy_loss": F.mse_loss,
+            "force_loss": F.mse_loss,
+        }
+        self.test_loss_fn = {"energy_loss": F.mse_loss, "force_loss": F.mse_loss}
+        log.info(
+            f"Training & validation loss fn: {self.training_and_validation_loss_fn}"
+        )
+        log.info(f"Test loss fn: {self.test_loss_fn}")
 
     def config_prior(self):
         """
@@ -259,9 +276,11 @@ class TrainingAdapter(pl.LightningModule):
             The loss tensor computed for the current training step.
         """
 
-        loss = self.loss.compute_loss(batch, { "energy_loss": F.mse_loss,"force_loss": F.mse_loss })
-        self.log("mse_train_loss", loss, on_step=True, prog_bar=True)
-        return loss
+        loss = self.loss.compute_loss(batch, self.training_and_validation_loss_fn)
+        self.log("E_train_loss", loss["force_loss"], on_step=True, prog_bar=True)
+        self.log("F_train_loss", loss["energy_loss"], on_step=True, prog_bar=True)
+        self.log("combined_loss", loss["combined_loss"], on_step=True, prog_bar=True)
+        return loss["combined_loss"]
 
     def test_step(self, batch: "BatchData", batch_idx: int) -> None:
         """
@@ -282,8 +301,14 @@ class TrainingAdapter(pl.LightningModule):
         None
             The results are logged and not directly returned.
         """
-        mse_loss = self.loss.compute_loss(batch, F.mse_loss).detach()
-        self.test_mse.append(float(mse_loss))
+        loss = self.loss.compute_loss(batch, loss_fn=self.test_loss_fn).detach()
+
+        self.test_mse.append(float(loss["combined_loss"]))
+        self.log("E_test_loss", loss["force_loss"], on_step=True, prog_bar=True)
+        self.log("F_test_loss", loss["energy_loss"], on_step=True, prog_bar=True)
+        self.log(
+            "combined_test_loss", loss["combined_loss"], on_step=True, prog_bar=True
+        )
 
     def on_test_epoch_end(self) -> None:
         """
@@ -318,10 +343,16 @@ class TrainingAdapter(pl.LightningModule):
         torch.Tensor
             The loss tensor computed for the current validation step.
         """
-        mse_loss = self.loss.compute_loss(batch, loss_fn = { "energy_loss": F.l1_loss,"force_loss": F.l1_loss }
-)
-        self.val_mse.append(float(mse_loss))
-        return mse_loss
+        loss = self.loss.compute_loss(
+            batch, loss_fn=self.training_and_validation_loss_fn
+        )
+        self.log("E_val_loss", loss["force_loss"], on_step=True, prog_bar=True)
+        self.log("F_val_loss", loss["energy_loss"], on_step=True, prog_bar=True)
+        self.log(
+            "combined_val_loss", loss["combined_loss"], on_step=True, prog_bar=True
+        )
+
+        self.val_mse.append(float(loss["combined_loss"].item()))
 
     def on_after_backward(self):
         # Log histograms of weights and biases after each backward pass
@@ -345,6 +376,7 @@ class TrainingAdapter(pl.LightningModule):
             log.info(f"Current learning rate: {sch.get_last_lr()}")
         except AttributeError:
             pass
+
         self.log(
             "rmse_val_loss", rmse_loss, on_epoch=True, prog_bar=True, sync_dist=True
         )
@@ -615,38 +647,38 @@ def perform_training(
     save_dir = training_config.get("save_dir", "lightning_logs")
     if save_dir == "lightning_logs":
         log.info(f"Saving logs to default location: {save_dir}")
-    
+
     experiment_name = training_config.get("experiment_name", "exp")
     if experiment_name == "experiment_name":
         log.info(f"Saving logs in default dir: {experiment_name}")
-    
+
     model_name = potential_config["model_name"]
     dataset_name = dataset_config["dataset_name"]
-    
+
     version_select = dataset_config.get("version_select", "latest")
     if version_select == "latest":
         log.info(f"Using default dataset version: {version_select}")
-    
+
     accelerator = training_config.get("accelerator", "cpu")
     if accelerator == "cpu":
         log.info(f"Using default accelerator: {accelerator}")
-    
+
     nr_of_epochs = training_config.get("nr_of_epochs", 10)
     if nr_of_epochs == 10:
         log.info(f"Using default number of epochs: {nr_of_epochs}")
-    
+
     num_nodes = training_config.get("num_nodes", 1)
     if num_nodes == 1:
         log.info(f"Using default number of nodes: {num_nodes}")
-    
+
     devices = training_config.get("devices", 1)
     if devices == 1:
         log.info(f"Using default device index/number: {devices}")
-    
+
     batch_size = training_config.get("batch_size", 128)
     if batch_size == 128:
         log.info(f"Using default batch size: {batch_size}")
-    
+
     remove_self_energies = dataset_config.get("remove_self_energies", False)
     if remove_self_energies is False:
         log.info(
@@ -655,9 +687,11 @@ def perform_training(
     early_stopping_config = training_config.get("early_stopping", None)
     if early_stopping_config is None:
         log.info(f"Using default: No early stopping performed")
-    
-    stochastic_weight_averaging_config = training_config.get("stochastic_weight_averaging_config", None)
-    
+
+    stochastic_weight_averaging_config = training_config.get(
+        "stochastic_weight_averaging_config", None
+    )
+
     num_workers = dataset_config.get("number_of_worker", 4)
     if num_workers == 4:
         log.info(
@@ -706,7 +740,9 @@ Experiments are saved to: {save_dir}/{experiment_name}.
     # set up trainer
     callbacks = [ModelSummary(max_depth=-1)]
     if stochastic_weight_averaging_config:
-        callbacks.append(StochasticWeightAveraging(**stochastic_weight_averaging_config))
+        callbacks.append(
+            StochasticWeightAveraging(**stochastic_weight_averaging_config)
+        )
     if early_stopping_config:
         callbacks.append(EarlyStopping(**early_stopping_config))
 

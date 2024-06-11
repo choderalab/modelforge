@@ -11,7 +11,7 @@ from .utils import Dense
 
 if TYPE_CHECKING:
     from .models import PairListOutputs
-    from modelforge.potential.utils import NNPInput
+    from modelforge.dataset.dataset import NNPInput
 
 from dataclasses import dataclass, field
 

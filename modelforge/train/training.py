@@ -4,6 +4,7 @@ import lightning as pl
 from typing import TYPE_CHECKING, Any, Union, Dict, NamedTuple, Tuple, Type, Mapping
 import torch
 from loguru import logger as log
+from modelforge.dataset.dataset import BatchData
 from torch.nn import functional as F
 
 if TYPE_CHECKING:

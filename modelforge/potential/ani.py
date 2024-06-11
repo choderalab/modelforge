@@ -10,7 +10,7 @@ from modelforge.potential.models import CoreNetwork
 from modelforge.utils.prop import SpeciesAEV
 
 if TYPE_CHECKING:
-    from modelforge.potential.utils import NNPInput
+    from modelforge.dataset.dataset import NNPInput
 
     from .models import PairListOutputs
 
@@ -547,10 +547,7 @@ class ANI2xCore(CoreNetwork):
 
 
 from .models import InputPreparation, BaseNetwork
-from .utils import NNPInput
 from typing import Union
-
-
 class ANI2x(BaseNetwork):
     def __init__(
         self,

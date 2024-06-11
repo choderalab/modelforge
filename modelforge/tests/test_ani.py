@@ -26,13 +26,14 @@ def setup_methane():
         [0, 0, 0, 0, 0], dtype=torch.int32, device=device
     )
 
-    from modelforge.potential.utils import NNPInput
+    from modelforge.dataset.dataset import NNPInput
 
     nnp_input = NNPInput(
         atomic_numbers=torch.tensor([6, 1, 1, 1, 1], device=device),
         positions=coordinates.squeeze(0) / 10,
         atomic_subsystem_indices=atomic_subsystem_indices,
         total_charge=torch.tensor([0.0]),
+        
     )
 
     return species, coordinates, device, nnp_input
@@ -71,7 +72,7 @@ def setup_two_methanes():
     )
 
     atomic_numbers = mf_species
-    from modelforge.potential.utils import NNPInput
+    from modelforge.dataset.dataset import NNPInput
 
     nnp_input = NNPInput(
         atomic_numbers=atomic_numbers,

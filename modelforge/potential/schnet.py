@@ -10,7 +10,7 @@ from .models import CoreNetwork
 
 if TYPE_CHECKING:
     from .models import PairListOutputs
-    from modelforge.potential.utils import NNPInput
+    from modelforge.dataset.dataset import NNPInput
 
 from modelforge.potential.utils import NeuralNetworkData
 

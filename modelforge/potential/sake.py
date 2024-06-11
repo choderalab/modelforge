@@ -9,10 +9,10 @@ from .models import CoreNetwork, PairListOutputs
 from .utils import (
     Dense,
     scatter_softmax,
-    NNPInput,
     SAKERadialSymmetryFunction,
     SAKERadialBasisFunction,
 )
+from modelforge.dataset.dataset import NNPInput
 import torch
 import torch.nn.functional as F
 

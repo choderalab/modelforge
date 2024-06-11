@@ -17,7 +17,7 @@ from loguru import logger as log
 from openff.units import unit
 from torch.nn import Module
 
-from modelforge.potential.utils import NNPInput
+from modelforge.dataset.dataset import NNPInput
 
 if TYPE_CHECKING:
     from modelforge.dataset.dataset import DatasetStatistics

@@ -80,7 +80,7 @@ class NNPInput:
     positions: Union[torch.Tensor, Quantity]
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
-    pair_list : torch.Tensor
+    pair_list: Optional[torch.Tensor] = None
 
     def to(
             self,
@@ -95,7 +95,8 @@ class NNPInput:
             self.positions = self.positions.to(device)
             self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(device)
             self.total_charge = self.total_charge.to(device)
-            self.pair_list = self.pair_list.to(device)
+            if self.pair_list is not None:
+                self.pair_list = self.pair_list.to(device)
         if dtype:
             self.positions = self.positions.to(dtype)
         return self

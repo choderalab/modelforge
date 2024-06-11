@@ -33,6 +33,7 @@ def setup_methane():
         positions=coordinates.squeeze(0) / 10,
         atomic_subsystem_indices=atomic_subsystem_indices,
         total_charge=torch.tensor([0.0]),
+        
     )
 
     return species, coordinates, device, nnp_input

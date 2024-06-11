@@ -280,9 +280,9 @@ class TrainingAdapter(pl.LightningModule):
         """
 
         loss = self.loss.compute_loss(batch, self.training_and_validation_loss_fn)
-        self.log("E_train_loss", loss["energy_loss"], on_step=True, prog_bar=True, batch_size=self._log_batch_size(batch.metadata.E))
-        self.log("F_train_loss", loss["force_loss"], on_step=True, prog_bar=True, batch_size=self._log_batch_size(batch.metadata.E))
-        self.log("combined_loss", loss["combined_loss"], on_step=True, prog_bar=True, batch_size=self._log_batch_size(batch.metadata.E))
+        self.log("L(E) [kJ/mol]", loss["energy_loss"], on_step=True, prog_bar=True, batch_size=self._log_batch_size(batch.metadata.E))
+        self.log("L(F) [kJ/mol]", loss["force_loss"], on_step=True, prog_bar=True, batch_size=self._log_batch_size(batch.metadata.E))
+        self.log("L(E+F)", loss["combined_loss"], on_step=True, prog_bar=True, batch_size=self._log_batch_size(batch.metadata.E))
         return loss["combined_loss"]
 
     def test_step(self, batch: "BatchData", batch_idx: int) -> None:
@@ -307,10 +307,10 @@ class TrainingAdapter(pl.LightningModule):
         loss = self.loss.compute_loss(batch, loss_fn=self.test_loss_fn)
 
         self.test_mse.append(float(loss["combined_loss"].detach()))
-        self.log("E_test_loss", loss["force_loss"], on_step=True, prog_bar=True)
-        self.log("F_test_loss", loss["energy_loss"], on_step=True, prog_bar=True)
+        self.log("L(E)_test [kJ/mol]", loss["energy_loss"], on_step=True, prog_bar=True)
+        self.log("L(F)_test [kJ/mol]", loss["force_loss"], on_step=True, prog_bar=True)
         self.log(
-            "combined_test_loss", loss["combined_loss"], on_step=True, prog_bar=True
+            "L(F+E)_test [kJ/mol]", loss["combined_loss"], on_step=True, prog_bar=True
         )
 
     def on_test_epoch_end(self) -> None:
@@ -351,10 +351,10 @@ class TrainingAdapter(pl.LightningModule):
         loss = self.loss.compute_loss(
             batch, loss_fn=self.training_and_validation_loss_fn
         )
-        self.log("E_val_loss", loss["force_loss"], on_step=True, prog_bar=True, batch_size=self._log_batch_size(batch.metadata.E))
-        self.log("F_val_loss", loss["energy_loss"], on_step=True, prog_bar=True, batch_size=self._log_batch_size(batch.metadata.E))
+        self.log("L(E)_v [kJ/mol]", loss["energy_loss"], on_step=True, prog_bar=True, batch_size=self._log_batch_size(batch.metadata.E))
+        self.log("L(F)_v [kJ/mol]", loss["force_loss"], on_step=True, prog_bar=True, batch_size=self._log_batch_size(batch.metadata.E))
         self.log(
-            "combined_val_loss", loss["combined_loss"], on_step=True, prog_bar=True, batch_size=self._log_batch_size(batch.metadata.E)
+            "L(E+F)_v [kJ/mol]", loss["combined_loss"], on_step=True, prog_bar=True, batch_size=self._log_batch_size(batch.metadata.E)
         )
 
         self.val_mse.append(float(loss["combined_loss"].item()))

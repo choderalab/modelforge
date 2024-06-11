@@ -228,9 +228,12 @@ class TrainingAdapter(pl.LightningModule):
         }
         self.test_loss_fn = {"energy_loss": F.mse_loss, "force_loss": F.mse_loss}
         log.info(
-            f"Training & validation loss fn: {self.training_and_validation_loss_fn}"
+            f"Training & validation loss fn: {[(k.__name__, v) for v, k in self.training_and_validation_loss_fn.items()]}"
         )
-        log.info(f"Test loss fn: {self.test_loss_fn}")
+        log.info(
+            f"Test loss fn: {[(k.__name__, v) for v, k in self.test_loss_fn.items()]}"
+        )
+        self.unused_parameters: bool = False
 
     def config_prior(self):
         """
@@ -318,6 +321,8 @@ class TrainingAdapter(pl.LightningModule):
         """
 
         import numpy as np
+        if self.unused_parameters:
+            log.warning(f"Unused parameters during training!\nPlease investigate if you aren't expecting this.")
 
         rmse_loss = np.sqrt(np.mean(np.array(self.test_mse)))
         self.log(
@@ -419,7 +424,8 @@ class TrainingAdapter(pl.LightningModule):
     def on_after_backward(self) -> None:
         for name, p in self.named_parameters():
             if p.grad is None:
-                print(name, p)
+                unused_parameters = True
+                # print(name, p)
 
     def train_func(self):
         """

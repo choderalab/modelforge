@@ -485,12 +485,12 @@ def test_dataset_neighborlist(model_name, single_batch_with_batchsize_64):
 
     # test the pairlist for message passing networks (with redundant atom pairs)
     # first molecule is methane, check if bonds are correct
-    methan_bonds = pair_list[:, :20]
+    methane_bonds = pair_list[:, :20]
 
     assert (
         torch.any(
             torch.eq(
-                methan_bonds,
+                methane_bonds,
                 torch.tensor(
                     [
                         [

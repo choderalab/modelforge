@@ -599,7 +599,7 @@ def read_config_and_train(
         Path to the TOML file defining the training configuration.
     """
     # Read the TOML file
-    config = return_toml_config(config_path)
+    config = return_toml_config(config_path, potential_path, dataset_path, training_path)
 
     # Extract parameters
     potential_config = config["potential"]

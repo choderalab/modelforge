@@ -566,13 +566,13 @@ def return_toml_config(
         log.info(f"Reading config from : {config_path}")
     else:
         if potential_path:
-            config["potential"] = toml.load(potential_path)
+            config["potential"] = toml.load(potential_path)["potential"]
             log.info(f"Reading potential config from : {potential_path}")
         if dataset_path:
-            config["dataset"] = toml.load(dataset_path)
+            config["dataset"] = toml.load(dataset_path)["dataset"]
             log.info(f"Reading dataset config from : {dataset_path}")
         if training_path:
-            config["training"] = toml.load(training_path)
+            config["training"] = toml.load(training_path)["training"]
             log.info(f"Reading training config from : {training_path}")
 
     return config
@@ -654,7 +654,6 @@ def perform_training(
     -------
     Trainer
     """
-
     from pytorch_lightning.loggers import TensorBoardLogger
     from modelforge.dataset.utils import RandomRecordSplittingStrategy
     from lightning import Trainer

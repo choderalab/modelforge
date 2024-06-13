@@ -583,6 +583,8 @@ def read_config_and_train(
     potential_path: Optional[str] = None,
     dataset_path: Optional[str] = None,
     training_path: Optional[str] = None,
+    accelerator: Optional[str] = None,
+    device: Optional[int] = None,
 ):
     """
     Reads one or more TOML configuration files and performs training based on the parameters.
@@ -597,15 +599,29 @@ def read_config_and_train(
         Path to the TOML file defining the dataset configuration.
     training_path : str, optional
         Path to the TOML file defining the training configuration.
+    accelerator : str, optional
+        Accelerator type to use for training.
+    device : int, optional
+        Device index to use for training.
     """
     # Read the TOML file
-    config = return_toml_config(config_path, potential_path, dataset_path, training_path)
+    config = return_toml_config(
+        config_path, potential_path, dataset_path, training_path
+    )
 
     # Extract parameters
     potential_config = config["potential"]
     dataset_config = config["dataset"]
     training_config = config["training"]
+    # Override config parameters with command-line arguments if provided
+    if accelerator:
+        training_config["accelerator"] = accelerator
+    if device is not None:
+        training_config["devices"] = device
 
+    log.debug(f"Potential config: {potential_config}")
+    log.debug(f"Dataset config: {dataset_config}")
+    log.debug(f"Training config: {training_config}")
     # Call the perform_training function with extracted parameters
     perform_training(
         potential_config=potential_config,

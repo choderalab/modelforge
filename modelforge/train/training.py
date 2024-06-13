@@ -184,6 +184,8 @@ class TrainingAdapter(pl.LightningModule):
         self.lr_scheduler_config = lr_scheduler_config
         self.test_mse: List[float] = []
         self.val_mse: List[float] = []
+        self.are_unused_parameters_present:bool = False
+        self.unused_parameters:List[str] = []
 
     def config_prior(self):
         """
@@ -271,6 +273,11 @@ class TrainingAdapter(pl.LightningModule):
             on_epoch=True,
             prog_bar=True,
         )
+        
+        if self.are_unused_parameters_present:
+            log.warning('Unused parameters present in the model')
+            log.warning(f"Unused parameters: {self.unused_parameters}")
+        
 
     def validation_step(self, batch: "BatchData", batch_idx: int) -> torch.Tensor:
         """
@@ -353,42 +360,33 @@ class TrainingAdapter(pl.LightningModule):
         }
         return {"optimizer": optimizer, "lr_scheduler": lr_scheduler_config}
 
-    def on_after_backward(self) -> None:
+    def on_train_end(self) -> None:
+        """
+        This method will be called once the training process is completed.
+        We will check for unused parameters here.
+        """
+        self.unused_parameters = []
+        self.are_unused_parameters_present = False
+
+        # Check for parameters that have not been updated
         for name, p in self.named_parameters():
             if p.grad is None:
-                print(name, p)
+                self.unused_parameters.append(name)
+                self.are_unused_parameters_present = True
 
-    def get_trainer(self):
+        # Log the unused parameter names
+        if self.are_unused_parameters_present:
+            self.log_unused_parameters()
+
+
+    def log_unused_parameters(self):
         """
-        Sets up and returns a PyTorch Lightning Trainer instance with configured logger and callbacks.
-
-        The trainer is configured with TensorBoard logging and an EarlyStopping callback to halt
-        the training process when the validation loss stops improving.
-
-        Returns
-        -------
-        Trainer
-            The configured PyTorch Lightning Trainer instance.
+        Log the unused parameters.
         """
-
-        from lightning import Trainer
-        from lightning.pytorch.callbacks.early_stopping import EarlyStopping
-        from pytorch_lightning.loggers import TensorBoardLogger
-
-        # set up tensor board logger
-        logger = TensorBoardLogger("tb_logs", name="training")
-        early_stopping = EarlyStopping(
-            monitor="rmse_val_loss", min_delta=0.05, patience=20, verbose=True
-        )
-
-        return Trainer(
-            max_epochs=10_000,
-            num_nodes=1,
-            devices="auto",
-            accelerator="auto",
-            logger=logger,  # Add the logger here
-            callbacks=[early_stopping],
-        )
+        if self.are_unused_parameters_present:
+            log.warning("Unused parameters detected:")
+            for param_name in self.unused_parameters:
+                log.warning(param_name)
 
     def train_func(self):
         """

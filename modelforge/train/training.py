@@ -529,50 +529,99 @@ class TrainingAdapter(pl.LightningModule):
         return tuner.fit()
 
 
-def return_toml_config(config_path: str):
+from typing import Optional
+
+
+def return_toml_config(
+    config_path: Optional[str] = None,
+    potential_path: Optional[str] = None,
+    dataset_path: Optional[str] = None,
+    training_path: Optional[str] = None,
+):
     """
-    Read a TOML configuration file and return the parsed configuration.
+    Read one or more TOML configuration files and return the parsed configuration.
 
     Parameters
     ----------
-    config_path : str
+    config_path : str, optional
         The path to the TOML configuration file.
+    potential_path : str, optional
+        The path to the TOML file defining the potential configuration.
+    dataset_path : str, optional
+        The path to the TOML file defining the dataset configuration.
+    training_path : str, optional
+        The path to the TOML file defining the training configuration.
 
     Returns
     -------
     dict
-        The parsed configuration from the TOML file.
+        The merged parsed configuration from the TOML files.
     """
     import toml
 
-    # Read the TOML file
-    config = toml.load(config_path)
-    log.info(f"Reading config from : {config_path}")
+    config = {}
+
+    if config_path:
+        config = toml.load(config_path)
+        log.info(f"Reading config from : {config_path}")
+    else:
+        if potential_path:
+            config["potential"] = toml.load(potential_path)["potential"]
+            log.info(f"Reading potential config from : {potential_path}")
+        if dataset_path:
+            config["dataset"] = toml.load(dataset_path)["dataset"]
+            log.info(f"Reading dataset config from : {dataset_path}")
+        if training_path:
+            config["training"] = toml.load(training_path)["training"]
+            log.info(f"Reading training config from : {training_path}")
+
     return config
 
 
-def read_config_and_train(config_path: str):
+def read_config_and_train(
+    config_path: Optional[str] = None,
+    potential_path: Optional[str] = None,
+    dataset_path: Optional[str] = None,
+    training_path: Optional[str] = None,
+    accelerator: Optional[str] = None,
+    device: Optional[int] = None,
+):
     """
-    Reads a TOML configuration file and performs training based on the parameters.
+    Reads one or more TOML configuration files and performs training based on the parameters.
 
     Parameters
     ----------
-    config_path : str
+    config_path : str, optional
         Path to the TOML configuration file.
+    potential_path : str, optional
+        Path to the TOML file defining the potential configuration.
+    dataset_path : str, optional
+        Path to the TOML file defining the dataset configuration.
+    training_path : str, optional
+        Path to the TOML file defining the training configuration.
+    accelerator : str, optional
+        Accelerator type to use for training.
+    device : int, optional
+        Device index to use for training.
     """
     # Read the TOML file
-    config = return_toml_config(config_path)
+    config = return_toml_config(
+        config_path, potential_path, dataset_path, training_path
+    )
 
     # Extract parameters
-    # potential
     potential_config = config["potential"]
-
-    # dataset
     dataset_config = config["dataset"]
-
-    # training
     training_config = config["training"]
+    # Override config parameters with command-line arguments if provided
+    if accelerator:
+        training_config["accelerator"] = accelerator
+    if device is not None:
+        training_config["devices"] = device
 
+    log.debug(f"Potential config: {potential_config}")
+    log.debug(f"Dataset config: {dataset_config}")
+    log.debug(f"Training config: {training_config}")
     # Call the perform_training function with extracted parameters
     perform_training(
         potential_config=potential_config,
@@ -605,7 +654,6 @@ def perform_training(
     -------
     Trainer
     """
-
     from pytorch_lightning.loggers import TensorBoardLogger
     from modelforge.dataset.utils import RandomRecordSplittingStrategy
     from lightning import Trainer

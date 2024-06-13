@@ -360,14 +360,33 @@ class TrainingAdapter(pl.LightningModule):
         }
         return {"optimizer": optimizer, "lr_scheduler": lr_scheduler_config}
 
-    def on_after_backward(self) -> None:
-        
-        if not self.are_unused_parameters_present:
-            for name, p in self.named_parameters():
-                if p.grad is None:
-                    self.unused_parameters.append(name)
-                    self.are_unused_parameters_present = True
+    def on_train_end(self) -> None:
+        """
+        This method will be called once the training process is completed.
+        We will check for unused parameters here.
+        """
+        self.unused_parameters = []
+        self.are_unused_parameters_present = False
 
+        # Check for parameters that have not been updated
+        for name, p in self.named_parameters():
+            if p.grad is None:
+                self.unused_parameters.append(name)
+                self.are_unused_parameters_present = True
+
+        # Log the unused parameter names
+        if self.are_unused_parameters_present:
+            self.log_unused_parameters()
+
+
+    def log_unused_parameters(self):
+        """
+        Log the unused parameters.
+        """
+        if self.are_unused_parameters_present:
+            log.warning("Unused parameters detected:")
+            for param_name in self.unused_parameters:
+                log.warning(param_name)
 
     def train_func(self):
         """

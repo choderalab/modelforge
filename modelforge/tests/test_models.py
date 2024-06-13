@@ -245,6 +245,7 @@ def test_energy_between_simulation_environments(
 def test_forward_pass_with_all_datasets(model_name, dataset_name, datamodule_factory):
     """Test forward pass with all datasets."""
     import torch
+
     if dataset_name.lower().startswith("spice"):
         print("using subset")
         dataset = datamodule_factory(
@@ -278,11 +279,10 @@ def test_forward_pass_with_all_datasets(model_name, dataset_name, datamodule_fac
         model_parameters=potential_parameters,
     )
     model(batch.nnp_input)
-    
+
     pair_list = batch.nnp_input.pair_list
     # pairlist is in ascending order in row 0
     assert torch.all(pair_list[0, 1:] >= pair_list[0, :-1])
-    
 
 
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
@@ -580,6 +580,41 @@ def test_pairlist():
     neighbor_indices = r.pair_indices
 
     assert not pair_indices.shape == neighbor_indices.shape
+
+
+def test_pairlist_precomputation():
+    from modelforge.potential.models import Pairlist
+    import torch
+    import numpy as np
+
+    atomic_subsystem_indices = torch.tensor([0, 0, 0])
+
+    pairlist = Pairlist()
+
+    pairs, nr_pairs = pairlist.construct_initial_pairlist_using_numpy(
+        atomic_subsystem_indices.to("cpu")
+    )
+
+    assert pairs.shape == (2, 6)
+    assert nr_pairs[0] == 6
+
+    # 3 molecules, 3 atoms each
+    atomic_subsystem_indices = torch.tensor([0, 0, 0, 1, 1, 1, 2, 2, 2])
+    pairs, nr_pairs = pairlist.construct_initial_pairlist_using_numpy(
+        atomic_subsystem_indices.to("cpu")
+    )
+
+    assert pairs.shape == (2, 18)
+    assert np.all(nr_pairs == [6, 6, 6])
+
+    # 3 molecules, 3,4, and 5 atoms each
+    atomic_subsystem_indices = torch.tensor([0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2])
+    pairs, nr_pairs = pairlist.construct_initial_pairlist_using_numpy(
+        atomic_subsystem_indices.to("cpu")
+    )
+
+    assert pairs.shape == (2, 38)
+    assert np.all(nr_pairs == [6, 12, 20])
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])

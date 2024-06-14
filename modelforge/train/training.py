@@ -298,7 +298,7 @@ class TrainingAdapter(pl.LightningModule):
         self.val_mse.append(float(mse_loss))
         return mse_loss
 
-    def on_after_backward(self):
+    def on_training_epoch_end(self):
         # Log histograms of weights and biases after each backward pass
         for name, params in self.named_parameters():
             if params is not None:
@@ -573,7 +573,10 @@ def return_toml_config(
 
     return config
 
+
 from typing import List, Optional, Union
+
+
 def read_config_and_train(
     config_path: Optional[str] = None,
     potential_path: Optional[str] = None,
@@ -609,6 +612,8 @@ def read_config_and_train(
     potential_config = config["potential"]
     dataset_config = config["dataset"]
     training_config = config["training"]
+    print(device)
+    print(type(device))
     # Override config parameters with command-line arguments if provided
     if accelerator:
         training_config["accelerator"] = accelerator
@@ -645,19 +650,19 @@ def log_training_arguments(
             config for the training process
         dataset_config: Dict[str, Any]
             config for the dataset
-    """    
+    """
     save_dir = training_config.get("save_dir", "lightning_logs")
     if save_dir == "lightning_logs":
         log.info(f"Saving logs to default location: {save_dir}")
     else:
         log.info(f"Saving logs to custom location: {save_dir}")
-        
+
     experiment_name = training_config.get("experiment_name", "exp")
     if experiment_name == "experiment_name":
         log.info(f"Saving logs in default dir: {experiment_name}")
     else:
         log.info(f"Saving logs in custom dir: {experiment_name}")
-        
+
     version_select = dataset_config.get("version_select", "latest")
     if version_select == "latest":
         log.info(f"Using default dataset version: {version_select}")
@@ -721,6 +726,7 @@ Experiments are saved to: {save_dir}/{experiment_name}.
 """
     )
 
+
 def perform_training(
     potential_config: Dict[str, Any],
     training_config: Dict[str, Any],
@@ -766,13 +772,15 @@ def perform_training(
     pin_memory = dataset_config.get("pin_memory", False)
     early_stopping_config = training_config.get("early_stopping", None)
 
-
     # set up tensor board logger
     logger = TensorBoardLogger(save_dir, name=experiment_name)
 
-
-    log.debug(f"Using {potential_config} potential config")
-    log.debug(f"Using {training_config} training config")
+    print(f"Using {accelerator} accelerator")
+    print(f"Using {num_nodes} nodes")
+    print(f"Using {devices} devices")
+    print(f"Training for {nr_of_epochs} epochs")
+    print(f"Using batch size: {batch_size}")
+    print(f"Using {num_workers} workers for training data loader")
 
     # Set up dataset
     dm = DataModule(

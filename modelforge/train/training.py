@@ -615,8 +615,6 @@ def read_config_and_train(
     potential_config = config["potential"]
     dataset_config = config["dataset"]
     training_config = config["training"]
-    print(device)
-    print(type(device))
     # Override config parameters with command-line arguments if provided
     if accelerator:
         training_config["accelerator"] = accelerator

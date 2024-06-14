@@ -93,7 +93,7 @@ def single_batch(batch_size: int = 64):
         batch_size=batch_size,
         version_select="nc_1000_v0",
     )
-    return next(iter(data_module.train_dataloader()))
+    return next(iter(data_module.train_dataloader(shuffle=False)))
 
 
 @pytest.fixture(scope="session")
@@ -248,7 +248,6 @@ def get_dataset_container(dataset_name: str) -> DataSetContainer:
 
 @pytest.fixture
 def get_dataset_container_fix():
-
     return get_dataset_container
 
 
@@ -262,7 +261,7 @@ def equivariance_utils():
 # helper functions
 # ----------------------------------------------------------- #
 
-from modelforge.potential.utils import Metadata, NNPInput, BatchData
+from modelforge.dataset.dataset import Metadata, NNPInput, BatchData
 
 
 @pytest.fixture

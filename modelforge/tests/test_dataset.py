@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 import torch
 
-from modelforge.dataset.dataset import DatasetFactory, TorchDataset
+from modelforge.dataset.dataset import DatasetFactory, TorchDataset, BatchData
 from modelforge.dataset import _ImplementedDatasets
 
 from modelforge.utils.prop import PropertyNames
@@ -76,11 +76,11 @@ def test_dataset_basic_operations():
 
     for conf_idx in range(len(dataset)):
         conf_data = dataset[conf_idx]
-        assert np.array_equal(conf_data["positions"], geom_true[conf_idx])
+        assert np.array_equal(conf_data.nnp_input.positions, geom_true[conf_idx])
         assert np.array_equal(
-            conf_data["atomic_numbers"], atomic_numbers_true[conf_idx]
+            conf_data.nnp_input.atomic_numbers, atomic_numbers_true[conf_idx]
         )
-        assert np.array_equal(conf_data["E"], energy_true[conf_idx])
+        assert np.array_equal(conf_data.metadata.E, energy_true[conf_idx])
 
     for rec_idx in range(dataset.record_len()):
         assert np.array_equal(
@@ -192,9 +192,10 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
     )
 
     raw_data_item = dataset[0]
-    assert isinstance(raw_data_item, dict)
-    assert len(raw_data_item) == 7  # 7 properties are returned
-
+    assert isinstance(raw_data_item, BatchData)
+    assert len(raw_data_item.__dataclass_fields__) == 2  
+    assert len(raw_data_item.nnp_input.__dataclass_fields__) == 5  # 8 properties are returned
+    assert len(raw_data_item.metadata.__dataclass_fields__) == 5  # 8 properties are returned
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_file_existence_after_initialization(
@@ -437,13 +438,129 @@ def test_data_item_format_of_datamodule(
     )
 
     raw_data_item = dm.torch_dataset[0]
-    assert isinstance(raw_data_item, Dict)
-    assert isinstance(raw_data_item["atomic_numbers"], torch.Tensor)
-    assert isinstance(raw_data_item["positions"], torch.Tensor)
-    assert isinstance(raw_data_item["E"], torch.Tensor)
+    assert isinstance(raw_data_item, BatchData)
+    assert isinstance(raw_data_item.nnp_input.atomic_numbers, torch.Tensor)
+    assert isinstance(raw_data_item.nnp_input.positions, torch.Tensor)
+    assert isinstance(raw_data_item.metadata.E, torch.Tensor)
 
     assert (
-        raw_data_item["atomic_numbers"].shape[0] == raw_data_item["positions"].shape[0]
+        raw_data_item.nnp_input.atomic_numbers.shape[0] == raw_data_item.nnp_input.positions.shape[0]
+    )
+
+
+from modelforge.potential import _Implemented_NNPs
+
+
+@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
+def test_dataset_neighborlist(model_name, single_batch_with_batchsize_64):
+    """Test the neighborlist."""
+
+    nnp_input = single_batch_with_batchsize_64.nnp_input
+
+    # test that the neighborlist is correctly generated
+    # cast input and model to torch.float64
+    from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
+
+    file_path = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
+    )
+    config = return_toml_config(file_path)
+
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+    from modelforge.potential.models import NeuralNetworkPotentialFactory
+
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        use="inference",
+        model_type=model_name,
+        simulation_environment="PyTorch",
+        model_parameters=potential_parameters,
+    )
+    model(nnp_input)
+
+    pair_list = nnp_input.pair_list
+    # pairlist is in ascending order in row 0
+    assert torch.all(pair_list[0, 1:] >= pair_list[0, :-1])
+
+    # test the pairlist for message passing networks (with redundant atom pairs)
+    # first molecule is methane, check if bonds are correct
+    methane_bonds = pair_list[:, :20]
+
+    assert (
+        torch.any(
+            torch.eq(
+                methane_bonds,
+                torch.tensor(
+                    [
+                        [
+                            0,
+                            0,
+                            0,
+                            0,
+                            1,
+                            1,
+                            1,
+                            1,
+                            2,
+                            2,
+                            2,
+                            2,
+                            3,
+                            3,
+                            3,
+                            3,
+                            4,
+                            4,
+                            4,
+                            4,
+                        ],
+                        [
+                            1,
+                            2,
+                            3,
+                            4,
+                            0,
+                            2,
+                            3,
+                            4,
+                            0,
+                            1,
+                            3,
+                            4,
+                            0,
+                            1,
+                            2,
+                            4,
+                            0,
+                            1,
+                            2,
+                            3,
+                        ],
+                    ]
+                ),
+            )
+            == False
+        ).item()
+        == False
+    )
+    # second molecule is ammonium, check if bonds are correct
+    ammonium_bonds = pair_list[:, 20:30]
+    assert (
+        torch.any(
+            torch.eq(
+                ammonium_bonds,
+                torch.tensor(
+                    [
+                        [5, 5, 5, 6, 6, 6, 7, 7, 7, 8],
+                        [6, 7, 8, 5, 7, 8, 5, 6, 8, 5],
+                    ]
+                ),
+            )
+            == False
+        ).item()
+        == False
     )
 
 
@@ -517,7 +634,7 @@ def test_dataset_splitting(
         dm.test_dataset,
     )
 
-    energy = train_dataset[0]["E"].item()
+    energy = train_dataset[0].metadata.E.item()
     dataset_to_test = get_dataset_container_fix(dataset_name)
     if splitting_strategy == RandomSplittingStrategy:
         assert np.isclose(energy, dataset_to_test.expected_E_random_split)
@@ -674,7 +791,7 @@ def test_self_energy(dataset_name, datamodule_factory):
         remove_self_energies=False,
     )
 
-    methane_energy_reference = float(dm.train_dataset[0]["E"])
+    methane_energy_reference = float(dm.train_dataset[0].metadata.E)
     assert np.isclose(methane_energy_reference, -106277.4161)
 
     # Scenario 1: dataset contains self energies
@@ -762,9 +879,9 @@ def test_self_energy(dataset_name, datamodule_factory):
         # Extract the first molecule (methane)
         # double check that it is methane
         k = dm.train_dataset[0]
-        methane_atomic_indices = dm.train_dataset[0]["atomic_numbers"]
+        methane_atomic_indices = dm.train_dataset[0].nnp_input.atomic_numbers
         # extract energy
-        methane_energy_offset = dm.train_dataset[0]["E"]
+        methane_energy_offset = dm.train_dataset[0].metadata.E
         if regression is False:
             # checking that the offset energy is actually correct for methane
             assert torch.isclose(

@@ -7,8 +7,18 @@ from modelforge.potential.painn import PaiNN
 
 def test_PaiNN_init():
     """Test initialization of the PaiNN neural network potential."""
+    # read default parameters
+    from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
 
-    painn = PaiNN()
+    file_path = resources.files(potential_defaults) / f"painn_defaults.toml"
+    config = return_toml_config(file_path)
+
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+
+    painn = PaiNN(**potential_parameters)
     assert painn is not None, "PaiNN model should be initialized."
 
 
@@ -43,6 +53,8 @@ def test_painn_forward(model_parameter, single_batch_with_batchsize_64):
         number_of_radial_basis_functions=number_of_gaussians,
         cutoff=cutoff,
         number_of_interaction_modules=nr_interaction_blocks,
+        shared_filters=False,
+        shared_interactions=False,
     )
     nnp_input = single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float32)
     energy = painn(nnp_input).E
@@ -58,13 +70,24 @@ def test_painn_interaction_equivariance(single_batch_with_batchsize_64):
     from dataclasses import replace
     import torch
 
+    # read default parameters
+    from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
+
+    file_path = resources.files(potential_defaults) / f"painn_defaults.toml"
+    config = return_toml_config(file_path)
+
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+
     # define a rotation matrix in 3D that rotates by 90 degrees around the z-axis
     # (clockwise when looking along the z-axis towards the origin)
     rotation_matrix = torch.tensor(
         [[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]], dtype=torch.float64
     )
 
-    painn = PaiNN().to(torch.float64)
+    painn = PaiNN(**potential_parameters).to(torch.float64)
     methane_input = single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float64)
     perturbed_methane_input = replace(methane_input)
     perturbed_methane_input.positions = torch.matmul(

@@ -12,7 +12,7 @@ from modelforge.potential.utils import NeuralNetworkData
 from .models import CoreNetwork
 
 if TYPE_CHECKING:
-    from modelforge.potential.utils import NNPInput
+    from modelforge.dataset.dataset import NNPInput
 
     from .models import PairListOutputs
 
@@ -413,12 +413,12 @@ class PhysNetModule(nn.Module):
 class PhysNetCore(CoreNetwork):
     def __init__(
         self,
-        max_Z: int = 100,
-        cutoff: unit.Quantity = 5 * unit.angstrom,
-        number_of_atom_features: int = 64,
-        number_of_radial_basis_functions: int = 16,
-        number_of_interaction_residual: int = 3,
-        number_of_modules: int = 5,
+        max_Z: int,
+        cutoff: unit.Quantity,
+        number_of_atom_features: int,
+        number_of_radial_basis_functions: int,
+        number_of_interaction_residual: int,
+        number_of_modules: int,
     ) -> None:
         """
         Implementation of the PhysNet neural network potential.
@@ -435,7 +435,6 @@ class PhysNetCore(CoreNetwork):
         """
 
         log.debug("Initializing PhysNet model.")
-
         super().__init__()
 
         # embedding
@@ -583,12 +582,12 @@ from .models import InputPreparation, NNPInput, BaseNetwork
 class PhysNet(BaseNetwork):
     def __init__(
         self,
-        max_Z: int = 101,
-        cutoff: unit.Quantity = 5 * unit.angstrom,
-        number_of_atom_features: int = 128,
-        number_of_radial_basis_functions: int = 64,
-        number_of_interaction_residual: int = 3,
-        number_of_modules: int = 5,
+        max_Z: int,
+        cutoff: unit.Quantity,
+        number_of_atom_features: int,
+        number_of_radial_basis_functions: int,
+        number_of_interaction_residual: int,
+        number_of_modules: int,
     ) -> None:
         """
         Unke, O. T. and Meuwly, M. "PhysNet: A Neural Network for Predicting Energies,
@@ -597,9 +596,11 @@ class PhysNet(BaseNetwork):
 
         """
         super().__init__()
+        from modelforge.utils.units import _convert
+
         self.core_module = PhysNetCore(
             max_Z=max_Z,
-            cutoff=cutoff,
+            cutoff=_convert(cutoff),
             number_of_atom_features=number_of_atom_features,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             number_of_interaction_residual=number_of_interaction_residual,
@@ -607,7 +608,7 @@ class PhysNet(BaseNetwork):
         )
         self.only_unique_pairs = False  # NOTE: for pairlist
         self.input_preparation = InputPreparation(
-            cutoff=cutoff, only_unique_pairs=self.only_unique_pairs
+            cutoff=_convert(cutoff), only_unique_pairs=self.only_unique_pairs
         )
 
     def _config_prior(self):

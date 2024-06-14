@@ -429,8 +429,6 @@ class ANIInteraction(nn.Module):
                 input_ = aev.index_select(0, midx)
                 output[midx] = model(input_).flatten()
 
-                # output.masked_scatter_(mask, model(input_).flatten())
-
         return output.view_as(species)
 
 

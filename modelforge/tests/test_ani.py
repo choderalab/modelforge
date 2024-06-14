@@ -5,7 +5,6 @@ import pytest
 def setup_methane():
     import torch
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     coordinates = torch.tensor(
         [
@@ -18,7 +17,7 @@ def setup_methane():
             ]
         ],
         requires_grad=True,
-        device=device,
+        device='cpu',
     )
     # In periodic table, C = 6 and H = 1
     species = torch.tensor([[1, 0, 0, 0, 0]], device=device)
@@ -116,7 +115,7 @@ def test_modelforge_ani(setup_two_methanes):
     potential_parameters = config["potential"].get("potential_parameters", {})
 
     _, _, _, mf_input = setup_two_methanes
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
     model = mf_ANI2x(**potential_parameters).to(device=device)
     energy = model(mf_input)
     derivative = torch.autograd.grad(energy.E.sum(), mf_input.positions)[0]

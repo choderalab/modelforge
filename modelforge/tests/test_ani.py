@@ -5,7 +5,7 @@ import pytest
 def setup_methane():
     import torch
 
-
+    device = torch.device("cpu")
     coordinates = torch.tensor(
         [
             [
@@ -17,7 +17,7 @@ def setup_methane():
             ]
         ],
         requires_grad=True,
-        device='cpu',
+        device=device,
     )
     # In periodic table, C = 6 and H = 1
     species = torch.tensor([[1, 0, 0, 0, 0]], device=device)
@@ -191,7 +191,7 @@ def test_radial_with_diagonal_batching(setup_two_methanes):
     vec = selected_coordinates[0] - selected_coordinates[1]
     distances = vec.norm(2, -1)
     # ------------ Modelforge calculation ----------#
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
 
     radial_symmetry_function = AniRadialSymmetryFunction(
         radial_dist_divisions,
@@ -231,7 +231,7 @@ def test_compare_angular_symmetry_features(setup_methane):
     from modelforge.potential.models import Pairlist
     import math
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
 
     # set up relevant system properties
     species, r, _, _ = setup_methane

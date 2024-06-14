@@ -184,6 +184,8 @@ class TrainingAdapter(pl.LightningModule):
         self.lr_scheduler_config = lr_scheduler_config
         self.test_mse: List[float] = []
         self.val_mse: List[float] = []
+        self.are_unused_parameters_present:bool = False
+        self.unused_parameters:List[str] = []
 
     def config_prior(self):
         """
@@ -271,6 +273,11 @@ class TrainingAdapter(pl.LightningModule):
             on_epoch=True,
             prog_bar=True,
         )
+        
+        if self.are_unused_parameters_present:
+            log.warning('Unused parameters present in the model')
+            log.warning(f"Unused parameters: {self.unused_parameters}")
+        
 
     def validation_step(self, batch: "BatchData", batch_idx: int) -> torch.Tensor:
         """
@@ -353,42 +360,33 @@ class TrainingAdapter(pl.LightningModule):
         }
         return {"optimizer": optimizer, "lr_scheduler": lr_scheduler_config}
 
-    def on_after_backward(self) -> None:
+    def on_train_end(self) -> None:
+        """
+        This method will be called once the training process is completed.
+        We will check for unused parameters here.
+        """
+        self.unused_parameters = []
+        self.are_unused_parameters_present = False
+
+        # Check for parameters that have not been updated
         for name, p in self.named_parameters():
             if p.grad is None:
-                print(name, p)
+                self.unused_parameters.append(name)
+                self.are_unused_parameters_present = True
 
-    def get_trainer(self):
+        # Log the unused parameter names
+        if self.are_unused_parameters_present:
+            self.log_unused_parameters()
+
+
+    def log_unused_parameters(self):
         """
-        Sets up and returns a PyTorch Lightning Trainer instance with configured logger and callbacks.
-
-        The trainer is configured with TensorBoard logging and an EarlyStopping callback to halt
-        the training process when the validation loss stops improving.
-
-        Returns
-        -------
-        Trainer
-            The configured PyTorch Lightning Trainer instance.
+        Log the unused parameters.
         """
-
-        from lightning import Trainer
-        from lightning.pytorch.callbacks.early_stopping import EarlyStopping
-        from pytorch_lightning.loggers import TensorBoardLogger
-
-        # set up tensor board logger
-        logger = TensorBoardLogger("tb_logs", name="training")
-        early_stopping = EarlyStopping(
-            monitor="rmse_val_loss", min_delta=0.05, patience=20, verbose=True
-        )
-
-        return Trainer(
-            max_epochs=10_000,
-            num_nodes=1,
-            devices="auto",
-            accelerator="auto",
-            logger=logger,  # Add the logger here
-            callbacks=[early_stopping],
-        )
+        if self.are_unused_parameters_present:
+            log.warning("Unused parameters detected:")
+            for param_name in self.unused_parameters:
+                log.warning(param_name)
 
     def train_func(self):
         """
@@ -529,50 +527,99 @@ class TrainingAdapter(pl.LightningModule):
         return tuner.fit()
 
 
-def return_toml_config(config_path: str):
+from typing import Optional
+
+
+def return_toml_config(
+    config_path: Optional[str] = None,
+    potential_path: Optional[str] = None,
+    dataset_path: Optional[str] = None,
+    training_path: Optional[str] = None,
+):
     """
-    Read a TOML configuration file and return the parsed configuration.
+    Read one or more TOML configuration files and return the parsed configuration.
 
     Parameters
     ----------
-    config_path : str
+    config_path : str, optional
         The path to the TOML configuration file.
+    potential_path : str, optional
+        The path to the TOML file defining the potential configuration.
+    dataset_path : str, optional
+        The path to the TOML file defining the dataset configuration.
+    training_path : str, optional
+        The path to the TOML file defining the training configuration.
 
     Returns
     -------
     dict
-        The parsed configuration from the TOML file.
+        The merged parsed configuration from the TOML files.
     """
     import toml
 
-    # Read the TOML file
-    config = toml.load(config_path)
-    log.info(f"Reading config from : {config_path}")
+    config = {}
+
+    if config_path:
+        config = toml.load(config_path)
+        log.info(f"Reading config from : {config_path}")
+    else:
+        if potential_path:
+            config["potential"] = toml.load(potential_path)["potential"]
+            log.info(f"Reading potential config from : {potential_path}")
+        if dataset_path:
+            config["dataset"] = toml.load(dataset_path)["dataset"]
+            log.info(f"Reading dataset config from : {dataset_path}")
+        if training_path:
+            config["training"] = toml.load(training_path)["training"]
+            log.info(f"Reading training config from : {training_path}")
+
     return config
 
 
-def read_config_and_train(config_path: str):
+def read_config_and_train(
+    config_path: Optional[str] = None,
+    potential_path: Optional[str] = None,
+    dataset_path: Optional[str] = None,
+    training_path: Optional[str] = None,
+    accelerator: Optional[str] = None,
+    device: Optional[int] = None,
+):
     """
-    Reads a TOML configuration file and performs training based on the parameters.
+    Reads one or more TOML configuration files and performs training based on the parameters.
 
     Parameters
     ----------
-    config_path : str
+    config_path : str, optional
         Path to the TOML configuration file.
+    potential_path : str, optional
+        Path to the TOML file defining the potential configuration.
+    dataset_path : str, optional
+        Path to the TOML file defining the dataset configuration.
+    training_path : str, optional
+        Path to the TOML file defining the training configuration.
+    accelerator : str, optional
+        Accelerator type to use for training.
+    device : int, optional
+        Device index to use for training.
     """
     # Read the TOML file
-    config = return_toml_config(config_path)
+    config = return_toml_config(
+        config_path, potential_path, dataset_path, training_path
+    )
 
     # Extract parameters
-    # potential
     potential_config = config["potential"]
-
-    # dataset
     dataset_config = config["dataset"]
-
-    # training
     training_config = config["training"]
+    # Override config parameters with command-line arguments if provided
+    if accelerator:
+        training_config["accelerator"] = accelerator
+    if device is not None:
+        training_config["devices"] = device
 
+    log.debug(f"Potential config: {potential_config}")
+    log.debug(f"Dataset config: {dataset_config}")
+    log.debug(f"Training config: {training_config}")
     # Call the perform_training function with extracted parameters
     perform_training(
         potential_config=potential_config,
@@ -605,7 +652,6 @@ def perform_training(
     -------
     Trainer
     """
-
     from pytorch_lightning.loggers import TensorBoardLogger
     from modelforge.dataset.utils import RandomRecordSplittingStrategy
     from lightning import Trainer

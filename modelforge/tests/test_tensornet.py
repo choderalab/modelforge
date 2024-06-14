@@ -1,7 +1,9 @@
-from modelforge.potential.tensornet import TensorNet
+import pytest
 
 
 def test_tensornet_init():
+    from modelforge.potential.tensornet import TensorNet
+
     net = TensorNet()
     assert net is not None
 
@@ -12,8 +14,9 @@ def test_compare_radial_symmetry_features():
 
     import torch
     from openff.units import unit
-    from torchmdnet import ExpNormalSmearing
+    from torchmdnet.models.utils import ExpNormalSmearing
 
+    from modelforge.potential.utils import CosineCutoff
     from modelforge.potential.utils import TensorNetRadialSymmetryFunction
 
     # generate a random list of distances, all < 5

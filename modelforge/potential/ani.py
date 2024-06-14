@@ -316,22 +316,24 @@ class ANIInteraction(nn.Module):
         super().__init__()
         # define atomic neural network
         atomic_neural_networks = self.intialize_atomic_neural_network(aev_dim)
-        self.H_network = atomic_neural_networks["H"]
-        self.C_network = atomic_neural_networks["C"]
-        self.O_network = atomic_neural_networks["O"]
-        self.N_network = atomic_neural_networks["N"]
-        self.S_network = atomic_neural_networks["S"]
-        self.F_network = atomic_neural_networks["F"]
-        self.Cl_network = atomic_neural_networks["Cl"]
-        self.atomic_networks = [
-            self.H_network,
-            self.C_network,
-            self.O_network,
-            self.N_network,
-            self.S_network,
-            self.F_network,
-            self.Cl_network,
-        ]
+        H_network = atomic_neural_networks["H"]
+        C_network = atomic_neural_networks["C"]
+        O_network = atomic_neural_networks["O"]
+        N_network = atomic_neural_networks["N"]
+        S_network = atomic_neural_networks["S"]
+        F_network = atomic_neural_networks["F"]
+        Cl_network = atomic_neural_networks["Cl"]
+        self.atomic_networks = nn.ModuleList(
+            [
+                H_network,
+                C_network,
+                O_network,
+                N_network,
+                S_network,
+                F_network,
+                Cl_network,
+            ]
+        )
 
     def intialize_atomic_neural_network(self, aev_dim: int) -> Dict[str, nn.Module]:
 
@@ -548,6 +550,8 @@ class ANI2xCore(CoreNetwork):
 
 from .models import InputPreparation, BaseNetwork
 from typing import Union
+
+
 class ANI2x(BaseNetwork):
     def __init__(
         self,

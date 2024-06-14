@@ -185,7 +185,7 @@ class TrainingAdapter(pl.LightningModule):
         self.test_mse: List[float] = []
         self.val_mse: List[float] = []
         self.are_unused_parameters_present: bool = False
-        self.unused_parameters: List[str] = []
+        self.unused_parameters: set = set()
 
     def config_prior(self):
         """
@@ -359,23 +359,26 @@ class TrainingAdapter(pl.LightningModule):
         }
         return {"optimizer": optimizer, "lr_scheduler": lr_scheduler_config}
 
-    def on_train_end(self) -> None:
+    def on_train_epoch_end(self) -> None:
         """
-        This method will be called once the training process is completed.
+        This method will be called at the end of each training epoch.
         We will check for unused parameters here.
         """
-        self.unused_parameters = []
-        self.are_unused_parameters_present = False
 
         # Check for parameters that have not been updated
         for name, p in self.named_parameters():
             if p.grad is None:
-                self.unused_parameters.append(name)
+                self.unused_parameters.add(name)
                 self.are_unused_parameters_present = True
 
-        # Log the unused parameter names
+
+    def on_train_end(self) -> None:
+        
+        # Log the unused parameters
         if self.are_unused_parameters_present:
-            self.log_unused_parameters()
+    
+            log.warning(f"Unused parameters detected:")
+            log.warning(self.unused_parameters)
 
     def log_unused_parameters(self):
         """
@@ -693,7 +696,7 @@ def log_training_arguments(
         log.info(f"Using default batch size: {batch_size}")
     else:
         log.info(f"Using batch size: {batch_size}")
-    remove_self_energies = dataset_config.get("remove_self_energies", False)
+    remove_self_energies = training_config.get("remove_self_energies", False)
     if remove_self_energies is False:
         log.warning(
             f"Using default for removing self energies: Self energies are not removed"
@@ -767,9 +770,9 @@ def perform_training(
     num_nodes = training_config.get("num_nodes", 1)
     devices = training_config.get("devices", 1)
     batch_size = training_config.get("batch_size", 128)
-    remove_self_energies = dataset_config.get("remove_self_energies", False)
+    remove_self_energies = training_config.get("remove_self_energies", False)
     num_workers = dataset_config.get("number_of_worker", 4)
-    pin_memory = dataset_config.get("pin_memory", False)
+    pin_memory = training_config.get("pin_memory", False)
     early_stopping_config = training_config.get("early_stopping", None)
 
     # set up tensor board logger

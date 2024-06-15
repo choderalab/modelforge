@@ -1,171 +1,83 @@
-from torch.optim import AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import lightning as pl
-from typing import TYPE_CHECKING, Any, Union, Dict, NamedTuple, Tuple, Type, Mapping
+from typing import TYPE_CHECKING, Any, Union, Dict, Type
 import torch
 from loguru import logger as log
 from modelforge.dataset.dataset import BatchData
 from torch.nn import functional as F
 
 if TYPE_CHECKING:
-    from modelforge.dataset.dataset import DatasetStatistics
-    from modelforge.potential.ani import ANI2x, AniNeuralNetworkData
-    from modelforge.potential.painn import PaiNN, PaiNNNeuralNetworkData
-    from modelforge.potential.physnet import PhysNet, PhysNetNeuralNetworkData
-    from modelforge.potential.schnet import SchNet, SchnetNeuralNetworkData
-    from modelforge.potential.sake import SAKE
     from modelforge.potential.utils import BatchData
 
-
-class Loss:
-    """
-    Base class for loss computations, designed to be overridden by subclasses for specific types of losses.
-    Initializes with a model to compute predictions for energies and forces.
-    """
-
-    def __init__(
-        self, model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet", "SAKE"]
-    ) -> None:
-
-        self.model = model
-
-    def _get_forces(
-        self, batch: "BatchData", energies: Dict[str, torch.Tensor]
-    ) -> Dict[str, torch.Tensor]:
-        """
-        Computes the forces from a given batch using the model.
-
-        Parameters
-        ----------
-        batch : BatchData
-            A single batch of data, including input features and target energies.
-
-        Returns
-        -------
-        Dict[str, torch.Tensor]
-            The true forces from the dataset and the predicted forces by the model.
-        """
-        nnp_input = batch.nnp_input
-        F_true = batch.metadata.F.to(torch.float32)
-        if F_true.numel() < 1:
-            raise RuntimeError("No force can be calculated.")
-        E_predict = energies["E_predict"]
-        F_predict = -torch.autograd.grad(
-            E_predict.sum(), nnp_input.positions, create_graph=False, retain_graph=True
-        )[0]
-
-        return {"F_true": F_true, "F_predict": F_predict}
-
-    def _get_energies(self, batch: "BatchData") -> Dict[str, torch.Tensor]:
-        """
-        Computes the energies from a given batch using the model.
-
-        Parameters
-        ----------
-        batch : BatchData
-            A single batch of data, including input features and target energies.
-
-        Returns
-        -------
-        Dict[str, torch.Tensor]
-            The true energies from the dataset and the predicted energies by the model.
-        """
-        nnp_input = batch.nnp_input
-        E_true = batch.metadata.E.to(torch.float32).squeeze(1)
-        E_predict = self.model.forward(nnp_input).E
-        assert E_true.shape == E_predict.shape, (
-            f"Shapes of true and predicted energies do not match: "
-            f"{E_true.shape} != {E_predict.shape}"
-        )
-        return {"E_true": E_true, "E_predict": E_predict}
+import torchmetrics
 
 
-from typing import Optional
-
-
-class EnergyAndForceLoss(Loss):
+class MSEMetric(torchmetrics.Metric):
     """
     Computes combined loss from energies and forces, with adjustable weighting.
     """
 
     def __init__(
         self,
-        model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet", "SAKE"],
         include_force: bool = False,
         force_weight: float = 1.0,
         energy_weight: float = 1.0,
     ) -> None:
-        super().__init__(model)
-        log.info("Initializing EnergyAndForceLoss")
-        self.force_weight = force_weight
-        self.energy_weight = energy_weight
+        super().__init__()
+
+        self.register_buffer("force_weight", torch.tensor(force_weight))
+        self.register_buffer("energy_weight", torch.tensor(energy_weight))
+
+        self.add_state(
+            "sum_squared_errors",
+            default=torch.tensor(0.0, dtype=torch.float64),
+            dist_reduce_fx="sum",
+        )
+        self.add_state("num_samples", default=torch.tensor(0), dist_reduce_fx="sum")
         self.include_force = include_force
-        self.have_raised_warning = False
 
-    def compute_loss(
+    def update(
         self,
-        batch: "BatchData",
-        loss_fn: Dict[str, torch.nn.Module] = {
-            "energy_loss": F.l1_loss,
-            "force_loss": F.l1_loss,
-        },
-    ) -> torch.Tensor:
-        """
-        Computes the weighted combined loss for energies and optionally forces.
-
-        Parameters
-        ----------
-        batch : BatchData
-            The batch of data to compute the loss for.
-        loss_fn : function, optional
-            The PyTorch loss function to apply, by default F.l1_loss.
-
-        Returns
-        -------
-        torch.Tensor
-            The computed loss as a PyTorch tensor.
-        """
-        with torch.set_grad_enabled(True):
-            energies = self._get_energies(batch)
-            if self.include_force:
-                forces = self._get_forces(batch, energies)
-            else:
-                forces = None
-            loss = self._compute_loss(energies, forces, loss_fn)
-
-        return loss
-
-    def _compute_loss(
-        self,
-        energies: Dict[str, torch.Tensor],
-        forces: Optional[Dict[str, torch.Tensor]],
-        loss_fn: Dict[str, torch.nn.Module],
+        predict_target: Dict[str, torch.Tensor],
     ) -> Dict[str, torch.Tensor]:
 
-        E_loss = self.energy_weight * loss_fn["energy_loss"](
-            energies["E_predict"], energies["E_true"]
+        E_loss = torch.sum(
+            (predict_target["E_predict"] - predict_target["E_true"]) ** 2
         )
-        if forces is None:
-            return {"combined_loss": E_loss, "energy_loss": E_loss, "force_loss": 0}
-
-        F_loss = self.force_weight * loss_fn["force_loss"](
-            forces["F_predict"], forces["F_true"]
+        F_loss = (
+            torch.sum((predict_target["F_predict"] - predict_target["F_true"]) ** 2)
+            * self.include_force
         )
-
         # combined loss with weights
-        combined_loss = self.energy_weight * E_loss + self.force_weight * F_loss
+        combined_loss = (self.energy_weight * E_loss + self.force_weight * F_loss) / (
+            1 + self.include_force
+        )
 
-        return {
-            "combined_loss": combined_loss,
-            "energy_loss": E_loss,
-            "force_loss": F_loss,
-        }
+        self.sum_squared_errors += combined_loss
+        self.num_samples += E_loss.numel()
+
+    def compute(self):
+        return self.sum_squared_errors / self.num_samples
+
+
+class RMSEMetric(MSEMetric):
+    """
+    Computes combined loss from energies and forces, with adjustable weighting.
+    """
+
+    def __init__(
+        self,
+        include_force: bool = False,
+        force_weight: float = 1.0,
+        energy_weight: float = 1.0,
+    ) -> None:
+        super().__init__(include_force, force_weight, energy_weight)
+
+    def compute(self):
+        return torch.sqrt(self.sum_squared_errors / self.num_samples)
 
 
 from torch.optim import Optimizer
-
-if TYPE_CHECKING:
-    from modelforge.potential import _Implemented_NNPs
 
 
 class TrainingAdapter(pl.LightningModule):
@@ -218,23 +130,98 @@ class TrainingAdapter(pl.LightningModule):
         self.model = nnp_class(**nnp_parameters_)
         self.optimizer = optimizer
         self.learning_rate = lr
-        self.loss = EnergyAndForceLoss(model=self.model, include_force=include_force)
         self.lr_scheduler_config = lr_scheduler_config
-        self.test_mse: List[float] = []
-        self.val_mse: List[float] = []
-        self.training_and_validation_loss_fn = {
-            "energy_loss": F.mse_loss,
-            "force_loss": F.mse_loss,
+        self.unused_parameters: bool = False
+
+        self.test_loss = []
+        self.val_loss = []
+
+
+    def _get_forces(
+        self, batch: "BatchData", energies: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Computes the forces from a given batch using the model.
+
+        Parameters
+        ----------
+        batch : BatchData
+            A single batch of data, including input features and target energies.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The true forces from the dataset and the predicted forces by the model.
+        """
+        nnp_input = batch.nnp_input
+        F_true = batch.metadata.F.to(torch.float32)
+        if F_true.numel() < 1:
+            raise RuntimeError("No force can be calculated.")
+        E_predict = energies["E_predict"]
+        F_predict = -torch.autograd.grad(
+            E_predict.sum(), nnp_input.positions, create_graph=False, retain_graph=True
+        )[0]
+
+        return {"F_true": F_true, "F_predict": F_predict}
+
+    def _get_energies(self, batch: "BatchData") -> Dict[str, torch.Tensor]:
+        """
+        Computes the energies from a given batch using the model.
+
+        Parameters
+        ----------
+        batch : BatchData
+            A single batch of data, including input features and target energies.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The true energies from the dataset and the predicted energies by the model.
+        """
+        nnp_input = batch.nnp_input
+        E_true = batch.metadata.E.to(torch.float32).squeeze(1)
+        E_predict = self.model.forward(nnp_input).E
+        assert E_true.shape == E_predict.shape, (
+            f"Shapes of true and predicted energies do not match: "
+            f"{E_true.shape} != {E_predict.shape}"
+        )
+        return {"E_true": E_true, "E_predict": E_predict}
+
+    def _get_predictions(self, batch: "BatchData") -> Dict[str, torch.Tensor]:
+        """
+        Computes the energies and forces from a given batch using the model.
+
+        Parameters
+        ----------
+        batch : BatchData
+            A single batch of data, including input features and target energies.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The true and predicted energies and forces from the dataset and the model.
+        """
+        energies = self._get_energies(batch)
+        forces = self._get_forces(batch, energies)
+        return {**energies, **forces}
+
+    def compute_mse_loss(self, predict_target) -> Dict[str, torch.Tensor]:
+        from torch.nn import MSELoss
+
+        E_loss = MSELoss(predict_target["E_predict"], predict_target["E_true"])
+        F_loss = (
+            MSELoss(predict_target["F_predict"], predict_target["F_true"])
+            * self.include_force
+        ) + self.eps
+        # combined loss with weights
+        combined_loss = (self.energy_weight * E_loss + self.force_weight * F_loss) / (
+            1 + self.include_force
+        )
+        return {
+            "combined_loss": combined_loss,
+            "energy_loss": E_loss,
+            "force_loss": F_loss,
         }
-        self.test_loss_fn = {"energy_loss": F.mse_loss, "force_loss": F.mse_loss}
-        log.info(
-            f"Training & validation loss fn: {[(k.__name__, v) for v, k in self.training_and_validation_loss_fn.items()]}"
-        )
-        log.info(
-            f"Test loss fn: {[(k.__name__, v) for v, k in self.test_loss_fn.items()]}"
-        )
-        self.are_unused_parameters_present: bool = False
-        self.unused_parameters: set = set()
 
     def config_prior(self):
         """
@@ -280,10 +267,26 @@ class TrainingAdapter(pl.LightningModule):
             The loss tensor computed for the current training step.
         """
 
-        loss = self.loss.compute_loss(batch, self.training_and_validation_loss_fn)
-        self.log("L(E)", loss["energy_loss"], on_step=True, prog_bar=True, batch_size=self._log_batch_size(batch.metadata.E))
-        self.log("L(F)", loss["force_loss"], on_step=True, prog_bar=True, batch_size=self._log_batch_size(batch.metadata.E))
-        self.log("L(E+F)", loss["combined_loss"], on_step=True, prog_bar=True, batch_size=self._log_batch_size(batch.metadata.E))
+        predict_target = self._get_predictions(batch)
+        loss = self.compute_mse_loss(predict_target)
+        self.log(
+            "train/L(E)",
+            loss["energy_loss"],
+            on_step=True,
+            prog_bar=True,
+        )
+        self.log(
+            "train/L(F)",
+            loss["force_loss"],
+            on_step=True,
+            prog_bar=True,
+        )
+        self.log(
+            "train/L(E+F)",
+            loss["combined_loss"],
+            on_step=True,
+            prog_bar=True,
+        )
         return loss["combined_loss"]
 
     def test_step(self, batch: "BatchData", batch_idx: int) -> None:
@@ -305,14 +308,9 @@ class TrainingAdapter(pl.LightningModule):
         None
             The results are logged and not directly returned.
         """
-        loss = self.loss.compute_loss(batch, loss_fn=self.test_loss_fn)
-
-        self.test_mse.append(float(loss["combined_loss"].detach()))
-        self.log("L(E)_test", loss["energy_loss"], on_step=True, prog_bar=True)
-        self.log("L(F)_test", loss["force_loss"], on_step=True, prog_bar=True)
-        self.log(
-            "L(F+E)_test", loss["combined_loss"], on_step=True, prog_bar=True
-        )
+        predict_target = self._get_predictions(batch)
+        loss = self.compute_mse_loss(predict_target)
+        self.test_loss.append(loss["combined_loss"])
 
     def on_test_epoch_end(self) -> None:
         """
@@ -322,12 +320,17 @@ class TrainingAdapter(pl.LightningModule):
         """
 
         import numpy as np
-        if self.unused_parameters:
-            log.warning(f"Unused parameters during training!\nPlease investigate if you aren't expecting this.")
 
-        rmse_loss = np.sqrt(np.mean(np.array(self.test_mse)))
+        if self.unused_parameters:
+            log.warning(
+                f"Unused parameters during training!\nPlease investigate if you aren't expecting this."
+            )
+
+        combined_rmse = torch.sqrt(torch.mean(self.test_loss['combined_loss']))
+        E_rmse = torch.sqrt(torch.mean(self.test_loss['E_loss']))
+        F_rmse = torch.sqrt(torch.mean(self.test_loss['F_loss']))
         self.log(
-            "rmse_test_loss",
+            "test/L(F+E)",
             rmse_loss,
             on_epoch=True,
             prog_bar=True,
@@ -353,16 +356,9 @@ class TrainingAdapter(pl.LightningModule):
         torch.Tensor
             The loss tensor computed for the current validation step.
         """
-        loss = self.loss.compute_loss(
-            batch, loss_fn=self.training_and_validation_loss_fn
-        )
-        self.log("L(E)_v", loss["energy_loss"], on_step=True, prog_bar=True, batch_size=self._log_batch_size(batch.metadata.E))
-        self.log("L(F)_v", loss["force_loss"], on_step=True, prog_bar=True, batch_size=self._log_batch_size(batch.metadata.E))
-        self.log(
-            "L(E+F)_v", loss["combined_loss"], on_step=True, prog_bar=True, batch_size=self._log_batch_size(batch.metadata.E)
-        )
-
-        self.val_mse.append(float(loss["combined_loss"].item()))
+        predict_target = self._get_predictions(batch)
+        loss = self.compute_mse_loss(predict_target)
+        self.val_mse.append(float(loss["combined_loss"].detach()))
 
     def on_training_epoch_end(self):
         # Log histograms of weights and biases after each backward pass
@@ -380,7 +376,7 @@ class TrainingAdapter(pl.LightningModule):
         """
         import numpy as np
 
-        rmse_loss = np.sqrt(np.mean(np.array(self.val_mse)))
+        rmse_loss = np.sqrt(np.mean(np.array(self.validation_loss)))
         sch = self.lr_schedulers()
         try:
             log.info(f"Current learning rate: {sch.get_last_lr()}")
@@ -822,6 +818,7 @@ def perform_training(
     -------
     Trainer
     """
+
     from pytorch_lightning.loggers import TensorBoardLogger
     from modelforge.dataset.utils import RandomRecordSplittingStrategy
     from lightning import Trainer
@@ -829,32 +826,76 @@ def perform_training(
     from modelforge.dataset.dataset import DataModule
     from lightning.pytorch.callbacks import ModelSummary
 
-    # Parse the arguments
-    log_training_arguments(potential_config, training_config, dataset_config)
+    save_dir = training_config.get("save_dir", "lightning_logs")
+    if save_dir == "lightning_logs":
+        log.info(f"Saving logs to default location: {save_dir}")
+
+    experiment_name = training_config.get("experiment_name", "exp")
+    if experiment_name == "experiment_name":
+        log.info(f"Saving logs in default dir: {experiment_name}")
+
     model_name = potential_config["model_name"]
     dataset_name = dataset_config["dataset_name"]
-    save_dir = training_config.get("save_dir", "lightning_logs")
-    experiment_name = training_config.get("experiment_name", "exp")
+
     version_select = dataset_config.get("version_select", "latest")
+    if version_select == "latest":
+        log.info(f"Using default dataset version: {version_select}")
+
     accelerator = training_config.get("accelerator", "cpu")
+    if accelerator == "cpu":
+        log.info(f"Using default accelerator: {accelerator}")
+
     nr_of_epochs = training_config.get("nr_of_epochs", 10)
+    if nr_of_epochs == 10:
+        log.info(f"Using default number of epochs: {nr_of_epochs}")
+
     num_nodes = training_config.get("num_nodes", 1)
+    if num_nodes == 1:
+        log.info(f"Using default number of nodes: {num_nodes}")
+
     devices = training_config.get("devices", 1)
+    if devices == 1:
+        log.info(f"Using default device index/number: {devices}")
+
     batch_size = training_config.get("batch_size", 128)
-    remove_self_energies = training_config.get("remove_self_energies", False)
-    num_workers = dataset_config.get("number_of_worker", 4)
-    pin_memory = training_config.get("pin_memory", False)
+    if batch_size == 128:
+        log.info(f"Using default batch size: {batch_size}")
+
+    remove_self_energies = dataset_config.get("remove_self_energies", False)
+    if remove_self_energies is False:
+        log.info(
+            f"Using default for removing self energies: Self energies are not removed"
+        )
     early_stopping_config = training_config.get("early_stopping", None)
+    if early_stopping_config is None:
+        log.info(f"Using default: No early stopping performed")
+
+    stochastic_weight_averaging_config = training_config.get(
+        "stochastic_weight_averaging_config", None
+    )
+
+    num_workers = dataset_config.get("number_of_worker", 4)
+    if num_workers == 4:
+        log.info(
+            f"Using default number of workers for training data loader: {num_workers}"
+        )
+    pin_memory = dataset_config.get("pin_memory", False)
+    if pin_memory is False:
+        log.info(f"Using default value for pinned_memory: {pin_memory}")
 
     # set up tensor board logger
     logger = TensorBoardLogger(save_dir, name=experiment_name)
 
-    print(f"Using {accelerator} accelerator")
-    print(f"Using {num_nodes} nodes")
-    print(f"Using {devices} devices")
-    print(f"Training for {nr_of_epochs} epochs")
-    print(f"Using batch size: {batch_size}")
-    print(f"Using {num_workers} workers for training data loader")
+    log.debug(
+        f"""
+Training {model_name} on {dataset_name}-{version_select} dataset with {accelerator}
+accelerator on {num_nodes} nodes for {nr_of_epochs} epochs.
+Experiments are saved to: {save_dir}/{experiment_name}.
+"""
+    )
+
+    log.debug(f"Using {potential_config} potential config")
+    log.debug(f"Using {training_config} training config")
 
     # Set up dataset
     dm = DataModule(

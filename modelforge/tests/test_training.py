@@ -56,105 +56,72 @@ def test_train_with_lightning(model_name, dataset_name, include_force):
     model = TrainingAdapter.load_from_checkpoint("test.chp")
     assert type(model) is not None
 
-from unittest.mock import MagicMock
+
 import torch
 from torch.nn import functional as F
 
-class MockModel:
-    def forward(self, nnp_input):
-        class MockOutput:
-            def __init__(self, E):
-                self.E = E
-        return MockOutput(torch.tensor([-10.0, 0.0]))  # Mock prediction
 
-class MockBatchData:
-    class Metadata:
-        def __init__(self):
-            self.E = torch.tensor([[-12.0], [2.0]])  # Mock true energies
-            self.F = torch.tensor([[[1.0, 2.0, 3.0]], [[-1.0, -2.0, -3.0]]])  # Mock true forces
+def test_energy_loss_only():
+    # test the loss
+    from modelforge.train.training import MSELoss
 
-    def __init__(self):
-        self.nnp_input = MagicMock()
-        self.metadata = self.Metadata()
+    loss_calculator = MSELoss(include_force=False)
 
-@pytest.fixture
-def mock_model():
-    return MockModel()
-
-@pytest.fixture
-def mock_batch_data():
-    return MockBatchData()
-
-def test_energy_loss_only(mock_model, mock_batch_data):
-    # test the loss 
-    from modelforge.train.training import EnergyAndForceLoss
-    loss_calculator = EnergyAndForceLoss(model=mock_model, include_force=False)
-    loss = loss_calculator.compute_loss(mock_batch_data, loss_fn={ 'energy_loss': F.l1_loss,'force_loss': F.l1_loss })
-    expected_loss = torch.tensor(2.0)  # The expected L1 loss between predicted and true energies
-    assert torch.isclose(loss['combined_loss'], expected_loss), f"Expected {expected_loss.item()} but got {loss.item()}"
-    assert torch.isclose(loss['energy_loss'], expected_loss), f"Expected {expected_loss.item()} but got {loss.item()}"
-    
-    loss_calculator = EnergyAndForceLoss(model=mock_model, include_force=True)
-    energies = {
-        "E_true": torch.tensor([[-12.0], [12.0]]),
-        "E_predict": torch.tensor([[-10.0], [10.0]])
-    }
-    loss = loss_calculator._compute_loss(energies, None, {'energy_loss': F.l1_loss})
-    assert torch.isclose(loss['combined_loss'], expected_loss), f"Expected {expected_loss.item()} but got {loss.item()}"
-
-def test_energy_and_force_loss(mock_model):
-    from modelforge.train.training import EnergyAndForceLoss
-    loss_calculator = EnergyAndForceLoss(model=mock_model, include_force=False)
-    energies = {
-        "E_true": torch.tensor([[-12.0], [12.0]]),
-        "E_predict": torch.tensor([[-10.0], [10.0]])
-    }
-    forces = {
-        "F_true": torch.tensor([[[0.5, 0.5, 0.5]], [[-0.5, -0.5, -0.5]]]),
-        "F_predict": torch.tensor([[[0.0, 0.0, 0.0]], [[0.0, 0.0, 0.0]]])
-    }
-    loss = loss_calculator._compute_loss(energies, forces, {'energy_loss': F.mse_loss, 'force_loss': F.mse_loss})
-    expected_energy_loss = F.mse_loss(energies["E_predict"], energies["E_true"])
-    expected_force_loss = F.mse_loss(forces["F_predict"], forces["F_true"])
-    expected_total_loss = expected_energy_loss + expected_force_loss
-    assert torch.isclose(loss['combined_loss'], expected_total_loss), f"Expected {expected_total_loss.item()} but got {loss.item()}"
-
-@pytest.mark.parametrize("model_name", ["SchNet"])
-@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
-def test_loss(model_name, dataset_name, datamodule_factory):
-
-    # read default parameters
-    from modelforge.train.training import return_toml_config
-    from importlib import resources
-    from modelforge.tests.data import training_defaults
-
-    file_path = (
-        resources.files(training_defaults)
-        / f"{model_name.lower()}_{dataset_name.lower()}.toml"
+    predict_target = {}
+    predict_target["E_predict"] = torch.tensor([[1.0], [2.0], [3.0]])
+    predict_target["E_true"] = torch.tensor([[1.0], [-2.0], [3.0]])
+    predict_target["F_predict"] = torch.tensor(
+        [[1.0, 2.0, 3.0], [1.0, 2.0, 3.0], [1.0, 2.0, 3.0]]
     )
-    config = return_toml_config(file_path)
-    # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
-
-    # inference model
-    model = NeuralNetworkPotentialFactory.create_nnp(
-        use="inference",
-        model_type=model_name,
-        model_parameters=potential_parameters,
+    predict_target["F_true"] = torch.tensor(
+        [[1.0, -2.0, -3.0], [1.0, -2.0, -3.0], [1.0, -2.0, -3.0]]
     )
 
-    dm = datamodule_factory(dataset_name=dataset_name)
+    expected_loss = torch.sum(
+        (predict_target["E_predict"] - predict_target["E_true"]) ** 2
+    )
+    loss_calculator.update(predict_target)
+    loss = loss_calculator.compute()
+    assert torch.allclose(
+        expected_loss.double(), loss
+    ), f"Expected {expected_loss.item()} but got {loss.item()}"
 
-    from modelforge.train.training import EnergyAndForceLoss
-    import torch
+    # now with RMSE
+    from modelforge.train.training import RMSELoss
 
-    loss = EnergyAndForceLoss(model)
+    loss_calculator = RMSELoss(include_force=False)
 
-    r = loss.compute_loss(next(iter(dm.train_dataloader())))
+    loss_calculator.update(predict_target)
+    loss = loss_calculator.compute()
+    assert torch.allclose(
+        torch.sqrt(expected_loss.double()), loss
+    ), f"Expected {expected_loss.item()} but got {loss.item()}"
 
-    if dataset_name != "QM9":
-        loss = EnergyAndForceLoss(model, include_force=True)
-        r = loss.compute_loss(next(iter(dm.train_dataloader())))
+
+def test_energy_and_force_loss():
+    from modelforge.train.training import MSELoss
+
+    loss_calculator = MSELoss(include_force=True)
+
+    predict_target = {}
+    predict_target["E_predict"] = torch.tensor([[1.0], [2.0], [3.0]])
+    predict_target["E_true"] = torch.tensor([[1.0], [-2.0], [3.0]])
+    predict_target["F_predict"] = torch.tensor(
+        [[1.0, 2.0, 3.0], [1.0, 2.0, 3.0], [1.0, 2.0, 3.0]]
+    )
+    predict_target["F_true"] = torch.tensor(
+        [[1.0, -2.0, -3.0], [1.0, -2.0, -3.0], [1.0, -2.0, -3.0]]
+    )
+
+    expected_loss = (
+        torch.sum((predict_target["E_predict"] - predict_target["E_true"]) ** 2)
+        + torch.sum((predict_target["F_predict"] - predict_target["F_true"]) ** 2)
+    ) / 2
+    loss_calculator.update(predict_target)
+    loss = loss_calculator.compute()
+    assert torch.allclose(
+        expected_loss.double(), loss
+    ), f"Expected {expected_loss.item()} but got {loss.item()}"
 
 
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")

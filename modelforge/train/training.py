@@ -43,21 +43,28 @@ class MSEMetric(torchmetrics.Metric):
 
         E_loss = torch.sum(
             (predict_target["E_predict"] - predict_target["E_true"]) ** 2
-        )
+        ).detach()
         F_loss = (
             torch.sum((predict_target["F_predict"] - predict_target["F_true"]) ** 2)
             * self.include_force
-        )
+        ).detach()
+
         # combined loss with weights
         combined_loss = (self.energy_weight * E_loss + self.force_weight * F_loss) / (
             1 + self.include_force
         )
 
-        self.sum_squared_errors += combined_loss
+        self.combined_sum_squared_errors += combined_loss
+        self.E_sum_squared_errors += E_loss
+        self.F_sum_squared_errors += F_loss
         self.num_samples += E_loss.numel()
 
-    def compute(self):
-        return self.sum_squared_errors / self.num_samples
+    def compute(self) -> Dict[str, torch.Tensor]:
+        return {
+            "combined_loss": self.sum_squared_errors / self.num_samples,
+            "E_loss": self.E_sum_squared_errors / self.num_samples,
+            "F_loss": self.F_sum_squared_errors / self.num_samples,
+        }
 
 
 class RMSEMetric(MSEMetric):
@@ -74,7 +81,115 @@ class RMSEMetric(MSEMetric):
         super().__init__(include_force, force_weight, energy_weight)
 
     def compute(self):
-        return torch.sqrt(self.sum_squared_errors / self.num_samples)
+        return {
+            "combined_loss": torch.sqrt(self.sum_squared_errors / self.num_samples),
+            "E_loss": self.E_sum_squared_errors / self.num_samples,
+            "F_loss": self.F_sum_squared_errors / self.num_samples,
+        }
+
+
+from torch import nn
+
+from abc import abstractmethod
+
+
+class Loss(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        from torch.nn import MSELoss
+
+        self.mse_loss = MSELoss()
+
+    @abstractmethod
+    def calculate_test_loss(
+        self, predict_target: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        pass
+
+    @abstractmethod
+    def calculate_val_loss(
+        self, predict_target: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        pass
+
+    @abstractmethod
+    def calculate_train_loss(
+        self, predict_target: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        pass
+
+    def _compute_sum_squared_errors(self, predict: torch.Tensor, target: torch.Tensor):
+        return torch.sum((predict - target) ** 2)
+
+    def compute_mse_loss(
+        self,
+        predict_target: Dict[str, torch.Tensor],
+        include_force: bool = False,
+    ) -> Dict[str, torch.Tensor]:
+
+        E_loss = self.mse_loss(
+            predict_target["E_predict"].squeeze(1), predict_target["E_true"].squeeze(1)
+        )
+        F_loss = (
+            self.mse_loss(predict_target["F_predict"].squeeze(1), predict_target["F_true"]).squeeze(1)
+            * include_force
+        )
+        return {"E_loss": E_loss, "F_loss": F_loss}
+
+
+class NaiveEnergyAndForceLoss(Loss):
+    def __init__(
+        self,
+        include_force: bool = False,
+        energy_weight: float = 1.0,
+        force_weight: float = 1.0,
+    ):
+        super().__init__()
+        self.include_force = include_force
+        self.register_buffer("energy_weight", torch.tensor(energy_weight))
+        self.register_buffer("force_weight", torch.tensor(force_weight))
+
+    def calculate_test_loss(
+        self, predict_target: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        """Calculate the RMSE loss for the test set."""
+        mse_loss = self.combined_loss(predict_target)
+        return {
+            "combined_loss": torch.sqrt(mse_loss["combined_loss"]),
+            "energy_loss": torch.sqrt(mse_loss["energy_loss"]),
+            "force_loss": torch.sqrt(mse_loss["force_loss"]),
+        }
+
+    def calculate_val_loss(
+        self, predict_target: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        """Calculate the MSE loss for the validation set."""
+        return self.combined_loss(predict_target)
+
+    def calculate_train_loss(
+        self, predict_target: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        """Calculate the MSE loss for the training set."""
+        return self.combined_loss(predict_target)
+
+    def combined_loss(
+        self, predict_target: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+
+        loss = self.compute_mse_loss(predict_target, self.include_force)
+        E_loss = loss["E_loss"]
+        F_loss = loss["F_loss"]
+
+        # combined loss with weights
+        combined_loss = (self.energy_weight * E_loss + self.force_weight * F_loss) / (
+            1 + self.include_force
+        )
+        return {
+            "combined_loss": combined_loss,
+            "energy_loss": E_loss,
+            "force_loss": F_loss,
+        }
 
 
 from torch.optim import Optimizer
@@ -132,10 +247,12 @@ class TrainingAdapter(pl.LightningModule):
         self.learning_rate = lr
         self.lr_scheduler_config = lr_scheduler_config
         self.unused_parameters: bool = False
+        self.val_metric = MSEMetric(include_force=include_force)
+        self.train_metric = MSEMetric(include_force=include_force)
+        self.test_metric = RMSEMetric(include_force=include_force)
 
         self.test_loss = []
         self.val_loss = []
-
 
     def _get_forces(
         self, batch: "BatchData", energies: Dict[str, torch.Tensor]
@@ -208,20 +325,11 @@ class TrainingAdapter(pl.LightningModule):
     def compute_mse_loss(self, predict_target) -> Dict[str, torch.Tensor]:
         from torch.nn import MSELoss
 
-        E_loss = MSELoss(predict_target["E_predict"], predict_target["E_true"])
-        F_loss = (
-            MSELoss(predict_target["F_predict"], predict_target["F_true"])
-            * self.include_force
-        ) + self.eps
-        # combined loss with weights
-        combined_loss = (self.energy_weight * E_loss + self.force_weight * F_loss) / (
-            1 + self.include_force
+        return _compute_mse_loss(
+            predict_target,
+            req_grad=True,
+            include_force=self.include_force,
         )
-        return {
-            "combined_loss": combined_loss,
-            "energy_loss": E_loss,
-            "force_loss": F_loss,
-        }
 
     def config_prior(self):
         """
@@ -326,9 +434,9 @@ class TrainingAdapter(pl.LightningModule):
                 f"Unused parameters during training!\nPlease investigate if you aren't expecting this."
             )
 
-        combined_rmse = torch.sqrt(torch.mean(self.test_loss['combined_loss']))
-        E_rmse = torch.sqrt(torch.mean(self.test_loss['E_loss']))
-        F_rmse = torch.sqrt(torch.mean(self.test_loss['F_loss']))
+        combined_rmse = torch.sqrt(torch.mean(self.test_loss["combined_loss"]))
+        E_rmse = torch.sqrt(torch.mean(self.test_loss["E_loss"]))
+        F_rmse = torch.sqrt(torch.mean(self.test_loss["F_loss"]))
         self.log(
             "test/L(F+E)",
             rmse_loss,
@@ -434,12 +542,11 @@ class TrainingAdapter(pl.LightningModule):
                 self.unused_parameters.add(name)
                 self.are_unused_parameters_present = True
 
-
     def on_train_end(self) -> None:
-        
+
         # Log the unused parameters
         if self.are_unused_parameters_present:
-    
+
             log.warning(f"Unused parameters detected:")
             log.warning(self.unused_parameters)
 

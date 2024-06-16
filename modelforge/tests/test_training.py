@@ -63,9 +63,9 @@ from torch.nn import functional as F
 
 def test_energy_loss_only():
     # test the loss
-    from modelforge.train.training import MSELoss
+    from modelforge.train.training import NaiveEnergyAndForceLoss
 
-    loss_calculator = MSELoss(include_force=False)
+    loss_calculator = NaiveEnergyAndForceLoss(include_force=False)
 
     predict_target = {}
     predict_target["E_predict"] = torch.tensor([[1.0], [2.0], [3.0]])
@@ -80,8 +80,7 @@ def test_energy_loss_only():
     expected_loss = torch.sum(
         (predict_target["E_predict"] - predict_target["E_true"]) ** 2
     )
-    loss_calculator.update(predict_target)
-    loss = loss_calculator.compute()
+    loss = loss_calculator.calculate_train_loss(predict_target)
     assert torch.allclose(
         expected_loss.double(), loss
     ), f"Expected {expected_loss.item()} but got {loss.item()}"

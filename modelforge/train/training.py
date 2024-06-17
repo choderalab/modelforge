@@ -12,80 +12,46 @@ if TYPE_CHECKING:
 import torchmetrics
 
 
-class MSEMetric(torchmetrics.Metric):
-    """
-    Computes combined loss from energies and forces, with adjustable weighting.
-    """
-
-    def __init__(
-        self,
-        include_force: bool = False,
-        force_weight: float = 1.0,
-        energy_weight: float = 1.0,
-    ) -> None:
+class EnergyLossMetric(torchmetrics.Metric):
+    def __init__(self) -> None:
         super().__init__()
+        self.add_state("energy_loss", default=torch.tensor(0.0), dist_reduce_fx="sum")
+        self.add_state("num_batches", default=torch.tensor(0), dist_reduce_fx="sum")
 
-        self.register_buffer("force_weight", torch.tensor(force_weight))
-        self.register_buffer("energy_weight", torch.tensor(energy_weight))
+    def update(self, loss: torch.Tensor) -> None:
+        self.energy_loss += loss
+        self.num_batches += 1
 
-        self.add_state(
-            "sum_squared_errors",
-            default=torch.tensor(0.0, dtype=torch.float64),
-            dist_reduce_fx="sum",
-        )
-        self.add_state("num_samples", default=torch.tensor(0), dist_reduce_fx="sum")
-        self.include_force = include_force
-
-    def update(
-        self,
-        predict_target: Dict[str, torch.Tensor],
-    ) -> Dict[str, torch.Tensor]:
-
-        E_loss = torch.sum(
-            (predict_target["E_predict"] - predict_target["E_true"]) ** 2
-        ).detach()
-        F_loss = (
-            torch.sum((predict_target["F_predict"] - predict_target["F_true"]) ** 2)
-            * self.include_force
-        ).detach()
-
-        # combined loss with weights
-        combined_loss = (self.energy_weight * E_loss + self.force_weight * F_loss) / (
-            1 + self.include_force
-        )
-
-        self.combined_sum_squared_errors += combined_loss
-        self.E_sum_squared_errors += E_loss
-        self.F_sum_squared_errors += F_loss
-        self.num_samples += E_loss.numel()
-
-    def compute(self) -> Dict[str, torch.Tensor]:
-        return {
-            "combined_loss": self.sum_squared_errors / self.num_samples,
-            "E_loss": self.E_sum_squared_errors / self.num_samples,
-            "F_loss": self.F_sum_squared_errors / self.num_samples,
-        }
+    def compute(self) -> torch.Tensor:
+        return self.energy_loss / self.num_batches
 
 
-class RMSEMetric(MSEMetric):
-    """
-    Computes combined loss from energies and forces, with adjustable weighting.
-    """
+class ForceLossMetric(torchmetrics.Metric):
+    def __init__(self) -> None:
+        super().__init__()
+        self.add_state("force_loss", default=torch.tensor(0.0), dist_reduce_fx="sum")
+        self.add_state("num_batches", default=torch.tensor(0), dist_reduce_fx="sum")
 
-    def __init__(
-        self,
-        include_force: bool = False,
-        force_weight: float = 1.0,
-        energy_weight: float = 1.0,
-    ) -> None:
-        super().__init__(include_force, force_weight, energy_weight)
+    def update(self, loss: torch.Tensor) -> None:
+        self.force_loss += loss
+        self.num_batches += 1
 
-    def compute(self):
-        return {
-            "combined_loss": torch.sqrt(self.sum_squared_errors / self.num_samples),
-            "E_loss": self.E_sum_squared_errors / self.num_samples,
-            "F_loss": self.F_sum_squared_errors / self.num_samples,
-        }
+    def compute(self) -> torch.Tensor:
+        return self.force_loss / self.num_batches
+
+
+class CombinedLossMetric(torchmetrics.Metric):
+    def __init__(self) -> None:
+        super().__init__()
+        self.add_state("combined_loss", default=torch.tensor(0.0), dist_reduce_fx="sum")
+        self.add_state("num_batches", default=torch.tensor(0), dist_reduce_fx="sum")
+
+    def update(self, loss: torch.Tensor) -> None:
+        self.combined_loss += loss
+        self.num_batches += 1
+
+    def compute(self) -> torch.Tensor:
+        return self.combined_loss / self.num_batches
 
 
 from torch import nn
@@ -128,13 +94,10 @@ class Loss(nn.Module):
         include_force: bool = False,
     ) -> Dict[str, torch.Tensor]:
 
-        E_loss = self.mse_loss(
-            predict_target["E_predict"].squeeze(1), predict_target["E_true"].squeeze(1)
-        )
+        E_loss = self.mse_loss(predict_target["E_predict"], predict_target["E_true"])
         F_loss = (
-            self.mse_loss(predict_target["F_predict"].squeeze(1), predict_target["F_true"]).squeeze(1)
-            * include_force
-        )
+            self.mse_loss(predict_target["F_predict"], predict_target["F_true"])
+        ) * include_force
         return {"E_loss": E_loss, "F_loss": F_loss}
 
 
@@ -206,7 +169,7 @@ class TrainingAdapter(pl.LightningModule):
         nnp_parameters: Dict[str, Any],
         lr_scheduler_config: Dict[str, Union[str, int, float]],
         lr: float,
-        include_force: bool = False,
+        loss_module: Type[NaiveEnergyAndForceLoss] = NaiveEnergyAndForceLoss(),
         optimizer: Type[Optimizer] = torch.optim.AdamW,
     ):
         """
@@ -220,7 +183,7 @@ class TrainingAdapter(pl.LightningModule):
             The configuration for the learning rate scheduler.
         lr : float
             The learning rate for the optimizer.
-        include_force : bool, optional
+        loss_module : Loss, optional
             Whether to include force in the loss function, by default False.
         optimizer : Type[Optimizer], optional
             The optimizer class to use for training, by default torch.optim.AdamW.
@@ -246,13 +209,20 @@ class TrainingAdapter(pl.LightningModule):
         self.optimizer = optimizer
         self.learning_rate = lr
         self.lr_scheduler_config = lr_scheduler_config
-        self.unused_parameters: bool = False
-        self.val_metric = MSEMetric(include_force=include_force)
-        self.train_metric = MSEMetric(include_force=include_force)
-        self.test_metric = RMSEMetric(include_force=include_force)
+        self.loss_module = loss_module
+        self.unused_parameters = set()
+        self.are_unused_parameters_present = False
+        self.val_energy_loss_metric = EnergyLossMetric()
+        self.val_force_loss_metric = ForceLossMetric()
+        self.val_combined_loss_metric = CombinedLossMetric()
 
-        self.test_loss = []
-        self.val_loss = []
+        self.train_energy_loss_metric = EnergyLossMetric()
+        self.train_force_loss_metric = ForceLossMetric()
+        self.train_combined_loss_metric = CombinedLossMetric()
+
+        self.test_energy_loss_metric = EnergyLossMetric()
+        self.test_force_loss_metric = ForceLossMetric()
+        self.test_combined_loss_metric = CombinedLossMetric()
 
     def _get_forces(
         self, batch: "BatchData", energies: Dict[str, torch.Tensor]
@@ -318,18 +288,10 @@ class TrainingAdapter(pl.LightningModule):
         Dict[str, torch.Tensor]
             The true and predicted energies and forces from the dataset and the model.
         """
-        energies = self._get_energies(batch)
-        forces = self._get_forces(batch, energies)
+        with torch.set_grad_enabled(True):
+            energies = self._get_energies(batch)
+            forces = self._get_forces(batch, energies)
         return {**energies, **forces}
-
-    def compute_mse_loss(self, predict_target) -> Dict[str, torch.Tensor]:
-        from torch.nn import MSELoss
-
-        return _compute_mse_loss(
-            predict_target,
-            req_grad=True,
-            include_force=self.include_force,
-        )
 
     def config_prior(self):
         """
@@ -376,26 +338,38 @@ class TrainingAdapter(pl.LightningModule):
         """
 
         predict_target = self._get_predictions(batch)
-        loss = self.compute_mse_loss(predict_target)
-        self.log(
-            "train/L(E)",
-            loss["energy_loss"],
-            on_step=True,
-            prog_bar=True,
-        )
-        self.log(
-            "train/L(F)",
-            loss["force_loss"],
-            on_step=True,
-            prog_bar=True,
-        )
-        self.log(
-            "train/L(E+F)",
-            loss["combined_loss"],
-            on_step=True,
-            prog_bar=True,
-        )
+        loss = self.loss_module.calculate_train_loss(predict_target)
+
+        # Update and log metrics
+        self.train_energy_loss_metric.update(loss["energy_loss"])
+        self.train_force_loss_metric.update(loss["force_loss"])
+        self.train_combined_loss_metric.update(loss["combined_loss"])
+
         return loss["combined_loss"]
+
+    def validation_step(self, batch: "BatchData", batch_idx: int) -> None:
+        """
+        Validation step to compute the RMSE loss and accumulate L1 loss across epochs.
+
+        Parameters
+        ----------
+        batch : BatchData
+            The batch of data provided for validation.
+        batch_idx : int
+            The index of the current batch.
+
+        Returns
+        -------
+        torch.Tensor
+            The loss tensor computed for the current validation step.
+        """
+        predict_target = self._get_predictions(batch)
+        loss = self.loss_module.calculate_val_loss(predict_target)
+
+        # Update and log metrics
+        self.val_energy_loss_metric.update(loss["energy_loss"])
+        self.val_force_loss_metric.update(loss["force_loss"])
+        self.val_combined_loss_metric.update(loss["combined_loss"])
 
     def test_step(self, batch: "BatchData", batch_idx: int) -> None:
         """
@@ -418,7 +392,11 @@ class TrainingAdapter(pl.LightningModule):
         """
         predict_target = self._get_predictions(batch)
         loss = self.compute_mse_loss(predict_target)
-        self.test_loss.append(loss["combined_loss"])
+
+        # Update and log metrics
+        self.test_energy_loss_metric.update(loss["energy_loss"])
+        self.test_force_loss_metric.update(loss["force_loss"])
+        self.test_combined_loss_metric.update(loss["combined_loss"])
 
     def on_test_epoch_end(self) -> None:
         """
@@ -427,48 +405,26 @@ class TrainingAdapter(pl.LightningModule):
         This method is called at the end of each test epoch during training. It calculates the RMSE of the test set by taking the square root of the mean of the test mean squared error (MSE) values. The RMSE is then logged to the progress bar with the key "rmse_test_loss".
         """
 
-        import numpy as np
-
-        if self.unused_parameters:
-            log.warning(
-                f"Unused parameters during training!\nPlease investigate if you aren't expecting this."
-            )
-
-        combined_rmse = torch.sqrt(torch.mean(self.test_loss["combined_loss"]))
-        E_rmse = torch.sqrt(torch.mean(self.test_loss["E_loss"]))
-        F_rmse = torch.sqrt(torch.mean(self.test_loss["F_loss"]))
         self.log(
-            "test/L(F+E)",
-            rmse_loss,
+            "test/energy_loss",
+            torch.sqrt(self.test_energy_loss_metric.compute()),
+            on_epoch=True,
+            prog_bar=True,
+        )
+        self.log(
+            "test/force_loss",
+            torch.sqrt(self.test_force_loss_metric.compute()),
+            on_epoch=True,
+            prog_bar=True,
+        )
+        self.log(
+            "test/combined_loss",
+            torch.sqrt(self.test_combined_loss_metric.compute()),
             on_epoch=True,
             prog_bar=True,
         )
 
-        if self.are_unused_parameters_present:
-            log.warning("Unused parameters present in the model")
-            log.warning(f"Unused parameters: {self.unused_parameters}")
-
-    def validation_step(self, batch: "BatchData", batch_idx: int) -> torch.Tensor:
-        """
-        Validation step to compute the RMSE loss and accumulate L1 loss across epochs.
-
-        Parameters
-        ----------
-        batch : BatchData
-            The batch of data provided for validation.
-        batch_idx : int
-            The index of the current batch.
-
-        Returns
-        -------
-        torch.Tensor
-            The loss tensor computed for the current validation step.
-        """
-        predict_target = self._get_predictions(batch)
-        loss = self.compute_mse_loss(predict_target)
-        self.val_mse.append(float(loss["combined_loss"].detach()))
-
-    def on_training_epoch_end(self):
+    def on_train_epoch_end(self):
         # Log histograms of weights and biases after each backward pass
         for name, params in self.named_parameters():
             if params is not None:
@@ -478,13 +434,23 @@ class TrainingAdapter(pl.LightningModule):
                     f"{name}.grad", params.grad, self.current_epoch
                 )
 
+    def on_train_epoch_end(self) -> None:
+        """
+        This method will be called at the end of each training epoch.
+        We will check for unused parameters here.
+        """
+
+        # Check for parameters that have not been updated
+        for name, p in self.named_parameters():
+            if p.grad is None:
+                self.unused_parameters.add(name)
+                self.are_unused_parameters_present = True
+
     def on_validation_epoch_end(self):
         """
         Handles end-of-validation-epoch events to compute and log the average RMSE validation loss.
         """
-        import numpy as np
 
-        rmse_loss = np.sqrt(np.mean(np.array(self.validation_loss)))
         sch = self.lr_schedulers()
         try:
             log.info(f"Current learning rate: {sch.get_last_lr()}")
@@ -492,10 +458,33 @@ class TrainingAdapter(pl.LightningModule):
             pass
 
         self.log(
-            "rmse_val_loss", rmse_loss, on_epoch=True, prog_bar=True, sync_dist=True
+            "val/energy_loss",
+            torch.sqrt(self.val_energy_loss_metric.compute()),
+            on_epoch=True,
+            prog_bar=True,
         )
-        self.val_mse.clear()
-        return rmse_loss
+        self.log(
+            "val/force_loss",
+            torch.sqrt(self.val_force_loss_metric.compute()),
+            on_epoch=True,
+            prog_bar=True,
+        )
+        self.log(
+            "val/combined_loss",
+            torch.sqrt(self.val_combined_loss_metric.compute()),
+            on_epoch=True,
+            prog_bar=True,
+        )
+
+    # what happens after training ends
+    def on_train_end(self) -> None:
+
+        # Log the unused parameters
+        if self.are_unused_parameters_present:
+
+            log.warning(f"Unused parameters detected:")
+            for param_name in self.unused_parameters:
+                log.warning(param_name)
 
     def configure_optimizers(self) -> Dict[str, Any]:
         """
@@ -524,178 +513,12 @@ class TrainingAdapter(pl.LightningModule):
 
         lr_scheduler_config = {
             "scheduler": lr_scheduler,
-            "monitor": "rmse_val_loss",  # Name of the metric to monitor
+            "monitor": "val/combined_loss",  # Name of the metric to monitor
             "interval": "epoch",
             "frequency": 1,
         }
         return {"optimizer": optimizer, "lr_scheduler": lr_scheduler_config}
 
-    def on_train_epoch_end(self) -> None:
-        """
-        This method will be called at the end of each training epoch.
-        We will check for unused parameters here.
-        """
-
-        # Check for parameters that have not been updated
-        for name, p in self.named_parameters():
-            if p.grad is None:
-                self.unused_parameters.add(name)
-                self.are_unused_parameters_present = True
-
-    def on_train_end(self) -> None:
-
-        # Log the unused parameters
-        if self.are_unused_parameters_present:
-
-            log.warning(f"Unused parameters detected:")
-            log.warning(self.unused_parameters)
-
-    def log_unused_parameters(self):
-        """
-        Log the unused parameters.
-        """
-        if self.are_unused_parameters_present:
-            log.warning("Unused parameters detected:")
-            for param_name in self.unused_parameters:
-                log.warning(param_name)
-
-    def train_func(self):
-        """
-        Defines the training function to be used with Ray for distributed training.
-
-        This function configures a PyTorch Lightning trainer with the Ray Distributed Data Parallel
-        (DDP) strategy for efficient distributed training. The training process utilizes a custom
-        training loop and environment setup provided by Ray.
-
-        Note: This function should be passed to a Ray Trainer or directly used with Ray tasks.
-        """
-
-        from ray.train.lightning import (
-            RayDDPStrategy,
-            RayLightningEnvironment,
-            RayTrainReportCallback,
-            prepare_trainer,
-        )
-
-        trainer = pl.Trainer(
-            devices="auto",
-            accelerator="auto",
-            strategy=RayDDPStrategy(find_unused_parameters=True),
-            callbacks=[RayTrainReportCallback()],
-            plugins=[RayLightningEnvironment()],
-            enable_progress_bar=False,
-        )
-        trainer = prepare_trainer(trainer)
-        trainer.fit(self, self.train_dataloader, self.val_dataloader)
-
-    def get_ray_trainer(self, number_of_workers: int = 2, use_gpu: bool = False):
-        """
-        Initializes and returns a Ray Trainer for distributed training.
-
-        Configures a Ray Trainer with a specified number of workers and GPU usage settings. This trainer
-        is prepared for distributed training using Ray, with support for checkpointing.
-
-        Parameters
-        ----------
-        number_of_workers : int, optional
-            The number of distributed workers to use, by default 2.
-        use_gpu : bool, optional
-            Specifies whether to use GPUs for training, by default False.
-
-        Returns
-        -------
-        Ray Trainer
-            The configured Ray Trainer for distributed training.
-        """
-
-        from ray.train import CheckpointConfig, RunConfig, ScalingConfig
-
-        scaling_config = ScalingConfig(
-            num_workers=number_of_workers,
-            use_gpu=use_gpu,
-            resources_per_worker={"CPU": 1, "GPU": 1} if use_gpu else {"CPU": 1},
-        )
-
-        run_config = RunConfig(
-            checkpoint_config=CheckpointConfig(
-                num_to_keep=2,
-                checkpoint_score_attribute="rmse_val_loss",
-                checkpoint_score_order="min",
-            ),
-        )
-        from ray.train.torch import TorchTrainer
-
-        # Define a TorchTrainer without hyper-parameters for Tuner
-        ray_trainer = TorchTrainer(
-            self.train_func,
-            scaling_config=scaling_config,
-            run_config=run_config,
-        )
-
-        return ray_trainer
-
-    def tune_with_ray(
-        self,
-        train_dataloader,
-        val_dataloader,
-        number_of_epochs: int = 5,
-        number_of_samples: int = 10,
-        number_of_ray_workers: int = 2,
-        train_on_gpu: bool = False,
-    ):
-        """
-        Performs hyperparameter tuning using Ray Tune.
-
-        This method sets up and starts a Ray Tune hyperparameter tuning session, utilizing the ASHA scheduler
-        for efficient trial scheduling and early stopping.
-
-        Parameters
-        ----------
-        train_dataloader : DataLoader
-            The DataLoader for training data.
-        val_dataloader : DataLoader
-            The DataLoader for validation data.
-        number_of_epochs : int, optional
-            The maximum number of epochs for training, by default 5.
-        number_of_samples : int, optional
-            The number of samples (trial runs) to perform, by default 10.
-        number_of_ray_workers : int, optional
-            The number of Ray workers to use for distributed training, by default 2.
-        use_gpu : bool, optional
-            Whether to use GPUs for training, by default False.
-
-        Returns
-        -------
-        Tune experiment analysis object
-            The result of the hyperparameter tuning session, containing performance metrics and the best hyperparameters found.
-        """
-
-        from ray import tune
-        from ray.tune.schedulers import ASHAScheduler
-
-        self.train_dataloader = train_dataloader
-        self.val_dataloader = val_dataloader
-
-        ray_trainer = self.get_ray_trainer(
-            number_of_workers=number_of_ray_workers, use_gpu=train_on_gpu
-        )
-        scheduler = ASHAScheduler(
-            max_t=number_of_epochs, grace_period=1, reduction_factor=2
-        )
-
-        tune_config = tune.TuneConfig(
-            metric="rmse_val_loss",
-            mode="min",
-            scheduler=scheduler,
-            num_samples=number_of_samples,
-        )
-
-        tuner = tune.Tuner(
-            ray_trainer,
-            param_space={"train_loop_config": self.config_prior()},
-            tune_config=tune_config,
-        )
-        return tuner.fit()
 
 
 from typing import Optional

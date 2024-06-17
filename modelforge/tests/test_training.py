@@ -61,67 +61,86 @@ import torch
 from torch.nn import functional as F
 
 
-def test_energy_loss_only():
-    # test the loss
+@pytest.fixture
+def _initialize_predict_target_dictionary():
+    # initalize the test system
+    predict_target = {}
+    predict_target["E_predict"] = torch.tensor([[1.0], [2.0], [3.0]])
+    predict_target["E_true"] = torch.tensor([[1.0], [-2.0], [3.0]])
+    predict_target["F_predict"] = torch.tensor(
+        [[1.0, 2.0, 3.0], [1.0, 2.0, 3.0], [1.0, 2.0, 3.0]]
+    )
+    predict_target["F_true"] = torch.tensor(
+        [[1.0, -2.0, -3.0], [1.0, -2.0, -3.0], [1.0, -2.0, -3.0]]
+    )
+    return predict_target
+
+
+def test_energy_loss_only(_initialize_predict_target_dictionary):
+    # test the different Loss classes
     from modelforge.train.training import NaiveEnergyAndForceLoss
 
+    # start with NaiveEnergyAndForceLoss
     loss_calculator = NaiveEnergyAndForceLoss(include_force=False)
-
-    predict_target = {}
-    predict_target["E_predict"] = torch.tensor([[1.0], [2.0], [3.0]])
-    predict_target["E_true"] = torch.tensor([[1.0], [-2.0], [3.0]])
-    predict_target["F_predict"] = torch.tensor(
-        [[1.0, 2.0, 3.0], [1.0, 2.0, 3.0], [1.0, 2.0, 3.0]]
-    )
-    predict_target["F_true"] = torch.tensor(
-        [[1.0, -2.0, -3.0], [1.0, -2.0, -3.0], [1.0, -2.0, -3.0]]
-    )
-
-    expected_loss = torch.sum(
+    predict_target = _initialize_predict_target_dictionary
+    # this loss calculates validation and training error as MSE and test error as RMSE
+    mse_expected_loss = torch.mean(
         (predict_target["E_predict"] - predict_target["E_true"]) ** 2
     )
+    rmse_expected_loss = torch.sqrt(mse_expected_loss)
+    
+    # test loss class
+    # make sure that train loss is MSE as expected
     loss = loss_calculator.calculate_train_loss(predict_target)
-    assert torch.allclose(
-        expected_loss.double(), loss
-    ), f"Expected {expected_loss.item()} but got {loss.item()}"
+    assert torch.isclose(
+        mse_expected_loss, loss["combined_loss"]
+    ), f"Expected {mse_expected_loss.item()} but got {loss['combined_loss'].item()}"
+    # make sure that no force loss is calculated
+    assert torch.isclose(
+        torch.tensor([0.0]), loss["force_loss"]
+    ), f"Expected 0. but got {loss['force_loss'].item()}"
+    loss_val = loss_calculator.calculate_val_loss(predict_target)
+    #test that combined loss of train and val loss are the same
+    assert torch.isclose(
+        loss["combined_loss"], loss_val["combined_loss"]
+    ), f"Expected equal loss. but got {loss['combined_loss'].item()} and {loss_val['combined_loss'].item()}"
 
-    # now with RMSE
-    from modelforge.train.training import RMSELoss
-
-    loss_calculator = RMSELoss(include_force=False)
-
-    loss_calculator.update(predict_target)
-    loss = loss_calculator.compute()
-    assert torch.allclose(
-        torch.sqrt(expected_loss.double()), loss
-    ), f"Expected {expected_loss.item()} but got {loss.item()}"
+    # test test loss (RMSE)
+    loss = loss_calculator.calculate_test_loss(predict_target)
+    assert torch.isclose(
+        rmse_expected_loss, loss["combined_loss"]
+    ), f"Expected {rmse_expected_loss.item()} but got {loss['combined_loss'].item()}"
 
 
-def test_energy_and_force_loss():
-    from modelforge.train.training import MSELoss
+def test_energy_and_force_loss(_initialize_predict_target_dictionary):
+    # test the different Loss classes with differnt prediction targets (i.e. forces)
+    from modelforge.train.training import NaiveEnergyAndForceLoss
 
-    loss_calculator = MSELoss(include_force=True)
+    loss_calculator = NaiveEnergyAndForceLoss(include_force=True)
 
-    predict_target = {}
-    predict_target["E_predict"] = torch.tensor([[1.0], [2.0], [3.0]])
-    predict_target["E_true"] = torch.tensor([[1.0], [-2.0], [3.0]])
-    predict_target["F_predict"] = torch.tensor(
-        [[1.0, 2.0, 3.0], [1.0, 2.0, 3.0], [1.0, 2.0, 3.0]]
-    )
-    predict_target["F_true"] = torch.tensor(
-        [[1.0, -2.0, -3.0], [1.0, -2.0, -3.0], [1.0, -2.0, -3.0]]
-    )
+    predict_target = _initialize_predict_target_dictionary
 
-    expected_loss = (
-        torch.sum((predict_target["E_predict"] - predict_target["E_true"]) ** 2)
-        + torch.sum((predict_target["F_predict"] - predict_target["F_true"]) ** 2)
+    # generate the MSE and RMSE loss
+    mse_expected_loss = (
+        torch.mean((predict_target["E_predict"] - predict_target["E_true"]) ** 2)
+        + torch.mean((predict_target["F_predict"] - predict_target["F_true"]) ** 2)
     ) / 2
-    loss_calculator.update(predict_target)
-    loss = loss_calculator.compute()
-    assert torch.allclose(
-        expected_loss.double(), loss
-    ), f"Expected {expected_loss.item()} but got {loss.item()}"
-
+    rmse_expected_loss = torch.sqrt(mse_expected_loss)
+    
+    # compare to train/val loss
+    train_loss = loss_calculator.calculate_train_loss(predict_target)
+    assert torch.isclose(
+        train_loss['combined_loss'], mse_expected_loss
+    ), f"Expected {mse_expected_loss.item()} but got {train_loss['combined_loss'].item()}"
+    val_loss = loss_calculator.calculate_val_loss(predict_target)
+    assert torch.isclose(
+        val_loss['combined_loss'], mse_expected_loss
+    ), f"Expected {mse_expected_loss.item()} but got {train_loss['combined_loss'].item()}"
+    # compare to test loss
+    test_loss = loss_calculator.calculate_test_loss(predict_target)
+    assert torch.isclose(
+        test_loss['combined_loss'], rmse_expected_loss
+    ), f"Expected {rmse_expected_loss.item()} but got {test_loss['combined_loss'].item()}"
 
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())

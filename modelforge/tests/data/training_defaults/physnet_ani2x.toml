@@ -24,17 +24,17 @@ training_parameters.lr_scheduler_config.cooldown = 5
 training_parameters.lr_scheduler_config.min_lr = 1e-8
 training_parameters.lr_scheduler_config.threshold = 0.1
 training_parameters.lr_scheduler_config.threshold_mode = "abs"
-training_parameters.lr_scheduler_config.monitor = "rmse_val_loss"
+training_parameters.lr_scheduler_config.monitor = "val/combined_loss"
 training_parameters.lr_scheduler_config.interval = "epoch"
 
 early_stopping.verbose = true
-early_stopping.monitor = "rmse_val_loss"
+early_stopping.monitor = "val/combined_loss"
 early_stopping.min_delta = 0.001
 early_stopping.patience = 50
 
 
-stochastic_weight_averaging_config.swa_epoch_start=50
-stochastic_weight_averaging_config.swa_lrs=1e-2
+stochastic_weight_averaging_config.swa_epoch_start = 50
+stochastic_weight_averaging_config.swa_lrs = 1e-2
 
 [dataset]
 dataset_name = "ANI2x"

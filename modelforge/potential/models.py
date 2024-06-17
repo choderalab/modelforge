@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from modelforge.potential.physnet import PhysNet, PhysNetNeuralNetworkData
     from modelforge.potential.sake import SAKE, SAKENeuralNetworkInput
     from modelforge.potential.schnet import SchNet, SchnetNeuralNetworkData
+    from modelforge.train.training import NaiveEnergyAndForceLoss
 
 
 # Define NamedTuple for the outputs of Pairlist and Neighborlist forward method
@@ -545,6 +546,7 @@ class NeuralNetworkPotentialFactory:
         *,
         use: Literal["training", "inference"],
         model_type: Literal["ANI2x", "SchNet", "PaiNN", "SAKE", "PhysNet"],
+        loss_module: Type["NaiveEnergyAndForceLoss"],
         model_parameters: Dict[str, Union[int, float, str]],
         simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
         training_parameters: Optional[Dict[str, Any]] = None,
@@ -579,7 +581,7 @@ class NeuralNetworkPotentialFactory:
         """
 
         from modelforge.potential import _Implemented_NNPs
-        from modelforge.train.training import TrainingAdapter
+        from modelforge.train.training import TrainingAdapter, NaiveEnergyAndForceLoss
 
         model_parameters = model_parameters or {}
         training_parameters = training_parameters or {}

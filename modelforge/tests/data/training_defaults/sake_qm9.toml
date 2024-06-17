@@ -1,10 +1,10 @@
 [potential]
-potential_parameters.max_Z = 101
-potential_parameters.number_of_atom_features = 64
-potential_parameters.number_of_radial_basis_functions = 50
-potential_parameters.cutoff = "5.0 angstrom"
-potential_parameters.number_of_interaction_modules = 6
-potential_parameters.number_of_spatial_attention_heads = 4
+potential_parameter.max_Z = 101
+potential_parameter.number_of_atom_features = 64
+potential_parameter.number_of_radial_basis_functions = 50
+potential_parameter.cutoff = "5.0 angstrom"
+potential_parameter.number_of_interaction_modules = 6
+potential_parameter.number_of_spatial_attention_heads = 4
 model_name = "SAKE"
 
 [training]
@@ -15,23 +15,27 @@ accelerator = "cpu"
 num_nodes = 1
 devices = 1                    #[0,1,2,3]
 
-training_parameters.lr = 1e-3
-training_parameters.lr_scheduler_config.frequency = 1
-training_parameters.lr_scheduler_config.mode = "min"
-training_parameters.lr_scheduler_config.factor = 0.1
-training_parameters.lr_scheduler_config.patience = 10
-training_parameters.lr_scheduler_config.cooldown = 5
-training_parameters.lr_scheduler_config.min_lr = 1e-8
-training_parameters.lr_scheduler_config.threshold = 0.1
-training_parameters.lr_scheduler_config.threshold_mode = "abs"
-training_parameters.lr_scheduler_config.monitor = "val/combined_loss"
-training_parameters.lr_scheduler_config.interval = "epoch"
+training_parameter.lr = 1e-3
+training_parameter.lr_scheduler_config.frequency = 1
+training_parameter.lr_scheduler_config.mode = "min"
+training_parameter.lr_scheduler_config.factor = 0.1
+training_parameter.lr_scheduler_config.patience = 10
+training_parameter.lr_scheduler_config.cooldown = 5
+training_parameter.lr_scheduler_config.min_lr = 1e-8
+training_parameter.lr_scheduler_config.threshold = 0.1
+training_parameter.lr_scheduler_config.threshold_mode = "abs"
+training_parameter.lr_scheduler_config.monitor = "val/combined_loss"
+training_parameter.lr_scheduler_config.interval = "epoch"
 
 early_stopping.verbose = true
 early_stopping.monitor = "val/combined_loss"
 early_stopping.min_delta = 0.001
 early_stopping.patience = 50
 
+loss_parameter.loss_type = "NaiveEnergyAndForceLoss"
+loss_parameter.include_force = true
+loss_parameter.force_weight = 1.0
+loss_parameter.energy_weight = 1.0
 
 stochastic_weight_averaging_config.swa_epoch_start = 50
 stochastic_weight_averaging_config.swa_lrs = 1e-2

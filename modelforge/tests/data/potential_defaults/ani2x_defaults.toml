@@ -1,9 +1,9 @@
 [potential]
-potential_parameters.angle_sections = 4
-potential_parameters.radial_max_distance = "5.1 angstrom"
-potential_parameters.radial_min_distance = "0.8 angstrom"
-potential_parameters.number_of_radial_basis_functions = 16
-potential_parameters.angular_max_distance = "3.5 angstrom"
-potential_parameters.angular_min_distance = "0.8 angstrom"
-potential_parameters.angular_dist_divisions = 8
+potential_parameter.angle_sections = 4
+potential_parameter.radial_max_distance = "5.1 angstrom"
+potential_parameter.radial_min_distance = "0.8 angstrom"
+potential_parameter.number_of_radial_basis_functions = 16
+potential_parameter.angular_max_distance = "3.5 angstrom"
+potential_parameter.angular_min_distance = "0.8 angstrom"
+potential_parameter.angular_dist_divisions = 8
 model_name = "ANI2x"

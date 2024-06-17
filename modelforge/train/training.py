@@ -101,6 +101,17 @@ class Loss(nn.Module):
         return {"E_loss": E_loss, "F_loss": F_loss}
 
 
+class LossFactory(object):
+
+    @staticmethod
+    def create_loss(loss_type: str, **kwargs) -> Type[Loss]:
+
+        if loss_type == "NaiveEnergyAndForceLoss":
+            return NaiveEnergyAndForceLoss(**kwargs)
+        else:
+            raise ValueError(f"Loss type {loss_type} not implemented.")
+
+
 class NaiveEnergyAndForceLoss(Loss):
     def __init__(
         self,
@@ -273,9 +284,8 @@ class TrainingAdapter(pl.LightningModule):
             f"{E_true.shape} != {E_predict.shape}"
         )
         return {"E_true": E_true, "E_predict": E_predict}
-    
+
     @torch.enable_grad()
-    @torch.inference_mode(False)
     def _get_predictions(self, batch: "BatchData") -> Dict[str, torch.Tensor]:
         """
         Computes the energies and forces from a given batch using the model.
@@ -371,6 +381,7 @@ class TrainingAdapter(pl.LightningModule):
 
         return loss["combined_loss"]
 
+    @torch.inference_mode(False)
     def validation_step(self, batch: "BatchData", batch_idx: int) -> None:
         """
         Validation step to compute the RMSE loss and accumulate L1 loss across epochs.
@@ -387,8 +398,8 @@ class TrainingAdapter(pl.LightningModule):
         torch.Tensor
             The loss tensor computed for the current validation step.
         """
-        
-        #batch.metadata.E = batch.metadata.E.re
+
+        # batch.metadata.E = batch.metadata.E.re
         predict_target = self._get_predictions(batch)
         loss = self.loss_module.calculate_val_loss(predict_target)
 
@@ -766,57 +777,24 @@ def perform_training(
         log.info(f"Saving logs to default location: {save_dir}")
 
     experiment_name = training_config.get("experiment_name", "exp")
-    if experiment_name == "experiment_name":
-        log.info(f"Saving logs in default dir: {experiment_name}")
-
     model_name = potential_config["model_name"]
     dataset_name = dataset_config["dataset_name"]
+    log_training_arguments(potential_config, training_config, dataset_config)
 
     version_select = dataset_config.get("version_select", "latest")
-    if version_select == "latest":
-        log.info(f"Using default dataset version: {version_select}")
-
     accelerator = training_config.get("accelerator", "cpu")
-    if accelerator == "cpu":
-        log.info(f"Using default accelerator: {accelerator}")
-
     nr_of_epochs = training_config.get("nr_of_epochs", 10)
-    if nr_of_epochs == 10:
-        log.info(f"Using default number of epochs: {nr_of_epochs}")
-
     num_nodes = training_config.get("num_nodes", 1)
-    if num_nodes == 1:
-        log.info(f"Using default number of nodes: {num_nodes}")
-
     devices = training_config.get("devices", 1)
-    if devices == 1:
-        log.info(f"Using default device index/number: {devices}")
-
     batch_size = training_config.get("batch_size", 128)
-    if batch_size == 128:
-        log.info(f"Using default batch size: {batch_size}")
-
     remove_self_energies = dataset_config.get("remove_self_energies", False)
-    if remove_self_energies is False:
-        log.info(
-            f"Using default for removing self energies: Self energies are not removed"
-        )
     early_stopping_config = training_config.get("early_stopping", None)
-    if early_stopping_config is None:
-        log.info(f"Using default: No early stopping performed")
-
     stochastic_weight_averaging_config = training_config.get(
         "stochastic_weight_averaging_config", None
     )
-
     num_workers = dataset_config.get("number_of_worker", 4)
-    if num_workers == 4:
-        log.info(
-            f"Using default number of workers for training data loader: {num_workers}"
-        )
     pin_memory = dataset_config.get("pin_memory", False)
-    if pin_memory is False:
-        log.info(f"Using default value for pinned_memory: {pin_memory}")
+    loss_module = LossFactory.create_loss(**training_config.get("loss_parameter", {}))
 
     # set up tensor board logger
     logger = TensorBoardLogger(save_dir, name=experiment_name)
@@ -844,8 +822,9 @@ Experiments are saved to: {save_dir}/{experiment_name}.
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="training",
         model_type=model_name,
-        model_parameters=potential_config["potential_parameters"],
-        training_parameters=training_config["training_parameters"],
+        loss_module=loss_module,
+        model_parameters=potential_config["potential_parameter"],
+        training_parameters=training_config["training_parameter"],
     )
 
     # set up traininer
@@ -870,6 +849,7 @@ Experiments are saved to: {save_dir}/{experiment_name}.
         accelerator=accelerator,
         logger=logger,  # Add the logger here
         callbacks=callbacks,
+        inference_mode=False,
     )
 
     dm.prepare_data()

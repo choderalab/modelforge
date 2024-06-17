@@ -33,6 +33,7 @@ dependencies:
   - ray-train
   - ray-tune
   - torchani
+  - torchmd-net
   - versioneer
 
   # Docs

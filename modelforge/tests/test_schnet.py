@@ -19,8 +19,8 @@ def test_Schnet_init():
     config = return_toml_config(file_path)
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
-    schnet = SchNet(**potential_parameters)
+    potential_parameter = config["potential"].get("potential_parameter", {})
+    schnet = SchNet(**potential_parameter)
     assert schnet is not None, "Schnet model should be initialized."
 
 

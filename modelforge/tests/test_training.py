@@ -164,13 +164,13 @@ def test_hypterparameter_tuning_with_ray(model_name, dataset_name, datamodule_fa
     config = return_toml_config(file_path)
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
     training_parameters = config["training"].get("training_parameters", {})
     # training model
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="training",
         model_type=model_name,
-        model_parameters=potential_parameters,
+        model_parameters=potential_parameter,
         training_parameters=training_parameters,
     )
 

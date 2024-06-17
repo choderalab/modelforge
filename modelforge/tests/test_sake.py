@@ -29,9 +29,9 @@ def test_SAKE_init():
     config = return_toml_config(file_path)
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
 
-    sake = SAKE(**potential_parameters)
+    sake = SAKE(**potential_parameter)
     assert sake is not None, "SAKE model should be initialized."
 
 
@@ -57,9 +57,9 @@ def test_sake_forward(single_batch_with_batchsize_64):
     config = return_toml_config(file_path)
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
 
-    sake = SAKE(**potential_parameters)
+    sake = SAKE(**potential_parameter)
     energy = sake(methane).E
     nr_of_mols = methane.atomic_subsystem_indices.unique().shape[0]
 
@@ -124,9 +124,9 @@ def test_sake_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize_64
     config = return_toml_config(file_path)
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
-    potential_parameters["number_of_atom_features"] = nr_atom_basis
-    sake = SAKE(**potential_parameters)
+    potential_parameter = config["potential"].get("potential_parameter", {})
+    potential_parameter["number_of_atom_features"] = nr_atom_basis
+    sake = SAKE(**potential_parameter)
 
     # get methane input
     methane = single_batch_with_batchsize_64.nnp_input
@@ -607,9 +607,9 @@ def test_model_invariance(single_batch_with_batchsize_1):
     config = return_toml_config(file_path)
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
 
-    model = SAKE(**potential_parameters)
+    model = SAKE(**potential_parameter)
     # get methane input
     methane = single_batch_with_batchsize_1.nnp_input
 

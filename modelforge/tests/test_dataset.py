@@ -475,13 +475,14 @@ def test_dataset_neighborlist(model_name, single_batch_with_batchsize_64):
     config = return_toml_config(file_path)
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
     from modelforge.potential.models import NeuralNetworkPotentialFactory
+
     training_config = {}
-    training_config['loss_type'] = "NaiveEnergyAndForceLoss"
-    training_config['include_force'] = True
-    training_config['force_weight'] = 1.0
-    training_config['energy_weight'] = 1.0
+    training_config["loss_type"] = "NaiveEnergyAndForceLoss"
+    training_config["include_force"] = True
+    training_config["force_weight"] = 1.0
+    training_config["energy_weight"] = 1.0
 
     loss_module = LossFactory.create_loss(**training_config)
 
@@ -490,7 +491,7 @@ def test_dataset_neighborlist(model_name, single_batch_with_batchsize_64):
         model_type=model_name,
         loss_module=loss_module,
         simulation_environment="PyTorch",
-        model_parameters=potential_parameters,
+        model_parameters=potential_parameter,
     )
     model(nnp_input)
 

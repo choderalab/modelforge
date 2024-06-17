@@ -273,7 +273,9 @@ class TrainingAdapter(pl.LightningModule):
             f"{E_true.shape} != {E_predict.shape}"
         )
         return {"E_true": E_true, "E_predict": E_predict}
-
+    
+    @torch.enable_grad()
+    @torch.inference_mode(False)
     def _get_predictions(self, batch: "BatchData") -> Dict[str, torch.Tensor]:
         """
         Computes the energies and forces from a given batch using the model.
@@ -288,9 +290,8 @@ class TrainingAdapter(pl.LightningModule):
         Dict[str, torch.Tensor]
             The true and predicted energies and forces from the dataset and the model.
         """
-        with torch.set_grad_enabled(True):
-            energies = self._get_energies(batch)
-            forces = self._get_forces(batch, energies)
+        energies = self._get_energies(batch)
+        forces = self._get_forces(batch, energies)
         return {**energies, **forces}
 
     def config_prior(self):
@@ -345,6 +346,29 @@ class TrainingAdapter(pl.LightningModule):
         self.train_force_loss_metric.update(loss["force_loss"])
         self.train_combined_loss_metric.update(loss["combined_loss"])
 
+        # Log metrics
+        self.log(
+            "train/energy_loss",
+            loss["combined_loss"].detach().item(),
+            on_step=True,
+            on_epoch=True,
+            prog_bar=True,
+        )
+        self.log(
+            "train/force_loss",
+            loss["combined_loss"].detach().item(),
+            on_step=True,
+            on_epoch=True,
+            prog_bar=True,
+        )
+        self.log(
+            "train/combined_loss",
+            loss["combined_loss"].detach().item(),
+            on_step=True,
+            on_epoch=True,
+            prog_bar=True,
+        )
+
         return loss["combined_loss"]
 
     def validation_step(self, batch: "BatchData", batch_idx: int) -> None:
@@ -363,13 +387,15 @@ class TrainingAdapter(pl.LightningModule):
         torch.Tensor
             The loss tensor computed for the current validation step.
         """
+        
+        #batch.metadata.E = batch.metadata.E.re
         predict_target = self._get_predictions(batch)
         loss = self.loss_module.calculate_val_loss(predict_target)
 
         # Update and log metrics
-        self.val_energy_loss_metric.update(loss["energy_loss"])
-        self.val_force_loss_metric.update(loss["force_loss"])
-        self.val_combined_loss_metric.update(loss["combined_loss"])
+        self.val_energy_loss_metric.update(loss["energy_loss"].detach())
+        self.val_force_loss_metric.update(loss["force_loss"].detach())
+        self.val_combined_loss_metric.update(loss["combined_loss"].detach())
 
     def test_step(self, batch: "BatchData", batch_idx: int) -> None:
         """
@@ -390,13 +416,14 @@ class TrainingAdapter(pl.LightningModule):
         None
             The results are logged and not directly returned.
         """
-        predict_target = self._get_predictions(batch)
-        loss = self.compute_mse_loss(predict_target)
+        with torch.enable_grad():
+            predict_target = self._get_predictions(batch)
+            loss = self.loss_module.calculate_test_loss(predict_target)
 
         # Update and log metrics
-        self.test_energy_loss_metric.update(loss["energy_loss"])
-        self.test_force_loss_metric.update(loss["force_loss"])
-        self.test_combined_loss_metric.update(loss["combined_loss"])
+        self.test_energy_loss_metric.update(loss["energy_loss"].detach())
+        self.test_force_loss_metric.update(loss["force_loss"].detach())
+        self.test_combined_loss_metric.update(loss["combined_loss"].detach())
 
     def on_test_epoch_end(self) -> None:
         """
@@ -425,6 +452,7 @@ class TrainingAdapter(pl.LightningModule):
         )
 
     def on_train_epoch_end(self):
+        a = 6
         # Log histograms of weights and biases after each backward pass
         for name, params in self.named_parameters():
             if params is not None:
@@ -433,18 +461,6 @@ class TrainingAdapter(pl.LightningModule):
                 self.logger.experiment.add_histogram(
                     f"{name}.grad", params.grad, self.current_epoch
                 )
-
-    def on_train_epoch_end(self) -> None:
-        """
-        This method will be called at the end of each training epoch.
-        We will check for unused parameters here.
-        """
-
-        # Check for parameters that have not been updated
-        for name, p in self.named_parameters():
-            if p.grad is None:
-                self.unused_parameters.add(name)
-                self.are_unused_parameters_present = True
 
     def on_validation_epoch_end(self):
         """
@@ -475,16 +491,6 @@ class TrainingAdapter(pl.LightningModule):
             on_epoch=True,
             prog_bar=True,
         )
-
-    # what happens after training ends
-    def on_train_end(self) -> None:
-
-        # Log the unused parameters
-        if self.are_unused_parameters_present:
-
-            log.warning(f"Unused parameters detected:")
-            for param_name in self.unused_parameters:
-                log.warning(param_name)
 
     def configure_optimizers(self) -> Dict[str, Any]:
         """
@@ -518,7 +524,6 @@ class TrainingAdapter(pl.LightningModule):
             "frequency": 1,
         }
         return {"optimizer": optimizer, "lr_scheduler": lr_scheduler_config}
-
 
 
 from typing import Optional

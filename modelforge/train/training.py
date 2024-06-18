@@ -676,6 +676,7 @@ def log_training_arguments(
         log.info(f"Using default batch size: {batch_size}")
     else:
         log.info(f"Using batch size: {batch_size}")
+
     remove_self_energies = training_config.get("remove_self_energies", False)
     if remove_self_energies is False:
         log.warning(
@@ -759,7 +760,7 @@ def perform_training(
     num_nodes = training_config.get("num_nodes", 1)
     devices = training_config.get("devices", 1)
     batch_size = training_config.get("batch_size", 128)
-    remove_self_energies = dataset_config.get("remove_self_energies", False)
+    remove_self_energies = training_config.get("remove_self_energies", False)
     early_stopping_config = training_config.get("early_stopping", None)
     stochastic_weight_averaging_config = training_config.get(
         "stochastic_weight_averaging_config", None

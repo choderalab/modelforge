@@ -10,9 +10,8 @@ from modelforge.potential.sake import SAKE, SAKEInteraction
 import sake as reference_sake
 from sys import platform
 
-IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 
-IN_MAC = platform == "darwin"
+ON_MAC = platform == "darwin"
 
 
 def test_SAKE_init():
@@ -296,7 +295,7 @@ def test_radial_symmetry_function_against_reference():
     )
 
 
-@pytest.mark.skipif(IN_MAC, reason="Test fails on macOS")
+@pytest.mark.skipif(ON_MAC, reason="Test fails on macOS")
 @pytest.mark.parametrize("include_self_pairs", [True, False])
 @pytest.mark.parametrize("v_is_none", [True, False])
 def test_sake_layer_against_reference(include_self_pairs, v_is_none):

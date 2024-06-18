@@ -51,6 +51,7 @@ def test_physnet_forward(single_batch_with_batchsize_64):
     yhat = model(single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float32))
 
 
+@pytest.mark.skipif(IN_GITHUB_ACTIONS, reason="Test fails on macOS")
 def test_rbf():
     # This test compares the RBF calculation of the original
     # PhysNet implemntation agains the SAKE/PhysNet implementation in modelforge

@@ -941,7 +941,7 @@ class TensorNetRadialSymmetryFunction(RadialSymmetryFunction):
     ):
         scale_factors = torch.full(
             (number_of_radial_basis_functions,),
-            torch.exp(-_min_distance_in_nanometer) \
+            np.exp(-_min_distance_in_nanometer) \
             - torch.exp(-_max_distance_in_nanometer),
         )
         scale_factors = scale_factors * 2 / number_of_radial_basis_functions

@@ -546,8 +546,8 @@ class NeuralNetworkPotentialFactory:
         *,
         use: Literal["training", "inference"],
         model_type: Literal["ANI2x", "SchNet", "PaiNN", "SAKE", "PhysNet"],
-        loss_module: Type["NaiveEnergyAndForceLoss"],
         model_parameters: Dict[str, Union[int, float, str]],
+        loss_module: Optional[Type["NaiveEnergyAndForceLoss"]] = None,
         simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
         training_parameters: Optional[Dict[str, Any]] = None,
     ) -> Union[Type[torch.nn.Module], Type[JAXModel], Type[pl.LightningModule]]:
@@ -600,7 +600,9 @@ class NeuralNetworkPotentialFactory:
                 )
             model_parameters["nnp_name"] = model_type
             return TrainingAdapter(
-                nnp_parameters=model_parameters, **training_parameters
+                model_parameters=model_parameters,
+                loss_module=loss_module,
+                **training_parameters,
             )
         elif use == "inference":
             # if this model_parameter dictionary ahs already been used
@@ -714,6 +716,7 @@ class BaseNetwork(Module):
     ):
         # Prefix to remove
         prefix = "model."
+        excluded_keys = ["loss_module.energy_weight", "loss_module.force_weight"]
 
         # check if prefix is present
         if any(key.startswith(prefix) for key in state_dict.keys()):
@@ -726,7 +729,12 @@ class BaseNetwork(Module):
         else:
             log.debug("No prefix found. No modifications to keys in state loading.")
 
-        super().load_state_dict(new_d, strict=strict, assign=assign)
+        filtered_state_dict = {k: v for k, v in new_d.items() if k not in excluded_keys}
+
+
+        super().load_state_dict(filtered_state_dict, strict=strict, assign=assign)
+
+
 
     def forward(self, data: NNPInput):
         # perform input checks

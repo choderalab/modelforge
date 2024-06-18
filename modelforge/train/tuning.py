@@ -62,6 +62,9 @@ def tune_model(
 
 class RayTuner:
 
+    def __init__(self, model) -> None:
+        self.model = model
+
     def train_func(self):
         """
         Defines the training function to be used with Ray for distributed training.
@@ -79,6 +82,7 @@ class RayTuner:
             RayTrainReportCallback,
             prepare_trainer,
         )
+        import lightning as pl
 
         trainer = pl.Trainer(
             devices="auto",
@@ -89,7 +93,7 @@ class RayTuner:
             enable_progress_bar=False,
         )
         trainer = prepare_trainer(trainer)
-        trainer.fit(self, self.train_dataloader, self.val_dataloader)
+        trainer.fit(self.model, self.train_dataloader, self.val_dataloader)
 
     def get_ray_trainer(self, number_of_workers: int = 2, use_gpu: bool = False):
         """
@@ -195,7 +199,7 @@ class RayTuner:
 
         tuner = tune.Tuner(
             ray_trainer,
-            param_space={"train_loop_config": self.config_prior()},
+            param_space={"train_loop_config": self.model.config_prior()},
             tune_config=tune_config,
         )
         return tuner.fit()

@@ -4,54 +4,25 @@ from typing import TYPE_CHECKING, Any, Union, Dict, Type
 import torch
 from loguru import logger as log
 from modelforge.dataset.dataset import BatchData
-from torch.nn import functional as F
 
 if TYPE_CHECKING:
     from modelforge.potential.utils import BatchData
 
 import torchmetrics
+from torchmetrics.utilities import dim_zero_cat
 
 
-class EnergyLossMetric(torchmetrics.Metric):
+class MSELossMetric(torchmetrics.Metric):
     def __init__(self) -> None:
         super().__init__()
-        self.add_state("energy_loss", default=torch.tensor(0.0), dist_reduce_fx="sum")
-        self.add_state("num_batches", default=torch.tensor(0), dist_reduce_fx="sum")
+        self.add_state("loss_per_batch", default=[], dist_reduce_fx="cat")
 
     def update(self, loss: torch.Tensor) -> None:
-        self.energy_loss += loss
-        self.num_batches += 1
+        self.energy_loss_per_batch.append(loss.detach())
 
     def compute(self) -> torch.Tensor:
-        return self.energy_loss / self.num_batches
-
-
-class ForceLossMetric(torchmetrics.Metric):
-    def __init__(self) -> None:
-        super().__init__()
-        self.add_state("force_loss", default=torch.tensor(0.0), dist_reduce_fx="sum")
-        self.add_state("num_batches", default=torch.tensor(0), dist_reduce_fx="sum")
-
-    def update(self, loss: torch.Tensor) -> None:
-        self.force_loss += loss
-        self.num_batches += 1
-
-    def compute(self) -> torch.Tensor:
-        return self.force_loss / self.num_batches
-
-
-class CombinedLossMetric(torchmetrics.Metric):
-    def __init__(self) -> None:
-        super().__init__()
-        self.add_state("combined_loss", default=torch.tensor(0.0), dist_reduce_fx="sum")
-        self.add_state("num_batches", default=torch.tensor(0), dist_reduce_fx="sum")
-
-    def update(self, loss: torch.Tensor) -> None:
-        self.combined_loss += loss
-        self.num_batches += 1
-
-    def compute(self) -> torch.Tensor:
-        return self.combined_loss / self.num_batches
+        loss_per_batch = dim_zero_cat(self.energy_loss_per_batch)
+        return torch.mean(torch.square(loss_per_batch))
 
 
 from torch import nn
@@ -177,10 +148,10 @@ class TrainingAdapter(pl.LightningModule):
     def __init__(
         self,
         *,
-        nnp_parameters: Dict[str, Any],
+        model_parameters: Dict[str, Any],
         lr_scheduler_config: Dict[str, Union[str, int, float]],
         lr: float,
-        loss_module: Type[NaiveEnergyAndForceLoss] = NaiveEnergyAndForceLoss(),
+        loss_module: Type[NaiveEnergyAndForceLoss],
         optimizer: Type[Optimizer] = torch.optim.AdamW,
     ):
         """
@@ -206,7 +177,7 @@ class TrainingAdapter(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
         # Extracting and instantiating the model from parameters
-        nnp_parameters_ = nnp_parameters.copy()
+        nnp_parameters_ = model_parameters.copy()
         nnp_name = nnp_parameters_.pop("nnp_name", None)
         if nnp_name is None:
             raise ValueError(
@@ -223,17 +194,17 @@ class TrainingAdapter(pl.LightningModule):
         self.loss_module = loss_module
         self.unused_parameters = set()
         self.are_unused_parameters_present = False
-        self.val_energy_loss_metric = EnergyLossMetric()
-        self.val_force_loss_metric = ForceLossMetric()
-        self.val_combined_loss_metric = CombinedLossMetric()
+        self.val_energy_loss_metric = MSELossMetric()
+        self.val_force_loss_metric = MSELossMetric()
+        self.val_combined_loss_metric = MSELossMetric()
 
-        self.train_energy_loss_metric = EnergyLossMetric()
-        self.train_force_loss_metric = ForceLossMetric()
-        self.train_combined_loss_metric = CombinedLossMetric()
+        self.train_energy_loss_metric = MSELossMetric()
+        self.train_force_loss_metric = MSELossMetric()
+        self.train_combined_loss_metric = MSELossMetric()
 
-        self.test_energy_loss_metric = EnergyLossMetric()
-        self.test_force_loss_metric = ForceLossMetric()
-        self.test_combined_loss_metric = CombinedLossMetric()
+        self.test_energy_loss_metric = MSELossMetric()
+        self.test_force_loss_metric = MSELossMetric()
+        self.test_combined_loss_metric = MSELossMetric()
 
     def _get_forces(
         self, batch: "BatchData", energies: Dict[str, torch.Tensor]
@@ -404,9 +375,9 @@ class TrainingAdapter(pl.LightningModule):
         loss = self.loss_module.calculate_val_loss(predict_target)
 
         # Update and log metrics
-        self.val_energy_loss_metric.update(loss["energy_loss"].detach())
-        self.val_force_loss_metric.update(loss["force_loss"].detach())
-        self.val_combined_loss_metric.update(loss["combined_loss"].detach())
+        self.val_energy_loss_metric.update(loss["energy_loss"])
+        self.val_force_loss_metric.update(loss["force_loss"])
+        self.val_combined_loss_metric.update(loss["combined_loss"])
 
     def test_step(self, batch: "BatchData", batch_idx: int) -> None:
         """
@@ -432,9 +403,9 @@ class TrainingAdapter(pl.LightningModule):
             loss = self.loss_module.calculate_test_loss(predict_target)
 
         # Update and log metrics
-        self.test_energy_loss_metric.update(loss["energy_loss"].detach())
-        self.test_force_loss_metric.update(loss["force_loss"].detach())
-        self.test_combined_loss_metric.update(loss["combined_loss"].detach())
+        self.test_energy_loss_metric.update(loss["energy_loss"])
+        self.test_force_loss_metric.update(loss["force_loss"])
+        self.test_combined_loss_metric.update(loss["combined_loss"])
 
     def on_test_epoch_end(self) -> None:
         """
@@ -794,7 +765,7 @@ def perform_training(
     )
     num_workers = dataset_config.get("number_of_worker", 4)
     pin_memory = dataset_config.get("pin_memory", False)
-    loss_module = LossFactory.create_loss(**training_config.get("loss_parameter", {}))
+    loss_module = LossFactory.create_loss(**training_config["loss_parameter"])
 
     # set up tensor board logger
     logger = TensorBoardLogger(save_dir, name=experiment_name)

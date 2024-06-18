@@ -7,7 +7,6 @@ ON_MACOS = platform.system() == "Darwin"
 
 IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 from modelforge.potential import _Implemented_NNPs
-from modelforge.dataset import _ImplementedDatasets
 from modelforge.potential import NeuralNetworkPotentialFactory
 
 
@@ -152,8 +151,12 @@ def test_energy_and_force_loss(_initialize_predict_target_dictionary):
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 @pytest.mark.parametrize("dataset_name", ["QM9"])
-def test_hypterparameter_tuning_with_ray(model_name, dataset_name, datamodule_factory):
-    from modelforge.train.training import return_toml_config
+def test_hypterparameter_tuning_with_ray(
+    model_name,
+    dataset_name,
+    datamodule_factory,
+):
+    from modelforge.train.training import return_toml_config, LossFactory
     from importlib import resources
     from modelforge.tests.data import training_defaults
 
@@ -164,17 +167,23 @@ def test_hypterparameter_tuning_with_ray(model_name, dataset_name, datamodule_fa
     config = return_toml_config(file_path)
 
     # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
-    training_parameters = config["training"].get("training_parameters", {})
+    potential_parameter = config["potential"]["potential_parameter"]
+    training_parameters = config["training"]["training_parameter"]
+    loss_module = LossFactory.create_loss(**config["training"]["loss_parameter"])
+
     # training model
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="training",
         model_type=model_name,
+        loss_module=loss_module,
         model_parameters=potential_parameter,
         training_parameters=training_parameters,
     )
 
-    model.tune_with_ray(
+    from modelforge.train.tuning import RayTuner
+
+    ray_tuner = RayTuner(model)
+    ray_tuner.tune_with_ray(
         train_dataloader=dm.train_dataloader(),
         val_dataloader=dm.val_dataloader(),
         number_of_ray_workers=1,

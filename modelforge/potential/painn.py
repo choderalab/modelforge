@@ -11,7 +11,7 @@ from .utils import Dense
 
 if TYPE_CHECKING:
     from .models import PairListOutputs
-    from modelforge.potential.utils import NNPInput
+    from modelforge.dataset.dataset import NNPInput
 
 from dataclasses import dataclass, field
 
@@ -93,7 +93,7 @@ class PaiNNCore(CoreNetwork):
     ):
 
         log.debug("Initializing PaiNN model.")
-        super().__init__(cutoff=cutoff)
+        super().__init__()
 
         self.number_of_interaction_modules = number_of_interaction_modules
         self.number_of_atom_features = number_of_atom_features
@@ -476,22 +476,23 @@ from .models import InputPreparation, NNPInput, BaseNetwork
 class PaiNN(BaseNetwork):
     def __init__(
         self,
-        max_Z: int = 100,
-        number_of_atom_features: int = 64,
-        number_of_radial_basis_functions: int = 16,
-        cutoff: unit.Quantity = 5 * unit.angstrom,
-        number_of_interaction_modules: int = 2,
-        shared_interactions: bool = False,
-        shared_filters: bool = False,
+        max_Z: int,
+        number_of_atom_features: int,
+        number_of_radial_basis_functions: int,
+        cutoff: unit.Quantity,
+        number_of_interaction_modules: int,
+        shared_interactions: bool,
+        shared_filters: bool,
         epsilon: float = 1e-8,
     ):
         super().__init__()
+        from modelforge.utils.units import _convert
 
         self.core_module = PaiNNCore(
             max_Z=max_Z,
             number_of_atom_features=number_of_atom_features,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
-            cutoff=cutoff,
+            cutoff=_convert(cutoff),
             number_of_interaction_modules=number_of_interaction_modules,
             shared_interactions=shared_interactions,
             shared_filters=shared_filters,
@@ -499,7 +500,7 @@ class PaiNN(BaseNetwork):
         )
         self.only_unique_pairs = False  # NOTE: for pairlist
         self.input_preparation = InputPreparation(
-            cutoff=cutoff, only_unique_pairs=self.only_unique_pairs
+            cutoff=_convert(cutoff), only_unique_pairs=self.only_unique_pairs
         )
 
     def _config_prior(self):

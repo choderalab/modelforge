@@ -1,0 +1,29 @@
+dataset: qm9
+latest: full_dataset_v0
+latest_test: nc_1000_v0
+full_dataset_v0:
+  version: 0
+  gz_data_file:
+    length: 267228348
+    md5: d172127848de114bd9cc47da2bc72566
+    name: qm9_dataset_v0.hdf5.gz
+  hdf5_data_file:
+    md5: 0b22dc048f3361875889f832527438db
+    name: qm9_dataset_v0.hdf5
+  processed_data_file:
+    md5: null
+    name: qm9_dataset_v0_processed.npz
+  url: https://www.dropbox.com/scl/fi/2pzb492h3e6aqtwxt17kw/qm9_dataset_v0.hdf5.gz?rlkey=o1wc71b01vjienss31sh9tpxs&st=otelclxq&dl=1
+nc_1000_v0:
+  version: 0
+  gz_data_file:
+    length: 1697917
+    md5: dc8ada0d808d02c699daf2000aff1fe9
+    name: qm9_dataset_v0_nc_1000.hdf5.gz
+  hdf5_data_file:
+    md5: 305a0602860f181fafa75f7c7e3e6de4
+    name: qm9_dataset_v0_nc_1000.hdf5
+  processed_data_file:
+    md5: null
+    name: qm9_dataset_v0_nc_1000_processed.npz
+  url: https://www.dropbox.com/scl/fi/irqbi0nrk8hcrbvcurqer/qm9_dataset_v0_ntc_1000.hdf5.gz?rlkey=yjl0ty0c8vpln31r84dvid7ux&st=7w7ezagh&dl=1

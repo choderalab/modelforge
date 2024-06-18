@@ -1,0 +1,55 @@
+dataset: spice114openff
+latest: full_dataset_v0
+latest_test: nc_1000_v0
+full_dataset_v0:
+  version: 0
+  gz_data_file:
+    length: 2540106767
+    md5: 3aca534133ebff8dba9ff859c89e18d1
+    name: SPICE114OpenFF_dataset.hdf5.gz
+  hdf5_data_file:
+    md5: d78e185ada6d1be26e6bc1a4bf6320fb
+    name: SPICE114OpenFF_dataset.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE114OpenFF_dataset_processed.npz
+  url: https://www.dropbox.com/scl/fi/7pjiys1919ajc2prndyzi/spice_114_openff_dataset_v0.hdf5.gz?rlkey=r92wpgktq0d6i39q0x48wmzf1&st=2z1aze2r&dl=1
+nc_1000_v0:
+  version: 0
+  gz_data_file:
+    length: 2508982
+    md5: d1cb65eff7fa7dc182188731e5ec6bf9
+    name: SPICE114OpenFF_dataset_nc_1000.hdf5.gz
+  hdf5_data_file:
+    md5: cb7c69b9aca9e836642f78716aea665b
+    name: SPICE114OpenFF_dataset_nc_1000.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE114OpenFF_dataset_nc_1000_processed.npz
+  url: https://www.dropbox.com/scl/fi/c5d35zwm44zy9vrjlwtt9/spice_114_openff_dataset_v0_ntc_1000.hdf5.gz?rlkey=gflroj9jdo1whvw9ylvpghpdw&st=ccc6fx74&dl=1
+full_dataset_v0_HCNOFClS:
+  version: 0
+  gz_data_file:
+    length: 2307451656
+    md5: 14a780b36034dfd919948b8fd3bf9b4e
+    name: SPICE114OpenFF_dataset_v0_HCNOFClS.hdf5.gz
+  hdf5_data_file:
+    md5: 69c8c34db0ef5f649e2e1d3fc261f3af
+    name: SPICE114OpenFF_dataset_v0_HCNOFClS.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE114OpenFF_dataset_v0_HCNOFClS_processed.npz
+  url: https://www.dropbox.com/scl/fi/85wbzm1o275ehzpvu30tn/spice_114_openff_dataset_v0_HCNOFClS.hdf5.gz?rlkey=66okew5lfax6num9v4b21y0s2&st=k0nmkd04&dl=1
+nc_1000_v0_HCNOFClS:
+  version: 0
+  gz_data_file:
+    length: 2529847
+    md5: c2f6a2fc02cc209050e41465092c98f7
+    name: SPICE114OpenFF_dataset_v0_nc_1000_HCNOFClS.hdf5.gz
+  hdf5_data_file:
+    md5: 55941e17dce389da6f110605a5b940e3
+    name: SPICE114OpenFF_dataset_v0_nc_1000_HCNOFClS.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE114OpenFF_dataset_v0_nc_1000_HCNOFClS_processed.npz
+  url: https://www.dropbox.com/scl/fi/8xl06zh2genar9ql8iwso/spice_114_openff_dataset_v0_ntc_1000_HCNOFClS.hdf5.gz?rlkey=orzli8esiig4atkyzvu7rhhsi&st=w5ldmbbg&dl=1

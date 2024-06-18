@@ -1,0 +1,6 @@
+dataset_name: spice114
+latest: v_0
+v_0:
+  version: 0
+  dataset_download_url: https://zenodo.org/records/8222043/files/SPICE-1.1.4.hdf5
+  dataset_md5_checksum: f27d4c81da0e37d6547276bf6b4ae6a1

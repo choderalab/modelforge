@@ -1,5 +1,24 @@
-from loguru import logger
+from typing import Literal
+
 import torch
+from loguru import logger
+from modelforge.dataset.dataset import DataModule
+
+
+def visualize_model(
+    dm: DataModule, model_name: Literal["ANI2x", "PhysNet", "SchNet", "PaiNN", "SAKE"]
+):
+    # visualize the compute graph
+    from torchviz import make_dot
+    from modelforge.potential import NeuralNetworkPotentialFactory
+
+    inference_model = NeuralNetworkPotentialFactory.create_nnp("inference", model_name)
+
+    nnp_input = next(iter(dm.train_dataloader())).nnp_input
+    yhat = inference_model(nnp_input)
+    make_dot(yhat, params=dict(list(inference_model.named_parameters()))).render(
+        f"compute_graph_{inference_model.__class__.__name__}", format="png"
+    )
 
 
 class Welford:

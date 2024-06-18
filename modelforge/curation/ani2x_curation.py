@@ -45,10 +45,33 @@ class ANI2xCuration(DatasetCuration):
         Initializes the dataset parameters.
 
         """
-        self.dataset_download_url = (
-            "https://zenodo.org/records/10108942/files/ANI-2x-wB97X-631Gd.tar.gz"
+        # read in the yaml file that defines the dataset download url and md5 checksum
+        # this yaml file should be stored along with the curated dataset
+
+        from importlib import resources
+        from modelforge.curation import yaml_files
+        import yaml
+
+        yaml_file = resources.files(yaml_files) / "ani2x_curation.yaml"
+        logger.debug(f"Loading config data from {yaml_file}")
+        with open(yaml_file, "r") as file:
+            data_inputs = yaml.safe_load(file)
+
+        assert data_inputs["dataset_name"] == "ani2x"
+
+        if self.version_select == "latest":
+            self.version_select = data_inputs["latest"]
+            logger.debug(f"Latest version: {self.version_select}")
+
+        self.dataset_download_url = data_inputs[self.version_select][
+            "dataset_download_url"
+        ]
+        self.dataset_md5_checksum = data_inputs[self.version_select][
+            "dataset_md5_checksum"
+        ]
+        logger.debug(
+            f"Dataset: {self.version_select} version: {data_inputs[self.version_select]['version']}"
         )
-        self.dataset_md5_checksum = "cb1d9effb3d07fc1cc6ced7cd0b1e1f2"
 
         # define the parameters in the dataset with their input and output units
         self.qm_parameters = {

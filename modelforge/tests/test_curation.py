@@ -12,6 +12,7 @@ from modelforge.curation.ani1x_curation import ANI1xCuration
 from modelforge.curation.spice_114_curation import SPICE114Curation
 from modelforge.curation.spice_openff_curation import SPICEOpenFFCuration
 from modelforge.curation.spice_2_from_qcarchive_curation import SPICE2Curation
+from modelforge.curation.phalkethoh_curation import PhAlkEthOHCuration
 from modelforge.curation.spice_2_curation import SPICE2Curation as SPICE2CurationH5
 
 from modelforge.curation.curation_baseclass import dict_to_hdf5
@@ -238,6 +239,7 @@ def test_qm9_curation_init_parameters(prep_temp_dir):
         hdf5_file_name="qm9_dataset.hdf5",
         output_file_dir=str(prep_temp_dir),
         local_cache_dir=str(prep_temp_dir),
+        version_select="v_0",
         convert_units=False,
     )
 
@@ -245,6 +247,24 @@ def test_qm9_curation_init_parameters(prep_temp_dir):
     assert qm9_data.output_file_dir == str(prep_temp_dir)
     assert qm9_data.local_cache_dir == str(prep_temp_dir)
     assert qm9_data.convert_units == False
+    assert qm9_data.version_select == "v_0"
+
+    qm9_data = QM9Curation(
+        hdf5_file_name="qm9_dataset.hdf5",
+        output_file_dir=str(prep_temp_dir),
+        local_cache_dir=str(prep_temp_dir),
+        version_select="v_0",
+        convert_units=False,
+    )
+    assert qm9_data.version_select == "v_0"
+
+    qm9_data._init_dataset_parameters()
+
+    assert (
+        qm9_data.dataset_download_url
+        == "https://springernature.figshare.com/ndownloader/files/3195389"
+    )
+    assert qm9_data.dataset_md5_checksum == "ad1ebd51ee7f5b3a6e32e974e5d54012"
 
 
 def test_qm9_reference_energy(prep_temp_dir):
@@ -1611,7 +1631,6 @@ def test_spice114_openff_test_fetching(prep_temp_dir):
         output_file_dir=local_path_dir,
         local_cache_dir=local_path_dir,
         convert_units=True,
-        release_version="1.1.4",
     )
 
     # test downloading two new records and saving to the sqlite db
@@ -1725,7 +1744,6 @@ def test_spice114_rename(prep_temp_dir):
         output_file_dir=local_path_dir,
         local_cache_dir=local_path_dir,
         convert_units=True,
-        release_version="1.1.4",
     )
 
     test_keys = ["ALA-1", "GLU-0", "GLU-1", "ALA-0", "ALA-2", "GLU-10", "GLU-3"]
@@ -1775,8 +1793,6 @@ def test_spice114_rename(prep_temp_dir):
 
 
 def test_spice114_openff_test_process_downloaded(prep_temp_dir):
-    from tqdm import tqdm
-    from sqlitedict import SqliteDict
 
     local_path_dir = str(prep_temp_dir)
     local_database_name = "test.sqlite"
@@ -1788,7 +1804,6 @@ def test_spice114_openff_test_process_downloaded(prep_temp_dir):
         output_file_dir=local_path_dir,
         local_cache_dir=local_path_dir,
         convert_units=True,
-        release_version="1.1.4",
     )
 
     for specification_name in specification_names:
@@ -1808,7 +1823,6 @@ def test_spice114_openff_test_process_downloaded(prep_temp_dir):
 
 
 def test_spice_114_openff_process_datasets(prep_temp_dir):
-    from numpy import array, float32
 
     local_path_dir = str(prep_temp_dir)
     hdf5_file_name = "test_dataset.hdf5"
@@ -1818,7 +1832,6 @@ def test_spice_114_openff_process_datasets(prep_temp_dir):
         output_file_dir=local_path_dir,
         local_cache_dir=local_path_dir,
         convert_units=True,
-        release_version="1.1.4",
     )
 
     self_energy, charge = spice_openff_data._calculate_reference_energy_and_charge("C")
@@ -1974,7 +1987,6 @@ def test_spice2_renaming(prep_temp_dir):
 
 
 def test_spice_2_process_datasets(prep_temp_dir):
-    from numpy import array, float32
 
     local_path_dir = str(prep_temp_dir)
     hdf5_file_name = "test_spice2_dataset.hdf5"

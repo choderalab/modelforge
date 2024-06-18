@@ -189,3 +189,4 @@ lightning_logs/
 *.gz
 *.npz
 *.hdf5
+scripts/tb_logs/*

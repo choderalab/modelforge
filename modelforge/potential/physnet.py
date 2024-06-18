@@ -12,7 +12,7 @@ from modelforge.potential.utils import NeuralNetworkData
 from .models import CoreNetwork
 
 if TYPE_CHECKING:
-    from modelforge.potential.utils import NNPInput
+    from modelforge.dataset.dataset import NNPInput
 
     from .models import PairListOutputs
 
@@ -250,6 +250,7 @@ class PhysNetInteractionModule(nn.Module):
 
         # Gating
         self.gate = nn.Parameter(torch.ones(number_of_atom_features))
+        self.dropout = nn.Dropout(p=0.05)
 
     def forward(self, data: PhysNetNeuralNetworkData) -> torch.Tensor:
         """
@@ -279,56 +280,56 @@ class PhysNetInteractionModule(nn.Module):
         f_ij = data.f_ij
         x = data.atomic_embedding
 
+        # # Apply activation to atomic embeddings
+        xa = self.dropout(self.activation_function(x))
+
         # calculate attention weights and
         # transform to
         # input shape: (number_of_pairs, number_of_radial_basis_functions)
         # output shape: (number_of_pairs, number_of_atom_features)
-        f_ij_prime = self.attention_mask(f_ij)
+        g = self.attention_mask(f_ij)
 
-        # # Apply activation to atomic embeddings
-        xa = self.activation_function(x)
-
-        # embedding for central atoms i
-        x_i_embedding = xa  # shape (number_of_atoms, number_of_atom_features)
         # Calculate contribution of central atom
-        x_i_prime = self.interaction_i(x_i_embedding)
-
-        # embedding for neighbor atom j
-        x_j_embedding = xa  # shape (number_of_atoms, number_of_atom_features)
-
+        x_i = self.interaction_i(xa)
         # Calculate contribution of neighbor atom
-        x_j_embedding = self.interaction_j(x_j_embedding)
+        x_j = self.interaction_j(xa)
         # Gather the results according to idx_j
-        x_j_embedding = x_j_embedding[idx_j]
-        # Compute sum_over_j(x_j_prime * f_ij_prime)
-        # Multiply the gathered features by f_ij_prime (equivalent to 'g' in TensorFlow code)
-        x_j_modulated = x_j_embedding * f_ij_prime
-
+        x_j = x_j[idx_j]
+        # Multiply the gathered features by g
+        x_j_modulated = x_j * g
         # Aggregate modulated contributions for each atom i
         x_j_prime = scatter_add(x_j_modulated, idx_i, dim=0, dim_size=x.shape[0])
+
         # Draft proto message v_tilde
-        v_tilde = x_i_prime + x_j_prime
-        # shape of v_tilde (nr_of_atoms_in_batch, 1)
+        m = x_i + x_j_prime
+        # shape of m (nr_of_atoms_in_batch, 1)
         # Equation 4: Preactivation Residual Block Implementation
         # xl+2_i = xl_i + Wl+1 * sigma(Wl * xl_i + bl) + bl+1
         for residual in self.residuals:
-            v_tilde = residual(
-                v_tilde
+            m = residual(
+                m
             )  # shape (nr_of_atoms_in_batch, number_of_radial_basis_functions)
-
-        return self.gate * x + self.process_v(v_tilde)
+        m = self.activation_function(m)
+        x = self.gate * x + self.process_v(m)
+        return x
 
 
 class PhysNetOutput(nn.Module):
 
     def __init__(
-        self, number_of_atom_features: int, number_of_atomic_properties: int = 2
+        self,
+        number_of_atom_features: int,
+        number_of_atomic_properties: int = 2,
+        number_of_residuals_in_output: int = 2,
     ):
         from .utils import Dense
 
         super().__init__()
-        self.residual = PhysNetResidual(
-            number_of_atom_features, number_of_atom_features
+        self.residuals = nn.Sequential(
+            *[
+                PhysNetResidual(number_of_atom_features, number_of_atom_features)
+                for _ in range(number_of_residuals_in_output)
+            ]
         )
         self.output = Dense(
             number_of_atom_features,
@@ -338,7 +339,7 @@ class PhysNetOutput(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.output(self.residual(x))
+        x = self.output(self.residuals(x))
         return x
 
 
@@ -412,12 +413,12 @@ class PhysNetModule(nn.Module):
 class PhysNetCore(CoreNetwork):
     def __init__(
         self,
-        max_Z: int = 100,
-        cutoff: unit.Quantity = 5 * unit.angstrom,
-        number_of_atom_features: int = 64,
-        number_of_radial_basis_functions: int = 16,
-        number_of_interaction_residual: int = 3,
-        number_of_modules: int = 5,
+        max_Z: int,
+        cutoff: unit.Quantity,
+        number_of_atom_features: int,
+        number_of_radial_basis_functions: int,
+        number_of_interaction_residual: int,
+        number_of_modules: int,
     ) -> None:
         """
         Implementation of the PhysNet neural network potential.
@@ -434,8 +435,7 @@ class PhysNetCore(CoreNetwork):
         """
 
         log.debug("Initializing PhysNet model.")
-
-        super().__init__(cutoff=cutoff)
+        super().__init__()
 
         # embedding
         from modelforge.potential.utils import Embedding
@@ -461,8 +461,8 @@ class PhysNetCore(CoreNetwork):
             ]
         )
 
-        self.atomic_scale = nn.Parameter(torch.zeros(max_Z, 2))
-        self.atomic_shift = nn.Parameter(torch.ones(max_Z, 2))
+        self.atomic_scale = nn.Parameter(torch.ones(max_Z, 2))
+        self.atomic_shift = nn.Parameter(torch.zeros(max_Z, 2))
 
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
@@ -558,8 +558,8 @@ class PhysNetCore(CoreNetwork):
             data.atomic_embedding = output_of_module["updated_embedding"]
 
         prediction_i_shifted_scaled = (
-            self.atomic_shift[data.atomic_numbers] * prediction_i
-            + self.atomic_scale[data.atomic_numbers]
+            self.atomic_shift[data.atomic_numbers]
+            + prediction_i * self.atomic_scale[data.atomic_numbers]
         )
 
         # sum over atom features
@@ -567,7 +567,7 @@ class PhysNetCore(CoreNetwork):
         q_i = prediction_i_shifted_scaled[:, 1]  # shape(nr_of_atoms, 1)
 
         output = {
-            "E_i": E_i,
+            "E_i": E_i.contiguous(),  # reshape memory mapping for JAX/dlpack
             "q_i": q_i,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
             "atomic_numbers": data.atomic_numbers,
@@ -582,17 +582,25 @@ from .models import InputPreparation, NNPInput, BaseNetwork
 class PhysNet(BaseNetwork):
     def __init__(
         self,
-        max_Z: int = 100,
-        cutoff: unit.Quantity = 5 * unit.angstrom,
-        number_of_atom_features: int = 64,
-        number_of_radial_basis_functions: int = 16,
-        number_of_interaction_residual: int = 3,
-        number_of_modules: int = 2,
+        max_Z: int,
+        cutoff: unit.Quantity,
+        number_of_atom_features: int,
+        number_of_radial_basis_functions: int,
+        number_of_interaction_residual: int,
+        number_of_modules: int,
     ) -> None:
+        """
+        Unke, O. T. and Meuwly, M. "PhysNet: A Neural Network for Predicting Energies,
+        Forces, Dipole Moments and Partial Charges" arxiv:1902.08408 (2019).
+
+
+        """
         super().__init__()
+        from modelforge.utils.units import _convert
+
         self.core_module = PhysNetCore(
             max_Z=max_Z,
-            cutoff=cutoff,
+            cutoff=_convert(cutoff),
             number_of_atom_features=number_of_atom_features,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             number_of_interaction_residual=number_of_interaction_residual,
@@ -600,7 +608,7 @@ class PhysNet(BaseNetwork):
         )
         self.only_unique_pairs = False  # NOTE: for pairlist
         self.input_preparation = InputPreparation(
-            cutoff=cutoff, only_unique_pairs=self.only_unique_pairs
+            cutoff=_convert(cutoff), only_unique_pairs=self.only_unique_pairs
         )
 
     def _config_prior(self):

@@ -1,17 +1,16 @@
 import os
-from typing import TYPE_CHECKING, Dict, Literal, List, Optional
-import pytorch_lightning as pl
-
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Dict, List, Literal, Optional, Union, NamedTuple
 
 import numpy as np
+import pytorch_lightning as pl
 import torch
 from loguru import logger as log
+from openff.units import Quantity
 from torch.utils.data import DataLoader
 
-from modelforge.utils.prop import PropertyNames
-
 from modelforge.dataset.utils import RandomRecordSplittingStrategy, SplittingStrategy
-from dataclasses import dataclass
+from modelforge.utils.prop import PropertyNames
 
 if TYPE_CHECKING:
     from modelforge.potential.processing import AtomicSelfEnergies
@@ -19,9 +18,166 @@ if TYPE_CHECKING:
 
 @dataclass
 class DatasetStatistics:
-    scaling_mean: float
-    scaling_stddev: float
+    E_i_mean: float
+    E_i_stddev: float
     atomic_self_energies: "AtomicSelfEnergies"
+    atomic_self_energies_removed: bool = False
+
+
+@dataclass(frozen=False)
+class Metadata:
+    """
+    A NamedTuple to structure the inputs for neural network potentials.
+
+    Parameters
+    ----------
+    """
+
+    E: torch.Tensor
+    atomic_subsystem_counts: torch.Tensor
+    atomic_subsystem_indices_referencing_dataset: torch.Tensor
+    number_of_atoms: int
+    F: torch.Tensor = torch.tensor([], dtype=torch.float32)
+
+    def to(
+        self, device: Optional[torch.device] = None, dtype: Optional[torch.dtype] = None
+    ):
+        """Move all tensors in this instance to the specified device."""
+        if device:
+            self.E = self.E.to(device)
+            self.F = self.F.to(device)
+            self.atomic_subsystem_counts = self.atomic_subsystem_counts.to(device)
+            self.atomic_subsystem_indices_referencing_dataset = (
+                self.atomic_subsystem_indices_referencing_dataset.to(device)
+            )
+        if dtype:
+            self.E = self.E.to(dtype)
+            self.F = self.F.to(dtype)
+        return self
+
+
+@dataclass
+class NNPInput:
+    """
+    A dataclass to structure the inputs for neural network potentials.
+
+    Attributes
+    ----------
+    atomic_numbers : torch.Tensor
+        A 1D tensor containing atomic numbers for each atom in the system(s).
+        Shape: [num_atoms], where `num_atoms` is the total number of atoms across all systems.
+    positions : torch.Tensor
+        A 2D tensor of shape [num_atoms, 3], representing the XYZ coordinates of each atom.
+    atomic_subsystem_indices : torch.Tensor
+        A 1D tensor mapping each atom to its respective subsystem or molecule.
+        This allows for calculations involving multiple molecules or subsystems within the same batch.
+        Shape: [num_atoms].
+    total_charge : torch.Tensor
+        A tensor with the total charge of molecule.
+        Shape: [num_systems], where `num_systems` is the number of molecules.
+    """
+
+    atomic_numbers: torch.Tensor
+    positions: Union[torch.Tensor, Quantity]
+    atomic_subsystem_indices: torch.Tensor
+    total_charge: torch.Tensor
+    pair_list: Optional[torch.Tensor] = None
+
+    def to(
+        self,
+        *,
+        device: Optional[torch.device] = None,
+        dtype: Optional[torch.dtype] = None,
+    ):
+        """Move all tensors in this instance to the specified device/dtype."""
+
+        if device:
+            self.atomic_numbers = self.atomic_numbers.to(device)
+            self.positions = self.positions.to(device)
+            self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(device)
+            self.total_charge = self.total_charge.to(device)
+            if self.pair_list is not None:
+                self.pair_list = self.pair_list.to(device)
+        if dtype:
+            self.positions = self.positions.to(dtype)
+        return self
+
+    def __post_init__(self):
+        # Set dtype and convert units if necessary
+        self.atomic_numbers = self.atomic_numbers.to(torch.int32)
+        self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(torch.int32)
+        self.total_charge = self.total_charge.to(torch.int32)
+
+        # Unit conversion for positions
+        if isinstance(self.positions, Quantity):
+            positions = self.positions.to(unit.nanometer).m
+            self.positions = torch.tensor(
+                positions, dtype=torch.float32, requires_grad=True
+            )
+
+        # Validate inputs
+        self._validate_inputs()
+
+    def _validate_inputs(self):
+        if self.atomic_numbers.dim() != 1:
+            raise ValueError("atomic_numbers must be a 1D tensor")
+        if self.positions.dim() != 2 or self.positions.size(1) != 3:
+            raise ValueError("positions must be a 2D tensor with shape [num_atoms, 3]")
+        if self.atomic_subsystem_indices.dim() != 1:
+            raise ValueError("atomic_subsystem_indices must be a 1D tensor")
+        if self.total_charge.dim() != 1:
+            raise ValueError("total_charge must be a 1D tensor")
+
+        # Optionally, check that the lengths match if required
+        if len(self.positions) != len(self.atomic_numbers):
+            raise ValueError(
+                "The size of atomic_numbers and the first dimension of positions must match"
+            )
+        if len(self.positions) != len(self.atomic_subsystem_indices):
+            raise ValueError(
+                "The size of atomic_subsystem_indices and the first dimension of positions must match"
+            )
+
+    def as_namedtuple(self) -> NamedTuple:
+        """Export the dataclass fields and values as a named tuple."""
+
+        import collections
+        from dataclasses import dataclass, fields
+
+        NNPInputTuple = collections.namedtuple(
+            "NNPInputTuple", [field.name for field in fields(self)]
+        )
+        return NNPInputTuple(*[getattr(self, field.name) for field in fields(self)])
+
+    def as_jax_namedtuple(self) -> NamedTuple:
+        """Export the dataclass fields and values as a named tuple.
+        Convert pytorch tensors to jax arrays."""
+
+        from dataclasses import dataclass, fields
+        import collections
+        from pytorch2jax.pytorch2jax import convert_to_jax
+
+        NNPInputTuple = collections.namedtuple(
+            "NNPInputTuple", [field.name for field in fields(self)]
+        )
+        return NNPInputTuple(
+            *[convert_to_jax(getattr(self, field.name)) for field in fields(self)]
+        )
+
+
+@dataclass
+class BatchData:
+    nnp_input: NNPInput
+    metadata: Metadata
+
+    def to(
+        self,
+        device: Optional[torch.device] = None,
+        dtype: Optional[torch.dtype] = None,
+    ):
+        self.nnp_input = self.nnp_input.to(device=device, dtype=dtype)
+        self.metadata = self.metadata.to(device=device, dtype=dtype)
+        return self
 
 
 class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
@@ -38,8 +194,6 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         If True, converts properties to PyTorch tensors ahead of time. Default is False.
 
     """
-
-    # TODO: add support for general properties with given formats
 
     def __init__(
         self,
@@ -61,24 +215,27 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         """
 
         self.properties_of_interest = {}
+        self.dataset_statistics: Dict[str, float] = {}
 
         self.properties_of_interest["atomic_numbers"] = torch.from_numpy(
-            dataset[property_name.Z]
-        )
+            dataset[property_name.Z].flatten()
+        ).to(torch.int32)
         self.properties_of_interest["positions"] = torch.from_numpy(
             dataset[property_name.R]
-        )
-        self.properties_of_interest["E"] = torch.from_numpy(dataset[property_name.E])
+        ).to(torch.float32)
+        self.properties_of_interest["E"] = torch.from_numpy(
+            dataset[property_name.E]
+        ).to(torch.float64)
 
         if property_name.Q is not None:
             self.properties_of_interest["Q"] = torch.from_numpy(
                 dataset[property_name.Q]
-            )
+            ).to(torch.int32)
         else:
             # this is a per atom property, so it will match the first dimension of the geometry
             self.properties_of_interest["Q"] = torch.zeros(
                 (dataset[property_name.R].shape[0], 1)
-            )
+            ).to(torch.int32)
 
         if property_name.F is not None:
             self.properties_of_interest["F"] = torch.from_numpy(
@@ -91,14 +248,16 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             )
 
         self.number_of_records = len(dataset["atomic_subsystem_counts"])
+        self.properties_of_interest["pair_list"] = None
         self.number_of_atoms = len(dataset["atomic_numbers"])
+
         single_atom_start_idxs_by_rec = np.concatenate(
-            [[0], np.cumsum(dataset["atomic_subsystem_counts"])]
+            [np.array([0]), np.cumsum(dataset["atomic_subsystem_counts"])]
         )
         # length: n_records + 1
 
         self.series_mol_start_idxs_by_rec = np.concatenate(
-            [[0], np.cumsum(dataset["n_confs"])]
+            [np.array([0]), np.cumsum(dataset["n_confs"])]
         )
         # length: n_records + 1
 
@@ -118,7 +277,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
 
         self.series_atom_start_idxs_by_conf = np.concatenate(
             [
-                [0],
+                np.array([0]),
                 np.cumsum(
                     np.repeat(dataset["atomic_subsystem_counts"], dataset["n_confs"])
                 ),
@@ -172,7 +331,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         for key, val in value.items():
             self.properties_of_interest[key][idx] = val
 
-    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+    def __getitem__(self, idx: int) -> BatchData:
         """
         Fetch a dictionary of the values for the properties of interest for a given conformer index.
 
@@ -183,50 +342,54 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
 
         Returns
         -------
-        Dictionary, contains:
-            - atomic_numbers: torch.Tensor, shape [n_atoms]
-                Atomic numbers for each atom in the molecule.
-            - positions: torch.Tensor, shape [n_atoms, 3]
-                Coordinates for each atom in the molecule.
-            - E: torch.Tensor, shape []
-                Scalar energy value for the molecule.
-            - idx: int
-                Index of the conformer in the dataset.
-            - atomic_subsystem_counts: torch.Tensor, shape [1]
-                Number of atoms in the conformer. Length one if __getitem__ is called with a single index, length batch_size if collate_conformers is used with DataLoader
+        BatchData instance representing the data for one conformer.
         """
         series_atom_start_idx = self.series_atom_start_idxs_by_conf[idx]
         series_atom_end_idx = self.series_atom_start_idxs_by_conf[idx + 1]
         single_atom_start_idx = self.single_atom_start_idxs_by_conf[idx]
         single_atom_end_idx = self.single_atom_end_idxs_by_conf[idx]
-        atomic_numbers = (
-            self.properties_of_interest["atomic_numbers"][
-                single_atom_start_idx:single_atom_end_idx
+        atomic_numbers = self.properties_of_interest["atomic_numbers"][
+            single_atom_start_idx:single_atom_end_idx
+        ]
+        positions = self.properties_of_interest["positions"][
+            series_atom_start_idx:series_atom_end_idx
+        ]
+        E = self.properties_of_interest["E"][idx]
+        F = self.properties_of_interest["F"][series_atom_start_idx:series_atom_end_idx]
+        total_charge = self.properties_of_interest["Q"][idx]
+        number_of_atoms = len(atomic_numbers)
+        if self.properties_of_interest["pair_list"] is None:
+            pair_list = None
+        else:
+            pair_list_indices_start = self.properties_of_interest["number_of_pairs"][
+                idx
             ]
-            .clone()
-            .detach()
-            .squeeze(1)
-        ).to(torch.int64)
-        positions = (
-            self.properties_of_interest["positions"][
-                series_atom_start_idx:series_atom_end_idx
+            pair_list_indices_end = self.properties_of_interest["number_of_pairs"][
+                idx + 1
             ]
-            .clone()
-            .detach()
-        ).to(torch.float32)
-        E = (
-            (self.properties_of_interest["E"][idx]).clone().detach().to(torch.float64)
-        )  # NOTE: upgrading to float64 to avoid precision issues
-        Q = (self.properties_of_interest["Q"][idx]).clone().detach().to(torch.int32)
+            pair_list = self.properties_of_interest["pair_list"][
+                :, pair_list_indices_start:pair_list_indices_end
+            ]
 
-        return {
-            "atomic_numbers": atomic_numbers,
-            "positions": positions,
-            "total_charge": Q,
-            "E": E,
-            "atomic_subsystem_counts": torch.tensor([atomic_numbers.shape[0]]),
-            "idx": idx,
-        }
+        nnp_input = NNPInput(
+            atomic_numbers=atomic_numbers,
+            positions=positions,
+            pair_list=pair_list,
+            total_charge=total_charge,
+            atomic_subsystem_indices=torch.zeros(number_of_atoms, dtype=torch.int32),
+        )
+
+        metadata = Metadata(
+            E=E,
+            F=F,
+            atomic_subsystem_counts=torch.tensor([number_of_atoms], dtype=torch.int32),
+            atomic_subsystem_indices_referencing_dataset=torch.repeat_interleave(
+                torch.tensor([idx], dtype=torch.int32), number_of_atoms
+            ),
+            number_of_atoms=number_of_atoms,
+        )
+
+        return BatchData(nnp_input, metadata)
 
 
 class HDF5Dataset:
@@ -273,7 +436,10 @@ class HDF5Dataset:
         self.gz_data_file = gz_data_file
         self.hdf5_data_file = hdf5_data_file
         self.processed_data_file = processed_data_file
-        self.local_cache_dir = local_cache_dir
+        import os
+
+        # make sure we can handle a path with a ~ in it
+        self.local_cache_dir = os.path.expanduser(local_cache_dir)
         self.force_download = force_download
         self.regenerate_cache = regenerate_cache
 
@@ -413,6 +579,7 @@ class HDF5Dataset:
 
         """
         from collections import OrderedDict
+
         import h5py
         import tqdm
 
@@ -734,53 +901,223 @@ class DatasetFactory:
 
 
 from torch import nn
+from openff.units import unit
 
 
-class TorchDataModule(pl.LightningDataModule):
-    """
-    Data module for PyTorch Lightning, handling data preparation and loading.
-
-    Parameters
-    ----------
-    data : HDF5Dataset
-        The dataset to use.
-    split : SplittingStrategy, optional
-        The strategy for splitting data into training,
-        validation, and test sets. Defaults to RandomRecordSplittingStrategy.
-    batch_size : int,
-
-    Examples
-    --------
-    >>> data = QM9Dataset()
-    >>> data_module = TorchDataModule(data)
-    >>> data_module.prepare_data()
-    >>> train_loader = data_module.train_dataloader()
-    """
+class DataModule(pl.LightningDataModule):
 
     def __init__(
         self,
-        data: HDF5Dataset,
+        name: Literal["QM9", "ANI1X", "ANI2X", "SPICE114", "SPICE2", "SPICE114_OPENFF"],
         splitting_strategy: SplittingStrategy = RandomRecordSplittingStrategy(),
         batch_size: int = 64,
-        split_file: Optional[str] = None,
-        transform: Optional[nn.Module] = None,
+        remove_self_energies: bool = True,
+        atomic_self_energies: Optional[Dict[str, float]] = None,
+        regression_ase: bool = False,
+        force_download: bool = False,
+        version_select: str = "latest",
+        local_cache_dir: str = "./",
+        regenerate_cache: bool = False,
     ):
+        """
+        Initializes adData module for PyTorch Lightning handling data preparation and loading object with the specified configuration.
+        If `remove_self_energies` is `True` and:
+        - `self_energies` are passed as a dictionary, these will be used
+        - `self_energies` are `None`, `self._ase` will be used
+        - `regression_ase` is `True`, self_energies will be calculated
+
+        Parameters
+        ---------
+            name: Literal["QM9", "ANI1X", "ANI2X", "SPICE114", "SPICE2", "SPICE114_OPENFF"]
+                The name of the dataset to use.
+            splitting_strategy : SplittingStrategy, defaults to RandomRecordSplittingStrategy
+                The strategy to use for splitting the dataset into train, test, and validation sets. .
+            batch_size : int, defaults to 64.
+                The batch size to use for the dataset.
+            remove_self_energies : bool, defaults to True
+                Whether to remove the self energies from the dataset.
+            atomic_self_energies : Optional[Dict[str, float]]
+                A dictionary mapping element names to their self energies. If not provided, the self energies will be calculated.
+            regression_ase: bool, defaults to False
+                Whether to use the calculated self energies for regression.
+            force_download : bool,  defaults to False
+                Whether to force the dataset to be downloaded, even if it is already cached.
+            version_select : str, defaults to "latest"
+                Select the version of the dataset to use. If "latest", the latest version will be used.
+                "latest_test" will use the latest test version. Specific versions can be selected by passing the version name
+                as defined in the yaml files associated with each dataset.
+            local_cache_dir : str, defaults to "./"
+                Directory to store the files.
+            regenerate_cache : bool, defaults to False
+                Whether to regenerate the cache.
+        """
         super().__init__()
-        self.data = data
+
+        self.name = name
         self.batch_size = batch_size
-        self.split_idxs = None
+        self.splitting_strategy = splitting_strategy
+        self.dataset_statistics: Optional[DatasetStatistics] = None
+        self.remove_self_energies = remove_self_energies
+        self.dict_atomic_self_energies = (
+            atomic_self_energies  # element name (e.g., 'H') maps to self energies
+        )
+        self.regression_ase = regression_ase
+        self.force_download = force_download
+        self.version_select = version_select
         self.train_dataset = None
         self.test_dataset = None
         self.val_dataset = None
-        self.transform = transform
-        self.splitting_strategy = splitting_strategy
-        self.split_file = split_file
-        self.dataset_statistics: Optional[DatasetStatistics] = None
-        self._ase = data.atomic_self_energies  # atomic self energies
+        import os
+
+        # make sure we can handle a path with a ~ in it
+        self.local_cache_dir = os.path.expanduser(local_cache_dir)
+        self.regenerate_cache = regenerate_cache
+        from modelforge.potential.models import Pairlist
+
+        self.pairlist = Pairlist()
+
+    def prepare_data(
+        self,
+    ) -> None:
+        """
+        Prepares the dataset for use. This method is responsible for the initial processing of
+        the data such as calculating self energies, normalizing, and splitting. It is executed
+        only once per node.
+        """
+        from modelforge.dataset import _ImplementedDatasets
+
+        dataset_class = _ImplementedDatasets.get_dataset_class(self.name)
+        dataset = dataset_class(
+            force_download=self.force_download,
+            version_select=self.version_select,
+            local_cache_dir=self.local_cache_dir,
+            regenerate_cache=self.regenerate_cache,
+        )
+
+        # obtain the atomic self energies from the dataset
+        dataset_ase = dataset.atomic_self_energies.energies
+        torch_dataset = self._create_torch_dataset(dataset)
+
+        # depending on the control flow that is set in the __init__,
+        # either use the atomic self energies of the dataset, recalculate it on the fly
+        # or use the provided dictionary
+        atomic_self_energies = self._calculate_atomic_self_energies(
+            torch_dataset, dataset_ase
+        )
+
+        # wrap them in the AtomicSelfEnergy class
+        from modelforge.potential.processing import AtomicSelfEnergies
+
+        atomic_self_energies = AtomicSelfEnergies(atomic_self_energies)
+
+        log.debug("Process dataset ...")
+        self._process_dataset(torch_dataset, atomic_self_energies)
+
+        # # calculate neighborlist
+        # self._calculating_pairwise_properties(torch_dataset)
+        # calculate the dataset statistic of the dataset
+        # This is done __after__ self energies are removed (if requested)
+        from modelforge.dataset.utils import calculate_mean_and_variance
+
+        # FIXME: this wont work for a setup on multiple devices
+        stats = calculate_mean_and_variance(torch_dataset)
+        self.dataset_statistics = DatasetStatistics(
+            E_i_stddev=stats["Ei_stddev"],
+            E_i_mean=stats["Ei_mean"],
+            atomic_self_energies=atomic_self_energies,
+            atomic_self_energies_removed=self.remove_self_energies,
+        )
+
+        # Save processed dataset and statistics for later use in setup
+        self._cache_dataset(torch_dataset)
+
+    def _create_torch_dataset(self, dataset):
+        """Create a PyTorch dataset from the provided dataset instance."""
+        return DatasetFactory().create_dataset(dataset)
+
+    def _process_dataset(
+        self, torch_dataset: TorchDataset, atomic_self_energies: "AtomicSelfEnergies"
+    ) -> None:
+        """Calculate and subtract self energies from the dataset."""
+        from modelforge.potential.processing import AtomicSelfEnergies
+
+        if self.regression_ase and not self.dict_atomic_self_energies:
+            atomic_self_energies = AtomicSelfEnergies(
+                self.calculate_self_energies(torch_dataset)
+            )
+        self._per_datapoint_operations(torch_dataset, atomic_self_energies)
+        self._save_self_energies(atomic_self_energies)
+
+    def _normalize_dataset(self, torch_dataset, stats: Dict[str, float]) -> None:
+        """Normalize the dataset if self energies have been removed."""
+        from modelforge.dataset.utils import (
+            normalize_energies,
+        )
+
+        if not self.remove_self_energies:
+            raise RuntimeError(
+                "Cannot normalize dataset if self energies are not removed."
+            )
+        normalize_energies(torch_dataset, stats)
+
+    def _calculate_atomic_self_energies(
+        self, torch_dataset, dataset_ase
+    ) -> Dict[str, float]:
+
+        from modelforge.dataset.utils import calculate_mean_and_variance
+
+        # Use provided ase dictionary
+        if self.dict_atomic_self_energies:
+            log.info("Using provided atomic self energies from the provided ictionary.")
+            return self.dict_atomic_self_energies
+
+        # Use regression to calculate ase
+        elif self.dict_atomic_self_energies is None and self.regression_ase is True:
+            log.info("Calculating atomic self energies using regression.")
+            return self.calculate_self_energies(torch_dataset)
+
+        # use self energies provided by the dataset (this should be the DEFAULT option)
+        elif self.dict_atomic_self_energies is None and self.regression_ase is False:
+            log.info("Using atomic self energies provided by the dataset.")
+            return dataset_ase
+        else:
+            raise RuntimeError()
+
+    def _cache_dataset(self, torch_dataset):
+        """Cache the dataset and its statistics using PyTorch's serialization."""
+        torch.save(torch_dataset, "torch_dataset.pt")
+        torch.save(self.dataset_statistics, "dataset_statistics.pt")
+        # sleep for 1 second to make sure that the dataset was written to disk
+        import time
+
+        time.sleep(1)
+
+    def setup(self, stage: Optional[str] = None) -> None:
+        """Sets up datasets for the train, validation, and test stages based on the stage argument."""
+
+        self.torch_dataset = torch.load("torch_dataset.pt")
+
+        self.dataset_statistics = torch.load("dataset_statistics.pt")
+        self.train_dataset, self.val_dataset, self.test_dataset = (
+            self.splitting_strategy.split(self.torch_dataset)
+        )
+
+    def _save_self_energies(self, self_energies):
+        """Save self energies to a file."""
+        import toml
+
+        with open("ase.toml", "w") as f:
+            toml.dump(
+                {
+                    str(idx): energy.m
+                    for (idx, energy) in self_energies.energies.items()
+                },
+                f,
+            )
 
     def calculate_self_energies(
         self, torch_dataset: TorchDataset, collate: bool = True
-    ) -> Dict[int, float]:
+    ) -> Dict[str, float]:
         """
         Calculates the self energies for each atomic number in the dataset by performing a least squares regression.
 
@@ -797,106 +1134,36 @@ class TorchDataModule(pl.LightningDataModule):
             A dictionary mapping atomic numbers to their calculated self energies.
         """
         log.info("Computing self energies for elements in the dataset.")
-        from modelforge.dataset.utils import calculate_self_energies
+        from modelforge.dataset.utils import _calculate_self_energies
 
         # Define the collate function based on the `collate` parameter
         collate_fn = collate_conformers if collate else None
-        return calculate_self_energies(
+        return _calculate_self_energies(
             torch_dataset=torch_dataset, collate_fn=collate_fn
         )
 
-    def prepare_data(
-        self,
-        remove_self_energies: bool = True,
-        normalize: bool = True,
-        self_energies: Dict[int, float] = None,
-        regression_ase: bool = False,
+    # def _calculating_pairwise_properties(self, dataset):
+    #     from tqdm import tqdm
+
+    #     log.info(
+    #         f"Calculate neighborlist with {self.calculate_distances_and_pairlist} cutoff"
+    #     )
+    #     print(dataset.properties_of_interest.keys())
+    #     for i in tqdm(range(len(dataset)), desc="Calculate neighborlist"):
+    #         a = dataset[i]
+    #         start_idx = dataset.single_atom_start_idxs_by_conf[i]
+    #         end_idx = dataset.single_atom_end_idxs_by_conf[i]
+    #         pairlist_output = self.calculate_distances_and_pairlist(
+    #             dataset.properties_of_interest["positions"][start_idx:end_idx],
+    #             torch.zeros(
+    #                 end_idx - start_idx,
+    #                 dtype=torch.float32,
+    #             ),
+    #         )
+
+    def _per_datapoint_operations(
+        self, dataset, self_energies: "AtomicSelfEnergies"
     ) -> None:
-        """
-        Prepares the dataset for use by calculating self energies, normalizing data, and splitting the dataset.
-
-        Parameters
-        ----------
-        remove_self_energies : bool, optional
-            Whether to remove self energies from the dataset. Defaults to True.
-        normalize : bool, optional
-            Whether to normalize the dataset. Defaults to True.
-        self_energies : Dict[str, float], optional
-            A dictionary mapping atomic numbers to their calculated self energies. Defaults to None.
-        regression_ase : bool, optional
-            If regression_ase is True, atomic self energies are calculated using linear regression
-
-        if remove_self_energies is True and
-            - self_energies are passed as dictionary, these will be used
-            - self_energies are None, self._ase will be used
-            - regression_ase is True, self_energies will be calculated
-        """
-        if self.split_file and os.path.exists(self.split_file):
-            self.split_idxs = np.load(self.split_file, allow_pickle=True)
-            log.debug(f"Loaded split indices from {self.split_file}")
-        else:
-            log.debug("Splitting strategy will be applied")
-
-        # generate dataset
-        factory = DatasetFactory()
-        torch_dataset = factory.create_dataset(self.data)
-        dataset_statistics = {
-            "scaling_stddev": 1,
-            "scaling_mean": 0,
-            "atomic_self_energies": {},
-        }
-
-        if remove_self_energies:
-            # calculate self energies, and then remove them from the dataset
-
-            log.debug("Self energies are removed ...")
-            if not self_energies:
-                if regression_ase:
-                    log.debug(
-                        "Using linear regression to calculate atomic self energies..."
-                    )
-                    self_energies = self.calculate_self_energies(
-                        torch_dataset=torch_dataset
-                    )
-                else:
-                    log.debug("Using atomic self energies from the dataset...")
-                    self_energies = self._ase
-
-            # remove self energies
-            self.subtract_self_energies(torch_dataset, self_energies)
-
-            # write the self energies that are removed from the dataset to disk
-            import toml
-
-            with open("ase.toml", "w") as f:
-                self_energies_ = {str(idx): energy for (idx, energy) in self._ase}
-                toml.dump(self_energies_, f)
-
-            # store self energies
-            dataset_statistics["atomic_self_energies"] = self_energies
-
-        if normalize:
-            # calculate average and variance
-            if not remove_self_energies:
-                raise RuntimeError(
-                    "Cannot normalize the dataset if self energies are not removed."
-                )
-
-            log.debug("Normalizing energies...")
-            from modelforge.dataset.utils import (
-                calculate_mean_and_variance,
-                normalize_energies,
-            )
-
-            stats = calculate_mean_and_variance(torch_dataset)
-            normalize_energies(torch_dataset, stats)
-            dataset_statistics["scaling_stddev"] = stats["stddev"]
-            dataset_statistics["scaling_mean"] = stats["mean"]
-
-        self.dataset_statistics = DatasetStatistics(**dataset_statistics)
-        self.setup(torch_dataset)
-
-    def subtract_self_energies(self, dataset, self_energies: Dict[int, float]) -> None:
         """
         Removes the self energies from the total energies for each molecule in the dataset .
 
@@ -904,68 +1171,64 @@ class TorchDataModule(pl.LightningDataModule):
         ----------
         dataset: torch.Dataset
             The dataset from which to remove the self energies.
-        self_energies : Dict[int, float]
-            Dictionary containing the self energies for each element in the dataset.
+        self_energies : AtomicSelfEnergies
         """
+
         from tqdm import tqdm
 
-        log.info("Removing self energies from the dataset")
-        for i in tqdm(range(len(dataset)), desc="Removing Self Energies"):
-            atomic_numbers = list(dataset[i]["atomic_numbers"])
-            E = dataset[i]["E"]
-            for Z in atomic_numbers:
-                E -= self_energies[int(Z)]
-            dataset[i] = {"E": E}
+        # remove the self energies if requested
+        log.info("Precalculating pairlist for dataset")
+        if self.remove_self_energies:
+            log.info("Removing self energies from the dataset")
 
-        return dataset
+            for i in tqdm(range(len(dataset)), desc="Process dataset"):
+                start_idx = dataset.single_atom_start_idxs_by_conf[i]
+                end_idx = dataset.single_atom_end_idxs_by_conf[i]
+                energy = torch.sum(
+                    self_energies.ase_tensor_for_indexing[
+                        dataset.properties_of_interest["atomic_numbers"][
+                            start_idx:end_idx
+                        ]
+                    ]
+                )
 
-    @classmethod
-    def preprocess_dataset(
-        cls,
-        dataset: TorchDataset,
-        normalize: bool,
-        dataset_mean: float,
-        dataset_std: Optional[float] = None,
-    ) -> TorchDataset:
-        from tqdm import tqdm
+                dataset[i] = {"E": dataset.properties_of_interest["E"][i] - energy}
 
-        log.info(f"Adjusting energies by subtracting global mean {dataset_mean}")
+        from torch.utils.data import DataLoader
 
-        if normalize:
-            log.info("Normalizing energies using computed mean and std")
-        for i in tqdm(range(len(dataset)), desc="Adjusting Energies"):
-            energy = dataset[i]["E"]
-            if normalize:
-                # Normalize using the computed mean and std
-                modified_energy = (energy - dataset_mean) / dataset_std
-            else:
-                # Only adjust by subtracting the mean
-                modified_energy = energy - dataset_mean
-            dataset[i] = {"E": modified_energy}
+        all_pairs = []
+        n_pairs_per_molecule_list = [torch.tensor([0], dtype=torch.int16)]
 
-        return dataset
-
-    def setup(self, torch_dataset) -> None:
-        """
-        Sets up datasets for the train, validation, and test stages.
-
-        """
-        from torch.utils.data import Subset
-
-        # saving the raw dataset
-        self.torch_dataset = torch_dataset  # FIXME: is this necessary?
-        # Create subsets for training, validation, and testing
-        if self.split_idxs and os.path.exists(self.split_file):
-            self.train_dataset = Subset(torch_dataset, self.split_idxs["train_idx"])
-            self.val_dataset = Subset(torch_dataset, self.split_idxs["val_idx"])
-            self.test_dataset = Subset(torch_dataset, self.split_idxs["test_idx"])
-        else:
-            # Fallback to manual splitting if split_idxs is not available
-            self.train_dataset, self.val_dataset, self.test_dataset = (
-                self.splitting_strategy.split(torch_dataset)
+        for batch in tqdm(
+            DataLoader(
+                dataset,
+                batch_size=500,
+                collate_fn=collate_conformers,
+                num_workers=4,
+                shuffle=False,
+                pin_memory=False,
+                persistent_workers=False,
+            ),
+            desc="Calculating pairlist for dataset",
+        ):
+            pairs_batch, n_pairs_batch = (
+                self.pairlist.construct_initial_pairlist_using_numpy(
+                    batch.nnp_input.atomic_subsystem_indices.to("cpu")
+                )
             )
+            all_pairs.append(torch.from_numpy(pairs_batch))
+            n_pairs_per_molecule_list.append(torch.from_numpy(n_pairs_batch))
 
-    def train_dataloader(self) -> DataLoader:
+        nr_of_pairs = torch.cat(n_pairs_per_molecule_list, dim=0)
+        nr_of_pairs_in_dataset = torch.cumsum(nr_of_pairs, dim=0, dtype=torch.int64)
+
+        # Determine N (number of tensors) and K (maximum M)
+        dataset.properties_of_interest["pair_list"] = torch.cat(all_pairs, dim=1)
+        dataset.properties_of_interest["number_of_pairs"] = nr_of_pairs_in_dataset
+
+    def train_dataloader(
+        self, num_workers: int = 4, shuffle: bool = True, pin_memory: bool = False
+    ) -> DataLoader:
         """
         Create a DataLoader for the training dataset.
 
@@ -978,10 +1241,12 @@ class TorchDataModule(pl.LightningDataModule):
             self.train_dataset,
             batch_size=self.batch_size,
             collate_fn=collate_conformers,
-            num_workers=4,
+            num_workers=num_workers,
+            shuffle=shuffle,
+            pin_memory=pin_memory,
         )
 
-    def val_dataloader(self) -> DataLoader:
+    def val_dataloader(self, num_workers: int = 4) -> DataLoader:
         """
         Create a DataLoader for the validation dataset.
 
@@ -994,7 +1259,7 @@ class TorchDataModule(pl.LightningDataModule):
             self.val_dataset,
             batch_size=self.batch_size,
             collate_fn=collate_conformers,
-            num_workers=4,
+            num_workers=num_workers,
         )
 
     def test_dataloader(self) -> DataLoader:
@@ -1014,48 +1279,73 @@ class TorchDataModule(pl.LightningDataModule):
 from typing import Tuple
 
 
-def collate_conformers(conf_list: List[Dict[str, torch.Tensor]]) -> "BatchData":
-    # TODO: once TorchDataset is reimplemented for general properties, reimplement this function using formats too.
-    """Concatenate the Z, R, and E tensors from a list of molecules into a single tensor each, and return a new dictionary with the concatenated tensors."""
-    from modelforge.potential.utils import NNPInput, BatchData, Metadata
-
-    Z_list = []  # nuclear charges/atomic numbers
-    R_list = []  # positions
+def collate_conformers(conf_list: List[BatchData]) -> BatchData:
+    """Collate a list of BatchData instances with one conformer each into a single BatchData instance."""
+    atomic_numbers_list = []
+    positions_list = []
+    total_charge_list = []
     E_list = []  # total energy
-    Q_list = []  # total charge
-    atomic_subsystem_counts = []
-    atomic_subsystem_indices = []
-    atomic_subsystem_indices_referencing_dataset = []
+    F_list = []  # forces
+    ij_list = []
+    atomic_subsystem_counts_list = []
+    atomic_subsystem_indices_referencing_dataset_list = []
+
+    offset = torch.tensor([0], dtype=torch.int32)
+    pair_list_present = (
+        True
+        if hasattr(conf_list[0].nnp_input, "pair_list")
+        and isinstance(conf_list[0].nnp_input.pair_list, torch.Tensor)
+        else False
+    )
+
     for idx, conf in enumerate(conf_list):
-        Z_list.append(conf["atomic_numbers"])
-        R_list.append(conf["positions"])
-        E_list.append(conf["E"])
-        Q_list.append(conf["total_charge"])
-        atomic_subsystem_counts.extend(conf["atomic_subsystem_counts"])
-        atomic_subsystem_indices.extend([idx] * conf["atomic_subsystem_counts"][0])
-        atomic_subsystem_indices_referencing_dataset.extend(
-            [conf["idx"]] * conf["atomic_subsystem_counts"][0]
+        if pair_list_present:
+            ## pairlist
+            # generate pairlist without padded values
+            pair_list = conf.nnp_input.pair_list.to(dtype=torch.int32) + offset
+            # update offset (for making sure the pair_list indices are pointing to the correct molecule)
+            offset += conf.nnp_input.atomic_numbers.shape[0]
+            ij_list.append(pair_list)
+
+        atomic_numbers_list.append(conf.nnp_input.atomic_numbers)
+        positions_list.append(conf.nnp_input.positions)
+        total_charge_list.append(conf.nnp_input.total_charge)
+        E_list.append(conf.metadata.E)
+        F_list.append(conf.metadata.F)
+        atomic_subsystem_counts_list.append(conf.metadata.atomic_subsystem_counts)
+        atomic_subsystem_indices_referencing_dataset_list.append(
+            conf.metadata.atomic_subsystem_indices_referencing_dataset
         )
-    atomic_numbers_cat = torch.cat(Z_list)
-    total_charge_cat = torch.cat(Q_list)
-    positions_cat = torch.cat(R_list).requires_grad_(True)
-    E_stack = torch.stack(E_list)
+
+    atomic_subsystem_counts = torch.cat(atomic_subsystem_counts_list)
+    atomic_subsystem_indices = torch.repeat_interleave(
+        torch.arange(len(conf_list), dtype=torch.int32), atomic_subsystem_counts
+    )
+    atomic_subsystem_indices_referencing_dataset = torch.cat(
+        atomic_subsystem_indices_referencing_dataset_list
+    )
+    atomic_numbers = torch.cat(atomic_numbers_list)
+    total_charge = torch.cat(total_charge_list)
+    positions = torch.cat(positions_list).requires_grad_(True)
+    F = torch.cat(F_list).to(torch.float64)
+    E = torch.stack(E_list)
+    if pair_list_present:
+        IJ_cat = torch.cat(ij_list, dim=1).to(torch.int64)
+    else:
+        IJ_cat = None
+
     nnp_input = NNPInput(
-        atomic_numbers=atomic_numbers_cat,
-        positions=positions_cat,
-        total_charge=total_charge_cat,
-        atomic_subsystem_indices=torch.tensor(
-            atomic_subsystem_indices, dtype=torch.int32
-        ),
+        atomic_numbers=atomic_numbers,
+        positions=positions,
+        total_charge=total_charge,
+        atomic_subsystem_indices=atomic_subsystem_indices,
+        pair_list=IJ_cat,
     )
     metadata = Metadata(
-        E=E_stack,
-        atomic_subsystem_counts=torch.tensor(
-            atomic_subsystem_counts, dtype=torch.int32
-        ),
-        atomic_subsystem_indices_referencing_dataset=torch.tensor(
-            atomic_subsystem_indices_referencing_dataset, dtype=torch.int32
-        ),
-        number_of_atoms=atomic_numbers_cat.numel(),
+        E=E,
+        F=F,
+        atomic_subsystem_counts=atomic_subsystem_counts,
+        atomic_subsystem_indices_referencing_dataset=atomic_subsystem_indices_referencing_dataset,
+        number_of_atoms=atomic_numbers.numel(),
     )
     return BatchData(nnp_input, metadata)

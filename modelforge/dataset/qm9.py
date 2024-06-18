@@ -14,10 +14,18 @@ class QM9Dataset(HDF5Dataset):
     ----------
     dataset_name : str
         Name of the dataset, default is "QM9".
-    for_unit_testing : bool
-        If set to True, a subset of the dataset is used for unit testing purposes; by default False.
+    version_select : str
+        Select the version of the dataset to use, default will provide the "latest".
+        "latest_test" will select the testing subset of 1000 conformers.
+        A version name can  be specified that corresponds to an entry in the associated yaml file, e.g., "full_dataset_v0".
     local_cache_dir: str, optional
             Path to the local cache directory, by default ".".
+    force_download: bool, optional
+        If set to True, we will download the dataset even if it already exists; by default False.
+    regenerate_cache: bool, optional
+        If set to True, we will regenerate the npz cache file even if it already exists, using
+        previously downloaded files, if available; by default False.
+
     Examples
     --------
     >>> data = QM9Dataset()
@@ -56,7 +64,7 @@ class QM9Dataset(HDF5Dataset):
     def __init__(
         self,
         dataset_name: str = "QM9",
-        for_unit_testing: bool = False,
+        version_select: str = "latest",
         local_cache_dir: str = ".",
         force_download: bool = False,
         regenerate_cache=False,
@@ -68,8 +76,10 @@ class QM9Dataset(HDF5Dataset):
         ----------
         data_name : str, optional
             Name of the dataset, by default "QM9".
-        for_unit_testing : bool, optional
-            If set to True, a subset of the dataset is used for unit testing purposes; by default False.
+        version_select : str,optional
+            Select the version of the dataset to use, default will provide the "latest".
+            "latest_test" will select the testing subset of 1000 conformers.
+        A version name can  be specified that corresponds to an entry in the associated yaml file, e.g., "full_dataset_v0".
         local_cache_dir: str, optional
             Path to the local cache directory, by default ".".
         force_download: bool, optional
@@ -80,7 +90,7 @@ class QM9Dataset(HDF5Dataset):
         Examples
         --------
         >>> data = QM9Dataset()  # Default dataset
-        >>> test_data = QM9Dataset(for_unit_testing=True)  # Testing subset
+        >>> test_data = QM9Dataset(version_select="latest_test"))  # Testing subset
         """
 
         _default_properties_of_interest = [
@@ -91,11 +101,9 @@ class QM9Dataset(HDF5Dataset):
         ]  # NOTE: Default values
 
         self._properties_of_interest = _default_properties_of_interest
-        if for_unit_testing:
-            dataset_name = f"{dataset_name}_subset"
 
         self.dataset_name = dataset_name
-        self.for_unit_testing = for_unit_testing
+        self.version_select = version_select
         from openff.units import unit
 
         # atomic self energies
@@ -108,52 +116,35 @@ class QM9Dataset(HDF5Dataset):
         }
         from loguru import logger
 
-        # We need to define the checksums for the various files that we will be dealing with to load up the data
-        # There are 3 files types that need name/checksum defined, of extensions hdf5.gz, hdf5, and npz.
+        from importlib import resources
+        from modelforge.dataset import yaml_files
+        import yaml
 
-        # note, need to change the end of the url to dl=1 instead of dl=0 (the default when you grab the share list), to ensure the same checksum each time we download
-        self.test_url = "https://www.dropbox.com/scl/fi/oe2tooxwrkget75zwrfey/qm9_dataset_ntc_1000.hdf5.gz?rlkey=6hfb8ge0pqf4tly15rmdsthmw&st=tusk38vt&dl=1"
-        self.full_url = "https://www.dropbox.com/scl/fi/4wu7zlpuuixttp0u741rv/qm9_dataset.hdf5.gz?rlkey=nszkqt2t4kmghih5mt4ssppvo&dl=1"
+        yaml_file = resources.files(yaml_files) / "qm9.yaml"
+        logger.debug(f"Loading config data from {yaml_file}")
+        with open(yaml_file, "r") as file:
+            data_inputs = yaml.safe_load(file)
 
-        if self.for_unit_testing:
-            url = self.test_url
-            gz_data_file = {
-                "name": "qm9_dataset_nc_1000.hdf5.gz",
-                "md5": "dc8ada0d808d02c699daf2000aff1fe9",
-                "length": 1697917,
-            }
-            hdf5_data_file = {
-                "name": "qm9_dataset_nc_1000.hdf5",
-                "md5": "305a0602860f181fafa75f7c7e3e6de4",
-            }
-            processed_data_file = {
-                "name": "qm9_dataset_nc_1000_processed.npz",
-                # checksum of otherwise identical npz files are different if using 3.11 vs 3.9/10
-                # we will therefore skip checking these files
-                "md5": None,
-            }
+        # make sure we have the correct yaml file
+        assert data_inputs["dataset"] == "qm9"
 
-            logger.info("Using test dataset")
-
+        if self.version_select == "latest":
+            # in the yaml file, the entry latest will define the name of the version to use
+            dataset_version = data_inputs["latest"]
+            logger.info(f"Using the latest dataset: {dataset_version}")
+        elif self.version_select == "latest_test":
+            dataset_version = data_inputs["latest_test"]
+            logger.info(f"Using the latest test dataset: {dataset_version}")
         else:
-            url = self.full_url
-            gz_data_file = {
-                "name": "qm9_dataset.hdf5.gz",
-                "md5": "d172127848de114bd9cc47da2bc72566",
-                "length": 267228348,
-            }
+            dataset_version = self.version_select
+            logger.info(f"Using dataset version {dataset_version}")
 
-            hdf5_data_file = {
-                "name": "qm9_dataset.hdf5",
-                "md5": "0b22dc048f3361875889f832527438db",
-            }
+        url = data_inputs[dataset_version]["url"]
 
-            processed_data_file = {
-                "name": "qm9_dataset_processed.npz",
-                "md5": None,
-            }
-
-            logger.info("Using full dataset")
+        # fetch the dictionaries that defined the size, md5 checksums (if provided) and filenames of the data files
+        gz_data_file = data_inputs[dataset_version]["gz_data_file"]
+        hdf5_data_file = data_inputs[dataset_version]["hdf5_data_file"]
+        processed_data_file = data_inputs[dataset_version]["processed_data_file"]
 
         # to ensure that that we are consistent in our naming, we need to set all the names and checksums in the HDF5Dataset class constructor
         super().__init__(
@@ -235,7 +226,7 @@ class QM9Dataset(HDF5Dataset):
         Examples
         --------
         >>> data = QM9Dataset()
-        >>> data.download()  # Downloads the dataset from Google Drive
+        >>> data.download()  # Downloads the dataset
 
         """
         # Right now this function needs to be defined for each dataset.
@@ -247,6 +238,7 @@ class QM9Dataset(HDF5Dataset):
             md5_checksum=self.gz_data_file["md5"],
             output_path=self.local_cache_dir,
             output_filename=self.gz_data_file["name"],
+            length=self.gz_data_file["length"],
             force_download=self.force_download,
         )
         # from modelforge.dataset.utils import _download_from_url

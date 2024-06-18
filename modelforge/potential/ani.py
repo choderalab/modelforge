@@ -10,7 +10,7 @@ from modelforge.potential.models import CoreNetwork
 from modelforge.utils.prop import SpeciesAEV
 
 if TYPE_CHECKING:
-    from modelforge.potential.utils import NNPInput
+    from modelforge.dataset.dataset import NNPInput
 
     from .models import PairListOutputs
 
@@ -316,22 +316,24 @@ class ANIInteraction(nn.Module):
         super().__init__()
         # define atomic neural network
         atomic_neural_networks = self.intialize_atomic_neural_network(aev_dim)
-        self.H_network = atomic_neural_networks["H"]
-        self.C_network = atomic_neural_networks["C"]
-        self.O_network = atomic_neural_networks["O"]
-        self.N_network = atomic_neural_networks["N"]
-        self.S_network = atomic_neural_networks["S"]
-        self.F_network = atomic_neural_networks["F"]
-        self.Cl_network = atomic_neural_networks["Cl"]
-        self.atomic_networks = [
-            self.H_network,
-            self.C_network,
-            self.O_network,
-            self.N_network,
-            self.S_network,
-            self.F_network,
-            self.Cl_network,
-        ]
+        H_network = atomic_neural_networks["H"]
+        C_network = atomic_neural_networks["C"]
+        O_network = atomic_neural_networks["O"]
+        N_network = atomic_neural_networks["N"]
+        S_network = atomic_neural_networks["S"]
+        F_network = atomic_neural_networks["F"]
+        Cl_network = atomic_neural_networks["Cl"]
+        self.atomic_networks = nn.ModuleList(
+            [
+                H_network,
+                C_network,
+                O_network,
+                N_network,
+                S_network,
+                F_network,
+                Cl_network,
+            ]
+        )
 
     def intialize_atomic_neural_network(self, aev_dim: int) -> Dict[str, nn.Module]:
 
@@ -425,7 +427,7 @@ class ANIInteraction(nn.Module):
             midx = mask.nonzero().flatten()
             if midx.shape[0] > 0:
                 input_ = aev.index_select(0, midx)
-                output.masked_scatter_(mask, model(input_).flatten())
+                output[midx] = model(input_).flatten()
 
         return output.view_as(species)
 
@@ -452,9 +454,7 @@ class ANI2xCore(CoreNetwork):
         self.num_species = 7
 
         log.debug("Initializing ANI model.")
-        super().__init__(
-            cutoff=radial_max_distance
-        )
+        super().__init__()
 
         # Initialize representation block
         self.ani_representation_module = ANIRepresentation(
@@ -547,33 +547,37 @@ class ANI2xCore(CoreNetwork):
 
 
 from .models import InputPreparation, BaseNetwork
-from .utils import NNPInput
+from typing import Union
 
 
 class ANI2x(BaseNetwork):
     def __init__(
         self,
-        radial_max_distance: unit.Quantity = 5.1 * unit.angstrom,
-        radial_min_distanc: unit.Quantity = 0.8 * unit.angstrom,
-        number_of_radial_basis_functions: int = 16,
-        angular_max_distance: unit.Quantity = 3.5 * unit.angstrom,
-        angular_min_distance: unit.Quantity = 0.8 * unit.angstrom,
-        angular_dist_divisions: int = 8,
-        angle_sections: int = 4,
+        radial_max_distance: Union[unit.Quantity, str],
+        radial_min_distance: Union[unit.Quantity, str],  # NOTE: min distance? #FIXME
+        number_of_radial_basis_functions: int,
+        angular_max_distance: Union[unit.Quantity, str],
+        angular_min_distance: Union[unit.Quantity, str],
+        angular_dist_divisions: int,
+        angle_sections: int,
     ) -> None:
         super().__init__()
+
+        from modelforge.utils.units import _convert
+
         self.core_module = ANI2xCore(
-            radial_max_distance,
-            radial_min_distanc,
+            _convert(radial_max_distance),
+            _convert(radial_min_distance),
             number_of_radial_basis_functions,
-            angular_max_distance,
-            angular_min_distance,
+            _convert(angular_max_distance),
+            _convert(angular_min_distance),
             angular_dist_divisions,
             angle_sections,
         )
         self.only_unique_pairs = True  # NOTE: for pairlist
         self.input_preparation = InputPreparation(
-            cutoff=radial_max_distance, only_unique_pairs=self.only_unique_pairs
+            cutoff=_convert(radial_max_distance),
+            only_unique_pairs=self.only_unique_pairs,
         )
 
     def _config_prior(self):

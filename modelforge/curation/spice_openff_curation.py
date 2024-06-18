@@ -51,8 +51,7 @@ class SPICEOpenFFCuration(DatasetCuration):
     convert_units: bool, optional, default=True
         Convert from the source units (e.g., angstrom, bohr, hartree)
         to [nanometer, kJ/mol] (i.e., target units)
-    release_version: str, optional, default='1.1.4'
-        Version of the SPICE dataset to fetch from the MOLSSI QCArchive.
+
     Examples
     --------
     >>> spice_openff_data = SPICEOpenFFCuration(hdf5_file_name='spice114_openff_dataset.hdf5',
@@ -60,22 +59,6 @@ class SPICEOpenFFCuration(DatasetCuration):
     >>> spice_openff_data.process()
 
     """
-
-    def __init__(
-        self,
-        hdf5_file_name: str,
-        output_file_dir: str,
-        local_cache_dir: str,
-        convert_units: bool = True,
-        release_version: str = "1.1.4",
-    ):
-        super().__init__(
-            hdf5_file_name=hdf5_file_name,
-            output_file_dir=output_file_dir,
-            local_cache_dir=local_cache_dir,
-            convert_units=convert_units,
-        )
-        self.release_version = release_version
 
     def _init_dataset_parameters(self):
         self.qcarchive_server = "ml.qcarchive.molssi.org"
@@ -207,7 +190,7 @@ class SPICEOpenFFCuration(DatasetCuration):
             Path to the directory to store the local sqlite database
         force_download: bool, required
             If True, this will force the software to download the data again, even if present.
-        unit_testing_max_records: Optional[int], optional, default=None
+        max_records: Optional[int], optional, default=None
             If set to an integer, 'n', the routine will only process the first 'n' records, useful for unit tests.
             Note, conformers of the same molecule are saved in separate records, and thus the number of molecules
             that end up in the 'data' list after _process_downloaded is called  may be less than unit_testing_max_records.
@@ -225,7 +208,9 @@ class SPICEOpenFFCuration(DatasetCuration):
         from qcportal import PortalClient
 
         dataset_type = "singlepoint"
-        client = PortalClient(self.qcarchive_server)
+        client = PortalClient(
+            self.qcarchive_server, cache_dir=f"{local_path_dir}/qcarchive_cache"
+        )
 
         ds = client.get_dataset(dataset_type=dataset_type, dataset_name=dataset_name)
 
@@ -441,6 +426,7 @@ class SPICEOpenFFCuration(DatasetCuration):
         dataset_names: List[str],
         max_conformers_per_record: Optional[int] = None,
         total_conformers: Optional[int] = None,
+        atomic_numbers_to_limit: Optional[List[int]] = None,
     ):
         """
         Processes a downloaded dataset: extracts relevant information.
@@ -453,7 +439,12 @@ class SPICEOpenFFCuration(DatasetCuration):
             Names of the raw sqlite files to process,
         dataset_names: List[str], required
             List of names of the sqlite datasets to process.
-
+        max_conformers_per_record: Optional[int], optional, default=None
+            If set, this will limit the number of conformers per record to the specified number.
+        total_conformers: Optional[int], optional, default=None
+            If set, this will limit the total number of conformers to the specified number.
+        atomic_numbers_to_limit: Optional[List[int]], optional, default=None
+            If set, this will limit the dataset to only include molecules with atomic numbers in the list.
         """
         from tqdm import tqdm
         import numpy as np
@@ -689,6 +680,17 @@ class SPICEOpenFFCuration(DatasetCuration):
         if self.convert_units:
             self._convert_units()
 
+        # if we want to limit to a subset of elements, we can quickly post process the dataset
+        if atomic_numbers_to_limit is not None:
+            data_temp = []
+            for datapoint in self.data:
+                add_to_record = set(datapoint["atomic_numbers"].flatten()).issubset(
+                    atomic_numbers_to_limit
+                )
+                if add_to_record:
+                    data_temp.append(datapoint)
+            self.data = data_temp
+
         if total_conformers is not None or max_conformers_per_record is not None:
             conformers_count = 0
             temp_data = []
@@ -732,6 +734,7 @@ class SPICEOpenFFCuration(DatasetCuration):
         max_records: Optional[int] = None,
         max_conformers_per_record: Optional[int] = None,
         total_conformers: Optional[int] = None,
+        limit_atomic_species: Optional[list] = None,
         n_threads=6,
     ) -> None:
         """
@@ -753,6 +756,8 @@ class SPICEOpenFFCuration(DatasetCuration):
             If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
             Can be used in conjunction with max_records and max_conformers_per_record.
             Note defining this will only fetch from the "SPICE PubChem Set 1 Single Points Dataset v1.2"
+        limit_atomic_species: Optional[list] = None,
+            If set to a list of element symbols, records that contain any elements not in this list will be ignored.
         n_threads, int, default=6
             Number of concurrent threads for retrieving data from QCArchive
         Examples
@@ -768,33 +773,32 @@ class SPICEOpenFFCuration(DatasetCuration):
         #     )
 
         from concurrent.futures import ThreadPoolExecutor, as_completed
+        from importlib import resources
+        from modelforge.curation import yaml_files
+        import yaml
 
-        if self.release_version == "1.1.4":
-            # The SPICE dataset is available in the MOLSSI QCArchive
-            # This will need to load from various datasets, as described on the spice-dataset github page
-            # see https://github.com/openmm/spice-dataset/blob/1.1.4/downloader/config.yaml
+        # The SPICE dataset is available in the MOLSSI QCArchive
+        # This will need to load from various datasets, as described on the spice-dataset github page
+        # see https://github.com/openmm/spice-dataset/blob/1.1.4/downloader/config.yaml
 
-            dataset_names = [
-                "SPICE Solvated Amino Acids Single Points Dataset v1.1",
-                "SPICE Dipeptides Single Points Dataset v1.2",
-                "SPICE DES Monomers Single Points Dataset v1.1",
-                "SPICE DES370K Single Points Dataset v1.0",
-                # "SPICE DES370K Single Points Dataset Supplement v1.0", # this does not have spec 2 or spec 6
-                "SPICE PubChem Set 1 Single Points Dataset v1.2",
-                "SPICE PubChem Set 2 Single Points Dataset v1.2",
-                "SPICE PubChem Set 3 Single Points Dataset v1.2",
-                "SPICE PubChem Set 4 Single Points Dataset v1.2",
-                "SPICE PubChem Set 5 Single Points Dataset v1.2",
-                "SPICE PubChem Set 6 Single Points Dataset v1.2",
-                # "SPICE Ion Pairs Single Points Dataset v1.1", #this does not have spec 6 data for dispersion corrections
-            ]
+        yaml_file = resources.files(yaml_files) / "spice114_openff_curation.yaml"
+        logger.debug(f"Loading config data from {yaml_file}")
+        with open(yaml_file, "r") as file:
+            data_inputs = yaml.safe_load(file)
+
+        assert data_inputs["dataset_name"] == "spice114openff"
+        if self.version_select == "latest":
+            self.version_select = data_inputs["latest"]
+            logger.debug(f"Using latest version {self.version_select}.")
+        if max_records is not None or total_conformers is not None:
+            # if we specify the number of records, restrict to only a subset
+            # so we don't download multiple collections.
+            dataset_names = data_inputs[self.version_select]["test_collection_name"]
+        else:
+            dataset_names = data_inputs[self.version_select]["collection_names"]
 
         specification_names = ["spec_2", "spec_6", "entry"]
 
-        # if we specify the number of records, restrict to only the first subset
-        # so we don't download multiple collections.
-        if max_records is not None or total_conformers is not None:
-            dataset_names = ["SPICE PubChem Set 1 Single Points Dataset v1.2"]
         threads = []
         local_database_names = []
 
@@ -822,12 +826,24 @@ class SPICEOpenFFCuration(DatasetCuration):
         self.molecule_names.clear()
         logger.debug(f"Processing downloaded dataset.")
 
+        if limit_atomic_species is not None:
+            self.atomic_numbers_to_limit = []
+            from openff.units import elements
+
+            for symbol in limit_atomic_species:
+                for num, sym in elements.SYMBOLS.items():
+                    if sym == symbol:
+                        self.atomic_numbers_to_limit.append(num)
+        else:
+            self.atomic_numbers_to_limit = None
+
         self._process_downloaded(
             self.local_cache_dir,
             local_database_names,
             dataset_names,
             max_conformers_per_record=max_conformers_per_record,
             total_conformers=total_conformers,
+            atomic_numbers_to_limit=self.atomic_numbers_to_limit,
         )
 
         self._generate_hdf5()

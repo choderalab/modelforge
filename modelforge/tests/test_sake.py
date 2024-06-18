@@ -17,33 +17,49 @@ IN_MAC = platform == "darwin"
 
 def test_SAKE_init():
     """Test initialization of the SAKE neural network potential."""
+    from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
 
-    sake = SAKE()
+    model_name = "SAKE"
+
+    file_path = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
+    )
+    config = return_toml_config(file_path)
+
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+
+    sake = SAKE(**potential_parameters)
     assert sake is not None, "SAKE model should be initialized."
 
 
 from openff.units import unit
 
 
-def test_sake_forward():
+def test_sake_forward(single_batch_with_batchsize_64):
     """
     Test the forward pass of the SAKE model.
     """
-    from modelforge.dataset.qm9 import QM9Dataset
-    from modelforge.dataset.dataset import TorchDataModule
-    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
-
-    # Set up dataset
-    data = QM9Dataset(for_unit_testing=True)
-    dataset = TorchDataModule(
-        data, batch_size=1, splitting_strategy=FirstComeFirstServeSplittingStrategy()
-    )
-
-    dataset.prepare_data(remove_self_energies=True, normalize=False)
     # get methane input
-    methane = next(iter(dataset.train_dataloader())).nnp_input
+    methane = single_batch_with_batchsize_64.nnp_input
 
-    sake = SAKE()
+    from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
+
+    model_name = "SAKE"
+
+    file_path = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
+    )
+    config = return_toml_config(file_path)
+
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+
+    sake = SAKE(**potential_parameters)
     energy = sake(methane).E
     nr_of_mols = methane.atomic_subsystem_indices.unique().shape[0]
 
@@ -83,7 +99,7 @@ def test_sake_interaction_forward():
 
 @pytest.mark.parametrize("eq_atol", [3e-1])
 @pytest.mark.parametrize("h_atol", [8e-2])
-def test_sake_layer_equivariance(h_atol, eq_atol):
+def test_sake_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize_64):
     import torch
     from modelforge.potential.sake import SAKE
     from dataclasses import replace
@@ -96,21 +112,24 @@ def test_sake_layer_equivariance(h_atol, eq_atol):
     # (clockwise when looking along the z-axis towards the origin)
     rotation_matrix = torch.tensor([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
 
-    sake = SAKE(number_of_atom_features=nr_atom_basis)  # only for preparing inputs
+    from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
 
-    from modelforge.dataset.qm9 import QM9Dataset
-    from modelforge.dataset.dataset import TorchDataModule
-    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
+    model_name = "SAKE"
 
-    # Set up dataset
-    data = QM9Dataset(for_unit_testing=True)
-    dataset = TorchDataModule(
-        data, batch_size=1, splitting_strategy=FirstComeFirstServeSplittingStrategy()
+    file_path = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
     )
+    config = return_toml_config(file_path)
 
-    dataset.prepare_data(remove_self_energies=True, normalize=False)
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameters["number_of_atom_features"] = nr_atom_basis
+    sake = SAKE(**potential_parameters)
+
     # get methane input
-    methane = next(iter(dataset.train_dataloader())).nnp_input
+    methane = single_batch_with_batchsize_64.nnp_input
     perturbed_methane_input = replace(methane)
     perturbed_methane_input.positions = torch.matmul(methane.positions, rotation_matrix)
 
@@ -413,7 +432,7 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none):
     )
 
 
-def test_sake_model_against_reference():
+def test_sake_model_against_reference(single_batch_with_batchsize_1):
     nr_heads = 5
     nr_atom_basis = 11
     max_Z = 13
@@ -440,18 +459,8 @@ def test_sake_model_against_reference():
         cutoff=None,
     )
 
-    from modelforge.dataset import QM9Dataset
-    from modelforge.dataset import TorchDataModule
-    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
-
-    data = QM9Dataset(for_unit_testing=True)
-    dataset = TorchDataModule(
-        data, batch_size=1, splitting_strategy=FirstComeFirstServeSplittingStrategy()
-    )
-
-    dataset.prepare_data(remove_self_energies=True, normalize=False)
     # get methane input
-    methane = next(iter(dataset.train_dataloader())).nnp_input
+    methane = single_batch_with_batchsize_1.nnp_input
     pairlist_output = mf_sake.input_preparation.prepare_inputs(methane)
     prepared_methane = mf_sake.core_module._model_specific_input_preparation(
         methane, pairlist_output
@@ -583,21 +592,26 @@ def test_sake_model_against_reference():
     # assert torch.allclose(mf_out.E, torch.from_numpy(onp.array(ref_out[0])))
 
 
-def test_model_invariance():
-    from modelforge.dataset import QM9Dataset
-    from modelforge.dataset import TorchDataModule
-    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
+def test_model_invariance(single_batch_with_batchsize_1):
     from dataclasses import replace
 
-    model = SAKE()
-    data = QM9Dataset(for_unit_testing=True)
-    dataset = TorchDataModule(
-        data, batch_size=1, splitting_strategy=FirstComeFirstServeSplittingStrategy()
-    )
+    from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
 
-    dataset.prepare_data(remove_self_energies=True, normalize=False)
+    model_name = "SAKE"
+
+    file_path = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
+    )
+    config = return_toml_config(file_path)
+
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+
+    model = SAKE(**potential_parameters)
     # get methane input
-    methane = next(iter(dataset.train_dataloader())).nnp_input
+    methane = single_batch_with_batchsize_1.nnp_input
 
     rotation_matrix = torch.tensor([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
     perturbed_methane_input = replace(methane)

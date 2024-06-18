@@ -1,78 +1,48 @@
 def test_physnet_init():
 
     from modelforge.potential.physnet import PhysNet
+    from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
 
-    model = PhysNet()
+    model_name = "PhysNet"
+
+    file_path = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
+    )
+    config = return_toml_config(file_path)
+
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+
+    model = PhysNet(**potential_parameters)
 
 
-def test_physnet_forward():
+def test_physnet_forward(single_batch_with_batchsize_64):
     import torch
     from modelforge.potential.physnet import PhysNet
-    from modelforge.dataset.qm9 import QM9Dataset
-    from modelforge.dataset.dataset import TorchDataModule
-    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
-    # Set up dataset
-    data = QM9Dataset(for_unit_testing=True)
-    dataset = TorchDataModule(
-        data, batch_size=1, splitting_strategy=FirstComeFirstServeSplittingStrategy()
+    # read default parameters
+    from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
+
+    model_name = "PhysNet"
+
+    file_path = (
+        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
     )
+    config = return_toml_config(file_path)
 
-    dataset.prepare_data(remove_self_energies=True, normalize=False)
-    # get methane input
-    methane = next(iter(dataset.train_dataloader())).nnp_input
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameters["number_of_modules"] = 1
+    potential_parameters["number_of_interaction_residual"] = 1
 
-    model = PhysNet(number_of_modules=1, number_of_interaction_residual=1)
+    model = PhysNet(**potential_parameters)
+    model = model.to(torch.float32)
     print(model)
-    yhat = model(methane)
-    from torchviz import make_dot
-
-
-def test_physnet_training():
-
-    from modelforge.dataset.qm9 import QM9Dataset
-    from modelforge.dataset.dataset import TorchDataModule, collate_conformers
-    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
-    from modelforge.potential import NeuralNetworkPotentialFactory
-
-    from lightning import Trainer
-
-    # Set up dataset
-    data = QM9Dataset(for_unit_testing=True)
-    dataset = TorchDataModule(
-        data, batch_size=1, splitting_strategy=FirstComeFirstServeSplittingStrategy()
-    )
-
-    dataset.prepare_data(remove_self_energies=True, normalize=False)
-    # get methane input
-    methane = next(iter(dataset.train_dataloader())).nnp_input
-
-    model = NeuralNetworkPotentialFactory.create_nnp("training", "PhysNet")
-    from torch.utils.data import DataLoader
-    from torch.utils.data import Subset
-
-    # set up traininer
-    from lightning.pytorch.callbacks.early_stopping import EarlyStopping
-
-    test_dataset = DataLoader(
-        Subset(dataset.torch_dataset, [0]),
-        batch_size=1,
-        collate_fn=collate_conformers,
-        num_workers=4,
-    )
-
-    trainer = Trainer(
-        max_epochs=20,
-        num_nodes=1,
-        devices=1,
-        accelerator="cpu",
-        callbacks=[
-            EarlyStopping(monitor="val_loss", min_delta=0.05, patience=20, verbose=True)
-        ],
-    )
-
-    # Run training loop and validate
-    trainer.fit(model, test_dataset, test_dataset)
+    yhat = model(single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float32))
 
 
 def test_rbf():

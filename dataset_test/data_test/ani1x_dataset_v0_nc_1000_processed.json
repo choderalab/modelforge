@@ -1,0 +1,11 @@
+{
+    "data_keys": [
+        "atomic_numbers",
+        "wb97x_dz.energy",
+        "geometry",
+        "wb97x_dz.forces"
+    ],
+    "hdf5_checksum": "776d38c18f3aa37b00360556cf8d78cc",
+    "hdf5_gz_checkusm": "f47a92bf4791607d9fc92a4cf16cd096",
+    "date_generated": "2024-06-01 09:30:29.060686"
+}

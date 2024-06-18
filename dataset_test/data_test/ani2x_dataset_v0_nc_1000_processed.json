@@ -1,0 +1,11 @@
+{
+    "data_keys": [
+        "atomic_numbers",
+        "energies",
+        "geometry",
+        "forces"
+    ],
+    "hdf5_checksum": "bed8b011c080078c15c3e7d79dfa99a3",
+    "hdf5_gz_checkusm": "9f043115c38db3739f7c529f900c0e07",
+    "date_generated": "2024-06-01 09:30:30.736235"
+}

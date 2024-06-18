@@ -1,0 +1,12 @@
+{
+    "data_keys": [
+        "atomic_numbers",
+        "dft_total_energy",
+        "geometry",
+        "dft_total_force",
+        "mbis_charges"
+    ],
+    "hdf5_checksum": "0a2554d0dba4f289dd93670686e4842e",
+    "hdf5_gz_checkusm": "04063f08a7ec93abfc661c22b12ceeb0",
+    "date_generated": "2024-06-01 09:31:28.699930"
+}

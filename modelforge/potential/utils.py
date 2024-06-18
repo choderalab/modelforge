@@ -926,8 +926,8 @@ class TensorNetRadialSymmetryFunction(RadialSymmetryFunction):
     ):
         # TensorNet evenly distribute centers in log space
         centers = torch.linspace(
-            torch.exp(-_max_distance_in_nanometer),
-            torch.exp(-_min_distance_in_nanometer),
+            np.exp(-_max_distance_in_nanometer),
+            np.exp(-_min_distance_in_nanometer),
             number_of_radial_basis_functions,
             dtype=dtype,
         )

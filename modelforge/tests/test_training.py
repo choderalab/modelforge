@@ -168,13 +168,12 @@ def test_hypterparameter_tuning_with_ray(
     # Extract parameters
     potential_parameter = config["potential"]["potential_parameter"]
     training_parameters = config["training"]["training_parameter"]
-    loss_module = LossFactory.create_loss(**config["training"]["loss_parameter"])
-
+    loss_config = config["training"]["loss_parameter"]
     # training model
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="training",
         model_type=model_name,
-        loss_module=loss_module,
+        loss_parameter=loss_config,
         model_parameters=potential_parameter,
         training_parameters=training_parameters,
     )

@@ -117,7 +117,7 @@ class TensorNetRepresentation(torch.nn.Module):
         min_distance: unit.Quantity,
         number_of_radial_basis_functions: int,
     ):
-        radial_symmetry_functizn = TensorNetRadialSymmetryFunction(
+        radial_symmetry_function = TensorNetRadialSymmetryFunction(
             number_of_radial_basis_functions,
             max_distance,
             min_distance,

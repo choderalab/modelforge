@@ -104,7 +104,7 @@ class TensorNetRepresentation(torch.nn.Module):
     ):
         super().__init__()
 
-        self.cutoff_module = CosineCutff(radial_max_distance)
+        self.cutoff_module = CosineCutoff(radial_max_distance)
         self.radial_symmetry_function = self._setup_radial_symmetry_functions(
             radial_max_distance, 
             radial_min_distance, 

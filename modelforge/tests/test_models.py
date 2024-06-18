@@ -213,7 +213,6 @@ def test_state_dict_saving_and_loading(model_name, training_config):
     model2 = NeuralNetworkPotentialFactory.create_nnp(
         use="inference",
         model_type=model_name,
-        loss_module=loss_module,
         simulation_environment="PyTorch",
         model_parameters=potential_parameter,
     )

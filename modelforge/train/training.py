@@ -18,11 +18,11 @@ class MSELossMetric(torchmetrics.Metric):
         self.add_state("loss_per_batch", default=[], dist_reduce_fx="cat")
 
     def update(self, loss: torch.Tensor) -> None:
-        self.energy_loss_per_batch.append(loss.detach())
+        self.loss_per_batch.append(loss.detach())
 
     def compute(self) -> torch.Tensor:
-        loss_per_batch = dim_zero_cat(self.energy_loss_per_batch)
-        return torch.mean(torch.square(loss_per_batch))
+        loss_per_epoch = dim_zero_cat(self.loss_per_batch)
+        return torch.mean(torch.square(loss_per_epoch))
 
 
 from torch import nn

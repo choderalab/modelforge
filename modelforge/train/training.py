@@ -228,6 +228,13 @@ class TrainingAdapter(pl.LightningModule):
         if F_true.numel() < 1:
             raise RuntimeError("No force can be calculated.")
         E_predict = energies["E_predict"]
+        
+        # Ensure E_predict and nnp_input.positions require gradients and are on the same device
+        if not E_predict.requires_grad:
+            E_predict.requires_grad = True
+        if not nnp_input.positions.requires_grad:
+            nnp_input.positions.requires_grad = True
+        
         F_predict = -torch.autograd.grad(
             E_predict.sum(), nnp_input.positions, create_graph=False, retain_graph=True
         )[0]
@@ -335,6 +342,7 @@ class TrainingAdapter(pl.LightningModule):
             on_step=True,
             on_epoch=True,
             prog_bar=True,
+            batch_size=1
         )
         self.log(
             "train/force_loss",
@@ -342,6 +350,7 @@ class TrainingAdapter(pl.LightningModule):
             on_step=True,
             on_epoch=True,
             prog_bar=True,
+            batch_size=1
         )
         self.log(
             "train/combined_loss",
@@ -349,6 +358,7 @@ class TrainingAdapter(pl.LightningModule):
             on_step=True,
             on_epoch=True,
             prog_bar=True,
+            batch_size=1
         )
 
         return loss["combined_loss"]

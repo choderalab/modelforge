@@ -42,3 +42,4 @@ loss_parameter.energy_weight = 1.0
 dataset_name = "QM9"
 batch_size = 512
 remove_self_energies = true
+version_select = "nc_1000_v0"

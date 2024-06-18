@@ -12,7 +12,7 @@ from modelforge.potential import NeuralNetworkPotentialFactory
 
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
-@pytest.mark.parametrize("dataset_name", ["ANI2x"])
+@pytest.mark.parametrize("dataset_name", ["QM9"])
 @pytest.mark.parametrize("include_force", [False, True])
 def test_train_with_lightning(model_name, dataset_name, include_force):
     """
@@ -22,7 +22,6 @@ def test_train_with_lightning(model_name, dataset_name, include_force):
     from modelforge.train.training import (
         return_toml_config,
         perform_training,
-        LossFactory,
     )
     from importlib import resources
     from modelforge.tests.data import training_defaults

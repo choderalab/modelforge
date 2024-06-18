@@ -23,28 +23,26 @@ dependencies:
   - retry
   - sqlitedict
   - pytorch_scatter
-  - jax
 
   # Testing
   - pytest>=2.1
   - pytest-cov
   - codecov
   - requests
-  - ray-data
-  - ray-train
-  - ray-tune
   - torchani
   - versioneer
 
   # Docs
   - sphinx_rtd_theme
 
-  # pip installs
   - pip:
       - schnetpack>=2.0.0
+      - jax
       - pytorch2jax
       - versioneer
       - flax
       - git+https://github.com/ArnNag/sake.git@nanometer
       - tensorflow
-      - torchviz
+      - ray-data
+      - ray-train
+      - ray-tune

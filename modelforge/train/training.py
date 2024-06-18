@@ -151,7 +151,7 @@ class TrainingAdapter(pl.LightningModule):
         model_parameters: Dict[str, Any],
         lr_scheduler_config: Dict[str, Union[str, int, float]],
         lr: float,
-        loss_module: Type[NaiveEnergyAndForceLoss],
+        loss_parameter: Dict[str, Any],
         optimizer: Type[Optimizer] = torch.optim.AdamW,
     ):
         """
@@ -175,7 +175,7 @@ class TrainingAdapter(pl.LightningModule):
         from modelforge.potential import _Implemented_NNPs
 
         super().__init__()
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=["loss_module"])
         # Extracting and instantiating the model from parameters
         nnp_parameters_ = model_parameters.copy()
         nnp_name = nnp_parameters_.pop("nnp_name", None)
@@ -191,7 +191,8 @@ class TrainingAdapter(pl.LightningModule):
         self.optimizer = optimizer
         self.learning_rate = lr
         self.lr_scheduler_config = lr_scheduler_config
-        self.loss_module = loss_module
+        self.loss_module = LossFactory.create_loss(**loss_parameter)
+
         self.unused_parameters = set()
         self.are_unused_parameters_present = False
         self.val_energy_loss_metric = MSELossMetric()
@@ -704,7 +705,7 @@ def log_training_arguments(
         log.info(f"Using pinned_memory: {pin_memory}")
     model_name = potential_config["model_name"]
     dataset_name = dataset_config["dataset_name"]
-
+    log.info(training_config["loss_parameter"])
     log.debug(
         f"""
 Training {model_name} on {dataset_name}-{version_select} dataset with {accelerator}
@@ -765,7 +766,6 @@ def perform_training(
     )
     num_workers = dataset_config.get("number_of_worker", 4)
     pin_memory = dataset_config.get("pin_memory", False)
-    loss_module = LossFactory.create_loss(**training_config["loss_parameter"])
 
     # set up tensor board logger
     logger = TensorBoardLogger(save_dir, name=experiment_name)
@@ -793,7 +793,7 @@ Experiments are saved to: {save_dir}/{experiment_name}.
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="training",
         model_type=model_name,
-        loss_module=loss_module,
+        loss_parameter=training_config["loss_parameter"],
         model_parameters=potential_config["potential_parameter"],
         training_parameters=training_config["training_parameter"],
     )

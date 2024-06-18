@@ -6,7 +6,7 @@ from modelforge.potential import NeuralNetworkPotentialFactory
 
 
 @pytest.fixture
-def training_config():
+def loss_config():
     training_config = {}
     training_config["loss_type"] = "NaiveEnergyAndForceLoss"
     training_config["include_force"] = True
@@ -16,7 +16,7 @@ def training_config():
 
 
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
-def test_JAX_wrapping(model_name, single_batch_with_batchsize_64, training_config):
+def test_JAX_wrapping(model_name, single_batch_with_batchsize_64, loss_config):
     from modelforge.potential.models import (
         NeuralNetworkPotentialFactory,
     )
@@ -31,9 +31,6 @@ def test_JAX_wrapping(model_name, single_batch_with_batchsize_64, training_confi
     )
 
     config = return_toml_config(filename)
-    from modelforge.train.training import return_toml_config, LossFactory
-
-    loss_module = LossFactory.create_loss(**training_config)
 
     # Extract parameters
     potential_parameter = config["potential"].get("potential_parameter", {})
@@ -42,7 +39,7 @@ def test_JAX_wrapping(model_name, single_batch_with_batchsize_64, training_confi
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="inference",
         model_type=model_name,
-        loss_module=loss_module,
+        loss_parameter=loss_config,
         simulation_environment="JAX",
         model_parameters=potential_parameter,
     )
@@ -60,7 +57,7 @@ def test_JAX_wrapping(model_name, single_batch_with_batchsize_64, training_confi
 
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
-def test_model_factory(model_name, simulation_environment, training_config):
+def test_model_factory(model_name, simulation_environment, loss_config):
     from modelforge.potential.models import (
         NeuralNetworkPotentialFactory,
     )
@@ -81,15 +78,13 @@ def test_model_factory(model_name, simulation_environment, training_config):
     potential_parameter = config["potential"].get("potential_parameter", {})
 
     # Setup loss
-    from modelforge.train.training import return_toml_config, LossFactory
-
-    loss_module = LossFactory.create_loss(**training_config)
+    from modelforge.train.training import return_toml_config
 
     # inference model
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="inference",
         model_type=model_name,
-        loss_module=loss_module,
+        loss_parameter=loss_config,
         simulation_environment=simulation_environment,
         model_parameters=potential_parameter,
     )
@@ -112,7 +107,7 @@ def test_model_factory(model_name, simulation_environment, training_config):
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="training",
         model_type=model_name,
-        loss_module=loss_module,
+        loss_parameter=loss_config,
         simulation_environment=simulation_environment,
         model_parameters=potential_parameter,
         training_parameters=training_parameters,
@@ -179,7 +174,7 @@ def test_energy_scaling_and_offset():
 
 
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
-def test_state_dict_saving_and_loading(model_name, training_config):
+def test_state_dict_saving_and_loading(model_name, loss_config):
     from modelforge.potential import NeuralNetworkPotentialFactory
     import torch
 
@@ -196,14 +191,13 @@ def test_state_dict_saving_and_loading(model_name, training_config):
     potential_parameter = config["potential"].get("potential_parameter", {})
     training_parameters = config["training"].get("training_parameter", {})
     # Setup loss
-    from modelforge.train.training import return_toml_config, LossFactory
+    from modelforge.train.training import return_toml_config
 
-    loss_module = LossFactory.create_loss(**training_config)
 
     model1 = NeuralNetworkPotentialFactory.create_nnp(
         use="training",
         model_type=model_name,
-        loss_module=loss_module,
+        loss_parameter=loss_config,
         simulation_environment="PyTorch",
         model_parameters=potential_parameter,
         training_parameters=training_parameters,
@@ -221,7 +215,7 @@ def test_state_dict_saving_and_loading(model_name, training_config):
 
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 def test_energy_between_simulation_environments(
-    model_name, single_batch_with_batchsize_64, training_config
+    model_name, single_batch_with_batchsize_64, loss_config
 ):
     # compare that the energy is the same for the JAX and PyTorch Model
     import numpy as np
@@ -242,15 +236,14 @@ def test_energy_between_simulation_environments(
     # Extract parameters
     potential_parameter = config["potential"].get("potential_parameter", {})
     # Setup loss
-    from modelforge.train.training import return_toml_config, LossFactory
+    from modelforge.train.training import return_toml_config
 
-    loss_module = LossFactory.create_loss(**training_config)
 
     torch.manual_seed(42)
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="inference",
         model_type=model_name,
-        loss_module=loss_module,
+        loss_parameter=loss_config,
         simulation_environment="PyTorch",
         model_parameters=potential_parameter,
     )
@@ -261,7 +254,7 @@ def test_energy_between_simulation_environments(
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="inference",
         model_type=model_name,
-        loss_module=loss_module,
+        loss_parameter=loss_config,
         simulation_environment="JAX",
         model_parameters=potential_parameter,
     )
@@ -275,7 +268,7 @@ def test_energy_between_simulation_environments(
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_forward_pass_with_all_datasets(
-    model_name, dataset_name, datamodule_factory, training_config
+    model_name, dataset_name, datamodule_factory, loss_config
 ):
     """Test forward pass with all datasets."""
     import torch
@@ -307,14 +300,13 @@ def test_forward_pass_with_all_datasets(
     from modelforge.potential.models import NeuralNetworkPotentialFactory
 
     # Setup loss
-    from modelforge.train.training import return_toml_config, LossFactory
+    from modelforge.train.training import return_toml_config
 
-    loss_module = LossFactory.create_loss(**training_config)
 
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="inference",
         model_type=model_name,
-        loss_module=loss_module,
+        loss_parameter=loss_config,
         simulation_environment="PyTorch",
         model_parameters=potential_parameter,
     )
@@ -328,7 +320,7 @@ def test_forward_pass_with_all_datasets(
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
 def test_forward_pass(
-    model_name, simulation_environment, single_batch_with_batchsize_64, training_config
+    model_name, simulation_environment, single_batch_with_batchsize_64, loss_config
 ):
     # this test sends a single batch from different datasets through the model
     import torch
@@ -349,15 +341,13 @@ def test_forward_pass(
     # Extract parameters
     potential_parameter = config["potential"].get("potential_parameter", {})
     # Setup loss
-    from modelforge.train.training import return_toml_config, LossFactory
-
-    loss_module = LossFactory.create_loss(**training_config)
+    from modelforge.train.training import return_toml_config
 
     # test the forward pass through each of the models
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="inference",
         model_type=model_name,
-        loss_module=loss_module,
+        loss_parameter=loss_config,
         simulation_environment=simulation_environment,
         model_parameters=potential_parameter,
     )
@@ -387,15 +377,13 @@ def test_forward_pass(
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
 def test_calculate_energies_and_forces(
-    model_name, simulation_environment, single_batch_with_batchsize_64, training_config
+    model_name, simulation_environment, single_batch_with_batchsize_64, loss_config
 ):
     """
     Test the calculation of energies and forces for a molecule.
     """
     import torch
-    from modelforge.train.training import return_toml_config, LossFactory
-
-    loss_module = LossFactory.create_loss(**training_config)
+    from modelforge.train.training import return_toml_config
 
     from modelforge.tests.data import potential_defaults
     from importlib import resources
@@ -418,7 +406,7 @@ def test_calculate_energies_and_forces(
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="inference",
         model_type=model_name,
-        loss_module=loss_module,
+        loss_parameter=loss_config,
         simulation_environment=simulation_environment,
         model_parameters=potential_parameter,
     )
@@ -693,7 +681,7 @@ def test_pairlist_on_dataset(dataset_name, datamodule_factory):
 
 
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
-def test_casting(model_name, single_batch_with_batchsize_64, training_config):
+def test_casting(model_name, single_batch_with_batchsize_64, loss_config):
     # test dtype casting
     import torch
 
@@ -723,14 +711,13 @@ def test_casting(model_name, single_batch_with_batchsize_64, training_config):
     # Extract parameters
     potential_parameter = config["potential"].get("potential_parameter", {})
     # Setup loss
-    from modelforge.train.training import return_toml_config, LossFactory
+    from modelforge.train.training import return_toml_config
 
-    loss_module = LossFactory.create_loss(**training_config)
 
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="inference",
         model_type=model_name,
-        loss_module=loss_module,
+        loss_parameter=loss_config,
         simulation_environment="PyTorch",
         model_parameters=potential_parameter,
     )
@@ -743,7 +730,7 @@ def test_casting(model_name, single_batch_with_batchsize_64, training_config):
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="inference",
         model_type=model_name,
-        loss_module=loss_module,
+        loss_parameter=loss_config,
         simulation_environment="PyTorch",
         model_parameters=potential_parameter,
     )
@@ -760,7 +747,7 @@ def test_equivariant_energies_and_forces(
     simulation_environment,
     single_batch_with_batchsize_64,
     equivariance_utils,
-    training_config,
+    loss_config,
 ):
     """
     Test the calculation of energies and forces for a molecule.
@@ -783,14 +770,13 @@ def test_equivariant_energies_and_forces(
     # Extract parameters
     potential_parameter = config["potential"].get("potential_parameter", {})
     # Setup loss
-    from modelforge.train.training import return_toml_config, LossFactory
+    from modelforge.train.training import return_toml_config
 
-    loss_module = LossFactory.create_loss(**training_config)
 
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="inference",
         model_type=model_name,
-        loss_module=loss_module,
+        loss_parameter=loss_config,
         simulation_environment=simulation_environment,
         model_parameters=potential_parameter,
     )

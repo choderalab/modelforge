@@ -47,12 +47,11 @@ def test_train_with_lightning(model_name, dataset_name, include_force):
     )
     # save checkpoint
     trainer.save_checkpoint("test.chp")
-    loss_module = LossFactory.create_loss(**training_config.get("loss_parameter", {}))
 
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="training",
         model_type=model_name,
-        loss_module=loss_module,
+        loss_parameter=training_config["loss_parameter"],
         model_parameters=potential_config["potential_parameter"],
         training_parameters=training_config["training_parameter"],
     )

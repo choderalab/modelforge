@@ -547,7 +547,7 @@ class NeuralNetworkPotentialFactory:
         use: Literal["training", "inference"],
         model_type: Literal["ANI2x", "SchNet", "PaiNN", "SAKE", "PhysNet"],
         model_parameters: Dict[str, Union[int, float, str]],
-        loss_module: Optional[Type["NaiveEnergyAndForceLoss"]] = None,
+        loss_parameter: Optional[Dict[str, Any]] = None,
         simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
         training_parameters: Optional[Dict[str, Any]] = None,
     ) -> Union[Type[torch.nn.Module], Type[JAXModel], Type[pl.LightningModule]]:
@@ -601,7 +601,7 @@ class NeuralNetworkPotentialFactory:
             model_parameters["nnp_name"] = model_type
             return TrainingAdapter(
                 model_parameters=model_parameters,
-                loss_module=loss_module,
+                loss_parameter=loss_parameter,
                 **training_parameters,
             )
         elif use == "inference":
@@ -739,19 +739,19 @@ class BaseNetwork(Module):
         # Create a new dictionary without the prefix in the keys if prefix exists
         if any(key.startswith(prefix) for key in state_dict.keys()):
             filtered_state_dict = {
-                key[len(prefix):] if key.startswith(prefix) else key: value
+                key[len(prefix) :] if key.startswith(prefix) else key: value
                 for key, value in state_dict.items()
                 if key not in excluded_keys
             }
             log.debug(f"Removed prefix: {prefix}")
         else:
             # Create a filtered dictionary without excluded keys if no prefix exists
-            filtered_state_dict = {k: v for k, v in state_dict.items() if k not in excluded_keys}
+            filtered_state_dict = {
+                k: v for k, v in state_dict.items() if k not in excluded_keys
+            }
             log.debug("No prefix found. No modifications to keys in state loading.")
 
         super().load_state_dict(filtered_state_dict, strict=strict, assign=assign)
-
-
 
     def forward(self, data: NNPInput):
         # perform input checks

@@ -5,8 +5,7 @@ import pytest
 def setup_methane():
     import torch
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+    device = torch.device("cpu")
     coordinates = torch.tensor(
         [
             [
@@ -26,13 +25,14 @@ def setup_methane():
         [0, 0, 0, 0, 0], dtype=torch.int32, device=device
     )
 
-    from modelforge.potential.utils import NNPInput
+    from modelforge.dataset.dataset import NNPInput
 
     nnp_input = NNPInput(
         atomic_numbers=torch.tensor([6, 1, 1, 1, 1], device=device),
         positions=coordinates.squeeze(0) / 10,
         atomic_subsystem_indices=atomic_subsystem_indices,
         total_charge=torch.tensor([0.0]),
+        
     )
 
     return species, coordinates, device, nnp_input
@@ -41,8 +41,7 @@ def setup_methane():
 @pytest.fixture
 def setup_two_methanes():
     import torch
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
 
     coordinates = torch.tensor(
         [
@@ -72,7 +71,7 @@ def setup_two_methanes():
     )
 
     atomic_numbers = mf_species
-    from modelforge.potential.utils import NNPInput
+    from modelforge.dataset.dataset import NNPInput
 
     nnp_input = NNPInput(
         atomic_numbers=atomic_numbers,
@@ -104,8 +103,20 @@ def test_modelforge_ani(setup_two_methanes):
     from modelforge.potential.ani import ANI2x as mf_ANI2x
     import torch
 
+    # read default parameters
+    from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
+
+    file_path = resources.files(potential_defaults) / f"ani2x_defaults.toml"
+    config = return_toml_config(file_path)
+
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+
     _, _, _, mf_input = setup_two_methanes
-    model = mf_ANI2x()
+    device = torch.device("cpu")
+    model = mf_ANI2x(**potential_parameters).to(device=device)
     energy = model(mf_input)
     derivative = torch.autograd.grad(energy.E.sum(), mf_input.positions)[0]
     force = -derivative
@@ -180,14 +191,15 @@ def test_radial_with_diagonal_batching(setup_two_methanes):
     vec = selected_coordinates[0] - selected_coordinates[1]
     distances = vec.norm(2, -1)
     # ------------ Modelforge calculation ----------#
+    device = torch.device("cpu")
 
     radial_symmetry_function = AniRadialSymmetryFunction(
         radial_dist_divisions,
         radial_cutoff * unit.angstrom,
         radial_start * unit.angstrom,
-    )
+    ).to(device=device)
 
-    cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom)
+    cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom).to(device=device)
     rcut_ij = cutoff_module(d_ij)
 
     radial_symmetry_feature_vector_mf = radial_symmetry_function(d_ij)
@@ -219,10 +231,12 @@ def test_compare_angular_symmetry_features(setup_methane):
     from modelforge.potential.models import Pairlist
     import math
 
+    device = torch.device("cpu")
+
     # set up relevant system properties
     species, r, _, _ = setup_methane
-    pairlist = Pairlist(only_unique_pairs=True)
-    pairs = pairlist(r[0], torch.tensor([0, 0, 0, 0, 0]))
+    pairlist = Pairlist(only_unique_pairs=True).to(device=device)
+    pairs = pairlist(r[0], torch.tensor([0, 0, 0, 0, 0], device=device))
     d_ij = pairs.d_ij.squeeze(1)
     r_ij = pairs.r_ij.squeeze(1)
 
@@ -306,7 +320,18 @@ def test_representation(setup_methane):
     # generate modelforge ani representation
     from modelforge.potential import ANI2x
 
-    mf_model = ANI2x()
+    # read default parameters
+    from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
+
+    file_path = resources.files(potential_defaults) / f"ani2x_defaults.toml"
+    config = return_toml_config(file_path)
+
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+
+    mf_model = ANI2x(**potential_parameters)
     # perform input checks
     mf_model.input_preparation._input_checks(mf_input)
     # prepare the input for the forward pass

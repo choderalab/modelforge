@@ -10,7 +10,7 @@ from .models import CoreNetwork
 
 if TYPE_CHECKING:
     from .models import PairListOutputs
-    from modelforge.potential.utils import NNPInput
+    from modelforge.dataset.dataset import NNPInput
 
 from modelforge.potential.utils import NeuralNetworkData
 
@@ -112,7 +112,7 @@ class SchNetCore(CoreNetwork):
         from .utils import Dense, ShiftedSoftplus
 
         log.debug("Initializing SchNet model.")
-        super().__init__(cutoff)
+        super().__init__()
         self.number_of_atom_features = number_of_atom_features
         self.number_of_filters = number_of_filters or self.number_of_atom_features
         self.number_of_radial_basis_functions = number_of_radial_basis_functions
@@ -215,6 +215,9 @@ class SchNetCore(CoreNetwork):
         }
 
 
+from torch_scatter import scatter_add
+
+
 class SchNETInteractionModule(nn.Module):
     def __init__(
         self,
@@ -288,30 +291,21 @@ class SchNETInteractionModule(nn.Module):
         torch.Tensor, shape [nr_of_atoms_in_systems, nr_atom_basis]
             Updated feature tensor after interaction block.
         """
+        idx_i, idx_j = pairlist[0], pairlist[1]
 
         # Map input features to the filter space
         x = self.intput_to_feature(x)
 
         # Generate interaction filters based on radial basis functions
-        Wij = self.filter_network(f_ij.squeeze(1))
-
-        idx_i, idx_j = pairlist[0], pairlist[1]
-        x_j = x[idx_j]
+        W_ij = self.filter_network(f_ij.squeeze(1))
+        W_ij = W_ij * f_ij_cutoff
 
         # Perform continuous-filter convolution
-        x_ij = x_j * Wij * f_ij_cutoff
+        x_j = x[idx_j]
+        x_ij = x_j * W_ij
+        x = scatter_add(x_ij, idx_i, dim=0, dim_size=x.size(0))
 
-        # Initialize a tensor to gather the results
-        x_ = torch.zeros_like(x, dtype=x.dtype, device=x.device)
-
-        # Sum contributions to update atom features
-        # x shape: torch.Size([nr_of_atoms_in_batch, 64])
-        # x_ij shape: torch.Size([nr_of_pairs, 64])
-        idx_i_expand = idx_i.unsqueeze(1).expand_as(x_ij)
-        x_.scatter_add_(0, idx_i_expand, x_ij)
-        # Map back to the original feature space and reshape
-        x = self.feature_to_output(x_)
-        return x
+        return self.feature_to_output(x)
 
 
 class SchNETRepresentation(nn.Module):
@@ -372,24 +366,26 @@ class SchNETRepresentation(nn.Module):
         return {"f_ij": f_ij, "f_cutoff": f_cutoff}
 
 
-from typing import NamedTuple, Union
-
 from .models import InputPreparation, NNPInput, BaseNetwork
 
 
 class SchNet(BaseNetwork):
     def __init__(
         self,
-        max_Z: int = 100,
-        number_of_atom_features: int = 64,
-        number_of_radial_basis_functions: int = 20,
-        number_of_interaction_modules: int = 3,
-        cutoff: unit.Quantity = 5 * unit.angstrom,
-        number_of_filters: int = 64,
-        shared_interactions: bool = False,
+        max_Z: int,
+        number_of_atom_features: int,
+        number_of_radial_basis_functions: int,
+        number_of_interaction_modules: int,
+        cutoff: unit.Quantity,
+        number_of_filters: int,
+        shared_interactions: bool,
     ) -> None:
         """
-        Initialize the SchNet class with neighborlist.
+        Initialize the SchNet network.
+
+        Schütt, Kindermans, Sauceda, Chmiela, Tkatchenko, Müller:
+        SchNet: A continuous-filter convolutional neural network for modeling quantum
+        interactions.
 
         Parameters
         ----------
@@ -403,6 +399,8 @@ class SchNet(BaseNetwork):
             The cutoff distance for interactions.
         """
         super().__init__()
+        from modelforge.utils.units import _convert
+
         self.core_module = SchNetCore(
             max_Z=max_Z,
             number_of_atom_features=number_of_atom_features,
@@ -413,7 +411,7 @@ class SchNet(BaseNetwork):
         )
         self.only_unique_pairs = False  # NOTE: for pairlist
         self.input_preparation = InputPreparation(
-            cutoff=cutoff, only_unique_pairs=self.only_unique_pairs
+            cutoff=_convert(cutoff), only_unique_pairs=self.only_unique_pairs
         )
 
     def _config_prior(self):

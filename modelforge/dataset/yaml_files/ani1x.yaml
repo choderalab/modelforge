@@ -1,0 +1,29 @@
+dataset: ani1x
+latest: full_dataset_v0
+latest_test: nc_1000_v0
+full_dataset_v0:
+  version: 0
+  gz_data_file:
+    length: 4510287721
+    md5: 408cdcf9768ac96a8ae8ade9f078c51b
+    name: ani1x_dataset_v0.hdf5.gz
+  hdf5_data_file:
+    md5: 361b7c4b9a4dfeece70f0fe6a893e76a
+    name: ani1x_dataset_v0.hdf5
+  processed_data_file:
+    md5: null
+    name: ani1x_dataset_v0_processed.npz
+  url: https://www.dropbox.com/scl/fi/eqatmpndfvbawp2q2tblj/ani1x_dataset_v0.hdf5.gz?rlkey=hlg8cicfte0fpwtpw9ln666hb&st=5hbm44in&dl=1
+nc_1000_v0:
+  version: 0
+  gz_data_file:
+    length: 1761417
+    md5: f47a92bf4791607d9fc92a4cf16cd096
+    name: ani1x_dataset_v0_nc_1000.hdf5.gz
+  hdf5_data_file:
+    md5: 776d38c18f3aa37b00360556cf8d78cc
+    name: ani1x_dataset_v0_nc_1000.hdf5
+  processed_data_file:
+    md5: null
+    name: ani1x_dataset_v0_nc_1000_processed.npz
+  url: https://www.dropbox.com/scl/fi/qktbls94mtx9mlx6g4j4g/ani1x_dataset_v0_ntc_1000.hdf5.gz?rlkey=otpgtn9jvh7a51ykmhta23dr3&st=6n5vwfqs&dl=1

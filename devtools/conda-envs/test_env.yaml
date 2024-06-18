@@ -48,3 +48,4 @@ dependencies:
       - torchviz
       - git+https://github.com/ArnNag/sake.git@nanometer
       - tensorflow
+      - torchviz

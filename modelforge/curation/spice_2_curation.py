@@ -15,7 +15,7 @@ class SPICE2Curation(DatasetCuration):
     It provides both forces and energies calculated at the ωB97M-D3(BJ)/def2-TZVPPD level of theory,
     using Psi4 1.4.1 along with other useful quantities such as multipole moments and bond orders.
 
-    Reference to the SPICE 1 dataset publication:
+    Reference to the original SPICE 1 dataset publication:
     Eastman, P., Behara, P.K., Dotson, D.L. et al. SPICE,
     A Dataset of Drug-like Molecules and Peptides for Training Machine Learning Potentials.
     Sci Data 10, 11 (2023). https://doi.org/10.1038/s41597-022-01882-6
@@ -37,19 +37,38 @@ class SPICE2Curation(DatasetCuration):
 
     Examples
     --------
-    >>> spice114_data = SPICE114Curation(hdf5_file_name='spice114_dataset.hdf5',
-    >>>                             local_cache_dir='~/datasets/spice114_dataset')
-    >>> spice114_data.process()
+    >>> spice2_data = SPICE2Curation(hdf5_file_name='spice12_dataset.hdf5',
+    >>>                             local_cache_dir='~/datasets/spice2_dataset')
+    >>> spice2_data.process()
 
     """
 
     def _init_dataset_parameters(self):
-        self.dataset_download_url = (
-            "https://zenodo.org/records/10975225/files/SPICE-2.0.1.hdf5"
+        from importlib import resources
+        from modelforge.curation import yaml_files
+        import yaml
+
+        yaml_file = resources.files(yaml_files) / "spice2_curation.yaml"
+        logger.debug(f"Loading config data from {yaml_file}")
+        with open(yaml_file, "r") as file:
+            data_inputs = yaml.safe_load(file)
+
+        assert data_inputs["dataset_name"] == "spice2"
+
+        if self.version_select == "latest":
+            self.version_select = data_inputs["latest"]
+            logger.debug(f"Latest version: {self.version_select}")
+
+        self.dataset_download_url = data_inputs[self.version_select][
+            "dataset_download_url"
+        ]
+        self.dataset_md5_checksum = data_inputs[self.version_select][
+            "dataset_md5_checksum"
+        ]
+        logger.debug(
+            f"Dataset: {self.version_select} version: {data_inputs[self.version_select]['version']}"
         )
-        self.dataset_md5_checksum = "bfba2224b6540e1390a579569b475510"
-        # the spice dataset includes openff compatible unit definitions in the hdf5 file
-        # these values were used to generate this dictionary
+
         self.qm_parameters = {
             "geometry": {
                 "u_in": unit.bohr,
@@ -179,6 +198,7 @@ class SPICE2Curation(DatasetCuration):
         max_records: Optional[int] = None,
         max_conformers_per_record: Optional[int] = None,
         total_conformers: Optional[int] = None,
+        atomic_numbers_to_limit: Optional[list] = None,
     ):
         """
         Processes a downloaded dataset: extracts relevant information.
@@ -198,6 +218,8 @@ class SPICE2Curation(DatasetCuration):
         total_conformers: int, optional, default=None
             If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
             Can be used in conjunction with max_records and max_conformers_per_record.
+        atomic_numbers_to_limit: list, optional, default=None
+            If set to a list of atomic numbers, only records containing these atomic numbers will be processed.
 
         Examples
         --------
@@ -281,8 +303,18 @@ class SPICE2Curation(DatasetCuration):
                     ds_temp["smiles"]
                 )
                 ds_temp["dft_total_force"] = -ds_temp["dft_total_gradient"]
-                self.data.append(ds_temp)
-                conformers_counter += conformers_per_record
+
+                # check if the record contains only the elements we are interested in
+                # if this has been defined
+                add_to_record = True
+                if atomic_numbers_to_limit is not None:
+                    add_to_record = set(ds_temp["atomic_numbers"].flatten()).issubset(
+                        atomic_numbers_to_limit
+                    )
+
+                if add_to_record:
+                    self.data.append(ds_temp)
+                    conformers_counter += conformers_per_record
 
         if self.convert_units:
             self._convert_units()
@@ -299,6 +331,7 @@ class SPICE2Curation(DatasetCuration):
         max_records: Optional[int] = None,
         max_conformers_per_record: Optional[int] = None,
         total_conformers: Optional[int] = None,
+        limit_atomic_species: Optional[list] = None,
     ) -> None:
         """
         Downloads the dataset, extracts relevant information, and writes an hdf5 file.
@@ -317,6 +350,9 @@ class SPICE2Curation(DatasetCuration):
         total_conformers: int, optional, default=None
             If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
             Can be used in conjunction with  max_conformers_per_record.
+        limit_atomic_species: list, optional, default=None
+            If set to a list of element symbols, records that contain any elements not in this list will be ignored.
+
 
         Examples
         --------
@@ -343,6 +379,17 @@ class SPICE2Curation(DatasetCuration):
 
         self._clear_data()
 
+        if limit_atomic_species is not None:
+            self.atomic_numbers_to_limit = []
+            from openff.units import elements
+
+            for symbol in limit_atomic_species:
+                for num, sym in elements.SYMBOLS.items():
+                    if sym == symbol:
+                        self.atomic_numbers_to_limit.append(num)
+        else:
+            self.atomic_numbers_to_limit = None
+
         # process the rest of the dataset
         if self.name is None:
             raise Exception("Failed to retrieve name of file from zenodo.")
@@ -352,6 +399,7 @@ class SPICE2Curation(DatasetCuration):
             max_records,
             max_conformers_per_record,
             total_conformers,
+            self.atomic_numbers_to_limit,
         )
 
         self._generate_hdf5()

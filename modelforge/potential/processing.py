@@ -5,12 +5,17 @@ from loguru import logger as log
 
 class FromAtomToMoleculeReduction(torch.nn.Module):
 
-    def __init__(self):
+    def __init__(
+        self,
+    ):
         """
         Initializes the per-atom property readout module.
         Performs the reduction of 'per_atom' property to 'per_molecule' property.
         """
         super().__init__()
+        # turn the following parameters in torch buffer
+        self.register_buffer("E_i_mean", torch.tensor([0.0]))
+        self.register_buffer("E_i_stddev", torch.tensor([1.0]))
 
     def forward(
         self, x: torch.Tensor, atomic_subsystem_indices: torch.Tensor
@@ -26,6 +31,9 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         -------
         Tensor, shape [nr_of_moleculs, 1], the per-molecule property.
         """
+
+        # scale
+        x = x * self.E_i_stddev + self.E_i_mean
 
         # Perform scatter add operation for atoms belonging to the same molecule
         indices = atomic_subsystem_indices.to(torch.int64)
@@ -44,6 +52,7 @@ from dataclasses import dataclass, field
 from typing import Dict, Iterator
 
 from openff.units import unit
+from modelforge.dataset.utils import _ATOMIC_NUMBER_TO_ELEMENT
 
 
 @dataclass
@@ -62,65 +71,7 @@ class AtomicSelfEnergies:
     energies: Dict[str, unit.Quantity] = field(default_factory=dict)
     # Example mapping, replace or extend as necessary
     atomic_number_to_element: Dict[int, str] = field(
-        default_factory=lambda: {
-            1: "H",
-            2: "He",
-            3: "Li",
-            4: "Be",
-            5: "B",
-            6: "C",
-            7: "N",
-            8: "O",
-            9: "F",
-            10: "Ne",
-            11: "Na",
-            12: "Mg",
-            13: "Al",
-            14: "Si",
-            15: "P",
-            16: "S",
-            17: "Cl",
-            18: "Ar",
-            19: "K",
-            20: "Ca",
-            21: "Sc",
-            22: "Ti",
-            23: "V",
-            24: "Cr",
-            25: "Mn",
-            26: "Fe",
-            27: "Co",
-            28: "Ni",
-            29: "Cu",
-            30: "Zn",
-            31: "Ga",
-            32: "Ge",
-            33: "As",
-            34: "Se",
-            35: "Br",
-            36: "Kr",
-            37: "Rb",
-            38: "Sr",
-            39: "Y",
-            40: "Zr",
-            41: "Nb",
-            42: "Mo",
-            43: "Tc",
-            44: "Ru",
-            45: "Rh",
-            46: "Pd",
-            47: "Ag",
-            48: "Cd",
-            49: "In",
-            50: "Sn",
-            51: "Sb",
-            52: "Te",
-            53: "I",
-            54: "Xe",
-            55: "Cs",
-            56: "Ba",
-            # Add more elements as needed
-        }
+        default_factory=lambda: _ATOMIC_NUMBER_TO_ELEMENT
     )
     _ase_tensor_for_indexing = None
 
@@ -300,8 +251,7 @@ class EnergyScaling:
         # first, resale the energies
         processed_energy = {}
         processed_energy["raw_E"] = properties_per_molecule.clone().detach()
-        properties_per_molecule = self._rescale_energy(properties_per_molecule)
-        processed_energy["rescaled_E"] = properties_per_molecule.clone().detach()
+
         # then, calculate the molecular self energy
         molecular_ase = self._calculate_molecular_self_energy(
             inputs, properties_per_molecule.numel()

@@ -74,7 +74,7 @@ class TensorNetCore(CoreNetwork):
         radial_min_distanc: unit.Quantity,
         number_of_radial_basis_functions: int,
     ):
-        super().__init__(cutoff=radial_max_distance)
+        super().__init__()
 
         # Initialize representation block
         self.tensornet_representation_module = TensorNetRepresentation(

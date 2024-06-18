@@ -7,8 +7,18 @@ from modelforge.potential.painn import PaiNN
 
 def test_PaiNN_init():
     """Test initialization of the PaiNN neural network potential."""
+    # read default parameters
+    from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
 
-    painn = PaiNN()
+    file_path = resources.files(potential_defaults) / f"painn_defaults.toml"
+    config = return_toml_config(file_path)
+
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+
+    painn = PaiNN(**potential_parameters)
     assert painn is not None, "PaiNN model should be initialized."
 
 
@@ -23,10 +33,12 @@ from openff.units import unit
         [100, 120, 5, unit.Quantity(5.0, unit.angstrom), 3],
     ),
 )
-def test_painn_forward(batch, model_parameter):
+def test_painn_forward(model_parameter, single_batch_with_batchsize_64):
     """
     Test the forward pass of the Schnet model.
     """
+    import torch
+
     print(f"model_parameter: {model_parameter}")
     (
         max_Z,
@@ -41,8 +53,10 @@ def test_painn_forward(batch, model_parameter):
         number_of_radial_basis_functions=number_of_gaussians,
         cutoff=cutoff,
         number_of_interaction_modules=nr_interaction_blocks,
+        shared_filters=False,
+        shared_interactions=False,
     )
-    nnp_input = batch.nnp_input
+    nnp_input = single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float32)
     energy = painn(nnp_input).E
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
@@ -51,10 +65,21 @@ def test_painn_forward(batch, model_parameter):
     )  # Assuming energy is calculated per sample in the batch
 
 
-def test_painn_interaction_equivariance(methane):
+def test_painn_interaction_equivariance(single_batch_with_batchsize_64):
     from modelforge.potential.painn import PaiNN
     from dataclasses import replace
     import torch
+
+    # read default parameters
+    from modelforge.train.training import return_toml_config
+    from importlib import resources
+    from modelforge.tests.data import potential_defaults
+
+    file_path = resources.files(potential_defaults) / f"painn_defaults.toml"
+    config = return_toml_config(file_path)
+
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
 
     # define a rotation matrix in 3D that rotates by 90 degrees around the z-axis
     # (clockwise when looking along the z-axis towards the origin)
@@ -62,8 +87,8 @@ def test_painn_interaction_equivariance(methane):
         [[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]], dtype=torch.float64
     )
 
-    painn = PaiNN().to(torch.float64)
-    methane_input = methane.nnp_input.to(dtype=torch.float64)
+    painn = PaiNN(**potential_parameters).to(torch.float64)
+    methane_input = single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float64)
     perturbed_methane_input = replace(methane_input)
     perturbed_methane_input.positions = torch.matmul(
         methane_input.positions, rotation_matrix
@@ -84,9 +109,7 @@ def test_painn_interaction_equivariance(methane):
         )
     )
 
-    pairlist_output = painn.input_preparation.prepare_inputs(
-        perturbed_methane_input
-    )
+    pairlist_output = painn.input_preparation.prepare_inputs(perturbed_methane_input)
     perturbed_prepared_input = painn.core_module._model_specific_input_preparation(
         perturbed_methane_input, pairlist_output
     )

@@ -137,7 +137,7 @@ class TrainingAdapter(pl.LightningModule):
         lr: float,
         loss_parameter: Dict[str, Any],
         optimizer: Type[Optimizer] = torch.optim.AdamW,
-        verbose_level: int = 0,
+        verbose_level: int = 5,
     ):
         """
         Initializes the TrainingAdapter with the specified model and training configuration.
@@ -267,10 +267,10 @@ class TrainingAdapter(pl.LightningModule):
         """
         nnp_input = batch.nnp_input
         F_true = batch.metadata.F.to(torch.float32)
-        return {"F_true": F_true, "F_predict": F_true.clone()}
 
         if F_true.numel() < 1:
             raise RuntimeError("No force can be calculated.")
+
         E_predict = energies["E_predict"]
 
         # Ensure E_predict and nnp_input.positions require gradients and are on the same device
@@ -279,10 +279,13 @@ class TrainingAdapter(pl.LightningModule):
         if not nnp_input.positions.requires_grad:
             nnp_input.positions.requires_grad = True
 
-        F_predict = -torch.autograd.grad(
-            E_predict.sum(), nnp_input.positions, create_graph=False, retain_graph=True
+        grad = torch.autograd.grad(
+            E_predict.sum(),
+            nnp_input.positions,
+            create_graph=False,
+            retain_graph=True,
         )[0]
-
+        F_predict = -1 * grad
         return {"F_true": F_true, "F_predict": F_predict}
 
     def _get_energies(self, batch: "BatchData") -> Dict[str, torch.Tensor]:
@@ -308,7 +311,6 @@ class TrainingAdapter(pl.LightningModule):
         )
         return {"E_true": E_true, "E_predict": E_predict}
 
-    # @torch.enable_grad()
     def _get_predictions(self, batch: "BatchData") -> Dict[str, torch.Tensor]:
         """
         Computes the energies and forces from a given batch using the model.
@@ -362,7 +364,7 @@ class TrainingAdapter(pl.LightningModule):
         self._log_on_epoch_metrics(loss, "train")
         return loss["combined_loss"]
 
-    # @torch.inference_mode(False)
+    @torch.enable_grad()
     def validation_step(self, batch: "BatchData", batch_idx: int) -> None:
         """
         Validation step to compute the RMSE loss and accumulate L1 loss across epochs.
@@ -380,6 +382,8 @@ class TrainingAdapter(pl.LightningModule):
             The loss tensor computed for the current validation step.
         """
 
+        batch.nnp_input.positions.requires_grad_(True)
+
         # calculate energy and forces
         predict_target = self._get_predictions(batch)
         # calculate the loss
@@ -388,6 +392,7 @@ class TrainingAdapter(pl.LightningModule):
         self.val_loss.append(loss["combined_loss"].detach().item())
         self._log_on_epoch_metrics(loss, "val")
 
+    @torch.enable_grad()
     def test_step(self, batch: "BatchData", batch_idx: int) -> None:
         """
         Test step to compute the RMSE loss for a given batch.
@@ -407,11 +412,11 @@ class TrainingAdapter(pl.LightningModule):
         None
             The results are logged and not directly returned.
         """
-        with torch.enable_grad():
-            # calculate energy and forces
-            predict_target = self._get_predictions(batch)
-            # calculate the loss
-            loss = self.loss_module.calculate_loss(predict_target)
+        batch.nnp_input.positions.requires_grad_(True)
+        # calculate energy and forces
+        predict_target = self._get_predictions(batch)
+        # calculate the loss
+        loss = self.loss_module.calculate_loss(predict_target)
 
         # Update  metrics
         self._log_on_epoch_metrics(loss, "test")
@@ -793,6 +798,7 @@ Experiments are saved to: {save_dir}/{experiment_name}.
         logger=logger,  # Add the logger here
         callbacks=callbacks,
         inference_mode=False,
+        num_sanity_val_steps=2,
     )
 
     dm.prepare_data()
@@ -807,10 +813,6 @@ Experiments are saved to: {save_dir}/{experiment_name}.
     model.model.core_module.readout_module.E_i_stddev = torch.tensor(
         [dm.dataset_statistics.E_i_stddev], dtype=torch.float32
     )
-
-    # from modelforge.utils.misc import visualize_model
-
-    # visualize_model(dm, model_name)
 
     # Run training loop and validate
     trainer.fit(

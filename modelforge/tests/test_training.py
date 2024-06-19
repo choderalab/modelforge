@@ -13,8 +13,8 @@ from modelforge.potential import NeuralNetworkPotentialFactory
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 @pytest.mark.parametrize("dataset_name", ["QM9"])
-@pytest.mark.parametrize("include_force", [False, True])
-def test_train_with_lightning(model_name, dataset_name, include_force):
+@pytest.mark.parametrize("loss_type", ["NaiveEnergyAndForceLoss", "EnergyLoss"])
+def test_train_with_lightning(model_name, dataset_name, loss_type):
     """
     Test the forward pass for a given model and dataset.
     """
@@ -37,7 +37,7 @@ def test_train_with_lightning(model_name, dataset_name, include_force):
     training_config = config["training"]
     dataset_config = config["dataset"]
 
-    training_config["include_force"] = include_force
+    training_config["loss_parameter"]["loss_type"] = loss_type
 
     trainer = perform_training(
         potential_config=potential_config,
@@ -117,7 +117,6 @@ def test_energy_loss_only(_initialize_predict_target_dictionary):
     assert torch.isclose(
         mse_expected_loss, loss["combined_loss"]
     ), f"Expected {mse_expected_loss.item()} but got {loss['combined_loss'].item()}"
-
 
 
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")

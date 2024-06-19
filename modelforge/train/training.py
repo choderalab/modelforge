@@ -765,8 +765,8 @@ Experiments are saved to: {save_dir}/{experiment_name}.
         StochasticWeightAveraging,
     )
 
-    # set up trainer
-    callbacks = [ModelSummary(max_depth=-1)]
+    # set up callbacks
+    callbacks = []
     if stochastic_weight_averaging_config:
         callbacks.append(
             StochasticWeightAveraging(**stochastic_weight_averaging_config)
@@ -774,6 +774,17 @@ Experiments are saved to: {save_dir}/{experiment_name}.
     if early_stopping_config:
         callbacks.append(EarlyStopping(**early_stopping_config))
 
+    from lightning.pytorch.callbacks import ModelCheckpoint
+
+    checkpoint_callback = ModelCheckpoint(
+        save_top_k=2,
+        monitor="val/combined_loss",
+        filename="best_{potential_name}-{dataset_name}-{epoch:02d}-{val_loss:.2f}",
+    )
+
+    callbacks.append(checkpoint_callback)
+
+    # set up trainer
     trainer = Trainer(
         max_epochs=nr_of_epochs,
         num_nodes=num_nodes,
@@ -809,6 +820,6 @@ Experiments are saved to: {save_dir}/{experiment_name}.
         ),
         val_dataloaders=dm.val_dataloader(),
     )
-    trainer.validate(model, dataloaders=dm.val_dataloader())
-    trainer.test(dataloaders=dm.test_dataloader())
+    trainer.validate(model=model, dataloaders=dm.val_dataloader(), ckpt_path="best")
+    trainer.test(dataloaders=dm.test_dataloader(), ckpt_path="best")
     return trainer

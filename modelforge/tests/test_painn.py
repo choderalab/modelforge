@@ -10,9 +10,9 @@ def test_PaiNN_init():
     # read default parameters
     from modelforge.train.training import return_toml_config
     from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
 
-    file_path = resources.files(potential_defaults) / f"painn_defaults.toml"
+    file_path = resources.files(potential) / f"painn_defaults.toml"
     config = return_toml_config(file_path)
 
     # Extract parameters
@@ -73,9 +73,9 @@ def test_painn_interaction_equivariance(single_batch_with_batchsize_64):
     # read default parameters
     from modelforge.train.training import return_toml_config
     from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
 
-    file_path = resources.files(potential_defaults) / f"painn_defaults.toml"
+    file_path = resources.files(potential) / f"painn_defaults.toml"
     config = return_toml_config(file_path)
 
     # Extract parameters

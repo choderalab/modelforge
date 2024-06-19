@@ -24,13 +24,17 @@ def test_train_with_lightning(model_name, dataset_name, loss_type):
         perform_training,
     )
     from importlib import resources
-    from modelforge.tests.data import training_defaults
+    from modelforge.tests.data import training, potential, dataset
 
-    file_path = (
-        resources.files(training_defaults)
-        / f"{model_name.lower()}_{dataset_name.lower()}.toml"
+    training_path = resources.files(training) / "default.toml"
+    potential_path = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
+    dataset_path = resources.files(dataset) / f"{dataset_name.lower()}.toml"
+
+    config = return_toml_config(
+        training_path=training_path,
+        potential_path=potential_path,
+        dataset_path=dataset_path,
     )
-    config = return_toml_config(file_path)
 
     # Extract parameters
     potential_config = config["potential"]

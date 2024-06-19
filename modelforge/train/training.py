@@ -14,22 +14,66 @@ from typing import Optional
 
 
 class MSELossMetric(torchmetrics.Metric):
+    """
+    Custom metric to calculate the Mean Squared Error (MSE) loss per batch and average it over an epoch.
+
+    Attributes
+    ----------
+    mse_loss_per_batch : List[torch.Tensor]
+        List to store the MSE loss for each batch.
+    """
+
     def __init__(self) -> None:
+        """
+        Initializes the MSELossMetric class, setting up the state for the metric.
+        """
         super().__init__()
         self.add_state("mse_loss_per_batch", default=[], dist_reduce_fx="cat")
 
     def update(self, loss: torch.Tensor) -> None:
-        # update with MSE of each batch
+        """
+        Updates the metric state with the MSE loss for a batch.
+
+        Parameters
+        ----------
+        loss : torch.Tensor
+            The MSE loss for a batch.
+        """
         self.mse_loss_per_batch.append(loss.detach())
 
     def compute(self) -> torch.Tensor:
+        """
+        Computes the average MSE loss over all batches in an epoch.
+
+        Returns
+        -------
+        torch.Tensor
+            The average MSE loss for the epoch.
+        """
         mse_loss_per_epoch = dim_zero_cat(self.mse_loss_per_batch)
         return torch.mean(mse_loss_per_epoch)
 
 
 class RMSELossMetric(MSELossMetric):
+    """
+    Custom metric to calculate the Root Mean Squared Error (RMSE) loss per batch and average it over an epoch.
+    Inherits from MSELossMetric.
+
+    Methods
+    -------
+    compute()
+        Computes the average RMSE loss over all batches in an epoch.
+    """
 
     def compute(self) -> torch.Tensor:
+        """
+        Computes the average RMSE loss over all batches in an epoch.
+
+        Returns
+        -------
+        torch.Tensor
+            The average RMSE loss for the epoch.
+        """
         mse_loss_per_epoch = dim_zero_cat(self.mse_loss_per_batch)
         return torch.sqrt(torch.mean(mse_loss_per_epoch))
 
@@ -83,34 +127,81 @@ class EnergyLoss(Loss):
 
 
 class NaiveEnergyAndForceLoss(Loss):
+    """
+    Class to calculate the combined loss for both energy and force predictions.
+
+    Attributes
+    ----------
+    include_force : bool
+        Whether to include force in the loss calculation.
+    energy_weight : torch.Tensor
+        Weight for the energy loss component.
+    force_weight : torch.Tensor
+        Weight for the force loss component.
+    """
+
     def __init__(
         self,
         include_force: bool = False,
         energy_weight: float = 1.0,
         force_weight: float = 1.0,
     ):
+        """
+        Initializes the NaiveEnergyAndForceLoss class.
+
+        Parameters
+        ----------
+        include_force : bool, optional
+            Whether to include force in the loss calculation, by default False.
+        energy_weight : float, optional
+            Weight for the energy loss component, by default 1.0.
+        force_weight : float, optional
+            Weight for the force loss component, by default 1.0.
+        """
         super().__init__()
         self.include_force = include_force
         self.register_buffer("energy_weight", torch.tensor(energy_weight))
         self.register_buffer("force_weight", torch.tensor(force_weight))
 
     def calculate_loss(self, predict_target: Dict[str, torch.Tensor], batch: BatchData):
+        """
+        Calculates the combined loss for both energy and force predictions.
+
+        Parameters
+        ----------
+        predict_target : dict
+            Dictionary containing predicted and true values for energy and force.
+            Expected keys are 'E_predict', 'E_true', 'F_predict', 'F_true'.
+        batch : BatchData
+            Batch of data, including input features and target values.
+
+        Returns
+        -------
+        dict
+            Dictionary containing combined loss, energy loss, and force loss.
+        """
         from torch_scatter import scatter_sum
 
+        # Calculate per-atom force error
         F_error_per_atom = (
             torch.norm(predict_target["F_predict"] - predict_target["F_true"], dim=1)
             ** 2
         )
+        # Aggregate force error per molecule
         F_error_per_molecule = scatter_sum(
             F_error_per_atom, batch.nnp_input.atomic_subsystem_indices.long(), 0
         )
 
+        # Scale factor for force loss
         scale = self.force_weight / (3 * batch.metadata.atomic_subsystem_counts)
+        # Calculate energy loss
         E_loss = (
             self.energy_weight
             * (predict_target["E_predict"] - predict_target["E_true"]) ** 2
         )
+        # Calculate force loss
         F_loss = scale * F_error_per_molecule
+        # Combine energy and force losses
         combined_loss = torch.mean(E_loss + F_loss)
         return {
             "combined_loss": combined_loss,
@@ -208,6 +299,8 @@ class TrainingAdapter(pl.LightningModule):
         prefix : str
             Prefix indicating the current phase of the training process.
             Should be one of 'train', 'val', or 'test'.
+        progress_bar : bool, optional
+            Whether to display the metrics in the progress bar, by default True.
 
         Raises
         ------
@@ -218,25 +311,24 @@ class TrainingAdapter(pl.LightningModule):
         if prefix not in ["train", "val", "test"]:
             raise RuntimeError(f"Unknown prefix: {prefix}")
 
-        # Update loss metrics dictionary based on the prefix
-        if prefix == "train":
-            loss_metrics = {
+        # Dictionary to hold loss metrics based on the prefix
+        loss_metrics = {
+            "train": {
                 "combined_loss": self.train_combined_loss_metric,
                 "energy_loss": self.train_energy_loss_metric,
                 "force_loss": self.train_force_loss_metric,
-            }
-        elif prefix == "test":
-            loss_metrics = {
-                "combined_loss": self.test_combined_loss_metric,
-                "energy_loss": self.test_energy_loss_metric,
-                "force_loss": self.test_force_loss_metric,
-            }
-        elif prefix == "val":
-            loss_metrics = {
+            },
+            "val": {
                 "combined_loss": self.val_combined_loss_metric,
                 "energy_loss": self.val_energy_loss_metric,
                 "force_loss": self.val_force_loss_metric,
-            }
+            },
+            "test": {
+                "combined_loss": self.test_combined_loss_metric,
+                "energy_loss": self.test_energy_loss_metric,
+                "force_loss": self.test_force_loss_metric,
+            },
+        }[prefix]
 
         # Log metrics
         for key, metric in loss_metrics.items():
@@ -259,6 +351,8 @@ class TrainingAdapter(pl.LightningModule):
         ----------
         batch : BatchData
             A single batch of data, including input features and target energies.
+        energies : dict
+            Dictionary containing predicted energies.
 
         Returns
         -------
@@ -279,13 +373,14 @@ class TrainingAdapter(pl.LightningModule):
         if not nnp_input.positions.requires_grad:
             nnp_input.positions.requires_grad = True
 
+        # Compute the gradient (forces) from the predicted energies
         grad = torch.autograd.grad(
             E_predict.sum(),
             nnp_input.positions,
             create_graph=False,
             retain_graph=True,
         )[0]
-        F_predict = -1 * grad
+        F_predict = -1 * grad  # Forces are the negative gradient of energy
         return {"F_true": F_true, "F_predict": F_predict}
 
     def _get_energies(self, batch: "BatchData") -> Dict[str, torch.Tensor]:
@@ -378,10 +473,10 @@ class TrainingAdapter(pl.LightningModule):
 
         Returns
         -------
-        torch.Tensor
-            The loss tensor computed for the current validation step.
+        None
         """
 
+        # Ensure positions require gradients for force calculation
         batch.nnp_input.positions.requires_grad_(True)
 
         # calculate energy and forces
@@ -412,17 +507,22 @@ class TrainingAdapter(pl.LightningModule):
         None
             The results are logged and not directly returned.
         """
+        # Ensure positions require gradients for force calculation
         batch.nnp_input.positions.requires_grad_(True)
         # calculate energy and forces
         predict_target = self._get_predictions(batch)
         # calculate the loss
         loss = self.loss_module.calculate_loss(predict_target, batch)
-
-        # Update  metrics
+        # Update and log metrics
         self._log_on_epoch_metrics(loss, "test")
 
     def on_train_epoch_end(self):
-        # Log histograms of weights and biases after each backward pass
+        """
+        Operations to perform at the end of each training epoch.
+
+        Logs histograms of weights and biases, and learning rate. 
+        Also, resets validation loss.
+        """
         for name, params in self.named_parameters():
             if params is not None:
                 self.logger.experiment.add_histogram(name, params, self.current_epoch)
@@ -437,7 +537,9 @@ class TrainingAdapter(pl.LightningModule):
         except AttributeError:
             pass
 
-        log.debug(torch.sqrt(torch.mean(torch.tensor(self.val_loss))).item())
+        # Log and reset the validation loss
+        avg_val_loss = torch.sqrt(torch.mean(torch.tensor(self.val_loss)))
+        log.debug(avg_val_loss.item())
         self.val_loss = []
 
     def configure_optimizers(self) -> Dict[str, Any]:

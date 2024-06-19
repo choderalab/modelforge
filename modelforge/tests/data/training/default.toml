@@ -1,20 +1,20 @@
 [potential]
-potential_parameter.angle_sections = 4
-potential_parameter.radial_max_distance = "5.1 angstrom"
-potential_parameter.radial_min_distance = "0.8 angstrom"
-potential_parameter.number_of_radial_basis_functions = 16
-potential_parameter.angular_max_distance = "3.5 angstrom"
-potential_parameter.angular_min_distance = "0.8 angstrom"
-potential_parameter.angular_dist_divisions = 8
-model_name = "ANI2x"
+potential_parameter.max_Z = 101
+potential_parameter.number_of_atom_features = 32
+potential_parameter.number_of_radial_basis_functions = 20
+potential_parameter.cutoff = "5.0 angstrom"
+potential_parameter.number_of_interaction_modules = 3
+potential_parameter.shared_interactions = false
+potential_parameter.shared_filters = false
+model_name = "PaiNN"
 
 [training]
 nr_of_epochs = 2
 save_dir = "test"
-experiment_name = "your_experiment_name"
+experiment_name = "exp_test"
 accelerator = "cpu"
 num_nodes = 1
-devices = 1                              #[0,1,2,3]
+devices = 1                  #[0,1,2,3]
 
 training_parameter.lr = 1e-3
 training_parameter.lr_scheduler_config.frequency = 1
@@ -34,16 +34,10 @@ loss_parameter.force_weight = 1.0
 loss_parameter.energy_weight = 1.0
 
 
-early_stopping.verbose = true
 early_stopping.monitor = "val/combined_loss"
 early_stopping.min_delta = 0.001
 early_stopping.patience = 50
+early_stopping.verbose = true
 
 stochastic_weight_averaging_config.swa_epoch_start = 50
 stochastic_weight_averaging_config.swa_lrs = 1e-2
-
-[dataset]
-dataset_name = "QM9"
-batch_size = 512
-remove_self_energies = true
-version_select = "nc_1000_v0"

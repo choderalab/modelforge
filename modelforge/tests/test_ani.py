@@ -106,9 +106,9 @@ def test_modelforge_ani(setup_two_methanes):
     # read default parameters
     from modelforge.train.training import return_toml_config
     from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
 
-    file_path = resources.files(potential_defaults) / f"ani2x_defaults.toml"
+    file_path = resources.files(potential) / f"ani2x_defaults.toml"
     config = return_toml_config(file_path)
 
     # Extract parameters
@@ -323,9 +323,9 @@ def test_representation(setup_methane):
     # read default parameters
     from modelforge.train.training import return_toml_config
     from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
 
-    file_path = resources.files(potential_defaults) / f"ani2x_defaults.toml"
+    file_path = resources.files(potential) / f"ani2x_defaults.toml"
     config = return_toml_config(file_path)
 
     # Extract parameters

@@ -23,12 +23,10 @@ def test_JAX_wrapping(model_name, single_batch_with_batchsize_64, loss_config):
 
     # read default parameters
     from modelforge.train.training import return_toml_config
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
     from importlib import resources
 
-    filename = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
-    )
+    filename = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
 
     config = return_toml_config(filename)
 
@@ -65,12 +63,10 @@ def test_model_factory(model_name, simulation_environment, loss_config):
 
     # read default parameters
     from modelforge.train.training import return_toml_config
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
     from importlib import resources
 
-    filename = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
-    )
+    filename = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
 
     config = return_toml_config(filename)
 
@@ -93,12 +89,19 @@ def test_model_factory(model_name, simulation_environment, loss_config):
         or "JAX" in str(type(model)).upper()
     )
 
-    from modelforge.tests.data import training_defaults
     from importlib import resources
 
-    filename = resources.files(training_defaults) / f"{model_name.lower()}_qm9.toml"
+    from modelforge.tests.data import training, potential, dataset
 
-    config = return_toml_config(filename)
+    training_path = resources.files(training) / "default.toml"
+    potential_path = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
+    dataset_path = resources.files(dataset) / f"qm9.toml"
+
+    config = return_toml_config(
+        training_path=training_path,
+        potential_path=potential_path,
+        dataset_path=dataset_path,
+    )
 
     # Extract parameters
     potential_parameter = config["potential"].get("potential_parameter", {})
@@ -138,10 +141,10 @@ def test_energy_scaling_and_offset():
     # initialize model
     # read default parameters
     from modelforge.train.training import return_toml_config
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
     from importlib import resources
 
-    filename = resources.files(potential_defaults) / "ani2x_defaults.toml"
+    filename = resources.files(potential) / "ani2x_defaults.toml"
     config = return_toml_config(filename)
 
     # Extract parameters
@@ -180,19 +183,25 @@ def test_state_dict_saving_and_loading(model_name, loss_config):
 
     # read default parameters
     from modelforge.train.training import return_toml_config
-    from modelforge.tests.data import training_defaults
     from importlib import resources
 
-    filename = resources.files(training_defaults) / f"{model_name.lower()}_qm9.toml"
+    from modelforge.tests.data import training, potential, dataset
 
-    config = return_toml_config(filename)
+    training_path = resources.files(training) / "default.toml"
+    potential_path = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
+    dataset_path = resources.files(dataset) / f"qm9.toml"
+
+    config = return_toml_config(
+        training_path=training_path,
+        potential_path=potential_path,
+        dataset_path=dataset_path,
+    )
 
     # Extract parameters
     potential_parameter = config["potential"].get("potential_parameter", {})
     training_parameters = config["training"].get("training_parameter", {})
     # Setup loss
     from modelforge.train.training import return_toml_config
-
 
     model1 = NeuralNetworkPotentialFactory.create_nnp(
         use="training",
@@ -225,11 +234,11 @@ def test_energy_between_simulation_environments(
     # test the forward pass through each of the models
     # cast input and model to torch.float64
     from modelforge.train.training import return_toml_config
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
     from importlib import resources
 
     filename = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
+        resources.files(potential) / f"{model_name.lower()}_defaults.toml"
     )
     config = return_toml_config(filename)
 
@@ -237,7 +246,6 @@ def test_energy_between_simulation_environments(
     potential_parameter = config["potential"].get("potential_parameter", {})
     # Setup loss
     from modelforge.train.training import return_toml_config
-
 
     torch.manual_seed(42)
     model = NeuralNetworkPotentialFactory.create_nnp(
@@ -288,10 +296,10 @@ def test_forward_pass_with_all_datasets(
     # cast input and model to torch.float64
     from modelforge.train.training import return_toml_config
     from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
 
     file_path = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
+        resources.files(potential) / f"{model_name.lower()}_defaults.toml"
     )
     config = return_toml_config(file_path)
 
@@ -301,7 +309,6 @@ def test_forward_pass_with_all_datasets(
 
     # Setup loss
     from modelforge.train.training import return_toml_config
-
 
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="inference",
@@ -330,12 +337,10 @@ def test_forward_pass(
 
     # read default parameters
     from modelforge.train.training import return_toml_config
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
     from importlib import resources
 
-    filename = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
-    )
+    filename = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
     config = return_toml_config(filename)
 
     # Extract parameters
@@ -385,12 +390,10 @@ def test_calculate_energies_and_forces(
     import torch
     from modelforge.train.training import return_toml_config
 
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
     from importlib import resources
 
-    filename = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
-    )
+    filename = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
 
     config = return_toml_config(filename)
 
@@ -699,11 +702,11 @@ def test_casting(model_name, single_batch_with_batchsize_64, loss_config):
 
     # cast input and model to torch.float64
     from modelforge.train.training import return_toml_config
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
     from importlib import resources
 
     filename = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
+        resources.files(potential) / f"{model_name.lower()}_defaults.toml"
     )
 
     config = return_toml_config(filename)
@@ -712,7 +715,6 @@ def test_casting(model_name, single_batch_with_batchsize_64, loss_config):
     potential_parameter = config["potential"].get("potential_parameter", {})
     # Setup loss
     from modelforge.train.training import return_toml_config
-
 
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="inference",
@@ -758,11 +760,11 @@ def test_equivariant_energies_and_forces(
 
     # cast input and model to torch.float64
     from modelforge.train.training import return_toml_config
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
     from importlib import resources
 
     filename = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
+        resources.files(potential) / f"{model_name.lower()}_defaults.toml"
     )
 
     config = return_toml_config(filename)
@@ -771,7 +773,6 @@ def test_equivariant_energies_and_forces(
     potential_parameter = config["potential"].get("potential_parameter", {})
     # Setup loss
     from modelforge.train.training import return_toml_config
-
 
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="inference",

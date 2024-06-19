@@ -18,13 +18,11 @@ def test_SAKE_init():
     """Test initialization of the SAKE neural network potential."""
     from modelforge.train.training import return_toml_config
     from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
 
     model_name = "SAKE"
 
-    file_path = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
-    )
+    file_path = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
     config = return_toml_config(file_path)
 
     # Extract parameters
@@ -46,13 +44,11 @@ def test_sake_forward(single_batch_with_batchsize_64):
 
     from modelforge.train.training import return_toml_config
     from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
 
     model_name = "SAKE"
 
-    file_path = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
-    )
+    file_path = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
     config = return_toml_config(file_path)
 
     # Extract parameters
@@ -113,13 +109,11 @@ def test_sake_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize_64
 
     from modelforge.train.training import return_toml_config
     from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
 
     model_name = "SAKE"
 
-    file_path = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
-    )
+    file_path = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
     config = return_toml_config(file_path)
 
     # Extract parameters
@@ -596,13 +590,11 @@ def test_model_invariance(single_batch_with_batchsize_1):
 
     from modelforge.train.training import return_toml_config
     from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
 
     model_name = "SAKE"
 
-    file_path = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
-    )
+    file_path = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
     config = return_toml_config(file_path)
 
     # Extract parameters

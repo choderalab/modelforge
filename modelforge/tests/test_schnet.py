@@ -9,13 +9,11 @@ def test_Schnet_init():
 
     from modelforge.train.training import return_toml_config
     from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
 
     model_name = "SchNet"
 
-    file_path = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
-    )
+    file_path = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
     config = return_toml_config(file_path)
 
     # Extract parameters

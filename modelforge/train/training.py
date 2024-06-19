@@ -196,16 +196,14 @@ class TrainingAdapter(pl.LightningModule):
 
         self.val_loss = []
 
-    def _log_on_epoch_metrics(
-        self, predict_target: Dict[str, torch.Tensor], prefix: str
-    ):
+    def _log_on_epoch_metrics(self, loss: Dict[str, torch.Tensor], prefix: str):
         """
         Logs metrics for the specified prefix (train, val, test) during the epoch.
 
         Parameters
         ----------
-        predict_target : dict
-            Dictionary containing the predicted and true values for energies and forces.
+        loss : dict
+            Dictionary containing the loss error for each batch.
             Expected keys are 'combined_loss', 'energy_loss', and 'force_loss'.
         prefix : str
             Prefix indicating the current phase of the training process.
@@ -217,12 +215,6 @@ class TrainingAdapter(pl.LightningModule):
             If the prefix is not recognized.
         """
         # Validate prefix
-        loss_metrics = {
-            "combined_loss": self.val_combined_loss_metric,
-            "energy_loss": self.val_energy_loss_metric,
-            "force_loss": self.val_force_loss_metric,
-        }
-
         if prefix not in ["train", "val", "test"]:
             raise RuntimeError(f"Unknown prefix: {prefix}")
 
@@ -249,7 +241,7 @@ class TrainingAdapter(pl.LightningModule):
         # Log metrics
         for key, metric in loss_metrics.items():
             if key == "combined_loss" or self.verbose_level > 0:
-                metric(predict_target[key])
+                metric(loss[key])
                 self.log(
                     f"{prefix}/{key}",
                     metric,
@@ -366,10 +358,8 @@ class TrainingAdapter(pl.LightningModule):
         predict_target = self._get_predictions(batch)
         # calculate the loss
         loss = self.loss_module.calculate_loss(predict_target)
-
         # Update and log metrics
-        self.train_combined_loss_metric(loss["combined_loss"])
-        self._log_on_epoch_metrics(predict_target, "train")
+        self._log_on_epoch_metrics(loss, "train")
         return loss["combined_loss"]
 
     # @torch.inference_mode(False)
@@ -396,7 +386,7 @@ class TrainingAdapter(pl.LightningModule):
         loss = self.loss_module.calculate_loss(predict_target)
         # log the loss
         self.val_loss.append(loss["combined_loss"].detach().item())
-        self._log_on_epoch_metrics(predict_target, "val")
+        self._log_on_epoch_metrics(loss, "val")
 
     def test_step(self, batch: "BatchData", batch_idx: int) -> None:
         """
@@ -421,13 +411,12 @@ class TrainingAdapter(pl.LightningModule):
             # calculate energy and forces
             predict_target = self._get_predictions(batch)
             # calculate the loss
-            loss = self.loss_module.calculate_test_loss(predict_target)
+            loss = self.loss_module.calculate_loss(predict_target)
 
         # Update  metrics
-        self._log_on_epoch_metrics(predict_target, "test")
+        self._log_on_epoch_metrics(loss, "test")
 
     def on_train_epoch_end(self):
-        a = 6
         # Log histograms of weights and biases after each backward pass
         for name, params in self.named_parameters():
             if params is not None:
@@ -436,19 +425,14 @@ class TrainingAdapter(pl.LightningModule):
                 self.logger.experiment.add_histogram(
                     f"{name}.grad", params.grad, self.current_epoch
                 )
+
         sch = self.lr_schedulers()
-
-        import time
-
         try:
-            log.info(f"Current learning rate: {sch.get_last_lr()}")
+            self.log("lr", sch.get_last_lr()[0], on_epoch=True, prog_bar=True)
         except AttributeError:
             pass
 
-        print()
-        print(torch.sqrt(torch.mean(torch.tensor(self.val_loss))).item())
-        print()
-        time.sleep(5)
+        log.debug(torch.sqrt(torch.mean(torch.tensor(self.val_loss))).item())
         self.val_loss = []
 
     def configure_optimizers(self) -> Dict[str, Any]:

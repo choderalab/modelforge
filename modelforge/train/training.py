@@ -199,69 +199,63 @@ class TrainingAdapter(pl.LightningModule):
     def _log_on_epoch_metrics(
         self, predict_target: Dict[str, torch.Tensor], prefix: str
     ):
-        if prefix == "train":
-            self.log(
-                "train/combined_loss",
-                self.train_combined_loss_metric,
-                on_epoch=True,
-                prog_bar=True,
-            )
-            if self.verbose_level > 0:
-                self.log(
-                    "train/emergy_loss",
-                    self.train_energy_loss_metric,
-                    on_epoch=True,
-                    prog_bar=True,
-                )
-                self.log(
-                    "train/force_loss",
-                    self.train_force_loss_metric,
-                    on_epoch=True,
-                    prog_bar=True,
-                )
-        elif prefix == "val":
-            self.log(
-                "val/combined_loss",
-                self.val_combined_loss_metric,
-                on_epoch=True,
-                prog_bar=True,
-            )
-            if self.verbose_level > 0:
-                self.log(
-                    "val/emergy_loss",
-                    self.val_energy_loss_metric,
-                    on_epoch=True,
-                    prog_bar=True,
-                )
-                self.log(
-                    "val/force_loss",
-                    self.val_force_loss_metric,
-                    on_epoch=True,
-                    prog_bar=True,
-                )
-        elif prefix == "test":
-            self.log(
-                "test/combined_loss",
-                self.test_combined_loss_metric,
-                on_epoch=True,
-                prog_bar=True,
-            )
-            if self.verbose_level > 0:
-                self.log(
-                    "test/emergy_loss",
-                    self.test_energy_loss_metric,
-                    on_epoch=True,
-                    prog_bar=True,
-                )
-                self.log(
-                    "test/force_loss",
-                    self.test_force_loss_metric,
-                    on_epoch=True,
-                    prog_bar=True,
-                )
-        else:
+        """
+        Logs metrics for the specified prefix (train, val, test) during the epoch.
+
+        Parameters
+        ----------
+        predict_target : dict
+            Dictionary containing the predicted and true values for energies and forces.
+            Expected keys are 'combined_loss', 'energy_loss', and 'force_loss'.
+        prefix : str
+            Prefix indicating the current phase of the training process.
+            Should be one of 'train', 'val', or 'test'.
+
+        Raises
+        ------
+        RuntimeError
+            If the prefix is not recognized.
+        """
+        # Validate prefix
+        loss_metrics = {
+            "combined_loss": self.val_combined_loss_metric,
+            "energy_loss": self.val_energy_loss_metric,
+            "force_loss": self.val_force_loss_metric,
+        }
+
+        if prefix not in ["train", "val", "test"]:
             raise RuntimeError(f"Unknown prefix: {prefix}")
 
+        # Update loss metrics dictionary based on the prefix
+        if prefix == "train":
+            loss_metrics = {
+                "combined_loss": self.train_combined_loss_metric,
+                "energy_loss": self.train_energy_loss_metric,
+                "force_loss": self.train_force_loss_metric,
+            }
+        elif prefix == "test":
+            loss_metrics = {
+                "combined_loss": self.test_combined_loss_metric,
+                "energy_loss": self.test_energy_loss_metric,
+                "force_loss": self.test_force_loss_metric,
+            }
+        elif prefix == "val":
+            loss_metrics = {
+                "combined_loss": self.val_combined_loss_metric,
+                "energy_loss": self.val_energy_loss_metric,
+                "force_loss": self.val_force_loss_metric,
+            }
+
+        # Log metrics
+        for key, metric in loss_metrics.items():
+            if key == "combined_loss" or self.verbose_level > 0:
+                metric(predict_target[key])
+                self.log(
+                    f"{prefix}/{key}",
+                    metric,
+                    on_epoch=True,
+                    prog_bar=True,
+                )
 
     def _get_forces(
         self, batch: "BatchData", energies: Dict[str, torch.Tensor]
@@ -378,7 +372,6 @@ class TrainingAdapter(pl.LightningModule):
         self._log_on_epoch_metrics(predict_target, "train")
         return loss["combined_loss"]
 
-
     # @torch.inference_mode(False)
     def validation_step(self, batch: "BatchData", batch_idx: int) -> None:
         """
@@ -402,7 +395,7 @@ class TrainingAdapter(pl.LightningModule):
         # calculate the loss
         loss = self.loss_module.calculate_loss(predict_target)
         # log the loss
-        self._log_validation_step(loss)
+        self.val_loss.append(loss["combined_loss"].detach().item())
         self._log_on_epoch_metrics(predict_target, "val")
 
     def test_step(self, batch: "BatchData", batch_idx: int) -> None:

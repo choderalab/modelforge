@@ -194,7 +194,9 @@ class TrainingAdapter(pl.LightningModule):
 
         self.val_loss = []
 
-    def _log_on_epoch_metrics(self, loss: Dict[str, torch.Tensor], prefix: str):
+    def _log_on_epoch_metrics(
+        self, loss: Dict[str, torch.Tensor], prefix: str, progress_bar: bool = True
+    ):
         """
         Logs metrics for the specified prefix (train, val, test) during the epoch.
 
@@ -244,7 +246,7 @@ class TrainingAdapter(pl.LightningModule):
                     f"{prefix}/{key}",
                     metric,
                     on_epoch=True,
-                    prog_bar=True,
+                    prog_bar=progress_bar,
                 )
 
     def _get_forces(
@@ -359,7 +361,7 @@ class TrainingAdapter(pl.LightningModule):
         # calculate the loss
         loss = self.loss_module.calculate_loss(predict_target, batch)
         # Update and log metrics
-        self._log_on_epoch_metrics(loss, "train")
+        self._log_on_epoch_metrics(loss, "train", progress_bar=False)
         return loss["combined_loss"]
 
     @torch.enable_grad()

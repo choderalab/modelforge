@@ -238,7 +238,7 @@ class TrainingAdapter(pl.LightningModule):
 
         # Log metrics
         for key, metric in loss_metrics.items():
-            if key == "combined_loss" or self.verbose_level > 0:
+            if key == "energy_loss" or self.verbose_level > 0:
                 metric(loss[key])
                 self.log(
                     f"{prefix}/{key}",
@@ -357,7 +357,7 @@ class TrainingAdapter(pl.LightningModule):
         # calculate energy and forces
         predict_target = self._get_predictions(batch)
         # calculate the loss
-        loss = self.loss_module.calculate_loss(predict_target)
+        loss = self.loss_module.calculate_loss(predict_target, batch)
         # Update and log metrics
         self._log_on_epoch_metrics(loss, "train")
         return loss["combined_loss"]
@@ -385,7 +385,7 @@ class TrainingAdapter(pl.LightningModule):
         # calculate energy and forces
         predict_target = self._get_predictions(batch)
         # calculate the loss
-        loss = self.loss_module.calculate_loss(predict_target)
+        loss = self.loss_module.calculate_loss(predict_target, batch)
         # log the loss
         self.val_loss.append(loss["combined_loss"].detach().item())
         self._log_on_epoch_metrics(loss, "val")
@@ -414,7 +414,7 @@ class TrainingAdapter(pl.LightningModule):
         # calculate energy and forces
         predict_target = self._get_predictions(batch)
         # calculate the loss
-        loss = self.loss_module.calculate_loss(predict_target)
+        loss = self.loss_module.calculate_loss(predict_target, batch)
 
         # Update  metrics
         self._log_on_epoch_metrics(loss, "test")

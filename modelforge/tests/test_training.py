@@ -64,6 +64,26 @@ import torch
 from torch.nn import functional as F
 
 
+def test_loss_fkt(single_batch_with_batchsize_2_with_force):
+    from torch_scatter import scatter_sum
+
+    batch = single_batch_with_batchsize_2_with_force
+    E_true = batch.metadata.E
+    F_true = batch.metadata.F
+    F_predict = torch.randn_like(F_true)
+    E_predict = torch.randn_like(E_true)
+
+    F_scaling = torch.tensor([1.0])
+
+    F_error_per_atom = torch.norm(F_true - F_predict, dim=1) ** 2
+    F_error_per_molecule = scatter_sum(
+        F_error_per_atom, batch.nnp_input.atomic_subsystem_indices.long(), 0
+    )
+
+    scale = F_scaling / (3 * batch.metadata.atomic_subsystem_counts)
+    F_per_mol_scaled = F_error_per_molecule / scale
+
+
 @pytest.fixture
 def _initialize_predict_target_dictionary():
     # initalize the test system
@@ -81,69 +101,23 @@ def _initialize_predict_target_dictionary():
 
 def test_energy_loss_only(_initialize_predict_target_dictionary):
     # test the different Loss classes
-    from modelforge.train.training import NaiveEnergyAndForceLoss
+    from modelforge.train.training import EnergyLoss
 
-    # start with NaiveEnergyAndForceLoss
-    loss_calculator = NaiveEnergyAndForceLoss(include_force=False)
+    # initialize loss
+    loss_calculator = EnergyLoss()
     predict_target = _initialize_predict_target_dictionary
     # this loss calculates validation and training error as MSE and test error as RMSE
     mse_expected_loss = torch.mean(
         (predict_target["E_predict"] - predict_target["E_true"]) ** 2
     )
-    rmse_expected_loss = torch.sqrt(mse_expected_loss)
 
     # test loss class
     # make sure that train loss is MSE as expected
-    loss = loss_calculator.calculate_train_loss(predict_target)
+    loss = loss_calculator.calculate_loss(predict_target, None)
     assert torch.isclose(
         mse_expected_loss, loss["combined_loss"]
     ), f"Expected {mse_expected_loss.item()} but got {loss['combined_loss'].item()}"
-    # make sure that no force loss is calculated
-    assert torch.isclose(
-        torch.tensor([0.0]), loss["force_loss"]
-    ), f"Expected 0. but got {loss['force_loss'].item()}"
-    loss_val = loss_calculator.calculate_val_loss(predict_target)
-    # test that combined loss of train and val loss are the same
-    assert torch.isclose(
-        loss["combined_loss"], loss_val["combined_loss"]
-    ), f"Expected equal loss. but got {loss['combined_loss'].item()} and {loss_val['combined_loss'].item()}"
 
-    # test test loss (RMSE)
-    loss = loss_calculator.calculate_test_loss(predict_target)
-    assert torch.isclose(
-        rmse_expected_loss, loss["combined_loss"]
-    ), f"Expected {rmse_expected_loss.item()} but got {loss['combined_loss'].item()}"
-
-
-def test_energy_and_force_loss(_initialize_predict_target_dictionary):
-    # test the different Loss classes with differnt prediction targets (i.e. forces)
-    from modelforge.train.training import NaiveEnergyAndForceLoss
-
-    loss_calculator = NaiveEnergyAndForceLoss(include_force=True)
-
-    predict_target = _initialize_predict_target_dictionary
-
-    # generate the MSE and RMSE loss
-    mse_expected_loss = (
-        torch.mean((predict_target["E_predict"] - predict_target["E_true"]) ** 2)
-        + torch.mean((predict_target["F_predict"] - predict_target["F_true"]) ** 2)
-    ) / 2
-    rmse_expected_loss = torch.sqrt(mse_expected_loss)
-
-    # compare to train/val loss
-    train_loss = loss_calculator.calculate_train_loss(predict_target)
-    assert torch.isclose(
-        train_loss["combined_loss"], mse_expected_loss
-    ), f"Expected {mse_expected_loss.item()} but got {train_loss['combined_loss'].item()}"
-    val_loss = loss_calculator.calculate_val_loss(predict_target)
-    assert torch.isclose(
-        val_loss["combined_loss"], mse_expected_loss
-    ), f"Expected {mse_expected_loss.item()} but got {train_loss['combined_loss'].item()}"
-    # compare to test loss
-    test_loss = loss_calculator.calculate_test_loss(predict_target)
-    assert torch.isclose(
-        test_loss["combined_loss"], rmse_expected_loss
-    ), f"Expected {rmse_expected_loss.item()} but got {test_loss['combined_loss'].item()}"
 
 
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")

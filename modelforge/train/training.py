@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
 import torchmetrics
 from torchmetrics.utilities import dim_zero_cat
+from typing import Optional
 
 
 class MSELossMetric(torchmetrics.Metric):
@@ -40,32 +41,11 @@ from abc import abstractmethod
 
 class Loss(nn.Module):
 
-    def __init__(self):
-        super().__init__()
-        from torch.nn import MSELoss
-
-        self.mse_loss = MSELoss()
-
     @abstractmethod
     def calculate_loss(
-        self, predict_target: Dict[str, torch.Tensor]
+        self, predict_target: Dict[str, torch.Tensor], batch: BatchData
     ) -> Dict[str, torch.Tensor]:
         pass
-
-    def _compute_sum_squared_errors(self, predict: torch.Tensor, target: torch.Tensor):
-        return torch.sum((predict - target) ** 2)
-
-    def compute_mse_loss(
-        self,
-        predict_target: Dict[str, torch.Tensor],
-        include_force: bool = False,
-    ) -> Dict[str, torch.Tensor]:
-
-        E_loss = self.mse_loss(predict_target["E_predict"], predict_target["E_true"])
-        F_loss = (
-            self.mse_loss(predict_target["F_predict"], predict_target["F_true"])
-        ) * include_force
-        return {"E_loss": E_loss, "F_loss": F_loss}
 
 
 class LossFactory(object):
@@ -75,8 +55,31 @@ class LossFactory(object):
 
         if loss_type == "NaiveEnergyAndForceLoss":
             return NaiveEnergyAndForceLoss(**kwargs)
+        elif loss_type == "EnergyLoss":
+            return EnergyLoss()
         else:
             raise ValueError(f"Loss type {loss_type} not implemented.")
+
+
+class EnergyLoss(Loss):
+    def __init__(
+        self,
+    ):
+        super().__init__()
+        from torch.nn import MSELoss
+
+        self.mse_loss = MSELoss()
+
+    def calculate_loss(
+        self, predict_target: Dict[str, torch.Tensor], batch: Optional[BatchData] = None
+    ):
+        E_loss = self.mse_loss(predict_target["E_predict"], predict_target["E_true"])
+
+        return {
+            "combined_loss": E_loss,
+            "energy_loss": E_loss,
+            "force_loss": torch.zeros_like(E_loss),
+        }
 
 
 class NaiveEnergyAndForceLoss(Loss):
@@ -91,29 +94,24 @@ class NaiveEnergyAndForceLoss(Loss):
         self.register_buffer("energy_weight", torch.tensor(energy_weight))
         self.register_buffer("force_weight", torch.tensor(force_weight))
 
-    def calculate_loss(
-        self, predict_target: Dict[str, torch.Tensor]
-    ) -> Dict[str, torch.Tensor]:
-        """Calculate the MSE loss."""
-        mse_loss = self.calculate_different_losses(predict_target)
-        return {
-            "combined_loss": mse_loss["combined_loss"],
-            "energy_loss": mse_loss["energy_loss"],
-            "force_loss": mse_loss["force_loss"],
-        }
+    def calculate_loss(self, predict_target: Dict[str, torch.Tensor], batch: BatchData):
+        from torch_scatter import scatter_sum
 
-    def calculate_different_losses(
-        self, predict_target: Dict[str, torch.Tensor]
-    ) -> Dict[str, torch.Tensor]:
-
-        loss = self.compute_mse_loss(predict_target, self.include_force)
-        E_loss = loss["E_loss"]
-        F_loss = loss["F_loss"]
-
-        # combined loss with weights
-        combined_loss = (self.energy_weight * E_loss + self.force_weight * F_loss) / (
-            1 + self.include_force
+        F_error_per_atom = (
+            torch.norm(predict_target["F_predict"] - predict_target["F_true"], dim=1)
+            ** 2
         )
+        F_error_per_molecule = scatter_sum(
+            F_error_per_atom, batch.nnp_input.atomic_subsystem_indices.long(), 0
+        )
+
+        scale = self.force_weight / (3 * batch.metadata.atomic_subsystem_counts)
+        E_loss = (
+            self.energy_weight
+            * (predict_target["E_predict"] - predict_target["E_true"]) ** 2
+        )
+        F_loss = scale * F_error_per_molecule
+        combined_loss = torch.mean(E_loss + F_loss)
         return {
             "combined_loss": combined_loss,
             "energy_loss": E_loss,
@@ -472,9 +470,6 @@ class TrainingAdapter(pl.LightningModule):
             "frequency": 1,
         }
         return {"optimizer": optimizer, "lr_scheduler": lr_scheduler_config}
-
-
-from typing import Optional
 
 
 def return_toml_config(

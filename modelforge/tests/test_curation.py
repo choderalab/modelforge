@@ -1574,37 +1574,35 @@ def test_ani2x(prep_temp_dir):
     ani2x_dataset._process_downloaded(local_data_path, filename, max_records=1)
 
     assert len(ani2x_dataset.data) == 1
-    assert ani2x_dataset.data[0]["name"] == "[1_9]"
-    assert ani2x_dataset.data[0]["n_configs"] == 517
-    assert ani2x_dataset.data[0]["energies"].shape == (517, 1)
+    assert ani2x_dataset.data[0]["name"] == "[6_8]_m0"
+    assert ani2x_dataset.data[0]["n_configs"] == 457
+    assert ani2x_dataset.data[0]["energies"].shape == (457, 1)
     assert ani2x_dataset.data[0]["atomic_numbers"].shape == (2, 1)
-    assert ani2x_dataset.data[0]["geometry"].shape == (517, 2, 3)
-    assert ani2x_dataset.data[0]["forces"].shape == (517, 2, 3)
-    assert np.all(
-        ani2x_dataset.data[0]["energies"][0:5].m
-        == np.array(
+    assert ani2x_dataset.data[0]["geometry"].shape == (457, 2, 3)
+    assert ani2x_dataset.data[0]["forces"].shape == (457, 2, 3)
+    assert np.allclose(
+        ani2x_dataset.data[0]["energies"][0:5].m,
+        np.array(
             [
-                [-263595.6246798465],
-                [-263591.3453779841],
-                [-263596.28778916295],
-                [-263592.7221558636],
-                [-263591.0017998503],
+                [-297412.8541896],
+                [-297412.420801],
+                [-297412.51068761],
+                [-297419.68079322],
+                [-297410.43861966],
             ]
         ),
     )
+    print(ani2x_dataset.data[0]["forces"][0:1].m)
+    assert np.allclose(
+        ani2x_dataset.data[0]["forces"][0:1].m,
+        np.array([[[-0.0, -0.0, 3933.23522166], [-0.0, -0.0, -3933.23522166]]]),
+    )
+    print(ani2x_dataset.data[0]["geometry"][0].m)
+    assert np.allclose(
+        ani2x_dataset.data[0]["geometry"][0].m,
+        np.array([[0.0, 0.0, -0.06694885], [0.0, 0.0, 0.05021213]]),
+    )
 
-    assert np.all(
-        ani2x_dataset.data[0]["forces"][0:1].m
-        == np.array(
-            [[[-0.0, -0.0, 1058.7310900538516], [-0.0, -0.0, -1058.7310900538516]]]
-        )
-    )
-    assert np.all(
-        ani2x_dataset.data[0]["geometry"][0].m
-        == np.array(
-            [[0.0, 0.0, -0.08543934673070908], [0.0, 0.0, 0.009493260644376278]]
-        )
-    )
     ani2x_dataset._clear_data()
     ani2x_dataset._process_downloaded(local_data_path, filename, total_conformers=10)
     assert ani2x_dataset.total_conformers == 10

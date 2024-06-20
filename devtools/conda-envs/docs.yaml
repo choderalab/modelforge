@@ -1,0 +1,21 @@
+name: test
+channels:
+  - conda-forge
+  - pytorch
+  - pyg
+dependencies:
+  # Base depends
+  - python
+  - pip
+  - tqdm
+  - loguru
+  - pint
+  - retry
+  - sqlitedict
+
+  # Docs
+  - sphinx_rtd_theme
+
+  # pip installs
+  - pip:
+      - versioneer

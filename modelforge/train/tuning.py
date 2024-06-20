@@ -126,7 +126,7 @@ class RayTuner:
         run_config = RunConfig(
             checkpoint_config=CheckpointConfig(
                 num_to_keep=2,
-                checkpoint_score_attribute="val/combined_loss",
+                checkpoint_score_attribute="val/energy/rmse",
                 checkpoint_score_order="min",
             ),
         )
@@ -191,7 +191,7 @@ class RayTuner:
         )
 
         tune_config = tune.TuneConfig(
-            metric="val/combined_loss",
+            metric="val/energy/rmse",
             mode="min",
             scheduler=scheduler,
             num_samples=number_of_samples,

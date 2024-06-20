@@ -115,6 +115,4 @@ def test_spookynet_interaction_module_forward():
     pij = torch.rand((P, 1))
     dij = torch.rand((P, 1))
     idx_i, idx_j = make_random_pairlist(N, P, include_self_pairs=False)
-    batch_seg = torch.randint(0, B, (N,))
-    mask = torch.rand((B, N, N))
-    spookynet_interaction_module(x, rbf, pij, dij, idx_i, idx_j, B, batch_seg, mask)
+    spookynet_interaction_module(x, rbf, pij, dij, idx_i, idx_j)

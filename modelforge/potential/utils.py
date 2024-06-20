@@ -274,6 +274,39 @@ class CosineCutoff(nn.Module):
         return input_cut
 
 
+class SpookyNetCutoff(nn.Module):
+    """
+    Implements Eq. 16 from
+        Unke, O.T., Chmiela, S., Gastegger, M. et al. SpookyNet: Learning force fields with
+        electronic degrees of freedom and nonlocal effects. Nat Commun 12, 7273 (2021).
+    Adapted from https://github.com/OUnke/SpookyNet/blob/d57b1fc02c4f1304a9445b2b9aa55a906818dd1b/spookynet/functional.py#L19 # noqa
+    """
+    def __init__(self, cutoff: unit.Quantity):
+        """
+
+        Parameters:
+        ----------
+        cutoff: unit.Quantity
+            The cutoff distance.
+
+        """
+        super().__init__()
+        cutoff = cutoff.to(unit.nanometer).m
+        self.register_buffer("cutoff", torch.tensor([cutoff]))
+
+    def forward(self, d_ij: torch.Tensor):
+        """
+        Cutoff function that smoothly goes from f(x) = 1 to f(x) = 0 in the interval
+        from x = 0 to x = cutoff. For x >= cutoff, f(x) = 0. This function has
+        infinitely many smooth derivatives. Only positive x should be used as input.
+        """
+        zeros = torch.zeros_like(d_ij)
+        x_ = torch.where(d_ij < self.cutoff, d_ij, zeros)  # prevent nan in backprop
+        return torch.where(
+            d_ij < self.cutoff, torch.exp(-(x_ ** 2) / ((self.cutoff - x_) * (self.cutoff + x_))), zeros
+        )
+
+
 from typing import Dict
 
 

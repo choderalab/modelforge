@@ -192,18 +192,16 @@ class SpookyNetCore(CoreNetwork):
 
         # Compute the representation for each atom (transform to radial basis set, multiply by cutoff)
         representation = self.spookynet_representation_module(data.d_ij)
-        data.f_ij = representation["f_ij"]
-        data.f_cutoff = representation["f_cutoff"]
+        data.filters = representation["filters"]
         x = data.atomic_embedding
+
+        f = x.new_zeros(x.size())  # initialize output features to zero
         # Iterate over interaction blocks to update features
         for interaction in self.interaction_modules:
-            v = interaction(
-                x,
-                data.pair_indices,
-                representation["f_ij"],
-                representation["f_cutoff"],
+            x, y = interaction(
+                x, rbf, pij, dij, sr_idx_i, sr_idx_j, num_batch, batch_seg, mask
             )
-            x = x + v  # Update atomic features
+            f += y  # accumulate module output to features
 
         E_i = self.energy_layer(x).squeeze(1)
 
@@ -275,6 +273,80 @@ class SpookyNet(BaseNetwork):
         }
         prior.update(shared_config_prior())
         return prior
+
+
+class SpookyNetRepresentation(nn.Module):
+
+    def __init__(
+            self,
+            cutoff: unit = 5 * unit.angstrom,
+            number_of_radial_basis_functions: int = 16,
+    ):
+        """
+        Representation module for the PhysNet potential, handling the generation of
+        the radial basis functions (RBFs) with a cutoff.
+
+        Parameters
+        ----------
+        cutoff : openff.units.unit.Quantity, default=5*unit.angstrom
+            The cutoff distance for interactions.
+        number_of_gaussians : int, default=16
+            Number of Gaussian functions to use in the radial basis function.
+        """
+
+        super().__init__()
+
+        # cutoff
+        from modelforge.potential import CosineCutoff
+
+
+        # radial symmetry function
+        from .utils import PhysNetRadialSymmetryFunction
+
+        self.radial_symmetry_function_module = PhysNetRadialSymmetryFunction(
+            number_of_radial_basis_functions=number_of_radial_basis_functions,
+            max_distance=cutoff,
+            dtype=torch.float32,
+        )
+
+    def forward(self, d_ij: torch.Tensor, r_ij: torch.Tensor) -> dict[str, torch.Tensor]:
+        """
+        Forward pass of the representation module.
+
+        Parameters
+        ----------
+        d_ij : torch.Tensor
+            pairwise distances between atoms, shape (n_pairs).
+        r_ij : torch.Tensor
+            pairwise displacements between atoms, shape (n_pairs, 3).
+
+        Returns
+        -------
+        torch.Tensor
+            The radial basis function expansion applied to the input distances,
+            shape (n_pairs, n_gaussians), after applying the cutoff function.
+        """
+
+        sqrt3 = math.sqrt(3)
+        sqrt3half = 0.5 * sqrt3
+        # short-range distances
+        p_orbital_ij = r_ij / d_ij.unsqueeze(-1)
+        d_orbital_ij = torch.stack(
+            [
+                sqrt3 * p_orbital_ij[:, 0] * p_orbital_ij[:, 1],  # xy
+                sqrt3 * p_orbital_ij[:, 0] * p_orbital_ij[:, 2],  # xz
+                sqrt3 * p_orbital_ij[:, 1] * p_orbital_ij[:, 2],  # yz
+                0.5 * (3 * p_orbital_ij[:, 2] * p_orbital_ij[:, 2] - 1.0),  # z2
+                sqrt3half
+                * (p_orbital_ij[:, 0] * p_orbital_ij[:, 0] - p_orbital_ij[:, 1] * p_orbital_ij[:, 1]),  # x2-y2
+            ],
+            dim=-1,
+        )
+        f_ij = self.radial_symmetry_function_module(d_ij)
+        f_ij_cutoff = self.cutoff_module(d_ij)
+        filters = f_ij * f_ij_cutoff
+
+        return {"filters": filters, "p_orbital_ij": p_orbital_ij, "d_orbital_ij": d_orbital_ij}
 
 
 class Swish(nn.Module):
@@ -390,14 +462,14 @@ class SpookyNetResidualStack(nn.Module):
     Arguments:
         num_features (int):
             Dimensions of feature space.
-        num_residual (int):
+        number_of_residual_blocks (int):
             Number of residual blocks to be stacked in sequence.
     """
 
     def __init__(
             self,
             num_features: int,
-            num_residual: int,
+            number_of_residual_blocks: int,
             bias: bool = True,
     ) -> None:
         """ Initializes the ResidualStack class. """
@@ -405,7 +477,7 @@ class SpookyNetResidualStack(nn.Module):
         self.stack = nn.ModuleList(
             [
                 SpookyNetResidual(num_features, bias)
-                for i in range(num_residual)
+                for _ in range(number_of_residual_blocks)
             ]
         )
 
@@ -432,12 +504,12 @@ class SpookyNetResidualMLP(nn.Module):
     def __init__(
             self,
             num_features: int,
-            num_residual: int,
+            number_of_residual_blocks: int,
             bias: bool = True,
     ) -> None:
         super(SpookyNetResidualMLP, self).__init__()
         self.residual = SpookyNetResidualStack(
-            num_features, num_residual, bias=bias
+            num_features, number_of_residual_blocks, bias=bias
         )
         self.activation = Swish(num_features)
         self.linear = nn.Linear(num_features, num_features, bias=bias)
@@ -510,10 +582,10 @@ class SpookyNetLocalInteraction(nn.Module):
 
     def forward(
             self,
-            x: torch.Tensor,
+            x_tilde: torch.Tensor,
             rbf: torch.Tensor,
-            pij: torch.Tensor,
-            dij: torch.Tensor,
+            p_orbital_ij: torch.Tensor,
+            d_orbital_ij: torch.Tensor,
             idx_i: torch.Tensor,
             idx_j: torch.Tensor,
     ) -> torch.Tensor:
@@ -526,6 +598,10 @@ class SpookyNetLocalInteraction(nn.Module):
             Atomic feature vectors.
         rbf (FloatTensor [N, num_basis_functions]):
             Values of the radial basis functions for the pairwise distances.
+        p_orbital_ij (TODO):
+            TODO
+        d_orbital_ij (TODO):
+            TODO
         idx_i (LongTensor [P]):
             Index of atom i for all atomic pairs ij. Each pair must be
             specified as both ij and ji.
@@ -534,20 +610,20 @@ class SpookyNetLocalInteraction(nn.Module):
         """
         # interaction functions
         gs = self.radial_s(rbf)
-        gp = self.radial_p(rbf).unsqueeze(-2) * pij.unsqueeze(-1)
-        gd = self.radial_d(rbf).unsqueeze(-2) * dij.unsqueeze(-1)
+        gp = self.radial_p(rbf).unsqueeze(-2) * p_orbital_ij.unsqueeze(-1)
+        gd = self.radial_d(rbf).unsqueeze(-2) * d_orbital_ij.unsqueeze(-1)
         # atom featurizations
-        xx = self.resblock_x(x)
-        xs = self.resblock_s(x)
-        xp = self.resblock_p(x)
-        xd = self.resblock_d(x)
+        xx = self.resblock_x(x_tilde)
+        xs = self.resblock_s(x_tilde)
+        xp = self.resblock_p(x_tilde)
+        xd = self.resblock_d(x_tilde)
         # collect neighbors
         xs = xs[idx_j]  # L=0
         xp = xp[idx_j]  # L=1
         xd = xd[idx_j]  # L=2
         # sum over neighbors
-        pp = x.new_zeros(x.shape[0], pij.shape[-1], x.shape[-1])
-        dd = x.new_zeros(x.shape[0], dij.shape[-1], x.shape[-1])
+        pp = x_tilde.new_zeros(x_tilde.shape[0], p_orbital_ij.shape[-1], x_tilde.shape[-1])
+        dd = x_tilde.new_zeros(x_tilde.shape[0], d_orbital_ij.shape[-1], x_tilde.shape[-1])
         s = xx.index_add(0, idx_i, gs * xs)  # L=0
         p = pp.index_add_(0, idx_i, gp * xp.unsqueeze(-2))  # L=1
         d = dd.index_add_(0, idx_i, gd * xd.unsqueeze(-2))  # L=2
@@ -606,8 +682,6 @@ class SpookyNetAttention(nn.Module):
             self,
             X: torch.Tensor,
             is_query: bool,
-            num_batch: int,
-            batch_seg: torch.Tensor,
             eps: float = 1e-4,
     ) -> torch.Tensor:
         """ Normalize X and project into random feature space. """
@@ -619,24 +693,7 @@ class SpookyNetAttention(nn.Module):
         if is_query:
             maximum, _ = torch.max(U, dim=-1, keepdim=True)
         else:
-            if num_batch > 1:
-                brow = batch_seg.view(1, -1, 1).expand(num_batch, -1, U.shape[-1])
-                bcol = (
-                    torch.arange(
-                        num_batch, dtype=batch_seg.dtype, device=batch_seg.device
-                    )
-                    .view(-1, 1, 1)
-                    .expand(-1, U.shape[-2], U.shape[-1])
-                )
-                mask = torch.where(
-                    torch.eq(brow, bcol), torch.ones_like(U), torch.zeros_like(U)
-                )
-                tmp = U.unsqueeze(0).expand(num_batch, -1, -1)
-                tmp, _ = torch.max(mask * tmp, dim=-1)
-                tmp, _ = torch.max(tmp, dim=-1)
-                maximum = tmp[batch_seg].unsqueeze(-1)
-            else:
-                maximum = torch.max(U)
+            maximum = torch.max(U)
         return (torch.exp(U - h - maximum) + eps) / math.sqrt(m)
 
     def forward(
@@ -644,9 +701,6 @@ class SpookyNetAttention(nn.Module):
             Q: torch.Tensor,
             K: torch.Tensor,
             V: torch.Tensor,
-            num_batch: int,
-            batch_seg: torch.Tensor,
-            mask: Optional[torch.Tensor] = None,
             eps: float = 1e-8,
     ) -> torch.Tensor:
         """
@@ -662,44 +716,16 @@ class SpookyNetAttention(nn.Module):
                 Matrix of N key vectors.
             V (FloatTensor [N, dim_v]):
                 Matrix of N value vectors.
-            num_batch (int):
-                Number of different batches in the input values.
-            batch_seg (LongTensor [N]):
-                Index for each input that specifies to which batch it belongs.
-                For example, when the input consists of a sequence of size 3 and
-                another sequence of size 5, batch_seg would be
-                [0, 0, 0, 1, 1, 1, 1, 1] (num_batch would be 2 then).
-            mask (Optional[FloatTensor [N, N]]): TODO: check shape
-                Mask to apply to the attention matrix.
             eps (float):
                 Small constant to prevent numerical instability.
         Returns:
             y (FloatTensor [N, dim_v]):
                 Attention-weighted sum of value vectors.
         """
-        Q = self._phi(Q, True, num_batch, batch_seg)  # random projection of Q
-        K = self._phi(K, False, num_batch, batch_seg)  # random projection of K
-        if num_batch > 1:
-            d = Q.shape[-1]
-
-            # compute norm
-            idx = batch_seg.unsqueeze(-1).expand(-1, d)
-            tmp = K.new_zeros(num_batch, d).scatter_add_(0, idx, K)
-            norm = torch.gather(Q @ tmp.T, -1, batch_seg.unsqueeze(-1)) + eps
-
-            # the ops below are equivalent to this loop (but more efficient):
-            # return torch.cat([Q[b==batch_seg]@(
-            #    K[b==batch_seg].transpose(-1,-2)@V[b==batch_seg])
-            #    for b in range(num_batch)])/norm
-            if mask is None:  # mask can be shared across multiple attentions
-                one_hot = nn.functional.one_hot(batch_seg).to(
-                    dtype=V.dtype, device=V.device
-                )
-                mask = one_hot @ one_hot.transpose(-1, -2)
-            return ((mask * (K @ Q.transpose(-1, -2))).transpose(-1, -2) @ V) / norm
-        else:
-            norm = Q @ torch.sum(K, 0, keepdim=True).T + eps
-            return (Q @ (K.T @ V)) / norm
+        Q = self._phi(Q, True)  # random projection of Q
+        K = self._phi(K, False)  # random projection of K
+        norm = Q @ torch.sum(K, 0, keepdim=True).T + eps
+        return (Q @ (K.T @ V)) / norm
 
 
 class SpookyNetNonlocalInteraction(nn.Module):
@@ -745,10 +771,7 @@ class SpookyNetNonlocalInteraction(nn.Module):
 
     def forward(
             self,
-            x: torch.Tensor,
-            num_batch: int,
-            batch_seg: torch.Tensor,
-            mask: Optional[torch.Tensor] = None,
+            x_tilde: torch.Tensor,
     ) -> torch.Tensor:
         """
         Evaluate interaction block.
@@ -757,10 +780,10 @@ class SpookyNetNonlocalInteraction(nn.Module):
         x (FloatTensor [N, num_features]):
             Atomic feature vectors.
         """
-        q = self.resblock_q(x)  # queries
-        k = self.resblock_k(x)  # keys
-        v = self.resblock_v(x)  # values
-        return self.attention(q, k, v, num_batch, batch_seg, mask)
+        q = self.resblock_q(x_tilde)  # queries
+        k = self.resblock_k(x_tilde)  # keys
+        v = self.resblock_v(x_tilde)  # values
+        return self.attention(q, k, v)
 
 
 class SpookyNetInteractionModule(nn.Module):
@@ -847,13 +870,10 @@ class SpookyNetInteractionModule(nn.Module):
             self,
             x: torch.Tensor,
             rbf: torch.Tensor,
-            pij: torch.Tensor,
-            dij: torch.Tensor,
+            p_orbital_ij: torch.Tensor,
+            d_orbital_ij: torch.Tensor,
             idx_i: torch.Tensor,
             idx_j: torch.Tensor,
-            num_batch: int,
-            batch_seg: torch.Tensor,
-            mask: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Evaluate all modules in the block.
@@ -866,23 +886,15 @@ class SpookyNetInteractionModule(nn.Module):
                 Latent atomic feature vectors.
             rbf (FloatTensor [P, num_basis_functions]):
                 Values of the radial basis functions for the pairwise distances.
-            pij (FloatTensor [P, 3]):
+            p_orbital_ij (FloatTensor [P, 3]):
                 Unit vectors pointing from atom i to atom j for all atomic pairs.
-            dij (FloatTensor [P]):
+            d_orbital_ij (FloatTensor [P]):
                 Distances between atom i and atom j for all atomic pairs.
             idx_i (LongTensor [P]):
                 Index of atom i for all atomic pairs ij. Each pair must be
                 specified as both ij and ji.
             idx_j (LongTensor [P]):
                 Same as idx_i, but for atom j.
-            num_batch (int):
-                Batch size (number of different molecules).
-            batch_seg (LongTensor [N]):
-                Index for each atom that specifies to which molecule in the
-                batch it belongs.
-            mask (Optional[FloatTensor [B, N, N]]): TODO: check shape
-                Mask for attention mechanism to prevent interactions between
-                atoms of different molecules.
         Returns:
             x (FloatTensor [N, num_features]):
                 Updated latent atomic feature vectors.
@@ -890,8 +902,10 @@ class SpookyNetInteractionModule(nn.Module):
                 Contribution to output atomic features (environment
                 descriptors).
         """
-        x = self.residual_pre(x)
-        l = self.local_interaction(x, rbf, pij, dij, idx_i, idx_j)
-        n = self.nonlocal_interaction(x, num_batch, batch_seg, mask)
-        x = self.residual_post(x + l + n)
-        return x, self.resblock(x)
+        x_tilde = self.residual_pre(x)
+        del x
+        l = self.local_interaction(x_tilde, rbf, p_orbital_ij, d_orbital_ij, idx_i, idx_j)
+        n = self.nonlocal_interaction(x_tilde)
+        x_updated = self.residual_post(x_tilde + l + n)
+        del x_tilde
+        return x_updated, self.resblock(x_updated)

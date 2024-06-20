@@ -9,7 +9,7 @@ class ANI2xCuration(DatasetCuration):
     Routines to fetch and process the ANI-2x dataset into a curated hdf5 file.
 
     The ANI-2x data set includes properties for small organic molecules that contain
-    H, C, N, O, S, F, and Cl.  This dataset contains 9651712 conformers for nearly 200,000 molecules.
+    H, C, N, O, S, F, and Cl.  This dataset contains 9651712 conformers for nearly 20,000 molecules.
     This will fetch data generated with the wB97X/631Gd level of theory
     used in the original ANI-2x paper, calculated using Gaussian 09
 

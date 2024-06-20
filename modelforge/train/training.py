@@ -13,7 +13,7 @@ from torchmetrics.utilities import dim_zero_cat
 from typing import Optional
 
 
-class MSELossMetric(torchmetrics.Metric):
+class LogLoss(torchmetrics.Metric):
     """
     Custom metric to calculate the Mean Squared Error (MSE) loss per batch and average it over an epoch.
 
@@ -28,7 +28,7 @@ class MSELossMetric(torchmetrics.Metric):
         Initializes the MSELossMetric class, setting up the state for the metric.
         """
         super().__init__()
-        self.add_state("mse_loss_per_batch", default=[], dist_reduce_fx="cat")
+        self.add_state("loss_per_batch", default=[], dist_reduce_fx="cat")
 
     def update(self, loss: torch.Tensor) -> None:
         """
@@ -39,7 +39,7 @@ class MSELossMetric(torchmetrics.Metric):
         loss : torch.Tensor
             The MSE loss for a batch.
         """
-        self.mse_loss_per_batch.append(loss.detach())
+        self.loss_per_batch.append(loss.detach())
 
     def compute(self) -> torch.Tensor:
         """
@@ -50,32 +50,8 @@ class MSELossMetric(torchmetrics.Metric):
         torch.Tensor
             The average MSE loss for the epoch.
         """
-        mse_loss_per_epoch = dim_zero_cat(self.mse_loss_per_batch)
+        mse_loss_per_epoch = dim_zero_cat(self.loss_per_batch)
         return torch.mean(mse_loss_per_epoch)
-
-
-class RMSELossMetric(MSELossMetric):
-    """
-    Custom metric to calculate the Root Mean Squared Error (RMSE) loss per batch and average it over an epoch.
-    Inherits from MSELossMetric.
-
-    Methods
-    -------
-    compute()
-        Computes the average RMSE loss over all batches in an epoch.
-    """
-
-    def compute(self) -> torch.Tensor:
-        """
-        Computes the average RMSE loss over all batches in an epoch.
-
-        Returns
-        -------
-        torch.Tensor
-            The average RMSE loss for the epoch.
-        """
-        mse_loss_per_epoch = dim_zero_cat(self.mse_loss_per_batch)
-        return torch.sqrt(torch.mean(mse_loss_per_epoch))
 
 
 from torch import nn
@@ -97,8 +73,8 @@ class LossFactory(object):
     @staticmethod
     def create_loss(loss_type: str, **kwargs) -> Type[Loss]:
 
-        if loss_type == "NaiveEnergyAndForceLoss":
-            return NaiveEnergyAndForceLoss(**kwargs)
+        if loss_type == "EnergyAndForceLoss":
+            return EnergyAndForceLoss(**kwargs)
         elif loss_type == "EnergyLoss":
             return EnergyLoss()
         else:
@@ -126,7 +102,7 @@ class EnergyLoss(Loss):
         }
 
 
-class NaiveEnergyAndForceLoss(Loss):
+class EnergyAndForceLoss(Loss):
     """
     Class to calculate the combined loss for both energy and force predictions.
 
@@ -147,7 +123,7 @@ class NaiveEnergyAndForceLoss(Loss):
         force_weight: float = 1.0,
     ):
         """
-        Initializes the NaiveEnergyAndForceLoss class.
+        Initializes the EnergyAndForceLoss class.
 
         Parameters
         ----------
@@ -247,6 +223,7 @@ class TrainingAdapter(pl.LightningModule):
 
         from typing import List
         from modelforge.potential import _Implemented_NNPs
+        from torchmetrics.regression import MeanSquaredError, MeanAbsoluteError
 
         super().__init__()
         self.save_hyperparameters(ignore=["loss_module"])
@@ -269,19 +246,55 @@ class TrainingAdapter(pl.LightningModule):
 
         self.unused_parameters = set()
         self.are_unused_parameters_present = False
-        self.verbose_level = verbose_level
 
-        self.val_energy_loss_metric = RMSELossMetric()
-        self.val_force_loss_metric = RMSELossMetric()
-        self.val_combined_loss_metric = RMSELossMetric()
+        self.train_log_loss = {
+            "energy_loss": LogLoss(),
+            "force_loss": LogLoss(),
+            "combined_loss": LogLoss(),
+        }
 
-        self.train_energy_loss_metric = MSELossMetric()
-        self.train_force_loss_metric = MSELossMetric()
-        self.train_combined_loss_metric = MSELossMetric()
+        self.val_error = {
+            "energy": {
+                "mae": MeanAbsoluteError(),
+                "rmse": MeanSquaredError(squared=False),
+            },
+            "force": {
+                "mae": MeanAbsoluteError(),
+                "rmse": MeanSquaredError(squared=False),
+            },
+        }
+        self.train_error = {
+            "energy": {
+                "mae": MeanAbsoluteError(),
+                "rmse": MeanSquaredError(squared=False),
+            },
+            "force": {
+                "mae": MeanAbsoluteError(),
+                "rmse": MeanSquaredError(squared=False),
+            },
+        }
+        self.test_error = {
+            "energy": {
+                "mae": MeanAbsoluteError(),
+                "rmse": MeanSquaredError(squared=False),
+            },
+            "force": {
+                "mae": MeanAbsoluteError(),
+                "rmse": MeanSquaredError(squared=False),
+            },
+        }
 
-        self.test_energy_loss_metric = RMSELossMetric()
-        self.test_force_loss_metric = RMSELossMetric()
-        self.test_combined_loss_metric = RMSELossMetric()
+        # Register metrics
+        for name, metric in self.train_log_loss.items():
+            self.add_module(f"train_log_loss_{name}", metric)
+        for phase, metrics in [
+            ("val", self.val_error),
+            ("train", self.train_error),
+            ("test", self.test_error),
+        ]:
+            for type_, metric in metrics.items():
+                for name, m in metric.items():
+                    self.add_module(f"{phase}_{type_}_{name}", m)
 
         self.val_loss = []
 
@@ -314,9 +327,9 @@ class TrainingAdapter(pl.LightningModule):
         # Dictionary to hold loss metrics based on the prefix
         loss_metrics = {
             "train": {
-                "combined_loss": self.train_combined_loss_metric,
-                "energy_loss": self.train_energy_loss_metric,
-                "force_loss": self.train_force_loss_metric,
+                "combined_loss": self.train_combined_loss,
+                "energy_loss": self.train_energy_loss,
+                "force_loss": self.train_force_loss,
             },
             "val": {
                 "combined_loss": self.val_combined_loss_metric,
@@ -434,6 +447,26 @@ class TrainingAdapter(pl.LightningModule):
         log.warning("Model does not implement _config_prior().")
         raise NotImplementedError()
 
+    def _log_metrics(
+        self,
+        error_dict,
+        prefix: str,
+        predict_target: Dict[str, torch.Tensor],
+        progress_bar: bool = False,
+    ):
+        for property, metrics in error_dict.items():
+            for metric, error_log in metrics.items():
+                if property == "energy":
+                    error_log(predict_target["E_predict"], predict_target["E_true"])
+                if property == "force":
+                    error_log(predict_target["F_predict"], predict_target["F_true"])
+                self.log(
+                    f"{prefix}/{property}/{metric}",
+                    error_log,
+                    on_epoch=True,
+                    prog_bar=progress_bar,
+                )
+
     def training_step(self, batch: "BatchData", batch_idx: int) -> torch.Tensor:
         """
         Training step to compute the MSE loss for a given batch.
@@ -456,7 +489,17 @@ class TrainingAdapter(pl.LightningModule):
         # calculate the loss
         loss = self.loss_module.calculate_loss(predict_target, batch)
         # Update and log metrics
-        self._log_on_epoch_metrics(loss, "train", progress_bar=False)
+        self._log_metrics(self.train_error, "train", predict_target)
+
+        for key, metric in self.train_log_loss.items():
+            metric(loss[key])
+            self.log(
+                f"train/{key}",
+                metric,
+                on_epoch=True,
+                prog_bar=True,
+            )
+
         return loss["combined_loss"]
 
     @torch.enable_grad()
@@ -485,7 +528,7 @@ class TrainingAdapter(pl.LightningModule):
         loss = self.loss_module.calculate_loss(predict_target, batch)
         # log the loss
         self.val_loss.append(loss["combined_loss"].detach().item())
-        self._log_on_epoch_metrics(loss, "val")
+        self._log_metrics(self.val_error, "val", predict_target, progress_bar=True)
 
     @torch.enable_grad()
     def test_step(self, batch: "BatchData", batch_idx: int) -> None:
@@ -511,16 +554,14 @@ class TrainingAdapter(pl.LightningModule):
         batch.nnp_input.positions.requires_grad_(True)
         # calculate energy and forces
         predict_target = self._get_predictions(batch)
-        # calculate the loss
-        loss = self.loss_module.calculate_loss(predict_target, batch)
         # Update and log metrics
-        self._log_on_epoch_metrics(loss, "test")
+        self._log_metrics(self.test_error, "test", predict_target, progress_bar=False)
 
     def on_train_epoch_end(self):
         """
         Operations to perform at the end of each training epoch.
 
-        Logs histograms of weights and biases, and learning rate. 
+        Logs histograms of weights and biases, and learning rate.
         Also, resets validation loss.
         """
         for name, params in self.named_parameters():
@@ -539,7 +580,7 @@ class TrainingAdapter(pl.LightningModule):
 
         # Log and reset the validation loss
         avg_val_loss = torch.sqrt(torch.mean(torch.tensor(self.val_loss)))
-        log.debug(avg_val_loss.item())
+        # log.debug(avg_val_loss.item())
         self.val_loss = []
 
     def configure_optimizers(self) -> Dict[str, Any]:
@@ -569,7 +610,7 @@ class TrainingAdapter(pl.LightningModule):
 
         lr_scheduler_config = {
             "scheduler": lr_scheduler,
-            "monitor": "val/combined_loss",  # Name of the metric to monitor
+            "monitor": lr_scheduler_config["monitor"],  # Name of the metric to monitor
             "interval": "epoch",
             "frequency": 1,
         }
@@ -882,7 +923,7 @@ Experiments are saved to: {save_dir}/{experiment_name}.
 
     checkpoint_callback = ModelCheckpoint(
         save_top_k=2,
-        monitor="val/combined_loss",
+        monitor="val/energy/rmse",
         filename="best_{potential_name}-{dataset_name}-{epoch:02d}-{val_loss:.2f}",
     )
 

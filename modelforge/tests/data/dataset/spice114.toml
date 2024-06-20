@@ -28,7 +28,7 @@ training_parameter.lr_scheduler_config.threshold_mode = "abs"
 training_parameter.lr_scheduler_config.monitor = "val/combined_loss"
 training_parameter.lr_scheduler_config.interval = "epoch"
 
-loss_parameter.loss_type = "NaiveEnergyAndForceLoss"
+loss_parameter.loss_type = "EnergyAndForceLoss"
 loss_parameter.include_force = true
 loss_parameter.force_weight = 1.0
 loss_parameter.energy_weight = 1.0

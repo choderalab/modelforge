@@ -8,7 +8,7 @@ from modelforge.potential import NeuralNetworkPotentialFactory
 @pytest.fixture
 def loss_config():
     training_config = {}
-    training_config["loss_type"] = "NaiveEnergyAndForceLoss"
+    training_config["loss_type"] = "EnergyAndForceLoss"
     training_config["include_force"] = True
     training_config["force_weight"] = 1.0
     training_config["energy_weight"] = 1.0
@@ -237,9 +237,7 @@ def test_energy_between_simulation_environments(
     from modelforge.tests.data import potential
     from importlib import resources
 
-    filename = (
-        resources.files(potential) / f"{model_name.lower()}_defaults.toml"
-    )
+    filename = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
     config = return_toml_config(filename)
 
     # Extract parameters
@@ -298,9 +296,7 @@ def test_forward_pass_with_all_datasets(
     from importlib import resources
     from modelforge.tests.data import potential
 
-    file_path = (
-        resources.files(potential) / f"{model_name.lower()}_defaults.toml"
-    )
+    file_path = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
     config = return_toml_config(file_path)
 
     # Extract parameters
@@ -705,9 +701,7 @@ def test_casting(model_name, single_batch_with_batchsize_64, loss_config):
     from modelforge.tests.data import potential
     from importlib import resources
 
-    filename = (
-        resources.files(potential) / f"{model_name.lower()}_defaults.toml"
-    )
+    filename = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
 
     config = return_toml_config(filename)
 
@@ -763,9 +757,7 @@ def test_equivariant_energies_and_forces(
     from modelforge.tests.data import potential
     from importlib import resources
 
-    filename = (
-        resources.files(potential) / f"{model_name.lower()}_defaults.toml"
-    )
+    filename = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
 
     config = return_toml_config(filename)
 

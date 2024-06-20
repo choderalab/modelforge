@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from modelforge.potential.physnet import PhysNet, PhysNetNeuralNetworkData
     from modelforge.potential.sake import SAKE, SAKENeuralNetworkInput
     from modelforge.potential.schnet import SchNet, SchnetNeuralNetworkData
-    from modelforge.train.training import NaiveEnergyAndForceLoss
+    from modelforge.train.training import EnergyAndForceLoss
 
 
 # Define NamedTuple for the outputs of Pairlist and Neighborlist forward method
@@ -581,7 +581,7 @@ class NeuralNetworkPotentialFactory:
         """
 
         from modelforge.potential import _Implemented_NNPs
-        from modelforge.train.training import TrainingAdapter, NaiveEnergyAndForceLoss
+        from modelforge.train.training import TrainingAdapter, EnergyAndForceLoss
 
         model_parameters = model_parameters or {}
         training_parameters = training_parameters or {}

@@ -13,7 +13,7 @@ from modelforge.potential import NeuralNetworkPotentialFactory
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 @pytest.mark.parametrize("dataset_name", ["QM9"])
-@pytest.mark.parametrize("loss_type", ["NaiveEnergyAndForceLoss", "EnergyLoss"])
+@pytest.mark.parametrize("loss_type", ["EnergyAndForceLoss", "EnergyLoss"])
 def test_train_with_lightning(model_name, dataset_name, loss_type):
     """
     Test the forward pass for a given model and dataset.
@@ -145,9 +145,7 @@ def test_hypterparameter_tuning_with_ray(
         dataset_path=dataset_path,
     )
 
-
     dm = datamodule_factory(dataset_name=dataset_name)
-
 
     # Extract parameters
     potential_parameter = config["potential"]["potential_parameter"]

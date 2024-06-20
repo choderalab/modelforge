@@ -21,10 +21,11 @@ def test_compare_radial_symmetry_features():
 
     # generate a random list of distances, all < 5
     d_ij = torch.rand(5, 1) * 5
+    print(d_ij)
 
     # TensorNet constants
-    radial_cutoff = 5.0  # radial_cutoff
-    radial_start = 0.8
+    radial_cutoff = 5.0
+    radial_start = 0.0
     radial_dist_divisions = 8
 
     rsf = TensorNetRadialSymmetryFunction(
@@ -35,15 +36,21 @@ def test_compare_radial_symmetry_features():
     r_mf = rsf(d_ij / 10)  # torch.Size([5, 1, 8]) # NOTE: nanometer
     cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom)
     
-    rcut_ij = cutoff_module(d_ij / 10)  # torch.Size([5]) # NOTE: nanometer
+    rcut_ij = cutoff_module(d_ij.unsqueeze(-1) / 10)  # torch.Size([5]) # NOTE: nanometer
     r_mf = r_mf * rcut_ij
     
     rsf_tn = ExpNormalSmearing(
         cutoff_lower=radial_start,
         cutoff_upper=radial_cutoff,
         num_rbf=radial_dist_divisions,
+        trainable=False,
     )
     r_tn = rsf_tn(d_ij)
 
     assert torch.allclose(r_mf, r_tn)
 
+
+if __name__ == "__main__":
+    import torch
+    torch.manual_seed(0)
+    test_compare_radial_symmetry_features()

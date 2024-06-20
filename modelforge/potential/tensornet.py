@@ -4,9 +4,12 @@ import torch
 from openff.units import unit
 
 from modelforge.potential.models import InputPreparation
-from modelforge.potential.models import BaseNetwork, CoreNetwork
+from modelforge.potential.models import BaseNetwork
+from modelforge.potential.models import CoreNetwork
+from modelforge.potential.utils import CosineCutoff
 from modelforge.potential.utils import TensorNetRadialSymmetryFunction
-from modelforge.potential.utils import NeuralNetworkData, NNPInput
+from modelforge.potential.utils import NeuralNetworkData
+from modelforge.potential.utils import NNPInput
 
 @dataclass
 class TensorNetNeuralNetworkData(NeuralNetworkData):
@@ -96,10 +99,17 @@ class TensorNetRepresentation(torch.nn.Module):
     def __init__(
         self,
         radial_max_distance,
-        radial_min_distanc,
+        radial_min_distance,
         number_of_radial_basis_functions,
     ):
-        pass
+        super().__init__()
+
+        self.cutoff_module = CosineCutoff(radial_max_distance)
+        self.radial_symmetry_function = self._setup_radial_symmetry_functions(
+            radial_max_distance, 
+            radial_min_distance, 
+            number_of_radial_basis_functions
+        )
 
     def _setup_radial_symmetry_functions(
         self,
@@ -107,7 +117,7 @@ class TensorNetRepresentation(torch.nn.Module):
         min_distance: unit.Quantity,
         number_of_radial_basis_functions: int,
     ):
-        radial_symmetry_functizn = TensorNetRadialSymmetryFunction(
+        radial_symmetry_function = TensorNetRadialSymmetryFunction(
             number_of_radial_basis_functions,
             max_distance,
             min_distance,
@@ -116,7 +126,10 @@ class TensorNetRepresentation(torch.nn.Module):
         return radial_symmetry_function
 
     def forward(self, data: TensorNetNeuralNetworkData):
-        pass
+        radial_feature_vector = self.radial_symmetry_functions(data.d_ij)
+        # cutoff
+        rcut_ij = self.cutoff_module(data.d_ij)
+        radial_feature_vector = radial_feature_vector * rcut_ij
 
 
 class TensorNetInteraction(torch.nn.Module):

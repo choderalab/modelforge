@@ -22,7 +22,6 @@ class NeuralNetworkData:
     total_charge: torch.Tensor
 
 
-
 import torch
 
 
@@ -808,9 +807,15 @@ class TensorNetRadialSymmetryFunction(RadialSymmetryFunction):
         dtype,
     ):
         # TensorNet evenly distribute centers in log space
+        start_value = torch.exp(
+            torch.scalar_tensor(
+                -_max_distance_in_nanometer*10 + _min_distance_in_nanometer*10, # in angstrom
+                dtype=dtype,
+            )
+        )
         centers = torch.linspace(
-            tensor.exp(-_max_distance_in_nanometer),
-            tensor.exp(-_min_distance_in_nanometer),
+            start_value,
+            1,
             number_of_radial_basis_functions,
             dtype=dtype,
         )
@@ -822,14 +827,32 @@ class TensorNetRadialSymmetryFunction(RadialSymmetryFunction):
         _max_distance_in_nanometer,
         number_of_radial_basis_functions,
     ):
+        start_value = torch.exp(
+            torch.scalar_tensor(
+                -_max_distance_in_nanometer*10 + _min_distance_in_nanometer*10, # in angstrom
+                dtype=self.dtype,
+            )
+        )
         scale_factors = torch.full(
             (number_of_radial_basis_functions,),
-            torch.exp(-_min_distance_in_nanometer) \
-            - torch.exp(-_max_distance_in_nanometer),
+            1 - start_value
         )
         scale_factors = scale_factors * 2 / number_of_radial_basis_functions
         scale_factors = torch.pow(scale_factors, -2)
         return scale_factors
+
+    def forward(self, d_ij: torch.Tensor):
+        d_ij = d_ij.unsqueeze(-1) * 10 # in angstrom
+        _max_distance_in_angstrom = self.max_distance.to(unit.angstrom).m
+        _min_distance_in_angstrom = self.min_distance.to(unit.angstrom).m
+        alpha = 5.0 / (_max_distance_in_angstrom - _min_distance_in_angstrom)
+        d_ij = torch.exp(alpha * (-d_ij + _min_distance_in_angstrom))
+        features = self.radial_basis_function.compute(
+            d_ij, self.radial_basis_centers, self.radial_scale_factor
+        )
+        result = self.prefactor * features
+        return result
+
 
 def pair_list(
     atomic_subsystem_indices: torch.Tensor,

@@ -20,8 +20,7 @@ def test_compare_radial_symmetry_features():
     from modelforge.potential.utils import TensorNetRadialSymmetryFunction
 
     # generate a random list of distances, all < 5
-    d_ij = torch.rand(5, 1) * 5
-    print(d_ij)
+    d_ij = torch.rand(5, 1) * 5 # NOTE: angstrom
 
     # TensorNet constants
     radial_cutoff = 5.0
@@ -35,10 +34,10 @@ def test_compare_radial_symmetry_features():
     )
     r_mf = rsf(d_ij / 10)  # torch.Size([5, 1, 8]) # NOTE: nanometer
     cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom)
-    
+
     rcut_ij = cutoff_module(d_ij.unsqueeze(-1) / 10)  # torch.Size([5]) # NOTE: nanometer
     r_mf = r_mf * rcut_ij
-    
+
     rsf_tn = ExpNormalSmearing(
         cutoff_lower=radial_start,
         cutoff_upper=radial_cutoff,
@@ -50,7 +49,75 @@ def test_compare_radial_symmetry_features():
     assert torch.allclose(r_mf, r_tn)
 
 
+def test_representation():
+    import torch
+    from openff.units import unit
+    from torch import nn
+    from torchmdnet.models.model import create_model, load_model
+    from torchmdnet.models.tensornet import TensorEmbedding
+    from torchmdnet.models.utils import ExpNormalSmearing, OptimizedDistance
+
+    from modelforge.potential.tensornet import TensorNetRepresentation
+
+    num_atoms = 5
+    hidden_channels = 2
+    num_rbf = 8
+    act_class = nn.SiLU
+    cutoff_lower = 0.0
+    cutoff_upper = 5.0
+    trainable_rbf = False
+    max_z = 128
+    dtype = torch.float32
+
+    ################ TensorNet ################
+    def create_example_batch(n_atoms=6, multiple_batches=True):
+        zs = torch.tensor([1, 6, 7, 8, 9], dtype=torch.long)
+        z = zs[torch.randint(0, len(zs), (n_atoms,))]
+
+        pos = torch.randn(len(z), 3)
+
+        batch = torch.zeros(len(z), dtype=torch.long)
+        if multiple_batches:
+            batch[len(batch) // 2 :] = 1
+        return z, pos, batch
+
+    # TensorNet embedding modules setup
+    tensor_embedding = TensorEmbedding(
+        hidden_channels,
+        num_rbf,
+        act_class,
+        cutoff_lower,
+        cutoff_upper,
+        trainable_rbf,
+        max_z,
+        dtype,
+    )
+    tensor_embedding.reset_parameters()
+    distance_module = OptimizedDistance(
+        cutoff_lower,
+        cutoff_upper,
+        max_num_pairs=-64,
+        return_vecs=True,
+        loop=True,
+        check_errors=True,
+        resize_to_fit=False,
+        box=None,
+        long_edge_index=True,
+    )
+    distance_expansion = ExpNormalSmearing(
+        cutoff_lower, cutoff_upper, num_rbf, trainable_rbf
+    )
+
+    # calculate embedding
+    z, pos, batch = create_example_batch()
+    edge_index, edge_weight, edge_vec = distance_module(pos, batch, box)
+    edge_attr = distance_expansion(edge_weight)
+    X_tn = tensor_embedding(z, edge_index, edge_weight, edge_vec, edge_attr)
+    ################ TensorNet ################
+
 if __name__ == "__main__":
     import torch
     torch.manual_seed(0)
     test_compare_radial_symmetry_features()
+
+    test_representation()

@@ -829,8 +829,7 @@ class TensorNetRadialSymmetryFunction(RadialSymmetryFunction):
     ):
         start_value = torch.exp(
             torch.scalar_tensor(
-                -_max_distance_in_nanometer*10 + _min_distance_in_nanometer*10, # in angstrom
-                dtype=self.dtype,
+                -_max_distance_in_nanometer*10 + _min_distance_in_nanometer*10, # NOTE: angstrom
             )
         )
         scale_factors = torch.full(
@@ -842,11 +841,14 @@ class TensorNetRadialSymmetryFunction(RadialSymmetryFunction):
         return scale_factors
 
     def forward(self, d_ij: torch.Tensor):
-        d_ij = d_ij.unsqueeze(-1) * 10 # in angstrom
+        d_ij = d_ij.unsqueeze(-1) * 10  # NOTE: angstrom
+
+        # transfrom d_ij
         _max_distance_in_angstrom = self.max_distance.to(unit.angstrom).m
         _min_distance_in_angstrom = self.min_distance.to(unit.angstrom).m
         alpha = 5.0 / (_max_distance_in_angstrom - _min_distance_in_angstrom)
         d_ij = torch.exp(alpha * (-d_ij + _min_distance_in_angstrom))
+
         features = self.radial_basis_function.compute(
             d_ij, self.radial_basis_centers, self.radial_scale_factor
         )

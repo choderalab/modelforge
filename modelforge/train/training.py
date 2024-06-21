@@ -336,8 +336,6 @@ class TrainingAdapter(pl.LightningModule):
             for property, collection in metrics.items():
                 self.add_module(f"{phase}_{property}", collection)
 
-        self.val_loss = []
-
     def _get_forces(
         self, batch: "BatchData", energies: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
@@ -431,7 +429,7 @@ class TrainingAdapter(pl.LightningModule):
         log.warning("Model does not implement _config_prior().")
         raise NotImplementedError()
 
-    def _update_metrics(
+    def _log_metrics(
         self,
         error_dict: Dict[str, torchmetrics.MetricCollection],
         predict_target: Dict[str, torch.Tensor],
@@ -487,7 +485,7 @@ class TrainingAdapter(pl.LightningModule):
         # calculate the loss
         loss = self.loss_module.calculate_loss(predict_target, batch)
         # Update and log metrics
-        self._update_metrics(self.train_error, predict_target)
+        self._log_metrics(self.train_error, predict_target)
 
         for key, metric in self.train_log_loss.items():
             metric(loss[key])
@@ -497,7 +495,7 @@ class TrainingAdapter(pl.LightningModule):
     @torch.enable_grad()
     def validation_step(self, batch: "BatchData", batch_idx: int) -> None:
         """
-        Validation step to compute the RMSE loss and accumulate L1 loss across epochs.
+        Validation step to compute the RMSE/MAE across epochs.
 
         Parameters
         ----------
@@ -513,13 +511,12 @@ class TrainingAdapter(pl.LightningModule):
 
         # Ensure positions require gradients for force calculation
         batch.nnp_input.positions.requires_grad_(True)
-
         # calculate energy and forces
         predict_target = self._get_predictions(batch)
         # calculate the loss
         loss = self.loss_module.calculate_loss(predict_target, batch)
         # log the loss
-        self._update_metrics(self.val_error, predict_target)
+        self._log_metrics(self.val_error, predict_target)
 
     @torch.enable_grad()
     def test_step(self, batch: "BatchData", batch_idx: int) -> None:
@@ -546,7 +543,7 @@ class TrainingAdapter(pl.LightningModule):
         # calculate energy and forces
         predict_target = self._get_predictions(batch)
         # Update and log metrics
-        self._update_metrics(self.test_error, predict_target)
+        self._log_metrics(self.test_error, predict_target)
 
     def on_train_epoch_end(self):
         """
@@ -578,9 +575,11 @@ class TrainingAdapter(pl.LightningModule):
             "MeanSquaredError": "rmse",
         }  # NOTE: MeanSquaredError(squared=False) is RMSE
         # Log accumulated training loss metrics
+        metrics = {}
         for key, metric in self.train_log_loss.items():
-            self.log(f"train/{key}", metric.compute(), on_epoch=True, prog_bar=True)
+            metrics[f"train/{key}"] = metric.compute()
             metric.reset()
+        self.log_dict(metrics, on_epoch=True, prog_bar=True)
 
         # Log all accumulated metrics for train, val, and test phases
         for phase, error_dict in [
@@ -594,7 +593,6 @@ class TrainingAdapter(pl.LightningModule):
                     metrics[f"{phase}/{property}/{conv[name]}"] = metric.compute()
                     metric.reset()
             self.log_dict(metrics, on_epoch=True, prog_bar=(phase == "val"))
-
 
     def configure_optimizers(self) -> Dict[str, Any]:
         """

@@ -293,12 +293,6 @@ class TrainingAdapter(pl.LightningModule):
         self.unused_parameters = set()
         self.are_unused_parameters_present = False
 
-        self.train_log_loss = {
-            "energy_loss": LogLoss(),
-            "force_loss": LogLoss(),
-            "combined_loss": LogLoss(),
-        }
-
         self.val_error = {
             "energy": MetricCollection(
                 [MeanAbsoluteError(), MeanSquaredError(squared=False)]
@@ -325,9 +319,6 @@ class TrainingAdapter(pl.LightningModule):
         }
 
         # Register metrics
-        for name, metric in self.train_log_loss.items():
-            self.add_module(f"train_log_loss_{name}", metric)
-
         for phase, metrics in [
             ("val", self.val_error),
             ("train", self.train_error),
@@ -483,14 +474,21 @@ class TrainingAdapter(pl.LightningModule):
         # calculate energy and forces
         predict_target = self._get_predictions(batch)
         # calculate the loss
-        loss = self.loss_module.calculate_loss(predict_target, batch)
+        loss_dict = self.loss_module.calculate_loss(predict_target, batch)
         # Update and log metrics
         self._log_metrics(self.train_error, predict_target)
+        # log loss
+        for key, loss in loss_dict.items():
+            self.log(
+                f"train/{key}",
+                torch.mean(loss),
+                on_step=True,
+                prog_bar=True,
+                on_epoch=True,
+                batch_size=1,
+            )  # batch size is 1 because the mean of the batch is logged
 
-        for key, metric in self.train_log_loss.items():
-            metric(loss[key])
-
-        return loss["combined_loss"]
+        return loss_dict["combined_loss"]
 
     @torch.enable_grad()
     def validation_step(self, batch: "BatchData", batch_idx: int) -> None:
@@ -576,9 +574,6 @@ class TrainingAdapter(pl.LightningModule):
         }  # NOTE: MeanSquaredError(squared=False) is RMSE
         # Log accumulated training loss metrics
         metrics = {}
-        for key, metric in self.train_log_loss.items():
-            metrics[f"train/{key}"] = metric.compute()
-            metric.reset()
         self.log_dict(metrics, on_epoch=True, prog_bar=True)
 
         # Log all accumulated metrics for train, val, and test phases
@@ -950,7 +945,7 @@ Experiments are saved to: {save_dir}/{experiment_name}.
         callbacks=callbacks,
         inference_mode=False,
         num_sanity_val_steps=2,
-        log_every_n_steps=10,
+        log_every_n_steps=50,
     )
 
     dm.prepare_data()

@@ -2,9 +2,9 @@
 from .qm9 import QM9Dataset
 from .ani1x import ANI1xDataset
 from .ani2x import ANI2xDataset
-from .spice1 import SPICE114Dataset
+from .spice1 import SPICE1Dataset
 from .spice2 import SPICE2Dataset
-from .spice1openff import SPICE114OpenFFDataset
+from .spice1openff import SPICE1OpenFFDataset
 from .phalkethoh import PhAlkEthOHDataset
 from .dataset import DatasetFactory, DataModule
 from enum import Enum
@@ -14,9 +14,9 @@ class _ImplementedDatasets(Enum):
     QM9 = QM9Dataset
     ANI1X = ANI1xDataset
     ANI2X = ANI2xDataset
-    SPICE114 = SPICE114Dataset
+    SPICE1 = SPICE1Dataset
     SPICE2 = SPICE2Dataset
-    SPICE114_OPENFF = SPICE114OpenFFDataset
+    SPICE1_OPENFF = SPICE1OpenFFDataset
     PHALKETHOH = PhAlkEthOHDataset
 
     @classmethod

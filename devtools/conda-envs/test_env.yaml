@@ -43,4 +43,4 @@ dependencies:
       - flax
       - git+https://github.com/ArnNag/sake.git@nanometer
       # - tensorflow
-      - ray[data,train,tune,serve]
+      - "ray[data,train,tune,serve]""

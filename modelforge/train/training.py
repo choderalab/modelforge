@@ -15,40 +15,40 @@ from typing import Optional
 
 class LogLoss(torchmetrics.Metric):
     """
-    Custom metric to calculate the Mean Squared Error (MSE) loss per batch and average it over an epoch.
+    Custom metric to log the loss function.
 
     Attributes
     ----------
-    mse_loss_per_batch : List[torch.Tensor]
-        List to store the MSE loss for each batch.
+    loss_per_batch : List[torch.Tensor]
+        List to store the loss for each batch.
     """
 
     def __init__(self) -> None:
         """
-        Initializes the MSELossMetric class, setting up the state for the metric.
+        Initializes the LogLoss class, setting up the state for the metric.
         """
         super().__init__()
         self.add_state("loss_per_batch", default=[], dist_reduce_fx="cat")
 
     def update(self, loss: torch.Tensor) -> None:
         """
-        Updates the metric state with the MSE loss for a batch.
+        Updates the metric state with the loss for a batch.
 
         Parameters
         ----------
         loss : torch.Tensor
-            The MSE loss for a batch.
+            The loss for a batch.
         """
         self.loss_per_batch.append(loss.detach())
 
     def compute(self) -> torch.Tensor:
         """
-        Computes the average MSE loss over all batches in an epoch.
+        Computes the average loss over all batches in an epoch.
 
         Returns
         -------
         torch.Tensor
-            The average MSE loss for the epoch.
+            The average loss for the epoch.
         """
         mse_loss_per_epoch = dim_zero_cat(self.loss_per_batch)
         return torch.mean(mse_loss_per_epoch)
@@ -60,6 +60,9 @@ from abc import abstractmethod
 
 
 class Loss(nn.Module):
+    """
+    Abstract base class for loss calculation in neural network potentials.
+    """
 
     @abstractmethod
     def calculate_loss(
@@ -69,9 +72,27 @@ class Loss(nn.Module):
 
 
 class LossFactory(object):
+    """
+    Factory class to create different types of loss functions.
+    """
 
     @staticmethod
     def create_loss(loss_type: str, **kwargs) -> Type[Loss]:
+        """
+        Creates an instance of the specified loss type.
+
+        Parameters
+        ----------
+        loss_type : str
+            The type of loss function to create.
+        **kwargs : dict
+            Additional parameters for the loss function.
+
+        Returns
+        -------
+        Loss
+            An instance of the specified loss function.
+        """
 
         if loss_type == "EnergyAndForceLoss":
             return EnergyAndForceLoss(**kwargs)
@@ -82,9 +103,17 @@ class LossFactory(object):
 
 
 class EnergyLoss(Loss):
+    """
+    Class to calculate the energy loss using Mean Squared Error (MSE).
+    """
+
     def __init__(
         self,
     ):
+        """
+        Initializes the EnergyLoss class.
+        """
+
         super().__init__()
         from torch.nn import MSELoss
 
@@ -92,7 +121,22 @@ class EnergyLoss(Loss):
 
     def calculate_loss(
         self, predict_target: Dict[str, torch.Tensor], batch: Optional[BatchData] = None
-    ):
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Calculates the energy loss.
+
+        Parameters
+        ----------
+        predict_target : dict
+            Dictionary containing predicted and true values for energy.
+        batch : BatchData, optional
+            Batch of data, by default None.
+
+        Returns
+        -------
+        dict
+            Dictionary containing combined loss, energy loss, and force loss.
+        """
         E_loss = self.mse_loss(predict_target["E_predict"], predict_target["E_true"])
 
         return {
@@ -139,7 +183,9 @@ class EnergyAndForceLoss(Loss):
         self.register_buffer("energy_weight", torch.tensor(energy_weight))
         self.register_buffer("force_weight", torch.tensor(force_weight))
 
-    def calculate_loss(self, predict_target: Dict[str, torch.Tensor], batch: BatchData):
+    def calculate_loss(
+        self, predict_target: Dict[str, torch.Tensor], batch: BatchData
+    ) -> Dict[str, torch.Tensor]:
         """
         Calculates the combined loss for both energy and force predictions.
 
@@ -202,7 +248,6 @@ class TrainingAdapter(pl.LightningModule):
         lr: float,
         loss_parameter: Dict[str, Any],
         optimizer: Type[Optimizer] = torch.optim.AdamW,
-        verbose_level: int = 5,
     ):
         """
         Initializes the TrainingAdapter with the specified model and training configuration.
@@ -224,6 +269,7 @@ class TrainingAdapter(pl.LightningModule):
         from typing import List
         from modelforge.potential import _Implemented_NNPs
         from torchmetrics.regression import MeanSquaredError, MeanAbsoluteError
+        from torchmetrics import MetricCollection
 
         super().__init__()
         self.save_hyperparameters(ignore=["loss_module"])
@@ -254,105 +300,43 @@ class TrainingAdapter(pl.LightningModule):
         }
 
         self.val_error = {
-            "energy": {
-                "mae": MeanAbsoluteError(),
-                "rmse": MeanSquaredError(squared=False),
-            },
-            "force": {
-                "mae": MeanAbsoluteError(),
-                "rmse": MeanSquaredError(squared=False),
-            },
+            "energy": MetricCollection(
+                [MeanAbsoluteError(), MeanSquaredError(squared=False)]
+            ),
+            "force": MetricCollection(
+                [MeanAbsoluteError(), MeanSquaredError(squared=False)]
+            ),
         }
         self.train_error = {
-            "energy": {
-                "mae": MeanAbsoluteError(),
-                "rmse": MeanSquaredError(squared=False),
-            },
-            "force": {
-                "mae": MeanAbsoluteError(),
-                "rmse": MeanSquaredError(squared=False),
-            },
+            "energy": MetricCollection(
+                [MeanAbsoluteError(), MeanSquaredError(squared=False)]
+            ),
+            "force": MetricCollection(
+                [MeanAbsoluteError(), MeanSquaredError(squared=False)]
+            ),
         }
         self.test_error = {
-            "energy": {
-                "mae": MeanAbsoluteError(),
-                "rmse": MeanSquaredError(squared=False),
-            },
-            "force": {
-                "mae": MeanAbsoluteError(),
-                "rmse": MeanSquaredError(squared=False),
-            },
+            "energy": MetricCollection(
+                [MeanAbsoluteError(), MeanSquaredError(squared=False)]
+            ),
+            "force": MetricCollection(
+                [MeanAbsoluteError(), MeanSquaredError(squared=False)]
+            ),
         }
 
         # Register metrics
         for name, metric in self.train_log_loss.items():
             self.add_module(f"train_log_loss_{name}", metric)
+
         for phase, metrics in [
             ("val", self.val_error),
             ("train", self.train_error),
             ("test", self.test_error),
         ]:
-            for type_, metric in metrics.items():
-                for name, m in metric.items():
-                    self.add_module(f"{phase}_{type_}_{name}", m)
+            for property, collection in metrics.items():
+                self.add_module(f"{phase}_{property}", collection)
 
         self.val_loss = []
-
-    def _log_on_epoch_metrics(
-        self, loss: Dict[str, torch.Tensor], prefix: str, progress_bar: bool = True
-    ):
-        """
-        Logs metrics for the specified prefix (train, val, test) during the epoch.
-
-        Parameters
-        ----------
-        loss : dict
-            Dictionary containing the loss error for each batch.
-            Expected keys are 'combined_loss', 'energy_loss', and 'force_loss'.
-        prefix : str
-            Prefix indicating the current phase of the training process.
-            Should be one of 'train', 'val', or 'test'.
-        progress_bar : bool, optional
-            Whether to display the metrics in the progress bar, by default True.
-
-        Raises
-        ------
-        RuntimeError
-            If the prefix is not recognized.
-        """
-        # Validate prefix
-        if prefix not in ["train", "val", "test"]:
-            raise RuntimeError(f"Unknown prefix: {prefix}")
-
-        # Dictionary to hold loss metrics based on the prefix
-        loss_metrics = {
-            "train": {
-                "combined_loss": self.train_combined_loss,
-                "energy_loss": self.train_energy_loss,
-                "force_loss": self.train_force_loss,
-            },
-            "val": {
-                "combined_loss": self.val_combined_loss_metric,
-                "energy_loss": self.val_energy_loss_metric,
-                "force_loss": self.val_force_loss_metric,
-            },
-            "test": {
-                "combined_loss": self.test_combined_loss_metric,
-                "energy_loss": self.test_energy_loss_metric,
-                "force_loss": self.test_force_loss_metric,
-            },
-        }[prefix]
-
-        # Log metrics
-        for key, metric in loss_metrics.items():
-            if key == "energy_loss" or self.verbose_level > 0:
-                metric(loss[key])
-                self.log(
-                    f"{prefix}/{key}",
-                    metric,
-                    on_epoch=True,
-                    prog_bar=progress_bar,
-                )
 
     def _get_forces(
         self, batch: "BatchData", energies: Dict[str, torch.Tensor]
@@ -447,25 +431,39 @@ class TrainingAdapter(pl.LightningModule):
         log.warning("Model does not implement _config_prior().")
         raise NotImplementedError()
 
-    def _log_metrics(
+    def _update_metrics(
         self,
-        error_dict,
-        prefix: str,
+        error_dict: Dict[str, torchmetrics.MetricCollection],
         predict_target: Dict[str, torch.Tensor],
-        progress_bar: bool = False,
-    ):
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Updates the provided metric collections with the predicted and true targets.
+
+        Parameters
+        ----------
+        error_dict : dict
+            Dictionary containing metric collections for energy and force.
+        predict_target : dict
+            Dictionary containing predicted and true values for energy and force.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            Dictionary containing updated metrics.
+        """
+
         for property, metrics in error_dict.items():
             for metric, error_log in metrics.items():
                 if property == "energy":
-                    error_log(predict_target["E_predict"], predict_target["E_true"])
+                    error_log(
+                        predict_target["E_predict"].detach(),
+                        predict_target["E_true"].detach(),
+                    )
                 if property == "force":
-                    error_log(predict_target["F_predict"], predict_target["F_true"])
-                self.log(
-                    f"{prefix}/{property}/{metric}",
-                    error_log,
-                    on_epoch=True,
-                    prog_bar=progress_bar,
-                )
+                    error_log(
+                        predict_target["F_predict"].detach(),
+                        predict_target["F_true"].detach(),
+                    )
 
     def training_step(self, batch: "BatchData", batch_idx: int) -> torch.Tensor:
         """
@@ -489,16 +487,10 @@ class TrainingAdapter(pl.LightningModule):
         # calculate the loss
         loss = self.loss_module.calculate_loss(predict_target, batch)
         # Update and log metrics
-        self._log_metrics(self.train_error, "train", predict_target)
+        self._update_metrics(self.train_error, predict_target)
 
         for key, metric in self.train_log_loss.items():
             metric(loss[key])
-            self.log(
-                f"train/{key}",
-                metric,
-                on_epoch=True,
-                prog_bar=True,
-            )
 
         return loss["combined_loss"]
 
@@ -527,8 +519,7 @@ class TrainingAdapter(pl.LightningModule):
         # calculate the loss
         loss = self.loss_module.calculate_loss(predict_target, batch)
         # log the loss
-        self.val_loss.append(loss["combined_loss"].detach().item())
-        self._log_metrics(self.val_error, "val", predict_target, progress_bar=True)
+        self._update_metrics(self.val_error, predict_target)
 
     @torch.enable_grad()
     def test_step(self, batch: "BatchData", batch_idx: int) -> None:
@@ -555,7 +546,7 @@ class TrainingAdapter(pl.LightningModule):
         # calculate energy and forces
         predict_target = self._get_predictions(batch)
         # Update and log metrics
-        self._log_metrics(self.test_error, "test", predict_target, progress_bar=False)
+        self._update_metrics(self.test_error, predict_target)
 
     def on_train_epoch_end(self):
         """
@@ -578,10 +569,32 @@ class TrainingAdapter(pl.LightningModule):
         except AttributeError:
             pass
 
-        # Log and reset the validation loss
-        avg_val_loss = torch.sqrt(torch.mean(torch.tensor(self.val_loss)))
-        # log.debug(avg_val_loss.item())
-        self.val_loss = []
+        self._log_on_epoch()
+
+    def _log_on_epoch(self):
+        # convert long names to shorter versions
+        conv = {
+            "MeanAbsoluteError": "mae",
+            "MeanSquaredError": "rmse",
+        }  # NOTE: MeanSquaredError(squared=False) is RMSE
+        # Log accumulated training loss metrics
+        for key, metric in self.train_log_loss.items():
+            self.log(f"train/{key}", metric.compute(), on_epoch=True, prog_bar=True)
+            metric.reset()
+
+        # Log all accumulated metrics for train, val, and test phases
+        for phase, error_dict in [
+            ("train", self.train_error),
+            ("val", self.val_error),
+            ("test", self.test_error),
+        ]:
+            metrics = {}
+            for property, metrics_dict in error_dict.items():
+                for name, metric in metrics_dict.items():
+                    metrics[f"{phase}/{property}/{conv[name]}"] = metric.compute()
+                    metric.reset()
+            self.log_dict(metrics, on_epoch=True, prog_bar=(phase == "val"))
+
 
     def configure_optimizers(self) -> Dict[str, Any]:
         """
@@ -939,6 +952,7 @@ Experiments are saved to: {save_dir}/{experiment_name}.
         callbacks=callbacks,
         inference_mode=False,
         num_sanity_val_steps=2,
+        log_every_n_steps=10,
     )
 
     dm.prepare_data()

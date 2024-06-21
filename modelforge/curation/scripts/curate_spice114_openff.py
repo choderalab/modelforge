@@ -69,7 +69,7 @@ def spice_114_openff_wrapper(
 
 
     """
-    from modelforge.curation.spice_openff_curation import SPICEOpenFFCuration
+    from modelforge.curation.spice_1_openff_curation import SPICEOpenFFCuration
 
     spice_dataset = SPICEOpenFFCuration(
         hdf5_file_name=hdf5_file_name,
@@ -90,7 +90,6 @@ def spice_114_openff_wrapper(
 
 
 def main():
-
     # define the location where to store and output the files
     import os
 

@@ -9,8 +9,8 @@ import pint
 
 from modelforge.curation.qm9_curation import QM9Curation
 from modelforge.curation.ani1x_curation import ANI1xCuration
-from modelforge.curation.spice_114_curation import SPICE114Curation
-from modelforge.curation.spice_openff_curation import SPICEOpenFFCuration
+from modelforge.curation.spice_1_curation import SPICE114Curation
+from modelforge.curation.spice_1_openff_curation import SPICEOpenFFCuration
 from modelforge.curation.spice_2_from_qcarchive_curation import SPICE2Curation
 from modelforge.curation.phalkethoh_curation import PhAlkEthOHCuration
 from modelforge.curation.spice_2_curation import SPICE2Curation as SPICE2CurationH5
@@ -347,7 +347,9 @@ def test_qm9_curation_parse_xyz(prep_temp_dir):
     assert data_dict_temp["energy_of_homo"] == [[-0.3877]] * unit.hartree
     assert data_dict_temp["energy_of_lumo"] == [[0.1171]] * unit.hartree
     assert data_dict_temp["lumo-homo_gap"] == [[0.5048]] * unit.hartree
-    assert data_dict_temp["electronic_spatial_extent"] == [[35.3641]] * unit.angstrom**2
+    assert (
+        data_dict_temp["electronic_spatial_extent"] == [[35.3641]] * unit.angstrom**2
+    )
     assert (
         data_dict_temp["zero_point_vibrational_energy"] == [[0.044749]] * unit.hartree
     )
@@ -1791,7 +1793,6 @@ def test_spice114_rename(prep_temp_dir):
 
 
 def test_spice114_openff_test_process_downloaded(prep_temp_dir):
-
     local_path_dir = str(prep_temp_dir)
     local_database_name = "test.sqlite"
     specification_names = ["entry", "spec_2", "spec_6"]
@@ -1821,7 +1822,6 @@ def test_spice114_openff_test_process_downloaded(prep_temp_dir):
 
 
 def test_spice_114_openff_process_datasets(prep_temp_dir):
-
     local_path_dir = str(prep_temp_dir)
     hdf5_file_name = "test_dataset.hdf5"
 
@@ -1985,7 +1985,6 @@ def test_spice2_renaming(prep_temp_dir):
 
 
 def test_spice_2_process_datasets(prep_temp_dir):
-
     local_path_dir = str(prep_temp_dir)
     hdf5_file_name = "test_spice2_dataset.hdf5"
 

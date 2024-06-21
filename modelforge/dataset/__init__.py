@@ -2,9 +2,9 @@
 from .qm9 import QM9Dataset
 from .ani1x import ANI1xDataset
 from .ani2x import ANI2xDataset
-from .spice114 import SPICE114Dataset
+from .spice1 import SPICE114Dataset
 from .spice2 import SPICE2Dataset
-from .spice114openff import SPICE114OpenFFDataset
+from .spice1openff import SPICE114OpenFFDataset
 from .phalkethoh import PhAlkEthOHDataset
 from .dataset import DatasetFactory, DataModule
 from enum import Enum

@@ -3,17 +3,9 @@ Getting Started
 
 This page details how to get started with modelforge. 
 
-.. toctree::
-   :maxdepth: 2
+Installation
+===============
 
-   install
-   tutorial
-   examples
-   api
-   faq
-   contributing
-   changelog
-   license
 
 Indices and tables
 ==================

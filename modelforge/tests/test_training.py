@@ -123,7 +123,9 @@ def test_energy_loss_only(_initialize_predict_target_dictionary):
     ), f"Expected {mse_expected_loss.item()} but got {loss['combined_loss'].item()}"
 
 
-@pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
+@pytest.mark.skipif(
+    IN_GITHUB_ACTIONS, reason="Skipping this test on MacOS GitHub Actions"
+)
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 @pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_hypterparameter_tuning_with_ray(

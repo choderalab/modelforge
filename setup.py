@@ -8,7 +8,7 @@ setup(
         "modelforge": [
             "dataset/yaml_files/*",
             "curation/yaml_files/*",
-            "tests/data/potential_defaults/*",
+            "tests/data/potential/*",
             "tests/data/training_defaults/*",
         ]
     },

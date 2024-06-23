@@ -705,11 +705,48 @@ class InputPreparation(torch.nn.Module):
         assert data.positions.shape == torch.Size([nr_of_atoms, 3])
 
 
-class BaseNetwork(Module):
+class NetworkWrapper(Module):
+    """
+    A wrapper class for neural network potentials that performs input preparation
+    (including neighborlist, d_ij and r_ij calculation), manages loading state dictionaries,
+    and executes the forward pass of the model.
+
+    Attributes
+    ----------
+    core_module : CoreNetwork
+        The core neural network module that performs the main computations.
+    input_preparation : InputPreparation
+        Module for preparing inputs before passing them to the core network.
+
+    Methods
+    -------
+    load_state_dict(state_dict, strict=True, assign=False)
+        Loads a state dictionary into the model, removing a specified prefix from keys if present.
+    forward(data)
+        Executes the forward pass of the model, performing input checks, preparing inputs,
+        and computing the outputs using the core network.
+    """
 
     def load_state_dict(
         self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False
-    ):
+    ) -> None:
+        """
+        Loads a state dictionary into the model, removing a specified prefix from keys if present.
+
+        Parameters
+        ----------
+        state_dict : Mapping[str, Any]
+            The state dictionary to load.
+        strict : bool, optional
+            Whether to strictly enforce that the keys in `state_dict` match the model's keys, by default True.
+        assign : bool, optional
+            If True, assigns the state dictionary to the model without calling `super().load_state_dict`, by default False.
+
+        Returns
+        -------
+        None
+        """
+
         # Prefix to remove
         prefix = "model."
 
@@ -727,6 +764,22 @@ class BaseNetwork(Module):
         super().load_state_dict(new_d, strict=strict, assign=assign)
 
     def forward(self, data: NNPInput):
+        """
+        Executes the forward pass of the model.
+        This method performs input checks, prepares the inputs,
+        and computes the outputs using the core network.
+
+        Parameters
+        ----------
+        data : NNPInput
+            The input data provided by the dataset, containing atomic numbers, positions, and other necessary information.
+
+        Returns
+        -------
+        Any
+            The outputs computed by the core network.
+        """
+
         # perform input checks
         self.input_preparation._input_checks(data)
         # prepare the input for the forward pass
@@ -735,20 +788,45 @@ class BaseNetwork(Module):
 
 
 class CoreNetwork(Module, ABC):
-    """Abstract base class for neural network potentials.
+    """
+    Abstract base class for neural network potentials.
+
+    This class defines the structure and common functionalities for various neural network
+    potential models, including methods for loading pretrained weights, performing the forward pass,
+    and abstract methods for model-specific input preparation and computation.
 
     Attributes
     ----------
     readout_module : FromAtomToMoleculeReduction
-        Module for reading out per molecule properties from atomic properties.
+        Module for reading out per-molecule properties from atomic properties.
     postprocessing : EnergyScaling
         Module for postprocessing the raw energies computed by the readout module.
+
+    Methods
+    -------
+    load_state_dict(state_dict, strict=True, assign=False)
+        Loads a state dictionary into the model, removing a specified prefix from keys if present.
+    forward(data)
+        Executes the forward pass of the model, performing input checks, preparing inputs,
+        and computing the outputs using the core network.
+    _model_specific_input_preparation(data, pairlist)
+        Abstract method for preparing model-specific inputs before the forward pass.
+    _forward(data)
+        Abstract method defining the forward pass of the model.
+    load_pretrained_weights(path)
+        Loads pretrained weights into the model from the specified path.
+    _readout(atom_specific_values, index)
+        Performs the readout operation to generate per-molecule properties from atomic properties.
+    forward(data, pairlist_output)
+        Defines the forward pass of the neural network potential.
     """
 
     def __init__(self):
         """
-        Initializes the neural network potential class with specified parameters.
+        Initializes the CoreNetwork class with specified parameters.
 
+        Initializes the readout module and postprocessing module for handling the conversion
+        of atomic properties to molecular properties and postprocessing the raw energies, respectively.
         """
 
         super().__init__()
@@ -789,7 +867,8 @@ class CoreNetwork(Module, ABC):
 
         Returns
         -------
-        NeuralNetworkData: The processed inputs, ready for the model's forward pass.
+        NeuralNetworkData
+            The processed inputs, ready for the model's forward pass.
         """
         pass
 
@@ -816,7 +895,8 @@ class CoreNetwork(Module, ABC):
 
         Returns
         -------
-        The model's output as computed from the inputs.
+        Any
+            The model's output as computed from the inputs.
         """
         pass
 
@@ -828,6 +908,10 @@ class CoreNetwork(Module, ABC):
         ----------
         path : str
             The path to the file containing the pretrained weights.
+
+        Returns
+        -------
+        None
         """
         self.load_state_dict(torch.load(path, map_location=self.device))
         self.eval()  # Set the model to evaluation mode

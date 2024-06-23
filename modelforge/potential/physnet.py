@@ -576,10 +576,10 @@ class PhysNetCore(CoreNetwork):
         return output
 
 
-from .models import InputPreparation, NNPInput, BaseNetwork
+from .models import InputPreparation, NNPInput, NetworkWrapper
 
 
-class PhysNet(BaseNetwork):
+class PhysNet(NetworkWrapper):
     def __init__(
         self,
         max_Z: int,

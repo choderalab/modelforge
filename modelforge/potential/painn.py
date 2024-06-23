@@ -470,10 +470,10 @@ class PaiNNMixing(nn.Module):
         return q, mu
 
 
-from .models import InputPreparation, NNPInput, BaseNetwork
+from .models import InputPreparation, NNPInput, NetworkWrapper
 
 
-class PaiNN(BaseNetwork):
+class PaiNN(NetworkWrapper):
     def __init__(
         self,
         max_Z: int,

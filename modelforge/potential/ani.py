@@ -546,11 +546,12 @@ class ANI2xCore(CoreNetwork):
         }
 
 
-from .models import InputPreparation, BaseNetwork
+from .models import InputPreparation
 from typing import Union
+from .models import InputPreparation, NNPInput, NetworkWrapper
 
 
-class ANI2x(BaseNetwork):
+class ANI2x(NetworkWrapper):
     def __init__(
         self,
         radial_max_distance: Union[unit.Quantity, str],

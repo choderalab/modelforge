@@ -366,10 +366,10 @@ class SchNETRepresentation(nn.Module):
         return {"f_ij": f_ij, "f_cutoff": f_cutoff}
 
 
-from .models import InputPreparation, NNPInput, BaseNetwork
+from .models import InputPreparation, NNPInput, NetworkWrapper
 
 
-class SchNet(BaseNetwork):
+class SchNet(NetworkWrapper):
     def __init__(
         self,
         max_Z: int,

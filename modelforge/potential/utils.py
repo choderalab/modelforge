@@ -10,6 +10,7 @@ from pint import Quantity
 from typing import Union
 from modelforge.dataset.dataset import NNPInput
 
+
 @dataclass
 class NeuralNetworkData:
     pair_indices: torch.Tensor
@@ -20,7 +21,6 @@ class NeuralNetworkData:
     positions: torch.Tensor
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
-
 
 
 import torch
@@ -239,6 +239,7 @@ class CosineCutoff(nn.Module):
     def __init__(self, cutoff: unit.Quantity):
         """
         Behler-style cosine cutoff module.
+        NOTE: The cutoff is converted to nanometer and the input MUST be in nanomter too.
 
         Parameters:
         ----------
@@ -253,17 +254,17 @@ class CosineCutoff(nn.Module):
     def forward(self, d_ij: torch.Tensor):
         """
         Compute the cosine cutoff for a distance tensor.
-        NOTE: the cutoff function doesn't care about units as long as they are consisten,
 
         Parameters
         ----------
         d_ij : Tensor
-            Pairwise distance tensor. Shape: [n_pairs, distance]
+            Pairwise distance tensor in nanometer. Shape: [n_pairs]
 
         Returns
         -------
         Tensor
-            The cosine cutoff tensor. Shape: [..., N]
+            Cosine cutoff tensor. Shape: [n_pairs]
+
         """
         # Compute values of cutoff function
         input_cut = 0.5 * (

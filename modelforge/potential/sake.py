@@ -543,10 +543,10 @@ class SAKEInteraction(nn.Module):
         return h_updated, x_updated, v_updated
 
 
-from .models import InputPreparation, NNPInput, BaseNetwork
+from .models import InputPreparation, NNPInput, NetworkWrapper
 
 
-class SAKE(BaseNetwork):
+class SAKE(NetworkWrapper):
 
     def __init__(
         self,

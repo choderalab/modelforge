@@ -4,11 +4,11 @@ import torch
 from openff.units import unit
 
 from modelforge.potential.models import InputPreparation
-from modelforge.potential.models import BaseNetwork, CoreNetwork
+from .models import InputPreparation, NNPInput, NetworkWrapper
 from modelforge.potential.utils import NeuralNetworkData
 
 
-class TensorNet(BaseNetwork):
+class TensorNet(NetworkWrapper):
     def __init__(
         self,
         radial_max_distance: unit.Quantity = 5.1 * unit.angstrom,
@@ -73,8 +73,6 @@ class ANIInteraction(torch.nn.Module):
 
     def forward(self):
         pass
-
-
 
 
 @dataclass

@@ -7,15 +7,14 @@ Installation
 ----------------------
 
 We recommend building a clean conda environment for modelforge using the 
-environment yaml file in the `devctools` modelforge directory.
+environment yaml file in the `devtools` modelforge directory.
 
 .. code-block:: bash
 
     conda env create -f devtools/conda-envs/test_env.yml --name modelforge
 
 This will create a new conda environment called `modelforge` with all 
-the necessary dependencies.
-THen check out the source from the GitHub repository:
+the necessary dependencies. Then check out the source from the GitHub repository:
 
 .. code-block:: bash
 
@@ -27,9 +26,6 @@ In the top level of the modelforge directory, use pip to install:
    
     pip install -e .
 
-
-TOML Configuration Files
----------------------------------
 
 
 

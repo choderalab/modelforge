@@ -4,7 +4,7 @@ Getting Started
 This page details how to get started with modelforge. 
 
 Installation
------------
+----------------------
 
 We recommend building a clean conda environment for modelforge using the 
 environment yaml file in the `devctools` modelforge directory.
@@ -44,7 +44,7 @@ sections in each TOML file, only the `dataset.toml` file needs to be changed).
 For further information on the default parameters, see the models documentation.
 
 TOML Configuration Files
-----------------------
+---------------------------------
 
 QM9 Dataset Configuration (qm9.toml)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

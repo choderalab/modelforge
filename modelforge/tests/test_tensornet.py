@@ -56,7 +56,6 @@ def test_representation():
     from torchmdnet.models.model import create_model, load_model
     from torchmdnet.models.tensornet import TensorEmbedding
     from torchmdnet.models.utils import ExpNormalSmearing, OptimizedDistance
-
     from modelforge.potential.tensornet import TensorNetRepresentation
 
     num_atoms = 5
@@ -110,9 +109,24 @@ def test_representation():
 
     # calculate embedding
     z, pos, batch = create_example_batch()
-    edge_index, edge_weight, edge_vec = distance_module(pos, batch, box)
+    edge_index, edge_weight, edge_vec = distance_module(pos, batch, None)
+
+    # static shape
+    q = torch.zeros_like(z, device=z.device, dtype=z.dtype)
+    zp = z
+    mask = (edge_index[0] < 0).unsqueeze(0).expand_as(edge_index)
+    zp = torch.cat((z, torch.zeros(1, device=z.device, dtype=z.dtype)), dim=0)
+    q = torch.cat((q, torch.zeros(1, device=q.device, dtype=q.dtype)), dim=0)
+    # I trick the model into thinking that the masked edges pertain to the extra atom
+    # WARNING: This can hurt performance if max_num_pairs >> actual_num_pairs
+    edge_index = edge_index.masked_fill(mask, z.shape[0])
+    edge_weight = edge_weight.masked_fill(mask[0], 0)
+    edge_vec = edge_vec.masked_fill(
+        mask[0].unsqueeze(-1).expand_as(edge_vec), 0
+    )
+
     edge_attr = distance_expansion(edge_weight)
-    X_tn = tensor_embedding(z, edge_index, edge_weight, edge_vec, edge_attr)
+    X_tn = tensor_embedding(zp, edge_index, edge_weight, edge_vec, edge_attr)
     ################ TensorNet ################
 
 if __name__ == "__main__":

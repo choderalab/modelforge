@@ -66,7 +66,7 @@ def spice114_wrapper(
         will be ignored. If not defined, no filtering by atomic species will be performed.
 
     """
-    from modelforge.curation.spice_114_curation import SPICE114Curation
+    from modelforge.curation.spice_1_curation import SPICE1Curation
 
     spice_114 = SPICE114Curation(
         hdf5_file_name=hdf5_file_name,
@@ -86,7 +86,6 @@ def spice114_wrapper(
 
 
 def main():
-
     # define the location where to store and output the files
     import os
 
@@ -100,6 +99,7 @@ def main():
     # version of the dataset to curate
     version_select = f"v_{version}"
 
+    # version v_0 corresponds to SPICE 1.1.4 release
     # curate ANI1x test dataset with 1000 total conformers, max of 10 conformers per record
     ani2x_elements = ["H", "C", "N", "O", "F", "Cl", "S"]
 

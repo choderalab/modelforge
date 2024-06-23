@@ -1,0 +1,3 @@
+[dataset]
+dataset_name = "ANI2x"
+number_of_worker = 6

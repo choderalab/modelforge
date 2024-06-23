@@ -1,0 +1,3 @@
+[dataset]
+dataset_name = "SPICE2"
+number_of_worker = 6

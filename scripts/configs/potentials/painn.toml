@@ -1,0 +1,9 @@
+[potential]
+potential_parameter.max_Z = 101
+potential_parameter.number_of_atom_features = 32
+potential_parameter.number_of_radial_basis_functions = 20
+potential_parameter.cutoff = "5.0 angstrom"
+potential_parameter.number_of_interaction_modules = 3
+potential_parameter.shared_interactions = false
+potential_parameter.shared_filters = false
+model_name = "PaiNN"

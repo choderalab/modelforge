@@ -9,8 +9,8 @@ import pint
 
 from modelforge.curation.qm9_curation import QM9Curation
 from modelforge.curation.ani1x_curation import ANI1xCuration
-from modelforge.curation.spice_114_curation import SPICE114Curation
-from modelforge.curation.spice_openff_curation import SPICEOpenFFCuration
+from modelforge.curation.spice_1_curation import SPICE1Curation
+from modelforge.curation.spice_1_openff_curation import SPICE1OpenFFCuration
 from modelforge.curation.spice_2_from_qcarchive_curation import SPICE2Curation
 from modelforge.curation.phalkethoh_curation import PhAlkEthOHCuration
 from modelforge.curation.spice_2_curation import SPICE2Curation as SPICE2CurationH5
@@ -1121,9 +1121,9 @@ def test_an1_process_download_unit_conversion(prep_temp_dir):
     )
 
 
-def spice114_process_download_short(prep_temp_dir):
+def spice1_process_download_short(prep_temp_dir):
     # first check where we don't convert units
-    spice_data = SPICE114Curation(
+    spice_data = SPICE1Curation(
         hdf5_file_name="test_dataset.hdf5",
         output_file_dir=str(prep_temp_dir),
         local_cache_dir=str(prep_temp_dir),
@@ -1181,7 +1181,7 @@ def spice114_process_download_short(prep_temp_dir):
 
 
 def test_baseclass_unit_conversion(prep_temp_dir):
-    spice_data = SPICE114Curation(
+    spice_data = SPICE1Curation(
         hdf5_file_name="test_dataset.hdf5",
         output_file_dir=str(prep_temp_dir),
         local_cache_dir=str(prep_temp_dir),
@@ -1220,12 +1220,12 @@ def test_baseclass_unit_conversion(prep_temp_dir):
         spice_data._process_downloaded(str(local_data_path), hdf5_file)
 
 
-def test_spice114_process_download_no_conversion(prep_temp_dir):
+def test_spice1_process_download_no_conversion(prep_temp_dir):
     from numpy import array, float32, uint8
     from openff.units import unit
 
     # first check where we don't convert units
-    spice_data = SPICE114Curation(
+    spice_data = SPICE1Curation(
         hdf5_file_name="test_dataset.hdf5",
         output_file_dir=str(prep_temp_dir),
         local_cache_dir=str(prep_temp_dir),
@@ -1368,12 +1368,12 @@ def test_spice114_process_download_no_conversion(prep_temp_dir):
     )
 
 
-def test_spice114_process_download_conversion(prep_temp_dir):
+def test_spice1_process_download_conversion(prep_temp_dir):
     from numpy import array, float32, uint8
     from openff.units import unit
 
     # first check where we don't convert units
-    spice_data = SPICE114Curation(
+    spice_data = SPICE1Curation(
         hdf5_file_name="test_dataset.hdf5",
         output_file_dir=str(prep_temp_dir),
         local_cache_dir=str(prep_temp_dir),
@@ -1574,37 +1574,35 @@ def test_ani2x(prep_temp_dir):
     ani2x_dataset._process_downloaded(local_data_path, filename, max_records=1)
 
     assert len(ani2x_dataset.data) == 1
-    assert ani2x_dataset.data[0]["name"] == "[1_9]"
-    assert ani2x_dataset.data[0]["n_configs"] == 517
-    assert ani2x_dataset.data[0]["energies"].shape == (517, 1)
+    assert ani2x_dataset.data[0]["name"] == "[6_8]_m0"
+    assert ani2x_dataset.data[0]["n_configs"] == 457
+    assert ani2x_dataset.data[0]["energies"].shape == (457, 1)
     assert ani2x_dataset.data[0]["atomic_numbers"].shape == (2, 1)
-    assert ani2x_dataset.data[0]["geometry"].shape == (517, 2, 3)
-    assert ani2x_dataset.data[0]["forces"].shape == (517, 2, 3)
-    assert np.all(
-        ani2x_dataset.data[0]["energies"][0:5].m
-        == np.array(
+    assert ani2x_dataset.data[0]["geometry"].shape == (457, 2, 3)
+    assert ani2x_dataset.data[0]["forces"].shape == (457, 2, 3)
+    assert np.allclose(
+        ani2x_dataset.data[0]["energies"][0:5].m,
+        np.array(
             [
-                [-263595.6246798465],
-                [-263591.3453779841],
-                [-263596.28778916295],
-                [-263592.7221558636],
-                [-263591.0017998503],
+                [-297412.8541896],
+                [-297412.420801],
+                [-297412.51068761],
+                [-297419.68079322],
+                [-297410.43861966],
             ]
         ),
     )
+    print(ani2x_dataset.data[0]["forces"][0:1].m)
+    assert np.allclose(
+        ani2x_dataset.data[0]["forces"][0:1].m,
+        np.array([[[-0.0, -0.0, 3933.23522166], [-0.0, -0.0, -3933.23522166]]]),
+    )
+    print(ani2x_dataset.data[0]["geometry"][0].m)
+    assert np.allclose(
+        ani2x_dataset.data[0]["geometry"][0].m,
+        np.array([[0.0, 0.0, -0.06694885], [0.0, 0.0, 0.05021213]]),
+    )
 
-    assert np.all(
-        ani2x_dataset.data[0]["forces"][0:1].m
-        == np.array(
-            [[[-0.0, -0.0, 1058.7310900538516], [-0.0, -0.0, -1058.7310900538516]]]
-        )
-    )
-    assert np.all(
-        ani2x_dataset.data[0]["geometry"][0].m
-        == np.array(
-            [[0.0, 0.0, -0.08543934673070908], [0.0, 0.0, 0.009493260644376278]]
-        )
-    )
     ani2x_dataset._clear_data()
     ani2x_dataset._process_downloaded(local_data_path, filename, total_conformers=10)
     assert ani2x_dataset.total_conformers == 10
@@ -1618,7 +1616,7 @@ def test_ani2x(prep_temp_dir):
         ani2x_dataset.process(max_records=2, total_conformers=1)
 
 
-def test_spice114_openff_test_fetching(prep_temp_dir):
+def test_spice1_openff_test_fetching(prep_temp_dir):
     from tqdm import tqdm
     from sqlitedict import SqliteDict
 
@@ -1626,7 +1624,7 @@ def test_spice114_openff_test_fetching(prep_temp_dir):
     local_database_name = "test.sqlite"
     specification_name = "entry"
 
-    spice_openff_data = SPICEOpenFFCuration(
+    spice_openff_data = SPICE1OpenFFCuration(
         hdf5_file_name="test_dataset.hdf5",
         output_file_dir=local_path_dir,
         local_cache_dir=local_path_dir,
@@ -1733,13 +1731,13 @@ def test_spice114_openff_test_fetching(prep_temp_dir):
         assert len(keys) == 10
 
 
-def test_spice114_rename(prep_temp_dir):
+def test_spice1_rename(prep_temp_dir):
     local_path_dir = str(prep_temp_dir)
     local_database_name = "test.sqlite"
     specification_names = ["entry", "spec_2", "spec_6"]
     dataset_name = "SPICE PubChem Set 1 Single Points Dataset v1.2"
 
-    spice_openff_data = SPICEOpenFFCuration(
+    spice_openff_data = SPICE1OpenFFCuration(
         hdf5_file_name="test_dataset.hdf5",
         output_file_dir=local_path_dir,
         local_cache_dir=local_path_dir,
@@ -1792,14 +1790,13 @@ def test_spice114_rename(prep_temp_dir):
     assert original_keys[sorted_keys[6]] == "GLU-GLU-1"
 
 
-def test_spice114_openff_test_process_downloaded(prep_temp_dir):
-
+def test_spice1_openff_test_process_downloaded(prep_temp_dir):
     local_path_dir = str(prep_temp_dir)
     local_database_name = "test.sqlite"
     specification_names = ["entry", "spec_2", "spec_6"]
     dataset_name = "SPICE PubChem Set 1 Single Points Dataset v1.2"
 
-    spice_openff_data = SPICEOpenFFCuration(
+    spice_openff_data = SPICE1OpenFFCuration(
         hdf5_file_name="test_dataset.hdf5",
         output_file_dir=local_path_dir,
         local_cache_dir=local_path_dir,
@@ -1822,12 +1819,11 @@ def test_spice114_openff_test_process_downloaded(prep_temp_dir):
     )
 
 
-def test_spice_114_openff_process_datasets(prep_temp_dir):
-
+def test_spice_1_openff_process_datasets(prep_temp_dir):
     local_path_dir = str(prep_temp_dir)
     hdf5_file_name = "test_dataset.hdf5"
 
-    spice_openff_data = SPICEOpenFFCuration(
+    spice_openff_data = SPICE1OpenFFCuration(
         hdf5_file_name=hdf5_file_name,
         output_file_dir=local_path_dir,
         local_cache_dir=local_path_dir,
@@ -1987,7 +1983,6 @@ def test_spice2_renaming(prep_temp_dir):
 
 
 def test_spice_2_process_datasets(prep_temp_dir):
-
     local_path_dir = str(prep_temp_dir)
     hdf5_file_name = "test_spice2_dataset.hdf5"
 

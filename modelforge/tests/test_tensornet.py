@@ -132,6 +132,11 @@ def test_representation():
     X_tn = tensor_embedding(zp, edge_index, edge_weight, edge_vec, edge_attr)
     ################ TensorNet ################
 
+
+    ################ modelforge TensorNet ################
+
+    ################ modelforge TensorNet ################
+
 if __name__ == "__main__":
     import torch
     torch.manual_seed(0)

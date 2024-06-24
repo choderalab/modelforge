@@ -101,6 +101,11 @@ class TensorNetRepresentation(torch.nn.Module):
         radial_max_distance,
         radial_min_distance,
         number_of_radial_basis_functions,
+        hidden_channels,
+        activation_function,
+        trainable_rbf,
+        max_z=128,
+        dtype=torch.float32,
     ):
         super().__init__()
 

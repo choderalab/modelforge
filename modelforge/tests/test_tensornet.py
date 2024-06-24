@@ -56,7 +56,10 @@ def test_representation():
     from torchmdnet.models.model import create_model, load_model
     from torchmdnet.models.tensornet import TensorEmbedding
     from torchmdnet.models.utils import ExpNormalSmearing, OptimizedDistance
+
+    from modelforge.potential.utils import CosineCutoff
     from modelforge.potential.tensornet import TensorNetRepresentation
+    from modelforge.potential.utils import TensorNetRadialSymmetryFunction 
 
     num_atoms = 5
     hidden_channels = 2
@@ -99,7 +102,7 @@ def test_representation():
         return_vecs=True,
         loop=True,
         check_errors=True,
-        resize_to_fit=False,
+        resize_to_fit=True,  # not self.static_shapes
         box=None,
         long_edge_index=True,
     )
@@ -112,18 +115,18 @@ def test_representation():
     edge_index, edge_weight, edge_vec = distance_module(pos, batch, None)
 
     # static shape
-    q = torch.zeros_like(z, device=z.device, dtype=z.dtype)
+    # q = torch.zeros_like(z, device=z.device, dtype=z.dtype)
     zp = z
-    mask = (edge_index[0] < 0).unsqueeze(0).expand_as(edge_index)
-    zp = torch.cat((z, torch.zeros(1, device=z.device, dtype=z.dtype)), dim=0)
-    q = torch.cat((q, torch.zeros(1, device=q.device, dtype=q.dtype)), dim=0)
-    # I trick the model into thinking that the masked edges pertain to the extra atom
-    # WARNING: This can hurt performance if max_num_pairs >> actual_num_pairs
-    edge_index = edge_index.masked_fill(mask, z.shape[0])
-    edge_weight = edge_weight.masked_fill(mask[0], 0)
-    edge_vec = edge_vec.masked_fill(
-        mask[0].unsqueeze(-1).expand_as(edge_vec), 0
-    )
+    # mask = (edge_index[0] < 0).unsqueeze(0).expand_as(edge_index)
+    # zp = torch.cat((z, torch.zeros(1, device=z.device, dtype=z.dtype)), dim=0)
+    # q = torch.cat((q, torch.zeros(1, device=q.device, dtype=q.dtype)), dim=0)
+    # # I trick the model into thinking that the masked edges pertain to the extra atom
+    # # WARNING: This can hurt performance if max_num_pairs >> actual_num_pairs
+    # edge_index = edge_index.masked_fill(mask, z.shape[0])
+    # edge_weight = edge_weight.masked_fill(mask[0], 0)
+    # edge_vec = edge_vec.masked_fill(
+    #     mask[0].unsqueeze(-1).expand_as(edge_vec), 0
+    # )
 
     edge_attr = distance_expansion(edge_weight)
     X_tn = tensor_embedding(zp, edge_index, edge_weight, edge_vec, edge_attr)

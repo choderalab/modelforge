@@ -30,6 +30,9 @@ The following datasets are available for use with `modelforge`:
 - :py:class:`modelforge.dataset.PhAlkEthOHDataset`
 
 
+Splitting Strategies
+---------------------
+
 
 Interacting with the Dataset Module
 -----------------------------------
@@ -91,11 +94,6 @@ Explanation of fields in `qm9.toml`:
 - `dataset_name`: Name of the dataset, here it is QM9.
 - `number_of_worker`: Number of worker threads for data loading.
 
-Indices and Tables
-==================
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
 
 .. toctree::
    :maxdepth: 2

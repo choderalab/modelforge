@@ -16,10 +16,10 @@ and allows for easy training and evaluation of models.
    :caption: Contents:
 
    getting_started
-   examples
-   datasets
    models
+   datasets
    training
+   examples
    for_developer
    api
 

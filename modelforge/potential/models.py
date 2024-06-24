@@ -717,14 +717,6 @@ class NetworkWrapper(Module):
         The core neural network module that performs the main computations.
     input_preparation : InputPreparation
         Module for preparing inputs before passing them to the core network.
-
-    Methods
-    -------
-    load_state_dict(state_dict, strict=True, assign=False)
-        Loads a state dictionary into the model, removing a specified prefix from keys if present.
-    forward(data)
-        Executes the forward pass of the model, performing input checks, preparing inputs,
-        and computing the outputs using the core network.
     """
 
     def load_state_dict(
@@ -801,24 +793,6 @@ class CoreNetwork(Module, ABC):
         Module for reading out per-molecule properties from atomic properties.
     postprocessing : EnergyScaling
         Module for postprocessing the raw energies computed by the readout module.
-
-    Methods
-    -------
-    load_state_dict(state_dict, strict=True, assign=False)
-        Loads a state dictionary into the model, removing a specified prefix from keys if present.
-    forward(data)
-        Executes the forward pass of the model, performing input checks, preparing inputs,
-        and computing the outputs using the core network.
-    _model_specific_input_preparation(data, pairlist)
-        Abstract method for preparing model-specific inputs before the forward pass.
-    _forward(data)
-        Abstract method defining the forward pass of the model.
-    load_pretrained_weights(path)
-        Loads pretrained weights into the model from the specified path.
-    _readout(atom_specific_values, index)
-        Performs the readout operation to generate per-molecule properties from atomic properties.
-    forward(data, pairlist_output)
-        Defines the forward pass of the neural network potential.
     """
 
     def __init__(self):
@@ -938,7 +912,8 @@ class CoreNetwork(Module, ABC):
 
     def forward(self, data: NNPInput, pairlist_output: PairListOutputs) -> EnergyOutput:
         """
-        Defines the forward pass of the neural network potential.
+        Executes the forward pass of the model, performing input checks, preparing inputs,
+        and computing the outputs using the core network.
 
         Parameters
         ----------

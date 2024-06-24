@@ -2,7 +2,8 @@ from dataclasses import dataclass
 
 import torch
 from openff.units import unit
-from torch import nn
+from torch import nn, Tensor
+from typing import Optional, Tuple
 
 from modelforge.potential.models import InputPreparation
 from modelforge.potential.models import BaseNetwork
@@ -46,7 +47,7 @@ class TensorNetNeuralNetworkData(NeuralNetworkData):
 class TensorNet(BaseNetwork):
     def __init__(
         self,
-        hidden_channels: int,
+        hidden_channels: int = 8,
         radial_max_distance: unit.Quantity = 5.1 * unit.angstrom,
         radial_min_distanc: unit.Quantity = 0.0 * unit.angstrom,
         number_of_radial_basis_functions: int = 16,
@@ -59,6 +60,7 @@ class TensorNet(BaseNetwork):
         super().__init__()
 
         self.core_module = TensorNetCore(
+            hidden_channels,
             radial_max_distance,
             radial_min_distanc,
             number_of_radial_basis_functions,
@@ -116,7 +118,7 @@ class TensorNetRepresentation(torch.nn.Module):
         self,
         hidden_channels: int,
         radial_max_distance: unit.Quantity,
-        radial_min_distanc: unit.Quantity,
+        radial_min_distance: unit.Quantity,
         number_of_radial_basis_functions: int,
         activation_function: nn.Module,
         trainable_rbf: bool,

@@ -1,6 +1,14 @@
 For Developers
 ===============
 
+.. note::
+    
+        This section is intended for developers who want to extend the functionality of the `modelforge` package
+        or who want to develop their own machine learned potentials. This section explains design decicions 
+        and the structure of neural network potentials.
+
+
+
 How to deal with units
 ---------------------------------
 
@@ -31,9 +39,25 @@ explicit attached units)..
 Base structure of machine learned potentials
 -------------------------------------------------
 
+The base structure of machine learned potentials is as shown in the figure below.
+
+
+The `NetworkWrapper` class is the main class that is used to store the potential.
+The `CoreNetwork` class is used to store the neural network that is used to predict the potential.
+
+
+.. image:: image/overview_network.png
+  :width: 400
+  :align: center
+  :alt: Alternative text
+
+
 .. autoclass:: modelforge.potential.models.NetworkWrapper
     :members:
 
 
 .. autoclass:: modelforge.potential.models.CoreNetwork
+    :members:
+
+.. autoclass:: modelforge.potential.models.InputPreparation
     :members:

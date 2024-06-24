@@ -35,7 +35,7 @@ def test_compare_radial_symmetry_features():
     r_mf = rsf(d_ij / 10)  # torch.Size([5, 1, 8]) # NOTE: nanometer
     cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom)
 
-    rcut_ij = cutoff_module(d_ij.unsqueeze(-1) / 10)  # torch.Size([5]) # NOTE: nanometer
+    rcut_ij = cutoff_module(d_ij / 10).unsqueeze(-1)  # torch.Size([5, 1, 1]) # NOTE: nanometer
     r_mf = r_mf * rcut_ij
 
     rsf_tn = ExpNormalSmearing(

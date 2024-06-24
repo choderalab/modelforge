@@ -242,7 +242,7 @@ class CosineCutoff(nn.Module):
         NOTE: The cutoff is converted to nanometer and the input MUST be in nanomter too.
 
         Parameters:
-        ----------
+        ------------
         cutoff: unit.Quantity
             The cutoff distance.
 

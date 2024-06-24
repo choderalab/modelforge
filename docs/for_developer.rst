@@ -42,14 +42,23 @@ Base structure of machine learned potentials
 The base structure of machine learned potentials is as shown in the figure below.
 
 
-The `NetworkWrapper` class is the main class that is used to store the potential.
-The `CoreNetwork` class is used to store the neural network that is used to predict the potential.
+The :py:class:`modelforge.potential.models.NetworkWrapper` class is the main class that is used to store the potential.
+The :py:class:`modelforge.potential.models.CoreNetwork` class is used to store the neural network that is used to predict the potential.
 
 
 .. image:: image/overview_network.png
   :width: 400
   :align: center
   :alt: Alternative text
+
+The input of every neural network is the :py:class:`modelforge.dataset.dataset.NNPInput` dataclass as shown below.
+Note that, for certain applications, it is useful to convert the dataclass to a `NamedTuple`, 
+which can be done using the :py:meth:`modelforge.dataset.dataset.NNPInput.as_namedtuple` function.
+
+.. autoclass:: modelforge.dataset.dataset.NNPInput
+    :members:
+
+
 
 
 .. autoclass:: modelforge.potential.models.NetworkWrapper

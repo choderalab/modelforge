@@ -32,7 +32,7 @@ on the `QM9` dataset on a single GPU using the default parameters, run the follo
         --accelerator="gpu"
         --device=1
 
-This command calls the :py:func:`training.perform_training` function in the `modelforge.train.training` module.
+This command calls the :py:func:`modelforge.train.training.perform_training` function.
 The function reads in the TOML files and trains the model on the specified dataset using the specified potential and training parameters.
 
 .. autoclass:: modelforge.train.training.perform_training

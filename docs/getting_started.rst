@@ -30,11 +30,6 @@ In the top level of the modelforge directory, use pip to install:
 
 
 
-Indices and Tables
-==================
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
 
 .. toctree::
    :maxdepth: 2

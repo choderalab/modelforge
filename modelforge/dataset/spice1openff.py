@@ -3,7 +3,7 @@ from typing import List
 from .dataset import HDF5Dataset
 
 
-class SPICE114OpenFFDataset(HDF5Dataset):
+class SPICE1OpenFFDataset(HDF5Dataset):
     """
     Data class for handling SPICE 1.1.4 dataset at the OpenForceField level of theory.
 
@@ -39,7 +39,7 @@ class SPICE114OpenFFDataset(HDF5Dataset):
     Attributes
     ----------
     dataset_name : str
-        Name of the dataset, default is "ANI2x".
+        Name of the dataset, default is "SPICE1_openff".
     version_select : str
         Select the version of the dataset to use, default will provide the "latest".
         "latest_test" will select the testing subset of 1000 conformers.
@@ -81,7 +81,7 @@ class SPICE114OpenFFDataset(HDF5Dataset):
 
     def __init__(
         self,
-        dataset_name: str = "SPICE114OpenFF",
+        dataset_name: str = "SPICE1_openff",
         version_select: str = "latest",
         local_cache_dir: str = ".",
         force_download: bool = False,
@@ -93,7 +93,7 @@ class SPICE114OpenFFDataset(HDF5Dataset):
         Parameters
         ----------
         data_name : str, optional
-            Name of the dataset, by default "SPICE114OpenFF".
+            Name of the dataset, by default "SPICE1OpenFF".
         version_select : str
             Select the version of the dataset to use, default will provide the "latest".
             "latest_test" will select the testing subset of 1000 conformers.
@@ -107,7 +107,7 @@ class SPICE114OpenFFDataset(HDF5Dataset):
             the data from the hdf5 file; by default False.
         Examples
         --------
-        >>> data = SPICE2Dataset()  # Default dataset
+        >>> data = SPICE1OpenFFDatasetDataset()  # Default dataset
         >>> test_data = SPICE2Dataset(version_select="latest_test")  # Testing subset
         """
 
@@ -163,12 +163,12 @@ class SPICE114OpenFFDataset(HDF5Dataset):
         from modelforge.dataset import yaml_files
         import yaml
 
-        yaml_file = resources.files(yaml_files) / "spice114openff.yaml"
+        yaml_file = resources.files(yaml_files) / "spice1openff.yaml"
         logger.debug(f"Loading config data from {yaml_file}")
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
         # make sure that the yaml file is for the correct dataset before we grab data
-        assert data_inputs["dataset"] == "spice114openff"
+        assert data_inputs["dataset"] == "spice1openff"
 
         if self.version_select == "latest":
             # in the yaml file, the entry latest will define the name of the version to use

@@ -37,9 +37,9 @@ class SPICE2Curation(DatasetCuration):
 
     Examples
     --------
-    >>> spice2_data = SPICE2Curation(hdf5_file_name='spice12_dataset.hdf5',
-    >>>                             local_cache_dir='~/datasets/spice2_dataset')
-    >>> spice2_data.process()
+    >>> spice_2_data = SPICE2Curation(hdf5_file_name='spice_2_dataset.hdf5',
+    >>>                             local_cache_dir='~/datasets/spice_2_dataset')
+    >>> spice_2_data.process()
 
     """
 
@@ -356,9 +356,9 @@ class SPICE2Curation(DatasetCuration):
 
         Examples
         --------
-        >>> spice2_data = SPICE2Curation(hdf5_file_name='spice2_dataset.hdf5',
-        >>>                             local_cache_dir='~/datasets/spice2_dataset')
-        >>> spice2_data.process()
+        >>> spice_2_data = SPICE2Curation(hdf5_file_name='spice_2_dataset.hdf5',
+        >>>                             local_cache_dir='~/datasets/spice_2_dataset')
+        >>> spice_2_data.process()
 
         """
         if max_records is not None and total_conformers is not None:

@@ -1,0 +1,59 @@
+dataset: spice1openff
+latest: full_dataset_v0
+latest_test: nc_1000_v0
+full_dataset_v0:
+  version: 0
+  gz_data_file:
+    doi: 10.5281/zenodo.12178522
+    length: 2546636843
+    md5: 8f98fe746e55df5b97441d115e26595b
+    name: SPICE1_OpenFF_dataset.hdf5.gz
+  hdf5_data_file:
+    md5: 2777b2aaa560461fb5d1900360cc5933
+    name: SPICE1_OpenFF_dataset.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE1_OpenFF_dataset_processed.npz
+  url: https://zenodo.org/records/12178522/files/spice_114_openff_dataset_v0.hdf5.gz
+nc_1000_v0:
+  version: 0
+  doi: 10.5281/zenodo.12192219
+  gz_data_file:
+    length: 2508206
+    md5: 73103149c00076844b835fd8e88cb9d5
+    name: SPICE1_OpenFF_dataset_nc_1000.hdf5.gz
+  hdf5_data_file:
+    md5: 19ae6e8e91e87db1b0e177134fa916ef
+    name: SPICE1_OpenFF_dataset_nc_1000.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE1_OpenFF_dataset_nc_1000_processed.npz
+  url: https://zenodo.org/records/12192219/files/spice_114_openff_dataset_v0_ntc_1000.hdf5.gz
+full_dataset_v0_HCNOFClS:
+  version: 0
+  doi: 10.5281/zenodo.12209421
+  gz_data_file:
+    length: 2307451656
+    md5: 586b2e23e52146a722a928732dc04792
+    name: SPICE1_OpenFF_dataset_v0_HCNOFClS.hdf5.gz
+  hdf5_data_file:
+    md5: 69c8c34db0ef5f649e2e1d3fc261f3af
+    name: SPICE1_OpenFF_dataset_v0_HCNOFClS.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE1_OpenFF_dataset_v0_HCNOFClS_processed.npz
+  url: https://zenodo.org/records/12209421/files/spice_114_openff_dataset_v0_HCNOFClS.hdf5.gz
+nc_1000_v0_HCNOFClS:
+  version: 0
+  doi: 10.5281/zenodo.12208395
+  gz_data_file:
+    length: 2529847
+    md5: c0554b29ab38b866fffef75b4e8e8a63
+    name: SPICE1_OpenFF_dataset_v0_nc_1000_HCNOFClS.hdf5.gz
+  hdf5_data_file:
+    md5: 55941e17dce389da6f110605a5b940e3
+    name: SPICE1_OpenFF_dataset_v0_nc_1000_HCNOFClS.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE1_OpenFF_dataset_v0_nc_1000_HCNOFClS_processed.npz
+  url: https://zenodo.org/records/12208395/files/spice_114_openff_dataset_v0_ntc_1000_HCNOFClS.hdf5.gz

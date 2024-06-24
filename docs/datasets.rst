@@ -73,7 +73,6 @@ Explanation of the DataModule Attributes and Methods
 ----------------------------------------------------
 
 .. autoclass:: modelforge.dataset.DataModule
-    :members:
 
 Dataset Configuration
 ------------------------------------

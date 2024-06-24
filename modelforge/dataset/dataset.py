@@ -920,7 +920,7 @@ class DataModule(pl.LightningDataModule):
         regenerate_cache: bool = False,
     ):
         """
-        Initializes adData module for PyTorch Lightning handling data preparation and loading object with the specified configuration.
+        Initializes a PyTorch Lightning DataModule handling data preparation and loading with the specified configuration.
         If `remove_self_energies` is `True` and:
         - `self_energies` are passed as a dictionary, these will be used
         - `self_energies` are `None`, `self._ase` will be used

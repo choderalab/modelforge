@@ -54,13 +54,15 @@ def test_spookynet_forward(single_batch_with_batchsize_64, model_parameter):
 
 def make_random_pairlist(nr_atoms, nr_pairs, include_self_pairs):
     if include_self_pairs:
+        assert nr_pairs <= nr_atoms ** 2, """Number of pairs requested is more than the number of possible pairs."""
         nr_pairs_choose = nr_pairs - nr_atoms
-        assert nr_pairs_choose >= 0, """Number of pairs must be greater than or equal to the number of atoms if "
-            include_self_pairs is True."""
 
     else:
+        assert nr_pairs <= nr_atoms ** 2 - nr_atoms, """Number of pairs requested is more than the number of possible 
+        pairs."""
         nr_pairs_choose = nr_pairs
-
+    assert nr_pairs_choose >= 0, """Number of pairs must be greater than or equal to the number of atoms if "
+        include_self_pairs is True or greater than 0 if include_self_pairs is False."""
     all_pairs = torch.cartesian_prod(torch.arange(nr_atoms), torch.arange(nr_atoms))
     self_pairs = all_pairs.T[0] == all_pairs.T[1]
     non_self_pairs = all_pairs[~self_pairs]
@@ -93,17 +95,17 @@ def test_spookynet_interaction_module_forward():
     N = 5
     P = 19
     num_features = 7
-    B = 23
+    number_of_radial_basis_functions = 5
     spookynet_interaction_module = SpookyNetInteractionModule(
         num_features=num_features,
-        num_basis_functions=5,
+        num_basis_functions=number_of_radial_basis_functions,
         num_residual_pre=3,
         num_residual_local_x=3,
         num_residual_local_s=3,
         num_residual_local_p=3,
         num_residual_local_d=3,
         num_residual_local=3,
-        num_residual_nonlocal_q=11,
+        num_residual_nonlocal_q=19,
         num_residual_nonlocal_k=13,
         num_residual_nonlocal_v=17,
         num_residual_post=3,
@@ -111,8 +113,65 @@ def test_spookynet_interaction_module_forward():
     )
 
     x = torch.rand((N, num_features))
-    rbf = torch.rand((P, 5))
-    pij = torch.rand((P, 1))
-    dij = torch.rand((P, 1))
-    idx_i, idx_j = make_random_pairlist(N, P, include_self_pairs=False)
-    spookynet_interaction_module(x, rbf, pij, dij, idx_i, idx_j)
+    f_ij = torch.rand((P, number_of_radial_basis_functions))
+    f_ij_cutoff = torch.rand((P, 1))
+    p_orbital_ij = torch.rand((P, 1))
+    d_orbital_ij = torch.rand((P, 1))
+    pairlist = make_random_pairlist(N, P, include_self_pairs=False)
+    spookynet_interaction_module(x, pairlist, f_ij, f_ij_cutoff, p_orbital_ij, d_orbital_ij)
+
+def test_spookynet_interaction_module_against_reference():
+    from modelforge.potential.spookynet import SpookyNetInteractionModule as MfSpookyNetInteractionModule
+    from spookynet.modules.interaction_module import InteractionModule as RefSpookyNetInteractionModule
+    N = 5
+    P = 19
+    num_features = 7
+    number_of_radial_basis_functions = 5
+    num_residual_all = 3
+    mf_spookynet_interaction_module = MfSpookyNetInteractionModule(
+        num_features=num_features,
+        num_basis_functions=number_of_radial_basis_functions,
+        num_residual_pre=num_residual_all,
+        num_residual_local_x=num_residual_all,
+        num_residual_local_s=num_residual_all,
+        num_residual_local_p=num_residual_all,
+        num_residual_local_d=num_residual_all,
+        num_residual_local=num_residual_all,
+        num_residual_nonlocal_q=num_residual_all,
+        num_residual_nonlocal_k=num_residual_all,
+        num_residual_nonlocal_v=num_residual_all,
+        num_residual_post=num_residual_all,
+        num_residual_output=num_residual_all
+    ).to(torch.double)
+
+    ref_spookynet_interaction_module =  RefSpookyNetInteractionModule(
+        num_features=num_features,
+        num_basis_functions=number_of_radial_basis_functions,
+        num_residual_pre=num_residual_all,
+        num_residual_local_x=num_residual_all,
+        num_residual_local_s=num_residual_all,
+        num_residual_local_p=num_residual_all,
+        num_residual_local_d=num_residual_all,
+        num_residual_local=num_residual_all,
+        num_residual_nonlocal_q=num_residual_all,
+        num_residual_nonlocal_k=num_residual_all,
+        num_residual_nonlocal_v=num_residual_all,
+        num_residual_post=num_residual_all,
+        num_residual_output=num_residual_all
+    ).to(torch.double)
+
+    for model in [mf_spookynet_interaction_module, ref_spookynet_interaction_module]:
+        for name, param in model.named_parameters():
+            print(name, param.size())
+
+
+    x = torch.rand((N, num_features), dtype=torch.double)
+    f_ij = torch.rand((P, number_of_radial_basis_functions), dtype=torch.double)
+    f_ij_cutoff = torch.rand((P, 1), dtype=torch.double)
+    p_orbital_ij = torch.rand((P, 1), dtype=torch.double)
+    d_orbital_ij = torch.rand((P, 1), dtype=torch.double)
+    pairlist = make_random_pairlist(N, P, include_self_pairs=False)
+    idx_i, idx_j = pairlist
+    mf_spookynet_interaction_result = mf_spookynet_interaction_module(x, pairlist, f_ij, f_ij_cutoff, p_orbital_ij, d_orbital_ij)
+    ref_spookynet_interaction_result = ref_spookynet_interaction_module(x, f_ij * f_ij_cutoff, p_orbital_ij, d_orbital_ij, idx_i, idx_j, 1, None, None)
+

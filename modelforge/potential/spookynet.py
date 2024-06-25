@@ -125,6 +125,9 @@ class SpookyNetCore(CoreNetwork):
 
         self.embedding_module = Embedding(max_Z, number_of_atom_features)
 
+        # initialize representation block
+        self.spookynet_representation_block = SpookyNetRepresentation(cutoff, number_of_radial_basis_functions)
+
         # initialize the energy readout
         from .processing import FromAtomToMoleculeReduction
 
@@ -192,14 +195,18 @@ class SpookyNetCore(CoreNetwork):
 
         # Compute the representation for each atom (transform to radial basis set, multiply by cutoff)
         representation = self.spookynet_representation_module(data.d_ij)
-        data.filters = representation["filters"]
         x = data.atomic_embedding
 
         f = x.new_zeros(x.size())  # initialize output features to zero
         # Iterate over interaction blocks to update features
         for interaction in self.interaction_modules:
             x, y = interaction(
-                x, rbf, pij, dij, sr_idx_i, sr_idx_j, num_batch, batch_seg, mask
+                x,
+                data.pair_indices,
+                representation["f_ij"],
+                representation["f_cutoff"],
+                representation["p_orbital_ij"],
+                representation["d_orbital_ij"]
             )
             f += y  # accumulate module output to features
 
@@ -290,8 +297,8 @@ class SpookyNetRepresentation(nn.Module):
         ----------
         cutoff : openff.units.unit.Quantity, default=5*unit.angstrom
             The cutoff distance for interactions.
-        number_of_gaussians : int, default=16
-            Number of Gaussian functions to use in the radial basis function.
+        number_of_radial_basis_functions : int, default=16
+            Number of radial basis functions
         """
 
         super().__init__()
@@ -583,7 +590,7 @@ class SpookyNetLocalInteraction(nn.Module):
     def forward(
             self,
             x_tilde: torch.Tensor,
-            rbf: torch.Tensor,
+            f_ij_after_cutoff: torch.Tensor,
             p_orbital_ij: torch.Tensor,
             d_orbital_ij: torch.Tensor,
             idx_i: torch.Tensor,
@@ -609,9 +616,9 @@ class SpookyNetLocalInteraction(nn.Module):
             Same as idx_i, but for atom j.
         """
         # interaction functions
-        gs = self.radial_s(rbf)
-        gp = self.radial_p(rbf).unsqueeze(-2) * p_orbital_ij.unsqueeze(-1)
-        gd = self.radial_d(rbf).unsqueeze(-2) * d_orbital_ij.unsqueeze(-1)
+        gs = self.radial_s(f_ij_after_cutoff)
+        gp = self.radial_p(f_ij_after_cutoff).unsqueeze(-2) * p_orbital_ij.unsqueeze(-1)
+        gd = self.radial_d(f_ij_after_cutoff).unsqueeze(-2) * d_orbital_ij.unsqueeze(-1)
         # atom featurizations
         xx = self.resblock_x(x_tilde)
         xs = self.resblock_s(x_tilde)
@@ -869,11 +876,11 @@ class SpookyNetInteractionModule(nn.Module):
     def forward(
             self,
             x: torch.Tensor,
-            rbf: torch.Tensor,
-            p_orbital_ij: torch.Tensor,
-            d_orbital_ij: torch.Tensor,
-            idx_i: torch.Tensor,
-            idx_j: torch.Tensor,
+            pairlist: torch.Tensor,  # shape [n_pairs, 2]
+            f_ij: torch.Tensor,  # shape [n_pairs, 1, number_of_radial_basis_functions] TODO: why the 1?
+            f_ij_cutoff: torch.Tensor,  # shape [n_pairs, 1]
+            p_orbital_ij: torch.Tensor, # shape [n_pairs, 1]
+            d_orbital_ij: torch.Tensor, # shape [n_pairs, 1]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Evaluate all modules in the block.
@@ -902,9 +909,10 @@ class SpookyNetInteractionModule(nn.Module):
                 Contribution to output atomic features (environment
                 descriptors).
         """
+        idx_i, idx_j = pairlist[0], pairlist[1]
         x_tilde = self.residual_pre(x)
         del x
-        l = self.local_interaction(x_tilde, rbf, p_orbital_ij, d_orbital_ij, idx_i, idx_j)
+        l = self.local_interaction(x_tilde, f_ij * f_ij_cutoff, p_orbital_ij, d_orbital_ij, idx_i, idx_j)
         n = self.nonlocal_interaction(x_tilde)
         x_updated = self.residual_post(x_tilde + l + n)
         del x_tilde

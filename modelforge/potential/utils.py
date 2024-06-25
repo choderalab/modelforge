@@ -296,14 +296,14 @@ class SpookyNetCutoff(nn.Module):
 
     def forward(self, d_ij: torch.Tensor):
         """
-        Cutoff function that smoothly goes from f(x) = 1 to f(x) = 0 in the interval
-        from x = 0 to x = cutoff. For x >= cutoff, f(x) = 0. This function has
-        infinitely many smooth derivatives. Only positive x should be used as input.
+        Cutoff function that smoothly goes from f(r) = 1 to f(r) = 0 in the interval
+        from r = 0 to r = cutoff. For r >= cutoff, f(r) = 0. This function has
+        infinitely many smooth derivatives. Only positive r should be used as input.
         """
         zeros = torch.zeros_like(d_ij)
-        x_ = torch.where(d_ij < self.cutoff, d_ij, zeros)  # prevent nan in backprop
+        r_ = torch.where(d_ij < self.cutoff, d_ij, zeros)  # prevent nan in backprop
         return torch.where(
-            d_ij < self.cutoff, torch.exp(-(x_ ** 2) / ((self.cutoff - x_) * (self.cutoff + x_))), zeros
+            d_ij < self.cutoff, torch.exp(-(r_ ** 2) / ((self.cutoff - r_) * (self.cutoff + r_))), zeros
         )
 
 

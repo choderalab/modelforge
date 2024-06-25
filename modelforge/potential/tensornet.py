@@ -29,7 +29,7 @@ class TensorNet(BaseNetwork):
         )
 
 
-class TensorNetCore(nn.Module):
+class TensorNetCore(torch.nn.Module):
     def __init__(
         self,
         radial_max_distance: unit.Quantity,

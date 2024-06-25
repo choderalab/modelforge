@@ -37,7 +37,6 @@ class PairListOutputs(NamedTuple):
 
 class EnergyOutput(NamedTuple):
     E: torch.Tensor
-    raw_E: torch.Tensor
     E_i: torch.Tensor
     molecular_ase: torch.Tensor
 
@@ -707,7 +706,11 @@ class InputPreparation(torch.nn.Module):
 
 class BaseNetwork(Module):
 
-    def __init__(self):
+    def __init__(
+        self,
+        E_i_mean: float = 0.0,
+        E_i_std: float = 1.0,
+    ):
         """
         Initializes the neural network potential class with specified parameters.
 
@@ -715,11 +718,19 @@ class BaseNetwork(Module):
 
         super().__init__()
 
-        from .processing import EnergyScaling, FromAtomToMoleculeReduction
+        from .processing import (
+            FromAtomToMoleculeReduction,
+            EnergyScaling,
+            CalculateAtomicSelfEnergy,
+        )
+        from modelforge.dataset.dataset import DatasetStatistics
+        self.dataset_statistics = DatasetStatistics(
+            E_i_mean, E_i_std, AtomicSelfEnergies()
+        )
 
         self.readout_module = FromAtomToMoleculeReduction()
-
-        self.postprocessing = EnergyScaling()
+        self.ase = CalculateAtomicSelfEnergy()
+        self.postprocessing = EnergyScaling(E_i_mean, E_i_std)
 
     def load_state_dict(
         self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False
@@ -740,26 +751,6 @@ class BaseNetwork(Module):
 
         super().load_state_dict(new_d, strict=strict, assign=assign)
 
-    def _readout(
-        self, atom_specific_values: torch.Tensor, index: torch.Tensor
-    ) -> torch.Tensor:
-        """
-        Performs the readout operation to generate per-molecule properties from atomic properties.
-
-        Parameters
-        ----------
-        atom_specific_values : torch.Tensor
-            The tensor containing atomic properties.
-        index : torch.Tensor
-            The tensor indicating the molecule to which each atom belongs.
-
-        Returns
-        -------
-        torch.Tensor
-            The tensor containing per-molecule properties.
-        """
-        return self.readout_module(atom_specific_values, index)
-
     def forward(self, data: NNPInput):
         # perform input checks
         self.input_preparation._input_checks(data)
@@ -768,21 +759,27 @@ class BaseNetwork(Module):
         nnp_input = self.core_module._model_specific_input_preparation(
             data, pairlist_output
         )
-        # perform the forward pass implemented in the subclass
+        # perform the forward pass implemented in the model
         outputs = self.core_module._forward(nnp_input)
-        # sum over atomic properties to generate per molecule properties
-        E = self._readout(
-            atom_specific_values=outputs["E_i"],
-            index=outputs["atomic_subsystem_indices"],
+        # process the atomic energies
+        E_i_scaled = self.postprocessing(outputs["E_i"])
+        # calculate the molecular self energies
+        atomic_self_energies = self.ase.calculate_atomic_self_energy(
+            nnp_input, self.dataset_statistics
         )
-        processed_energy = self.postprocessing._energy_postprocessing(E, nnp_input)
+        # sum over atomic properties to generate per molecule properties
+        E_molecule = self.readout_module(
+            per_atom_property=E_i_scaled,
+            atomic_subsystem_indices=outputs["atomic_subsystem_indices"],
+        )
+        molecular_self_energies = self.readout_module(
+            per_atom_property=atomic_self_energies,
+            atomic_subsystem_indices=outputs["atomic_subsystem_indices"],
+        )
 
         # return energies
         return EnergyOutput(
-            E=processed_energy["E"],
-            raw_E=processed_energy["raw_E"],
-            E_i=outputs["E_i"],
-            molecular_ase=processed_energy["molecular_ase"],
+            E=E_molecule,
+            E_i=E_i_scaled,
+            molecular_ase=molecular_self_energies,
         )
-
-

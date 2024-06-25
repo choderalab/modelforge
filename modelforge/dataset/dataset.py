@@ -1024,9 +1024,8 @@ class DataModule(pl.LightningDataModule):
 
         # if dataset statistics is present load it from disk
         if os.path.exists(self.dataset_statistics_filename):
-            dataset_statistics = toml.load(open(self.dataset_statistics_filename, "r"))
-            atomic_self_energies = dataset_statistics["atomic_self_energies"]
-            atomic_energies_stats = dataset_statistics["atomic_energies_stats"]
+            atomic_self_energies = self._read_atomic_self_energies()
+            atomic_energies_stats = self._read_atomic_energies_stats()
         else:
             atomic_self_energies = None
             atomic_energies_stats = None
@@ -1101,16 +1100,30 @@ class DataModule(pl.LightningDataModule):
         """Read the atomic self energies from a file."""
         import toml
 
-        unitless_atomic_self_energies = toml.load(
+        unitless_energy_statistic = toml.load(
             open(self.dataset_statistics_filename, "r")
         )
 
         # attach kJ/mol units
         atomic_self_energies = {
-            key: value * unit.kilojoule_per_mole
-            for key, value in unitless_atomic_self_energies.items()
+            key: float(value) * unit.kilojoule_per_mole
+            for key, value in unitless_energy_statistic["atomic_self_energies"].items()
         }
+
         return atomic_self_energies
+
+    def _read_atomic_energies_stats(self) -> Dict[str, torch.Tensor]:
+        """Read the atomic energies statistics from a file."""
+        import toml
+
+        unitless_energy_statistic = toml.load(
+            open(self.dataset_statistics_filename, "r")
+        )
+        # convert values to tensor
+        atomic_energies_stats = {
+            key: torch.tensor(value) for key, value in unitless_energy_statistic['atomic_energies_stats'].items()
+        }
+        return atomic_energies_stats
 
     def _create_torch_dataset(self, dataset):
         """Create a PyTorch dataset from the provided dataset instance."""

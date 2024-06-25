@@ -141,6 +141,7 @@ class TrainingAdapter(pl.LightningModule):
         nnp_parameters: Dict[str, Any],
         lr_scheduler_config: Dict[str, Union[str, int, float]],
         lr: float,
+        dataset_statistics:Dict[str, torch.Tensor],
         include_force: bool = False,
         optimizer: Type[Optimizer] = torch.optim.AdamW,
     ):
@@ -177,7 +178,7 @@ class TrainingAdapter(pl.LightningModule):
         if nnp_class is None:
             raise ValueError(f"Specified NNP name '{nnp_name}' is not implemented.")
 
-        self.model = nnp_class(**nnp_parameters_)
+        self.model = nnp_class(**nnp_parameters_, E_i_mean=dataset_statistics["E_i_mean"], E_i_stddev=dataset_statistics["E_i_stddev"])
         self.optimizer = optimizer
         self.learning_rate = lr
         self.loss = EnergyAndForceLoss(model=self.model, include_force=include_force)
@@ -797,6 +798,7 @@ def perform_training(
         model_type=model_name,
         model_parameters=potential_config["potential_parameters"],
         training_parameters=training_config["training_parameters"],
+        dataset_statistics_path = dm.dataset_statistics_filename
     )
 
     # set up traininer

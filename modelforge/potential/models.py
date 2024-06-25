@@ -167,6 +167,76 @@ class Pairlist(Module):
 
         return pair_indices.to(device)
 
+    def construct_initial_pairlist_using_numpy(
+        self, atomic_subsystem_indices: torch.Tensor
+    ):
+        """Compute all pairs of atoms and also return counts of the number of pairs for each molecule in batch.
+
+        Parameters
+        ----------
+        atomic_subsystem_indices : torch.Tensor, shape (nr_atoms_per_systems)
+            Atom indices to indicate which atoms belong to which molecule
+            Note in all cases, the values in this tensor must be numbered from 0 to n_molecules - 1
+            sequentially, with no gaps in the numbering. E.g., [0,0,0,1,1,2,2,2 ...].
+            This is the case for all internal data structures, and those no validation is performed in
+            this routine. If the data is not structured in this way, the results will be incorrect.
+        Returns
+        -------
+        pair_indices : np.ndarray, shape (2, n_pairs)
+            Pairs of atom indices, 0-indexed for each molecule
+        number_of_pairs : np.ndarray, shape (n_molecules)
+            The number to index into pair_indices for each molecule
+
+        """
+
+        # atomic_subsystem_indices are always numbered from 0 to n_molecules - 1
+        # e.g., a single molecule will be [0, 0, 0, 0 ... ]
+        # and a batch of molecules will always start at 0 and increment [ 0, 0, 0, 1, 1, 1, ...]
+        # As such, we can use bincount, as there are no gaps in the numbering
+        # Note if the indices are not numbered from 0 to n_molecules - 1, this will not work
+        # E.g., bincount on [3,3,3, 4,4,4, 5,5,5] will return [0,0,0,3,3,3,3,3,3]
+        # as we have no values for 0, 1, 2
+        # using a combination of unique and argsort would make this work for any numbering ordering
+        # but that is not how the data ends up being structured internally, and thus is not needed
+
+        import numpy as np
+
+        # get the number of atoms in each molecule
+        repeats = np.bincount(atomic_subsystem_indices)
+
+        # calculate the number of pairs for each molecule, using simple permutation
+        npairs_by_molecule = np.array([r * (r - 1) for r in repeats], dtype=np.int16)
+
+        i_indices = np.concatenate(
+            [
+                np.repeat(
+                    np.arange(
+                        0,
+                        r,
+                        dtype=np.int16,
+                    ),
+                    repeats=r,
+                )
+                for r in repeats
+            ]
+        )
+        j_indices = np.concatenate(
+            [
+                np.concatenate([np.arange(0, 0 + r, dtype=np.int16) for _ in range(r)])
+                for r in repeats
+            ]
+        )
+
+        # filter out identical pairs where i==j
+        unique_pairs_mask = i_indices != j_indices
+        i_final_pairs = i_indices[unique_pairs_mask]
+        j_final_pairs = j_indices[unique_pairs_mask]
+
+        # concatenate to form final (2, n_pairs) vector
+        pair_indices = np.stack((i_final_pairs, j_final_pairs))
+
+        return pair_indices, npairs_by_molecule
+
     def calculate_r_ij(
         self, pair_indices: torch.Tensor, positions: torch.Tensor
     ) -> torch.Tensor:

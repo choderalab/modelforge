@@ -5,8 +5,7 @@ import pytest
 def setup_methane():
     import torch
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+    device = torch.device("cpu")
     coordinates = torch.tensor(
         [
             [
@@ -116,7 +115,7 @@ def test_modelforge_ani(setup_two_methanes):
     potential_parameters = config["potential"].get("potential_parameters", {})
 
     _, _, _, mf_input = setup_two_methanes
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
     model = mf_ANI2x(**potential_parameters).to(device=device)
     energy = model(mf_input)
     derivative = torch.autograd.grad(energy.E.sum(), mf_input.positions)[0]
@@ -192,7 +191,7 @@ def test_radial_with_diagonal_batching(setup_two_methanes):
     vec = selected_coordinates[0] - selected_coordinates[1]
     distances = vec.norm(2, -1)
     # ------------ Modelforge calculation ----------#
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
 
     radial_symmetry_function = AniRadialSymmetryFunction(
         radial_dist_divisions,
@@ -232,7 +231,7 @@ def test_compare_angular_symmetry_features(setup_methane):
     from modelforge.potential.models import Pairlist
     import math
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
 
     # set up relevant system properties
     species, r, _, _ = setup_methane

@@ -184,6 +184,8 @@ class TrainingAdapter(pl.LightningModule):
         self.lr_scheduler_config = lr_scheduler_config
         self.test_mse: List[float] = []
         self.val_mse: List[float] = []
+        self.are_unused_parameters_present: bool = False
+        self.unused_parameters: set = set()
 
     def config_prior(self):
         """
@@ -272,6 +274,10 @@ class TrainingAdapter(pl.LightningModule):
             prog_bar=True,
         )
 
+        if self.are_unused_parameters_present:
+            log.warning("Unused parameters present in the model")
+            log.warning(f"Unused parameters: {self.unused_parameters}")
+
     def validation_step(self, batch: "BatchData", batch_idx: int) -> torch.Tensor:
         """
         Validation step to compute the RMSE loss and accumulate L1 loss across epochs.
@@ -292,7 +298,7 @@ class TrainingAdapter(pl.LightningModule):
         self.val_mse.append(float(mse_loss))
         return mse_loss
 
-    def on_after_backward(self):
+    def on_training_epoch_end(self):
         # Log histograms of weights and biases after each backward pass
         for name, params in self.named_parameters():
             if params is not None:
@@ -353,42 +359,35 @@ class TrainingAdapter(pl.LightningModule):
         }
         return {"optimizer": optimizer, "lr_scheduler": lr_scheduler_config}
 
-    def on_after_backward(self) -> None:
+    def on_train_epoch_end(self) -> None:
+        """
+        This method will be called at the end of each training epoch.
+        We will check for unused parameters here.
+        """
+
+        # Check for parameters that have not been updated
         for name, p in self.named_parameters():
             if p.grad is None:
-                print(name, p)
+                self.unused_parameters.add(name)
+                self.are_unused_parameters_present = True
 
-    def get_trainer(self):
+
+    def on_train_end(self) -> None:
+        
+        # Log the unused parameters
+        if self.are_unused_parameters_present:
+    
+            log.warning(f"Unused parameters detected:")
+            log.warning(self.unused_parameters)
+
+    def log_unused_parameters(self):
         """
-        Sets up and returns a PyTorch Lightning Trainer instance with configured logger and callbacks.
-
-        The trainer is configured with TensorBoard logging and an EarlyStopping callback to halt
-        the training process when the validation loss stops improving.
-
-        Returns
-        -------
-        Trainer
-            The configured PyTorch Lightning Trainer instance.
+        Log the unused parameters.
         """
-
-        from lightning import Trainer
-        from lightning.pytorch.callbacks.early_stopping import EarlyStopping
-        from pytorch_lightning.loggers import TensorBoardLogger
-
-        # set up tensor board logger
-        logger = TensorBoardLogger("tb_logs", name="training")
-        early_stopping = EarlyStopping(
-            monitor="rmse_val_loss", min_delta=0.05, patience=20, verbose=True
-        )
-
-        return Trainer(
-            max_epochs=10_000,
-            num_nodes=1,
-            devices="auto",
-            accelerator="auto",
-            logger=logger,  # Add the logger here
-            callbacks=[early_stopping],
-        )
+        if self.are_unused_parameters_present:
+            log.warning("Unused parameters detected:")
+            for param_name in self.unused_parameters:
+                log.warning(param_name)
 
     def train_func(self):
         """
@@ -529,50 +528,102 @@ class TrainingAdapter(pl.LightningModule):
         return tuner.fit()
 
 
-def return_toml_config(config_path: str):
+from typing import Optional
+
+
+def return_toml_config(
+    config_path: Optional[str] = None,
+    potential_path: Optional[str] = None,
+    dataset_path: Optional[str] = None,
+    training_path: Optional[str] = None,
+):
     """
-    Read a TOML configuration file and return the parsed configuration.
+    Read one or more TOML configuration files and return the parsed configuration.
 
     Parameters
     ----------
-    config_path : str
+    config_path : str, optional
         The path to the TOML configuration file.
+    potential_path : str, optional
+        The path to the TOML file defining the potential configuration.
+    dataset_path : str, optional
+        The path to the TOML file defining the dataset configuration.
+    training_path : str, optional
+        The path to the TOML file defining the training configuration.
 
     Returns
     -------
     dict
-        The parsed configuration from the TOML file.
+        The merged parsed configuration from the TOML files.
     """
     import toml
 
-    # Read the TOML file
-    config = toml.load(config_path)
-    log.info(f"Reading config from : {config_path}")
+    config = {}
+
+    if config_path:
+        config = toml.load(config_path)
+        log.info(f"Reading config from : {config_path}")
+    else:
+        if potential_path:
+            config["potential"] = toml.load(potential_path)["potential"]
+            log.info(f"Reading potential config from : {potential_path}")
+        if dataset_path:
+            config["dataset"] = toml.load(dataset_path)["dataset"]
+            log.info(f"Reading dataset config from : {dataset_path}")
+        if training_path:
+            config["training"] = toml.load(training_path)["training"]
+            log.info(f"Reading training config from : {training_path}")
+
     return config
 
 
-def read_config_and_train(config_path: str):
+from typing import List, Optional, Union
+
+
+def read_config_and_train(
+    config_path: Optional[str] = None,
+    potential_path: Optional[str] = None,
+    dataset_path: Optional[str] = None,
+    training_path: Optional[str] = None,
+    accelerator: Optional[str] = None,
+    device: Optional[Union[int, List[int]]] = None,
+):
     """
-    Reads a TOML configuration file and performs training based on the parameters.
+    Reads one or more TOML configuration files and performs training based on the parameters.
 
     Parameters
     ----------
-    config_path : str
+    config_path : str, optional
         Path to the TOML configuration file.
+    potential_path : str, optional
+        Path to the TOML file defining the potential configuration.
+    dataset_path : str, optional
+        Path to the TOML file defining the dataset configuration.
+    training_path : str, optional
+        Path to the TOML file defining the training configuration.
+    accelerator : str, optional
+        Accelerator type to use for training.
+    device : int|List[int], optional
+        Device index to use for training.
     """
     # Read the TOML file
-    config = return_toml_config(config_path)
+    config = return_toml_config(
+        config_path, potential_path, dataset_path, training_path
+    )
 
     # Extract parameters
-    # potential
     potential_config = config["potential"]
-
-    # dataset
     dataset_config = config["dataset"]
-
-    # training
     training_config = config["training"]
+    # Override config parameters with command-line arguments if provided
+    if accelerator:
+        training_config["accelerator"] = accelerator
+    if device is not None:
+        training_config["devices"] = device
 
+    log.debug(f"Potential config: {potential_config}")
+    log.debug(f"Dataset config: {dataset_config}")
+    log.debug(f"Training config: {training_config}")
     # Call the perform_training function with extracted parameters
     perform_training(
         potential_config=potential_config,
@@ -582,6 +633,99 @@ def read_config_and_train(config_path: str):
 
 
 from lightning import Trainer
+
+
+def log_training_arguments(
+    potential_config: Dict[str, Any],
+    training_config: Dict[str, Any],
+    dataset_config: Dict[str, Any],
+):
+    """
+    Log arguments that are passed to the training routine.
+
+    Arguments
+    ----
+        potential_config: Dict[str, Any]
+            config for the potential model
+        training_config: Dict[str, Any]
+            config for the training process
+        dataset_config: Dict[str, Any]
+            config for the dataset
+    """
+    save_dir = training_config.get("save_dir", "lightning_logs")
+    if save_dir == "lightning_logs":
+        log.info(f"Saving logs to default location: {save_dir}")
+    else:
+        log.info(f"Saving logs to custom location: {save_dir}")
+
+    experiment_name = training_config.get("experiment_name", "exp")
+    if experiment_name == "experiment_name":
+        log.info(f"Saving logs in default dir: {experiment_name}")
+    else:
+        log.info(f"Saving logs in custom dir: {experiment_name}")
+
+    version_select = dataset_config.get("version_select", "latest")
+    if version_select == "latest":
+        log.info(f"Using default dataset version: {version_select}")
+    else:
+        log.info(f"Using dataset version: {version_select}")
+    accelerator = training_config.get("accelerator", "cpu")
+    if accelerator == "cpu":
+        log.info(f"Using default accelerator: {accelerator}")
+    else:
+        log.info(f"Using accelerator: {accelerator}")
+    nr_of_epochs = training_config.get("nr_of_epochs", 10)
+    if nr_of_epochs == 10:
+        log.info(f"Using default number of epochs: {nr_of_epochs}")
+    else:
+        log.info(f"Training for {nr_of_epochs} epochs")
+    num_nodes = training_config.get("num_nodes", 1)
+    if num_nodes == 1:
+        log.info(f"Using default number of nodes: {num_nodes}")
+    else:
+        log.info(f"Training on {num_nodes} nodes")
+    devices = training_config.get("devices", 1)
+    if devices == 1:
+        log.info(f"Using default device index/number: {devices}")
+    else:
+        log.info(f"Using device index/number: {devices}")
+    batch_size = training_config.get("batch_size", 128)
+    if batch_size == 128:
+        log.info(f"Using default batch size: {batch_size}")
+    else:
+        log.info(f"Using batch size: {batch_size}")
+    remove_self_energies = training_config.get("remove_self_energies", False)
+    if remove_self_energies is False:
+        log.warning(
+            f"Using default for removing self energies: Self energies are not removed"
+        )
+    else:
+        log.info(f"Removing self energies: {remove_self_energies}")
+    early_stopping_config = training_config.get("early_stopping", None)
+    if early_stopping_config is None:
+        log.info(f"Using default: No early stopping performed")
+    num_workers = dataset_config.get("number_of_worker", 4)
+    if num_workers == 4:
+        log.info(
+            f"Using default number of workers for training data loader: {num_workers}"
+        )
+    else:
+        log.info(f"Using {num_workers} workers for training data loader")
+    pin_memory = dataset_config.get("pin_memory", False)
+    if pin_memory is False:
+        log.info(f"Using default value for pinned_memory: {pin_memory}")
+    else:
+        log.info(f"Using pinned_memory: {pin_memory}")
+    model_name = potential_config["model_name"]
+    dataset_name = dataset_config["dataset_name"]
+
+    log.debug(
+        f"""
+Training {model_name} on {dataset_name}-{version_select} dataset with {accelerator}
+accelerator on {num_nodes} nodes for {nr_of_epochs} epochs.
+Experiments are saved to: {save_dir}/{experiment_name}.
+"""
+    )
 
 
 def perform_training(
@@ -605,7 +749,6 @@ def perform_training(
     -------
     Trainer
     """
-
     from pytorch_lightning.loggers import TensorBoardLogger
     from modelforge.dataset.utils import RandomRecordSplittingStrategy
     from lightning import Trainer
@@ -613,62 +756,32 @@ def perform_training(
     from modelforge.dataset.dataset import DataModule
     from lightning.pytorch.callbacks import ModelSummary
 
-    save_dir = training_config.get("save_dir", "lightning_logs")
-    if save_dir == "lightning_logs":
-        log.info(f"Saving logs to default location: {save_dir}")
-    experiment_name = training_config.get("experiment_name", "exp")
-    if experiment_name == "experiment_name":
-        log.info(f"Saving logs in default dir: {experiment_name}")
+    # Parse the arguments
+    log_training_arguments(potential_config, training_config, dataset_config)
     model_name = potential_config["model_name"]
     dataset_name = dataset_config["dataset_name"]
+    save_dir = training_config.get("save_dir", "lightning_logs")
+    experiment_name = training_config.get("experiment_name", "exp")
     version_select = dataset_config.get("version_select", "latest")
-    if version_select == "latest":
-        log.info(f"Using default dataset version: {version_select}")
     accelerator = training_config.get("accelerator", "cpu")
-    if accelerator == "cpu":
-        log.info(f"Using default accelerator: {accelerator}")
     nr_of_epochs = training_config.get("nr_of_epochs", 10)
-    if nr_of_epochs == 10:
-        log.info(f"Using default number of epochs: {nr_of_epochs}")
     num_nodes = training_config.get("num_nodes", 1)
-    if num_nodes == 1:
-        log.info(f"Using default number of nodes: {num_nodes}")
     devices = training_config.get("devices", 1)
-    if devices == 1:
-        log.info(f"Using default device index/number: {devices}")
     batch_size = training_config.get("batch_size", 128)
-    if batch_size == 128:
-        log.info(f"Using default batch size: {batch_size}")
-    remove_self_energies = dataset_config.get("remove_self_energies", False)
-    if remove_self_energies is False:
-        log.info(
-            f"Using default for removing self energies: Self energies are not removed"
-        )
-    early_stopping_config = training_config.get("early_stopping", None)
-    if early_stopping_config is None:
-        log.info(f"Using default: No early stopping performed")
+    remove_self_energies = training_config.get("remove_self_energies", False)
     num_workers = dataset_config.get("number_of_worker", 4)
-    if num_workers == 4:
-        log.info(
-            f"Using default number of workers for training data loader: {num_workers}"
-        )
-    pin_memory = dataset_config.get("pin_memory", False)
-    if pin_memory is False:
-        log.info(f"Using default value for pinned_memory: {pin_memory}")
+    pin_memory = training_config.get("pin_memory", False)
+    early_stopping_config = training_config.get("early_stopping", None)
 
     # set up tensor board logger
     logger = TensorBoardLogger(save_dir, name=experiment_name)
 
-    log.debug(
-        f"""
-Training {model_name} on {dataset_name}-{version_select} dataset with {accelerator}
-accelerator on {num_nodes} nodes for {nr_of_epochs} epochs.
-Experiments are saved to: {save_dir}/{experiment_name}.
-"""
-    )
-
-    log.debug(f"Using {potential_config} potential config")
-    log.debug(f"Using {training_config} training config")
+    print(f"Using {accelerator} accelerator")
+    print(f"Using {num_nodes} nodes")
+    print(f"Using {devices} devices")
+    print(f"Training for {nr_of_epochs} epochs")
+    print(f"Using batch size: {batch_size}")
+    print(f"Using {num_workers} workers for training data loader")
 
     # Set up dataset
     dm = DataModule(

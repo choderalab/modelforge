@@ -244,15 +244,6 @@ class SplittingStrategy(ABC):
 
 
 class RandomSplittingStrategy(SplittingStrategy):
-    """
-    Strategy to split a dataset randomly.
-
-    Examples
-    --------
-    >>> dataset = [1, 2, 3, 4, 5]
-    >>> strategy = RandomSplittingStrategy(seed=42)
-    >>> train_idx, val_idx, test_idx = strategy.split(dataset)
-    """
 
     def __init__(self, seed: int = 42, split: List[float] = [0.8, 0.1, 0.1]):
         """
@@ -276,8 +267,9 @@ class RandomSplittingStrategy(SplittingStrategy):
 
         Examples
         --------
-        >>> random_strategy_default = RandomSplittingStrategy()
-        >>> random_strategy_custom = RandomSplittingStrategy(seed=123, split=[0.7, 0.2, 0.1])
+        >>> dataset = [1, 2, 3, 4, 5]
+        >>> random_split = RandomSplittingStrategy(seed=123, split=[0.7, 0.2, 0.1])
+        >>> train_idx, val_idx, test_idx = random_split.split(dataset)
         """
 
         super().__init__(seed=seed, split=split)
@@ -325,19 +317,10 @@ class RandomSplittingStrategy(SplittingStrategy):
 
 
 class RandomRecordSplittingStrategy(SplittingStrategy):
-    """
-    Strategy to split a dataset randomly, keeping all conformers in a record in the same split.
-
-    Examples
-    --------
-    >>> dataset = [1, 2, 3, 4, 5]
-    >>> strategy = RandomSplittingStrategy(seed=42)
-    >>> train_idx, val_idx, test_idx = strategy.split(dataset)
-    """
 
     def __init__(self, seed: int = 42, split: List[float] = [0.8, 0.1, 0.1]):
         """
-        Initializes the RandomSplittingStrategy with a specified seed and split ratios.
+        Strategy to split a dataset randomly, keeping all conformers in a record in the same split.
 
         This strategy splits a dataset randomly based on provided ratios for training, validation,
         and testing subsets. The sum of split ratios should be 1.0.
@@ -357,8 +340,9 @@ class RandomRecordSplittingStrategy(SplittingStrategy):
 
         Examples
         --------
-        >>> random_strategy_default = RandomRecordSplittingStrategy()
-        >>> random_strategy_custom = RandomRecordSplittingStrategy(seed=123, split=[0.7, 0.2, 0.1])
+        >>> dataset = [1, 2, 3, 4, 5]
+        >>> random_split = RandomRecordSplittingStrategy(seed=123, split=[0.7, 0.2, 0.1])
+        >>> train_idx, val_idx, test_idx = random_split.split(dataset)
         """
 
         super().__init__(split=split, seed=seed)
@@ -585,5 +569,6 @@ def _to_file_cache(
 
 REGISTERED_SPLITTING_STRATEGIES = {
     "first_come_first_serve": FirstComeFirstServeSplittingStrategy,
-    "random": RandomRecordSplittingStrategy,
+    "random_record_splitting_strategy": RandomRecordSplittingStrategy,
+    "random_conformer_splitting_strategy": RandomSplittingStrategy,
 }

@@ -1,21 +1,24 @@
 Datasets
 ===============
+The dataset module in `modelforge` provides a comprehensive suite of functions and 
+classes designed to retrieve, transform, and store QM datasets from QCArchive. 
+These datasets are delivered in a format compatible 
+with `torch.utils.data.Dataset <https://pytorch.org/docs/stable/data.html#torch.utils.data.Dataset>`_, 
+facilitating the training of neural network potentials (NNPs). 
+The module supports actions related to data storage, caching, retrieval, and the conversion 
+of stored HDF5 files into PyTorch-compatible datasets for training purposes.
 
-The dataset module provides functions and classes to retrieve, transform, 
-and store QM datasets from QCArchive and delivers them as 
-`torch.utils.data.Dataset <https://pytorch.org/docs/stable/data.html#torch.utils.data.Dataset>`_ to train NNPs. 
-The dataset module implements actions associated with data storage, caching, and retrieval, 
-as well as the pipeline from the stored hdf5 files to the PyTorch dataset class that can be 
-used for training. The general workflow to interact with public datasets will be as follows:
+General Workflow
+----------------
+The typical workflow to interact with public datasets includes the following steps:
 
-- obtaining the dataset
-- processing the dataset and storing it in an HDF5 file with standard naming and units
-- uploading to Zenodo and updating the retrieval link in the dataset implementation
+- Obtaining the dataset
+- Processing the dataset and storing it in an HDF5 file with standardized naming and units
+- Uploading the processed dataset to Zenodo and updating the retrieval link in the dataset implementation
 
-For more information on how units are handled in the dataset, which properties are available and 
-how to develop your own dataset for `modelforge` we refer to the 
-`developer documentation <for_developer.html>`_.
-
+For more information on how units are handled within the dataset, a
+vailable properties, and instructions on developing custom datasets for `modelforge`, 
+please refer to the `developer documentation <for_developer.html>`_.
 
 Available Datasets
 ------------------
@@ -33,17 +36,37 @@ The following datasets are available for use with `modelforge`:
 Splitting Strategies
 ---------------------
 
+The default splitting strategy for datasets in `modelforge` is to randomly split the dataset 
+into 80% training, 10% validation, and 10% test sets based on records. 
+This approach ensures that different conformations of a molecule are always part of the same split, 
+thereby avoiding data leakage. 
+
+`modelforge` also provides other splitting strategies, including:
+
+- :class:`modelforge.dataset.utils.FirstComeFirstServeStrategy`: Splits the dataset based on the order of records.
+- :class:`modelforge.dataset.utils.RandomSplittingStrategy`: Splits the dataset randomly based on conformations.
+
+To use a different data split ratio, you can specify a custom split list in the splitting strategy. 
+The most effective way to pass this information to the training process is by defining the appropriate fields in 
+the `dataset.toml` file, as shown in :ref:`dataset-configuration`.
+
+.. autoclass:: modelforge.dataset.utils.RandomRecordSplittingStrategy
+
 
 Interacting with the Dataset Module
 -----------------------------------
 
-The dataset module provides a `DataModule` class that can be used to prepare 
-and set up a dataset for training. The `DataModule` class is designed to be used with 
-PyTorch Lightning, and provides a convenient interface for preparing and loading datasets.
+The dataset module provides a :class:`modelforge.dataset.DataModule` class for preparing and 
+setting up datasets for training. 
+Designed to integrate seamlessly with PyTorch Lightning, 
+the :class:`modelforge.dataset.DataModule` class provides a user-friendly interface for 
+dataset preparation and loading.
 
+.. autoclass:: modelforge.dataset.DataModule
 
+The following example demonstrates how to use the :class:`modelforge.dataset.DataModule` class 
+to prepare and set up a dataset for training:
 
-The dataset module allows for flexible and efficient handling of datasets. Below is an example of how to use the `DataModule` class to prepare and set up a dataset for training:
 
 .. code-block:: python
 
@@ -72,18 +95,16 @@ The dataset module allows for flexible and efficient handling of datasets. Below
     # Setup the data for training, validation, and testing
     data_module.setup()
 
-Explanation of the DataModule Attributes and Methods
-----------------------------------------------------
-
-.. autoclass:: modelforge.dataset.DataModule
+.. _dataset-configuration:
 
 Dataset Configuration
 ------------------------------------
 
-Typically, the dataset configuration is stored in a TOML file for training.
-The config TOML file overwrites in the `DataModule` class.
-Below is a minmal example of a dataset configuration for the QM9 dataset.
-
+Typically, the dataset configuration is stored in a TOML file, 
+which is used for the training process. T
+his configuration file overrides the default values specified in the 
+:class:`modelforge.dataset.DataModule` class. 
+Below is a minimal example of a dataset configuration for the QM9 dataset.
 
 .. literalinclude:: ../scripts/configs/datasets/qm9.toml
    :language: toml
@@ -92,6 +113,9 @@ Below is a minmal example of a dataset configuration for the QM9 dataset.
 Explanation of fields in `qm9.toml`:
 
 - `dataset_name`: Name of the dataset, here it is QM9.
+- `number_of_worker`: Number of worker threads for data loading.
+- `splitting_strategy`: The splitting strategy to use, possible values are 'first_come_first_serve', 
+ 'random_record_splitting_strategy', and 'random_conformer_splitting_strategy'.
 - `number_of_worker`: Number of worker threads for data loading.
 
 

@@ -6,7 +6,6 @@ from loguru import logger as log
 from openff.units import unit
 from torch import nn
 
-from modelforge.potential.models import CoreNetwork
 from modelforge.utils.prop import SpeciesAEV
 
 if TYPE_CHECKING:
@@ -432,7 +431,7 @@ class ANIInteraction(nn.Module):
         return output.view_as(species)
 
 
-class ANI2xCore(CoreNetwork):
+class ANI2xCore(nn.Module):
 
     def __init__(
         self,
@@ -554,7 +553,7 @@ class ANI2x(BaseNetwork):
     def __init__(
         self,
         radial_max_distance: Union[unit.Quantity, str],
-        radial_min_distance: Union[unit.Quantity, str],  # NOTE: min distance? #FIXME
+        radial_min_distance: Union[unit.Quantity, str],
         number_of_radial_basis_functions: int,
         angular_max_distance: Union[unit.Quantity, str],
         angular_min_distance: Union[unit.Quantity, str],

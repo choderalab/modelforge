@@ -5,7 +5,7 @@ from loguru import logger as log
 from typing import Dict, Tuple
 from openff.units import unit
 
-from .models import CoreNetwork, PairListOutputs
+from .models import PairListOutputs
 from .utils import (
     Dense,
     scatter_softmax,
@@ -66,7 +66,7 @@ class SAKENeuralNetworkInput:
     atomic_embedding: torch.Tensor
 
 
-class SAKECore(CoreNetwork):
+class SAKECore(nn.Module):
     """SAKE - spatial attention kinetic networks with E(n) equivariance.
 
     Reference:

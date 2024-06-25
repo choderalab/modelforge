@@ -6,8 +6,6 @@ import torch.nn as nn
 from loguru import logger as log
 from openff.units import unit
 
-from .models import CoreNetwork
-
 if TYPE_CHECKING:
     from .models import PairListOutputs
     from modelforge.dataset.dataset import NNPInput
@@ -84,7 +82,7 @@ class SchnetNeuralNetworkData(NeuralNetworkData):
     f_cutoff: Optional[torch.Tensor] = field(default=None)
 
 
-class SchNetCore(CoreNetwork):
+class SchNetCore(nn.Module):
     def __init__(
         self,
         max_Z: int = 100,

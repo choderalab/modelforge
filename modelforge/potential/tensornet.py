@@ -4,7 +4,7 @@ import torch
 from openff.units import unit
 
 from modelforge.potential.models import InputPreparation
-from modelforge.potential.models import BaseNetwork, CoreNetwork
+from modelforge.potential.models import BaseNetwork
 from modelforge.potential.utils import NeuralNetworkData
 
 
@@ -29,7 +29,7 @@ class TensorNet(BaseNetwork):
         )
 
 
-class TensorNetCore(CoreNetwork):
+class TensorNetCore(nn.Module):
     def __init__(
         self,
         radial_max_distance: unit.Quantity,
@@ -73,8 +73,6 @@ class ANIInteraction(torch.nn.Module):
 
     def forward(self):
         pass
-
-
 
 
 @dataclass

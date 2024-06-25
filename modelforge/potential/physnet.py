@@ -9,8 +9,6 @@ from torch_scatter import scatter_add
 
 from modelforge.potential.utils import NeuralNetworkData
 
-from .models import CoreNetwork
-
 if TYPE_CHECKING:
     from modelforge.dataset.dataset import NNPInput
 
@@ -410,7 +408,7 @@ class PhysNetModule(nn.Module):
         }
 
 
-class PhysNetCore(CoreNetwork):
+class PhysNetCore(nn.Module):
     def __init__(
         self,
         max_Z: int,

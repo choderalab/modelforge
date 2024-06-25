@@ -6,7 +6,6 @@ import torch.nn.functional as F
 from loguru import logger as log
 from openff.units import unit
 
-from .models import CoreNetwork
 from .utils import Dense
 
 if TYPE_CHECKING:
@@ -71,7 +70,7 @@ class PaiNNNeuralNetworkData(NeuralNetworkData):
     atomic_embedding: torch.Tensor
 
 
-class PaiNNCore(CoreNetwork):
+class PaiNNCore(nn.Module):
     """PaiNN - polarizable interaction neural network
 
     References:

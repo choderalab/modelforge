@@ -925,7 +925,15 @@ class DataModule(pl.LightningDataModule):
 
     def __init__(
         self,
-        name: Literal["QM9", "ANI1X", "ANI2X", "SPICE114", "SPICE2", "SPICE114_OPENFF"],
+        name: Literal[
+            "QM9",
+            "ANI1X",
+            "ANI2X",
+            "SPICE114",
+            "SPICE2",
+            "SPICE114_OPENFF",
+            "PhAlkEthOH",
+        ],
         splitting_strategy: SplittingStrategy = RandomRecordSplittingStrategy(),
         batch_size: int = 64,
         remove_self_energies: bool = True,
@@ -997,9 +1005,7 @@ class DataModule(pl.LightningDataModule):
         self,
     ) -> None:
         """
-        Prepares the dataset for use. This method is responsible for the initial processing of
-        the data such as calculating self energies, normalizing, and splitting. It is executed
-        only once per node.
+        Prepares the dataset for use. This method is responsible for the initial processing of the data such as calculating self energies, atomic energy statistics, and splitting. It is executed only once per node.
         """
         from modelforge.dataset import _ImplementedDatasets
 
@@ -1025,24 +1031,27 @@ class DataModule(pl.LightningDataModule):
         # wrap them in the AtomicSelfEnergy class
         from modelforge.potential.processing import AtomicSelfEnergies
 
-        atomic_self_energies = AtomicSelfEnergies(atomic_self_energies)
-
         log.debug("Process dataset ...")
-        self._process_dataset(torch_dataset, atomic_self_energies)
+        self._process_dataset(torch_dataset, AtomicSelfEnergies(atomic_self_energies))
 
-        # # calculate neighborlist
-        # self._calculating_pairwise_properties(torch_dataset)
         # calculate the dataset statistic of the dataset
         # This is done __after__ self energies are removed (if requested)
         from modelforge.dataset.utils import calculate_mean_and_variance
 
-        # FIXME: this wont work for a setup on multiple devices
         stats = calculate_mean_and_variance(torch_dataset)
-        self.dataset_statistics = DatasetStatistics(
-            E_i_stddev=stats["Ei_stddev"],
-            E_i_mean=stats["Ei_mean"],
-            atomic_self_energies=atomic_self_energies,
-            atomic_self_energies_removed=self.remove_self_energies,
+        dataset_statistics = {"ase": atomic_self_energies, "E_i_statistics": stats}
+
+        # save dataset_statistics dictionary to disk as yaml files
+        import yaml
+
+        yaml.dump(
+            dataset_statistics,
+            open(
+                os.path.join(
+                    self.local_cache_dir, str(self.name), "dataset_statistics.yaml"
+                ),
+                "w",
+            ),
         )
 
         # Save processed dataset and statistics for later use in setup
@@ -1065,18 +1074,6 @@ class DataModule(pl.LightningDataModule):
         self._per_datapoint_operations(torch_dataset, atomic_self_energies)
         self._save_self_energies(atomic_self_energies)
 
-    def _normalize_dataset(self, torch_dataset, stats: Dict[str, float]) -> None:
-        """Normalize the dataset if self energies have been removed."""
-        from modelforge.dataset.utils import (
-            normalize_energies,
-        )
-
-        if not self.remove_self_energies:
-            raise RuntimeError(
-                "Cannot normalize dataset if self energies are not removed."
-            )
-        normalize_energies(torch_dataset, stats)
-
     def _calculate_atomic_self_energies(
         self, torch_dataset, dataset_ase
     ) -> Dict[str, float]:
@@ -1085,7 +1082,9 @@ class DataModule(pl.LightningDataModule):
 
         # Use provided ase dictionary
         if self.dict_atomic_self_energies:
-            log.info("Using provided atomic self energies from the provided ictionary.")
+            log.info(
+                "Using provided atomic self energies from the provided dictionary."
+            )
             return self.dict_atomic_self_energies
 
         # Use regression to calculate ase
@@ -1158,25 +1157,6 @@ class DataModule(pl.LightningDataModule):
         return _calculate_self_energies(
             torch_dataset=torch_dataset, collate_fn=collate_fn
         )
-
-    # def _calculating_pairwise_properties(self, dataset):
-    #     from tqdm import tqdm
-
-    #     log.info(
-    #         f"Calculate neighborlist with {self.calculate_distances_and_pairlist} cutoff"
-    #     )
-    #     print(dataset.properties_of_interest.keys())
-    #     for i in tqdm(range(len(dataset)), desc="Calculate neighborlist"):
-    #         a = dataset[i]
-    #         start_idx = dataset.single_atom_start_idxs_by_conf[i]
-    #         end_idx = dataset.single_atom_end_idxs_by_conf[i]
-    #         pairlist_output = self.calculate_distances_and_pairlist(
-    #             dataset.properties_of_interest["positions"][start_idx:end_idx],
-    #             torch.zeros(
-    #                 end_idx - start_idx,
-    #                 dtype=torch.float32,
-    #             ),
-    #         )
 
     def _per_datapoint_operations(
         self, dataset, self_energies: "AtomicSelfEnergies"

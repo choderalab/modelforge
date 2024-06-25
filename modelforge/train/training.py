@@ -822,6 +822,7 @@ def perform_training(
     log.info(f"Setting E_i_mean and E_i_stddev for {model_name}")
     log.info(f"E_i_mean: {dm.dataset_statistics.E_i_mean}")
     log.info(f"E_i_stddev: {dm.dataset_statistics.E_i_stddev}")
+    
     model.model.core_module.readout_module.E_i_mean = torch.tensor(
         [dm.dataset_statistics.E_i_mean], dtype=torch.float32
     )

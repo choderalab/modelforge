@@ -925,7 +925,7 @@ class DataModule(pl.LightningDataModule):
 
     def __init__(
         self,
-        name: Literal["QM9", "ANI1X", "ANI2X", "SPICE114", "SPICE2", "SPICE114_OPENFF"],
+        name: Literal["QM9", "ANI1X", "ANI2X", "SPICE114", "SPICE2", "SPICE114_OPENFF", 'PhAlkEthOH'],
         splitting_strategy: SplittingStrategy = RandomRecordSplittingStrategy(),
         batch_size: int = 64,
         remove_self_energies: bool = True,
@@ -945,10 +945,10 @@ class DataModule(pl.LightningDataModule):
 
         Parameters
         ---------
-            name: Literal["QM9", "ANI1X", "ANI2X", "SPICE114", "SPICE2", "SPICE114_OPENFF"]
+            name: Literal["PhAlkEthOH", "QM9", "ANI1X", "ANI2X", "SPICE114", "SPICE2", "SPICE114_OPENFF"]
                 The name of the dataset to use.
             splitting_strategy : SplittingStrategy, defaults to RandomRecordSplittingStrategy
-                The strategy to use for splitting the dataset into train, test, and validation sets. .
+                The strategy to use for splitting the dataset into train, test, and validation sets.
             batch_size : int, defaults to 64.
                 The batch size to use for the dataset.
             remove_self_energies : bool, defaults to True
@@ -956,12 +956,12 @@ class DataModule(pl.LightningDataModule):
             atomic_self_energies : Optional[Dict[str, float]]
                 A dictionary mapping element names to their self energies. If not provided, the self energies will be calculated.
             regression_ase: bool, defaults to False
-                Whether to use the calculated self energies for regression.
+                Whether to use regression to calculate the self energies.
             force_download : bool,  defaults to False
                 Whether to force the dataset to be downloaded, even if it is already cached.
             version_select : str, defaults to "latest"
                 Select the version of the dataset to use. If "latest", the latest version will be used.
-                "latest_test" will use the latest test version. Specific versions can be selected by passing the version name
+                Specific versions can be selected by passing the version name
                 as defined in the yaml files associated with each dataset.
             local_cache_dir : str, defaults to "./"
                 Directory to store the files.

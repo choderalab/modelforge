@@ -581,3 +581,9 @@ def _to_file_cache(
         processed_dataset_file,
         **data,
     )
+
+
+REGISTERED_SPLITTING_STRATEGIES = {
+    "first_come_first_serve": FirstComeFirstServeSplittingStrategy,
+    "random": RandomRecordSplittingStrategy,
+}

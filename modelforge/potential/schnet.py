@@ -365,6 +365,7 @@ class SchNETRepresentation(nn.Module):
 
 
 from .models import InputPreparation, NNPInput, BaseNetwork
+from typing import List
 
 
 class SchNet(BaseNetwork):
@@ -377,8 +378,9 @@ class SchNet(BaseNetwork):
         cutoff: unit.Quantity,
         number_of_filters: int,
         shared_interactions: bool,
-        E_i_mean: Optional[float] = None,
-        E_i_stddev: Optional[float] = None,
+        processing: List[Dict[str, str]],
+        readout: List[Dict[str, str]],
+        dataset_statistics: Optional[Dict[str, float]] = None,
     ) -> None:
         """
         Initialize the SchNet network.
@@ -398,7 +400,11 @@ class SchNet(BaseNetwork):
         cutoff : openff.units.unit.Quantity, default=5*unit.angstrom
             The cutoff distance for interactions.
         """
-        super().__init__(E_i_stddev=E_i_stddev, E_i_mean=E_i_mean)
+        super().__init__(
+            dataset_statistics=dataset_statistics,
+            processing=processing,
+            readout=readout,
+        )
         from modelforge.utils.units import _convert
 
         self.core_module = SchNetCore(
@@ -430,3 +436,8 @@ class SchNet(BaseNetwork):
         }
         prior.update(shared_config_prior())
         return prior
+
+    def combine_per_atom_properties(
+        self, values: Dict[str, torch.Tensor]
+    ) -> torch.Tensor:
+        return values

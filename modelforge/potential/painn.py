@@ -526,3 +526,8 @@ class PaiNN(BaseNetwork):
         }
         prior.update(shared_config_prior())
         return prior
+
+    def combine_per_atom_properties(
+        self, values: Dict[str, torch.Tensor]
+    ) -> torch.Tensor:
+        return values

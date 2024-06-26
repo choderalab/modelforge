@@ -559,8 +559,8 @@ class ANI2x(BaseNetwork):
         angular_min_distance: Union[unit.Quantity, str],
         angular_dist_divisions: int,
         angle_sections: int,
-        processing: Dict[str, torch.nn.ModuleList],
-        readout: Dict[str, List[Dict[str, str]]],
+        processing: List[Dict[str, str]],
+        readout: List[Dict[str, str]],
         dataset_statistics: Optional[Dict[str, float]] = None,
     ) -> None:
 

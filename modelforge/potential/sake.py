@@ -545,7 +545,9 @@ class SAKEInteraction(nn.Module):
 
 from .models import InputPreparation, NNPInput, BaseNetwork
 
-from typing import Optional
+from typing import Optional, List
+
+
 class SAKE(BaseNetwork):
 
     def __init__(
@@ -556,11 +558,16 @@ class SAKE(BaseNetwork):
         number_of_spatial_attention_heads: int,
         number_of_radial_basis_functions: int,
         cutoff: unit.Quantity,
+        processing: List[Dict[str, str]],
+        readout: List[Dict[str, str]],
+        dataset_statistics: Optional[Dict[str, float]] = None,
         epsilon: float = 1e-8,
-        E_i_mean: Optional[float] = None,
-        E_i_stddev: Optional[float] = None,
     ):
-        super().__init__(E_i_mean=E_i_mean, E_i_stddev=E_i_stddev)
+        super().__init__(
+            dataset_statistics=dataset_statistics,
+            processing=processing,
+            readout=readout,
+        )
         from modelforge.utils.units import _convert
 
         self.core_module = SAKECore(
@@ -593,3 +600,8 @@ class SAKE(BaseNetwork):
         }
         prior.update(shared_config_prior())
         return prior
+
+    def combine_per_atom_properties(
+        self, values: Dict[str, torch.Tensor]
+    ) -> torch.Tensor:
+        return values

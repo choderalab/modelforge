@@ -575,7 +575,7 @@ class PhysNetCore(nn.Module):
 
 
 from .models import InputPreparation, NNPInput, BaseNetwork
-
+from typing import List
 
 class PhysNet(BaseNetwork):
     def __init__(
@@ -586,8 +586,9 @@ class PhysNet(BaseNetwork):
         number_of_radial_basis_functions: int,
         number_of_interaction_residual: int,
         number_of_modules: int,
-        E_i_mean: Optional[float] = None,
-        E_i_stddev: Optional[float] = None,
+        processing: List[Dict[str, str]],
+        readout: List[Dict[str, str]],
+        dataset_statistics: Optional[Dict[str, float]] = None,
     ) -> None:
         """
         Unke, O. T. and Meuwly, M. "PhysNet: A Neural Network for Predicting Energies,
@@ -595,7 +596,11 @@ class PhysNet(BaseNetwork):
 
 
         """
-        super().__init__(E_i_mean=E_i_mean, E_i_stddev=E_i_stddev)
+        super().__init__(
+            dataset_statistics=dataset_statistics,
+            processing=processing,
+            readout=readout,
+        )
         from modelforge.utils.units import _convert
 
         self.core_module = PhysNetCore(
@@ -626,3 +631,8 @@ class PhysNet(BaseNetwork):
         }
         prior.update(shared_config_prior())
         return prior
+    
+    def combine_per_atom_properties(
+        self, values: Dict[str, torch.Tensor]
+    ) -> torch.Tensor:
+        return values

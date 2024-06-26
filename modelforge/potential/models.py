@@ -708,8 +708,8 @@ class BaseNetwork(Module):
 
     def __init__(
         self,
-        E_i_mean: float = 0.0,
-        E_i_std: float = 1.0,
+        E_i_mean: Optional[float] = None,
+        E_i_stddev: Optional[float] = None,
     ):
         """
         Initializes the neural network potential class with specified parameters.
@@ -724,13 +724,14 @@ class BaseNetwork(Module):
             CalculateAtomicSelfEnergy,
         )
         from modelforge.dataset.dataset import DatasetStatistics
+
         self.dataset_statistics = DatasetStatistics(
-            E_i_mean, E_i_std, AtomicSelfEnergies()
+            E_i_mean, E_i_stddev, AtomicSelfEnergies()
         )
 
         self.readout_module = FromAtomToMoleculeReduction()
         self.ase = CalculateAtomicSelfEnergy()
-        self.postprocessing = EnergyScaling(E_i_mean, E_i_std)
+        self.postprocessing = EnergyScaling(E_i_mean, E_i_stddev)
 
     def load_state_dict(
         self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False

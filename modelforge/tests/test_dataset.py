@@ -815,21 +815,23 @@ def test_self_energy(dataset_name, datamodule_factory):
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
     )
     # it is saved in the dataset statistics
-    f = dm.dataset_statistics_filename
+    
     import toml
-
+    f = dm.dataset_statistics_filename
     dataset_statistics = toml.load(f)
-    self_energies = dm.dataset_statistics[atomic_self_energies]
+    self_energies = dataset_statistics['atomic_self_energies']
+    os.remove(f)
+
     # 5 elements present in the QM9 dataset
     assert len(self_energies.keys()) == 5
     # H: -1313.4668615546
-    assert np.isclose(self_energies['H'], -1313.4668615546)
+    assert np.isclose(float(self_energies['H']), -1313.4668615546)
     # C: -99366.70745535441
-    assert np.isclose(self_energies['C'], -99366.70745535441)
+    assert np.isclose(float(self_energies['C']), -99366.70745535441)
     # N: -143309.9379722722
-    assert np.isclose(self_energies['N'], -143309.9379722722)
+    assert np.isclose(float(self_energies['N']), -143309.9379722722)
     # O: -197082.0671774158
-    assert np.isclose(self_energies['O'], -197082.0671774158)
+    assert np.isclose(float(self_energies['O']), -197082.0671774158)
 
     # Scenario 2: dataset may or may not contain self energies
     # but user wants to use least square regression to calculate the energies
@@ -843,35 +845,36 @@ def test_self_energy(dataset_name, datamodule_factory):
     )
 
     # it is saved in the dataset statistics
-    f = dm.dataset_statistics_filename
     import toml
-
+    f = dm.dataset_statistics_filename
     dataset_statistics = toml.load(f)
-    self_energies = dm.dataset_statistics.atomic_self_energies
+    self_energies = dataset_statistics['atomic_self_energies']
+    os.remove(f)
+
     # 5 elements present in the total QM9 dataset
-    assert len(self_energies) == 5
+    assert len(self_energies.keys()) == 5
     # value from DFT calculation
     # H: -1313.4668615546
     assert np.isclose(
-        self_energies[1],
+        float(self_energies['H']),
         -1577.0870687452618,
     )
     # value from DFT calculation
     # C: -99366.70745535441
     assert np.isclose(
-        self_energies[6],
+        float(self_energies['C']),
         -99977.40806211969,
     )
     # value from DFT calculation
     # N: -143309.9379722722
     assert np.isclose(
-        self_energies[7],
+        float(self_energies['N']),
         -143742.7416655554,
     )
     # value from DFT calculation
     # O: -197082.0671774158
     assert np.isclose(
-        self_energies[8],
+        float(self_energies['O']),
         -197492.33270235246,
     )
 
@@ -884,8 +887,11 @@ def test_self_energy(dataset_name, datamodule_factory):
         version_select="nc_1000_v0",
     )
     # it is saved in the dataset statistics
-    assert dm.train_dataset
-    self_energies = dm.dataset_statistics.atomic_self_energies
+    import toml
+    f = dm.dataset_statistics_filename
+    dataset_statistics = toml.load(f)
+    self_energies = dataset_statistics['atomic_self_energies']
+    os.remove(f)
     # Test that self energies are correctly removed
     for regression in [True, False]:
         dm = datamodule_factory(
@@ -898,7 +904,6 @@ def test_self_energy(dataset_name, datamodule_factory):
         )
         # Extract the first molecule (methane)
         # double check that it is methane
-        k = dm.train_dataset[0]
         methane_atomic_indices = dm.train_dataset[0].nnp_input.atomic_numbers
         # extract energy
         methane_energy_offset = dm.train_dataset[0].metadata.E
@@ -908,7 +913,10 @@ def test_self_energy(dataset_name, datamodule_factory):
                 methane_energy_offset, torch.tensor([-1656.8412], dtype=torch.float64)
             )
         # extract the ase offset
-        self_energies = dm.dataset_statistics.atomic_self_energies
+        f = dm.dataset_statistics_filename
+        dataset_statistics = toml.load(f)
+        self_energies = dataset_statistics['atomic_self_energies']
+        os.remove(f)
         methane_ase = sum(
             [
                 self_energies[int(index)]

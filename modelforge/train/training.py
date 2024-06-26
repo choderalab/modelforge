@@ -141,7 +141,10 @@ class TrainingAdapter(pl.LightningModule):
         nnp_parameters: Dict[str, Any],
         lr_scheduler_config: Dict[str, Union[str, int, float]],
         lr: float,
-        dataset_statistics:Dict[str, torch.Tensor],
+        dataset_statistics: Dict[str, Union[torch.Tensor, None]] = {
+            "E_i_mean": None,
+            "E_i_stddev": None,
+        },
         include_force: bool = False,
         optimizer: Type[Optimizer] = torch.optim.AdamW,
     ):
@@ -178,7 +181,11 @@ class TrainingAdapter(pl.LightningModule):
         if nnp_class is None:
             raise ValueError(f"Specified NNP name '{nnp_name}' is not implemented.")
 
-        self.model = nnp_class(**nnp_parameters_, E_i_mean=dataset_statistics["E_i_mean"], E_i_stddev=dataset_statistics["E_i_stddev"])
+        self.model = nnp_class(
+            **nnp_parameters_,
+            E_i_mean=dataset_statistics["E_i_mean"],
+            E_i_stddev=dataset_statistics["E_i_stddev"],
+        )
         self.optimizer = optimizer
         self.learning_rate = lr
         self.loss = EnergyAndForceLoss(model=self.model, include_force=include_force)
@@ -372,12 +379,11 @@ class TrainingAdapter(pl.LightningModule):
                 self.unused_parameters.add(name)
                 self.are_unused_parameters_present = True
 
-
     def on_train_end(self) -> None:
-        
+
         # Log the unused parameters
         if self.are_unused_parameters_present:
-    
+
             log.warning(f"Unused parameters detected:")
             log.warning(self.unused_parameters)
 
@@ -798,7 +804,7 @@ def perform_training(
         model_type=model_name,
         model_parameters=potential_config["potential_parameters"],
         training_parameters=training_config["training_parameters"],
-        dataset_statistics_path = dm.dataset_statistics_filename
+        dataset_statistics_path=dm.dataset_statistics_filename,
     )
 
     # set up traininer
@@ -824,7 +830,7 @@ def perform_training(
     log.info(f"Setting E_i_mean and E_i_stddev for {model_name}")
     log.info(f"E_i_mean: {dm.dataset_statistics.E_i_mean}")
     log.info(f"E_i_stddev: {dm.dataset_statistics.E_i_stddev}")
-    
+
     model.model.core_module.readout_module.E_i_mean = torch.tensor(
         [dm.dataset_statistics.E_i_mean], dtype=torch.float32
     )

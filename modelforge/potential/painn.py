@@ -483,8 +483,10 @@ class PaiNN(BaseNetwork):
         shared_interactions: bool,
         shared_filters: bool,
         epsilon: float = 1e-8,
+        E_i_mean: Optional[float] = None,
+        E_i_stddev: Optional[float] = None,
     ):
-        super().__init__()
+        super().__init__(E_i_mean=E_i_mean, E_i_stddev=E_i_stddev)
         from modelforge.utils.units import _convert
 
         self.core_module = PaiNNCore(

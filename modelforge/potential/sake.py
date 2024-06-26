@@ -545,7 +545,7 @@ class SAKEInteraction(nn.Module):
 
 from .models import InputPreparation, NNPInput, BaseNetwork
 
-
+from typing import Optional
 class SAKE(BaseNetwork):
 
     def __init__(
@@ -557,8 +557,10 @@ class SAKE(BaseNetwork):
         number_of_radial_basis_functions: int,
         cutoff: unit.Quantity,
         epsilon: float = 1e-8,
+        E_i_mean: Optional[float] = None,
+        E_i_stddev: Optional[float] = None,
     ):
-        super().__init__()
+        super().__init__(E_i_mean=E_i_mean, E_i_stddev=E_i_stddev)
         from modelforge.utils.units import _convert
 
         self.core_module = SAKECore(

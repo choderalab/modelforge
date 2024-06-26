@@ -377,6 +377,8 @@ class SchNet(BaseNetwork):
         cutoff: unit.Quantity,
         number_of_filters: int,
         shared_interactions: bool,
+        E_i_mean: Optional[float] = None,
+        E_i_stddev: Optional[float] = None,
     ) -> None:
         """
         Initialize the SchNet network.
@@ -396,7 +398,7 @@ class SchNet(BaseNetwork):
         cutoff : openff.units.unit.Quantity, default=5*unit.angstrom
             The cutoff distance for interactions.
         """
-        super().__init__()
+        super().__init__(E_i_stddev=E_i_stddev, E_i_mean=E_i_mean)
         from modelforge.utils.units import _convert
 
         self.core_module = SchNetCore(

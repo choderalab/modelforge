@@ -586,6 +586,8 @@ class PhysNet(BaseNetwork):
         number_of_radial_basis_functions: int,
         number_of_interaction_residual: int,
         number_of_modules: int,
+        E_i_mean: Optional[float] = None,
+        E_i_stddev: Optional[float] = None,
     ) -> None:
         """
         Unke, O. T. and Meuwly, M. "PhysNet: A Neural Network for Predicting Energies,
@@ -593,7 +595,7 @@ class PhysNet(BaseNetwork):
 
 
         """
-        super().__init__()
+        super().__init__(E_i_mean=E_i_mean, E_i_stddev=E_i_stddev)
         from modelforge.utils.units import _convert
 
         self.core_module = PhysNetCore(

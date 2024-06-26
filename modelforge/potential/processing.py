@@ -182,15 +182,24 @@ class AtomicSelfEnergies:
 
 
 from modelforge.potential.utils import NeuralNetworkData
+from typing import Union
+from loguru import logger as log
 
 
 class EnergyScaling(torch.nn.Module):
 
-    def __init__(self, E_i_mean: float, E_i_stddev: float) -> None:
+    def __init__(
+        self, E_i_mean: Union[float, None], E_i_stddev: Union[float, None]
+    ) -> None:
         """
         Initializes the `DatasetStatistics` object with default values for the scaling factors and atomic self energies.
         """
         super().__init__()
+        if E_i_mean is None and E_i_stddev is None:
+            E_i_mean = torch.tensor([0.0])
+            E_i_stddev = torch.tensor([1.0])
+            log.debug("No energy scaling factors provided. Using default values.")
+
         self.register_buffer("E_i_mean", torch.tensor([E_i_mean]))
         self.register_buffer("E_i_stddev", torch.tensor([E_i_stddev]))
 

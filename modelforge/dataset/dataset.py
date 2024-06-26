@@ -1057,7 +1057,7 @@ class DataModule(pl.LightningDataModule):
             }
 
             if atomic_self_energies and atomic_energies_stats:
-                print(dataset_statistics)
+                log.info(dataset_statistics)
                 # save dataset_statistics dictionary to disk as yaml files
                 self._log_dataset_statistics(dataset_statistics)
             else:
@@ -1143,8 +1143,6 @@ class DataModule(pl.LightningDataModule):
     def _calculate_atomic_self_energies(
         self, torch_dataset, dataset_ase
     ) -> Dict[str, float]:
-
-        from modelforge.dataset.utils import calculate_mean_and_variance
 
         # Use provided ase dictionary
         if self.dict_atomic_self_energies:

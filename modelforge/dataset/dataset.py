@@ -16,14 +16,6 @@ if TYPE_CHECKING:
     from modelforge.potential.processing import AtomicSelfEnergies
 
 
-@dataclass
-class DatasetStatistics:
-    E_i_mean: float
-    E_i_stddev: float
-    atomic_self_energies: "AtomicSelfEnergies"
-    atomic_self_energies_removed: bool = False
-
-
 @dataclass(frozen=False)
 class Metadata:
     """
@@ -942,6 +934,7 @@ class DataModule(pl.LightningDataModule):
         version_select: str = "latest",
         local_cache_dir: str = "./",
         regenerate_cache: bool = False,
+        regenerate_dataset_statistics: bool = False,
     ):
         """
         Initializes adData module for PyTorch Lightning handling data preparation and loading object with the specified configuration.
@@ -980,7 +973,6 @@ class DataModule(pl.LightningDataModule):
         self.name = name
         self.batch_size = batch_size
         self.splitting_strategy = splitting_strategy
-        self.dataset_statistics: Optional[DatasetStatistics] = None
         self.remove_self_energies = remove_self_energies
         self.dict_atomic_self_energies = (
             atomic_self_energies  # element name (e.g., 'H') maps to self energies
@@ -988,6 +980,7 @@ class DataModule(pl.LightningDataModule):
         self.regression_ase = regression_ase
         self.force_download = force_download
         self.version_select = version_select
+        self.regenerate_dataset_statistics = regenerate_dataset_statistics
         self.train_dataset = None
         self.test_dataset = None
         self.val_dataset = None
@@ -1022,7 +1015,10 @@ class DataModule(pl.LightningDataModule):
         torch_dataset = self._create_torch_dataset(dataset)
 
         # if dataset statistics is present load it from disk
-        if os.path.exists(self.dataset_statistics_filename):
+        if (
+            os.path.exists(self.dataset_statistics_filename)
+            and self.regenerate_dataset_statistics is False
+        ):
             log.info(
                 f"Loading dataset statistics from disk: {self.dataset_statistics_filename}"
             )
@@ -1103,33 +1099,14 @@ class DataModule(pl.LightningDataModule):
 
     def _read_atomic_self_energies(self) -> Dict[str, Quantity]:
         """Read the atomic self energies from a file."""
-        import toml
+        from modelforge.potential.processing import load_atomic_self_energies
+        return load_atomic_self_energies(self.dataset_statistics_filename, with_units=True)
 
-        unitless_energy_statistic = toml.load(
-            open(self.dataset_statistics_filename, "r")
-        )
-
-        # attach kJ/mol units
-        atomic_self_energies = {
-            key: float(value) * unit.kilojoule_per_mole
-            for key, value in unitless_energy_statistic["atomic_self_energies"].items()
-        }
-
-        return atomic_self_energies
 
     def _read_atomic_energies_stats(self) -> Dict[str, torch.Tensor]:
         """Read the atomic energies statistics from a file."""
-        import toml
-
-        unitless_energy_statistic = toml.load(
-            open(self.dataset_statistics_filename, "r")
-        )
-        # convert values to tensor
-        atomic_energies_stats = {
-            key: torch.tensor(value)
-            for key, value in unitless_energy_statistic["atomic_energies_stats"].items()
-        }
-        return atomic_energies_stats
+        from modelforge.potential.processing import load_atomic_energies_stats
+        return load_atomic_energies_stats(self.dataset_statistics_filename, to_tensor=True)
 
     def _create_torch_dataset(self, dataset):
         """Create a PyTorch dataset from the provided dataset instance."""

@@ -1,9 +1,23 @@
 [potential]
-potential_parameters.angle_sections = 4
-potential_parameters.radial_max_distance = "5.1 angstrom"
-potential_parameters.radial_min_distance = "0.8 angstrom"
-potential_parameters.number_of_radial_basis_functions = 16
-potential_parameters.angular_max_distance = "3.5 angstrom"
-potential_parameters.angular_min_distance = "0.8 angstrom"
-potential_parameters.angular_dist_divisions = 8
 model_name = "ANI2x"
+
+[potential.potential_parameters]
+angle_sections = 4
+radial_max_distance = "5.1 angstrom"
+radial_min_distance = "0.8 angstrom"
+number_of_radial_basis_functions = 16
+angular_max_distance = "3.5 angstrom"
+angular_min_distance = "0.8 angstrom"
+angular_dist_divisions = 8
+
+[potential.potential_parameters.processing]
+E = [
+  { step = "normalization", mean = "E_i_mean", stddev = "E_i_mean" },
+  { step = "calculate_ase" },
+  { step = "per_molecule" }
+]
+
+[potential.potential_parameters.readout]
+E = [
+  { step = "from_atom_to_molecule", mode = 'sum'}
+]

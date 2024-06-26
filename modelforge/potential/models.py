@@ -9,6 +9,7 @@ from typing import (
     Type,
     Union,
     Optional,
+    List,
 )
 
 import lightning as pl
@@ -20,7 +21,6 @@ from torch.nn import Module
 from modelforge.dataset.dataset import NNPInput
 
 if TYPE_CHECKING:
-    from modelforge.dataset.dataset import DatasetStatistics
     from modelforge.potential.ani import ANI2x, AniNeuralNetworkData
     from modelforge.potential.painn import PaiNN, PaiNNNeuralNetworkData
     from modelforge.potential.physnet import PhysNet, PhysNetNeuralNetworkData
@@ -544,10 +544,10 @@ class NeuralNetworkPotentialFactory:
         *,
         use: Literal["training", "inference"],
         model_type: Literal["ANI2x", "SchNet", "PaiNN", "SAKE", "PhysNet"],
-        model_parameters: Dict[str, Union[int, float, str]],
+        model_parameters: Dict[str, Union[int, float, str, List[str]]],
         simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
         training_parameters: Optional[Dict[str, Any]] = None,
-        dataset_statistics: Optional[Dict[str, torch.Tensor]] = None,
+        dataset_statistics: Optional[Dict[str, float]] = None,
     ) -> Union[Type[torch.nn.Module], Type[JAXModel], Type[pl.LightningModule]]:
         """
         Creates an NNP instance of the specified type, configured either for training or inference.
@@ -597,7 +597,9 @@ class NeuralNetworkPotentialFactory:
                 )
             model_parameters["nnp_name"] = model_type
             return TrainingAdapter(
-                nnp_parameters=model_parameters, **training_parameters
+                model_parameters=model_parameters,
+                **training_parameters,
+                dataset_statistics=dataset_statistics,
             )
         elif use == "inference":
             # if this model_parameter dictionary ahs already been used
@@ -704,12 +706,16 @@ class InputPreparation(torch.nn.Module):
         assert data.positions.shape == torch.Size([nr_of_atoms, 3])
 
 
+from torch.nn import ModuleList
+
+
 class BaseNetwork(Module):
 
     def __init__(
         self,
-        E_i_mean: Optional[float] = None,
-        E_i_stddev: Optional[float] = None,
+        processing: Dict[str, torch.nn.ModuleList],
+        dataset_statistics: Optional[Dict[str, float]] = None,
+        readout: Dict[str, str] = None,
     ):
         """
         Initializes the neural network potential class with specified parameters.
@@ -718,20 +724,7 @@ class BaseNetwork(Module):
 
         super().__init__()
 
-        from .processing import (
-            FromAtomToMoleculeReduction,
-            EnergyScaling,
-            CalculateAtomicSelfEnergy,
-        )
-        from modelforge.dataset.dataset import DatasetStatistics
-
-        self.dataset_statistics = DatasetStatistics(
-            E_i_mean, E_i_stddev, AtomicSelfEnergies()
-        )
-
-        self.readout_module = FromAtomToMoleculeReduction()
-        self.ase = CalculateAtomicSelfEnergy()
-        self.postprocessing = EnergyScaling(E_i_mean, E_i_stddev)
+        self._initialize_postprocessing(processing, readout, dataset_statistics)
 
     def load_state_dict(
         self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False
@@ -752,6 +745,64 @@ class BaseNetwork(Module):
 
         super().load_state_dict(new_d, strict=strict, assign=assign)
 
+    def _initialize_postprocessing(self, processing, readout, dataset_statistics):
+        from .processing import (
+            FromAtomToMoleculeReduction,
+            ScaleValues,
+            CalculateAtomicSelfEnergy,
+        )
+
+        # initialize per atom processing
+        self.postprocessing = {}
+        for property in processing:
+            work_to_be_done_per_property = []
+            for proc in processing[property]:
+                if proc["step"] == "normalization":
+
+                    if dataset_statistics is None:
+                        log.warning(
+                            f"No mean and stddev provided for property {property}. Setting to default values!"
+                        )
+                        mean = 0.0
+                        stddev = 0.0
+                    else:
+                        mean = dataset_statistics[proc["mean"]]
+                        stddev = dataset_statistics[proc["stddev"]]
+                    operation = ScaleValues(mean=mean, stddev=stddev)
+                    work_to_be_done_per_property.append(operation)
+
+                elif proc["step"] == "calculate_ase":
+                    if dataset_statistics is None:
+                        log.warning(
+                            "No dataset statistics provided for ASE calculation. Skipping!"
+                        )
+                    else:
+                        operation = CalculateAtomicSelfEnergy(dataset_statistics)
+                        work_to_be_done_per_property.append(operation)
+
+            self.postprocessing[property] = ModuleList(work_to_be_done_per_property)
+
+        # initialize per molecule reduction
+        self.readout = {}
+        for property in readout:
+            work_to_be_done_per_property = []
+            for proc in processing[property]:
+                if proc["step"] == "from_atom_to_molecule":
+                    work_to_be_done_per_property.append(
+                        FromAtomToMoleculeReduction(reduction_mode=proc["mode"])
+                    )
+
+            self.readout[property] = ModuleList(work_to_be_done_per_property)
+
+        # register all modules
+        for prop in self.postprocessing:
+            for module_list in self.postprocessing[prop]:
+                self.add_module(f"{prop}_post", module_list)
+
+        for prop in self.readout:
+            for module_list in self.readout[prop]:
+                self.add_module(f"{prop}_readout", module_list)
+
     def forward(self, data: NNPInput):
         # perform input checks
         self.input_preparation._input_checks(data)
@@ -762,25 +813,16 @@ class BaseNetwork(Module):
         )
         # perform the forward pass implemented in the model
         outputs = self.core_module._forward(nnp_input)
-        # process the atomic energies
-        E_i_scaled = self.postprocessing(outputs["E_i"])
-        # calculate the molecular self energies
-        atomic_self_energies = self.ase.calculate_atomic_self_energy(
-            nnp_input, self.dataset_statistics
-        )
-        # sum over atomic properties to generate per molecule properties
-        E_molecule = self.readout_module(
-            per_atom_property=E_i_scaled,
-            atomic_subsystem_indices=outputs["atomic_subsystem_indices"],
-        )
-        molecular_self_energies = self.readout_module(
-            per_atom_property=atomic_self_energies,
-            atomic_subsystem_indices=outputs["atomic_subsystem_indices"],
-        )
+        # perform postprocessing on properties
+        for property, processing in self.postprocessing.items():
+            for module in processing:
+                outputs[property] = module(outputs[property])
+        # if per atom properties need to be combined
+        output = self.combine_per_atom_properties(output)
+        # perform readout on properties
+        for property, processing in self.readout.items():
+            for module in processing:
+                outputs[property] = module(outputs[property])
 
-        # return energies
-        return EnergyOutput(
-            E=E_molecule,
-            E_i=E_i_scaled,
-            molecular_ase=molecular_self_energies,
-        )
+        # return output
+        return output

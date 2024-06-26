@@ -546,7 +546,7 @@ class ANI2xCore(nn.Module):
 
 
 from .models import InputPreparation, BaseNetwork
-from typing import Union, Optional
+from typing import Union, Optional, List, Dict
 
 
 class ANI2x(BaseNetwork):
@@ -559,10 +559,16 @@ class ANI2x(BaseNetwork):
         angular_min_distance: Union[unit.Quantity, str],
         angular_dist_divisions: int,
         angle_sections: int,
-        E_i_mean: Optional[float] = None,
-        E_i_stddev: Optional[float] = None,
+        processing: Dict[str, torch.nn.ModuleList],
+        readout: Dict[str, List[Dict[str, str]]],
+        dataset_statistics: Optional[Dict[str, float]] = None,
     ) -> None:
-        super().__init__(E_i_mean=E_i_mean, E_i_stddev=E_i_stddev)
+
+        super().__init__(
+            dataset_statistics=dataset_statistics,
+            processing=processing,
+            readout=readout,
+        )
 
         from modelforge.utils.units import _convert
 

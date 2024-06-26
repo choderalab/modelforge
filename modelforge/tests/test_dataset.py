@@ -803,6 +803,7 @@ def test_self_energy(dataset_name, datamodule_factory):
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         version_select="nc_1000_v0",
         remove_self_energies=False,
+        regenerate_dataset_statistics=True,
     )
 
     methane_energy_reference = float(dm.train_dataset[0].metadata.E)
@@ -813,25 +814,26 @@ def test_self_energy(dataset_name, datamodule_factory):
         dataset_name=dataset_name,
         batch_size=512,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        regenerate_dataset_statistics=True,
     )
     # it is saved in the dataset statistics
-    
+
     import toml
+
     f = dm.dataset_statistics_filename
     dataset_statistics = toml.load(f)
-    self_energies = dataset_statistics['atomic_self_energies']
-    os.remove(f)
+    self_energies = dataset_statistics["atomic_self_energies"]
 
     # 5 elements present in the QM9 dataset
     assert len(self_energies.keys()) == 5
     # H: -1313.4668615546
-    assert np.isclose(float(self_energies['H']), -1313.4668615546)
+    assert np.isclose(float(self_energies["H"]), -1313.4668615546)
     # C: -99366.70745535441
-    assert np.isclose(float(self_energies['C']), -99366.70745535441)
+    assert np.isclose(float(self_energies["C"]), -99366.70745535441)
     # N: -143309.9379722722
-    assert np.isclose(float(self_energies['N']), -143309.9379722722)
+    assert np.isclose(float(self_energies["N"]), -143309.9379722722)
     # O: -197082.0671774158
-    assert np.isclose(float(self_energies['O']), -197082.0671774158)
+    assert np.isclose(float(self_energies["O"]), -197082.0671774158)
 
     # Scenario 2: dataset may or may not contain self energies
     # but user wants to use least square regression to calculate the energies
@@ -842,39 +844,40 @@ def test_self_energy(dataset_name, datamodule_factory):
         regression_ase=True,
         remove_self_energies=True,
         version_select="nc_1000_v0",
+        regenerate_dataset_statistics=True,
     )
 
     # it is saved in the dataset statistics
     import toml
+
     f = dm.dataset_statistics_filename
     dataset_statistics = toml.load(f)
-    self_energies = dataset_statistics['atomic_self_energies']
-    os.remove(f)
+    self_energies = dataset_statistics["atomic_self_energies"]
 
     # 5 elements present in the total QM9 dataset
     assert len(self_energies.keys()) == 5
     # value from DFT calculation
     # H: -1313.4668615546
     assert np.isclose(
-        float(self_energies['H']),
+        float(self_energies["H"]),
         -1577.0870687452618,
     )
     # value from DFT calculation
     # C: -99366.70745535441
     assert np.isclose(
-        float(self_energies['C']),
+        float(self_energies["C"]),
         -99977.40806211969,
     )
     # value from DFT calculation
     # N: -143309.9379722722
     assert np.isclose(
-        float(self_energies['N']),
+        float(self_energies["N"]),
         -143742.7416655554,
     )
     # value from DFT calculation
     # O: -197082.0671774158
     assert np.isclose(
-        float(self_energies['O']),
+        float(self_energies["O"]),
         -197492.33270235246,
     )
 
@@ -885,13 +888,15 @@ def test_self_energy(dataset_name, datamodule_factory):
         regression_ase=True,
         remove_self_energies=True,
         version_select="nc_1000_v0",
+        regenerate_dataset_statistics=True,
     )
     # it is saved in the dataset statistics
     import toml
+
     f = dm.dataset_statistics_filename
     dataset_statistics = toml.load(f)
-    self_energies = dataset_statistics['atomic_self_energies']
-    os.remove(f)
+    self_energies = dataset_statistics["atomic_self_energies"]
+
     # Test that self energies are correctly removed
     for regression in [True, False]:
         dm = datamodule_factory(
@@ -901,6 +906,7 @@ def test_self_energy(dataset_name, datamodule_factory):
             regression_ase=regression,
             remove_self_energies=True,
             version_select="nc_1000_v0",
+            regenerate_dataset_statistics=True,
         )
         # Extract the first molecule (methane)
         # double check that it is methane
@@ -915,8 +921,11 @@ def test_self_energy(dataset_name, datamodule_factory):
         # extract the ase offset
         f = dm.dataset_statistics_filename
         dataset_statistics = toml.load(f)
-        self_energies = dataset_statistics['atomic_self_energies']
-        os.remove(f)
+        self_energies = dataset_statistics["atomic_self_energies"]
+        
+        from modelforge.potential.processing import AtomicSelfEnergies
+        self_energies = AtomicSelfEnergies(self_energies)
+        
         methane_ase = sum(
             [
                 self_energies[int(index)]

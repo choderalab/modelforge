@@ -8,6 +8,18 @@ potential_parameters.angular_min_distance = "0.8 angstrom"
 potential_parameters.angular_dist_divisions = 8
 model_name = "ANI2x"
 
+[potential.potential_parameters.processing]
+E = [
+  { step = "normalization", mean = "E_i_mean", stddev = "E_i_mean" },
+  { step = "calculate_ase" },
+  { step = "per_molecule" }
+]
+
+[potential.potential_parameters.readout]
+E = [
+  { step = "from_atom_to_molecule", mode = 'sum'}
+]
+
 [training]
 nr_of_epochs = 50
 save_dir = "test"

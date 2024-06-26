@@ -194,6 +194,77 @@ def test_state_dict_saving_and_loading(model_name):
 
 
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
+def test_dataset_statistics(model_name):
+
+    # Test that the scaling parmaeters are propagated from the dataset to the
+    # training model and then via the state_dict to the inference model
+
+    from modelforge.dataset.dataset import DataModule
+    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
+    from modelforge.train.training import return_toml_config
+    from modelforge.tests.data import training_defaults
+    from importlib import resources
+
+    filename = resources.files(training_defaults) / f"{model_name.lower()}_qm9.toml"
+
+    config = return_toml_config(filename)
+
+    # Extract parameters
+    potential_parameters = config["potential"].get("potential_parameters", {})
+    training_parameters = config["training"].get("training_parameters", {})
+
+    # test the self energy calculation on the QM9 dataset
+    dataset = DataModule(
+        name="QM9",
+        batch_size=64,
+        version_select="nc_1000_v0",
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        remove_self_energies=True,
+        regression_ase=False,
+        regenerate_dataset_statistics=True,
+    )
+    dataset.prepare_data()
+    dataset.setup()
+
+    import toml
+
+    dataset_statistics = toml.load(dataset.dataset_statistics_filename)
+    toml_E_i_mean = dataset_statistics["atomic_energies_stats"]["E_i_mean"]
+
+    # set up training model
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        use="training",
+        model_type=model_name,
+        simulation_environment="PyTorch",
+        model_parameters=potential_parameters,
+        training_parameters=training_parameters,
+        dataset_statistics=dataset_statistics["atomic_energies_stats"],
+    )
+    import torch
+
+    print(model.model.postprocessing["E"])
+    # check that the E_i_mean is the same than in the dataset statistics
+    assert torch.isclose(
+        torch.tensor([toml_E_i_mean]), model.model.postprocessing["E"][0].mean
+    )
+
+    torch.save(model.state_dict(), "model.pth")
+    print(model.state_dict())
+
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        use="inference",
+        model_type=model_name,
+        simulation_environment="PyTorch",
+        model_parameters=potential_parameters,
+    )
+    
+    model.load_state_dict(torch.load("model.pth"))
+    assert torch.isclose(
+        torch.tensor([toml_E_i_mean]), model.postprocessing["E"][0].mean
+    )
+
+
+@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 def test_energy_between_simulation_environments(
     model_name, single_batch_with_batchsize_64
 ):

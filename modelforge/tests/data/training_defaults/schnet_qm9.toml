@@ -8,6 +8,18 @@ potential_parameters.number_of_filters = 32
 potential_parameters.shared_interactions = false
 model_name = "SchNet"
 
+[potential.potential_parameters.processing]
+E = [
+  { step = "normalization", mean = "E_i_mean", stddev = "E_i_mean" },
+  { step = "calculate_ase" },
+  { step = "per_molecule" }
+]
+
+[potential.potential_parameters.readout]
+E = [
+  { step = "from_atom_to_molecule", mode = 'sum'}
+]
+
 [training]
 nr_of_epochs = 50
 save_dir = "test"

@@ -1,14 +1,13 @@
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import lightning as pl
-from typing import TYPE_CHECKING, Any, Union, Dict, NamedTuple, Tuple, Type, Mapping
+from typing import TYPE_CHECKING, Any, Union, Dict, Type, Optional
 import torch
 from loguru import logger as log
 from modelforge.dataset.dataset import BatchData
 from torch.nn import functional as F
 
 if TYPE_CHECKING:
-    from modelforge.dataset.dataset import DatasetStatistics
     from modelforge.potential.ani import ANI2x, AniNeuralNetworkData
     from modelforge.potential.painn import PaiNN, PaiNNNeuralNetworkData
     from modelforge.potential.physnet import PhysNet, PhysNetNeuralNetworkData
@@ -138,13 +137,10 @@ class TrainingAdapter(pl.LightningModule):
     def __init__(
         self,
         *,
-        nnp_parameters: Dict[str, Any],
+        model_parameters: Dict[str, Any],
         lr_scheduler_config: Dict[str, Union[str, int, float]],
         lr: float,
-        dataset_statistics: Dict[str, Union[torch.Tensor, None]] = {
-            "E_i_mean": None,
-            "E_i_stddev": None,
-        },
+        dataset_statistics: Optional[Dict[str, float]] = None,
         include_force: bool = False,
         optimizer: Type[Optimizer] = torch.optim.AdamW,
     ):
@@ -171,8 +167,8 @@ class TrainingAdapter(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
         # Extracting and instantiating the model from parameters
-        nnp_parameters_ = nnp_parameters.copy()
-        nnp_name = nnp_parameters_.pop("nnp_name", None)
+        model_parameters_ = model_parameters.copy()
+        nnp_name = model_parameters_.pop("nnp_name", None)
         if nnp_name is None:
             raise ValueError(
                 "NNP name must be specified in nnp_parameters with key 'nnp_name'."
@@ -182,9 +178,8 @@ class TrainingAdapter(pl.LightningModule):
             raise ValueError(f"Specified NNP name '{nnp_name}' is not implemented.")
 
         self.model = nnp_class(
-            **nnp_parameters_,
-            E_i_mean=dataset_statistics["E_i_mean"],
-            E_i_stddev=dataset_statistics["E_i_stddev"],
+            **model_parameters_,
+            dataset_statistics=dataset_statistics,
         )
         self.optimizer = optimizer
         self.learning_rate = lr

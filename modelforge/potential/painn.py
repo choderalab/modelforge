@@ -470,6 +470,7 @@ class PaiNNMixing(nn.Module):
 
 
 from .models import InputPreparation, NNPInput, BaseNetwork
+from typing import List
 
 
 class PaiNN(BaseNetwork):
@@ -482,11 +483,16 @@ class PaiNN(BaseNetwork):
         number_of_interaction_modules: int,
         shared_interactions: bool,
         shared_filters: bool,
+        processing: Dict[str, torch.nn.ModuleList],
+        readout: Dict[str, List[Dict[str, str]]],
+        dataset_statistics: Optional[Dict[str, float]] = None,
         epsilon: float = 1e-8,
-        E_i_mean: Optional[float] = None,
-        E_i_stddev: Optional[float] = None,
-    ):
-        super().__init__(E_i_mean=E_i_mean, E_i_stddev=E_i_stddev)
+    ) -> None:
+        super().__init__(
+            dataset_statistics=dataset_statistics,
+            processing=processing,
+            readout=readout,
+        )
         from modelforge.utils.units import _convert
 
         self.core_module = PaiNNCore(

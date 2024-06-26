@@ -1,62 +1,55 @@
 import torch
-from modelforge.dataset.dataset import DatasetStatistics
 from modelforge.potential.utils import NeuralNetworkData
 
 
-class CalculateAtomicSelfEnergy(object):
+def load_atomic_self_energies(path: str, with_units: bool = True):
+    import toml
 
-    @staticmethod
-    def calculate_atomic_self_energy(
-        data: NeuralNetworkData,
-        dataset_statistics: DatasetStatistics,
-    ) -> torch.Tensor:
-        """
-        Calculates the molecular self energy.
+    unitless_energy_statistic = toml.load(open(path, "r"))
 
-        Parameters
-        ----------
-        data : NeuralNetworkData
-            The input data for the model, including atomic numbers and subsystem indices.
-        number_of_molecules : int
-            The number of molecules in the batch.
+    if with_units:
+        # attach kJ/mol units
+        atomic_self_energies = {
+            key: float(value) * unit.kilojoule_per_mole
+            for key, value in unitless_energy_statistic["atomic_self_energies"].items()
+        }
+    else:
+        atomic_self_energies = unitless_energy_statistic["atomic_self_energies"]
+    return atomic_self_energies
 
-        Returns
-        -------
-        torch.Tensor
-            The tensor containing the molecular self energy for each molecule.
-        """
 
-        atomic_numbers = data.atomic_numbers
-        atomic_subsystem_indices = data.atomic_subsystem_indices.to(
-            dtype=torch.long, device=atomic_numbers.device
-        )
+def load_atomic_energies_stats(path: str, to_tensor: bool = True):
+    import toml
 
-        # atomic_number_to_energy
-        atomic_self_energies = dataset_statistics.atomic_self_energies
-        ase_tensor_for_indexing = atomic_self_energies.ase_tensor_for_indexing.to(
-            device=atomic_numbers.device
-        )
-
-        # first, we need to use the atomic numbers to generate a tensor that
-        # contains the atomic self energy for each atomic number
-        ase_tensor = ase_tensor_for_indexing[atomic_numbers]
-
-        return ase_tensor
+    unitless_energy_statistic = toml.load(open(path, "r"))
+    if to_tensor:
+        # convert values to tensor
+        atomic_energies_stats = {
+            key: torch.tensor(value)
+            for key, value in unitless_energy_statistic["atomic_energies_stats"].items()
+        }
+    else:
+        atomic_energies_stats = unitless_energy_statistic["atomic_energies_stats"]
+    return atomic_energies_stats
 
 
 class FromAtomToMoleculeReduction(torch.nn.Module):
 
     def __init__(
         self,
+        reduction_mode: str = "sum",
     ):
         """
         Initializes the per-atom property readout module.
         Performs the reduction of 'per_atom' property to 'per_molecule' property.
         """
         super().__init__()
+        self.reduction_mode = reduction_mode
 
     def forward(
-        self, per_atom_property: torch.Tensor, atomic_subsystem_indices: torch.Tensor
+        self,
+        per_atom_property: torch.Tensor,
+        atomic_subsystem_indices: torch.Tensor,
     ) -> torch.Tensor:
         """
 
@@ -78,12 +71,10 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
             device=per_atom_property.device,
         )
 
-        property_per_molecule = property_per_molecule_zeros.scatter_add(
-            0, indices, per_atom_property
+        property_per_molecule = property_per_molecule_zeros.scatter_reduce(
+            0, indices, per_atom_property, reduce=self.reduction_mode
         )
 
-        # Sum across feature dimension to get final tensor of shape (num_molecules, 1)
-        # property_per_molecule = result.sum(dim=1, keepdim=True)
         return property_per_molecule
 
 
@@ -186,36 +177,75 @@ from typing import Union
 from loguru import logger as log
 
 
-class EnergyScaling(torch.nn.Module):
+class ScaleValues(torch.nn.Module):
 
-    def __init__(
-        self, E_i_mean: Union[float, None], E_i_stddev: Union[float, None]
-    ) -> None:
-        """
-        Initializes the `DatasetStatistics` object with default values for the scaling factors and atomic self energies.
-        """
+    def __init__(self, mean: float, stddev: float) -> None:
+
         super().__init__()
-        if E_i_mean is None and E_i_stddev is None:
-            E_i_mean = torch.tensor([0.0])
-            E_i_stddev = torch.tensor([1.0])
-            log.debug("No energy scaling factors provided. Using default values.")
+        self.register_buffer("mean", torch.tensor([mean]))
+        self.register_buffer("stddev", torch.tensor([stddev]))
 
-        self.register_buffer("E_i_mean", torch.tensor([E_i_mean]))
-        self.register_buffer("E_i_stddev", torch.tensor([E_i_stddev]))
-
-    def forward(self, energies: torch.Tensor) -> torch.Tensor:
+    def forward(self, values_to_be_scaled: torch.Tensor) -> torch.Tensor:
         """
-        Rescales energies using the dataset statistics.
+        Rescales values using the provided mean and stddev.
 
         Parameters
         ----------
-        energies : torch.Tensor
+        values_to_be_scaled : torch.Tensor
             The tensor of energies to be rescaled.
 
         Returns
         -------
         torch.Tensor
-            The rescaled energies.
+            The rescaled values.
         """
 
-        return energies * self.E_i_stddev + self.E_i_mean
+        return values_to_be_scaled * self.stddev + self.mean
+
+
+class CalculateAtomicSelfEnergy(torch.nn.Module):
+
+    def __init__(self, atomic_self_energies) -> None:
+        super().__init__()
+        atomic_self_energies = atomic_self_energies
+
+        # if values in atomic_self_energies have no units, attach kJ/mol units
+        if not isinstance(list(atomic_self_energies.values())[0], unit.Quantity):
+            atomic_self_energies = {
+                key: float(value) * unit.kilojoule_per_mole
+                for key, value in atomic_self_energies.items()
+            }
+        self.atomic_self_energies = AtomicSelfEnergies(atomic_self_energies)
+
+    def calculate_atomic_self_energy(
+        self,
+        atomic_numbers: torch.Tensor,
+        atomic_subsystem_indices: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Calculates the molecular self energy.
+
+        Parameters
+        ----------
+        atomic_numbers : torch.Tensor
+            The input data for the model, including atomic numbers and subsystem indices.
+        Returns
+        -------
+        torch.Tensor
+            The tensor containing the molecular self energy for each molecule.
+        """
+
+        atomic_subsystem_indices = atomic_subsystem_indices.to(
+            dtype=torch.long, device=atomic_numbers.device
+        )
+
+        # atomic_number_to_energy
+        ase_tensor_for_indexing = self.atomic_self_energies.ase_tensor_for_indexing.to(
+            device=atomic_numbers.device
+        )
+
+        # first, we need to use the atomic numbers to generate a tensor that
+        # contains the atomic self energy for each atomic number
+        ase_tensor = ase_tensor_for_indexing[atomic_numbers]
+
+        return ase_tensor

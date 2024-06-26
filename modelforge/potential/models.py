@@ -721,10 +721,18 @@ class BaseNetwork(Module):
         Initializes the neural network potential class with specified parameters.
 
         """
+        from .processing import CalculateAtomicSelfEnergy
 
         super().__init__()
-
-        self._initialize_postprocessing(processing, readout, dataset_statistics)
+        if "atomic_self_energies" not in dataset_statistics:
+            self.calculate_atomic_self_energies = None
+        else:
+            self.calculate_atomic_self_energies = CalculateAtomicSelfEnergy(
+                dataset_statistics["atomic_self_energies"]
+            )
+        self._initialize_postprocessing(
+            processing, readout, dataset_statistics.get("atomic_energies_stats", None)
+        )
 
     def load_state_dict(
         self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False
@@ -749,7 +757,6 @@ class BaseNetwork(Module):
         from .processing import (
             FromAtomToMoleculeReduction,
             ScaleValues,
-            CalculateAtomicSelfEnergy,
         )
 
         # initialize per atom processing
@@ -768,17 +775,6 @@ class BaseNetwork(Module):
                     stddev = dataset_statistics[proc["stddev"]]
                 operation = ScaleValues(mean=mean, stddev=stddev)
                 work_to_be_done_per_property.append(operation)
-                props.append(proc)
-
-            elif proc["step"] == "calculate_ase":
-                if dataset_statistics is None:
-                    log.warning(
-                        "No dataset statistics provided for ASE calculation. Skipping!"
-                    )
-                else:
-                    operation = CalculateAtomicSelfEnergy(dataset_statistics)
-                    work_to_be_done_per_property.append(operation)
-
                 props.append(proc)
 
         self.postprocessing = ModuleList(work_to_be_done_per_property)
@@ -816,7 +812,9 @@ class BaseNetwork(Module):
 
         # perform readout on properties
         for property, processing in zip(self.readout_prop, self.readout):
-            outputs[property["out"]] = processing(outputs[property["in"]], outputs[property["index_key"]])
+            outputs[property["out"]] = processing(
+                outputs[property["in"]], outputs[property["index_key"]]
+            )
 
         # return output
         return outputs

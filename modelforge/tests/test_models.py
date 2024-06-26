@@ -125,7 +125,7 @@ def test_energy_scaling_and_offset():
     from modelforge.tests.data import potential_defaults
     from importlib import resources
 
-    filename = resources.files(potential_defaults) / "ani2x_defaults.toml"
+    filename = resources.files(potential_defaults) / "ani2x.toml"
     config = return_toml_config(filename)
 
     # Extract parameters
@@ -246,7 +246,7 @@ def test_dataset_statistics(model_name):
         simulation_environment="PyTorch",
         model_parameters=potential_parameters,
         training_parameters=training_parameters,
-        dataset_statistics=dataset_statistics["atomic_energies_stats"],
+        dataset_statistics=dataset_statistics,
     )
     import torch
 
@@ -287,7 +287,7 @@ def test_energy_between_simulation_environments(
     from importlib import resources
 
     filename = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
+        resources.files(potential_defaults) / f"{model_name.lower()}.toml"
     )
     config = return_toml_config(filename)
 
@@ -302,7 +302,7 @@ def test_energy_between_simulation_environments(
         model_parameters=potential_parameters,
     )
 
-    output_torch = model(nnp_input).E
+    output_torch = model(nnp_input)['E']
 
     torch.manual_seed(42)
     model = NeuralNetworkPotentialFactory.create_nnp(
@@ -312,7 +312,7 @@ def test_energy_between_simulation_environments(
         model_parameters=potential_parameters,
     )
     nnp_input = nnp_input.as_jax_namedtuple()
-    output_jax = model(nnp_input).E
+    output_jax = model(nnp_input)['E']
 
     # test tat we get an energie per molecule
     assert np.isclose(output_torch.sum().detach().numpy(), output_jax.sum())
@@ -431,7 +431,7 @@ def test_calculate_energies_and_forces(
     from importlib import resources
 
     filename = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
+        resources.files(potential_defaults) / f"{model_name.lower()}.toml"
     )
 
     config = return_toml_config(filename)
@@ -455,7 +455,7 @@ def test_calculate_energies_and_forces(
     if "JAX" in str(type(model)):
         nnp_input = nnp_input.as_jax_namedtuple()
 
-    result = model(nnp_input).E
+    result = model(nnp_input)['E']
 
     import jax
 
@@ -744,7 +744,7 @@ def test_casting(model_name, single_batch_with_batchsize_64):
     from importlib import resources
 
     filename = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
+        resources.files(potential_defaults) / f"{model_name.lower()}.toml"
     )
 
     config = return_toml_config(filename)

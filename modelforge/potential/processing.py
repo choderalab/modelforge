@@ -204,7 +204,6 @@ class CalculateAtomicSelfEnergy(torch.nn.Module):
 
     def __init__(self, atomic_self_energies) -> None:
         super().__init__()
-        atomic_self_energies = atomic_self_energies
 
         # if values in atomic_self_energies have no units, attach kJ/mol units
         if not isinstance(list(atomic_self_energies.values())[0], unit.Quantity):

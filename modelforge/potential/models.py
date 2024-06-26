@@ -24,8 +24,9 @@ if TYPE_CHECKING:
     from modelforge.potential.ani import ANI2x, AniNeuralNetworkData
     from modelforge.potential.painn import PaiNN, PaiNNNeuralNetworkData
     from modelforge.potential.physnet import PhysNet, PhysNetNeuralNetworkData
-    from modelforge.potential.sake import SAKE, SAKENeuralNetworkInput
+    from modelforge.potential.sake import SAKE, SAKENeuralNetworkData
     from modelforge.potential.schnet import SchNet, SchnetNeuralNetworkData
+    from modelforge.potential.spookynet import SpookyNet, SpookyNetNeuralNetworkData
 
 
 # Define NamedTuple for the outputs of Pairlist and Neighborlist forward method
@@ -438,7 +439,7 @@ class PyTorch2JAXConverter:
     """
 
     def convert_to_jax_model(
-        self, nnp_instance: Union["ANI2x", "SchNet", "PaiNN", "PhysNet"]
+        self, nnp_instance: Union["ANI2x", "SchNet", "PaiNN", "PhysNet", "SAKE", "SpookyNet"]
     ) -> JAXModel:
         """
         Convert a PyTorch neural network instance to a JAX model.
@@ -770,7 +771,7 @@ class CoreNetwork(Module, ABC):
         "PaiNNNeuralNetworkData",
         "SchnetNeuralNetworkData",
         "AniNeuralNetworkData",
-        "SAKENeuralNetworkInput",
+        "SAKENeuralNetworkData",
     ]:
         """
         Prepares model-specific inputs before the forward pass.
@@ -801,7 +802,8 @@ class CoreNetwork(Module, ABC):
             "PaiNNNeuralNetworkData",
             "SchnetNeuralNetworkData",
             "AniNeuralNetworkData",
-            "SAKENeuralNetworkInput",
+            "SAKENeuralNetworkData",
+            "SpookyNetNeuralNetworkData",
         ],
     ):
         """

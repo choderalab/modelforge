@@ -18,7 +18,7 @@ import torch.nn.functional as F
 
 
 @dataclass
-class SAKENeuralNetworkInput:
+class SAKENeuralNetworkData:
     """
     A dataclass designed to structure the inputs for SAKE neural network potentials, ensuring
     an efficient and structured representation of atomic systems for energy computation and
@@ -48,7 +48,7 @@ class SAKENeuralNetworkInput:
 
     Examples
     --------
-    >>> sake_input = SAKENeuralNetworkInput(
+    >>> sake_input = SAKENeuralNetworkData(
     ...     atomic_numbers=torch.tensor([1, 6, 6, 8]),
     ...     positions=torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]),
     ...     atomic_subsystem_indices=torch.tensor([0, 0, 0, 0]),
@@ -122,7 +122,7 @@ class SAKECore(CoreNetwork):
 
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
-    ) -> SAKENeuralNetworkInput:
+    ) -> SAKENeuralNetworkData:
         # Perform atomic embedding
 
         number_of_atoms = data.atomic_numbers.shape[0]
@@ -133,7 +133,7 @@ class SAKECore(CoreNetwork):
             )
         )
 
-        nnp_input = SAKENeuralNetworkInput(
+        nnp_input = SAKENeuralNetworkData(
             pair_indices=pairlist_output.pair_indices,
             number_of_atoms=number_of_atoms,
             positions=data.positions.to(self.embedding.weight.dtype),
@@ -144,13 +144,13 @@ class SAKECore(CoreNetwork):
 
         return nnp_input
 
-    def _forward(self, data: SAKENeuralNetworkInput):
+    def _forward(self, data: SAKENeuralNetworkData):
         """
         Compute atomic representations/embeddings.
 
         Parameters
         ----------
-        data: SAKENeuralNetworkInput
+        data: SAKENeuralNetworkData
             Dataclass containing atomic properties, embeddings, and pairlist.
 
         Returns

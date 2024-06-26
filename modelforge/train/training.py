@@ -798,13 +798,24 @@ def perform_training(
         remove_self_energies=remove_self_energies,
         version_select=version_select,
     )
+    dm.prepare_data()
+    dm.setup()
+
+    # read dataset statistics
+    import toml
+
+    dataset_statistics = toml.load(dm.dataset_statistics_filename)
+    log.info(f"Setting E_i_mean and E_i_stddev for {model_name}")
+    log.info(f"E_i_mean: {dataset_statistics['atomic_energies_stats']['E_i_mean']}")
+    log.info(f"E_i_stddev: {dataset_statistics['atomic_energies_stats']['E_i_stddev']}")
+
     # Set up model
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="training",
         model_type=model_name,
         model_parameters=potential_config["potential_parameters"],
         training_parameters=training_config["training_parameters"],
-        dataset_statistics_path=dm.dataset_statistics_filename,
+        dataset_statistics=dataset_statistics["atomic_energies_stats"],
     )
 
     # set up traininer
@@ -823,24 +834,6 @@ def perform_training(
         logger=logger,  # Add the logger here
         callbacks=callbacks,
     )
-
-    dm.prepare_data()
-    dm.setup()
-
-    log.info(f"Setting E_i_mean and E_i_stddev for {model_name}")
-    log.info(f"E_i_mean: {dm.dataset_statistics.E_i_mean}")
-    log.info(f"E_i_stddev: {dm.dataset_statistics.E_i_stddev}")
-
-    model.model.core_module.readout_module.E_i_mean = torch.tensor(
-        [dm.dataset_statistics.E_i_mean], dtype=torch.float32
-    )
-    model.model.core_module.readout_module.E_i_stddev = torch.tensor(
-        [dm.dataset_statistics.E_i_stddev], dtype=torch.float32
-    )
-
-    # from modelforge.utils.misc import visualize_model
-
-    # visualize_model(dm, model_name)
 
     # Run training loop and validate
     trainer.fit(

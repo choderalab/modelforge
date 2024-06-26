@@ -1023,6 +1023,9 @@ class DataModule(pl.LightningDataModule):
 
         # if dataset statistics is present load it from disk
         if os.path.exists(self.dataset_statistics_filename):
+            log.info(
+                f"Loading dataset statistics from disk: {self.dataset_statistics_filename}"
+            )
             atomic_self_energies = self._read_atomic_self_energies()
             atomic_energies_stats = self._read_atomic_energies_stats()
         else:
@@ -1094,6 +1097,9 @@ class DataModule(pl.LightningDataModule):
                 "w",
             ),
         )
+        log.info(
+            f"Saving dataset statistics to disk: {self.dataset_statistics_filename}"
+        )
 
     def _read_atomic_self_energies(self) -> Dict[str, Quantity]:
         """Read the atomic self energies from a file."""
@@ -1120,7 +1126,8 @@ class DataModule(pl.LightningDataModule):
         )
         # convert values to tensor
         atomic_energies_stats = {
-            key: torch.tensor(value) for key, value in unitless_energy_statistic['atomic_energies_stats'].items()
+            key: torch.tensor(value)
+            for key, value in unitless_energy_statistic["atomic_energies_stats"].items()
         }
         return atomic_energies_stats
 

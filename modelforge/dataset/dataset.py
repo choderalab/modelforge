@@ -215,7 +215,6 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         """
 
         self.properties_of_interest = {}
-        self.dataset_statistics: Dict[str, float] = {}
 
         self.properties_of_interest["atomic_numbers"] = torch.from_numpy(
             dataset[property_name.Z].flatten()
@@ -1169,7 +1168,6 @@ class DataModule(pl.LightningDataModule):
     def _cache_dataset(self, torch_dataset):
         """Cache the dataset and its statistics using PyTorch's serialization."""
         torch.save(torch_dataset, "torch_dataset.pt")
-        torch.save(self.dataset_statistics, "dataset_statistics.pt")
         # sleep for 1 second to make sure that the dataset was written to disk
         import time
 

@@ -193,9 +193,14 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
 
     raw_data_item = dataset[0]
     assert isinstance(raw_data_item, BatchData)
-    assert len(raw_data_item.__dataclass_fields__) == 2  
-    assert len(raw_data_item.nnp_input.__dataclass_fields__) == 5  # 8 properties are returned
-    assert len(raw_data_item.metadata.__dataclass_fields__) == 5  # 8 properties are returned
+    assert len(raw_data_item.__dataclass_fields__) == 2
+    assert (
+        len(raw_data_item.nnp_input.__dataclass_fields__) == 5
+    )  # 8 properties are returned
+    assert (
+        len(raw_data_item.metadata.__dataclass_fields__) == 5
+    )  # 8 properties are returned
+
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_file_existence_after_initialization(
@@ -444,7 +449,8 @@ def test_data_item_format_of_datamodule(
     assert isinstance(raw_data_item.metadata.E, torch.Tensor)
 
     assert (
-        raw_data_item.nnp_input.atomic_numbers.shape[0] == raw_data_item.nnp_input.positions.shape[0]
+        raw_data_item.nnp_input.atomic_numbers.shape[0]
+        == raw_data_item.nnp_input.positions.shape[0]
     )
 
 
@@ -763,15 +769,23 @@ def test_energy_postprocessing():
         ),
     )
 
-    dataset_statistics = dm.dataset_statistics
+    f = dm.dataset_statistics_filename
+    import toml
+
+    dataset_statistics = toml.load(f)
 
     torch.isclose(
-        dataset_statistics.E_i_mean,
+        torch.tensor(
+            dataset_statistics["atomic_energies_stats"]["E_i_mean"], dtype=torch.float64
+        ),
         torch.tensor(-424.8404, dtype=torch.float64),
     )
 
     torch.isclose(
-        dataset_statistics.E_i_stddev,
+        torch.tensor(
+            dataset_statistics["atomic_energies_stats"]["E_i_stddev"],
+            dtype=torch.float64,
+        ),
         torch.tensor(3438.2806, dtype=torch.float64),
     )
 
@@ -801,18 +815,21 @@ def test_self_energy(dataset_name, datamodule_factory):
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
     )
     # it is saved in the dataset statistics
-    assert dm.dataset_statistics
-    self_energies = dm.dataset_statistics.atomic_self_energies
+    f = dm.dataset_statistics_filename
+    import toml
+
+    dataset_statistics = toml.load(f)
+    self_energies = dm.dataset_statistics[atomic_self_energies]
     # 5 elements present in the QM9 dataset
-    assert len(self_energies) == 5
+    assert len(self_energies.keys()) == 5
     # H: -1313.4668615546
-    assert np.isclose(self_energies[1], -1313.4668615546)
+    assert np.isclose(self_energies['H'], -1313.4668615546)
     # C: -99366.70745535441
-    assert np.isclose(self_energies[6], -99366.70745535441)
+    assert np.isclose(self_energies['C'], -99366.70745535441)
     # N: -143309.9379722722
-    assert np.isclose(self_energies[7], -143309.9379722722)
+    assert np.isclose(self_energies['N'], -143309.9379722722)
     # O: -197082.0671774158
-    assert np.isclose(self_energies[8], -197082.0671774158)
+    assert np.isclose(self_energies['O'], -197082.0671774158)
 
     # Scenario 2: dataset may or may not contain self energies
     # but user wants to use least square regression to calculate the energies
@@ -826,7 +843,10 @@ def test_self_energy(dataset_name, datamodule_factory):
     )
 
     # it is saved in the dataset statistics
-    assert dm.dataset_statistics
+    f = dm.dataset_statistics_filename
+    import toml
+
+    dataset_statistics = toml.load(f)
     self_energies = dm.dataset_statistics.atomic_self_energies
     # 5 elements present in the total QM9 dataset
     assert len(self_energies) == 5

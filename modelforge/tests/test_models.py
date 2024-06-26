@@ -202,12 +202,20 @@ def test_dataset_statistics(model_name):
     from modelforge.dataset.dataset import DataModule
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
     from modelforge.train.training import return_toml_config
-    from modelforge.tests.data import training_defaults
+    from modelforge.tests.data import (
+        training_defaults,
+        potential_defaults,
+        dataset_defaults,
+    )
     from importlib import resources
 
-    filename = resources.files(training_defaults) / f"{model_name.lower()}_qm9.toml"
+    potential_filename = (
+        resources.files(potential_defaults) / f"{model_name.lower()}.toml"
+    )
+    training_filename = resources.files(training_defaults) / f"default.toml"
+    dataset_filename = resources.files(dataset_defaults) / f"qm9.toml"
 
-    config = return_toml_config(filename)
+    config = return_toml_config(potential_path=potential_filename, dataset_path=dataset_filename, training_path=training_filename)
 
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
@@ -244,7 +252,7 @@ def test_dataset_statistics(model_name):
 
     # check that the E_i_mean is the same than in the dataset statistics
     assert torch.isclose(
-        torch.tensor([toml_E_i_mean]), model.model.postprocessing["E"][0].mean
+        torch.tensor([toml_E_i_mean]), model.model.postprocessing[0].mean
     )
 
     torch.save(model.state_dict(), "model.pth")
@@ -259,7 +267,7 @@ def test_dataset_statistics(model_name):
 
     model.load_state_dict(torch.load("model.pth"))
     assert torch.isclose(
-        torch.tensor([toml_E_i_mean]), model.postprocessing["E"][0].mean
+        torch.tensor([toml_E_i_mean]), model.postprocessing[0].mean
     )
 
 
@@ -392,7 +400,7 @@ def test_forward_pass(
     output = model(nnp_input)
 
     # test tat we get an energie per molecule
-    assert len(output.E) == nr_of_mols
+    assert len(output["E"]) == nr_of_mols
 
     # the batch consists of methane (CH4) and amamonium (NH3)
     # which has symmetric hydrogens.
@@ -401,12 +409,12 @@ def test_forward_pass(
     if "JAX" not in str(type(model)):
 
         # assert that the following tensor has equal values for dim=0 index 1 to 4 and 6 to 8
-        assert torch.allclose(output.E_i[1:4], output.E_i[1], atol=1e-5)
-        assert torch.allclose(output.E_i[6:8], output.E_i[6], atol=1e-5)
+        assert torch.allclose(output["E_i"][1:4], output["E_i"][1], atol=1e-5)
+        assert torch.allclose(output["E_i"][6:8], output["E_i"][6], atol=1e-5)
 
         # make sure that the total energy is \sum E_i
-        assert torch.allclose(output.E[0], output.E_i[0:5].sum(dim=0), atol=1e-5)
-        assert torch.allclose(output.E[1], output.E_i[5:9].sum(dim=0), atol=1e-5)
+        assert torch.allclose(output["E"][0], output["E_i"][0:5].sum(dim=0), atol=1e-5)
+        assert torch.allclose(output["E"][1], output["E_i"][5:9].sum(dim=0), atol=1e-5)
 
 
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())

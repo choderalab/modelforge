@@ -58,6 +58,7 @@ def test_representation():
     from torchmdnet.models.utils import ExpNormalSmearing, OptimizedDistance
 
     from modelforge.potential.utils import CosineCutoff
+    from modelforge.potential.tensornet import TensorNetNeuralNetworkData
     from modelforge.potential.tensornet import TensorNetRepresentation
     from modelforge.potential.utils import TensorNetRadialSymmetryFunction 
 
@@ -94,7 +95,6 @@ def test_representation():
         max_z,
         dtype,
     )
-    tensor_embedding.reset_parameters()
     distance_module = OptimizedDistance(
         cutoff_lower,
         cutoff_upper,
@@ -134,7 +134,23 @@ def test_representation():
 
 
     ################ modelforge TensorNet ################
+    tensornet_representation_module = TensorNetRepresentation(
+        hidden_channels=hidden_channels,
+        radial_max_distance=cutoff_upper * unit.angstrom,
+        radial_min_distance=cutoff_lower * unit.angstrom,
+        number_of_radial_basis_functions=num_rbf,
+        activation_function=act_class,
+        trainable_rbf=trainable_rbf,
+        max_z=max_z,
+        dtype=dtype,
+    )
 
+    # nnp_data = TensorNetNeuralNetworkData(
+    #     atomic_numbers=z,
+    #     edge_index=edge_index,
+    #     edge_weight=edge_weight,
+    #     edge_vec=edge_vec,
+    # )
     ################ modelforge TensorNet ################
 
 if __name__ == "__main__":

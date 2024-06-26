@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import torch
 from openff.units import unit
 from torch import nn, Tensor
+from torchmdnet.models.utils import OptimizedDistance
 from typing import Optional, Tuple
 
 from modelforge.potential.models import InputPreparation
@@ -16,7 +17,7 @@ from modelforge.potential.utils import NNPInput
 @dataclass
 class TensorNetNeuralNetworkData(NeuralNetworkData):
     """
-    A dataclass to structure the inputs for ANI neural network potentials, designed to
+    A dataclass to structure the inputs for TensorNet neural network potentials, designed to
     facilitate the efficient representation of atomic systems for energy computation and
     property prediction.
 
@@ -38,11 +39,12 @@ class TensorNetNeuralNetworkData(NeuralNetworkData):
         A 1D tensor mapping each atom to its respective subsystem or molecule. Shape: [num_atoms].
     total_charge : torch.Tensor
         An tensor with the total charge of each system or molecule. Shape: [num_systems].
-    atomic_numbers : torch.Tensor
-        A 1D tensor containing the atomic numbers for atoms, used for identifying the atom types within the model. Shape: [num_atoms].
-
     """
-    pass
+    atomic_numbers: Tensor
+    edge_index: Tensor
+    edge_weight: Tensor
+    edge_vec: Tensor
+
 
 class TensorNet(BaseNetwork):
     def __init__(
@@ -106,7 +108,7 @@ class TensorNetCore(CoreNetwork):
     def _forward(self):
         pass
 
-    def _model_specific_input_preparation(self):
+    def _model_specific_input_preparation(self)->TensorNetNeuralNetworkData:
         pass
 
     def forward(self):
@@ -134,17 +136,17 @@ class TensorNetRepresentation(torch.nn.Module):
             number_of_radial_basis_functions
         )
         self.hidden_channels = hidden_channels
-        self. distance_proj1 = nn.Linear(
+        self.distance_proj1 = nn.Linear(
             number_of_radial_basis_functions,
             hidden_channels,
             dtype=dtype,
         )
-        self. distance_proj2 = nn.Linear(
+        self.distance_proj2 = nn.Linear(
             number_of_radial_basis_functions,
             hidden_channels,
             dtype=dtype,
         )
-        self. distance_proj3 = nn.Linear(
+        self.distance_proj3 = nn.Linear(
             number_of_radial_basis_functions,
             hidden_channels,
             dtype=dtype,
@@ -224,10 +226,43 @@ class TensorNetRepresentation(torch.nn.Module):
         return radial_symmetry_function
 
     def forward(self, data: TensorNetNeuralNetworkData):
-        radial_feature_vector = self.radial_symmetry_function(data.d_ij)
+        Zij = self._get_atomic_number_message(data.z, data.edge_index)
+        # Normalizing edge vectors by their length can result in NaNs, breaking Autograd.
+        # I avoid dividing by zero by setting the weight of self edges and self loops to 1
+        edge_vec_norm = edge_vec / edge_weight.masked_fill(mask, 1).unsqueeze(1)
+
+        radial_feature_vector = self.radial_symmetry_function(data.edge_weight)
         # cutoff
-        rcut_ij = self.cutoff_module(data.d_ij)
+        rcut_ij = self.cutoff_module(data.edge_weight)
         radial_feature_vector = radial_feature_vector * rcut_ij
+
+        Iij, Aij, Sij = self._get_tensor_messages(
+            Zij, data.edge_weight, edge_vec_norm, radial_feature_vector
+        )
+        source = torch.zeros(
+            z.shape[0], self.hidden_channels, 3, 3, device=z.device, dtype=Iij.dtype
+        )
+        I = source.index_add(dim=0, index=edge_index[0], source=Iij)
+        A = source.index_add(dim=0, index=edge_index[0], source=Aij)
+        S = source.index_add(dim=0, index=edge_index[0], source=Sij)
+        norm = self.init_norm(tensor_norm(I + A + S))
+        for linear_scalar in self.linears_scalar:
+            norm = self.act(linear_scalar(norm))
+        norm = norm.reshape(-1, self.hidden_channels, 3)
+        I = (
+            self.linears_tensor[0](I.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+            * norm[..., 0, None, None]
+        )
+        A = (
+            self.linears_tensor[1](A.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+            * norm[..., 1, None, None]
+        )
+        S = (
+            self.linears_tensor[2](S.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+            * norm[..., 2, None, None]
+        )
+        X = I + A + S
+        return X
 
 
 class TensorNetInteraction(torch.nn.Module):
@@ -236,5 +271,3 @@ class TensorNetInteraction(torch.nn.Module):
 
     def forward(self):
         pass
-
-

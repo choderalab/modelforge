@@ -120,6 +120,7 @@ def test_spookynet_interaction_module_forward():
     pairlist = make_random_pairlist(N, P, include_self_pairs=False)
     spookynet_interaction_module(x, pairlist, f_ij, f_ij_cutoff, p_orbital_ij, d_orbital_ij)
 
+
 def test_spookynet_interaction_module_against_reference():
     from modelforge.potential.spookynet import SpookyNetInteractionModule as MfSpookyNetInteractionModule
     from spookynet.modules.interaction_module import InteractionModule as RefSpookyNetInteractionModule
@@ -144,7 +145,7 @@ def test_spookynet_interaction_module_against_reference():
         num_residual_output=num_residual_all
     ).to(torch.double)
 
-    ref_spookynet_interaction_module =  RefSpookyNetInteractionModule(
+    ref_spookynet_interaction_module = RefSpookyNetInteractionModule(
         num_features=num_features,
         num_basis_functions=number_of_radial_basis_functions,
         num_residual_pre=num_residual_all,
@@ -160,9 +161,18 @@ def test_spookynet_interaction_module_against_reference():
         num_residual_output=num_residual_all
     ).to(torch.double)
 
-    for model in [mf_spookynet_interaction_module, ref_spookynet_interaction_module]:
-        for name, param in model.named_parameters():
-            print(name, param.size())
+    for (_, mf_param), (_, ref_param) in zip(mf_spookynet_interaction_module.named_parameters(),
+                                             ref_spookynet_interaction_module.named_parameters()):
+        mf_param.requires_grad = False
+        mf_param[:] = ref_param
+
+    assert len(list(mf_spookynet_interaction_module.resblock.named_parameters())) == len(list(ref_spookynet_interaction_module.resblock.named_parameters()))
+    for (mf_name, mf_param), (ref_name, ref_param) in zip(mf_spookynet_interaction_module.resblock.named_parameters(), ref_spookynet_interaction_module.resblock.named_parameters()):
+        print(f"{mf_name=} {ref_name=}")
+        if not torch.equal(mf_param, ref_param):
+            print(f"{mf_param=} {ref_param=}")
+        else:
+            print("parameters are the same")
 
 
     x = torch.rand((N, num_features), dtype=torch.double)
@@ -172,6 +182,9 @@ def test_spookynet_interaction_module_against_reference():
     d_orbital_ij = torch.rand((P, 1), dtype=torch.double)
     pairlist = make_random_pairlist(N, P, include_self_pairs=False)
     idx_i, idx_j = pairlist
-    mf_spookynet_interaction_result = mf_spookynet_interaction_module(x, pairlist, f_ij, f_ij_cutoff, p_orbital_ij, d_orbital_ij)
-    ref_spookynet_interaction_result = ref_spookynet_interaction_module(x, f_ij * f_ij_cutoff, p_orbital_ij, d_orbital_ij, idx_i, idx_j, 1, None, None)
-
+    mf_x_result, mf_y_result = mf_spookynet_interaction_module(x, pairlist, f_ij, f_ij_cutoff, p_orbital_ij,
+                                                               d_orbital_ij)
+    ref_x_result, ref_y_result = ref_spookynet_interaction_module(x, f_ij * f_ij_cutoff, p_orbital_ij,
+                                                                  d_orbital_ij, idx_i, idx_j, 1, None, None)
+    assert torch.equal(mf_x_result, ref_x_result)
+    assert torch.equal(mf_y_result, ref_y_result)

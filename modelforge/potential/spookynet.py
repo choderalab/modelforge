@@ -95,7 +95,6 @@ class SpookyNetCore(CoreNetwork):
             number_of_radial_basis_functions: int = 20,
             number_of_interaction_modules: int = 3,
             number_of_filters: int = 64,
-            shared_interactions: bool = False,
             cutoff: unit.Quantity = 5.0 * unit.angstrom,
     ) -> None:
         """

@@ -1,0 +1,4 @@
+[dataset]
+dataset_name = "QM9"
+batch_size = 512
+remove_self_energies = true

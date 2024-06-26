@@ -1,0 +1,28 @@
+[training]
+nr_of_epochs = 50
+save_dir = "test"
+experiment_name = "your_experiment_name"
+accelerator = "cpu"
+num_nodes = 1
+devices = 1  # [0,1,2,3]
+
+[training.training_parameters]
+lr = 1e-3
+
+[training.training_parameters.lr_scheduler_config]
+frequency = 1
+mode = "min"
+factor = 0.1
+patience = 10
+cooldown = 5
+min_lr = 1e-8
+threshold = 0.1
+threshold_mode = "abs"
+monitor = "rmse_val_loss"
+interval = "epoch"
+
+[training.early_stopping]
+verbose = true
+monitor = "rmse_val_loss"
+min_delta = 0.001
+patience = 50

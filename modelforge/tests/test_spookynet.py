@@ -166,14 +166,15 @@ def test_spookynet_interaction_module_against_reference():
         mf_param.requires_grad = False
         mf_param[:] = ref_param
 
-    assert len(list(mf_spookynet_interaction_module.resblock.named_parameters())) == len(list(ref_spookynet_interaction_module.resblock.named_parameters()))
-    for (mf_name, mf_param), (ref_name, ref_param) in zip(mf_spookynet_interaction_module.resblock.named_parameters(), ref_spookynet_interaction_module.resblock.named_parameters()):
+    assert len(list(mf_spookynet_interaction_module.resblock.named_parameters())) == len(
+        list(ref_spookynet_interaction_module.resblock.named_parameters()))
+    for (mf_name, mf_param), (ref_name, ref_param) in zip(mf_spookynet_interaction_module.resblock.named_parameters(),
+                                                          ref_spookynet_interaction_module.resblock.named_parameters()):
         print(f"{mf_name=} {ref_name=}")
         if not torch.equal(mf_param, ref_param):
             print(f"{mf_param=} {ref_param=}")
         else:
             print("parameters are the same")
-
 
     x = torch.rand((N, num_features), dtype=torch.double)
     f_ij = torch.rand((P, number_of_radial_basis_functions), dtype=torch.double)
@@ -188,3 +189,20 @@ def test_spookynet_interaction_module_against_reference():
                                                                   d_orbital_ij, idx_i, idx_j, 1, None, None)
     assert torch.equal(mf_x_result, ref_x_result)
     assert torch.equal(mf_y_result, ref_y_result)
+
+
+def test_spookynet_bernstein_polynomial_equivalence():
+    from spookynet.modules.exponential_bernstein_polynomials import ExponentialBernsteinPolynomials as RefExponentialBernsteinPolynomials
+    from modelforge.potential.utils import ExponentialBernsteinPolynomials as MfExponentialBernSteinPolynomials
+
+    num_basis_functions = 3
+    ref_exp_bernstein_polynomials = RefExponentialBernsteinPolynomials(num_basis_functions, exp_weighting=True)
+    mf_exp_bernstein_polynomials = MfExponentialBernSteinPolynomials(num_basis_functions)
+
+    N = 5
+    r_angstrom = torch.rand((N, 1))
+    r_nanometer = r_angstrom * 0.1
+    cutoff_values = torch.rand((N, 1))
+    ref_exp_bernstein_polynomial_result = ref_exp_bernstein_polynomials(r_angstrom, cutoff_values)
+    mf_exp_bernstein_polynomial_result = mf_exp_bernstein_polynomials(r_nanometer) * cutoff_values
+    assert torch.equal(ref_exp_bernstein_polynomial_result, mf_exp_bernstein_polynomial_result)

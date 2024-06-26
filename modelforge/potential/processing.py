@@ -1,5 +1,5 @@
 import torch
-from modelforge.potential.utils import NeuralNetworkData
+from typing import Dict
 
 
 def load_atomic_self_energies(path: str, with_units: bool = True):
@@ -47,9 +47,7 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         self.reduction_mode = reduction_mode
 
     def forward(
-        self,
-        per_atom_property: torch.Tensor,
-        atomic_subsystem_indices: torch.Tensor,
+        self, per_atom_property: torch.Tensor, index: torch.Tensor
     ) -> torch.Tensor:
         """
 
@@ -62,11 +60,11 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         -------
         Tensor, shape [nr_of_moleculs, 1], the per-molecule property.
         """
-
+        indices = index.to(torch.int64)
+        per_atom_property = per_atom_property
         # Perform scatter add operation for atoms belonging to the same molecule
-        indices = atomic_subsystem_indices.to(torch.int64)
         property_per_molecule_zeros = torch.zeros(
-            len(atomic_subsystem_indices.unique()),
+            len(indices.unique()),
             dtype=per_atom_property.dtype,
             device=per_atom_property.device,
         )
@@ -74,7 +72,6 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         property_per_molecule = property_per_molecule_zeros.scatter_reduce(
             0, indices, per_atom_property, reduce=self.reduction_mode
         )
-
         return property_per_molecule
 
 

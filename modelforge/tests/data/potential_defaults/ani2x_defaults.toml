@@ -10,14 +10,9 @@ angular_max_distance = "3.5 angstrom"
 angular_min_distance = "0.8 angstrom"
 angular_dist_divisions = 8
 
-[potential.potential_parameters.processing]
-E = [
-  { step = "normalization", mean = "E_i_mean", stddev = "E_i_mean" },
-  { step = "calculate_ase" },
-  { step = "per_molecule" }
+processing = [
+  { in = "E_i", out = "E_i", step = "normalization", mean = "E_i_mean", stddev = "E_i_mean" },
 ]
-
-[potential.potential_parameters.readout]
-E = [
-  { step = "from_atom_to_molecule", mode = 'sum'}
+readout = [
+  { step = "from_atom_to_molecule", mode = 'sum', in = 'E_i', index_key = 'atomic_subsystem_indices', out = 'E' },
 ]

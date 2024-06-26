@@ -753,55 +753,50 @@ class BaseNetwork(Module):
         )
 
         # initialize per atom processing
-        self.postprocessing = {}
-        for property in processing:
-            work_to_be_done_per_property = []
-            for proc in processing[property]:
-                if proc["step"] == "normalization":
+        work_to_be_done_per_property = []
+        props = []
+        for proc in processing:
+            if proc["step"] == "normalization":
+                if dataset_statistics is None:
+                    log.warning(
+                        f"No mean and stddev provided for property {proc['in']}. Setting to default values!"
+                    )
+                    mean = 0.0
+                    stddev = 1.0
+                else:
+                    mean = dataset_statistics[proc["mean"]]
+                    stddev = dataset_statistics[proc["stddev"]]
+                operation = ScaleValues(mean=mean, stddev=stddev)
+                work_to_be_done_per_property.append(operation)
+                props.append(proc)
 
-                    if dataset_statistics is None:
-                        log.warning(
-                            f"No mean and stddev provided for property {property}. Setting to default values!"
-                        )
-                        mean = 0.0
-                        stddev = 0.0
-                    else:
-                        mean = dataset_statistics[proc["mean"]]
-                        stddev = dataset_statistics[proc["stddev"]]
-                    operation = ScaleValues(mean=mean, stddev=stddev)
+            elif proc["step"] == "calculate_ase":
+                if dataset_statistics is None:
+                    log.warning(
+                        "No dataset statistics provided for ASE calculation. Skipping!"
+                    )
+                else:
+                    operation = CalculateAtomicSelfEnergy(dataset_statistics)
                     work_to_be_done_per_property.append(operation)
 
-                elif proc["step"] == "calculate_ase":
-                    if dataset_statistics is None:
-                        log.warning(
-                            "No dataset statistics provided for ASE calculation. Skipping!"
-                        )
-                    else:
-                        operation = CalculateAtomicSelfEnergy(dataset_statistics)
-                        work_to_be_done_per_property.append(operation)
+                props.append(proc)
 
-            self.postprocessing[property] = ModuleList(work_to_be_done_per_property)
+        self.postprocessing = ModuleList(work_to_be_done_per_property)
+        self.postprocessing_prop = props
 
         # initialize per molecule reduction
-        self.readout = {}
-        for property in readout:
-            work_to_be_done_per_property = []
-            for proc in processing[property]:
-                if proc["step"] == "from_atom_to_molecule":
-                    work_to_be_done_per_property.append(
-                        FromAtomToMoleculeReduction(reduction_mode=proc["mode"])
-                    )
+        work_to_be_done_per_property = []
+        props = []
+        for proc in readout:
+            if proc["step"] == "from_atom_to_molecule":
+                operation = FromAtomToMoleculeReduction(
+                    reduction_mode=proc["mode"],
+                )
+            work_to_be_done_per_property.append(operation)
+            props.append(proc)
 
-            self.readout[property] = ModuleList(work_to_be_done_per_property)
-
-        # register all modules
-        for prop in self.postprocessing:
-            for module_list in self.postprocessing[prop]:
-                self.add_module(f"{prop}_post", module_list)
-
-        for prop in self.readout:
-            for module_list in self.readout[prop]:
-                self.add_module(f"{prop}_readout", module_list)
+        self.readout = ModuleList(work_to_be_done_per_property)
+        self.readout_prop = props
 
     def forward(self, data: NNPInput):
         # perform input checks
@@ -814,15 +809,14 @@ class BaseNetwork(Module):
         # perform the forward pass implemented in the model
         outputs = self.core_module._forward(nnp_input)
         # perform postprocessing on properties
-        for property, processing in self.postprocessing.items():
-            for module in processing:
-                outputs[property] = module(outputs[property])
+        for property, processing in zip(self.postprocessing_prop, self.postprocessing):
+            outputs[property["out"]] = processing(outputs[property["in"]])
         # if per atom properties need to be combined
-        output = self.combine_per_atom_properties(output)
+        outputs = self.combine_per_atom_properties(outputs)
+
         # perform readout on properties
-        for property, processing in self.readout.items():
-            for module in processing:
-                outputs[property] = module(outputs[property])
+        for property, processing in zip(self.readout_prop, self.readout):
+            outputs[property["out"]] = processing(outputs[property["in"]], outputs[property["index_key"]])
 
         # return output
-        return output
+        return outputs

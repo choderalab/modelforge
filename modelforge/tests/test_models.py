@@ -242,14 +242,13 @@ def test_dataset_statistics(model_name):
     )
     import torch
 
-    print(model.model.postprocessing["E"])
     # check that the E_i_mean is the same than in the dataset statistics
     assert torch.isclose(
         torch.tensor([toml_E_i_mean]), model.model.postprocessing["E"][0].mean
     )
 
     torch.save(model.state_dict(), "model.pth")
-    print(model.state_dict())
+    l = model.state_dict()
 
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="inference",
@@ -257,7 +256,7 @@ def test_dataset_statistics(model_name):
         simulation_environment="PyTorch",
         model_parameters=potential_parameters,
     )
-    
+
     model.load_state_dict(torch.load("model.pth"))
     assert torch.isclose(
         torch.tensor([toml_E_i_mean]), model.postprocessing["E"][0].mean

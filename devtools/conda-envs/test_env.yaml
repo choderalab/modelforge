@@ -30,6 +30,7 @@ dependencies:
   - codecov
   - requests
   - torchani
+  - torchmd-net
   - versioneer
 
   # Docs

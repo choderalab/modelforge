@@ -10,7 +10,7 @@ on:
   pull_request:
     branches:
       - "main"
-      - "ref-toml"
+      - "tensornet"
   schedule:
     # Weekly tests run on main by default:
     #   Scheduled workflows run on the latest commit on the default or base branch.
@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macOS-latest, ubuntu-latest]
+        os: [ubuntu-latest]
         python-version: ["3.10", "3.11"]
 
     steps:

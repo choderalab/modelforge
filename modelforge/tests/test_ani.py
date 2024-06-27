@@ -101,16 +101,11 @@ def test_modelforge_ani(setup_two_methanes):
     # Test modelforge ANI implementation
     # Test forward pass and backpropagation through network
     from modelforge.potential.ani import ANI2x as mf_ANI2x
+    from modelforge.tests.test_models import load_configs
     import torch
 
     # read default parameters
-    from modelforge.train.training import return_toml_config
-    from importlib import resources
-    from modelforge.tests.data import potential_defaults
-
-    file_path = resources.files(potential_defaults) / f"ani2x_defaults.toml"
-    config = return_toml_config(file_path)
-
+    config = load_configs("ani2x_without_ase", 'qm9')
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
 
@@ -118,7 +113,7 @@ def test_modelforge_ani(setup_two_methanes):
     device = torch.device("cpu")
     model = mf_ANI2x(**potential_parameters).to(device=device)
     energy = model(mf_input)
-    derivative = torch.autograd.grad(energy.E.sum(), mf_input.positions)[0]
+    derivative = torch.autograd.grad(energy['E']sum(), mf_input.positions)[0]
     force = -derivative
 
 

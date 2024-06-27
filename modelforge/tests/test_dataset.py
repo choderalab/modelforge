@@ -919,9 +919,8 @@ def test_self_energy(dataset_name, datamodule_factory):
                 methane_energy_offset, torch.tensor([-1656.8412], dtype=torch.float64)
             )
         # extract the ase offset
-        f = dm.dataset_statistics_filename
-        dataset_statistics = toml.load(f)
-        self_energies = dataset_statistics["atomic_self_energies"]
+        from modelforge.potential.processing import load_atomic_self_energies
+        self_energies = load_atomic_self_energies(dm.dataset_statistics_filename)
         
         from modelforge.potential.processing import AtomicSelfEnergies
         self_energies = AtomicSelfEnergies(self_energies)

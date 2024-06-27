@@ -70,9 +70,7 @@ def test_model_factory(model_name, simulation_environment):
     from modelforge.train.training import TrainingAdapter
 
     # read default parameters
-    from modelforge.train.training import return_toml_config
-
-    config = load_configs(model_name.lower(), "qm9")
+    config = load_configs(f'{model_name.lower()}_without_ase', "qm9")
 
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
@@ -88,9 +86,6 @@ def test_model_factory(model_name, simulation_environment):
         model_name.upper() in str(type(model)).upper()
         or "JAX" in str(type(model)).upper()
     )
-
-    from modelforge.tests.data import training_defaults
-    from importlib import resources
 
     # Extract parameters
     training_parameters = config["training"].get("training_parameters", {})
@@ -324,7 +319,7 @@ def test_forward_pass_with_all_datasets(model_name, dataset_name, datamodule_fac
     # test that the neighborlist is correctly generated
     # cast input and model to torch.float64
     # read default parameters
-    config = load_configs(f"{model_name.lower()}", dataset_name)
+    config = load_configs(f"{model_name.lower()}", dataset_name.lower())
 
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
@@ -756,7 +751,7 @@ def test_equivariant_energies_and_forces(
 
     # cast input and model to torch.float64
     # read default parameters
-    config = load_configs(f"ani2x_without_ase", "qm9")
+    config = load_configs(f"{model_name}_without_ase", "qm9")
 
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})

@@ -465,14 +465,11 @@ def test_dataset_neighborlist(model_name, single_batch_with_batchsize_64):
 
     # test that the neighborlist is correctly generated
     # cast input and model to torch.float64
-    from modelforge.train.training import return_toml_config
-    from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    # read default parameters
+    from modelforge.tests.test_models import load_configs
 
-    file_path = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
-    )
-    config = return_toml_config(file_path)
+    # read default parameters
+    config = load_configs(f"{model_name}_without_ase", "qm9")
 
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
@@ -920,11 +917,17 @@ def test_self_energy(dataset_name, datamodule_factory):
             )
         # extract the ase offset
         from modelforge.potential.processing import load_atomic_self_energies
+
         self_energies = load_atomic_self_energies(dm.dataset_statistics_filename)
-        
-        from modelforge.potential.processing import AtomicSelfEnergies
+
+        from modelforge.potential.processing import (
+            AtomicSelfEnergies,
+            load_atomic_self_energies,
+        )
+
+        self_energies = load_atomic_self_energies(dm.dataset_statistics_filename)
         self_energies = AtomicSelfEnergies(self_energies)
-        
+
         methane_ase = sum(
             [
                 self_energies[int(index)]

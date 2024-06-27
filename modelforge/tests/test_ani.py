@@ -316,12 +316,10 @@ def test_representation(setup_methane):
     from modelforge.potential import ANI2x
 
     # read default parameters
-    from modelforge.train.training import return_toml_config
-    from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.test_models import load_configs
 
-    file_path = resources.files(potential_defaults) / f"ani2x_defaults.toml"
-    config = return_toml_config(file_path)
+    # read default parameters
+    config = load_configs("ani2x_without_ase", 'qm9')
 
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})

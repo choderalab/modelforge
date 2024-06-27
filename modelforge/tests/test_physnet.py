@@ -5,13 +5,10 @@ def test_physnet_init():
     from importlib import resources
     from modelforge.tests.data import potential_defaults
 
-    model_name = "PhysNet"
+    from modelforge.tests.test_models import load_configs
 
-    file_path = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
-    )
-    config = return_toml_config(file_path)
-
+    # read default parameters
+    config = load_configs(f"physnet_without_ase", "qm9")
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
 
@@ -23,19 +20,14 @@ def test_physnet_forward(single_batch_with_batchsize_64):
     from modelforge.potential.physnet import PhysNet
 
     # read default parameters
-    from modelforge.train.training import return_toml_config
-    from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.test_models import load_configs
 
-    model_name = "PhysNet"
-
-    file_path = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
-    )
-    config = return_toml_config(file_path)
-
+    # read default parameters
+    config = load_configs(f"physnet_without_ase", "qm9")
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
+
+    # Extract parameters
     potential_parameters["number_of_modules"] = 1
     potential_parameters["number_of_interaction_residual"] = 1
 

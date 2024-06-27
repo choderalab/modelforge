@@ -58,7 +58,7 @@ def test_model_factory(model_name, simulation_environment):
     from importlib import resources
 
     filename = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
+        resources.files(potential_defaults) / f"{model_name.lower()}_without_ase.toml"
     )
 
     config = return_toml_config(filename)
@@ -81,7 +81,7 @@ def test_model_factory(model_name, simulation_environment):
     from modelforge.tests.data import training_defaults
     from importlib import resources
 
-    filename = resources.files(training_defaults) / f"{model_name.lower()}_qm9.toml"
+    filename = resources.files(training_defaults) / f"{model_name.lower()}_without_ase.toml"
 
     config = return_toml_config(filename)
 
@@ -103,6 +103,7 @@ def test_energy_scaling_and_offset():
     # setup test dataset
     from modelforge.dataset.dataset import DataModule
     from modelforge.potential.ani import ANI2x
+    import torch
 
     # test the self energy calculation on the QM9 dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
@@ -125,13 +126,16 @@ def test_energy_scaling_and_offset():
     from modelforge.tests.data import potential_defaults
     from importlib import resources
 
-    filename = resources.files(potential_defaults) / "ani2x.toml"
+    filename = resources.files(potential_defaults) / "ani2x_without_ase.toml"
     config = return_toml_config(filename)
 
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
+    import toml
 
-    model = ANI2x(**potential_parameters)
+    dataset_statistics = toml.load(dataset.dataset_statistics_filename)
+    torch.manual_seed(42)
+    model = ANI2x(**potential_parameters, dataset_statistics=dataset_statistics)
 
     # -------------------------------#
     # Test that we can add the reference energy correctly
@@ -142,19 +146,22 @@ def test_energy_scaling_and_offset():
     output_no_postprocessing = model(methane)
 
     # let's add self energies
-    model.dataset_statistics = dataset.dataset_statistics
+    import toml
+
+    dataset_statistics = toml.load(dataset.dataset_statistics_filename)
+    filename = resources.files(potential_defaults) / "ani2x.toml"
+    config = return_toml_config(filename)
+    potential_parameters = config["potential"].get("potential_parameters", {})
+    torch.manual_seed(42)
+    model = ANI2x(**potential_parameters, dataset_statistics=dataset_statistics)
     output_with_ase = model(methane)
 
     # make sure that the raw prediction is the same
     import torch
 
-    assert torch.isclose(output_no_postprocessing.raw_E, output_with_ase.raw_E)
+    assert torch.isclose(output_no_postprocessing["E"], output_with_ase["E"])
 
-    # make sure that the difference in E_predict is the ase
-    assert torch.isclose(
-        output_with_ase.E - output_no_postprocessing.E,
-        output_with_ase.molecular_ase,
-    )
+    assert torch.isclose(output_with_ase["mse"], torch.tensor([-707050.0]))
 
 
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
@@ -210,12 +217,16 @@ def test_dataset_statistics(model_name):
     from importlib import resources
 
     potential_filename = (
-        resources.files(potential_defaults) / f"{model_name.lower()}.toml"
+        resources.files(potential_defaults) / f"{model_name.lower()}_without_ase.toml"
     )
     training_filename = resources.files(training_defaults) / f"default.toml"
     dataset_filename = resources.files(dataset_defaults) / f"qm9.toml"
 
-    config = return_toml_config(potential_path=potential_filename, dataset_path=dataset_filename, training_path=training_filename)
+    config = return_toml_config(
+        potential_path=potential_filename,
+        dataset_path=dataset_filename,
+        training_path=training_filename,
+    )
 
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
@@ -266,9 +277,7 @@ def test_dataset_statistics(model_name):
     )
 
     model.load_state_dict(torch.load("model.pth"))
-    assert torch.isclose(
-        torch.tensor([toml_E_i_mean]), model.postprocessing[0].mean
-    )
+    assert torch.isclose(torch.tensor([toml_E_i_mean]), model.postprocessing[0].mean)
 
 
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
@@ -287,7 +296,7 @@ def test_energy_between_simulation_environments(
     from importlib import resources
 
     filename = (
-        resources.files(potential_defaults) / f"{model_name.lower()}.toml"
+        resources.files(potential_defaults) / f"{model_name.lower()}_without_ase.toml"
     )
     config = return_toml_config(filename)
 
@@ -302,7 +311,7 @@ def test_energy_between_simulation_environments(
         model_parameters=potential_parameters,
     )
 
-    output_torch = model(nnp_input)['E']
+    output_torch = model(nnp_input)["E"]
 
     torch.manual_seed(42)
     model = NeuralNetworkPotentialFactory.create_nnp(
@@ -312,7 +321,7 @@ def test_energy_between_simulation_environments(
         model_parameters=potential_parameters,
     )
     nnp_input = nnp_input.as_jax_namedtuple()
-    output_jax = model(nnp_input)['E']
+    output_jax = model(nnp_input)["E"]
 
     # test tat we get an energie per molecule
     assert np.isclose(output_torch.sum().detach().numpy(), output_jax.sum())
@@ -341,20 +350,22 @@ def test_forward_pass_with_all_datasets(model_name, dataset_name, datamodule_fac
     from importlib import resources
     from modelforge.tests.data import potential_defaults
 
-    file_path = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
-    )
+    file_path = resources.files(potential_defaults) / "ani2x_without_ase.toml"
     config = return_toml_config(file_path)
 
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
     from modelforge.potential.models import NeuralNetworkPotentialFactory
+    import toml
+
+    dataset_statistics = toml.load(dataset.dataset_statistics_filename)
 
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="inference",
         model_type=model_name,
         simulation_environment="PyTorch",
         model_parameters=potential_parameters,
+        dataset_statistics=dataset_statistics,
     )
     model(batch.nnp_input)
 
@@ -380,7 +391,7 @@ def test_forward_pass(
     from importlib import resources
 
     filename = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
+        resources.files(potential_defaults) / f"{model_name.lower()}_without_ase.toml"
     )
     config = return_toml_config(filename)
 
@@ -431,7 +442,7 @@ def test_calculate_energies_and_forces(
     from importlib import resources
 
     filename = (
-        resources.files(potential_defaults) / f"{model_name.lower()}.toml"
+        resources.files(potential_defaults) / f"{model_name.lower()}_without_ase.toml"
     )
 
     config = return_toml_config(filename)
@@ -455,7 +466,7 @@ def test_calculate_energies_and_forces(
     if "JAX" in str(type(model)):
         nnp_input = nnp_input.as_jax_namedtuple()
 
-    result = model(nnp_input)['E']
+    result = model(nnp_input)["E"]
 
     import jax
 
@@ -744,7 +755,7 @@ def test_casting(model_name, single_batch_with_batchsize_64):
     from importlib import resources
 
     filename = (
-        resources.files(potential_defaults) / f"{model_name.lower()}.toml"
+        resources.files(potential_defaults) / f"{model_name.lower()}_without_ase.toml"
     )
 
     config = return_toml_config(filename)
@@ -796,9 +807,7 @@ def test_equivariant_energies_and_forces(
     from modelforge.tests.data import potential_defaults
     from importlib import resources
 
-    filename = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
-    )
+    filename = resources.files(potential_defaults) / "ani2x_without_ase.toml"
 
     config = return_toml_config(filename)
 
@@ -825,7 +834,7 @@ def test_equivariant_energies_and_forces(
     # start the test
     # reference values
     nnp_input = single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float64)
-    reference_result = model(nnp_input).E.to(dtype=torch.float64)
+    reference_result = model(nnp_input)["E"].to(dtype=torch.float64)
     reference_forces = -torch.autograd.grad(
         reference_result.sum(),
         nnp_input.positions,
@@ -834,7 +843,7 @@ def test_equivariant_energies_and_forces(
     # translation test
     translation_nnp_input = replace(nnp_input)
     translation_nnp_input.positions = translation(translation_nnp_input.positions)
-    translation_result = model(translation_nnp_input).E
+    translation_result = model(translation_nnp_input)["E"]
     assert torch.allclose(
         translation_result,
         reference_result,
@@ -859,7 +868,7 @@ def test_equivariant_energies_and_forces(
     # rotation test
     rotation_input_data = replace(nnp_input)
     rotation_input_data.positions = rotation(rotation_input_data.positions)
-    rotation_result = model(rotation_input_data).E
+    rotation_result = model(rotation_input_data)["E"]
 
     for t, r in zip(rotation_result, reference_result):
         if not torch.allclose(t, r, atol=atol):
@@ -888,7 +897,7 @@ def test_equivariant_energies_and_forces(
     # reflection test
     reflection_input_data = replace(nnp_input)
     reflection_input_data.positions = reflection(reflection_input_data.positions)
-    reflection_result = model(reflection_input_data).E
+    reflection_result = model(reflection_input_data)["E"]
     reflection_forces = -torch.autograd.grad(
         reflection_result.sum(),
         reflection_input_data.positions,

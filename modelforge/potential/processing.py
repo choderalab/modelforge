@@ -61,7 +61,6 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         Tensor, shape [nr_of_moleculs, 1], the per-molecule property.
         """
         indices = index.to(torch.int64)
-        per_atom_property = per_atom_property
         # Perform scatter add operation for atoms belonging to the same molecule
         property_per_molecule_zeros = torch.zeros(
             len(indices.unique()),
@@ -213,7 +212,7 @@ class CalculateAtomicSelfEnergy(torch.nn.Module):
             }
         self.atomic_self_energies = AtomicSelfEnergies(atomic_self_energies)
 
-    def calculate_atomic_self_energy(
+    def forward(
         self,
         atomic_numbers: torch.Tensor,
         atomic_subsystem_indices: torch.Tensor,

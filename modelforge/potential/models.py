@@ -721,18 +721,10 @@ class BaseNetwork(Module):
         Initializes the neural network potential class with specified parameters.
 
         """
-        from .processing import CalculateAtomicSelfEnergy
 
         super().__init__()
-        if "atomic_self_energies" not in dataset_statistics:
-            self.calculate_atomic_self_energies = None
-        else:
-            self.calculate_atomic_self_energies = CalculateAtomicSelfEnergy(
-                dataset_statistics["atomic_self_energies"]
-            )
-        self._initialize_postprocessing(
-            processing, readout, dataset_statistics.get("atomic_energies_stats", None)
-        )
+
+        self._initialize_postprocessing(processing, readout, dataset_statistics)
 
     def load_state_dict(
         self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False
@@ -757,6 +749,7 @@ class BaseNetwork(Module):
         from .processing import (
             FromAtomToMoleculeReduction,
             ScaleValues,
+            CalculateAtomicSelfEnergy,
         )
 
         # initialize per atom processing
@@ -771,10 +764,23 @@ class BaseNetwork(Module):
                     mean = 0.0
                     stddev = 1.0
                 else:
-                    mean = dataset_statistics[proc["mean"]]
-                    stddev = dataset_statistics[proc["stddev"]]
+                    atomic_energies_stats = dataset_statistics["atomic_energies_stats"]
+                    mean = atomic_energies_stats[proc["mean"]]
+                    stddev = atomic_energies_stats[proc["stddev"]]
                 operation = ScaleValues(mean=mean, stddev=stddev)
                 work_to_be_done_per_property.append(operation)
+                props.append(proc)
+
+            elif proc["step"] == "calculate_ase":
+                if dataset_statistics is None:
+                    raise RuntimeError(
+                        "No dataset statistics provided for ASE calculation. Skipping!"
+                    )
+                else:
+                    atomic_self_energies = dataset_statistics["atomic_self_energies"]
+                    operation = CalculateAtomicSelfEnergy(atomic_self_energies)
+                    work_to_be_done_per_property.append(operation)
+
                 props.append(proc)
 
         self.postprocessing = ModuleList(work_to_be_done_per_property)
@@ -804,9 +810,12 @@ class BaseNetwork(Module):
         )
         # perform the forward pass implemented in the model
         outputs = self.core_module._forward(nnp_input)
+        outputs["atomic_numbers"] = data.atomic_numbers
+        
         # perform postprocessing on properties
         for property, processing in zip(self.postprocessing_prop, self.postprocessing):
-            outputs[property["out"]] = processing(outputs[property["in"]])
+            inputs = [outputs[in_key] for in_key in property["in"]]
+            outputs[property["out"]] = processing(*inputs)
         # if per atom properties need to be combined
         outputs = self.combine_per_atom_properties(outputs)
 

@@ -334,9 +334,9 @@ class SchNETRepresentation(nn.Module):
     def _setup_radial_symmetry_functions(
         self, radial_cutoff: unit.Quantity, number_of_radial_basis_functions: int
     ):
-        from .utils import SchnetRadialSymmetryFunction
+        from .utils import SchnetRadialBasisFunction
 
-        radial_symmetry_function = SchnetRadialSymmetryFunction(
+        radial_symmetry_function = SchnetRadialBasisFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             max_distance=radial_cutoff,
             dtype=torch.float32,

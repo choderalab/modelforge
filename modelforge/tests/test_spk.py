@@ -3,7 +3,7 @@ import torch
 
 def test_compare_radial_symmetry_features():
     # compare schnetpack RadialSymmetryFunction with modelforge RadialSymmetryFunction
-    from modelforge.potential.utils import SchnetRadialSymmetryFunction
+    from modelforge.potential.utils import SchnetRadialBasisFunction
     from schnetpack.nn import GaussianRBF as schnetpackGaussianRBF
     from openff.units import unit
 
@@ -16,7 +16,7 @@ def test_compare_radial_symmetry_features():
         cutoff=cutoff.to(unit.angstrom).m,
         start=start.to(unit.angstrom).m,
     )
-    radial_symmetry_function_module = SchnetRadialSymmetryFunction(
+    radial_symmetry_function_module = SchnetRadialBasisFunction(
         number_of_radial_basis_functions=number_of_gaussians,
         max_distance=cutoff,
         min_distance=start,

@@ -240,7 +240,7 @@ def make_equivalent_pairlist_mask(key, nr_atoms, nr_pairs, include_self_pairs):
 
 def test_radial_symmetry_function_against_reference():
     from modelforge.potential.utils import (
-        SAKERadialSymmetryFunction,
+        PhysNetRadialBasisFunction,
         SAKERadialBasisFunctionCore,
     )
     from sake.utils import ExpNormalSmearing as RefExpNormalSmearing
@@ -252,7 +252,7 @@ def test_radial_symmetry_function_against_reference():
     mf_unit = unit.nanometer
     ref_unit = unit.nanometer
 
-    radial_symmetry_function_module = SAKERadialSymmetryFunction(
+    radial_symmetry_function_module = PhysNetRadialBasisFunction(
         number_of_radial_basis_functions=number_of_radial_basis_functions,
         max_distance=cutoff_upper,
         min_distance=cutoff_lower,

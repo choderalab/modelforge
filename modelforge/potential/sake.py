@@ -9,8 +9,7 @@ from .models import CoreNetwork, PairListOutputs
 from .utils import (
     Dense,
     scatter_softmax,
-    SAKERadialSymmetryFunction,
-    SAKERadialBasisFunctionCore,
+    PhysNetRadialBasisFunction,
 )
 from modelforge.dataset.dataset import NNPInput
 import torch
@@ -234,12 +233,10 @@ class SAKEInteraction(nn.Module):
         self.nr_coefficients = nr_coefficients
         self.nr_heads = nr_heads
         self.epsilon = epsilon
-        self.radial_symmetry_function_module = SAKERadialSymmetryFunction(
+        self.radial_symmetry_function_module = PhysNetRadialBasisFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             max_distance=cutoff,
             dtype=torch.float32,
-            trainable=False,
-            radial_basis_function=SAKERadialBasisFunctionCore(0.0 * unit.nanometer),
         )
 
         self.node_mlp = nn.Sequential(
@@ -324,7 +321,7 @@ class SAKEInteraction(nn.Module):
             Intermediate edge features. Shape [nr_pairs, nr_edge_basis].
         """
         h_ij_cat = torch.cat([h_i_by_pair, h_j_by_pair], dim=-1)
-        h_ij_filtered = self.radial_symmetry_function_module(d_ij) * self.edge_mlp_in(
+        h_ij_filtered = self.radial_symmetry_function_module(d_ij.unsqueeze(-1)) * self.edge_mlp_in(
             h_ij_cat
         )
         return self.edge_mlp_out(

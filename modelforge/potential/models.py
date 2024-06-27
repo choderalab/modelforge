@@ -731,6 +731,7 @@ class BaseNetwork(Module):
         self.input_preparation._input_checks(data)
         # prepare the input for the forward pass
         pairlist_output = self.input_preparation.prepare_inputs(data)
+        print(f"{type(self)}: {pairlist_output.d_ij.shape=}")
         return self.core_module(data, pairlist_output)
 
 

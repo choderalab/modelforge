@@ -90,9 +90,9 @@ class PhysNetRepresentation(nn.Module):
         self.cutoff_module = CosineCutoff(cutoff)
 
         # radial symmetry function
-        from .utils import PhysNetRadialSymmetryFunction
+        from .utils import PhysNetRadialBasisFunction
 
-        self.radial_symmetry_function_module = PhysNetRadialSymmetryFunction(
+        self.radial_symmetry_function_module = PhysNetRadialBasisFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             max_distance=cutoff,
             dtype=torch.float32,
@@ -469,6 +469,7 @@ class PhysNetCore(CoreNetwork):
     ) -> PhysNetNeuralNetworkData:
 
         # Perform atomic embedding
+        print(f"Physnet {pairlist_output.d_ij.shape=}")
         atomic_embedding = self.embedding_module(data.atomic_numbers)
         #         Z_i, ..., Z_N
         #

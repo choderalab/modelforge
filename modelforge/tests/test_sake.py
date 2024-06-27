@@ -10,28 +10,25 @@ from modelforge.potential.sake import SAKE, SAKEInteraction
 import sake as reference_sake
 from sys import platform
 
-IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 
-IN_MAC = platform == "darwin"
+ON_MAC = platform == "darwin"
 
 
 def test_SAKE_init():
     """Test initialization of the SAKE neural network potential."""
     from modelforge.train.training import return_toml_config
     from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
 
     model_name = "SAKE"
 
-    file_path = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
-    )
+    file_path = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
     config = return_toml_config(file_path)
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
 
-    sake = SAKE(**potential_parameters)
+    sake = SAKE(**potential_parameter)
     assert sake is not None, "SAKE model should be initialized."
 
 
@@ -47,19 +44,17 @@ def test_sake_forward(single_batch_with_batchsize_64):
 
     from modelforge.train.training import return_toml_config
     from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
 
     model_name = "SAKE"
 
-    file_path = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
-    )
+    file_path = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
     config = return_toml_config(file_path)
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
 
-    sake = SAKE(**potential_parameters)
+    sake = SAKE(**potential_parameter)
     energy = sake(methane).E
     nr_of_mols = methane.atomic_subsystem_indices.unique().shape[0]
 
@@ -114,19 +109,17 @@ def test_sake_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize_64
 
     from modelforge.train.training import return_toml_config
     from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
 
     model_name = "SAKE"
 
-    file_path = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
-    )
+    file_path = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
     config = return_toml_config(file_path)
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
-    potential_parameters["number_of_atom_features"] = nr_atom_basis
-    sake = SAKE(**potential_parameters)
+    potential_parameter = config["potential"].get("potential_parameter", {})
+    potential_parameter["number_of_atom_features"] = nr_atom_basis
+    sake = SAKE(**potential_parameter)
 
     # get methane input
     methane = single_batch_with_batchsize_64.nnp_input
@@ -296,7 +289,7 @@ def test_radial_symmetry_function_against_reference():
     )
 
 
-@pytest.mark.skipif(IN_MAC, reason="Test fails on macOS")
+@pytest.mark.skipif(ON_MAC, reason="Test fails on macOS")
 @pytest.mark.parametrize("include_self_pairs", [True, False])
 @pytest.mark.parametrize("v_is_none", [True, False])
 def test_sake_layer_against_reference(include_self_pairs, v_is_none):
@@ -597,19 +590,17 @@ def test_model_invariance(single_batch_with_batchsize_1):
 
     from modelforge.train.training import return_toml_config
     from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
 
     model_name = "SAKE"
 
-    file_path = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
-    )
+    file_path = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
     config = return_toml_config(file_path)
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
 
-    model = SAKE(**potential_parameters)
+    model = SAKE(**potential_parameter)
     # get methane input
     methane = single_batch_with_batchsize_1.nnp_input
 

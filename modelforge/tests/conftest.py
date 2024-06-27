@@ -84,12 +84,12 @@ from modelforge.dataset.dataset import DatasetFactory, TorchDataset
 from modelforge.dataset import _ImplementedDatasets
 
 
-def single_batch(batch_size: int = 64):
+def single_batch(batch_size: int = 64, dataset_name="QM9"):
     """
     Utility function to create a single batch of data for testing.
     """
     data_module = initialize_datamodule(
-        dataset_name="QM9",
+        dataset_name=dataset_name,
         batch_size=batch_size,
         version_select="nc_1000_v0",
     )
@@ -110,6 +110,14 @@ def single_batch_with_batchsize_1():
     Utility fixture to create a single batch of data for testing.
     """
     return single_batch(batch_size=1)
+
+
+@pytest.fixture(scope="session")
+def single_batch_with_batchsize_2_with_force():
+    """
+    Utility fixture to create a single batch of data for testing.
+    """
+    return single_batch(batch_size=2, dataset_name="PHALKETHOH")
 
 
 def initialize_dataset(

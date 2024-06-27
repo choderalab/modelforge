@@ -1,0 +1,9 @@
+[potential]
+potential_parameter.max_Z = 101
+potential_parameter.number_of_atom_features = 64
+potential_parameter.number_of_radial_basis_functions = 50
+potential_parameter.cutoff = "5.0 angstrom"
+potential_parameter.number_of_interaction_modules = 6
+potential_parameter.number_of_spatial_attention_heads = 4
+model_name = "SAKE"
+

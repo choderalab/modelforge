@@ -10,7 +10,6 @@ from modelforge.dataset import _ImplementedDatasets
 
 from modelforge.utils.prop import PropertyNames
 
-
 def test_dataset_imported():
     """Sample test, will always pass so long as import statement worked."""
 
@@ -193,9 +192,14 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
 
     raw_data_item = dataset[0]
     assert isinstance(raw_data_item, BatchData)
-    assert len(raw_data_item.__dataclass_fields__) == 2  
-    assert len(raw_data_item.nnp_input.__dataclass_fields__) == 5  # 8 properties are returned
-    assert len(raw_data_item.metadata.__dataclass_fields__) == 5  # 8 properties are returned
+    assert len(raw_data_item.__dataclass_fields__) == 2
+    assert (
+        len(raw_data_item.nnp_input.__dataclass_fields__) == 5
+    )  # 8 properties are returned
+    assert (
+        len(raw_data_item.metadata.__dataclass_fields__) == 5
+    )  # 8 properties are returned
+
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_file_existence_after_initialization(
@@ -444,7 +448,8 @@ def test_data_item_format_of_datamodule(
     assert isinstance(raw_data_item.metadata.E, torch.Tensor)
 
     assert (
-        raw_data_item.nnp_input.atomic_numbers.shape[0] == raw_data_item.nnp_input.positions.shape[0]
+        raw_data_item.nnp_input.atomic_numbers.shape[0]
+        == raw_data_item.nnp_input.positions.shape[0]
     )
 
 
@@ -459,24 +464,24 @@ def test_dataset_neighborlist(model_name, single_batch_with_batchsize_64):
 
     # test that the neighborlist is correctly generated
     # cast input and model to torch.float64
-    from modelforge.train.training import return_toml_config
+    from modelforge.train.training import return_toml_config, LossFactory
     from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
 
     file_path = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
+        resources.files(potential) / f"{model_name.lower()}_defaults.toml"
     )
     config = return_toml_config(file_path)
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
     from modelforge.potential.models import NeuralNetworkPotentialFactory
 
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="inference",
         model_type=model_name,
         simulation_environment="PyTorch",
-        model_parameters=potential_parameters,
+        model_parameters=potential_parameter,
     )
     model(nnp_input)
 

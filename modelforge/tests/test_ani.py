@@ -32,7 +32,6 @@ def setup_methane():
         positions=coordinates.squeeze(0) / 10,
         atomic_subsystem_indices=atomic_subsystem_indices,
         total_charge=torch.tensor([0.0]),
-        
     )
 
     return species, coordinates, device, nnp_input
@@ -41,6 +40,7 @@ def setup_methane():
 @pytest.fixture
 def setup_two_methanes():
     import torch
+
     device = torch.device("cpu")
 
     coordinates = torch.tensor(
@@ -105,7 +105,7 @@ def test_modelforge_ani(setup_two_methanes):
     import torch
 
     # read default parameters
-    config = load_configs("ani2x_without_ase", 'qm9')
+    config = load_configs("ani2x_without_ase", "qm9")
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
 
@@ -113,7 +113,7 @@ def test_modelforge_ani(setup_two_methanes):
     device = torch.device("cpu")
     model = mf_ANI2x(**potential_parameters).to(device=device)
     energy = model(mf_input)
-    derivative = torch.autograd.grad(energy['E']sum(), mf_input.positions)[0]
+    derivative = torch.autograd.grad(energy["E"].sum(), mf_input.positions)[0]
     force = -derivative
 
 

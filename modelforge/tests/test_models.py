@@ -49,7 +49,7 @@ def test_JAX_wrapping(model_name, single_batch_with_batchsize_64):
 
     assert "JAX" in str(type(model))
     nnp_input = single_batch_with_batchsize_64.nnp_input.as_jax_namedtuple()
-    out = model(nnp_input).E
+    out = model(nnp_input)['E']
     import jax
 
     grad_fn = jax.grad(lambda pos: out.sum())  # Create a gradient function

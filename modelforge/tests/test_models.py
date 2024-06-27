@@ -20,7 +20,7 @@ def load_configs(model_name: str, dataset_name: str):
     dataset_path = resources.files(dataset_defaults) / f"{dataset_name}.toml"
     training_path = resources.files(training_defaults) / "default.toml"
 
-    config = return_toml_config(
+    return return_toml_config(
         potential_path=potential_path,
         dataset_path=dataset_path,
         training_path=training_path,

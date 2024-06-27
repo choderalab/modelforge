@@ -20,15 +20,12 @@ def test_train_with_lightning(model_name, dataset_name, include_force):
     Test the forward pass for a given model and dataset.
     """
 
-    from modelforge.train.training import return_toml_config, perform_training
-    from importlib import resources
-    from modelforge.tests.data import training_defaults
+    from modelforge.tests.test_models import load_configs
+    from modelforge.train.training import perform_training
 
-    file_path = (
-        resources.files(training_defaults)
-        / f"{model_name.lower()}_{dataset_name.lower()}.toml"
-    )
-    config = return_toml_config(file_path)
+    # read default parameters
+    config = load_configs(f"{model_name}_without_ase", "qm9")
+
 
     from pytorch_lightning.loggers import TensorBoardLogger
 

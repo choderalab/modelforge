@@ -34,10 +34,7 @@ def test_JAX_wrapping(model_name, single_batch_with_batchsize_64):
     )
 
     # read default parameters
-    from modelforge.tests.data import potential_defaults
-    from importlib import resources
-
-    config = load_configs(model_name.lower(), "qm9")
+    config = load_configs(f'{model_name.lower()}_without_ase', "qm9")
 
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})

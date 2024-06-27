@@ -1,32 +1,335 @@
-from torch.optim import AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import lightning as pl
 from typing import TYPE_CHECKING, Any, Union, Dict, Type, Optional
 import torch
 from loguru import logger as log
 from modelforge.dataset.dataset import BatchData
-from torch.nn import functional as F
 
 if TYPE_CHECKING:
-    from modelforge.potential.ani import ANI2x, AniNeuralNetworkData
-    from modelforge.potential.painn import PaiNN, PaiNNNeuralNetworkData
-    from modelforge.potential.physnet import PhysNet, PhysNetNeuralNetworkData
-    from modelforge.potential.schnet import SchNet, SchnetNeuralNetworkData
-    from modelforge.potential.sake import SAKE
     from modelforge.potential.utils import BatchData
 
+import torchmetrics
+from torchmetrics.utilities import dim_zero_cat
+from typing import Optional
 
-class Loss:
+
+class LogLoss(torchmetrics.Metric):
     """
-    Base class for loss computations, designed to be overridden by subclasses for specific types of losses.
-    Initializes with a model to compute predictions for energies and forces.
+    Custom metric to log the loss function.
+
+    Attributes
+    ----------
+    loss_per_batch : List[torch.Tensor]
+        List to store the loss for each batch.
+    """
+
+    def __init__(self) -> None:
+        """
+        Initializes the LogLoss class, setting up the state for the metric.
+        """
+        super().__init__()
+        self.add_state("loss_per_batch", default=[], dist_reduce_fx="cat")
+
+    def update(self, loss: torch.Tensor) -> None:
+        """
+        Updates the metric state with the loss for a batch.
+
+        Parameters
+        ----------
+        loss : torch.Tensor
+            The loss for a batch.
+        """
+        self.loss_per_batch.append(loss.detach())
+
+    def compute(self) -> torch.Tensor:
+        """
+        Computes the average loss over all batches in an epoch.
+
+        Returns
+        -------
+        torch.Tensor
+            The average loss for the epoch.
+        """
+        mse_loss_per_epoch = dim_zero_cat(self.loss_per_batch)
+        return torch.mean(mse_loss_per_epoch)
+
+
+from torch import nn
+
+from abc import abstractmethod
+
+
+class Loss(nn.Module):
+    """
+    Abstract base class for loss calculation in neural network potentials.
+    """
+
+    @abstractmethod
+    def calculate_loss(
+        self, predict_target: Dict[str, torch.Tensor], batch: BatchData
+    ) -> Dict[str, torch.Tensor]:
+        pass
+
+
+class LossFactory(object):
+    """
+    Factory class to create different types of loss functions.
+    """
+
+    @staticmethod
+    def create_loss(loss_type: str, **kwargs) -> Type[Loss]:
+        """
+        Creates an instance of the specified loss type.
+
+        Parameters
+        ----------
+        loss_type : str
+            The type of loss function to create.
+        **kwargs : dict
+            Additional parameters for the loss function.
+
+        Returns
+        -------
+        Loss
+            An instance of the specified loss function.
+        """
+
+        if loss_type == "EnergyAndForceLoss":
+            return EnergyAndForceLoss(**kwargs)
+        elif loss_type == "EnergyLoss":
+            return EnergyLoss()
+        else:
+            raise ValueError(f"Loss type {loss_type} not implemented.")
+
+
+class EnergyLoss(Loss):
+    """
+    Class to calculate the energy loss using Mean Squared Error (MSE).
     """
 
     def __init__(
-        self, model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet", "SAKE"]
-    ) -> None:
+        self,
+    ):
+        """
+        Initializes the EnergyLoss class.
+        """
 
-        self.model = model
+        super().__init__()
+        from torch.nn import MSELoss
+
+        self.mse_loss = MSELoss()
+
+    def calculate_loss(
+        self, predict_target: Dict[str, torch.Tensor], batch: Optional[BatchData] = None
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Calculates the energy loss.
+
+        Parameters
+        ----------
+        predict_target : dict
+            Dictionary containing predicted and true values for energy.
+        batch : BatchData, optional
+            Batch of data, by default None.
+
+        Returns
+        -------
+        dict
+            Dictionary containing combined loss, energy loss, and force loss.
+        """
+        E_loss = self.mse_loss(predict_target["E_predict"], predict_target["E_true"])
+
+        return {
+            "combined_loss": E_loss,
+            "energy_loss": E_loss,
+            "force_loss": torch.zeros_like(E_loss),
+        }
+
+
+class EnergyAndForceLoss(Loss):
+    """
+    Class to calculate the combined loss for both energy and force predictions.
+
+    Attributes
+    ----------
+    include_force : bool
+        Whether to include force in the loss calculation.
+    energy_weight : torch.Tensor
+        Weight for the energy loss component.
+    force_weight : torch.Tensor
+        Weight for the force loss component.
+    """
+
+    def __init__(
+        self,
+        include_force: bool = False,
+        energy_weight: float = 1.0,
+        force_weight: float = 1.0,
+    ):
+        """
+        Initializes the EnergyAndForceLoss class.
+
+        Parameters
+        ----------
+        include_force : bool, optional
+            Whether to include force in the loss calculation, by default False.
+        energy_weight : float, optional
+            Weight for the energy loss component, by default 1.0.
+        force_weight : float, optional
+            Weight for the force loss component, by default 1.0.
+        """
+        super().__init__()
+        self.include_force = include_force
+        self.register_buffer("energy_weight", torch.tensor(energy_weight))
+        self.register_buffer("force_weight", torch.tensor(force_weight))
+
+    def calculate_loss(
+        self, predict_target: Dict[str, torch.Tensor], batch: BatchData
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Calculates the combined loss for both energy and force predictions.
+
+        Parameters
+        ----------
+        predict_target : dict
+            Dictionary containing predicted and true values for energy and force.
+            Expected keys are 'E_predict', 'E_true', 'F_predict', 'F_true'.
+        batch : BatchData
+            Batch of data, including input features and target values.
+
+        Returns
+        -------
+        dict
+            Dictionary containing combined loss, energy loss, and force loss.
+        """
+        from torch_scatter import scatter_sum
+
+        # Calculate per-atom force error
+        F_error_per_atom = (
+            torch.norm(predict_target["F_predict"] - predict_target["F_true"], dim=1)
+            ** 2
+        )
+        # Aggregate force error per molecule
+        F_error_per_molecule = scatter_sum(
+            F_error_per_atom, batch.nnp_input.atomic_subsystem_indices.long(), 0
+        )
+
+        # Scale factor for force loss
+        scale = self.force_weight / (3 * batch.metadata.atomic_subsystem_counts)
+        # Calculate energy loss
+        E_loss = (
+            self.energy_weight
+            * (predict_target["E_predict"] - predict_target["E_true"]) ** 2
+        )
+        # Calculate force loss
+        F_loss = scale * F_error_per_molecule
+        # Combine energy and force losses
+        combined_loss = torch.mean(E_loss + F_loss)
+        return {
+            "combined_loss": combined_loss,
+            "energy_loss": E_loss,
+            "force_loss": F_loss,
+        }
+
+
+from torch.optim import Optimizer
+
+
+class TrainingAdapter(pl.LightningModule):
+    """
+    Adapter class for training neural network potentials using PyTorch Lightning.
+    """
+
+    def __init__(
+        self,
+        *,
+        model_parameters: Dict[str, Any],
+        lr_scheduler_config: Dict[str, Union[str, int, float]],
+        lr: float,
+        dataset_statistics: Optional[Dict[str, float]] = None,
+        loss_parameter: Dict[str, Any],
+        optimizer: Type[Optimizer] = torch.optim.AdamW,
+    ):
+        """
+        Initializes the TrainingAdapter with the specified model and training configuration.
+
+        Parameters
+        ----------
+        nnp_parameters : Dict[str, Any]
+            The parameters for the neural network potential model.
+        lr_scheduler_config : Dict[str, Union[str, int, float]]
+            The configuration for the learning rate scheduler.
+        lr : float
+            The learning rate for the optimizer.
+        loss_module : Loss, optional
+            Whether to include force in the loss function, by default False.
+        optimizer : Type[Optimizer], optional
+            The optimizer class to use for training, by default torch.optim.AdamW.
+        """
+
+        from typing import List
+        from modelforge.potential import _Implemented_NNPs
+        from torchmetrics.regression import MeanSquaredError, MeanAbsoluteError
+        from torchmetrics import MetricCollection
+
+        super().__init__()
+        self.save_hyperparameters(ignore=["loss_module"])
+        # Extracting and instantiating the model from parameters
+        model_parameters_ = model_parameters.copy()
+        model_name = model_parameters_.pop("nnp_name", None)
+        if model_name is None:
+            raise ValueError(
+                "NNP name must be specified in nnp_parameters with key 'nnp_name'."
+            )
+        nnp_class: Type = _Implemented_NNPs.get_neural_network_class(model_name)
+        if nnp_class is None:
+            raise ValueError(f"Specified NNP name '{nnp_name}' is not implemented.")
+
+        self.model = nnp_class(
+            **model_parameters_,
+            dataset_statistics=dataset_statistics,
+        )
+        self.optimizer = optimizer
+        self.learning_rate = lr
+        self.lr_scheduler_config = lr_scheduler_config
+        self.loss_module = LossFactory.create_loss(**loss_parameter)
+
+        self.unused_parameters = set()
+        self.are_unused_parameters_present = False
+
+        self.val_error = {
+            "energy": MetricCollection(
+                [MeanAbsoluteError(), MeanSquaredError(squared=False)]
+            ),
+            "force": MetricCollection(
+                [MeanAbsoluteError(), MeanSquaredError(squared=False)]
+            ),
+        }
+        self.train_error = {
+            "energy": MetricCollection(
+                [MeanAbsoluteError(), MeanSquaredError(squared=False)]
+            ),
+            "force": MetricCollection(
+                [MeanAbsoluteError(), MeanSquaredError(squared=False)]
+            ),
+        }
+        self.test_error = {
+            "energy": MetricCollection(
+                [MeanAbsoluteError(), MeanSquaredError(squared=False)]
+            ),
+            "force": MetricCollection(
+                [MeanAbsoluteError(), MeanSquaredError(squared=False)]
+            ),
+        }
+
+        # Register metrics
+        for phase, metrics in [
+            ("val", self.val_error),
+            ("train", self.train_error),
+            ("test", self.test_error),
+        ]:
+            for property, collection in metrics.items():
+                self.add_module(f"{phase}_{property}", collection)
 
     def _get_forces(
         self, batch: "BatchData", energies: Dict[str, torch.Tensor]
@@ -38,6 +341,8 @@ class Loss:
         ----------
         batch : BatchData
             A single batch of data, including input features and target energies.
+        energies : dict
+            Dictionary containing predicted energies.
 
         Returns
         -------
@@ -46,13 +351,26 @@ class Loss:
         """
         nnp_input = batch.nnp_input
         F_true = batch.metadata.F.to(torch.float32)
+
         if F_true.numel() < 1:
             raise RuntimeError("No force can be calculated.")
-        E_predict = energies["E_predict"]
-        F_predict = -torch.autograd.grad(
-            E_predict.sum(), nnp_input.positions, create_graph=False, retain_graph=True
-        )[0]
 
+        E_predict = energies["E_predict"]
+
+        # Ensure E_predict and nnp_input.positions require gradients and are on the same device
+        if not E_predict.requires_grad:
+            E_predict.requires_grad = True
+        if not nnp_input.positions.requires_grad:
+            nnp_input.positions.requires_grad = True
+
+        # Compute the gradient (forces) from the predicted energies
+        grad = torch.autograd.grad(
+            E_predict.sum(),
+            nnp_input.positions,
+            create_graph=False,
+            retain_graph=True,
+        )[0]
+        F_predict = -1 * grad  # Forces are the negative gradient of energy
         return {"F_true": F_true, "F_predict": F_predict}
 
     def _get_energies(self, batch: "BatchData") -> Dict[str, torch.Tensor]:
@@ -72,123 +390,29 @@ class Loss:
         nnp_input = batch.nnp_input
         E_true = batch.metadata.E.to(torch.float32).squeeze(1)
         E_predict = self.model.forward(nnp_input).E
+        assert E_true.shape == E_predict.shape, (
+            f"Shapes of true and predicted energies do not match: "
+            f"{E_true.shape} != {E_predict.shape}"
+        )
         return {"E_true": E_true, "E_predict": E_predict}
 
-
-class EnergyAndForceLoss(Loss):
-    """
-    Computes combined loss from energies and forces, with adjustable weighting.
-    """
-
-    def __init__(
-        self,
-        model: Union["ANI2x", "SchNet", "PaiNN", "PhysNet", "SAKE"],
-        include_force: bool = False,
-        force_weight: float = 1.0,
-        energy_weight: float = 1.0,
-    ) -> None:
-        super().__init__(model)
-        log.info("Initializing EnergyAndForceLoss")
-        self.force_weight = force_weight
-        self.energy_weight = energy_weight
-        self.include_force = include_force
-        self.have_raised_warning = False
-
-    def compute_loss(self, batch: "BatchData", loss_fn=F.l1_loss) -> torch.Tensor:
+    def _get_predictions(self, batch: "BatchData") -> Dict[str, torch.Tensor]:
         """
-        Computes the weighted combined loss for energies and optionally forces.
+        Computes the energies and forces from a given batch using the model.
 
         Parameters
         ----------
         batch : BatchData
-            The batch of data to compute the loss for.
-        loss_fn : function, optional
-            The PyTorch loss function to apply, by default F.l1_loss.
+            A single batch of data, including input features and target energies.
 
         Returns
         -------
-        torch.Tensor
-            The computed loss as a PyTorch tensor.
+        Dict[str, torch.Tensor]
+            The true and predicted energies and forces from the dataset and the model.
         """
-        with torch.set_grad_enabled(True):
-            energies = self._get_energies(batch)
-            loss = self.energy_weight * loss_fn(
-                energies["E_predict"], energies["E_true"]
-            )
-            if self.include_force:
-                forces = self._get_forces(batch, energies)
-                loss += self.force_weight * loss_fn(
-                    forces["F_predict"], forces["F_true"]
-                )
-        return loss
-
-
-from torch.optim import Optimizer
-
-if TYPE_CHECKING:
-    from modelforge.potential import _Implemented_NNPs
-
-
-class TrainingAdapter(pl.LightningModule):
-    """
-    Adapter class for training neural network potentials using PyTorch Lightning.
-    """
-
-    def __init__(
-        self,
-        *,
-        model_parameters: Dict[str, Any],
-        lr_scheduler_config: Dict[str, Union[str, int, float]],
-        lr: float,
-        dataset_statistics: Optional[Dict[str, float]] = None,
-        include_force: bool = False,
-        optimizer: Type[Optimizer] = torch.optim.AdamW,
-    ):
-        """
-        Initializes the TrainingAdapter with the specified model and training configuration.
-
-        Parameters
-        ----------
-        nnp_parameters : Dict[str, Any]
-            The parameters for the neural network potential model.
-        lr_scheduler_config : Dict[str, Union[str, int, float]]
-            The configuration for the learning rate scheduler.
-        lr : float
-            The learning rate for the optimizer.
-        include_force : bool, optional
-            Whether to include force in the loss function, by default False.
-        optimizer : Type[Optimizer], optional
-            The optimizer class to use for training, by default torch.optim.AdamW.
-        """
-
-        from typing import List
-        from modelforge.potential import _Implemented_NNPs
-
-        super().__init__()
-        self.save_hyperparameters()
-        # Extracting and instantiating the model from parameters
-        model_parameters_ = model_parameters.copy()
-        nnp_name = model_parameters_.pop("nnp_name", None)
-        if nnp_name is None:
-            raise ValueError(
-                "NNP name must be specified in nnp_parameters with key 'nnp_name'."
-            )
-        nnp_class: Type = _Implemented_NNPs.get_neural_network_class(nnp_name)
-        if nnp_class is None:
-            raise ValueError(f"Specified NNP name '{nnp_name}' is not implemented.")
-
-        self.model = nnp_class(
-            **model_parameters_,
-            dataset_statistics=dataset_statistics,
-        )
-        self.optimizer = optimizer
-        self.learning_rate = lr
-        self.loss = EnergyAndForceLoss(model=self.model, include_force=include_force)
-        self.lr_scheduler_config = lr_scheduler_config
-        self.test_mse: List[float] = []
-        self.val_mse: List[float] = []
-        self.are_unused_parameters_present: bool = False
-        self.unused_parameters: set = set()
+        energies = self._get_energies(batch)
+        forces = self._get_forces(batch, energies)
+        return {**energies, **forces}
 
     def config_prior(self):
         """
@@ -200,22 +424,39 @@ class TrainingAdapter(pl.LightningModule):
         log.warning("Model does not implement _config_prior().")
         raise NotImplementedError()
 
-    def _log_batch_size(self, y: torch.Tensor) -> int:
+    def _log_metrics(
+        self,
+        error_dict: Dict[str, torchmetrics.MetricCollection],
+        predict_target: Dict[str, torch.Tensor],
+    ) -> Dict[str, torch.Tensor]:
         """
-        Logs the size of the batch and returns it. Useful for logging and debugging.
+        Updates the provided metric collections with the predicted and true targets.
 
         Parameters
         ----------
-        y : torch.Tensor
-            The tensor containing the target values of the batch.
+        error_dict : dict
+            Dictionary containing metric collections for energy and force.
+        predict_target : dict
+            Dictionary containing predicted and true values for energy and force.
 
         Returns
         -------
-        int
-            The size of the batch.
+        Dict[str, torch.Tensor]
+            Dictionary containing updated metrics.
         """
-        batch_size = y.size(0)
-        return batch_size
+
+        for property, metrics in error_dict.items():
+            for metric, error_log in metrics.items():
+                if property == "energy":
+                    error_log(
+                        predict_target["E_predict"].detach(),
+                        predict_target["E_true"].detach(),
+                    )
+                if property == "force":
+                    error_log(
+                        predict_target["F_predict"].detach(),
+                        predict_target["F_true"].detach(),
+                    )
 
     def training_step(self, batch: "BatchData", batch_idx: int) -> torch.Tensor:
         """
@@ -234,10 +475,52 @@ class TrainingAdapter(pl.LightningModule):
             The loss tensor computed for the current training step.
         """
 
-        loss = self.loss.compute_loss(batch, F.mse_loss)
-        self.log("mse_train_loss", loss, on_step=True, prog_bar=True)
-        return loss
+        # calculate energy and forces
+        predict_target = self._get_predictions(batch)
+        # calculate the loss
+        loss_dict = self.loss_module.calculate_loss(predict_target, batch)
+        # Update and log metrics
+        self._log_metrics(self.train_error, predict_target)
+        # log loss
+        for key, loss in loss_dict.items():
+            self.log(
+                f"train/{key}",
+                torch.mean(loss),
+                on_step=True,
+                prog_bar=True,
+                on_epoch=True,
+                batch_size=1,
+            )  # batch size is 1 because the mean of the batch is logged
 
+        return loss_dict["combined_loss"]
+
+    @torch.enable_grad()
+    def validation_step(self, batch: "BatchData", batch_idx: int) -> None:
+        """
+        Validation step to compute the RMSE/MAE across epochs.
+
+        Parameters
+        ----------
+        batch : BatchData
+            The batch of data provided for validation.
+        batch_idx : int
+            The index of the current batch.
+
+        Returns
+        -------
+        None
+        """
+
+        # Ensure positions require gradients for force calculation
+        batch.nnp_input.positions.requires_grad_(True)
+        # calculate energy and forces
+        predict_target = self._get_predictions(batch)
+        # calculate the loss
+        loss = self.loss_module.calculate_loss(predict_target, batch)
+        # log the loss
+        self._log_metrics(self.val_error, predict_target)
+
+    @torch.enable_grad()
     def test_step(self, batch: "BatchData", batch_idx: int) -> None:
         """
         Test step to compute the RMSE loss for a given batch.
@@ -257,52 +540,20 @@ class TrainingAdapter(pl.LightningModule):
         None
             The results are logged and not directly returned.
         """
-        mse_loss = self.loss.compute_loss(batch, F.mse_loss).detach()
-        self.test_mse.append(float(mse_loss))
+        # Ensure positions require gradients for force calculation
+        batch.nnp_input.positions.requires_grad_(True)
+        # calculate energy and forces
+        predict_target = self._get_predictions(batch)
+        # Update and log metrics
+        self._log_metrics(self.test_error, predict_target)
 
-    def on_test_epoch_end(self) -> None:
+    def on_train_epoch_end(self):
         """
-        Calculates the root mean squared error (RMSE) of the test set and logs it to the progress bar.
+        Operations to perform at the end of each training epoch.
 
-        This method is called at the end of each test epoch during training. It calculates the RMSE of the test set by taking the square root of the mean of the test mean squared error (MSE) values. The RMSE is then logged to the progress bar with the key "rmse_test_loss".
+        Logs histograms of weights and biases, and learning rate.
+        Also, resets validation loss.
         """
-
-        import numpy as np
-
-        rmse_loss = np.sqrt(np.mean(np.array(self.test_mse)))
-        self.log(
-            "rmse_test_loss",
-            rmse_loss,
-            on_epoch=True,
-            prog_bar=True,
-        )
-
-        if self.are_unused_parameters_present:
-            log.warning("Unused parameters present in the model")
-            log.warning(f"Unused parameters: {self.unused_parameters}")
-
-    def validation_step(self, batch: "BatchData", batch_idx: int) -> torch.Tensor:
-        """
-        Validation step to compute the RMSE loss and accumulate L1 loss across epochs.
-
-        Parameters
-        ----------
-        batch : BatchData
-            The batch of data provided for validation.
-        batch_idx : int
-            The index of the current batch.
-
-        Returns
-        -------
-        torch.Tensor
-            The loss tensor computed for the current validation step.
-        """
-        mse_loss = self.loss.compute_loss(batch, F.mse_loss)
-        self.val_mse.append(float(mse_loss))
-        return mse_loss
-
-    def on_training_epoch_end(self):
-        # Log histograms of weights and biases after each backward pass
         for name, params in self.named_parameters():
             if params is not None:
                 self.logger.experiment.add_histogram(name, params, self.current_epoch)
@@ -311,23 +562,36 @@ class TrainingAdapter(pl.LightningModule):
                     f"{name}.grad", params.grad, self.current_epoch
                 )
 
-    def on_validation_epoch_end(self):
-        """
-        Handles end-of-validation-epoch events to compute and log the average RMSE validation loss.
-        """
-        import numpy as np
-
-        rmse_loss = np.sqrt(np.mean(np.array(self.val_mse)))
         sch = self.lr_schedulers()
         try:
-            log.info(f"Current learning rate: {sch.get_last_lr()}")
+            self.log("lr", sch.get_last_lr()[0], on_epoch=True, prog_bar=True)
         except AttributeError:
             pass
-        self.log(
-            "rmse_val_loss", rmse_loss, on_epoch=True, prog_bar=True, sync_dist=True
-        )
-        self.val_mse.clear()
-        return rmse_loss
+
+        self._log_on_epoch()
+
+    def _log_on_epoch(self):
+        # convert long names to shorter versions
+        conv = {
+            "MeanAbsoluteError": "mae",
+            "MeanSquaredError": "rmse",
+        }  # NOTE: MeanSquaredError(squared=False) is RMSE
+        # Log accumulated training loss metrics
+        metrics = {}
+        self.log_dict(metrics, on_epoch=True, prog_bar=True)
+
+        # Log all accumulated metrics for train, val, and test phases
+        for phase, error_dict in [
+            ("train", self.train_error),
+            ("val", self.val_error),
+            ("test", self.test_error),
+        ]:
+            metrics = {}
+            for property, metrics_dict in error_dict.items():
+                for name, metric in metrics_dict.items():
+                    metrics[f"{phase}/{property}/{conv[name]}"] = metric.compute()
+                    metric.reset()
+            self.log_dict(metrics, on_epoch=True, prog_bar=(phase == "val"))
 
     def configure_optimizers(self) -> Dict[str, Any]:
         """
@@ -356,181 +620,12 @@ class TrainingAdapter(pl.LightningModule):
 
         lr_scheduler_config = {
             "scheduler": lr_scheduler,
-            "monitor": "rmse_val_loss",  # Name of the metric to monitor
+            "monitor": lr_scheduler_config["monitor"],  # Name of the metric to monitor
             "interval": "epoch",
             "frequency": 1,
         }
         return {"optimizer": optimizer, "lr_scheduler": lr_scheduler_config}
 
-    def on_train_epoch_end(self) -> None:
-        """
-        This method will be called at the end of each training epoch.
-        We will check for unused parameters here.
-        """
-
-        # Check for parameters that have not been updated
-        for name, p in self.named_parameters():
-            if p.grad is None:
-                self.unused_parameters.add(name)
-                self.are_unused_parameters_present = True
-
-    def on_train_end(self) -> None:
-
-        # Log the unused parameters
-        if self.are_unused_parameters_present:
-
-            log.warning(f"Unused parameters detected:")
-            log.warning(self.unused_parameters)
-
-    def log_unused_parameters(self):
-        """
-        Log the unused parameters.
-        """
-        if self.are_unused_parameters_present:
-            log.warning("Unused parameters detected:")
-            for param_name in self.unused_parameters:
-                log.warning(param_name)
-
-    def train_func(self):
-        """
-        Defines the training function to be used with Ray for distributed training.
-
-        This function configures a PyTorch Lightning trainer with the Ray Distributed Data Parallel
-        (DDP) strategy for efficient distributed training. The training process utilizes a custom
-        training loop and environment setup provided by Ray.
-
-        Note: This function should be passed to a Ray Trainer or directly used with Ray tasks.
-        """
-
-        from ray.train.lightning import (
-            RayDDPStrategy,
-            RayLightningEnvironment,
-            RayTrainReportCallback,
-            prepare_trainer,
-        )
-
-        trainer = pl.Trainer(
-            devices="auto",
-            accelerator="auto",
-            strategy=RayDDPStrategy(find_unused_parameters=True),
-            callbacks=[RayTrainReportCallback()],
-            plugins=[RayLightningEnvironment()],
-            enable_progress_bar=False,
-        )
-        trainer = prepare_trainer(trainer)
-        trainer.fit(self, self.train_dataloader, self.val_dataloader)
-
-    def get_ray_trainer(self, number_of_workers: int = 2, use_gpu: bool = False):
-        """
-        Initializes and returns a Ray Trainer for distributed training.
-
-        Configures a Ray Trainer with a specified number of workers and GPU usage settings. This trainer
-        is prepared for distributed training using Ray, with support for checkpointing.
-
-        Parameters
-        ----------
-        number_of_workers : int, optional
-            The number of distributed workers to use, by default 2.
-        use_gpu : bool, optional
-            Specifies whether to use GPUs for training, by default False.
-
-        Returns
-        -------
-        Ray Trainer
-            The configured Ray Trainer for distributed training.
-        """
-
-        from ray.train import CheckpointConfig, RunConfig, ScalingConfig
-
-        scaling_config = ScalingConfig(
-            num_workers=number_of_workers,
-            use_gpu=use_gpu,
-            resources_per_worker={"CPU": 1, "GPU": 1} if use_gpu else {"CPU": 1},
-        )
-
-        run_config = RunConfig(
-            checkpoint_config=CheckpointConfig(
-                num_to_keep=2,
-                checkpoint_score_attribute="rmse_val_loss",
-                checkpoint_score_order="min",
-            ),
-        )
-        from ray.train.torch import TorchTrainer
-
-        # Define a TorchTrainer without hyper-parameters for Tuner
-        ray_trainer = TorchTrainer(
-            self.train_func,
-            scaling_config=scaling_config,
-            run_config=run_config,
-        )
-
-        return ray_trainer
-
-    def tune_with_ray(
-        self,
-        train_dataloader,
-        val_dataloader,
-        number_of_epochs: int = 5,
-        number_of_samples: int = 10,
-        number_of_ray_workers: int = 2,
-        train_on_gpu: bool = False,
-    ):
-        """
-        Performs hyperparameter tuning using Ray Tune.
-
-        This method sets up and starts a Ray Tune hyperparameter tuning session, utilizing the ASHA scheduler
-        for efficient trial scheduling and early stopping.
-
-        Parameters
-        ----------
-        train_dataloader : DataLoader
-            The DataLoader for training data.
-        val_dataloader : DataLoader
-            The DataLoader for validation data.
-        number_of_epochs : int, optional
-            The maximum number of epochs for training, by default 5.
-        number_of_samples : int, optional
-            The number of samples (trial runs) to perform, by default 10.
-        number_of_ray_workers : int, optional
-            The number of Ray workers to use for distributed training, by default 2.
-        use_gpu : bool, optional
-            Whether to use GPUs for training, by default False.
-
-        Returns
-        -------
-        Tune experiment analysis object
-            The result of the hyperparameter tuning session, containing performance metrics and the best hyperparameters found.
-        """
-
-        from ray import tune
-        from ray.tune.schedulers import ASHAScheduler
-
-        self.train_dataloader = train_dataloader
-        self.val_dataloader = val_dataloader
-
-        ray_trainer = self.get_ray_trainer(
-            number_of_workers=number_of_ray_workers, use_gpu=train_on_gpu
-        )
-        scheduler = ASHAScheduler(
-            max_t=number_of_epochs, grace_period=1, reduction_factor=2
-        )
-
-        tune_config = tune.TuneConfig(
-            metric="rmse_val_loss",
-            mode="min",
-            scheduler=scheduler,
-            num_samples=number_of_samples,
-        )
-
-        tuner = tune.Tuner(
-            ray_trainer,
-            param_space={"train_loop_config": self.config_prior()},
-            tune_config=tune_config,
-        )
-        return tuner.fit()
-
-
-from typing import Optional
 
 
 def return_toml_config(
@@ -669,6 +764,7 @@ def log_training_arguments(
     version_select = dataset_config.get("version_select", "latest")
     if version_select == "latest":
         log.info(f"Using default dataset version: {version_select}")
+
     else:
         log.info(f"Using dataset version: {version_select}")
     accelerator = training_config.get("accelerator", "cpu")
@@ -696,6 +792,7 @@ def log_training_arguments(
         log.info(f"Using default batch size: {batch_size}")
     else:
         log.info(f"Using batch size: {batch_size}")
+
     remove_self_energies = training_config.get("remove_self_energies", False)
     if remove_self_energies is False:
         log.warning(
@@ -706,6 +803,11 @@ def log_training_arguments(
     early_stopping_config = training_config.get("early_stopping", None)
     if early_stopping_config is None:
         log.info(f"Using default: No early stopping performed")
+
+    stochastic_weight_averaging_config = training_config.get(
+        "stochastic_weight_averaging_config", None
+    )
+
     num_workers = dataset_config.get("number_of_worker", 4)
     if num_workers == 4:
         log.info(
@@ -720,7 +822,7 @@ def log_training_arguments(
         log.info(f"Using pinned_memory: {pin_memory}")
     model_name = potential_config["model_name"]
     dataset_name = dataset_config["dataset_name"]
-
+    log.info(training_config["loss_parameter"])
     log.debug(
         f"""
 Training {model_name} on {dataset_name}-{version_select} dataset with {accelerator}
@@ -751,6 +853,7 @@ def perform_training(
     -------
     Trainer
     """
+
     from pytorch_lightning.loggers import TensorBoardLogger
     from modelforge.dataset.utils import RandomRecordSplittingStrategy
     from lightning import Trainer
@@ -758,12 +861,15 @@ def perform_training(
     from modelforge.dataset.dataset import DataModule
     from lightning.pytorch.callbacks import ModelSummary
 
-    # Parse the arguments
-    log_training_arguments(potential_config, training_config, dataset_config)
+    save_dir = training_config.get("save_dir", "lightning_logs")
+    if save_dir == "lightning_logs":
+        log.info(f"Saving logs to default location: {save_dir}")
+
+    experiment_name = training_config.get("experiment_name", "exp")
     model_name = potential_config["model_name"]
     dataset_name = dataset_config["dataset_name"]
-    save_dir = training_config.get("save_dir", "lightning_logs")
-    experiment_name = training_config.get("experiment_name", "exp")
+    log_training_arguments(potential_config, training_config, dataset_config)
+
     version_select = dataset_config.get("version_select", "latest")
     accelerator = training_config.get("accelerator", "cpu")
     nr_of_epochs = training_config.get("nr_of_epochs", 10)
@@ -771,19 +877,26 @@ def perform_training(
     devices = training_config.get("devices", 1)
     batch_size = training_config.get("batch_size", 128)
     remove_self_energies = training_config.get("remove_self_energies", False)
-    num_workers = dataset_config.get("number_of_worker", 4)
-    pin_memory = training_config.get("pin_memory", False)
     early_stopping_config = training_config.get("early_stopping", None)
+    stochastic_weight_averaging_config = training_config.get(
+        "stochastic_weight_averaging_config", None
+    )
+    num_workers = dataset_config.get("number_of_worker", 4)
+    pin_memory = dataset_config.get("pin_memory", False)
 
     # set up tensor board logger
     logger = TensorBoardLogger(save_dir, name=experiment_name)
 
-    print(f"Using {accelerator} accelerator")
-    print(f"Using {num_nodes} nodes")
-    print(f"Using {devices} devices")
-    print(f"Training for {nr_of_epochs} epochs")
-    print(f"Using batch size: {batch_size}")
-    print(f"Using {num_workers} workers for training data loader")
+    log.debug(
+        f"""
+Training {model_name} on {dataset_name}-{version_select} dataset with {accelerator}
+accelerator on {num_nodes} nodes for {nr_of_epochs} epochs.
+Experiments are saved to: {save_dir}/{experiment_name}.
+"""
+    )
+
+    log.debug(f"Using {potential_config} potential config")
+    log.debug(f"Using {training_config} training config")
 
     # Set up dataset
     dm = DataModule(
@@ -808,19 +921,38 @@ def perform_training(
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="training",
         model_type=model_name,
-        model_parameters=potential_config["potential_parameters"],
-        training_parameters=training_config["training_parameters"],
         dataset_statistics=dataset_statistics["atomic_energies_stats"],
+        loss_parameter=training_config["loss_parameter"],
+        model_parameters=potential_config["potential_parameter"],
+        training_parameters=training_config["training_parameter"],
     )
 
     # set up traininer
     from lightning.pytorch.callbacks.early_stopping import EarlyStopping
+    from lightning.pytorch.callbacks.stochastic_weight_avg import (
+        StochasticWeightAveraging,
+    )
 
-    # set up trainer
-    callbacks = [ModelSummary(max_depth=-1)]
+    # set up callbacks
+    callbacks = []
+    if stochastic_weight_averaging_config:
+        callbacks.append(
+            StochasticWeightAveraging(**stochastic_weight_averaging_config)
+        )
     if early_stopping_config:
         callbacks.append(EarlyStopping(**early_stopping_config))
 
+    from lightning.pytorch.callbacks import ModelCheckpoint
+
+    checkpoint_callback = ModelCheckpoint(
+        save_top_k=2,
+        monitor="val/energy/rmse",
+        filename="best_{potential_name}-{dataset_name}-{epoch:02d}-{val_loss:.2f}",
+    )
+
+    callbacks.append(checkpoint_callback)
+
+    # set up trainer
     trainer = Trainer(
         max_epochs=nr_of_epochs,
         num_nodes=num_nodes,
@@ -828,6 +960,9 @@ def perform_training(
         accelerator=accelerator,
         logger=logger,  # Add the logger here
         callbacks=callbacks,
+        inference_mode=False,
+        num_sanity_val_steps=2,
+        log_every_n_steps=50,
     )
 
     # Run training loop and validate
@@ -838,6 +973,6 @@ def perform_training(
         ),
         val_dataloaders=dm.val_dataloader(),
     )
-    trainer.validate(model, dataloaders=dm.val_dataloader())
-    trainer.test(dataloaders=dm.test_dataloader())
+    trainer.validate(model=model, dataloaders=dm.val_dataloader(), ckpt_path="best")
+    trainer.test(dataloaders=dm.test_dataloader(), ckpt_path="best")
     return trainer

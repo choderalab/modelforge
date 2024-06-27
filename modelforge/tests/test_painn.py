@@ -11,9 +11,9 @@ def test_PaiNN_forward(single_batch_with_batchsize_64):
     config = load_configs("painn_without_ase", 'qm9')
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
 
-    painn = PaiNN(**potential_parameters)
+    painn = PaiNN(**potential_parameter)
     assert painn is not None, "PaiNN model should be initialized."
 
     nnp_input = single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float32)
@@ -38,7 +38,7 @@ def test_painn_interaction_equivariance(single_batch_with_batchsize_64):
     config = load_configs("painn_without_ase", 'qm9')
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
 
     # define a rotation matrix in 3D that rotates by 90 degrees around the z-axis
     # (clockwise when looking along the z-axis towards the origin)
@@ -46,7 +46,7 @@ def test_painn_interaction_equivariance(single_batch_with_batchsize_64):
         [[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]], dtype=torch.float64
     )
 
-    painn = PaiNN(**potential_parameters).to(torch.float64)
+    painn = PaiNN(**potential_parameter).to(torch.float64)
     methane_input = single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float64)
     perturbed_methane_input = replace(methane_input)
     perturbed_methane_input.positions = torch.matmul(

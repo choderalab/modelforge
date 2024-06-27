@@ -606,7 +606,9 @@ class NeuralNetworkPotentialFactory:
             # for training the `nnp_name` might have been set
             if "nnp_name" in model_parameters:
                 del model_parameters["nnp_name"]
-            nnp_instance = nnp_class(**model_parameters)
+            nnp_instance = nnp_class(
+                **model_parameters, dataset_statistics=dataset_statistics
+            )
             if simulation_environment == "JAX":
                 return PyTorch2JAXConverter().convert_to_jax_model(nnp_instance)
             else:
@@ -811,7 +813,7 @@ class BaseNetwork(Module):
         # perform the forward pass implemented in the model
         outputs = self.core_module._forward(nnp_input)
         outputs["atomic_numbers"] = data.atomic_numbers
-        
+
         # perform postprocessing on properties
         for property, processing in zip(self.postprocessing_prop, self.postprocessing):
             inputs = [outputs[in_key] for in_key in property["in"]]

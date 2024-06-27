@@ -46,7 +46,7 @@ def test_sake_forward(single_batch_with_batchsize_64):
     potential_parameters = config["potential"].get("potential_parameters", {})
 
     sake = SAKE(**potential_parameters)
-    energy = sake(methane).E
+    energy = sake(methane)['E']
     nr_of_mols = methane.atomic_subsystem_indices.unique().shape[0]
 
     assert (

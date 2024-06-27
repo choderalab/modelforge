@@ -432,8 +432,7 @@ class RadialBasisFunctionCore(ABC):
         Parameters
         ---------
         nondimensionalized_distances: torch.Tensor, shape [number_of_pairs, number_of_radial_basis_functions]
-            Nondimensional quantities that range from 0 to infinity. All distances should be nondimensionalized
-            appropriately before passing as input to this function.
+            Nondimensional quantities that depend on pairwise distances.
 
         Returns
         ---------

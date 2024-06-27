@@ -14,9 +14,7 @@ def load_configs(model_name: str, dataset_name: str):
     from importlib import resources
     from modelforge.train.training import return_toml_config
 
-    potential_path = (
-        resources.files(potential_defaults) / f"{model_name.lower()}.toml"
-    )
+    potential_path = resources.files(potential_defaults) / f"{model_name.lower()}.toml"
     dataset_path = resources.files(dataset_defaults) / f"{dataset_name}.toml"
     training_path = resources.files(training_defaults) / "default.toml"
 
@@ -34,7 +32,7 @@ def test_JAX_wrapping(model_name, single_batch_with_batchsize_64):
     )
 
     # read default parameters
-    config = load_configs(f'{model_name.lower()}_without_ase', "qm9")
+    config = load_configs(f"{model_name.lower()}_without_ase", "qm9")
 
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
@@ -49,7 +47,7 @@ def test_JAX_wrapping(model_name, single_batch_with_batchsize_64):
 
     assert "JAX" in str(type(model))
     nnp_input = single_batch_with_batchsize_64.nnp_input.as_jax_namedtuple()
-    out = model(nnp_input)['E']
+    out = model(nnp_input)["E"]
     import jax
 
     grad_fn = jax.grad(lambda pos: out.sum())  # Create a gradient function
@@ -67,7 +65,7 @@ def test_model_factory(model_name, simulation_environment):
     from modelforge.train.training import TrainingAdapter
 
     # read default parameters
-    config = load_configs(f'{model_name.lower()}_without_ase', "qm9")
+    config = load_configs(f"{model_name.lower()}_without_ase", "qm9")
 
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
@@ -332,7 +330,18 @@ def test_forward_pass_with_all_datasets(model_name, dataset_name, datamodule_fac
         model_parameters=potential_parameters,
         dataset_statistics=dataset_statistics,
     )
-    model(batch.nnp_input)
+    output = model(batch.nnp_input)
+
+    # test that the output has the following keys
+    assert "E" in output
+    assert "E_i" in output
+    assert "mse" in output
+    assert "ase" in output
+
+    assert output["E"].shape[0] == 64
+    assert output["mse"].shape[0] == 64
+    assert output["ase"].shape == batch.nnp_input.atomic_numbers.shape
+    assert output["E_i"].shape == batch.nnp_input.atomic_numbers.shape
 
     pair_list = batch.nnp_input.pair_list
     # pairlist is in ascending order in row 0
@@ -395,6 +404,7 @@ def test_calculate_energies_and_forces(
     Test the calculation of energies and forces for a molecule.
     """
     import torch
+
     # read default parameters
     config = load_configs(f"{model_name.lower()}_without_ase", "qm9")
 

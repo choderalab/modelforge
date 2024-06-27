@@ -21,9 +21,9 @@ def test_SAKE_init():
     # read default parameters
     config = load_configs(f"sake_without_ase", "qm9")
     # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
+    potential_parameterss = config["potential"].get("potential_parameterss", {})
 
-    sake = SAKE(**potential_parameter)
+    sake = SAKE(**potential_parameterss)
     assert sake is not None, "SAKE model should be initialized."
 
 
@@ -42,7 +42,7 @@ def test_sake_forward(single_batch_with_batchsize_64):
     # read default parameters
     config = load_configs(f"sake_without_ase", "qm9")
     # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
+    potential_parameterss = config["potential"].get("potential_parameterss", {})
 
     sake = SAKE(**potential_parameters)
     energy = sake(methane)["E"]
@@ -101,9 +101,9 @@ def test_sake_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize_64
 
     config = load_configs(f"sake_without_ase", "qm9")
     # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
-    potential_parameter["number_of_atom_features"] = nr_atom_basis
-    sake = SAKE(**potential_parameter)
+    potential_parameterss = config["potential"].get("potential_parameterss", {})
+    potential_parameterss["number_of_atom_features"] = nr_atom_basis
+    sake = SAKE(**potential_parameterss)
 
     # get methane input
     methane = single_batch_with_batchsize_64.nnp_input
@@ -586,9 +586,9 @@ def test_model_invariance(single_batch_with_batchsize_1):
 
     config = load_configs(f"sake_without_ase", "qm9")
     # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
+    potential_parameterss = config["potential"].get("potential_parameterss", {})
 
-    model = SAKE(**potential_parameter)
+    model = SAKE(**potential_parameterss)
     # get methane input
     methane = single_batch_with_batchsize_1.nnp_input
 

@@ -18,11 +18,17 @@ cooldown = 5
 min_lr = 1e-8
 threshold = 0.1
 threshold_mode = "abs"
-monitor = "rmse_val_loss"
+monitor = "val/energy/rmse"
 interval = "epoch"
 
 [training.early_stopping]
 verbose = true
-monitor = "rmse_val_loss"
+monitor = "val/energy/rmse"
 min_delta = 0.001
 patience = 50
+
+[training.loss_parameter]
+loss_type = "EnergyAndForceLoss"
+include_force = true
+force_weight = 1.0
+energy_weight = 1.0

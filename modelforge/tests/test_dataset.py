@@ -10,6 +10,7 @@ from modelforge.dataset import _ImplementedDatasets
 
 from modelforge.utils.prop import PropertyNames
 
+
 def test_dataset_imported():
     """Sample test, will always pass so long as import statement worked."""
 
@@ -471,14 +472,14 @@ def test_dataset_neighborlist(model_name, single_batch_with_batchsize_64):
     config = load_configs(f"{model_name}_without_ase", "qm9")
 
     # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
+    potential_parameterss = config["potential"].get("potential_parameterss", {})
     from modelforge.potential.models import NeuralNetworkPotentialFactory
 
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="inference",
         model_type=model_name,
         simulation_environment="PyTorch",
-        model_parameters=potential_parameter,
+        model_parameters=potential_parameterss,
     )
     model(nnp_input)
 

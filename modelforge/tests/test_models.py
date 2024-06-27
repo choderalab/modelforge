@@ -45,7 +45,7 @@ def test_JAX_wrapping(model_name, single_batch_with_batchsize_64, loss_config):
     config = load_configs(f"{model_name.lower()}_without_ase", "qm9")
 
     # Extract parameters
-    potential_parameterss = config["potential"].get("potential_parameterss", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
 
     # inference model
     model = NeuralNetworkPotentialFactory.create_nnp(
@@ -53,7 +53,7 @@ def test_JAX_wrapping(model_name, single_batch_with_batchsize_64, loss_config):
         model_type=model_name,
         loss_parameter=loss_config,
         simulation_environment="JAX",
-        model_parameters=potential_parameterss,
+        model_parameters=potential_parameter,
     )
 
     assert "JAX" in str(type(model))
@@ -79,7 +79,7 @@ def test_model_factory(model_name, simulation_environment, loss_config):
     config = load_configs(f"{model_name.lower()}_without_ase", "qm9")
 
     # Extract parameters
-    potential_parameterss = config["potential"].get("potential_parameterss", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
 
     # Setup loss
     from modelforge.train.training import return_toml_config
@@ -90,7 +90,7 @@ def test_model_factory(model_name, simulation_environment, loss_config):
         model_type=model_name,
         loss_parameter=loss_config,
         simulation_environment=simulation_environment,
-        model_parameters=potential_parameterss,
+        model_parameters=potential_parameter,
     )
     assert (
         model_name.upper() in str(type(model)).upper()
@@ -105,7 +105,7 @@ def test_model_factory(model_name, simulation_environment, loss_config):
         model_type=model_name,
         loss_parameter=loss_config,
         simulation_environment=simulation_environment,
-        model_parameters=potential_parameterss,
+        model_parameters=potential_parameter,
         training_parameters=training_parameters,
     )
     assert type(model) == TrainingAdapter
@@ -141,12 +141,12 @@ def test_energy_scaling_and_offset():
     config = load_configs("ani2x_without_ase", "qm9")
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
     import toml
 
     dataset_statistics = toml.load(dataset.dataset_statistics_filename)
     torch.manual_seed(42)
-    model = ANI2x(**potential_parameters, dataset_statistics=dataset_statistics)
+    model = ANI2x(**potential_parameter, dataset_statistics=dataset_statistics)
 
     # -------------------------------#
     # Test that we can add the reference energy correctly
@@ -162,9 +162,9 @@ def test_energy_scaling_and_offset():
     dataset_statistics = toml.load(dataset.dataset_statistics_filename)
     filename = resources.files(potential_defaults) / "ani2x.toml"
     config = return_toml_config(filename)
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
     torch.manual_seed(42)
-    model = ANI2x(**potential_parameters, dataset_statistics=dataset_statistics)
+    model = ANI2x(**potential_parameter, dataset_statistics=dataset_statistics)
     output_with_ase = model(methane)
 
     # make sure that the raw prediction is the same
@@ -184,7 +184,7 @@ def test_state_dict_saving_and_loading(model_name, loss_config):
     config = load_configs(f"{model_name.lower()}_without_ase", "qm9")
 
     # Extract parameters
-    potential_parameterss = config["potential"].get("potential_parameterss", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
     training_parameters = config["training"].get("training_parameter", {})
     # Setup loss
     from modelforge.train.training import return_toml_config
@@ -194,7 +194,7 @@ def test_state_dict_saving_and_loading(model_name, loss_config):
         model_type=model_name,
         loss_parameter=loss_config,
         simulation_environment="PyTorch",
-        model_parameters=potential_parameterss,
+        model_parameters=potential_parameter,
         training_parameters=training_parameters,
     )
     torch.save(model1.state_dict(), "model.pth")
@@ -203,7 +203,7 @@ def test_state_dict_saving_and_loading(model_name, loss_config):
         use="inference",
         model_type=model_name,
         simulation_environment="PyTorch",
-        model_parameters=potential_parameterss,
+        model_parameters=potential_parameter,
     )
     model2.load_state_dict(torch.load("model.pth"))
 
@@ -221,7 +221,7 @@ def test_dataset_statistics(model_name):
     config = load_configs(f"{model_name.lower()}_without_ase", "qm9")
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
     training_parameters = config["training"].get("training_parameters", {})
 
     # test the self energy calculation on the QM9 dataset
@@ -247,7 +247,7 @@ def test_dataset_statistics(model_name):
         use="training",
         model_type=model_name,
         simulation_environment="PyTorch",
-        model_parameters=potential_parameters,
+        model_parameters=potential_parameter,
         training_parameters=training_parameters,
         dataset_statistics=dataset_statistics,
     )
@@ -265,7 +265,7 @@ def test_dataset_statistics(model_name):
         use="inference",
         model_type=model_name,
         simulation_environment="PyTorch",
-        model_parameters=potential_parameters,
+        model_parameters=potential_parameter,
     )
 
     model.load_state_dict(torch.load("model.pth"))
@@ -287,7 +287,7 @@ def test_energy_between_simulation_environments(
     config = load_configs(f"{model_name.lower()}_without_ase", "qm9")
 
     # Extract parameters
-    potential_parameterss = config["potential"].get("potential_parameterss", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
     # Setup loss
     from modelforge.train.training import return_toml_config
 
@@ -297,7 +297,7 @@ def test_energy_between_simulation_environments(
         model_type=model_name,
         loss_parameter=loss_config,
         simulation_environment="PyTorch",
-        model_parameters=potential_parameterss,
+        model_parameters=potential_parameter,
     )
 
     output_torch = model(nnp_input)["E"]
@@ -308,7 +308,7 @@ def test_energy_between_simulation_environments(
         model_type=model_name,
         loss_parameter=loss_config,
         simulation_environment="JAX",
-        model_parameters=potential_parameterss,
+        model_parameters=potential_parameter,
     )
     nnp_input = nnp_input.as_jax_namedtuple()
     output_jax = model(nnp_input)["E"]
@@ -342,7 +342,7 @@ def test_forward_pass_with_all_datasets(
     config = load_configs(f"{model_name.lower()}", dataset_name.lower())
 
     # Extract parameters
-    potential_parameterss = config["potential"].get("potential_parameterss", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
     from modelforge.potential.models import NeuralNetworkPotentialFactory
     import toml
 
@@ -356,7 +356,7 @@ def test_forward_pass_with_all_datasets(
         model_type=model_name,
         loss_parameter=loss_config,
         simulation_environment="PyTorch",
-        model_parameters=potential_parameters,
+        model_parameters=potential_parameter,
         dataset_statistics=dataset_statistics,
     )
     output = model(batch.nnp_input)
@@ -392,7 +392,7 @@ def test_forward_pass(
     config = load_configs(f"{model_name.lower()}_without_ase", "qm9")
 
     # Extract parameters
-    potential_parameterss = config["potential"].get("potential_parameterss", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
     # Setup loss
     from modelforge.train.training import return_toml_config
 
@@ -402,7 +402,7 @@ def test_forward_pass(
         model_type=model_name,
         loss_parameter=loss_config,
         simulation_environment=simulation_environment,
-        model_parameters=potential_parameterss,
+        model_parameters=potential_parameter,
     )
     if "JAX" in str(type(model)):
         nnp_input = nnp_input.as_jax_namedtuple()
@@ -441,7 +441,7 @@ def test_calculate_energies_and_forces(
     config = load_configs(f"{model_name.lower()}_without_ase", "qm9")
 
     # Extract parameters
-    potential_parameterss = config["potential"].get("potential_parameterss", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
 
     nnp_input = single_batch_with_batchsize_64.nnp_input
     # test the backward pass through each of the models
@@ -454,7 +454,7 @@ def test_calculate_energies_and_forces(
         model_type=model_name,
         loss_parameter=loss_config,
         simulation_environment=simulation_environment,
-        model_parameters=potential_parameterss,
+        model_parameters=potential_parameter,
     )
 
     if "JAX" in str(type(model)):
@@ -748,7 +748,7 @@ def test_casting(model_name, single_batch_with_batchsize_64, loss_config):
     config = load_configs(f"{model_name.lower()}_without_ase", "qm9")
 
     # Extract parameters
-    potential_parameterss = config["potential"].get("potential_parameterss", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
     # Setup loss
     from modelforge.train.training import return_toml_config
 
@@ -757,7 +757,7 @@ def test_casting(model_name, single_batch_with_batchsize_64, loss_config):
         model_type=model_name,
         loss_parameter=loss_config,
         simulation_environment="PyTorch",
-        model_parameters=potential_parameterss,
+        model_parameters=potential_parameter,
     )
     model = model.to(dtype=torch.float64)
     nnp_input = batch.nnp_input.to(dtype=torch.float64)
@@ -770,7 +770,7 @@ def test_casting(model_name, single_batch_with_batchsize_64, loss_config):
         model_type=model_name,
         loss_parameter=loss_config,
         simulation_environment="PyTorch",
-        model_parameters=potential_parameterss,
+        model_parameters=potential_parameter,
     )
     model = model.to(dtype=torch.float32)
     nnp_input = batch.nnp_input.to(dtype=torch.float32)
@@ -799,7 +799,7 @@ def test_equivariant_energies_and_forces(
     config = load_configs(f"{model_name}_without_ase", "qm9")
 
     # Extract parameters
-    potential_parameterss = config["potential"].get("potential_parameterss", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
     # Setup loss
     from modelforge.train.training import return_toml_config
 
@@ -808,7 +808,7 @@ def test_equivariant_energies_and_forces(
         model_type=model_name,
         loss_parameter=loss_config,
         simulation_environment=simulation_environment,
-        model_parameters=potential_parameterss,
+        model_parameters=potential_parameter,
     )
 
     # define the symmetry operations

@@ -12,6 +12,6 @@ def test_Schnet_init():
     # read default parameters
     config = load_configs(f"schnet_without_ase", "qm9")
     # Extract parameters
-    potential_parameterss = config["potential"].get("potential_parameterss", {})
-    schnet = SchNet(**potential_parameterss)
+    potential_parameter = config["potential"].get("potential_parameter", {})
+    schnet = SchNet(**potential_parameter)
     assert schnet is not None, "Schnet model should be initialized."

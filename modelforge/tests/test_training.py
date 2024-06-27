@@ -50,7 +50,7 @@ def test_train_with_lightning(model_name, dataset_name, loss_type):
         use="training",
         model_type=model_name,
         loss_parameter=training_config["loss_parameter"],
-        model_parameters=potential_config["potential_parameterss"],
+        model_parameters=potential_config["potential_parameter"],
         training_parameters=training_config["training_parameter"],
     )
     from modelforge.train.training import TrainingAdapter
@@ -145,7 +145,7 @@ def test_hypterparameter_tuning_with_ray(
     dm = datamodule_factory(dataset_name=dataset_name)
 
     # Extract parameters
-    potential_parameterss = config["potential"]["potential_parameterss"]
+    potential_parameter = config["potential"]["potential_parameter"]
     training_parameters = config["training"]["training_parameter"]
     loss_config = config["training"]["loss_parameter"]
     # training model
@@ -153,7 +153,7 @@ def test_hypterparameter_tuning_with_ray(
         use="training",
         model_type=model_name,
         loss_parameter=loss_config,
-        model_parameters=potential_parameterss,
+        model_parameters=potential_parameter,
         training_parameters=training_parameters,
     )
 

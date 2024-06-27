@@ -472,14 +472,14 @@ def test_dataset_neighborlist(model_name, single_batch_with_batchsize_64):
     config = load_configs(f"{model_name}_without_ase", "qm9")
 
     # Extract parameters
-    potential_parameterss = config["potential"].get("potential_parameterss", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
     from modelforge.potential.models import NeuralNetworkPotentialFactory
 
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="inference",
         model_type=model_name,
         simulation_environment="PyTorch",
-        model_parameters=potential_parameterss,
+        model_parameters=potential_parameter,
     )
     model(nnp_input)
 

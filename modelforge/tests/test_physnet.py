@@ -16,9 +16,9 @@ def test_physnet_init():
     # read default parameters
     config = load_configs(f"physnet_without_ase", "qm9")
     # Extract parameters
-    potential_parameterss = config["potential"].get("potential_parameterss", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
 
-    model = PhysNet(**potential_parameterss)
+    model = PhysNet(**potential_parameter)
 
 
 def test_physnet_forward(single_batch_with_batchsize_64):
@@ -31,13 +31,13 @@ def test_physnet_forward(single_batch_with_batchsize_64):
     # read default parameters
     config = load_configs(f"physnet_without_ase", "qm9")
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
 
     # Extract parameters
-    potential_parameters["number_of_modules"] = 1
-    potential_parameters["number_of_interaction_residual"] = 1
+    potential_parameter["number_of_modules"] = 1
+    potential_parameter["number_of_interaction_residual"] = 1
 
-    model = PhysNet(**potential_parameterss)
+    model = PhysNet(**potential_parameter)
     model = model.to(torch.float32)
     print(model)
     yhat = model(single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float32))

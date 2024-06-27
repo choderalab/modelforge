@@ -1,7 +1,7 @@
 [potential]
 model_name = "ANI2x"
 
-[potential.potential_parameters]
+[potential.potential_parameter]
 angle_sections = 4
 radial_max_distance = "5.1 angstrom"
 radial_min_distance = "0.8 angstrom"

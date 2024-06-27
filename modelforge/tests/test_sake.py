@@ -241,7 +241,7 @@ def make_equivalent_pairlist_mask(key, nr_atoms, nr_pairs, include_self_pairs):
 def test_radial_symmetry_function_against_reference():
     from modelforge.potential.utils import (
         SAKERadialSymmetryFunction,
-        SAKERadialBasisFunction,
+        SAKERadialBasisFunctionCore,
     )
     from sake.utils import ExpNormalSmearing as RefExpNormalSmearing
 
@@ -258,7 +258,7 @@ def test_radial_symmetry_function_against_reference():
         min_distance=cutoff_lower,
         dtype=torch.float32,
         trainable=False,
-        radial_basis_function=SAKERadialBasisFunction(cutoff_lower),
+        radial_basis_function=SAKERadialBasisFunctionCore(cutoff_lower),
     )
     ref_radial_basis_module = RefExpNormalSmearing(
         num_rbf=number_of_radial_basis_functions,

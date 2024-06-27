@@ -10,7 +10,7 @@ from .utils import (
     Dense,
     scatter_softmax,
     SAKERadialSymmetryFunction,
-    SAKERadialBasisFunction,
+    SAKERadialBasisFunctionCore,
 )
 from modelforge.dataset.dataset import NNPInput
 import torch
@@ -239,7 +239,7 @@ class SAKEInteraction(nn.Module):
             max_distance=cutoff,
             dtype=torch.float32,
             trainable=False,
-            radial_basis_function=SAKERadialBasisFunction(0.0 * unit.nanometer),
+            radial_basis_function=SAKERadialBasisFunctionCore(0.0 * unit.nanometer),
         )
 
         self.node_mlp = nn.Sequential(

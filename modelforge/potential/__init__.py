@@ -5,7 +5,7 @@ from .ani import ANI2x
 from .sake import SAKE
 from .utils import (
     CosineCutoff,
-    RadialSymmetryFunction,
+    RadialBasisFunction,
     AngularSymmetryFunction,
 )
 from .processing import FromAtomToMoleculeReduction

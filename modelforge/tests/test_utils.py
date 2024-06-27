@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import pytest
 
-from modelforge.potential.utils import CosineCutoff, RadialSymmetryFunction
+from modelforge.potential.utils import CosineCutoff, RadialBasisFunction
 
 
 def test_dense_layer():
@@ -116,13 +116,13 @@ def test_radial_symmetry_function_implementation():
     """
     Test the Radial Symmetry function implementation.
     """
-    from modelforge.potential.utils import RadialSymmetryFunction, CosineCutoff
+    from modelforge.potential.utils import RadialBasisFunction, CosineCutoff
     import torch
     from openff.units import unit
     import numpy as np
 
     cutoff_module = CosineCutoff(cutoff=unit.Quantity(5.0, unit.angstrom))
-    RSF = RadialSymmetryFunction(
+    RSF = RadialBasisFunction(
         number_of_radial_basis_functions=18,
         max_distance=unit.Quantity(5.0, unit.angstrom),
     )

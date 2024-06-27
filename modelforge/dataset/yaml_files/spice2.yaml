@@ -3,9 +3,10 @@ latest: full_dataset_v0
 latest_test: nc_1000_v0
 full_dataset_v0:
   version: 0
+  doi: 10.5281/zenodo.11632270
   gz_data_file:
     length: 26313472234
-    md5: 59d9f80d72ed25bb3b271d5e77994b46
+    md5: eced174da46773a6e7ef398e250208d4
     name: SPICE2_dataset_v0.hdf5.gz
   hdf5_data_file:
     md5: 653d430eb42ac631b45a22da45e4026f
@@ -13,12 +14,13 @@ full_dataset_v0:
   processed_data_file:
     md5: null
     name: SPICE2_dataset_v0_processed.npz
-  url: https://www.dropbox.com/scl/fi/yvzxsbk2j8z4z5b5ww7rn/spice_2_dataset_v0.hdf5.gz?rlkey=t3ebtgc2ktm45v8mowqlytg6d&st=r9zgdiq0&dl=1
+  url: https://zenodo.org/records/11632270/files/spice_2_dataset_v0.hdf5.gz
 nc_1000_v0:
   version: 0
+  doi: 10.5281/zenodo.11650631
   gz_data_file:
-    length: 26751223
-    md5: 86579601617309feeb13d30ad130a774
+    length: 26589532
+    md5: 4b7e411d83cb39bee58a06ec3d231fc5
     name: SPICE2_dataset_v0_nc_1000.hdf5.gz
   hdf5_data_file:
     md5: 0a2554d0dba4f289dd93670686e4842e
@@ -26,12 +28,13 @@ nc_1000_v0:
   processed_data_file:
     md5: null
     name: SPICE2_dataset_v0_nc_1000_processed.npz
-  url: https://www.dropbox.com/scl/fi/feb54dn1y1tvzkl7d6dmi/spice_2_dataset_v0_ntc_1000.hdf5.gz?rlkey=p9uqdgva7k7385sp6udjnoyy4&st=1ydq2ipd&dl=1
+  url: https://zenodo.org/records/11650631/files/spice_2_dataset_v0_ntc_1000.hdf5.gz
 full_dataset_v0_HCNOFClS:
   version: 0
+  doi: 10.5281/zenodo.11658662
   gz_data_file:
-    length: 21732636430
-    md5: e8c22a7309c61c616efcbac58abe4f53
+    length: 21670264291
+    md5: af1af7b7f50b5dfdd6a3d94924c7147f
     name: SPICE2_dataset_v0_HCNOFClS.hdf5.gz
   hdf5_data_file:
     md5: 8bbd0d621e22e41194294af56a7bfd96
@@ -39,12 +42,13 @@ full_dataset_v0_HCNOFClS:
   processed_data_file:
     md5: null
     name: SPICE2_dataset_v0_HCNOFClS_processed.npz
-  url: https://www.dropbox.com/scl/fi/y688irh2qsqhuvukot8ox/spice_2_dataset_v0_HCNOFClS.hdf5.gz?rlkey=eh1f7ysgqdx5gp7t69hc9rado&st=vev70f7j&dl=1
+  url: https://zenodo.org/records/11658662/files/spice_2_dataset_v0_HCNOFClS.hdf5.gz
 nc_1000_v0_HCNOFClS:
   version: 0
+  doi: 10.5281/zenodo.11658793
   gz_data_file:
-    length: 26817386
-    md5: 9084ebf212eda4a83e778ac794bded11
+    length: 26660738
+    md5: 46dbd8c914297395796ffea91e78000e
     name: SPICE2_dataset_v0_nc_1000_HCNOFClS.hdf5.gz
   hdf5_data_file:
     md5: 083d28832770c07b555369c553e62fea
@@ -52,4 +56,4 @@ nc_1000_v0_HCNOFClS:
   processed_data_file:
     md5: null
     name: SPICE2_dataset_v0_nc_1000_HCNOFClS_processed.npz
-  url: https://www.dropbox.com/scl/fi/3qxxhg39ygnfpc0edt7o0/spice_2_dataset_v0_ntc_1000_HCNOFClS.hdf5.gz?rlkey=1d2cimxmfl7iefea9y2pa4dpk&st=lz9ns64m&dl=1
+  url: https://zenodo.org/records/11658793/files/spice_2_dataset_v0_ntc_1000_HCNOFClS.hdf5.gz

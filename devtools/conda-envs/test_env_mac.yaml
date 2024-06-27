@@ -17,12 +17,12 @@ dependencies:
   - tensorboard
   - torchvision
   - openff-units
-  - torchmetrics>=1.4
   - pint
   - rdkit
   - retry
   - sqlitedict
   - pytorch_scatter
+  - jax
 
   # Testing
   - pytest>=2.1
@@ -35,12 +35,13 @@ dependencies:
   # Docs
   - sphinx_rtd_theme
 
+  # pip installs
   - pip:
-      # - schnetpack>=2.0.0
-      - jax
+      - schnetpack>=2.0.0
       - pytorch2jax
       - versioneer
       - flax
+      - torchviz
       - git+https://github.com/ArnNag/sake.git@nanometer
-      # - tensorflow
-      - "ray[data,train,tune,serve]"
+      - tensorflow
+      - torchviz

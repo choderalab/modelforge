@@ -1,7 +1,4 @@
-import os
-
-import pytest
-
+import torch
 from modelforge.potential.painn import PaiNN
 
 

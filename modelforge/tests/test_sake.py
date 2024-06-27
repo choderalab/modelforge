@@ -98,19 +98,12 @@ def test_sake_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize_64
     # (clockwise when looking along the z-axis towards the origin)
     rotation_matrix = torch.tensor([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
 
-    from modelforge.train.training import return_toml_config
-    from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.test_models import load_configs
 
-    model_name = "SAKE"
-
-    file_path = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
-    )
-    config = return_toml_config(file_path)
-
+    config = load_configs(f"sake_without_ase", "qm9")
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
+
     potential_parameters["number_of_atom_features"] = nr_atom_basis
     sake = SAKE(**potential_parameters)
 
@@ -581,17 +574,9 @@ def test_sake_model_against_reference(single_batch_with_batchsize_1):
 def test_model_invariance(single_batch_with_batchsize_1):
     from dataclasses import replace
 
-    from modelforge.train.training import return_toml_config
-    from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.test_models import load_configs
 
-    model_name = "SAKE"
-
-    file_path = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
-    )
-    config = return_toml_config(file_path)
-
+    config = load_configs(f"sake_without_ase", "qm9")
     # Extract parameters
     potential_parameters = config["potential"].get("potential_parameters", {})
 

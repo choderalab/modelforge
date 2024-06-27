@@ -3,7 +3,7 @@ from typing import List
 from .dataset import HDF5Dataset
 
 
-class SPICE114Dataset(HDF5Dataset):
+class SPICE1Dataset(HDF5Dataset):
     """
     Data class for handling SPICE 1.1.4 dataset.
 
@@ -70,7 +70,7 @@ class SPICE114Dataset(HDF5Dataset):
 
     def __init__(
         self,
-        dataset_name: str = "SPICE114",
+        dataset_name: str = "SPICE1",
         version_select: str = "latest",
         local_cache_dir: str = ".",
         force_download: bool = False,
@@ -82,7 +82,7 @@ class SPICE114Dataset(HDF5Dataset):
         Parameters
         ----------
         data_name : str, optional
-            Name of the dataset, by default "SPICE114".
+            Name of the dataset, by default "SPICE1".
         version_select : str
             Select the version of the dataset to use, default will provide the "latest".
             "latest_test" will select the testing subset of 1000 conformers.
@@ -96,8 +96,8 @@ class SPICE114Dataset(HDF5Dataset):
             the data from the hdf5 file; by default False.
         Examples
         --------
-        >>> data = SPICE2Dataset()  # Default dataset
-        >>> test_data = SPICE2Dataset(for_unit_testing=True)  # Testing subset
+        >>> data = SPICE1Dataset()  # Default dataset
+        >>> test_data = SPICE1Dataset(for_unit_testing=True)  # Testing subset
         """
 
         _default_properties_of_interest = [
@@ -152,12 +152,12 @@ class SPICE114Dataset(HDF5Dataset):
         from modelforge.dataset import yaml_files
         import yaml
 
-        yaml_file = resources.files(yaml_files) / "spice114.yaml"
+        yaml_file = resources.files(yaml_files) / "spice1.yaml"
         logger.debug(f"Loading config data from {yaml_file}")
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
 
-        assert data_inputs["dataset"] == "spice114"
+        assert data_inputs["dataset"] == "spice1"
 
         if self.version_select == "latest":
             # in the yaml file, the entry latest will define the name of the version to use

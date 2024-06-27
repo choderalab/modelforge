@@ -1,5 +1,5 @@
 [potential]
-potential_parameters = { radial_max_distance = "5.1 angstrom", radial_min_distance = "0.8 angstrom", number_of_radial_basis_functions = 16, angular_max_distance = "3.5 angstrom", angular_min_distance = "0.8 angstrom", angular_dist_divisions = 8, angle_sections = 4 }
+potential_parameter = { radial_max_distance = "5.1 angstrom", radial_min_distance = "0.8 angstrom", number_of_radial_basis_functions = 16, angular_max_distance = "3.5 angstrom", angular_min_distance = "0.8 angstrom", angular_dist_divisions = 8, angle_sections = 4 }
 
 
 model_name = "ANI2x"
@@ -10,8 +10,8 @@ experiment_name = "your_experiment_name"
 accelerator = "cpu"
 training_parameters = {}
 num_nodes = 1
-devices = 1                                                                                      #[0,1,2,3]
-early_stopping = { monitor = "rmse_val_loss", min_delta = 0.001, patience = 50, verbose = true }
+devices = 1                                                                                          #[0,1,2,3]
+early_stopping = { monitor = "val/combined_loss", min_delta = 0.001, patience = 50, verbose = true }
 
 [dataset]
 dataset_name = "QM9"

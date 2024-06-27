@@ -640,79 +640,96 @@ class HDF5Dataset:
             log.debug(f"n_entries: {len(hf.keys())}")
 
             for record in tqdm.tqdm(list(hf.keys())):
-                # There may be cases where a specific property of interest
-                # has not been computed for a given record
-                # in that case, we'll want to just skip over that entry
-                property_found = [
-                    value in hf[record].keys() for value in self.properties_of_interest
-                ]
+                # if we have a record with no conformers, we'll skip it to avoid failures
+                if hf[record]["n_configs"][()] != 0:
+                    # There may be cases where a specific property of interest
+                    # has not been computed for a given record
+                    # in that case, we'll want to just skip over that entry
+                    property_found = [
+                        value in hf[record].keys()
+                        for value in self.properties_of_interest
+                    ]
 
-                if all(property_found):
-                    # we want to exclude conformers with NaN values for any property of interest
-                    configs_nan_by_prop: Dict[str, np.ndarray] = (
-                        OrderedDict()
-                    )  # ndarray.size (n_configs, )
-                    for value in list(series_mol_data.keys()) + list(
-                        series_atom_data.keys()
-                    ):
-                        record_array = hf[record][value][()]
-                        configs_nan_by_prop[value] = np.isnan(record_array).any(
-                            axis=tuple(range(1, record_array.ndim))
-                        )
-                    # check that all values have the same number of conformers
-
-                    if (
-                        len(
-                            set([value.shape for value in configs_nan_by_prop.values()])
-                        )
-                        != 1
-                    ):
-                        raise ValueError(
-                            f"Number of conformers is inconsistent across properties for record {record}"
-                        )
-
-                    configs_nan = np.logical_or.reduce(
-                        list(configs_nan_by_prop.values())
-                    )  # boolean array of size (n_configs, )
-                    n_confs_rec = sum(~configs_nan)
-
-                    atomic_subsystem_counts_rec = hf[record][
-                        next(iter(single_atom_data.keys()))
-                    ].shape[0]
-                    # all single and series atom properties should have the same number of atoms as the first property
-
-                    self.n_confs.append(n_confs_rec)
-                    self.atomic_subsystem_counts.append(atomic_subsystem_counts_rec)
-
-                    for value in single_atom_data.keys():
-                        record_array = hf[record][value][()]
-                        if record_array.shape[0] != atomic_subsystem_counts_rec:
-                            raise ValueError(
-                                f"Number of atoms for property {value} is inconsistent with other properties for record {record}"
+                    if all(property_found):
+                        # we want to exclude conformers with NaN values for any property of interest
+                        configs_nan_by_prop: Dict[str, np.ndarray] = (
+                            OrderedDict()
+                        )  # ndarray.size (n_configs, )
+                        for value in list(series_mol_data.keys()) + list(
+                            series_atom_data.keys()
+                        ):
+                            record_array = hf[record][value][()]
+                            configs_nan_by_prop[value] = np.isnan(record_array).any(
+                                axis=tuple(range(1, record_array.ndim))
                             )
-                        else:
-                            single_atom_data[value].append(record_array)
+                        # check that all values have the same number of conformers
 
-                    for value in series_atom_data.keys():
-                        record_array = hf[record][value][()][~configs_nan]
-                        if record_array.shape[1] != atomic_subsystem_counts_rec:
-                            raise ValueError(
-                                f"Number of atoms for property {value} is inconsistent with other properties for record {record}"
-                            )
-                        else:
-                            series_atom_data[value].append(
-                                record_array.reshape(
-                                    n_confs_rec * atomic_subsystem_counts_rec, -1
+                        if (
+                            len(
+                                set(
+                                    [
+                                        value.shape
+                                        for value in configs_nan_by_prop.values()
+                                    ]
                                 )
                             )
+                            != 1
+                        ):
+                            raise ValueError(
+                                f"Number of conformers is inconsistent across properties for record {record}"
+                            )
 
-                    for value in series_mol_data.keys():
-                        record_array = hf[record][value][()][~configs_nan]
-                        series_mol_data[value].append(record_array)
+                        configs_nan = np.logical_or.reduce(
+                            list(configs_nan_by_prop.values())
+                        )  # boolean array of size (n_configs, )
+                        n_confs_rec = sum(~configs_nan)
 
-                    for value in single_rec_data.keys():
-                        record_array = hf[record][value][()]
-                        single_rec_data[value].append(record_array)
+                        atomic_subsystem_counts_rec = hf[record][
+                            next(iter(single_atom_data.keys()))
+                        ].shape[0]
+                        # all single and series atom properties should have the same number of atoms as the first property
+
+                        self.n_confs.append(n_confs_rec)
+                        self.atomic_subsystem_counts.append(atomic_subsystem_counts_rec)
+
+                        for value in single_atom_data.keys():
+                            record_array = hf[record][value][()]
+                            if record_array.shape[0] != atomic_subsystem_counts_rec:
+                                raise ValueError(
+                                    f"Number of atoms for property {value} is inconsistent with other properties for record {record}"
+                                )
+                            else:
+                                single_atom_data[value].append(record_array)
+
+                        for value in series_atom_data.keys():
+                            record_array = hf[record][value][()][~configs_nan]
+                            try:
+                                if record_array.shape[1] != atomic_subsystem_counts_rec:
+                                    raise ValueError(
+                                        f"Number of atoms for property {value} is inconsistent with other properties for record {record}"
+                                    )
+                                else:
+                                    series_atom_data[value].append(
+                                        record_array.reshape(
+                                            n_confs_rec * atomic_subsystem_counts_rec,
+                                            -1,
+                                        )
+                                    )
+                            except IndexError:
+                                log.warning(
+                                    f"Property {value} has an index error for record {record}."
+                                )
+                                log.warning(
+                                    record_array.shape, atomic_subsystem_counts_rec
+                                )
+
+                        for value in series_mol_data.keys():
+                            record_array = hf[record][value][()][~configs_nan]
+                            series_mol_data[value].append(record_array)
+
+                        for value in single_rec_data.keys():
+                            record_array = hf[record][value][()]
+                            single_rec_data[value].append(record_array)
 
             # convert lists of arrays to single arrays
 

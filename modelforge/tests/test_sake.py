@@ -46,7 +46,7 @@ def test_sake_forward(single_batch_with_batchsize_64):
     potential_parameters = config["potential"].get("potential_parameters", {})
 
     sake = SAKE(**potential_parameters)
-    energy = sake(methane)['E']
+    energy = sake(methane)["E"]
     nr_of_mols = methane.atomic_subsystem_indices.unique().shape[0]
 
     assert (
@@ -428,6 +428,16 @@ def test_sake_model_against_reference(single_batch_with_batchsize_1):
         cutoff=cutoff,
         number_of_radial_basis_functions=50,
         epsilon=1e-8,
+        processing=[],
+        readout=[
+            {
+                "step": "from_atom_to_molecule",
+                "mode": "sum",
+                "in": "E_i",
+                "index_key": "atomic_subsystem_indices",
+                "out": "E",
+            }
+        ],
     )
 
     ref_sake = reference_sake.models.DenseSAKEModel(

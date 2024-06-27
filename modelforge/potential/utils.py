@@ -597,8 +597,8 @@ class RadialBasisFunctionWithCenters(RadialBasisFunction):
         return scale_factors
 
     def nondimensionalize_distances(self, distances: torch.Tensor) -> torch.Tensor:
-        diff = distances - self.centers
-        return diff / self.scale_factors
+        diff = distances - self.radial_basis_centers
+        return diff / self.radial_scale_factor
 
 
 

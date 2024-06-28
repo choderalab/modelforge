@@ -1,5 +1,5 @@
 [training]
-nr_of_epochs = 50
+nr_of_epochs = 5
 save_dir = "test"
 experiment_name = "your_experiment_name"
 accelerator = "cpu"

@@ -20,7 +20,7 @@ def test_compare_radial_symmetry_features():
     from modelforge.potential.utils import TensorNetRadialSymmetryFunction
 
     # generate a random list of distances, all < 5
-    d_ij = torch.rand(5, 1) * 5 # NOTE: angstrom
+    d_ij = torch.rand(5, 1) * 5  # NOTE: angstrom
 
     # TensorNet constants
     radial_cutoff = 5.0
@@ -60,7 +60,7 @@ def test_representation():
     from modelforge.potential.utils import CosineCutoff
     from modelforge.potential.tensornet import TensorNetNeuralNetworkData
     from modelforge.potential.tensornet import TensorNetRepresentation
-    from modelforge.potential.utils import TensorNetRadialSymmetryFunction 
+    from modelforge.potential.utils import TensorNetRadialSymmetryFunction
 
     num_atoms = 5
     hidden_channels = 2
@@ -81,7 +81,7 @@ def test_representation():
 
         batch = torch.zeros(len(z), dtype=torch.long)
         if multiple_batches:
-            batch[len(batch) // 2 :] = 1
+            batch[len(batch) // 2:] = 1
         return z, pos, batch
 
     # TensorNet embedding modules setup
@@ -112,6 +112,7 @@ def test_representation():
 
     # calculate embedding
     z, pos, batch = create_example_batch()
+    edge_weight: object
     edge_index, edge_weight, edge_vec = distance_module(pos, batch, None)
 
     # static shape
@@ -131,7 +132,6 @@ def test_representation():
     edge_attr = distance_expansion(edge_weight)
     X_tn = tensor_embedding(zp, edge_index, edge_weight, edge_vec, edge_attr)
     ################ TensorNet ################
-
 
     ################ modelforge TensorNet ################
     tensornet_representation_module = TensorNetRepresentation(
@@ -153,8 +153,10 @@ def test_representation():
     # )
     ################ modelforge TensorNet ################
 
+
 if __name__ == "__main__":
     import torch
+
     torch.manual_seed(0)
     test_compare_radial_symmetry_features()
 

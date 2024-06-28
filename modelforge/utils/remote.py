@@ -89,7 +89,11 @@ def calculate_md5_checksum(file_name: str, file_path: str) -> str:
     # make sure we can handle a path with a ~ in it
     file_path = os.path.expanduser(file_path)
 
-    with open(f"{file_path}/{file_name}", "rb") as f:
+    from modelforge.utils.misc import OpenWithLock
+
+    # we will use the OpenWithLock context manager to open the file
+    # because we do not want to calculate the checksum if the file is still being written
+    with OpenWithLock(f"{file_path}/{file_name}", "rb") as f:
         file_hash = hashlib.md5()
         while chunk := f.read(8192):
             file_hash.update(chunk)
@@ -116,6 +120,9 @@ def download_from_url(
     output_path = os.path.expanduser(output_path)
 
     if os.path.isfile(f"{output_path}/{output_filename}"):
+        # if the file exists, we need to check to make sure that the file that is stored in the output path
+        # note, we will check if the file has a lock on it inside calculate_md5_checksum to ensure
+        # that we aren't looking at a file that is still being written to
         calculated_checksum = calculate_md5_checksum(
             file_name=output_filename, file_path=output_path
         )
@@ -137,7 +144,10 @@ def download_from_url(
             total = int(length / chunk_size) + 1
         else:
             total = None
-        with open(f"{output_path}/{output_filename}", "wb") as fd:
+
+        from modelforge.utils.misc import OpenWithLock
+
+        with OpenWithLock(f"{output_path}/{output_filename}", "wb") as fd:
             for chunk in tqdm(
                 r.iter_content(chunk_size=chunk_size),
                 ascii=True,
@@ -249,7 +259,9 @@ def download_from_figshare(
             length = -1
         r = requests.get(url, stream=True)
 
-        with open(f"{output_path}/{name}", "wb") as fd:
+        from modelforge.utils.misc import OpenWithLock
+
+        with OpenWithLock(f"{output_path}/{name}", "wb") as fd:
             # if we couldn't fetch the length from figshare, which seems to happen for some records
             # we just don't know how long the tqdm bar will be.
             if length == -1:
@@ -367,7 +379,9 @@ def download_from_zenodo(
 
         os.makedirs(output_path, exist_ok=True)
 
-        with open(f"{output_path}/{name}", "wb") as fd:
+        from modelforge.utils.misc import OpenWithLock
+
+        with OpenWithLock(f"{output_path}/{name}", "wb") as fd:
             for chunk in tqdm(
                 r.iter_content(chunk_size=chunk_size),
                 ascii=True,

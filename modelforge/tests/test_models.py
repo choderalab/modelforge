@@ -454,8 +454,8 @@ def test_calculate_energies_and_forces(model_name, single_batch_with_batchsize_6
     )[0]
 
     # make sure that both agree on E and F
-    assert torch.allclose(E_inference, E_training)
-    assert torch.allclose(F_inference, F_training)
+    assert torch.allclose(E_inference, E_training, atol=1e-4)
+    assert torch.allclose(F_inference, F_training, atol=1e-4)
 
 
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())

@@ -7,9 +7,8 @@ IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 def test_physnet_init():
 
     from modelforge.potential.physnet import PhysNet
-    from modelforge.train.training import return_toml_config
     from importlib import resources
-    from modelforge.tests.data import potential
+    from modelforge.tests.data import potential_defaults
 
     from modelforge.tests.test_models import load_configs
 

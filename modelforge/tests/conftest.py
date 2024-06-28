@@ -53,7 +53,7 @@ def initialize_datamodule(
     splitting_strategy: SplittingStrategy = FirstComeFirstServeSplittingStrategy(),
     remove_self_energies: bool = True,
     regression_ase: bool = False,
-    regenerate_dataset_statistics: bool = False,
+    regenerate_dataset_statistic: bool = False,
 ) -> DataModule:
     """
     Initialize a dataset for a given mode.
@@ -66,7 +66,7 @@ def initialize_datamodule(
         version_select=version_select,
         remove_self_energies=remove_self_energies,
         regression_ase=regression_ase,
-        regenerate_dataset_statistics=regenerate_dataset_statistics,
+        regenerate_dataset_statistic=regenerate_dataset_statistic,
     )
     data_module.prepare_data()
     data_module.setup()

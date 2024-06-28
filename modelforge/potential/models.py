@@ -536,7 +536,7 @@ class NeuralNetworkPotentialFactory:
 
     Methods
     -------
-    create_nnp(use, nnp_type, nnp_parameters=None, training_parameters=None)
+    create_nnp(use, nnp_type, nnp_parameters=None, training_parameter=None)
         Creates an instance of a specified NNP type configured for either training or inference.
     """
 
@@ -545,11 +545,10 @@ class NeuralNetworkPotentialFactory:
         *,
         use: Literal["training", "inference"],
         model_type: Literal["ANI2x", "SchNet", "PaiNN", "SAKE", "PhysNet"],
-        model_parameters: Dict[str, Union[int, float, str, List[str]]],
-        loss_parameter: Optional[Dict[str, Any]] = None,
+        model_parameter: Dict[str, Union[int, float, str, List[str]]],
         simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
-        training_parameters: Optional[Dict[str, Any]] = None,
-        dataset_statistics: Optional[Dict[str, float]] = None,
+        training_parameter: Optional[Dict[str, Any]] = None,
+        dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> Union[Type[torch.nn.Module], Type[JAXModel], Type[pl.LightningModule]]:
         """
         Creates an NNP instance of the specified type, configured either for training or inference.
@@ -564,7 +563,7 @@ class NeuralNetworkPotentialFactory:
             The environment to use, either 'PyTorch' or 'JAX'.
         nnp_parameters : dict, optional
             Parameters specific to the NNP model, by default {}.
-        training_parameters : dict, optional
+        training_parameter : dict, optional
             Parameters for configuring the training, by default {}.
 
         Returns
@@ -581,11 +580,11 @@ class NeuralNetworkPotentialFactory:
         """
 
         from modelforge.potential import _Implemented_NNPs
-        from modelforge.train.training import TrainingAdapter, EnergyAndForceLoss
+        from modelforge.train.training import TrainingAdapter
 
-        model_parameters = model_parameters or {}
-        training_parameters = training_parameters or {}
-        log.debug(f"{training_parameters=}")
+        model_parameter = model_parameter or {}
+        training_parameter = training_parameter or {}
+        log.debug(f"{training_parameter=}")
         # get NNP
         nnp_class: Type = _Implemented_NNPs.get_neural_network_class(model_type)
         if nnp_class is None:
@@ -597,20 +596,19 @@ class NeuralNetworkPotentialFactory:
                 log.warning(
                     "Training in JAX is not availalbe. Falling back to PyTorch."
                 )
-            model_parameters["nnp_name"] = model_type
+            model_parameter["nnp_name"] = model_type
             return TrainingAdapter(
-                model_parameters=model_parameters,
-                **training_parameters,
-                dataset_statistics=dataset_statistics,
-                loss_parameter=loss_parameter,
+                model_parameter=model_parameter,
+                **training_parameter,
+                dataset_statistic=dataset_statistic,
             )
         elif use == "inference":
             # if this model_parameter dictionary ahs already been used
             # for training the `nnp_name` might have been set
-            if "nnp_name" in model_parameters:
-                del model_parameters["nnp_name"]
+            if "nnp_name" in model_parameter:
+                del model_parameter["nnp_name"]
             nnp_instance = nnp_class(
-                **model_parameters, dataset_statistics=dataset_statistics
+                **model_parameter, dataset_statistic=dataset_statistic
             )
             if simulation_environment == "JAX":
                 return PyTorch2JAXConverter().convert_to_jax_model(nnp_instance)
@@ -719,7 +717,7 @@ class BaseNetwork(Module):
     def __init__(
         self,
         processing: Dict[str, torch.nn.ModuleList],
-        dataset_statistics: Optional[Dict[str, float]] = None,
+        dataset_statistic: Optional[Dict[str, float]] = None,
         readout: Dict[str, str] = None,
     ):
         """
@@ -729,7 +727,7 @@ class BaseNetwork(Module):
 
         super().__init__()
 
-        self._initialize_postprocessing(processing, readout, dataset_statistics)
+        self._initialize_postprocessing(processing, readout, dataset_statistic)
 
     def load_state_dict(
         self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False
@@ -773,7 +771,7 @@ class BaseNetwork(Module):
 
         super().load_state_dict(filtered_state_dict, strict=strict, assign=assign)
 
-    def _initialize_postprocessing(self, processing, readout, dataset_statistics):
+    def _initialize_postprocessing(self, processing, readout, dataset_statistic):
         from .processing import (
             FromAtomToMoleculeReduction,
             ScaleValues,
@@ -785,14 +783,14 @@ class BaseNetwork(Module):
         props = []
         for proc in processing:
             if proc["step"] == "normalization":
-                if dataset_statistics is None:
+                if dataset_statistic is None:
                     log.warning(
                         f"No mean and stddev provided for property {proc['in']}. Setting to default values!"
                     )
                     mean = 0.0
                     stddev = 1.0
                 else:
-                    atomic_energies_stats = dataset_statistics["atomic_energies_stats"]
+                    atomic_energies_stats = dataset_statistic["atomic_energies_stats"]
                     mean = atomic_energies_stats[proc["mean"]]
                     stddev = atomic_energies_stats[proc["stddev"]]
                 operation = ScaleValues(mean=mean, stddev=stddev)
@@ -800,12 +798,12 @@ class BaseNetwork(Module):
                 props.append(proc)
 
             elif proc["step"] == "calculate_ase":
-                if dataset_statistics is None:
+                if dataset_statistic is None:
                     raise RuntimeError(
                         "No dataset statistics provided for ASE calculation. Skipping!"
                     )
                 else:
-                    atomic_self_energies = dataset_statistics["atomic_self_energies"]
+                    atomic_self_energies = dataset_statistic["atomic_self_energies"]
                     operation = CalculateAtomicSelfEnergy(atomic_self_energies)
                     work_to_be_done_per_property.append(operation)
 

@@ -561,11 +561,11 @@ class ANI2x(BaseNetwork):
         angle_sections: int,
         processing: List[Dict[str, str]],
         readout: List[Dict[str, str]],
-        dataset_statistics: Optional[Dict[str, float]] = None,
+        dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
 
         super().__init__(
-            dataset_statistics=dataset_statistics,
+            dataset_statistic=dataset_statistic,
             processing=processing,
             readout=readout,
         )

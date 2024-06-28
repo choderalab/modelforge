@@ -479,7 +479,7 @@ def test_dataset_neighborlist(model_name, single_batch_with_batchsize_64):
         use="inference",
         model_type=model_name,
         simulation_environment="PyTorch",
-        model_parameters=potential_parameter,
+        model_parameter=potential_parameter,
     )
     model(nnp_input)
 
@@ -766,21 +766,21 @@ def test_energy_postprocessing():
         ),
     )
 
-    f = dm.dataset_statistics_filename
+    f = dm.dataset_statistic_filename
     import toml
 
-    dataset_statistics = toml.load(f)
+    dataset_statistic = toml.load(f)
 
     torch.isclose(
         torch.tensor(
-            dataset_statistics["atomic_energies_stats"]["E_i_mean"], dtype=torch.float64
+            dataset_statistic["atomic_energies_stats"]["E_i_mean"], dtype=torch.float64
         ),
         torch.tensor(-424.8404, dtype=torch.float64),
     )
 
     torch.isclose(
         torch.tensor(
-            dataset_statistics["atomic_energies_stats"]["E_i_stddev"],
+            dataset_statistic["atomic_energies_stats"]["E_i_stddev"],
             dtype=torch.float64,
         ),
         torch.tensor(3438.2806, dtype=torch.float64),
@@ -800,7 +800,7 @@ def test_self_energy(dataset_name, datamodule_factory):
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         version_select="nc_1000_v0",
         remove_self_energies=False,
-        regenerate_dataset_statistics=True,
+        regenerate_dataset_statistic=True,
     )
 
     methane_energy_reference = float(dm.train_dataset[0].metadata.E)
@@ -811,15 +811,15 @@ def test_self_energy(dataset_name, datamodule_factory):
         dataset_name=dataset_name,
         batch_size=512,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        regenerate_dataset_statistics=True,
+        regenerate_dataset_statistic=True,
     )
     # it is saved in the dataset statistics
 
     import toml
 
-    f = dm.dataset_statistics_filename
-    dataset_statistics = toml.load(f)
-    self_energies = dataset_statistics["atomic_self_energies"]
+    f = dm.dataset_statistic_filename
+    dataset_statistic = toml.load(f)
+    self_energies = dataset_statistic["atomic_self_energies"]
 
     # 5 elements present in the QM9 dataset
     assert len(self_energies.keys()) == 5
@@ -841,15 +841,15 @@ def test_self_energy(dataset_name, datamodule_factory):
         regression_ase=True,
         remove_self_energies=True,
         version_select="nc_1000_v0",
-        regenerate_dataset_statistics=True,
+        regenerate_dataset_statistic=True,
     )
 
     # it is saved in the dataset statistics
     import toml
 
-    f = dm.dataset_statistics_filename
-    dataset_statistics = toml.load(f)
-    self_energies = dataset_statistics["atomic_self_energies"]
+    f = dm.dataset_statistic_filename
+    dataset_statistic = toml.load(f)
+    self_energies = dataset_statistic["atomic_self_energies"]
 
     # 5 elements present in the total QM9 dataset
     assert len(self_energies.keys()) == 5
@@ -885,14 +885,14 @@ def test_self_energy(dataset_name, datamodule_factory):
         regression_ase=True,
         remove_self_energies=True,
         version_select="nc_1000_v0",
-        regenerate_dataset_statistics=True,
+        regenerate_dataset_statistic=True,
     )
     # it is saved in the dataset statistics
     import toml
 
-    f = dm.dataset_statistics_filename
-    dataset_statistics = toml.load(f)
-    self_energies = dataset_statistics["atomic_self_energies"]
+    f = dm.dataset_statistic_filename
+    dataset_statistic = toml.load(f)
+    self_energies = dataset_statistic["atomic_self_energies"]
 
     # Test that self energies are correctly removed
     for regression in [True, False]:
@@ -903,7 +903,7 @@ def test_self_energy(dataset_name, datamodule_factory):
             regression_ase=regression,
             remove_self_energies=True,
             version_select="nc_1000_v0",
-            regenerate_dataset_statistics=True,
+            regenerate_dataset_statistic=True,
         )
         # Extract the first molecule (methane)
         # double check that it is methane
@@ -918,14 +918,14 @@ def test_self_energy(dataset_name, datamodule_factory):
         # extract the ase offset
         from modelforge.potential.processing import load_atomic_self_energies
 
-        self_energies = load_atomic_self_energies(dm.dataset_statistics_filename)
+        self_energies = load_atomic_self_energies(dm.dataset_statistic_filename)
 
         from modelforge.potential.processing import (
             AtomicSelfEnergies,
             load_atomic_self_energies,
         )
 
-        self_energies = load_atomic_self_energies(dm.dataset_statistics_filename)
+        self_energies = load_atomic_self_energies(dm.dataset_statistic_filename)
         self_energies = AtomicSelfEnergies(self_energies)
 
         methane_ase = sum(

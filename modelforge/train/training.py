@@ -243,10 +243,10 @@ class TrainingAdapter(pl.LightningModule):
     def __init__(
         self,
         *,
-        model_parameters: Dict[str, Any],
+        model_parameter: Dict[str, Any],
         lr_scheduler_config: Dict[str, Union[str, int, float]],
         lr: float,
-        dataset_statistics: Optional[Dict[str, float]] = None,
+        dataset_statistic: Optional[Dict[str, float]] = None,
         loss_parameter: Dict[str, Any],
         optimizer: Type[Optimizer] = torch.optim.AdamW,
     ):
@@ -275,8 +275,8 @@ class TrainingAdapter(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters(ignore=["loss_module"])
         # Extracting and instantiating the model from parameters
-        model_parameters_ = model_parameters.copy()
-        model_name = model_parameters_.pop("nnp_name", None)
+        model_parameter_ = model_parameter.copy()
+        model_name = model_parameter_.pop("nnp_name", None)
         if model_name is None:
             raise ValueError(
                 "NNP name must be specified in nnp_parameters with key 'nnp_name'."
@@ -286,8 +286,8 @@ class TrainingAdapter(pl.LightningModule):
             raise ValueError(f"Specified NNP name '{nnp_name}' is not implemented.")
 
         self.model = nnp_class(
-            **model_parameters_,
-            dataset_statistics=dataset_statistics,
+            **model_parameter_,
+            dataset_statistic=dataset_statistic,
         )
         self.optimizer = optimizer
         self.learning_rate = lr
@@ -627,7 +627,6 @@ class TrainingAdapter(pl.LightningModule):
         return {"optimizer": optimizer, "lr_scheduler": lr_scheduler_config}
 
 
-
 def return_toml_config(
     config_path: Optional[str] = None,
     potential_path: Optional[str] = None,
@@ -912,19 +911,19 @@ Experiments are saved to: {save_dir}/{experiment_name}.
     # read dataset statistics
     import toml
 
-    dataset_statistics = toml.load(dm.dataset_statistics_filename)
+    dataset_statistic = toml.load(dm.dataset_statistic_filename)
     log.info(f"Setting E_i_mean and E_i_stddev for {model_name}")
-    log.info(f"E_i_mean: {dataset_statistics['atomic_energies_stats']['E_i_mean']}")
-    log.info(f"E_i_stddev: {dataset_statistics['atomic_energies_stats']['E_i_stddev']}")
+    log.info(f"E_i_mean: {dataset_statistic['atomic_energies_stats']['E_i_mean']}")
+    log.info(f"E_i_stddev: {dataset_statistic['atomic_energies_stats']['E_i_stddev']}")
 
     # Set up model
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="training",
         model_type=model_name,
-        dataset_statistics=dataset_statistics["atomic_energies_stats"],
+        dataset_statistic=dataset_statistic["atomic_energies_stats"],
         loss_parameter=training_config["loss_parameter"],
-        model_parameters=potential_config["potential_parameter"],
-        training_parameters=training_config["training_parameter"],
+        model_parameter=potential_config["potential_parameter"],
+        training_parameter=training_config["training_parameter"],
     )
 
     # set up traininer

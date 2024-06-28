@@ -485,11 +485,11 @@ class PaiNN(BaseNetwork):
         shared_filters: bool,
         processing: Dict[str, torch.nn.ModuleList],
         readout: Dict[str, List[Dict[str, str]]],
-        dataset_statistics: Optional[Dict[str, float]] = None,
+        dataset_statistic: Optional[Dict[str, float]] = None,
         epsilon: float = 1e-8,
     ) -> None:
         super().__init__(
-            dataset_statistics=dataset_statistics,
+            dataset_statistic=dataset_statistic,
             processing=processing,
             readout=readout,
         )

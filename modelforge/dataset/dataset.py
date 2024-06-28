@@ -934,7 +934,7 @@ class DataModule(pl.LightningDataModule):
         version_select: str = "latest",
         local_cache_dir: str = "./",
         regenerate_cache: bool = False,
-        regenerate_dataset_statistics: bool = False,
+        regenerate_dataset_statistic: bool = False,
     ):
         """
         Initializes adData module for PyTorch Lightning handling data preparation and loading object with the specified configuration.
@@ -980,7 +980,7 @@ class DataModule(pl.LightningDataModule):
         self.regression_ase = regression_ase
         self.force_download = force_download
         self.version_select = version_select
-        self.regenerate_dataset_statistics = regenerate_dataset_statistics
+        self.regenerate_dataset_statistic = regenerate_dataset_statistic
         self.train_dataset = None
         self.test_dataset = None
         self.val_dataset = None
@@ -992,8 +992,8 @@ class DataModule(pl.LightningDataModule):
         from modelforge.potential.models import Pairlist
 
         self.pairlist = Pairlist()
-        self.dataset_statistics_filename = (
-            f"{self.local_cache_dir}/{self.name}_dataset_statistics.toml"
+        self.dataset_statistic_filename = (
+            f"{self.local_cache_dir}/{self.name}_dataset_statistic.toml"
         )
 
     def prepare_data(
@@ -1016,11 +1016,11 @@ class DataModule(pl.LightningDataModule):
 
         # if dataset statistics is present load it from disk
         if (
-            os.path.exists(self.dataset_statistics_filename)
-            and self.regenerate_dataset_statistics is False
+            os.path.exists(self.dataset_statistic_filename)
+            and self.regenerate_dataset_statistic is False
         ):
             log.info(
-                f"Loading dataset statistics from disk: {self.dataset_statistics_filename}"
+                f"Loading dataset statistics from disk: {self.dataset_statistic_filename}"
             )
             atomic_self_energies = self._read_atomic_self_energies()
             atomic_energies_stats = self._read_atomic_energies_stats()
@@ -1050,15 +1050,15 @@ class DataModule(pl.LightningDataModule):
 
             atomic_energies_stats = calculate_mean_and_variance(torch_dataset)
             # wrap everything in a dictionary and save it to disk
-            dataset_statistics = {
+            dataset_statistic = {
                 "atomic_self_energies": atomic_self_energies,
                 "atomic_energies_stats": atomic_energies_stats,
             }
 
             if atomic_self_energies and atomic_energies_stats:
-                log.info(dataset_statistics)
-                # save dataset_statistics dictionary to disk as yaml files
-                self._log_dataset_statistics(dataset_statistics)
+                log.info(dataset_statistic)
+                # save dataset_statistic dictionary to disk as yaml files
+                self._log_dataset_statistic(dataset_statistic)
             else:
                 raise RuntimeError(
                     "Atomic self energies or atomic energies statistics are missing."
@@ -1067,46 +1067,51 @@ class DataModule(pl.LightningDataModule):
         # Save processed dataset and statistics for later use in setup
         self._cache_dataset(torch_dataset)
 
-    def _log_dataset_statistics(self, dataset_statistics):
+    def _log_dataset_statistic(self, dataset_statistic):
         """Save the dataset statistics to a file."""
         import toml
 
         # remove units from the statistics
         atomic_self_energies = {
             key: value.magnitude if isinstance(value, unit.Quantity) else value
-            for key, value in dataset_statistics["atomic_self_energies"].items()
+            for key, value in dataset_statistic["atomic_self_energies"].items()
         }
         # cast float on pytorch tensors
         atomic_energies_stats = {
             key: value.item() if isinstance(value, torch.Tensor) else value
-            for key, value in dataset_statistics["atomic_energies_stats"].items()
+            for key, value in dataset_statistic["atomic_energies_stats"].items()
         }
 
-        dataset_statistics = {
+        dataset_statistic = {
             "atomic_self_energies": atomic_self_energies,
             "atomic_energies_stats": atomic_energies_stats,
         }
         toml.dump(
-            dataset_statistics,
+            dataset_statistic,
             open(
-                self.dataset_statistics_filename,
+                self.dataset_statistic_filename,
                 "w",
             ),
         )
         log.info(
-            f"Saving dataset statistics to disk: {self.dataset_statistics_filename}"
+            f"Saving dataset statistics to disk: {self.dataset_statistic_filename}"
         )
 
     def _read_atomic_self_energies(self) -> Dict[str, Quantity]:
         """Read the atomic self energies from a file."""
         from modelforge.potential.processing import load_atomic_self_energies
-        return load_atomic_self_energies(self.dataset_statistics_filename, with_units=True)
 
+        return load_atomic_self_energies(
+            self.dataset_statistic_filename, with_units=True
+        )
 
     def _read_atomic_energies_stats(self) -> Dict[str, torch.Tensor]:
         """Read the atomic energies statistics from a file."""
         from modelforge.potential.processing import load_atomic_energies_stats
-        return load_atomic_energies_stats(self.dataset_statistics_filename, to_tensor=True)
+
+        return load_atomic_energies_stats(
+            self.dataset_statistic_filename, to_tensor=True
+        )
 
     def _create_torch_dataset(self, dataset):
         """Create a PyTorch dataset from the provided dataset instance."""

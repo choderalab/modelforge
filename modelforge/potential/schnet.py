@@ -380,7 +380,7 @@ class SchNet(BaseNetwork):
         shared_interactions: bool,
         processing: List[Dict[str, str]],
         readout: List[Dict[str, str]],
-        dataset_statistics: Optional[Dict[str, float]] = None,
+        dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
         """
         Initialize the SchNet network.
@@ -401,7 +401,7 @@ class SchNet(BaseNetwork):
             The cutoff distance for interactions.
         """
         super().__init__(
-            dataset_statistics=dataset_statistics,
+            dataset_statistic=dataset_statistic,
             processing=processing,
             readout=readout,
         )

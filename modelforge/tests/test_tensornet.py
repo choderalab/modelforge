@@ -1,4 +1,3 @@
-
 def test_tensornet_init():
     from modelforge.potential.tensornet import TensorNet
 
@@ -33,13 +32,62 @@ def test_tensornet_forward():
     net(batch)
 
 
+def test_model_input():
+    # Set up a dataset
+    from torchmdnet.models.utils import OptimizedDistance
 
+    from modelforge.dataset.dataset import DataModule
+    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
+    from modelforge.potential.tensornet import TensorNet
 
+    # prepare reference value
+    dataset = DataModule(
+        name="QM9",
+        batch_size=1,
+        version_select="nc_1000_v0",
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        remove_self_energies=True,
+        regression_ase=False,
+    )
+    dataset.prepare_data()
+    dataset.setup()
+    # -------------------------------#
+    # -------------------------------#
+    # Test that we can add the reference energy correctly
+    # get methane input
+    nnpinput = next(iter(dataset.train_dataloader())).nnp_input
+    model = TensorNet()
+    model.input_preparation._input_checks(nnpinput)
+    model_input = model.input_preparation.prepare_inputs(nnpinput)
+    # basenetwork_forward = model(nnpinput)
+    
 
+    z, pos, batch = (
+        nnpinput.atomic_numbers, 
+        nnpinput.positions, 
+        nnpinput.atomic_subsystem_indices
+    )
+
+    distance_module = OptimizedDistance(
+        cutoff_lower=0.0,
+        cutoff_upper=5.0,
+        max_num_pairs=-64,
+        return_vecs=True,
+        loop=True,
+        check_errors=True,
+        resize_to_fit=True,  # not self.static_shapes
+        box=None,
+        long_edge_index=True,
+    )
+
+    edge_index, edge_weight, edge_vec = distance_module(pos, batch, None)
+
+    return 0
 
 def test_compare_radial_symmetry_features():
     # Compare the TensorNet radial symmetry function
     # to the output of the modelforge radial symmetry function
+    # TODO: only 'expnorm' from TensorNet implemented
 
     import torch
     from openff.units import unit
@@ -187,6 +235,8 @@ if __name__ == "__main__":
     import torch
 
     torch.manual_seed(0)
-    test_compare_radial_symmetry_features()
+    # test_compare_radial_symmetry_features()
 
-    test_representation()
+    # test_representation()
+
+    test_model_input()

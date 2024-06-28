@@ -53,34 +53,32 @@ class TensorNetNeuralNetworkData(NeuralNetworkData):
     total_charge : torch.Tensor
         An tensor with the total charge of each system or molecule. Shape: [num_systems].
     """
-    atomic_numbers: Tensor
-    edge_index: Tensor
-    edge_weight: Tensor
-    edge_vec: Tensor
+    pass
 
 
 class TensorNet(BaseNetwork):
     def __init__(
             self,
-            hidden_channels: int = 8,
+            # hidden_channels: int = 8,
             radial_max_distance: unit.Quantity = 5.1 * unit.angstrom,
             radial_min_distanc: unit.Quantity = 0.0 * unit.angstrom,
             number_of_radial_basis_functions: int = 16,
-            activation_function: nn.Module = nn.SiLU,
-            trainable_rbf: bool = False,
-            max_z: int = 128,
+            # activation_function: nn.Module = nn.SiLU,
+            # trainable_rbf: bool = False,
+            # max_z: int = 128,
             dtype: torch.dtype = torch.float32,
     ) -> None:
         super().__init__()
 
         self.core_module = TensorNetCore(
-            hidden_channels,
+            # hidden_channels,
             radial_max_distance,
             radial_min_distanc,
             number_of_radial_basis_functions,
-            activation_function,
-            trainable_rbf,
-            max_z,
+            # activation_function,
+            # trainable_rbf,
+            # -64,
+            # max_z,
             dtype,
         )
         self.only_unique_pairs = True  # NOTE: for pairlist
@@ -92,62 +90,61 @@ class TensorNet(BaseNetwork):
 class TensorNetCore(CoreNetwork):
     def __init__(
             self,
-            hidden_channels: int,
+            # hidden_channels: int,
             radial_max_distance: unit.Quantity,
             radial_min_distance: unit.Quantity,
             number_of_radial_basis_functions: int,
-            number_of_layers: int,
-            activation_function: nn.Module,
-            trainable_rbf: bool,
-            max_number_of_neighbors: int,
-            max_z: int,
-            static_shapes: bool = True,
-            check_errors: bool = True,
+            # number_of_layers: int,
+            # activation_function: nn.Module,
+            # trainable_rbf: bool,
+            # max_number_of_neighbors: int,
+            # max_z: int,
+            # static_shapes: bool = True,
+            # check_errors: bool = True,
             dtype: torch.dtype = torch.float32,
-            box_vecs=None
     ):
         super().__init__()
 
-        self.static_shapes = static_shapes
+        # self.static_shapes = static_shapes
 
-        # TensorNet uses angstrom
-        _max_distance_in_angstrom = self.radial_max_distance.to(unit.angstrom).m
-        _min_distance_in_angstrom = self.radial_min_distance.to(unit.angstrom).m
+        # # TensorNet uses angstrom
+        # _max_distance_in_angstrom = radial_max_distance.to(unit.angstrom).m
+        # _min_distance_in_angstrom = radial_min_distance.to(unit.angstrom).m
 
-        self.distance = OptimizedDistance(
-            _min_distance_in_angstrom,
-            _max_distance_in_angstrom,
-            max_num_pairs=-max_number_of_neighbors,
-            return_vecs=True,
-            loop=True,
-            check_errors=check_errors,
-            resize_to_fit=not self.static_shapes,
-            box=box_vecs,
-            long_edge_index=True,
-        )
+        # self.distance = OptimizedDistance(
+        #     _min_distance_in_angstrom,
+        #     _max_distance_in_angstrom,
+        #     max_num_pairs=-max_number_of_neighbors,
+        #     return_vecs=True,
+        #     loop=True,
+        #     check_errors=check_errors,
+        #     resize_to_fit=not self.static_shapes,
+        #     box=None,
+        #     long_edge_index=True,
+        # )
 
-        # Initialize representation block
-        self.tensornet_representation_module = TensorNetRepresentation(
-            hidden_channels,
-            radial_max_distance,
-            radial_min_distance,
-            number_of_radial_basis_functions,
-            activation_function,
-            trainable_rbf,
-            max_z,
-            dtype,
-        )
+        # # Initialize representation block
+        # self.tensornet_representation_module = TensorNetRepresentation(
+        #     hidden_channels,
+        #     radial_max_distance,
+        #     radial_min_distance,
+        #     number_of_radial_basis_functions,
+        #     activation_function,
+        #     trainable_rbf,
+        #     max_z,
+        #     dtype,
+        # )
 
-        self.interaction_modules = TensorNetInteraction()
+        # self.interaction_modules = TensorNetInteraction()
 
-        max_atomic_number = max(ATOMIC_NUMBER_TO_INDEX_MAP.keys())
-        lookup_tensor = torch.full((max_atomic_number + 1,), -1, dtype=torch.long)
+        # max_atomic_number = max(ATOMIC_NUMBER_TO_INDEX_MAP.keys())
+        # lookup_tensor = torch.full((max_atomic_number + 1,), -1, dtype=torch.long)
 
-        # Populate the lookup tensor with indices from your map
-        for atomic_number, index in ATOMIC_NUMBER_TO_INDEX_MAP.items():
-            lookup_tensor[atomic_number] = index
+        # # Populate the lookup tensor with indices from your map
+        # for atomic_number, index in ATOMIC_NUMBER_TO_INDEX_MAP.items():
+        #     lookup_tensor[atomic_number] = index
 
-        self.register_buffer("lookup_tensor", lookup_tensor)
+        # self.register_buffer("lookup_tensor", lookup_tensor)
 
     def _forward(self):
         pass
@@ -158,11 +155,12 @@ class TensorNetCore(CoreNetwork):
         number_of_atoms = data.atomic_numbers.shape[0]
 
         # Where should $box and $batch be input???
-        edge_index, edge_weight, edge_vec = self.distance(
-            data.positions,
-            batch,
-            box,
-        )
+        # test this separately: pair_indices, d_ij, r_ij
+        # edge_index, edge_weight, edge_vec = self.distance(
+        #     data.positions,
+        #     data.atomic_subsystem_indices,
+        #     box,
+        # )
 
         nnpdata = TensorNetNeuralNetworkData(
             pair_indices=pairlist_output.pair_indices,
@@ -172,15 +170,12 @@ class TensorNetCore(CoreNetwork):
             positions=data.positions,
             atomic_numbers=data.atomic_numbers,
             atomic_subsystem_indices=data.atomic_subsystem_indices,
-            edge_index=edge_index,
-            edge_weight=edge_weight,
-            edge_vec=edge_vec,
+            total_charge=data.total_charge,
         )
 
-        return nnpdata
-
-    def forward(self):
+        # return nnpdata
         pass
+
 
 
 class TensorNetRepresentation(torch.nn.Module):

@@ -146,9 +146,10 @@ def test_energy_scaling_and_offset():
     # let's add self energies
     import toml
 
+    # load dataset statistic
     dataset_statistic = toml.load(dataset.dataset_statistic_filename)
-    filename = resources.files(potential_defaults) / "ani2x.toml"
-    config = return_toml_config(filename)
+    # load potential parameter
+    config = load_configs("ani2x", "qm9")
     potential_parameter = config["potential"].get("potential_parameter", {})
     torch.manual_seed(42)
     model = ANI2x(**potential_parameter, dataset_statistic=dataset_statistic)

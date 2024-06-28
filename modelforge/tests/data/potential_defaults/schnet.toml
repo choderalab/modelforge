@@ -1,7 +1,7 @@
 [potential]
 model_name = "SchNet"
 
-[potential.potential_parameters]
+[potential.potential_parameter]
 
 max_Z = 101
 number_of_atom_features = 32

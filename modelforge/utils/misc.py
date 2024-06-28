@@ -296,8 +296,8 @@ class OpenWithLock:
         # import fcntl
         # fcntl.flock(self._file_handle.fileno(), fcntl.LOCK_EX)
 
-    # return the opened file stream
-    return self._file_handle
+        # return the opened file stream
+        return self._file_handle
 
     def __exit__(self, *args):
 

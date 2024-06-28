@@ -28,9 +28,6 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip_data_download)
 
 
-from modelforge.potential.utils import BatchData
-
-
 # datamodule fixture
 @pytest.fixture
 def datamodule_factory():

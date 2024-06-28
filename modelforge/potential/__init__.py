@@ -9,7 +9,6 @@ from .utils import (
     AngularSymmetryFunction,
 )
 from .processing import FromAtomToMoleculeReduction
-from modelforge.train.training import TrainingAdapter
 from .models import NeuralNetworkPotentialFactory
 from enum import Enum
 

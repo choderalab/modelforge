@@ -494,7 +494,6 @@ class RadialBasisFunction(nn.Module, ABC):
             Output of radial basis functions.
         """
         nondimensionalized_distances = self.nondimensionalize_distances(distances)
-        print(f"{nondimensionalized_distances.size()=}: {type(self)}")
         return self.prefactor * self.radial_basis_function.compute(
             nondimensionalized_distances
         )
@@ -549,7 +548,6 @@ class RadialBasisFunctionWithCenters(RadialBasisFunction):
     def initialize_parameters(self):
         # convert to nanometer
         _max_distance_in_nanometer = self.max_distance.to(unit.nanometer).m
-        print(f"{_max_distance_in_nanometer=}")
         _min_distance_in_nanometer = self.min_distance.to(unit.nanometer).m
 
         # calculate radial basis centers
@@ -597,7 +595,6 @@ class RadialBasisFunctionWithCenters(RadialBasisFunction):
 
     def nondimensionalize_distances(self, distances: torch.Tensor) -> torch.Tensor:
         diff = distances - self.radial_basis_centers
-        print(f"{distances.shape=}, {self.radial_basis_centers.shape=}")
         return diff / self.radial_scale_factor
 
 
@@ -663,7 +660,7 @@ class SchnetRadialBasisFunction(RadialBasisFunctionWithCenters):
                 * torch.ones_like(scale_factors)
         ).to(dtype)
 
-        scale_factors = 0.5 / torch.square_(widths)
+        scale_factors = math.sqrt(2) * widths
         return scale_factors
 
 
@@ -702,7 +699,6 @@ class AniRadialSymmetryFunction(RadialBasisFunctionWithCenters):
             _min_distance_in_nanometer,
             dtype,
     ):
-        print(f"{_min_distance_in_nanometer=}, {_max_distance_in_nanometer=}, {number_of_radial_basis_functions=}")
         centers = torch.linspace(
             _min_distance_in_nanometer,
             _max_distance_in_nanometer,
@@ -809,9 +805,6 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
         1/Angstrom, which is equivalent to 10/nanometer, to make the input to exp unitless.
         """
 
-        print(f"{self.radial_scale_factor.shape=}")
-        print(f"{distances.shape=}")
-        print(f"{self.radial_basis_centers.shape=}")
         return self.radial_scale_factor * (
                 torch.exp(-distances * 10) - self.radial_basis_centers
         )

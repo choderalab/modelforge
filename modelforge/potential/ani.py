@@ -140,9 +140,9 @@ class ANIRepresentation(nn.Module):
         min_distance: unit.Quantity,
         number_of_radial_basis_functions: int,
     ):
-        from .utils import AniRadialSymmetryFunction
+        from .utils import AniRadialBasisFunction
 
-        radial_symmetry_function = AniRadialSymmetryFunction(
+        radial_symmetry_function = AniRadialBasisFunction(
             number_of_radial_basis_functions,
             max_distance,
             min_distance,

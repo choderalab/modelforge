@@ -581,6 +581,9 @@ class RadialBasisFunctionWithCenters(RadialBasisFunction):
             _min_distance_in_nanometer,
             dtype,
     ):
+        """
+        NOTE: centers have units of nanometers
+        """
         pass
 
     @staticmethod
@@ -591,6 +594,9 @@ class RadialBasisFunctionWithCenters(RadialBasisFunction):
             _min_distance_in_nanometer,
             dtype,
     ):
+        """
+        NOTE: radial scale factors have units of nanometers
+        """
         pass
 
     def nondimensionalize_distances(self, distances: torch.Tensor) -> torch.Tensor:
@@ -632,15 +638,12 @@ class SchnetRadialBasisFunction(RadialBasisFunctionWithCenters):
             _min_distance_in_nanometer,
             dtype,
     ):
-        # the default approach to calculate radial basis centers
-        # can be overwritten by subclasses
-        centers = torch.linspace(
+        return torch.linspace(
             _min_distance_in_nanometer,
             _max_distance_in_nanometer,
             number_of_radial_basis_functions,
             dtype=dtype,
         )
-        return centers
 
     @staticmethod
     def calculate_radial_scale_factor(
@@ -664,7 +667,7 @@ class SchnetRadialBasisFunction(RadialBasisFunctionWithCenters):
         return scale_factors
 
 
-class AniRadialSymmetryFunction(RadialBasisFunctionWithCenters):
+class AniRadialBasisFunction(RadialBasisFunctionWithCenters):
     def __init__(
             self,
             number_of_radial_basis_functions,
@@ -715,7 +718,7 @@ class AniRadialSymmetryFunction(RadialBasisFunctionWithCenters):
             dtype,
     ):
         # ANI uses a predefined scaling factor
-        scale_factors = torch.full((number_of_radial_basis_functions,), (19.7 * 100))
+        scale_factors = torch.full((number_of_radial_basis_functions,), (19.7 * 100) ** -0.5)
         return scale_factors
 
 
@@ -724,7 +727,7 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
     def __init__(
             self,
             number_of_radial_basis_functions: int,
-            max_distance: unit.Quantity = 1.0 * unit.nanometer,
+            max_distance: unit.Quantity,
             min_distance: unit.Quantity = 0.0 * unit.nanometer,
             dtype: Optional[torch.dtype] = None,
             trainable_centers_and_scale_factors: bool = False,
@@ -769,7 +772,7 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
                 (-_max_distance_in_nanometer + _min_distance_in_nanometer) * 10,
                 dtype=dtype,
             )
-        )  # NOTE: this is defined in Angstrom
+        )  # NOTE: there is an implicit multiplication by 1/Angstrom within the exp, so we multiply by 10/nanometer.
         centers = torch.linspace(
             start_value, 1, number_of_radial_basis_functions, dtype=dtype
         )
@@ -783,21 +786,12 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
             dtype,
     ):
         # NOTE: Unlike RadialBasisFunctionWithCenters, the scale factors are unitless.
-        radial_scale_factor = torch.full(
+        return torch.full(
             (number_of_radial_basis_functions,),
-            number_of_radial_basis_functions
-            / (
-                    2
-                    * (
-                            1
-                            - math.exp(
-                        10 * (-_max_distance_in_nanometer + _min_distance_in_nanometer)
-                    )
-                    )
-            ),
+            (2 * (1 - math.exp(10 * (-_max_distance_in_nanometer + _min_distance_in_nanometer)))) /
+            number_of_radial_basis_functions,
             dtype=dtype,
-        )  # NOTE: radial_square_factor here is the square root of beta in the PhysNet paper
-        return radial_scale_factor
+        )  # NOTE: radial_square_factor here is the reciprocal of the square root of beta in the PhysNet paper
 
     def nondimensionalize_distances(self, distances: torch.Tensor) -> torch.Tensor:
         """
@@ -805,9 +799,7 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
         1/Angstrom, which is equivalent to 10/nanometer, to make the input to exp unitless.
         """
 
-        return self.radial_scale_factor * (
-                torch.exp(-distances * 10) - self.radial_basis_centers
-        )
+        return (torch.exp(-distances * 10).unsqueeze(-1) - self.radial_basis_centers) / self.radial_scale_factor
 
 
 def pair_list(

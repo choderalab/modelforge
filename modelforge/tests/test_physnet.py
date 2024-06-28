@@ -69,9 +69,9 @@ def test_rbf():
     # RBF comparision
     #############################
     # Initialize the rbf class
-    from modelforge.potential.utils import PhysNetRadialSymmetryFunction
+    from modelforge.potential.utils import PhysNetRadialBasisFunction
 
-    mf_rbf = PhysNetRadialSymmetryFunction(
+    mf_rbf = PhysNetRadialBasisFunction(
         number_of_radial_basis_functions,
         max_distance=_max_distance_in_nanometer * unit.nanometer,
     )
@@ -92,7 +92,8 @@ def test_rbf():
 
     # Modelforge implementation
     mf_widths_np = mf_rbf.get_buffer("radial_scale_factor").numpy()
-    assert np.allclose(pn_widths_np, mf_widths_np)
+    assert np.allclose(pn_widths_np ** -0.5, mf_widths_np)  # we redefine the scale factor such that we can apply the
+    # Gaussian RBF
 
     # center_position
     #################

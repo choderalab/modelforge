@@ -78,8 +78,8 @@ class PhysNetRepresentation(nn.Module):
         ----------
         cutoff : openff.units.unit.Quantity, default=5*unit.angstrom
             The cutoff distance for interactions.
-        number_of_gaussians : int, default=16
-            Number of Gaussian functions to use in the radial basis function.
+        number_of_radial_basis_functions : int, default=16
+            Number of radial basis functions to use.
         """
 
         super().__init__()

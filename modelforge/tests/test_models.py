@@ -430,7 +430,7 @@ def test_forward_pass(
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
 def test_calculate_energies_and_forces(
-    model_name, simulation_environment, single_batch_with_batchsize_64, loss_config
+    model_name, simulation_environment, single_batch_with_batchsize_64
 ):
     """
     Test the calculation of energies and forces for a molecule.
@@ -452,7 +452,6 @@ def test_calculate_energies_and_forces(
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="inference",
         model_type=model_name,
-        loss_parameter=loss_config,
         simulation_environment=simulation_environment,
         model_parameter=potential_parameter,
     )

@@ -271,7 +271,7 @@ def equivariance_utils():
 # helper functions
 # ----------------------------------------------------------- #
 
-from modelforge.dataset.dataset import Metadata, NNPInput, BatchData
+from modelforge.dataset.dataset import BatchData
 
 
 @pytest.fixture

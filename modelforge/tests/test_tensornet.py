@@ -1,11 +1,40 @@
-import pytest
-
 
 def test_tensornet_init():
     from modelforge.potential.tensornet import TensorNet
 
     net = TensorNet()
     assert net is not None
+
+
+def test_tensornet_forward():
+    # Set up a dataset
+    from modelforge.dataset.dataset import DataModule
+    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
+
+    # prepare reference value
+    dataset = DataModule(
+        name="QM9",
+        batch_size=1,
+        version_select="nc_1000_v0",
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        remove_self_energies=True,
+        regression_ase=False,
+    )
+    dataset.prepare_data()
+    dataset.setup()
+    # -------------------------------#
+    # -------------------------------#
+    # Test that we can add the reference energy correctly
+    # get methane input
+    batch = next(iter(dataset.train_dataloader())).nnp_input
+    from modelforge.potential.tensornet import TensorNet
+
+    net = TensorNet()
+    net(batch)
+
+
+
+
 
 
 def test_compare_radial_symmetry_features():

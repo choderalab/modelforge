@@ -389,7 +389,7 @@ class TrainingAdapter(pl.LightningModule):
         """
         nnp_input = batch.nnp_input
         E_true = batch.metadata.E.to(torch.float32).squeeze(1)
-        E_predict = self.model.forward(nnp_input).E
+        E_predict = self.model.forward(nnp_input)['E']
         assert E_true.shape == E_predict.shape, (
             f"Shapes of true and predicted energies do not match: "
             f"{E_true.shape} != {E_predict.shape}"
@@ -821,7 +821,7 @@ def log_training_arguments(
         log.info(f"Using pinned_memory: {pin_memory}")
     model_name = potential_config["model_name"]
     dataset_name = dataset_config["dataset_name"]
-    log.info(training_config["loss_parameter"])
+    log.info(training_config['training_parameter']["loss_parameter"])
     log.debug(
         f"""
 Training {model_name} on {dataset_name}-{version_select} dataset with {accelerator}
@@ -920,8 +920,7 @@ Experiments are saved to: {save_dir}/{experiment_name}.
     model = NeuralNetworkPotentialFactory.create_nnp(
         use="training",
         model_type=model_name,
-        dataset_statistic=dataset_statistic["atomic_energies_stats"],
-        loss_parameter=training_config["loss_parameter"],
+        dataset_statistic=dataset_statistic,
         model_parameter=potential_config["potential_parameter"],
         training_parameter=training_config["training_parameter"],
     )

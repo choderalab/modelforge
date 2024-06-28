@@ -10,33 +10,57 @@ from modelforge.potential import _Implemented_NNPs
 from modelforge.potential import NeuralNetworkPotentialFactory
 
 
+def load_configs(model_name: str, dataset_name: str):
+    from modelforge.tests.data import (
+        potential_defaults,
+        training_defaults,
+        dataset_defaults,
+    )
+    from importlib import resources
+    from modelforge.train.training import return_toml_config
+
+    potential_path = resources.files(potential_defaults) / f"{model_name.lower()}.toml"
+    dataset_path = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
+    training_path = resources.files(training_defaults) / "default.toml"
+
+    return return_toml_config(
+        potential_path=potential_path,
+        dataset_path=dataset_path,
+        training_path=training_path,
+    )
+
+
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 @pytest.mark.parametrize("dataset_name", ["QM9"])
-@pytest.mark.parametrize("loss_type", ["EnergyAndForceLoss", "EnergyLoss"])
+@pytest.mark.parametrize(
+    "loss_type",
+    [
+        {
+            "loss_type": "EnergyAndForceLoss",
+            "include_force": True,
+            "force_weight": 0.99,
+            "energy_weight": 0.01,
+        },
+        {"loss_type": "EnergyAndForceLoss"},
+    ],
+)
 def test_train_with_lightning(model_name, dataset_name, loss_type):
     """
     Test the forward pass for a given model and dataset.
     """
 
-    from modelforge.tests.test_models import load_configs
     from modelforge.train.training import perform_training
 
     # read default parameters
-    config = load_configs(f"{model_name}_without_ase", "qm9")
-
-    config = return_toml_config(
-        training_path=training_path,
-        potential_path=potential_path,
-        dataset_path=dataset_path,
-    )
+    config = load_configs(model_name, dataset_name)
 
     # Extract parameters
     potential_config = config["potential"]
     training_config = config["training"]
     dataset_config = config["dataset"]
 
-    training_config["loss_parameter"]["loss_type"] = loss_type
+    training_config["training_parameter"]["loss_parameter"] = loss_type
 
     trainer = perform_training(
         potential_config=potential_config,

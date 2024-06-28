@@ -574,7 +574,7 @@ def test_sake_model_against_reference(single_batch_with_batchsize_1):
     ref_out = ref_sake.apply(variables, h, x, mask=mask)[0].sum(-2)
     # ref_out is nan, so we can't compare it to the modelforge output
 
-    print(f"{mf_out.E=}")
+    print(f"{mf_out['E']=}")
     print(f"{ref_out=}")
     # assert torch.allclose(mf_out.E, torch.from_numpy(onp.array(ref_out[0])))
 
@@ -599,4 +599,4 @@ def test_model_invariance(single_batch_with_batchsize_1):
     reference_out = model(methane)
     perturbed_out = model(perturbed_methane_input)
 
-    assert torch.allclose(reference_out.E, perturbed_out.E)
+    assert torch.allclose(reference_out['E'], perturbed_out['E'])

@@ -321,9 +321,12 @@ class SAKEInteraction(nn.Module):
             Intermediate edge features. Shape [nr_pairs, nr_edge_basis].
         """
         h_ij_cat = torch.cat([h_i_by_pair, h_j_by_pair], dim=-1)
-        h_ij_filtered = self.radial_symmetry_function_module(d_ij.unsqueeze(-1)) * self.edge_mlp_in(
+        print(f"{self.radial_symmetry_function_module(d_ij.unsqueeze(-1)).shape=}")
+        print(f"{self.edge_mlp_in(h_ij_cat).shape=}")
+        h_ij_filtered = self.radial_symmetry_function_module(d_ij.unsqueeze(-1)).squeeze(-2) * self.edge_mlp_in(
             h_ij_cat
         )
+        print(f"{h_ij_filtered.shape=}, {h_ij_cat.shape=}, {d_ij.shape=}")
         return self.edge_mlp_out(
             torch.cat([h_ij_cat, h_ij_filtered, d_ij.unsqueeze(-1)], dim=-1)
         )

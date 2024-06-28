@@ -234,52 +234,103 @@ def make_equivalent_pairlist_mask(key, nr_atoms, nr_pairs, include_self_pairs):
 def test_radial_symmetry_function_against_reference():
     from modelforge.potential.utils import (
         PhysNetRadialBasisFunction,
-        SAKERadialBasisFunctionCore,
     )
     from sake.utils import ExpNormalSmearing as RefExpNormalSmearing
 
-    nr_atoms = 13
-    number_of_radial_basis_functions = 11
-    cutoff_upper = 6.0 * unit.bohr
-    cutoff_lower = 2.0 * unit.bohr
-    mf_unit = unit.nanometer
-    ref_unit = unit.nanometer
+    nr_atoms = 1
+    number_of_radial_basis_functions = 10
+    cutoff_upper = 6.0 * unit.nanometer
+    cutoff_lower = 2.0 * unit.nanometer
 
     radial_symmetry_function_module = PhysNetRadialBasisFunction(
         number_of_radial_basis_functions=number_of_radial_basis_functions,
         max_distance=cutoff_upper,
         min_distance=cutoff_lower,
         dtype=torch.float32,
-        trainable=False,
-        radial_basis_function=SAKERadialBasisFunctionCore(cutoff_lower),
     )
     ref_radial_basis_module = RefExpNormalSmearing(
         num_rbf=number_of_radial_basis_functions,
-        cutoff_upper=cutoff_upper.to(ref_unit).m,
-        cutoff_lower=cutoff_lower.to(ref_unit).m,
+        cutoff_upper=cutoff_upper.m,
+        cutoff_lower=cutoff_lower.m,
     )
     key = jax.random.PRNGKey(1884)
 
     # Generate random input data in JAX
-    d_ij_bohr_mag = jax.random.normal(key, (nr_atoms, nr_atoms, 1))
-    d_ij_jax = (d_ij_bohr_mag * unit.bohr).to(ref_unit).m
+    d_ij_jax = jax.random.uniform(key, (nr_atoms, nr_atoms, 1))
     d_ij = torch.from_numpy(
-        onp.array((d_ij_bohr_mag * unit.bohr).to(mf_unit).m)
+        onp.array(d_ij_jax)
     ).reshape(nr_atoms**2)
 
     mf_rbf = radial_symmetry_function_module(d_ij)
     variables = ref_radial_basis_module.init(key, d_ij_jax)
 
+    print(f"{variables['params']['means']=}")
+    print(f"{variables['params']['betas']=}")
     assert torch.allclose(
         torch.from_numpy(onp.array(variables["params"]["means"])),
         radial_symmetry_function_module.radial_basis_centers.detach().T,
     )
     assert torch.allclose(
-        torch.from_numpy(onp.array(variables["params"]["betas"])),
+        torch.from_numpy(onp.array(variables["params"]["betas"])) ** -0.5,
         radial_symmetry_function_module.radial_scale_factor.detach().T,
     )
 
     ref_rbf = ref_radial_basis_module.apply(variables, d_ij_jax)
+    print(f"{mf_rbf=}")
+    print(f"{ref_rbf=}")
+
+    assert torch.allclose(
+        mf_rbf,
+        torch.from_numpy(onp.array(ref_rbf)).reshape(
+            nr_atoms**2, number_of_radial_basis_functions
+        ),
+    )
+
+def test_rbf_forward():
+    from modelforge.potential.utils import (
+        PhysNetRadialBasisFunction,
+    )
+    from sake.utils import ExpNormalSmearing as RefExpNormalSmearing
+
+    nr_atoms = 1
+    number_of_radial_basis_functions = 1
+    cutoff_upper = 6.0 * unit.nanometer
+    cutoff_lower = 2.0 * unit.nanometer
+
+    radial_symmetry_function_module = PhysNetRadialBasisFunction(
+        number_of_radial_basis_functions=number_of_radial_basis_functions,
+        max_distance=cutoff_upper,
+        min_distance=cutoff_lower,
+        dtype=torch.float32,
+    )
+    ref_radial_basis_module = RefExpNormalSmearing(
+        num_rbf=number_of_radial_basis_functions,
+        cutoff_upper=cutoff_upper.m,
+        cutoff_lower=cutoff_lower.m,
+    )
+    key = jax.random.PRNGKey(1882)
+
+    # Generate random input data in JAX
+    d_ij_jax = jnp.full((nr_atoms, nr_atoms, 1), 1)
+    d_ij = torch.from_numpy(
+        onp.array(d_ij_jax)
+    ).reshape(nr_atoms**2)
+
+    variables = ref_radial_basis_module.init(key, d_ij_jax)
+
+    means = 1e-18
+    betas = 25
+
+    variables["params"]["means"] = jnp.full_like(variables["params"]["means"], means)
+    radial_symmetry_function_module.radial_basis_centers[:] = means
+    variables["params"]["betas"] = jnp.full_like(variables["params"]["betas"], betas)
+    radial_symmetry_function_module.radial_scale_factor[:] = betas ** -2
+
+    mf_rbf = radial_symmetry_function_module(d_ij)
+    ref_rbf = ref_radial_basis_module.apply(variables, d_ij_jax)
+    print(f"{d_ij=}")
+    print(f"{mf_rbf=}")
+    print(f"{ref_rbf=}")
 
     assert torch.allclose(
         mf_rbf,

@@ -84,7 +84,6 @@ def test_train_with_lightning(model_name, dataset_name, loss_type):
 
 
 import torch
-from torch.nn import functional as F
 
 
 def test_loss_fkt(single_batch_with_batchsize_2_with_force):

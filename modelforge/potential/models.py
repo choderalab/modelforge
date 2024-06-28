@@ -582,10 +582,8 @@ class NeuralNetworkPotentialFactory:
         from modelforge.potential import _Implemented_NNPs
         from modelforge.train.training import TrainingAdapter
 
-        model_parameter = model_parameter or {}
-        training_parameter = training_parameter or {}
         log.debug(f"{training_parameter=}")
-        # get NNP
+        # get model
         nnp_class: Type = _Implemented_NNPs.get_neural_network_class(model_type)
         if nnp_class is None:
             raise NotImplementedError(f"NNP type {model_type} is not implemented.")

@@ -59,9 +59,9 @@ def test_train_with_lightning(model_name, dataset_name, loss_type):
     potential_config = config["potential"]
     training_config = config["training"]
     dataset_config = config["dataset"]
-
+    # set loss type
     training_config["training_parameter"]["loss_parameter"] = loss_type
-
+    # perform training
     trainer = perform_training(
         potential_config=potential_config,
         training_config=training_config,
@@ -69,18 +69,13 @@ def test_train_with_lightning(model_name, dataset_name, loss_type):
     )
     # save checkpoint
     trainer.save_checkpoint("test.chp")
-
-    model = NeuralNetworkPotentialFactory.create_nnp(
-        use="training",
-        model_type=model_name,
-        loss_parameter=training_config["loss_parameter"],
-        model_parameter=potential_config["potential_parameter"],
-        training_parameter=training_config["training_parameter"],
+    # continue training
+    trainer = perform_training(
+        potential_config=potential_config,
+        training_config=training_config,
+        dataset_config=dataset_config,
+        checkpoint_path="test.chp",
     )
-    from modelforge.train.training import TrainingAdapter
-
-    model = TrainingAdapter.load_from_checkpoint("test.chp")
-    assert type(model) is not None
 
 
 import torch

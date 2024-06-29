@@ -628,6 +628,7 @@ def return_toml_config(
     potential_path: Optional[str] = None,
     dataset_path: Optional[str] = None,
     training_path: Optional[str] = None,
+    runtime_path: Optional[str] = None,
 ):
     """
     Read one or more TOML configuration files and return the parsed configuration.
@@ -642,6 +643,8 @@ def return_toml_config(
         The path to the TOML file defining the dataset configuration.
     training_path : str, optional
         The path to the TOML file defining the training configuration.
+    runtime_path : str, optional
+        The path to the TOML file defining the runtime configuration.
 
     Returns
     -------
@@ -665,7 +668,9 @@ def return_toml_config(
         if training_path:
             config["training"] = toml.load(training_path)["training"]
             log.info(f"Reading training config from : {training_path}")
-
+        if runtime_path:
+            config["runtime"] = toml.load(runtime_path)["runtime"]
+            log.info(f"Reading runtime config from : {runtime_path}")
     return config
 
 

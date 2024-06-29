@@ -566,7 +566,7 @@ class PhysNetCore(nn.Module):
 
         output = {
             "E_i": E_i.contiguous(),  # reshape memory mapping for JAX/dlpack
-            "q_i": q_i,
+            "q_i": q_i.contiguous(),
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
             "atomic_numbers": data.atomic_numbers,
         }

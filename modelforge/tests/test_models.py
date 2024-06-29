@@ -721,30 +721,133 @@ def test_pairlist_precomputation():
     assert np.all(nr_pairs == [6, 12, 20])
 
 
-@pytest.mark.parametrize("dataset_name", ["QM9"])
-def test_pairlist_on_dataset(dataset_name, datamodule_factory):
-    from modelforge.potential.models import Neighborlist
+def test_pairlist_on_dataset():
+    # Set up a dataset
+    from modelforge.dataset.dataset import DataModule
+    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
-    dm = datamodule_factory(
-        dataset_name=dataset_name,
-        batch_size=512,
+    # prepare reference value
+    dataset = DataModule(
+        name="QM9",
+        batch_size=1,
+        version_select="nc_1000_v0",
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        remove_self_energies=True,
+        regression_ase=False,
+    )
+    dataset.prepare_data()
+    dataset.setup()
+    # -------------------------------#
+    # -------------------------------#
+    # get methane input
+    batch = next(iter(dataset.train_dataloader(shuffle=False))).nnp_input
+    import torch
+
+    # make sure that the pairlist of methane is correct (single molecule)
+    assert torch.equal(
+        batch.pair_list,
+        torch.tensor(
+            [
+                [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4],
+                [1, 2, 3, 4, 0, 2, 3, 4, 0, 1, 3, 4, 0, 1, 2, 4, 0, 1, 2, 3],
+            ]
+        ),
     )
 
-    for data in dm.train_dataloader():
-        nnp_input = data.nnp_input
-        positions = nnp_input.positions
-        atomic_subsystem_indices = nnp_input.atomic_subsystem_indices
-        print(atomic_subsystem_indices)
-        from openff.units import unit
+    # test that the pairlist of 2 molecules is correct (which can then be expected also to be true for N molecules)
+    dataset = DataModule(
+        name="QM9",
+        batch_size=2,
+        version_select="nc_1000_v0",
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        remove_self_energies=True,
+        regression_ase=False,
+    )
+    dataset.prepare_data()
+    dataset.setup()
+    # -------------------------------#
+    # -------------------------------#
+    # get methane input
+    batch = next(iter(dataset.train_dataloader(shuffle=False))).nnp_input
 
-        pairlist = Neighborlist(cutoff=5.0 * unit.angstrom)
-        r = pairlist(positions, atomic_subsystem_indices)
-        print(r)
-        shapePairlist = r.pair_indices.shape
-        shape_distance = r.d_ij.shape
+    assert torch.equal(
+        batch.pair_list,
+        torch.tensor(
+            [
+                [
+                    0,
+                    0,
+                    0,
+                    0,
+                    1,
+                    1,
+                    1,
+                    1,
+                    2,
+                    2,
+                    2,
+                    2,
+                    3,
+                    3,
+                    3,
+                    3,
+                    4,
+                    4,
+                    4,
+                    4,
+                    5,
+                    5,
+                    5,
+                    6,
+                    6,
+                    6,
+                    7,
+                    7,
+                    7,
+                    8,
+                    8,
+                    8,
+                ],
+                [
+                    1,
+                    2,
+                    3,
+                    4,
+                    0,
+                    2,
+                    3,
+                    4,
+                    0,
+                    1,
+                    3,
+                    4,
+                    0,
+                    1,
+                    2,
+                    4,
+                    0,
+                    1,
+                    2,
+                    3,
+                    6,
+                    7,
+                    8,
+                    5,
+                    7,
+                    8,
+                    5,
+                    6,
+                    8,
+                    5,
+                    6,
+                    7,
+                ],
+            ]
+        ),
+    )
 
-        assert shapePairlist[1] == shape_distance[0]
-        assert shapePairlist[0] == 2
+    # check that the pairlist maximum value for i is the number of atoms in the batch
+    assert int(batch.pair_list[0][-1].item())+1 == 8+1 == len(batch.atomic_numbers) # +1 because of 0-based indexing
 
 
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())

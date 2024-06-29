@@ -38,9 +38,11 @@ class PairListOutputs(NamedTuple):
         d_ij (torch.Tensor): A tensor of shape (n_pairs, 1) containing the Euclidean distances between the atoms in each pair.
         r_ij (torch.Tensor): A tensor of shape (n_pairs, 3) containing the displacement vectors between the atoms in each pair.
     """
+
     pair_indices: torch.Tensor
     d_ij: torch.Tensor
     r_ij: torch.Tensor
+
 
 class Pairlist(Module):
     """
@@ -949,7 +951,9 @@ class CoreNetwork(Module, ABC):
         self.load_state_dict(torch.load(path, map_location=self.device))
         self.eval()  # Set the model to evaluation mode
 
-    def forward(self, data: NNPInput, pairlist_output: PairListOutputs) -> EnergyOutput:
+    def forward(
+        self, data: NNPInput, pairlist_output: PairListOutputs
+    ) -> Dict[str, torch.Tensor]:
         """
         Implements the forward pass through the network.
 

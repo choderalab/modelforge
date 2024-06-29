@@ -882,7 +882,9 @@ def perform_training(
     experiment_name = runtime_config.get("experiment_name", "exp")
     model_name = potential_config["model_name"]
     dataset_name = dataset_config["dataset_name"]
-    log_training_arguments(potential_config, training_config, dataset_config, runtime_config
+    log_training_arguments(
+        potential_config, training_config, dataset_config, runtime_config
+    )
 
     version_select = dataset_config.get("version_select", "latest")
     accelerator = runtime_config.get("accelerator", "cpu")

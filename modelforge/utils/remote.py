@@ -93,10 +93,13 @@ def calculate_md5_checksum(file_name: str, file_path: str) -> str:
 
     # we will use the OpenWithLock context manager to open the file
     # because we do not want to calculate the checksum if the file is still being written
-    with OpenWithLock(f"{file_path}/{file_name}", "rb") as f:
-        file_hash = hashlib.md5()
-        while chunk := f.read(8192):
-            file_hash.update(chunk)
+    with OpenWithLock(f"{file_path}/{file_name}.lockfile", "w") as fl:
+        with open(f"{file_path}/{file_name}", "rb") as f:
+            file_hash = hashlib.md5()
+            while chunk := f.read(8192):
+                file_hash.update(chunk)
+
+    os.remove(f"{file_path}/{file_name}.lockfile")
 
     return file_hash.hexdigest()
 
@@ -147,15 +150,16 @@ def download_from_url(
 
         from modelforge.utils.misc import OpenWithLock
 
-        with OpenWithLock(f"{output_path}/{output_filename}", "wb") as fd:
-            for chunk in tqdm(
-                r.iter_content(chunk_size=chunk_size),
-                ascii=True,
-                desc="downloading",
-                total=total,
-            ):
-                fd.write(chunk)
-
+        with OpenWithLock(f"{output_path}/{output_filename}.lockfile", "w") as fl:
+            with open(f"{output_path}/{output_filename}", "wb") as fd:
+                for chunk in tqdm(
+                    r.iter_content(chunk_size=chunk_size),
+                    ascii=True,
+                    desc="downloading",
+                    total=total,
+                ):
+                    fd.write(chunk)
+        os.remove(f"{output_path}/{output_filename}.lockfile")
         calculated_checksum = calculate_md5_checksum(
             file_name=output_filename, file_path=output_path
         )
@@ -261,24 +265,26 @@ def download_from_figshare(
 
         from modelforge.utils.misc import OpenWithLock
 
-        with OpenWithLock(f"{output_path}/{name}", "wb") as fd:
-            # if we couldn't fetch the length from figshare, which seems to happen for some records
-            # we just don't know how long the tqdm bar will be.
-            if length == -1:
-                for chunk in tqdm(
-                    r.iter_content(chunk_size=chunk_size),
-                    ascii=True,
-                    desc="downloading",
-                ):
-                    fd.write(chunk)
-            else:
-                for chunk in tqdm(
-                    r.iter_content(chunk_size=chunk_size),
-                    ascii=True,
-                    desc="downloading",
-                    total=(int(length / chunk_size) + 1),
-                ):
-                    fd.write(chunk)
+        with OpenWithLock(f"{output_path}/{name}.lockfile", "w") as fl:
+            with open(f"{output_path}/{name}", "wb") as fd:
+                # if we couldn't fetch the length from figshare, which seems to happen for some records
+                # we just don't know how long the tqdm bar will be.
+                if length == -1:
+                    for chunk in tqdm(
+                        r.iter_content(chunk_size=chunk_size),
+                        ascii=True,
+                        desc="downloading",
+                    ):
+                        fd.write(chunk)
+                else:
+                    for chunk in tqdm(
+                        r.iter_content(chunk_size=chunk_size),
+                        ascii=True,
+                        desc="downloading",
+                        total=(int(length / chunk_size) + 1),
+                    ):
+                        fd.write(chunk)
+        os.remove(f"{output_path}/{name}.lockfile")
 
         calculated_checksum = calculate_md5_checksum(
             file_name=name, file_path=output_path
@@ -381,14 +387,17 @@ def download_from_zenodo(
 
         from modelforge.utils.misc import OpenWithLock
 
-        with OpenWithLock(f"{output_path}/{name}", "wb") as fd:
-            for chunk in tqdm(
-                r.iter_content(chunk_size=chunk_size),
-                ascii=True,
-                desc="downloading",
-                total=(int(length / chunk_size) + 1),
-            ):
-                fd.write(chunk)
+        with OpenWithLock(f"{output_path}/{name}.lockfile", "w") as fl:
+            with open(f"{output_path}/{name}", "wb") as fd:
+                for chunk in tqdm(
+                    r.iter_content(chunk_size=chunk_size),
+                    ascii=True,
+                    desc="downloading",
+                    total=(int(length / chunk_size) + 1),
+                ):
+                    fd.write(chunk)
+        os.remove(f"{output_path}/{name}.lockfile")
+
         calculated_checksum = calculate_md5_checksum(
             file_name=name, file_path=output_path
         )

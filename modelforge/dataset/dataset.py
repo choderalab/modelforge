@@ -528,23 +528,27 @@ class HDF5Dataset:
 
             from modelforge.utils.misc import OpenWithLock
 
-            with OpenWithLock(f"{file_path}/{file_name}", "r") as f:
-                self._npz_metadata = json.load(f)
+            with OpenWithLock(f"{file_path}/{file_name}.lockfile", "w") as fl:
+                with open(f"{file_path}/{file_name}", "r") as f:
+                    self._npz_metadata = json.load(f)
 
-                if not self._check_lists(
-                    self._npz_metadata["data_keys"], self.properties_of_interest
-                ):
-                    log.warning(
-                        f"Data keys used to generate {file_path}/{file_name} ({self._npz_metadata['data_keys']}) do not match data loader ({self.properties_of_interest}) ."
-                    )
-                    return False
+                    if not self._check_lists(
+                        self._npz_metadata["data_keys"], self.properties_of_interest
+                    ):
+                        log.warning(
+                            f"Data keys used to generate {file_path}/{file_name} ({self._npz_metadata['data_keys']}) do not match data loader ({self.properties_of_interest}) ."
+                        )
+                        return False
 
-                if self._npz_metadata["hdf5_checksum"] != self.hdf5_data_file["md5"]:
-                    log.warning(
-                        f"Checksum for hdf5 file used to generate npz file does not match current file in dataloader."
-                    )
-                    return False
-
+                    if (
+                        self._npz_metadata["hdf5_checksum"]
+                        != self.hdf5_data_file["md5"]
+                    ):
+                        log.warning(
+                            f"Checksum for hdf5 file used to generate npz file does not match current file in dataloader."
+                        )
+                        return False
+            os.remove(f"{file_path}/{file_name}.lockfile")
         return True
 
     def _file_validation(
@@ -873,11 +877,13 @@ class HDF5Dataset:
         }
         import json
 
-        with OpenWithLock(
-            f"{self.local_cache_dir}/{self.processed_data_file['name'].replace('.npz', '.json')}",
-            "w",
-        ) as f:
-            json.dump(metadata, f)
+        json_file_path = f"{self.local_cache_dir}/{self.processed_data_file['name'].replace('.npz', '.json')}"
+        with OpenWithLock(f"{json_file_path}.lockfile", "w") as fl:
+            with open(
+                json_file_path,
+                "w",
+            ) as f:
+                json.dump(metadata, f)
 
         del self.hdf5data
 

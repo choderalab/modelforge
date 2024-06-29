@@ -4,6 +4,7 @@ import torch.nn as nn
 from loguru import logger as log
 from typing import Dict, Tuple
 from openff.units import unit
+from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
 
 from .models import PairListOutputs
 from .utils import (
@@ -66,7 +67,7 @@ class SAKENeuralNetworkInput:
     atomic_embedding: torch.Tensor
 
 
-class SAKECore(nn.Module):
+class SAKECore(CoreNetwork):
     """SAKE - spatial attention kinetic networks with E(n) equivariance.
 
     Reference:
@@ -144,7 +145,7 @@ class SAKECore(nn.Module):
 
         return nnp_input
 
-    def _forward(self, data: SAKENeuralNetworkInput):
+    def compute_properties(self, data: SAKENeuralNetworkInput):
         """
         Compute atomic representations/embeddings.
 
@@ -543,8 +544,6 @@ class SAKEInteraction(nn.Module):
         return h_updated, x_updated, v_updated
 
 
-from .models import InputPreparation, NNPInput, BaseNetwork
-
 from typing import Optional, List
 
 
@@ -558,15 +557,15 @@ class SAKE(BaseNetwork):
         number_of_spatial_attention_heads: int,
         number_of_radial_basis_functions: int,
         cutoff: unit.Quantity,
-        processing: List[Dict[str, str]],
-        readout: List[Dict[str, str]],
+        processing_operation: List[Dict[str, str]],
+        readout_operation: List[Dict[str, str]],
         dataset_statistic: Optional[Dict[str, float]] = None,
         epsilon: float = 1e-8,
     ):
         super().__init__(
             dataset_statistic=dataset_statistic,
-            processing=processing,
-            readout=readout,
+            processing_operation=processing_operation,
+            readout_operation=readout_operation,
         )
         from modelforge.utils.units import _convert
 

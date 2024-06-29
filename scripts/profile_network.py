@@ -22,7 +22,7 @@ def setup(model_name: str):
     # Extract parameters
     potential_parameter = config["potential"].get("potential_parameter", {})
 
-    model = NeuralNetworkPotentialFactory.create_nnp(
+    model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         model_type=model_name,
         simulation_environment="PyTorch",

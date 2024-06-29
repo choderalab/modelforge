@@ -475,7 +475,7 @@ def test_dataset_neighborlist(model_name, single_batch_with_batchsize_64):
     potential_parameter = config["potential"].get("potential_parameter", {})
     from modelforge.potential.models import NeuralNetworkPotentialFactory
 
-    model = NeuralNetworkPotentialFactory.create_nnp(
+    model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         model_type=model_name,
         simulation_environment="PyTorch",

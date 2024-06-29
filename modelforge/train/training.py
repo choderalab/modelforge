@@ -275,14 +275,14 @@ class TrainingAdapter(pl.LightningModule):
         self.save_hyperparameters()
         # Extracting and instantiating the model from parameters
         model_parameter_ = model_parameter.copy()
-        model_name = model_parameter_.pop("nnp_name", None)
+        model_name = model_parameter_.pop("model_name", None)
         if model_name is None:
             raise ValueError(
-                "NNP name must be specified in nnp_parameters with key 'nnp_name'."
+                "NNP name must be specified in nnp_parameters with key 'model_name'."
             )
         nnp_class: Type = _Implemented_NNPs.get_neural_network_class(model_name)
         if nnp_class is None:
-            raise ValueError(f"Specified NNP name '{nnp_name}' is not implemented.")
+            raise ValueError(f"Specified NNP name '{model_name}' is not implemented.")
 
         self.model = nnp_class(
             **model_parameter_,
@@ -917,7 +917,7 @@ Experiments are saved to: {save_dir}/{experiment_name}.
     log.info(f"E_i_stddev: {dataset_statistic['atomic_energies_stats']['E_i_stddev']}")
 
     # Set up model
-    model = NeuralNetworkPotentialFactory.create_nnp(
+    model = NeuralNetworkPotentialFactory.generate_model(
         use="training",
         model_type=model_name,
         dataset_statistic=dataset_statistic,

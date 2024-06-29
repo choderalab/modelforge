@@ -40,7 +40,7 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         reduction_mode: str = "sum",
     ):
         """
-        Initializes the per-atom property readout module.
+        Initializes the per-atom property readout_operation module.
         Performs the reduction of 'per_atom' property to 'per_molecule' property.
         """
         super().__init__()

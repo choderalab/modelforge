@@ -6,6 +6,7 @@ from loguru import logger as log
 from openff.units import unit
 from torch import nn
 from torch_scatter import scatter_add
+from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
 
 from modelforge.potential.utils import NeuralNetworkData
 
@@ -408,7 +409,7 @@ class PhysNetModule(nn.Module):
         }
 
 
-class PhysNetCore(nn.Module):
+class PhysNetCore(CoreNetwork):
     def __init__(
         self,
         max_Z: int,
@@ -493,7 +494,7 @@ class PhysNetCore(nn.Module):
 
         return nnp_input
 
-    def _forward(self, data: PhysNetNeuralNetworkData) -> Dict[str, torch.Tensor]:
+    def compute_properties(self, data: PhysNetNeuralNetworkData) -> Dict[str, torch.Tensor]:
         """
         Calculate the energy for a given input batch.
         Parameters
@@ -587,8 +588,8 @@ class PhysNet(BaseNetwork):
         number_of_radial_basis_functions: int,
         number_of_interaction_residual: int,
         number_of_modules: int,
-        processing: List[Dict[str, str]],
-        readout: List[Dict[str, str]],
+        processing_operation: List[Dict[str, str]],
+        readout_operation: List[Dict[str, str]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
         """
@@ -599,8 +600,8 @@ class PhysNet(BaseNetwork):
         """
         super().__init__(
             dataset_statistic=dataset_statistic,
-            processing=processing,
-            readout=readout,
+            processing_operation=processing_operation,
+            readout_operation=readout_operation,
         )
         from modelforge.utils.units import _convert
 

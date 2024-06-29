@@ -38,7 +38,7 @@ def test_JAX_wrapping(model_name, single_batch_with_batchsize_64):
     potential_parameter = config["potential"].get("potential_parameter", {})
 
     # inference model
-    model = NeuralNetworkPotentialFactory.create_nnp(
+    model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         model_type=model_name,
         simulation_environment="JAX",
@@ -74,7 +74,7 @@ def test_model_factory(model_name, simulation_environment):
     from modelforge.train.training import return_toml_config
 
     # inference model
-    model = NeuralNetworkPotentialFactory.create_nnp(
+    model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         model_type=model_name,
         simulation_environment=simulation_environment,
@@ -88,7 +88,7 @@ def test_model_factory(model_name, simulation_environment):
     # Extract parameters
     training_parameter = config["training"].get("training_parameter", {})
     # training model
-    model = NeuralNetworkPotentialFactory.create_nnp(
+    model = NeuralNetworkPotentialFactory.generate_model(
         use="training",
         model_type=model_name,
         simulation_environment=simulation_environment,
@@ -177,7 +177,7 @@ def test_state_dict_saving_and_loading(model_name):
     # Setup loss
     from modelforge.train.training import return_toml_config
 
-    model1 = NeuralNetworkPotentialFactory.create_nnp(
+    model1 = NeuralNetworkPotentialFactory.generate_model(
         use="training",
         model_type=model_name,
         simulation_environment="PyTorch",
@@ -186,7 +186,7 @@ def test_state_dict_saving_and_loading(model_name):
     )
     torch.save(model1.state_dict(), "model.pth")
 
-    model2 = NeuralNetworkPotentialFactory.create_nnp(
+    model2 = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         model_type=model_name,
         simulation_environment="PyTorch",
@@ -230,7 +230,7 @@ def test_dataset_statistic(model_name):
     toml_E_i_mean = dataset_statistic["atomic_energies_stats"]["E_i_mean"]
 
     # set up training model
-    model = NeuralNetworkPotentialFactory.create_nnp(
+    model = NeuralNetworkPotentialFactory.generate_model(
         use="training",
         model_type=model_name,
         simulation_environment="PyTorch",
@@ -248,7 +248,7 @@ def test_dataset_statistic(model_name):
     torch.save(model.state_dict(), "model.pth")
     l = model.state_dict()
 
-    model = NeuralNetworkPotentialFactory.create_nnp(
+    model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         model_type=model_name,
         simulation_environment="PyTorch",
@@ -279,7 +279,7 @@ def test_energy_between_simulation_environments(
     from modelforge.train.training import return_toml_config
 
     torch.manual_seed(42)
-    model = NeuralNetworkPotentialFactory.create_nnp(
+    model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         model_type=model_name,
         simulation_environment="PyTorch",
@@ -289,7 +289,7 @@ def test_energy_between_simulation_environments(
     output_torch = model(nnp_input)["E"]
 
     torch.manual_seed(42)
-    model = NeuralNetworkPotentialFactory.create_nnp(
+    model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         model_type=model_name,
         simulation_environment="JAX",
@@ -331,7 +331,7 @@ def test_forward_pass_with_all_datasets(model_name, dataset_name, datamodule_fac
 
     dataset_statistic = toml.load(dataset.dataset_statistic_filename)
 
-    model = NeuralNetworkPotentialFactory.create_nnp(
+    model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         model_type=model_name,
         simulation_environment="PyTorch",
@@ -376,7 +376,7 @@ def test_forward_pass(
     from modelforge.train.training import return_toml_config
 
     # test the forward pass through each of the models
-    model = NeuralNetworkPotentialFactory.create_nnp(
+    model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         model_type=model_name,
         simulation_environment=simulation_environment,
@@ -425,7 +425,7 @@ def test_calculate_energies_and_forces(model_name, single_batch_with_batchsize_6
     nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
     # set seed manually
     torch.manual_seed(42)
-    model_inference = NeuralNetworkPotentialFactory.create_nnp(
+    model_inference = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         model_type=model_name,
         model_parameter=potential_parameter,
@@ -441,7 +441,7 @@ def test_calculate_energies_and_forces(model_name, single_batch_with_batchsize_6
     assert F_inference.shape == (nr_of_atoms_per_batch, 3)  #  only one molecule
 
     torch.manual_seed(42)
-    model_training = NeuralNetworkPotentialFactory.create_nnp(
+    model_training = NeuralNetworkPotentialFactory.generate_model(
         use="training",
         model_type=model_name,
         model_parameter=potential_parameter,
@@ -479,7 +479,7 @@ def test_calculate_energies_and_forces_with_jax(
     nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
 
     # The inference_model fixture now returns a function that expects an environment
-    model = NeuralNetworkPotentialFactory.create_nnp(
+    model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         model_type=model_name,
         model_parameter=potential_parameter,
@@ -771,7 +771,7 @@ def test_casting(model_name, single_batch_with_batchsize_64):
     # Extract parameters
     potential_parameter = config["potential"].get("potential_parameter", {})
 
-    model = NeuralNetworkPotentialFactory.create_nnp(
+    model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         model_type=model_name,
         simulation_environment="PyTorch",
@@ -783,7 +783,7 @@ def test_casting(model_name, single_batch_with_batchsize_64):
     model(nnp_input)
 
     # cast input and model to torch.float64
-    model = NeuralNetworkPotentialFactory.create_nnp(
+    model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         model_type=model_name,
         simulation_environment="PyTorch",
@@ -819,7 +819,7 @@ def test_equivariant_energies_and_forces(
     # Setup loss
     from modelforge.train.training import return_toml_config
 
-    model = NeuralNetworkPotentialFactory.create_nnp(
+    model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         model_type=model_name,
         simulation_environment=simulation_environment,

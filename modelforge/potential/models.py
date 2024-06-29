@@ -536,12 +536,12 @@ class NeuralNetworkPotentialFactory:
 
     Methods
     -------
-    create_nnp(use, nnp_type, nnp_parameters=None, training_parameter=None)
+    generate_model(use, nnp_type, nnp_parameters=None, training_parameter=None)
         Creates an instance of a specified NNP type configured for either training or inference.
     """
 
     @staticmethod
-    def create_nnp(
+    def generate_model(
         *,
         use: Literal["training", "inference"],
         model_type: Literal["ANI2x", "SchNet", "PaiNN", "SAKE", "PhysNet"],
@@ -557,7 +557,7 @@ class NeuralNetworkPotentialFactory:
         ----------
         use : str
             The use case for the NNP instance.
-        nnp_name : str
+        model_name : str
             The type of NNP to instantiate.
         simulation_environment : str
             The environment to use, either 'PyTorch' or 'JAX'.
@@ -594,7 +594,7 @@ class NeuralNetworkPotentialFactory:
                 log.warning(
                     "Training in JAX is not availalbe. Falling back to PyTorch."
                 )
-            model_parameter["nnp_name"] = model_type
+            model_parameter["model_name"] = model_type
             model = TrainingAdapter(
                 model_parameter=model_parameter,
                 **training_parameter,
@@ -603,12 +603,10 @@ class NeuralNetworkPotentialFactory:
             return model
         elif use == "inference":
             # if this model_parameter dictionary ahs already been used
-            # for training the `nnp_name` might have been set
-            if "nnp_name" in model_parameter:
-                del model_parameter["nnp_name"]
-            model = nnp_class(
-                **model_parameter, dataset_statistic=dataset_statistic
-            )
+            # for training the `model_name` might have been set
+            if "model_name" in model_parameter:
+                del model_parameter["model_name"]
+            model = nnp_class(**model_parameter, dataset_statistic=dataset_statistic)
             if simulation_environment == "JAX":
                 return PyTorch2JAXConverter().convert_to_jax_model(model)
             else:
@@ -715,18 +713,30 @@ class BaseNetwork(Module):
 
     def __init__(
         self,
-        processing: Dict[str, torch.nn.ModuleList],
+        *,
+        processing_operation: Dict[str, torch.nn.ModuleList],
         dataset_statistic: Optional[Dict[str, float]] = None,
-        readout: Dict[str, str] = None,
+        readout_operation: Dict[str, str] = None,
     ):
         """
-        Initializes the neural network potential class with specified parameters.
+        The BaseNetwork wraps the input preparation (including pairlist calculation, d_ij and r_ij calculation), the actual model as well as the output preparation in a wrapper class.
 
+        Learned parameters are present only in the core model, the input preparation and output preparation are not learned.
+
+        Parameters
+        ----------
+        processing_operation : List[Dict[str, str]]
+            A list of dictionaries containing the processing steps to be applied to the model output.
+        readout_operation : List[Dict[str, str]]
+            A list of dictionaries containing the readout_operation steps to be applied to the model output.
+        dataset_statistic : Dict[str, float], optional
+            A dictionary containing the dataset statistics for the model, by default None.
         """
 
         super().__init__()
-
-        self._initialize_postprocessing(processing, readout, dataset_statistic)
+        self._initialize_postprocessing(
+            processing_operation, readout_operation, dataset_statistic
+        )
 
     def load_state_dict(
         self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False
@@ -770,7 +780,12 @@ class BaseNetwork(Module):
 
         super().load_state_dict(filtered_state_dict, strict=strict, assign=assign)
 
-    def _initialize_postprocessing(self, processing, readout, dataset_statistic):
+    def _initialize_postprocessing(
+        self,
+        processing_operation: List[Dict[str, str]],
+        readout_operation: List[Dict[str, str]],
+        dataset_statistic,
+    ):
         from .processing import (
             FromAtomToMoleculeReduction,
             ScaleValues,
@@ -780,7 +795,7 @@ class BaseNetwork(Module):
         # initialize per atom processing
         work_to_be_done_per_property = []
         props = []
-        for proc in processing:
+        for proc in processing_operation:
             if proc["step"] == "normalization":
                 if dataset_statistic is None:
                     log.warning(
@@ -814,7 +829,7 @@ class BaseNetwork(Module):
         # initialize per molecule reduction
         work_to_be_done_per_property = []
         props = []
-        for proc in readout:
+        for proc in readout_operation:
             if proc["step"] == "from_atom_to_molecule":
                 operation = FromAtomToMoleculeReduction(
                     reduction_mode=proc["mode"],
@@ -822,33 +837,149 @@ class BaseNetwork(Module):
             work_to_be_done_per_property.append(operation)
             props.append(proc)
 
-        self.readout = ModuleList(work_to_be_done_per_property)
+        self.readout_operation = ModuleList(work_to_be_done_per_property)
         self.readout_prop = props
 
-    def forward(self, data: NNPInput):
-        # perform input checks
-        self.input_preparation._input_checks(data)
-        # prepare the input for the forward pass
-        pairlist_output = self.input_preparation.prepare_inputs(data)
-        nnp_input = self.core_module._model_specific_input_preparation(
-            data, pairlist_output
-        )
-        # perform the forward pass implemented in the model
-        outputs = self.core_module._forward(nnp_input)
-        outputs["atomic_numbers"] = data.atomic_numbers
-
-        # perform postprocessing on properties
+    def perform_postprocessing(self, outputs: Dict[str, torch.Tensor]):
+        """
+        Perform post-processing operations on per-atom properties and reduction operations to calculate per-molecule properties.
+        """
         for property, processing in zip(self.postprocessing_prop, self.postprocessing):
             inputs = [outputs[in_key] for in_key in property["in"]]
             outputs[property["out"]] = processing(*inputs)
+
         # if per atom properties need to be combined
         outputs = self.combine_per_atom_properties(outputs)
 
-        # perform readout on properties
-        for property, processing in zip(self.readout_prop, self.readout):
+        # perform readout_operation on properties
+        for property, processing in zip(self.readout_prop, self.readout_operation):
             outputs[property["out"]] = processing(
                 outputs[property["in"]], outputs[property["index_key"]]
             )
 
-        # return output
+        return outputs
+
+    def prepare_input(self, data):
+        self.input_preparation._input_checks(data)
+        return self.input_preparation.prepare_inputs(data)
+
+    def compute(self, data, core_input):
+        return self.core_module(data, core_input)
+
+    def forward(self, data: NNPInput):
+        # perform input checks
+        core_input = self.prepare_input(data)
+        # prepare the input for the forward pass
+        output = self.compute(data, core_input)
+        # perform postprocessing operations
+        processed_output = self.perform_postprocessing(output)
+        return processed_output
+
+
+class CoreNetwork(Module, ABC):
+
+    def __init__(
+        self,
+    ):
+        """
+        The CoreNetwork implements methods that are used by all neural network potentials. Every network inherits from CoreNetwork.
+        Networks are taking in a NNPInput and pairlist and returning a dictionary of **atomic** properties.
+
+        Operations that are performed outside the network (e.g. pairlist calculation and operations that reduce atomic properties to molecule properties) are not part of the network and implemented in the BaseNetwork, which is a wrapper around the CoreNetwork.
+        """
+
+        super().__init__()
+        self._dtype: Optional[bool] = None  # set at runtime
+
+    @abstractmethod
+    def _model_specific_input_preparation(
+        self, data: NNPInput, pairlist: PairListOutputs
+    ) -> Union[
+        "PhysNetNeuralNetworkData",
+        "PaiNNNeuralNetworkData",
+        "SchnetNeuralNetworkData",
+        "AniNeuralNetworkData",
+        "SAKENeuralNetworkInput",
+    ]:
+        """
+        Prepares model-specific inputs before the forward pass.
+
+        This abstract method should be implemented by subclasses to accommodate any
+        model-specific preprocessing of inputs.
+
+        Parameters
+        ----------
+        data : NNPInput
+            The initial inputs to the neural network model, including atomic numbers, positions, and other relevant data.
+        pairlist : PairListOutputs
+            The outputs of a pairlist calculation, including pair indices, distances, and displacement vectors.
+
+        Returns
+        -------
+        NeuralNetworkData: The processed inputs, ready for the model's forward pass.
+        """
+        pass
+
+    @abstractmethod
+    def compute_properties(
+        self,
+        data: Union[
+            "PhysNetNeuralNetworkData",
+            "PaiNNNeuralNetworkData",
+            "SchnetNeuralNetworkData",
+            "AniNeuralNetworkData",
+            "SAKENeuralNetworkInput",
+        ],
+    ):
+        """
+        Defines the forward pass of the model.
+
+        This abstract method should be implemented by subclasses to specify the model's computation from inputs (processed input data) to outputs (per atom properties).
+
+        Parameters
+        ----------
+        data : The processed input data, specific to the model's requirements.
+
+        Returns
+        -------
+        The model's output as computed from the inputs.
+        """
+        pass
+
+    def load_pretrained_weights(self, path: str):
+        """
+        Loads pretrained weights into the model from the specified path.
+
+        Parameters
+        ----------
+        path : str
+            The path to the file containing the pretrained weights.
+        """
+        self.load_state_dict(torch.load(path, map_location=self.device))
+        self.eval()  # Set the model to evaluation mode
+
+    def forward(self, data: NNPInput, pairlist_output: PairListOutputs) -> EnergyOutput:
+        """
+        Implements the forward pass through the network.
+
+        Parameters
+        ----------
+        data : NNPInput
+            Contains input data for the batch obtained directly from the dataset, including atomic numbers, positions,
+            and other relevant fields.
+        pairlist_output : PairListOutputs
+            Contains the indices for the selected pairs and their associated distances and displacement vectors.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The calculated per-atom properties and other properties from the forward pass.
+        """
+        # perform model specific modifications
+        nnp_input = self._model_specific_input_preparation(data, pairlist_output)
+        # perform the forward pass implemented in the subclass
+        outputs = self.compute_properties(nnp_input)
+        # add atomic numbers to the output
+        outputs["atomic_numbers"] = data.atomic_numbers
+
         return outputs

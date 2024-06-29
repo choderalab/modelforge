@@ -167,7 +167,7 @@ def test_hypterparameter_tuning_with_ray(
     training_parameter = config["training"]["training_parameter"]
     loss_config = config["training"]["loss_parameter"]
     # training model
-    model = NeuralNetworkPotentialFactory.create_nnp(
+    model = NeuralNetworkPotentialFactory.generate_model(
         use="training",
         model_type=model_name,
         loss_parameter=loss_config,

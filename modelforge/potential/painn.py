@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from loguru import logger as log
 from openff.units import unit
+from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
 
 from .utils import Dense
 
@@ -70,7 +71,7 @@ class PaiNNNeuralNetworkData(NeuralNetworkData):
     atomic_embedding: torch.Tensor
 
 
-class PaiNNCore(nn.Module):
+class PaiNNCore(CoreNetwork):
     """PaiNN - polarizable interaction neural network
 
     References:
@@ -103,7 +104,7 @@ class PaiNNCore(nn.Module):
 
         self.embedding_module = Embedding(max_Z, number_of_atom_features)
 
-        # initialize the energy readout
+        # initialize the energy readout_operation
         from .processing import FromAtomToMoleculeReduction
 
         self.readout_module = FromAtomToMoleculeReduction()
@@ -160,7 +161,7 @@ class PaiNNCore(nn.Module):
 
         return nnp_input
 
-    def _forward(
+    def compute_properties(
         self,
         data: PaiNNNeuralNetworkData,
     ):
@@ -483,15 +484,15 @@ class PaiNN(BaseNetwork):
         number_of_interaction_modules: int,
         shared_interactions: bool,
         shared_filters: bool,
-        processing: Dict[str, torch.nn.ModuleList],
-        readout: Dict[str, List[Dict[str, str]]],
+        processing_operation: Dict[str, torch.nn.ModuleList],
+        readout_operation: Dict[str, List[Dict[str, str]]],
         dataset_statistic: Optional[Dict[str, float]] = None,
         epsilon: float = 1e-8,
     ) -> None:
         super().__init__(
             dataset_statistic=dataset_statistic,
-            processing=processing,
-            readout=readout,
+            processing_operation=processing_operation,
+            readout_operation=readout_operation,
         )
         from modelforge.utils.units import _convert
 

@@ -12,7 +12,9 @@ def visualize_model(
     from torchviz import make_dot
     from modelforge.potential import NeuralNetworkPotentialFactory
 
-    inference_model = NeuralNetworkPotentialFactory.create_nnp("inference", model_name)
+    inference_model = NeuralNetworkPotentialFactory.generate_model(
+        "inference", model_name
+    )
 
     nnp_input = next(iter(dm.train_dataloader())).nnp_input
     yhat = inference_model(nnp_input)

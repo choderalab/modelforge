@@ -10,12 +10,12 @@ cutoff = "5.0 angstrom"
 number_of_interaction_residual = 3
 number_of_modules = 5
 
-processing = [
+processing_operation = [
   { in = [
     "E_i",
   ], out = "E_i", step = "normalization", mean = "E_i_mean", stddev = "E_i_mean" },
 
 ]
-readout = [
+readout_operation = [
   { step = "from_atom_to_molecule", mode = 'sum', in = 'E_i', index_key = 'atomic_subsystem_indices', out = 'E' },
 ]

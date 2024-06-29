@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from modelforge.dataset.dataset import NNPInput
 
 from modelforge.potential.utils import NeuralNetworkData
+from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
 
 
 @dataclass
@@ -82,7 +83,7 @@ class SchnetNeuralNetworkData(NeuralNetworkData):
     f_cutoff: Optional[torch.Tensor] = field(default=None)
 
 
-class SchNetCore(nn.Module):
+class SchNetCore(CoreNetwork):
     def __init__(
         self,
         max_Z: int = 100,
@@ -120,7 +121,7 @@ class SchNetCore(nn.Module):
 
         self.embedding_module = Embedding(max_Z, number_of_atom_features)
 
-        # initialize the energy readout
+        # initialize the energy readout_operation
         from .processing import FromAtomToMoleculeReduction
 
         self.readout_module = FromAtomToMoleculeReduction()
@@ -175,7 +176,7 @@ class SchNetCore(nn.Module):
 
         return nnp_input
 
-    def _forward(self, data: SchnetNeuralNetworkData) -> Dict[str, torch.Tensor]:
+    def compute_properties(self, data: SchnetNeuralNetworkData) -> Dict[str, torch.Tensor]:
         """
         Calculate the energy for a given input batch.
 
@@ -364,7 +365,6 @@ class SchNETRepresentation(nn.Module):
         return {"f_ij": f_ij, "f_cutoff": f_cutoff}
 
 
-from .models import InputPreparation, NNPInput, BaseNetwork
 from typing import List
 
 
@@ -378,8 +378,8 @@ class SchNet(BaseNetwork):
         cutoff: unit.Quantity,
         number_of_filters: int,
         shared_interactions: bool,
-        processing: List[Dict[str, str]],
-        readout: List[Dict[str, str]],
+        processing_operation: List[Dict[str, str]],
+        readout_operation: List[Dict[str, str]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
         """
@@ -402,8 +402,8 @@ class SchNet(BaseNetwork):
         """
         super().__init__(
             dataset_statistic=dataset_statistic,
-            processing=processing,
-            readout=readout,
+            processing_operation=processing_operation,
+            readout_operation=readout_operation,
         )
         from modelforge.utils.units import _convert
 

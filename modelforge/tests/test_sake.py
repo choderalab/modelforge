@@ -427,7 +427,7 @@ def test_sake_model_against_reference(single_batch_with_batchsize_1):
         number_of_radial_basis_functions=50,
         epsilon=1e-8,
         processing=[],
-        readout=[
+        readout_operation=[
             {
                 "step": "from_atom_to_molecule",
                 "mode": "sum",
@@ -599,4 +599,4 @@ def test_model_invariance(single_batch_with_batchsize_1):
     reference_out = model(methane)
     perturbed_out = model(perturbed_methane_input)
 
-    assert torch.allclose(reference_out['E'], perturbed_out['E'])
+    assert torch.allclose(reference_out["E"], perturbed_out["E"])

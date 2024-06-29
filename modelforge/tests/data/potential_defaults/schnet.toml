@@ -11,7 +11,7 @@ number_of_interaction_modules = 3
 number_of_filters = 32
 shared_interactions = false
 
-processing = [
+processing_operation = [
     { in = [
         "E_i",
     ], out = "E_i", step = "normalization", mean = "E_i_mean", stddev = "E_i_mean" },
@@ -21,7 +21,7 @@ processing = [
     ], out = "ase", step = "calculate_ase" },
 
 ]
-readout = [
+readout_operation = [
     { step = "from_atom_to_molecule", mode = 'sum', in = 'E_i', index_key = 'atomic_subsystem_indices', out = 'E' },
     { step = "from_atom_to_molecule", mode = 'sum', in = 'ase', index_key = 'atomic_subsystem_indices', out = 'mse' },
 

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, NamedTuple, Tuple
+from typing import TYPE_CHECKING, Dict, Tuple
+from .models import InputPreparation, BaseNetwork, CoreNetwork
 
 import torch
 from loguru import logger as log
@@ -10,7 +11,6 @@ from modelforge.utils.prop import SpeciesAEV
 
 if TYPE_CHECKING:
     from modelforge.dataset.dataset import NNPInput
-
     from .models import PairListOutputs
 
 
@@ -431,7 +431,7 @@ class ANIInteraction(nn.Module):
         return output.view_as(species)
 
 
-class ANI2xCore(nn.Module):
+class ANI2xCore(CoreNetwork):
 
     def __init__(
         self,
@@ -516,7 +516,7 @@ class ANI2xCore(nn.Module):
 
         return nnp_data
 
-    def _forward(self, data: AniNeuralNetworkData) -> Dict[str, torch.Tensor]:
+    def compute_properties(self, data: AniNeuralNetworkData) -> Dict[str, torch.Tensor]:
         """
         Calculate the energy for a given input batch.
 
@@ -545,7 +545,6 @@ class ANI2xCore(nn.Module):
         }
 
 
-from .models import InputPreparation, BaseNetwork
 from typing import Union, Optional, List, Dict
 
 
@@ -559,15 +558,15 @@ class ANI2x(BaseNetwork):
         angular_min_distance: Union[unit.Quantity, str],
         angular_dist_divisions: int,
         angle_sections: int,
-        processing: List[Dict[str, str]],
-        readout: List[Dict[str, str]],
+        processing_operation: List[Dict[str, str]],
+        readout_operation: List[Dict[str, str]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
 
         super().__init__(
+            processing_operation=processing_operation,
             dataset_statistic=dataset_statistic,
-            processing=processing,
-            readout=readout,
+            readout_operation=readout_operation,
         )
 
         from modelforge.utils.units import _convert

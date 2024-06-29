@@ -243,11 +243,11 @@ class TrainingAdapter(pl.LightningModule):
     def __init__(
         self,
         *,
-        model_parameter: Dict[str, Any],
         lr_scheduler_config: Dict[str, Union[str, int, float]],
+        model_parameter: Dict[str, Any],
         lr: float,
-        dataset_statistic: Optional[Dict[str, float]] = None,
         loss_parameter: Dict[str, Any],
+        dataset_statistic: Optional[Dict[str, float]] = None,
         optimizer: Type[Optimizer] = torch.optim.AdamW,
     ):
         """
@@ -267,13 +267,12 @@ class TrainingAdapter(pl.LightningModule):
             The optimizer class to use for training, by default torch.optim.AdamW.
         """
 
-        from typing import List
         from modelforge.potential import _Implemented_NNPs
         from torchmetrics.regression import MeanSquaredError, MeanAbsoluteError
         from torchmetrics import MetricCollection
 
         super().__init__()
-        self.save_hyperparameters(ignore=["loss_module"])
+        self.save_hyperparameters()
         # Extracting and instantiating the model from parameters
         model_parameter_ = model_parameter.copy()
         model_name = model_parameter_.pop("nnp_name", None)
@@ -835,7 +834,7 @@ def perform_training(
     potential_config: Dict[str, Any],
     training_config: Dict[str, Any],
     dataset_config: Dict[str, Any],
-    checkpoint_path: str = None,
+    checkpoint_path: Optional[str] = None,
 ) -> Trainer:
     """
     Performs the training process for a neural network potential model.
@@ -917,17 +916,14 @@ Experiments are saved to: {save_dir}/{experiment_name}.
     log.info(f"E_i_mean: {dataset_statistic['atomic_energies_stats']['E_i_mean']}")
     log.info(f"E_i_stddev: {dataset_statistic['atomic_energies_stats']['E_i_stddev']}")
 
-    if checkpoint_path:
-        model = TrainingAdapter.load_from_checkpoint(checkpoint_path)
-    else:
-        # Set up model
-        model = NeuralNetworkPotentialFactory.create_nnp(
-            use="training",
-            model_type=model_name,
-            dataset_statistic=dataset_statistic,
-            model_parameter=potential_config["potential_parameter"],
-            training_parameter=training_config["training_parameter"],
-        )
+    # Set up model
+    model = NeuralNetworkPotentialFactory.create_nnp(
+        use="training",
+        model_type=model_name,
+        dataset_statistic=dataset_statistic,
+        model_parameter=potential_config["potential_parameter"],
+        training_parameter=training_config["training_parameter"],
+    )
 
     # set up traininer
     from lightning.pytorch.callbacks.early_stopping import EarlyStopping
@@ -974,6 +970,7 @@ Experiments are saved to: {save_dir}/{experiment_name}.
             num_workers=num_workers, pin_memory=pin_memory
         ),
         val_dataloaders=dm.val_dataloader(),
+        ckpt_path=checkpoint_path,
     )
     trainer.validate(model=model, dataloaders=dm.val_dataloader(), ckpt_path="best")
     trainer.test(dataloaders=dm.test_dataloader(), ckpt_path="best")

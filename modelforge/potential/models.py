@@ -595,23 +595,24 @@ class NeuralNetworkPotentialFactory:
                     "Training in JAX is not availalbe. Falling back to PyTorch."
                 )
             model_parameter["nnp_name"] = model_type
-            return TrainingAdapter(
+            model = TrainingAdapter(
                 model_parameter=model_parameter,
                 **training_parameter,
                 dataset_statistic=dataset_statistic,
             )
+            return model
         elif use == "inference":
             # if this model_parameter dictionary ahs already been used
             # for training the `nnp_name` might have been set
             if "nnp_name" in model_parameter:
                 del model_parameter["nnp_name"]
-            nnp_instance = nnp_class(
+            model = nnp_class(
                 **model_parameter, dataset_statistic=dataset_statistic
             )
             if simulation_environment == "JAX":
-                return PyTorch2JAXConverter().convert_to_jax_model(nnp_instance)
+                return PyTorch2JAXConverter().convert_to_jax_model(model)
             else:
-                return nnp_instance
+                return model
         else:
             raise ValueError(f"Unsupported 'use' value: {use}")
 

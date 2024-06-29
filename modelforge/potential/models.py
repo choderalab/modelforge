@@ -26,47 +26,38 @@ if TYPE_CHECKING:
     from modelforge.potential.physnet import PhysNet, PhysNetNeuralNetworkData
     from modelforge.potential.sake import SAKE, SAKENeuralNetworkInput
     from modelforge.potential.schnet import SchNet, SchnetNeuralNetworkData
-    from modelforge.train.training import EnergyAndForceLoss
 
 
 # Define NamedTuple for the outputs of Pairlist and Neighborlist forward method
 class PairListOutputs(NamedTuple):
+    """
+    A namedtuple to store the outputs of the Pairlist and Neighborlist forward methods.
+
+    Attributes:
+        pair_indices (torch.Tensor): A tensor of shape (2, n_pairs) containing the indices of the interacting atom pairs.
+        d_ij (torch.Tensor): A tensor of shape (n_pairs, 1) containing the Euclidean distances between the atoms in each pair.
+        r_ij (torch.Tensor): A tensor of shape (n_pairs, 3) containing the displacement vectors between the atoms in each pair.
+    """
     pair_indices: torch.Tensor
     d_ij: torch.Tensor
     r_ij: torch.Tensor
 
-
-class EnergyOutput(NamedTuple):
-    E: torch.Tensor
-    E_i: torch.Tensor
-    molecular_ase: torch.Tensor
-
-
 class Pairlist(Module):
-    """Handle pair list calculations for atoms, returning atom indices pairs and displacement vectors.
+    """
+    Handle pair list calculations for atoms, returning atom indices pairs and displacement vectors.
 
-    Attributes
-    ----------
-    calculate_pairs : callable
-        A function to calculate pairs given specific criteria.
-
-    Methods
-    -------
-    calculate_r_ij(pair_indices, positions)
-        Computes the displacement vector between atom pairs.
-    calculate_d_ij(r_ij)
-        Computes the Euclidean distance between atoms in a pair.
-    forward(positions, atomic_subsystem_indices)
-        Forward pass to compute pair indices, distances, and displacement vectors.
+    Attributes:
+        only_unique_pairs (bool): If True, only unique pairs are returned (default is False).
+            Otherwise, all pairs are returned.
     """
 
     def __init__(self, only_unique_pairs: bool = False):
         """
-        Parameters
-        ----------
-        only_unique_pairs : bool, optional
-            If True, only unique pairs are returned (default is False).
-            Otherwise, all pairs are returned.
+        Initialize the Pairlist object.
+
+        Parameters:
+            only_unique_pairs (bool, optional): If True, only unique pairs are returned (default is False).
+                Otherwise, all pairs are returned.
         """
         super().__init__()
         self.only_unique_pairs = only_unique_pairs
@@ -280,21 +271,21 @@ class Pairlist(Module):
         atomic_subsystem_indices: torch.Tensor,
     ) -> PairListOutputs:
         """
-        Compute interacting pairs, distances, and displacement vectors.
+        Performs the forward pass of the Pairlist module.
 
         Parameters
         ----------
         positions : torch.Tensor
             Atom positions. Shape: [nr_atoms, 3].
-        atomic_subsystem_indices : torch.Tensor
-            Indices to identify atoms in subsystems. Shape: [nr_atoms].
-        only_unique_pairs : bool, optional
-            If True, considers only unique pairs of atoms. Default is False.
+        atomic_subsystem_indices (torch.Tensor, shape (nr_atoms_per_systems)):
+            Atom indices to indicate which atoms belong to which molecule.
 
         Returns
         -------
-        PairListOutputs
-            A NamedTuple containing 'pair_indices', 'd_ij' (distances), and 'r_ij' (displacement vectors).
+        PairListOutputs: A namedtuple containing the following attributes:
+            pair_indices (torch.Tensor): A tensor of shape (2, n_pairs) containing the indices of the interacting atom pairs.
+            d_ij (torch.Tensor): A tensor of shape (n_pairs, 1) containing the Euclidean distances between the atoms in each pair.
+            r_ij (torch.Tensor): A tensor of shape (n_pairs, 3) containing the displacement vectors between the atoms in each pair.
         """
         pair_indices = self.enumerate_all_pairs(
             atomic_subsystem_indices,

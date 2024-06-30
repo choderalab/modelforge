@@ -1,35 +1,32 @@
 import torch
 from typing import Dict
+from openff.units import unit
 
 
-def load_atomic_self_energies(path: str, with_units: bool = True):
+def load_atomic_self_energies(path: str) -> Dict[str, unit.Quantity]:
     import toml
 
-    unitless_energy_statistic = toml.load(open(path, "r"))
+    energy_statistic = toml.load(open(path, "r"))
 
-    if with_units:
-        # attach kJ/mol units
-        atomic_self_energies = {
-            key: float(value) * unit.kilojoule_per_mole
-            for key, value in unitless_energy_statistic["atomic_self_energies"].items()
-        }
-    else:
-        atomic_self_energies = unitless_energy_statistic["atomic_self_energies"]
+    # attach kJ/mol units
+    atomic_self_energies = {
+        key: unit.Quantity(value)
+        for key, value in energy_statistic["atomic_self_energies"].items()
+    }
+
     return atomic_self_energies
 
 
-def load_atomic_energies_stats(path: str, to_tensor: bool = True):
+def load_atomic_energies_stats(path: str) -> Dict[str, unit.Quantity]:
     import toml
 
-    unitless_energy_statistic = toml.load(open(path, "r"))
-    if to_tensor:
-        # convert values to tensor
-        atomic_energies_stats = {
-            key: torch.tensor(value)
-            for key, value in unitless_energy_statistic["atomic_energies_stats"].items()
-        }
-    else:
-        atomic_energies_stats = unitless_energy_statistic["atomic_energies_stats"]
+    energy_statistic = toml.load(open(path, "r"))
+    # convert values to tensor
+    atomic_energies_stats = {
+        key: unit.Quantity(value)
+        for key, value in energy_statistic["atomic_energies_stats"].items()
+    }
+
     return atomic_energies_stats
 
 
@@ -168,11 +165,6 @@ class AtomicSelfEnergies:
         return self._ase_tensor_for_indexing
 
 
-from modelforge.potential.utils import NeuralNetworkData
-from typing import Union
-from loguru import logger as log
-
-
 class ScaleValues(torch.nn.Module):
 
     def __init__(self, mean: float, stddev: float) -> None:
@@ -204,10 +196,10 @@ class CalculateAtomicSelfEnergy(torch.nn.Module):
     def __init__(self, atomic_self_energies) -> None:
         super().__init__()
 
-        # if values in atomic_self_energies have no units, attach kJ/mol units
-        if not isinstance(list(atomic_self_energies.values())[0], unit.Quantity):
+        # if values in atomic_self_energies are strings convert them to kJ/mol
+        if isinstance(list(atomic_self_energies.values())[0], str):
             atomic_self_energies = {
-                key: float(value) * unit.kilojoule_per_mole
+                key: unit.Quantity(value)
                 for key, value in atomic_self_energies.items()
             }
         self.atomic_self_energies = AtomicSelfEnergies(atomic_self_energies)

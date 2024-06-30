@@ -516,9 +516,6 @@ class PyTorch2JAXConverter:
         return apply, model_params, model_buffer
 
 
-from modelforge.potential.processing import AtomicSelfEnergies
-
-
 class NeuralNetworkPotentialFactory:
     """
     Factory class for creating instances of neural network potentials (NNP) that are traceable/scriptable and can be
@@ -798,8 +795,12 @@ class BaseNetwork(Module):
                     stddev = 1.0
                 else:
                     atomic_energies_stats = dataset_statistic["atomic_energies_stats"]
-                    mean = atomic_energies_stats[proc["mean"]]
-                    stddev = atomic_energies_stats[proc["stddev"]]
+                    mean = unit.Quantity(atomic_energies_stats[proc["mean"]]).m_as(
+                        unit.kilocalorie_per_mole
+                    )
+                    stddev = unit.Quantity(atomic_energies_stats[proc["stddev"]]).m_as(
+                        unit.kilocalorie_per_mole
+                    )
                 operation = ScaleValues(mean=mean, stddev=stddev)
                 work_to_be_done_per_property.append(operation)
                 props.append(proc)

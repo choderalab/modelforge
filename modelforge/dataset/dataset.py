@@ -1068,17 +1068,18 @@ class DataModule(pl.LightningDataModule):
         self._cache_dataset(torch_dataset)
 
     def _log_dataset_statistic(self, dataset_statistic):
-        """Save the dataset statistics to a file."""
+        """Save the dataset statistics to a file with units"""
         import toml
+        
 
-        # remove units from the statistics
+        # cast units to string
         atomic_self_energies = {
-            key: value.magnitude if isinstance(value, unit.Quantity) else value
+            key: str(value) if isinstance(value, unit.Quantity) else value
             for key, value in dataset_statistic["atomic_self_energies"].items()
         }
-        # cast float on pytorch tensors
+        # cast float and kJ/mol on pytorch tensors and then convert to string
         atomic_energies_stats = {
-            key: value.item() if isinstance(value, torch.Tensor) else value
+            key: str(unit.Quantity(value.item(), unit.kilojoule_per_mole)) if isinstance(value, torch.Tensor) else value
             for key, value in dataset_statistic["atomic_energies_stats"].items()
         }
 
@@ -1102,7 +1103,7 @@ class DataModule(pl.LightningDataModule):
         from modelforge.potential.processing import load_atomic_self_energies
 
         return load_atomic_self_energies(
-            self.dataset_statistic_filename, with_units=True
+            self.dataset_statistic_filename
         )
 
     def _read_atomic_energies_stats(self) -> Dict[str, torch.Tensor]:
@@ -1110,7 +1111,7 @@ class DataModule(pl.LightningDataModule):
         from modelforge.potential.processing import load_atomic_energies_stats
 
         return load_atomic_energies_stats(
-            self.dataset_statistic_filename, to_tensor=True
+            self.dataset_statistic_filename
         )
 
     def _create_torch_dataset(self, dataset):

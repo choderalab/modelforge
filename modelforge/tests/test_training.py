@@ -32,7 +32,7 @@ def load_configs(model_name: str, dataset_name: str):
 
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
-@pytest.mark.parametrize("dataset_name", ["QM9"])
+@pytest.mark.parametrize("dataset_name", ["QM9", "PHALKETHOH"])
 @pytest.mark.parametrize(
     "loss_type",
     [

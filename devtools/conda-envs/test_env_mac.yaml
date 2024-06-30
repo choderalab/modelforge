@@ -17,13 +17,13 @@ dependencies:
   - tensorboard
   - torchvision
   - openff-units
-  - torchmetrics>=1.4
   - pint
   - rdkit
   - retry
   - sqlitedict
   - pytorch_scatter
   - jax
+  - torchmetrics>=1.4
 
   # Testing
   - pytest>=2.1

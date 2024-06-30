@@ -868,10 +868,15 @@ def perform_training(
     from lightning.pytorch.callbacks import ModelSummary
 
     save_dir = training_config.get("save_dir", "lightning_logs")
-    if save_dir == "{model_name}_{dataset_name}":
-        save_dir = f"{potential_config['model_name']}_{dataset_config['dataset_name']}"
 
     experiment_name = training_config.get("experiment_name", "exp")
+    if experiment_name == "{model_name}_{dataset_name}":
+        experiment_name = (
+            f"{potential_config['model_name']}_{dataset_config['dataset_name']}"
+        )
+        training_config["experiment_name"] = (
+            experiment_name  # update the save_dir in training_config
+        )
     model_name = potential_config["model_name"]
     dataset_name = dataset_config["dataset_name"]
     log_training_arguments(potential_config, training_config, dataset_config)

@@ -23,7 +23,7 @@ dependencies:
   - sqlitedict
   - pytorch_scatter
   - jax
-  - torchmetrics>=1.4
+  - torchmetrics
 
   # Testing
   - pytest>=2.1

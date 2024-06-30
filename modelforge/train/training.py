@@ -884,7 +884,7 @@ def perform_training(
     pin_memory = dataset_config.get("pin_memory", False)
 
     # set up tensor board logger
-    logger = TensorBoardLogger(save_dir, name=experiment_name)
+    logger = TensorBoardLogger(save_dir, name=experiment_name, version={model_name}_{dataset_name})
 
     log.debug(
         f"""

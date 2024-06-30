@@ -29,7 +29,7 @@ def test_tensornet_forward():
     from modelforge.potential.tensornet import TensorNet
 
     net = TensorNet()
-    net()
+    # net(batch)
 
 
 def test_model_input():

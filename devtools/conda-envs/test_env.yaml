@@ -17,7 +17,7 @@ dependencies:
   - tensorboard
   - torchvision
   - openff-units
-  - pint
+  - pint=0.23
   - rdkit
   - retry
   - sqlitedict

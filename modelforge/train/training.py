@@ -762,29 +762,33 @@ def log_training_arguments(
     version_select = dataset_config.get("version_select", "latest")
     if version_select == "latest":
         log.info(f"Using default dataset version: {version_select}")
-
     else:
         log.info(f"Using dataset version: {version_select}")
+
     accelerator = training_config.get("accelerator", "cpu")
     if accelerator == "cpu":
         log.info(f"Using default accelerator: {accelerator}")
     else:
         log.info(f"Using accelerator: {accelerator}")
+
     nr_of_epochs = training_config.get("nr_of_epochs", 10)
     if nr_of_epochs == 10:
         log.info(f"Using default number of epochs: {nr_of_epochs}")
     else:
         log.info(f"Training for {nr_of_epochs} epochs")
+
     num_nodes = training_config.get("num_nodes", 1)
     if num_nodes == 1:
         log.info(f"Using default number of nodes: {num_nodes}")
     else:
         log.info(f"Training on {num_nodes} nodes")
+
     devices = training_config.get("devices", 1)
     if devices == 1:
         log.info(f"Using default device index/number: {devices}")
     else:
         log.info(f"Using device index/number: {devices}")
+
     batch_size = training_config.get("batch_size", 128)
     if batch_size == 128:
         log.info(f"Using default batch size: {batch_size}")
@@ -798,6 +802,7 @@ def log_training_arguments(
         )
     else:
         log.info(f"Removing self energies: {remove_self_energies}")
+
     early_stopping_config = training_config.get("early_stopping", None)
     if early_stopping_config is None:
         log.info(f"Using default: No early stopping performed")
@@ -813,11 +818,13 @@ def log_training_arguments(
         )
     else:
         log.info(f"Using {num_workers} workers for training data loader")
+
     pin_memory = dataset_config.get("pin_memory", False)
     if pin_memory is False:
         log.info(f"Using default value for pinned_memory: {pin_memory}")
     else:
         log.info(f"Using pinned_memory: {pin_memory}")
+
     model_name = potential_config["model_name"]
     dataset_name = dataset_config["dataset_name"]
     log.info(training_config["training_parameter"]["loss_parameter"])
@@ -861,8 +868,8 @@ def perform_training(
     from lightning.pytorch.callbacks import ModelSummary
 
     save_dir = training_config.get("save_dir", "lightning_logs")
-    if save_dir == "lightning_logs":
-        log.info(f"Saving logs to default location: {save_dir}")
+    if save_dir == "{model_name}_{dataset_name}":
+        save_dir = f"{potential_config['model_name']}_{dataset_config['dataset_name']}"
 
     experiment_name = training_config.get("experiment_name", "exp")
     model_name = potential_config["model_name"]
@@ -884,18 +891,7 @@ def perform_training(
     pin_memory = dataset_config.get("pin_memory", False)
 
     # set up tensor board logger
-    logger = TensorBoardLogger(save_dir, name=experiment_name, version={model_name}_{dataset_name})
-
-    log.debug(
-        f"""
-Training {model_name} on {dataset_name}-{version_select} dataset with {accelerator}
-accelerator on {num_nodes} nodes for {nr_of_epochs} epochs.
-Experiments are saved to: {save_dir}/{experiment_name}.
-"""
-    )
-
-    log.debug(f"Using {potential_config} potential config")
-    log.debug(f"Using {training_config} training config")
+    logger = TensorBoardLogger(save_dir, name=experiment_name)
 
     # Set up dataset
     dm = DataModule(

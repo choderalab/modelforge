@@ -29,17 +29,19 @@ def test_tensornet_forward():
     from modelforge.potential.tensornet import TensorNet
 
     net = TensorNet()
-    net(batch)
+    net()
 
 
 def test_model_input():
-    # Set up a dataset
+    import torch
+    from openff.units import unit
     from torchmdnet.models.utils import OptimizedDistance
 
     from modelforge.dataset.dataset import DataModule
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
     from modelforge.potential.tensornet import TensorNet
 
+    # Set up a dataset
     # prepare reference value
     dataset = DataModule(
         name="QM9",
@@ -56,33 +58,40 @@ def test_model_input():
     # Test that we can add the reference energy correctly
     # get methane input
     nnpinput = next(iter(dataset.train_dataloader())).nnp_input
-    model = TensorNet()
+    model = TensorNet(radial_max_distance=100 * unit.angstrom)  # no max distance for test purposes
     model.input_preparation._input_checks(nnpinput)
     model_input = model.input_preparation.prepare_inputs(nnpinput)
     # basenetwork_forward = model(nnpinput)
-    
 
     z, pos, batch = (
-        nnpinput.atomic_numbers, 
-        nnpinput.positions, 
+        nnpinput.atomic_numbers,
+        nnpinput.positions,
         nnpinput.atomic_subsystem_indices
     )
-
     distance_module = OptimizedDistance(
         cutoff_lower=0.0,
         cutoff_upper=5.0,
-        max_num_pairs=-64,
+        max_num_pairs=153,
         return_vecs=True,
-        loop=True,
-        check_errors=True,
-        resize_to_fit=True,  # not self.static_shapes
+        loop=False,
+        check_errors=False,
+        resize_to_fit=False,  # not self.static_shapes
         box=None,
-        long_edge_index=True,
+        long_edge_index=False,
     )
 
     edge_index, edge_weight, edge_vec = distance_module(pos, batch, None)
 
-    return 0
+    # reshape and compare
+    pair_indices = model_input.pair_indices.transpose(0, 1)
+    edge_index = edge_index.transpose(0, 1)
+    for _, pair_index in enumerate(pair_indices):
+        idx = ((edge_index == pair_index).sum(axis=1) == 2).nonzero()[0][0]  # select [True, True]
+        print(model_input.d_ij[_][0])
+        print(edge_weight[idx])
+        assert torch.allclose(model_input.d_ij[_][0], edge_weight[idx])
+        assert torch.allclose(model_input.r_ij[_], -edge_vec[idx])
+
 
 def test_compare_radial_symmetry_features():
     # Compare the TensorNet radial symmetry function

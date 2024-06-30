@@ -724,25 +724,20 @@ def test_energy_postprocessing():
 
     # -------------------------------#
     # Test that we can calculate the normalize energies correctly
-
     dm = DataModule(
         name="QM9",
         batch_size=10,
         version_select="nc_1000_v0",
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         remove_self_energies=True,
+        regenerate_dataset_statistic=True,
     )
     dm.prepare_data()
     dm.setup()
 
-    batch = next(
-        iter(dm.val_dataloader())
-    )  # NOTE: using validation dataloader because of random shuffel in training dataloader
-    unnormalized_E = batch.metadata.E.numpy()
+    batch = next(iter(dm.val_dataloader()))
+    unnormalized_E = batch.metadata.E.numpy().flatten()
     import numpy as np
-
-    mean = np.average(unnormalized_E)
-    stddev = np.std(unnormalized_E)
 
     # check that normalized energies are correct
     assert torch.allclose(
@@ -766,25 +761,34 @@ def test_energy_postprocessing():
         ),
     )
 
+    # check that we have saved the dataset statistics
+    # correctly
     f = dm.dataset_statistic_filename
     import toml
 
     dataset_statistic = toml.load(f)
+    from openff.units import unit
 
-    torch.isclose(
-        torch.tensor(
-            dataset_statistic["atomic_energies_stats"]["E_i_mean"], dtype=torch.float64
-        ),
-        torch.tensor(-424.8404, dtype=torch.float64),
+    assert np.isclose(
+        unit.Quantity(dataset_statistic["atomic_energies_stats"]["E_i_mean"]).m,
+        -402.916561,
     )
 
-    torch.isclose(
-        torch.tensor(
-            dataset_statistic["atomic_energies_stats"]["E_i_stddev"],
-            dtype=torch.float64,
-        ),
-        torch.tensor(3438.2806, dtype=torch.float64),
+    assert np.isclose(
+        unit.Quantity(dataset_statistic["atomic_energies_stats"]["E_i_stddev"]).m,
+        25.013382078330697,
     )
+
+    # check that the normalization is correct
+    normalized_atomic_energies = (
+        unnormalized_E / batch.metadata.atomic_subsystem_counts.numpy().flatten()
+    )
+    mean = np.average(normalized_atomic_energies)
+    stddev = np.std(normalized_atomic_energies)
+
+    # seams reasonable
+    assert np.isclose(mean, -388.36276540521123)
+    assert np.isclose(stddev, 19.372371857226035)
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
@@ -820,17 +824,18 @@ def test_function_of_self_energy(dataset_name, datamodule_factory):
     f = dm.dataset_statistic_filename
     dataset_statistic = toml.load(f)
     self_energies = dataset_statistic["atomic_self_energies"]
+    from openff.units import unit
 
     # 5 elements present in the QM9 dataset
     assert len(self_energies.keys()) == 5
     # H: -1313.4668615546
-    assert np.isclose(float(self_energies["H"]), -1313.4668615546)
+    assert np.isclose(unit.Quantity(self_energies["H"]).m, -1313.4668615546)
     # C: -99366.70745535441
-    assert np.isclose(float(self_energies["C"]), -99366.70745535441)
+    assert np.isclose(unit.Quantity(self_energies["C"]).m, -99366.70745535441)
     # N: -143309.9379722722
-    assert np.isclose(float(self_energies["N"]), -143309.9379722722)
+    assert np.isclose(unit.Quantity(self_energies["N"]).m, -143309.9379722722)
     # O: -197082.0671774158
-    assert np.isclose(float(self_energies["O"]), -197082.0671774158)
+    assert np.isclose(unit.Quantity(self_energies["O"]).m, -197082.0671774158)
 
     # Scenario 2: dataset may or may not contain self energies
     # but user wants to use least square regression to calculate the energies
@@ -856,25 +861,25 @@ def test_function_of_self_energy(dataset_name, datamodule_factory):
     # value from DFT calculation
     # H: -1313.4668615546
     assert np.isclose(
-        float(self_energies["H"]),
+        unit.Quantity(self_energies["H"]).m,
         -1577.0870687452618,
     )
     # value from DFT calculation
     # C: -99366.70745535441
     assert np.isclose(
-        float(self_energies["C"]),
+        unit.Quantity(self_energies["C"]).m,
         -99977.40806211969,
     )
     # value from DFT calculation
     # N: -143309.9379722722
     assert np.isclose(
-        float(self_energies["N"]),
+        unit.Quantity(self_energies["N"]).m,
         -143742.7416655554,
     )
     # value from DFT calculation
     # O: -197082.0671774158
     assert np.isclose(
-        float(self_energies["O"]),
+        unit.Quantity(self_energies["O"]).m,
         -197492.33270235246,
     )
 

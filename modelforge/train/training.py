@@ -865,7 +865,6 @@ def perform_training(
     from lightning import Trainer
     from modelforge.potential import NeuralNetworkPotentialFactory
     from modelforge.dataset.dataset import DataModule
-    from lightning.pytorch.callbacks import ModelSummary
 
     save_dir = training_config.get("save_dir", "lightning_logs")
 

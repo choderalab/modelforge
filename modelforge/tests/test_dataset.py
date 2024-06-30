@@ -788,7 +788,7 @@ def test_energy_postprocessing():
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
-def test_self_energy(dataset_name, datamodule_factory):
+def test_function_of_self_energy(dataset_name, datamodule_factory):
 
     # test the self energy calculation on the QM9 dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
@@ -916,16 +916,13 @@ def test_self_energy(dataset_name, datamodule_factory):
                 methane_energy_offset, torch.tensor([-1656.8412], dtype=torch.float64)
             )
         # extract the ase offset
-        from modelforge.potential.processing import load_atomic_self_energies
-
-        self_energies = load_atomic_self_energies(dm.dataset_statistic_filename)
-
         from modelforge.potential.processing import (
             AtomicSelfEnergies,
             load_atomic_self_energies,
         )
 
         self_energies = load_atomic_self_energies(dm.dataset_statistic_filename)
+
         self_energies = AtomicSelfEnergies(self_energies)
 
         methane_ase = sum(

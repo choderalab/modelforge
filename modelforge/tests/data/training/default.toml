@@ -1,10 +1,4 @@
 [training]
-nr_of_epochs = 2
-save_dir = "test"
-experiment_name = "exp_test"
-accelerator = "cpu"
-num_nodes = 1
-devices = 1                  #[0,1,2,3]
 
 training_parameter.lr = 1e-3
 training_parameter.lr_scheduler_config.frequency = 1

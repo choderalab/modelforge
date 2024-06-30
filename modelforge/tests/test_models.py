@@ -225,9 +225,12 @@ def test_dataset_statistic(model_name):
     dataset.setup()
 
     import toml
+    from openff.units import unit
 
     dataset_statistic = toml.load(dataset.dataset_statistic_filename)
-    toml_E_i_mean = dataset_statistic["atomic_energies_stats"]["E_i_mean"]
+    toml_E_i_mean = unit.Quantity(
+        dataset_statistic["atomic_energies_stats"]["E_i_mean"]
+    ).m
 
     # set up training model
     model = NeuralNetworkPotentialFactory.generate_model(
@@ -239,14 +242,12 @@ def test_dataset_statistic(model_name):
         dataset_statistic=dataset_statistic,
     )
     import torch
+    import numpy as np
 
     # check that the E_i_mean is the same than in the dataset statistics
-    assert torch.isclose(
-        torch.tensor([toml_E_i_mean]), model.model.postprocessing[0].mean
-    )
+    assert np.isclose(toml_E_i_mean, model.model.postprocessing[0].mean)
 
     torch.save(model.state_dict(), "model.pth")
-    l = model.state_dict()
 
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
@@ -254,9 +255,8 @@ def test_dataset_statistic(model_name):
         simulation_environment="PyTorch",
         model_parameter=potential_parameter,
     )
-
     model.load_state_dict(torch.load("model.pth"))
-    assert torch.isclose(torch.tensor([toml_E_i_mean]), model.postprocessing[0].mean)
+    assert np.isclose(toml_E_i_mean, model.postprocessing[0].mean)
 
 
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
@@ -847,7 +847,9 @@ def test_pairlist_on_dataset():
     )
 
     # check that the pairlist maximum value for i is the number of atoms in the batch
-    assert int(batch.pair_list[0][-1].item())+1 == 8+1 == len(batch.atomic_numbers) # +1 because of 0-based indexing
+    assert (
+        int(batch.pair_list[0][-1].item()) + 1 == 8 + 1 == len(batch.atomic_numbers)
+    )  # +1 because of 0-based indexing
 
 
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())

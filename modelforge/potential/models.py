@@ -796,10 +796,10 @@ class BaseNetwork(Module):
                 else:
                     atomic_energies_stats = dataset_statistic["atomic_energies_stats"]
                     mean = unit.Quantity(atomic_energies_stats[proc["mean"]]).m_as(
-                        unit.kilocalorie_per_mole
+                        unit.kilojoule_per_mole
                     )
                     stddev = unit.Quantity(atomic_energies_stats[proc["stddev"]]).m_as(
-                        unit.kilocalorie_per_mole
+                        unit.kilojoule_per_mole
                     )
                 operation = ScaleValues(mean=mean, stddev=stddev)
                 work_to_be_done_per_property.append(operation)

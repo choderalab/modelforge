@@ -804,7 +804,7 @@ def log_training_arguments(
         log.info(f"Removing self energies: {remove_self_energies}")
 
     splitting_strategy = training_config["splitting_strategy"]["name"]
-    data_split = training_config["splitting_strategy"]["split"]
+    data_split = training_config["splitting_strategy"]["data_split"]
     log.info(f"Using splitting strategy: {splitting_strategy} with split: {data_split}")
 
     early_stopping_config = training_config.get("early_stopping", None)
@@ -878,9 +878,9 @@ def perform_training(
     # Parse the arguments
     model_name = potential_config["model_name"]
     dataset_name = dataset_config["dataset_name"]
-    splitting_strategy = dataset_config["splitting_strategy"]["name"]
-    data_split = dataset_config["splitting_strategy"]["split"]
-    splitting_seed = dataset_config["splitting_strategy"].get("seed", 42)
+    splitting_strategy = training_config["splitting_strategy"]["name"]
+    data_split = training_config["splitting_strategy"]["data_split"]
+    splitting_seed = training_config["splitting_strategy"].get("seed", 42)
 
     save_dir = training_config.get("save_dir", "lightning_logs")
 

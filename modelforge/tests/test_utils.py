@@ -90,7 +90,6 @@ def test_cosine_cutoff():
     actual_output = cutoff_module(d_ij / 10)
 
     # Check if the results are equal
-    # NOTE: Cutoff function doesn't care about the units as long as they are the same
     assert np.isclose(actual_output, expected_output)
 
 
@@ -103,13 +102,16 @@ def test_cosine_cutoff_module():
     # the expected outcome is that entry 1 and 2 become zero
     # and entry 0 becomes 0.5 (since the cutoff is 2.0 angstrom)
 
+    # input in angstrom
     cutoff = 2.0 * unit.angstrom
-    expected_output = torch.tensor([0.5, 0.0, 0.0]) / 10
+    expected_output = torch.tensor([0.5, 0.0, 0.0])
     cosine_cutoff_module = CosineCutoff(cutoff)
 
+    # cutoff operats on input in nanometer!
     output = cosine_cutoff_module(d_ij_angstrom / 10)  # input is in nanometer
 
     assert torch.allclose(output, expected_output, rtol=1e-3)
+
 
 
 def test_radial_symmetry_function_implementation():

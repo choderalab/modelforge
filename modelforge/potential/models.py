@@ -786,7 +786,7 @@ class PostProcessing(torch.nn.Module):
             outputs[property["out"]] = processing(*inputs)
 
         # if per atom properties need to be combined
-        outputs = self.combine_per_atom_properties(outputs)
+        # TODO: Not Implemented yet!
 
         # perform readout_operation on properties
         for property, processing in zip(self.readout_prop, self.readout_operation):

@@ -34,3 +34,7 @@ verbose = true
 monitor = "val/energy/rmse"
 min_delta = 0.001
 patience = 50
+
+[training.splitting_strategy]
+name = "random_record_splitting_strategy"
+data_split = [0.8, 0.1, 0.1]

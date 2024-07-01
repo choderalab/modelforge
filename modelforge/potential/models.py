@@ -760,8 +760,8 @@ class PostProcessing(torch.nn.Module):
 
                 props.append(proc)
 
-        self.postprocessing = ModuleList(work_to_be_done_per_property)
-        self.postprocessing_prop = props
+        self.per_atom_operations = ModuleList(work_to_be_done_per_property)
+        self.per_atom_operations_prop = props
 
         # initialize per molecule reduction
         work_to_be_done_per_property = []
@@ -781,12 +781,12 @@ class PostProcessing(torch.nn.Module):
         """
         Perform post-processing operations on per-atom properties and reduction operations to calculate per-molecule properties.
         """
-        for property, processing in zip(self.postprocessing_prop, self.postprocessing):
+        for property, processing in zip(self.per_atom_operations_prop, self.per_atom_operations):
             inputs = [outputs[in_key] for in_key in property["in"]]
             outputs[property["out"]] = processing(*inputs)
 
         # if per atom properties need to be combined
-        outputs = self.combine_per_atom_properties(outputs)
+        # TODO: Not Implemented yet!
 
         # perform readout_operation on properties
         for property, processing in zip(self.readout_prop, self.readout_operation):

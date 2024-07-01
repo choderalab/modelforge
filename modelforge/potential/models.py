@@ -518,16 +518,7 @@ class PyTorch2JAXConverter:
 
 class NeuralNetworkPotentialFactory:
     """
-    Factory class for creating instances of neural network potentials (NNP) that are traceable/scriptable and can be
-    exported to torchscript.
-
-    This factory allows for the creation of specific NNP instances configured for either
-    training or inference purposes based on the given parameters.
-
-    Methods
-    -------
-    generate_model(use, nnp_type, nnp_parameters=None, training_parameter=None)
-        Creates an instance of a specified NNP type configured for either training or inference.
+    Factory class for creating instances of neural network potentials for training/inference.
     """
 
     @staticmethod
@@ -550,7 +541,7 @@ class NeuralNetworkPotentialFactory:
         model_name : str
             The type of NNP to instantiate.
         simulation_environment : str
-            The environment to use, either 'PyTorch' or 'JAX'.
+            The ML framework to use, either 'PyTorch' or 'JAX'.
         nnp_parameters : dict, optional
             Parameters specific to the NNP model, by default {}.
         training_parameter : dict, optional
@@ -558,15 +549,15 @@ class NeuralNetworkPotentialFactory:
 
         Returns
         -------
-        Union[Union[ANI2x, SchNet, PaiNN, PhysNet], TrainingAdapter]
-            An instantiated NNP model.
+        Union[Union[torch.nn.Module], pl.LightningModule, JAXModel]
+            An instantiated model.
 
         Raises
         ------
         ValueError
             If an unknown use case is requested.
         NotImplementedError
-            If the requested NNP type is not implemented.
+            If the requested model type is not implemented.
         """
 
         from modelforge.potential import _Implemented_NNPs
@@ -699,76 +690,28 @@ class InputPreparation(torch.nn.Module):
 from torch.nn import ModuleList
 
 
-class BaseNetwork(Module):
-
+class PostProcessing(torch.nn.Module):
     def __init__(
         self,
-        *,
-        processing_operation: Dict[str, torch.nn.ModuleList],
-        dataset_statistic: Optional[Dict[str, float]] = None,
-        readout_operation: Dict[str, str] = None,
+        processing_operation: List[Dict[str, str]],
+        readout_operation: List[Dict[str, str]],
+        dataset_statistic,
     ):
         """
-        The BaseNetwork wraps the input preparation (including pairlist calculation, d_ij and r_ij calculation), the actual model as well as the output preparation in a wrapper class.
-
-        Learned parameters are present only in the core model, the input preparation and output preparation are not learned.
-
         Parameters
         ----------
-        processing_operation : List[Dict[str, str]]
-            A list of dictionaries containing the processing steps to be applied to the model output.
-        readout_operation : List[Dict[str, str]]
-            A list of dictionaries containing the readout_operation steps to be applied to the model output.
-        dataset_statistic : Dict[str, float], optional
-            A dictionary containing the dataset statistics for the model, by default None.
+        model_parameter : Dict[str, Any]
+            The model parameters.
+        dataset_statistic : Dict[str, float]
+            The dataset statistics.
         """
-
         super().__init__()
+
         self._initialize_postprocessing(
-            processing_operation, readout_operation, dataset_statistic
+            processing_operation,
+            readout_operation,
+            dataset_statistic,
         )
-
-    def load_state_dict(
-        self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False
-    ):
-        """
-        Load the state dictionary into the model, with optional prefix removal and key exclusions.
-
-        Parameters
-        ----------
-        state_dict : Mapping[str, Any]
-            The state dictionary to load.
-        strict : bool, optional
-            Whether to strictly enforce that the keys in `state_dict` match the keys returned by this module's `state_dict()` function (default is True).
-        assign : bool, optional
-            Whether to assign the state dictionary to the model directly (default is False).
-
-        Notes
-        -----
-        - This function can remove a specific prefix from the keys in the state dictionary.
-        - It can also exclude certain keys from being loaded into the model.
-        """
-
-        # Prefix to remove
-        prefix = "model."
-        excluded_keys = ["loss_module.energy_weight", "loss_module.force_weight"]
-
-        # Create a new dictionary without the prefix in the keys if prefix exists
-        if any(key.startswith(prefix) for key in state_dict.keys()):
-            filtered_state_dict = {
-                key[len(prefix) :] if key.startswith(prefix) else key: value
-                for key, value in state_dict.items()
-                if key not in excluded_keys
-            }
-            log.debug(f"Removed prefix: {prefix}")
-        else:
-            # Create a filtered dictionary without excluded keys if no prefix exists
-            filtered_state_dict = {
-                k: v for k, v in state_dict.items() if k not in excluded_keys
-            }
-            log.debug("No prefix found. No modifications to keys in state loading.")
-
-        super().load_state_dict(filtered_state_dict, strict=strict, assign=assign)
 
     def _initialize_postprocessing(
         self,
@@ -834,7 +777,7 @@ class BaseNetwork(Module):
         self.readout_operation = ModuleList(work_to_be_done_per_property)
         self.readout_prop = props
 
-    def perform_postprocessing(self, outputs: Dict[str, torch.Tensor]):
+    def forward(self, outputs: Dict[str, torch.Tensor]):
         """
         Perform post-processing operations on per-atom properties and reduction operations to calculate per-molecule properties.
         """
@@ -853,6 +796,80 @@ class BaseNetwork(Module):
 
         return outputs
 
+
+class BaseNetwork(Module):
+
+    def __init__(
+        self,
+        *,
+        processing_operation: Dict[str, torch.nn.ModuleList],
+        dataset_statistic: Optional[Dict[str, float]] = None,
+        readout_operation: Dict[str, str] = None,
+    ):
+        """
+        The BaseNetwork wraps the input preparation (including pairlist calculation, d_ij and r_ij calculation), the actual model as well as the output preparation in a wrapper class.
+
+        Learned parameters are present only in the core model, the input preparation and output preparation are not learned.
+
+        Parameters
+        ----------
+        processing_operation : List[Dict[str, str]]
+            A list of dictionaries containing the processing steps to be applied to the model output.
+        readout_operation : List[Dict[str, str]]
+            A list of dictionaries containing the readout_operation steps to be applied to the model output.
+        dataset_statistic : Dict[str, float], optional
+            A dictionary containing the dataset statistics for the model, by default None.
+        """
+
+        super().__init__()
+        self.postprocessing = PostProcessing(
+            processing_operation=processing_operation,
+            dataset_statistic=dataset_statistic,
+            readout_operation=readout_operation,
+        )
+
+    def load_state_dict(
+        self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False
+    ):
+        """
+        Load the state dictionary into the model, with optional prefix removal and key exclusions.
+
+        Parameters
+        ----------
+        state_dict : Mapping[str, Any]
+            The state dictionary to load.
+        strict : bool, optional
+            Whether to strictly enforce that the keys in `state_dict` match the keys returned by this module's `state_dict()` function (default is True).
+        assign : bool, optional
+            Whether to assign the state dictionary to the model directly (default is False).
+
+        Notes
+        -----
+        - This function can remove a specific prefix from the keys in the state dictionary.
+        - It can also exclude certain keys from being loaded into the model.
+        """
+
+        # Prefix to remove
+        prefix = "model."
+        excluded_keys = ["loss_module.energy_weight", "loss_module.force_weight"]
+
+        # Create a new dictionary without the prefix in the keys if prefix exists
+        if any(key.startswith(prefix) for key in state_dict.keys()):
+            filtered_state_dict = {
+                key[len(prefix) :] if key.startswith(prefix) else key: value
+                for key, value in state_dict.items()
+                if key not in excluded_keys
+            }
+            log.debug(f"Removed prefix: {prefix}")
+        else:
+            # Create a filtered dictionary without excluded keys if no prefix exists
+            filtered_state_dict = {
+                k: v for k, v in state_dict.items() if k not in excluded_keys
+            }
+            log.debug("No prefix found. No modifications to keys in state loading.")
+
+        super().load_state_dict(filtered_state_dict, strict=strict, assign=assign)
+
     def prepare_input(self, data):
         self.input_preparation._input_checks(data)
         return self.input_preparation.prepare_inputs(data)
@@ -861,12 +878,28 @@ class BaseNetwork(Module):
         return self.core_module(data, core_input)
 
     def forward(self, data: NNPInput):
+        """
+        Executes the forward pass of the model.
+        This method performs input checks, prepares the inputs,
+        and computes the outputs using the core network.
+
+        Parameters
+        ----------
+        data : NNPInput
+            The input data provided by the dataset, containing atomic numbers, positions, and other necessary information.
+
+        Returns
+        -------
+        Any
+            The outputs computed by the core network.
+        """
+
         # perform input checks
         core_input = self.prepare_input(data)
         # prepare the input for the forward pass
         output = self.compute(data, core_input)
         # perform postprocessing operations
-        processed_output = self.perform_postprocessing(output)
+        processed_output = self.postprocessing(output)
         return processed_output
 
 
@@ -910,7 +943,8 @@ class CoreNetwork(Module, ABC):
 
         Returns
         -------
-        NeuralNetworkData: The processed inputs, ready for the model's forward pass.
+        NeuralNetworkData
+            The processed inputs, ready for the model's forward pass.
         """
         pass
 
@@ -936,7 +970,8 @@ class CoreNetwork(Module, ABC):
 
         Returns
         -------
-        The model's output as computed from the inputs.
+        Any
+            The model's output as computed from the inputs.
         """
         pass
 
@@ -948,6 +983,10 @@ class CoreNetwork(Module, ABC):
         ----------
         path : str
             The path to the file containing the pretrained weights.
+
+        Returns
+        -------
+        None
         """
         self.load_state_dict(torch.load(path, map_location=self.device))
         self.eval()  # Set the model to evaluation mode

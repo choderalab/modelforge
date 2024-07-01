@@ -6,13 +6,12 @@ import torch.nn as nn
 from loguru import logger as log
 from openff.units import unit
 
-from .models import CoreNetwork
-
 if TYPE_CHECKING:
     from .models import PairListOutputs
     from modelforge.dataset.dataset import NNPInput
 
 from modelforge.potential.utils import NeuralNetworkData
+from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
 
 
 @dataclass
@@ -122,7 +121,7 @@ class SchNetCore(CoreNetwork):
 
         self.embedding_module = Embedding(max_Z, number_of_atom_features)
 
-        # initialize the energy readout
+        # initialize the energy readout_operation
         from .processing import FromAtomToMoleculeReduction
 
         self.readout_module = FromAtomToMoleculeReduction()
@@ -177,7 +176,7 @@ class SchNetCore(CoreNetwork):
 
         return nnp_input
 
-    def _forward(self, data: SchnetNeuralNetworkData) -> Dict[str, torch.Tensor]:
+    def compute_properties(self, data: SchnetNeuralNetworkData) -> Dict[str, torch.Tensor]:
         """
         Calculate the energy for a given input batch.
 
@@ -366,7 +365,7 @@ class SchNETRepresentation(nn.Module):
         return {"f_ij": f_ij, "f_cutoff": f_cutoff}
 
 
-from .models import InputPreparation, NNPInput, NetworkWrapper
+from typing import List
 
 
 class SchNet(NetworkWrapper):
@@ -379,6 +378,9 @@ class SchNet(NetworkWrapper):
         cutoff: unit.Quantity,
         number_of_filters: int,
         shared_interactions: bool,
+        processing_operation: List[Dict[str, str]],
+        readout_operation: List[Dict[str, str]],
+        dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
         """
         Initialize the SchNet network.
@@ -398,7 +400,11 @@ class SchNet(NetworkWrapper):
         cutoff : openff.units.unit.Quantity, default=5*unit.angstrom
             The cutoff distance for interactions.
         """
-        super().__init__()
+        super().__init__(
+            dataset_statistic=dataset_statistic,
+            processing_operation=processing_operation,
+            readout_operation=readout_operation,
+        )
         from modelforge.utils.units import _convert
 
         self.core_module = SchNetCore(
@@ -430,3 +436,8 @@ class SchNet(NetworkWrapper):
         }
         prior.update(shared_config_prior())
         return prior
+
+    def combine_per_atom_properties(
+        self, values: Dict[str, torch.Tensor]
+    ) -> torch.Tensor:
+        return values

@@ -16,14 +16,6 @@ if TYPE_CHECKING:
     from modelforge.potential.processing import AtomicSelfEnergies
 
 
-@dataclass
-class DatasetStatistics:
-    E_i_mean: float
-    E_i_stddev: float
-    atomic_self_energies: "AtomicSelfEnergies"
-    atomic_self_energies_removed: bool = False
-
-
 @dataclass(frozen=False)
 class Metadata:
     """
@@ -215,7 +207,6 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         """
 
         self.properties_of_interest = {}
-        self.dataset_statistics: Dict[str, float] = {}
 
         self.properties_of_interest["atomic_numbers"] = torch.from_numpy(
             dataset[property_name.Z].flatten()
@@ -925,7 +916,15 @@ class DataModule(pl.LightningDataModule):
 
     def __init__(
         self,
-        name: Literal["QM9", "ANI1X", "ANI2X", "SPICE114", "SPICE2", "SPICE114_OPENFF", 'PhAlkEthOH'],
+        name: Literal[
+            "QM9",
+            "ANI1X",
+            "ANI2X",
+            "SPICE114",
+            "SPICE2",
+            "SPICE114_OPENFF",
+            "PhAlkEthOH",
+        ],
         splitting_strategy: SplittingStrategy = RandomRecordSplittingStrategy(),
         batch_size: int = 64,
         remove_self_energies: bool = True,
@@ -935,6 +934,7 @@ class DataModule(pl.LightningDataModule):
         version_select: str = "latest",
         local_cache_dir: str = "./",
         regenerate_cache: bool = False,
+        regenerate_dataset_statistic: bool = False,
     ):
         """
         Initializes a PyTorch Lightning DataModule handling data preparation and loading with the specified configuration.
@@ -973,7 +973,6 @@ class DataModule(pl.LightningDataModule):
         self.name = name
         self.batch_size = batch_size
         self.splitting_strategy = splitting_strategy
-        self.dataset_statistics: Optional[DatasetStatistics] = None
         self.remove_self_energies = remove_self_energies
         self.dict_atomic_self_energies = (
             atomic_self_energies  # element name (e.g., 'H') maps to self energies
@@ -981,6 +980,7 @@ class DataModule(pl.LightningDataModule):
         self.regression_ase = regression_ase
         self.force_download = force_download
         self.version_select = version_select
+        self.regenerate_dataset_statistic = regenerate_dataset_statistic
         self.train_dataset = None
         self.test_dataset = None
         self.val_dataset = None
@@ -992,16 +992,18 @@ class DataModule(pl.LightningDataModule):
         from modelforge.potential.models import Pairlist
 
         self.pairlist = Pairlist()
+        self.dataset_statistic_filename = (
+            f"{self.local_cache_dir}/{self.name}_dataset_statistic.toml"
+        )
 
     def prepare_data(
         self,
     ) -> None:
         """
-        Prepares the dataset for use. This method is responsible for the initial processing of
-        the data such as calculating self energies, normalizing, and splitting. It is executed
-        only once per node.
+        Prepares the dataset for use. This method is responsible for the initial processing of the data such as calculating self energies, atomic energy statistics, and splitting. It is executed only once per node.
         """
         from modelforge.dataset import _ImplementedDatasets
+        import toml
 
         dataset_class = _ImplementedDatasets.get_dataset_class(self.name)
         dataset = dataset_class(
@@ -1010,43 +1012,106 @@ class DataModule(pl.LightningDataModule):
             local_cache_dir=self.local_cache_dir,
             regenerate_cache=self.regenerate_cache,
         )
-
-        # obtain the atomic self energies from the dataset
-        dataset_ase = dataset.atomic_self_energies.energies
         torch_dataset = self._create_torch_dataset(dataset)
 
-        # depending on the control flow that is set in the __init__,
-        # either use the atomic self energies of the dataset, recalculate it on the fly
-        # or use the provided dictionary
-        atomic_self_energies = self._calculate_atomic_self_energies(
-            torch_dataset, dataset_ase
-        )
+        # if dataset statistics is present load it from disk
+        if (
+            os.path.exists(self.dataset_statistic_filename)
+            and self.regenerate_dataset_statistic is False
+        ):
+            log.info(
+                f"Loading dataset statistics from disk: {self.dataset_statistic_filename}"
+            )
+            atomic_self_energies = self._read_atomic_self_energies()
+            atomic_energies_stats = self._read_atomic_energies_stats()
+        else:
+            atomic_self_energies = None
+            atomic_energies_stats = None
+            # obtain the atomic self energies from the dataset
+            dataset_ase = dataset.atomic_self_energies.energies
 
-        # wrap them in the AtomicSelfEnergy class
+            # depending on the control flow that is set in the __init__,
+            # either use the atomic self energies of the dataset, recalculate
+            # it on the fly  or use the provided dictionary
+            atomic_self_energies = self._calculate_atomic_self_energies(
+                torch_dataset, dataset_ase
+            )
+
+        # wrap them in the AtomicSelfEnergy class for processing the dataset
         from modelforge.potential.processing import AtomicSelfEnergies
 
-        atomic_self_energies = AtomicSelfEnergies(atomic_self_energies)
-
         log.debug("Process dataset ...")
-        self._process_dataset(torch_dataset, atomic_self_energies)
+        self._process_dataset(torch_dataset, AtomicSelfEnergies(atomic_self_energies))
 
-        # # calculate neighborlist
-        # self._calculating_pairwise_properties(torch_dataset)
         # calculate the dataset statistic of the dataset
         # This is done __after__ self energies are removed (if requested)
-        from modelforge.dataset.utils import calculate_mean_and_variance
+        if atomic_energies_stats is None:
+            from modelforge.dataset.utils import calculate_mean_and_variance
 
-        # FIXME: this wont work for a setup on multiple devices
-        stats = calculate_mean_and_variance(torch_dataset)
-        self.dataset_statistics = DatasetStatistics(
-            E_i_stddev=stats["Ei_stddev"],
-            E_i_mean=stats["Ei_mean"],
-            atomic_self_energies=atomic_self_energies,
-            atomic_self_energies_removed=self.remove_self_energies,
-        )
+            atomic_energies_stats = calculate_mean_and_variance(torch_dataset)
+            # wrap everything in a dictionary and save it to disk
+            dataset_statistic = {
+                "atomic_self_energies": atomic_self_energies,
+                "atomic_energies_stats": atomic_energies_stats,
+            }
+
+            if atomic_self_energies and atomic_energies_stats:
+                log.info(dataset_statistic)
+                # save dataset_statistic dictionary to disk as yaml files
+                self._log_dataset_statistic(dataset_statistic)
+            else:
+                raise RuntimeError(
+                    "Atomic self energies or atomic energies statistics are missing."
+                )
 
         # Save processed dataset and statistics for later use in setup
         self._cache_dataset(torch_dataset)
+
+    def _log_dataset_statistic(self, dataset_statistic):
+        """Save the dataset statistics to a file with units"""
+        import toml
+
+        # cast units to string
+        atomic_self_energies = {
+            key: str(value) if isinstance(value, unit.Quantity) else value
+            for key, value in dataset_statistic["atomic_self_energies"].items()
+        }
+        # cast float and kJ/mol on pytorch tensors and then convert to string
+        atomic_energies_stats = {
+            key: (
+                str(unit.Quantity(value.item(), unit.kilojoule_per_mole))
+                if isinstance(value, torch.Tensor)
+                else value
+            )
+            for key, value in dataset_statistic["atomic_energies_stats"].items()
+        }
+
+        dataset_statistic = {
+            "atomic_self_energies": atomic_self_energies,
+            "atomic_energies_stats": atomic_energies_stats,
+        }
+        toml.dump(
+            dataset_statistic,
+            open(
+                self.dataset_statistic_filename,
+                "w",
+            ),
+        )
+        log.info(
+            f"Saving dataset statistics to disk: {self.dataset_statistic_filename}"
+        )
+
+    def _read_atomic_self_energies(self) -> Dict[str, Quantity]:
+        """Read the atomic self energies from a file."""
+        from modelforge.potential.processing import load_atomic_self_energies
+
+        return load_atomic_self_energies(self.dataset_statistic_filename)
+
+    def _read_atomic_energies_stats(self) -> Dict[str, torch.Tensor]:
+        """Read the atomic energies statistics from a file."""
+        from modelforge.potential.processing import load_atomic_energies_stats
+
+        return load_atomic_energies_stats(self.dataset_statistic_filename)
 
     def _create_torch_dataset(self, dataset):
         """Create a PyTorch dataset from the provided dataset instance."""
@@ -1063,29 +1128,16 @@ class DataModule(pl.LightningDataModule):
                 self.calculate_self_energies(torch_dataset)
             )
         self._per_datapoint_operations(torch_dataset, atomic_self_energies)
-        self._save_self_energies(atomic_self_energies)
-
-    def _normalize_dataset(self, torch_dataset, stats: Dict[str, float]) -> None:
-        """Normalize the dataset if self energies have been removed."""
-        from modelforge.dataset.utils import (
-            normalize_energies,
-        )
-
-        if not self.remove_self_energies:
-            raise RuntimeError(
-                "Cannot normalize dataset if self energies are not removed."
-            )
-        normalize_energies(torch_dataset, stats)
 
     def _calculate_atomic_self_energies(
         self, torch_dataset, dataset_ase
     ) -> Dict[str, float]:
 
-        from modelforge.dataset.utils import calculate_mean_and_variance
-
         # Use provided ase dictionary
         if self.dict_atomic_self_energies:
-            log.info("Using provided atomic self energies from the provided ictionary.")
+            log.info(
+                "Using provided atomic self energies from the provided dictionary."
+            )
             return self.dict_atomic_self_energies
 
         # Use regression to calculate ase
@@ -1103,7 +1155,6 @@ class DataModule(pl.LightningDataModule):
     def _cache_dataset(self, torch_dataset):
         """Cache the dataset and its statistics using PyTorch's serialization."""
         torch.save(torch_dataset, "torch_dataset.pt")
-        torch.save(self.dataset_statistics, "dataset_statistics.pt")
         # sleep for 1 second to make sure that the dataset was written to disk
         import time
 
@@ -1113,24 +1164,9 @@ class DataModule(pl.LightningDataModule):
         """Sets up datasets for the train, validation, and test stages based on the stage argument."""
 
         self.torch_dataset = torch.load("torch_dataset.pt")
-
-        self.dataset_statistics = torch.load("dataset_statistics.pt")
         self.train_dataset, self.val_dataset, self.test_dataset = (
             self.splitting_strategy.split(self.torch_dataset)
         )
-
-    def _save_self_energies(self, self_energies):
-        """Save self energies to a file."""
-        import toml
-
-        with open("ase.toml", "w") as f:
-            toml.dump(
-                {
-                    str(idx): energy.m
-                    for (idx, energy) in self_energies.energies.items()
-                },
-                f,
-            )
 
     def calculate_self_energies(
         self, torch_dataset: TorchDataset, collate: bool = True
@@ -1158,25 +1194,6 @@ class DataModule(pl.LightningDataModule):
         return _calculate_self_energies(
             torch_dataset=torch_dataset, collate_fn=collate_fn
         )
-
-    # def _calculating_pairwise_properties(self, dataset):
-    #     from tqdm import tqdm
-
-    #     log.info(
-    #         f"Calculate neighborlist with {self.calculate_distances_and_pairlist} cutoff"
-    #     )
-    #     print(dataset.properties_of_interest.keys())
-    #     for i in tqdm(range(len(dataset)), desc="Calculate neighborlist"):
-    #         a = dataset[i]
-    #         start_idx = dataset.single_atom_start_idxs_by_conf[i]
-    #         end_idx = dataset.single_atom_end_idxs_by_conf[i]
-    #         pairlist_output = self.calculate_distances_and_pairlist(
-    #             dataset.properties_of_interest["positions"][start_idx:end_idx],
-    #             torch.zeros(
-    #                 end_idx - start_idx,
-    #                 dtype=torch.float32,
-    #             ),
-    #         )
 
     def _per_datapoint_operations(
         self, dataset, self_energies: "AtomicSelfEnergies"

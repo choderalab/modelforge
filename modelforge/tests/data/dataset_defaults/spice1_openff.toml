@@ -1,0 +1,5 @@
+[dataset]
+dataset_name = "SPICE1_OPENFF"
+version_select = "nc_1000_v0"
+batch_size = 512
+remove_self_energies = true

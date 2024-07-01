@@ -9,6 +9,7 @@ from typing import (
     Type,
     Union,
     Optional,
+    List,
 )
 
 import lightning as pl
@@ -20,7 +21,6 @@ from torch.nn import Module
 from modelforge.dataset.dataset import NNPInput
 
 if TYPE_CHECKING:
-    from modelforge.dataset.dataset import DatasetStatistics
     from modelforge.potential.ani import ANI2x, AniNeuralNetworkData
     from modelforge.potential.painn import PaiNN, PaiNNNeuralNetworkData
     from modelforge.potential.physnet import PhysNet, PhysNetNeuralNetworkData
@@ -30,43 +30,36 @@ if TYPE_CHECKING:
 
 # Define NamedTuple for the outputs of Pairlist and Neighborlist forward method
 class PairListOutputs(NamedTuple):
+    """
+    A namedtuple to store the outputs of the Pairlist and Neighborlist forward methods.
+
+    Attributes:
+        pair_indices (torch.Tensor): A tensor of shape (2, n_pairs) containing the indices of the interacting atom pairs.
+        d_ij (torch.Tensor): A tensor of shape (n_pairs, 1) containing the Euclidean distances between the atoms in each pair.
+        r_ij (torch.Tensor): A tensor of shape (n_pairs, 3) containing the displacement vectors between the atoms in each pair.
+    """
+
     pair_indices: torch.Tensor
     d_ij: torch.Tensor
     r_ij: torch.Tensor
 
 
-class EnergyOutput(NamedTuple):
-    E: torch.Tensor
-    raw_E: torch.Tensor
-    E_i: torch.Tensor
-    molecular_ase: torch.Tensor
-
-
 class Pairlist(Module):
-    """Handle pair list calculations for atoms, returning atom indices pairs and displacement vectors.
+    """
+    Handle pair list calculations for atoms, returning atom indices pairs and displacement vectors.
 
-    Attributes
-    ----------
-    calculate_pairs : callable
-        A function to calculate pairs given specific criteria.
-
-    Methods
-    -------
-    calculate_r_ij(pair_indices, positions)
-        Computes the displacement vector between atom pairs.
-    calculate_d_ij(r_ij)
-        Computes the Euclidean distance between atoms in a pair.
-    forward(positions, atomic_subsystem_indices)
-        Forward pass to compute pair indices, distances, and displacement vectors.
+    Attributes:
+        only_unique_pairs (bool): If True, only unique pairs are returned (default is False).
+            Otherwise, all pairs are returned.
     """
 
     def __init__(self, only_unique_pairs: bool = False):
         """
-        Parameters
-        ----------
-        only_unique_pairs : bool, optional
-            If True, only unique pairs are returned (default is False).
-            Otherwise, all pairs are returned.
+        Initialize the Pairlist object.
+
+        Parameters:
+            only_unique_pairs (bool, optional): If True, only unique pairs are returned (default is False).
+                Otherwise, all pairs are returned.
         """
         super().__init__()
         self.only_unique_pairs = only_unique_pairs
@@ -280,21 +273,21 @@ class Pairlist(Module):
         atomic_subsystem_indices: torch.Tensor,
     ) -> PairListOutputs:
         """
-        Compute interacting pairs, distances, and displacement vectors.
+        Performs the forward pass of the Pairlist module.
 
         Parameters
         ----------
         positions : torch.Tensor
             Atom positions. Shape: [nr_atoms, 3].
-        atomic_subsystem_indices : torch.Tensor
-            Indices to identify atoms in subsystems. Shape: [nr_atoms].
-        only_unique_pairs : bool, optional
-            If True, considers only unique pairs of atoms. Default is False.
+        atomic_subsystem_indices (torch.Tensor, shape (nr_atoms_per_systems)):
+            Atom indices to indicate which atoms belong to which molecule.
 
         Returns
         -------
-        PairListOutputs
-            A NamedTuple containing 'pair_indices', 'd_ij' (distances), and 'r_ij' (displacement vectors).
+        PairListOutputs: A namedtuple containing the following attributes:
+            pair_indices (torch.Tensor): A tensor of shape (2, n_pairs) containing the indices of the interacting atom pairs.
+            d_ij (torch.Tensor): A tensor of shape (n_pairs, 1) containing the Euclidean distances between the atoms in each pair.
+            r_ij (torch.Tensor): A tensor of shape (n_pairs, 3) containing the displacement vectors between the atoms in each pair.
         """
         pair_indices = self.enumerate_all_pairs(
             atomic_subsystem_indices,
@@ -523,22 +516,20 @@ class PyTorch2JAXConverter:
         return apply, model_params, model_buffer
 
 
-from modelforge.potential.processing import AtomicSelfEnergies
-
-
 class NeuralNetworkPotentialFactory:
     """
     Factory class for creating instances of neural network potentials for training/inference.
     """
 
     @staticmethod
-    def create_nnp(
+    def generate_model(
         *,
         use: Literal["training", "inference"],
         model_type: Literal["ANI2x", "SchNet", "PaiNN", "SAKE", "PhysNet"],
-        model_parameters: Dict[str, Union[int, float, str]],
+        model_parameter: Dict[str, Union[int, float, str, List[str]]],
         simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
-        training_parameters: Optional[Dict[str, Any]] = None,
+        training_parameter: Optional[Dict[str, Any]] = None,
+        dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> Union[Type[torch.nn.Module], Type[JAXModel], Type[pl.LightningModule]]:
         """
         Creates an NNP instance of the specified type, configured either for training or inference.
@@ -546,14 +537,14 @@ class NeuralNetworkPotentialFactory:
         Parameters
         ----------
         use : str
-            Is the model used for inference or training.
-        nnp_name : str
-            The name of the model to be created.
+            The use case for the NNP instance.
+        model_name : str
+            The type of NNP to instantiate.
         simulation_environment : str
             The ML framework to use, either 'PyTorch' or 'JAX'.
         nnp_parameters : dict, optional
-            Parameters specific to the model, by default {}.
-        training_parameters : dict, optional
+            Parameters specific to the NNP model, by default {}.
+        training_parameter : dict, optional
             Parameters for configuring the training, by default {}.
 
         Returns
@@ -572,11 +563,8 @@ class NeuralNetworkPotentialFactory:
         from modelforge.potential import _Implemented_NNPs
         from modelforge.train.training import TrainingAdapter
 
-        model_parameters = model_parameters or {}
-        training_parameters = training_parameters or {}
-
-        log.debug(f"{training_parameters=}")
-        # get NNP
+        log.debug(f"{training_parameter=}")
+        # get model
         nnp_class: Type = _Implemented_NNPs.get_neural_network_class(model_type)
         if nnp_class is None:
             raise NotImplementedError(f"NNP type {model_type} is not implemented.")
@@ -587,20 +575,23 @@ class NeuralNetworkPotentialFactory:
                 log.warning(
                     "Training in JAX is not availalbe. Falling back to PyTorch."
                 )
-            model_parameters["nnp_name"] = model_type
-            return TrainingAdapter(
-                nnp_parameters=model_parameters, **training_parameters
+            model_parameter["model_name"] = model_type
+            model = TrainingAdapter(
+                model_parameter=model_parameter,
+                **training_parameter,
+                dataset_statistic=dataset_statistic,
             )
+            return model
         elif use == "inference":
             # if this model_parameter dictionary ahs already been used
-            # for training the `nnp_name` might have been set
-            if "nnp_name" in model_parameters:
-                del model_parameters["nnp_name"]
-            nnp_instance = nnp_class(**model_parameters)
+            # for training the `model_name` might have been set
+            if "model_name" in model_parameter:
+                del model_parameter["model_name"]
+            model = nnp_class(**model_parameter, dataset_statistic=dataset_statistic)
             if simulation_environment == "JAX":
-                return PyTorch2JAXConverter().convert_to_jax_model(nnp_instance)
+                return PyTorch2JAXConverter().convert_to_jax_model(model)
             else:
-                return nnp_instance
+                return model
         else:
             raise ValueError(f"Unsupported 'use' value: {use}")
 
@@ -696,55 +687,169 @@ class InputPreparation(torch.nn.Module):
         assert data.positions.shape == torch.Size([nr_of_atoms, 3])
 
 
-class NetworkWrapper(Module):
-    """
-    A wrapper class for neural network potentials that performs input preparation
-    (including neighborlist, d_ij and r_ij calculation), manages loading state dictionaries,
-    and executes the forward pass of the model.
+from torch.nn import ModuleList
 
-    Attributes
-    ----------
-    core_module : CoreNetwork
-        The core neural network module that performs the main computations.
-    input_preparation : InputPreparation
-        Module for preparing inputs before passing them to the core network.
-    """
+
+class BaseNetwork(Module):
+
+    def __init__(
+        self,
+        *,
+        processing_operation: Dict[str, torch.nn.ModuleList],
+        dataset_statistic: Optional[Dict[str, float]] = None,
+        readout_operation: Dict[str, str] = None,
+    ):
+        """
+        The BaseNetwork wraps the input preparation (including pairlist calculation, d_ij and r_ij calculation), the actual model as well as the output preparation in a wrapper class.
+
+        Learned parameters are present only in the core model, the input preparation and output preparation are not learned.
+
+        Parameters
+        ----------
+        processing_operation : List[Dict[str, str]]
+            A list of dictionaries containing the processing steps to be applied to the model output.
+        readout_operation : List[Dict[str, str]]
+            A list of dictionaries containing the readout_operation steps to be applied to the model output.
+        dataset_statistic : Dict[str, float], optional
+            A dictionary containing the dataset statistics for the model, by default None.
+        """
+
+        super().__init__()
+        self._initialize_postprocessing(
+            processing_operation, readout_operation, dataset_statistic
+        )
 
     def load_state_dict(
         self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False
-    ) -> None:
+    ):
         """
-        Loads a state dictionary into the model, removing a specified prefix from keys if present.
+        Load the state dictionary into the model, with optional prefix removal and key exclusions.
 
         Parameters
         ----------
         state_dict : Mapping[str, Any]
             The state dictionary to load.
         strict : bool, optional
-            Whether to strictly enforce that the keys in `state_dict` match the model's keys, by default True.
+            Whether to strictly enforce that the keys in `state_dict` match the keys returned by this module's `state_dict()` function (default is True).
         assign : bool, optional
-            If True, assigns the state dictionary to the model without calling `super().load_state_dict`, by default False.
+            Whether to assign the state dictionary to the model directly (default is False).
 
-        Returns
-        -------
-        None
+        Notes
+        -----
+        - This function can remove a specific prefix from the keys in the state dictionary.
+        - It can also exclude certain keys from being loaded into the model.
         """
 
         # Prefix to remove
         prefix = "model."
+        excluded_keys = ["loss_module.energy_weight", "loss_module.force_weight"]
 
-        # check if prefix is present
+        # Create a new dictionary without the prefix in the keys if prefix exists
         if any(key.startswith(prefix) for key in state_dict.keys()):
-            # Create a new dictionary without the prefix in the keys if prefix exists
-            new_d = {
+            filtered_state_dict = {
                 key[len(prefix) :] if key.startswith(prefix) else key: value
                 for key, value in state_dict.items()
+                if key not in excluded_keys
             }
             log.debug(f"Removed prefix: {prefix}")
         else:
+            # Create a filtered dictionary without excluded keys if no prefix exists
+            filtered_state_dict = {
+                k: v for k, v in state_dict.items() if k not in excluded_keys
+            }
             log.debug("No prefix found. No modifications to keys in state loading.")
 
-        super().load_state_dict(new_d, strict=strict, assign=assign)
+        super().load_state_dict(filtered_state_dict, strict=strict, assign=assign)
+
+    def _initialize_postprocessing(
+        self,
+        processing_operation: List[Dict[str, str]],
+        readout_operation: List[Dict[str, str]],
+        dataset_statistic,
+    ):
+        from .processing import (
+            FromAtomToMoleculeReduction,
+            ScaleValues,
+            CalculateAtomicSelfEnergy,
+        )
+
+        # initialize per atom processing
+        work_to_be_done_per_property = []
+        props = []
+        for proc in processing_operation:
+            if proc["step"] == "normalization":
+                if dataset_statistic is None:
+                    log.warning(
+                        f"No mean and stddev provided for property {proc['in']}. Setting to default values!"
+                    )
+                    mean = 0.0
+                    stddev = 1.0
+                else:
+                    atomic_energies_stats = dataset_statistic["atomic_energies_stats"]
+                    mean = unit.Quantity(atomic_energies_stats[proc["mean"]]).m_as(
+                        unit.kilojoule_per_mole
+                    )
+                    stddev = unit.Quantity(atomic_energies_stats[proc["stddev"]]).m_as(
+                        unit.kilojoule_per_mole
+                    )
+                operation = ScaleValues(mean=mean, stddev=stddev)
+                work_to_be_done_per_property.append(operation)
+                props.append(proc)
+
+            elif proc["step"] == "calculate_ase":
+                if dataset_statistic is None:
+                    raise RuntimeError(
+                        "No dataset statistics provided for ASE calculation. Skipping!"
+                    )
+                else:
+                    atomic_self_energies = dataset_statistic["atomic_self_energies"]
+                    operation = CalculateAtomicSelfEnergy(atomic_self_energies)
+                    work_to_be_done_per_property.append(operation)
+
+                props.append(proc)
+
+        self.postprocessing = ModuleList(work_to_be_done_per_property)
+        self.postprocessing_prop = props
+
+        # initialize per molecule reduction
+        work_to_be_done_per_property = []
+        props = []
+        for proc in readout_operation:
+            if proc["step"] == "from_atom_to_molecule":
+                operation = FromAtomToMoleculeReduction(
+                    reduction_mode=proc["mode"],
+                )
+            work_to_be_done_per_property.append(operation)
+            props.append(proc)
+
+        self.readout_operation = ModuleList(work_to_be_done_per_property)
+        self.readout_prop = props
+
+    def perform_postprocessing(self, outputs: Dict[str, torch.Tensor]):
+        """
+        Perform post-processing operations on per-atom properties and reduction operations to calculate per-molecule properties.
+        """
+        for property, processing in zip(self.postprocessing_prop, self.postprocessing):
+            inputs = [outputs[in_key] for in_key in property["in"]]
+            outputs[property["out"]] = processing(*inputs)
+
+        # if per atom properties need to be combined
+        outputs = self.combine_per_atom_properties(outputs)
+
+        # perform readout_operation on properties
+        for property, processing in zip(self.readout_prop, self.readout_operation):
+            outputs[property["out"]] = processing(
+                outputs[property["in"]], outputs[property["index_key"]]
+            )
+
+        return outputs
+
+    def prepare_input(self, data):
+        self.input_preparation._input_checks(data)
+        return self.input_preparation.prepare_inputs(data)
+
+    def compute(self, data, core_input):
+        return self.core_module(data, core_input)
 
     def forward(self, data: NNPInput):
         """
@@ -764,46 +869,28 @@ class NetworkWrapper(Module):
         """
 
         # perform input checks
-        self.input_preparation._input_checks(data)
+        core_input = self.prepare_input(data)
         # prepare the input for the forward pass
-        pairlist_output = self.input_preparation.prepare_inputs(data)
-        return self.core_module(data, pairlist_output)
+        output = self.compute(data, core_input)
+        # perform postprocessing operations
+        processed_output = self.perform_postprocessing(output)
+        return processed_output
 
 
 class CoreNetwork(Module, ABC):
-    """
-    Abstract base class for neural network potentials.
 
-    This class defines the structure and common functionalities for various neural network
-    potential models, including methods for loading pretrained weights, performing the forward pass,
-    and abstract methods for model-specific input preparation and computation.
-
-    Attributes
-    ----------
-    readout_module : FromAtomToMoleculeReduction
-        Module for reading out per-molecule properties from atomic properties.
-    postprocessing : EnergyScaling
-        Module for postprocessing the raw energies computed by the readout module.
-    """
-
-    def __init__(self):
+    def __init__(
+        self,
+    ):
         """
-        Initializes the CoreNetwork class with specified parameters.
+        The CoreNetwork implements methods that are used by all neural network potentials. Every network inherits from CoreNetwork.
+        Networks are taking in a NNPInput and pairlist and returning a dictionary of **atomic** properties.
 
-        Initializes the readout module and postprocessing module for handling the conversion
-        of atomic properties to molecular properties and postprocessing the raw energies, respectively.
+        Operations that are performed outside the network (e.g. pairlist calculation and operations that reduce atomic properties to molecule properties) are not part of the network and implemented in the BaseNetwork, which is a wrapper around the CoreNetwork.
         """
 
         super().__init__()
         self._dtype: Optional[bool] = None  # set at runtime
-        self._log_message_dtype = False
-        self._log_message_units = False
-        # initialize the per molecule readout module
-        from .processing import EnergyScaling, FromAtomToMoleculeReduction
-
-        self.readout_module = FromAtomToMoleculeReduction()
-
-        self.postprocessing = EnergyScaling()
 
     @abstractmethod
     def _model_specific_input_preparation(
@@ -824,11 +911,9 @@ class CoreNetwork(Module, ABC):
         Parameters
         ----------
         data : NNPInput
-            The initial inputs to the neural network model, including atomic numbers,
-            positions, and other relevant data.
+            The initial inputs to the neural network model, including atomic numbers, positions, and other relevant data.
         pairlist : PairListOutputs
-            The outputs of a pairlist calculation, including pair indices, distances,
-            and displacement vectors.
+            The outputs of a pairlist calculation, including pair indices, distances, and displacement vectors.
 
         Returns
         -------
@@ -838,7 +923,7 @@ class CoreNetwork(Module, ABC):
         pass
 
     @abstractmethod
-    def _forward(
+    def compute_properties(
         self,
         data: Union[
             "PhysNetNeuralNetworkData",
@@ -851,8 +936,7 @@ class CoreNetwork(Module, ABC):
         """
         Defines the forward pass of the model.
 
-        This abstract method should be implemented by subclasses to specify the model's
-        computation from inputs to outputs.
+        This abstract method should be implemented by subclasses to specify the model's computation from inputs (processed input data) to outputs (per atom properties).
 
         Parameters
         ----------
@@ -881,30 +965,11 @@ class CoreNetwork(Module, ABC):
         self.load_state_dict(torch.load(path, map_location=self.device))
         self.eval()  # Set the model to evaluation mode
 
-    def _readout(
-        self, atom_specific_values: torch.Tensor, index: torch.Tensor
-    ) -> torch.Tensor:
+    def forward(
+        self, data: NNPInput, pairlist_output: PairListOutputs
+    ) -> Dict[str, torch.Tensor]:
         """
-        Performs the readout operation to generate per-molecule properties from atomic properties.
-
-        Parameters
-        ----------
-        atom_specific_values : torch.Tensor
-            The tensor containing atomic properties.
-        index : torch.Tensor
-            The tensor indicating the molecule to which each atom belongs.
-
-        Returns
-        -------
-        torch.Tensor
-            The tensor containing per-molecule properties.
-        """
-        return self.readout_module(atom_specific_values, index)
-
-    def forward(self, data: NNPInput, pairlist_output: PairListOutputs) -> EnergyOutput:
-        """
-        Executes the forward pass of the model, performing input checks, preparing inputs,
-        and computing the outputs using the core network.
+        Implements the forward pass through the network.
 
         Parameters
         ----------
@@ -916,29 +981,14 @@ class CoreNetwork(Module, ABC):
 
         Returns
         -------
-        EnergyOutput
-            The calculated energies and other properties from the forward pass.
+        Dict[str, torch.Tensor]
+            The calculated per-atom properties and other properties from the forward pass.
         """
-        # ---------------------------
         # perform model specific modifications
         nnp_input = self._model_specific_input_preparation(data, pairlist_output)
         # perform the forward pass implemented in the subclass
-        outputs = self._forward(nnp_input)
-        # sum over atomic properties to generate per molecule properties
-        E = self._readout(
-            atom_specific_values=outputs["E_i"],
-            index=outputs["atomic_subsystem_indices"],
-        )
-        # postprocess energies: add atomic self energies,
-        # and other constant factors used to optionally normalize the data range of the training dataset
-        processed_energy = self.postprocessing._energy_postprocessing(E, nnp_input)
-        # from icecream import ic
+        outputs = self.compute_properties(nnp_input)
+        # add atomic numbers to the output
+        outputs["atomic_numbers"] = data.atomic_numbers
 
-        # ic(processed_energy["E"])
-        # return energies
-        return EnergyOutput(
-            E=processed_energy["E"],
-            raw_E=processed_energy["raw_E"],
-            E_i=outputs["E_i"],
-            molecular_ase=processed_energy["molecular_ase"],
-        )
+        return outputs

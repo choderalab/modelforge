@@ -20,13 +20,13 @@ def setup(model_name: str):
         f"{resources.files(modelforge_tests)}data/training_defaults/{model_name.lower()}_qm9.toml"
     )
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
 
-    model = NeuralNetworkPotentialFactory.create_nnp(
+    model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         model_type=model_name,
         simulation_environment="PyTorch",
-        model_parameters=potential_parameters,
+        model_parameters=potential_parameter,
     )
 
     from modelforge.dataset.dataset import DataModule

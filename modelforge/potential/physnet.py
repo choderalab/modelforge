@@ -6,10 +6,9 @@ from loguru import logger as log
 from openff.units import unit
 from torch import nn
 from torch_scatter import scatter_add
+from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
 
 from modelforge.potential.utils import NeuralNetworkData
-
-from .models import CoreNetwork
 
 if TYPE_CHECKING:
     from modelforge.dataset.dataset import NNPInput
@@ -495,7 +494,7 @@ class PhysNetCore(CoreNetwork):
 
         return nnp_input
 
-    def _forward(self, data: PhysNetNeuralNetworkData) -> Dict[str, torch.Tensor]:
+    def compute_properties(self, data: PhysNetNeuralNetworkData) -> Dict[str, torch.Tensor]:
         """
         Calculate the energy for a given input batch.
         Parameters
@@ -568,7 +567,7 @@ class PhysNetCore(CoreNetwork):
 
         output = {
             "E_i": E_i.contiguous(),  # reshape memory mapping for JAX/dlpack
-            "q_i": q_i,
+            "q_i": q_i.contiguous(),
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
             "atomic_numbers": data.atomic_numbers,
         }
@@ -576,7 +575,8 @@ class PhysNetCore(CoreNetwork):
         return output
 
 
-from .models import InputPreparation, NNPInput, NetworkWrapper
+from .models import InputPreparation, NNPInput, BaseNetwork
+from typing import List
 
 
 class PhysNet(NetworkWrapper):
@@ -588,6 +588,9 @@ class PhysNet(NetworkWrapper):
         number_of_radial_basis_functions: int,
         number_of_interaction_residual: int,
         number_of_modules: int,
+        processing_operation: List[Dict[str, str]],
+        readout_operation: List[Dict[str, str]],
+        dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
         """
         Unke, O. T. and Meuwly, M. "PhysNet: A Neural Network for Predicting Energies,
@@ -595,7 +598,11 @@ class PhysNet(NetworkWrapper):
 
 
         """
-        super().__init__()
+        super().__init__(
+            dataset_statistic=dataset_statistic,
+            processing_operation=processing_operation,
+            readout_operation=readout_operation,
+        )
         from modelforge.utils.units import _convert
 
         self.core_module = PhysNetCore(
@@ -626,3 +633,8 @@ class PhysNet(NetworkWrapper):
         }
         prior.update(shared_config_prior())
         return prior
+
+    def combine_per_atom_properties(
+        self, values: Dict[str, torch.Tensor]
+    ) -> torch.Tensor:
+        return values

@@ -1,63 +1,23 @@
-import os
-
-import pytest
-
+import torch
 from modelforge.potential.painn import PaiNN
 
 
-def test_PaiNN_init():
+def test_PaiNN_forward(single_batch_with_batchsize_64):
     """Test initialization of the PaiNN neural network potential."""
     # read default parameters
-    from modelforge.train.training import return_toml_config
-    from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.test_models import load_configs
 
-    file_path = resources.files(potential_defaults) / f"painn_defaults.toml"
-    config = return_toml_config(file_path)
+    # read default parameters
+    config = load_configs("painn_without_ase", 'qm9')
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
 
-    painn = PaiNN(**potential_parameters)
+    painn = PaiNN(**potential_parameter)
     assert painn is not None, "PaiNN model should be initialized."
 
-
-from openff.units import unit
-
-
-@pytest.mark.parametrize(
-    "model_parameter",
-    (
-        [25, 50, 2, unit.Quantity(5.0, unit.angstrom), 2],
-        [50, 60, 10, unit.Quantity(7.0, unit.angstrom), 1],
-        [100, 120, 5, unit.Quantity(5.0, unit.angstrom), 3],
-    ),
-)
-def test_painn_forward(model_parameter, single_batch_with_batchsize_64):
-    """
-    Test the forward pass of the Schnet model.
-    """
-    import torch
-
-    print(f"model_parameter: {model_parameter}")
-    (
-        max_Z,
-        embedding_dimensions,
-        number_of_gaussians,
-        cutoff,
-        nr_interaction_blocks,
-    ) = model_parameter
-    painn = PaiNN(
-        max_Z=max_Z,
-        number_of_atom_features=embedding_dimensions,
-        number_of_radial_basis_functions=number_of_gaussians,
-        cutoff=cutoff,
-        number_of_interaction_modules=nr_interaction_blocks,
-        shared_filters=False,
-        shared_interactions=False,
-    )
     nnp_input = single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float32)
-    energy = painn(nnp_input).E
+    energy = painn(nnp_input)['E']
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
     assert (
@@ -65,21 +25,20 @@ def test_painn_forward(model_parameter, single_batch_with_batchsize_64):
     )  # Assuming energy is calculated per sample in the batch
 
 
+
+
 def test_painn_interaction_equivariance(single_batch_with_batchsize_64):
     from modelforge.potential.painn import PaiNN
     from dataclasses import replace
     import torch
 
-    # read default parameters
-    from modelforge.train.training import return_toml_config
-    from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.test_models import load_configs
 
-    file_path = resources.files(potential_defaults) / f"painn_defaults.toml"
-    config = return_toml_config(file_path)
+    # read default parameters
+    config = load_configs("painn_without_ase", 'qm9')
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
 
     # define a rotation matrix in 3D that rotates by 90 degrees around the z-axis
     # (clockwise when looking along the z-axis towards the origin)
@@ -87,7 +46,7 @@ def test_painn_interaction_equivariance(single_batch_with_batchsize_64):
         [[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]], dtype=torch.float64
     )
 
-    painn = PaiNN(**potential_parameters).to(torch.float64)
+    painn = PaiNN(**potential_parameter).to(torch.float64)
     methane_input = single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float64)
     perturbed_methane_input = replace(methane_input)
     perturbed_methane_input.positions = torch.matmul(

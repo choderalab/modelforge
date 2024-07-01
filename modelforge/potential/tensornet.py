@@ -4,7 +4,7 @@ import torch
 from openff.units import unit
 
 from modelforge.potential.models import InputPreparation
-from .models import InputPreparation, NNPInput, NetworkWrapper
+from modelforge.potential.models import BaseNetwork
 from modelforge.potential.utils import NeuralNetworkData
 
 
@@ -29,7 +29,7 @@ class TensorNet(NetworkWrapper):
         )
 
 
-class TensorNetCore(CoreNetwork):
+class TensorNetCore(torch.nn.Module):
     def __init__(
         self,
         radial_max_distance: unit.Quantity,

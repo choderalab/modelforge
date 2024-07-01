@@ -245,7 +245,9 @@ def test_dataset_statistic(model_name):
     import numpy as np
 
     # check that the E_i_mean is the same than in the dataset statistics
-    assert np.isclose(toml_E_i_mean, model.model.postprocessing[0].mean)
+    assert np.isclose(
+        toml_E_i_mean, model.model.postprocessing.per_atom_operations[0].mean
+    )
 
     torch.save(model.state_dict(), "model.pth")
 
@@ -256,7 +258,7 @@ def test_dataset_statistic(model_name):
         model_parameter=potential_parameter,
     )
     model.load_state_dict(torch.load("model.pth"))
-    assert np.isclose(toml_E_i_mean, model.postprocessing[0].mean)
+    assert np.isclose(toml_E_i_mean, model.postprocessing.per_atom_operations[0].mean)
 
 
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())

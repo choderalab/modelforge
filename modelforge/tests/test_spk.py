@@ -202,7 +202,7 @@ def setup_modelforge_painn_representation(
         processing_operation=[],
         readout_operation=[
             {
-                "step": "from_atom_to_molecule",
+                "function": "from_atom_to_molecule",
                 "mode": "sum",
                 "in": "E_i",
                 "index_key": "atomic_subsystem_indices",
@@ -581,7 +581,7 @@ def setup_mf_schnet_representation(
         processing_operation=[],
         readout_operation=[
             {
-                "step": "from_atom_to_molecule",
+                "function": "from_atom_to_molecule",
                 "mode": "sum",
                 "in": "E_i",
                 "index_key": "atomic_subsystem_indices",

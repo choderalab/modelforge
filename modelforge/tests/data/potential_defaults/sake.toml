@@ -13,15 +13,15 @@ number_of_spatial_attention_heads = 4
 processing_operation = [
   { in = [
     "E_i",
-  ], out = "E_i", step = "normalization", mean = "E_i_mean", stddev = "E_i_mean" },
+  ], out = "E_i", function = "normalization", mean = "E_i_mean", stddev = "E_i_mean" },
   { in = [
     "atomic_numbers",
     'atomic_subsystem_indices',
-  ], out = "ase", step = "calculate_ase" },
+  ], out = "ase", function = "calculate_ase" },
 
 ]
 readout_operation = [
-  { step = "from_atom_to_molecule", mode = 'sum', in = 'E_i', index_key = 'atomic_subsystem_indices', out = 'E' },
-  { step = "from_atom_to_molecule", mode = 'sum', in = 'ase', index_key = 'atomic_subsystem_indices', out = 'mse' },
+  { function = "from_atom_to_molecule", mode = 'sum', in = 'E_i', index_key = 'atomic_subsystem_indices', out = 'E' },
+  { function = "from_atom_to_molecule", mode = 'sum', in = 'ase', index_key = 'atomic_subsystem_indices', out = 'mse' },
 
 ]

@@ -729,7 +729,7 @@ class PostProcessing(torch.nn.Module):
         work_to_be_done_per_property = []
         props = []
         for proc in processing_operation:
-            if proc["step"] == "normalization":
+            if proc["function"] == "normalization":
                 if dataset_statistic is None:
                     log.warning(
                         f"No mean and stddev provided for property {proc['in']}. Setting to default values!"
@@ -748,7 +748,7 @@ class PostProcessing(torch.nn.Module):
                 work_to_be_done_per_property.append(operation)
                 props.append(proc)
 
-            elif proc["step"] == "calculate_ase":
+            elif proc["function"] == "calculate_ase":
                 if dataset_statistic is None:
                     raise RuntimeError(
                         "No dataset statistics provided for ASE calculation. Skipping!"
@@ -767,7 +767,7 @@ class PostProcessing(torch.nn.Module):
         work_to_be_done_per_property = []
         props = []
         for proc in readout_operation:
-            if proc["step"] == "from_atom_to_molecule":
+            if proc["function"] == "from_atom_to_molecule":
                 operation = FromAtomToMoleculeReduction(
                     reduction_mode=proc["mode"],
                 )
@@ -781,7 +781,9 @@ class PostProcessing(torch.nn.Module):
         """
         Perform post-processing operations on per-atom properties and reduction operations to calculate per-molecule properties.
         """
-        for property, processing in zip(self.per_atom_operations_prop, self.per_atom_operations):
+        for property, processing in zip(
+            self.per_atom_operations_prop, self.per_atom_operations
+        ):
             inputs = [outputs[in_key] for in_key in property["in"]]
             outputs[property["out"]] = processing(*inputs)
 

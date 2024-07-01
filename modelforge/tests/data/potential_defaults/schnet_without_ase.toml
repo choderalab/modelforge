@@ -14,9 +14,9 @@ shared_interactions = false
 processing_operation = [
     { in = [
         "E_i",
-    ], out = "E_i", step = "normalization", mean = "E_i_mean", stddev = "E_i_mean" },
+    ], out = "E_i", function = "normalization", mean = "E_i_mean", stddev = "E_i_mean" },
 
 ]
 readout_operation = [
-    { step = "from_atom_to_molecule", mode = 'sum', in = 'E_i', index_key = 'atomic_subsystem_indices', out = 'E' },
+    { function = "from_atom_to_molecule", mode = 'sum', in = 'E_i', index_key = 'atomic_subsystem_indices', out = 'E' },
 ]

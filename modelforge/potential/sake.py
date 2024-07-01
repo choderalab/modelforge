@@ -435,7 +435,7 @@ class SAKEInteraction(nn.Module):
     def aggregate(self, h_ij_semantic, idx_i, nr_atoms):
         """Aggregate edge semantic attention over all senders connected to a receiver.
 
-        Wang and Chodera (2023) Sec. 5 Algorithm 1,  step labelled "Neighborhood aggregation".
+        Wang and Chodera (2023) Sec. 5 Algorithm 1,  function labelled "Neighborhood aggregation".
 
         Parameters
         ----------

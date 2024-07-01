@@ -46,7 +46,7 @@ The :py:class:`modelforge.potential.models.BaseNetwork` class is the main class 
 The :py:class:`modelforge.potential.models.CoreNetwork` class is used to store the neural network that is used to predict the potential.
 
 
-.. image:: image/overview_network.png
+.. image:: image/overview_network_v2.png
   :width: 400
   :align: center
   :alt: Alternative text

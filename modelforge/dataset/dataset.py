@@ -956,12 +956,11 @@ class DataModule(pl.LightningDataModule):
             atomic_self_energies : Optional[Dict[str, float]]
                 A dictionary mapping element names to their self energies. If not provided, the self energies will be calculated.
             regression_ase: bool, defaults to False
-                Whether to use the calculated self energies for regression.
+                Whether to use regression to calculate the self energies.
             force_download : bool,  defaults to False
                 Whether to force the dataset to be downloaded, even if it is already cached.
             version_select : str, defaults to "latest"
-                Select the version of the dataset to use. If "latest", the latest version will be used.
-                "latest_test" will use the latest test version. Specific versions can be selected by passing the version name
+                Select the version of the dataset to use. If "latest", the latest version will be used. "latest_test" will use the latest test version. Specific versions can be selected by passing the version name
                 as defined in the yaml files associated with each dataset.
             local_cache_dir : str, defaults to "./"
                 Directory to store the files.

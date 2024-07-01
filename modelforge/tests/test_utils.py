@@ -103,8 +103,8 @@ def test_cosine_cutoff_module():
     # the expected outcome is that entry 1 and 2 become zero
     # and entry 0 becomes 0.5 (since the cutoff is 2.0 angstrom)
 
-    cutoff = unit.Quantity(2.0, unit.angstrom)
-    expected_output = torch.tensor([0.5, 0.0, 0.0])
+    cutoff = 2.0 * unit.angstrom
+    expected_output = torch.tensor([0.5, 0.0, 0.0]) / 10
     cosine_cutoff_module = CosineCutoff(cutoff)
 
     output = cosine_cutoff_module(d_ij_angstrom / 10)  # input is in nanometer

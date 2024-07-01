@@ -528,16 +528,7 @@ from modelforge.potential.processing import AtomicSelfEnergies
 
 class NeuralNetworkPotentialFactory:
     """
-    Factory class for creating instances of neural network potentials (NNP) that are traceable/scriptable and can be
-    exported to torchscript.
-
-    This factory allows for the creation of specific NNP instances configured for either
-    training or inference purposes based on the given parameters.
-
-    Methods
-    -------
-    create_nnp(use, nnp_type, nnp_parameters=None, training_parameters=None)
-        Creates an instance of a specified NNP type configured for either training or inference.
+    Factory class for creating instances of neural network potentials for training/inference.
     """
 
     @staticmethod
@@ -555,27 +546,27 @@ class NeuralNetworkPotentialFactory:
         Parameters
         ----------
         use : str
-            The use case for the NNP instance.
+            Is the model used for inference or training.
         nnp_name : str
-            The type of NNP to instantiate.
+            The name of the model to be created.
         simulation_environment : str
-            The environment to use, either 'PyTorch' or 'JAX'.
+            The ML framework to use, either 'PyTorch' or 'JAX'.
         nnp_parameters : dict, optional
-            Parameters specific to the NNP model, by default {}.
+            Parameters specific to the model, by default {}.
         training_parameters : dict, optional
             Parameters for configuring the training, by default {}.
 
         Returns
         -------
-        Union[Union[ANI2x, SchNet, PaiNN, PhysNet], TrainingAdapter]
-            An instantiated NNP model.
+        Union[Union[torch.nn.Module], pl.LightningModule, JAXModel]
+            An instantiated model.
 
         Raises
         ------
         ValueError
             If an unknown use case is requested.
         NotImplementedError
-            If the requested NNP type is not implemented.
+            If the requested model type is not implemented.
         """
 
         from modelforge.potential import _Implemented_NNPs

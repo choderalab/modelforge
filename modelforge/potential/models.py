@@ -802,9 +802,9 @@ class BaseNetwork(Module):
     def __init__(
         self,
         *,
-        processing_operation: Dict[str, torch.nn.ModuleList],
+        processing_operation: Dict[str, str],
+        readout_operation: Dict[str, str],
         dataset_statistic: Optional[Dict[str, float]] = None,
-        readout_operation: Dict[str, str] = None,
     ):
         """
         The BaseNetwork wraps the input preparation (including pairlist calculation, d_ij and r_ij calculation), the actual model as well as the output preparation in a wrapper class.

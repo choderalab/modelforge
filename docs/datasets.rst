@@ -98,7 +98,7 @@ Dataset Configuration
 Typically, the dataset configuration is stored in a TOML file, which is used for the training process. This configuration file overrides the default values specified in the :class:`modelforge.dataset.DataModule` class. 
 Below is a minimal example of a dataset configuration for the QM9 dataset.
 
-.. literalinclude:: ../scripts/configs/datasets/qm9.toml
+.. literalinclude:: ../modelforge/tests/data/dataset_defaults/qm9.toml
    :language: toml
    :caption: QM9 Dataset Configuration
 

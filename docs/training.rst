@@ -5,7 +5,7 @@ Training
 Training Configuration (training.toml)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. literalinclude:: ../scripts/configs/training/default.toml
+.. literalinclude:: ../modelforge/tests/data/training_defaults/default.toml
    :language: toml
    :caption: Training Configuration
 

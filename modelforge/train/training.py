@@ -917,7 +917,6 @@ def perform_training(
     dm = DataModule(
         name=dataset_name,
         batch_size=batch_size,
-        splitting_strategy=RandomRecordSplittingStrategy(),
         remove_self_energies=remove_self_energies,
         version_select=version_select,
         splitting_strategy=REGISTERED_SPLITTING_STRATEGIES[splitting_strategy](

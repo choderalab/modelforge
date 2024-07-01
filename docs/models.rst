@@ -24,7 +24,7 @@ Using toml files to configure models
 A neural network model is defined by a configuration file, which is a TOML file. The configuration file contains the parameters for the neural network, as well as the parameters for the input preparation and postprocessing modules.
 Below is an example of a configuration file for the SchNet model:
 
-.. literalinclude:: ../scripts/configs/potentials/schnet.toml
+.. literalinclude:: ../modelforge/tests/data/potential_defaults/schnet.toml
    :language: toml
    :caption: SchNet Configuration
 
@@ -40,7 +40,7 @@ Explanation of fields in `schnet.toml`:
 * `potential_parameter.shared_interactions`: Whether interaction modules share weights.
 
 
-There are default parameter files for each model in `modelforge/scripts/configs/potentials`. These files can be used as a starting point for creating a new model configuration file. Note that all parameters in the configuration file have units attached where applicable.
+There are default parameter files for each model in `modelforge/tests/data/potential_defaults`. These files can be used as a starting point for creating a new model configuration file. Note that all parameters in the configuration file have units attached where applicable.
 
 Example
 ------------------------------------

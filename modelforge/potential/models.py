@@ -722,24 +722,6 @@ class BaseNetwork(Module):
     def load_state_dict(
         self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False
     ):
-        """
-        Load the state dictionary into the model, with optional prefix removal and key exclusions.
-
-        Parameters
-        ----------
-        state_dict : Mapping[str, Any]
-            The state dictionary to load.
-        strict : bool, optional
-            Whether to strictly enforce that the keys in `state_dict` match the keys returned by this module's `state_dict()` function (default is True).
-        assign : bool, optional
-            Whether to assign the state dictionary to the model directly (default is False).
-
-        Notes
-        -----
-        - This function can remove a specific prefix from the keys in the state dictionary.
-        - It can also exclude certain keys from being loaded into the model.
-        """
-
         # Prefix to remove
         prefix = "model."
         excluded_keys = ["loss_module.energy_weight", "loss_module.force_weight"]

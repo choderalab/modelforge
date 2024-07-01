@@ -937,7 +937,7 @@ class DataModule(pl.LightningDataModule):
         regenerate_dataset_statistic: bool = False,
     ):
         """
-        Initializes adData module for PyTorch Lightning handling data preparation and loading object with the specified configuration.
+        Initializes a data module for PyTorch Lightning handling data preparation and loading object with the specified configuration.
         If `remove_self_energies` is `True` and:
         - `self_energies` are passed as a dictionary, these will be used
         - `self_energies` are `None`, `self._ase` will be used
@@ -966,6 +966,8 @@ class DataModule(pl.LightningDataModule):
                 Directory to store the files.
             regenerate_cache : bool, defaults to False
                 Whether to regenerate the cache.
+            regenerate_dataset_statistic: bool, defaults to False
+                Recalculate the dataset statistics. This should be set to True if the dataset has changed (e.g., if atomic self energies were added to the dataset). This regenerates both the atomic self energies and the dataset statistics (mean and std).
         """
         super().__init__()
 

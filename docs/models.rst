@@ -4,7 +4,9 @@ Models
 Introduction
 ----------------
 
-A model is defined as a PyTorch model that takes as input a :py:class:`modelforge.dataset.dataset.NNPInput` dataclass, and returns a dictionary of PyTorch tensors. The model consists of three, functional compounds:
+A model contains all the operations that are needed to map the input to, at minimum, an energy. A model takes as input a :py:class:`modelforge.dataset.dataset.NNPInput` dataclass, and returns a dictionary of PyTorch tensors. 
+The model consists of three, functional compounds:
+
 - the input preparation module (:class:`modelforge.potential.model.InputPreparation`): responsible for generating the pairlist, pair distances and pair displacement vectors given the atomic coordinates and the cutoff.
 - the core model (:class:`modelforge.potential.model.CoreNetwork`): the neural network containing learnable parameters (what is considered the "core" of the potential).
 - the postprocessing module: contains operations that are applied to per-atom and per-molecule outputs, as well as the reduction operations that are performed to obtain the per-molecule properties.

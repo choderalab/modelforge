@@ -170,6 +170,7 @@ class AtomicSelfEnergies:
 class ScaleValues(torch.nn.Module):
 
     def __init__(self, mean: float, stddev: float) -> None:
+
         """
         A module for scaling values using provided mean and standard deviation.
 
@@ -186,6 +187,7 @@ class ScaleValues(torch.nn.Module):
         self.register_buffer("stddev", torch.tensor([stddev]))
 
     def forward(self, values_to_be_scaled: torch.Tensor) -> torch.Tensor:
+
         """
         Rescales values using the provided mean and standard deviation.
 
@@ -193,7 +195,8 @@ class ScaleValues(torch.nn.Module):
         ----------
         values_to_be_scaled : torch.Tensor
             The tensor of values to be rescaled.
-
+        atomic_numbers : torch.Tensor
+            The input data for the model, including atomic numbers and subsystem indices.
         Returns
         -------
         torch.Tensor

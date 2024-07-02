@@ -23,5 +23,4 @@ processing_operation = [
 readout_operation = [
   { function = "from_atom_to_molecule", mode = 'sum', in = 'E_i', index_key = 'atomic_subsystem_indices', out = 'E' },
   { function = "from_atom_to_molecule", mode = 'sum', in = 'ase', index_key = 'atomic_subsystem_indices', out = 'mse' },
-
 ]

@@ -32,7 +32,6 @@ def setup_methane():
         positions=coordinates.squeeze(0) / 10,
         atomic_subsystem_indices=atomic_subsystem_indices,
         total_charge=torch.tensor([0.0]),
-        
     )
 
     return species, coordinates, device, nnp_input
@@ -41,6 +40,7 @@ def setup_methane():
 @pytest.fixture
 def setup_two_methanes():
     import torch
+
     device = torch.device("cpu")
 
     coordinates = torch.tensor(
@@ -106,17 +106,17 @@ def test_modelforge_ani(setup_two_methanes):
     # read default parameters
     from modelforge.train.training import return_toml_config
     from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
 
-    file_path = resources.files(potential_defaults) / f"ani2x_defaults.toml"
+    file_path = resources.files(potential) / f"ani2x_defaults.toml"
     config = return_toml_config(file_path)
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
 
     _, _, _, mf_input = setup_two_methanes
     device = torch.device("cpu")
-    model = mf_ANI2x(**potential_parameters).to(device=device)
+    model = mf_ANI2x(**potential_parameter).to(device=device)
     energy = model(mf_input)
     derivative = torch.autograd.grad(energy.E.sum(), mf_input.positions)[0]
     force = -derivative
@@ -126,7 +126,7 @@ def test_compare_radial_symmetry_features():
     # Compare the ANI radial symmetry function
     # to the output of the modelforge radial symmetry function
     import torch
-    from modelforge.potential.utils import AniRadialSymmetryFunction, CosineCutoff
+    from modelforge.potential.utils import AniRadialBasisFunction, CosineCutoff
     from openff.units import unit
 
     # generate a random list of distances, all < 5
@@ -140,7 +140,7 @@ def test_compare_radial_symmetry_features():
     ShfR = torch.linspace(radial_start, radial_cutoff, radial_dist_divisions + 1)[:-1]
 
     # NOTE: we pass in Angstrom to ANI and in nanometer to mf
-    rsf = AniRadialSymmetryFunction(
+    rsf = AniRadialBasisFunction(
         number_of_radial_basis_functions=radial_dist_divisions,
         max_distance=radial_cutoff * unit.angstrom,
         min_distance=radial_start * unit.angstrom,
@@ -158,7 +158,7 @@ def test_compare_radial_symmetry_features():
 
 def test_radial_with_diagonal_batching(setup_two_methanes):
     import torch
-    from modelforge.potential.utils import AniRadialSymmetryFunction, CosineCutoff
+    from modelforge.potential.utils import AniRadialBasisFunction, CosineCutoff
     from openff.units import unit
     from modelforge.potential.models import Pairlist
     from torchani.aev import neighbor_pairs_nopbc
@@ -193,7 +193,7 @@ def test_radial_with_diagonal_batching(setup_two_methanes):
     # ------------ Modelforge calculation ----------#
     device = torch.device("cpu")
 
-    radial_symmetry_function = AniRadialSymmetryFunction(
+    radial_symmetry_function = AniRadialBasisFunction(
         radial_dist_divisions,
         radial_cutoff * unit.angstrom,
         radial_start * unit.angstrom,
@@ -323,15 +323,15 @@ def test_representation(setup_methane):
     # read default parameters
     from modelforge.train.training import return_toml_config
     from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
 
-    file_path = resources.files(potential_defaults) / f"ani2x_defaults.toml"
+    file_path = resources.files(potential) / f"ani2x_defaults.toml"
     config = return_toml_config(file_path)
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
 
-    mf_model = ANI2x(**potential_parameters)
+    mf_model = ANI2x(**potential_parameter)
     # perform input checks
     mf_model.input_preparation._input_checks(mf_input)
     # prepare the input for the forward pass

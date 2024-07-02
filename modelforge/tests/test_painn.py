@@ -10,15 +10,15 @@ def test_PaiNN_init():
     # read default parameters
     from modelforge.train.training import return_toml_config
     from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
 
-    file_path = resources.files(potential_defaults) / f"painn_defaults.toml"
+    file_path = resources.files(potential) / f"painn_defaults.toml"
     config = return_toml_config(file_path)
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
 
-    painn = PaiNN(**potential_parameters)
+    painn = PaiNN(**potential_parameter)
     assert painn is not None, "PaiNN model should be initialized."
 
 
@@ -73,13 +73,13 @@ def test_painn_interaction_equivariance(single_batch_with_batchsize_64):
     # read default parameters
     from modelforge.train.training import return_toml_config
     from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
 
-    file_path = resources.files(potential_defaults) / f"painn_defaults.toml"
+    file_path = resources.files(potential) / f"painn_defaults.toml"
     config = return_toml_config(file_path)
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
 
     # define a rotation matrix in 3D that rotates by 90 degrees around the z-axis
     # (clockwise when looking along the z-axis towards the origin)
@@ -87,7 +87,7 @@ def test_painn_interaction_equivariance(single_batch_with_batchsize_64):
         [[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]], dtype=torch.float64
     )
 
-    painn = PaiNN(**potential_parameters).to(torch.float64)
+    painn = PaiNN(**potential_parameter).to(torch.float64)
     methane_input = single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float64)
     perturbed_methane_input = replace(methane_input)
     perturbed_methane_input.positions = torch.matmul(

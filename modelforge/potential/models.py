@@ -24,9 +24,9 @@ if TYPE_CHECKING:
     from modelforge.potential.ani import ANI2x, AniNeuralNetworkData
     from modelforge.potential.painn import PaiNN, PaiNNNeuralNetworkData
     from modelforge.potential.physnet import PhysNet, PhysNetNeuralNetworkData
-    from modelforge.potential.sake import SAKE, SAKENeuralNetworkData
+    from modelforge.potential.sake import SAKE, SAKENeuralNetworkInput
     from modelforge.potential.schnet import SchNet, SchnetNeuralNetworkData
-    from modelforge.potential.spookynet import SpookyNet, SpookyNetNeuralNetworkData
+    from modelforge.train.training import EnergyAndForceLoss
 
 
 # Define NamedTuple for the outputs of Pairlist and Neighborlist forward method
@@ -439,7 +439,7 @@ class PyTorch2JAXConverter:
     """
 
     def convert_to_jax_model(
-        self, nnp_instance: Union["ANI2x", "SchNet", "PaiNN", "PhysNet", "SAKE", "SpookyNet"]
+        self, nnp_instance: Union["ANI2x", "SchNet", "PaiNN", "PhysNet"]
     ) -> JAXModel:
         """
         Convert a PyTorch neural network instance to a JAX model.
@@ -547,6 +547,7 @@ class NeuralNetworkPotentialFactory:
         use: Literal["training", "inference"],
         model_type: Literal["ANI2x", "SchNet", "PaiNN", "SAKE", "PhysNet"],
         model_parameters: Dict[str, Union[int, float, str]],
+        loss_parameter: Optional[Dict[str, Any]] = None,
         simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
         training_parameters: Optional[Dict[str, Any]] = None,
     ) -> Union[Type[torch.nn.Module], Type[JAXModel], Type[pl.LightningModule]]:
@@ -580,7 +581,7 @@ class NeuralNetworkPotentialFactory:
         """
 
         from modelforge.potential import _Implemented_NNPs
-        from modelforge.train.training import TrainingAdapter
+        from modelforge.train.training import TrainingAdapter, EnergyAndForceLoss
 
         model_parameters = model_parameters or {}
         training_parameters = training_parameters or {}
@@ -599,7 +600,9 @@ class NeuralNetworkPotentialFactory:
                 )
             model_parameters["nnp_name"] = model_type
             return TrainingAdapter(
-                nnp_parameters=model_parameters, **training_parameters
+                model_parameters=model_parameters,
+                loss_parameter=loss_parameter,
+                **training_parameters,
             )
         elif use == "inference":
             # if this model_parameter dictionary ahs already been used
@@ -711,21 +714,44 @@ class BaseNetwork(Module):
     def load_state_dict(
         self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False
     ):
+        """
+        Load the state dictionary into the model, with optional prefix removal and key exclusions.
+
+        Parameters
+        ----------
+        state_dict : Mapping[str, Any]
+            The state dictionary to load.
+        strict : bool, optional
+            Whether to strictly enforce that the keys in `state_dict` match the keys returned by this module's `state_dict()` function (default is True).
+        assign : bool, optional
+            Whether to assign the state dictionary to the model directly (default is False).
+
+        Notes
+        -----
+        - This function can remove a specific prefix from the keys in the state dictionary.
+        - It can also exclude certain keys from being loaded into the model.
+        """
+
         # Prefix to remove
         prefix = "model."
+        excluded_keys = ["loss_module.energy_weight", "loss_module.force_weight"]
 
-        # check if prefix is present
+        # Create a new dictionary without the prefix in the keys if prefix exists
         if any(key.startswith(prefix) for key in state_dict.keys()):
-            # Create a new dictionary without the prefix in the keys if prefix exists
-            new_d = {
+            filtered_state_dict = {
                 key[len(prefix) :] if key.startswith(prefix) else key: value
                 for key, value in state_dict.items()
+                if key not in excluded_keys
             }
             log.debug(f"Removed prefix: {prefix}")
         else:
+            # Create a filtered dictionary without excluded keys if no prefix exists
+            filtered_state_dict = {
+                k: v for k, v in state_dict.items() if k not in excluded_keys
+            }
             log.debug("No prefix found. No modifications to keys in state loading.")
 
-        super().load_state_dict(new_d, strict=strict, assign=assign)
+        super().load_state_dict(filtered_state_dict, strict=strict, assign=assign)
 
     def forward(self, data: NNPInput):
         # perform input checks
@@ -771,7 +797,7 @@ class CoreNetwork(Module, ABC):
         "PaiNNNeuralNetworkData",
         "SchnetNeuralNetworkData",
         "AniNeuralNetworkData",
-        "SAKENeuralNetworkData",
+        "SAKENeuralNetworkInput",
     ]:
         """
         Prepares model-specific inputs before the forward pass.
@@ -802,8 +828,7 @@ class CoreNetwork(Module, ABC):
             "PaiNNNeuralNetworkData",
             "SchnetNeuralNetworkData",
             "AniNeuralNetworkData",
-            "SAKENeuralNetworkData",
-            "SpookyNetNeuralNetworkData",
+            "SAKENeuralNetworkInput",
         ],
     ):
         """

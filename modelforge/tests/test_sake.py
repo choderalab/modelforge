@@ -10,28 +10,24 @@ from modelforge.potential.sake import SAKE, SAKEInteraction
 import sake as reference_sake
 from sys import platform
 
-IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
-
-IN_MAC = platform == "darwin"
+ON_MAC = platform == "darwin"
 
 
 def test_SAKE_init():
     """Test initialization of the SAKE neural network potential."""
     from modelforge.train.training import return_toml_config
     from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
 
     model_name = "SAKE"
 
-    file_path = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
-    )
+    file_path = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
     config = return_toml_config(file_path)
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
 
-    sake = SAKE(**potential_parameters)
+    sake = SAKE(**potential_parameter)
     assert sake is not None, "SAKE model should be initialized."
 
 
@@ -47,24 +43,22 @@ def test_sake_forward(single_batch_with_batchsize_64):
 
     from modelforge.train.training import return_toml_config
     from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
 
     model_name = "SAKE"
 
-    file_path = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
-    )
+    file_path = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
     config = return_toml_config(file_path)
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
 
-    sake = SAKE(**potential_parameters)
+    sake = SAKE(**potential_parameter)
     energy = sake(methane).E
     nr_of_mols = methane.atomic_subsystem_indices.unique().shape[0]
 
     assert (
-        len(energy) == nr_of_mols
+            len(energy) == nr_of_mols
     )  # Assuming energy is calculated per sample in the batch
 
 
@@ -114,19 +108,17 @@ def test_sake_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize_64
 
     from modelforge.train.training import return_toml_config
     from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
 
     model_name = "SAKE"
 
-    file_path = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
-    )
+    file_path = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
     config = return_toml_config(file_path)
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
-    potential_parameters["number_of_atom_features"] = nr_atom_basis
-    sake = SAKE(**potential_parameters)
+    potential_parameter = config["potential"].get("potential_parameter", {})
+    potential_parameter["number_of_atom_features"] = nr_atom_basis
+    sake = SAKE(**potential_parameter)
 
     # get methane input
     methane = single_batch_with_batchsize_64.nnp_input
@@ -240,39 +232,33 @@ def make_equivalent_pairlist_mask(key, nr_atoms, nr_pairs, include_self_pairs):
 
 def test_radial_symmetry_function_against_reference():
     from modelforge.potential.utils import (
-        SAKERadialSymmetryFunction,
-        SAKERadialBasisFunction,
+        PhysNetRadialBasisFunction,
     )
     from sake.utils import ExpNormalSmearing as RefExpNormalSmearing
 
-    nr_atoms = 13
-    number_of_radial_basis_functions = 11
-    cutoff_upper = 6.0 * unit.bohr
-    cutoff_lower = 2.0 * unit.bohr
-    mf_unit = unit.nanometer
-    ref_unit = unit.nanometer
+    nr_atoms = 1
+    number_of_radial_basis_functions = 10
+    cutoff_upper = 6.0 * unit.nanometer
+    cutoff_lower = 2.0 * unit.nanometer
 
-    radial_symmetry_function_module = SAKERadialSymmetryFunction(
+    radial_symmetry_function_module = PhysNetRadialBasisFunction(
         number_of_radial_basis_functions=number_of_radial_basis_functions,
         max_distance=cutoff_upper,
         min_distance=cutoff_lower,
         dtype=torch.float32,
-        trainable=False,
-        radial_basis_function=SAKERadialBasisFunction(cutoff_lower),
     )
     ref_radial_basis_module = RefExpNormalSmearing(
         num_rbf=number_of_radial_basis_functions,
-        cutoff_upper=cutoff_upper.to(ref_unit).m,
-        cutoff_lower=cutoff_lower.to(ref_unit).m,
+        cutoff_upper=cutoff_upper.m,
+        cutoff_lower=cutoff_lower.m,
     )
     key = jax.random.PRNGKey(1884)
 
     # Generate random input data in JAX
-    d_ij_bohr_mag = jax.random.normal(key, (nr_atoms, nr_atoms, 1))
-    d_ij_jax = (d_ij_bohr_mag * unit.bohr).to(ref_unit).m
+    d_ij_jax = jax.random.uniform(key, (nr_atoms, nr_atoms, 1))
     d_ij = torch.from_numpy(
-        onp.array((d_ij_bohr_mag * unit.bohr).to(mf_unit).m)
-    ).reshape(nr_atoms**2)
+        onp.array(d_ij_jax)
+    ).reshape(nr_atoms ** 2)
 
     mf_rbf = radial_symmetry_function_module(d_ij)
     variables = ref_radial_basis_module.init(key, d_ij_jax)
@@ -282,7 +268,7 @@ def test_radial_symmetry_function_against_reference():
         radial_symmetry_function_module.radial_basis_centers.detach().T,
     )
     assert torch.allclose(
-        torch.from_numpy(onp.array(variables["params"]["betas"])),
+        torch.from_numpy(onp.array(variables["params"]["betas"])) ** -0.5,
         radial_symmetry_function_module.radial_scale_factor.detach().T,
     )
 
@@ -291,16 +277,15 @@ def test_radial_symmetry_function_against_reference():
     assert torch.allclose(
         mf_rbf,
         torch.from_numpy(onp.array(ref_rbf)).reshape(
-            nr_atoms**2, number_of_radial_basis_functions
+            nr_atoms ** 2, number_of_radial_basis_functions
         ),
     )
 
 
-@pytest.mark.skipif(IN_MAC, reason="Test fails on macOS")
+@pytest.mark.skipif(ON_MAC, reason="Test fails on macOS")
 @pytest.mark.parametrize("include_self_pairs", [True, False])
 @pytest.mark.parametrize("v_is_none", [True, False])
 def test_sake_layer_against_reference(include_self_pairs, v_is_none):
-
     nr_atoms = 13
     out_features = 11
     hidden_features = 7
@@ -337,7 +322,7 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none):
     layer = variables["params"]
 
     assert torch.allclose(
-        torch.from_numpy(onp.array(layer["edge_model"]["kernel"]["betas"])),
+        torch.from_numpy(onp.array(layer["edge_model"]["kernel"]["betas"]) ** -0.5),
         mf_sake_block.radial_symmetry_function_module.radial_scale_factor.detach().T,
     )
     assert torch.allclose(
@@ -503,7 +488,7 @@ def test_sake_model_against_reference(single_batch_with_batchsize_1):
         if layer_name.startswith("d")
     )
     for (layer_name, layer), mf_sake_block in zip(
-        layers, mf_sake.core_module.interaction_modules.children()
+            layers, mf_sake.core_module.interaction_modules.children()
     ):
         layer["edge_model"]["kernel"]["betas"] = (
             mf_sake_block.radial_symmetry_function_module.radial_scale_factor.detach()
@@ -597,19 +582,17 @@ def test_model_invariance(single_batch_with_batchsize_1):
 
     from modelforge.train.training import return_toml_config
     from importlib import resources
-    from modelforge.tests.data import potential_defaults
+    from modelforge.tests.data import potential
 
     model_name = "SAKE"
 
-    file_path = (
-        resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
-    )
+    file_path = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
     config = return_toml_config(file_path)
 
     # Extract parameters
-    potential_parameters = config["potential"].get("potential_parameters", {})
+    potential_parameter = config["potential"].get("potential_parameter", {})
 
-    model = SAKE(**potential_parameters)
+    model = SAKE(**potential_parameter)
     # get methane input
     methane = single_batch_with_batchsize_1.nnp_input
 

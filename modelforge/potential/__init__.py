@@ -6,11 +6,10 @@ from .sake import SAKE
 from .spookynet import SpookyNet
 from .utils import (
     CosineCutoff,
-    RadialSymmetryFunction,
+    RadialBasisFunction,
     AngularSymmetryFunction,
 )
 from .processing import FromAtomToMoleculeReduction
-from modelforge.train.training import TrainingAdapter
 from .models import NeuralNetworkPotentialFactory
 from enum import Enum
 

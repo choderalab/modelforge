@@ -152,7 +152,7 @@ def test_radial_symmetry_function_implementation():
                 (_min_distance_in_nanometer - _max_distance_in_nanometer)
                 / number_of_radial_basis_functions,
             )
-            scale_factors = scale_factors * -15_000
+            scale_factors = (scale_factors * -15_000) ** -0.5
             return scale_factors
 
 

@@ -455,13 +455,14 @@ class RadialBasisFunction(nn.Module, ABC):
             self,
             radial_basis_function: Type[RadialBasisFunctionCore],
             dtype,
+            prefactor: float = 1.0,
             trainable_prefactor: bool = False,
     ):
         super().__init__()
         if trainable_prefactor:
-            self.prefactor = nn.Parameter(torch.tensor([1.0], dtype=dtype))
+            self.prefactor = nn.Parameter(torch.tensor([prefactor], dtype=dtype))
         else:
-            self.register_buffer("prefactor", torch.tensor([1.0], dtype=dtype))
+            self.register_buffer("prefactor", torch.tensor([prefactor], dtype=dtype))
         self.radial_basis_function = radial_basis_function
 
     @abstractmethod
@@ -506,6 +507,7 @@ class GaussianRadialBasisFunctionWithScaling(RadialBasisFunction):
             max_distance: unit.Quantity,
             min_distance: unit.Quantity = 0.0 * unit.nanometer,
             dtype: Optional[torch.dtype] = None,
+            prefactor: float = 1.0,
             trainable_prefactor: bool = False,
             trainable_centers_and_scale_factors: bool = False,
     ):
@@ -523,6 +525,8 @@ class GaussianRadialBasisFunctionWithScaling(RadialBasisFunction):
             Minimum distance to consider.
         dtype:
             Data type for computations.
+        prefactor:
+            Scalar factor by which to multiply output of radial basis functions.
         trainable_prefactor: bool, default False
             Whether prefactor is trainable
         trainable_centers_and_scale_factors: bool, default False
@@ -532,7 +536,7 @@ class GaussianRadialBasisFunctionWithScaling(RadialBasisFunction):
         symmetry function output given an input distance matrix.
         """
 
-        super().__init__(GaussianRadialBasisFunctionCore, dtype, trainable_prefactor)
+        super().__init__(GaussianRadialBasisFunctionCore, dtype, prefactor, trainable_prefactor)
         self.number_of_radial_basis_functions = number_of_radial_basis_functions
         self.max_distance = max_distance
         self.min_distance = min_distance
@@ -620,7 +624,6 @@ class SchnetRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
         """
 
         super().__init__(
-            GaussianRadialBasisFunctionCore,
             number_of_radial_basis_functions,
             max_distance,
             min_distance,
@@ -683,15 +686,14 @@ class AniRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
         """
 
         super().__init__(
-            GaussianRadialBasisFunctionCore,
             number_of_radial_basis_functions,
             max_distance,
             min_distance,
             dtype,
+            prefactor=0.25,
             trainable_prefactor=False,
             trainable_centers_and_scale_factors=trainable_centers_and_scale_factors,
         )
-        self.prefactor = torch.tensor([0.25], dtype=dtype)
 
     @staticmethod
     def calculate_radial_basis_centers(

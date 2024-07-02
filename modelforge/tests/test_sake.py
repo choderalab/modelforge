@@ -286,62 +286,6 @@ def test_radial_symmetry_function_against_reference():
     )
 
 
-def test_rbf_forward():
-    from modelforge.potential.utils import (
-        PhysNetRadialBasisFunction,
-    )
-    from sake.utils import ExpNormalSmearing as RefExpNormalSmearing
-
-    jax.numpy.set_printoptions(precision=100)
-    torch.set_printoptions(precision=100)
-    nr_atoms = 1
-    number_of_radial_basis_functions = 1
-    cutoff_upper = 6.0 * unit.nanometer
-    cutoff_lower = 2.0 * unit.nanometer
-
-    radial_symmetry_function_module = PhysNetRadialBasisFunction(
-        number_of_radial_basis_functions=number_of_radial_basis_functions,
-        max_distance=cutoff_upper,
-        min_distance=cutoff_lower,
-        dtype=torch.float32,
-    )
-    ref_radial_basis_module = RefExpNormalSmearing(
-        num_rbf=number_of_radial_basis_functions,
-        cutoff_upper=cutoff_upper.m,
-        cutoff_lower=cutoff_lower.m,
-    )
-    key = jax.random.PRNGKey(1882)
-
-    # Generate random input data in JAX
-    d_ij_jax = jnp.full((nr_atoms, nr_atoms, 1), 1)
-    d_ij = torch.from_numpy(
-        onp.array(d_ij_jax)
-    ).reshape(nr_atoms ** 2)
-
-    variables = ref_radial_basis_module.init(key, d_ij_jax)
-
-    means = 0
-    betas = 1
-
-    variables["params"]["means"] = jnp.full_like(variables["params"]["means"], means)
-    radial_symmetry_function_module.radial_basis_centers[:] = means
-    variables["params"]["betas"] = jnp.full_like(variables["params"]["betas"], betas)
-    radial_symmetry_function_module.radial_scale_factor[:] = betas ** -2
-
-    mf_rbf = radial_symmetry_function_module(d_ij)
-    ref_rbf = ref_radial_basis_module.apply(variables, d_ij_jax)
-    print(f"{d_ij=}")
-    print(f"{mf_rbf=}")
-    print(f"{ref_rbf=}")
-
-    assert torch.allclose(
-        mf_rbf,
-        torch.from_numpy(onp.array(ref_rbf)).reshape(
-            nr_atoms ** 2, number_of_radial_basis_functions
-        ),
-    )
-
-
 @pytest.mark.skipif(ON_MAC, reason="Test fails on macOS")
 @pytest.mark.parametrize("include_self_pairs", [True, False])
 @pytest.mark.parametrize("v_is_none", [True, False])

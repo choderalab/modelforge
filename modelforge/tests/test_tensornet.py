@@ -32,7 +32,7 @@ def test_tensornet_forward():
     # net(batch)
 
 
-def test_model_input():
+def test_tensornet_input():
     import torch
     from openff.units import unit
     from torchmdnet.models.utils import OptimizedDistance
@@ -94,7 +94,7 @@ def test_model_input():
         assert torch.allclose(pairlist_output.r_ij[_], -edge_vec[idx])
 
 
-def test_compare_radial_symmetry_features():
+def test_tensornet_compare_radial_symmetry_features():
     # Compare the TensorNet radial symmetry function
     # to the output of the modelforge radial symmetry function
     # TODO: only 'expnorm' from TensorNet implemented
@@ -136,7 +136,7 @@ def test_compare_radial_symmetry_features():
     assert torch.allclose(r_mf, r_tn)
 
 
-def test_representation():
+def test_tensornet_representation():
     import torch
     from openff.units import unit
     from torch import nn

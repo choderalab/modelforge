@@ -228,25 +228,27 @@ class TensorNetRepresentation(torch.nn.Module):
 
     def _get_tensor_messages(
             self,
-            Zij: torch.Tensor,
-            edge_weight: torch.Tensor,
-            edge_vec_norm: torch.Tensor,
-            edge_attr: torch.Tensor
+            atomic_number_embedding: torch.Tensor,
+            d_ij_in_representation_unit: torch.Tensor,
+            r_ij_norm: torch.Tensor,
+            radial_feature_vector: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        C = self.cutoff_module(edge_weight).reshape(-1, 1, 1, 1) * Zij
-        eye = torch.eye(3, 3, device=edge_vec_norm.device, dtype=edge_vec_norm.dtype)[
+        C = self.cutoff_module(
+            d_ij_in_representation_unit
+        ).reshape(-1, 1, 1, 1) * atomic_number_embedding
+        eye = torch.eye(3, 3, device=r_ij_norm.device, dtype=r_ij_norm.dtype)[
             None, None, ...
         ]
-        Iij = self.distance_proj1(edge_attr).permute(0, 2, 1)[..., None] * C * eye
+        Iij = self.distance_proj1(radial_feature_vector).permute(0, 2, 1)[..., None] * C * eye
         Aij = (
-                self.distance_proj2(edge_attr).permute(0, 2, 1)[..., None]
+                self.distance_proj2(radial_feature_vector).permute(0, 2, 1)[..., None]
                 * C
-                * vector_to_skewtensor(edge_vec_norm)[..., None, :, :]
+                * vector_to_skewtensor(r_ij_norm)[..., None, :, :]
         )
         Sij = (
-                self.distance_proj3(edge_attr).permute(0, 2, 1)[..., None]
+                self.distance_proj3(radial_feature_vector).permute(0, 2, 1)[..., None]
                 * C
-                * vector_to_symtensor(edge_vec_norm)[..., None, :, :]
+                * vector_to_symtensor(r_ij_norm)[..., None, :, :]
         )
         return Iij, Aij, Sij
 
@@ -270,24 +272,21 @@ class TensorNetRepresentation(torch.nn.Module):
             data.atomic_numbers,
             data.pair_indices,
         )
-        r_ij = (data.r_ij * unit.nanometer).to(self.representation_unit).m
-        d_ij = (data.d_ij * unit.nanometer).to(self.representation_unit).m
-        edge_vec_norm = r_ij / d_ij
+        _r_ij_in_representation_unit = (data.r_ij * unit.nanometer).to(self.representation_unit).m
+        _d_ij_in_representation_unit = (data.d_ij * unit.nanometer).to(self.representation_unit).m
+        _r_ij_norm = _r_ij_in_representation_unit / _d_ij_in_representation_unit
 
-        radial_feature_vector = self.radial_symmetry_function(d_ij)
+        radial_feature_vector = self.radial_symmetry_function(_d_ij_in_representation_unit)
         # cutoff
-        rcut_ij = self.cutoff_module(d_ij)
+        rcut_ij = self.cutoff_module(_d_ij_in_representation_unit)
         radial_feature_vector = radial_feature_vector * rcut_ij.unsqueeze(-1)
 
         Iij, Aij, Sij = self._get_tensor_messages(
             atomic_number_embedding,
-            d_ij,
-            edge_vec_norm,
+            _d_ij_in_representation_unit,
+            _r_ij_norm,
             radial_feature_vector
         )
-        # Iij_in_angstrom = Iij
-        # Aij_in_angstrom = Aij * 10
-        # Sij_in_angstrom = Sij * 100
         source = torch.zeros(
             data.atomic_numbers.shape[0],
             self.hidden_channels,

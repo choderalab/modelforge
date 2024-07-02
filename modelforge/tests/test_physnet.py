@@ -7,15 +7,13 @@ IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 def test_physnet_init():
 
     from modelforge.potential.physnet import PhysNet
-    from modelforge.train.training import return_toml_config
     from importlib import resources
-    from modelforge.tests.data import potential
+    from modelforge.tests.data import potential_defaults
 
-    model_name = "PhysNet"
+    from modelforge.tests.test_models import load_configs
 
-    file_path = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
-    config = return_toml_config(file_path)
-
+    # read default parameters
+    config = load_configs(f"physnet_without_ase", "qm9")
     # Extract parameters
     potential_parameter = config["potential"].get("potential_parameter", {})
 
@@ -27,17 +25,14 @@ def test_physnet_forward(single_batch_with_batchsize_64):
     from modelforge.potential.physnet import PhysNet
 
     # read default parameters
-    from modelforge.train.training import return_toml_config
-    from importlib import resources
-    from modelforge.tests.data import potential
+    from modelforge.tests.test_models import load_configs
 
-    model_name = "PhysNet"
-
-    file_path = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
-    config = return_toml_config(file_path)
-
+    # read default parameters
+    config = load_configs(f"physnet_without_ase", "qm9")
     # Extract parameters
     potential_parameter = config["potential"].get("potential_parameter", {})
+
+    # Extract parameters
     potential_parameter["number_of_modules"] = 1
     potential_parameter["number_of_interaction_residual"] = 1
 

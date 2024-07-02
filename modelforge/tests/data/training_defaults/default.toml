@@ -1,0 +1,36 @@
+[training]
+nr_of_epochs = 5
+save_dir = "test"
+experiment_name = "your_experiment_name"
+accelerator = "cpu"
+num_nodes = 1
+devices = 1                              # [0,1,2,3]
+remove_self_energies = true
+batch_size = 128
+
+[training.training_parameter]
+lr = 1e-3
+
+[training.training_parameter.lr_scheduler_config]
+frequency = 1
+mode = "min"
+factor = 0.1
+patience = 10
+cooldown = 5
+min_lr = 1e-8
+threshold = 0.1
+threshold_mode = "abs"
+monitor = "val/energy/rmse"
+interval = "epoch"
+
+[training.training_parameter.loss_parameter]
+loss_type = "EnergyAndForceLoss"
+include_force = true
+force_weight = 0.99
+energy_weight = 0.01
+
+[training.early_stopping]
+verbose = true
+monitor = "val/energy/rmse"
+min_delta = 0.001
+patience = 50

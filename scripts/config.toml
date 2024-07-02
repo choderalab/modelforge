@@ -8,7 +8,7 @@ nr_of_epochs = 50
 save_dir = "test"
 experiment_name = "your_experiment_name"
 accelerator = "cpu"
-training_parameters = {}
+training_parameter = {}
 num_nodes = 1
 devices = 1                                                                                          #[0,1,2,3]
 early_stopping = { monitor = "val/combined_loss", min_delta = 0.001, patience = 50, verbose = true }

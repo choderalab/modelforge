@@ -1,6 +1,6 @@
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import lightning as pl
-from typing import TYPE_CHECKING, Any, Union, Dict, Type
+from typing import TYPE_CHECKING, Any, Union, Dict, Type, Optional
 import torch
 from loguru import logger as log
 from modelforge.dataset.dataset import BatchData
@@ -243,10 +243,11 @@ class TrainingAdapter(pl.LightningModule):
     def __init__(
         self,
         *,
-        model_parameters: Dict[str, Any],
         lr_scheduler_config: Dict[str, Union[str, int, float]],
+        model_parameter: Dict[str, Any],
         lr: float,
         loss_parameter: Dict[str, Any],
+        dataset_statistic: Optional[Dict[str, float]] = None,
         optimizer: Type[Optimizer] = torch.optim.AdamW,
     ):
         """
@@ -266,25 +267,27 @@ class TrainingAdapter(pl.LightningModule):
             The optimizer class to use for training, by default torch.optim.AdamW.
         """
 
-        from typing import List
         from modelforge.potential import _Implemented_NNPs
         from torchmetrics.regression import MeanSquaredError, MeanAbsoluteError
         from torchmetrics import MetricCollection
 
         super().__init__()
-        self.save_hyperparameters(ignore=["loss_module"])
+        self.save_hyperparameters()
         # Extracting and instantiating the model from parameters
-        nnp_parameters_ = model_parameters.copy()
-        nnp_name = nnp_parameters_.pop("nnp_name", None)
-        if nnp_name is None:
+        model_parameter_ = model_parameter.copy()
+        model_name = model_parameter_.pop("model_name", None)
+        if model_name is None:
             raise ValueError(
-                "NNP name must be specified in nnp_parameters with key 'nnp_name'."
+                "NNP name must be specified in nnp_parameters with key 'model_name'."
             )
-        nnp_class: Type = _Implemented_NNPs.get_neural_network_class(nnp_name)
+        nnp_class: Type = _Implemented_NNPs.get_neural_network_class(model_name)
         if nnp_class is None:
-            raise ValueError(f"Specified NNP name '{nnp_name}' is not implemented.")
+            raise ValueError(f"Specified NNP name '{model_name}' is not implemented.")
 
-        self.model = nnp_class(**nnp_parameters_)
+        self.model = nnp_class(
+            **model_parameter_,
+            dataset_statistic=dataset_statistic,
+        )
         self.optimizer = optimizer
         self.learning_rate = lr
         self.lr_scheduler_config = lr_scheduler_config
@@ -385,7 +388,7 @@ class TrainingAdapter(pl.LightningModule):
         """
         nnp_input = batch.nnp_input
         E_true = batch.metadata.E.to(torch.float32).squeeze(1)
-        E_predict = self.model.forward(nnp_input).E
+        E_predict = self.model.forward(nnp_input)["E"]
         assert E_true.shape == E_predict.shape, (
             f"Shapes of true and predicted energies do not match: "
             f"{E_true.shape} != {E_predict.shape}"
@@ -759,29 +762,33 @@ def log_training_arguments(
     version_select = dataset_config.get("version_select", "latest")
     if version_select == "latest":
         log.info(f"Using default dataset version: {version_select}")
-
     else:
         log.info(f"Using dataset version: {version_select}")
+
     accelerator = training_config.get("accelerator", "cpu")
     if accelerator == "cpu":
         log.info(f"Using default accelerator: {accelerator}")
     else:
         log.info(f"Using accelerator: {accelerator}")
+
     nr_of_epochs = training_config.get("nr_of_epochs", 10)
     if nr_of_epochs == 10:
         log.info(f"Using default number of epochs: {nr_of_epochs}")
     else:
         log.info(f"Training for {nr_of_epochs} epochs")
+
     num_nodes = training_config.get("num_nodes", 1)
     if num_nodes == 1:
         log.info(f"Using default number of nodes: {num_nodes}")
     else:
         log.info(f"Training on {num_nodes} nodes")
+
     devices = training_config.get("devices", 1)
     if devices == 1:
         log.info(f"Using default device index/number: {devices}")
     else:
         log.info(f"Using device index/number: {devices}")
+
     batch_size = training_config.get("batch_size", 128)
     if batch_size == 128:
         log.info(f"Using default batch size: {batch_size}")
@@ -795,6 +802,7 @@ def log_training_arguments(
         )
     else:
         log.info(f"Removing self energies: {remove_self_energies}")
+
     early_stopping_config = training_config.get("early_stopping", None)
     if early_stopping_config is None:
         log.info(f"Using default: No early stopping performed")
@@ -810,14 +818,16 @@ def log_training_arguments(
         )
     else:
         log.info(f"Using {num_workers} workers for training data loader")
+
     pin_memory = dataset_config.get("pin_memory", False)
     if pin_memory is False:
         log.info(f"Using default value for pinned_memory: {pin_memory}")
     else:
         log.info(f"Using pinned_memory: {pin_memory}")
+
     model_name = potential_config["model_name"]
     dataset_name = dataset_config["dataset_name"]
-    log.info(training_config["loss_parameter"])
+    log.info(training_config["training_parameter"]["loss_parameter"])
     log.debug(
         f"""
 Training {model_name} on {dataset_name}-{version_select} dataset with {accelerator}
@@ -831,6 +841,7 @@ def perform_training(
     potential_config: Dict[str, Any],
     training_config: Dict[str, Any],
     dataset_config: Dict[str, Any],
+    checkpoint_path: Optional[str] = None,
 ) -> Trainer:
     """
     Performs the training process for a neural network potential model.
@@ -854,13 +865,17 @@ def perform_training(
     from lightning import Trainer
     from modelforge.potential import NeuralNetworkPotentialFactory
     from modelforge.dataset.dataset import DataModule
-    from lightning.pytorch.callbacks import ModelSummary
 
     save_dir = training_config.get("save_dir", "lightning_logs")
-    if save_dir == "lightning_logs":
-        log.info(f"Saving logs to default location: {save_dir}")
 
     experiment_name = training_config.get("experiment_name", "exp")
+    if experiment_name == "{model_name}_{dataset_name}":
+        experiment_name = (
+            f"{potential_config['model_name']}_{dataset_config['dataset_name']}"
+        )
+        training_config["experiment_name"] = (
+            experiment_name  # update the save_dir in training_config
+        )
     model_name = potential_config["model_name"]
     dataset_name = dataset_config["dataset_name"]
     log_training_arguments(potential_config, training_config, dataset_config)
@@ -882,17 +897,6 @@ def perform_training(
     # set up tensor board logger
     logger = TensorBoardLogger(save_dir, name=experiment_name)
 
-    log.debug(
-        f"""
-Training {model_name} on {dataset_name}-{version_select} dataset with {accelerator}
-accelerator on {num_nodes} nodes for {nr_of_epochs} epochs.
-Experiments are saved to: {save_dir}/{experiment_name}.
-"""
-    )
-
-    log.debug(f"Using {potential_config} potential config")
-    log.debug(f"Using {training_config} training config")
-
     # Set up dataset
     dm = DataModule(
         name=dataset_name,
@@ -901,13 +905,24 @@ Experiments are saved to: {save_dir}/{experiment_name}.
         remove_self_energies=remove_self_energies,
         version_select=version_select,
     )
+    dm.prepare_data()
+    dm.setup()
+
+    # read dataset statistics
+    import toml
+
+    dataset_statistic = toml.load(dm.dataset_statistic_filename)
+    log.info(f"Setting E_i_mean and E_i_stddev for {model_name}")
+    log.info(f"E_i_mean: {dataset_statistic['atomic_energies_stats']['E_i_mean']}")
+    log.info(f"E_i_stddev: {dataset_statistic['atomic_energies_stats']['E_i_stddev']}")
+
     # Set up model
-    model = NeuralNetworkPotentialFactory.create_nnp(
+    model = NeuralNetworkPotentialFactory.generate_model(
         use="training",
         model_type=model_name,
-        loss_parameter=training_config["loss_parameter"],
-        model_parameters=potential_config["potential_parameter"],
-        training_parameters=training_config["training_parameter"],
+        dataset_statistic=dataset_statistic,
+        model_parameter=potential_config["potential_parameter"],
+        training_parameter=training_config["training_parameter"],
     )
 
     # set up traininer
@@ -948,19 +963,6 @@ Experiments are saved to: {save_dir}/{experiment_name}.
         log_every_n_steps=50,
     )
 
-    dm.prepare_data()
-    dm.setup()
-
-    log.info(f"Setting E_i_mean and E_i_stddev for {model_name}")
-    log.info(f"E_i_mean: {dm.dataset_statistics.E_i_mean}")
-    log.info(f"E_i_stddev: {dm.dataset_statistics.E_i_stddev}")
-    model.model.core_module.readout_module.E_i_mean = torch.tensor(
-        [dm.dataset_statistics.E_i_mean], dtype=torch.float32
-    )
-    model.model.core_module.readout_module.E_i_stddev = torch.tensor(
-        [dm.dataset_statistics.E_i_stddev], dtype=torch.float32
-    )
-
     # Run training loop and validate
     trainer.fit(
         model,
@@ -968,6 +970,7 @@ Experiments are saved to: {save_dir}/{experiment_name}.
             num_workers=num_workers, pin_memory=pin_memory
         ),
         val_dataloaders=dm.val_dataloader(),
+        ckpt_path=checkpoint_path,
     )
     trainer.validate(model=model, dataloaders=dm.val_dataloader(), ckpt_path="best")
     trainer.test(dataloaders=dm.test_dataloader(), ckpt_path="best")

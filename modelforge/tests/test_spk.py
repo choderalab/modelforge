@@ -199,6 +199,16 @@ def setup_modelforge_painn_representation(
         cutoff=cutoff,
         shared_interactions=False,
         shared_filters=False,
+        processing_operation=[],
+        readout_operation=[
+            {
+                "step": "from_atom_to_molecule",
+                "mode": "sum",
+                "in": "E_i",
+                "index_key": "atomic_subsystem_indices",
+                "out": "E",
+            }
+        ],
     )
 
 
@@ -568,6 +578,16 @@ def setup_mf_schnet_representation(
         cutoff=cutoff,
         number_of_filters=number_of_atom_features,
         shared_interactions=False,
+        processing_operation=[],
+        readout_operation=[
+            {
+                "step": "from_atom_to_molecule",
+                "mode": "sum",
+                "in": "E_i",
+                "index_key": "atomic_subsystem_indices",
+                "out": "E",
+            }
+        ],
     )
 
 

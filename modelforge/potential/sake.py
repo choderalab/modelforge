@@ -4,8 +4,9 @@ import torch.nn as nn
 from loguru import logger as log
 from typing import Dict, Tuple
 from openff.units import unit
+from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
 
-from .models import CoreNetwork, PairListOutputs
+from .models import PairListOutputs
 from .utils import (
     Dense,
     scatter_softmax,
@@ -143,7 +144,7 @@ class SAKECore(CoreNetwork):
 
         return nnp_input
 
-    def _forward(self, data: SAKENeuralNetworkInput):
+    def compute_properties(self, data: SAKENeuralNetworkInput):
         """
         Compute atomic representations/embeddings.
 
@@ -543,7 +544,7 @@ class SAKEInteraction(nn.Module):
         return h_updated, x_updated, v_updated
 
 
-from .models import InputPreparation, NNPInput, BaseNetwork
+from typing import Optional, List
 
 
 class SAKE(BaseNetwork):
@@ -556,9 +557,16 @@ class SAKE(BaseNetwork):
         number_of_spatial_attention_heads: int,
         number_of_radial_basis_functions: int,
         cutoff: unit.Quantity,
+        processing_operation: List[Dict[str, str]],
+        readout_operation: List[Dict[str, str]],
+        dataset_statistic: Optional[Dict[str, float]] = None,
         epsilon: float = 1e-8,
     ):
-        super().__init__()
+        super().__init__(
+            dataset_statistic=dataset_statistic,
+            processing_operation=processing_operation,
+            readout_operation=readout_operation,
+        )
         from modelforge.utils.units import _convert
 
         self.core_module = SAKECore(
@@ -591,3 +599,8 @@ class SAKE(BaseNetwork):
         }
         prior.update(shared_config_prior())
         return prior
+
+    def combine_per_atom_properties(
+        self, values: Dict[str, torch.Tensor]
+    ) -> torch.Tensor:
+        return values

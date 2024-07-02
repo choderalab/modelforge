@@ -10,7 +10,6 @@ from modelforge.potential.sake import SAKE, SAKEInteraction
 import sake as reference_sake
 from sys import platform
 
-
 ON_MAC = platform == "darwin"
 
 
@@ -59,7 +58,7 @@ def test_sake_forward(single_batch_with_batchsize_64):
     nr_of_mols = methane.atomic_subsystem_indices.unique().shape[0]
 
     assert (
-        len(energy) == nr_of_mols
+            len(energy) == nr_of_mols
     )  # Assuming energy is calculated per sample in the batch
 
 
@@ -259,7 +258,7 @@ def test_radial_symmetry_function_against_reference():
     d_ij_jax = jax.random.uniform(key, (nr_atoms, nr_atoms, 1))
     d_ij = torch.from_numpy(
         onp.array(d_ij_jax)
-    ).reshape(nr_atoms**2)
+    ).reshape(nr_atoms ** 2)
 
     mf_rbf = radial_symmetry_function_module(d_ij)
     variables = ref_radial_basis_module.init(key, d_ij_jax)
@@ -282,9 +281,10 @@ def test_radial_symmetry_function_against_reference():
     assert torch.allclose(
         mf_rbf,
         torch.from_numpy(onp.array(ref_rbf)).reshape(
-            nr_atoms**2, number_of_radial_basis_functions
+            nr_atoms ** 2, number_of_radial_basis_functions
         ),
     )
+
 
 def test_rbf_forward():
     from modelforge.potential.utils import (
@@ -292,6 +292,8 @@ def test_rbf_forward():
     )
     from sake.utils import ExpNormalSmearing as RefExpNormalSmearing
 
+    jax.numpy.set_printoptions(precision=100)
+    torch.set_printoptions(precision=100)
     nr_atoms = 1
     number_of_radial_basis_functions = 1
     cutoff_upper = 6.0 * unit.nanometer
@@ -314,12 +316,12 @@ def test_rbf_forward():
     d_ij_jax = jnp.full((nr_atoms, nr_atoms, 1), 1)
     d_ij = torch.from_numpy(
         onp.array(d_ij_jax)
-    ).reshape(nr_atoms**2)
+    ).reshape(nr_atoms ** 2)
 
     variables = ref_radial_basis_module.init(key, d_ij_jax)
 
-    means = 1e-18
-    betas = 25
+    means = 0
+    betas = 1
 
     variables["params"]["means"] = jnp.full_like(variables["params"]["means"], means)
     radial_symmetry_function_module.radial_basis_centers[:] = means
@@ -335,7 +337,7 @@ def test_rbf_forward():
     assert torch.allclose(
         mf_rbf,
         torch.from_numpy(onp.array(ref_rbf)).reshape(
-            nr_atoms**2, number_of_radial_basis_functions
+            nr_atoms ** 2, number_of_radial_basis_functions
         ),
     )
 
@@ -344,7 +346,6 @@ def test_rbf_forward():
 @pytest.mark.parametrize("include_self_pairs", [True, False])
 @pytest.mark.parametrize("v_is_none", [True, False])
 def test_sake_layer_against_reference(include_self_pairs, v_is_none):
-
     nr_atoms = 13
     out_features = 11
     hidden_features = 7
@@ -547,7 +548,7 @@ def test_sake_model_against_reference(single_batch_with_batchsize_1):
         if layer_name.startswith("d")
     )
     for (layer_name, layer), mf_sake_block in zip(
-        layers, mf_sake.core_module.interaction_modules.children()
+            layers, mf_sake.core_module.interaction_modules.children()
     ):
         layer["edge_model"]["kernel"]["betas"] = (
             mf_sake_block.radial_symmetry_function_module.radial_scale_factor.detach()

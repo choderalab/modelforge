@@ -251,7 +251,7 @@ class ANIRepresentation(nn.Module):
 
         radial_feature_vector = radial_feature_vector.squeeze(1)
         number_of_atoms = data.number_of_atoms
-        radial_sublength = self.radial_symmetry_functions.radial_sublength
+        radial_sublength = self.radial_symmetry_functions.number_of_radial_basis_functions
         radial_length = radial_sublength * self.nr_of_supported_elements
 
         radial_aev = radial_feature_vector.new_zeros(
@@ -445,7 +445,7 @@ class ANI2xCore(CoreNetwork):
         angle_sections: int = 4,
     ) -> None:
         """
-        Initialize the ANi NNP architeture.
+        Initialize the ANi NNP architecture.
 
         Parameters
         ----------
@@ -467,10 +467,7 @@ class ANI2xCore(CoreNetwork):
             angle_sections,
         )
         # The length of radial aev
-        self.radial_length = (
-            self.num_species
-            * self.ani_representation_module.radial_symmetry_functions.radial_sublength
-        )
+        self.radial_length = self.num_species * number_of_radial_basis_functions
         # The length of angular aev
         self.angular_length = (
             (self.num_species * (self.num_species + 1))

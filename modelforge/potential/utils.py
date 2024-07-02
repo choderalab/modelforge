@@ -504,6 +504,9 @@ class RadialBasisFunction(nn.Module, ABC):
 
 
 class GaussianRadialBasisFunctionWithScaling(RadialBasisFunction):
+    """
+    Shifts inputs by a set of centers and scales by a set of scale factors before passing into the standard Gaussian.
+    """
     def __init__(
             self,
             number_of_radial_basis_functions: int,
@@ -515,9 +518,6 @@ class GaussianRadialBasisFunctionWithScaling(RadialBasisFunction):
             trainable_centers_and_scale_factors: bool = False,
     ):
         """
-
-        Initializes and contains the logic for computing radial symmetry functions.
-
         Parameters
         ---------
         number_of_radial_basis_functions: int
@@ -534,25 +534,15 @@ class GaussianRadialBasisFunctionWithScaling(RadialBasisFunction):
             Whether prefactor is trainable
         trainable_centers_and_scale_factors: bool, default False
             Whether centers and scale factors are trainable.
-
-        Subclasses must implement the forward() method to compute the actual
-        symmetry function output given an input distance matrix.
         """
 
         super().__init__(GaussianRadialBasisFunctionCore, dtype, prefactor, trainable_prefactor)
         self.number_of_radial_basis_functions = number_of_radial_basis_functions
-        self.max_distance = max_distance
-        self.min_distance = min_distance
         self.dtype = dtype
         self.trainable_centers_and_scale_factors = trainable_centers_and_scale_factors
-        self.initialize_parameters()
-        # The length of radial subaev of a single species
-        self.radial_sublength = self.radial_basis_centers.numel()
-
-    def initialize_parameters(self):
         # convert to nanometer
-        _max_distance_in_nanometer = self.max_distance.to(unit.nanometer).m
-        _min_distance_in_nanometer = self.min_distance.to(unit.nanometer).m
+        _max_distance_in_nanometer = max_distance.to(unit.nanometer).m
+        _min_distance_in_nanometer = min_distance.to(unit.nanometer).m
 
         # calculate radial basis centers
         radial_basis_centers = self.calculate_radial_basis_centers(
@@ -766,8 +756,8 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
             _min_distance_in_nanometer,
             dtype,
     ):
-        # initialize centers according to the default values in PhysNet https://pubs.acs.org/doi/10.1021/acs.jctc.9b00181 # noqa
-        # (see mu_k in Figure 2 caption)
+        # initialize centers according to the default values in PhysNet
+        # (see mu_k in Figure 2 caption of https://pubs.acs.org/doi/10.1021/acs.jctc.9b00181)
         # NOTE: Unlike RadialBasisFunctionWithCenters, the centers are unitless.
 
         start_value = torch.exp(
@@ -789,8 +779,9 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
             _min_distance_in_nanometer,
             dtype,
     ):
-        # initialize according to the default values in PhysNet (see beta_k in Eq. 7)
-        # NOTES: - Unlike RadialBasisFunctionWithCenters, the scale factors are unitless.
+        # initialize according to the default values in PhysNet (see beta_k in Figure 2 caption)
+        # NOTES:
+        # - Unlike RadialBasisFunctionWithCenters, the scale factors are unitless.
         # - Each element of radial_square_factor here is the reciprocal of the square root of beta_k in the
         # Eq. 7 of the PhysNet paper. This way, it is consistent with the sqrt(2) * standard deviation interpretation
         # of radial_scale_factor in GaussianRadialBasisFunctionWithScaling
@@ -806,7 +797,9 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
         # NOTE: the PhysNet paper implicitly multiplies by 1/Angstrom within the inner exp but distances are in
         # nanometers, so we multiply by 10/nanometer
 
-        return (torch.exp((-distances + self._min_distance_in_nanometer) * 10).unsqueeze(-1) - self.radial_basis_centers) / self.radial_scale_factor
+        return ((torch.exp(
+            (-distances + self._min_distance_in_nanometer) * 10).unsqueeze(-1) - self.radial_basis_centers)
+                / self.radial_scale_factor)
 
 
 def pair_list(

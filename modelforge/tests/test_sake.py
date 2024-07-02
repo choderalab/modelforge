@@ -263,8 +263,6 @@ def test_radial_symmetry_function_against_reference():
     mf_rbf = radial_symmetry_function_module(d_ij)
     variables = ref_radial_basis_module.init(key, d_ij_jax)
 
-    print(f"{variables['params']['means']=}")
-    print(f"{variables['params']['betas']=}")
     assert torch.allclose(
         torch.from_numpy(onp.array(variables["params"]["means"])),
         radial_symmetry_function_module.radial_basis_centers.detach().T,
@@ -275,8 +273,6 @@ def test_radial_symmetry_function_against_reference():
     )
 
     ref_rbf = ref_radial_basis_module.apply(variables, d_ij_jax)
-    print(f"{mf_rbf=}")
-    print(f"{ref_rbf=}")
 
     assert torch.allclose(
         mf_rbf,
@@ -326,7 +322,7 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none):
     layer = variables["params"]
 
     assert torch.allclose(
-        torch.from_numpy(onp.array(layer["edge_model"]["kernel"]["betas"])),
+        torch.from_numpy(onp.array(layer["edge_model"]["kernel"]["betas"]) ** -0.5),
         mf_sake_block.radial_symmetry_function_module.radial_scale_factor.detach().T,
     )
     assert torch.allclose(

@@ -429,7 +429,7 @@ def test_sake_model_against_reference(single_batch_with_batchsize_1):
         processing_operation=[],
         readout_operation=[
             {
-                "step": "from_atom_to_molecule",
+                "function": "from_atom_to_molecule",
                 "mode": "sum",
                 "in": "E_i",
                 "index_key": "atomic_subsystem_indices",

@@ -6,11 +6,21 @@
 Welcome to modelforge's documentation!
 =========================================================
 
+`modelforge` is a package to build and train machine learned interatomic potentials.
+It provides datasets and popular models, 
+and allows for easy training and evaluation of models.
+
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
    getting_started
+   models
+   datasets
+   training
+   examples
+   for_developer
    api
 
 

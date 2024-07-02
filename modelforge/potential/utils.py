@@ -239,9 +239,10 @@ class CosineCutoff(nn.Module):
     def __init__(self, cutoff: unit.Quantity):
         """
         Behler-style cosine cutoff module.
+        NOTE: The cutoff is converted to nanometer and the input MUST be in nanomter too.
 
         Parameters:
-        ----------
+        -------------
         cutoff: unit.Quantity
             The cutoff distance.
 
@@ -258,12 +259,12 @@ class CosineCutoff(nn.Module):
         Parameters
         ----------
         d_ij : Tensor
-            Pairwise distance tensor. Shape: [n_pairs, distance]
+            Pairwise distance tensor in nanometer. Shape: [n_pairs]
 
         Returns
         -------
         Tensor
-            The cosine cutoff tensor. Shape: [..., N]
+            Cosine cutoff tensor. Shape: [n_pairs]
         """
         # Compute values of cutoff function
         input_cut = 0.5 * (

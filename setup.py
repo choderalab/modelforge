@@ -9,6 +9,7 @@ setup(
             "dataset/yaml_files/*",
             "curation/yaml_files/*",
             "tests/data/potential_defaults/*",
+            "tests/data/dataset_defaults/*",
             "tests/data/training_defaults/*",
         ]
     },

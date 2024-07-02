@@ -803,6 +803,10 @@ def log_training_arguments(
     else:
         log.info(f"Removing self energies: {remove_self_energies}")
 
+    splitting_strategy = training_config["splitting_strategy"]["name"]
+    data_split = training_config["splitting_strategy"]["data_split"]
+    log.info(f"Using splitting strategy: {splitting_strategy} with split: {data_split}")
+
     early_stopping_config = training_config.get("early_stopping", None)
     if early_stopping_config is None:
         log.info(f"Using default: No early stopping performed")
@@ -865,6 +869,18 @@ def perform_training(
     from lightning import Trainer
     from modelforge.potential import NeuralNetworkPotentialFactory
     from modelforge.dataset.dataset import DataModule
+    from lightning.pytorch.callbacks import ModelSummary
+    from modelforge.dataset.utils import REGISTERED_SPLITTING_STRATEGIES
+
+    # log the arguments
+    log_training_arguments(potential_config, training_config, dataset_config)
+
+    # Parse the arguments
+    model_name = potential_config["model_name"]
+    dataset_name = dataset_config["dataset_name"]
+    splitting_strategy = training_config["splitting_strategy"]["name"]
+    data_split = training_config["splitting_strategy"]["data_split"]
+    splitting_seed = training_config["splitting_strategy"].get("seed", 42)
 
     save_dir = training_config.get("save_dir", "lightning_logs")
 
@@ -901,9 +917,11 @@ def perform_training(
     dm = DataModule(
         name=dataset_name,
         batch_size=batch_size,
-        splitting_strategy=RandomRecordSplittingStrategy(),
         remove_self_energies=remove_self_energies,
         version_select=version_select,
+        splitting_strategy=REGISTERED_SPLITTING_STRATEGIES[splitting_strategy](
+            seed=splitting_seed, split=data_split
+        ),
     )
     dm.prepare_data()
     dm.setup()

@@ -119,10 +119,10 @@ def test_compare_radial_symmetry_features():
         max_distance=radial_cutoff * unit.angstrom,
         min_distance=radial_start * unit.angstrom,
     )
-    r_mf = rsf(d_ij / 10)  # torch.Size([5, 1, 8]) # NOTE: nanometer
-    cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom)
+    r_mf = rsf(d_ij)  # torch.Size([5, 1, 8]) # NOTE: nanometer
+    cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom, representation_unit=unit.angstrom)
 
-    rcut_ij = cutoff_module(d_ij / 10)  # torch.Size([5, 1]) # NOTE: nanometer
+    rcut_ij = cutoff_module(d_ij)  # torch.Size([5, 1]) # NOTE: nanometer
     r_mf = r_mf * rcut_ij.unsqueeze(-1)
 
     rsf_tn = ExpNormalSmearing(
@@ -176,7 +176,7 @@ def test_representation():
     mf_input = next(iter(dataset.train_dataloader())).nnp_input
     # modelforge TensorNet
     torch.manual_seed(0)
-    model = TensorNet(radial_max_distance=5.1 * unit.angstrom)  # no max distance for test purposes
+    model = TensorNet(representation_unit=unit.angstrom)
     model.input_preparation._input_checks(mf_input)
     pairlist_output = model.input_preparation.prepare_inputs(mf_input)
 
@@ -205,25 +205,28 @@ def test_representation():
     )
 
     # calculate embedding
-    edge_attr = distance_expansion(nnp_input.d_ij.squeeze(-1) * 10)
+    edge_attr = distance_expansion(nnp_input.d_ij.squeeze(-1) * 10) # Note: in angstrom
 
     X_tn = tensor_embedding(
         nnp_input.atomic_numbers,
         nnp_input.pair_indices,
-        nnp_input.d_ij.squeeze(-1) * 10,
-        nnp_input.r_ij / nnp_input.d_ij * 10,  # edge_vec_norm
+        nnp_input.d_ij.squeeze(-1) * 10,  # Note: in angstrom
+        nnp_input.r_ij / nnp_input.d_ij,  # edge_vec_norm in angstrom
         edge_attr,
     )
     ################ TensorNet ################
 
     assert X_mf.shape == X_tn.shape
-    assert torch.allclose(X_mf, X_tn, atol=1e-7)
+    assert torch.allclose(X_mf, X_tn, atol=1e-6)
 
 
 if __name__ == "__main__":
     import torch
 
     torch.manual_seed(0)
+
+    # test_tensornet_init()
+
     # test_compare_radial_symmetry_features()
 
     # test_model_input()

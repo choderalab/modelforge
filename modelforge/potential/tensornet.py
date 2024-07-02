@@ -67,6 +67,7 @@ class TensorNet(BaseNetwork):
             trainable_rbf: bool = False,
             max_atomic_number: int = 128,
             dtype: torch.dtype = torch.float32,
+            representation_unit: unit.Quantity = unit.angstrom,
     ) -> None:
         super().__init__()
 
@@ -79,6 +80,7 @@ class TensorNet(BaseNetwork):
             trainable_rbf,
             max_atomic_number,
             dtype,
+            representation_unit,
         )
         self.only_unique_pairs = True  # NOTE: for pairlist
         self.input_preparation = InputPreparation(
@@ -97,6 +99,7 @@ class TensorNetCore(CoreNetwork):
             trainable_rbf: bool,
             max_atomic_number: int,
             dtype: torch.dtype,
+            representation_unit: unit.Quantity,
     ):
         super().__init__()
 
@@ -109,6 +112,7 @@ class TensorNetCore(CoreNetwork):
             trainable_rbf,
             max_atomic_number,
             dtype,
+            representation_unit,
         )
         self.interaction_modules = TensorNetInteraction()
 
@@ -145,15 +149,15 @@ class TensorNetRepresentation(torch.nn.Module):
             trainable_rbf: bool,  # TODO
             max_atomic_number: int,
             dtype: torch.dtype,
+            representation_unit: unit.Quantity,
     ):
         super().__init__()
 
         # TensorNet uses angstrom
-        _max_distance_in_angstrom = radial_max_distance.to(unit.angstrom).m
-        _min_distance_in_angstrom = radial_min_distance.to(unit.angstrom).m
         self.dtype = dtype
+        self.representation_unit = representation_unit
 
-        self.cutoff_module = CosineCutoff(radial_max_distance)
+        self.cutoff_module = CosineCutoff(radial_max_distance, representation_unit)
         self.radial_symmetry_function = self._setup_radial_symmetry_functions(
             radial_max_distance,
             radial_min_distance,
@@ -257,6 +261,7 @@ class TensorNetRepresentation(torch.nn.Module):
             max_distance,
             min_distance,
             dtype=self.dtype,
+            representation_unit=self.representation_unit,
         )
         return radial_symmetry_function
 
@@ -265,22 +270,24 @@ class TensorNetRepresentation(torch.nn.Module):
             data.atomic_numbers,
             data.pair_indices,
         )
-        edge_vec_norm = data.r_ij / data.d_ij
+        r_ij = (data.r_ij * unit.nanometer).to(self.representation_unit).m
+        d_ij = (data.d_ij * unit.nanometer).to(self.representation_unit).m
+        edge_vec_norm = r_ij / d_ij
 
-        radial_feature_vector = self.radial_symmetry_function(data.d_ij)
+        radial_feature_vector = self.radial_symmetry_function(d_ij)
         # cutoff
-        rcut_ij = self.cutoff_module(data.d_ij)
+        rcut_ij = self.cutoff_module(d_ij)
         radial_feature_vector = radial_feature_vector * rcut_ij.unsqueeze(-1)
 
         Iij, Aij, Sij = self._get_tensor_messages(
             atomic_number_embedding,
-            data.d_ij,
+            d_ij,
             edge_vec_norm,
             radial_feature_vector
         )
-        Iij_in_angstrom = Iij
-        Aij_in_angstrom = Aij * 10
-        Sij_in_angstrom = Sij * 100
+        # Iij_in_angstrom = Iij
+        # Aij_in_angstrom = Aij * 10
+        # Sij_in_angstrom = Sij * 100
         source = torch.zeros(
             data.atomic_numbers.shape[0],
             self.hidden_channels,
@@ -289,9 +296,9 @@ class TensorNetRepresentation(torch.nn.Module):
             device=data.atomic_numbers.device,
             dtype=Iij.dtype
         )
-        I = source.index_add(dim=0, index=data.pair_indices[0], source=Iij_in_angstrom)
-        A = source.index_add(dim=0, index=data.pair_indices[0], source=Aij_in_angstrom)
-        S = source.index_add(dim=0, index=data.pair_indices[0], source=Sij_in_angstrom)
+        I = source.index_add(dim=0, index=data.pair_indices[0], source=Iij)
+        A = source.index_add(dim=0, index=data.pair_indices[0], source=Aij)
+        S = source.index_add(dim=0, index=data.pair_indices[0], source=Sij)
         norm = self.init_norm(tensor_norm(I + A + S))
         for linear_scalar in self.linears_scalar:
             norm = self.act(linear_scalar(norm))

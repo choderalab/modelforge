@@ -7,58 +7,11 @@ def test_Schnet_init():
     """Test initialization of the Schnet model."""
     from modelforge.potential.schnet import SchNet
 
-    from modelforge.train.training import return_toml_config
-    from importlib import resources
-    from modelforge.tests.data import potential
+    from modelforge.tests.test_models import load_configs
 
-    model_name = "SchNet"
-
-    file_path = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
-    config = return_toml_config(file_path)
-
+    # read default parameters
+    config = load_configs(f"schnet_without_ase", "qm9")
     # Extract parameters
     potential_parameter = config["potential"].get("potential_parameter", {})
     schnet = SchNet(**potential_parameter)
     assert schnet is not None, "Schnet model should be initialized."
-
-
-from openff.units import unit
-
-
-@pytest.mark.parametrize(
-    "model_parameter",
-    (
-        [64, 50, 20, unit.Quantity(5.0, unit.angstrom), 2],
-        [32, 60, 10, unit.Quantity(7.0, unit.angstrom), 1],
-        [128, 120, 64, unit.Quantity(5.0, unit.angstrom), 3],
-    ),
-)
-def test_schnet_forward(single_batch_with_batchsize_64, model_parameter):
-    """
-    Test the forward pass of the Schnet model.
-    """
-    print(f"model_parameter: {model_parameter}")
-    (
-        nr_atom_basis,
-        max_atomic_number,
-        number_of_gaussians,
-        cutoff,
-        nr_interaction_blocks,
-    ) = model_parameter
-    schnet = SchNet(
-        number_of_atom_features=nr_atom_basis,
-        max_Z=max_atomic_number,
-        number_of_radial_basis_functions=number_of_gaussians,
-        cutoff=cutoff,
-        number_of_interaction_modules=nr_interaction_blocks,
-        number_of_filters=3,
-        shared_interactions=False,
-    )
-    energy = schnet(single_batch_with_batchsize_64.nnp_input).E
-    nr_of_mols = single_batch_with_batchsize_64.nnp_input.atomic_subsystem_indices.unique().shape[
-        0
-    ]
-
-    assert (
-        len(energy) == nr_of_mols
-    )  # Assuming energy is calculated per sample in the batch

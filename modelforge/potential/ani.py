@@ -1,17 +1,16 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, NamedTuple, Tuple
+from typing import TYPE_CHECKING, Dict, Tuple
+from .models import InputPreparation, BaseNetwork, CoreNetwork
 
 import torch
 from loguru import logger as log
 from openff.units import unit
 from torch import nn
 
-from modelforge.potential.models import CoreNetwork
 from modelforge.utils.prop import SpeciesAEV
 
 if TYPE_CHECKING:
     from modelforge.dataset.dataset import NNPInput
-
     from .models import PairListOutputs
 
 
@@ -517,7 +516,7 @@ class ANI2xCore(CoreNetwork):
 
         return nnp_data
 
-    def _forward(self, data: AniNeuralNetworkData) -> Dict[str, torch.Tensor]:
+    def compute_properties(self, data: AniNeuralNetworkData) -> Dict[str, torch.Tensor]:
         """
         Calculate the energy for a given input batch.
 
@@ -546,22 +545,29 @@ class ANI2xCore(CoreNetwork):
         }
 
 
-from .models import InputPreparation, BaseNetwork
-from typing import Union
+from typing import Union, Optional, List, Dict
 
 
 class ANI2x(BaseNetwork):
     def __init__(
         self,
         radial_max_distance: Union[unit.Quantity, str],
-        radial_min_distance: Union[unit.Quantity, str],  # NOTE: min distance? #FIXME
+        radial_min_distance: Union[unit.Quantity, str],
         number_of_radial_basis_functions: int,
         angular_max_distance: Union[unit.Quantity, str],
         angular_min_distance: Union[unit.Quantity, str],
         angular_dist_divisions: int,
         angle_sections: int,
+        processing_operation: List[Dict[str, str]],
+        readout_operation: List[Dict[str, str]],
+        dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
-        super().__init__()
+
+        super().__init__(
+            processing_operation=processing_operation,
+            dataset_statistic=dataset_statistic,
+            readout_operation=readout_operation,
+        )
 
         from modelforge.utils.units import _convert
 
@@ -596,3 +602,8 @@ class ANI2x(BaseNetwork):
         }
         prior.update(shared_config_prior())
         return prior
+
+    def combine_per_atom_properties(
+        self, values: Dict[str, torch.Tensor]
+    ) -> torch.Tensor:
+        return values

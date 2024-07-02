@@ -5,8 +5,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from loguru import logger as log
 from openff.units import unit
+from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
 
-from .models import CoreNetwork
 from .utils import Dense
 
 if TYPE_CHECKING:
@@ -104,7 +104,7 @@ class PaiNNCore(CoreNetwork):
 
         self.embedding_module = Embedding(max_Z, number_of_atom_features)
 
-        # initialize the energy readout
+        # initialize the energy readout_operation
         from .processing import FromAtomToMoleculeReduction
 
         self.readout_module = FromAtomToMoleculeReduction()
@@ -161,7 +161,7 @@ class PaiNNCore(CoreNetwork):
 
         return nnp_input
 
-    def _forward(
+    def compute_properties(
         self,
         data: PaiNNNeuralNetworkData,
     ):
@@ -471,6 +471,7 @@ class PaiNNMixing(nn.Module):
 
 
 from .models import InputPreparation, NNPInput, BaseNetwork
+from typing import List
 
 
 class PaiNN(BaseNetwork):
@@ -483,9 +484,16 @@ class PaiNN(BaseNetwork):
         number_of_interaction_modules: int,
         shared_interactions: bool,
         shared_filters: bool,
+        processing_operation: Dict[str, torch.nn.ModuleList],
+        readout_operation: Dict[str, List[Dict[str, str]]],
+        dataset_statistic: Optional[Dict[str, float]] = None,
         epsilon: float = 1e-8,
-    ):
-        super().__init__()
+    ) -> None:
+        super().__init__(
+            dataset_statistic=dataset_statistic,
+            processing_operation=processing_operation,
+            readout_operation=readout_operation,
+        )
         from modelforge.utils.units import _convert
 
         self.core_module = PaiNNCore(
@@ -519,3 +527,8 @@ class PaiNN(BaseNetwork):
         }
         prior.update(shared_config_prior())
         return prior
+
+    def combine_per_atom_properties(
+        self, values: Dict[str, torch.Tensor]
+    ) -> torch.Tensor:
+        return values

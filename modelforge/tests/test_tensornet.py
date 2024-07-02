@@ -84,8 +84,8 @@ def test_model_input():
     edge_index, edge_weight, edge_vec = distance_module(pos, batch, None)
 
     # reshape and compare
-    pair_indices = pairlist_output.pair_indices.transpose(0, 1)
-    edge_index = edge_index.transpose(0, 1)
+    pair_indices = pairlist_output.pair_indices.t()
+    edge_index = edge_index.t()
     for _, pair_index in enumerate(pair_indices):
         idx = ((edge_index == pair_index).sum(axis=1) == 2).nonzero()[0][0]  # select [True, True]
         print(pairlist_output.d_ij[_][0])
@@ -122,8 +122,8 @@ def test_compare_radial_symmetry_features():
     r_mf = rsf(d_ij / 10)  # torch.Size([5, 1, 8]) # NOTE: nanometer
     cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom)
 
-    rcut_ij = cutoff_module(d_ij / 10).unsqueeze(-1)  # torch.Size([5, 1, 1]) # NOTE: nanometer
-    r_mf = r_mf * rcut_ij
+    rcut_ij = cutoff_module(d_ij / 10)  # torch.Size([5, 1]) # NOTE: nanometer
+    r_mf = r_mf * rcut_ij.unsqueeze(-1)
 
     rsf_tn = ExpNormalSmearing(
         cutoff_lower=radial_start,
@@ -140,32 +140,22 @@ def test_representation():
     import torch
     from openff.units import unit
     from torch import nn
-    from torchmdnet.models.model import create_model, load_model
     from torchmdnet.models.tensornet import TensorEmbedding
     from torchmdnet.models.utils import ExpNormalSmearing, OptimizedDistance
-
-    from modelforge.potential.utils import CosineCutoff
-    from modelforge.potential.tensornet import TensorNetNeuralNetworkData
-    from modelforge.potential.tensornet import TensorNetRepresentation
-    from modelforge.potential.utils import TensorNetRadialSymmetryFunction
-
-    num_atoms = 5
-    hidden_channels = 2
-    num_rbf = 8
-    act_class = nn.SiLU
-    cutoff_lower = 0.0
-    cutoff_upper = 5.0
-    trainable_rbf = False
-    max_z = 128
-    dtype = torch.float32
-
-    import torch
-    from openff.units import unit
     from torchmdnet.models.utils import OptimizedDistance
 
     from modelforge.dataset.dataset import DataModule
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
     from modelforge.potential.tensornet import TensorNet
+
+    hidden_channels = 8
+    num_rbf = 16
+    act_class = nn.SiLU
+    cutoff_lower = 0.0
+    cutoff_upper = 5.1
+    trainable_rbf = False
+    max_z = 128
+    dtype = torch.float32
 
     # Set up a dataset
     # prepare reference value
@@ -185,11 +175,19 @@ def test_representation():
     # get methane input
     mf_input = next(iter(dataset.train_dataloader())).nnp_input
     # modelforge TensorNet
-    model = TensorNet(radial_max_distance=100 * unit.angstrom)  # no max distance for test purposes
+    torch.manual_seed(0)
+    model = TensorNet(radial_max_distance=5.1 * unit.angstrom)  # no max distance for test purposes
     model.input_preparation._input_checks(mf_input)
     pairlist_output = model.input_preparation.prepare_inputs(mf_input)
 
+    ################ modelforge TensorNet ################
+    tensornet_representation_module = model.core_module.tensornet_representation_module
+    nnp_input = model.core_module._model_specific_input_preparation(mf_input, pairlist_output)
+    X_mf = tensornet_representation_module(nnp_input)
+    ################ modelforge TensorNet ################
+
     ################ TensorNet ################
+    torch.manual_seed(0)
     # TensorNet embedding modules setup
     tensor_embedding = TensorEmbedding(
         hidden_channels,
@@ -201,40 +199,25 @@ def test_representation():
         max_z,
         dtype,
     )
-    z, pos, batch = (
-        mf_input.atomic_numbers,
-        mf_input.positions,
-        mf_input.atomic_subsystem_indices
-    )
-    distance_module = OptimizedDistance(
-        cutoff_lower=0.0,
-        cutoff_upper=5.0,
-        max_num_pairs=153,
-        return_vecs=True,
-        loop=False,
-        check_errors=False,
-        resize_to_fit=False,  # not self.static_shapes
-        box=None,
-        long_edge_index=False,
-    )
+
     distance_expansion = ExpNormalSmearing(
         cutoff_lower, cutoff_upper, num_rbf, trainable_rbf
     )
 
     # calculate embedding
-    edge_index, edge_weight, edge_vec = distance_module(pos, batch, None)
-    edge_attr = distance_expansion(edge_weight)
-    X_tn = tensor_embedding(z, edge_index, edge_weight, edge_vec, edge_attr)
+    edge_attr = distance_expansion(nnp_input.d_ij.squeeze(-1) * 10)
+
+    X_tn = tensor_embedding(
+        nnp_input.atomic_numbers,
+        nnp_input.pair_indices,
+        nnp_input.d_ij.squeeze(-1) * 10,
+        nnp_input.r_ij / nnp_input.d_ij * 10,  # edge_vec_norm
+        edge_attr,
+    )
     ################ TensorNet ################
 
-    ################ modelforge TensorNet ################
-    tensornet_representation_module = model.core_module.tensornet_representation_module
-    nnp_input = model.core_module._model_specific_input_preparation(mf_input, pairlist_output)
-    tensornet_representation_module(nnp_input)
-
-    ################ modelforge TensorNet ################
-
-    return 0
+    assert X_mf.shape == X_tn.shape
+    assert torch.allclose(X_mf, X_tn, atol=1e-7)
 
 
 if __name__ == "__main__":
@@ -243,8 +226,6 @@ if __name__ == "__main__":
     torch.manual_seed(0)
     # test_compare_radial_symmetry_features()
 
-    # test_compare_radial_symmetry_features
+    # test_model_input()
 
     test_representation()
-
-    # test_model_input(test_model_input)

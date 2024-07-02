@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import torch
 from openff.units import unit
-from torch import nn, Tensor
+from torch import nn
 from torchmdnet.models.tensornet import tensor_norm, vector_to_skewtensor, vector_to_symtensor
 from torchmdnet.models.utils import OptimizedDistance
 from typing import Optional, Tuple
@@ -151,12 +151,13 @@ class TensorNetRepresentation(torch.nn.Module):
         # TensorNet uses angstrom
         _max_distance_in_angstrom = radial_max_distance.to(unit.angstrom).m
         _min_distance_in_angstrom = radial_min_distance.to(unit.angstrom).m
+        self.dtype = dtype
 
         self.cutoff_module = CosineCutoff(radial_max_distance)
         self.radial_symmetry_function = self._setup_radial_symmetry_functions(
             radial_max_distance,
             radial_min_distance,
-            number_of_radial_basis_functions
+            number_of_radial_basis_functions,
         )
         self.hidden_channels = hidden_channels
         self.distance_proj1 = nn.Linear(
@@ -176,7 +177,7 @@ class TensorNetRepresentation(torch.nn.Module):
         )
         self.max_z = max_atomic_number
         self.emb = nn.Embedding(max_atomic_number, hidden_channels, dtype=dtype)
-        self.emb2 = nn.Embedding(2 * hidden_channels, hidden_channels, dtype=dtype)
+        self.emb2 = nn.Linear(2 * hidden_channels, hidden_channels, dtype=dtype)
         self.act = activation_function()
         self.linears_tensor = nn.ModuleList()
         for _ in range(3):
@@ -205,30 +206,41 @@ class TensorNetRepresentation(torch.nn.Module):
             linear.reset_parameters()
         self.init_norm.reset_parameters()
 
-    def _get_atomic_number_message(self, z: Tensor, edge_index: Tensor) -> Tensor:
-        Z = self.emb(z)
-        Zij = self.emb2(
-            Z.index_select(0, edge_index.t().reshape(-1)).view(
+    def _get_atomic_number_message(
+            self,
+            atomic_number: torch.Tensor,
+            pair_indices: torch.Tensor
+    ) -> torch.Tensor:
+        atomic_number_embedding_i = self.emb(atomic_number)
+        atomic_number_embedding_ij = self.emb2(
+            atomic_number_embedding_i.index_select(
+                0,
+                pair_indices.t().reshape(-1)
+            ).view(
                 -1, self.hidden_channels * 2
             )
         )[..., None, None]
-        return Zij
+        return atomic_number_embedding_ij
 
     def _get_tensor_messages(
-            self, Zij: Tensor, edge_weight: Tensor, edge_vec_norm: Tensor, edge_attr: Tensor
-    ) -> Tuple[Tensor, Tensor, Tensor]:
-        C = self.cutoff(edge_weight).reshape(-1, 1, 1, 1) * Zij
+            self,
+            Zij: torch.Tensor,
+            edge_weight: torch.Tensor,
+            edge_vec_norm: torch.Tensor,
+            edge_attr: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        C = self.cutoff_module(edge_weight).reshape(-1, 1, 1, 1) * Zij
         eye = torch.eye(3, 3, device=edge_vec_norm.device, dtype=edge_vec_norm.dtype)[
             None, None, ...
         ]
-        Iij = self.distance_proj1(edge_attr)[..., None, None] * C * eye
+        Iij = self.distance_proj1(edge_attr).permute(0, 2, 1)[..., None] * C * eye
         Aij = (
-                self.distance_proj2(edge_attr)[..., None, None]
+                self.distance_proj2(edge_attr).permute(0, 2, 1)[..., None]
                 * C
                 * vector_to_skewtensor(edge_vec_norm)[..., None, :, :]
         )
         Sij = (
-                self.distance_proj3(edge_attr)[..., None, None]
+                self.distance_proj3(edge_attr).permute(0, 2, 1)[..., None]
                 * C
                 * vector_to_symtensor(edge_vec_norm)[..., None, :, :]
         )
@@ -244,31 +256,42 @@ class TensorNetRepresentation(torch.nn.Module):
             number_of_radial_basis_functions,
             max_distance,
             min_distance,
-            dtype=torch.float32,
+            dtype=self.dtype,
         )
         return radial_symmetry_function
 
     def forward(self, data: TensorNetNeuralNetworkData):
-        Zij = self._get_atomic_number_message(data.atomic_numbers, data.edge_index)
-        # Normalizing edge vectors by their length can result in NaNs, breaking Autograd.
-        # I avoid dividing by zero by setting the weight of self edges and self loops to 1
-        mask = data.edge_index[0] == data.edge_index[1]
-        edge_vec_norm = data.edge_vec / data.edge_weight.masked_fill(mask, 1).unsqueeze(1)
+        atomic_number_embedding = self._get_atomic_number_message(
+            data.atomic_numbers,
+            data.pair_indices,
+        )
+        edge_vec_norm = data.r_ij / data.d_ij
 
-        radial_feature_vector = self.radial_symmetry_function(data.edge_weight)
+        radial_feature_vector = self.radial_symmetry_function(data.d_ij)
         # cutoff
-        rcut_ij = self.cutoff_module(data.edge_weight)
-        radial_feature_vector = radial_feature_vector * rcut_ij
+        rcut_ij = self.cutoff_module(data.d_ij)
+        radial_feature_vector = radial_feature_vector * rcut_ij.unsqueeze(-1)
 
         Iij, Aij, Sij = self._get_tensor_messages(
-            Zij, data.edge_weight, edge_vec_norm, radial_feature_vector
+            atomic_number_embedding,
+            data.d_ij,
+            edge_vec_norm,
+            radial_feature_vector
         )
+        Iij_in_angstrom = Iij
+        Aij_in_angstrom = Aij * 10
+        Sij_in_angstrom = Sij * 100
         source = torch.zeros(
-            data.atomic_numbers.shape[0], self.hidden_channels, 3, 3, device=data.atomic_numbers.device, dtype=Iij.dtype
+            data.atomic_numbers.shape[0],
+            self.hidden_channels,
+            3,
+            3,
+            device=data.atomic_numbers.device,
+            dtype=Iij.dtype
         )
-        I = source.index_add(dim=0, index=data.edge_index[0], source=Iij)
-        A = source.index_add(dim=0, index=data.edge_index[0], source=Aij)
-        S = source.index_add(dim=0, index=data.edge_index[0], source=Sij)
+        I = source.index_add(dim=0, index=data.pair_indices[0], source=Iij_in_angstrom)
+        A = source.index_add(dim=0, index=data.pair_indices[0], source=Aij_in_angstrom)
+        S = source.index_add(dim=0, index=data.pair_indices[0], source=Sij_in_angstrom)
         norm = self.init_norm(tensor_norm(I + A + S))
         for linear_scalar in self.linears_scalar:
             norm = self.act(linear_scalar(norm))

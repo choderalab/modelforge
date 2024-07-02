@@ -599,10 +599,14 @@ class NeuralNetworkPotentialFactory:
 class InputPreparation(torch.nn.Module):
     def __init__(self, cutoff: unit.Quantity, only_unique_pairs: bool = True):
         """
+        A module for preparing input data, including the calculation of pair lists, distances (d_ij), and displacement vectors (r_ij) for molecular simulations.
+
         Parameters
         ----------
+        cutoff : unit.Quantity
+            The cutoff distance for neighbor list calculations.
         only_unique_pairs : bool, optional
-            Whether to only use unique pairs in the pair list calculation, by default True.
+            Whether to only use unique pairs in the pair list calculation, by default True. This should be set to True for all message passing networks.
         """
 
         super().__init__()
@@ -615,18 +619,18 @@ class InputPreparation(torch.nn.Module):
         """
         Prepares the input tensors for passing to the model.
 
-        This method handles general input manipulation, such as calculating distances
-        and generating the pair list. It also calls the model-specific input preparation.
+        This method handles general input manipulation, such as calculating distances and generating the pair list.
 
         Parameters
         ----------
-        data : NNPInput
+        data : Union[NNPInput, NamedTuple]
             The input data provided by the dataset, containing atomic numbers, positions,
             and other necessary information.
 
         Returns
         -------
-        The processed input data, ready for the models forward pass.
+        PairListOutputs
+            A namedtuple containing the pair indices, Euclidean distances (d_ij), and displacement vectors (r_ij).
         """
         # ---------------------------
         # general input manipulation
@@ -698,12 +702,16 @@ class PostProcessing(torch.nn.Module):
         dataset_statistic,
     ):
         """
+        A module for handling post-processing operations on model outputs, including normalization, calculation of atomic self-energies, and reduction operations to compute per-molecule properties from per-atom properties.
+
         Parameters
         ----------
-        model_parameter : Dict[str, Any]
-            The model parameters.
+        processing_operation : List[Dict[str, str]]
+            A list of dictionaries containing the processing steps to be applied to the model output *in the order these are provided*.
+        readout_operation : List[Dict[str, str]]
+            A list of dictionaries containing the readout operations to be applied to the model output *in the order these are provided*.
         dataset_statistic : Dict[str, float]
-            The dataset statistics.
+            A dictionary containing the dataset statistics for normalization and other calculations.
         """
         super().__init__()
 
@@ -719,6 +727,19 @@ class PostProcessing(torch.nn.Module):
         readout_operation: List[Dict[str, str]],
         dataset_statistic,
     ):
+        """
+        Initializes post-processing operations based on the provided configuration.
+
+        Parameters
+        ----------
+        processing_operation : List[Dict[str, str]]
+            A list of dictionaries containing the processing steps to be applied to the model output.
+        readout_operation : List[Dict[str, str]]
+            A list of dictionaries containing the readout operations to be applied to the model output.
+        dataset_statistic : Dict[str, float]
+            A dictionary containing the dataset statistics for normalization and other calculations.
+        """
+
         from .processing import (
             FromAtomToMoleculeReduction,
             ScaleValues,
@@ -780,6 +801,16 @@ class PostProcessing(torch.nn.Module):
     def forward(self, outputs: Dict[str, torch.Tensor]):
         """
         Perform post-processing operations on per-atom properties and reduction operations to calculate per-molecule properties.
+
+        Parameters
+        ----------
+        outputs : Dict[str, torch.Tensor]
+            The output properties from the model, containing per-atom properties.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The processed outputs after applying the post-processing operations.
         """
         for property, processing in zip(
             self.per_atom_operations_prop, self.per_atom_operations

@@ -50,8 +50,10 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
 
         Parameters
         ----------
-        per_atom_property: torch.Tensor, shape [nr_of_atoms, 1]. The per-atom property that will be reduced to per-molecule property.
-        atomic_subsystem_indices: torch.Tensor, shape [nr_of_atoms]. The atomic subsystem indices
+        per_atom_property: torch.Tensor, shape [nr_of_atoms, 1].
+            The per-atom property that will be reduced to per-molecule property.
+        atomic_subsystem_indices: torch.Tensor, shape [nr_of_atoms].
+            The atomic subsystem indices
 
         Returns
         -------
@@ -168,6 +170,16 @@ class AtomicSelfEnergies:
 class ScaleValues(torch.nn.Module):
 
     def __init__(self, mean: float, stddev: float) -> None:
+        """
+        A module for scaling values using provided mean and standard deviation.
+
+        Parameters
+        ----------
+        mean : float
+            The mean value used for scaling.
+        stddev : float
+            The standard deviation value used for scaling.
+        """
 
         super().__init__()
         self.register_buffer("mean", torch.tensor([mean]))
@@ -175,12 +187,12 @@ class ScaleValues(torch.nn.Module):
 
     def forward(self, values_to_be_scaled: torch.Tensor) -> torch.Tensor:
         """
-        Rescales values using the provided mean and stddev.
+        Rescales values using the provided mean and standard deviation.
 
         Parameters
         ----------
         values_to_be_scaled : torch.Tensor
-            The tensor of energies to be rescaled.
+            The tensor of values to be rescaled.
 
         Returns
         -------
@@ -194,13 +206,13 @@ class ScaleValues(torch.nn.Module):
 class CalculateAtomicSelfEnergy(torch.nn.Module):
 
     def __init__(self, atomic_self_energies) -> None:
+
         super().__init__()
 
         # if values in atomic_self_energies are strings convert them to kJ/mol
         if isinstance(list(atomic_self_energies.values())[0], str):
             atomic_self_energies = {
-                key: unit.Quantity(value)
-                for key, value in atomic_self_energies.items()
+                key: unit.Quantity(value) for key, value in atomic_self_energies.items()
             }
         self.atomic_self_energies = AtomicSelfEnergies(atomic_self_energies)
 

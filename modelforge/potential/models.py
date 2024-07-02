@@ -752,11 +752,12 @@ class PostProcessing(torch.nn.Module):
         for proc in processing_operation:
             if proc["function"] == "normalization":
                 if dataset_statistic is None:
-                    log.warning(
-                        f"No mean and stddev provided for property {proc['in']}. Setting to default values!"
-                    )
                     mean = 0.0
                     stddev = 1.0
+
+                    log.warning(
+                        f"No mean and stddev provided for function {proc["function"]}. Setting to default mean={mean} and stddev={stddev}!"
+                    )
                 else:
                     atomic_energies_stats = dataset_statistic["atomic_energies_stats"]
                     mean = unit.Quantity(atomic_energies_stats[proc["mean"]]).m_as(

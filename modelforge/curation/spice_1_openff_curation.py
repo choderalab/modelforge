@@ -6,7 +6,7 @@ from tqdm import tqdm
 from openff.units import unit
 
 
-class SPICEOpenFFCuration(DatasetCuration):
+class SPICE1OpenFFCuration(DatasetCuration):
     """
     Fetches the SPICE 1.1.4 dataset from MOLSSI QCArchive and processes it into a curated hdf5 file.
 
@@ -54,9 +54,9 @@ class SPICEOpenFFCuration(DatasetCuration):
 
     Examples
     --------
-    >>> spice_openff_data = SPICEOpenFFCuration(hdf5_file_name='spice114_openff_dataset.hdf5',
-    >>>                             local_cache_dir='~/datasets/spice114_openff_dataset')
-    >>> spice_openff_data.process()
+    >>> spice_1_openff_data = SPICE1OpenFFCuration(hdf5_file_name='spice_1_openff_dataset.hdf5',
+    >>>                             local_cache_dir='~/datasets/spice_1_openff_dataset')
+    >>> spice_1_openff_data.process()
 
     """
 
@@ -762,9 +762,9 @@ class SPICEOpenFFCuration(DatasetCuration):
             Number of concurrent threads for retrieving data from QCArchive
         Examples
         --------
-        >>> spice_openff_data = SPICEOpenFFCuration(hdf5_file_name='spice114_openff_dataset.hdf5',
-        >>>                             local_cache_dir='~/datasets/spice114_openff_dataset')
-        >>> spice_openff_data.process()
+        >>> spice_1_openff_data = SPICE1OpenFFCuration(hdf5_file_name='spice_1_openff_dataset.hdf5',
+        >>>                             local_cache_dir='~/datasets/spice_1_openff_dataset')
+        >>> spice_1_openff_data.process()
 
         """
         # if max_records is not None and total_conformers is not None:
@@ -781,12 +781,12 @@ class SPICEOpenFFCuration(DatasetCuration):
         # This will need to load from various datasets, as described on the spice-dataset github page
         # see https://github.com/openmm/spice-dataset/blob/1.1.4/downloader/config.yaml
 
-        yaml_file = resources.files(yaml_files) / "spice114_openff_curation.yaml"
+        yaml_file = resources.files(yaml_files) / "spice1_openff_curation.yaml"
         logger.debug(f"Loading config data from {yaml_file}")
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
 
-        assert data_inputs["dataset_name"] == "spice114openff"
+        assert data_inputs["dataset_name"] == "spice1openff"
         if self.version_select == "latest":
             self.version_select = data_inputs["latest"]
             logger.debug(f"Using latest version {self.version_select}.")

@@ -3,27 +3,29 @@ latest: full_dataset_v0
 latest_test: nc_1000_v0
 full_dataset_v0:
   version: 0
+  doi: 10.5281/zenodo.11642744
   gz_data_file:
-    length: 5085941907
-    md5: 8daf9a7d8bbf9bcb1e9cea13b4df9270
+    length: 5083521300
+    md5: 9c1c3d977b043cc3491dbe59f68e1a8d
     name: ani2x_dataset_v0.hdf5.gz
   hdf5_data_file:
-    md5: 86bb855cb8df54e082506088e949518e
+    md5: 39dde98fbd47d08cfd6f80e6b5e29ef4
     name: ani2x_dataset_v0.hdf5
   processed_data_file:
     md5: null
     name: ani2x_dataset_v0_processed.npz
-  url: https://www.dropbox.com/scl/fi/sv1d32wepxfygxe7figp9/ani2x_dataset_v0.hdf5.gz?rlkey=bq4gvhg192qhicf300450a1ci&st=ubeng9h7&dl=1
+  url: https://zenodo.org/records/11642744/files/ani2x_dataset_v0.hdf5.gz
 nc_1000_v0:
   version: 0
+  doi: 10.5281/zenodo.12059090
   gz_data_file:
-    length: 174189
-    md5: 9f043115c38db3739f7c529f900c0e07
+    length: 174025
+    md5: c6b01060d164cf98497b6927da49dd07
     name: ani2x_dataset_v0_nc_1000.hdf5.gz
   hdf5_data_file:
-    md5: bed8b011c080078c15c3e7d79dfa99a3
+    md5: ef52d8414326c4b73171a5fa300df654
     name: ani2x_dataset_v0_nc_1000.hdf5
   processed_data_file:
     md5: null
     name: ani2x_dataset_v0_nc_1000_processed.npz
-  url: https://www.dropbox.com/scl/fi/dd2w73q3w4t6e05hdr9b0/ani2x_dataset_v0_ntc_1000.hdf5.gz?rlkey=odnhx1yve5p0agcjxnlhxs0s2&st=8t1mb139&dl=1
+  url: https://zenodo.org/records/12059090/files/ani2x_dataset_v0_ntc_1000.hdf5.gz

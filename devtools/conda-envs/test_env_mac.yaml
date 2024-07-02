@@ -17,7 +17,7 @@ dependencies:
   - tensorboard
   - torchvision
   - openff-units
-  - pint=0.23
+  - pint
   - rdkit
   - retry
   - sqlitedict
@@ -29,11 +29,7 @@ dependencies:
   - pytest-cov
   - codecov
   - requests
-  - ray-data
-  - ray-train
-  - ray-tune
   - torchani
-  - torchmd-net
   - versioneer
 
   # Docs

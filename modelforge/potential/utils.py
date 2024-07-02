@@ -799,6 +799,36 @@ class TensorNetRadialSymmetryFunction(RadialSymmetryFunction):
         )
         self.prefactor = torch.tensor([1.0])
 
+    def initialize_parameters(self):
+        # convert to nanometer
+        _max_distance_in_nanometer = self.max_distance.to(unit.nanometer).m
+        _min_distance_in_nanometer = self.min_distance.to(unit.nanometer).m
+
+        # calculate radial basis centers
+        radial_basis_centers = self.calculate_radial_basis_centers(
+            _min_distance_in_nanometer,
+            _max_distance_in_nanometer,
+            self.number_of_radial_basis_functions,
+            self.dtype,
+        )
+        # calculate scale factors
+        radial_scale_factor = self.calculate_radial_scale_factor(
+            _min_distance_in_nanometer,
+            _max_distance_in_nanometer,
+            self.number_of_radial_basis_functions,
+            self.dtype
+        )
+
+        # either add as parameters or register buffers
+        if self.trainable:
+            self.radial_basis_centers = radial_basis_centers
+            self.radial_scale_factor = radial_scale_factor
+            self.prefactor = nn.Parameter(torch.tensor([1.0]))
+        else:
+            self.register_buffer("radial_basis_centers", radial_basis_centers)
+            self.register_buffer("radial_scale_factor", radial_scale_factor)
+            self.register_buffer("prefactor", torch.tensor([1.0]))
+
     def calculate_radial_basis_centers(
         self,
         _min_distance_in_nanometer,
@@ -826,27 +856,32 @@ class TensorNetRadialSymmetryFunction(RadialSymmetryFunction):
         _min_distance_in_nanometer,
         _max_distance_in_nanometer,
         number_of_radial_basis_functions,
+        dtype,
     ):
         start_value = torch.exp(
             torch.scalar_tensor(
-                -_max_distance_in_nanometer*10 + _min_distance_in_nanometer*10, # in angstrom
-                dtype=self.dtype,
+                -_max_distance_in_nanometer*10 + _min_distance_in_nanometer*10, # NOTE: angstrom
+                dtype=dtype,
             )
         )
         scale_factors = torch.full(
             (number_of_radial_basis_functions,),
-            1 - start_value
+            1 - start_value,
+            dtype=dtype,
         )
         scale_factors = scale_factors * 2 / number_of_radial_basis_functions
         scale_factors = torch.pow(scale_factors, -2)
         return scale_factors
 
     def forward(self, d_ij: torch.Tensor):
-        d_ij = d_ij.unsqueeze(-1) * 10 # in angstrom
+        d_ij = d_ij.unsqueeze(-1) * 10  # NOTE: angstrom
+
+        # transfrom d_ij
         _max_distance_in_angstrom = self.max_distance.to(unit.angstrom).m
         _min_distance_in_angstrom = self.min_distance.to(unit.angstrom).m
         alpha = 5.0 / (_max_distance_in_angstrom - _min_distance_in_angstrom)
         d_ij = torch.exp(alpha * (-d_ij + _min_distance_in_angstrom))
+
         features = self.radial_basis_function.compute(
             d_ij, self.radial_basis_centers, self.radial_scale_factor
         )

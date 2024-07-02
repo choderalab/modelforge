@@ -66,7 +66,7 @@ def PhAlkEthOH_openff_wrapper(
         max_conformers_per_record=max_conformers_per_record,
         total_conformers=total_conformers,
         limit_atomic_species=limit_atomic_species,
-        n_threads=2,
+        n_threads=1,
     )
     print(f"Total records: {PhAlkEthOH_dataset.total_records}")
     print(f"Total conformers: {PhAlkEthOH_dataset.total_conformers}")
@@ -87,7 +87,7 @@ def main():
     # version of the dataset to curate
     version_select = f"v_{version}"
 
-    # curate SPICE 1.1.4 OpenFF dataset with 1000 total conformers, max of 10 conformers per record
+    # curate dataset with 1000 total conformers, max of 10 conformers per record
     hdf5_file_name = f"PhAlkEthOH_openff_dataset_v{version}_ntc_1000.hdf5"
 
     PhAlkEthOH_openff_wrapper(
@@ -101,7 +101,7 @@ def main():
         max_conformers_per_record=10,
     )
 
-    # curate the full SPICE 1.1.4 OpenFF dataset
+    # curate the full dataset
     hdf5_file_name = f"PhAlkEthOH_openff_dataset_v{version}.hdf5"
     print("total dataset")
     PhAlkEthOH_openff_wrapper(

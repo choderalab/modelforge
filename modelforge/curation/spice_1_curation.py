@@ -4,7 +4,7 @@ from loguru import logger
 from openff.units import unit
 
 
-class SPICE114Curation(DatasetCuration):
+class SPICE1Curation(DatasetCuration):
     """
     Routines to fetch  the spice 1.1.4 dataset from zenodo and process into a curated hdf5 file.
 
@@ -37,9 +37,9 @@ class SPICE114Curation(DatasetCuration):
 
     Examples
     --------
-    >>> spice114_data = SPICE114Curation(hdf5_file_name='spice114_dataset.hdf5',
-    >>>                             local_cache_dir='~/datasets/spice114_dataset')
-    >>> spice114_data.process()
+    >>> spice1_data = SPICE1Curation(hdf5_file_name='spice1_dataset.hdf5',
+    >>>                             local_cache_dir='~/datasets/spice1_dataset')
+    >>> spice1_data.process()
 
     """
 
@@ -51,12 +51,12 @@ class SPICE114Curation(DatasetCuration):
         from modelforge.curation import yaml_files
         import yaml
 
-        yaml_file = resources.files(yaml_files) / "spice114_curation.yaml"
+        yaml_file = resources.files(yaml_files) / "spice1_curation.yaml"
         logger.debug(f"Loading config data from {yaml_file}")
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
 
-        assert data_inputs["dataset_name"] == "spice114"
+        assert data_inputs["dataset_name"] == "spice1"
 
         if self.version_select == "latest":
             self.version_select = data_inputs["latest"]
@@ -358,9 +358,9 @@ class SPICE114Curation(DatasetCuration):
 
         Examples
         --------
-        >>> spice114_data = SPICE114Curation(hdf5_file_name='spice114_dataset.hdf5',
-        >>>                             local_cache_dir='~/datasets/spice114_dataset')
-        >>> spice114_data.process()
+        >>> spice1_data = SPICE1Curation(hdf5_file_name='spice1_dataset.hdf5',
+        >>>                             local_cache_dir='~/datasets/spice1_dataset')
+        >>> spice1_data.process()
 
         """
         if max_records is not None and total_conformers is not None:

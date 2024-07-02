@@ -53,6 +53,16 @@ jobs:
           cache-downloads: true
           create-args: >-
             python=${{ matrix.python-version }}
+        if : matrix.os == 'ubuntu-latest'
+
+      - uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-file: devtools/conda-envs/test_env_mac.yaml
+          cache-environment: true
+          cache-downloads: true
+          create-args: >-
+            python=${{ matrix.python-version }}
+        if: matrix.os != 'ubuntu-latest'
 
       - name: Install package
         # conda setup requires this special shell

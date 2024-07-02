@@ -174,6 +174,7 @@ class PhAlkEthOHCuration(DatasetCuration):
 
         ds.fetch_entry_names()
         entry_names = ds.entry_names
+
         if max_records is None:
             max_records = len(entry_names)
 
@@ -196,6 +197,9 @@ class PhAlkEthOHCuration(DatasetCuration):
             if pbar is not None:
                 pbar.total = pbar.total + len(to_fetch)
                 pbar.refresh()
+            logger.debug(
+                f"Fetching {len(to_fetch)} entries from dataset {dataset_name}."
+            )
 
             # We need a different routine to fetch entries vs records with a give specification
             if len(to_fetch) > 0:
@@ -214,38 +218,6 @@ class PhAlkEthOHCuration(DatasetCuration):
                     logger.debug(
                         f"Fetching {len(to_fetch)} records for {specification_name} from dataset {dataset_name}."
                     )
-                    # chunks = []
-                    # chunk_size = 100
-                    # for i in range(0, len(to_fetch), chunk_size):
-                    #     chunks.append({"lo": i, "hi": i + chunk_size})
-                    # chunks.append(
-                    #     {
-                    #         "lo": len(to_fetch) - len(to_fetch) % chunk_size,
-                    #         "hi": len(to_fetch) + 1,
-                    #     }
-                    # )
-                    #
-                    # for chunk in chunks:
-                    #     lo = chunk["lo"]
-                    #     hi = chunk["hi"]
-                    #
-                    #     for record in ds.iterate_records(
-                    #         to_fetch[lo:hi],
-                    #         specification_names=[specification_name],
-                    #         force_refetch=force_download,
-                    #         include=["**"],
-                    #     ):
-                    #         # spice_db[record[0]] = [record[2].dict(), record[2].trajectory]
-                    #
-                    #         spice_db[record[0]] = [
-                    #             record[2].dict()["status"].value,
-                    #             [
-                    #                 [traj.dict(), traj.molecule.geometry]
-                    #                 for traj in record[2].trajectory
-                    #             ],
-                    #         ]
-                    #         if pbar is not None:
-                    #             pbar.update(1)
 
                     for record in ds.iterate_records(
                         to_fetch,
@@ -328,16 +300,18 @@ class PhAlkEthOHCuration(DatasetCuration):
             input_file_name = f"{local_path_dir}/{filename}"
 
             non_error_keys = []
-
+            print("Reading from local database: ", input_file_name)
             # identify the set of molecules that do not have errors
             with SqliteDict(
                 input_file_name, tablename="default", autocommit=False
             ) as db_default:
                 db_keys = list(db_default.keys())
+
                 for key in db_keys:
+
                     if db_default[key][0] == "complete":
                         non_error_keys.append(key)
-
+            print(len(non_error_keys))
             # sorted_keys, original_name = self._sort_keys(non_error_keys)
 
             # first read in molecules from entry
@@ -607,9 +581,9 @@ class PhAlkEthOHCuration(DatasetCuration):
             Number of concurrent threads for retrieving data from QCArchive
         Examples
         --------
-        >>> spice_openff_data = SPICEOpenFFCuration(hdf5_file_name='spice114_openff_dataset.hdf5',
-        >>>                             local_cache_dir='~/datasets/spice114_openff_dataset')
-        >>> spice_openff_data.process()
+        >>> phalkethoh_openff_data = PhAlkEthOHCuration(hdf5_file_name='phalkethoh_openff_dataset.hdf5',
+        >>>                             local_cache_dir='~/datasets/phalkethoh_openff_dataset')
+        >>> phalkethoh_openff_data.process()
 
         """
         # if max_records is not None and total_conformers is not None:

@@ -45,7 +45,7 @@ for name in _ImplementedDatasets.get_all_dataset_names():
 @pytest.mark.parametrize("dataset_name, version", dataset_and_version)
 @pytest.mark.data_download
 def test_download_download(dataset_name, version, prep_temp_dir):
-    local_cache_dir = "/home/cri/downloads"  # str(prep_temp_dir)
+    local_cache_dir = str(prep_temp_dir)
 
     # if version in dataset_versions[dataset_name]:
     data = _ImplementedDatasets.get_dataset_class(dataset_name)(

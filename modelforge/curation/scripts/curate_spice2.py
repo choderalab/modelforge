@@ -98,9 +98,11 @@ def main():
     # version of the dataset to curate
     version_select = f"v_{version}"
 
+    # version v_0 corresponds to SPICE 2.0.1
+
     ani2x_elements = ["H", "C", "N", "O", "F", "Cl", "S"]
 
-    # curate SPICE 2 dataset with 1000 total conformers, max of 10 conformers per record
+    # curate SPICE 2.0.1 dataset with 1000 total conformers, max of 10 conformers per record
     # limited to the elements that will work with ANI2x
     hdf5_file_name = f"spice_2_dataset_v{version}_ntc_1000_HCNOFClS.hdf5"
 
@@ -114,7 +116,7 @@ def main():
         total_conformers=1000,
         limit_atomic_species=ani2x_elements,
     )
-    # curate the full SPICE 2 dataset, limited to the elements that will work with ANI2x
+    # curate the full SPICE 2.0.1 dataset, limited to the elements that will work with ANI2x
     hdf5_file_name = f"spice_2_dataset_v{version}_HCNOFClS.hdf5"
 
     spice2_wrapper(
@@ -126,7 +128,7 @@ def main():
         limit_atomic_species=ani2x_elements,
     )
 
-    # curate the test SPICE 2 dataset with 1000 total conformers, max of 10 conformers per record
+    # curate the test SPICE 2.0.1 dataset with 1000 total conformers, max of 10 conformers per record
     hdf5_file_name = f"spice_2_dataset_v{version}_ntc_1000.hdf5"
 
     spice2_wrapper(
@@ -139,7 +141,7 @@ def main():
         total_conformers=1000,
     )
 
-    # curate the full SPICE 2 dataset
+    # curate the full SPICE 2.0.1 dataset
     hdf5_file_name = f"spice_2_dataset_v{version}.hdf5"
 
     spice2_wrapper(

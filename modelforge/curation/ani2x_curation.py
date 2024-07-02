@@ -9,7 +9,7 @@ class ANI2xCuration(DatasetCuration):
     Routines to fetch and process the ANI-2x dataset into a curated hdf5 file.
 
     The ANI-2x data set includes properties for small organic molecules that contain
-    H, C, N, O, S, F, and Cl.  This dataset contains 9651712 conformers for nearly 200,000 molecules.
+    H, C, N, O, S, F, and Cl.  This dataset contains 9651712 conformers for nearly 20,000 molecules.
     This will fetch data generated with the wB97X/631Gd level of theory
     used in the original ANI-2x paper, calculated using Gaussian 09
 
@@ -161,6 +161,7 @@ class ANI2xCuration(DatasetCuration):
         with h5py.File(input_file_name, "r") as hf:
             #  The ani2x hdf5 file groups molecules by number of atoms
             # we need to break up each of these groups into individual molecules
+            mol_counter = 0
 
             for num_atoms, properties in hf.items():
                 species = properties["species"][:]
@@ -179,19 +180,36 @@ class ANI2xCuration(DatasetCuration):
 
                 import numpy as np
 
-                unique_molecules = np.unique(species, axis=0)
+                molecules = {}
+
+                last = species[0]
+
+                molecule_name = (
+                    f'{np.array2string(species[0], separator="_")}_m{mol_counter}'
+                )
+
+                molecules[molecule_name] = []
+
+                for i in range(species.shape[0]):
+                    if np.all(species[i] == last):
+                        molecules[molecule_name].append(i)
+                    else:
+                        mol_counter += 1
+                        molecule_name = f'{np.array2string(species[0], separator="_")}_m{mol_counter}'
+                        molecules[molecule_name] = [i]
+                        last = species[i]
 
                 if max_records is None:
-                    n_max = unique_molecules.shape[0]
+                    n_max = len(molecules)
                 else:
-                    n_max = min(max_records, unique_molecules.shape[0])
+                    n_max = min(max_records, len(molecules))
                     max_records -= n_max
 
                 if n_max == 0:
                     break
 
-                for i, molecule in tqdm(
-                    enumerate(unique_molecules[0:n_max]), total=n_max
+                for molecule_name in tqdm(
+                    ([key for key in molecules.keys()][0:n_max]), total=n_max
                 ):
                     # stop processing if we have reached the total number of conformers
 
@@ -200,25 +218,13 @@ class ANI2xCuration(DatasetCuration):
                             break
 
                     ds_temp = {}
-                    # molecule represents an aray of atomic species, e.g., [ 8, 8 ] is O_2
-                    # here we will create an array of shape( num_confomer, num_atoms) of bools
-                    mask_temp = species == molecule
 
-                    # to get the usable mask for the sort, i.e., of shape (n_conformers,),
-                    # we will sum over axis=1 in mask_temp; since a True entry has a value of 1
-                    # we have a match if the sum is equal to the number of atoms in the molecule
-                    mask = np.sum(mask_temp, axis=1) == molecule.shape[0]
+                    base_index = molecules[molecule_name][0]
+                    indices = molecules[molecule_name]
+                    ds_temp["name"] = molecule_name
+                    ds_temp["atomic_numbers"] = species[base_index].reshape(-1, 1)
 
-                    # We are assuming that the name of the molecule will always be a string
-                    # This will allow us to use the value of the name as a dictionary key
-                    # We will just make  a string based representation of
-                    # the molecule array which stores the atomic numbers, e.g., [ 8, 8 ] becomes "[8_8]"
-                    molecule_as_string = np.array2string(molecule, separator="_")
-
-                    ds_temp["name"] = molecule_as_string
-                    ds_temp["atomic_numbers"] = molecule.reshape(-1, 1)
-
-                    conformers_per_molecule = int(np.sum(mask))
+                    conformers_per_molecule = len(molecules[molecule_name])
                     if max_conformers_per_record is not None:
                         conformers_per_molecule = min(
                             conformers_per_molecule, max_conformers_per_record
@@ -231,14 +237,14 @@ class ANI2xCuration(DatasetCuration):
                     ds_temp["n_configs"] = conformers_per_molecule
 
                     ds_temp["geometry"] = (
-                        coordinates[mask] * self.qm_parameters["geometry"]["u_in"]
+                        coordinates[indices] * self.qm_parameters["geometry"]["u_in"]
                     )[0:conformers_per_molecule]
                     ds_temp["energies"] = (
-                        energies[mask].reshape(-1, 1)
+                        energies[indices].reshape(-1, 1)
                         * self.qm_parameters["energies"]["u_in"]
                     )[0:conformers_per_molecule]
                     ds_temp["forces"] = (
-                        forces[mask] * self.qm_parameters["forces"]["u_in"]
+                        forces[indices] * self.qm_parameters["forces"]["u_in"]
                     )[0:conformers_per_molecule]
 
                     self.data.append(ds_temp)

@@ -482,7 +482,10 @@ class RadialBasisFunction(nn.Module, ABC):
 
     def forward(self, distances: torch.Tensor) -> torch.Tensor:
         """
-        Applies nondimensionalization transformations on the distances and passes the result to RadialBasisFunctionCore.
+        The input distances have implicit units of nanometers by the convention of modelforge. This function applies
+        nondimensionalization transformations on the distances and passes the dimensionless result to
+        RadialBasisFunctionCore. There can be several nondimsionalization transformations, corresponding to each element
+        along the number_of_radial_basis_functions axis in the output.
 
         Parameters
         ---------

@@ -1137,7 +1137,7 @@ class DataModule(pl.LightningDataModule):
         # Use provided ase dictionary
         if self.dict_atomic_self_energies:
             log.info(
-                "Using provided atomic self energies from the provided dictionary."
+                "Using atomic self energies from the provided dictionary."
             )
             return self.dict_atomic_self_energies
 

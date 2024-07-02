@@ -13,7 +13,7 @@ angular_dist_divisions = 8
 processing_operation = [
   { in = [
     "E_i",
-  ], out = "E_i", function = "normalization", mean = "E_i_mean", stddev = "E_i_mean" },
+  ], out = "E_i", function = "normalization", mean = "E_i_mean", stddev = "E_i_stddev" },
 
 ]
 readout_operation = [

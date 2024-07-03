@@ -27,22 +27,6 @@ The following datasets are available for use with `modelforge`:
 - :py:class:`modelforge.dataset.PhAlkEthOHDataset`
 
 
-Splitting Strategies
----------------------
-
-The default splitting strategy for datasets in `modelforge` is to randomly split the dataset into 80% training, 10% validation, and 10% test sets based on records. 
-This approach ensures that different conformations of a molecule are always part of the same split, thereby avoiding data leakage. 
-
-`modelforge` also provides other splitting strategies, including:
-
-- :class:`modelforge.dataset.utils.FirstComeFirstServeStrategy`: Splits the dataset based on the order of records.
-- :class:`modelforge.dataset.utils.RandomSplittingStrategy`: Splits the dataset randomly based on conformations.
-
-To use a different data split ratio, you can specify a custom split list in the splitting strategy. 
-The most effective way to pass this information to the training process is by defining the appropriate fields in the `dataset.toml` file, as shown in :ref:`dataset-configuration`.
-
-.. autoclass:: modelforge.dataset.utils.RandomRecordSplittingStrategy
-
 
 Postprocessing of dataset entries
 -----------------------------------
@@ -105,8 +89,6 @@ Below is a minimal example of a dataset configuration for the QM9 dataset.
 Explanation of fields in `qm9.toml`:
 
 - `dataset_name`: Name of the dataset, here it is QM9.
-- `number_of_worker`: Number of worker threads for data loading.
-- `splitting_strategy`: The splitting strategy to use, possible values are 'first_come_first_serve', 'random_record_splitting_strategy', and 'random_conformer_splitting_strategy'.
 - `number_of_worker`: Number of worker threads for data loading.
 
 

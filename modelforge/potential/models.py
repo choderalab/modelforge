@@ -713,8 +713,8 @@ from modelforge.potential.processing import (
 )
 
 _REGISTER_PROCESSING_OPERATIONS = {
-    "normalize": ScaleValues,
-    "atomic_self_energy": CalculateAtomicSelfEnergy,
+    "normalization": ScaleValues,
+    "calculate_ase": CalculateAtomicSelfEnergy,
 }
 
 _REGISTER_READOUT_OPERATIONS = {"from_atom_to_molecule": FromAtomToMoleculeReduction}

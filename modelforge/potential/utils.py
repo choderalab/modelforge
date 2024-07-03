@@ -454,7 +454,7 @@ class RadialBasisFunction(nn.Module, ABC):
     def __init__(
             self,
             radial_basis_function: Type[RadialBasisFunctionCore],
-            dtype,
+            type:torch.dtype,
             prefactor: float = 1.0,
             trainable_prefactor: bool = False,
     ):
@@ -526,9 +526,9 @@ class GaussianRadialBasisFunctionWithScaling(RadialBasisFunction):
             Maximum distance to consider for symmetry functions.
         min_distance: unit.Quantity
             Minimum distance to consider.
-        dtype:
+        dtype: torch.dtype, default None
             Data type for computations.
-        prefactor:
+        prefactor: float
             Scalar factor by which to multiply output of radial basis functions.
         trainable_prefactor: bool, default False
             Whether prefactor is trainable
@@ -600,6 +600,9 @@ class GaussianRadialBasisFunctionWithScaling(RadialBasisFunction):
 
 
 class SchnetRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
+    """
+    Implementation of the radial basis function as used by the SchNet neural network
+    """
     def __init__(
             self,
             number_of_radial_basis_functions: int,
@@ -608,14 +611,20 @@ class SchnetRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
             dtype: Optional[torch.dtype] = None,
             trainable_centers_and_scale_factors: bool = False,
     ):
-        """RadialSymmetryFunction class.
-
-        Initializes and contains the logic for computing radial symmetry functions.
-
+        """
         Parameters
         ---------
+        number_of_radial_basis_functions: int
+            Number of radial basis functions to use.
+        max_distance: unit.Quantity
+            Maximum distance to consider for symmetry functions.
+        min_distance: unit.Quantity
+            Minimum distance to consider.
+        dtype: torch.dtype, default None
+            Data type for computations.
+        trainable_centers_and_scale_factors: bool, default False
+            Whether centers and scale factors are trainable.
         """
-
         super().__init__(
             number_of_radial_basis_functions,
             max_distance,
@@ -662,22 +671,31 @@ class SchnetRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
 
 
 class AniRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
+    """
+    Implementation of the radial basis function as used by the ANI neural network
+    """
     def __init__(
             self,
             number_of_radial_basis_functions,
             max_distance: unit.Quantity,
             min_distance: unit.Quantity = 0.0 * unit.nanometer,
-            dtype: Optional[torch.dtype] = None,
+            dtype: torch.dtype = torch.float32,
             trainable_centers_and_scale_factors: bool = False,
     ):
-        """RadialSymmetryFunction class.
-
-        Initializes and contains the logic for computing radial symmetry functions.
-
+        """
         Parameters
         ---------
+        number_of_radial_basis_functions: int
+            Number of radial basis functions to use.
+        max_distance: unit.Quantity
+            Maximum distance to consider for symmetry functions.
+        min_distance: unit.Quantity
+            Minimum distance to consider.
+        dtype: torch.dtype, default torch.float32
+            Data type for computations.
+        trainable_centers_and_scale_factors: bool, default False
+            Whether centers and scale factors are trainable.
         """
-
         super().__init__(
             number_of_radial_basis_functions,
             max_distance,
@@ -716,15 +734,33 @@ class AniRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
 
 
 class PhysNetRadialBasisFunction(RadialBasisFunction):
+    """
+    Implementation of the radial basis function as used by the PysNet neural network
+    """
 
     def __init__(
             self,
             number_of_radial_basis_functions: int,
             max_distance: unit.Quantity,
             min_distance: unit.Quantity = 0.0 * unit.nanometer,
-            dtype: Optional[torch.dtype] = None,
+            dtype: torch.dtype = torch.float32,
             trainable_centers_and_scale_factors: bool = False,
     ):
+        """
+        Parameters
+        ----------
+        number_of_radial_basis_functions : int
+            Number of radial basis functions to use.
+        max_distance : unit.Quantity
+            Maximum distance to consider for symmetry functions.
+        min_distance : unit.Quantity, optional
+            Minimum distance to consider, by default 0.0 * unit.nanometer.
+        dtype : torch.dtype, optional
+            Data type for computations, by default torch.float32.
+        trainable_centers_and_scale_factors : bool, optional
+            Whether centers and scale factors are trainable, by default False.
+        """
+
         super().__init__(GaussianRadialBasisFunctionCore, trainable_prefactor=False, dtype=dtype)
         self._max_distance_in_nanometer = max_distance.to(unit.nanometer).m
         self._min_distance_in_nanometer = min_distance.to(unit.nanometer).m

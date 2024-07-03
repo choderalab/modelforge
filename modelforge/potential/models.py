@@ -693,26 +693,33 @@ class InputPreparation(torch.nn.Module):
 
 from torch.nn import ModuleList
 
-_POSTPROCESSING_OPERATIONS= {
+_POSTPROCESSING_OPERATIONS = {
     "normalize": lambda x: x / x.norm(dim=-1, keepdim=True),
     "self_energy": lambda x: x - x.mean(dim=-1, keepdim=True),
     "sum": lambda x: x.sum(dim=-1),
-    "sum_and_normalize": lambda x: x.sum(dim=-1) / x.sum(dim=-1).norm(dim=-1, keepdim=True),
+    "sum_and_normalize": lambda x: x.sum(dim=-1)
+    / x.sum(dim=-1).norm(dim=-1, keepdim=True),
     "mean": lambda x: x.mean(dim=-1),
-    "mean_and_normalize": lambda x: x.mean(dim=-1) / x.mean(dim=-1).norm(dim=-1, keepdim=True),
+    "mean_and_normalize": lambda x: x.mean(dim=-1)
+    / x.mean(dim=-1).norm(dim=-1, keepdim=True),
     "max": lambda x: x.max(dim=-1)[0],
-    "max_and_normalize": lambda x: x.max(dim=-1)[0] / x.max(dim=-1)[0].norm(dim=-1, keepdim=True),
+    "max_and_normalize": lambda x: x.max(dim=-1)[0]
+    / x.max(dim=-1)[0].norm(dim=-1, keepdim=True),
 }
-from modelforge.potential.processing import ScaleValues, CalculateAtomicSelfEnergy, FromAtomToMoleculeReduction
+from modelforge.potential.processing import (
+    ScaleValues,
+    CalculateAtomicSelfEnergy,
+    FromAtomToMoleculeReduction,
+)
 
-_REGISTER_PROCESSING_OPERATIONS =  {
-    'normalize' : ScaleValues,
-    'atomic_self_energy' : CalculateAtomicSelfEnergy,
+_REGISTER_PROCESSING_OPERATIONS = {
+    "normalize": ScaleValues,
+    "atomic_self_energy": CalculateAtomicSelfEnergy,
 }
 
-_REGISTER_READOUT_OPERATIONS = {
-    "from_atom_to_molecule": FromAtomToMoleculeReduction
-}
+_REGISTER_READOUT_OPERATIONS = {"from_atom_to_molecule": FromAtomToMoleculeReduction}
+
+
 class PostProcessing(torch.nn.Module):
     def __init__(
         self,
@@ -733,8 +740,8 @@ class PostProcessing(torch.nn.Module):
             A dictionary containing the dataset statistics for normalization and other calculations.
         """
         super().__init__()
-        
-        #TODO: validate input parameters
+
+        # TODO: validate input parameters
 
         self._initialize_postprocessing(
             processing_operation,
@@ -771,7 +778,7 @@ class PostProcessing(torch.nn.Module):
                     stddev = 1.0
 
                     log.warning(
-                        f"No mean and stddev provided for function {proc["function"]}. Setting to default mean={mean} and stddev={stddev}!"
+                        f"No mean and stddev provided for function {proc['function']}. Setting to default mean={mean} and stddev={stddev}!"
                     )
                 else:
                     atomic_energies_stats = dataset_statistic["atomic_energies_stats"]
@@ -781,7 +788,9 @@ class PostProcessing(torch.nn.Module):
                     stddev = unit.Quantity(atomic_energies_stats[proc["stddev"]]).m_as(
                         unit.kilojoule_per_mole
                     )
-                operation = _REGISTER_PROCESSING_OPERATIONS[proc["function"]](mean=mean, stddev=stddev)
+                operation = _REGISTER_PROCESSING_OPERATIONS[proc["function"]](
+                    mean=mean, stddev=stddev
+                )
                 work_to_be_done_per_property.append(operation)
                 props.append(proc)
 
@@ -792,7 +801,9 @@ class PostProcessing(torch.nn.Module):
                     )
                 else:
                     atomic_self_energies = dataset_statistic["atomic_self_energies"]
-                    operation = _REGISTER_PROCESSING_OPERATIONS[proc["function"]](atomic_self_energies)
+                    operation = _REGISTER_PROCESSING_OPERATIONS[proc["function"]](
+                        atomic_self_energies
+                    )
                     work_to_be_done_per_property.append(operation)
 
                 props.append(proc)

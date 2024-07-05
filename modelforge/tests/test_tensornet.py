@@ -217,7 +217,7 @@ def test_tensornet_representation():
     ################ TensorNet ################
 
     assert X_mf.shape == X_tn.shape
-    assert torch.allclose(X_mf, X_tn, atol=1e-6)
+    assert torch.allclose(X_mf, X_tn)
 
 
 if __name__ == "__main__":

@@ -205,7 +205,7 @@ def test_tensornet_representation():
     )
 
     # calculate embedding
-    edge_attr = distance_expansion(nnp_input.d_ij.squeeze(-1) * 10) # Note: in angstrom
+    edge_attr = distance_expansion(nnp_input.d_ij.squeeze(-1) * 10)  # Note: in angstrom
 
     X_tn = tensor_embedding(
         nnp_input.atomic_numbers,
@@ -231,4 +231,4 @@ if __name__ == "__main__":
 
     # test_model_input()
 
-    test_representation()
+    test_tensornet_representation()

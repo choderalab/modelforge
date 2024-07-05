@@ -82,7 +82,7 @@ class TensorNet(BaseNetwork):
             dtype,
             representation_unit,
         )
-        self.only_unique_pairs = True  # NOTE: for pairlist
+        self.only_unique_pairs = False
         self.input_preparation = InputPreparation(
             cutoff=radial_max_distance, only_unique_pairs=self.only_unique_pairs
         )
@@ -164,24 +164,31 @@ class TensorNetRepresentation(torch.nn.Module):
             number_of_radial_basis_functions,
         )
         self.hidden_channels = hidden_channels
-        self.distance_proj1 = nn.Linear(
+        self.rsf_projection_I = nn.Linear(
             number_of_radial_basis_functions,
             hidden_channels,
             dtype=dtype,
         )
-        self.distance_proj2 = nn.Linear(
+        self.rsf_projection_A = nn.Linear(
             number_of_radial_basis_functions,
             hidden_channels,
             dtype=dtype,
         )
-        self.distance_proj3 = nn.Linear(
+        self.rsf_projection_S = nn.Linear(
             number_of_radial_basis_functions,
             hidden_channels,
             dtype=dtype,
         )
-        self.max_z = max_atomic_number
-        self.emb = nn.Embedding(max_atomic_number, hidden_channels, dtype=dtype)
-        self.emb2 = nn.Linear(2 * hidden_channels, hidden_channels, dtype=dtype)
+        self.atomic_number_i_embedding_layer = nn.Embedding(
+            max_atomic_number,
+            hidden_channels,
+            dtype=dtype,
+        )
+        self.atomic_number_ij_embedding_layer = nn.Linear(
+            2 * hidden_channels,
+            hidden_channels,
+            dtype=dtype,
+        )
         self.act = activation_function()
         self.linears_tensor = nn.ModuleList()
         for _ in range(3):
@@ -199,11 +206,11 @@ class TensorNetRepresentation(torch.nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        self.distance_proj1.reset_parameters()
-        self.distance_proj2.reset_parameters()
-        self.distance_proj3.reset_parameters()
-        self.emb.reset_parameters()
-        self.emb2.reset_parameters()
+        self.rsf_projection_I.reset_parameters()
+        self.rsf_projection_A.reset_parameters()
+        self.rsf_projection_S.reset_parameters()
+        self.atomic_number_i_embedding_layer.reset_parameters()
+        self.atomic_number_ij_embedding_layer.reset_parameters()
         for linear in self.linears_tensor:
             linear.reset_parameters()
         for linear in self.linears_scalar:
@@ -215,16 +222,16 @@ class TensorNetRepresentation(torch.nn.Module):
             atomic_number: torch.Tensor,
             pair_indices: torch.Tensor
     ) -> torch.Tensor:
-        atomic_number_embedding_i = self.emb(atomic_number)
-        atomic_number_embedding_ij = self.emb2(
-            atomic_number_embedding_i.index_select(
+        atomic_number_i_embedding = self.atomic_number_i_embedding_layer(atomic_number)
+        atomic_number_ij_embedding = self.atomic_number_ij_embedding_layer(
+            atomic_number_i_embedding.index_select(
                 0,
                 pair_indices.t().reshape(-1)
             ).view(
                 -1, self.hidden_channels * 2
             )
         )[..., None, None]
-        return atomic_number_embedding_ij
+        return atomic_number_ij_embedding
 
     def _get_tensor_messages(
             self,
@@ -239,14 +246,14 @@ class TensorNetRepresentation(torch.nn.Module):
         eye = torch.eye(3, 3, device=r_ij_norm.device, dtype=r_ij_norm.dtype)[
             None, None, ...
         ]
-        Iij = self.distance_proj1(radial_feature_vector).permute(0, 2, 1)[..., None] * C * eye
+        Iij = self.rsf_projection_I(radial_feature_vector).permute(0, 2, 1)[..., None] * C * eye
         Aij = (
-                self.distance_proj2(radial_feature_vector).permute(0, 2, 1)[..., None]
+                self.rsf_projection_A(radial_feature_vector).permute(0, 2, 1)[..., None]
                 * C
                 * vector_to_skewtensor(r_ij_norm)[..., None, :, :]
         )
         Sij = (
-                self.distance_proj3(radial_feature_vector).permute(0, 2, 1)[..., None]
+                self.rsf_projection_S(radial_feature_vector).permute(0, 2, 1)[..., None]
                 * C
                 * vector_to_symtensor(r_ij_norm)[..., None, :, :]
         )
@@ -278,7 +285,7 @@ class TensorNetRepresentation(torch.nn.Module):
 
         radial_feature_vector = self.radial_symmetry_function(_d_ij_in_representation_unit)
         # cutoff
-        rcut_ij = self.cutoff_module(_d_ij_in_representation_unit)
+        rcut_ij = self.cutoff_module(_d_ij_in_representation_unit)  # cutoff function applied twice
         radial_feature_vector = radial_feature_vector * rcut_ij.unsqueeze(-1)
 
         Iij, Aij, Sij = self._get_tensor_messages(

@@ -233,9 +233,6 @@ def test_tensornet_representation():
     )
     ################ TensorNet ################
 
-    for i in range(150):
-        if not torch.allclose(X_mf[i], X_tn[i]):
-            print(i)
     assert X_mf.shape == X_tn.shape
     assert torch.allclose(X_mf, X_tn, atol=1e-6)
 

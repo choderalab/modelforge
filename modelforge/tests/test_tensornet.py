@@ -205,19 +205,41 @@ def test_tensornet_representation():
     )
 
     # calculate embedding
-    edge_attr = distance_expansion(nnp_input.d_ij.squeeze(-1) * 10) # Note: in angstrom
+    edge_attr = distance_expansion(
+        torch.cat(
+            (nnp_input.d_ij.squeeze(-1) * 10, nnp_input.d_ij.squeeze(-1) * 10),
+            dim=0,
+        )
+    )  # Note: in angstrom
 
+    tn_pair_indices = torch.cat(
+        (nnp_input.pair_indices, torch.stack(
+            (nnp_input.pair_indices[1], nnp_input.pair_indices[0]),
+        )),
+        dim=1,
+    )
     X_tn = tensor_embedding(
         nnp_input.atomic_numbers,
-        nnp_input.pair_indices,
-        nnp_input.d_ij.squeeze(-1) * 10,  # Note: in angstrom
-        nnp_input.r_ij / nnp_input.d_ij,  # edge_vec_norm in angstrom
+        tn_pair_indices,
+        torch.cat(
+            (nnp_input.d_ij.squeeze(-1) * 10, nnp_input.d_ij.squeeze(-1) * 10),
+            dim=0,
+        ),  # Note: in angstrom
+        torch.cat(
+            (nnp_input.r_ij / nnp_input.d_ij, nnp_input.r_ij / nnp_input.d_ij),
+            dim=0,
+        ),  # edge_vec_norm in angstrom
         edge_attr,
     )
     ################ TensorNet ################
 
+    for i in range(150):
+        if not torch.allclose(X_mf[i], X_tn[i]):
+            print(i)
     assert X_mf.shape == X_tn.shape
     assert torch.allclose(X_mf, X_tn, atol=1e-6)
+
+    print("success")
 
 
 if __name__ == "__main__":
@@ -231,4 +253,4 @@ if __name__ == "__main__":
 
     # test_model_input()
 
-    test_representation()
+    test_tensornet_representation()

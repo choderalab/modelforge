@@ -4,6 +4,12 @@ Training
 Introduction
 ------------------------------------------
 
+During training the parameters of a model are fitted to reproduce the target properties provided by a dataset. These are typically energies and forces, but can also be other properties provided by a dataset (e.g., dipole moments).
+
+The properties a given model can be trained on are deterimend by the model itself and by the loss function used to train the model. Each of the models implemented in modelforge have flexible numbers of output heads, each of which can be fitted against a different property. The loss function is responsible for comparing the model's predictions to the target properties and providing a scalar value that the optimizer can use to update the model's parameters.
+
+The training process is controlled by a configuration file, `training.toml`, which specifies the number of epochs, the learning rate, the loss function, and the splitting strategy for the dataset.
+
 Learning rate scheduler
 ------------------------------------------
 

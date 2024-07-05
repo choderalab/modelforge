@@ -444,7 +444,6 @@ class RadialBasisFunctionCore(nn.Module, ABC):
 
 class GaussianRadialBasisFunctionCore(RadialBasisFunctionCore):
 
-    @staticmethod
     def forward(self, nondimensionalized_distances: torch.Tensor) -> torch.Tensor:
         return torch.exp(-(nondimensionalized_distances**2))
 

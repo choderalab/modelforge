@@ -425,10 +425,10 @@ class AngularSymmetryFunction(nn.Module):
 from abc import ABC, abstractmethod
 
 
-class RadialBasisFunctionCore(ABC):
-    @staticmethod
+class RadialBasisFunctionCore(nn.Module, ABC):
+    
     @abstractmethod
-    def compute(nondimensionalized_distances: torch.Tensor) -> torch.Tensor:
+    def forward(self, nondimensionalized_distances: torch.Tensor) -> torch.Tensor:
         """
         Parameters
         ---------
@@ -445,7 +445,7 @@ class RadialBasisFunctionCore(ABC):
 class GaussianRadialBasisFunctionCore(RadialBasisFunctionCore):
 
     @staticmethod
-    def compute(nondimensionalized_distances: torch.Tensor) -> torch.Tensor:
+    def forward(self, nondimensionalized_distances: torch.Tensor) -> torch.Tensor:
         return torch.exp(-(nondimensionalized_distances**2))
 
 
@@ -453,7 +453,7 @@ class RadialBasisFunction(nn.Module, ABC):
 
     def __init__(
         self,
-        radial_basis_function: Type[RadialBasisFunctionCore],
+        radial_basis_function: RadialBasisFunctionCore,
         dtype: torch.dtype,
         prefactor: float = 1.0,
         trainable_prefactor: bool = False,
@@ -498,7 +498,7 @@ class RadialBasisFunction(nn.Module, ABC):
             Output of radial basis functions.
         """
         nondimensionalized_distances = self.nondimensionalize_distances(distances)
-        return self.prefactor * self.radial_basis_function.compute(
+        return self.prefactor * self.radial_basis_function(
             nondimensionalized_distances
         )
 
@@ -538,7 +538,7 @@ class GaussianRadialBasisFunctionWithScaling(RadialBasisFunction):
         """
 
         super().__init__(
-            GaussianRadialBasisFunctionCore, dtype, prefactor, trainable_prefactor
+            GaussianRadialBasisFunctionCore(), dtype, prefactor, trainable_prefactor
         )
         self.number_of_radial_basis_functions = number_of_radial_basis_functions
         self.dtype = dtype
@@ -769,7 +769,7 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
         """
 
         super().__init__(
-            GaussianRadialBasisFunctionCore, trainable_prefactor=False, dtype=dtype
+            GaussianRadialBasisFunctionCore(), trainable_prefactor=False, dtype=dtype
         )
         self._max_distance_in_nanometer = max_distance.to(unit.nanometer).m
         self._min_distance_in_nanometer = min_distance.to(unit.nanometer).m

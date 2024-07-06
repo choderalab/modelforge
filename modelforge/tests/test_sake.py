@@ -242,7 +242,7 @@ def test_radial_symmetry_function_against_reference():
     d_ij_jax = jax.random.uniform(key, (nr_atoms, nr_atoms, 1))
     d_ij = torch.from_numpy(
         onp.array(d_ij_jax)
-    ).reshape(nr_atoms ** 2)
+    ).reshape((nr_atoms ** 2, 1))
 
     mf_rbf = radial_symmetry_function_module(d_ij)
     variables = ref_radial_basis_module.init(key, d_ij_jax)

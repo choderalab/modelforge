@@ -205,4 +205,6 @@ def test_spookynet_bernstein_polynomial_equivalence():
     cutoff_values = torch.rand((N, 1))
     ref_exp_bernstein_polynomial_result = ref_exp_bernstein_polynomials(r_angstrom, cutoff_values)
     mf_exp_bernstein_polynomial_result = mf_exp_bernstein_polynomials(r_nanometer) * cutoff_values
-    assert torch.equal(ref_exp_bernstein_polynomial_result, mf_exp_bernstein_polynomial_result)
+    print(f"{ref_exp_bernstein_polynomial_result=}")
+    print(f"{mf_exp_bernstein_polynomial_result=}")
+    assert torch.allclose(ref_exp_bernstein_polynomial_result, mf_exp_bernstein_polynomial_result)

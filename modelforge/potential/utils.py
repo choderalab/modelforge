@@ -282,6 +282,7 @@ class SpookyNetCutoff(nn.Module):
         electronic degrees of freedom and nonlocal effects. Nat Commun 12, 7273 (2021).
     Adapted from https://github.com/OUnke/SpookyNet/blob/d57b1fc02c4f1304a9445b2b9aa55a906818dd1b/spookynet/functional.py#L19 # noqa
     """
+
     def __init__(self, cutoff: unit.Quantity):
         """
 
@@ -308,80 +309,31 @@ class SpookyNetCutoff(nn.Module):
         )
 
 
-class ExponentialBernsteinPolynomials(nn.Module):
-    """
-    Taken from SpookyNet.
-    Radial basis functions based on exponential Bernstein polynomials given by:
-    b_{v,n}(x) = (n over v) * exp(-alpha*x)**v * (1-exp(-alpha*x))**(n-v)
-    (see https://en.wikipedia.org/wiki/Bernstein_polynomial)
-    Here, n = num_basis_functions-1 and v takes values from 0 to n. This
-    implementation operates in log space to prevent multiplication of very large
-    (n over v) and very small numbers (exp(-alpha*x)**v and
-    (1-exp(-alpha*x))**(n-v)) for numerical stability.
-    NOTE: There is a problem for x = 0, as log(-expm1(0)) will be log(0) = -inf.
-    This itself is not an issue, but the buffer v contains an entry 0 and
-    0*(-inf)=nan. The correct behaviour could be recovered by replacing the nan
-    with 0.0, but should not be necessary because issues are only present when
-    r = 0, which will not occur with chemically meaningful inputs.
+class ExponentialBernsteinPolynomialsFactory:
 
-    Arguments:
-        num_basis_functions (int):
-            Number of radial basis functions.
-            x = infinity.
-        ini_alpha (float):
-            Initial value for scaling parameter alpha (Default value corresponds
-            to 0.5 1/Bohr converted to 1/Angstrom).
-    """
-
-    def __init__(
-            self,
-            num_basis_functions: int,
-            ini_alpha: Quantity = 0.5 / unit.bohr,
-            dtype: Optional[torch.dtype] = None,
-    ) -> None:
-        """ Initializes the ExponentialBernsteinPolynomials class. """
-        super(ExponentialBernsteinPolynomials, self).__init__()
-        self.ini_alpha = ini_alpha.to(1 / unit.nanometer).m
-        # compute values to initialize buffers
-        logfactorial = np.zeros(num_basis_functions)
-        for i in range(2, num_basis_functions):
+    @staticmethod
+    def make_radial_basis_function(number_of_radial_basis_functions: int, dtype: torch.dtype):
+        logfactorial = np.zeros(number_of_radial_basis_functions)
+        for i in range(2, number_of_radial_basis_functions):
             logfactorial[i] = logfactorial[i - 1] + np.log(i)
-        v = np.arange(0, num_basis_functions)
-        n = (num_basis_functions - 1) - v
+        v = np.arange(0, number_of_radial_basis_functions)
+        n = (number_of_radial_basis_functions - 1) - v
         logbinomial = logfactorial[-1] - logfactorial[v] - logfactorial[n]
         # register buffers and parameters
-        self.register_buffer("logc", torch.tensor(logbinomial, dtype=dtype))
-        self.register_buffer("n", torch.tensor(n, dtype=dtype))
-        self.register_buffer("v", torch.tensor(v, dtype=dtype))
-        self.register_parameter(
-            "_alpha", nn.Parameter(torch.tensor(1.0, dtype=dtype))
-        )
-        self.reset_parameters()
+        radial_basis_function = ExponentialBernsteinPolynomialsCore
+        radial_basis_function.logc = torch.tensor(logbinomial, dtype=dtype)
+        radial_basis_function.n = torch.tensor(n, dtype=dtype)
+        radial_basis_function.v = torch.tensor(v, dtype=dtype)
+        return radial_basis_function
 
-    def reset_parameters(self) -> None:
-        """ Initialize exponential scaling parameter alpha. """
-        nn.init.constant_(self._alpha, softplus_inverse(self.ini_alpha))
 
-    def forward(self, r: torch.Tensor) -> torch.Tensor:
-        """
-        Evaluates radial basis functions given distances
-        N: Number of input values.
-        num_basis_functions: Number of radial basis functions.
+class ExponentialBernsteinPolynomials:
+    nn.init.constant_(self.alpha, alpha)
+    self.reset_parameters(ini_alpha.to(unit.nanometer).m)
 
-        Arguments:
-            r (FloatTensor [N]):
-                Input distances.
 
-        Returns:
-            rbf (FloatTensor [N, num_basis_functions]):
-                Values of the radial basis functions for the distances r.
-        """
-        alphar = -F.softplus(self._alpha) * r.view(-1, 1)
-        x = self.logc + self.n * alphar + self.v * torch.log(-torch.expm1(alphar))
-        print(f"{self.logc.shape=}")
-
-        rbf = torch.exp(x)
-        return rbf * torch.exp(alphar)
+def nondimensionalize_distances(self, d_ij: torch.Tensor) -> torch.Tensor:
+    return -(d_ij.view(-1, 1) / self.alpha)
 
 
 from typing import Dict
@@ -412,6 +364,7 @@ class ShiftedSoftplus(nn.Module):
         from torch.nn import functional
 
         return functional.softplus(x) - self.log_2
+
 
 def softplus_inverse(x):
     """
@@ -545,7 +498,9 @@ from abc import ABC, abstractmethod
 
 
 class RadialBasisFunctionCore(ABC):
-    @staticmethod
+
+    @abstractmethod
+    def __init__(self, ):
     @abstractmethod
     def compute(nondimensionalized_distances: torch.Tensor) -> torch.Tensor:
         """
@@ -563,16 +518,67 @@ class RadialBasisFunctionCore(ABC):
 
 class GaussianRadialBasisFunctionCore(RadialBasisFunctionCore):
 
-    @staticmethod
-    def compute(nondimensionalized_distances: torch.Tensor) -> torch.Tensor:
+    def compute(self, nondimensionalized_distances: torch.Tensor) -> torch.Tensor:
         return torch.exp(-(nondimensionalized_distances ** 2))
+
+
+class ExponentialBernsteinPolynomialsCore(RadialBasisFunctionCore):
+    """
+    Taken from SpookyNet.
+    Radial basis functions based on exponential Bernstein polynomials given by:
+    b_{v,n}(x) = (n over v) * exp(-alpha*x)**v * (1-exp(-alpha*x))**(n-v)
+    (see https://en.wikipedia.org/wiki/Bernstein_polynomial)
+    Here, n = num_basis_functions-1 and v takes values from 0 to n. This
+    implementation operates in log space to prevent multiplication of very large
+    (n over v) and very small numbers (exp(-alpha*x)**v and
+    (1-exp(-alpha*x))**(n-v)) for numerical stability.
+    NOTE: There is a problem for x = 0, as log(-expm1(0)) will be log(0) = -inf.
+    This itself is not an issue, but the buffer v contains an entry 0 and
+    0*(-inf)=nan. The correct behaviour could be recovered by replacing the nan
+    with 0.0, but should not be necessary because issues are only present when
+    r = 0, which will not occur with chemically meaningful inputs.
+
+    Arguments:
+        num_basis_functions (int):
+            Number of radial basis functions.
+            x = infinity.
+        ini_alpha (float):
+            Initial value for scaling parameter alpha (alpha here is the reciprocal of alpha in the paper. The original
+            default is 0.5/bohr, so we use 2 bohr).
+    """
+
+    def __init__(self, number_of_radial_basis_functions: int):
+
+
+    def reset_parameters(self, alpha) -> None:
+        """ Initialize exponential scaling parameter alpha. """
+
+    def compute(self, nondimensionalized_distances: torch.Tensor) -> torch.Tensor:
+        """
+        Evaluates radial basis functions given distances
+        N: Number of input values.
+        num_basis_functions: Number of radial basis functions.
+
+        Arguments:
+            nondimensionalized_distances (FloatTensor [N]):
+                Input distances.
+
+        Returns:
+            rbf (FloatTensor [N, num_basis_functions]):
+                Values of the radial basis functions for the distances r.
+        """
+        x = (cls.logc + (cls.n + 1) * nondimensionalized_distances
+             + v * torch.log(-torch.expm1(nondimensionalized_distances)))
+        print(f"{cls.logc.shape=}")
+
+        return torch.exp(x)
 
 
 class RadialBasisFunction(nn.Module, ABC):
 
     def __init__(
             self,
-            radial_basis_function: Type[RadialBasisFunctionCore],
+            radial_basis_function: Callable[[torch.Tensor], torch.Tensor],
             dtype,
             prefactor: float = 1.0,
             trainable_prefactor: bool = False,

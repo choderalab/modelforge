@@ -506,7 +506,6 @@ class RadialBasisFunction(nn.Module, ABC):
         torch.Tensor, shape [number_of_pairs, number_of_radial_basis_functions]
             Output of radial basis functions.
         """
-        print(f"{distances.shape=}")
         nondimensionalized_distances = self.nondimensionalize_distances(distances)
         return self.prefactor * self.radial_basis_function(nondimensionalized_distances)
 

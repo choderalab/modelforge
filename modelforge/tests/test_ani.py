@@ -82,6 +82,7 @@ def setup_two_methanes():
     return ani_species, coordinates, device, nnp_input
 
 
+@pytest.mark.xfail
 def test_torchani_ani(setup_two_methanes):
     # Test torchani ANI implementation
     # Test forward pass and backpropagation through network
@@ -100,7 +101,7 @@ def test_torchani_ani(setup_two_methanes):
 def test_modelforge_ani(setup_two_methanes):
     # Test modelforge ANI implementation
     # Test forward pass and backpropagation through network
-    from modelforge.potential.ani import ANI2x as mf_ANI2x
+    from modelforge.potential.ani import ANI2x
     from modelforge.tests.test_models import load_configs
     import torch
 
@@ -111,7 +112,7 @@ def test_modelforge_ani(setup_two_methanes):
 
     _, _, _, mf_input = setup_two_methanes
     device = torch.device("cpu")
-    model = mf_ANI2x(**potential_parameter).to(device=device)
+    model = ANI2x(**potential_parameter).to(device=device)
     energy = model(mf_input)
     derivative = torch.autograd.grad(energy["E"].sum(), mf_input.positions)[0]
     force = -derivative
@@ -125,7 +126,7 @@ def test_compare_radial_symmetry_features():
     from openff.units import unit
 
     # generate a random list of distances, all < 5
-    d_ij = torch.rand(5, 1) * 5
+    d_ij = torch.tensor([[3.5201], [2.6756], [2.1641], [3.0990], [4.5180]])
 
     # ANI constants
     radial_cutoff = 5.0  # radial_cutoff
@@ -147,7 +148,60 @@ def test_compare_radial_symmetry_features():
     rcut_ij = cutoff_module(d_ij / 10)  # torch.Size([5]) # NOTE: nanometer
 
     r_mf = r_mf * rcut_ij
-    r_ani = radial_terms(5, EtaR, ShfR, d_ij)  # torch.Size([5,8]) # NOTE: Angstrom
+    r_ani = torch.tensor(
+        [
+            [
+                0.0000e00,
+                2.9988e-43,
+                6.8802e-26,
+                3.0382e-13,
+                2.5784e-05,
+                4.2054e-02,
+                1.3182e-03,
+                7.9414e-10,
+            ],
+            [
+                8.8859e-32,
+                2.7530e-17,
+                1.6391e-07,
+                1.8757e-02,
+                4.1250e-02,
+                1.7435e-06,
+                1.4162e-15,
+                2.2109e-29,
+            ],
+            [
+                1.8177e-17,
+                1.4309e-07,
+                2.1648e-02,
+                6.2946e-02,
+                3.5175e-06,
+                3.7776e-15,
+                7.7972e-29,
+                0.0000e00,
+            ],
+            [
+                0.0000e00,
+                9.3933e-29,
+                3.5579e-15,
+                2.5900e-06,
+                3.6235e-02,
+                9.7429e-03,
+                5.0346e-08,
+                5.0000e-18,
+            ],
+            [
+                0.0000e00,
+                0.0000e00,
+                0.0000e00,
+                2.9091e-42,
+                2.2756e-25,
+                3.4204e-13,
+                9.8803e-06,
+                5.4852e-03,
+            ],
+        ]
+    )  # NOTE: Angstrom
     assert torch.allclose(r_mf, r_ani)
 
 

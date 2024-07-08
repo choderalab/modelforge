@@ -8,7 +8,7 @@ from torchmdnet.models.tensornet import tensor_message_passing
 from torchmdnet.models.tensornet import tensor_norm
 from torchmdnet.models.tensornet import vector_to_skewtensor
 from torchmdnet.models.tensornet import vector_to_symtensor
-from typing import Optional, Tuple
+from typing import Tuple
 
 from modelforge.potential.models import InputPreparation
 from modelforge.potential.models import BaseNetwork
@@ -18,6 +18,7 @@ from modelforge.potential.utils import TensorNetRadialSymmetryFunction
 from modelforge.potential.utils import NeuralNetworkData
 from modelforge.potential.utils import NNPInput
 from .models import PairListOutputs
+
 
 ATOMIC_NUMBER_TO_INDEX_MAP = {
     1: 0,  # H
@@ -94,7 +95,6 @@ class TensorNet(BaseNetwork):
             cutoff=radial_max_distance, only_unique_pairs=self.only_unique_pairs
         )
 
-
 class TensorNetCore(CoreNetwork):
     def __init__(
             self,
@@ -112,6 +112,7 @@ class TensorNetCore(CoreNetwork):
     ):
         super().__init__()
 
+        torch.manual_seed(0)
         self.representation_module = TensorNetRepresentation(
             hidden_channels,
             number_of_radial_basis_functions,

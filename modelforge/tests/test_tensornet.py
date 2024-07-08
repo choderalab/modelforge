@@ -146,6 +146,7 @@ def test_tensornet_representation():
     from modelforge.dataset.dataset import DataModule
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
     from modelforge.potential.tensornet import TensorNet
+    from modelforge.potential.tensornet import TensorNetRepresentation
 
     hidden_channels = 8
     num_rbf = 16
@@ -155,6 +156,7 @@ def test_tensornet_representation():
     trainable_rbf = False
     max_z = 128
     dtype = torch.float32
+    representation_unit = unit.angstrom
 
     # Set up a dataset
     # prepare reference value
@@ -175,12 +177,24 @@ def test_tensornet_representation():
     mf_input = next(iter(dataset.train_dataloader())).nnp_input
     # modelforge TensorNet
     torch.manual_seed(0)
-    model = TensorNet(representation_unit=unit.angstrom)
+    model = TensorNet(representation_unit=representation_unit)
     model.input_preparation._input_checks(mf_input)
     pairlist_output = model.input_preparation.prepare_inputs(mf_input)
 
     ################ modelforge TensorNet ################
-    tensornet_representation_module = model.core_module.representation_module
+    torch.manual_seed(0)
+    tensornet_representation_module = TensorNetRepresentation(
+        hidden_channels,
+        num_rbf,
+        act_class,
+        cutoff_upper * unit.angstrom,
+        cutoff_lower * unit.angstrom,
+        trainable_rbf,
+        max_z,
+        dtype,
+        representation_unit,
+    )
+    # tensornet_representation_module = model.core_module.representation_module
     nnp_input = model.core_module._model_specific_input_preparation(mf_input, pairlist_output)
     mf_X = tensornet_representation_module(nnp_input)
     ################ modelforge TensorNet ################
@@ -317,6 +331,7 @@ def test_tensornet_interaction():
     assert mf_X.shape == tn_X.shape
     assert torch.allclose(mf_X, tn_X)
 
+
 if __name__ == "__main__":
     import torch
 
@@ -324,12 +339,8 @@ if __name__ == "__main__":
 
     # test_tensornet_init()
 
-    # test_tensornet_forward()
+    # test_compare_radial_symmetry_features()
 
-    # test_tensornet_input()
+    # test_model_input()
 
-    # test_tensornet_compare_radial_symmetry_features()
-
-    # test_tensornet_representation()
-
-    test_tensornet_interaction()
+    test_tensornet_representation()

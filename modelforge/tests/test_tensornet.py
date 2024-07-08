@@ -233,6 +233,105 @@ def test_tensornet_representation():
     assert torch.allclose(mf_X, tn_X)
 
 
+def test_tensornet_interaction():
+    import torch
+    from openff.units import unit
+    from torch import nn
+    from torchmdnet.models.tensornet import Interaction
+
+    from modelforge.dataset.dataset import DataModule
+    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
+    from modelforge.potential.tensornet import TensorNet
+    from modelforge.potential.tensornet import TensorNetInteraction
+
+    hidden_channels = 8
+    num_rbf = 16
+    act_class = nn.SiLU
+    cutoff_lower = 0.0
+    cutoff_upper = 5.1
+    dtype = torch.float32
+    representation_unit = unit.angstrom
+
+    # Set up a dataset
+    # prepare reference value
+    dataset = DataModule(
+        name="QM9",
+        batch_size=1,
+        version_select="nc_1000_v0",
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        remove_self_energies=True,
+        regression_ase=False,
+    )
+    dataset.prepare_data()
+    dataset.setup()
+    # -------------------------------#
+    # -------------------------------#
+    # Test that we can add the reference energy correctly
+    # get methane input
+    mf_input = next(iter(dataset.train_dataloader())).nnp_input
+    # modelforge TensorNet
+    torch.manual_seed(0)
+    model = TensorNet(representation_unit=unit.angstrom)
+    model.input_preparation._input_checks(mf_input)
+    pairlist_output = model.input_preparation.prepare_inputs(mf_input)
+
+    ################ modelforge TensorNet ################
+    tensornet_representation_module = model.core_module.representation_module
+    nnp_input = model.core_module._model_specific_input_preparation(mf_input, pairlist_output)
+    X = tensornet_representation_module(nnp_input)
+
+    _d_ij_in_representation_unit = (nnp_input.d_ij * unit.nanometer).to(representation_unit).m
+    radial_feature_vector = tensornet_representation_module.radial_symmetry_function(
+        _d_ij_in_representation_unit
+    )
+    rcut_ij = tensornet_representation_module.cutoff_module(_d_ij_in_representation_unit)
+    radial_feature_vector = radial_feature_vector * rcut_ij.unsqueeze(-1)
+
+    total_charge = torch.zeros_like(nnp_input.atomic_numbers)
+
+    # interaction
+    torch.manual_seed(0)
+    interaction_module = TensorNetInteraction(
+        hidden_channels,
+        num_rbf,
+        act_class,
+        cutoff_upper * unit.angstrom,
+        "O(3)",
+        dtype,
+        representation_unit,
+    )
+    mf_X = interaction_module(
+        X,
+        nnp_input.pair_indices,
+        _d_ij_in_representation_unit.squeeze(-1),
+        radial_feature_vector.squeeze(1),
+        total_charge,
+    )
+    ################ modelforge TensorNet ################
+
+    ################ TensorNet ################
+    torch.manual_seed(0)
+    tn_interaction = Interaction(
+        num_rbf,
+        hidden_channels,
+        act_class,
+        cutoff_lower,
+        cutoff_upper,
+        "O(3)",
+    )
+    tn_X = tn_interaction(
+        X,
+        nnp_input.pair_indices,
+        nnp_input.d_ij.squeeze(-1) * 10,
+        radial_feature_vector.squeeze(1),
+        total_charge,
+    )
+    ################ TensorNet ################
+
+    assert mf_X.shape == tn_X.shape
+    assert torch.allclose(mf_X, tn_X)
+
+
 if __name__ == "__main__":
     import torch
 

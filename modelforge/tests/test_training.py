@@ -15,6 +15,7 @@ def load_configs(model_name: str, dataset_name: str):
         potential_defaults,
         training_defaults,
         dataset_defaults,
+        training,
     )
     from importlib import resources
     from modelforge.train.training import return_toml_config
@@ -22,11 +23,12 @@ def load_configs(model_name: str, dataset_name: str):
     potential_path = resources.files(potential_defaults) / f"{model_name.lower()}.toml"
     dataset_path = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
     training_path = resources.files(training_defaults) / "default.toml"
-
+    runtime_path = resources.files(training) / "runtime.toml"
     return return_toml_config(
         potential_path=potential_path,
         dataset_path=dataset_path,
         training_path=training_path,
+        runtime_path=runtime_path,
     )
 
 
@@ -59,6 +61,8 @@ def test_train_with_lightning(model_name, dataset_name, loss_type):
     potential_config = config["potential"]
     training_config = config["training"]
     dataset_config = config["dataset"]
+    runtime_config = config["runtime"]
+
     # set loss type
     training_config["training_parameter"]["loss_parameter"] = loss_type
     # perform training
@@ -66,6 +70,7 @@ def test_train_with_lightning(model_name, dataset_name, loss_type):
         potential_config=potential_config,
         training_config=training_config,
         dataset_config=dataset_config,
+        runtime_config=runtime_config,
     )
     # save checkpoint
     trainer.save_checkpoint("test.chp")
@@ -74,6 +79,7 @@ def test_train_with_lightning(model_name, dataset_name, loss_type):
         potential_config=potential_config,
         training_config=training_config,
         dataset_config=dataset_config,
+        runtime_config=runtime_config,
         checkpoint_path="test.chp",
     )
 
@@ -148,16 +154,23 @@ def test_hypterparameter_tuning_with_ray(
 ):
     from modelforge.train.training import return_toml_config, LossFactory
     from importlib import resources
-    from modelforge.tests.data import training, potential, dataset
+    from modelforge.tests.data import (
+        training,
+        potential_defaults,
+        dataset_defaults,
+        training_defaults,
+    )
 
-    training_path = resources.files(training) / "default.toml"
-    potential_path = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
-    dataset_path = resources.files(dataset) / f"{dataset_name.lower()}.toml"
+    training_path = resources.files(training_defaults) / "default.toml"
+    potential_path = resources.files(potential_defaults) / f"{model_name.lower()}.toml"
+    dataset_path = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
+    runtime_path = resources.files(training) / "runtime.toml"
 
     config = return_toml_config(
         training_path=training_path,
         potential_path=potential_path,
         dataset_path=dataset_path,
+        runtime_path=runtime_path,
     )
 
     dm = datamodule_factory(dataset_name=dataset_name)
@@ -165,12 +178,12 @@ def test_hypterparameter_tuning_with_ray(
     # Extract parameters
     potential_parameter = config["potential"]["potential_parameter"]
     training_parameter = config["training"]["training_parameter"]
-    loss_config = config["training"]["loss_parameter"]
+    # loss_config = config["training"]["training_parameter"]["loss_parameter"]
     # training model
     model = NeuralNetworkPotentialFactory.generate_model(
         use="training",
         model_type=model_name,
-        loss_parameter=loss_config,
+        # loss_parameter=loss_config,
         model_parameter=potential_parameter,
         training_parameter=training_parameter,
     )

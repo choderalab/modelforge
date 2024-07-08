@@ -1,9 +1,0 @@
-[potential]
-potential_parameter.max_Z = 101
-potential_parameter.number_of_atom_features = 64
-potential_parameter.number_of_radial_basis_functions = 16
-potential_parameter.cutoff = "5.0 angstrom"
-potential_parameter.number_of_interaction_residual = 3
-potential_parameter.number_of_modules = 5
-model_name = "PhysNet"
-

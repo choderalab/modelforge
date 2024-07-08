@@ -23,7 +23,6 @@ dependencies:
   - sqlitedict
   - pytorch_scatter
   - jax
-  - torchmetrics>=1.4
 
   # Testing
   - pytest>=2.1
@@ -38,9 +37,11 @@ dependencies:
 
   # pip installs
   - pip:
+      # - schnetpack>=2.0.0
       - pytorch2jax
       - versioneer
       - flax
       - torchviz
       - git+https://github.com/ArnNag/sake.git@nanometer
       - tensorflow
+      - torchviz

@@ -20,17 +20,6 @@ from modelforge.potential.utils import NNPInput
 from .models import PairListOutputs
 
 
-ATOMIC_NUMBER_TO_INDEX_MAP = {
-    1: 0,  # H
-    6: 1,  # C
-    7: 2,  # N
-    8: 3,  # O
-    9: 4,  # F
-    16: 5,  # S
-    17: 6,  # Cl
-}
-
-
 @dataclass
 class TensorNetNeuralNetworkData(NeuralNetworkData):
     """
@@ -75,7 +64,10 @@ class TensorNet(BaseNetwork):
             dtype: torch.dtype = torch.float32,
             representation_unit: unit.Quantity = unit.angstrom,
     ) -> None:
-        super().__init__()
+        super().__init__(
+            processing_operation = [],
+            readout_operation = [],
+        )
 
         self.core_module = TensorNetCore(
             hidden_channels,
@@ -138,7 +130,7 @@ class TensorNetCore(CoreNetwork):
                         representation_unit,
                     )
                 )
-    def _forward(self):
+    def compute_properties(self):
         pass
 
     def _model_specific_input_preparation(

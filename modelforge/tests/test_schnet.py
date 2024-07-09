@@ -55,7 +55,7 @@ def test_Schnet_init():
 
 def test_compare_radial_symmetry_features():
     # compare schnetpack RadialSymmetryFunction with modelforge RadialSymmetryFunction
-    from modelforge.potential.utils import SchnetRadialSymmetryFunction
+    from modelforge.potential.utils import SchnetRadialBasisFunction
     from openff.units import unit
 
     # Initialize the RBFs
@@ -63,7 +63,7 @@ def test_compare_radial_symmetry_features():
     cutoff = unit.Quantity(5.2, unit.angstrom)
     start = unit.Quantity(0.8, unit.angstrom)
 
-    radial_symmetry_function_module = SchnetRadialSymmetryFunction(
+    radial_symmetry_function_module = SchnetRadialBasisFunction(
         number_of_radial_basis_functions=number_of_gaussians,
         max_distance=cutoff,
         min_distance=start,
@@ -228,10 +228,10 @@ def test_schnet_forward_pass():
         dtype=torch.float64,
     )
     modelforge_phi_ij = modelforge_schnet.core_module.schnet_representation_module.radial_symmetry_function_module(
-        d_ij.unsqueeze(1) / 10
+        d_ij / 10
     )  # NOTE: converting to nm
 
-    assert torch.allclose(schnetpack_phi_ij, modelforge_phi_ij, atol=1e-3)
+    assert torch.allclose(schnetpack_phi_ij, modelforge_phi_ij.unsqueeze(1), atol=1e-3)
     # ---------------------------------------- #
     # test cutoff
     # ---------------------------------------- #

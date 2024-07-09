@@ -29,7 +29,6 @@ dependencies:
   - pytest-cov
   - codecov
   - requests
-  - torchani
   - versioneer
 
   # Docs

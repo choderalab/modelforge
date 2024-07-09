@@ -116,7 +116,7 @@ def test_rbf():
     D = tf.expand_dims(D, -1)  # necessary for proper broadcasting behaviour
     pn_rbf_output = tf.exp(-pn_widths * (tf.exp(-D) - pn_centers) ** 2)
 
-    mf_rbf_output = mf_rbf(torch.tensor(D.numpy() / 10).squeeze())
+    mf_rbf_output = mf_rbf(torch.tensor(D.numpy() / 10).squeeze(-1))
     assert np.allclose(
         np.flip(pn_rbf_output.numpy().squeeze(), axis=1), mf_rbf_output.numpy()
     )

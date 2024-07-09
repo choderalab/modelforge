@@ -53,6 +53,7 @@ def initialize_datamodule(
     splitting_strategy: SplittingStrategy = FirstComeFirstServeSplittingStrategy(),
     remove_self_energies: bool = True,
     regression_ase: bool = False,
+    regenerate_dataset_statistic: bool = False,
 ) -> DataModule:
     """
     Initialize a dataset for a given mode.
@@ -65,6 +66,7 @@ def initialize_datamodule(
         version_select=version_select,
         remove_self_energies=remove_self_energies,
         regression_ase=regression_ase,
+        regenerate_dataset_statistic=regenerate_dataset_statistic,
     )
     data_module.prepare_data()
     data_module.setup()
@@ -84,12 +86,12 @@ from modelforge.dataset.dataset import DatasetFactory, TorchDataset
 from modelforge.dataset import _ImplementedDatasets
 
 
-def single_batch(batch_size: int = 64):
+def single_batch(batch_size: int = 64, dataset_name="QM9"):
     """
     Utility function to create a single batch of data for testing.
     """
     data_module = initialize_datamodule(
-        dataset_name="QM9",
+        dataset_name=dataset_name,
         batch_size=batch_size,
         version_select="nc_1000_v0",
     )
@@ -110,6 +112,14 @@ def single_batch_with_batchsize_1():
     Utility fixture to create a single batch of data for testing.
     """
     return single_batch(batch_size=1)
+
+
+@pytest.fixture(scope="session")
+def single_batch_with_batchsize_2_with_force():
+    """
+    Utility fixture to create a single batch of data for testing.
+    """
+    return single_batch(batch_size=2, dataset_name="PHALKETHOH")
 
 
 def initialize_dataset(
@@ -261,7 +271,7 @@ def equivariance_utils():
 # helper functions
 # ----------------------------------------------------------- #
 
-from modelforge.dataset.dataset import Metadata, NNPInput, BatchData
+from modelforge.dataset.dataset import BatchData
 
 
 @pytest.fixture

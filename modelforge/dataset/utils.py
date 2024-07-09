@@ -111,11 +111,12 @@ def calculate_mean_and_variance(
         collate_fn=collate_conformers,
         num_workers=4,
     )
+    import tqdm
 
     # NOTE: while what is shown below works I didn't think this through complelty
     # NOTE: it might not matter, but revisit this again
     log.info("Calculating mean and variance of atomic energies")
-    for batch_data in dataloader:
+    for batch_data in tqdm.tqdm(dataloader):
         E_scaled = (
             batch_data.metadata.E
             / batch_data.metadata.atomic_subsystem_counts.view(-1, 1)
@@ -123,8 +124,8 @@ def calculate_mean_and_variance(
         online_estimator.update(E_scaled)
 
     stats = {
-        "Ei_mean": online_estimator.mean,
-        "Ei_stddev": online_estimator.stddev,
+        "E_i_mean": online_estimator.mean,
+        "E_i_stddev": online_estimator.stddev,
     }
     log.info(f"Mean and standard deviation of the dataset:{stats}")
     return stats

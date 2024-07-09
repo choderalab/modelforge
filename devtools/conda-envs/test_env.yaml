@@ -17,35 +17,28 @@ dependencies:
   - tensorboard
   - torchvision
   - openff-units
-  - pint
+  - torchmetrics>=1.4
+  - pint=0.23
   - rdkit
   - retry
   - sqlitedict
   - pytorch_scatter
-  - jax
 
   # Testing
   - pytest>=2.1
   - pytest-cov
   - codecov
   - requests
-  - ray-data
-  - ray-train
-  - ray-tune
-  - torchani
-  - torchmd-net
   - versioneer
 
   # Docs
   - sphinx_rtd_theme
 
-  # pip installs
   - pip:
-      - schnetpack>=2.0.0
+      - jax
       - pytorch2jax
       - versioneer
       - flax
-      - torchviz
       - git+https://github.com/ArnNag/sake.git@nanometer
-      - tensorflow
-      - torchviz
+      # - tensorflow
+      - "ray[data,train,tune,serve]"

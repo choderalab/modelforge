@@ -20,7 +20,7 @@ dataset = DataModule(
 dataset.prepare_data(remove_self_energies=True, normalize=False)
 
 # Set up model
-model = NeuralNetworkPotentialFactory.create_nnp("training", "ANI2x")
+model = NeuralNetworkPotentialFactory.generate_model("training", "ANI2x")
 model = model.to(torch.float32)
 
 model.tune_with_ray(

@@ -309,33 +309,6 @@ class SpookyNetCutoff(nn.Module):
         )
 
 
-class ExponentialBernsteinPolynomialsFactory:
-
-    @staticmethod
-    def make_radial_basis_function(number_of_radial_basis_functions: int, dtype: torch.dtype):
-        logfactorial = np.zeros(number_of_radial_basis_functions)
-        for i in range(2, number_of_radial_basis_functions):
-            logfactorial[i] = logfactorial[i - 1] + np.log(i)
-        v = np.arange(0, number_of_radial_basis_functions)
-        n = (number_of_radial_basis_functions - 1) - v
-        logbinomial = logfactorial[-1] - logfactorial[v] - logfactorial[n]
-        # register buffers and parameters
-        radial_basis_function = ExponentialBernsteinPolynomialsCore
-        radial_basis_function.logc = torch.tensor(logbinomial, dtype=dtype)
-        radial_basis_function.n = torch.tensor(n, dtype=dtype)
-        radial_basis_function.v = torch.tensor(v, dtype=dtype)
-        return radial_basis_function
-
-
-class ExponentialBernsteinPolynomials:
-    nn.init.constant_(self.alpha, alpha)
-    self.reset_parameters(ini_alpha.to(unit.nanometer).m)
-
-
-def nondimensionalize_distances(self, d_ij: torch.Tensor) -> torch.Tensor:
-    return -(d_ij.view(-1, 1) / self.alpha)
-
-
 from typing import Dict
 
 
@@ -539,21 +512,27 @@ class ExponentialBernsteinPolynomialsCore(RadialBasisFunctionCore):
     r = 0, which will not occur with chemically meaningful inputs.
 
     Arguments:
-        num_basis_functions (int):
+        number_of_radial_basis_functions (int):
             Number of radial basis functions.
             x = infinity.
-        ini_alpha (float):
-            Initial value for scaling parameter alpha (alpha here is the reciprocal of alpha in the paper. The original
-            default is 0.5/bohr, so we use 2 bohr).
     """
 
+
     def __init__(self, number_of_radial_basis_functions: int):
+        logfactorial = np.zeros(number_of_radial_basis_functions)
+        for i in range(2, number_of_radial_basis_functions):
+            logfactorial[i] = logfactorial[i - 1] + np.log(i)
+        v = np.arange(0, number_of_radial_basis_functions)
+        n = (number_of_radial_basis_functions - 1) - v
+        logbinomial = logfactorial[-1] - logfactorial[v] - logfactorial[n]
+        # register buffers and parameters
+        dtype = torch.float64 # TODO: make this a parameter
+        self.logc = torch.tensor(logbinomial, dtype=dtype)
+        self.n = torch.tensor(n, dtype=dtype)
+        self.v = torch.tensor(v, dtype=dtype)
 
 
-    def reset_parameters(self, alpha) -> None:
-        """ Initialize exponential scaling parameter alpha. """
-
-    def compute(self, nondimensionalized_distances: torch.Tensor) -> torch.Tensor:
+    def forward(self, nondimensionalized_distances: torch.Tensor) -> torch.Tensor:
         """
         Evaluates radial basis functions given distances
         N: Number of input values.
@@ -567,9 +546,9 @@ class ExponentialBernsteinPolynomialsCore(RadialBasisFunctionCore):
             rbf (FloatTensor [N, num_basis_functions]):
                 Values of the radial basis functions for the distances r.
         """
-        x = (cls.logc + (cls.n + 1) * nondimensionalized_distances
-             + v * torch.log(-torch.expm1(nondimensionalized_distances)))
-        print(f"{cls.logc.shape=}")
+        x = (self.logc + (self.n + 1) * nondimensionalized_distances
+             + self.v * torch.log(-torch.expm1(nondimensionalized_distances)))
+        print(f"{self.logc.shape=}")
 
         return torch.exp(x)
 
@@ -661,7 +640,7 @@ class GaussianRadialBasisFunctionWithScaling(RadialBasisFunction):
             Whether centers and scale factors are trainable.
         """
 
-        super().__init__(GaussianRadialBasisFunctionCore, dtype, prefactor, trainable_prefactor)
+        super().__init__(GaussianRadialBasisFunctionCore(), dtype, prefactor, trainable_prefactor)
         self.number_of_radial_basis_functions = number_of_radial_basis_functions
         self.dtype = dtype
         self.trainable_centers_and_scale_factors = trainable_centers_and_scale_factors
@@ -925,6 +904,19 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
         return ((torch.exp(
             (-distances + self._min_distance_in_nanometer) * 10).unsqueeze(-1) - self.radial_basis_centers)
                 / self.radial_scale_factor)
+
+
+class ExponentialBernsteinRadialBasisFunction(RadialBasisFunction):
+
+    def __init__(self, ini_alpha):
+        """
+            ini_alpha (float):
+                Initial value for scaling parameter alpha (alpha here is the reciprocal of alpha in the paper. The original
+                default is 0.5/bohr, so we use 2 bohr).
+        """
+        self.ini_alpha = ini_alpha
+    def nondimensionalize_distances(self, d_ij: torch.Tensor) -> torch.Tensor:
+        return -(d_ij.view(-1, 1) / self.alpha)
 
 
 def pair_list(

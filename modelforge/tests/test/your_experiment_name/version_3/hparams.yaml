@@ -1,0 +1,23 @@
+include_force: false
+lr: 0.001
+lr_scheduler_config:
+  cooldown: 5
+  factor: 0.1
+  frequency: 1
+  interval: epoch
+  min_lr: 1.0e-08
+  mode: min
+  monitor: rmse_val_loss
+  patience: 10
+  threshold: 0.1
+  threshold_mode: abs
+nnp_parameters:
+  angle_sections: 4
+  angular_dist_divisions: 8
+  angular_max_distance: 3.5 angstrom
+  angular_min_distance: 0.8 angstrom
+  nnp_name: ANI2x
+  number_of_radial_basis_functions: 16
+  radial_max_distance: 5.1 angstrom
+  radial_min_distance: 0.8 angstrom
+optimizer: !!python/name:torch.optim.adamw.AdamW ''

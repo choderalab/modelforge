@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import torch.nn as nn
 from loguru import logger as log
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Union
 from openff.units import unit
 from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
 
@@ -117,6 +117,7 @@ class SAKECore(CoreNetwork):
                 cutoff=cutoff,
                 number_of_radial_basis_functions=number_of_radial_basis_functions,
                 epsilon=epsilon,
+                scale_factor=1.0,
             )
             for _ in range(self.nr_interaction_blocks)
         )
@@ -193,9 +194,10 @@ class SAKEInteraction(nn.Module):
         nr_coefficients: int,
         nr_heads: int,
         activation: nn.Module,
-        cutoff: float,
+        cutoff: unit.Quantity,
         number_of_radial_basis_functions: int,
         epsilon: float,
+        scale_factor: float,
     ):
         """
         Parameters
@@ -218,11 +220,15 @@ class SAKEInteraction(nn.Module):
             Number of coefficients for spatial attention.
         activation : Callable
             Activation function to use.
-
-        Attributes
-        ----------
-        nr_atom_basis : int
-            Number of features to describe atomic environments.
+        cutoff : unit.Quantity
+            Distance parameter for setting scale factors in radial basis functions.
+        number_of_radial_basis_functions: int
+            Number of radial basis functions.
+        epsilon : float
+            Small constant to add for stability.
+        scale_factor : float
+            Magnitude of the multiplier (in units nanometer) used to nondimensionalize distances before being
+            passed directly into linear layers.
         """
         super().__init__()
         self.nr_atom_basis = nr_atom_basis
@@ -305,6 +311,8 @@ class SAKEInteraction(nn.Module):
 
         self.v_mixing_mlp = Dense(self.nr_coefficients, 1, bias=False)
 
+        self.scale_factor = scale_factor
+
     def update_edge(self, h_i_by_pair, h_j_by_pair, d_ij):
         """Compute intermediate edge features for semantic attention.
 
@@ -329,7 +337,7 @@ class SAKEInteraction(nn.Module):
             h_ij_cat
         )
         return self.edge_mlp_out(
-            torch.cat([h_ij_cat, h_ij_filtered, d_ij.unsqueeze(-1)], dim=-1)
+            torch.cat([h_ij_cat, h_ij_filtered, d_ij.unsqueeze(-1) / self.scale_factor], dim=-1)
         )
 
     def update_node(self, h, h_i_semantic, h_i_spatial):
@@ -554,7 +562,7 @@ class SAKE(BaseNetwork):
         number_of_interaction_modules: int,
         number_of_spatial_attention_heads: int,
         number_of_radial_basis_functions: int,
-        cutoff: unit.Quantity,
+        cutoff: Union[str, unit.Quantity],
         processing_operation: List[Dict[str, str]],
         readout_operation: List[Dict[str, str]],
         dataset_statistic: Optional[Dict[str, float]] = None,

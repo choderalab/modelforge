@@ -71,6 +71,7 @@ def test_sake_interaction_forward():
         cutoff=5.0 * unit.angstrom,
         number_of_radial_basis_functions=53,
         epsilon=1e-5,
+        scale_factor=1.0,
     )
     h = torch.randn(nr_atoms, nr_atom_basis)
     x = torch.randn(nr_atoms, geometry_basis)
@@ -175,6 +176,7 @@ def make_reference_equivalent_sake_interaction(out_features, hidden_features, nr
         cutoff=cutoff,
         number_of_radial_basis_functions=50,
         epsilon=1e-5,
+        scale_factor=1.0,
     )
 
     # Define the reference layer

@@ -398,7 +398,7 @@ def test_painn_representation_implementation():
         schnetpack_painn.filter_net.weight,
         atol=1e-4,
     )
-    modelforge_results = modelforge_painn.core_module._forward(pain_nn_input_mf)
+    modelforge_results = modelforge_painn.core_module.compute_properties(pain_nn_input_mf)
     schnetpack_results = schnetpack_painn(spk_input)
 
     assert (

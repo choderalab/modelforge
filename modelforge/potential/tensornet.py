@@ -3,11 +3,11 @@ from dataclasses import dataclass
 import torch
 from openff.units import unit
 from torch import nn
-from torchmdnet.models.tensornet import decompose_tensor
-from torchmdnet.models.tensornet import tensor_message_passing
-from torchmdnet.models.tensornet import tensor_norm
-from torchmdnet.models.tensornet import vector_to_skewtensor
-from torchmdnet.models.tensornet import vector_to_symtensor
+# from torchmdnet.models.tensornet import decompose_tensor
+# from torchmdnet.models.tensornet import tensor_message_passing
+# from torchmdnet.models.tensornet import tensor_norm
+# from torchmdnet.models.tensornet import vector_to_skewtensor
+# from torchmdnet.models.tensornet import vector_to_symtensor
 from typing import Tuple
 
 from modelforge.potential.models import InputPreparation
@@ -18,6 +18,60 @@ from modelforge.potential.utils import TensorNetRadialSymmetryFunction
 from modelforge.potential.utils import NeuralNetworkData
 from modelforge.potential.utils import NNPInput
 from .models import PairListOutputs
+
+
+def vector_to_skewtensor(vector):
+    """Creates a skew-symmetric tensor from a vector."""
+    batch_size = vector.size(0)
+    zero = torch.zeros(batch_size, device=vector.device, dtype=vector.dtype)
+    tensor = torch.stack(
+        (
+            zero,
+            -vector[:, 2],
+            vector[:, 1],
+            vector[:, 2],
+            zero,
+            -vector[:, 0],
+            -vector[:, 1],
+            vector[:, 0],
+            zero,
+        ),
+        dim=1,
+    )
+    tensor = tensor.view(-1, 3, 3)
+    return tensor.squeeze(0)
+
+def vector_to_symtensor(vector):
+    """Creates a symmetric traceless tensor from the outer product of a vector with itself."""
+    tensor = torch.matmul(vector.unsqueeze(-1), vector.unsqueeze(-2))
+    I = (tensor.diagonal(offset=0, dim1=-1, dim2=-2)).mean(-1)[
+        ..., None, None
+    ] * torch.eye(3, 3, device=tensor.device, dtype=tensor.dtype)
+    S = 0.5 * (tensor + tensor.transpose(-2, -1)) - I
+    return S
+
+def decompose_tensor(tensor):
+    """Full tensor decomposition into irreducible components."""
+    I = (tensor.diagonal(offset=0, dim1=-1, dim2=-2)).mean(-1)[
+        ..., None, None
+    ] * torch.eye(3, 3, device=tensor.device, dtype=tensor.dtype)
+    A = 0.5 * (tensor - tensor.transpose(-2, -1))
+    S = 0.5 * (tensor + tensor.transpose(-2, -1)) - I
+    return I, A, S
+
+def tensor_norm(tensor):
+    """Computes Frobenius norm."""
+    return (tensor**2).sum((-2, -1))
+
+def tensor_message_passing(
+    edge_index: torch.Tensor, factor: torch.Tensor, tensor: torch.Tensor, natoms: int
+) -> torch.Tensor:
+    """Message passing for tensors."""
+    msg = factor * tensor.index_select(0, edge_index[1])
+    shape = (natoms, tensor.shape[1], tensor.shape[2], tensor.shape[3])
+    tensor_m = torch.zeros(*shape, device=tensor.device, dtype=tensor.dtype)
+    tensor_m = tensor_m.index_add(0, edge_index[0], msg)
+    return tensor_m
 
 
 @dataclass

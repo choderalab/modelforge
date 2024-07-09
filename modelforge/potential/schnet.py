@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING, Dict, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -375,7 +375,7 @@ class SchNet(BaseNetwork):
         number_of_atom_features: int,
         number_of_radial_basis_functions: int,
         number_of_interaction_modules: int,
-        cutoff: unit.Quantity,
+        cutoff: Union[unit.Quantity, str],
         number_of_filters: int,
         shared_interactions: bool,
         processing_operation: List[Dict[str, str]],

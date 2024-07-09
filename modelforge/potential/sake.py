@@ -2,9 +2,9 @@ from dataclasses import dataclass
 
 import torch.nn as nn
 from loguru import logger as log
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Union
 from openff.units import unit
-from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
+from .models import InputPreparation, BaseNetwork, CoreNetwork
 
 from .models import PairListOutputs
 from .utils import (
@@ -556,7 +556,7 @@ class SAKE(BaseNetwork):
         number_of_interaction_modules: int,
         number_of_spatial_attention_heads: int,
         number_of_radial_basis_functions: int,
-        cutoff: unit.Quantity,
+        cutoff: Union[unit.Quantity, str],
         processing_operation: List[Dict[str, str]],
         readout_operation: List[Dict[str, str]],
         dataset_statistic: Optional[Dict[str, float]] = None,

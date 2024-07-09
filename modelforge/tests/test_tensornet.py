@@ -84,7 +84,7 @@ def test_tensornet_input():
     # edge_index, edge_weight, edge_vec = distance_module(pos, batch, None)
     #
     # torch.save((edge_index, edge_weight, edge_vec), "data/tensornet_input.pt")
-    edge_index, edge_weight, edge_vec = torch.load("data/tensornet_input.pt")
+    edge_index, edge_weight, edge_vec = torch.load("tensornet_input.pt")
 
     # reshape and compare
     pair_indices = pairlist_output.pair_indices.t()
@@ -138,7 +138,7 @@ def test_tensornet_compare_radial_symmetry_features():
     # tn_r = rsf_tn(d_ij)
     #
     # torch.save(tn_r, "data/tensornet_radial_symmetry_features.pt")
-    tn_r = torch.load("data/tensornet_radial_symmetry_features.pt")
+    tn_r = torch.load("tensornet_radial_symmetry_features.pt")
 
     assert torch.allclose(mf_r, tn_r)
 
@@ -237,7 +237,7 @@ def test_tensornet_representation():
     # )
     #
     # torch.save(tn_X, "data/tensornet_representation.pt")
-    tn_X = torch.load("data/tensornet_representation.pt")
+    tn_X = torch.load("tensornet_representation.pt")
     ################ TensorNet ################
 
     assert mf_X.shape == tn_X.shape
@@ -343,7 +343,7 @@ def test_tensornet_interaction():
     # )
     #
     # torch.save(tn_X, "data/tensornet_interaction.pt")
-    tn_X = torch.load("data/tensornet_interaction.pt")
+    tn_X = torch.load("tensornet_interaction.pt")
     ################ TensorNet ################
 
     assert mf_X.shape == tn_X.shape

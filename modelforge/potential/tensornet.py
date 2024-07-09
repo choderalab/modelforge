@@ -116,7 +116,7 @@ class TensorNet(BaseNetwork):
             max_atomic_number: int = 128,
             equivariance_invariance_group: str = "O(3)",
             dtype: torch.dtype = torch.float32,
-            representation_unit: unit.Quantity = unit.angstrom,
+            # representation_unit: unit.Quantity = unit.angstrom,
     ) -> None:
         super().__init__(
             processing_operation = [],
@@ -134,7 +134,7 @@ class TensorNet(BaseNetwork):
             max_atomic_number,
             equivariance_invariance_group,
             dtype,
-            representation_unit,
+            # representation_unit,
         )
         self.only_unique_pairs = False
         self.input_preparation = InputPreparation(
@@ -154,7 +154,7 @@ class TensorNetCore(CoreNetwork):
             max_atomic_number: int,
             equivariance_invariance_group: str,
             dtype: torch.dtype,
-            representation_unit: unit.Quantity,
+            # representation_unit: unit.Quantity,
     ):
         super().__init__()
 
@@ -168,7 +168,7 @@ class TensorNetCore(CoreNetwork):
             trainable_rbf,
             max_atomic_number,
             dtype,
-            representation_unit,
+            # representation_unit,
         )
         self.interaction_modules = nn.ModuleList()
         if number_of_interaction_layers > 0:
@@ -181,7 +181,7 @@ class TensorNetCore(CoreNetwork):
                         radial_max_distance,
                         equivariance_invariance_group,
                         dtype,
-                        representation_unit,
+                        # representation_unit,
                     )
                 )
     def compute_properties(self):
@@ -217,16 +217,17 @@ class TensorNetRepresentation(torch.nn.Module):
             trainable_rbf: bool,  # TODO
             max_atomic_number: int,
             dtype: torch.dtype,
-            representation_unit: unit.Quantity,
+            # representation_unit: unit.Quantity,
     ):
         super().__init__()
 
         # TensorNet uses angstrom
         self.hidden_channels = hidden_channels
         self.dtype = dtype
-        self.representation_unit = representation_unit
+        # self.representation_unit = representation_unit
 
-        self.cutoff_module = CosineCutoff(radial_max_distance, representation_unit)
+        self.cutoff_module = CosineCutoff(radial_max_distance)
+        # self.cutoff_module = CosineCutoff(radial_max_distance, representation_unit)
         self.radial_symmetry_function = self._setup_radial_symmetry_functions(
             radial_max_distance,
             radial_min_distance,
@@ -304,12 +305,13 @@ class TensorNetRepresentation(torch.nn.Module):
     def _get_tensor_messages(
             self,
             atomic_number_embedding: torch.Tensor,
-            d_ij_in_representation_unit: torch.Tensor,
+            d_ij_in_angstrom: torch.Tensor,
+            # d_ij_in_representation_unit: torch.Tensor,
             r_ij_norm: torch.Tensor,
             radial_feature_vector: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         C = self.cutoff_module(
-            d_ij_in_representation_unit
+            d_ij_in_angstrom / 10  # in nanometer
         ).reshape(-1, 1, 1, 1) * atomic_number_embedding
         eye = torch.eye(3, 3, device=r_ij_norm.device, dtype=r_ij_norm.dtype)[
             None, None, ...
@@ -338,7 +340,7 @@ class TensorNetRepresentation(torch.nn.Module):
             max_distance,
             min_distance,
             dtype=self.dtype,
-            representation_unit=self.representation_unit,
+            # representation_unit=self.representation_unit,
         )
         return radial_symmetry_function
 
@@ -347,18 +349,21 @@ class TensorNetRepresentation(torch.nn.Module):
             data.atomic_numbers,
             data.pair_indices,
         )
-        _r_ij_in_representation_unit = (data.r_ij * unit.nanometer).to(self.representation_unit).m
-        _d_ij_in_representation_unit = (data.d_ij * unit.nanometer).to(self.representation_unit).m
-        _r_ij_norm = _r_ij_in_representation_unit / _d_ij_in_representation_unit
+        _r_ij_in_angstrom = data.r_ij * 10
+        _d_ij_in_angstrom = data.d_ij * 10
+        # _r_ij_in_representation_unit = (data.r_ij * unit.nanometer).to(self.representation_unit).m
+        # _d_ij_in_representation_unit = (data.d_ij * unit.nanometer).to(self.representation_unit).m
+        _r_ij_norm = _r_ij_in_angstrom / _d_ij_in_angstrom
 
-        radial_feature_vector = self.radial_symmetry_function(_d_ij_in_representation_unit)
+        radial_feature_vector = self.radial_symmetry_function(data.d_ij)  # in nanometer
         # cutoff
-        rcut_ij = self.cutoff_module(_d_ij_in_representation_unit)  # cutoff function applied twice
+        rcut_ij = self.cutoff_module(data.d_ij)  # cutoff function applied twice
+        # rcut_ij = self.cutoff_module(_d_ij_in_angstrom)  # cutoff function applied twice
         radial_feature_vector = radial_feature_vector * rcut_ij.unsqueeze(-1)
 
         Iij, Aij, Sij = self._get_tensor_messages(
             atomic_number_embedding,
-            _d_ij_in_representation_unit,
+            _d_ij_in_angstrom,
             _r_ij_norm,
             radial_feature_vector
         )
@@ -402,14 +407,15 @@ class TensorNetInteraction(torch.nn.Module):
             radial_max_distance: unit.Quantity,
             equivariance_invariance_group,
             dtype: torch.dtype,
-            representation_unit: unit.Quantity,
+            # representation_unit: unit.Quantity,
     ):
         super().__init__()
 
         self.hidden_channels = hidden_channels
         self.number_of_radial_basis_functions = number_of_radial_basis_functions
         self.activation_function = activation_function()
-        self.cutoff_module = CosineCutoff(radial_max_distance, representation_unit)
+        self.cutoff_module = CosineCutoff(radial_max_distance)
+        # self.cutoff_module = CosineCutoff(radial_max_distance, representation_unit)
         self.linears_scalar = nn.ModuleList()
         self.linears_scalar.append(
             nn.Linear(number_of_radial_basis_functions, hidden_channels, bias=True, dtype=dtype)

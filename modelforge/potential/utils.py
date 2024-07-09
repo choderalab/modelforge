@@ -239,7 +239,7 @@ class CosineCutoff(nn.Module):
     def __init__(
         self,
         cutoff: unit.Quantity,
-        representation_unit: unit.Quantity = unit.nanometer,
+        # representation_unit: unit.Quantity = unit.nanometer,
     ):
         """
         Behler-style cosine cutoff module.
@@ -251,7 +251,8 @@ class CosineCutoff(nn.Module):
 
         """
         super().__init__()
-        cutoff = cutoff.to(representation_unit).m
+        cutoff = cutoff.to(unit.nanometer).m
+        # cutoff = cutoff.to(representation_unit).m
         self.register_buffer("cutoff", torch.tensor([cutoff]))
 
     def forward(self, d_ij: torch.Tensor):
@@ -792,9 +793,9 @@ class TensorNetRadialSymmetryFunction(RadialSymmetryFunction):
         trainable: bool = False,
         radial_basis_function: RadialBasisFunction = \
                 GaussianRadialBasisFunction(),
-        representation_unit: unit.Quantity = unit.angstrom,
+        # representation_unit: unit.Quantity = unit.angstrom,
     ):
-        self.representation_unit = representation_unit
+        # self.representation_unit = representation_unit
         super().__init__(
             number_of_radial_basis_functions,
             max_distance,
@@ -807,21 +808,21 @@ class TensorNetRadialSymmetryFunction(RadialSymmetryFunction):
 
     def initialize_parameters(self):
         # convert to nanometer
-        # _max_distance_in_nanometer = self.max_distance.to(unit.nanometer).m
-        # _min_distance_in_nanometer = self.min_distance.to(unit.nanometer).m
-        _max_distance = self.max_distance.to(self.representation_unit).m
-        _min_distance = self.min_distance.to(self.representation_unit).m
+        _max_distance_in_nanometer = self.max_distance.to(unit.nanometer).m
+        _min_distance_in_nanometer = self.min_distance.to(unit.nanometer).m
+        # _max_distance = self.max_distance.to(self.representation_unit).m
+        # _min_distance = self.min_distance.to(self.representation_unit).m
 
         # calculate radial basis centers
         radial_basis_centers = self.calculate_radial_basis_centers(
-            _min_distance,
-            _max_distance,
+            _min_distance_in_nanometer,
+            _max_distance_in_nanometer,
             self.number_of_radial_basis_functions,
             self.dtype,
         )
         # calculate scale factors
-        radial_scale_factor = self.calculate_radial_scale_factor(_min_distance,
-                                                                 _max_distance,
+        radial_scale_factor = self.calculate_radial_scale_factor(_min_distance_in_nanometer,
+                                                                 _max_distance_in_nanometer,
                                                                  self.number_of_radial_basis_functions)
 
         # either add as parameters or register buffers
@@ -836,15 +837,15 @@ class TensorNetRadialSymmetryFunction(RadialSymmetryFunction):
 
     def calculate_radial_basis_centers(
             self,
-            _min_distance,
-            _max_distance,
+            _min_distance_in_nanometer,
+            _max_distance_in_nanometer,
             number_of_radial_basis_functions,
             dtype,
     ):
         # TensorNet evenly distribute centers in log space
         start_value = torch.exp(
             torch.scalar_tensor(
-                -_max_distance + _min_distance,  # in angstrom
+                -_max_distance_in_nanometer * 10 + _min_distance_in_nanometer * 10,  # in angstrom
                 dtype=dtype,
             )
         )
@@ -858,13 +859,13 @@ class TensorNetRadialSymmetryFunction(RadialSymmetryFunction):
 
     def calculate_radial_scale_factor(
             self,
-            _min_distance,
-            _max_distance,
+            _min_distance_in_nanometer,
+            _max_distance_in_nanometer,
             number_of_radial_basis_functions,
     ):
         start_value = torch.exp(
             torch.scalar_tensor(
-                -_max_distance + _min_distance,
+                -_max_distance_in_nanometer * 10 + _min_distance_in_nanometer * 10,  # in angstrom
             )
         )
         scale_factors = torch.full(
@@ -876,15 +877,15 @@ class TensorNetRadialSymmetryFunction(RadialSymmetryFunction):
         return scale_factors
 
     def forward(self, d_ij: torch.Tensor):
-        d_ij = d_ij.unsqueeze(-1)
+        d_ij = d_ij.unsqueeze(-1) * 10  # in angstrom
 
         # transfrom d_ij
-        # _max_distance_in_angstrom = self.max_distance.to(unit.angstrom).m
-        # _min_distance_in_angstrom = self.min_distance.to(unit.angstrom).m
-        _max_distance = self.max_distance.to(self.representation_unit).m
-        _min_distance = self.min_distance.to(self.representation_unit).m
-        alpha = 5.0 / (_max_distance - _min_distance)
-        d_ij = torch.exp(alpha * (-d_ij + _min_distance))
+        _max_distance_in_nanometer = self.max_distance.to(unit.nanometer).m
+        _min_distance_in_nanometer = self.min_distance.to(unit.nanometer).m
+        # _max_distance = self.max_distance.to(self.representation_unit).m
+        # _min_distance = self.min_distance.to(self.representation_unit).m
+        alpha = 5.0 / (_max_distance_in_nanometer * 10 - _min_distance_in_nanometer * 10)  # in angstrom
+        d_ij = torch.exp(alpha * (-d_ij + _min_distance_in_nanometer * 10))  # in angstrom
 
         features = self.radial_basis_function.compute(
             d_ij, self.radial_basis_centers, self.radial_scale_factor

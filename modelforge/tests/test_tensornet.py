@@ -64,26 +64,26 @@ def test_tensornet_input():
     pairlist_output = model.input_preparation.prepare_inputs(mf_input)
 
     # torchmd-net TensorNet
-    # z, pos, batch = (
-    #     mf_input.atomic_numbers,
-    #     mf_input.positions,
-    #     mf_input.atomic_subsystem_indices
-    # )
-    # distance_module = OptimizedDistance(
-    #     cutoff_lower=0.0,
-    #     cutoff_upper=5.0,
-    #     max_num_pairs=153,
-    #     return_vecs=True,
-    #     loop=False,
-    #     check_errors=False,
-    #     resize_to_fit=False,  # not self.static_shapes
-    #     box=None,
-    #     long_edge_index=False,
-    # )
-    #
-    # edge_index, edge_weight, edge_vec = distance_module(pos, batch, None)
+    z, pos, batch = (
+        mf_input.atomic_numbers,
+        mf_input.positions,
+        mf_input.atomic_subsystem_indices
+    )
+    distance_module = OptimizedDistance(
+        cutoff_lower=0.0,
+        cutoff_upper=5.0,
+        max_num_pairs=153,
+        return_vecs=True,
+        loop=False,
+        check_errors=False,
+        resize_to_fit=False,  # not self.static_shapes
+        box=None,
+        long_edge_index=False,
+    )
 
-    # torch.save((edge_index, edge_weight, edge_vec), "data/tensornet_input.pt")
+    edge_index, edge_weight, edge_vec = distance_module(pos, batch, None)
+
+    torch.save((edge_index, edge_weight, edge_vec), "data/tensornet_input.pt")
     edge_index, edge_weight, edge_vec = torch.load("data/tensornet_input.pt")
 
     # reshape and compare
@@ -122,21 +122,22 @@ def test_tensornet_compare_radial_symmetry_features():
         max_distance=radial_cutoff * unit.angstrom,
         min_distance=radial_start * unit.angstrom,
     )
-    mf_r = rsf(d_ij)  # torch.Size([5, 1, 8]) # NOTE: nanometer
-    cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom, representation_unit=unit.angstrom)
+    mf_r = rsf(d_ij / 10)  # torch.Size([5, 1, 8]) # NOTE: nanometer
+    cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom)
+    # cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom, representation_unit=unit.angstrom)
 
-    rcut_ij = cutoff_module(d_ij)  # torch.Size([5, 1]) # NOTE: nanometer
+    rcut_ij = cutoff_module(d_ij / 10)  # torch.Size([5, 1]) # NOTE: nanometer
     mf_r = mf_r * rcut_ij.unsqueeze(-1)
 
-    # rsf_tn = ExpNormalSmearing(
-    #     cutoff_lower=radial_start,
-    #     cutoff_upper=radial_cutoff,
-    #     num_rbf=radial_dist_divisions,
-    #     trainable=False,
-    # )
-    # r_tn = rsf_tn(d_ij)
+    rsf_tn = ExpNormalSmearing(
+        cutoff_lower=radial_start,
+        cutoff_upper=radial_cutoff,
+        num_rbf=radial_dist_divisions,
+        trainable=False,
+    )
+    tn_r = rsf_tn(d_ij)
 
-    # torch.save(r_tn, "data/tensornet_radial_symmetry_features.pt")
+    torch.save(tn_r, "data/tensornet_radial_symmetry_features.pt")
     tn_r = torch.load("data/tensornet_radial_symmetry_features.pt")
 
     assert torch.allclose(mf_r, tn_r)
@@ -162,7 +163,7 @@ def test_tensornet_representation():
     trainable_rbf = False
     max_z = 128
     dtype = torch.float32
-    representation_unit = unit.angstrom
+    # representation_unit = unit.angstrom
 
     # Set up a dataset
     # prepare reference value
@@ -183,7 +184,8 @@ def test_tensornet_representation():
     mf_input = next(iter(dataset.train_dataloader())).nnp_input
     # modelforge TensorNet
     torch.manual_seed(0)
-    model = TensorNet(representation_unit=representation_unit)
+    model = TensorNet()
+    # model = TensorNet(representation_unit=representation_unit)
     model.input_preparation._input_checks(mf_input)
     pairlist_output = model.input_preparation.prepare_inputs(mf_input)
 
@@ -198,7 +200,7 @@ def test_tensornet_representation():
         trainable_rbf,
         max_z,
         dtype,
-        representation_unit,
+        # representation_unit,
     )
     # tensornet_representation_module = model.core_module.representation_module
     nnp_input = model.core_module._model_specific_input_preparation(mf_input, pairlist_output)
@@ -206,35 +208,35 @@ def test_tensornet_representation():
     ################ modelforge TensorNet ################
 
     ################ TensorNet ################
-    # torch.manual_seed(0)
-    # # TensorNet embedding modules setup
-    # tensor_embedding = TensorEmbedding(
-    #     hidden_channels,
-    #     num_rbf,
-    #     act_class,
-    #     cutoff_lower,
-    #     cutoff_upper,
-    #     trainable_rbf,
-    #     max_z,
-    #     dtype,
-    # )
-    #
-    # distance_expansion = ExpNormalSmearing(
-    #     cutoff_lower, cutoff_upper, num_rbf, trainable_rbf
-    # )
-    #
-    # # calculate embedding
-    # edge_attr = distance_expansion(nnp_input.d_ij.squeeze(-1) * 10)  # Note: in angstrom
-    #
-    # tn_X = tensor_embedding(
-    #     nnp_input.atomic_numbers,
-    #     nnp_input.pair_indices,
-    #     nnp_input.d_ij.squeeze(-1) * 10,  # Note: in angstrom
-    #     nnp_input.r_ij / nnp_input.d_ij,  # edge_vec_norm in angstrom
-    #     edge_attr,
-    # )
-    #
-    # torch.save(tn_X, "data/tensornet_representation.pt")
+    torch.manual_seed(0)
+    # TensorNet embedding modules setup
+    tensor_embedding = TensorEmbedding(
+        hidden_channels,
+        num_rbf,
+        act_class,
+        cutoff_lower,
+        cutoff_upper,
+        trainable_rbf,
+        max_z,
+        dtype,
+    )
+
+    distance_expansion = ExpNormalSmearing(
+        cutoff_lower, cutoff_upper, num_rbf, trainable_rbf
+    )
+
+    # calculate embedding
+    edge_attr = distance_expansion(nnp_input.d_ij.squeeze(-1) * 10)  # Note: in angstrom
+
+    tn_X = tensor_embedding(
+        nnp_input.atomic_numbers,
+        nnp_input.pair_indices,
+        nnp_input.d_ij.squeeze(-1) * 10,  # Note: in angstrom
+        nnp_input.r_ij / nnp_input.d_ij,  # edge_vec_norm in angstrom
+        edge_attr,
+    )
+
+    torch.save(tn_X, "data/tensornet_representation.pt")
     tn_X = torch.load("data/tensornet_representation.pt")
     ################ TensorNet ################
 
@@ -259,7 +261,7 @@ def test_tensornet_interaction():
     cutoff_lower = 0.0
     cutoff_upper = 5.1
     dtype = torch.float32
-    representation_unit = unit.angstrom
+    # representation_unit = unit.angstrom
 
     # Set up a dataset
     # prepare reference value
@@ -280,7 +282,8 @@ def test_tensornet_interaction():
     mf_input = next(iter(dataset.train_dataloader())).nnp_input
     # modelforge TensorNet
     torch.manual_seed(0)
-    model = TensorNet(representation_unit=unit.angstrom)
+    model = TensorNet()
+    # model = TensorNet(representation_unit=unit.angstrom)
     model.input_preparation._input_checks(mf_input)
     pairlist_output = model.input_preparation.prepare_inputs(mf_input)
 
@@ -289,11 +292,14 @@ def test_tensornet_interaction():
     nnp_input = model.core_module._model_specific_input_preparation(mf_input, pairlist_output)
     X = tensornet_representation_module(nnp_input)
 
-    _d_ij_in_representation_unit = (nnp_input.d_ij * unit.nanometer).to(representation_unit).m
     radial_feature_vector = tensornet_representation_module.radial_symmetry_function(
-        _d_ij_in_representation_unit
+        nnp_input.d_ij
     )
-    rcut_ij = tensornet_representation_module.cutoff_module(_d_ij_in_representation_unit)
+    # _d_ij_in_representation_unit = (nnp_input.d_ij * unit.nanometer).to(representation_unit).m
+    # radial_feature_vector = tensornet_representation_module.radial_symmetry_function(
+    #     _d_ij_in_representation_unit
+    # )
+    rcut_ij = tensornet_representation_module.cutoff_module(nnp_input.d_ij)
     radial_feature_vector = radial_feature_vector * rcut_ij.unsqueeze(-1)
 
     total_charge = torch.zeros_like(nnp_input.atomic_numbers)
@@ -307,36 +313,36 @@ def test_tensornet_interaction():
         cutoff_upper * unit.angstrom,
         "O(3)",
         dtype,
-        representation_unit,
+        # representation_unit,
     )
     mf_X = interaction_module(
         X,
         nnp_input.pair_indices,
-        _d_ij_in_representation_unit.squeeze(-1),
+        nnp_input.d_ij.squeeze(-1),
         radial_feature_vector.squeeze(1),
         total_charge,
     )
     ################ modelforge TensorNet ################
 
     ################ TensorNet ################
-    # torch.manual_seed(0)
-    # tn_interaction = Interaction(
-    #     num_rbf,
-    #     hidden_channels,
-    #     act_class,
-    #     cutoff_lower,
-    #     cutoff_upper,
-    #     "O(3)",
-    # )
-    # tn_X = tn_interaction(
-    #     X,
-    #     nnp_input.pair_indices,
-    #     nnp_input.d_ij.squeeze(-1) * 10,
-    #     radial_feature_vector.squeeze(1),
-    #     total_charge,
-    # )
-    #
-    # torch.save(tn_X, "data/tensornet_interaction.pt")
+    torch.manual_seed(0)
+    tn_interaction = Interaction(
+        num_rbf,
+        hidden_channels,
+        act_class,
+        cutoff_lower,
+        cutoff_upper,
+        "O(3)",
+    )
+    tn_X = tn_interaction(
+        X,
+        nnp_input.pair_indices,
+        nnp_input.d_ij.squeeze(-1) * 10,
+        radial_feature_vector.squeeze(1),
+        total_charge,
+    )
+
+    torch.save(tn_X, "data/tensornet_interaction.pt")
     tn_X = torch.load("data/tensornet_interaction.pt")
     ################ TensorNet ################
 
@@ -353,4 +359,4 @@ if __name__ == "__main__":
 
     # test_tensornet_compare_radial_symmetry_features()
 
-    # test_tensornet_representation()
+    test_tensornet_representation()

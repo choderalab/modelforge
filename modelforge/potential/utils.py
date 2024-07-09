@@ -203,7 +203,7 @@ class Dense(nn.Linear):
         in_features: int,
         out_features: int,
         bias: bool = True,
-        activation: Optional[Union[nn.Module, Callable[[torch.Tensor], torch.Tensor]]] = None,
+        activation: Optional[Union[nn.Module], Callable[[torch.Tensor], torch.Tensor]] = None,
         weight_init: Callable = xavier_uniform_,
         bias_init: Callable = zeros_,
     ):

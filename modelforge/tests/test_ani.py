@@ -1,7 +1,6 @@
 import pytest
 
 
-@pytest.fixture
 def setup_methane():
     import torch
 
@@ -37,7 +36,6 @@ def setup_methane():
     return species, coordinates, device, nnp_input
 
 
-@pytest.fixture
 def setup_two_methanes():
     import torch
 
@@ -82,14 +80,15 @@ def setup_two_methanes():
     return ani_species, coordinates, device, nnp_input
 
 
-def test_torchani_ani(setup_two_methanes):
+@pytest.mark.xfail
+def test_torchani_ani():
     # Test torchani ANI implementation
     # Test forward pass and backpropagation through network
 
     import torch
     import torchani
 
-    species, coordinates, device, _ = setup_two_methanes
+    species, coordinates, device, _ = setup_two_methanes()
     model = torchani.models.ANI2x(periodic_table_index=False).to(device)
 
     energy = model((species, coordinates)).energies
@@ -97,47 +96,41 @@ def test_torchani_ani(setup_two_methanes):
     force = -derivative
 
 
-def test_modelforge_ani(setup_two_methanes):
+def test_modelforge_ani_forward_and_backward_pass():
     # Test modelforge ANI implementation
     # Test forward pass and backpropagation through network
-    from modelforge.potential.ani import ANI2x as mf_ANI2x
+    from modelforge.potential.ani import ANI2x
+    from modelforge.tests.test_models import load_configs
     import torch
 
     # read default parameters
-    from modelforge.train.training import return_toml_config
-    from importlib import resources
-    from modelforge.tests.data import potential
-
-    file_path = resources.files(potential) / f"ani2x_defaults.toml"
-    config = return_toml_config(file_path)
-
+    config = load_configs("ani2x_without_ase", "qm9")
     # Extract parameters
     potential_parameter = config["potential"].get("potential_parameter", {})
 
-    _, _, _, mf_input = setup_two_methanes
+    _, _, _, mf_input = setup_two_methanes()
     device = torch.device("cpu")
-    model = mf_ANI2x(**potential_parameter).to(device=device)
+    model = ANI2x(**potential_parameter).to(device=device)
     energy = model(mf_input)
-    derivative = torch.autograd.grad(energy.E.sum(), mf_input.positions)[0]
+    derivative = torch.autograd.grad(energy["E"].sum(), mf_input.positions)[0]
     force = -derivative
 
 
-def test_compare_radial_symmetry_features():
+def test_compare_rsf():
     # Compare the ANI radial symmetry function
     # to the output of the modelforge radial symmetry function
     import torch
     from modelforge.potential.utils import AniRadialBasisFunction, CosineCutoff
     from openff.units import unit
+    from .precalculated_values import (
+        provide_reference_values_for_test_ani_test_compare_rsf,
+    )
 
-    # generate a random list of distances, all < 5
-    d_ij = torch.rand(5, 1) * 5
-
-    # ANI constants
+    # use d_ij in angstrom
+    d_ij = torch.tensor([[3.5201], [2.6756], [2.1641], [3.0990], [4.5180]])
     radial_cutoff = 5.0  # radial_cutoff
     radial_start = 0.8
     radial_dist_divisions = 8
-    EtaR = torch.tensor([19.7])  # radial eta
-    ShfR = torch.linspace(radial_start, radial_cutoff, radial_dist_divisions + 1)[:-1]
 
     # NOTE: we pass in Angstrom to ANI and in nanometer to mf
     rsf = AniRadialBasisFunction(
@@ -147,24 +140,24 @@ def test_compare_radial_symmetry_features():
     )
     r_mf = rsf(d_ij / 10)  # torch.Size([5,1, 8]) # NOTE: nanometer
     cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom)
-    from torchani.aev import radial_terms
 
     rcut_ij = cutoff_module(d_ij / 10)  # torch.Size([5]) # NOTE: nanometer
-
+    r_ani = provide_reference_values_for_test_ani_test_compare_rsf()
     r_mf = r_mf * rcut_ij
-    r_ani = radial_terms(5, EtaR, ShfR, d_ij)  # torch.Size([5,8]) # NOTE: Angstrom
-    assert torch.allclose(r_mf, r_ani)
+    assert torch.allclose(r_mf, r_ani, rtol=1e-4)
 
 
-def test_radial_with_diagonal_batching(setup_two_methanes):
+def test_compute_rsf_with_diagonal_batching():
     import torch
     from modelforge.potential.utils import AniRadialBasisFunction, CosineCutoff
     from openff.units import unit
     from modelforge.potential.models import Pairlist
-    from torchani.aev import neighbor_pairs_nopbc
+    from .precalculated_values import (
+        provide_reference_values_for_test_ani_test_compute_rsf_with_diagonal_batching,
+    )
 
     # ------------ general setup -------------#
-    ani_species, ani_coordinates, _, mf_input = setup_two_methanes
+    ani_species, ani_coordinates, _, mf_input = setup_two_methanes()
     pairlist = Pairlist(only_unique_pairs=True)
     pairs = pairlist(
         mf_input.positions,
@@ -176,20 +169,6 @@ def test_radial_with_diagonal_batching(setup_two_methanes):
     radial_cutoff = 5.1  # radial_cutoff
     radial_start = 0.8
     radial_dist_divisions = 16
-    # --------------- ANI setup --------------- #
-    EtaR = torch.tensor([19.7])  # radial eta
-    ShfR = torch.linspace(radial_start, radial_cutoff, radial_dist_divisions + 1)[:-1]
-
-    ani_coordinates_ = ani_coordinates
-    ani_coordinates = ani_coordinates_.flatten(0, 1)
-
-    species = ani_species
-    atom_index12 = neighbor_pairs_nopbc(species == -1, ani_coordinates_, radial_cutoff)
-    selected_coordinates = ani_coordinates.index_select(0, atom_index12.view(-1)).view(
-        2, -1, 3
-    )
-    vec = selected_coordinates[0] - selected_coordinates[1]
-    distances = vec.norm(2, -1)
     # ------------ Modelforge calculation ----------#
     device = torch.device("cpu")
 
@@ -204,24 +183,22 @@ def test_radial_with_diagonal_batching(setup_two_methanes):
 
     radial_symmetry_feature_vector_mf = radial_symmetry_function(d_ij)
     radial_symmetry_feature_vector_mf = radial_symmetry_feature_vector_mf * rcut_ij
-    # ------------ ANI calculation ----------#
-    from torchani.aev import radial_terms
 
-    assert torch.allclose(distances, d_ij.squeeze(1) * 10)  # NOTE: unit mismatch
-    radial_symmetry_feature_vector_ani = radial_terms(
-        radial_cutoff, EtaR, ShfR, distances
-    )
     # test that both ANI and MF obtain the same radial symmetry outpu
-    assert torch.allclose(
-        radial_symmetry_feature_vector_mf, radial_symmetry_feature_vector_ani
+    ani_rsf, ani_d_ij = (
+        provide_reference_values_for_test_ani_test_compute_rsf_with_diagonal_batching()
     )
+    assert torch.allclose(radial_symmetry_feature_vector_mf, ani_rsf, atol=1e-4)
+    assert torch.allclose(
+        ani_d_ij, d_ij.squeeze(1) * 10, atol=1e-4
+    )  # NOTE: unit mismatch
 
     assert radial_symmetry_feature_vector_mf.shape == torch.Size(
         [20, radial_dist_divisions]
     )
 
 
-def test_compare_angular_symmetry_features(setup_methane):
+def test_compare_angular_symmetry_features():
     # Compare the Modelforge angular symmetry function
     # against the original torchani implementation
 
@@ -229,12 +206,11 @@ def test_compare_angular_symmetry_features(setup_methane):
     from modelforge.potential.utils import AngularSymmetryFunction, triple_by_molecule
     from openff.units import unit
     from modelforge.potential.models import Pairlist
-    import math
 
     device = torch.device("cpu")
 
     # set up relevant system properties
-    species, r, _, _ = setup_methane
+    species, r, _, _ = setup_methane()
     pairlist = Pairlist(only_unique_pairs=True).to(device=device)
     pairs = pairlist(r[0], torch.tensor([0, 0, 0, 0, 0], device=device))
     d_ij = pairs.d_ij.squeeze(1)
@@ -243,44 +219,32 @@ def test_compare_angular_symmetry_features(setup_methane):
     # reformat for input
     species = species.flatten()
     atom_index12 = pairs.pair_indices
-    species12 = species[atom_index12]
     # ANI constants
     # for angular features
     angular_cutoff = Rca = 3.5  # angular_cutoff
     angular_start = 0.8
-    EtaA = angular_eta = 12.5
     angular_dist_divisions = 8
-    ShfA = torch.linspace(angular_start, angular_cutoff, angular_dist_divisions + 1)[
-        :-1
-    ]
-    angle_sections = 4
-
-    angle_start = math.pi / (2 * angle_sections)
-    ShfZ = (torch.linspace(0, math.pi, angle_sections + 1) + angle_start)[:-1]
-
-    # other constants
-    Zeta = 14.1
 
     # get index in right order
     even_closer_indices = (d_ij <= Rca).nonzero().flatten()
     atom_index12 = atom_index12.index_select(1, even_closer_indices)
-    species12 = species12.index_select(1, even_closer_indices)
     r_ij = r_ij.index_select(0, even_closer_indices)
     central_atom_index, pair_index12, sign12 = triple_by_molecule(atom_index12)
-    species12_small = species12[:, pair_index12]
     vec12 = r_ij.index_select(0, pair_index12.view(-1)).view(
         2, -1, 3
     ) * sign12.unsqueeze(-1)
-    species12_ = torch.where(sign12 == 1, species12_small[1], species12_small[0])
 
     # now use formated indices and inputs to calculate the
     # angular terms, both with the modelforge AngularSymmetryFunction
     # and with its implementation in torchani
-    from torchani.aev import angular_terms
 
-    # First with ANI
-    angular_feature_vector_ani = angular_terms(
-        Rca, ShfZ.unsqueeze(0).unsqueeze(0), EtaA, Zeta, ShfA.unsqueeze(1), vec12
+    # ref value
+    from .precalculated_values import (
+        provide_input_for_test_ani_test_compare_angular_symmetry_features,
+    )
+
+    angular_feature_vector_ani = (
+        provide_input_for_test_ani_test_compare_angular_symmetry_features()
     )
 
     # set up modelforge angular features
@@ -288,7 +252,7 @@ def test_compare_angular_symmetry_features(setup_methane):
         angular_cutoff * unit.angstrom,
         angular_start * unit.angstrom,
         angular_dist_divisions,
-        angle_sections,
+        angle_sections=4,
     )
     # NOTE: ANI works with Angstrom, modelforge with nanometer
     vec12 = vec12 / 10
@@ -296,37 +260,26 @@ def test_compare_angular_symmetry_features(setup_methane):
     angular_feature_vector_mf = asf(vec12)
     # make sure that the output is the same
     assert angular_feature_vector_ani.size() == angular_feature_vector_mf.size()
-    assert torch.allclose(angular_feature_vector_ani, angular_feature_vector_mf)
+    assert torch.allclose(
+        angular_feature_vector_ani, angular_feature_vector_mf, atol=1e-4
+    )
 
 
-def test_representation(setup_methane):
-    # Compare the Modelforge angular symmetry function
-    # against the original torchani implementation
+def test_compare_aev():
+    import torch
+    from .precalculated_values import provide_input_for_test_ani_test_compare_aev
 
     # methane input
-    species, coordinates, device, mf_input = setup_methane
-
-    # generate torchani representation
-    import torchani
-    import torch
-
-    torchani_model = torchani.models.ANI2x(periodic_table_index=False)
-
-    # calculate aev
-    (species, tochani_aev) = torchani_model.aev_computer(
-        (species, coordinates), cell=None, pbc=None
-    )
+    species, coordinates, device, mf_input = setup_methane()
 
     # generate modelforge ani representation
     from modelforge.potential import ANI2x
 
     # read default parameters
-    from modelforge.train.training import return_toml_config
-    from importlib import resources
-    from modelforge.tests.data import potential
+    from modelforge.tests.test_models import load_configs
 
-    file_path = resources.files(potential) / f"ani2x_defaults.toml"
-    config = return_toml_config(file_path)
+    # read default parameters
+    config = load_configs("ani2x_without_ase", "qm9")
 
     # Extract parameters
     potential_parameter = config["potential"].get("potential_parameter", {})
@@ -341,8 +294,8 @@ def test_representation(setup_methane):
     )
     representation = mf_model.core_module.ani_representation_module(nnp_input)
 
-    tochani_aev = tochani_aev.squeeze(0)
-
-    # test for equivalenc
-    assert tochani_aev.shape == representation.aevs.shape
-    assert torch.allclose(tochani_aev, representation.aevs, atol=1e-4)
+    tochani_aev = provide_input_for_test_ani_test_compare_aev()
+    # test for equivalence
+    assert torch.Size([5, 1008]) == representation.aevs.shape
+    # compare a selected subsection
+    assert torch.allclose(tochani_aev, representation.aevs[::2, :50:5], atol=1e-4)

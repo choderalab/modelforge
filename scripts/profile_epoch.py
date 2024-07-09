@@ -63,7 +63,7 @@ def setup(model_name: str):
     dm.setup()
 
     # Set up model
-    model = NeuralNetworkPotentialFactory.create_nnp(
+    model = NeuralNetworkPotentialFactory.generate_model(
         use="training",
         model_type=model_name,
         model_parameters=potential_config["potential_parameters"],

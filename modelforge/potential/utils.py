@@ -339,17 +339,6 @@ class ShiftedSoftplus(nn.Module):
         return functional.softplus(x) - self.log_2
 
 
-def softplus_inverse(x):
-    """
-    From SpookyNet:
-    Inverse of the softplus function. This is useful for initialization of
-    parameters that are constrained to be positive (via softplus).
-    """
-    if not isinstance(x, torch.Tensor):
-        x = torch.tensor(x)
-    return x + torch.log(-torch.expm1(-x))
-
-
 class AngularSymmetryFunction(nn.Module):
     """
     Initialize AngularSymmetryFunction module.
@@ -470,12 +459,14 @@ class AngularSymmetryFunction(nn.Module):
 from abc import ABC, abstractmethod
 
 
-class RadialBasisFunctionCore(ABC):
+class RadialBasisFunctionCore(nn.Module, ABC):
+
+    def __init__(self, number_of_radial_basis_functions):
+        super().__init__()
+        self.number_of_radial_basis_functions = number_of_radial_basis_functions
 
     @abstractmethod
-    def __init__(self, ):
-    @abstractmethod
-    def compute(nondimensionalized_distances: torch.Tensor) -> torch.Tensor:
+    def forward(self, nondimensionalized_distances: torch.Tensor) -> torch.Tensor:
         """
         Parameters
         ---------
@@ -491,7 +482,13 @@ class RadialBasisFunctionCore(ABC):
 
 class GaussianRadialBasisFunctionCore(RadialBasisFunctionCore):
 
-    def compute(self, nondimensionalized_distances: torch.Tensor) -> torch.Tensor:
+    def forward(self, nondimensionalized_distances: torch.Tensor) -> torch.Tensor:
+        assert nondimensionalized_distances.ndim == 2
+        assert (
+                nondimensionalized_distances.shape[1]
+                == self.number_of_radial_basis_functions
+        )
+
         return torch.exp(-(nondimensionalized_distances ** 2))
 
 
@@ -557,8 +554,8 @@ class RadialBasisFunction(nn.Module, ABC):
 
     def __init__(
             self,
-            radial_basis_function: Callable[[torch.Tensor], torch.Tensor],
-            dtype,
+            radial_basis_function: RadialBasisFunctionCore,
+            dtype: torch.dtype,
             prefactor: float = 1.0,
             trainable_prefactor: bool = False,
     ):
@@ -602,15 +599,14 @@ class RadialBasisFunction(nn.Module, ABC):
             Output of radial basis functions.
         """
         nondimensionalized_distances = self.nondimensionalize_distances(distances)
-        return self.prefactor * self.radial_basis_function.compute(
-            nondimensionalized_distances
-        )
+        return self.prefactor * self.radial_basis_function(nondimensionalized_distances)
 
 
 class GaussianRadialBasisFunctionWithScaling(RadialBasisFunction):
     """
     Shifts inputs by a set of centers and scales by a set of scale factors before passing into the standard Gaussian.
     """
+
     def __init__(
             self,
             number_of_radial_basis_functions: int,
@@ -630,9 +626,9 @@ class GaussianRadialBasisFunctionWithScaling(RadialBasisFunction):
             Maximum distance to consider for symmetry functions.
         min_distance: unit.Quantity
             Minimum distance to consider.
-        dtype:
+        dtype: torch.dtype, default None
             Data type for computations.
-        prefactor:
+        prefactor: float
             Scalar factor by which to multiply output of radial basis functions.
         trainable_prefactor: bool, default False
             Whether prefactor is trainable
@@ -640,7 +636,12 @@ class GaussianRadialBasisFunctionWithScaling(RadialBasisFunction):
             Whether centers and scale factors are trainable.
         """
 
-        super().__init__(GaussianRadialBasisFunctionCore(), dtype, prefactor, trainable_prefactor)
+        super().__init__(
+            GaussianRadialBasisFunctionCore(number_of_radial_basis_functions),
+            dtype,
+            prefactor,
+            trainable_prefactor,
+        )
         self.number_of_radial_basis_functions = number_of_radial_basis_functions
         self.dtype = dtype
         self.trainable_centers_and_scale_factors = trainable_centers_and_scale_factors
@@ -660,7 +661,7 @@ class GaussianRadialBasisFunctionWithScaling(RadialBasisFunction):
             self.number_of_radial_basis_functions,
             _max_distance_in_nanometer,
             _min_distance_in_nanometer,
-            self.dtype
+            self.dtype,
         )
 
         # either add as parameters or register buffers
@@ -704,6 +705,10 @@ class GaussianRadialBasisFunctionWithScaling(RadialBasisFunction):
 
 
 class SchnetRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
+    """
+    Implementation of the radial basis function as used by the SchNet neural network
+    """
+
     def __init__(
             self,
             number_of_radial_basis_functions: int,
@@ -712,14 +717,20 @@ class SchnetRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
             dtype: Optional[torch.dtype] = None,
             trainable_centers_and_scale_factors: bool = False,
     ):
-        """RadialSymmetryFunction class.
-
-        Initializes and contains the logic for computing radial symmetry functions.
-
+        """
         Parameters
         ---------
+        number_of_radial_basis_functions: int
+            Number of radial basis functions to use.
+        max_distance: unit.Quantity
+            Maximum distance to consider for symmetry functions.
+        min_distance: unit.Quantity
+            Minimum distance to consider.
+        dtype: torch.dtype, default None
+            Data type for computations.
+        trainable_centers_and_scale_factors: bool, default False
+            Whether centers and scale factors are trainable.
         """
-
         super().__init__(
             number_of_radial_basis_functions,
             max_distance,
@@ -766,22 +777,32 @@ class SchnetRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
 
 
 class AniRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
+    """
+    Implementation of the radial basis function as used by the ANI neural network
+    """
+
     def __init__(
             self,
             number_of_radial_basis_functions,
             max_distance: unit.Quantity,
             min_distance: unit.Quantity = 0.0 * unit.nanometer,
-            dtype: Optional[torch.dtype] = None,
+            dtype: torch.dtype = torch.float32,
             trainable_centers_and_scale_factors: bool = False,
     ):
-        """RadialSymmetryFunction class.
-
-        Initializes and contains the logic for computing radial symmetry functions.
-
+        """
         Parameters
         ---------
+        number_of_radial_basis_functions: int
+            Number of radial basis functions to use.
+        max_distance: unit.Quantity
+            Maximum distance to consider for symmetry functions.
+        min_distance: unit.Quantity
+            Minimum distance to consider.
+        dtype: torch.dtype, default torch.float32
+            Data type for computations.
+        trainable_centers_and_scale_factors: bool, default False
+            Whether centers and scale factors are trainable.
         """
-
         super().__init__(
             number_of_radial_basis_functions,
             max_distance,
@@ -815,21 +836,45 @@ class AniRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
             dtype,
     ):
         # ANI uses a predefined scaling factor
-        scale_factors = torch.full((number_of_radial_basis_functions,), (19.7 * 100) ** -0.5)
+        scale_factors = torch.full(
+            (number_of_radial_basis_functions,), (19.7 * 100) ** -0.5
+        )
         return scale_factors
 
 
 class PhysNetRadialBasisFunction(RadialBasisFunction):
+    """
+    Implementation of the radial basis function as used by the PysNet neural network
+    """
 
     def __init__(
             self,
             number_of_radial_basis_functions: int,
             max_distance: unit.Quantity,
             min_distance: unit.Quantity = 0.0 * unit.nanometer,
-            dtype: Optional[torch.dtype] = None,
+            dtype: torch.dtype = torch.float32,
             trainable_centers_and_scale_factors: bool = False,
     ):
-        super().__init__(GaussianRadialBasisFunctionCore, trainable_prefactor=False, dtype=dtype)
+        """
+        Parameters
+        ----------
+        number_of_radial_basis_functions : int
+            Number of radial basis functions to use.
+        max_distance : unit.Quantity
+            Maximum distance to consider for symmetry functions.
+        min_distance : unit.Quantity, optional
+            Minimum distance to consider, by default 0.0 * unit.nanometer.
+        dtype : torch.dtype, optional
+            Data type for computations, by default torch.float32.
+        trainable_centers_and_scale_factors : bool, optional
+            Whether centers and scale factors are trainable, by default False.
+        """
+
+        super().__init__(
+            GaussianRadialBasisFunctionCore(number_of_radial_basis_functions),
+            trainable_prefactor=False,
+            dtype=dtype,
+        )
         self._max_distance_in_nanometer = max_distance.to(unit.nanometer).m
         self._min_distance_in_nanometer = min_distance.to(unit.nanometer).m
         radial_basis_centers = self.calculate_radial_basis_centers(
@@ -843,7 +888,7 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
             number_of_radial_basis_functions,
             self._max_distance_in_nanometer,
             self._min_distance_in_nanometer,
-            dtype
+            dtype,
         )
 
         if trainable_centers_and_scale_factors:
@@ -891,8 +936,16 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
         # of radial_scale_factor in GaussianRadialBasisFunctionWithScaling
         return torch.full(
             (number_of_radial_basis_functions,),
-            (2 * (1 - math.exp(10 * (-_max_distance_in_nanometer + _min_distance_in_nanometer)))) /
-            number_of_radial_basis_functions,
+            (
+                    2
+                    * (
+                            1
+                            - math.exp(
+                        10 * (-_max_distance_in_nanometer + _min_distance_in_nanometer)
+                    )
+                    )
+            )
+            / number_of_radial_basis_functions,
             dtype=dtype,
         )
 
@@ -901,9 +954,10 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
         # NOTE: the PhysNet paper implicitly multiplies by 1/Angstrom within the inner exp but distances are in
         # nanometers, so we multiply by 10/nanometer
 
-        return ((torch.exp(
-            (-distances + self._min_distance_in_nanometer) * 10).unsqueeze(-1) - self.radial_basis_centers)
-                / self.radial_scale_factor)
+        return (
+                torch.exp((-distances + self._min_distance_in_nanometer) * 10)
+                - self.radial_basis_centers
+        ) / self.radial_scale_factor
 
 
 class ExponentialBernsteinRadialBasisFunction(RadialBasisFunction):

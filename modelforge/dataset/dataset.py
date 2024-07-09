@@ -16,14 +16,6 @@ if TYPE_CHECKING:
     from modelforge.potential.processing import AtomicSelfEnergies
 
 
-@dataclass
-class DatasetStatistics:
-    E_i_mean: float
-    E_i_stddev: float
-    atomic_self_energies: "AtomicSelfEnergies"
-    atomic_self_energies_removed: bool = False
-
-
 @dataclass(frozen=False)
 class Metadata:
     """
@@ -215,7 +207,6 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         """
 
         self.properties_of_interest = {}
-        self.dataset_statistics: Dict[str, float] = {}
 
         self.properties_of_interest["atomic_numbers"] = torch.from_numpy(
             dataset[property_name.Z].flatten()
@@ -459,10 +450,25 @@ class HDF5Dataset:
         with gzip.open(
             f"{self.local_cache_dir}/{self.gz_data_file['name']}", "rb"
         ) as gz_file:
-            with open(
-                f"{self.local_cache_dir}/{self.hdf5_data_file['name']}", "wb"
-            ) as out_file:
-                shutil.copyfileobj(gz_file, out_file)
+
+            from modelforge.utils.misc import OpenWithLock
+
+            # rather than locking the file we are writing, we will create a lockfile.  the _from_hdf5 function will
+            # try to open the same lockfile before reading, so this should prevent issues
+            # The use of a lockfile is necessary because h5py will exit immediately if it tries to open a file that is
+            # locked by another process.
+            with OpenWithLock(
+                f"{self.local_cache_dir}/{self.hdf5_data_file['name']}.lockfile", "w"
+            ) as lock_file:
+                with open(
+                    f"{self.local_cache_dir}/{self.hdf5_data_file['name']}", "wb"
+                ) as out_file:
+                    shutil.copyfileobj(gz_file, out_file)
+
+            # now that the file is written we can safely remove the lockfile
+            import os
+
+            os.remove(f"{self.local_cache_dir}/{self.hdf5_data_file['name']}.lockfile")
 
     def _check_lists(self, list_1: List, list_2: List) -> bool:
         """
@@ -511,23 +517,29 @@ class HDF5Dataset:
         else:
             import json
 
-            with open(f"{file_path}/{file_name}", "r") as f:
-                self._npz_metadata = json.load(f)
+            from modelforge.utils.misc import OpenWithLock
 
-                if not self._check_lists(
-                    self._npz_metadata["data_keys"], self.properties_of_interest
-                ):
-                    log.warning(
-                        f"Data keys used to generate {file_path}/{file_name} ({self._npz_metadata['data_keys']}) do not match data loader ({self.properties_of_interest}) ."
-                    )
-                    return False
+            with OpenWithLock(f"{file_path}/{file_name}.lockfile", "w") as fl:
+                with open(f"{file_path}/{file_name}", "r") as f:
+                    self._npz_metadata = json.load(f)
 
-                if self._npz_metadata["hdf5_checksum"] != self.hdf5_data_file["md5"]:
-                    log.warning(
-                        f"Checksum for hdf5 file used to generate npz file does not match current file in dataloader."
-                    )
-                    return False
+                    if not self._check_lists(
+                        self._npz_metadata["data_keys"], self.properties_of_interest
+                    ):
+                        log.warning(
+                            f"Data keys used to generate {file_path}/{file_name} ({self._npz_metadata['data_keys']}) do not match data loader ({self.properties_of_interest}) ."
+                        )
+                        return False
 
+                    if (
+                        self._npz_metadata["hdf5_checksum"]
+                        != self.hdf5_data_file["md5"]
+                    ):
+                        log.warning(
+                            f"Checksum for hdf5 file used to generate npz file does not match current file in dataloader."
+                        )
+                        return False
+            os.remove(f"{file_path}/{file_name}.lockfile")
         return True
 
     def _file_validation(
@@ -604,146 +616,164 @@ class HDF5Dataset:
             raise ValueError(
                 f"Checksum mismatch for unzipped data file {temp_hdf5_file}. Found {checksum}, Expected {self.hdf5_data_file['md5']}"
             )
+        from modelforge.utils.misc import OpenWithLock
 
-        with h5py.File(temp_hdf5_file, "r") as hf:
-            # create dicts to store data for each format type
-            single_rec_data: Dict[str, List[np.ndarray]] = OrderedDict()
-            # value shapes: (*)
-            single_atom_data: Dict[str, List[np.ndarray]] = OrderedDict()
-            # value shapes: (n_atoms, *)
-            series_mol_data: Dict[str, List[np.ndarray]] = OrderedDict()
-            # value shapes: (n_confs, *)
-            series_atom_data: Dict[str, List[np.ndarray]] = OrderedDict()
-            # value shapes: (n_confs, n_atoms, *)
+        # h5py does file locking internally, but will exit immediately if the file is locked by another program
+        # let us create a simple lockfile to prevent this, as OpenWithLock will just wait until the lockfile is unlocked
+        # before proceeding
+        with OpenWithLock(
+            f"{self.local_cache_dir}/{self.hdf5_data_file['name']}.lockfile", "w"
+        ) as lock_file:
+            with h5py.File(temp_hdf5_file, "r") as hf:
 
-            # initialize each relevant value in data dicts to empty list
-            for value in self.properties_of_interest:
-                value_format = hf[next(iter(hf.keys()))][value].attrs["format"]
-                if value_format == "single_rec":
-                    single_rec_data[value] = []
-                elif value_format == "single_atom":
-                    single_atom_data[value] = []
-                elif value_format == "series_mol":
-                    series_mol_data[value] = []
-                elif value_format == "series_atom":
-                    series_atom_data[value] = []
-                else:
-                    raise ValueError(
-                        f"Unknown format type {value_format} for property {value}"
-                    )
+                # create dicts to store data for each format type
+                single_rec_data: Dict[str, List[np.ndarray]] = OrderedDict()
+                # value shapes: (*)
+                single_atom_data: Dict[str, List[np.ndarray]] = OrderedDict()
+                # value shapes: (n_atoms, *)
+                series_mol_data: Dict[str, List[np.ndarray]] = OrderedDict()
+                # value shapes: (n_confs, *)
+                series_atom_data: Dict[str, List[np.ndarray]] = OrderedDict()
+                # value shapes: (n_confs, n_atoms, *)
 
-            self.atomic_subsystem_counts = []  # number of atoms in each record
-            self.n_confs = []  # number of conformers in each record
+                # initialize each relevant value in data dicts to empty list
+                for value in self.properties_of_interest:
+                    value_format = hf[next(iter(hf.keys()))][value].attrs["format"]
+                    if value_format == "single_rec":
+                        single_rec_data[value] = []
+                    elif value_format == "single_atom":
+                        single_atom_data[value] = []
+                    elif value_format == "series_mol":
+                        series_mol_data[value] = []
+                    elif value_format == "series_atom":
+                        series_atom_data[value] = []
+                    else:
+                        raise ValueError(
+                            f"Unknown format type {value_format} for property {value}"
+                        )
 
-            # loop over all records in the hdf5 file and add property arrays to the appropriate dict
+                self.atomic_subsystem_counts = []  # number of atoms in each record
+                self.n_confs = []  # number of conformers in each record
 
-            log.debug(f"n_entries: {len(hf.keys())}")
+                # loop over all records in the hdf5 file and add property arrays to the appropriate dict
 
-            for record in tqdm.tqdm(list(hf.keys())):
-                # if we have a record with no conformers, we'll skip it to avoid failures
-                if hf[record]["n_configs"][()] != 0:
-                    # There may be cases where a specific property of interest
-                    # has not been computed for a given record
-                    # in that case, we'll want to just skip over that entry
-                    property_found = [
-                        value in hf[record].keys()
-                        for value in self.properties_of_interest
-                    ]
+                log.debug(f"n_entries: {len(hf.keys())}")
 
-                    if all(property_found):
-                        # we want to exclude conformers with NaN values for any property of interest
-                        configs_nan_by_prop: Dict[str, np.ndarray] = (
-                            OrderedDict()
-                        )  # ndarray.size (n_configs, )
-                        for value in list(series_mol_data.keys()) + list(
-                            series_atom_data.keys()
-                        ):
-                            record_array = hf[record][value][()]
-                            configs_nan_by_prop[value] = np.isnan(record_array).any(
-                                axis=tuple(range(1, record_array.ndim))
-                            )
-                        # check that all values have the same number of conformers
+                for record in tqdm.tqdm(list(hf.keys())):
+                    # if we have a record with no conformers, we'll skip it to avoid failures
+                    if hf[record]["n_configs"][()] != 0:
+                        # There may be cases where a specific property of interest
+                        # has not been computed for a given record
+                        # in that case, we'll want to just skip over that entry
+                        property_found = [
+                            value in hf[record].keys()
+                            for value in self.properties_of_interest
+                        ]
 
-                        if (
-                            len(
-                                set(
-                                    [
-                                        value.shape
-                                        for value in configs_nan_by_prop.values()
-                                    ]
+                        if all(property_found):
+                            # we want to exclude conformers with NaN values for any property of interest
+                            configs_nan_by_prop: Dict[str, np.ndarray] = (
+                                OrderedDict()
+                            )  # ndarray.size (n_configs, )
+                            for value in list(series_mol_data.keys()) + list(
+                                series_atom_data.keys()
+                            ):
+                                record_array = hf[record][value][()]
+                                configs_nan_by_prop[value] = np.isnan(record_array).any(
+                                    axis=tuple(range(1, record_array.ndim))
                                 )
-                            )
-                            != 1
-                        ):
-                            raise ValueError(
-                                f"Number of conformers is inconsistent across properties for record {record}"
-                            )
+                            # check that all values have the same number of conformers
 
-                        configs_nan = np.logical_or.reduce(
-                            list(configs_nan_by_prop.values())
-                        )  # boolean array of size (n_configs, )
-                        n_confs_rec = sum(~configs_nan)
-
-                        atomic_subsystem_counts_rec = hf[record][
-                            next(iter(single_atom_data.keys()))
-                        ].shape[0]
-                        # all single and series atom properties should have the same number of atoms as the first property
-
-                        self.n_confs.append(n_confs_rec)
-                        self.atomic_subsystem_counts.append(atomic_subsystem_counts_rec)
-
-                        for value in single_atom_data.keys():
-                            record_array = hf[record][value][()]
-                            if record_array.shape[0] != atomic_subsystem_counts_rec:
+                            if (
+                                len(
+                                    set(
+                                        [
+                                            value.shape
+                                            for value in configs_nan_by_prop.values()
+                                        ]
+                                    )
+                                )
+                                != 1
+                            ):
                                 raise ValueError(
-                                    f"Number of atoms for property {value} is inconsistent with other properties for record {record}"
+                                    f"Number of conformers is inconsistent across properties for record {record}"
                                 )
-                            else:
-                                single_atom_data[value].append(record_array)
 
-                        for value in series_atom_data.keys():
-                            record_array = hf[record][value][()][~configs_nan]
-                            try:
-                                if record_array.shape[1] != atomic_subsystem_counts_rec:
+                            configs_nan = np.logical_or.reduce(
+                                list(configs_nan_by_prop.values())
+                            )  # boolean array of size (n_configs, )
+                            n_confs_rec = sum(~configs_nan)
+
+                            atomic_subsystem_counts_rec = hf[record][
+                                next(iter(single_atom_data.keys()))
+                            ].shape[0]
+                            # all single and series atom properties should have the same number of atoms as the first property
+
+                            self.n_confs.append(n_confs_rec)
+                            self.atomic_subsystem_counts.append(
+                                atomic_subsystem_counts_rec
+                            )
+
+                            for value in single_atom_data.keys():
+                                record_array = hf[record][value][()]
+                                if record_array.shape[0] != atomic_subsystem_counts_rec:
                                     raise ValueError(
                                         f"Number of atoms for property {value} is inconsistent with other properties for record {record}"
                                     )
                                 else:
-                                    series_atom_data[value].append(
-                                        record_array.reshape(
-                                            n_confs_rec * atomic_subsystem_counts_rec,
-                                            -1,
+                                    single_atom_data[value].append(record_array)
+
+                            for value in series_atom_data.keys():
+                                record_array = hf[record][value][()][~configs_nan]
+                                try:
+                                    if (
+                                        record_array.shape[1]
+                                        != atomic_subsystem_counts_rec
+                                    ):
+                                        raise ValueError(
+                                            f"Number of atoms for property {value} is inconsistent with other properties for record {record}"
                                         )
+                                    else:
+                                        series_atom_data[value].append(
+                                            record_array.reshape(
+                                                n_confs_rec
+                                                * atomic_subsystem_counts_rec,
+                                                -1,
+                                            )
+                                        )
+                                except IndexError:
+                                    log.warning(
+                                        f"Property {value} has an index error for record {record}."
                                     )
-                            except IndexError:
-                                log.warning(
-                                    f"Property {value} has an index error for record {record}."
-                                )
-                                log.warning(
-                                    record_array.shape, atomic_subsystem_counts_rec
-                                )
+                                    log.warning(
+                                        record_array.shape, atomic_subsystem_counts_rec
+                                    )
 
-                        for value in series_mol_data.keys():
-                            record_array = hf[record][value][()][~configs_nan]
-                            series_mol_data[value].append(record_array)
+                            for value in series_mol_data.keys():
+                                record_array = hf[record][value][()][~configs_nan]
+                                series_mol_data[value].append(record_array)
 
-                        for value in single_rec_data.keys():
-                            record_array = hf[record][value][()]
-                            single_rec_data[value].append(record_array)
+                            for value in single_rec_data.keys():
+                                record_array = hf[record][value][()]
+                                single_rec_data[value].append(record_array)
 
-            # convert lists of arrays to single arrays
+                # convert lists of arrays to single arrays
 
-            data = OrderedDict()
-            for value in single_atom_data.keys():
-                data[value] = np.concatenate(single_atom_data[value], axis=0)
-            for value in series_mol_data.keys():
-                data[value] = np.concatenate(series_mol_data[value], axis=0)
-            for value in series_atom_data.keys():
-                data[value] = np.concatenate(series_atom_data[value], axis=0)
-            for value in single_rec_data.keys():
-                data[value] = np.stack(single_rec_data[value], axis=0)
+                data = OrderedDict()
+                for value in single_atom_data.keys():
+                    data[value] = np.concatenate(single_atom_data[value], axis=0)
+                for value in series_mol_data.keys():
+                    data[value] = np.concatenate(series_mol_data[value], axis=0)
+                for value in series_atom_data.keys():
+                    data[value] = np.concatenate(series_atom_data[value], axis=0)
+                for value in single_rec_data.keys():
+                    data[value] = np.stack(single_rec_data[value], axis=0)
 
-        self.hdf5data = data
+            self.hdf5data = data
+        # we can safely remove the lockfile now that we have read the file
+        import os
+
+        os.remove(f"{self.local_cache_dir}/{self.hdf5_data_file['name']}.lockfile")
 
     def _from_file_cache(self) -> None:
         """
@@ -767,8 +797,24 @@ class HDF5Dataset:
                 log.debug(
                     f"Properties of Interest in .npz file: {self._npz_metadata['data_keys']}"
                 )
-                self.numpy_data = np.load(
-                    f"{self.local_cache_dir}/{self.processed_data_file['name']}"
+
+                from modelforge.utils.misc import OpenWithLock
+
+                # this will check check for the existence of the lock file and wait until it is unlocked
+                # we will just open it as write, since we do not need to read it in; this ensure that we don't have an issue
+                # where we have deleted the lock file from a separate, prior process
+                with OpenWithLock(
+                    f"{self.local_cache_dir}/{self.processed_data_file['name']}.lockfile",
+                    "w",
+                ) as f:
+                    self.numpy_data = np.load(
+                        f"{self.local_cache_dir}/{self.processed_data_file['name']}"
+                    )
+                # we can safely remove the lockfile
+                import os
+
+                os.remove(
+                    f"{self.local_cache_dir}/{self.processed_data_file['name']}.lockfile"
                 )
         else:
             raise ValueError(
@@ -791,13 +837,24 @@ class HDF5Dataset:
         log.debug(
             f"Writing npz file to {self.local_cache_dir}/{self.processed_data_file['name']}"
         )
+        from modelforge.utils.misc import OpenWithLock
 
-        np.savez(
-            f"{self.local_cache_dir}/{self.processed_data_file['name']}",
-            atomic_subsystem_counts=self.atomic_subsystem_counts,
-            n_confs=self.n_confs,
-            **self.hdf5data,
-        )
+        # we will create a separate lock file that we will check for in the load function to ensure we aren't
+        # reading the npz file from a separate process while still writing
+
+        with OpenWithLock(
+            f"{self.local_cache_dir}/{self.processed_data_file['name']}.lockfile", "w"
+        ) as f:
+            np.savez(
+                f"{self.local_cache_dir}/{self.processed_data_file['name']}",
+                atomic_subsystem_counts=self.atomic_subsystem_counts,
+                n_confs=self.n_confs,
+                **self.hdf5data,
+            )
+        # we can safely remove the lockfile
+        import os
+
+        os.remove(f"{self.local_cache_dir}/{self.processed_data_file['name']}.lockfile")
         import datetime
 
         # we will generate a simple metadata file to list which data keys were used to generate the npz file
@@ -811,11 +868,13 @@ class HDF5Dataset:
         }
         import json
 
-        with open(
-            f"{self.local_cache_dir}/{self.processed_data_file['name'].replace('.npz', '.json')}",
-            "w",
-        ) as f:
-            json.dump(metadata, f)
+        json_file_path = f"{self.local_cache_dir}/{self.processed_data_file['name'].replace('.npz', '.json')}"
+        with OpenWithLock(f"{json_file_path}.lockfile", "w") as fl:
+            with open(
+                json_file_path,
+                "w",
+            ) as f:
+                json.dump(metadata, f)
 
         del self.hdf5data
 
@@ -925,7 +984,15 @@ class DataModule(pl.LightningDataModule):
 
     def __init__(
         self,
-        name: Literal["QM9", "ANI1X", "ANI2X", "SPICE114", "SPICE2", "SPICE114_OPENFF"],
+        name: Literal[
+            "QM9",
+            "ANI1X",
+            "ANI2X",
+            "SPICE114",
+            "SPICE2",
+            "SPICE114_OPENFF",
+            "PhAlkEthOH",
+        ],
         splitting_strategy: SplittingStrategy = RandomRecordSplittingStrategy(),
         batch_size: int = 64,
         remove_self_energies: bool = True,
@@ -935,6 +1002,7 @@ class DataModule(pl.LightningDataModule):
         version_select: str = "latest",
         local_cache_dir: str = "./",
         regenerate_cache: bool = False,
+        regenerate_dataset_statistic: bool = False,
     ):
         """
         Initializes adData module for PyTorch Lightning handling data preparation and loading object with the specified configuration.
@@ -973,7 +1041,6 @@ class DataModule(pl.LightningDataModule):
         self.name = name
         self.batch_size = batch_size
         self.splitting_strategy = splitting_strategy
-        self.dataset_statistics: Optional[DatasetStatistics] = None
         self.remove_self_energies = remove_self_energies
         self.dict_atomic_self_energies = (
             atomic_self_energies  # element name (e.g., 'H') maps to self energies
@@ -981,6 +1048,7 @@ class DataModule(pl.LightningDataModule):
         self.regression_ase = regression_ase
         self.force_download = force_download
         self.version_select = version_select
+        self.regenerate_dataset_statistic = regenerate_dataset_statistic
         self.train_dataset = None
         self.test_dataset = None
         self.val_dataset = None
@@ -992,16 +1060,18 @@ class DataModule(pl.LightningDataModule):
         from modelforge.potential.models import Pairlist
 
         self.pairlist = Pairlist()
+        self.dataset_statistic_filename = (
+            f"{self.local_cache_dir}/{self.name}_dataset_statistic.toml"
+        )
 
     def prepare_data(
         self,
     ) -> None:
         """
-        Prepares the dataset for use. This method is responsible for the initial processing of
-        the data such as calculating self energies, normalizing, and splitting. It is executed
-        only once per node.
+        Prepares the dataset for use. This method is responsible for the initial processing of the data such as calculating self energies, atomic energy statistics, and splitting. It is executed only once per node.
         """
         from modelforge.dataset import _ImplementedDatasets
+        import toml
 
         dataset_class = _ImplementedDatasets.get_dataset_class(self.name)
         dataset = dataset_class(
@@ -1010,43 +1080,107 @@ class DataModule(pl.LightningDataModule):
             local_cache_dir=self.local_cache_dir,
             regenerate_cache=self.regenerate_cache,
         )
-
-        # obtain the atomic self energies from the dataset
-        dataset_ase = dataset.atomic_self_energies.energies
         torch_dataset = self._create_torch_dataset(dataset)
 
-        # depending on the control flow that is set in the __init__,
-        # either use the atomic self energies of the dataset, recalculate it on the fly
-        # or use the provided dictionary
-        atomic_self_energies = self._calculate_atomic_self_energies(
-            torch_dataset, dataset_ase
-        )
+        # if dataset statistics is present load it from disk
+        if (
+            os.path.exists(self.dataset_statistic_filename)
+            and self.regenerate_dataset_statistic is False
+        ):
+            log.info(
+                f"Loading dataset statistics from disk: {self.dataset_statistic_filename}"
+            )
+            atomic_self_energies = self._read_atomic_self_energies()
+            atomic_energies_stats = self._read_atomic_energies_stats()
+        else:
+            atomic_self_energies = None
+            atomic_energies_stats = None
+            # obtain the atomic self energies from the dataset
+            dataset_ase = dataset.atomic_self_energies.energies
 
-        # wrap them in the AtomicSelfEnergy class
+            # depending on the control flow that is set in the __init__,
+            # either use the atomic self energies of the dataset, recalculate
+            # it on the fly  or use the provided dictionary
+            atomic_self_energies = self._calculate_atomic_self_energies(
+                torch_dataset, dataset_ase
+            )
+
+        # wrap them in the AtomicSelfEnergy class for processing the dataset
         from modelforge.potential.processing import AtomicSelfEnergies
 
-        atomic_self_energies = AtomicSelfEnergies(atomic_self_energies)
-
         log.debug("Process dataset ...")
-        self._process_dataset(torch_dataset, atomic_self_energies)
+        self._process_dataset(torch_dataset, AtomicSelfEnergies(atomic_self_energies))
 
-        # # calculate neighborlist
-        # self._calculating_pairwise_properties(torch_dataset)
         # calculate the dataset statistic of the dataset
         # This is done __after__ self energies are removed (if requested)
-        from modelforge.dataset.utils import calculate_mean_and_variance
+        if atomic_energies_stats is None:
+            from modelforge.dataset.utils import calculate_mean_and_variance
 
-        # FIXME: this wont work for a setup on multiple devices
-        stats = calculate_mean_and_variance(torch_dataset)
-        self.dataset_statistics = DatasetStatistics(
-            E_i_stddev=stats["Ei_stddev"],
-            E_i_mean=stats["Ei_mean"],
-            atomic_self_energies=atomic_self_energies,
-            atomic_self_energies_removed=self.remove_self_energies,
-        )
+            atomic_energies_stats = calculate_mean_and_variance(torch_dataset)
+            # wrap everything in a dictionary and save it to disk
+            dataset_statistic = {
+                "atomic_self_energies": atomic_self_energies,
+                "atomic_energies_stats": atomic_energies_stats,
+            }
+
+            if atomic_self_energies and atomic_energies_stats:
+                log.info(dataset_statistic)
+                # save dataset_statistic dictionary to disk as yaml files
+                self._log_dataset_statistic(dataset_statistic)
+            else:
+                raise RuntimeError(
+                    "Atomic self energies or atomic energies statistics are missing."
+                )
 
         # Save processed dataset and statistics for later use in setup
         self._cache_dataset(torch_dataset)
+
+    def _log_dataset_statistic(self, dataset_statistic):
+        """Save the dataset statistics to a file with units"""
+        import toml
+        
+
+        # cast units to string
+        atomic_self_energies = {
+            key: str(value) if isinstance(value, unit.Quantity) else value
+            for key, value in dataset_statistic["atomic_self_energies"].items()
+        }
+        # cast float and kJ/mol on pytorch tensors and then convert to string
+        atomic_energies_stats = {
+            key: str(unit.Quantity(value.item(), unit.kilojoule_per_mole)) if isinstance(value, torch.Tensor) else value
+            for key, value in dataset_statistic["atomic_energies_stats"].items()
+        }
+
+        dataset_statistic = {
+            "atomic_self_energies": atomic_self_energies,
+            "atomic_energies_stats": atomic_energies_stats,
+        }
+        toml.dump(
+            dataset_statistic,
+            open(
+                self.dataset_statistic_filename,
+                "w",
+            ),
+        )
+        log.info(
+            f"Saving dataset statistics to disk: {self.dataset_statistic_filename}"
+        )
+
+    def _read_atomic_self_energies(self) -> Dict[str, Quantity]:
+        """Read the atomic self energies from a file."""
+        from modelforge.potential.processing import load_atomic_self_energies
+
+        return load_atomic_self_energies(
+            self.dataset_statistic_filename
+        )
+
+    def _read_atomic_energies_stats(self) -> Dict[str, torch.Tensor]:
+        """Read the atomic energies statistics from a file."""
+        from modelforge.potential.processing import load_atomic_energies_stats
+
+        return load_atomic_energies_stats(
+            self.dataset_statistic_filename
+        )
 
     def _create_torch_dataset(self, dataset):
         """Create a PyTorch dataset from the provided dataset instance."""
@@ -1063,29 +1197,16 @@ class DataModule(pl.LightningDataModule):
                 self.calculate_self_energies(torch_dataset)
             )
         self._per_datapoint_operations(torch_dataset, atomic_self_energies)
-        self._save_self_energies(atomic_self_energies)
-
-    def _normalize_dataset(self, torch_dataset, stats: Dict[str, float]) -> None:
-        """Normalize the dataset if self energies have been removed."""
-        from modelforge.dataset.utils import (
-            normalize_energies,
-        )
-
-        if not self.remove_self_energies:
-            raise RuntimeError(
-                "Cannot normalize dataset if self energies are not removed."
-            )
-        normalize_energies(torch_dataset, stats)
 
     def _calculate_atomic_self_energies(
         self, torch_dataset, dataset_ase
     ) -> Dict[str, float]:
 
-        from modelforge.dataset.utils import calculate_mean_and_variance
-
         # Use provided ase dictionary
         if self.dict_atomic_self_energies:
-            log.info("Using provided atomic self energies from the provided ictionary.")
+            log.info(
+                "Using atomic self energies from the provided dictionary."
+            )
             return self.dict_atomic_self_energies
 
         # Use regression to calculate ase
@@ -1103,7 +1224,6 @@ class DataModule(pl.LightningDataModule):
     def _cache_dataset(self, torch_dataset):
         """Cache the dataset and its statistics using PyTorch's serialization."""
         torch.save(torch_dataset, "torch_dataset.pt")
-        torch.save(self.dataset_statistics, "dataset_statistics.pt")
         # sleep for 1 second to make sure that the dataset was written to disk
         import time
 
@@ -1113,24 +1233,9 @@ class DataModule(pl.LightningDataModule):
         """Sets up datasets for the train, validation, and test stages based on the stage argument."""
 
         self.torch_dataset = torch.load("torch_dataset.pt")
-
-        self.dataset_statistics = torch.load("dataset_statistics.pt")
         self.train_dataset, self.val_dataset, self.test_dataset = (
             self.splitting_strategy.split(self.torch_dataset)
         )
-
-    def _save_self_energies(self, self_energies):
-        """Save self energies to a file."""
-        import toml
-
-        with open("ase.toml", "w") as f:
-            toml.dump(
-                {
-                    str(idx): energy.m
-                    for (idx, energy) in self_energies.energies.items()
-                },
-                f,
-            )
 
     def calculate_self_energies(
         self, torch_dataset: TorchDataset, collate: bool = True
@@ -1158,25 +1263,6 @@ class DataModule(pl.LightningDataModule):
         return _calculate_self_energies(
             torch_dataset=torch_dataset, collate_fn=collate_fn
         )
-
-    # def _calculating_pairwise_properties(self, dataset):
-    #     from tqdm import tqdm
-
-    #     log.info(
-    #         f"Calculate neighborlist with {self.calculate_distances_and_pairlist} cutoff"
-    #     )
-    #     print(dataset.properties_of_interest.keys())
-    #     for i in tqdm(range(len(dataset)), desc="Calculate neighborlist"):
-    #         a = dataset[i]
-    #         start_idx = dataset.single_atom_start_idxs_by_conf[i]
-    #         end_idx = dataset.single_atom_end_idxs_by_conf[i]
-    #         pairlist_output = self.calculate_distances_and_pairlist(
-    #             dataset.properties_of_interest["positions"][start_idx:end_idx],
-    #             torch.zeros(
-    #                 end_idx - start_idx,
-    #                 dtype=torch.float32,
-    #             ),
-    #         )
 
     def _per_datapoint_operations(
         self, dataset, self_energies: "AtomicSelfEnergies"

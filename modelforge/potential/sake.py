@@ -4,8 +4,9 @@ import torch.nn as nn
 from loguru import logger as log
 from typing import Dict, Tuple
 from openff.units import unit
+from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
 
-from .models import CoreNetwork, PairListOutputs
+from .models import PairListOutputs
 from .utils import (
     Dense,
     scatter_softmax,
@@ -17,7 +18,7 @@ import torch.nn.functional as F
 
 
 @dataclass
-class SAKENeuralNetworkData:
+class SAKENeuralNetworkInput:
     """
     A dataclass designed to structure the inputs for SAKE neural network potentials, ensuring
     an efficient and structured representation of atomic systems for energy computation and
@@ -47,7 +48,7 @@ class SAKENeuralNetworkData:
 
     Examples
     --------
-    >>> sake_input = SAKENeuralNetworkData(
+    >>> sake_input = SAKENeuralNetworkInput(
     ...     atomic_numbers=torch.tensor([1, 6, 6, 8]),
     ...     positions=torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]),
     ...     atomic_subsystem_indices=torch.tensor([0, 0, 0, 0]),
@@ -121,7 +122,7 @@ class SAKECore(CoreNetwork):
 
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
-    ) -> SAKENeuralNetworkData:
+    ) -> SAKENeuralNetworkInput:
         # Perform atomic embedding
 
         number_of_atoms = data.atomic_numbers.shape[0]
@@ -132,7 +133,7 @@ class SAKECore(CoreNetwork):
             )
         )
 
-        nnp_input = SAKENeuralNetworkData(
+        nnp_input = SAKENeuralNetworkInput(
             pair_indices=pairlist_output.pair_indices,
             number_of_atoms=number_of_atoms,
             positions=data.positions.to(self.embedding.weight.dtype),
@@ -143,13 +144,13 @@ class SAKECore(CoreNetwork):
 
         return nnp_input
 
-    def _forward(self, data: SAKENeuralNetworkData):
+    def compute_properties(self, data: SAKENeuralNetworkInput):
         """
         Compute atomic representations/embeddings.
 
         Parameters
         ----------
-        data: SAKENeuralNetworkData
+        data: SAKENeuralNetworkInput
             Dataclass containing atomic properties, embeddings, and pairlist.
 
         Returns
@@ -321,12 +322,9 @@ class SAKEInteraction(nn.Module):
             Intermediate edge features. Shape [nr_pairs, nr_edge_basis].
         """
         h_ij_cat = torch.cat([h_i_by_pair, h_j_by_pair], dim=-1)
-        print(f"{self.radial_symmetry_function_module(d_ij.unsqueeze(-1)).shape=}")
-        print(f"{self.edge_mlp_in(h_ij_cat).shape=}")
         h_ij_filtered = self.radial_symmetry_function_module(d_ij.unsqueeze(-1)).squeeze(-2) * self.edge_mlp_in(
             h_ij_cat
         )
-        print(f"{h_ij_filtered.shape=}, {h_ij_cat.shape=}, {d_ij.shape=}")
         return self.edge_mlp_out(
             torch.cat([h_ij_cat, h_ij_filtered, d_ij.unsqueeze(-1)], dim=-1)
         )
@@ -543,7 +541,7 @@ class SAKEInteraction(nn.Module):
         return h_updated, x_updated, v_updated
 
 
-from .models import InputPreparation, NNPInput, BaseNetwork
+from typing import Optional, List
 
 
 class SAKE(BaseNetwork):
@@ -556,9 +554,16 @@ class SAKE(BaseNetwork):
         number_of_spatial_attention_heads: int,
         number_of_radial_basis_functions: int,
         cutoff: unit.Quantity,
+        processing_operation: List[Dict[str, str]],
+        readout_operation: List[Dict[str, str]],
+        dataset_statistic: Optional[Dict[str, float]] = None,
         epsilon: float = 1e-8,
     ):
-        super().__init__()
+        super().__init__(
+            dataset_statistic=dataset_statistic,
+            processing_operation=processing_operation,
+            readout_operation=readout_operation,
+        )
         from modelforge.utils.units import _convert
 
         self.core_module = SAKECore(
@@ -591,3 +596,8 @@ class SAKE(BaseNetwork):
         }
         prior.update(shared_config_prior())
         return prior
+
+    def combine_per_atom_properties(
+        self, values: Dict[str, torch.Tensor]
+    ) -> torch.Tensor:
+        return values

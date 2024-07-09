@@ -4,6 +4,12 @@ import pytest
 
 
 
+@pytest.fixture(scope="session")
+def prep_temp_dir(tmp_path_factory):
+    fn = tmp_path_factory.mktemp("utils_test")
+    return fn
+
+
 def test_dense_layer():
     from modelforge.potential.utils import Dense
     import torch
@@ -507,3 +513,53 @@ def test_welford():
         assert np.isclose(online_estimator.mean / target_mean, 1.0, rtol=1e-1)
         assert np.isclose(online_estimator.variance / target_variance, 1.0, rtol=1e-1)
         assert np.isclose(online_estimator.stddev / target_stddev, 1.0, rtol=1e-1)
+
+
+def test_filelocking(prep_temp_dir):
+    from modelforge.utils.misc import lock_file, unlock_file, check_file_lock
+
+    filepath = str(prep_temp_dir) + "/test.txt"
+
+    import threading
+
+    class thread(threading.Thread):
+        def __init__(self, thread_name, thread_id, filepath):
+            threading.Thread.__init__(self)
+            self.thread_id = thread_id
+            self.name = thread_name
+            self.filepath = filepath
+            self.did_I_lock_it = None
+
+        def run(self):
+            import time
+
+            with open(self.filepath, "w") as f:
+                if not check_file_lock(f):
+                    lock_file(f)
+                    self.did_I_lock_it = True
+                    time.sleep(2)
+                    unlock_file(f)
+
+                else:
+                    self.did_I_lock_it = False
+
+    # the first thread should lock the file and set "did_I_lock_it" to True
+    thread1 = thread("lock_file_here", "Thread-1", filepath)
+    # the second thread should check if locked, and set "did_I_lock_it" to False
+    # the second thread should also set "status" to True, because it waits for the first thread to unlock the file
+    thread2 = thread("encounter_locked_file", "Thread-2", filepath)
+
+    thread1.start()
+    thread2.start()
+    thread1.join()
+    thread2.join()
+
+    # this thread should lock the file, since it will be executed after the others complete
+    # this will ensure that we can unlock the file
+    thread3 = thread("lock_file_here", "Thread-3", filepath)
+    thread3.start()
+    thread3.join()
+    assert thread1.did_I_lock_it == True
+
+    assert thread2.did_I_lock_it == False
+    assert thread3.did_I_lock_it == True

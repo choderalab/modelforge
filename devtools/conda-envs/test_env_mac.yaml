@@ -29,7 +29,6 @@ dependencies:
   - pytest-cov
   - codecov
   - requests
-  - torchani
   - versioneer
 
   # Docs
@@ -37,7 +36,7 @@ dependencies:
 
   # pip installs
   - pip:
-      - schnetpack>=2.0.0
+      # - schnetpack>=2.0.0
       - pytorch2jax
       - versioneer
       - flax

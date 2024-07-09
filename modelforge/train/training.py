@@ -1,6 +1,6 @@
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import lightning as pl
-from typing import TYPE_CHECKING, Any, Union, Dict, Type
+from typing import TYPE_CHECKING, Any, Union, Dict, Type, Optional
 import torch
 from loguru import logger as log
 from modelforge.dataset.dataset import BatchData
@@ -243,10 +243,11 @@ class TrainingAdapter(pl.LightningModule):
     def __init__(
         self,
         *,
-        model_parameters: Dict[str, Any],
         lr_scheduler_config: Dict[str, Union[str, int, float]],
+        model_parameter: Dict[str, Any],
         lr: float,
         loss_parameter: Dict[str, Any],
+        dataset_statistic: Optional[Dict[str, float]] = None,
         optimizer: Type[Optimizer] = torch.optim.AdamW,
     ):
         """
@@ -266,25 +267,27 @@ class TrainingAdapter(pl.LightningModule):
             The optimizer class to use for training, by default torch.optim.AdamW.
         """
 
-        from typing import List
         from modelforge.potential import _Implemented_NNPs
         from torchmetrics.regression import MeanSquaredError, MeanAbsoluteError
         from torchmetrics import MetricCollection
 
         super().__init__()
-        self.save_hyperparameters(ignore=["loss_module"])
+        self.save_hyperparameters()
         # Extracting and instantiating the model from parameters
-        nnp_parameters_ = model_parameters.copy()
-        nnp_name = nnp_parameters_.pop("nnp_name", None)
-        if nnp_name is None:
+        model_parameter_ = model_parameter.copy()
+        model_name = model_parameter_.pop("model_name", None)
+        if model_name is None:
             raise ValueError(
-                "NNP name must be specified in nnp_parameters with key 'nnp_name'."
+                "NNP name must be specified in nnp_parameters with key 'model_name'."
             )
-        nnp_class: Type = _Implemented_NNPs.get_neural_network_class(nnp_name)
+        nnp_class: Type = _Implemented_NNPs.get_neural_network_class(model_name)
         if nnp_class is None:
-            raise ValueError(f"Specified NNP name '{nnp_name}' is not implemented.")
+            raise ValueError(f"Specified NNP name '{model_name}' is not implemented.")
 
-        self.model = nnp_class(**nnp_parameters_)
+        self.model = nnp_class(
+            **model_parameter_,
+            dataset_statistic=dataset_statistic,
+        )
         self.optimizer = optimizer
         self.learning_rate = lr
         self.lr_scheduler_config = lr_scheduler_config
@@ -385,7 +388,7 @@ class TrainingAdapter(pl.LightningModule):
         """
         nnp_input = batch.nnp_input
         E_true = batch.metadata.E.to(torch.float32).squeeze(1)
-        E_predict = self.model.forward(nnp_input).E
+        E_predict = self.model.forward(nnp_input)["E"]
         assert E_true.shape == E_predict.shape, (
             f"Shapes of true and predicted energies do not match: "
             f"{E_true.shape} != {E_predict.shape}"
@@ -628,6 +631,7 @@ def return_toml_config(
     potential_path: Optional[str] = None,
     dataset_path: Optional[str] = None,
     training_path: Optional[str] = None,
+    runtime_path: Optional[str] = None,
 ):
     """
     Read one or more TOML configuration files and return the parsed configuration.
@@ -642,6 +646,8 @@ def return_toml_config(
         The path to the TOML file defining the dataset configuration.
     training_path : str, optional
         The path to the TOML file defining the training configuration.
+    runtime_path : str, optional
+        The path to the TOML file defining the runtime configuration.
 
     Returns
     -------
@@ -665,7 +671,9 @@ def return_toml_config(
         if training_path:
             config["training"] = toml.load(training_path)["training"]
             log.info(f"Reading training config from : {training_path}")
-
+        if runtime_path:
+            config["runtime"] = toml.load(runtime_path)["runtime"]
+            log.info(f"Reading runtime config from : {runtime_path}")
     return config
 
 
@@ -677,6 +685,7 @@ def read_config_and_train(
     potential_path: Optional[str] = None,
     dataset_path: Optional[str] = None,
     training_path: Optional[str] = None,
+    runtime_path: Optional[str] = None,
     accelerator: Optional[str] = None,
     device: Optional[Union[int, List[int]]] = None,
 ):
@@ -693,6 +702,8 @@ def read_config_and_train(
         Path to the TOML file defining the dataset configuration.
     training_path : str, optional
         Path to the TOML file defining the training configuration.
+    runtime_path : str, optional
+        Path to the TOML file defining the runtime configuration.
     accelerator : str, optional
         Accelerator type to use for training.
     device : int|List[int], optional
@@ -707,11 +718,12 @@ def read_config_and_train(
     potential_config = config["potential"]
     dataset_config = config["dataset"]
     training_config = config["training"]
+    runtime_config = config["runtime"]
     # Override config parameters with command-line arguments if provided
     if accelerator:
-        training_config["accelerator"] = accelerator
+        runtime_config["accelerator"] = accelerator
     if device is not None:
-        training_config["devices"] = device
+        runtime_config["devices"] = device
 
     log.debug(f"Potential config: {potential_config}")
     log.debug(f"Dataset config: {dataset_config}")
@@ -721,6 +733,7 @@ def read_config_and_train(
         potential_config=potential_config,
         training_config=training_config,
         dataset_config=dataset_config,
+        runtime_config=runtime_config,
     )
 
 
@@ -731,6 +744,7 @@ def log_training_arguments(
     potential_config: Dict[str, Any],
     training_config: Dict[str, Any],
     dataset_config: Dict[str, Any],
+    runtime_config: Dict[str, Any],
 ):
     """
     Log arguments that are passed to the training routine.
@@ -743,6 +757,8 @@ def log_training_arguments(
             config for the training process
         dataset_config: Dict[str, Any]
             config for the dataset
+        runtime_config: Dict[str, Any]
+            config for the runtime
     """
     save_dir = training_config.get("save_dir", "lightning_logs")
     if save_dir == "lightning_logs":
@@ -759,29 +775,37 @@ def log_training_arguments(
     version_select = dataset_config.get("version_select", "latest")
     if version_select == "latest":
         log.info(f"Using default dataset version: {version_select}")
-
     else:
         log.info(f"Using dataset version: {version_select}")
+
+    local_cache_dir = runtime_config.get("local_cache_dir", "./")
+    if local_cache_dir is None:
+        log.info(f"Using default cache directory: {local_cache_dir}")
+    else:
+        log.info(f"Using cache directory: {local_cache_dir}")
+
+
     accelerator = training_config.get("accelerator", "cpu")
     if accelerator == "cpu":
         log.info(f"Using default accelerator: {accelerator}")
     else:
         log.info(f"Using accelerator: {accelerator}")
-    nr_of_epochs = training_config.get("nr_of_epochs", 10)
+    nr_of_epochs = runtime_config.get("nr_of_epochs", 10)
     if nr_of_epochs == 10:
         log.info(f"Using default number of epochs: {nr_of_epochs}")
     else:
         log.info(f"Training for {nr_of_epochs} epochs")
-    num_nodes = training_config.get("num_nodes", 1)
+    num_nodes = runtime_config.get("num_nodes", 1)
     if num_nodes == 1:
         log.info(f"Using default number of nodes: {num_nodes}")
     else:
         log.info(f"Training on {num_nodes} nodes")
-    devices = training_config.get("devices", 1)
+    devices = runtime_config.get("devices", 1)
     if devices == 1:
         log.info(f"Using default device index/number: {devices}")
     else:
         log.info(f"Using device index/number: {devices}")
+
     batch_size = training_config.get("batch_size", 128)
     if batch_size == 128:
         log.info(f"Using default batch size: {batch_size}")
@@ -795,6 +819,7 @@ def log_training_arguments(
         )
     else:
         log.info(f"Removing self energies: {remove_self_energies}")
+
     early_stopping_config = training_config.get("early_stopping", None)
     if early_stopping_config is None:
         log.info(f"Using default: No early stopping performed")
@@ -810,19 +835,22 @@ def log_training_arguments(
         )
     else:
         log.info(f"Using {num_workers} workers for training data loader")
+
     pin_memory = dataset_config.get("pin_memory", False)
     if pin_memory is False:
         log.info(f"Using default value for pinned_memory: {pin_memory}")
     else:
         log.info(f"Using pinned_memory: {pin_memory}")
+
     model_name = potential_config["model_name"]
     dataset_name = dataset_config["dataset_name"]
-    log.info(training_config["loss_parameter"])
+    log.info(training_config["training_parameter"]["loss_parameter"])
     log.debug(
         f"""
 Training {model_name} on {dataset_name}-{version_select} dataset with {accelerator}
 accelerator on {num_nodes} nodes for {nr_of_epochs} epochs.
 Experiments are saved to: {save_dir}/{experiment_name}.
+Local cache directory: {local_cache_dir}
 """
     )
 
@@ -831,6 +859,8 @@ def perform_training(
     potential_config: Dict[str, Any],
     training_config: Dict[str, Any],
     dataset_config: Dict[str, Any],
+    runtime_config: Dict[str, Any],
+    checkpoint_path: Optional[str] = None,
 ) -> Trainer:
     """
     Performs the training process for a neural network potential model.
@@ -854,22 +884,31 @@ def perform_training(
     from lightning import Trainer
     from modelforge.potential import NeuralNetworkPotentialFactory
     from modelforge.dataset.dataset import DataModule
-    from lightning.pytorch.callbacks import ModelSummary
 
-    save_dir = training_config.get("save_dir", "lightning_logs")
+    save_dir = runtime_config.get("save_dir", "lightning_logs")
     if save_dir == "lightning_logs":
         log.info(f"Saving logs to default location: {save_dir}")
 
     experiment_name = training_config.get("experiment_name", "exp")
+    if experiment_name == "{model_name}_{dataset_name}":
+        experiment_name = (
+            f"{potential_config['model_name']}_{dataset_config['dataset_name']}"
+        )
+        training_config["experiment_name"] = (
+            experiment_name  # update the save_dir in training_config
+        )
+    experiment_name = runtime_config.get("experiment_name", "exp")
     model_name = potential_config["model_name"]
     dataset_name = dataset_config["dataset_name"]
-    log_training_arguments(potential_config, training_config, dataset_config)
+    log_training_arguments(
+        potential_config, training_config, dataset_config, runtime_config
+    )
 
     version_select = dataset_config.get("version_select", "latest")
-    accelerator = training_config.get("accelerator", "cpu")
-    nr_of_epochs = training_config.get("nr_of_epochs", 10)
-    num_nodes = training_config.get("num_nodes", 1)
-    devices = training_config.get("devices", 1)
+    accelerator = runtime_config.get("accelerator", "cpu")
+    nr_of_epochs = runtime_config.get("nr_of_epochs", 10)
+    num_nodes = runtime_config.get("num_nodes", 1)
+    devices = runtime_config.get("devices", 1)
     batch_size = training_config.get("batch_size", 128)
     remove_self_energies = training_config.get("remove_self_energies", False)
     early_stopping_config = training_config.get("early_stopping", None)
@@ -878,20 +917,9 @@ def perform_training(
     )
     num_workers = dataset_config.get("number_of_worker", 4)
     pin_memory = dataset_config.get("pin_memory", False)
-
+    local_cache_dir = runtime_config.get("local_cache_dir", "./")
     # set up tensor board logger
     logger = TensorBoardLogger(save_dir, name=experiment_name)
-
-    log.debug(
-        f"""
-Training {model_name} on {dataset_name}-{version_select} dataset with {accelerator}
-accelerator on {num_nodes} nodes for {nr_of_epochs} epochs.
-Experiments are saved to: {save_dir}/{experiment_name}.
-"""
-    )
-
-    log.debug(f"Using {potential_config} potential config")
-    log.debug(f"Using {training_config} training config")
 
     # Set up dataset
     dm = DataModule(
@@ -900,14 +928,26 @@ Experiments are saved to: {save_dir}/{experiment_name}.
         splitting_strategy=RandomRecordSplittingStrategy(),
         remove_self_energies=remove_self_energies,
         version_select=version_select,
+        local_cache_dir=local_cache_dir,
     )
+    dm.prepare_data()
+    dm.setup()
+
+    # read dataset statistics
+    import toml
+
+    dataset_statistic = toml.load(dm.dataset_statistic_filename)
+    log.info(f"Setting E_i_mean and E_i_stddev for {model_name}")
+    log.info(f"E_i_mean: {dataset_statistic['atomic_energies_stats']['E_i_mean']}")
+    log.info(f"E_i_stddev: {dataset_statistic['atomic_energies_stats']['E_i_stddev']}")
+
     # Set up model
-    model = NeuralNetworkPotentialFactory.create_nnp(
+    model = NeuralNetworkPotentialFactory.generate_model(
         use="training",
         model_type=model_name,
-        loss_parameter=training_config["loss_parameter"],
-        model_parameters=potential_config["potential_parameter"],
-        training_parameters=training_config["training_parameter"],
+        dataset_statistic=dataset_statistic,
+        model_parameter=potential_config["potential_parameter"],
+        training_parameter=training_config["training_parameter"],
     )
 
     # set up traininer
@@ -948,19 +988,6 @@ Experiments are saved to: {save_dir}/{experiment_name}.
         log_every_n_steps=50,
     )
 
-    dm.prepare_data()
-    dm.setup()
-
-    log.info(f"Setting E_i_mean and E_i_stddev for {model_name}")
-    log.info(f"E_i_mean: {dm.dataset_statistics.E_i_mean}")
-    log.info(f"E_i_stddev: {dm.dataset_statistics.E_i_stddev}")
-    model.model.core_module.readout_module.E_i_mean = torch.tensor(
-        [dm.dataset_statistics.E_i_mean], dtype=torch.float32
-    )
-    model.model.core_module.readout_module.E_i_stddev = torch.tensor(
-        [dm.dataset_statistics.E_i_stddev], dtype=torch.float32
-    )
-
     # Run training loop and validate
     trainer.fit(
         model,
@@ -968,6 +995,7 @@ Experiments are saved to: {save_dir}/{experiment_name}.
             num_workers=num_workers, pin_memory=pin_memory
         ),
         val_dataloaders=dm.val_dataloader(),
+        ckpt_path=checkpoint_path,
     )
     trainer.validate(model=model, dataloaders=dm.val_dataloader(), ckpt_path="best")
     trainer.test(dataloaders=dm.test_dataloader(), ckpt_path="best")

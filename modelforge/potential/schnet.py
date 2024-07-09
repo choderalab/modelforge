@@ -142,7 +142,7 @@ class SchNetCore(CoreNetwork):
             ]
         )
 
-        # final output layer
+        # output layer to obtain per-atom energies
         self.energy_layer = nn.Sequential(
             Dense(
                 number_of_atom_features,
@@ -176,7 +176,9 @@ class SchNetCore(CoreNetwork):
 
         return nnp_input
 
-    def compute_properties(self, data: SchnetNeuralNetworkData) -> Dict[str, torch.Tensor]:
+    def compute_properties(
+        self, data: SchnetNeuralNetworkData
+    ) -> Dict[str, torch.Tensor]:
         """
         Calculate the energy for a given input batch.
 
@@ -209,7 +211,7 @@ class SchNetCore(CoreNetwork):
 
         return {
             "E_i": E_i,
-            "q": x,
+            "scalar_representation": x,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
 

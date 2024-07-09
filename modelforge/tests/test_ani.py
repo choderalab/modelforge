@@ -140,7 +140,6 @@ def test_compare_rsf():
     )
     r_mf = rsf(d_ij / 10)  # torch.Size([5,1, 8]) # NOTE: nanometer
     cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom)
-    from torchani.aev import radial_terms
 
     rcut_ij = cutoff_module(d_ij / 10)  # torch.Size([5]) # NOTE: nanometer
     r_ani = provide_reference_values_for_test_ani_test_compare_rsf()
@@ -153,7 +152,6 @@ def test_compute_rsf_with_diagonal_batching():
     from modelforge.potential.utils import AniRadialSymmetryFunction, CosineCutoff
     from openff.units import unit
     from modelforge.potential.models import Pairlist
-    from torchani.aev import neighbor_pairs_nopbc
     from .precalculated_values import (
         provide_reference_values_for_test_ani_test_compute_rsf_with_diagonal_batching,
     )
@@ -239,7 +237,6 @@ def test_compare_angular_symmetry_features():
     # now use formated indices and inputs to calculate the
     # angular terms, both with the modelforge AngularSymmetryFunction
     # and with its implementation in torchani
-    from torchani.aev import angular_terms
 
     # ref value
     from .precalculated_values import (

@@ -35,7 +35,6 @@ dependencies:
   - sphinx_rtd_theme
 
   - pip:
-      # - schnetpack>=2.0.0
       - jax
       - pytorch2jax
       - versioneer

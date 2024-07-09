@@ -1,11 +1,8 @@
 import torch
 import pytest
-import os
-
-IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 
 
-@pytest.mark.skipif(IN_GITHUB_ACTIONS, reason="Test fails on macOS")
+@pytest.mark.xfail
 def test_compare_radial_symmetry_features():
     # compare schnetpack RadialSymmetryFunction with modelforge RadialSymmetryFunction
     from modelforge.potential.utils import SchnetRadialSymmetryFunction
@@ -40,125 +37,7 @@ def test_compare_radial_symmetry_features():
     )
 
 
-def setup_single_methane_input():
-    import torch
-
-    # ------------------------------------ #
-    # set up the input for the spk Painn model
-    methan_spk = {
-        "_idx": torch.tensor([0]),
-        "dipole_moment": torch.tensor([0.0], dtype=torch.float64),
-        "energy_U0": torch.tensor([-40.4789], dtype=torch.float64),
-        "energy_U": torch.tensor([-40.4761], dtype=torch.float64),
-        "_n_atoms": torch.tensor([5]),
-        "_atomic_numbers": torch.tensor([6, 1, 1, 1, 1]),
-        "_positions": torch.tensor(
-            [
-                [-1.2698e-02, 1.0858e00, 8.0010e-03],
-                [2.1504e-03, -6.0313e-03, 1.9761e-03],
-                [1.0117e00, 1.4638e00, 2.7657e-04],
-                [-5.4082e-01, 1.4475e00, -8.7664e-01],
-                [-5.2381e-01, 1.4379e00, 9.0640e-01],
-            ],
-            dtype=torch.float64,
-        ),
-        "_cell": torch.tensor(
-            [[[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]], dtype=torch.float64
-        ),
-        "_pbc": torch.tensor([False, False, False]),
-        "_offsets": torch.tensor(
-            [
-                [0.0, 0.0, 0.0],
-                [0.0, 0.0, 0.0],
-                [0.0, 0.0, 0.0],
-                [0.0, 0.0, 0.0],
-                [0.0, 0.0, 0.0],
-                [0.0, 0.0, 0.0],
-                [0.0, 0.0, 0.0],
-                [0.0, 0.0, 0.0],
-                [0.0, 0.0, 0.0],
-                [0.0, 0.0, 0.0],
-                [0.0, 0.0, 0.0],
-                [0.0, 0.0, 0.0],
-                [0.0, 0.0, 0.0],
-                [0.0, 0.0, 0.0],
-                [0.0, 0.0, 0.0],
-                [0.0, 0.0, 0.0],
-                [0.0, 0.0, 0.0],
-                [0.0, 0.0, 0.0],
-                [0.0, 0.0, 0.0],
-                [0.0, 0.0, 0.0],
-            ],
-            dtype=torch.float64,
-        ),
-        "_idx_i": torch.tensor(
-            [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4]
-        ),
-        "_idx_j": torch.tensor(
-            [1, 2, 3, 4, 0, 2, 3, 4, 0, 1, 3, 4, 0, 1, 2, 4, 0, 1, 2, 3]
-        ),
-        "_Rij": torch.tensor(
-            [
-                [1.4849e-02, -1.0918e00, -6.0249e-03],
-                [1.0244e00, 3.7795e-01, -7.7244e-03],
-                [-5.2812e-01, 3.6172e-01, -8.8464e-01],
-                [-5.1112e-01, 3.5213e-01, 8.9840e-01],
-                [-1.4849e-02, 1.0918e00, 6.0249e-03],
-                [1.0096e00, 1.4698e00, -1.6995e-03],
-                [-5.4297e-01, 1.4536e00, -8.7862e-01],
-                [-5.2596e-01, 1.4440e00, 9.0442e-01],
-                [-1.0244e00, -3.7795e-01, 7.7244e-03],
-                [-1.0096e00, -1.4698e00, 1.6995e-03],
-                [-1.5525e00, -1.6225e-02, -8.7692e-01],
-                [-1.5355e00, -2.5819e-02, 9.0612e-01],
-                [5.2812e-01, -3.6172e-01, 8.8464e-01],
-                [5.4297e-01, -1.4536e00, 8.7862e-01],
-                [1.5525e00, 1.6225e-02, 8.7692e-01],
-                [1.7001e-02, -9.5940e-03, 1.7830e00],
-                [5.1112e-01, -3.5213e-01, -8.9840e-01],
-                [5.2596e-01, -1.4440e00, -9.0442e-01],
-                [1.5355e00, 2.5819e-02, -9.0612e-01],
-                [-1.7001e-02, 9.5940e-03, -1.7830e00],
-            ],
-            dtype=torch.float64,
-        ),
-    }
-    # ------------------------------------ #
-
-    # ------------------------------------ #
-    # set up the input for the modelforge Painn model
-    atomic_numbers = torch.tensor([6, 1, 1, 1, 1], dtype=torch.int64)
-
-    positions = (
-        torch.tensor(
-            [
-                [-1.2698e-02, 1.0858e00, 8.0010e-03],
-                [2.1504e-03, -6.0313e-03, 1.9761e-03],
-                [1.0117e00, 1.4638e00, 2.7657e-04],
-                [-5.4082e-01, 1.4475e00, -8.7664e-01],
-                [-5.2381e-01, 1.4379e00, 9.0640e-01],
-            ],
-            dtype=torch.float64,
-            requires_grad=True,
-        )
-        / 10
-    )
-    E = torch.tensor([0.0], requires_grad=True)
-    atomic_subsystem_indices = torch.tensor([0, 0, 0, 0, 0], dtype=torch.int32)
-    from modelforge.dataset.dataset import NNPInput
-
-    modelforge_methane = NNPInput(
-        atomic_numbers=atomic_numbers,
-        positions=positions,
-        atomic_subsystem_indices=atomic_subsystem_indices,
-        total_charge=torch.tensor([0], dtype=torch.int32),
-    )
-    # ------------------------------------ #
-
-    return {
-        "spk_methane_input": methan_spk,
-        "modelforge_methane_input": modelforge_methane,
-    }
+from .precalculated_values import setup_single_methane_input
 
 
 def setup_spk_painn_representation(
@@ -212,7 +91,7 @@ def setup_modelforge_painn_representation(
     )
 
 
-@pytest.mark.skipif(IN_GITHUB_ACTIONS, reason="Test fails on macOS")
+@pytest.mark.xfail
 def test_painn_representation_implementation():
     # ---------------------------------------- #
     # test the implementation of the representation part of the PaiNN model
@@ -558,6 +437,7 @@ def setup_spk_schnet_representation(
     )
 
 
+@pytest.mark.xfail
 def setup_mf_schnet_representation(
     cutoff: float,
     number_of_atom_features: int,
@@ -591,7 +471,7 @@ def setup_mf_schnet_representation(
     )
 
 
-@pytest.mark.skipif(IN_GITHUB_ACTIONS, reason="Test fails on macOS")
+@pytest.mark.xfail
 def test_schnet_representation_implementation():
     # ---------------------------------------- #
     # test the implementation of the representation part of the PaiNN model

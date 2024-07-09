@@ -98,7 +98,7 @@ def test_torchani_ani(setup_two_methanes):
     force = -derivative
 
 
-def test_modelforge_ani(setup_two_methanes):
+def test_modelforge_ani_forward_and_backward_pass(setup_two_methanes):
     # Test modelforge ANI implementation
     # Test forward pass and backpropagation through network
     from modelforge.potential.ani import ANI2x
@@ -118,22 +118,21 @@ def test_modelforge_ani(setup_two_methanes):
     force = -derivative
 
 
-def test_compare_radial_symmetry_features():
+def test_compare_rsf():
     # Compare the ANI radial symmetry function
     # to the output of the modelforge radial symmetry function
     import torch
     from modelforge.potential.utils import AniRadialSymmetryFunction, CosineCutoff
     from openff.units import unit
+    from .precalculated_values import (
+        provide_reference_values_for_test_compare_radial_symmetry_features,
+    )
 
-    # generate a random list of distances, all < 5
+    # use d_ij in angstrom
     d_ij = torch.tensor([[3.5201], [2.6756], [2.1641], [3.0990], [4.5180]])
-
-    # ANI constants
     radial_cutoff = 5.0  # radial_cutoff
     radial_start = 0.8
     radial_dist_divisions = 8
-    EtaR = torch.tensor([19.7])  # radial eta
-    ShfR = torch.linspace(radial_start, radial_cutoff, radial_dist_divisions + 1)[:-1]
 
     # NOTE: we pass in Angstrom to ANI and in nanometer to mf
     rsf = AniRadialSymmetryFunction(
@@ -146,66 +145,12 @@ def test_compare_radial_symmetry_features():
     from torchani.aev import radial_terms
 
     rcut_ij = cutoff_module(d_ij / 10)  # torch.Size([5]) # NOTE: nanometer
-
+    r_ani = provide_reference_values_for_test_compare_radial_symmetry_features()
     r_mf = r_mf * rcut_ij
-    r_ani = torch.tensor(
-        [
-            [
-                0.0000e00,
-                2.9988e-43,
-                6.8802e-26,
-                3.0382e-13,
-                2.5784e-05,
-                4.2054e-02,
-                1.3182e-03,
-                7.9414e-10,
-            ],
-            [
-                8.8859e-32,
-                2.7530e-17,
-                1.6391e-07,
-                1.8757e-02,
-                4.1250e-02,
-                1.7435e-06,
-                1.4162e-15,
-                2.2109e-29,
-            ],
-            [
-                1.8177e-17,
-                1.4309e-07,
-                2.1648e-02,
-                6.2946e-02,
-                3.5175e-06,
-                3.7776e-15,
-                7.7972e-29,
-                0.0000e00,
-            ],
-            [
-                0.0000e00,
-                9.3933e-29,
-                3.5579e-15,
-                2.5900e-06,
-                3.6235e-02,
-                9.7429e-03,
-                5.0346e-08,
-                5.0000e-18,
-            ],
-            [
-                0.0000e00,
-                0.0000e00,
-                0.0000e00,
-                2.9091e-42,
-                2.2756e-25,
-                3.4204e-13,
-                9.8803e-06,
-                5.4852e-03,
-            ],
-        ]
-    )  # NOTE: Angstrom
-    assert torch.allclose(r_mf, r_ani)
+    assert torch.allclose(r_mf, r_ani, rtol=1e-4)
 
 
-def test_radial_with_diagonal_batching(setup_two_methanes):
+def test_compute_rsf_with_diagonal_batching(setup_two_methanes):
     import torch
     from modelforge.potential.utils import AniRadialSymmetryFunction, CosineCutoff
     from openff.units import unit

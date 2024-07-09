@@ -535,3 +535,76 @@ def load_precalculated_schnet_results():
         ),
     }
     return schnetpack_results
+
+
+def provide_reference_values_for_test_compare_radial_symmetry_features():
+    def calculate_reference():
+        from torchani.aev import radial_terms
+
+        # ANI constants
+        radial_cutoff = 5.0  # radial_cutoff
+        radial_start = 0.8
+        radial_dist_divisions = 8
+        EtaR = torch.tensor([19.7])  # radial eta
+        ShfR = torch.linspace(radial_start, radial_cutoff, radial_dist_divisions + 1)[
+            :-1
+        ]
+        # generate reference value
+        r_ani = radial_terms(5, EtaR, ShfR, d_ij)  # torch.Size([5,8]) # NOTE: Angstrom
+
+    # r_ani = calculate_reference()
+    r_ani = torch.tensor(
+        [
+            [
+                0.0000e00,
+                2.9988e-43,
+                6.8802e-26,
+                3.0382e-13,
+                2.5784e-05,
+                4.2054e-02,
+                1.3182e-03,
+                7.9414e-10,
+            ],
+            [
+                8.8859e-32,
+                2.7530e-17,
+                1.6391e-07,
+                1.8757e-02,
+                4.1250e-02,
+                1.7435e-06,
+                1.4162e-15,
+                2.2109e-29,
+            ],
+            [
+                1.8177e-17,
+                1.4309e-07,
+                2.1648e-02,
+                6.2946e-02,
+                3.5175e-06,
+                3.7776e-15,
+                7.7972e-29,
+                0.0000e00,
+            ],
+            [
+                0.0000e00,
+                9.3933e-29,
+                3.5579e-15,
+                2.5900e-06,
+                3.6235e-02,
+                9.7429e-03,
+                5.0346e-08,
+                5.0000e-18,
+            ],
+            [
+                0.0000e00,
+                0.0000e00,
+                0.0000e00,
+                2.9091e-42,
+                2.2756e-25,
+                3.4204e-13,
+                9.8803e-06,
+                5.4852e-03,
+            ],
+        ]
+    )  # NOTE: Angstrom
+    return r_ani

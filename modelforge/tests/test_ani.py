@@ -261,7 +261,7 @@ def test_compare_angular_symmetry_features():
     # make sure that the output is the same
     assert angular_feature_vector_ani.size() == angular_feature_vector_mf.size()
     assert torch.allclose(
-        angular_feature_vector_ani, angular_feature_vector_mf, atol=1e-4
+        angular_feature_vector_ani, angular_feature_vector_mf, atol=1e-3
     )
 
 

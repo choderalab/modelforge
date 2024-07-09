@@ -2,9 +2,9 @@ from dataclasses import dataclass
 
 import torch.nn as nn
 from loguru import logger as log
-from typing import Dict, Tuple, Union
+from typing import Dict, Tuple
 from openff.units import unit
-from .models import InputPreparation, BaseNetwork, CoreNetwork
+from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
 
 from .models import PairListOutputs
 from .utils import (
@@ -544,7 +544,7 @@ class SAKEInteraction(nn.Module):
         return h_updated, x_updated, v_updated
 
 
-from typing import Optional, List
+from typing import Optional, List, Union
 
 
 class SAKE(BaseNetwork):

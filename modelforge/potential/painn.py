@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Callable, Dict, Optional, Tuple, Union, List
+from typing import TYPE_CHECKING, Callable, Dict, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from .models import PairListOutputs
     from modelforge.dataset.dataset import NNPInput
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from modelforge.potential.utils import NeuralNetworkData
 
@@ -171,6 +171,8 @@ class PaiNNCore(CoreNetwork):
         Parameters
         ----------
         data : PaiNNNeuralNetworkInput(NamedTuple)
+        atomic_embedding : torch.Tensor
+            Tensor containing atomic number embeddings.
 
         Returns
         -------
@@ -466,6 +468,10 @@ class PaiNNMixing(nn.Module):
         q = q + dq_intra + dqmu_intra
         mu = mu + dmu_intra
         return q, mu
+
+
+from .models import InputPreparation, NNPInput, BaseNetwork
+from typing import List
 
 
 class PaiNN(BaseNetwork):

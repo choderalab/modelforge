@@ -494,7 +494,6 @@ def test_schnet_representation_implementation():
     spk_input = input["spk_methane_input"]
     mf_nnp_input = input["modelforge_methane_input"]
 
-    schnetpack_results = schnetpack_schnet(spk_input)
     modelforge_schnet.input_preparation._input_checks(mf_nnp_input)
 
     pairlist_output = modelforge_schnet.input_preparation.prepare_inputs(mf_nnp_input)
@@ -510,8 +509,6 @@ def test_schnet_representation_implementation():
     assert torch.allclose(spk_input["_Rij"] / 10, schnet_nn_input_mf.r_ij, atol=1e-4)
     assert torch.allclose(spk_input["_idx_i"], schnet_nn_input_mf.pair_indices[0])
     assert torch.allclose(spk_input["_idx_j"], schnet_nn_input_mf.pair_indices[1])
-    idx_i = spk_input["_idx_i"]
-    idx_j = spk_input["_idx_j"]
 
     # ---------------------------------------- #
     # test radial symmetry function
@@ -567,9 +564,8 @@ def test_schnet_representation_implementation():
     f_ij_spk = schnetpack_schnet.radial_basis(d_ij)
     rcut_ij_spk = schnetpack_schnet.cutoff_fn(d_ij)
 
-    f_ij_mf_ = f_ij_mf
     r_cut_ij_mf_ = r_cut_ij_mf.squeeze(1)
-    assert torch.allclose(f_ij_mf_, f_ij_spk)
+    assert torch.allclose(f_ij_mf, f_ij_spk)
     assert torch.allclose(r_cut_ij_mf_, rcut_ij_spk)
 
     # ---------------------------------------- #

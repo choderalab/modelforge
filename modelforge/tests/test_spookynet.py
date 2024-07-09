@@ -193,11 +193,11 @@ def test_spookynet_interaction_module_against_reference():
 
 def test_spookynet_bernstein_polynomial_equivalence():
     from spookynet.modules.exponential_bernstein_polynomials import ExponentialBernsteinPolynomials as RefExponentialBernsteinPolynomials
-    from modelforge.potential.utils import ExponentialBernsteinPolynomials as MfExponentialBernSteinPolynomials
+    from modelforge.potential.utils import ExponentialBernsteinRadialBasisFunction as MfExponentialBernSteinPolynomials
 
     num_basis_functions = 3
     ref_exp_bernstein_polynomials = RefExponentialBernsteinPolynomials(num_basis_functions, exp_weighting=True)
-    mf_exp_bernstein_polynomials = MfExponentialBernSteinPolynomials(num_basis_functions)
+    mf_exp_bernstein_polynomials = MfExponentialBernSteinPolynomials(num_basis_functions, ini_alpha=1.0)
 
     N = 5
     r_angstrom = torch.rand((N, 1))

@@ -2,7 +2,7 @@ import torch
 from modelforge.potential.painn import PaiNN
 
 
-def test_PaiNN_forward(single_batch_with_batchsize_64):
+def test_forward(single_batch_with_batchsize_64):
     """Test initialization of the PaiNN neural network potential."""
     # read default parameters
     from modelforge.tests.test_models import load_configs
@@ -25,7 +25,7 @@ def test_PaiNN_forward(single_batch_with_batchsize_64):
     )  # Assuming energy is calculated per sample in the batch
 
 
-def test_painn_interaction_equivariance(single_batch_with_batchsize_64):
+def test_equivariance(single_batch_with_batchsize_64):
     from modelforge.potential.painn import PaiNN
     from dataclasses import replace
     import torch
@@ -153,27 +153,8 @@ import torch
 from modelforge.tests.test_schnet import setup_single_methane_input
 
 
-def setup_spk_painn_representation(
-    cutoff, nr_atom_basis, number_of_gaussians, nr_of_interactions
-):
-    # ------------------------------------ #
-    # set up the schnetpack Painn representation model
-    from schnetpack.nn import GaussianRBF, CosineCutoff
-    from schnetpack.representation import PaiNN as schnetpack_PaiNN
-    from openff.units import unit
 
-    radial_basis = GaussianRBF(
-        n_rbf=number_of_gaussians, cutoff=cutoff.to(unit.angstrom).m
-    )
-    return schnetpack_PaiNN(
-        n_atom_basis=nr_atom_basis,
-        n_interactions=nr_of_interactions,
-        radial_basis=radial_basis,
-        cutoff_fn=CosineCutoff(cutoff.to(unit.angstrom).m),
-    )
-
-
-def setup_modelforge_painn_representation(
+def setup_representation(
     cutoff, nr_atom_basis, number_of_gaussians, nr_of_interactions
 ):
     # ------------------------------------ #
@@ -203,7 +184,7 @@ def setup_modelforge_painn_representation(
     )
 
 
-def test_painn_representation_implementation():
+def test_compare_representation():
     # ---------------------------------------- #
     # setup the PaiNN model
     # ---------------------------------------- #
@@ -216,7 +197,7 @@ def test_painn_representation_implementation():
     nr_of_interactions = 3
     torch.manual_seed(1234)
 
-    modelforge_painn = setup_modelforge_painn_representation(
+    modelforge_painn = setup_representation(
         cutoff, nr_atom_basis, number_of_gaussians, nr_of_interactions
     ).double()
     # ------------------------------------ #

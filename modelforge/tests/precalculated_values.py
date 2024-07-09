@@ -2191,3 +2191,92 @@ def provide_input_for_test_ani_test_compare_aev():
         ],
     )
     return torchani_aev
+
+
+def provide_reference_for_test_physnet_test_rbf():
+    import numpy as np
+
+    def calculate_reference():
+        import numpy as np
+        import tensorflow as tf
+
+        K = 20
+        cutoff_in_angstrom = 5
+
+        # PhysNet implementation
+        def softplus_inverse(x):
+            return x + np.log(-np.expm1(-x))
+
+        pn_widths = [
+            softplus_inverse((0.5 / ((1.0 - np.exp(-cutoff_in_angstrom)) / K)) ** 2)
+        ] * K
+        pn_widths = tf.nn.softplus(
+            tf.Variable(np.asarray(pn_widths), name="widths", dtype=tf.float32)
+        )
+        pn_widths_np = pn_widths.numpy()
+        centers = softplus_inverse(np.linspace(1.0, np.exp(-cutoff_in_angstrom), K))
+
+        _centers = tf.nn.softplus(
+            tf.Variable(np.asarray(centers), name="centers", dtype=tf.float32)
+        )
+        pn_centers = _centers.numpy()
+        # PhysNet implementation
+        D = np.array([[1.0394776], [3.375541]], dtype=np.float32)
+        D = tf.expand_dims(D, -1)  # necessary for proper broadcasting behaviour
+        return tf.exp(-pn_widths * (tf.exp(-D) - pn_centers) ** 2)
+
+    # rbf = calculate_reference()
+    rbf = np.array(
+        [
+            [
+                [
+                    4.0640094e-19,
+                    2.9076915e-16,
+                    1.1954596e-13,
+                    2.8243187e-11,
+                    3.8343178e-09,
+                    2.9912576e-07,
+                    1.3409588e-05,
+                    3.4543799e-04,
+                    5.1135044e-03,
+                    4.3497097e-02,
+                    2.1261550e-01,
+                    5.9720534e-01,
+                    9.6393162e-01,
+                    8.9405125e-01,
+                    4.7651026e-01,
+                    1.4594044e-01,
+                    2.5684591e-02,
+                    2.5975453e-03,
+                    1.5095502e-04,
+                    5.0411036e-06,
+                ]
+            ],
+            [
+                [
+                    0.0000000e00,
+                    1.8350491e-37,
+                    2.2277273e-33,
+                    1.5541043e-29,
+                    6.2299409e-26,
+                    1.4350924e-22,
+                    1.8996544e-19,
+                    1.4449790e-16,
+                    6.3160042e-14,
+                    1.5864159e-11,
+                    2.2897197e-09,
+                    1.8990863e-07,
+                    9.0510239e-06,
+                    2.4788288e-04,
+                    3.9011124e-03,
+                    3.5279620e-02,
+                    1.8333825e-01,
+                    5.4748958e-01,
+                    9.3949002e-01,
+                    9.2640764e-01,
+                ]
+            ],
+        ],
+        dtype=np.float32,
+    )
+    return rbf

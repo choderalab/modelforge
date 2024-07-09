@@ -1,12 +1,6 @@
-import os
-import pytest
-
-
-def test_physnet_init():
+def test_init():
 
     from modelforge.potential.physnet import PhysNet
-    from importlib import resources
-    from modelforge.tests.data import potential_defaults
 
     from modelforge.tests.test_models import load_configs
 
@@ -18,7 +12,7 @@ def test_physnet_init():
     model = PhysNet(**potential_parameter)
 
 
-def test_physnet_forward(single_batch_with_batchsize_64):
+def test_forward(single_batch_with_batchsize_64):
     import torch
     from modelforge.potential.physnet import PhysNet
 
@@ -40,12 +34,11 @@ def test_physnet_forward(single_batch_with_batchsize_64):
     yhat = model(single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float32))
 
 
-def test_rbf():
+def test_compare_representation():
     # This test compares the RBF calculation of the original
     # PhysNet implemntation against the SAKE/PhysNet implementation in modelforge
     # # NOTE: input in PhysNet is expected in angstrom, in contrast to modelforge which expects input in nanomter
 
-    import tensorflow as tf
     import numpy as np
     import torch
     from openff.units import unit

@@ -81,7 +81,7 @@ def setup_two_methanes():
 
 
 @pytest.mark.xfail
-def test_torchani_ani():
+def test_forward_and_backward_using_torchani():
     # Test torchani ANI implementation
     # Test forward pass and backpropagation through network
 
@@ -96,7 +96,7 @@ def test_torchani_ani():
     force = -derivative
 
 
-def test_modelforge_ani_forward_and_backward_pass():
+def test_forward_and_backward():
     # Test modelforge ANI implementation
     # Test forward pass and backpropagation through network
     from modelforge.potential.ani import ANI2x
@@ -116,7 +116,7 @@ def test_modelforge_ani_forward_and_backward_pass():
     force = -derivative
 
 
-def test_compare_rsf():
+def test_representation():
     # Compare the ANI radial symmetry function
     # to the output of the modelforge radial symmetry function
     import torch
@@ -147,7 +147,7 @@ def test_compare_rsf():
     assert torch.allclose(r_mf, r_ani, rtol=1e-4)
 
 
-def test_compute_rsf_with_diagonal_batching():
+def test_representation_with_diagonal_batching():
     import torch
     from modelforge.potential.utils import AniRadialSymmetryFunction, CosineCutoff
     from openff.units import unit

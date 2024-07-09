@@ -6,7 +6,7 @@ from modelforge.tests.precalculated_values import (
 )
 
 
-def initialize_schnet(
+def initialize_model(
     cutoff: float,
     number_of_atom_features: int,
     number_of_radial_basis_functions: int,
@@ -39,7 +39,7 @@ def initialize_schnet(
     )
 
 
-def test_Schnet_init():
+def test_init():
     """Test initialization of the Schnet model."""
     from modelforge.potential.schnet import SchNet
 
@@ -53,7 +53,7 @@ def test_Schnet_init():
     assert schnet is not None, "Schnet model should be initialized."
 
 
-def test_compare_radial_symmetry_features():
+def test_compare_representation():
     # compare schnetpack RadialSymmetryFunction with modelforge RadialSymmetryFunction
     from modelforge.potential.utils import SchnetRadialSymmetryFunction
     from openff.units import unit
@@ -155,7 +155,7 @@ def test_compare_radial_symmetry_features():
     )  # NOTE: there is a shape mismatch between the two outputs
 
 
-def test_schnet_forward_pass():
+def test_compare_forward():
     # ---------------------------------------- #
     # test the implementation of the representation part of the PaiNN model
     # ---------------------------------------- #
@@ -166,7 +166,7 @@ def test_schnet_forward_pass():
     n_rbf = 5
     nr_of_interactions = 3
     torch.manual_seed(1234)
-    modelforge_schnet = initialize_schnet(
+    modelforge_schnet = initialize_model(
         cutoff, number_of_atom_features, n_rbf, nr_of_interactions
     ).double()
 

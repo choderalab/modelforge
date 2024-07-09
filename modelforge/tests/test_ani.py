@@ -240,11 +240,11 @@ def test_compare_angular_symmetry_features():
 
     # ref value
     from .precalculated_values import (
-        provide_input_for_test_ani_test_compare_angular_symmetry_features,
+        provide_input_for_test_test_compare_angular_symmetry_features,
     )
 
-    angular_feature_vector_ani = (
-        provide_input_for_test_ani_test_compare_angular_symmetry_features()
+    reference_angular_feature_vector = (
+        provide_input_for_test_test_compare_angular_symmetry_features()
     )
 
     # set up modelforge angular features
@@ -255,13 +255,12 @@ def test_compare_angular_symmetry_features():
         angle_sections=4,
     )
     # NOTE: ANI works with Angstrom, modelforge with nanometer
-    vec12 = vec12 / 10
     # NOTE: ANI operates on a [nr_of_molecules, nr_of_atoms, 3] tensor
-    angular_feature_vector_mf = asf(vec12)
+    angular_feature_vector_mf = asf(vec12 / 10)
     # make sure that the output is the same
-    assert angular_feature_vector_ani.size() == angular_feature_vector_mf.size()
+    assert reference_angular_feature_vector.size() == angular_feature_vector_mf.size()
     assert torch.allclose(
-        angular_feature_vector_ani, angular_feature_vector_mf, atol=1e-3
+        reference_angular_feature_vector, angular_feature_vector_mf, atol=1e-3
     )
 
 

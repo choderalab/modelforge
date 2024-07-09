@@ -838,7 +838,7 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
     ):
         # initialize according to the default values in PhysNet (see beta_k in Figure 2 caption)
         # NOTES:
-        # - Unlike RadialBasisFunctionWithCenters, the scale factors are unitless.
+        # - Unlike GaussianRadialBasisFunctionWithScaling, the scale factors are unitless.
         # - Each element of radial_square_factor here is the reciprocal of the square root of beta_k in the
         # Eq. 7 of the PhysNet paper. This way, it is consistent with the sqrt(2) * standard deviation interpretation
         # of radial_scale_factor in GaussianRadialBasisFunctionWithScaling

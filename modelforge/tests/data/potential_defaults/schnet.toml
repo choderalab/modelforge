@@ -1,8 +1,7 @@
 [potential]
 model_name = "SchNet"
 
-[potential.potential_parameter]
-
+[potential.core_parameter]
 max_Z = 101
 number_of_atom_features = 32
 number_of_radial_basis_functions = 20

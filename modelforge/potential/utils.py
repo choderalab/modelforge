@@ -673,12 +673,13 @@ class SchnetRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
             _min_distance_in_nanometer,
             _max_distance_in_nanometer,
             number_of_radial_basis_functions,
+            dtype=dtype
         )
 
         widths = (
                 torch.abs(scale_factors[1] - scale_factors[0])
                 * torch.ones_like(scale_factors)
-        ).to(dtype)
+        )
 
         scale_factors = math.sqrt(2) * widths
         return scale_factors

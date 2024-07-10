@@ -197,7 +197,7 @@ def test_compare_representation():
     nr_of_interactions = 3
     torch.manual_seed(1234)
 
-    modelforge_painn = setup_representation(
+    model = setup_representation(
         cutoff, nr_atom_basis, number_of_gaussians, nr_of_interactions
     ).double()
     # ------------------------------------ #
@@ -206,9 +206,9 @@ def test_compare_representation():
     spk_input = input["spk_methane_input"]
     mf_nnp_input = input["modelforge_methane_input"]
 
-    modelforge_painn.input_preparation._input_checks(mf_nnp_input)
-    pairlist_output = modelforge_painn.input_preparation.prepare_inputs(mf_nnp_input)
-    pain_nn_input_mf = modelforge_painn.core_module._model_specific_input_preparation(
+    model.input_preparation._input_checks(mf_nnp_input)
+    pairlist_output = model.input_preparation.prepare_inputs(mf_nnp_input)
+    prepared_input = model.core_module._model_specific_input_preparation(
         mf_nnp_input, pairlist_output
     )
 
@@ -218,32 +218,32 @@ def test_compare_representation():
 
     # reset filter parameters
     torch.manual_seed(1234)
-    modelforge_painn.core_module.representation_module.filter_net.reset_parameters()
+    model.core_module.representation_module.filter_net.reset_parameters()
 
-    modelforge_results = modelforge_painn.core_module.forward(
-        pain_nn_input_mf, pairlist_output
+    calculated_results = model.core_module.forward(
+        prepared_input, pairlist_output
     )
-    schnetpack_results = load_precalculated_painn_results()
+    reference_results = load_precalculated_painn_results()
 
     # check that the scalar and vector representations are the same
     # start with scalar representation
     assert (
-        schnetpack_results["scalar_representation"].shape
-        == modelforge_results["q"].shape
+        reference_results["scalar_representation"].shape
+        == calculated_results["q"].shape
     )
 
-    scalar_spk = schnetpack_results["scalar_representation"].double()
-    scalar_mf = modelforge_results["q"].double()
+    scalar_spk = reference_results["scalar_representation"].double()
+    scalar_mf = calculated_results["q"].double()
 
     assert torch.allclose(scalar_spk, scalar_mf, atol=1e-4)
     # check vector representation
     assert (
-        schnetpack_results["vector_representation"].shape
-        == modelforge_results["mu"].shape
+        reference_results["vector_representation"].shape
+        == calculated_results["mu"].shape
     )
 
     assert torch.allclose(
-        schnetpack_results["vector_representation"].double(),
-        modelforge_results["mu"].double(),
+        reference_results["vector_representation"].double(),
+        calculated_results["mu"].double(),
         atol=1e-4,
     )

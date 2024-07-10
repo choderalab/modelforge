@@ -1050,7 +1050,7 @@ def provide_reference_values_for_test_ani_test_compute_rsf_with_diagonal_batchin
     return (ani_radial_feature_vector, d_ij)
 
 
-def provide_input_for_test_ani_test_compare_angular_symmetry_features():
+def provide_input_for_test_test_compare_angular_symmetry_features():
     def calculate_values():
         from torchani.aev import angular_terms
         import math
@@ -1104,7 +1104,6 @@ def provide_input_for_test_ani_test_compare_angular_symmetry_features():
         )
         return angular_feature_vector_ani
 
-    # angular_feature_vector_ani = calculate_values()
     # angular_feature_vector_ani = calculate_values()
     angular_feature_vector_ani = torch.tensor(
         [

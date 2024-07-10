@@ -176,7 +176,7 @@ def make_reference_equivalent_sake_interaction(out_features, hidden_features, nr
         cutoff=cutoff,
         number_of_radial_basis_functions=50,
         epsilon=1e-5,
-        scale_factor=1.0,
+        scale_factor=(1.0 * unit.nanometer),
     )
 
     # Define the reference layer

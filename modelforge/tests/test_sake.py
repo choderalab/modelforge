@@ -68,10 +68,10 @@ def test_sake_interaction_forward():
         nr_coefficients=23,
         nr_heads=29,
         activation=torch.nn.ReLU(),
-        cutoff=5.0 * unit.angstrom,
+        cutoff=(5.0 * unit.angstrom),
         number_of_radial_basis_functions=53,
         epsilon=1e-5,
-        scale_factor=1.0,
+        scale_factor=(1.0 * unit.nanometer),
     )
     h = torch.randn(nr_atoms, nr_atom_basis)
     x = torch.randn(nr_atoms, geometry_basis)

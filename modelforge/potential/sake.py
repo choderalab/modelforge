@@ -311,7 +311,7 @@ class SAKEInteraction(nn.Module):
 
         self.v_mixing_mlp = Dense(self.nr_coefficients, 1, bias=False)
 
-        self.scale_factor_in_nanometer = scale_factor.to(unit.nanometer).m
+        self.scale_factor_in_nanometer = scale_factor.m_as(unit.nanometer)
 
     def update_edge(self, h_i_by_pair, h_j_by_pair, d_ij):
         """Compute intermediate edge features for semantic attention.

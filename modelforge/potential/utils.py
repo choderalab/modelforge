@@ -760,6 +760,7 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
             number_of_radial_basis_functions: int,
             max_distance: unit.Quantity,
             min_distance: unit.Quantity = 0.0 * unit.nanometer,
+            alpha: unit.Quantity = 1.0 * unit.angstrom,
             dtype: torch.dtype = torch.float32,
             trainable_centers_and_scale_factors: bool = False,
     ):
@@ -770,8 +771,12 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
             Number of radial basis functions to use.
         max_distance : unit.Quantity
             Maximum distance to consider for symmetry functions.
-        min_distance : unit.Quantity, optional
+        min_distance : unit.Quantity
             Minimum distance to consider, by default 0.0 * unit.nanometer.
+        alpha: unit.Quantity
+            Scale factor used to nondimensionalize the input to all exp calls. The PhysNet paper implicitly divides by 1
+            Angstrom within exponentials. Note that this is distinct from the unitless scale factors used outside the
+            exp but within the Gaussian.
         dtype : torch.dtype, optional
             Data type for computations, by default torch.float32.
         trainable_centers_and_scale_factors : bool, optional
@@ -785,10 +790,12 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
         )
         self._max_distance_in_nanometer = max_distance.to(unit.nanometer).m
         self._min_distance_in_nanometer = min_distance.to(unit.nanometer).m
+        self._alpha_in_nanometer = alpha.to(unit.nanometer).m
         radial_basis_centers = self.calculate_radial_basis_centers(
             number_of_radial_basis_functions,
             self._max_distance_in_nanometer,
             self._min_distance_in_nanometer,
+            self._alpha_in_nanometer,
             dtype,
         )
         # calculate scale factors
@@ -796,6 +803,7 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
             number_of_radial_basis_functions,
             self._max_distance_in_nanometer,
             self._min_distance_in_nanometer,
+            self._alpha_in_nanometer,
             dtype,
         )
 
@@ -811,19 +819,19 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
             number_of_radial_basis_functions,
             _max_distance_in_nanometer,
             _min_distance_in_nanometer,
+            _alpha_in_nanometer,
             dtype,
     ):
         # initialize centers according to the default values in PhysNet
         # (see mu_k in Figure 2 caption of https://pubs.acs.org/doi/10.1021/acs.jctc.9b00181)
-        # NOTE: Unlike RadialBasisFunctionWithCenters, the centers are unitless.
+        # NOTE: Unlike GaussianRadialBasisFunctionWithScaling, the centers are unitless.
 
         start_value = torch.exp(
             torch.scalar_tensor(
-                (-_max_distance_in_nanometer + _min_distance_in_nanometer) * 10,
+                (-_max_distance_in_nanometer + _min_distance_in_nanometer) / _alpha_in_nanometer,
                 dtype=dtype,
             )
-        )  # NOTE: the PhysNet paper implicitly multiplies by 1/Angstrom within the exp, so we multiply
-        # _max_distance_in_nanometers and _min_distance_in_nanometers by 10/nanometer
+        )
         centers = torch.linspace(
             start_value, 1, number_of_radial_basis_functions, dtype=dtype
         )
@@ -834,6 +842,7 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
             number_of_radial_basis_functions,
             _max_distance_in_nanometer,
             _min_distance_in_nanometer,
+            _alpha_in_nanometer,
             dtype,
     ):
         # initialize according to the default values in PhysNet (see beta_k in Figure 2 caption)
@@ -849,7 +858,7 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
                     * (
                             1
                             - math.exp(
-                        10 * (-_max_distance_in_nanometer + _min_distance_in_nanometer)
+                        (-_max_distance_in_nanometer + _min_distance_in_nanometer) / _alpha_in_nanometer
                     )
                     )
             )
@@ -863,7 +872,7 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
         # nanometers, so we multiply by 10/nanometer
 
         return (
-                torch.exp((-distances + self._min_distance_in_nanometer) * 10)
+                torch.exp((-distances + self._min_distance_in_nanometer) / self._alpha_in_nanometer)
                 - self.radial_basis_centers
         ) / self.radial_scale_factor
 

@@ -1,4 +1,6 @@
-from openff.units import unit, Quantity
+from typing import Union
+
+from openff.units import unit
 
 # define new context for converting energy (e.g., hartree)
 # to energy/mol (e.g., kJ/mol)
@@ -37,8 +39,8 @@ chem_context.add_transformation(
 )
 
 
-def _convert(val):
-    """Convert a string representation of a openff unit to a unit.Quantity"""
+def _convert(val: Union[unit.Quantity, str]) -> unit.Quantity:
+    """Convert a string representation of an OpenFF unit to a unit.Quantity"""
     if isinstance(val, str):
         return unit.Quantity(val)
     return val

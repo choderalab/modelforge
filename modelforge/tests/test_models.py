@@ -344,14 +344,14 @@ def test_forward_pass_with_all_datasets(model_name, dataset_name, datamodule_fac
 
     # test that the output has the following keys
     assert "E" in output
-    assert "E_i" in output
+    assert per_atom_energy in output
     assert "mse" in output
     assert "ase" in output
 
     assert output["E"].shape[0] == 64
     assert output["mse"].shape[0] == 64
     assert output["ase"].shape == batch.nnp_input.atomic_numbers.shape
-    assert output["E_i"].shape == batch.nnp_input.atomic_numbers.shape
+    assert output[per_atom_energy].shape == batch.nnp_input.atomic_numbers.shape
 
     pair_list = batch.nnp_input.pair_list
     # pairlist is in ascending order in row 0
@@ -396,12 +396,20 @@ def test_forward_pass(
     if "JAX" not in str(type(model)):
 
         # assert that the following tensor has equal values for dim=0 index 1 to 4 and 6 to 8
-        assert torch.allclose(output["E_i"][1:4], output["E_i"][1], atol=1e-5)
-        assert torch.allclose(output["E_i"][6:8], output["E_i"][6], atol=1e-5)
+        assert torch.allclose(
+            output[per_atom_energy][1:4], output[per_atom_energy][1], atol=1e-5
+        )
+        assert torch.allclose(
+            output[per_atom_energy][6:8], output[per_atom_energy][6], atol=1e-5
+        )
 
         # make sure that the total energy is \sum E_i
-        assert torch.allclose(output["E"][0], output["E_i"][0:5].sum(dim=0), atol=1e-5)
-        assert torch.allclose(output["E"][1], output["E_i"][5:9].sum(dim=0), atol=1e-5)
+        assert torch.allclose(
+            output["E"][0], output[per_atom_energy][0:5].sum(dim=0), atol=1e-5
+        )
+        assert torch.allclose(
+            output["E"][1], output[per_atom_energy][5:9].sum(dim=0), atol=1e-5
+        )
 
 
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())

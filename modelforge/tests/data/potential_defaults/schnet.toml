@@ -11,7 +11,6 @@ number_of_filters = 32
 shared_interactions = false
 
 [potential.postprocessing]
-[potential.postprocessing.energy]
+[potential.postprocessing.per_atom_energy]
 normalize = true
 from_atom_to_molecule_reduction = true
-

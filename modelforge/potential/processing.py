@@ -34,7 +34,11 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
 
     def __init__(
         self,
+        per_atom_property_name: str,
+        index_name: str,
+        output_name: str,
         reduction_mode: str = "sum",
+        keep_per_atom_property: bool = False,
     ):
         """
         Initializes the per-atom property readout_operation module.
@@ -42,10 +46,11 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         """
         super().__init__()
         self.reduction_mode = reduction_mode
+        self.per_atom_property_name = per_atom_property_name
+        self.output_name = output_name
+        self.index_name = index_name
 
-    def forward(
-        self, per_atom_property: torch.Tensor, index: torch.Tensor
-    ) -> torch.Tensor:
+    def forward(self, data: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
 
         Parameters
@@ -57,7 +62,8 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         -------
         Tensor, shape [nr_of_moleculs, 1], the per-molecule property.
         """
-        indices = index.to(torch.int64)
+        indices = data[self.index_name].to(torch.int64)
+        per_atom_property = data[self.per_atom_property_name]
         # Perform scatter add operation for atoms belonging to the same molecule
         property_per_molecule_zeros = torch.zeros(
             len(indices.unique()),
@@ -68,7 +74,11 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         property_per_molecule = property_per_molecule_zeros.scatter_reduce(
             0, indices, per_atom_property, reduce=self.reduction_mode
         )
-        return property_per_molecule
+        data[self.output_name] = property_per_molecule
+        if self.keep_per_atom_property is False:
+            del data[self.per_atom_property_name]
+
+        return data
 
 
 from dataclasses import dataclass, field
@@ -202,13 +212,8 @@ class CalculateAtomicSelfEnergy(torch.nn.Module):
                 key: unit.Quantity(value) for key, value in atomic_self_energies.items()
             }
         self.atomic_self_energies = AtomicSelfEnergies(atomic_self_energies)
-        self.reduction = FromAtomToMoleculeReduction(reduction_mode="sum")
 
-    def forward(
-        self,
-        atomic_numbers: torch.Tensor,
-        atomic_subsystem_indices: torch.Tensor,
-    ) -> torch.Tensor:
+    def forward(self, data: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
         Calculates the molecular self energy.
 
@@ -221,6 +226,8 @@ class CalculateAtomicSelfEnergy(torch.nn.Module):
         torch.Tensor
             The tensor containing the molecular self energy for each molecule.
         """
+        atomic_numbers = data["atomic_numbers"]
+        atomic_subsystem_indices = data["atomic_subsystem_indices"]
 
         atomic_subsystem_indices = atomic_subsystem_indices.to(
             dtype=torch.long, device=atomic_numbers.device
@@ -231,11 +238,9 @@ class CalculateAtomicSelfEnergy(torch.nn.Module):
             device=atomic_numbers.device
         )
 
-        # first, we need to use the atomic numbers to generate a tensor that
+        # use the atomic numbers to generate a tensor that
         # contains the atomic self energy for each atomic number
         ase_tensor = ase_tensor_for_indexing[atomic_numbers]
 
-        # then we need to sum over atoms to get the molecular self energy
-        per_molecule_self_energy = self.reduction(ase_tensor, atomic_subsystem_indices)
-
-        return per_molecule_self_energy
+        data["ase_tensor"] = ase_tensor
+        return data

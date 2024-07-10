@@ -83,7 +83,7 @@ def setup_modelforge_painn_representation(
             {
                 "step": "from_atom_to_molecule",
                 "mode": "sum",
-                "in": "E_i",
+                "in": per_atom_energy,
                 "index_key": "atomic_subsystem_indices",
                 "out": "E",
             }
@@ -463,7 +463,7 @@ def setup_mf_schnet_representation(
             {
                 "step": "from_atom_to_molecule",
                 "mode": "sum",
-                "in": "E_i",
+                "in": per_atom_energy,
                 "index_key": "atomic_subsystem_indices",
                 "out": "E",
             }

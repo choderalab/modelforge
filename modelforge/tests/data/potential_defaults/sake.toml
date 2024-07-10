@@ -12,8 +12,8 @@ number_of_spatial_attention_heads = 4
 
 processing_operation = [
   { in = [
-    "E_i",
-  ], out = "E_i", step = "normalization", mean = "E_i_mean", stddev = "E_i_mean" },
+    per_atom_energy,
+  ], out = per_atom_energy, step = "normalization", mean = "E_i_mean", stddev = "E_i_mean" },
   { in = [
     "atomic_numbers",
     'atomic_subsystem_indices',

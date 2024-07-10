@@ -562,12 +562,8 @@ class NeuralNetworkPotentialFactory:
 
         log.debug(f"{training_parameter=}")
         log.debug(f"{model_parameter=}")
-        # get model
-        model_type = model_parameter["model_name"]
-        nnp_class: Type = _Implemented_NNPs.get_neural_network_class(model_type)
 
-        # add modifications to NNP if requested
-
+        # obtain model for training
         if use == "training":
             if simulation_environment == "JAX":
                 log.warning(
@@ -580,11 +576,10 @@ class NeuralNetworkPotentialFactory:
                 dataset_statistic=dataset_statistic,
             )
             return model
+        # obtain model for inference
         elif use == "inference":
-            # if this model_parameter dictionary ahs already been used
-            # for training the `model_name` might have been set
-            if "model_name" in model_parameter:
-                del model_parameter["model_name"]
+            model_type = model_parameter["model_name"]
+            nnp_class: Type = _Implemented_NNPs.get_neural_network_class(model_type)
             model = nnp_class(
                 **model_parameter["core_parameter"],
                 postprocessing_parameter=model_parameter["postprocessing"],
@@ -694,7 +689,7 @@ from torch.nn import ModuleDict
 
 class PostProcessing(torch.nn.Module):
 
-    _SUPPORTED_PROPERTIES = ["energy"]
+    _SUPPORTED_PROPERTIES = ["per_atom_energy"]
     _SUPPORTED_OPERATIONS = ["normalize", "from_atom_to_molecule_reduction"]
 
     def __init__(
@@ -712,7 +707,7 @@ class PostProcessing(torch.nn.Module):
         super().__init__()
 
         self._registered_properties: List[str] = []
-        
+
         # operations that use nn.Sequence to pass the output of the model to the next
         self.registered_chained_operations = ModuleDict()
         # operations that don't requre any nn.Sequence
@@ -725,7 +720,7 @@ class PostProcessing(torch.nn.Module):
         )
 
     def _get_mean_and_stddev_of_dataset(self) -> Tuple[float, float]:
-        
+
         if self.dataset_statistic is None:
             mean = 0.0
             stddev = 1.0
@@ -764,15 +759,27 @@ class PostProcessing(torch.nn.Module):
         # register operations
         for property, operations in postprocessing_parameter.items():
             postprocessing_sequence = torch.nn.Sequential()
+            prostprocessing_sequence_names = []
 
             for operation in operations:
-                if operation.lower() == "normalize":
+                if operation.lower() == "normalize" and property == "per_atom_energy":
                     mean, stddev = self._get_mean_and_stddev_of_dataset()
                     postprocessing_sequence.append(
                         ScaleValues(mean=mean, stddev=stddev)
                     )
-                elif operation.lower() == "from_atom_to_molecule_reduction":
-                    postprocessing_sequence.append(FromAtomToMoleculeReduction())
+                    prostprocessing_sequence_names.append(operation)
+                    # check if also reduction is requested
+                    for operation in operations:
+                        if operation.lower() == "from_atom_to_molecule_reduction":
+                            postprocessing_sequence.append(
+                                FromAtomToMoleculeReduction(
+                                    per_atom_property_name="per_atom_energy",
+                                    index_name="atomic_subsystem_indices",
+                                    output_name="per_molecule_energy",
+                                )
+                            )
+                            prostprocessing_sequence_names.append(operation)
+
                 elif operation.lower() == "calculate_atomic_self_energy":
                     atomic_self_energies = self.dataset_statistic[
                         "atomic_self_energies"
@@ -780,32 +787,36 @@ class PostProcessing(torch.nn.Module):
                     postprocessing_sequence.append(
                         CalculateAtomicSelfEnergy(atomic_self_energies)()
                     )
+                    prostprocessing_sequence_names.append(operation)
 
-                else:
-                    raise ValueError(
-                        f"Operation {operation} is not implemented. Supported properties are {self._SUPPORTED_OPERATIONS}"
+                    postprocessing_sequence.append(
+                        FromAtomToMoleculeReduction(
+                            per_atom_property_name="ase_tensor",
+                            index_name="atomic_subsystem_indices",
+                            output_name="per_molecule_self_energy",
+                        )
                     )
+
+                elif (
+                    operation.lower() == "from_atom_to_molecule_reduction"
+                    and operation.lower() not in prostprocessing_sequence_names
+                ):
+                    postprocessing_sequence.append(FromAtomToMoleculeReduction())
+                    prostprocessing_sequence_names.append(operation)
+
+            log.debug(prostprocessing_sequence_names)
 
             self.registered_chained_operations[property] = postprocessing_sequence
 
     def forward(self, outputs: Dict[str, torch.Tensor]):
         """
-        Perform post-processing operations on per-atom properties and reduction operations to calculate per-molecule properties.
+        Perform post-processing operations for all registered properties.
         """
-        for property, processing in zip(
-            self.per_atom_operations_prop, self.per_atom_operations
-        ):
-            inputs = [outputs[in_key] for in_key in property["in"]]
-            outputs[property["out"]] = processing(*inputs)
 
-        # if per atom properties need to be combined
-        # TODO: Not Implemented yet!
-
-        # perform readout_operation on properties
-        for property, processing in zip(self.readout_prop, self.readout_operation):
-            outputs[property["out"]] = processing(
-                outputs[property["in"]], outputs[property["index_key"]]
-            )
+        a = 7
+        for key, value in outputs.items():
+            if key in self._registered_properties:
+                outputs[key] = self.registered_chained_operations[key](outputs[key])
 
         return outputs
 

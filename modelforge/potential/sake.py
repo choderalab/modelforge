@@ -171,7 +171,10 @@ class SAKECore(CoreNetwork):
         # Use squeeze to remove dimensions of size 1
         E_i = self.energy_layer(h).squeeze(1)
 
-        return {"E_i": E_i, "atomic_subsystem_indices": data.atomic_subsystem_indices}
+        return {
+            per_atom_energy: E_i,
+            "atomic_subsystem_indices": data.atomic_subsystem_indices,
+        }
 
 
 class SAKEInteraction(nn.Module):

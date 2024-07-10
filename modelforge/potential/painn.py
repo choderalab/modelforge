@@ -205,7 +205,7 @@ class PaiNNCore(CoreNetwork):
         E_i = self.energy_layer(q).squeeze(1)
 
         return {
-            "E_i": E_i,
+            per_atom_energy: E_i,
             "mu": mu,
             "q": q,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,

@@ -540,7 +540,7 @@ class ANI2xCore(CoreNetwork):
         E_i = self.interaction_modules(representation)
 
         return {
-            "E_i": E_i,
+            per_atom_energy: E_i,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
 

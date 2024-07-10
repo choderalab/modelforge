@@ -153,7 +153,6 @@ import torch
 from modelforge.tests.test_schnet import setup_single_methane_input
 
 
-
 def setup_representation(
     cutoff, nr_atom_basis, number_of_gaussians, nr_of_interactions
 ):
@@ -176,7 +175,7 @@ def setup_representation(
             {
                 "step": "from_atom_to_molecule",
                 "mode": "sum",
-                "in": "E_i",
+                "in": per_atom_energy,
                 "index_key": "atomic_subsystem_indices",
                 "out": "E",
             }
@@ -220,9 +219,7 @@ def test_compare_representation():
     torch.manual_seed(1234)
     model.core_module.representation_module.filter_net.reset_parameters()
 
-    calculated_results = model.core_module.forward(
-        prepared_input, pairlist_output
-    )
+    calculated_results = model.core_module.forward(prepared_input, pairlist_output)
     reference_results = load_precalculated_painn_results()
 
     # check that the scalar and vector representations are the same

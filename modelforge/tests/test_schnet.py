@@ -229,7 +229,7 @@ def test_compare_forward():
         d_ij / 10
     )  # NOTE: converting to nm
 
-    assert torch.allclose(reference_phi_ij, calculated_phi_ij, atol=1e-3)
+    assert torch.allclose(reference_phi_ij.squeeze(1), calculated_phi_ij, atol=1e-3)
     # ---------------------------------------- #
     # test cutoff
     # ---------------------------------------- #

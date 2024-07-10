@@ -117,7 +117,7 @@ class SAKECore(CoreNetwork):
                 cutoff=cutoff,
                 number_of_radial_basis_functions=number_of_radial_basis_functions,
                 epsilon=epsilon,
-                scale_factor=1.0,
+                scale_factor=(1.0 * unit.nanometer),  # TODO: switch to angstrom
             )
             for _ in range(self.nr_interaction_blocks)
         )
@@ -197,7 +197,7 @@ class SAKEInteraction(nn.Module):
         cutoff: unit.Quantity,
         number_of_radial_basis_functions: int,
         epsilon: float,
-        scale_factor: float,
+        scale_factor: unit.Quantity,
     ):
         """
         Parameters
@@ -226,8 +226,8 @@ class SAKEInteraction(nn.Module):
             Number of radial basis functions.
         epsilon : float
             Small constant to add for stability.
-        scale_factor : float
-            Magnitude of the multiplier (in units nanometer) used to nondimensionalize distances before being
+        scale_factor : unit.Quantity
+            Factor with dimensions of length used to nondimensionalize distances before being
             passed directly into linear layers.
         """
         super().__init__()
@@ -311,7 +311,7 @@ class SAKEInteraction(nn.Module):
 
         self.v_mixing_mlp = Dense(self.nr_coefficients, 1, bias=False)
 
-        self.scale_factor = scale_factor
+        self.scale_factor_in_nanometer = scale_factor.to(unit.nanometer).m
 
     def update_edge(self, h_i_by_pair, h_j_by_pair, d_ij):
         """Compute intermediate edge features for semantic attention.
@@ -337,7 +337,7 @@ class SAKEInteraction(nn.Module):
             h_ij_cat
         )
         return self.edge_mlp_out(
-            torch.cat([h_ij_cat, h_ij_filtered, d_ij.unsqueeze(-1) / self.scale_factor], dim=-1)
+            torch.cat([h_ij_cat, h_ij_filtered, d_ij.unsqueeze(-1) / self.scale_factor_in_nanometer], dim=-1)
         )
 
     def update_node(self, h, h_i_semantic, h_i_spatial):

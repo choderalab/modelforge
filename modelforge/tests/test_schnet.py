@@ -63,7 +63,7 @@ def test_compare_representation():
     cutoff = unit.Quantity(5.2, unit.angstrom)
     start = unit.Quantity(0.8, unit.angstrom)
 
-    radial_symmetry_function_module = SchnetRadialBasisFunction(
+    rbf_module = SchnetRadialBasisFunction(
         number_of_radial_basis_functions=number_of_gaussians,
         max_distance=cutoff,
         min_distance=start,
@@ -73,7 +73,7 @@ def test_compare_representation():
     d_ij = torch.tensor([[1.0077], [4.2496], [2.8202], [3.4342], [9.2465]])
 
     # this has been calculated with schnetpack2.0
-    schnetpack_rbf_output = torch.tensor(
+    reference_rbf_output = torch.tensor(
         [
             [
                 [
@@ -149,8 +149,8 @@ def test_compare_representation():
     )
 
     assert torch.allclose(
-        schnetpack_rbf_output,
-        radial_symmetry_function_module(d_ij / 10).unsqueeze(1),
+        reference_rbf_output,
+        rbf_module(d_ij / 10).unsqueeze(1),
         atol=1e-5,
     )  # NOTE: there is a shape mismatch between the two outputs
 
@@ -178,23 +178,21 @@ def test_compare_forward():
     # set up the input for the spk Schnet model
     input = setup_single_methane_input()
     spk_input = input["spk_methane_input"]
-    mf_nnp_input = input["modelforge_methane_input"]
+    model_input = input["modelforge_methane_input"]
 
-    modelforge_schnet.input_preparation._input_checks(mf_nnp_input)
+    modelforge_schnet.input_preparation._input_checks(model_input)
 
-    pairlist_output = modelforge_schnet.input_preparation.prepare_inputs(mf_nnp_input)
-    schnet_nn_input_mf = (
-        modelforge_schnet.core_module._model_specific_input_preparation(
-            mf_nnp_input, pairlist_output
-        )
+    pairlist_output = modelforge_schnet.input_preparation.prepare_inputs(model_input)
+    prepared_input = modelforge_schnet.core_module._model_specific_input_preparation(
+        model_input, pairlist_output
     )
 
     # ---------------------------------------- #
     # test neighborlist and distance
     # ---------------------------------------- #
-    assert torch.allclose(spk_input["_Rij"] / 10, schnet_nn_input_mf.r_ij, atol=1e-4)
-    assert torch.allclose(spk_input["_idx_i"], schnet_nn_input_mf.pair_indices[0])
-    assert torch.allclose(spk_input["_idx_j"], schnet_nn_input_mf.pair_indices[1])
+    assert torch.allclose(spk_input["_Rij"] / 10, prepared_input.r_ij, atol=1e-4)
+    assert torch.allclose(spk_input["_idx_i"], prepared_input.pair_indices[0])
+    assert torch.allclose(spk_input["_idx_j"], prepared_input.pair_indices[1])
 
     # ---------------------------------------- #
     # test radial symmetry function
@@ -202,7 +200,7 @@ def test_compare_forward():
     r_ij = spk_input["_Rij"]
     d_ij = torch.norm(r_ij, dim=1, keepdim=True)
 
-    schnetpack_phi_ij = torch.tensor(
+    reference_phi_ij = torch.tensor(
         [
             [[0.6828, 0.9920, 0.5302, 0.1043, 0.0075]],
             [[0.6828, 0.9920, 0.5302, 0.1043, 0.0075]],
@@ -227,15 +225,15 @@ def test_compare_forward():
         ],
         dtype=torch.float64,
     )
-    modelforge_phi_ij = modelforge_schnet.core_module.schnet_representation_module.radial_symmetry_function_module(
+    calculated_phi_ij = modelforge_schnet.core_module.schnet_representation_module.radial_symmetry_function_module(
         d_ij / 10
     )  # NOTE: converting to nm
 
-    assert torch.allclose(schnetpack_phi_ij, modelforge_phi_ij.unsqueeze(1), atol=1e-3)
+    assert torch.allclose(reference_phi_ij, calculated_phi_ij, atol=1e-3)
     # ---------------------------------------- #
     # test cutoff
     # ---------------------------------------- #
-    fcut_spk = torch.tensor(
+    reference_fcut = torch.tensor(
         [
             [0.8869],
             [0.8869],
@@ -260,10 +258,12 @@ def test_compare_forward():
         ],
         dtype=torch.float64,
     )
-    fcut_mf = modelforge_schnet.core_module.schnet_representation_module.cutoff_module(
-        d_ij / 10
+    calculated_fcut = (
+        modelforge_schnet.core_module.schnet_representation_module.cutoff_module(
+            d_ij / 10
+        )
     )  # NOTE: converting to nm
-    assert torch.allclose(fcut_spk, fcut_mf, atol=1e-4)
+    assert torch.allclose(reference_fcut, calculated_fcut, atol=1e-4)
 
     # ---------------------------------------- #
     # test forward pass
@@ -283,15 +283,15 @@ def test_compare_forward():
                 j
             ].reset_parameters()
 
-    modelforge_results = modelforge_schnet.core_module.forward(
-        schnet_nn_input_mf, pairlist_output
+    calculated_results = modelforge_schnet.core_module.forward(
+        model_input, pairlist_output
     )
-    schnetpack_results = load_precalculated_schnet_results()
+    reference_results = load_precalculated_schnet_results()
     assert (
-        schnetpack_results["scalar_representation"].shape
-        == modelforge_results["scalar_representation"].shape
+        reference_results["scalar_representation"].shape
+        == calculated_results["scalar_representation"].shape
     )
 
-    scalar_spk = schnetpack_results["scalar_representation"]
-    scalar_mf = modelforge_results["scalar_representation"]
+    scalar_spk = reference_results["scalar_representation"]
+    scalar_mf = calculated_results["scalar_representation"]
     assert torch.allclose(scalar_spk, scalar_mf, atol=1e-4)

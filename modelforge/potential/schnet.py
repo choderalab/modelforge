@@ -363,7 +363,7 @@ class SchNETRepresentation(nn.Module):
         return {"f_ij": f_ij, "f_cutoff": f_cutoff}
 
 
-from typing import List
+from typing import List, Union
 
 
 class SchNet(BaseNetwork):
@@ -373,7 +373,7 @@ class SchNet(BaseNetwork):
         number_of_atom_features: int,
         number_of_radial_basis_functions: int,
         number_of_interaction_modules: int,
-        cutoff: unit.Quantity,
+        cutoff: Union[unit.Quantity, str],
         number_of_filters: int,
         shared_interactions: bool,
         processing_operation: List[Dict[str, str]],

@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING, Dict, Optional, Union
 
 import torch
 from loguru import logger as log
@@ -584,7 +584,7 @@ class PhysNet(BaseNetwork):
     def __init__(
         self,
         max_Z: int,
-        cutoff: unit.Quantity,
+        cutoff: Union[unit.Quantity, str],
         number_of_atom_features: int,
         number_of_radial_basis_functions: int,
         number_of_interaction_residual: int,

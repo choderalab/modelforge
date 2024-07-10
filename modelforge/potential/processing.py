@@ -199,10 +199,10 @@ class CalculateAtomicSelfEnergy(torch.nn.Module):
         # if values in atomic_self_energies are strings convert them to kJ/mol
         if isinstance(list(atomic_self_energies.values())[0], str):
             atomic_self_energies = {
-                key: unit.Quantity(value)
-                for key, value in atomic_self_energies.items()
+                key: unit.Quantity(value) for key, value in atomic_self_energies.items()
             }
         self.atomic_self_energies = AtomicSelfEnergies(atomic_self_energies)
+        self.reduction = FromAtomToMoleculeReduction(reduction_mode="sum")
 
     def forward(
         self,
@@ -235,4 +235,7 @@ class CalculateAtomicSelfEnergy(torch.nn.Module):
         # contains the atomic self energy for each atomic number
         ase_tensor = ase_tensor_for_indexing[atomic_numbers]
 
-        return ase_tensor
+        # then we need to sum over atoms to get the molecular self energy
+        per_molecule_self_energy = self.reduction(ase_tensor, atomic_subsystem_indices)
+
+        return per_molecule_self_energy

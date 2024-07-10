@@ -370,19 +370,16 @@ def test_forward_pass(
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
     # read default parameters
-    config = load_configs(f"{model_name.lower()}_without_ase", "qm9")
+    config = load_configs(f"{model_name.lower()}", "qm9")
 
     # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
-    # Setup loss
-    from modelforge.train.training import return_toml_config
+    model_parameter = config["potential"]
 
     # test the forward pass through each of the models
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
-        model_type=model_name,
         simulation_environment=simulation_environment,
-        model_parameter=potential_parameter,
+        model_parameter=model_parameter,
     )
     if "JAX" in str(type(model)):
         nnp_input = nnp_input.as_jax_namedtuple()

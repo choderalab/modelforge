@@ -281,8 +281,6 @@ class TrainingAdapter(pl.LightningModule):
                 "NNP name must be specified in nnp_parameters with key 'model_name'."
             )
         nnp_class: Type = _Implemented_NNPs.get_neural_network_class(model_name)
-        if nnp_class is None:
-            raise ValueError(f"Specified NNP name '{model_name}' is not implemented.")
 
         self.model = nnp_class(
             **model_parameter_,

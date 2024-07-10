@@ -467,11 +467,21 @@ class PyTorch2JAXConverter:
             A tuple containing the JAX function, parameters, and buffers.
         """
 
-        import functorch
-        import jax
-        from functorch import make_functional_with_buffers
+        # make sure
+        from modelforge.utils.io import import_, check_import
+
+        jax = import_(
+            "jax"
+        )  # use the wrapper to import jax, so we can provide install notes if not in the env
+        check_import(
+            "pytorch2jax"
+        )  # use the wrapper to check if pytorch2jax is in the environment
+
         from jax import custom_vjp
         from pytorch2jax.pytorch2jax import convert_to_jax, convert_to_pyt
+
+        import functorch
+        from functorch import make_functional_with_buffers
 
         # Convert the PyTorch model to a functional representation and extract the model function and parameters
         model_fn, model_params, model_buffer = make_functional_with_buffers(
@@ -781,7 +791,9 @@ class PostProcessing(torch.nn.Module):
         """
         Perform post-processing operations on per-atom properties and reduction operations to calculate per-molecule properties.
         """
-        for property, processing in zip(self.per_atom_operations_prop, self.per_atom_operations):
+        for property, processing in zip(
+            self.per_atom_operations_prop, self.per_atom_operations
+        ):
             inputs = [outputs[in_key] for in_key in property["in"]]
             outputs[property["out"]] = processing(*inputs)
 
@@ -798,7 +810,6 @@ class PostProcessing(torch.nn.Module):
 
 
 class BaseNetwork(Module):
-
     def __init__(
         self,
         *,
@@ -904,7 +915,6 @@ class BaseNetwork(Module):
 
 
 class CoreNetwork(Module, ABC):
-
     def __init__(
         self,
     ):

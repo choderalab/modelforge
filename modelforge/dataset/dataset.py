@@ -147,6 +147,9 @@ class NNPInput:
 
         from dataclasses import dataclass, fields
         import collections
+        from modelforge.utils.io import check_import
+
+        check_import("pytorch2jax")
         from pytorch2jax.pytorch2jax import convert_to_jax
 
         NNPInputTuple = collections.namedtuple(
@@ -450,7 +453,6 @@ class HDF5Dataset:
         with gzip.open(
             f"{self.local_cache_dir}/{self.gz_data_file['name']}", "rb"
         ) as gz_file:
-
             from modelforge.utils.misc import OpenWithLock
 
             # rather than locking the file we are writing, we will create a lockfile.  the _from_hdf5 function will
@@ -625,7 +627,6 @@ class HDF5Dataset:
             f"{self.local_cache_dir}/{self.hdf5_data_file['name']}.lockfile", "w"
         ) as lock_file:
             with h5py.File(temp_hdf5_file, "r") as hf:
-
                 # create dicts to store data for each format type
                 single_rec_data: Dict[str, List[np.ndarray]] = OrderedDict()
                 # value shapes: (*)
@@ -672,9 +673,9 @@ class HDF5Dataset:
 
                         if all(property_found):
                             # we want to exclude conformers with NaN values for any property of interest
-                            configs_nan_by_prop: Dict[str, np.ndarray] = (
-                                OrderedDict()
-                            )  # ndarray.size (n_configs, )
+                            configs_nan_by_prop: Dict[
+                                str, np.ndarray
+                            ] = OrderedDict()  # ndarray.size (n_configs, )
                             for value in list(series_mol_data.keys()) + list(
                                 series_atom_data.keys()
                             ):
@@ -929,7 +930,6 @@ class DatasetFactory:
             and not data.force_download
             and not data.regenerate_cache
         ):
-
             data._from_file_cache()
         # check to see if the hdf5 file exists and the checksum matches
         elif (
@@ -981,7 +981,6 @@ from openff.units import unit
 
 
 class DataModule(pl.LightningDataModule):
-
     def __init__(
         self,
         name: Literal[
@@ -1138,7 +1137,6 @@ class DataModule(pl.LightningDataModule):
     def _log_dataset_statistic(self, dataset_statistic):
         """Save the dataset statistics to a file with units"""
         import toml
-        
 
         # cast units to string
         atomic_self_energies = {
@@ -1147,7 +1145,9 @@ class DataModule(pl.LightningDataModule):
         }
         # cast float and kJ/mol on pytorch tensors and then convert to string
         atomic_energies_stats = {
-            key: str(unit.Quantity(value.item(), unit.kilojoule_per_mole)) if isinstance(value, torch.Tensor) else value
+            key: str(unit.Quantity(value.item(), unit.kilojoule_per_mole))
+            if isinstance(value, torch.Tensor)
+            else value
             for key, value in dataset_statistic["atomic_energies_stats"].items()
         }
 
@@ -1170,17 +1170,13 @@ class DataModule(pl.LightningDataModule):
         """Read the atomic self energies from a file."""
         from modelforge.potential.processing import load_atomic_self_energies
 
-        return load_atomic_self_energies(
-            self.dataset_statistic_filename
-        )
+        return load_atomic_self_energies(self.dataset_statistic_filename)
 
     def _read_atomic_energies_stats(self) -> Dict[str, torch.Tensor]:
         """Read the atomic energies statistics from a file."""
         from modelforge.potential.processing import load_atomic_energies_stats
 
-        return load_atomic_energies_stats(
-            self.dataset_statistic_filename
-        )
+        return load_atomic_energies_stats(self.dataset_statistic_filename)
 
     def _create_torch_dataset(self, dataset):
         """Create a PyTorch dataset from the provided dataset instance."""
@@ -1201,12 +1197,9 @@ class DataModule(pl.LightningDataModule):
     def _calculate_atomic_self_energies(
         self, torch_dataset, dataset_ase
     ) -> Dict[str, float]:
-
         # Use provided ase dictionary
         if self.dict_atomic_self_energies:
-            log.info(
-                "Using atomic self energies from the provided dictionary."
-            )
+            log.info("Using atomic self energies from the provided dictionary.")
             return self.dict_atomic_self_energies
 
         # Use regression to calculate ase
@@ -1233,9 +1226,11 @@ class DataModule(pl.LightningDataModule):
         """Sets up datasets for the train, validation, and test stages based on the stage argument."""
 
         self.torch_dataset = torch.load("torch_dataset.pt")
-        self.train_dataset, self.val_dataset, self.test_dataset = (
-            self.splitting_strategy.split(self.torch_dataset)
-        )
+        (
+            self.train_dataset,
+            self.val_dataset,
+            self.test_dataset,
+        ) = self.splitting_strategy.split(self.torch_dataset)
 
     def calculate_self_energies(
         self, torch_dataset: TorchDataset, collate: bool = True
@@ -1314,10 +1309,11 @@ class DataModule(pl.LightningDataModule):
             ),
             desc="Calculating pairlist for dataset",
         ):
-            pairs_batch, n_pairs_batch = (
-                self.pairlist.construct_initial_pairlist_using_numpy(
-                    batch.nnp_input.atomic_subsystem_indices.to("cpu")
-                )
+            (
+                pairs_batch,
+                n_pairs_batch,
+            ) = self.pairlist.construct_initial_pairlist_using_numpy(
+                batch.nnp_input.atomic_subsystem_indices.to("cpu")
             )
             all_pairs.append(torch.from_numpy(pairs_batch))
             n_pairs_per_molecule_list.append(torch.from_numpy(n_pairs_batch))

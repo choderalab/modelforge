@@ -1,4 +1,8 @@
 import torch
+
+from modelforge.utils.io import check_import
+
+check_import("ray")
 from ray import air, tune
 from ray.tune.schedulers import ASHAScheduler
 
@@ -61,7 +65,6 @@ def tune_model(
 
 
 class RayTuner:
-
     def __init__(self, model) -> None:
         self.model = model
 
@@ -176,6 +179,11 @@ class RayTuner:
         Tune experiment analysis object
             The result of the hyperparameter tuning session, containing performance metrics and the best hyperparameters found.
         """
+        from modelforge.utils.io import check_import
+
+        check_import(
+            "ray"
+        )  # check that ray is installed before trying to import submodules
 
         from ray import tune
         from ray.tune.schedulers import ASHAScheduler

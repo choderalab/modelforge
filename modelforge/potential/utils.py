@@ -10,6 +10,7 @@ from pint import Quantity
 from typing import Union
 from modelforge.dataset.dataset import NNPInput
 
+
 @dataclass
 class NeuralNetworkData:
     pair_indices: torch.Tensor
@@ -20,7 +21,6 @@ class NeuralNetworkData:
     positions: torch.Tensor
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
-
 
 
 import torch
@@ -74,7 +74,11 @@ class BatchData:
 
 
 def shared_config_prior():
-    import ray
+    from modelforge.utils.io import check_import
+
+    check_import(
+        "ray"
+    )  # check that ray is installed before trying to import submodules
     from ray import tune
 
     return {
@@ -722,7 +726,6 @@ class SAKERadialSymmetryFunction(RadialSymmetryFunction):
 
 
 class SAKERadialBasisFunction(RadialBasisFunction):
-
     def __init__(self, min_distance):
         super().__init__()
         self._min_distance_in_nanometer = min_distance.to(unit.nanometer).m
@@ -733,7 +736,6 @@ class SAKERadialBasisFunction(RadialBasisFunction):
         centers: torch.Tensor,
         scale_factors: torch.Tensor,
     ) -> torch.Tensor:
-
         return torch.exp(
             -scale_factors
             * (
@@ -747,7 +749,6 @@ class SAKERadialBasisFunction(RadialBasisFunction):
 
 
 class PhysNetRadialSymmetryFunction(SAKERadialSymmetryFunction):
-
     def __init__(
         self,
         number_of_radial_basis_functions: int,

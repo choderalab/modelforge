@@ -548,7 +548,6 @@ from typing import Optional, List
 
 
 class SAKE(BaseNetwork):
-
     def __init__(
         self,
         max_Z: int,
@@ -586,6 +585,11 @@ class SAKE(BaseNetwork):
 
     def _config_prior(self):
         log.info("Configuring SAKE model hyperparameter prior distribution")
+        from modelforge.utils.io import check_import
+
+        check_import(
+            "ray"
+        )  # check that ray is installed before trying to import submodules
         from ray import tune
 
         from modelforge.potential.utils import shared_config_prior

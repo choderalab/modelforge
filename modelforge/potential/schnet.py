@@ -121,11 +121,6 @@ class SchNetCore(CoreNetwork):
 
         self.embedding_module = Embedding(max_Z, number_of_atom_features)
 
-        # initialize the energy readout_operation
-        from .processing import FromAtomToMoleculeReduction
-
-        self.readout_module = FromAtomToMoleculeReduction()
-
         # Initialize representation block
         self.schnet_representation_module = SchNETRepresentation(
             cutoff, number_of_radial_basis_functions
@@ -196,6 +191,7 @@ class SchNetCore(CoreNetwork):
         representation = self.schnet_representation_module(data.d_ij)
         data.f_ij = representation["f_ij"]
         data.f_cutoff = representation["f_cutoff"]
+
         x = data.atomic_embedding
         # Iterate over interaction blocks to update features
         for interaction in self.interaction_modules:

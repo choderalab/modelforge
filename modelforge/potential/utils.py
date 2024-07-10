@@ -788,22 +788,21 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
             trainable_prefactor=False,
             dtype=dtype,
         )
-        self._max_distance_in_nanometer = max_distance.to(unit.nanometer).m
         self._min_distance_in_nanometer = min_distance.to(unit.nanometer).m
         self._alpha_in_nanometer = alpha.to(unit.nanometer).m
         radial_basis_centers = self.calculate_radial_basis_centers(
             number_of_radial_basis_functions,
-            self._max_distance_in_nanometer,
-            self._min_distance_in_nanometer,
-            self._alpha_in_nanometer,
+            max_distance,
+            min_distance,
+            alpha,
             dtype,
         )
         # calculate scale factors
         radial_scale_factor = self.calculate_radial_scale_factor(
             number_of_radial_basis_functions,
-            self._max_distance_in_nanometer,
-            self._min_distance_in_nanometer,
-            self._alpha_in_nanometer,
+            max_distance,
+            min_distance,
+            alpha,
             dtype,
         )
 
@@ -817,9 +816,9 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
     @staticmethod
     def calculate_radial_basis_centers(
             number_of_radial_basis_functions,
-            _max_distance_in_nanometer,
-            _min_distance_in_nanometer,
-            _alpha_in_nanometer,
+            max_distance,
+            min_distance,
+            alpha,
             dtype,
     ):
         # initialize centers according to the default values in PhysNet
@@ -828,7 +827,7 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
 
         start_value = torch.exp(
             torch.scalar_tensor(
-                (-_max_distance_in_nanometer + _min_distance_in_nanometer) / _alpha_in_nanometer,
+                ((-max_distance + min_distance) / alpha).to('').m,
                 dtype=dtype,
             )
         )
@@ -840,9 +839,9 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
     @staticmethod
     def calculate_radial_scale_factor(
             number_of_radial_basis_functions,
-            _max_distance_in_nanometer,
-            _min_distance_in_nanometer,
-            _alpha_in_nanometer,
+            max_distance,
+            min_distance,
+            alpha,
             dtype,
     ):
         # initialize according to the default values in PhysNet (see beta_k in Figure 2 caption)
@@ -858,7 +857,7 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
                     * (
                             1
                             - math.exp(
-                        (-_max_distance_in_nanometer + _min_distance_in_nanometer) / _alpha_in_nanometer
+                        ((-max_distance + min_distance) / alpha).to('').m
                     )
                     )
             )

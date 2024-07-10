@@ -66,4 +66,6 @@ def test_compare_representation():
     D = np.array([[1.0394776], [3.375541]], dtype=np.float32)
 
     mf_rbf_output = mf_rbf(torch.tensor(D / 10))
+    print(f"{mf_rbf_output=}")
+    print(f"{pn_rbf_output=}")
     assert np.allclose(np.flip(pn_rbf_output.squeeze(), axis=1), mf_rbf_output.numpy())

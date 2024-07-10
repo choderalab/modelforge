@@ -765,7 +765,12 @@ class PostProcessing(torch.nn.Module):
                 if operation.lower() == "normalize" and property == "per_atom_energy":
                     mean, stddev = self._get_mean_and_stddev_of_dataset()
                     postprocessing_sequence.append(
-                        ScaleValues(mean=mean, stddev=stddev)
+                        ScaleValues(
+                            mean=mean,
+                            stddev=stddev,
+                            property="per_atom_energy",
+                            output_name="per_atom_energy",
+                        )
                     )
                     prostprocessing_sequence_names.append(operation)
                     # check if also reduction is requested
@@ -808,17 +813,19 @@ class PostProcessing(torch.nn.Module):
 
             self.registered_chained_operations[property] = postprocessing_sequence
 
-    def forward(self, outputs: Dict[str, torch.Tensor]):
+    def forward(self, data: Dict[str, torch.Tensor]):
         """
         Perform post-processing operations for all registered properties.
         """
 
-        a = 7
-        for key, value in outputs.items():
-            if key in self._registered_properties:
-                outputs[key] = self.registered_chained_operations[key](outputs[key])
 
-        return outputs
+        # NOTE: this is not very elegant, but I am unsure how to do this better
+        # I am currently directly writing new keys and values in the data dictionary
+        for property in list(data.keys()):
+            if property in self._registered_properties:
+                self.registered_chained_operations[property](data)
+
+        return data
 
 
 class BaseNetwork(Module):

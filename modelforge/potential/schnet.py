@@ -206,7 +206,7 @@ class SchNetCore(CoreNetwork):
         E_i = self.energy_layer(x).squeeze(1)
 
         return {
-            per_atom_energy: E_i,
+            'per_atom_energy': E_i,
             "scalar_representation": x,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }

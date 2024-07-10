@@ -49,8 +49,9 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         self.per_atom_property_name = per_atom_property_name
         self.output_name = output_name
         self.index_name = index_name
+        self.keep_per_atom_property = keep_per_atom_property
 
-    def forward(self, data: Dict[str, torch.Tensor]) -> torch.Tensor:
+    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
 
         Parameters
@@ -177,13 +178,17 @@ class AtomicSelfEnergies:
 
 class ScaleValues(torch.nn.Module):
 
-    def __init__(self, mean: float, stddev: float) -> None:
+    def __init__(
+        self, mean: float, stddev: float, property: str, output_name: str
+    ) -> None:
 
         super().__init__()
         self.register_buffer("mean", torch.tensor([mean]))
         self.register_buffer("stddev", torch.tensor([stddev]))
+        self.property = property
+        self.output_name = output_name
 
-    def forward(self, values_to_be_scaled: torch.Tensor) -> torch.Tensor:
+    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
         Rescales values using the provided mean and stddev.
 
@@ -198,7 +203,8 @@ class ScaleValues(torch.nn.Module):
             The rescaled values.
         """
 
-        return values_to_be_scaled * self.stddev + self.mean
+        data[self.output_name] = data[self.property] * self.stddev + self.mean
+        return data
 
 
 class CalculateAtomicSelfEnergy(torch.nn.Module):

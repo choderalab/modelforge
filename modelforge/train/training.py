@@ -14,7 +14,7 @@ from torch import nn
 from torch_scatter import scatter_sum
 
 
-class PerAtomToPerMoleculeError(nn.Module):
+class FromPerAtomToPerMoleculeError(nn.Module):
     """
     Calculates the per-atom error and aggregates it to per-molecule mean squared error.
 
@@ -121,7 +121,7 @@ class Loss(nn.Module):
         Module dictionary containing the loss functions for each property.
     """
 
-    _SUPPORTED_PROPERTIES = ["per_molecule_energy", "force"]
+    _SUPPORTED_PROPERTIES = ["per_molecule_energy_error", "per_atom_force_error"]
 
     def __init__(self, loss_porperty: List[str], weight: Dict[str, float]):
         """
@@ -150,8 +150,8 @@ class Loss(nn.Module):
 
         for prop, w in weight.items():
             if prop in self._SUPPORTED_PROPERTIES:
-                if prop == "force":
-                    self.loss[prop] = PerAtomToPerMoleculeError()
+                if prop == "per_atom_force_error":
+                    self.loss[prop] = FromPerAtomToPerMoleculeError()
                 else:
                     self.loss[prop] = PerMoleculeError()
                 self.register_buffer(prop, torch.tensor(w))
@@ -165,7 +165,7 @@ class Loss(nn.Module):
         Parameters
         ----------
         predict_target : Dict[str, torch.Tensor]
-            Dictionary containing predicted and true values for energy and force.
+            Dictionary containing predicted and true values for energy and per_atom_force.
         batch : Any
             The batch data containing metadata and input information.
 
@@ -241,7 +241,6 @@ class TrainingAdapter(pl.LightningModule):
         lr : float
             The learning rate for the optimizer.
         loss_module : Loss, optional
-            Whether to include force in the loss function, by default False.
         optimizer : Type[Optimizer], optional
             The optimizer class to use for training, by default torch.optim.AdamW.
         """
@@ -424,7 +423,7 @@ class TrainingAdapter(pl.LightningModule):
                         predict_target["E_predict"].detach(),
                         predict_target["E_true"].detach(),
                     )
-                if property == "force":
+                if property == "per_atom_force":
                     error_log(
                         predict_target["F_predict"].detach(),
                         predict_target["F_true"].detach(),

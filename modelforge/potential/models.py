@@ -688,7 +688,7 @@ from torch.nn import ModuleDict
 
 class PostProcessing(torch.nn.Module):
 
-    _SUPPORTED_PROPERTIES = ["per_atom_energy"]
+    _SUPPORTED_PROPERTIES = ["per_atom_energy", "general_postprocessing_operation"]
     _SUPPORTED_OPERATIONS = ["normalize", "from_atom_to_molecule_reduction"]
 
     def __init__(
@@ -893,7 +893,7 @@ class BaseNetwork(Module):
 
         # Prefix to remove
         prefix = "model."
-        excluded_keys = ["loss.per_molecule_energy", "loss.force"]
+        excluded_keys = ["loss.per_molecule_energy_error", "loss.per_atom_force_error"]
 
         # Create a new dictionary without the prefix in the keys if prefix exists
         if any(key.startswith(prefix) for key in state_dict.keys()):

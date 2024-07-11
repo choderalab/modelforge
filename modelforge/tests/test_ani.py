@@ -93,7 +93,7 @@ def test_forward_and_backward_using_torchani():
 
     energy = model((species, coordinates)).energies
     derivative = torch.autograd.grad(energy.sum(), coordinates)[0]
-    force = -derivative
+    per_atom_force = -derivative
 
 
 def test_forward_and_backward():
@@ -113,7 +113,7 @@ def test_forward_and_backward():
     model = ANI2x(**potential_parameter).to(device=device)
     energy = model(mf_input)
     derivative = torch.autograd.grad(energy["E"].sum(), mf_input.positions)[0]
-    force = -derivative
+    per_atom_force = -derivative
 
 
 def test_representation():
@@ -188,16 +188,12 @@ def test_representation_with_diagonal_batching():
     reference_rbf_output, ani_d_ij = (
         provide_reference_values_for_test_ani_test_compute_rsf_with_diagonal_batching()
     )
-    assert torch.allclose(
-        calculated_rbf_output, reference_rbf_output, atol=1e-4
-    )
+    assert torch.allclose(calculated_rbf_output, reference_rbf_output, atol=1e-4)
     assert torch.allclose(
         ani_d_ij, d_ij.squeeze(1) * 10, atol=1e-4
     )  # NOTE: unit mismatch
 
-    assert calculated_rbf_output.shape == torch.Size(
-        [20, radial_dist_divisions]
-    )
+    assert calculated_rbf_output.shape == torch.Size([20, radial_dist_divisions])
 
 
 def test_compare_angular_symmetry_features():

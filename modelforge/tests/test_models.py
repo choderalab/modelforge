@@ -32,22 +32,18 @@ def test_JAX_wrapping(model_name, single_batch_with_batchsize_64):
     )
 
     # read default parameters
-    config = load_configs(f"{model_name.lower()}_without_ase", "qm9")
-
-    # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
+    config = load_configs(f"{model_name.lower()}", "qm9")
 
     # inference model
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
-        model_type=model_name,
         simulation_environment="JAX",
-        model_parameter=potential_parameter,
+        model_parameter=config["potential"],
     )
 
     assert "JAX" in str(type(model))
     nnp_input = single_batch_with_batchsize_64.nnp_input.as_jax_namedtuple()
-    out = model(nnp_input)["E"]
+    out = model(nnp_input)["per_molecule_energy"]
     import jax
 
     grad_fn = jax.grad(lambda pos: out.sum())  # Create a gradient function
@@ -65,20 +61,13 @@ def test_model_factory(model_name, simulation_environment):
     from modelforge.train.training import TrainingAdapter
 
     # read default parameters
-    config = load_configs(f"{model_name.lower()}_without_ase", "qm9")
-
-    # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
-
-    # Setup loss
-    from modelforge.train.training import return_toml_config
+    config = load_configs(f"{model_name.lower()}", "qm9")
 
     # inference model
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
-        model_type=model_name,
         simulation_environment=simulation_environment,
-        model_parameter=potential_parameter,
+        model_parameter=config["potential"],
     )
     assert (
         model_name.upper() in str(type(model)).upper()
@@ -90,9 +79,8 @@ def test_model_factory(model_name, simulation_environment):
     # training model
     model = NeuralNetworkPotentialFactory.generate_model(
         use="training",
-        model_type=model_name,
         simulation_environment=simulation_environment,
-        model_parameter=potential_parameter,
+        model_parameter=config["potential"],
         training_parameter=training_parameter,
     )
     assert type(model) == TrainingAdapter
@@ -163,28 +151,23 @@ def test_state_dict_saving_and_loading(model_name):
     import torch
 
     # read default parameters
-    config = load_configs(f"{model_name.lower()}_without_ase", "qm9")
+    config = load_configs(f"{model_name.lower()}", "qm9")
 
     # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
     training_parameter = config["training"].get("training_parameter", {})
-    # Setup loss
-    from modelforge.train.training import return_toml_config
 
     model1 = NeuralNetworkPotentialFactory.generate_model(
         use="training",
-        model_type=model_name,
         simulation_environment="PyTorch",
-        model_parameter=potential_parameter,
+        model_parameter=config["potential"],
         training_parameter=training_parameter,
     )
     torch.save(model1.state_dict(), "model.pth")
 
     model2 = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
-        model_type=model_name,
         simulation_environment="PyTorch",
-        model_parameter=potential_parameter,
+        model_parameter=config["potential"],
     )
     model2.load_state_dict(torch.load("model.pth"))
 
@@ -911,20 +894,13 @@ def test_equivariant_energies_and_forces(
     import torch
     from dataclasses import replace
 
-    # cast input and model to torch.float64
-    # read default parameters
-    config = load_configs(f"{model_name}_without_ase", "qm9")
-
-    # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
-    # Setup loss
-    from modelforge.train.training import return_toml_config
+    # load default parameters
+    config = load_configs(f"{model_name}", "qm9")
 
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
-        model_type=model_name,
         simulation_environment=simulation_environment,
-        model_parameter=potential_parameter,
+        model_parameter=config["potential"],
     )
 
     # define the symmetry operations
@@ -940,7 +916,7 @@ def test_equivariant_energies_and_forces(
     # start the test
     # reference values
     nnp_input = single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float64)
-    reference_result = model(nnp_input)["E"].to(dtype=torch.float64)
+    reference_result = model(nnp_input)["per_molecule_energy"].to(dtype=torch.float64)
     reference_forces = -torch.autograd.grad(
         reference_result.sum(),
         nnp_input.positions,
@@ -949,7 +925,7 @@ def test_equivariant_energies_and_forces(
     # translation test
     translation_nnp_input = replace(nnp_input)
     translation_nnp_input.positions = translation(translation_nnp_input.positions)
-    translation_result = model(translation_nnp_input)["E"]
+    translation_result = model(translation_nnp_input)["per_molecule_energy"]
     assert torch.allclose(
         translation_result,
         reference_result,
@@ -974,7 +950,7 @@ def test_equivariant_energies_and_forces(
     # rotation test
     rotation_input_data = replace(nnp_input)
     rotation_input_data.positions = rotation(rotation_input_data.positions)
-    rotation_result = model(rotation_input_data)["E"]
+    rotation_result = model(rotation_input_data)["per_molecule_energy"]
 
     for t, r in zip(rotation_result, reference_result):
         if not torch.allclose(t, r, atol=atol):
@@ -1003,7 +979,7 @@ def test_equivariant_energies_and_forces(
     # reflection test
     reflection_input_data = replace(nnp_input)
     reflection_input_data.positions = reflection(reflection_input_data.positions)
-    reflection_result = model(reflection_input_data)["E"]
+    reflection_result = model(reflection_input_data)["per_molecule_energy"]
     reflection_forces = -torch.autograd.grad(
         reflection_result.sum(),
         reflection_input_data.positions,

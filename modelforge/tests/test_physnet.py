@@ -5,11 +5,12 @@ def test_init():
     from modelforge.tests.test_models import load_configs
 
     # read default parameters
-    config = load_configs(f"physnet_without_ase", "qm9")
-    # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
+    config = load_configs(f"physnet", "qm9")
 
-    model = PhysNet(**potential_parameter)
+    model = PhysNet(
+        **config["potential"]["core_parameter"],
+        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+    )
 
 
 def test_forward(single_batch_with_batchsize_64):
@@ -20,15 +21,16 @@ def test_forward(single_batch_with_batchsize_64):
     from modelforge.tests.test_models import load_configs
 
     # read default parameters
-    config = load_configs(f"physnet_without_ase", "qm9")
-    # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
+    config = load_configs(f"physnet", "qm9")
 
     # Extract parameters
-    potential_parameter["number_of_modules"] = 1
-    potential_parameter["number_of_interaction_residual"] = 1
+    config["potential"]["core_parameter"]["number_of_modules"] = 1
+    config["potential"]["core_parameter"]["number_of_interaction_residual"] = 1
 
-    model = PhysNet(**potential_parameter)
+    model = PhysNet(
+        **config["potential"]["core_parameter"],
+        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+    )
     model = model.to(torch.float32)
     print(model)
     yhat = model(single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float32))

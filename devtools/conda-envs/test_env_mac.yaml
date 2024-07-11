@@ -1,8 +1,8 @@
 name: test
 channels:
+  - pyg
   - conda-forge
   - pytorch
-  - pyg
 dependencies:
   # Base depends
   - python

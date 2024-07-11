@@ -25,6 +25,7 @@ MESSAGES[
 The code at {filename}:{line_number} requires the "jax" package.
 
 jax is a library for numerical computing that is designed for high-performance machine learning research.
+
 jax can be installed via pip:
 
     pip install jax

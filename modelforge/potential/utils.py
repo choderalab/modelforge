@@ -106,6 +106,14 @@ def triple_by_molecule(
 
     # convert representation from pair to central-others
     ai1 = atom_pairs.view(-1)
+
+    # Note, torch.sort doesn't guarantee stable sort by default.
+    # This means that the order of rev_indices is not guaranteed when there are "ties"
+    # (i.e., identical values in the input tensor).
+    # Stable sort is more expensive and ultimately unnecessary, so we will not use it here,
+    # but it does mean that vector-wise comparison of the outputs of this function may be
+    # inconsistent for the same input, and thus tests must be designed accordingly.
+
     sorted_ai1, rev_indices = ai1.sort()
 
     # sort and compute unique key
@@ -366,14 +374,12 @@ class AngularSymmetryFunction(nn.Module):
         # ShfZ
         angle_start = math.pi / (2 * angle_sections)
         ShfZ = (torch.linspace(0, math.pi, angle_sections + 1) + angle_start)[:-1]
-
         # ShfA
         ShfA = torch.linspace(
             _unitless_angular_start,
             _unitless_angular_cutoff,
             number_of_gaussians_for_asf + 1,
         )[:-1]
-
         # register shifts
         if trainable:
             self.ShfZ = ShfZ
@@ -410,7 +416,6 @@ class AngularSymmetryFunction(nn.Module):
             vectors12[0], vectors12[1], dim=-5
         )
         angles = torch.acos(cos_angles)
-
         fcj12 = self.cosine_cutoff(distances12)
         factor1 = ((1 + torch.cos(angles - self.ShfZ)) / 2) ** self.Zeta
         factor2 = torch.exp(

@@ -22,19 +22,23 @@ def load_atomic_energies_stats(path: str) -> Dict[str, unit.Quantity]:
 
     energy_statistic = toml.load(open(path, "r"))
     # convert values to tensor
-    atomic_energies_stats = {
+    training_dataset_statistics = {
         key: unit.Quantity(value)
-        for key, value in energy_statistic["atomic_energies_stats"].items()
+        for key, value in energy_statistic["training_dataset_statistics"].items()
     }
 
-    return atomic_energies_stats
+    return training_dataset_statistics
 
 
 class FromAtomToMoleculeReduction(torch.nn.Module):
 
     def __init__(
         self,
+        per_atom_property_name: str,
+        index_name: str,
+        output_name: str,
         reduction_mode: str = "sum",
+        keep_per_atom_property: bool = False,
     ):
         """
         Initializes the per-atom property readout_operation module.
@@ -42,10 +46,12 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         """
         super().__init__()
         self.reduction_mode = reduction_mode
+        self.per_atom_property_name = per_atom_property_name
+        self.output_name = output_name
+        self.index_name = index_name
+        self.keep_per_atom_property = keep_per_atom_property
 
-    def forward(
-        self, per_atom_property: torch.Tensor, index: torch.Tensor
-    ) -> torch.Tensor:
+    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
 
         Parameters
@@ -57,7 +63,8 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         -------
         Tensor, shape [nr_of_moleculs, 1], the per-molecule property.
         """
-        indices = index.to(torch.int64)
+        indices = data[self.index_name].to(torch.int64)
+        per_atom_property = data[self.per_atom_property_name]
         # Perform scatter add operation for atoms belonging to the same molecule
         property_per_molecule_zeros = torch.zeros(
             len(indices.unique()),
@@ -68,7 +75,11 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         property_per_molecule = property_per_molecule_zeros.scatter_reduce(
             0, indices, per_atom_property, reduce=self.reduction_mode
         )
-        return property_per_molecule
+        data[self.output_name] = property_per_molecule
+        if self.keep_per_atom_property is False:
+            del data[self.per_atom_property_name]
+
+        return data
 
 
 from dataclasses import dataclass, field
@@ -167,13 +178,17 @@ class AtomicSelfEnergies:
 
 class ScaleValues(torch.nn.Module):
 
-    def __init__(self, mean: float, stddev: float) -> None:
+    def __init__(
+        self, mean: float, stddev: float, property: str, output_name: str
+    ) -> None:
 
         super().__init__()
         self.register_buffer("mean", torch.tensor([mean]))
         self.register_buffer("stddev", torch.tensor([stddev]))
+        self.property = property
+        self.output_name = output_name
 
-    def forward(self, values_to_be_scaled: torch.Tensor) -> torch.Tensor:
+    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
         Rescales values using the provided mean and stddev.
 
@@ -188,7 +203,8 @@ class ScaleValues(torch.nn.Module):
             The rescaled values.
         """
 
-        return values_to_be_scaled * self.stddev + self.mean
+        data[self.output_name] = data[self.property] * self.stddev + self.mean
+        return data
 
 
 class CalculateAtomicSelfEnergy(torch.nn.Module):
@@ -199,16 +215,11 @@ class CalculateAtomicSelfEnergy(torch.nn.Module):
         # if values in atomic_self_energies are strings convert them to kJ/mol
         if isinstance(list(atomic_self_energies.values())[0], str):
             atomic_self_energies = {
-                key: unit.Quantity(value)
-                for key, value in atomic_self_energies.items()
+                key: unit.Quantity(value) for key, value in atomic_self_energies.items()
             }
         self.atomic_self_energies = AtomicSelfEnergies(atomic_self_energies)
 
-    def forward(
-        self,
-        atomic_numbers: torch.Tensor,
-        atomic_subsystem_indices: torch.Tensor,
-    ) -> torch.Tensor:
+    def forward(self, data: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
         Calculates the molecular self energy.
 
@@ -221,6 +232,8 @@ class CalculateAtomicSelfEnergy(torch.nn.Module):
         torch.Tensor
             The tensor containing the molecular self energy for each molecule.
         """
+        atomic_numbers = data["atomic_numbers"]
+        atomic_subsystem_indices = data["atomic_subsystem_indices"]
 
         atomic_subsystem_indices = atomic_subsystem_indices.to(
             dtype=torch.long, device=atomic_numbers.device
@@ -231,8 +244,9 @@ class CalculateAtomicSelfEnergy(torch.nn.Module):
             device=atomic_numbers.device
         )
 
-        # first, we need to use the atomic numbers to generate a tensor that
+        # use the atomic numbers to generate a tensor that
         # contains the atomic self energy for each atomic number
         ase_tensor = ase_tensor_for_indexing[atomic_numbers]
 
-        return ase_tensor
+        data["ase_tensor"] = ase_tensor
+        return data

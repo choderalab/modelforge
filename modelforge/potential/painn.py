@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Callable, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Callable, Dict, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -104,11 +104,6 @@ class PaiNNCore(CoreNetwork):
 
         self.embedding_module = Embedding(max_Z, number_of_atom_features)
 
-        # initialize the energy readout_operation
-        from .processing import FromAtomToMoleculeReduction
-
-        self.readout_module = FromAtomToMoleculeReduction()
-
         # initialize representation block
         self.representation_module = PaiNNRepresentation(
             cutoff,
@@ -205,7 +200,7 @@ class PaiNNCore(CoreNetwork):
         E_i = self.energy_layer(q).squeeze(1)
 
         return {
-            "E_i": E_i,
+            "per_atom_energy": E_i,
             "mu": mu,
             "q": q,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
@@ -273,7 +268,7 @@ class PaiNNRepresentation(nn.Module):
             - "r_ij" (torch.Tensor): Displacement vector between atoms. Shape: (n_pairs, 3).
             - "atomic_embedding" (torch.Tensor): Embeddings of atomic numbers. Shape: (n_atoms, embedding_dim).
 
-        Returns:
+        Returns
         ----------
         Dict[str, torch.Tensor]:
             A dictionary containing the transformed input tensors.
@@ -358,7 +353,7 @@ class PaiNNInteraction(nn.Module):
             Scalar input values of shape [nr_of_atoms, 1, nr_atom_basis].
         mu : torch.Tensor
             Vector input values of shape [nr_of_atoms, 3, nr_atom_basis].
-        Wij : torch.Tensor
+        W_ij : torch.Tensor
             Filter of shape [nr_of_pairs, 1, n_interactions].
         dir_ij : torch.Tensor
             Directional vector between atoms i and j.
@@ -480,19 +475,17 @@ class PaiNN(BaseNetwork):
         max_Z: int,
         number_of_atom_features: int,
         number_of_radial_basis_functions: int,
-        cutoff: unit.Quantity,
+        cutoff: Union[unit.Quantity, str],
         number_of_interaction_modules: int,
         shared_interactions: bool,
         shared_filters: bool,
-        processing_operation: Dict[str, torch.nn.ModuleList],
-        readout_operation: Dict[str, List[Dict[str, str]]],
+        postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
         epsilon: float = 1e-8,
     ) -> None:
         super().__init__(
             dataset_statistic=dataset_statistic,
-            processing_operation=processing_operation,
-            readout_operation=readout_operation,
+            postprocessing_parameter=postprocessing_parameter,
         )
         from modelforge.utils.units import _convert
 

@@ -474,11 +474,16 @@ def test_energy_readout():
     # the input for the EnergyReadout module is vector (E_i) that will be scatter_added, and
     # a second tensor supplying the indixes for the summation
 
-    E_i = torch.tensor([3, 3, 1, 1, 1, 1, 1, 1], dtype=torch.float32)
-    atomic_subsystem_indices = torch.tensor([0, 0, 1, 1, 1, 1, 1, 1])
-
-    energy_readout = FromAtomToMoleculeReduction()
-    E = energy_readout(E_i, atomic_subsystem_indices)
+    r = {
+        "per_atom_energy": torch.tensor([3, 3, 1, 1, 1, 1, 1, 1], dtype=torch.float32),
+        "atomic_subsystem_index": torch.tensor([0, 0, 1, 1, 1, 1, 1, 1]),
+    }
+    energy_readout = FromAtomToMoleculeReduction(
+        per_atom_property_name="per_atom_energy",
+        index_name="atomic_subsystem_index",
+        output_name="per_molecule_energy",
+    )
+    E = energy_readout(r)["per_molecule_energy"]
 
     # check that output has length of total number of molecules in batch
     assert E.size() == torch.Size(

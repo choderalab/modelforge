@@ -36,7 +36,7 @@ dependencies:
 
   - pip:
       - jax
-      - pytorch2jax
-      - versioneer
       - flax
+      - pytorch2jax
       - git+https://github.com/ArnNag/sake.git@nanometer
+      - "ray[data,train,tune,serve]"

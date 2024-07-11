@@ -119,6 +119,14 @@ def single_batch_with_batchsize_2_with_force():
     return single_batch(batch_size=2, dataset_name="PHALKETHOH")
 
 
+@pytest.fixture(scope="session")
+def single_batch_with_batchsize_16_with_force():
+    """
+    Utility fixture to create a single batch of data for testing.
+    """
+    return single_batch(batch_size=16, dataset_name="PHALKETHOH")
+
+
 def initialize_dataset(
     dataset_name: str,
     local_cache_dir: str,

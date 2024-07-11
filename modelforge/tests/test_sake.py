@@ -13,23 +13,25 @@ from sys import platform
 ON_MAC = platform == "darwin"
 
 
-def test_SAKE_init():
+def test_init():
     """Test initialization of the SAKE neural network potential."""
     from modelforge.tests.test_models import load_configs
 
     # read default parameters
-    config = load_configs(f"sake_without_ase", "qm9")
-    # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
+    config = load_configs(f"sake", "qm9")
 
-    sake = SAKE(**potential_parameter)
+    # initialize model
+    sake = SAKE(
+        **config["potential"]["core_parameter"],
+        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+    )
     assert sake is not None, "SAKE model should be initialized."
 
 
 from openff.units import unit
 
 
-def test_sake_forward(single_batch_with_batchsize_64):
+def test_forward(single_batch_with_batchsize_64):
     """
     Test the forward pass of the SAKE model.
     """
@@ -39,12 +41,13 @@ def test_sake_forward(single_batch_with_batchsize_64):
     from modelforge.tests.test_models import load_configs
 
     # read default parameters
-    config = load_configs(f"sake_without_ase", "qm9")
-    # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
+    config = load_configs(f"sake", "qm9")
 
-    sake = SAKE(**potential_parameter)
-    energy = sake(methane)["E"]
+    sake = SAKE(
+        **config["potential"]["core_parameter"],
+        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+    )
+    energy = sake(methane)["per_molecule_energy"]
     nr_of_mols = methane.atomic_subsystem_indices.unique().shape[0]
 
     assert (
@@ -52,7 +55,7 @@ def test_sake_forward(single_batch_with_batchsize_64):
     )  # Assuming energy is calculated per sample in the batch
 
 
-def test_sake_interaction_forward():
+def test_interaction_forward():
     nr_atoms = 41
     nr_atom_basis = 47
     geometry_basis = 3
@@ -83,7 +86,7 @@ def test_sake_interaction_forward():
 
 @pytest.mark.parametrize("eq_atol", [3e-1])
 @pytest.mark.parametrize("h_atol", [8e-2])
-def test_sake_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize_64):
+def test_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize_64):
     import torch
     from modelforge.potential.sake import SAKE
     from dataclasses import replace
@@ -98,11 +101,14 @@ def test_sake_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize_64
 
     from modelforge.tests.test_models import load_configs
 
-    config = load_configs(f"sake_without_ase", "qm9")
+    config = load_configs(f"sake", "qm9")
     # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
-    potential_parameter["number_of_atom_features"] = nr_atom_basis
-    sake = SAKE(**potential_parameter)
+    core_parameter = config["potential"]["core_parameter"]
+    core_parameter["number_of_atom_features"] = nr_atom_basis
+    sake = SAKE(
+        **core_parameter,
+        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+    )
 
     # get methane input
     methane = single_batch_with_batchsize_64.nnp_input
@@ -401,7 +407,7 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none):
     )
 
 
-def test_sake_model_against_reference(single_batch_with_batchsize_1):
+def test_model_against_reference(single_batch_with_batchsize_1):
     nr_heads = 5
     nr_atom_basis = 11
     max_Z = 13
@@ -418,16 +424,13 @@ def test_sake_model_against_reference(single_batch_with_batchsize_1):
         cutoff=cutoff,
         number_of_radial_basis_functions=50,
         epsilon=1e-8,
-        processing_operation=[],
-        readout_operation=[
-            {
-                "step": "from_atom_to_molecule",
-                "mode": "sum",
-                "in": "E_i",
-                "index_key": "atomic_subsystem_indices",
-                "out": "E",
+        postprocessing_parameter={
+            "per_atom_energy": {
+                "normalize": True,
+                "from_atom_to_molecule_reduction": True,
+                "keep_per_atom_property": True,
             }
-        ],
+        },
     )
 
     ref_sake = reference_sake.models.DenseSAKEModel(
@@ -566,7 +569,7 @@ def test_sake_model_against_reference(single_batch_with_batchsize_1):
     ref_out = ref_sake.apply(variables, h, x, mask=mask)[0].sum(-2)
     # ref_out is nan, so we can't compare it to the modelforge output
 
-    print(f"{mf_out['E']=}")
+    print(f"{mf_out['per_molecule_energy']=}")
     print(f"{ref_out=}")
     # assert torch.allclose(mf_out.E, torch.from_numpy(onp.array(ref_out[0])))
 
@@ -576,11 +579,13 @@ def test_model_invariance(single_batch_with_batchsize_1):
 
     from modelforge.tests.test_models import load_configs
 
-    config = load_configs(f"sake_without_ase", "qm9")
-    # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
+    config = load_configs(f"sake", "qm9")
 
-    model = SAKE(**potential_parameter)
+    # initialize model
+    model = SAKE(
+        **config["potential"]["core_parameter"],
+        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+    )
     # get methane input
     methane = single_batch_with_batchsize_1.nnp_input
 
@@ -591,4 +596,6 @@ def test_model_invariance(single_batch_with_batchsize_1):
     reference_out = model(methane)
     perturbed_out = model(perturbed_methane_input)
 
-    assert torch.allclose(reference_out["E"], perturbed_out["E"])
+    assert torch.allclose(
+        reference_out["per_molecule_energy"], perturbed_out["per_molecule_energy"]
+    )

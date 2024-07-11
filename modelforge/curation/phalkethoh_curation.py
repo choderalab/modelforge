@@ -1,6 +1,9 @@
 from typing import List, Tuple, Dict, Optional
 
 from modelforge.curation.curation_baseclass import *
+from modelforge.utils.io import check_import, import_
+
+check_import("retry")
 from retry import retry
 from tqdm import tqdm
 from openff.units import unit
@@ -122,7 +125,7 @@ class PhAlkEthOHCuration(DatasetCuration):
         }
 
     # we will use the retry package to allow us to resume download if we lose connection to the server
-    # @retry(delay=1, jitter=1, backoff=2, tries=50, logger=logger, max_delay=10)
+    @retry(delay=1, jitter=1, backoff=2, tries=50, logger=logger, max_delay=10)
     def _fetch_singlepoint_from_qcarchive(
         self,
         dataset_name: str,
@@ -161,8 +164,12 @@ class PhAlkEthOHCuration(DatasetCuration):
         -------
 
         """
+
+        check_import("sqlitedict")
         from sqlitedict import SqliteDict
         from loguru import logger
+
+        check_import("qcportal")
         from qcportal import PortalClient
 
         dataset_type = "optimization"
@@ -255,6 +262,7 @@ class PhAlkEthOHCuration(DatasetCuration):
             total charge of the molecule (in elementary charge).
         """
 
+        check_import("rdkit")
         from rdkit import Chem
 
         rdmol = Chem.MolFromSmiles(smiles, sanitize=False)
@@ -291,9 +299,12 @@ class PhAlkEthOHCuration(DatasetCuration):
         """
         from tqdm import tqdm
         import numpy as np
+
+        check_import("sqlitedict")
         from sqlitedict import SqliteDict
         from loguru import logger
-        import qcelemental as qcel
+
+        qcel = import_("qcelemental")
         from numpy import newaxis
 
         for filename, dataset_name in zip(filenames, dataset_names):
@@ -308,7 +319,6 @@ class PhAlkEthOHCuration(DatasetCuration):
                 db_keys = list(db_default.keys())
 
                 for key in db_keys:
-
                     if db_default[key][0] == "complete":
                         non_error_keys.append(key)
             print(len(non_error_keys))

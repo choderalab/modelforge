@@ -227,8 +227,13 @@ class SPICE2Curation(DatasetCuration):
         -------
 
         """
+        from modelforge.utils.io import check_import
+
+        check_import("sqlitedict")
         from sqlitedict import SqliteDict
         from loguru import logger
+
+        check_import("qcportal")
         from qcportal import PortalClient
 
         dataset_type = "singlepoint"
@@ -309,6 +314,9 @@ class SPICE2Curation(DatasetCuration):
             and the total charge of the molecule (in elementary charge).
         """
 
+        from modelforge.utils.io import check_import
+
+        check_import("rdkit")
         from rdkit import Chem
         import numpy as np
 
@@ -531,9 +539,13 @@ class SPICE2Curation(DatasetCuration):
         """
         from tqdm import tqdm
         import numpy as np
+        from modelforge.utils.io import check_import, import_
+
+        check_import("sqlitedict")
         from sqlitedict import SqliteDict
         from loguru import logger
-        import qcelemental as qcel
+
+        qcel = import_("qcelemental")
         from numpy import newaxis
 
         for filename, dataset_info in zip(filenames, dataset_sources):

@@ -26,9 +26,13 @@ The code at {filename}:{line_number} requires the "jax" package.
 
 jax is a library for numerical computing that is designed for high-performance machine learning research.
 
-jax can be installed via pip:
+jax can be installed via conda:
 
-    pip install jax
+    conda install -c conda-forge jax
+
+To install on a machine with an NVIDIA GPU, use:
+    
+    conda install jaxlib=*=*cuda* jax cuda-nvcc -c conda-forge -c nvidia
 
 """
 
@@ -52,9 +56,9 @@ The code at {filename}:{line_number} requires the "flax" package.
 
 Flax: A neural network library and ecosystem for JAX designed for flexibility.
 
-Flax can be installed via pip:
+Flax can be installed via conda:
     
-        pip install flax
+        conda install conda-forge::flax
     
     """
 
@@ -65,9 +69,83 @@ The code at {filename}:{line_number} requires the "ray" package.
 
 Ray is an open-source unified framework for scaling AI and Python applications like machine learning.
 
-Ray can be installed via pip:
+On Linux, Ray can be install via conda:
+
+    conda install -c conda-forge ray-all
     
-    pip install -U "ray[data,train,tune,serve]"
+"""
+
+MESSAGES[
+    "torchviz"
+] = """
+PyTorchViz is a small package to create visualizations of PyTorch execution graphs and traces.
+https://github.com/szagoruyko/pytorchviz
+
+PyTorchViz can be installed via pip:
+
+    pip install torchviz
+
+"""
+
+MESSAGES[
+    "qcelemental"
+] = """
+QCElemental is a resource module for quantum chemistry containing physical constants and periodic table data from NIST and molecule handlers.
+
+https://molssi.github.io/QCElemental/
+
+QCElemental can be installed via conda:
+
+    conda install qcelemental -c conda-forge
+"""
+
+MESSAGES[
+    "qcportal"
+] = """
+QCPortal is a data generation and retrieval platform specialized for quantum chemistry calculation.
+
+https://molssi.github.io/QCFractal/
+
+QCPortal can be installed via conda:
+    
+        conda install qcportal">=0.50" -c conda-forge
+
+"""
+
+MESSAGES[
+    "rdkit"
+] = """
+RDKit is a collection of cheminformatics and machine learning tools.
+
+https://www.rdkit.org/
+
+RDKit can be installed via conda:
+
+    conda install -c conda-forge rdkit
+    
+"""
+
+MESSAGES[
+    "retry"
+] = """
+Retry is a simple Python library for retrying failed operations.
+    
+Retry can be installed via conda:
+    
+        conda install -c conda-forge retry
+    
+"""
+
+MESSAGES[
+    "sqlitedict"
+] = """
+
+SqliteDict is a lightweight wrapper around Python's sqlite3 database.
+
+SqliteDict can be installed via conda:
+    
+        conda install -c conda-forge sqlitedict
+    
 """
 
 

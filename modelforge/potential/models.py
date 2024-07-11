@@ -710,8 +710,6 @@ class PostProcessing(torch.nn.Module):
 
         # operations that use nn.Sequence to pass the output of the model to the next
         self.registered_chained_operations = ModuleDict()
-        # operations that don't requre any nn.Sequence
-        self.registered_independent_operations = ModuleDict()
 
         self.dataset_statistic = dataset_statistic
 
@@ -761,8 +759,9 @@ class PostProcessing(torch.nn.Module):
             postprocessing_sequence = torch.nn.Sequential()
             prostprocessing_sequence_names = []
 
-            for operation in operations:
-                if operation.lower() == "normalize" and property == "per_atom_energy":
+            # for each property parse the requested operations
+            if property == "per_atom_energy":
+                if operations.get("normalize", False):
                     mean, stddev = self._get_mean_and_stddev_of_dataset()
                     postprocessing_sequence.append(
                         ScaleValues(
@@ -772,42 +771,48 @@ class PostProcessing(torch.nn.Module):
                             output_name="per_atom_energy",
                         )
                     )
-                    prostprocessing_sequence_names.append(operation)
-                    # check if also reduction is requested
-                    for operation in operations:
-                        if operation.lower() == "from_atom_to_molecule_reduction":
-                            postprocessing_sequence.append(
-                                FromAtomToMoleculeReduction(
-                                    per_atom_property_name="per_atom_energy",
-                                    index_name="atomic_subsystem_indices",
-                                    output_name="per_molecule_energy",
-                                )
-                            )
-                            prostprocessing_sequence_names.append(operation)
-
-                elif operation.lower() == "calculate_atomic_self_energy":
-                    atomic_self_energies = self.dataset_statistic[
-                        "atomic_self_energies"
-                    ]
-                    postprocessing_sequence.append(
-                        CalculateAtomicSelfEnergy(atomic_self_energies)()
-                    )
-                    prostprocessing_sequence_names.append(operation)
-
+                    prostprocessing_sequence_names.append("normalize")
+                # check if also reduction is requested
+                if operations.get("from_atom_to_molecule_reduction", False):
                     postprocessing_sequence.append(
                         FromAtomToMoleculeReduction(
-                            per_atom_property_name="ase_tensor",
+                            per_atom_property_name="per_atom_energy",
                             index_name="atomic_subsystem_indices",
-                            output_name="per_molecule_self_energy",
+                            output_name="per_molecule_energy",
+                            keep_per_atom_property=operations.get(
+                                "keep_per_atom_property", False
+                            ),
                         )
                     )
+                    prostprocessing_sequence_names.append(
+                        "from_atom_to_molecule_reduction"
+                    )
 
-                elif (
-                    operation.lower() == "from_atom_to_molecule_reduction"
-                    and operation.lower() not in prostprocessing_sequence_names
-                ):
-                    postprocessing_sequence.append(FromAtomToMoleculeReduction())
-                    prostprocessing_sequence_names.append(operation)
+            # check if also self-energies are requested
+            if operations.get("calculate_molecular_self_energy", False):
+                atomic_self_energies = self.dataset_statistic["atomic_self_energies"]
+
+                postprocessing_sequence.append(
+                    CalculateAtomicSelfEnergy(atomic_self_energies)()
+                )
+                prostprocessing_sequence_names.append("calculate_molecular_self_energy")
+
+                postprocessing_sequence.append(
+                    FromAtomToMoleculeReduction(
+                        per_atom_property_name="ase_tensor",
+                        index_name="atomic_subsystem_indices",
+                        output_name="per_molecule_self_energy",
+                    )
+                )
+
+            # check if also self-energies are requested
+            if operations.get("calculate_atomic_self_energy", False):
+                atomic_self_energies = self.dataset_statistic["atomic_self_energies"]
+
+                postprocessing_sequence.append(
+                    CalculateAtomicSelfEnergy(atomic_self_energies)()
+                )
+                prostprocessing_sequence_names.append("calculate_atomic_self_energy")
 
             log.debug(prostprocessing_sequence_names)
 
@@ -817,7 +822,6 @@ class PostProcessing(torch.nn.Module):
         """
         Perform post-processing operations for all registered properties.
         """
-
 
         # NOTE: this is not very elegant, but I am unsure how to do this better
         # I am currently directly writing new keys and values in the data dictionary

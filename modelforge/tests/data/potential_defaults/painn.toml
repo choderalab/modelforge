@@ -11,18 +11,8 @@ number_of_interaction_modules = 3
 shared_interactions = false
 shared_filters = false
 
-processing_operation = [
-  { in = [
-    per_atom_energy,
-  ], out = per_atom_energy, step = "normalization", mean = "E_i_mean", stddev = "E_i_mean" },
-  { in = [
-    "atomic_numbers",
-    'atomic_subsystem_indices',
-  ], out = "ase", step = "calculate_ase" },
-
-]
-readout_operation = [
-  { step = "from_atom_to_molecule", mode = 'sum', in = 'E_i', index_key = 'atomic_subsystem_indices', out = 'E' },
-  { step = "from_atom_to_molecule", mode = 'sum', in = 'ase', index_key = 'atomic_subsystem_indices', out = 'mse' },
-
-]
+[potential.postprocessing]
+[potential.postprocessing.per_atom_energy]
+normalize = true
+from_atom_to_molecule_reduction = true
+keep_per_atom_property = true

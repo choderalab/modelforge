@@ -172,7 +172,7 @@ class SAKECore(CoreNetwork):
         E_i = self.energy_layer(h).squeeze(1)
 
         return {
-            per_atom_energy: E_i,
+            'per_atom_energy': E_i,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
 

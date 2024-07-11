@@ -102,11 +102,14 @@ def test_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize_64):
 
     from modelforge.tests.test_models import load_configs
 
-    config = load_configs(f"sake_without_ase", "qm9")
+    config = load_configs(f"sake", "qm9")
     # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
-    potential_parameter["number_of_atom_features"] = nr_atom_basis
-    sake = SAKE(**potential_parameter)
+    core_parameter = config["potential"]["core_parameter"]
+    core_parameter["number_of_atom_features"] = nr_atom_basis
+    sake = SAKE(
+        **core_parameter,
+        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+    )
 
     # get methane input
     methane = single_batch_with_batchsize_64.nnp_input
@@ -429,16 +432,13 @@ def test_model_against_reference(single_batch_with_batchsize_1):
         cutoff=cutoff,
         number_of_radial_basis_functions=50,
         epsilon=1e-8,
-        processing_operation=[],
-        readout_operation=[
-            {
-                "step": "from_atom_to_molecule",
-                "mode": "sum",
-                "in": "per_atom_energy",
-                "index_key": "atomic_subsystem_indices",
-                "out": "E",
+        postprocessing_parameter={
+            "per_atom_energy": {
+                "normalize": True,
+                "from_atom_to_molecule_reduction": True,
+                "keep_per_atom_property": True,
             }
-        ],
+        },
     )
 
     ref_sake = reference_sake.models.DenseSAKEModel(
@@ -577,7 +577,7 @@ def test_model_against_reference(single_batch_with_batchsize_1):
     ref_out = ref_sake.apply(variables, h, x, mask=mask)[0].sum(-2)
     # ref_out is nan, so we can't compare it to the modelforge output
 
-    print(f"{mf_out['E']=}")
+    print(f"{mf_out['per_molecule_energy']=}")
     print(f"{ref_out=}")
     # assert torch.allclose(mf_out.E, torch.from_numpy(onp.array(ref_out[0])))
 

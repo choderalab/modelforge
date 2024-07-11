@@ -189,10 +189,10 @@ class SPICE1Curation(DatasetCuration):
         -------
         total_charge: unit.Quantity
         """
-        from modelforge.utils.io import check_import
+        from modelforge.utils.io import import_
 
-        check_import("rdkit")
-        from rdkit import Chem
+        Chem = import_("rdkit.Chem")
+        # from rdkit import Chem
 
         rdmol = Chem.MolFromSmiles(smiles, sanitize=False)
         total_charge = sum(atom.GetFormalCharge() for atom in rdmol.GetAtoms())

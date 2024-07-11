@@ -617,12 +617,10 @@ class PhysNet(BaseNetwork):
 
     def _config_prior(self):
         log.info("Configuring SchNet model hyperparameter prior distribution")
-        from modelforge.utils.io import check_import
+        from modelforge.utils.io import import_
 
-        check_import(
-            "ray"
-        )  # check that ray is installed before trying to import submodules
-        from ray import tune
+        tune = import_("ray.tune")
+        # from ray import tune
 
         from modelforge.potential.utils import shared_config_prior
 

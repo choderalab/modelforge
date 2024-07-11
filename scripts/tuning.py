@@ -1,12 +1,11 @@
 import torch
-from modelforge.utils.io import check_import
+from modelforge.utils.io import import_
 
-    check_import(
-        "ray"
-    )  # check that ray is installed before trying to import submodules
-
-from ray import tune, air
-from ray.tune.schedulers import ASHAScheduler
+tune = import_("ray.tune")
+air = import_("ray.air")
+# from ray import tune, air
+ASHAScheduler = import_("ray.tune.schedulers.ASHAScheduler")
+# from ray.tune.schedulers import ASHAScheduler
 
 from modelforge.potential import NeuralNetworkPotentialFactory
 from modelforge.dataset.qm9 import QM9Dataset

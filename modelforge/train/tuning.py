@@ -1,10 +1,13 @@
 import torch
 
-from modelforge.utils.io import check_import
+from modelforge.utils.io import import_
 
-check_import("ray")
-from ray import air, tune
-from ray.tune.schedulers import ASHAScheduler
+air = import_("ray.air")
+tune = import_("ray.tune")
+# from ray import air, tune
+
+ASHAScheduler = import_("ray.tune.scheduleres.ASHAScheduler")
+# from ray.tune.schedulers import ASHAScheduler
 
 
 def tune_model(
@@ -179,14 +182,13 @@ class RayTuner:
         Tune experiment analysis object
             The result of the hyperparameter tuning session, containing performance metrics and the best hyperparameters found.
         """
-        from modelforge.utils.io import check_import
+        from modelforge.utils.io import import_
 
-        check_import(
-            "ray"
-        )  # check that ray is installed before trying to import submodules
+        tune = import_("ray.tune")
+        # from ray import tune
 
-        from ray import tune
-        from ray.tune.schedulers import ASHAScheduler
+        ASHAScheduler = import_("ray.tune.schedulers.ASHAScheduler")
+        # from ray.tune.schedulers import ASHAScheduler
 
         self.train_dataloader = train_dataloader
         self.val_dataloader = val_dataloader

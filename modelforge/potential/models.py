@@ -467,17 +467,17 @@ class PyTorch2JAXConverter:
         """
 
         # make sure
-        from modelforge.utils.io import import_, check_import
+        from modelforge.utils.io import import_
 
-        jax = import_(
-            "jax"
-        )  # use the wrapper to import jax, so we can provide install notes if not in the env
-        check_import(
-            "pytorch2jax"
-        )  # use the wrapper to check if pytorch2jax is in the environment
+        jax = import_("jax")
+        # use the wrapper to check if pytorch2jax is in the environment
 
-        from jax import custom_vjp
-        from pytorch2jax.pytorch2jax import convert_to_jax, convert_to_pyt
+        custom_vjp = import_("jax.custom_vjp")
+
+        # from jax import custom_vjp
+        convert_to_jax = import_("pytorch2jax.pytorch2jax.convert_to_jax")
+        convert_to_pyt = import_("pytorch2jax.pytorch2jax.convert_to_pyt")
+        # from pytorch2jax.pytorch2jax import convert_to_jax, convert_to_pyt
 
         import functorch
         from functorch import make_functional_with_buffers

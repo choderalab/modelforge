@@ -297,7 +297,9 @@ class ANIRepresentation(nn.Module):
         r_ij12 = r_ij.index_select(0, pair_index12.view(-1)).view(
             2, -1, 3
         ) * sign12.unsqueeze(-1)
-        species12_ = torch.where(torch.eq(sign12, 1), species12_small[1], species12_small[0])
+        species12_ = torch.where(
+            torch.eq(sign12, 1), species12_small[1], species12_small[0]
+        )
         return {
             "angular_r_ij": r_ij12,
             "central_atom_index": central_atom_index,
@@ -578,12 +580,10 @@ class ANI2x(BaseNetwork):
 
     def _config_prior(self):
         log.info("Configuring ANI2x model hyperparameter prior distribution")
-        from modelforge.utils.io import check_import
+        from modelforge.utils.io import import_
 
-        check_import(
-            "ray"
-        )  # check that ray is installed before trying to import submodules
-        from ray import tune
+        tune = import_("ray.tune")
+        # from ray import tune
 
         from modelforge.train.utils import shared_config_prior
 

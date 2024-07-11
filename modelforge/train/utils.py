@@ -1,10 +1,8 @@
 def shared_config_prior():
-    from modelforge.utils.io import check_import
+    from modelforge.utils.io import import_
 
-    check_import(
-        "ray"
-    )  # check that ray is installed before trying to import submodules
-    from ray import tune
+    tune = import_("ray.tune")
+    # from ray import tune
 
     return {
         "lr": tune.loguniform(1e-5, 1e-1),

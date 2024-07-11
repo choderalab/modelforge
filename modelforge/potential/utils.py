@@ -74,12 +74,10 @@ class BatchData:
 
 
 def shared_config_prior():
-    from modelforge.utils.io import check_import
+    from modelforge.utils.io import import_
 
-    check_import(
-        "ray"
-    )  # check that ray is installed before trying to import submodules
-    from ray import tune
+    tune = import_("ray.tune")
+    # from ray import tune
 
     return {
         "lr": tune.loguniform(1e-5, 1e-1),
@@ -215,7 +213,9 @@ class Dense(nn.Linear):
         in_features: int,
         out_features: int,
         bias: bool = True,
-        activation: Optional[Union[nn.Module, Callable[[torch.Tensor], torch.Tensor]]] = None,
+        activation: Optional[
+            Union[nn.Module, Callable[[torch.Tensor], torch.Tensor]]
+        ] = None,
         weight_init: Callable = xavier_uniform_,
         bias_init: Callable = zeros_,
     ):

@@ -170,8 +170,12 @@ def import_(module: str):
 
     Examples
     --------
-    >>> from modelforge.utils.package_import import import_
+    >>> from modelforge.utils.io import import_
     >>> jax = import_("jax")
+    >>>
+    >>> # to import a submodule, the following are equivalent:
+    >>> from jax import numpy as jnp
+    >>> jnp = import_("jax.numpy")
 
 
     """
@@ -187,8 +191,10 @@ def import_(module: str):
             index,
         ) = inspect.getouterframes(inspect.currentframe())[1]
 
-        if module in MESSAGES:
-            message = MESSAGES[module].format(
+        basemodule = module.split(".")[0]
+
+        if basemodule in MESSAGES:
+            message = MESSAGES[basemodule].format(
                 filename=filename, line_number=line_number
             )
         else:

@@ -257,9 +257,12 @@ def test_compare_angular_symmetry_features():
     )
     # NOTE: ANI works with Angstrom, modelforge with nanometer
     # NOTE: ANI operates on a [nr_of_molecules, nr_of_atoms, 3] tensor
-    angular_feature_vector_mf = asf(vec12 / 10)
+    calculated_angular_feature_vector = asf(vec12 / 10)
     # make sure that the output is the same
-    assert angular_feature_vector_ani.size() == angular_feature_vector_mf.size()
+    assert (
+        calculated_angular_feature_vector.size()
+        == reference_angular_feature_vector.size()
+    )
 
     # NOTE: the order of the angular_feature_vector is not guaranteed
     # as the triple_by_molecule function  used to prepare the inputs does not use stable sorting.
@@ -267,8 +270,8 @@ def test_compare_angular_symmetry_features():
     # used here as it is slower and the order of the output is not important in practrice.
     # As such, to check for equivalence in a way that is not order dependent, we can just consider the sum.
     assert torch.isclose(
-        torch.sum(angular_feature_vector_ani),
-        torch.sum(angular_feature_vector_mf),
+        torch.sum(calculated_angular_feature_vector),
+        torch.sum(reference_angular_feature_vector),
         atol=1e-4,
     )
 

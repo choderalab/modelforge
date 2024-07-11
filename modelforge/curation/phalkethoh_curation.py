@@ -1,9 +1,10 @@
 from typing import List, Tuple, Dict, Optional
 
 from modelforge.curation.curation_baseclass import *
-from modelforge.utils.io import , import_
+from modelforge.utils.io import import_, check_import
 
-retry = import_("retry.retry")
+check_import("retry")
+from retry import retry
 from tqdm import tqdm
 from openff.units import unit
 

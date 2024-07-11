@@ -895,7 +895,7 @@ class BaseNetwork(Module):
 
         # Prefix to remove
         prefix = "model."
-        excluded_keys = ["loss.per_molecule_energy_error", "loss.per_atom_force_error"]
+        excluded_keys = ["loss.per_molecule_energy", "loss.per_atom_force"]
 
         # Create a new dictionary without the prefix in the keys if prefix exists
         if any(key.startswith(prefix) for key in state_dict.keys()):

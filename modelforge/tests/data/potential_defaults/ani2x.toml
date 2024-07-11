@@ -10,8 +10,8 @@ angular_max_distance = "3.5 angstrom"
 angular_min_distance = "0.8 angstrom"
 angular_dist_divisions = 8
 
-[potential.postprocessing]
-[potential.postprocessing.per_atom_energy]
+[potential.postprocessing_parameter]
+[potential.postprocessing_parameter.per_atom_energy]
 normalize = true
 from_atom_to_molecule_reduction = true
 keep_per_atom_property = true

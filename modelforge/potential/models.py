@@ -569,7 +569,6 @@ class NeuralNetworkPotentialFactory:
                 log.warning(
                     "Training in JAX is not availalbe. Falling back to PyTorch."
                 )
-            model_parameter["model_name"] = model_type
             model = TrainingAdapter(
                 model_parameter=model_parameter,
                 **training_parameter,
@@ -582,7 +581,7 @@ class NeuralNetworkPotentialFactory:
             nnp_class: Type = _Implemented_NNPs.get_neural_network_class(model_type)
             model = nnp_class(
                 **model_parameter["core_parameter"],
-                postprocessing_parameter=model_parameter["postprocessing"],
+                postprocessing_parameter=model_parameter["postprocessing_parameter"],
                 dataset_statistic=dataset_statistic,
             )
             if simulation_environment == "JAX":
@@ -590,7 +589,7 @@ class NeuralNetworkPotentialFactory:
             else:
                 return model
         else:
-            raise ValueError(f"Unsupported 'use' value: {use}")
+            raise NotImplementedError(f"Unsupported 'use' value: {use}")
 
 
 class InputPreparation(torch.nn.Module):
@@ -727,10 +726,10 @@ class PostProcessing(torch.nn.Module):
             )
         else:
             atomic_energies_stats = self.dataset_statistic["atomic_energies_stats"]
-            mean = unit.Quantity(atomic_energies_stats["mean"]).m_as(
+            mean = unit.Quantity(atomic_energies_stats["E_i_mean"]).m_as(
                 unit.kilojoule_per_mole
             )
-            stddev = unit.Quantity(atomic_energies_stats["stddev"]).m_as(
+            stddev = unit.Quantity(atomic_energies_stats["E_i_stddev"]).m_as(
                 unit.kilojoule_per_mole
             )
         return mean, stddev
@@ -801,7 +800,7 @@ class PostProcessing(torch.nn.Module):
                     ]
 
                     postprocessing_sequence.append(
-                        CalculateAtomicSelfEnergy(atomic_self_energies)()
+                        CalculateAtomicSelfEnergy(atomic_self_energies)
                     )
                     prostprocessing_sequence_names.append(
                         "calculate_molecular_self_energy"
@@ -894,7 +893,7 @@ class BaseNetwork(Module):
 
         # Prefix to remove
         prefix = "model."
-        excluded_keys = ["loss_module.energy_weight", "loss_module.force_weight"]
+        excluded_keys = ["loss.per_molecule_energy", "loss.force"]
 
         # Create a new dictionary without the prefix in the keys if prefix exists
         if any(key.startswith(prefix) for key in state_dict.keys()):

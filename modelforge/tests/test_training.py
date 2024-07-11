@@ -35,19 +35,7 @@ def load_configs(model_name: str, dataset_name: str):
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 @pytest.mark.parametrize("dataset_name", ["QM9"])
-@pytest.mark.parametrize(
-    "loss_type",
-    [
-        {
-            "loss_type": "EnergyAndForceLoss",
-            "include_force": True,
-            "force_weight": 0.99,
-            "energy_weight": 0.01,
-        },
-        {"loss_type": "EnergyAndForceLoss"},
-    ],
-)
-def test_train_with_lightning(model_name, dataset_name, loss_type):
+def test_train_with_lightning(model_name, dataset_name):
     """
     Test the forward pass for a given model and dataset.
     """
@@ -63,8 +51,6 @@ def test_train_with_lightning(model_name, dataset_name, loss_type):
     dataset_config = config["dataset"]
     runtime_config = config["runtime"]
 
-    # set loss type
-    training_config["training_parameter"]["loss_parameter"] = loss_type
     # perform training
     trainer = perform_training(
         potential_config=potential_config,
@@ -87,59 +73,46 @@ def test_train_with_lightning(model_name, dataset_name, loss_type):
 import torch
 
 
-def test_loss_fkt(single_batch_with_batchsize_2_with_force):
+def test_error_calculation(single_batch_with_batchsize_16_with_force):
+    # test the different Loss classes
+    from modelforge.train.training import (
+        FromPerAtomToPerMoleculeError,
+        PerMoleculeError,
+    )
     from torch_scatter import scatter_sum
 
-    batch = single_batch_with_batchsize_2_with_force
-    E_true = batch.metadata.E
-    F_true = batch.metadata.F
-    F_predict = torch.randn_like(F_true)
-    E_predict = torch.randn_like(E_true)
+    # generate data
+    data = single_batch_with_batchsize_16_with_force
+    true_E = data.metadata.E
+    true_F = data.metadata.F
 
-    F_scaling = torch.tensor([1.0])
+    # make predictions
+    predicted_E = true_E + torch.rand_like(true_E) * 10
+    predicted_F = true_F + torch.rand_like(true_F) * 10
+    # test energy error
+    error = PerMoleculeError()
+    E_error = error(predicted_E, true_E, data)
 
-    F_error_per_atom = torch.norm(F_true - F_predict, dim=1) ** 2
-    F_error_per_molecule = scatter_sum(
-        F_error_per_atom, batch.nnp_input.atomic_subsystem_indices.long(), 0
+    # test energy error (mean squared error scaled by number of atoms in the molecule)
+    reference_E_error = torch.mean(
+        ((predicted_E - true_E) ** 2) / data.metadata.atomic_subsystem_counts
     )
+    assert torch.allclose(E_error, reference_E_error)
 
-    scale = F_scaling / (3 * batch.metadata.atomic_subsystem_counts)
-    F_per_mol_scaled = F_error_per_molecule / scale
+    # test force error
+    error = FromPerAtomToPerMoleculeError()
+    F_error = error(predicted_F, true_F, data)
 
-
-@pytest.fixture
-def _initialize_predict_target_dictionary():
-    # initalize the test system
-    predict_target = {}
-    predict_target["E_predict"] = torch.tensor([[1.0], [2.0], [3.0]])
-    predict_target["E_true"] = torch.tensor([[1.0], [-2.0], [3.0]])
-    predict_target["F_predict"] = torch.tensor(
-        [[1.0, 2.0, 3.0], [1.0, 2.0, 3.0], [1.0, 2.0, 3.0]]
+    # test force error (mean squared error scaled by number of atoms in the molecule)
+    reference_F_error = torch.mean(
+        scatter_sum(
+            torch.norm(predicted_F - true_F, dim=1) ** 2,
+            data.nnp_input.atomic_subsystem_indices.long(),
+            0,
+        )
+        / data.metadata.atomic_subsystem_counts
     )
-    predict_target["F_true"] = torch.tensor(
-        [[1.0, -2.0, -3.0], [1.0, -2.0, -3.0], [1.0, -2.0, -3.0]]
-    )
-    return predict_target
-
-
-def test_energy_loss_only(_initialize_predict_target_dictionary):
-    # test the different Loss classes
-    from modelforge.train.training import EnergyLoss
-
-    # initialize loss
-    loss_calculator = EnergyLoss()
-    predict_target = _initialize_predict_target_dictionary
-    # this loss calculates validation and training error as MSE and test error as RMSE
-    mse_expected_loss = torch.mean(
-        (predict_target["E_predict"] - predict_target["E_true"]) ** 2
-    )
-
-    # test loss class
-    # make sure that train loss is MSE as expected
-    loss = loss_calculator.calculate_loss(predict_target, None)
-    assert torch.isclose(
-        mse_expected_loss, loss["combined_loss"]
-    ), f"Expected {mse_expected_loss.item()} but got {loss['combined_loss'].item()}"
+    assert torch.allclose(F_error, reference_F_error)
 
 
 @pytest.mark.skipif(

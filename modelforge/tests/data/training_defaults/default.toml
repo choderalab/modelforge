@@ -24,10 +24,10 @@ monitor = "val/per_molecule_energy/rmse"
 interval = "epoch"
 
 [training.training_parameter.loss_parameter]
-loss_property = ['per_molecule_energy_error', 'per_atom_force_error'] # use .
+loss_property = ['per_molecule_energy', 'per_atom_force'] # use .
 [training.training_parameter.loss_parameter.weight]
-per_molecule_energy_error = 0.999 #NOTE: reciproce units
-per_atom_force_error = 0.001
+per_molecule_energy = 0.999 #NOTE: reciproce units
+per_atom_force = 0.001
 
 [training.early_stopping]
 verbose = true

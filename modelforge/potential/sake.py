@@ -99,8 +99,6 @@ class SAKECore(CoreNetwork):
             nn.SiLU(),
             Dense(number_of_atom_features, 1),
         )
-        self.readout_module = FromAtomToMoleculeReduction()
-
         # initialize the interaction networks
         self.interaction_modules = nn.ModuleList(
             SAKEInteraction(

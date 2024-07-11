@@ -104,11 +104,6 @@ class PaiNNCore(CoreNetwork):
 
         self.embedding_module = Embedding(max_Z, number_of_atom_features)
 
-        # initialize the energy readout_operation
-        from .processing import FromAtomToMoleculeReduction
-
-        self.readout_module = FromAtomToMoleculeReduction()
-
         # initialize representation block
         self.representation_module = PaiNNRepresentation(
             cutoff,

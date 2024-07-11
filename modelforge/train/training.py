@@ -7,49 +7,7 @@ from modelforge.dataset.dataset import BatchData
 
 
 import torchmetrics
-from torchmetrics.utilities import dim_zero_cat
 from typing import Optional
-
-
-class LogLoss(torchmetrics.Metric):
-    """
-    Custom metric to log the loss function.
-
-    Attributes
-    ----------
-    loss_per_batch : List[torch.Tensor]
-        List to store the loss for each batch.
-    """
-
-    def __init__(self) -> None:
-        """
-        Initializes the LogLoss class, setting up the state for the metric.
-        """
-        super().__init__()
-        self.add_state("loss_per_batch", default=[], dist_reduce_fx="cat")
-
-    def update(self, loss: torch.Tensor) -> None:
-        """
-        Updates the metric state with the loss for a batch.
-
-        Parameters
-        ----------
-        loss : torch.Tensor
-            The loss for a batch.
-        """
-        self.loss_per_batch.append(loss.detach())
-
-    def compute(self) -> torch.Tensor:
-        """
-        Computes the average loss over all batches in an epoch.
-
-        Returns
-        -------
-        torch.Tensor
-            The average loss for the epoch.
-        """
-        mse_loss_per_epoch = dim_zero_cat(self.loss_per_batch)
-        return torch.mean(mse_loss_per_epoch)
 
 
 from torch import nn
@@ -57,51 +15,130 @@ from torch_scatter import scatter_sum
 
 
 class PerAtomToPerMoleculeError(nn.Module):
+    """
+    Calculates the per-atom error and aggregates it to per-molecule mean squared error.
+
+    """
 
     def __init__(self):
+        """
+        Initializes the PerAtomToPerMoleculeError class.
+        """
+
         from torch.nn import MSELoss
 
         super().__init__()
-        self.loss = MSELoss()
 
     def forward(
         self, predicted: torch.Tensor, true: torch.Tensor, batch
     ) -> torch.Tensor:
+        """
+        Computes the per-atom error and aggregates it to per-molecule mean squared error.
+
+        Parameters
+        ----------
+        predicted : torch.Tensor
+            The predicted values.
+        true : torch.Tensor
+            The true values.
+        batch : Any
+            The batch data containing metadata and input information.
+
+        Returns
+        -------
+        torch.Tensor
+            The aggregated per-molecule error.
+        """
 
         # squaared error
-        error_per_atom = torch.norm(predicted - true, dim=1) ** 2
+        per_atom_squared_error = torch.norm(predicted - true, dim=1) ** 2
 
         # Aggregate error per molecule
-        error_per_molecule = scatter_sum(
-            error_per_atom, batch.nnp_input.atomic_subsystem_indices.long(), 0
+        per_molecule_squared_error = scatter_sum(
+            per_atom_squared_error, batch.nnp_input.atomic_subsystem_indices.long(), 0
         )
-
+        per_molecule_square_error_scaled = (
+            per_molecule_squared_error / batch.metadata.atomic_subsystem_counts
+        )
         # divide by nnumber of atoms
-        return error_per_molecule / batch.metadata.atomic_subsystem_counts
+        return per_molecule_square_error_scaled
 
 
 class PerMoleculeError(nn.Module):
+    """
+    Calculates the per-molecule mean squared error.
+
+    """
 
     def __init__(self):
-        from torch.nn import MSELoss
+        """
+        Initializes the PerMoleculeError class.
+        """
 
         super().__init__()
-
-        self.loss = MSELoss()
 
     def forward(
         self, predicted: torch.Tensor, true: torch.Tensor, batch
     ) -> torch.Tensor:
+        """
+        Computes the per-molecule mean squared error.
 
-        # divide by number of atoms
-        return self.loss(predicted, true) / batch.metadata.atomic_subsystem_counts
+        Parameters
+        ----------
+        predicted : torch.Tensor
+            The predicted values.
+        true : torch.Tensor
+            The true values.
+        batch : Any
+            The batch data containing metadata and input information.
+
+        Returns
+        -------
+        torch.Tensor
+            The mean per-molecule error.
+        """
+
+        per_molecule_squared_error = (predicted - true) ** 2
+        per_molecule_square_error_scaled = (
+            per_molecule_squared_error / batch.metadata.atomic_subsystem_counts
+        )
+
+        # average
+        return torch.mean(per_molecule_square_error_scaled)
 
 
 class Loss(nn.Module):
+    """
+    Calculates the combined loss for energy and force predictions.
+
+    Attributes
+    ----------
+    loss_property : List[str]
+        List of properties to include in the loss calculation.
+    weight : Dict[str, float]
+        Dictionary containing the weights for each property in the loss calculation.
+    loss : nn.ModuleDict
+        Module dictionary containing the loss functions for each property.
+    """
 
     _SUPPORTED_PROPERTIES = ["per_molecule_energy", "force"]
 
     def __init__(self, loss_porperty: List[str], weight: Dict[str, float]):
+        """
+        Initializes the Loss class.
+
+        Parameters
+        ----------
+        loss_property : List[str]
+            List of properties to include in the loss calculation.
+        weight : Dict[str, float]
+            Dictionary containing the weights for each property in the loss calculation.
+
+        Raises
+        ------
+        NotImplementedError
+            If an unsupported loss type is specified.
+        """
         super().__init__()
 
         from torch.nn import ModuleDict
@@ -122,6 +159,21 @@ class Loss(nn.Module):
                 raise NotImplementedError(f"Loss type {prop} not implemented.")
 
     def forward(self, predict_target: Dict[str, torch.Tensor], batch):
+        """
+        Calculates the combined loss for the specified properties.
+
+        Parameters
+        ----------
+        predict_target : Dict[str, torch.Tensor]
+            Dictionary containing predicted and true values for energy and force.
+        batch : Any
+            The batch data containing metadata and input information.
+
+        Returns
+        -------
+        torch.Tensor
+            The combined loss for the specified properties.
+        """
 
         loss = torch.zeros_like(predict_target["E_true"])
 
@@ -142,6 +194,14 @@ class LossFactory(object):
     def create_loss(loss_property: List[str], weight: Dict[str, float]) -> Type[Loss]:
         """
         Creates an instance of the specified loss type.
+
+        Parameters
+        ----------
+        loss_property : List[str]
+            List of properties to include in the loss calculation.
+        weight : Dict[str, float]
+            Dictionary containing the weights for each property in the loss calculation.
+
         Returns
         -------
         Loss

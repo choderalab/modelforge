@@ -545,7 +545,7 @@ class SAKEInteraction(nn.Module):
         return h_updated, x_updated, v_updated
 
 
-from typing import Optional, List
+from typing import Optional, List, Union
 
 
 class SAKE(BaseNetwork):

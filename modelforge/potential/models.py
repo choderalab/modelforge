@@ -7,7 +7,6 @@ from typing import (
     NamedTuple,
     Tuple,
     Type,
-    Union,
     Optional,
     List,
 )

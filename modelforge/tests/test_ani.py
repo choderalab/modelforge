@@ -186,20 +186,17 @@ def test_representation_with_diagonal_batching():
 
     # test that both ANI and MF obtain the same radial symmetry outpu
 
-    reference_rbf_output, ani_d_ij = (
-        provide_reference_values_for_test_ani_test_compute_rsf_with_diagonal_batching()
-    )
-    assert torch.allclose(
-        calculated_rbf_output, reference_rbf_output, atol=1e-4
-    )
+    (
+        reference_rbf_output,
+        ani_d_ij,
+    ) = provide_reference_values_for_test_ani_test_compute_rsf_with_diagonal_batching()
+    assert torch.allclose(calculated_rbf_output, reference_rbf_output, atol=1e-4)
 
     assert torch.allclose(
         ani_d_ij, d_ij.squeeze(1) * 10, atol=1e-4
     )  # NOTE: unit mismatch
 
-    assert calculated_rbf_output.shape == torch.Size(
-        [20, radial_dist_divisions]
-    )
+    assert calculated_rbf_output.shape == torch.Size([20, radial_dist_divisions])
 
 
 def test_compare_angular_symmetry_features():
@@ -260,14 +257,14 @@ def test_compare_angular_symmetry_features():
     )
     # NOTE: ANI works with Angstrom, modelforge with nanometer
     # NOTE: ANI operates on a [nr_of_molecules, nr_of_atoms, 3] tensor
-    calculated_angular_feature_vector = asf(vec12 / 10)
+    angular_feature_vector_mf = asf(vec12 / 10)
     # make sure that the output is the same
     assert angular_feature_vector_ani.size() == angular_feature_vector_mf.size()
 
     # NOTE: the order of the angular_feature_vector is not guaranteed
-    # as the underlying algorithm does not use stable sorting.
+    # as the triple_by_molecule function  used to prepare the inputs does not use stable sorting.
     # When stable sorting is used, the output is identical across platforms, but will not be
-    # used here as it is slower and the order of the output is not important to the actual calculation.
+    # used here as it is slower and the order of the output is not important in practrice.
     # As such, to check for equivalence in a way that is not order dependent, we can just consider the sum.
     assert torch.isclose(
         torch.sum(angular_feature_vector_ani),

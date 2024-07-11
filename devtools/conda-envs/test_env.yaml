@@ -24,7 +24,7 @@ dependencies:
   - sqlitedict
   - pytorch_scatter
   - jax
-  - "ray[data,train,tune,serve]"
+  - ray-all
 
   # Testing
   - pytest>=2.1

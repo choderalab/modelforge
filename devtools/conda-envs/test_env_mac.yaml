@@ -39,3 +39,4 @@ dependencies:
       - pytorch2jax
       - git+https://github.com/ArnNag/sake.git@nanometer
       - jax
+      - flax

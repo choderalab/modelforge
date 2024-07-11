@@ -29,7 +29,6 @@ dependencies:
   - pytest-cov
   - codecov
   - requests
-  - versioneer
 
   # Docs
   - sphinx_rtd_theme
@@ -40,3 +39,4 @@ dependencies:
       - git+https://github.com/ArnNag/sake.git@nanometer
       - "ray[data,train,tune,serve]"
       - flax
+      - versioneer

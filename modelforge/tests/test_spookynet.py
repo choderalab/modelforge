@@ -5,11 +5,20 @@ import torch
 import pytest
 
 
-def test_spookynet_init():
+def test_init():
     """Test initialization of the SpookyNet model."""
+    from modelforge.potential.spookynet import SpookyNet
 
-    spookynet = SpookyNet()
-    assert spookynet is not None, "SpookyNet model should be initialized."
+    from modelforge.tests.test_models import load_configs
+
+    # load default parameters
+    config = load_configs(f"spookynet", "qm9")
+    # initialize model
+    spookynet = SpookyNet(
+        **config["potential"]["core_parameter"],
+        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+    )
+    assert spookynet is not None, "Schnet model should be initialized."
 
 
 from openff.units import unit

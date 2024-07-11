@@ -544,7 +544,7 @@ class SAKEInteraction(nn.Module):
         return h_updated, x_updated, v_updated
 
 
-from typing import Optional, List
+from typing import Optional, List, Union
 
 
 class SAKE(BaseNetwork):
@@ -555,7 +555,7 @@ class SAKE(BaseNetwork):
         number_of_interaction_modules: int,
         number_of_spatial_attention_heads: int,
         number_of_radial_basis_functions: int,
-        cutoff: unit.Quantity,
+        cutoff: Union[unit.Quantity, str],
         processing_operation: List[Dict[str, str]],
         readout_operation: List[Dict[str, str]],
         dataset_statistic: Optional[Dict[str, float]] = None,

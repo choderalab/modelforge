@@ -7,7 +7,6 @@ from typing import (
     NamedTuple,
     Tuple,
     Type,
-    Union,
     Optional,
     List,
 )
@@ -813,8 +812,8 @@ class BaseNetwork(Module):
     def __init__(
         self,
         *,
-        processing_operation: Dict[str, str],
-        readout_operation: Dict[str, str],
+        processing_operation: List[Dict[str, str]],
+        readout_operation: List[Dict[str, str]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ):
         """

@@ -984,7 +984,7 @@ class ExponentialBernsteinRadialBasisFunction(RadialBasisFunction):
             trainable_prefactor=False,
             dtype=dtype,
         )
-        self.alpha = ini_alpha
+        self.alpha = ini_alpha  #TODO: should this be unitful?
 
     def nondimensionalize_distances(self, d_ij: torch.Tensor) -> torch.Tensor:
         return -(

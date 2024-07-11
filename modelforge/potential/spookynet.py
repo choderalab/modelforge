@@ -204,7 +204,7 @@ class SpookyNetCore(CoreNetwork):
                 data.pair_indices,
                 representation["f_ij"],
                 representation["f_cutoff"],
-                representation["p_orbital_ij"],
+                representation["dir_ij"],
                 representation["d_orbital_ij"]
             )
             f += y  # accumulate module output to features
@@ -230,7 +230,6 @@ class SpookyNet(BaseNetwork):
             number_of_interaction_modules: int = 3,
             cutoff: unit.Quantity = 5 * unit.angstrom,
             number_of_filters: int = 32,
-            shared_interactions: bool = False,
     ) -> None:
         """
         Initialize the SpookyNet network.
@@ -256,7 +255,6 @@ class SpookyNet(BaseNetwork):
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             number_of_interaction_modules=number_of_interaction_modules,
             number_of_filters=number_of_filters,
-            shared_interactions=shared_interactions,
         )
         self.only_unique_pairs = False  # NOTE: for pairlist
         self.input_preparation = InputPreparation(
@@ -303,17 +301,16 @@ class SpookyNetRepresentation(nn.Module):
         super().__init__()
 
         # cutoff
-        from modelforge.potential import CosineCutoff
-
-
         # radial symmetry function
-        from .utils import PhysNetRadialSymmetryFunction
+        from .utils import ExponentialBernsteinRadialBasisFunction, CosineCutoff
 
-        self.radial_symmetry_function_module = PhysNetRadialSymmetryFunction(
+        self.radial_symmetry_function_module = ExponentialBernsteinRadialBasisFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
-            max_distance=cutoff,
+            ini_alpha=1.0,  # TODO: put the right number
             dtype=torch.float32,
         )
+
+        self.cutoff_module = CosineCutoff(cutoff=cutoff)
 
     def forward(self, d_ij: torch.Tensor, r_ij: torch.Tensor) -> dict[str, torch.Tensor]:
         """
@@ -336,15 +333,15 @@ class SpookyNetRepresentation(nn.Module):
         sqrt3 = math.sqrt(3)
         sqrt3half = 0.5 * sqrt3
         # short-range distances
-        p_orbital_ij = r_ij / d_ij.unsqueeze(-1)
+        dir_ij = r_ij / d_ij.unsqueeze(-1)
         d_orbital_ij = torch.stack(
             [
-                sqrt3 * p_orbital_ij[:, 0] * p_orbital_ij[:, 1],  # xy
-                sqrt3 * p_orbital_ij[:, 0] * p_orbital_ij[:, 2],  # xz
-                sqrt3 * p_orbital_ij[:, 1] * p_orbital_ij[:, 2],  # yz
-                0.5 * (3 * p_orbital_ij[:, 2] * p_orbital_ij[:, 2] - 1.0),  # z2
+                sqrt3 * dir_ij[:, 0] * dir_ij[:, 1],  # xy
+                sqrt3 * dir_ij[:, 0] * dir_ij[:, 2],  # xz
+                sqrt3 * dir_ij[:, 1] * dir_ij[:, 2],  # yz
+                0.5 * (3 * dir_ij[:, 2] * dir_ij[:, 2] - 1.0),  # z2
                 sqrt3half
-                * (p_orbital_ij[:, 0] * p_orbital_ij[:, 0] - p_orbital_ij[:, 1] * p_orbital_ij[:, 1]),  # x2-y2
+                * (dir_ij[:, 0] * dir_ij[:, 0] - dir_ij[:, 1] * dir_ij[:, 1]),  # x2-y2
             ],
             dim=-1,
         )
@@ -352,7 +349,7 @@ class SpookyNetRepresentation(nn.Module):
         f_ij_cutoff = self.cutoff_module(d_ij)
         filters = f_ij * f_ij_cutoff
 
-        return {"filters": filters, "p_orbital_ij": p_orbital_ij, "d_orbital_ij": d_orbital_ij}
+        return {"filters": filters, "dir_ij": dir_ij, "d_orbital_ij": d_orbital_ij}
 
 
 class Swish(nn.Module):
@@ -590,7 +587,7 @@ class SpookyNetLocalInteraction(nn.Module):
             self,
             x_tilde: torch.Tensor,
             f_ij_after_cutoff: torch.Tensor,
-            p_orbital_ij: torch.Tensor,
+            dir_ij: torch.Tensor,
             d_orbital_ij: torch.Tensor,
             idx_i: torch.Tensor,
             idx_j: torch.Tensor,
@@ -604,7 +601,7 @@ class SpookyNetLocalInteraction(nn.Module):
             Atomic feature vectors.
         rbf (FloatTensor [N, num_basis_functions]):
             Values of the radial basis functions for the pairwise distances.
-        p_orbital_ij (TODO):
+        dir_ij (TODO):
             TODO
         d_orbital_ij (TODO):
             TODO
@@ -616,8 +613,8 @@ class SpookyNetLocalInteraction(nn.Module):
         """
         # interaction functions
         gs = self.radial_s(f_ij_after_cutoff)
-        gp = self.radial_p(f_ij_after_cutoff).unsqueeze(-2) * p_orbital_ij.unsqueeze(-1)
-        gd = self.radial_d(f_ij_after_cutoff).unsqueeze(-2) * d_orbital_ij.unsqueeze(-1)
+        gp = self.radial_p(f_ij_after_cutoff).unsqueeze(-2) * dir_ij.unsqueeze(-1)  # TODO: replace with einsum
+        gd = self.radial_d(f_ij_after_cutoff).unsqueeze(-2) * d_orbital_ij.unsqueeze(-1)  # TODO: replace with einsum
         # atom featurizations
         xx = self.resblock_x(x_tilde)
         xs = self.resblock_s(x_tilde)
@@ -628,15 +625,15 @@ class SpookyNetLocalInteraction(nn.Module):
         xp = xp[idx_j]  # L=1
         xd = xd[idx_j]  # L=2
         # sum over neighbors
-        pp = x_tilde.new_zeros(x_tilde.shape[0], p_orbital_ij.shape[-1], x_tilde.shape[-1])
+        pp = x_tilde.new_zeros(x_tilde.shape[0], dir_ij.shape[-1], x_tilde.shape[-1])
         dd = x_tilde.new_zeros(x_tilde.shape[0], d_orbital_ij.shape[-1], x_tilde.shape[-1])
-        s = xx.index_add(0, idx_i, gs * xs)  # L=0
-        p = pp.index_add_(0, idx_i, gp * xp.unsqueeze(-2))  # L=1
-        d = dd.index_add_(0, idx_i, gd * xd.unsqueeze(-2))  # L=2
+        s = xx.index_add(0, idx_i, gs * xs)  # L=0 # TODO: replace with einsum
+        p = pp.index_add_(0, idx_i, gp * xp.unsqueeze(-2))  # L=1 # TODO: replace with einsum
+        d = dd.index_add_(0, idx_i, gd * xd.unsqueeze(-2))  # L=2 # TODO: replace with einsum
         # project tensorial features to scalars
         pa, pb = torch.split(self.projection_p(p), p.shape[-1], dim=-1)
         da, db = torch.split(self.projection_d(d), d.shape[-1], dim=-1)
-        return self.resblock(s + (pa * pb).sum(-2) + (da * db).sum(-2))
+        return self.resblock(s + (pa * pb).sum(-2) + (da * db).sum(-2))  # TODO: replace with einsum
 
 
 class SpookyNetAttention(nn.Module):
@@ -878,8 +875,8 @@ class SpookyNetInteractionModule(nn.Module):
             pairlist: torch.Tensor,  # shape [n_pairs, 2]
             f_ij: torch.Tensor,  # shape [n_pairs, 1, number_of_radial_basis_functions] TODO: why the 1?
             f_ij_cutoff: torch.Tensor,  # shape [n_pairs, 1]
-            p_orbital_ij: torch.Tensor, # shape [n_pairs, 1]
-            d_orbital_ij: torch.Tensor, # shape [n_pairs, 1]
+            dir_ij: torch.Tensor,  # shape [n_pairs, 1]
+            d_orbital_ij: torch.Tensor,  # shape [n_pairs, 1]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Evaluate all modules in the block.
@@ -892,7 +889,7 @@ class SpookyNetInteractionModule(nn.Module):
                 Latent atomic feature vectors.
             rbf (FloatTensor [P, num_basis_functions]):
                 Values of the radial basis functions for the pairwise distances.
-            p_orbital_ij (FloatTensor [P, 3]):
+            dir_ij (FloatTensor [P, 3]):
                 Unit vectors pointing from atom i to atom j for all atomic pairs.
             d_orbital_ij (FloatTensor [P]):
                 Distances between atom i and atom j for all atomic pairs.
@@ -911,7 +908,7 @@ class SpookyNetInteractionModule(nn.Module):
         idx_i, idx_j = pairlist[0], pairlist[1]
         x_tilde = self.residual_pre(x)
         del x
-        l = self.local_interaction(x_tilde, f_ij * f_ij_cutoff, p_orbital_ij, d_orbital_ij, idx_i, idx_j)
+        l = self.local_interaction(x_tilde, f_ij * f_ij_cutoff, dir_ij, d_orbital_ij, idx_i, idx_j)
         n = self.nonlocal_interaction(x_tilde)
         x_updated = self.residual_post(x_tilde + l + n)
         del x_tilde

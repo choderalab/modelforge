@@ -205,7 +205,7 @@ class PaiNNCore(CoreNetwork):
         E_i = self.energy_layer(q).squeeze(1)
 
         return {
-            'per_atom_energy': E_i,
+            "per_atom_energy": E_i,
             "mu": mu,
             "q": q,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
@@ -484,15 +484,13 @@ class PaiNN(BaseNetwork):
         number_of_interaction_modules: int,
         shared_interactions: bool,
         shared_filters: bool,
-        processing_operation: Dict[str, torch.nn.ModuleList],
-        readout_operation: Dict[str, List[Dict[str, str]]],
+        postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
         epsilon: float = 1e-8,
     ) -> None:
         super().__init__(
             dataset_statistic=dataset_statistic,
-            processing_operation=processing_operation,
-            readout_operation=readout_operation,
+            postprocessing_parameter=postprocessing_parameter,
         )
         from modelforge.utils.units import _convert
 

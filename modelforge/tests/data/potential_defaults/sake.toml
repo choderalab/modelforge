@@ -1,7 +1,7 @@
 [potential]
 model_name = "SAKE"
 
-[potential.potential_parameter]
+[potential.core_parameter]
 
 max_Z = 101
 number_of_atom_features = 64

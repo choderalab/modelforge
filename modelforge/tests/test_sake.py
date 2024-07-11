@@ -431,7 +431,7 @@ def test_sake_model_against_reference(single_batch_with_batchsize_1):
             {
                 "step": "from_atom_to_molecule",
                 "mode": "sum",
-                "in": per_atom_energy,
+                "in": 'per_atom_energy',
                 "index_key": "atomic_subsystem_indices",
                 "out": "E",
             }

@@ -172,7 +172,7 @@ class SAKECore(CoreNetwork):
         E_i = self.energy_layer(h).squeeze(1)
 
         return {
-            'per_atom_energy': E_i,
+            "per_atom_energy": E_i,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
 
@@ -560,15 +560,13 @@ class SAKE(BaseNetwork):
         number_of_spatial_attention_heads: int,
         number_of_radial_basis_functions: int,
         cutoff: unit.Quantity,
-        processing_operation: List[Dict[str, str]],
-        readout_operation: List[Dict[str, str]],
+        postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
         epsilon: float = 1e-8,
     ):
         super().__init__(
             dataset_statistic=dataset_statistic,
-            processing_operation=processing_operation,
-            readout_operation=readout_operation,
+            postprocessing_parameter=postprocessing_parameter,
         )
         from modelforge.utils.units import _convert
 

@@ -31,7 +31,7 @@ def initialize_model(
             {
                 "step": "from_atom_to_molecule",
                 "mode": "sum",
-                "in": per_atom_energy,
+                "in": 'per_atom_energy',
                 "index_key": "atomic_subsystem_indices",
                 "out": "E",
             }

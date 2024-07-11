@@ -344,14 +344,14 @@ def test_forward_pass_with_all_datasets(model_name, dataset_name, datamodule_fac
 
     # test that the output has the following keys
     assert "E" in output
-    assert per_atom_energy in output
+    assert 'per_atom_energy' in output
     assert "mse" in output
     assert "ase" in output
 
     assert output["E"].shape[0] == 64
     assert output["mse"].shape[0] == 64
     assert output["ase"].shape == batch.nnp_input.atomic_numbers.shape
-    assert output[per_atom_energy].shape == batch.nnp_input.atomic_numbers.shape
+    assert output['per_atom_energy'].shape == batch.nnp_input.atomic_numbers.shape
 
     pair_list = batch.nnp_input.pair_list
     # pairlist is in ascending order in row 0
@@ -367,19 +367,15 @@ def test_forward_pass(
     import torch
 
     nnp_input = single_batch_with_batchsize_64.nnp_input
-    nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
     # read default parameters
     config = load_configs(f"{model_name.lower()}", "qm9")
-
-    # Extract parameters
-    model_parameter = config["potential"]
 
     # test the forward pass through each of the models
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         simulation_environment=simulation_environment,
-        model_parameter=model_parameter,
+        model_parameter=config["potential"],
     )
     if "JAX" in str(type(model)):
         nnp_input = nnp_input.as_jax_namedtuple()
@@ -387,31 +383,30 @@ def test_forward_pass(
     output = model(nnp_input)
 
     # test tat we get an energie per molecule
+    nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
     assert len(output["per_molecule_energy"]) == nr_of_mols
 
 
-    # TEST WORKS UNTIL HERE
-
     # the batch consists of methane (CH4) and amamonium (NH3)
-    # which has symmetric hydrogens.
+    # which have chemically equivalent hydrogens at the minimum geometry.
     # This has to be reflected in the atomic energies E_i, which
-    # has to be equal for all hydrogens
+    # have to be equal for all hydrogens
     if "JAX" not in str(type(model)):
 
         # assert that the following tensor has equal values for dim=0 index 1 to 4 and 6 to 8
         assert torch.allclose(
-            output[per_atom_energy][1:4], output[per_atom_energy][1], atol=1e-5
+            output['per_atom_energy'][1:4], output['per_atom_energy'][1], atol=1e-5
         )
         assert torch.allclose(
-            output[per_atom_energy][6:8], output[per_atom_energy][6], atol=1e-5
+            output['per_atom_energy'][6:8], output['per_atom_energy'][6], atol=1e-5
         )
 
         # make sure that the total energy is \sum E_i
         assert torch.allclose(
-            output["E"][0], output[per_atom_energy][0:5].sum(dim=0), atol=1e-5
+            output["per_molecule_energy"][0], output['per_atom_energy'][0:5].sum(dim=0), atol=1e-5
         )
         assert torch.allclose(
-            output["E"][1], output[per_atom_energy][5:9].sum(dim=0), atol=1e-5
+            output["per_molecule_energy"][1], output['per_atom_energy'][5:9].sum(dim=0), atol=1e-5
         )
 
 

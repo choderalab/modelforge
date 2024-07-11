@@ -790,29 +790,48 @@ class PostProcessing(torch.nn.Module):
 
             # check if also self-energies are requested
             if operations.get("calculate_molecular_self_energy", False):
-                atomic_self_energies = self.dataset_statistic["atomic_self_energies"]
 
-                postprocessing_sequence.append(
-                    CalculateAtomicSelfEnergy(atomic_self_energies)()
-                )
-                prostprocessing_sequence_names.append("calculate_molecular_self_energy")
-
-                postprocessing_sequence.append(
-                    FromAtomToMoleculeReduction(
-                        per_atom_property_name="ase_tensor",
-                        index_name="atomic_subsystem_indices",
-                        output_name="per_molecule_self_energy",
+                if self.dataset_statistic is None:
+                    log.warning(
+                        "Dataset statistics are required to calculate the molecular self-energies but haven't been provided."
                     )
-                )
+                else:
+                    atomic_self_energies = self.dataset_statistic[
+                        "atomic_self_energies"
+                    ]
+
+                    postprocessing_sequence.append(
+                        CalculateAtomicSelfEnergy(atomic_self_energies)()
+                    )
+                    prostprocessing_sequence_names.append(
+                        "calculate_molecular_self_energy"
+                    )
+
+                    postprocessing_sequence.append(
+                        FromAtomToMoleculeReduction(
+                            per_atom_property_name="ase_tensor",
+                            index_name="atomic_subsystem_indices",
+                            output_name="per_molecule_self_energy",
+                        )
+                    )
 
             # check if also self-energies are requested
             if operations.get("calculate_atomic_self_energy", False):
-                atomic_self_energies = self.dataset_statistic["atomic_self_energies"]
+                if self.dataset_statistic is None:
+                    log.warning(
+                        "Dataset statistics are required to calculate the molecular self-energies but haven't been provided."
+                    )
+                else:
+                    atomic_self_energies = self.dataset_statistic[
+                        "atomic_self_energies"
+                    ]
 
-                postprocessing_sequence.append(
-                    CalculateAtomicSelfEnergy(atomic_self_energies)()
-                )
-                prostprocessing_sequence_names.append("calculate_atomic_self_energy")
+                    postprocessing_sequence.append(
+                        CalculateAtomicSelfEnergy(atomic_self_energies)()
+                    )
+                    prostprocessing_sequence_names.append(
+                        "calculate_atomic_self_energy"
+                    )
 
             log.debug(prostprocessing_sequence_names)
 

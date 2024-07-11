@@ -540,7 +540,7 @@ class ANI2xCore(CoreNetwork):
         E_i = self.interaction_modules(representation)
 
         return {
-            'per_atom_energy': E_i,
+            "per_atom_energy": E_i,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
 
@@ -558,15 +558,13 @@ class ANI2x(BaseNetwork):
         angular_min_distance: Union[unit.Quantity, str],
         angular_dist_divisions: int,
         angle_sections: int,
-        processing_operation: List[Dict[str, str]],
-        readout_operation: List[Dict[str, str]],
+        postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
 
         super().__init__(
-            processing_operation=processing_operation,
             dataset_statistic=dataset_statistic,
-            readout_operation=readout_operation,
+            postprocessing_parameter=postprocessing_parameter,
         )
 
         from modelforge.utils.units import _convert

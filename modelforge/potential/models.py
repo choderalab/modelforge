@@ -816,23 +816,23 @@ class PostProcessing(torch.nn.Module):
                             )
                         )
 
-            # check if also self-energies are requested
-            if operations.get("calculate_atomic_self_energy", False):
-                if self.dataset_statistic is None:
-                    log.warning(
-                        "Dataset statistics are required to calculate the molecular self-energies but haven't been provided."
-                    )
-                else:
-                    atomic_self_energies = self.dataset_statistic[
-                        "atomic_self_energies"
-                    ]
+                # check if also self-energies are requested
+                elif operations.get("calculate_atomic_self_energy", False):
+                    if self.dataset_statistic is None:
+                        log.warning(
+                            "Dataset statistics are required to calculate the molecular self-energies but haven't been provided."
+                        )
+                    else:
+                        atomic_self_energies = self.dataset_statistic[
+                            "atomic_self_energies"
+                        ]
 
-                    postprocessing_sequence.append(
-                        CalculateAtomicSelfEnergy(atomic_self_energies)()
-                    )
-                    prostprocessing_sequence_names.append(
-                        "calculate_atomic_self_energy"
-                    )
+                        postprocessing_sequence.append(
+                            CalculateAtomicSelfEnergy(atomic_self_energies)()
+                        )
+                        prostprocessing_sequence_names.append(
+                            "calculate_atomic_self_energy"
+                        )
 
             log.debug(prostprocessing_sequence_names)
 
@@ -845,7 +845,8 @@ class PostProcessing(torch.nn.Module):
 
         # NOTE: this is not very elegant, but I am unsure how to do this better
         # I am currently directly writing new keys and values in the data dictionary
-        for property in list(data.keys()):
+        property_keys = list(self.registered_chained_operations.keys())
+        for property in property_keys:
             if property in self._registered_properties:
                 self.registered_chained_operations[property](data)
 

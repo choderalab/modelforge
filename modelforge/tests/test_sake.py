@@ -587,11 +587,13 @@ def test_model_invariance(single_batch_with_batchsize_1):
 
     from modelforge.tests.test_models import load_configs
 
-    config = load_configs(f"sake_without_ase", "qm9")
-    # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
+    config = load_configs(f"sake", "qm9")
 
-    model = SAKE(**potential_parameter)
+    # initialize model
+    model = SAKE(
+        **config["potential"]["core_parameter"],
+        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+    )
     # get methane input
     methane = single_batch_with_batchsize_1.nnp_input
 
@@ -602,4 +604,6 @@ def test_model_invariance(single_batch_with_batchsize_1):
     reference_out = model(methane)
     perturbed_out = model(perturbed_methane_input)
 
-    assert torch.allclose(reference_out["E"], perturbed_out["E"])
+    assert torch.allclose(
+        reference_out["per_molecule_energy"], perturbed_out["per_molecule_energy"]
+    )

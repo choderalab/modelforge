@@ -770,12 +770,16 @@ def test_energy_postprocessing():
     from openff.units import unit
 
     assert np.isclose(
-        unit.Quantity(dataset_statistic["atomic_energies_stats"]["E_i_mean"]).m,
+        unit.Quantity(
+            dataset_statistic["training_dataset_statistics"]["per_atom_energy_mean"]
+        ).m,
         -402.916561,
     )
 
     assert np.isclose(
-        unit.Quantity(dataset_statistic["atomic_energies_stats"]["E_i_stddev"]).m,
+        unit.Quantity(
+            dataset_statistic["training_dataset_statistics"]["per_atom_energy_stddev"]
+        ).m,
         25.013382078330697,
     )
 

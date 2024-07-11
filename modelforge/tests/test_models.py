@@ -88,10 +88,13 @@ def test_model_factory(model_name, simulation_environment):
 
 def test_energy_scaling_and_offset():
     # setup test dataset
-    from modelforge.dataset.dataset import DataModule
     from modelforge.potential.ani import ANI2x
+    from modelforge.dataset.dataset import DataModule
+
     import torch
 
+    # prepare reference value
+    # get methane input
     # test the self energy calculation on the QM9 dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
@@ -106,43 +109,68 @@ def test_energy_scaling_and_offset():
     )
     dataset.prepare_data()
     dataset.setup()
-    # -------------------------------#
-    # initialize model
-    # -------------------------------#
-    config = load_configs("ani2x_without_ase", "qm9")
-
-    import toml
-
-    dataset_statistic = toml.load(dataset.dataset_statistic_filename)
-    torch.manual_seed(42)
-    model = ANI2x(**potential_parameter, dataset_statistic=dataset_statistic)
-
-    # -------------------------------#
-    # Test that we can add the reference energy correctly
     # get methane input
-    methane = next(iter(dataset.train_dataloader())).nnp_input
-
-    # let's predict without any further postprocessing
-    output_no_postprocessing = model(methane)
-
-    # let's add self energies
+    methane = next(iter(dataset.train_dataloader(shuffle=False))).nnp_input
+    # load dataset statistic
     import toml
 
-    # load dataset statistic
     dataset_statistic = toml.load(dataset.dataset_statistic_filename)
-    # load potential parameter
+    # -------------------------------#
+    # initialize model without any postprocessing
+    # -------------------------------#
     config = load_configs("ani2x", "qm9")
-    potential_parameter = config["potential"].get("potential_parameter", {})
+
     torch.manual_seed(42)
-    model = ANI2x(**potential_parameter, dataset_statistic=dataset_statistic)
-    output_with_ase = model(methane)
+    model = ANI2x(
+        **config["potential"]["core_parameter"],
+        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+    )
+    output_no_postprocessing = model(methane)
+    # -------------------------------#
+    # Scale output
+
+    torch.manual_seed(42)
+    model = ANI2x(
+        **config["potential"]["core_parameter"],
+        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+        dataset_statistic=dataset_statistic,
+    )
+    scaled_output = model(methane)
+
+    # make sure that the scaled output equals the unscaled output
+    from openff.units import unit
+
+    mean = unit.Quantity(
+        dataset_statistic["training_dataset_statistics"]["per_atom_energy_mean"]
+    ).m
+    stddev = unit.Quantity(
+        dataset_statistic["training_dataset_statistics"]["per_atom_energy_stddev"]
+    ).m
+
+    compare_to = output_no_postprocessing["per_atom_energy"] * stddev + mean
+    assert torch.allclose(scaled_output["per_atom_energy"], compare_to)
+
+    # -------------------------------#
+    # Calculate atomic self energies
+
+    # modify postprocessing parameters
+    config["potential"]["postprocessing_parameter"][
+        "general_postprocessing_operation"
+    ] = {"calculate_molecular_self_energy": True}
+
+    model = ANI2x(
+        **config["potential"]["core_parameter"],
+        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+        dataset_statistic=dataset_statistic,
+    )
+
+    output_with_molecular_self_energies = model(methane)
 
     # make sure that the raw prediction is the same
-    import torch
-
-    assert torch.isclose(output_no_postprocessing["E"], output_with_ase["E"])
-
-    assert torch.isclose(output_with_ase["mse"], torch.tensor([-707050.0]))
+    assert torch.isclose(
+        output_with_molecular_self_energies["per_molecule_self_energy"],
+        torch.tensor([-104620.5859]),
+    )
 
 
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
@@ -208,7 +236,7 @@ def test_dataset_statistic(model_name):
 
     # extract value to compare against
     toml_E_i_mean = unit.Quantity(
-        dataset_statistic["atomic_energies_stats"]["E_i_mean"]
+        dataset_statistic["training_dataset_statistics"]["per_atom_energy_mean"]
     ).m
 
     # set up training model
@@ -223,13 +251,13 @@ def test_dataset_statistic(model_name):
     import numpy as np
 
     print(training_adapter.model.postprocessing.dataset_statistic)
-    # check that the E_i_mean is the same than in the dataset statistics
+    # check that the per_atom_energy_mean is the same than in the dataset statistics
     assert np.isclose(
         toml_E_i_mean,
         unit.Quantity(
             training_adapter.model.postprocessing.dataset_statistic[
-                "atomic_energies_stats"
-            ]["E_i_mean"]
+                "training_dataset_statistics"
+            ]["per_atom_energy_mean"]
         ).m,
     )
 
@@ -250,7 +278,9 @@ def test_dataset_statistic(model_name):
     assert np.isclose(
         toml_E_i_mean,
         unit.Quantity(
-            model.postprocessing.dataset_statistic["atomic_energies_stats"]["E_i_mean"]
+            model.postprocessing.dataset_statistic["training_dataset_statistics"][
+                "per_atom_energy_mean"
+            ]
         ).m,
     )
 

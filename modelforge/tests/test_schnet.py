@@ -165,13 +165,15 @@ def test_compare_forward():
 
     from modelforge.tests.test_models import load_configs
 
-    torch.manual_seed(1234)
     # load default parameters
     config = load_configs(f"schnet", "qm9")
 
     # override default parameters
     config["potential"]["core_parameter"]["number_of_atom_features"] = 12
     config["potential"]["core_parameter"]["number_of_radial_basis_functions"] = 5
+    config["potential"]["core_parameter"]["number_of_filters"] = 12
+
+    torch.manual_seed(1234)
 
     # initialize model
     schnet = SchNet(
@@ -277,8 +279,7 @@ def test_compare_forward():
     # ---------------------------------------- #
     # test forward pass
     # ---------------------------------------- #
-
-    # Check full pass
+    # reset
     torch.manual_seed(1234)
     for i in range(3):
         schnet.core_module.interaction_modules[i].intput_to_feature.reset_parameters()

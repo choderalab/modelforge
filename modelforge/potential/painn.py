@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Callable, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Callable, Dict, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -268,7 +268,7 @@ class PaiNNRepresentation(nn.Module):
             - "r_ij" (torch.Tensor): Displacement vector between atoms. Shape: (n_pairs, 3).
             - "atomic_embedding" (torch.Tensor): Embeddings of atomic numbers. Shape: (n_atoms, embedding_dim).
 
-        Returns:
+        Returns
         ----------
         Dict[str, torch.Tensor]:
             A dictionary containing the transformed input tensors.
@@ -353,7 +353,7 @@ class PaiNNInteraction(nn.Module):
             Scalar input values of shape [nr_of_atoms, 1, nr_atom_basis].
         mu : torch.Tensor
             Vector input values of shape [nr_of_atoms, 3, nr_atom_basis].
-        Wij : torch.Tensor
+        W_ij : torch.Tensor
             Filter of shape [nr_of_pairs, 1, n_interactions].
         dir_ij : torch.Tensor
             Directional vector between atoms i and j.
@@ -475,7 +475,7 @@ class PaiNN(BaseNetwork):
         max_Z: int,
         number_of_atom_features: int,
         number_of_radial_basis_functions: int,
-        cutoff: unit.Quantity,
+        cutoff: Union[unit.Quantity, str],
         number_of_interaction_modules: int,
         shared_interactions: bool,
         shared_filters: bool,

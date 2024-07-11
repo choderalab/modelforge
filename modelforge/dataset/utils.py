@@ -124,8 +124,8 @@ def calculate_mean_and_variance(
         online_estimator.update(E_scaled)
 
     stats = {
-        "E_i_mean": online_estimator.mean,
-        "E_i_stddev": online_estimator.stddev,
+        "per_atom_energy_mean": online_estimator.mean,
+        "per_atom_energy_stddev": online_estimator.stddev,
     }
     log.info(f"Mean and standard deviation of the dataset:{stats}")
     return stats

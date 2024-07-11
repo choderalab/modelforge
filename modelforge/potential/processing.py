@@ -22,12 +22,12 @@ def load_atomic_energies_stats(path: str) -> Dict[str, unit.Quantity]:
 
     energy_statistic = toml.load(open(path, "r"))
     # convert values to tensor
-    atomic_energies_stats = {
+    training_dataset_statistics = {
         key: unit.Quantity(value)
-        for key, value in energy_statistic["atomic_energies_stats"].items()
+        for key, value in energy_statistic["training_dataset_statistics"].items()
     }
 
-    return atomic_energies_stats
+    return training_dataset_statistics
 
 
 class FromAtomToMoleculeReduction(torch.nn.Module):

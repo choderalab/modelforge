@@ -725,13 +725,15 @@ class PostProcessing(torch.nn.Module):
                 f"No mean and stddev provided for dataset. Setting to default value {mean=} and {stddev=}!"
             )
         else:
-            atomic_energies_stats = self.dataset_statistic["atomic_energies_stats"]
-            mean = unit.Quantity(atomic_energies_stats["E_i_mean"]).m_as(
-                unit.kilojoule_per_mole
-            )
-            stddev = unit.Quantity(atomic_energies_stats["E_i_stddev"]).m_as(
-                unit.kilojoule_per_mole
-            )
+            training_dataset_statistics = self.dataset_statistic[
+                "training_dataset_statistics"
+            ]
+            mean = unit.Quantity(
+                training_dataset_statistics["per_atom_energy_mean"]
+            ).m_as(unit.kilojoule_per_mole)
+            stddev = unit.Quantity(
+                training_dataset_statistics["per_atom_energy_stddev"]
+            ).m_as(unit.kilojoule_per_mole)
         return mean, stddev
 
     def _initialize_postprocessing(

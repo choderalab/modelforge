@@ -909,9 +909,15 @@ def perform_training(
     import toml
 
     dataset_statistic = toml.load(dm.dataset_statistic_filename)
-    log.info(f"Setting E_i_mean and E_i_stddev for {model_name}")
-    log.info(f"E_i_mean: {dataset_statistic['atomic_energies_stats']['E_i_mean']}")
-    log.info(f"E_i_stddev: {dataset_statistic['atomic_energies_stats']['E_i_stddev']}")
+    log.info(
+        f"Setting per_atom_energy_mean and per_atom_energy_stddev for {model_name}"
+    )
+    log.info(
+        f"per_atom_energy_mean: {dataset_statistic['training_dataset_statistics']['per_atom_energy_mean']}"
+    )
+    log.info(
+        f"per_atom_energy_stddev: {dataset_statistic['training_dataset_statistics']['per_atom_energy_stddev']}"
+    )
 
     # Set up model
     model = NeuralNetworkPotentialFactory.generate_model(

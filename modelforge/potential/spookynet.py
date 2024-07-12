@@ -622,8 +622,9 @@ class SpookyNetLocalInteraction(nn.Module):
         """
         # interaction functions
         gs = self.radial_s(f_ij_after_cutoff)
-        gp = self.radial_p(f_ij_after_cutoff).unsqueeze(-2) * dir_ij.unsqueeze(-1)  # TODO: replace with einsum
-        gd = self.radial_d(f_ij_after_cutoff).unsqueeze(-2) * d_orbital_ij.unsqueeze(-1)  # TODO: replace with einsum
+        # p: num_pairs, f: number_of_atomic_features, r: number_of_radial_basis_functions
+        gp = torch.einsum("pf,pr->prf", self.radial_p(f_ij_after_cutoff), dir_ij)
+        gd = torch.einsum("pf,pr->prf", self.radial_d(f_ij_after_cutoff), d_orbital_ij)
         # atom featurizations
         xx = self.resblock_x(x_tilde)
         xs = self.resblock_s(x_tilde)

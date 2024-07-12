@@ -643,7 +643,8 @@ class SpookyNetLocalInteraction(nn.Module):
         # project tensorial features to scalars
         pa, pb = torch.split(self.projection_p(p), p.shape[-1], dim=-1)
         da, db = torch.split(self.projection_d(d), d.shape[-1], dim=-1)
-        return self.resblock(s + (pa * pb).sum(-2) + (da * db).sum(-2))  # TODO: replace with einsum
+        # r: number_of_radial_basis_functions, x: 3 (geometry axis), f: number_of_atom_features
+        return self.resblock(s + torch.einsum("rxf,rxf->rf", pa, pb) + torch.einsum("rxf,rxf->rf", da, db))
 
 
 class SpookyNetAttention(nn.Module):

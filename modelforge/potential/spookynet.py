@@ -124,7 +124,7 @@ class SpookyNetCore(CoreNetwork):
         self.embedding_module = Embedding(max_Z, number_of_atom_features)
 
         # initialize representation block
-        self.spookynet_representation_block = SpookyNetRepresentation(cutoff, number_of_radial_basis_functions)
+        self.spookynet_representation_module = SpookyNetRepresentation(cutoff, number_of_radial_basis_functions)
 
         # Intialize interaction blocks
         self.interaction_modules = nn.ModuleList(
@@ -197,7 +197,7 @@ class SpookyNetCore(CoreNetwork):
         """
 
         # Compute the representation for each atom (transform to radial basis set, multiply by cutoff)
-        representation = self.spookynet_representation_module(data.d_ij)
+        representation = self.spookynet_representation_module(data.d_ij, data.r_ij)
         x = data.atomic_embedding
 
         f = x.new_zeros(x.size())  # initialize output features to zero
@@ -206,8 +206,7 @@ class SpookyNetCore(CoreNetwork):
             x, y = interaction(
                 x,
                 data.pair_indices,
-                representation["f_ij"],
-                representation["f_cutoff"],
+                representation["filters"],
                 representation["dir_ij"],
                 representation["d_orbital_ij"]
             )
@@ -357,7 +356,7 @@ class SpookyNetRepresentation(nn.Module):
         )
         f_ij = self.radial_symmetry_function_module(d_ij)
         f_ij_cutoff = self.cutoff_module(d_ij)
-        filters = f_ij * f_ij_cutoff
+        filters = f_ij * f_ij_cutoff  # TODO: replace with einsum
 
         return {"filters": filters, "dir_ij": dir_ij, "d_orbital_ij": d_orbital_ij}
 
@@ -611,10 +610,10 @@ class SpookyNetLocalInteraction(nn.Module):
             Atomic feature vectors.
         rbf (FloatTensor [N, number_of_radial_basis_functions]):
             Values of the radial basis functions for the pairwise distances.
-        dir_ij (TODO):
-            TODO
+        dir_ij (TODO:):
+            TODO:
         d_orbital_ij (TODO):
-            TODO
+            TODO:
         idx_i (LongTensor [P]):
             Index of atom i for all atomic pairs ij. Each pair must be
             specified as both ij and ji.
@@ -883,8 +882,7 @@ class SpookyNetInteractionModule(nn.Module):
             self,
             x: torch.Tensor,
             pairlist: torch.Tensor,  # shape [n_pairs, 2]
-            f_ij: torch.Tensor,  # shape [n_pairs, 1, number_of_radial_basis_functions] TODO: why the 1?
-            f_ij_cutoff: torch.Tensor,  # shape [n_pairs, 1]
+            filters: torch.Tensor,  # shape [n_pairs, 1, number_of_radial_basis_functions] TODO: why the 1?
             dir_ij: torch.Tensor,  # shape [n_pairs, 1]
             d_orbital_ij: torch.Tensor,  # shape [n_pairs, 1]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -918,7 +916,7 @@ class SpookyNetInteractionModule(nn.Module):
         idx_i, idx_j = pairlist[0], pairlist[1]
         x_tilde = self.residual_pre(x)
         del x
-        l = self.local_interaction(x_tilde, f_ij * f_ij_cutoff, dir_ij, d_orbital_ij, idx_i, idx_j)
+        l = self.local_interaction(x_tilde, filters, dir_ij, d_orbital_ij, idx_i, idx_j)
         n = self.nonlocal_interaction(x_tilde)
         x_updated = self.residual_post(x_tilde + l + n)
         del x_tilde

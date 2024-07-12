@@ -1,5 +1,8 @@
 from modelforge.potential.spookynet import SpookyNet
 from spookynet import SpookyNet as RefSpookyNet
+from modelforge.tests.precalculated_values import (
+    setup_single_methane_input,
+)
 import torch
 
 import pytest
@@ -24,14 +27,42 @@ def test_init():
 from openff.units import unit
 
 
-@pytest.mark.parametrize(
-    "model_parameter",
-    (
-            [64, 50, 20, unit.Quantity(5.0, unit.angstrom), 2],
-            [32, 60, 10, unit.Quantity(7.0, unit.angstrom), 1],
-            [128, 120, 64, unit.Quantity(5.0, unit.angstrom), 3],
-    ),
-)
+def test_forward():
+    # ---------------------------------------- #
+    # test the implementation of the representation part of the PaiNN model
+    # ---------------------------------------- #
+    from modelforge.potential.spookynet import SpookyNet
+
+    from modelforge.tests.test_models import load_configs
+
+    # load default parameters
+    config = load_configs(f"spookynet", "qm9")
+
+    # override default parameters
+    config["potential"]["core_parameter"]["number_of_atom_features"] = 12
+    config["potential"]["core_parameter"]["number_of_radial_basis_functions"] = 5
+
+    torch.manual_seed(1234)
+
+    # initialize model
+    spookynet = SpookyNet(
+        **config["potential"]["core_parameter"],
+        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+    ).double()
+
+    input = setup_single_methane_input()
+    model_input = input["modelforge_methane_input"]
+
+
+    spookynet.input_preparation._input_checks(model_input)
+
+    pairlist_output = spookynet.input_preparation.prepare_inputs(model_input)
+    prepared_input = spookynet.core_module._model_specific_input_preparation(
+        model_input, pairlist_output
+    )
+    calculated_results = spookynet.core_module.forward(model_input, pairlist_output)
+
+
 def test_spookynet_forward(single_batch_with_batchsize_64, model_parameter):
     """
     Test the forward pass of the SpookyNet model.

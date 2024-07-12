@@ -56,7 +56,7 @@ def test_init():
 
 
 def test_compare_representation():
-    # compare schnetpack RadialSymmetryFunction with modelforge RadialSymmetryFunction
+    # compare schnetpack RadialBasisFunction with modelforge RadialBasisFunction
     from modelforge.potential.utils import SchnetRadialBasisFunction
     from openff.units import unit
 

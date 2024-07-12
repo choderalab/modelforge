@@ -55,9 +55,9 @@ class Error(nn.Module):
             torch.Tensor: The scaled error.
         """
         # divide by number of atoms
-        scaled_by_number_of_atoms = (
-            error / atomic_subsystem_counts.unsqueeze(1)
-        )  # FIXME: beware broadcasting
+        scaled_by_number_of_atoms = error / atomic_subsystem_counts.unsqueeze(
+            1
+        )  # FIXME: ensure that all per-atom properties have dimension (N, 1)
         return scaled_by_number_of_atoms
 
 
@@ -100,7 +100,6 @@ class FromPerAtomToPerMoleculeError(Error):
         per_atom_squared_error = self.calculate_error(
             per_atom_prediction, per_atom_reference
         )
-        a = 7
         # Aggregate error per molecule
         per_molecule_squared_error = scatter_sum(
             per_atom_squared_error,
@@ -156,10 +155,7 @@ class PerMoleculeError(Error):
             per_molecule_prediction, per_molecule_reference
         )
         per_molecule_square_error_scaled = self.scale_by_number_of_atoms(
-            per_molecule_squared_error,
-            batch.metadata.atomic_subsystem_counts.unsqueeze(
-                1
-            ),  # FIXME: ensure that all per-atom properties have dimension (N, 1)
+            per_molecule_squared_error, batch.metadata.atomic_subsystem_counts
         )
 
         # return the average

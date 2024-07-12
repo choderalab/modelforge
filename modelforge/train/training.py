@@ -430,10 +430,10 @@ class TrainingAdapter(pl.LightningModule):
             The true energies from the dataset and the predicted energies by the model.
         """
         nnp_input = batch.nnp_input
-        per_molecule_energy_true = batch.metadata.E.to(torch.float32).squeeze(1)
+        per_molecule_energy_true = batch.metadata.E.to(torch.float32)
         per_molecule_energy_predict = self.model.forward(nnp_input)[
             "per_molecule_energy"
-        ]
+        ].unsqueeze(1) #FIXME: ensure that all per-molecule properties have dimension (N, 1)
         assert per_molecule_energy_true.shape == per_molecule_energy_predict.shape, (
             f"Shapes of true and predicted energies do not match: "
             f"{per_molecule_energy_true.shape} != {per_molecule_energy_predict.shape}"

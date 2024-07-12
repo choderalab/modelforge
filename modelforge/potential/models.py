@@ -472,11 +472,11 @@ class PyTorch2JAXConverter:
         jax = import_("jax")
         # use the wrapper to check if pytorch2jax is in the environment
 
-        custom_vjp = import_("jax.custom_vjp")
+        custom_vjp = import_("jax").custom_vjp
 
         # from jax import custom_vjp
-        convert_to_jax = import_("pytorch2jax.pytorch2jax.convert_to_jax")
-        convert_to_pyt = import_("pytorch2jax.pytorch2jax.convert_to_pyt")
+        convert_to_jax = import_("pytorch2jax").pytorch2jax.convert_to_jax
+        convert_to_pyt = import_("pytorch2jax").pytorch2jax.convert_to_pyt
         # from pytorch2jax.pytorch2jax import convert_to_jax, convert_to_pyt
 
         import functorch

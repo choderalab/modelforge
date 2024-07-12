@@ -76,7 +76,7 @@ class BatchData:
 def shared_config_prior():
     from modelforge.utils.io import import_
 
-    tune = import_("ray.tune")
+    tune = import_("ray").tune
     # from ray import tune
 
     return {

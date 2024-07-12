@@ -514,7 +514,7 @@ class PaiNN(BaseNetwork):
         log.info("Configuring PaiNN model hyperparameter prior distribution")
         from modelforge.utils.io import import_
 
-        tune = import_("ray.tune")
+        tune = import_("ray").tune
         # from ray import tune
 
         from modelforge.potential.utils import shared_config_prior

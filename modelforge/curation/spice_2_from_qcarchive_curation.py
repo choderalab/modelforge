@@ -229,11 +229,11 @@ class SPICE2Curation(DatasetCuration):
         """
         from modelforge.utils.io import import_
 
-        SqliteDict = import_("sqlitedict.SqliteDict")
+        SqliteDict = import_("sqlitedict").SqliteDict
         # from sqlitedict import SqliteDict
         from loguru import logger
 
-        PortalClient = import_("qcportal.PortalClient")
+        PortalClient = import_("qcportal").PortalClient
         # from qcportal import PortalClient
 
         dataset_type = "singlepoint"
@@ -316,7 +316,7 @@ class SPICE2Curation(DatasetCuration):
 
         from modelforge.utils.io import import_
 
-        Chem = import_("rdkit.Chem")
+        Chem = import_("rdkit").Chem
         # from rdkit import Chem
         import numpy as np
 
@@ -543,7 +543,7 @@ class SPICE2Curation(DatasetCuration):
         import numpy as np
         from modelforge.utils.io import import_
 
-        SqliteDict = import_("sqlitedict.SqliteDict")
+        SqliteDict = import_("sqlitedict").SqliteDict
         qcel = import_("qcelemental")
 
         for filename, dataset_info in zip(filenames, dataset_sources):

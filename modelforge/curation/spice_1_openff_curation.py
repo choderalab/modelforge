@@ -1,10 +1,9 @@
 from typing import List, Tuple, Dict, Optional
 
 from modelforge.curation.curation_baseclass import *
-from modelforge.utils.io import import_, check_import
+from modelforge.utils.io import import_
 
-check_import("retry")
-from retry import retry
+retry = import_("retry").retry
 from tqdm import tqdm
 from openff.units import unit
 
@@ -207,11 +206,11 @@ class SPICE1OpenFFCuration(DatasetCuration):
 
         """
 
-        SqliteDict = import_("sqlitedict.SqliteDict")
+        SqliteDict = import_("sqlitedict").SqliteDict
         # from sqlitedict import SqliteDict
         from loguru import logger
 
-        PortalClient = import_("qcportal.PortalClient")
+        PortalClient = import_("qcportal").PortalClient
         # from qcportal import PortalClient
 
         dataset_type = "singlepoint"
@@ -292,7 +291,7 @@ class SPICE1OpenFFCuration(DatasetCuration):
             Returns the reference energy of for the atoms in the molecule (in hartrees)
             and the total charge of the molecule (in elementary charge).
         """
-        Chem = import_("rdkit.Chem")
+        Chem = import_("rdkit").Chem
         # from rdkit import Chem
         import numpy as np
 
@@ -456,7 +455,7 @@ class SPICE1OpenFFCuration(DatasetCuration):
         from tqdm import tqdm
         import numpy as np
 
-        SqliteDict = import_("sqlitedict.SqliteDict")
+        SqliteDict = import_("sqlitedict").SqliteDict
         # from sqlitedict import SqliteDict
         from loguru import logger
 

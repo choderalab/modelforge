@@ -175,7 +175,7 @@ def import_(module: str):
     >>>
     >>> # to import a submodule, the following are equivalent:
     >>> from jax import numpy as jnp
-    >>> jnp = import_("jax.numpy")
+    >>> jnp = import_("jax").numpy
 
 
     """

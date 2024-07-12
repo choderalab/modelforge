@@ -2,11 +2,11 @@ import torch
 
 from modelforge.utils.io import import_
 
-air = import_("ray.air")
-tune = import_("ray.tune")
+air = import_("ray").air
+tune = import_("ray").tune
 # from ray import air, tune
 
-ASHAScheduler = import_("ray.tune.scheduleres.ASHAScheduler")
+ASHAScheduler = import_("ray").tune.scheduleres.ASHAScheduler
 # from ray.tune.schedulers import ASHAScheduler
 
 
@@ -184,10 +184,10 @@ class RayTuner:
         """
         from modelforge.utils.io import import_
 
-        tune = import_("ray.tune")
+        tune = import_("ray").tune
         # from ray import tune
 
-        ASHAScheduler = import_("ray.tune.schedulers.ASHAScheduler")
+        ASHAScheduler = import_("ray").tune.schedulers.ASHAScheduler
         # from ray.tune.schedulers import ASHAScheduler
 
         self.train_dataloader = train_dataloader

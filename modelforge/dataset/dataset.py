@@ -149,7 +149,7 @@ class NNPInput:
         import collections
         from modelforge.utils.io import import_
 
-        convert_to_jax = import_("pytorch2jax.pytorch2jax")
+        convert_to_jax = import_("pytorch2jax").pytorch2jax.convert_to_jax
         # from pytorch2jax.pytorch2jax import convert_to_jax
 
         NNPInputTuple = collections.namedtuple(

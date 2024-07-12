@@ -1177,9 +1177,9 @@ class DataModule(pl.LightningDataModule):
 
     def _read_atomic_energies_stats(self) -> Dict[str, torch.Tensor]:
         """Read the atomic energies statistics from a file."""
-        from modelforge.potential.processing import load_atomic_energies_stats
+        from modelforge.potential.processing import load_dataset_energy_statistics
 
-        return load_atomic_energies_stats(self.dataset_statistic_filename)
+        return load_dataset_energy_statistics(self.dataset_statistic_filename)
 
     def _create_torch_dataset(self, dataset):
         """Create a PyTorch dataset from the provided dataset instance."""

@@ -316,7 +316,7 @@ class SPICE2Curation(DatasetCuration):
 
         from modelforge.utils.io import import_
 
-        Chem = import_("rdkit").Chem
+        Chem = import_("rdkit.Chem")
         # from rdkit import Chem
         import numpy as np
 

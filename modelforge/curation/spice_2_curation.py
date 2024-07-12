@@ -186,8 +186,8 @@ class SPICE2Curation(DatasetCuration):
         """
         from modelforge.utils.io import import_
 
-        Chem = import_("rdkit").Chem
-        from rdkit import Chem
+        Chem = import_("rdkit.Chem")
+        # from rdkit import Chem
 
         rdmol = Chem.MolFromSmiles(smiles, sanitize=False)
         total_charge = sum(atom.GetFormalCharge() for atom in rdmol.GetAtoms())

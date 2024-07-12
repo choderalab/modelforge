@@ -291,7 +291,7 @@ class SPICE1OpenFFCuration(DatasetCuration):
             Returns the reference energy of for the atoms in the molecule (in hartrees)
             and the total charge of the molecule (in elementary charge).
         """
-        Chem = import_("rdkit").Chem
+        Chem = import_("rdkit.Chem")
         # from rdkit import Chem
         import numpy as np
 

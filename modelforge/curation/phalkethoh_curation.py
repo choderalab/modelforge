@@ -261,7 +261,7 @@ class PhAlkEthOHCuration(DatasetCuration):
             total charge of the molecule (in elementary charge).
         """
 
-        Chem = import_("rdkit").Chem
+        Chem = import_("rdkit.Chem")
         # from rdkit import Chem
 
         rdmol = Chem.MolFromSmiles(smiles, sanitize=False)

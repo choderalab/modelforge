@@ -40,7 +40,7 @@ def test_forward():
 
     # override default parameters
     config["potential"]["core_parameter"]["number_of_atom_features"] = 12
-    config["potential"]["core_parameter"]["number_of_radial_basis_functions"] = 5
+    config["potential"]["core_parameter"]["number_of_radial_basis_functions"] = 7
 
     torch.manual_seed(1234)
 

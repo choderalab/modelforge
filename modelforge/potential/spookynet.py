@@ -637,14 +637,15 @@ class SpookyNetLocalInteraction(nn.Module):
         # sum over neighbors
         pp = x_tilde.new_zeros(x_tilde.shape[0], dir_ij.shape[-1], x_tilde.shape[-1])
         dd = x_tilde.new_zeros(x_tilde.shape[0], d_orbital_ij.shape[-1], x_tilde.shape[-1])
-        s = xx.index_add(0, idx_i, gs * xs)  # L=0 # TODO: replace with einsum
-        p = pp.index_add_(0, idx_i, gp * xp.unsqueeze(-2))  # L=1 # TODO: replace with einsum
-        d = dd.index_add_(0, idx_i, gd * xd.unsqueeze(-2))  # L=2 # TODO: replace with einsum
+        s = xx.index_add(0, idx_i, torch.einsum("pf,pf->pf", gs, xs))   # L=0
+        # p: num_pairs, x: 3 (geometry axis), f: number_of_atom_features
+        p = pp.index_add_(0, idx_i, torch.einsum("pxf,pf->pxf", gp, xp))  # L=1
+        d = dd.index_add_(0, idx_i, torch.einsum("pxf,pf->pxf", gd, xd))  # L=2
         # project tensorial features to scalars
         pa, pb = torch.split(self.projection_p(p), p.shape[-1], dim=-1)
         da, db = torch.split(self.projection_d(d), d.shape[-1], dim=-1)
-        # r: number_of_radial_basis_functions, x: 3 (geometry axis), f: number_of_atom_features
-        return self.resblock(s + torch.einsum("rxf,rxf->rf", pa, pb) + torch.einsum("rxf,rxf->rf", da, db))
+        # n: number_of_atoms_in_system, x: 3 (geometry axis), f: number_of_atom_features
+        return self.resblock(s + torch.einsum("nxf,nxf->nf", pa, pb) + torch.einsum("nxf,nxf->nf", da, db))
 
 
 class SpookyNetAttention(nn.Module):

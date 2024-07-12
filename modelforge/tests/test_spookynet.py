@@ -238,8 +238,7 @@ def test_spookynet_bernstein_polynomial_equivalence():
 
     num_basis_functions = 3
     ref_exp_bernstein_polynomials = RefExponentialBernsteinPolynomials(num_basis_functions, exp_weighting=True)
-    mf_exp_bernstein_polynomials = MfExponentialBernSteinPolynomials(num_basis_functions, ini_alpha=1.0)  # TODO: put
-    # the right number
+    mf_exp_bernstein_polynomials = MfExponentialBernSteinPolynomials(num_basis_functions)
 
     N = 5
     r_angstrom = torch.rand((N, 1))

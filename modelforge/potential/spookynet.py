@@ -319,7 +319,6 @@ class SpookyNetRepresentation(nn.Module):
 
         self.radial_symmetry_function_module = ExponentialBernsteinRadialBasisFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
-            ini_alpha=1.0,  # TODO: put the right number
             dtype=torch.float32,
         )
 

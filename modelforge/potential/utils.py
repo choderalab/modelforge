@@ -970,7 +970,10 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
 
 class ExponentialBernsteinRadialBasisFunction(RadialBasisFunction):
 
-    def __init__(self, number_of_radial_basis_functions, ini_alpha, dtype=torch.int64):
+    def __init__(self,
+                 number_of_radial_basis_functions: int,
+                 ini_alpha: unit.Quantity = 2.0 * unit.bohr,
+                 dtype=torch.int64):
         """
         ini_alpha (float):
             Initial value for scaling parameter alpha (alpha here is the reciprocal of alpha in the paper. The original
@@ -981,7 +984,7 @@ class ExponentialBernsteinRadialBasisFunction(RadialBasisFunction):
             trainable_prefactor=False,
             dtype=dtype,
         )
-        self.alpha = ini_alpha  #TODO: should this be unitful?
+        self.register_parameter("alpha", nn.Parameter(torch.tensor(ini_alpha.m_as(unit.nanometer))))
 
     def nondimensionalize_distances(self, d_ij: torch.Tensor) -> torch.Tensor:
         return -(

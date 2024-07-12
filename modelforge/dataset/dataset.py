@@ -111,14 +111,14 @@ class NNPInput:
         self._validate_inputs()
 
     def _validate_inputs(self):
-        if self.atomic_numbers.dim() != 1:
-            raise ValueError("atomic_numbers must be a 1D tensor")
+        if self.atomic_numbers.dim() != 2:
+            raise ValueError("atomic_numbers must be a 2D tensor")
         if self.positions.dim() != 2 or self.positions.size(1) != 3:
             raise ValueError("positions must be a 2D tensor with shape [num_atoms, 3]")
         if self.atomic_subsystem_indices.dim() != 1:
             raise ValueError("atomic_subsystem_indices must be a 1D tensor")
-        if self.total_charge.dim() != 1:
-            raise ValueError("total_charge must be a 1D tensor")
+        if self.total_charge.dim() != 2:
+            raise ValueError("total_charge must be a 2D tensor")
 
         # Optionally, check that the lengths match if required
         if len(self.positions) != len(self.atomic_numbers):
@@ -363,10 +363,10 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             ]
 
         nnp_input = NNPInput(
-            atomic_numbers=atomic_numbers,
+            atomic_numbers=atomic_numbers.unsqueeze(1),
             positions=positions,
             pair_list=pair_list,
-            total_charge=total_charge,
+            total_charge=total_charge.unsqueeze(1),
             atomic_subsystem_indices=torch.zeros(number_of_atoms, dtype=torch.int32),
         )
 

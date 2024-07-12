@@ -675,10 +675,10 @@ class InputPreparation(torch.nn.Module):
         assert isinstance(data, NNPInput) or isinstance(data, Tuple)
 
         nr_of_atoms = data.atomic_numbers.shape[0]
-        assert data.atomic_numbers.shape == torch.Size([nr_of_atoms])
+        assert data.atomic_numbers.shape == torch.Size([nr_of_atoms,1])
         assert data.atomic_subsystem_indices.shape == torch.Size([nr_of_atoms])
         nr_of_molecules = torch.unique(data.atomic_subsystem_indices).numel()
-        assert data.total_charge.shape == torch.Size([nr_of_molecules])
+        assert data.total_charge.shape == torch.Size([nr_of_molecules, 1])
         assert data.positions.shape == torch.Size([nr_of_atoms, 3])
 
 

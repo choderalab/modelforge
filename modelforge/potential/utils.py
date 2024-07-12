@@ -544,8 +544,6 @@ class ExponentialBernsteinPolynomialsCore(RadialBasisFunctionCore):
             rbf (FloatTensor [N, num_basis_functions]):
                 Values of the radial basis functions for the distances r.
         """
-        print(f"{nondimensionalized_distances.shape=}")
-        print(f"{self.number_of_radial_basis_functions=}")
         assert nondimensionalized_distances.ndim == 2
         assert (
             nondimensionalized_distances.shape[1]
@@ -556,7 +554,6 @@ class ExponentialBernsteinPolynomialsCore(RadialBasisFunctionCore):
             + (self.n + 1) * nondimensionalized_distances
             + self.v * torch.log(-torch.expm1(nondimensionalized_distances))
         )
-        print(f"{self.logc.shape=}")
 
         return torch.exp(x)
 

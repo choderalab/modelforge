@@ -57,6 +57,7 @@ def test_forward():
     spookynet.input_preparation._input_checks(model_input)
 
     pairlist_output = spookynet.input_preparation.prepare_inputs(model_input)
+    print(f"{pairlist_output.d_ij.shape=}")
     prepared_input = spookynet.core_module._model_specific_input_preparation(
         model_input, pairlist_output
     )

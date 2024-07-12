@@ -204,11 +204,11 @@ class SpookyNetCore(CoreNetwork):
         # Iterate over interaction blocks to update features
         for interaction in self.interaction_modules:
             x, y = interaction(
-                x,
-                data.pair_indices,
-                representation["filters"],
-                representation["dir_ij"],
-                representation["d_orbital_ij"]
+                x=x,
+                pairlist=data.pair_indices,
+                filters=representation["filters"],
+                dir_ij=representation["dir_ij"],
+                d_orbital_ij=representation["d_orbital_ij"],
             )
             f += y  # accumulate module output to features
 
@@ -328,9 +328,9 @@ class SpookyNetRepresentation(nn.Module):
         Parameters
         ----------
         d_ij : torch.Tensor
-            pairwise distances between atoms, shape (n_pairs).
+            pairwise distances between atoms, shape [num_pairs, 1].
         r_ij : torch.Tensor
-            pairwise displacements between atoms, shape (n_pairs, 3).
+            pairwise displacements between atoms, shape [num_pairs, 3].
 
         Returns
         -------
@@ -342,7 +342,7 @@ class SpookyNetRepresentation(nn.Module):
         sqrt3 = math.sqrt(3)
         sqrt3half = 0.5 * sqrt3
         # short-range distances
-        dir_ij = r_ij / d_ij.unsqueeze(-1)
+        dir_ij = r_ij / d_ij
         d_orbital_ij = torch.stack(
             [
                 sqrt3 * dir_ij[:, 0] * dir_ij[:, 1],  # xy
@@ -916,7 +916,14 @@ class SpookyNetInteractionModule(nn.Module):
         idx_i, idx_j = pairlist[0], pairlist[1]
         x_tilde = self.residual_pre(x)
         del x
-        l = self.local_interaction(x_tilde, filters, dir_ij, d_orbital_ij, idx_i, idx_j)
+        l = self.local_interaction(
+            x_tilde=x_tilde,
+            f_ij_after_cutoff=filters,
+            dir_ij=dir_ij,
+            d_orbital_ij=d_orbital_ij,
+            idx_i=idx_i,
+            idx_j=idx_j,
+        )
         n = self.nonlocal_interaction(x_tilde)
         x_updated = self.residual_post(x_tilde + l + n)
         del x_tilde

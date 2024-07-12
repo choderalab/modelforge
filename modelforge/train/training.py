@@ -1,47 +1,93 @@
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import lightning as pl
-from typing import TYPE_CHECKING, Any, Union, Dict, Type, Optional, List
+from typing import Any, Union, Dict, Type, Optional, List
 import torch
 from loguru import logger as log
-from modelforge.dataset.dataset import BatchData
-
-
+from modelforge.dataset.dataset import BatchData, NNPInput
 import torchmetrics
-from typing import Optional
-
-
 from torch import nn
 from torch_scatter import scatter_sum
 
 
-class FromPerAtomToPerMoleculeError(nn.Module):
+class Error(nn.Module):
+    """
+    Class representing the error calculation for predicted and true values.
+
+    Methods:
+        calculate_error(predicted: torch.Tensor, true: torch.Tensor) -> torch.Tensor:
+            Calculates the error between the predicted and true values.
+
+        scale_by_number_of_atoms(error, atomic_subsystem_counts) -> torch.Tensor:
+            Scales the error by the number of atoms in the atomic subsystems.
+    """
+
+    @staticmethod
+    def calculate_error(
+        predicted_tensor: torch.Tensor, reference_tensor: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Calculates the error between the predicted and true values.
+
+        Parameters:
+            predicted_tensor (torch.Tensor): The predicted values.
+            reference_tensor (torch.Tensor): The values provided by the dataset.
+
+        Returns:
+            torch.Tensor: The calculated error.
+        """
+        return (
+            torch.linalg.vector_norm(
+                predicted_tensor - reference_tensor, dim=1, keepdim=True
+            )
+            ** 2
+        )
+
+    @staticmethod
+    def scale_by_number_of_atoms(error, atomic_subsystem_counts) -> torch.Tensor:
+        """
+        Scales the error by the number of atoms in the atomic subsystems.
+
+        Parameters:
+            error: The error to be scaled.
+            atomic_subsystem_counts: The number of atoms in the atomic subsystems.
+
+        Returns:
+            torch.Tensor: The scaled error.
+        """
+        # divide by number of atoms
+        scaled_by_number_of_atoms = (
+            error / atomic_subsystem_counts.unsqueeze(1)
+        )  # FIXME: beware broadcasting
+        return scaled_by_number_of_atoms
+
+
+class FromPerAtomToPerMoleculeError(Error):
     """
     Calculates the per-atom error and aggregates it to per-molecule mean squared error.
-
     """
 
     def __init__(self):
         """
         Initializes the PerAtomToPerMoleculeError class.
         """
-
-        from torch.nn import MSELoss
-
         super().__init__()
 
     def forward(
-        self, predicted: torch.Tensor, true: torch.Tensor, batch
+        self,
+        per_atom_prediction: torch.Tensor,
+        per_atom_reference: torch.Tensor,
+        batch: "NNPInput",
     ) -> torch.Tensor:
         """
         Computes the per-atom error and aggregates it to per-molecule mean squared error.
 
         Parameters
         ----------
-        predicted : torch.Tensor
+        per_atom_prediction : torch.Tensor
             The predicted values.
-        true : torch.Tensor
-            The true values.
-        batch : Any
+        per_atom_reference : torch.Tensor
+            The reference values provided by the dataset.
+        batch : NNPInput
             The batch data containing metadata and input information.
 
         Returns
@@ -50,21 +96,26 @@ class FromPerAtomToPerMoleculeError(nn.Module):
             The aggregated per-molecule error.
         """
 
-        # squaared error
-        per_atom_squared_error = torch.norm(predicted - true, dim=1) ** 2
-
+        # squared error
+        per_atom_squared_error = self.calculate_error(
+            per_atom_prediction, per_atom_reference
+        )
+        a = 7
         # Aggregate error per molecule
         per_molecule_squared_error = scatter_sum(
-            per_atom_squared_error, batch.nnp_input.atomic_subsystem_indices.long(), 0
+            per_atom_squared_error,
+            batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
+            0,
         )
-        # divide by nnumber of atoms
-        per_molecule_square_error_scaled = (
-            per_molecule_squared_error / batch.metadata.atomic_subsystem_counts
+        # divide by number of atoms
+        per_molecule_square_error_scaled = self.scale_by_number_of_atoms(
+            per_molecule_squared_error, batch.metadata.atomic_subsystem_counts
         )
+        # return the average
         return torch.mean(per_molecule_square_error_scaled)
 
 
-class PerMoleculeError(nn.Module):
+class PerMoleculeError(Error):
     """
     Calculates the per-molecule mean squared error.
 
@@ -78,16 +129,19 @@ class PerMoleculeError(nn.Module):
         super().__init__()
 
     def forward(
-        self, predicted: torch.Tensor, true: torch.Tensor, batch
+        self,
+        per_molecule_prediction: torch.Tensor,
+        per_molecule_reference: torch.Tensor,
+        batch,
     ) -> torch.Tensor:
         """
         Computes the per-molecule mean squared error.
 
         Parameters
         ----------
-        predicted : torch.Tensor
+        per_molecule_prediction : torch.Tensor
             The predicted values.
-        true : torch.Tensor
+        per_molecule_reference : torch.Tensor
             The true values.
         batch : Any
             The batch data containing metadata and input information.
@@ -98,14 +152,18 @@ class PerMoleculeError(nn.Module):
             The mean per-molecule error.
         """
 
-        per_molecule_squared_error = (predicted - true) ** 2
-        per_molecule_square_error_scaled = (
-            per_molecule_squared_error / batch.metadata.atomic_subsystem_counts
+        per_molecule_squared_error = self.calculate_error(
+            per_molecule_prediction, per_molecule_reference
+        )
+        per_molecule_square_error_scaled = self.scale_by_number_of_atoms(
+            per_molecule_squared_error,
+            batch.metadata.atomic_subsystem_counts.unsqueeze(
+                1
+            ),  # FIXME: ensure that all per-atom properties have dimension (N, 1)
         )
 
-        # average
-        per_molecule_average = torch.mean(per_molecule_square_error_scaled)
-        return per_molecule_average
+        # return the average
+        return torch.mean(per_molecule_square_error_scaled)
 
 
 class Loss(nn.Module):

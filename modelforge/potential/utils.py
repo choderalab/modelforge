@@ -75,8 +75,10 @@ class BatchData:
 
 
 def shared_config_prior():
-    import ray
-    from ray import tune
+    from modelforge.utils.io import import_
+
+    tune = import_("ray").tune
+    # from ray import tune
 
     return {
         "lr": tune.loguniform(1e-5, 1e-1),
@@ -103,6 +105,14 @@ def triple_by_molecule(
 
     # convert representation from pair to central-others
     ai1 = atom_pairs.view(-1)
+
+    # Note, torch.sort doesn't guarantee stable sort by default.
+    # This means that the order of rev_indices is not guaranteed when there are "ties"
+    # (i.e., identical values in the input tensor).
+    # Stable sort is more expensive and ultimately unnecessary, so we will not use it here,
+    # but it does mean that vector-wise comparison of the outputs of this function may be
+    # inconsistent for the same input, and thus tests must be designed accordingly.
+
     sorted_ai1, rev_indices = ai1.sort()
 
     # sort and compute unique key
@@ -200,13 +210,15 @@ class Dense(nn.Linear):
     """
 
     def __init__(
-            self,
-            in_features: int,
-            out_features: int,
-            bias: bool = True,
-            activation: Optional[nn.Module] = None,
-            weight_init: Callable = xavier_uniform_,
-            bias_init: Callable = zeros_,
+        self,
+        in_features: int,
+        out_features: int,
+        bias: bool = True,
+        activation: Optional[
+            Union[nn.Module, Callable[[torch.Tensor], torch.Tensor]]
+        ] = None,
+        weight_init: Callable = xavier_uniform_,
+        bias_init: Callable = zeros_,
     ):
         """
         Args:
@@ -312,13 +324,13 @@ class AngularSymmetryFunction(nn.Module):
     """
 
     def __init__(
-            self,
-            max_distance: unit.Quantity,
-            min_distance: unit.Quantity,
-            number_of_gaussians_for_asf: int = 8,
-            angle_sections: int = 4,
-            trainable: bool = False,
-            dtype: Optional[torch.dtype] = None,
+        self,
+        max_distance: unit.Quantity,
+        min_distance: unit.Quantity,
+        number_of_gaussians_for_asf: int = 8,
+        angle_sections: int = 4,
+        trainable: bool = False,
+        dtype: Optional[torch.dtype] = None,
     ) -> None:
         """
         Parameters
@@ -363,14 +375,12 @@ class AngularSymmetryFunction(nn.Module):
         # ShfZ
         angle_start = math.pi / (2 * angle_sections)
         ShfZ = (torch.linspace(0, math.pi, angle_sections + 1) + angle_start)[:-1]
-
         # ShfA
         ShfA = torch.linspace(
             _unitless_angular_start,
             _unitless_angular_cutoff,
             number_of_gaussians_for_asf + 1,
         )[:-1]
-
         # register shifts
         if trainable:
             self.ShfZ = ShfZ
@@ -407,7 +417,6 @@ class AngularSymmetryFunction(nn.Module):
             vectors12[0], vectors12[1], dim=-5
         )
         angles = torch.acos(cos_angles)
-
         fcj12 = self.cosine_cutoff(distances12)
         factor1 = ((1 + torch.cos(angles - self.ShfZ)) / 2) ** self.Zeta
         factor2 = torch.exp(
@@ -461,11 +470,11 @@ class GaussianRadialBasisFunctionCore(RadialBasisFunctionCore):
 class RadialBasisFunction(nn.Module, ABC):
 
     def __init__(
-            self,
-            radial_basis_function: RadialBasisFunctionCore,
-            dtype: torch.dtype,
-            prefactor: float = 1.0,
-            trainable_prefactor: bool = False,
+        self,
+        radial_basis_function: RadialBasisFunctionCore,
+        dtype: torch.dtype,
+        prefactor: float = 1.0,
+        trainable_prefactor: bool = False,
     ):
         super().__init__()
         if trainable_prefactor:
@@ -516,14 +525,14 @@ class GaussianRadialBasisFunctionWithScaling(RadialBasisFunction):
     """
 
     def __init__(
-            self,
-            number_of_radial_basis_functions: int,
-            max_distance: unit.Quantity,
-            min_distance: unit.Quantity = 0.0 * unit.nanometer,
-            dtype: Optional[torch.dtype] = None,
-            prefactor: float = 1.0,
-            trainable_prefactor: bool = False,
-            trainable_centers_and_scale_factors: bool = False,
+        self,
+        number_of_radial_basis_functions: int,
+        max_distance: unit.Quantity,
+        min_distance: unit.Quantity = 0.0 * unit.nanometer,
+        dtype: Optional[torch.dtype] = None,
+        prefactor: float = 1.0,
+        trainable_prefactor: bool = False,
+        trainable_centers_and_scale_factors: bool = False,
     ):
         """
         Parameters
@@ -583,10 +592,10 @@ class GaussianRadialBasisFunctionWithScaling(RadialBasisFunction):
     @staticmethod
     @abstractmethod
     def calculate_radial_basis_centers(
-            number_of_radial_basis_functions,
-            _max_distance_in_nanometer,
-            _min_distance_in_nanometer,
-            dtype,
+        number_of_radial_basis_functions,
+        _max_distance_in_nanometer,
+        _min_distance_in_nanometer,
+        dtype,
     ):
         """
         NOTE: centers have units of nanometers
@@ -596,10 +605,10 @@ class GaussianRadialBasisFunctionWithScaling(RadialBasisFunction):
     @staticmethod
     @abstractmethod
     def calculate_radial_scale_factor(
-            number_of_radial_basis_functions,
-            _max_distance_in_nanometer,
-            _min_distance_in_nanometer,
-            dtype,
+        number_of_radial_basis_functions,
+        _max_distance_in_nanometer,
+        _min_distance_in_nanometer,
+        dtype,
     ):
         """
         NOTE: radial scale factors have units of nanometers
@@ -618,12 +627,12 @@ class SchnetRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
     """
 
     def __init__(
-            self,
-            number_of_radial_basis_functions: int,
-            max_distance: unit.Quantity,
-            min_distance: unit.Quantity = 0.0 * unit.nanometer,
-            dtype: Optional[torch.dtype] = None,
-            trainable_centers_and_scale_factors: bool = False,
+        self,
+        number_of_radial_basis_functions: int,
+        max_distance: unit.Quantity,
+        min_distance: unit.Quantity = 0.0 * unit.nanometer,
+        dtype: Optional[torch.dtype] = None,
+        trainable_centers_and_scale_factors: bool = False,
     ):
         """
         Parameters
@@ -650,10 +659,10 @@ class SchnetRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
 
     @staticmethod
     def calculate_radial_basis_centers(
-            number_of_radial_basis_functions,
-            _max_distance_in_nanometer,
-            _min_distance_in_nanometer,
-            dtype,
+        number_of_radial_basis_functions,
+        _max_distance_in_nanometer,
+        _min_distance_in_nanometer,
+        dtype,
     ):
         return torch.linspace(
             _min_distance_in_nanometer,
@@ -664,10 +673,10 @@ class SchnetRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
 
     @staticmethod
     def calculate_radial_scale_factor(
-            number_of_radial_basis_functions,
-            _max_distance_in_nanometer,
-            _min_distance_in_nanometer,
-            dtype,
+        number_of_radial_basis_functions,
+        _max_distance_in_nanometer,
+        _min_distance_in_nanometer,
+        dtype,
     ):
         scale_factors = torch.linspace(
             _min_distance_in_nanometer,
@@ -691,12 +700,12 @@ class AniRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
     """
 
     def __init__(
-            self,
-            number_of_radial_basis_functions,
-            max_distance: unit.Quantity,
-            min_distance: unit.Quantity = 0.0 * unit.nanometer,
-            dtype: torch.dtype = torch.float32,
-            trainable_centers_and_scale_factors: bool = False,
+        self,
+        number_of_radial_basis_functions,
+        max_distance: unit.Quantity,
+        min_distance: unit.Quantity = 0.0 * unit.nanometer,
+        dtype: torch.dtype = torch.float32,
+        trainable_centers_and_scale_factors: bool = False,
     ):
         """
         Parameters
@@ -724,10 +733,10 @@ class AniRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
 
     @staticmethod
     def calculate_radial_basis_centers(
-            number_of_radial_basis_functions,
-            _max_distance_in_nanometer,
-            _min_distance_in_nanometer,
-            dtype,
+        number_of_radial_basis_functions,
+        _max_distance_in_nanometer,
+        _min_distance_in_nanometer,
+        dtype,
     ):
         centers = torch.linspace(
             _min_distance_in_nanometer,
@@ -739,10 +748,10 @@ class AniRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
 
     @staticmethod
     def calculate_radial_scale_factor(
-            number_of_radial_basis_functions,
-            _max_distance_in_nanometer,
-            _min_distance_in_nanometer,
-            dtype,
+        number_of_radial_basis_functions,
+        _max_distance_in_nanometer,
+        _min_distance_in_nanometer,
+        dtype,
     ):
         # ANI uses a predefined scaling factor
         scale_factors = torch.full(
@@ -757,13 +766,13 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
     """
 
     def __init__(
-            self,
-            number_of_radial_basis_functions: int,
-            max_distance: unit.Quantity,
-            min_distance: unit.Quantity = 0.0 * unit.nanometer,
-            alpha: unit.Quantity = 1.0 * unit.angstrom,
-            dtype: torch.dtype = torch.float32,
-            trainable_centers_and_scale_factors: bool = False,
+        self,
+        number_of_radial_basis_functions: int,
+        max_distance: unit.Quantity,
+        min_distance: unit.Quantity = 0.0 * unit.nanometer,
+        alpha: unit.Quantity = 1.0 * unit.angstrom,
+        dtype: torch.dtype = torch.float32,
+        trainable_centers_and_scale_factors: bool = False,
     ):
         """
         Parameters
@@ -816,11 +825,11 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
 
     @staticmethod
     def calculate_radial_basis_centers(
-            number_of_radial_basis_functions,
-            max_distance,
-            min_distance,
-            alpha,
-            dtype,
+        number_of_radial_basis_functions,
+        max_distance,
+        min_distance,
+        alpha,
+        dtype,
     ):
         # initialize centers according to the default values in PhysNet
         # (see mu_k in Figure 2 caption of https://pubs.acs.org/doi/10.1021/acs.jctc.9b00181)
@@ -839,11 +848,11 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
 
     @staticmethod
     def calculate_radial_scale_factor(
-            number_of_radial_basis_functions,
-            max_distance,
-            min_distance,
-            alpha,
-            dtype,
+        number_of_radial_basis_functions,
+        max_distance,
+        min_distance,
+        alpha,
+        dtype,
     ):
         # initialize according to the default values in PhysNet (see beta_k in Figure 2 caption)
         # NOTES:

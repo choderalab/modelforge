@@ -48,6 +48,7 @@ def test_JAX_wrapping(model_name, single_batch_with_batchsize_64):
     assert "JAX" in str(type(model))
     nnp_input = single_batch_with_batchsize_64.nnp_input.as_jax_namedtuple()
     out = model(nnp_input)["E"]
+
     import jax
 
     grad_fn = jax.grad(lambda pos: out.sum())  # Create a gradient function
@@ -197,7 +198,6 @@ def test_state_dict_saving_and_loading(model_name):
 
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 def test_dataset_statistic(model_name):
-
     # Test that the scaling parmaeters are propagated from the dataset to the
     # training model and then via the state_dict to the inference model
 
@@ -397,7 +397,6 @@ def test_forward_pass(
     # This has to be reflected in the atomic energies E_i, which
     # has to be equal for all hydrogens
     if "JAX" not in str(type(model)):
-
         # assert that the following tensor has equal values for dim=0 index 1 to 4 and 6 to 8
         assert torch.allclose(output["E_i"][1:4], output["E_i"][1], atol=1e-5)
         assert torch.allclose(output["E_i"][6:8], output["E_i"][6], atol=1e-5)
@@ -492,7 +491,9 @@ def test_calculate_energies_and_forces_with_jax(
 
     result = model(nnp_input)["E"]
 
-    import jax
+    from modelforge.utils.io import import_
+
+    jax = import_("jax")
 
     grad_fn = jax.grad(lambda pos: result.sum())  # Create a gradient function
     forces = -grad_fn(

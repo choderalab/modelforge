@@ -23,6 +23,9 @@ dependencies:
   - retry
   - sqlitedict
   - pytorch_scatter
+  - jax
+  - flax
+  - ray-all
 
   # Testing
   - pytest>=2.1
@@ -35,10 +38,6 @@ dependencies:
   - sphinx_rtd_theme
 
   - pip:
-      - jax
       - pytorch2jax
-      - versioneer
-      - flax
       - git+https://github.com/ArnNag/sake.git@nanometer
       # - tensorflow
-      - "ray[data,train,tune,serve]"

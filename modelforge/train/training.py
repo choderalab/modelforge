@@ -6,7 +6,6 @@ from loguru import logger as log
 from modelforge.dataset.dataset import BatchData, NNPInput
 import torchmetrics
 from torch import nn
-from torch_scatter import scatter_sum
 
 
 class Error(nn.Module):
@@ -100,11 +99,16 @@ class FromPerAtomToPerMoleculeError(Error):
         per_atom_squared_error = self.calculate_error(
             per_atom_prediction, per_atom_reference
         )
+
+        per_molecule_squared_error = torch.zeros_like(
+            batch.metadata.E, dtype=per_atom_squared_error.dtype
+        )
         # Aggregate error per molecule
-        per_molecule_squared_error = scatter_sum(
-            per_atom_squared_error,
-            batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
+
+        per_molecule_squared_error.scatter_add_(
             0,
+            batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
+            per_atom_squared_error,
         )
         # divide by number of atoms
         per_molecule_square_error_scaled = self.scale_by_number_of_atoms(
@@ -433,7 +437,9 @@ class TrainingAdapter(pl.LightningModule):
         per_molecule_energy_true = batch.metadata.E.to(torch.float32)
         per_molecule_energy_predict = self.model.forward(nnp_input)[
             "per_molecule_energy"
-        ].unsqueeze(1) #FIXME: ensure that all per-molecule properties have dimension (N, 1)
+        ].unsqueeze(
+            1
+        )  # FIXME: ensure that all per-molecule properties have dimension (N, 1)
         assert per_molecule_energy_true.shape == per_molecule_energy_predict.shape, (
             f"Shapes of true and predicted energies do not match: "
             f"{per_molecule_energy_true.shape} != {per_molecule_energy_predict.shape}"

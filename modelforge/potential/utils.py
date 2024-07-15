@@ -834,39 +834,6 @@ def pair_list(
 
     return pair_indices.to(device)
 
-    def forward(
-        self,
-        coordinates: torch.Tensor,  # in nanometer
-        atomic_subsystem_indices: torch.Tensor,
-    ) -> torch.Tensor:
-        """Compute all pairs of atoms and their distances.
-
-        Parameters
-        ----------
-        coordinates : torch.Tensor, shape (nr_atoms_per_systems, 3), in nanometer
-        atomic_subsystem_indices : torch.Tensor, shape (nr_atoms_per_systems)
-            Atom indices to indicate which atoms belong to which molecule
-        """
-        positions = coordinates
-        pair_indices = self.pair_list(atomic_subsystem_indices)
-
-        # create pair_coordinates tensor
-        pair_coordinates = positions[pair_indices.T]
-        pair_coordinates = pair_coordinates.view(-1, 2, 3)
-
-        # Calculate distances
-        distances = (pair_coordinates[:, 0, :] - pair_coordinates[:, 1, :]).norm(
-            p=2, dim=-1
-        )
-
-        # Find pairs within the cutoff
-        in_cutoff = (distances <= self.cutoff).nonzero(as_tuple=False).squeeze()
-
-        # Get the atom indices within the cutoff
-        pair_indices_within_cutoff = pair_indices[:, in_cutoff]
-
-        return pair_indices_within_cutoff
-
 
 def scatter_softmax(
     src: torch.Tensor,

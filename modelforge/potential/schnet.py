@@ -212,9 +212,6 @@ class SchNetCore(CoreNetwork):
         }
 
 
-from torch_scatter import scatter_add
-
-
 class SchNETInteractionModule(nn.Module):
     def __init__(
         self,
@@ -300,9 +297,11 @@ class SchNETInteractionModule(nn.Module):
         # Perform continuous-filter convolution
         x_j = x[idx_j]
         x_ij = x_j * W_ij
-        x = scatter_add(x_ij, idx_i, dim=0, dim_size=x.size(0))
+        
+        out = torch.zeros_like(x)
+        out.scatter_add_(0, idx_i.unsqueeze(-1).expand_as(x_ij), x_ij)
 
-        return self.feature_to_output(x)
+        return self.feature_to_output(out)
 
 
 class SchNETRepresentation(nn.Module):

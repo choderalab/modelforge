@@ -23,6 +23,8 @@ dependencies:
   - retry
   - sqlitedict
   - pytorch_scatter
+  - jax
+  - flax
 
   # Testing
   - pytest>=2.1

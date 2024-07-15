@@ -1,6 +1,11 @@
 import torch
-from ray import tune, air
-from ray.tune.schedulers import ASHAScheduler
+from modelforge.utils.io import import_
+
+tune = import_("ray").tune
+air = import_("ray").air
+# from ray import tune, air
+ASHAScheduler = import_("ray").tune.schedulers.ASHAScheduler
+# from ray.tune.schedulers import ASHAScheduler
 
 from modelforge.potential import NeuralNetworkPotentialFactory
 from modelforge.dataset.qm9 import QM9Dataset

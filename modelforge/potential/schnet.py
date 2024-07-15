@@ -121,11 +121,6 @@ class SchNetCore(CoreNetwork):
 
         self.embedding_module = Embedding(max_Z, number_of_atom_features)
 
-        # initialize the energy readout_operation
-        from .processing import FromAtomToMoleculeReduction
-
-        self.readout_module = FromAtomToMoleculeReduction()
-
         # Initialize representation block
         self.schnet_representation_module = SchNETRepresentation(
             cutoff, number_of_radial_basis_functions
@@ -142,7 +137,7 @@ class SchNetCore(CoreNetwork):
             ]
         )
 
-        # final output layer
+        # output layer to obtain per-atom energies
         self.energy_layer = nn.Sequential(
             Dense(
                 number_of_atom_features,
@@ -176,7 +171,9 @@ class SchNetCore(CoreNetwork):
 
         return nnp_input
 
-    def compute_properties(self, data: SchnetNeuralNetworkData) -> Dict[str, torch.Tensor]:
+    def compute_properties(
+        self, data: SchnetNeuralNetworkData
+    ) -> Dict[str, torch.Tensor]:
         """
         Calculate the energy for a given input batch.
 
@@ -194,6 +191,7 @@ class SchNetCore(CoreNetwork):
         representation = self.schnet_representation_module(data.d_ij)
         data.f_ij = representation["f_ij"]
         data.f_cutoff = representation["f_cutoff"]
+
         x = data.atomic_embedding
         # Iterate over interaction blocks to update features
         for interaction in self.interaction_modules:
@@ -208,13 +206,10 @@ class SchNetCore(CoreNetwork):
         E_i = self.energy_layer(x).squeeze(1)
 
         return {
-            "E_i": E_i,
-            "q": x,
+            'per_atom_energy': E_i,
+            "scalar_representation": x,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
-
-
-from torch_scatter import scatter_add
 
 
 class SchNETInteractionModule(nn.Module):
@@ -302,9 +297,11 @@ class SchNETInteractionModule(nn.Module):
         # Perform continuous-filter convolution
         x_j = x[idx_j]
         x_ij = x_j * W_ij
-        x = scatter_add(x_ij, idx_i, dim=0, dim_size=x.size(0))
+        
+        out = torch.zeros_like(x)
+        out.scatter_add_(0, idx_i.unsqueeze(-1).expand_as(x_ij), x_ij)
 
-        return self.feature_to_output(x)
+        return self.feature_to_output(out)
 
 
 class SchNETRepresentation(nn.Module):
@@ -365,7 +362,7 @@ class SchNETRepresentation(nn.Module):
         return {"f_ij": f_ij, "f_cutoff": f_cutoff}
 
 
-from typing import List
+from typing import List, Union
 
 
 class SchNet(BaseNetwork):
@@ -375,11 +372,10 @@ class SchNet(BaseNetwork):
         number_of_atom_features: int,
         number_of_radial_basis_functions: int,
         number_of_interaction_modules: int,
-        cutoff: unit.Quantity,
+        cutoff: Union[unit.Quantity, str],
         number_of_filters: int,
         shared_interactions: bool,
-        processing_operation: List[Dict[str, str]],
-        readout_operation: List[Dict[str, str]],
+        postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
         """
@@ -402,8 +398,7 @@ class SchNet(BaseNetwork):
         """
         super().__init__(
             dataset_statistic=dataset_statistic,
-            processing_operation=processing_operation,
-            readout_operation=readout_operation,
+            postprocessing_parameter=postprocessing_parameter,
         )
         from modelforge.utils.units import _convert
 

@@ -4,11 +4,25 @@ from openff.units import unit
 
 
 def load_atomic_self_energies(path: str) -> Dict[str, unit.Quantity]:
+    """
+    Load the atomic self energies from the dataset statistics toml.
+
+    Parameters
+    ----------
+    path : str
+        path to the dataset statistics toml file.
+
+    Returns
+    -------
+    Dict[str, unit.Quantity]
+        returns the atomic self energies from the dataset statistics toml with units attached.
+    """
+
     import toml
 
     energy_statistic = toml.load(open(path, "r"))
 
-    # attach kJ/mol units
+    # attach units
     atomic_self_energies = {
         key: unit.Quantity(value)
         for key, value in energy_statistic["atomic_self_energies"].items()
@@ -17,52 +31,87 @@ def load_atomic_self_energies(path: str) -> Dict[str, unit.Quantity]:
     return atomic_self_energies
 
 
-def load_atomic_energies_stats(path: str) -> Dict[str, unit.Quantity]:
+def load_dataset_energy_statistics(path: str) -> Dict[str, unit.Quantity]:
+    """
+    Load the per-atom energy distribution statistics (mean and stddev of atomic energies) from the dataset statistics toml.
+
+    Parameters
+    ----------
+    path : str
+        path to the dataset statistics toml file.
+
+    Returns
+    -------
+    Dict[str, unit.Quantity]
+        returns the per-atom energy distribution statistics from the dataset statistics toml with units attached.
+    """
     import toml
 
     energy_statistic = toml.load(open(path, "r"))
-    # convert values to tensor
-    atomic_energies_stats = {
+    # attach units
+    training_dataset_statistics = {
         key: unit.Quantity(value)
-        for key, value in energy_statistic["atomic_energies_stats"].items()
+        for key, value in energy_statistic["training_dataset_statistics"].items()
     }
 
-    return atomic_energies_stats
+    return training_dataset_statistics
 
 
 class FromAtomToMoleculeReduction(torch.nn.Module):
+    """
+    Reducing per-atom property to per-molecule property.
+    """
 
     def __init__(
         self,
+        per_atom_property_name: str,
+        index_name: str,
+        output_name: str,
         reduction_mode: str = "sum",
+        keep_per_atom_property: bool = False,
     ):
         """
         Initializes the per-atom property readout_operation module.
-        Performs the reduction of 'per_atom' property to 'per_molecule' property.
-        """
-        super().__init__()
-        self.reduction_mode = reduction_mode
-
-    def forward(
-        self, per_atom_property: torch.Tensor, index: torch.Tensor
-    ) -> torch.Tensor:
-        """
 
         Parameters
         ----------
-        per_atom_property: torch.Tensor, shape [nr_of_atoms, 1].
-            The per-atom property that will be reduced to per-molecule property.
-        atomic_subsystem_indices: torch.Tensor, shape [nr_of_atoms].
-            The atomic subsystem indices
+        per_atom_property_name : str
+            The name of the per-atom property that will be reduced.
+        index_name : str
+            The name of the index used to identify the molecules.
+        output_name : str
+            The name of the output property.
+        reduction_mode : str, optional
+            The reduction mode. Default is "sum".
+        keep_per_atom_property : bool, optional
+            Whether to keep the per-atom property. Default is False.
+        """
+        super().__init__()
+        self.reduction_mode = reduction_mode
+        self.per_atom_property_name = per_atom_property_name
+        self.output_name = output_name
+        self.index_name = index_name
+        self.keep_per_atom_property = keep_per_atom_property
+
+    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        """
+        Forward pass of the module.
+
+        Parameters
+        ----------
+        data : Dict[str, torch.Tensor]
+            The input data dictionary containing the per-atom property and index.
 
         Returns
         -------
-        Tensor, shape [nr_of_moleculs, 1], the per-molecule property.
+        Dict[str, torch.Tensor]
+            The output data dictionary containing the per-molecule property.
         """
-        indices = index.to(torch.int64)
+        indices = data[self.index_name].long().unsqueeze(1)
+        per_atom_property = data[self.per_atom_property_name]
         # Perform scatter add operation for atoms belonging to the same molecule
         property_per_molecule_zeros = torch.zeros(
-            len(indices.unique()),
+            (indices.unique().size(0), *per_atom_property.shape[1:]),
             dtype=per_atom_property.dtype,
             device=per_atom_property.device,
         )
@@ -70,7 +119,11 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         property_per_molecule = property_per_molecule_zeros.scatter_reduce(
             0, indices, per_atom_property, reduce=self.reduction_mode
         )
-        return property_per_molecule
+        data[self.output_name] = property_per_molecule
+        if self.keep_per_atom_property is False:
+            del data[self.per_atom_property_name]
+
+        return data
 
 
 from dataclasses import dataclass, field
@@ -168,8 +221,27 @@ class AtomicSelfEnergies:
 
 
 class ScaleValues(torch.nn.Module):
+    """
+    Rescales values using the provided mean and standard deviation.
+    """
 
-    def __init__(self, mean: float, stddev: float) -> None:
+    def __init__(
+        self, mean: float, stddev: float, property: str, output_name: str
+    ) -> None:
+        """
+        Rescales values using the provided mean and standard deviation.
+        Parameters
+        ----------
+        mean : float
+            The mean value used for rescaling.
+        stddev : float
+            The standard deviation value used for rescaling.
+        property : str
+            The name of the property to be rescaled.
+        output_name : str
+            The name of the output property.
+
+        """
 
         """
         A module for scaling values using provided mean and standard deviation.
@@ -185,30 +257,48 @@ class ScaleValues(torch.nn.Module):
         super().__init__()
         self.register_buffer("mean", torch.tensor([mean]))
         self.register_buffer("stddev", torch.tensor([stddev]))
+        self.property = property
+        self.output_name = output_name
 
-    def forward(self, values_to_be_scaled: torch.Tensor) -> torch.Tensor:
-
+    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
         Rescales values using the provided mean and standard deviation.
 
         Parameters
         ----------
-        values_to_be_scaled : torch.Tensor
-            The tensor of values to be rescaled.
-        atomic_numbers : torch.Tensor
-            The input data for the model, including atomic numbers and subsystem indices.
+        data : Dict[str, torch.Tensor]
+            The input data dictionary containing the property to be rescaled.
+
         Returns
         -------
-        torch.Tensor
-            The rescaled values.
+        Dict[str, torch.Tensor]
+            The output data dictionary containing the rescaled values.
         """
+        data[self.output_name] = data[self.property] * self.stddev + self.mean
+        return data
 
-        return values_to_be_scaled * self.stddev + self.mean
+
+from typing import Union
 
 
 class CalculateAtomicSelfEnergy(torch.nn.Module):
+    """
+    Calculates the atomic self energy for each molecule.
+    """
 
-    def __init__(self, atomic_self_energies) -> None:
+    def __init__(
+        self, atomic_self_energies: Dict[str, Union[unit.Quantity, str]]
+    ) -> None:
+        """
+        Calculates the atomic self energy for each molecule given the atomic self energies provided by the training dataset and the element information.
+
+
+        Parameters
+        ----------
+        atomic_self_energies : Dict[str, Union[unit.Quantity, str]]
+            A dictionary containing the atomic self energies for each atomic number.
+
+        """
 
         super().__init__()
 
@@ -219,23 +309,22 @@ class CalculateAtomicSelfEnergy(torch.nn.Module):
             }
         self.atomic_self_energies = AtomicSelfEnergies(atomic_self_energies)
 
-    def forward(
-        self,
-        atomic_numbers: torch.Tensor,
-        atomic_subsystem_indices: torch.Tensor,
-    ) -> torch.Tensor:
+    def forward(self, data: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
         Calculates the molecular self energy.
 
         Parameters
         ----------
-        atomic_numbers : torch.Tensor
+        data : dict
             The input data for the model, including atomic numbers and subsystem indices.
+
         Returns
         -------
         torch.Tensor
             The tensor containing the molecular self energy for each molecule.
         """
+        atomic_numbers = data["atomic_numbers"]
+        atomic_subsystem_indices = data["atomic_subsystem_indices"]
 
         atomic_subsystem_indices = atomic_subsystem_indices.to(
             dtype=torch.long, device=atomic_numbers.device
@@ -246,8 +335,9 @@ class CalculateAtomicSelfEnergy(torch.nn.Module):
             device=atomic_numbers.device
         )
 
-        # first, we need to use the atomic numbers to generate a tensor that
+        # use the atomic numbers to generate a tensor that
         # contains the atomic self energy for each atomic number
         ase_tensor = ase_tensor_for_indexing[atomic_numbers]
 
-        return ase_tensor
+        data["ase_tensor"] = ase_tensor
+        return data

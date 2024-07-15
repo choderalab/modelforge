@@ -1,7 +1,7 @@
 [potential]
 model_name = "PhysNet"
 
-[potential.potential_parameter]
+[potential.core_parameter]
 
 max_Z = 101
 number_of_atom_features = 64
@@ -10,17 +10,8 @@ cutoff = "5.0 angstrom"
 number_of_interaction_residual = 3
 number_of_modules = 5
 
-processing_operation = [
-  { in = [
-    "E_i",
-  ], out = "E_i", function = "normalization", mean = "E_i_mean", stddev = "E_i_stddev" },
-  { in = [
-    "atomic_numbers",
-    'atomic_subsystem_indices',
-  ], out = "ase", function = "calculate_ase" },
-
-]
-readout_operation = [
-  { function = "from_atom_to_molecule", mode = 'sum', in = 'E_i', index_key = 'atomic_subsystem_indices', out = 'E' },
-  { function = "from_atom_to_molecule", mode = 'sum', in = 'ase', index_key = 'atomic_subsystem_indices', out = 'mse' },
-]
+[potential.postprocessing_parameter]
+[potential.postprocessing_parameter.per_atom_energy]
+normalize = true
+from_atom_to_molecule_reduction = true
+keep_per_atom_property = true

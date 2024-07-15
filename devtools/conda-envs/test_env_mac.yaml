@@ -2,7 +2,6 @@ name: test
 channels:
   - conda-forge
   - pytorch
-  - pyg
 dependencies:
   # Base depends
   - python
@@ -21,7 +20,6 @@ dependencies:
   - rdkit
   - retry
   - sqlitedict
-  - pytorch_scatter
   - jax
 
   # Testing
@@ -29,7 +27,6 @@ dependencies:
   - pytest-cov
   - codecov
   - requests
-  - torchani
   - versioneer
 
   # Docs
@@ -37,11 +34,7 @@ dependencies:
 
   # pip installs
   - pip:
-      # - schnetpack>=2.0.0
       - pytorch2jax
-      - versioneer
-      - flax
-      - torchviz
       - git+https://github.com/ArnNag/sake.git@nanometer
-      - tensorflow
-      - torchviz
+      - jax
+      - flax

@@ -15,6 +15,7 @@ def load_configs(model_name: str, dataset_name: str):
         potential_defaults,
         training_defaults,
         dataset_defaults,
+        training,
     )
     from importlib import resources
     from modelforge.train.training import return_toml_config
@@ -22,30 +23,19 @@ def load_configs(model_name: str, dataset_name: str):
     potential_path = resources.files(potential_defaults) / f"{model_name.lower()}.toml"
     dataset_path = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
     training_path = resources.files(training_defaults) / "default.toml"
-
+    runtime_path = resources.files(training) / "runtime.toml"
     return return_toml_config(
         potential_path=potential_path,
         dataset_path=dataset_path,
         training_path=training_path,
+        runtime_path=runtime_path,
     )
 
 
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 @pytest.mark.parametrize("dataset_name", ["QM9"])
-@pytest.mark.parametrize(
-    "loss_type",
-    [
-        {
-            "loss_type": "EnergyAndForceLoss",
-            "include_force": True,
-            "force_weight": 0.99,
-            "energy_weight": 0.01,
-        },
-        {"loss_type": "EnergyAndForceLoss"},
-    ],
-)
-def test_train_with_lightning(model_name, dataset_name, loss_type):
+def test_train_with_lightning(model_name, dataset_name):
     """
     Test the forward pass for a given model and dataset.
     """
@@ -59,13 +49,14 @@ def test_train_with_lightning(model_name, dataset_name, loss_type):
     potential_config = config["potential"]
     training_config = config["training"]
     dataset_config = config["dataset"]
-    # set loss type
-    training_config["training_parameter"]["loss_parameter"] = loss_type
+    runtime_config = config["runtime"]
+
     # perform training
     trainer = perform_training(
         potential_config=potential_config,
         training_config=training_config,
         dataset_config=dataset_config,
+        runtime_config=runtime_config,
     )
     # save checkpoint
     trainer.save_checkpoint("test.chp")
@@ -74,6 +65,7 @@ def test_train_with_lightning(model_name, dataset_name, loss_type):
         potential_config=potential_config,
         training_config=training_config,
         dataset_config=dataset_config,
+        runtime_config=runtime_config,
         checkpoint_path="test.chp",
     )
 
@@ -81,59 +73,57 @@ def test_train_with_lightning(model_name, dataset_name, loss_type):
 import torch
 
 
-def test_loss_fkt(single_batch_with_batchsize_2_with_force):
-    from torch_scatter import scatter_sum
-
-    batch = single_batch_with_batchsize_2_with_force
-    E_true = batch.metadata.E
-    F_true = batch.metadata.F
-    F_predict = torch.randn_like(F_true)
-    E_predict = torch.randn_like(E_true)
-
-    F_scaling = torch.tensor([1.0])
-
-    F_error_per_atom = torch.norm(F_true - F_predict, dim=1) ** 2
-    F_error_per_molecule = scatter_sum(
-        F_error_per_atom, batch.nnp_input.atomic_subsystem_indices.long(), 0
-    )
-
-    scale = F_scaling / (3 * batch.metadata.atomic_subsystem_counts)
-    F_per_mol_scaled = F_error_per_molecule / scale
-
-
-@pytest.fixture
-def _initialize_predict_target_dictionary():
-    # initalize the test system
-    predict_target = {}
-    predict_target["E_predict"] = torch.tensor([[1.0], [2.0], [3.0]])
-    predict_target["E_true"] = torch.tensor([[1.0], [-2.0], [3.0]])
-    predict_target["F_predict"] = torch.tensor(
-        [[1.0, 2.0, 3.0], [1.0, 2.0, 3.0], [1.0, 2.0, 3.0]]
-    )
-    predict_target["F_true"] = torch.tensor(
-        [[1.0, -2.0, -3.0], [1.0, -2.0, -3.0], [1.0, -2.0, -3.0]]
-    )
-    return predict_target
-
-
-def test_energy_loss_only(_initialize_predict_target_dictionary):
+def test_error_calculation(single_batch_with_batchsize_16_with_force):
     # test the different Loss classes
-    from modelforge.train.training import EnergyLoss
+    from modelforge.train.training import (
+        FromPerAtomToPerMoleculeError,
+        PerMoleculeError,
+    )
+    # generate data
+    data = single_batch_with_batchsize_16_with_force
+    true_E = data.metadata.E
+    true_F = data.metadata.F
 
-    # initialize loss
-    loss_calculator = EnergyLoss()
-    predict_target = _initialize_predict_target_dictionary
-    # this loss calculates validation and training error as MSE and test error as RMSE
-    mse_expected_loss = torch.mean(
-        (predict_target["E_predict"] - predict_target["E_true"]) ** 2
+    # make predictions
+    predicted_E = true_E + torch.rand_like(true_E) * 10
+    predicted_F = true_F + torch.rand_like(true_F) * 10
+
+    # test error for property with shape (nr_of_molecules, 1)
+    error = PerMoleculeError()
+    E_error = error(predicted_E, true_E, data)
+
+    # compare output (mean squared error scaled by number of atoms in the molecule)
+    scale_squared_error = (
+        (predicted_E - true_E) ** 2
+    ) / data.metadata.atomic_subsystem_counts.unsqueeze(
+        1
+    )  # FIXME : fi
+    reference_E_error = torch.mean(scale_squared_error)
+    assert torch.allclose(E_error, reference_E_error)
+
+    # test error for property with shape (nr_of_atoms, 3)
+    error = FromPerAtomToPerMoleculeError()
+    F_error = error(predicted_F, true_F, data)
+
+    # compare error (mean squared error scaled by number of atoms in the molecule)
+
+    scaled_error = (
+        torch.linalg.vector_norm(predicted_F - true_F, dim=1, keepdim=True) ** 2
     )
 
-    # test loss class
-    # make sure that train loss is MSE as expected
-    loss = loss_calculator.calculate_loss(predict_target, None)
-    assert torch.isclose(
-        mse_expected_loss, loss["combined_loss"]
-    ), f"Expected {mse_expected_loss.item()} but got {loss['combined_loss'].item()}"
+    per_mol_error = torch.zeros_like(data.metadata.E)
+    per_mol_error.scatter_add_(
+        0,
+        data.nnp_input.atomic_subsystem_indices.unsqueeze(-1)
+        .expand(-1, scaled_error.size(1))
+        .to(torch.int64),
+        scaled_error,
+    )
+
+    reference_F_error = torch.mean(
+        per_mol_error / data.metadata.atomic_subsystem_counts.unsqueeze(1)
+    )
+    assert torch.allclose(F_error, reference_F_error)
 
 
 @pytest.mark.skipif(
@@ -148,16 +138,23 @@ def test_hypterparameter_tuning_with_ray(
 ):
     from modelforge.train.training import return_toml_config, LossFactory
     from importlib import resources
-    from modelforge.tests.data import training, potential, dataset
+    from modelforge.tests.data import (
+        training,
+        potential_defaults,
+        dataset_defaults,
+        training_defaults,
+    )
 
-    training_path = resources.files(training) / "default.toml"
-    potential_path = resources.files(potential) / f"{model_name.lower()}_defaults.toml"
-    dataset_path = resources.files(dataset) / f"{dataset_name.lower()}.toml"
+    training_path = resources.files(training_defaults) / "default.toml"
+    potential_path = resources.files(potential_defaults) / f"{model_name.lower()}.toml"
+    dataset_path = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
+    runtime_path = resources.files(training) / "runtime.toml"
 
     config = return_toml_config(
         training_path=training_path,
         potential_path=potential_path,
         dataset_path=dataset_path,
+        runtime_path=runtime_path,
     )
 
     dm = datamodule_factory(dataset_name=dataset_name)
@@ -165,12 +162,12 @@ def test_hypterparameter_tuning_with_ray(
     # Extract parameters
     potential_parameter = config["potential"]["potential_parameter"]
     training_parameter = config["training"]["training_parameter"]
-    loss_config = config["training"]["loss_parameter"]
+    # loss_config = config["training"]["training_parameter"]["loss_parameter"]
     # training model
     model = NeuralNetworkPotentialFactory.generate_model(
         use="training",
         model_type=model_name,
-        loss_parameter=loss_config,
+        # loss_parameter=loss_config,
         model_parameter=potential_parameter,
         training_parameter=training_parameter,
     )

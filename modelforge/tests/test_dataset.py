@@ -464,22 +464,18 @@ def test_dataset_neighborlist(model_name, single_batch_with_batchsize_64):
     nnp_input = single_batch_with_batchsize_64.nnp_input
 
     # test that the neighborlist is correctly generated
-    # cast input and model to torch.float64
-    # read default parameters
     from modelforge.tests.test_models import load_configs
 
     # read default parameters
-    config = load_configs(f"{model_name}_without_ase", "qm9")
+    config = load_configs(f"{model_name}", "qm9")
 
     # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
     from modelforge.potential.models import NeuralNetworkPotentialFactory
-
+    # initialize model
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
-        model_type=model_name,
         simulation_environment="PyTorch",
-        model_parameter=potential_parameter,
+        model_parameter=config["potential"],
     )
     model(nnp_input)
 
@@ -770,12 +766,16 @@ def test_energy_postprocessing():
     from openff.units import unit
 
     assert np.isclose(
-        unit.Quantity(dataset_statistic["atomic_energies_stats"]["E_i_mean"]).m,
+        unit.Quantity(
+            dataset_statistic["training_dataset_statistics"]["per_atom_energy_mean"]
+        ).m,
         -402.916561,
     )
 
     assert np.isclose(
-        unit.Quantity(dataset_statistic["atomic_energies_stats"]["E_i_stddev"]).m,
+        unit.Quantity(
+            dataset_statistic["training_dataset_statistics"]["per_atom_energy_stddev"]
+        ).m,
         25.013382078330697,
     )
 

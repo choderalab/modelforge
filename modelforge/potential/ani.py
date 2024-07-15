@@ -4,7 +4,6 @@ from .models import InputPreparation, BaseNetwork, CoreNetwork
 
 import torch
 from loguru import logger as log
-from openff.units import unit
 from torch import nn
 
 from modelforge.utils.prop import SpeciesAEV
@@ -74,11 +73,11 @@ class AniNeuralNetworkData(NeuralNetworkData):
 
     Examples
     --------
-    >>> ani_input = AniNeuralNetworkInput(
+    >>> ani_input = AniNeuralNetworkData(
     ...     pair_indices=torch.tensor([[0, 1], [0, 2], [1, 2]]).T,  # Transpose for correct shape
     ...     d_ij=torch.tensor([[1.0], [1.0], [1.0]]),  # Distances between pairs
     ...     r_ij=torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),  # Displacement vectors
-    ...     number_of_atoms=torch.tensor([4]),  # Total number of atoms
+    ...     number_of_atoms=4,  # Total number of atoms
     ...     positions=torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]),
     ...     atom_index=torch.tensor([1, 6, 6, 8]),  # Atomic numbers for H, C, C, O
     ...     atomic_subsystem_indices=torch.tensor([0, 0, 0, 0]),  # All atoms belong to the same molecule
@@ -259,9 +258,9 @@ class ANIRepresentation(nn.Module):
                 radial_sublength,
             )
         )
-        atom_index12 = data.pair_indices
-        species = data.atom_index
-        species12 = species[atom_index12]
+        atom_index12 = data.pair_indices.squeeze(1)
+        species = data.atom_index.squeeze(1)
+        species12 = species[atom_index12].squeeze(1)
 
         index12 = atom_index12 * self.nr_of_supported_elements + species12.flip(0)
         radial_aev.index_add_(0, index12[0], radial_feature_vector)
@@ -301,7 +300,7 @@ class ANIRepresentation(nn.Module):
         r_ij12 = r_ij.index_select(0, pair_index12.view(-1)).view(
             2, -1, 3
         ) * sign12.unsqueeze(-1)
-        species12_ = torch.where(sign12 == 1, species12_small[1], species12_small[0])
+        species12_ = torch.where(torch.eq(sign12, 1), species12_small[1], species12_small[0])
         return {
             "angular_r_ij": r_ij12,
             "central_atom_index": central_atom_index,
@@ -419,16 +418,16 @@ class ANIInteraction(nn.Module):
     def forward(self, input: Tuple[torch.Tensor, torch.Tensor]):
 
         species, aev = input
-        output = aev.new_zeros(species.shape)
+        output = aev.new_zeros(species.shape) # return shape (nr_of_atoms, 1)
 
         for i, model in enumerate(self.atomic_networks):
-            mask = species == i
+            mask = torch.eq(species, i)
             midx = mask.nonzero().flatten()
             if midx.shape[0] > 0:
                 input_ = aev.index_select(0, midx)
-                output[midx] = model(input_).flatten()
+                output[midx] = model(input_)
 
-        return output.view_as(species)
+        return output
 
 
 class ANI2xCore(CoreNetwork):
@@ -540,7 +539,7 @@ class ANI2xCore(CoreNetwork):
         E_i = self.interaction_modules(representation)
 
         return {
-            "E_i": E_i,
+            "per_atom_energy": E_i,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
 
@@ -558,8 +557,7 @@ class ANI2x(BaseNetwork):
         angular_min_distance: Union[unit.Quantity, str],
         angular_dist_divisions: int,
         angle_sections: int,
-        processing_operation: List[Dict[str, str]],
-        readout_operation: List[Dict[str, str]],
+        postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
         """
@@ -590,9 +588,8 @@ class ANI2x(BaseNetwork):
         """
 
         super().__init__(
-            processing_operation=processing_operation,
             dataset_statistic=dataset_statistic,
-            readout_operation=readout_operation,
+            postprocessing_parameter=postprocessing_parameter,
         )
 
         from modelforge.utils.units import _convert

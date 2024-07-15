@@ -5,6 +5,12 @@ import pytest
 from modelforge.potential.utils import CosineCutoff, RadialSymmetryFunction
 
 
+@pytest.fixture(scope="session")
+def prep_temp_dir(tmp_path_factory):
+    fn = tmp_path_factory.mktemp("utils_test")
+    return fn
+
+
 def test_dense_layer():
     from modelforge.potential.utils import Dense
     import torch
@@ -434,11 +440,16 @@ def test_energy_readout():
     # the input for the EnergyReadout module is vector (E_i) that will be scatter_added, and
     # a second tensor supplying the indixes for the summation
 
-    E_i = torch.tensor([3, 3, 1, 1, 1, 1, 1, 1], dtype=torch.float32)
-    atomic_subsystem_indices = torch.tensor([0, 0, 1, 1, 1, 1, 1, 1])
-
-    energy_readout = FromAtomToMoleculeReduction()
-    E = energy_readout(E_i, atomic_subsystem_indices)
+    r = {
+        "per_atom_energy": torch.tensor([3, 3, 1, 1, 1, 1, 1, 1], dtype=torch.float32),
+        "atomic_subsystem_index": torch.tensor([0, 0, 1, 1, 1, 1, 1, 1]),
+    }
+    energy_readout = FromAtomToMoleculeReduction(
+        per_atom_property_name="per_atom_energy",
+        index_name="atomic_subsystem_index",
+        output_name="per_molecule_energy",
+    )
+    E = energy_readout(r)["per_molecule_energy"]
 
     # check that output has length of total number of molecules in batch
     assert E.size() == torch.Size(
@@ -473,3 +484,53 @@ def test_welford():
         assert np.isclose(online_estimator.mean / target_mean, 1.0, rtol=1e-1)
         assert np.isclose(online_estimator.variance / target_variance, 1.0, rtol=1e-1)
         assert np.isclose(online_estimator.stddev / target_stddev, 1.0, rtol=1e-1)
+
+
+def test_filelocking(prep_temp_dir):
+    from modelforge.utils.misc import lock_file, unlock_file, check_file_lock
+
+    filepath = str(prep_temp_dir) + "/test.txt"
+
+    import threading
+
+    class thread(threading.Thread):
+        def __init__(self, thread_name, thread_id, filepath):
+            threading.Thread.__init__(self)
+            self.thread_id = thread_id
+            self.name = thread_name
+            self.filepath = filepath
+            self.did_I_lock_it = None
+
+        def run(self):
+            import time
+
+            with open(self.filepath, "w") as f:
+                if not check_file_lock(f):
+                    lock_file(f)
+                    self.did_I_lock_it = True
+                    time.sleep(2)
+                    unlock_file(f)
+
+                else:
+                    self.did_I_lock_it = False
+
+    # the first thread should lock the file and set "did_I_lock_it" to True
+    thread1 = thread("lock_file_here", "Thread-1", filepath)
+    # the second thread should check if locked, and set "did_I_lock_it" to False
+    # the second thread should also set "status" to True, because it waits for the first thread to unlock the file
+    thread2 = thread("encounter_locked_file", "Thread-2", filepath)
+
+    thread1.start()
+    thread2.start()
+    thread1.join()
+    thread2.join()
+
+    # this thread should lock the file, since it will be executed after the others complete
+    # this will ensure that we can unlock the file
+    thread3 = thread("lock_file_here", "Thread-3", filepath)
+    thread3.start()
+    thread3.join()
+    assert thread1.did_I_lock_it == True
+
+    assert thread2.did_I_lock_it == False
+    assert thread3.did_I_lock_it == True

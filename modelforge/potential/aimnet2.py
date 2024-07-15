@@ -12,12 +12,36 @@ if TYPE_CHECKING:
 
 from modelforge.potential.utils import NeuralNetworkData
 from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
+from .utils import RadialSymmetryFunction
+
+
+class AIMNet2RadialSymmetryFunction(RadialSymmetryFunction):
+
+    def calculate_radial_scale_factor(
+        self,
+        _min_distance_in_nanometer,
+        _max_distance_in_nanometer,
+        number_of_radial_basis_functions,
+    ):
+        scale_factors = torch.linspace(
+            _min_distance_in_nanometer,
+            _max_distance_in_nanometer,
+            number_of_radial_basis_functions,
+        )
+
+        widths = (
+            torch.abs(scale_factors[1] - scale_factors[0])
+            * torch.ones_like(scale_factors)
+        ).to(self.dtype)
+
+        scale_factors = 0.5 / torch.square_(widths)
+        return scale_factors
 
 
 @dataclass
-class AimNet2NeuralNetworkData(NeuralNetworkData):
+class AIMNet2NeuralNetworkData(NeuralNetworkData):
     """
-    A dataclass to structure the inputs specifically for AimNet2-based neural network potentials, including the necessary
+    A dataclass to structure the inputs specifically for AIMNet2-based neural network potentials, including the necessary
     geometric and chemical information, along with the radial symmetry function expansion (`f_ij`) and the cosine cutoff
     (`f_cutoff`) to accurately represent atomistic systems for energy predictions.
 
@@ -83,7 +107,7 @@ class AimNet2NeuralNetworkData(NeuralNetworkData):
     f_cutoff: Optional[torch.Tensor] = field(default=None)
 
 
-class AimNet2Core(CoreNetwork):
+class AIMNet2Core(CoreNetwork):
     def __init__(
         self,
         max_Z: int = 100,
@@ -116,11 +140,11 @@ class AimNet2Core(CoreNetwork):
 
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
-    ) -> AimNet2NeuralNetworkData:
+    ) -> AIMNet2NeuralNetworkData:
 
         number_of_atoms = data.atomic_numbers.shape[0]
 
-        nnp_input = AimNet2NeuralNetworkData(
+        nnp_input = AIMNet2NeuralNetworkData(
             pair_indices=pairlist_output.pair_indices,
             d_ij=pairlist_output.d_ij,
             r_ij=pairlist_output.r_ij,
@@ -137,7 +161,7 @@ class AimNet2Core(CoreNetwork):
         return nnp_input
 
     def compute_properties(
-        self, data: AimNet2NeuralNetworkData
+        self, data: AIMNet2NeuralNetworkData
     ) -> Dict[str, torch.Tensor]:
         """
         Calculate the requested properties for a given input batch.
@@ -217,7 +241,7 @@ class AimNet2Representation(nn.Module):
 from typing import List
 
 
-class AimNet2(BaseNetwork):
+class AIMNet2(BaseNetwork):
     def __init__(
         self,
         max_Z: int,
@@ -232,10 +256,10 @@ class AimNet2(BaseNetwork):
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
         """
-        Initialize the AimNet2 network.
+        Initialize the AIMNet2 network.
 
-        #NOTE: set correct reference
-        
+        # NOTE: set correct reference
+
         Parameters
         ----------
         max_Z : int, default=100
@@ -254,7 +278,7 @@ class AimNet2(BaseNetwork):
         )
         from modelforge.utils.units import _convert
 
-        self.core_module = AimNet2Core(
+        self.core_module = AIMNet2Core(
             max_Z=max_Z,
             number_of_atom_features=number_of_atom_features,
             number_of_radial_basis_functions=number_of_radial_basis_functions,

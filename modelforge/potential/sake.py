@@ -228,7 +228,7 @@ class SAKEInteraction(nn.Module):
             Small constant to add for stability.
         scale_factor : unit.Quantity
             Factor with dimensions of length used to nondimensionalize distances before being
-            passed directly into linear layers.
+            passed into `edge_mlp_in`.
         """
         super().__init__()
         self.nr_atom_basis = nr_atom_basis

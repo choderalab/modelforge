@@ -1,18 +1,19 @@
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Dict, Optional, Union
+from typing import Dict, Optional, Union
 
 import torch
 from loguru import logger as log
 from openff.units import unit
 from torch import nn
-from .models import InputPreparation, ModelInput, BaseNetwork, CoreNetwork
+from .models import (
+    InputPreparation,
+    ModelInput,
+    BaseNetwork,
+    CoreNetwork,
+    PairListOutputs,
+)
 
 from modelforge.potential.utils import NeuralNetworkData
-
-if TYPE_CHECKING:
-    from modelforge.dataset.dataset import ModelInput
-
-    from .models import PairListOutputs
 
 
 @dataclass
@@ -580,7 +581,6 @@ class PhysNetCore(CoreNetwork):
 
 
 from .models import InputPreparation, ModelInput, BaseNetwork
-from typing import List
 
 
 class PhysNet(BaseNetwork):

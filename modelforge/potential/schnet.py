@@ -184,7 +184,7 @@ class SchNetCore(CoreNetwork):
         Returns
         -------
         Dict[str, torch.Tensor]
-            Calculated energies; shape (nr_systems,).
+            Calculated energies; shape (nr_systems).
         """
 
         # Compute the representation for each atom (transform to radial basis set, multiply by cutoff)

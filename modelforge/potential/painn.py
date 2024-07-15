@@ -179,21 +179,21 @@ class PaiNNCore(CoreNetwork):
         transformed_input = self.representation_module(data)
 
         filter_list = transformed_input["filters"]
-        q = transformed_input["q"]
-        mu = transformed_input["mu"]
-        dir_ij = transformed_input["dir_ij"]
+        q = transformed_input["q"]  # shape (nr_of_atoms, 1, nr_atom_basis)
+        mu = transformed_input["mu"]  # shape (nr_of_atoms, 3, nr_atom_basis)
+        dir_ij = transformed_input["dir_ij"]  # (nr_of_pairs, 3)
 
-        for i, (interaction_mod, mixing_mod) in enumerate(
-            zip(self.interaction_modules, self.mixing_modules)
+        for filter_module, interaction_module, mixing_module in zip(
+            filter_list, self.interaction_modules, self.mixing_modules
         ):
-            q, mu = interaction_mod(
+            q, mu = interaction_module(
                 q,
                 mu,
-                filter_list[i],
+                filter_module,
                 dir_ij,
                 data.pair_indices,
             )
-            q, mu = mixing_mod(q, mu)
+            q, mu = mixing_module(q, mu)
 
         # Use squeeze to remove dimensions of size 1
         q = q.squeeze(dim=1)
@@ -298,7 +298,7 @@ class PaiNNRepresentation(nn.Module):
 
         # generate q and mu #NOTE the shape
         # scalar feature
-        q = data.atomic_embedding.unsqueeze(1) # nr_of_atoms, 1, nr_atom_basis
+        q = data.atomic_embedding.unsqueeze(1)  # nr_of_atoms, 1, nr_atom_basis
         # vector feature
         mu = torch.zeros(
             (q.shape[0], 3, q.shape[2]), device=q.device, dtype=q.dtype

@@ -10,6 +10,7 @@ from pint import Quantity
 from typing import Union
 from modelforge.dataset.dataset import NNPInput
 
+
 @dataclass
 class NeuralNetworkData:
     pair_indices: torch.Tensor
@@ -20,7 +21,6 @@ class NeuralNetworkData:
     positions: torch.Tensor
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
-
 
 
 import torch
@@ -577,32 +577,6 @@ class RadialSymmetryFunction(nn.Module):
 
 
 class SchnetRadialSymmetryFunction(RadialSymmetryFunction):
-    def __init__(
-        self,
-        number_of_radial_basis_functions: int,
-        max_distance: unit.Quantity,
-        min_distance: unit.Quantity = 0.0 * unit.nanometer,
-        dtype: Optional[torch.dtype] = None,
-        trainable: bool = False,
-        radial_basis_function: RadialBasisFunction = GaussianRadialBasisFunction(),
-    ):
-        """RadialSymmetryFunction class.
-
-        Initializes and contains the logic for computing radial symmetry functions.
-
-        Parameters
-        ---------
-        """
-
-        super().__init__(
-            number_of_radial_basis_functions,
-            max_distance,
-            min_distance,
-            dtype,
-            trainable,
-            radial_basis_function,
-        )
-        self.prefactor = torch.tensor([1.0])
 
     def calculate_radial_scale_factor(
         self,

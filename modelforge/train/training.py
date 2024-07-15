@@ -3,7 +3,7 @@ import lightning as pl
 from typing import Any, Union, Dict, Type, Optional, List
 import torch
 from loguru import logger as log
-from modelforge.dataset.dataset import BatchData, NNPInput
+from modelforge.dataset.dataset import BatchData, ModelInput
 import torchmetrics
 from torch import nn
 
@@ -75,7 +75,7 @@ class FromPerAtomToPerMoleculeError(Error):
         self,
         per_atom_prediction: torch.Tensor,
         per_atom_reference: torch.Tensor,
-        batch: "NNPInput",
+        batch: "ModelInput",
     ) -> torch.Tensor:
         """
         Computes the per-atom error and aggregates it to per-molecule mean squared error.
@@ -86,7 +86,7 @@ class FromPerAtomToPerMoleculeError(Error):
             The predicted values.
         per_atom_reference : torch.Tensor
             The reference values provided by the dataset.
-        batch : NNPInput
+        batch : ModelInput
             The batch data containing metadata and input information.
 
         Returns
@@ -107,7 +107,7 @@ class FromPerAtomToPerMoleculeError(Error):
 
         per_molecule_squared_error.scatter_add_(
             0,
-            batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
+            batch.model_input.atomic_subsystem_indices.long().unsqueeze(1),
             per_atom_squared_error,
         )
         # divide by number of atoms
@@ -391,7 +391,7 @@ class TrainingAdapter(pl.LightningModule):
         Dict[str, torch.Tensor]
             The true forces from the dataset and the predicted forces by the model.
         """
-        nnp_input = batch.nnp_input
+        model_input = batch.model_input
         per_atom_force_true = batch.metadata.F.to(torch.float32)
 
         if per_atom_force_true.numel() < 1:
@@ -399,16 +399,16 @@ class TrainingAdapter(pl.LightningModule):
 
         per_molecule_energy_predict = energies["per_molecule_energy_predict"]
 
-        # Ensure E_predict and nnp_input.positions require gradients and are on the same device
+        # Ensure E_predict and model_input.positions require gradients and are on the same device
         if not per_molecule_energy_predict.requires_grad:
             per_molecule_energy_predict.requires_grad = True
-        if not nnp_input.positions.requires_grad:
-            nnp_input.positions.requires_grad = True
+        if not model_input.positions.requires_grad:
+            model_input.positions.requires_grad = True
 
         # Compute the gradient (forces) from the predicted energies
         grad = torch.autograd.grad(
             per_molecule_energy_predict.sum(),
-            nnp_input.positions,
+            model_input.positions,
             create_graph=False,
             retain_graph=True,
         )[0]
@@ -433,9 +433,9 @@ class TrainingAdapter(pl.LightningModule):
         Dict[str, torch.Tensor]
             The true energies from the dataset and the predicted energies by the model.
         """
-        nnp_input = batch.nnp_input
+        model_input = batch.model_input
         per_molecule_energy_true = batch.metadata.E.to(torch.float32)
-        per_molecule_energy_predict = self.model.forward(nnp_input)[
+        per_molecule_energy_predict = self.model.forward(model_input)[
             "per_molecule_energy"
         ].unsqueeze(
             1
@@ -568,7 +568,7 @@ class TrainingAdapter(pl.LightningModule):
         """
 
         # Ensure positions require gradients for force calculation
-        batch.nnp_input.positions.requires_grad_(True)
+        batch.model_input.positions.requires_grad_(True)
         # calculate energy and forces
         predict_target = self._get_predictions(batch)
         # calculate the loss
@@ -597,7 +597,7 @@ class TrainingAdapter(pl.LightningModule):
             The results are logged and not directly returned.
         """
         # Ensure positions require gradients for force calculation
-        batch.nnp_input.positions.requires_grad_(True)
+        batch.model_input.positions.requires_grad_(True)
         # calculate energy and forces
         predict_target = self._get_predictions(batch)
         # Update and log metrics

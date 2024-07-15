@@ -79,6 +79,7 @@ def test_error_calculation(single_batch_with_batchsize_16_with_force):
         FromPerAtomToPerMoleculeError,
         PerMoleculeError,
     )
+
     # generate data
     data = single_batch_with_batchsize_16_with_force
     true_E = data.metadata.E
@@ -114,7 +115,7 @@ def test_error_calculation(single_batch_with_batchsize_16_with_force):
     per_mol_error = torch.zeros_like(data.metadata.E)
     per_mol_error.scatter_add_(
         0,
-        data.nnp_input.atomic_subsystem_indices.unsqueeze(-1)
+        data.model_input.atomic_subsystem_indices.unsqueeze(-1)
         .expand(-1, scaled_error.size(1))
         .to(torch.int64),
         scaled_error,

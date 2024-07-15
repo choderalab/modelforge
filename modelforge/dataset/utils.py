@@ -162,8 +162,8 @@ def _calculate_self_energies(torch_dataset, collate_fn) -> Dict[str, unit.Quanti
         a = 7
         energies, atomic_numbers, molecules_id = (
             batch.metadata.E.squeeze(),
-            batch.nnp_input.atomic_numbers.squeeze(-1).to(torch.int64),
-            batch.nnp_input.atomic_subsystem_indices.to(torch.int16),
+            batch.model_input.atomic_numbers.squeeze(-1).to(torch.int64),
+            batch.model_input.atomic_subsystem_indices.to(torch.int16),
         )
 
         # Update the energy array and unique atomic numbers set
@@ -325,6 +325,7 @@ class RandomRecordSplittingStrategy(SplittingStrategy):
     Strategy to split a dataset randomly, keeping all conformers in a record in the same split.
 
     """
+
     def __init__(self, seed: int = 42, split: List[float] = [0.8, 0.1, 0.1]):
         """
         This strategy splits a dataset randomly based on provided ratios for training, validation,
@@ -506,7 +507,6 @@ class FirstComeFirstServeSplittingStrategy(SplittingStrategy):
         )
 
         return (train_d, val_d, test_d)
-
 
 
 REGISTERED_SPLITTING_STRATEGIES = {

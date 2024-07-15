@@ -9,7 +9,7 @@ from torch import nn
 from modelforge.utils.prop import SpeciesAEV
 
 if TYPE_CHECKING:
-    from modelforge.dataset.dataset import NNPInput
+    from modelforge.dataset.dataset import ModelInput
     from .models import PairListOutputs
 
 
@@ -517,7 +517,7 @@ class ANI2xCore(CoreNetwork):
         self.register_buffer("lookup_tensor", lookup_tensor)
 
     def _model_specific_input_preparation(
-        self, data: "NNPInput", pairlist_output: "PairListOutputs"
+        self, data: "ModelInput", pairlist_output: "PairListOutputs"
     ) -> AniNeuralNetworkData:
 
         number_of_atoms = data.atomic_numbers.shape[0]

@@ -5,12 +5,12 @@ import torch
 from loguru import logger as log
 from openff.units import unit
 from torch import nn
-from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
+from .models import InputPreparation, ModelInput, BaseNetwork, CoreNetwork
 
 from modelforge.potential.utils import NeuralNetworkData
 
 if TYPE_CHECKING:
-    from modelforge.dataset.dataset import NNPInput
+    from modelforge.dataset.dataset import ModelInput
 
     from .models import PairListOutputs
 
@@ -466,7 +466,7 @@ class PhysNetCore(CoreNetwork):
         self.atomic_shift = nn.Parameter(torch.zeros(max_Z, 2))
 
     def _model_specific_input_preparation(
-        self, data: "NNPInput", pairlist_output: "PairListOutputs"
+        self, data: "ModelInput", pairlist_output: "PairListOutputs"
     ) -> PhysNetNeuralNetworkData:
 
         # Perform atomic embedding
@@ -481,7 +481,7 @@ class PhysNetCore(CoreNetwork):
 
         number_of_atoms = data.atomic_numbers.shape[0]
 
-        nnp_input = PhysNetNeuralNetworkData(
+        model_input = PhysNetNeuralNetworkData(
             pair_indices=pairlist_output.pair_indices,
             d_ij=pairlist_output.d_ij,
             r_ij=pairlist_output.r_ij,
@@ -494,7 +494,7 @@ class PhysNetCore(CoreNetwork):
             atomic_embedding=atomic_embedding,  # atom embedding
         )
 
-        return nnp_input
+        return model_input
 
     def compute_properties(
         self, data: PhysNetNeuralNetworkData
@@ -579,7 +579,7 @@ class PhysNetCore(CoreNetwork):
         return output
 
 
-from .models import InputPreparation, NNPInput, BaseNetwork
+from .models import InputPreparation, ModelInput, BaseNetwork
 from typing import List
 
 

@@ -76,9 +76,9 @@ def test_dataset_basic_operations():
 
     for conf_idx in range(len(dataset)):
         conf_data = dataset[conf_idx]
-        assert np.array_equal(conf_data.nnp_input.positions, geom_true[conf_idx])
+        assert np.array_equal(conf_data.model_input.positions, geom_true[conf_idx])
         assert np.array_equal(
-            conf_data.nnp_input.atomic_numbers, atomic_numbers_true[conf_idx]
+            conf_data.model_input.atomic_numbers, atomic_numbers_true[conf_idx]
         )
         assert np.array_equal(conf_data.metadata.E, energy_true[conf_idx])
 
@@ -195,7 +195,7 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
     assert isinstance(raw_data_item, BatchData)
     assert len(raw_data_item.__dataclass_fields__) == 2
     assert (
-        len(raw_data_item.nnp_input.__dataclass_fields__) == 5
+        len(raw_data_item.model_input.__dataclass_fields__) == 5
     )  # 8 properties are returned
     assert (
         len(raw_data_item.metadata.__dataclass_fields__) == 5
@@ -444,13 +444,13 @@ def test_data_item_format_of_datamodule(
 
     raw_data_item = dm.torch_dataset[0]
     assert isinstance(raw_data_item, BatchData)
-    assert isinstance(raw_data_item.nnp_input.atomic_numbers, torch.Tensor)
-    assert isinstance(raw_data_item.nnp_input.positions, torch.Tensor)
+    assert isinstance(raw_data_item.model_input.atomic_numbers, torch.Tensor)
+    assert isinstance(raw_data_item.model_input.positions, torch.Tensor)
     assert isinstance(raw_data_item.metadata.E, torch.Tensor)
 
     assert (
-        raw_data_item.nnp_input.atomic_numbers.shape[0]
-        == raw_data_item.nnp_input.positions.shape[0]
+        raw_data_item.model_input.atomic_numbers.shape[0]
+        == raw_data_item.model_input.positions.shape[0]
     )
 
 
@@ -461,7 +461,7 @@ from modelforge.potential import _Implemented_NNPs
 def test_dataset_neighborlist(model_name, single_batch_with_batchsize_64):
     """Test the neighborlist."""
 
-    nnp_input = single_batch_with_batchsize_64.nnp_input
+    model_input = single_batch_with_batchsize_64.model_input
 
     # test that the neighborlist is correctly generated
     from modelforge.tests.test_models import load_configs
@@ -471,15 +471,16 @@ def test_dataset_neighborlist(model_name, single_batch_with_batchsize_64):
 
     # Extract parameters
     from modelforge.potential.models import NeuralNetworkPotentialFactory
+
     # initialize model
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         simulation_environment="PyTorch",
         model_parameter=config["potential"],
     )
-    model(nnp_input)
+    model(model_input)
 
-    pair_list = nnp_input.pair_list
+    pair_list = model_input.pair_list
     # pairlist is in ascending order in row 0
     assert torch.all(pair_list[0, 1:] >= pair_list[0, :-1])
 
@@ -912,7 +913,7 @@ def test_function_of_self_energy(dataset_name, datamodule_factory):
         )
         # Extract the first molecule (methane)
         # double check that it is methane
-        methane_atomic_indices = dm.train_dataset[0].nnp_input.atomic_numbers
+        methane_atomic_indices = dm.train_dataset[0].model_input.atomic_numbers
         # extract energy
         methane_energy_offset = dm.train_dataset[0].metadata.E
         if regression is False:

@@ -5,13 +5,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 from loguru import logger as log
 from openff.units import unit
-from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
+from .models import InputPreparation, ModelInput, BaseNetwork, CoreNetwork
 
 from .utils import Dense
 
 if TYPE_CHECKING:
     from .models import PairListOutputs
-    from modelforge.dataset.dataset import NNPInput
+    from modelforge.dataset.dataset import ModelInput
 
 from dataclasses import dataclass, field
 
@@ -134,13 +134,13 @@ class PaiNNCore(CoreNetwork):
         )
 
     def _model_specific_input_preparation(
-        self, data: "NNPInput", pairlist_output: "PairListOutputs"
+        self, data: "ModelInput", pairlist_output: "PairListOutputs"
     ) -> PaiNNNeuralNetworkData:
         # Perform atomic embedding
 
         number_of_atoms = data.atomic_numbers.shape[0]
 
-        nnp_input = PaiNNNeuralNetworkData(
+        model_input = PaiNNNeuralNetworkData(
             pair_indices=pairlist_output.pair_indices,
             d_ij=pairlist_output.d_ij,
             r_ij=pairlist_output.r_ij,
@@ -154,7 +154,7 @@ class PaiNNCore(CoreNetwork):
             ),  # atom embedding
         )
 
-        return nnp_input
+        return model_input
 
     def compute_properties(
         self,
@@ -489,7 +489,7 @@ class PaiNNMixing(nn.Module):
         return q, mu
 
 
-from .models import InputPreparation, NNPInput, BaseNetwork
+from .models import InputPreparation, ModelInput, BaseNetwork
 from typing import List
 
 

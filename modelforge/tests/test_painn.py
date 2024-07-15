@@ -16,9 +16,9 @@ def test_forward(single_batch_with_batchsize_64):
     )
     assert painn is not None, "PaiNN model should be initialized."
 
-    nnp_input = single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float32)
-    energy = painn(nnp_input)["per_molecule_energy"]
-    nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
+    model_input = single_batch_with_batchsize_64.model_input.to(dtype=torch.float32)
+    energy = painn(model_input)["per_molecule_energy"]
+    nr_of_mols = model_input.atomic_subsystem_indices.unique().shape[0]
 
     assert (
         len(energy) == nr_of_mols
@@ -45,8 +45,8 @@ def test_equivariance(single_batch_with_batchsize_64):
         **config["potential"]["core_parameter"],
         postprocessing_parameter=config["potential"]["postprocessing_parameter"],
     ).double()
-    
-    methane_input = single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float64)
+
+    methane_input = single_batch_with_batchsize_64.model_input.to(dtype=torch.float64)
     perturbed_methane_input = replace(methane_input)
     perturbed_methane_input.positions = torch.matmul(
         methane_input.positions, rotation_matrix

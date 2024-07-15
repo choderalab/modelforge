@@ -4,16 +4,45 @@ Models
 Introduction
 ----------------
 
-A model contains all the operations that are needed to map the cartisian coordinates, atomic numbers and total charge of a system to, at minimum, an energy. A model takes as input a :py:class:`modelforge.dataset.dataset.NNPInput` dataclass, and returns a dictionary of PyTorch tensors representing per-atom and/or per-molecule properties (including per-molecule energies). 
-The model consists of three functional compounds:
+A model contains all operations needed to map (in `inference` mode) or learn the mapping (in `training` mode) the cartesian coordinates, atomic numbers and charge of a system to an energy (and, depending on the model, other properties). Models are typically trained on quantum chemistry data, which are provided by `modelforge` (see :doc:datasets for more information)
+
+A model takes as input a :py:class:`modelforge.dataset.dataset.ModelInput` dataclass, which includes information about the system, such as the atomic numbers, the cartesian coordinates and the charge. 
+The model returns a dictionary, which includes the predicted energy and, depending on the model, other properties.
 
 - the input preparation module (:class:`modelforge.potential.model.InputPreparation`): responsible for generating the pairlist, pair distances and pair displacement vectors given the atomic coordinates and the cutoff.
 - the core model (:class:`modelforge.potential.model.CoreNetwork`): the neural network containing learnable parameters (what is considered the "core" of the potential).
+
 - the postprocessing module(:class:`modelforge.potential.model.PostProcessing`): contains operations that are applied to per-atom and per-molecule outputs, as well as the reduction operations that are performed to obtain the per-molecule properties. Examples of per-atom operations are atomic energy scaling or charge equilibration, examples for reduction operations are summation of per-atom energies to obtain per-molecule energies.
 
-A given neural network (e.g., SchNet) implements the core model, the input prepartion and postprocessing modules are independent of the neural network. 
+A given neural network (e.g., SchNet) implements the core model, the input prepartion and postprocessing modules are independent of the neural network. This modularity allows the user to use any neural network for the core model.
 
-To initialize a model, the model factory is used: :class:`modelforge.potential.models.NeuralNetworkPotentialFactory`.
+The models that are currently implemented in `modelforge` are:
+- SchNet (see :class:`modelforge.potential.schnet.SchNet`): a invariant, second generation neural network potential <https://arxiv.org/abs/1706.08566>.
+
+- PaiNN (see :class:`modelforge.potential.painn.PaiNN`): a direct improvement on SchNet, using equivariant features <https://arxiv.org/abs/2102.03150>.
+
+- ANI2x (see :class:`modelforge.potential.ani.ANI2x`): a invariant, second generation neural network potential <https://doi.org/10.26434/chemrxiv.11819268.v1>.
+
+- PhysNet (see :class:`modelforge.potential.physnet.PhysNet`): an invariant, third generation neural network potential <https://doi.org/10.1021/acs.jctc.9b00181.
+
+- SAKE (see :class:`modelforge.potential.sake.SAKE`): a second generation equivariant neural network potential <https://arxiv.org/abs/2301.08893>.
+
+- TensorNet (see :class:`modelforge.potential.tensornet.TensorNet`): a fast and scalable equivariant neural network potential <https://arxiv.org/abs/2306.06482>.
+
+
+How to use a model
+------------------------------------
+
+We are planning to provide trained models in the future, but we are still working on the best way to do so.
+
+In the meantime the way to use a model is to first train it. The workflow to do so is outlined in the :doc:`training` section. Once a model is trained, it can be used to predict energies for new systems. A trained model can save its configuration and weights in a directory, which can be used to initialize a model.
+
+```python
+model.save_state_dict('model')
+```
+To initialize a model, the model factory is used: :class:`modelforge.potential.models.NeuralNetworkPotentialFactory`. 
+
+
 
 .. autoclass:: modelforge.potential.models.NeuralNetworkPotentialFactory
       :members:

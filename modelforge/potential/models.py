@@ -17,7 +17,7 @@ from loguru import logger as log
 from openff.units import unit
 from torch.nn import Module
 
-from modelforge.dataset.dataset import NNPInput
+from modelforge.dataset.dataset import ModelInput
 
 if TYPE_CHECKING:
     from modelforge.potential.ani import ANI2x, AniNeuralNetworkData
@@ -615,7 +615,7 @@ class InputPreparation(torch.nn.Module):
         self.only_unique_pairs = only_unique_pairs
         self.calculate_distances_and_pairlist = Neighborlist(cutoff, only_unique_pairs)
 
-    def prepare_inputs(self, data: Union[NNPInput, NamedTuple]):
+    def prepare_inputs(self, data: Union[ModelInput, NamedTuple]):
         """
         Prepares the input tensors for passing to the model.
 
@@ -624,7 +624,7 @@ class InputPreparation(torch.nn.Module):
 
         Parameters
         ----------
-        data : Union[NNPInput, NamedTuple]
+        data : Union[ModelInput, NamedTuple]
             The input data provided by the dataset, containing atomic numbers, positions, and other necessary information.
 
         Returns
@@ -664,7 +664,7 @@ class InputPreparation(torch.nn.Module):
 
         return pairlist_output
 
-    def _input_checks(self, data: Union[NNPInput, NamedTuple]):
+    def _input_checks(self, data: Union[ModelInput, NamedTuple]):
         """
         Performs input validation checks.
 
@@ -672,7 +672,7 @@ class InputPreparation(torch.nn.Module):
 
         Parameters
         ----------
-        data : NNPInput
+        data : ModelInput
             The input data to be validated.
 
         Raises
@@ -680,8 +680,8 @@ class InputPreparation(torch.nn.Module):
         ValueError
             If the input data does not meet the expected criteria.
         """
-        # check that the input is instance of NNPInput
-        assert isinstance(data, NNPInput) or isinstance(data, Tuple)
+        # check that the input is instance of ModelInput
+        assert isinstance(data, ModelInput) or isinstance(data, Tuple)
 
         nr_of_atoms = data.atomic_numbers.shape[0]
         assert data.atomic_numbers.shape == torch.Size([nr_of_atoms])
@@ -933,7 +933,7 @@ class BaseNetwork(Module):
     def compute(self, data, core_input):
         return self.core_module(data, core_input)
 
-    def forward(self, data: NNPInput):
+    def forward(self, data: ModelInput):
         """
         Executes the forward pass of the model.
         This method performs input checks, prepares the inputs,
@@ -941,7 +941,7 @@ class BaseNetwork(Module):
 
         Parameters
         ----------
-        data : NNPInput
+        data : ModelInput
             The input data provided by the dataset, containing atomic numbers, positions, and other necessary information.
 
         Returns
@@ -966,7 +966,7 @@ class CoreNetwork(Module, ABC):
     ):
         """
         The CoreNetwork implements methods that are used by all neural network potentials. Every network inherits from CoreNetwork.
-        Networks are taking in a NNPInput and pairlist and returning a dictionary of **atomic** properties.
+        Networks are taking in a ModelInput and pairlist and returning a dictionary of **atomic** properties.
 
         Operations that are performed outside the network (e.g. pairlist calculation and operations that reduce atomic properties to molecule properties) are not part of the network and implemented in the BaseNetwork, which is a wrapper around the CoreNetwork.
         """
@@ -976,7 +976,7 @@ class CoreNetwork(Module, ABC):
 
     @abstractmethod
     def _model_specific_input_preparation(
-        self, data: NNPInput, pairlist: PairListOutputs
+        self, data: ModelInput, pairlist: PairListOutputs
     ) -> Union[
         "PhysNetNeuralNetworkData",
         "PaiNNNeuralNetworkData",
@@ -992,7 +992,7 @@ class CoreNetwork(Module, ABC):
 
         Parameters
         ----------
-        data : NNPInput
+        data : ModelInput
             The initial inputs to the neural network model, including atomic numbers, positions, and other relevant data.
         pairlist : PairListOutputs
             The outputs of a pairlist calculation, including pair indices, distances, and displacement vectors.
@@ -1048,14 +1048,14 @@ class CoreNetwork(Module, ABC):
         self.eval()  # Set the model to evaluation mode
 
     def forward(
-        self, data: NNPInput, pairlist_output: PairListOutputs
+        self, data: ModelInput, pairlist_output: PairListOutputs
     ) -> Dict[str, torch.Tensor]:
         """
         Implements the forward pass through the network.
 
         Parameters
         ----------
-        data : NNPInput
+        data : ModelInput
             Contains input data for the batch obtained directly from the dataset, including atomic numbers, positions,
             and other relevant fields.
         pairlist_output : PairListOutputs
@@ -1067,9 +1067,9 @@ class CoreNetwork(Module, ABC):
             The calculated per-atom properties and other properties from the forward pass.
         """
         # perform model specific modifications
-        nnp_input = self._model_specific_input_preparation(data, pairlist_output)
+        model_input = self._model_specific_input_preparation(data, pairlist_output)
         # perform the forward pass implemented in the subclass
-        outputs = self.compute_properties(nnp_input)
+        outputs = self.compute_properties(model_input)
         # add atomic numbers to the output
         outputs["atomic_numbers"] = data.atomic_numbers
 

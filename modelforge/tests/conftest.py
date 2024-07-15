@@ -291,7 +291,7 @@ def methane() -> BatchData:
     -------
     BatchData
     """
-    from modelforge.potential.utils import Metadata, NNPInput, BatchData
+    from modelforge.potential.utils import Metadata, ModelInput, BatchData
 
     atomic_numbers = torch.tensor([6, 1, 1, 1, 1], dtype=torch.int64)
     positions = (
@@ -310,7 +310,7 @@ def methane() -> BatchData:
     E = torch.tensor([0.0], requires_grad=True)
     atomic_subsystem_indices = torch.tensor([0, 0, 0, 0, 0], dtype=torch.int32)
     return BatchData(
-        NNPInput(
+        ModelInput(
             atomic_numbers=atomic_numbers,
             positions=positions,
             atomic_subsystem_indices=atomic_subsystem_indices,

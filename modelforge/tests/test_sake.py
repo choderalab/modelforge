@@ -37,7 +37,7 @@ def test_forward(single_batch_with_batchsize_64):
     Test the forward pass of the SAKE model.
     """
     # get methane input
-    methane = single_batch_with_batchsize_64.nnp_input
+    methane = single_batch_with_batchsize_64.model_input
 
     from modelforge.tests.test_models import load_configs
 
@@ -112,7 +112,7 @@ def test_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize_64):
     )
 
     # get methane input
-    methane = single_batch_with_batchsize_64.nnp_input
+    methane = single_batch_with_batchsize_64.model_input
     perturbed_methane_input = replace(methane)
     perturbed_methane_input.positions = torch.matmul(methane.positions, rotation_matrix)
 
@@ -450,7 +450,7 @@ def test_model_against_reference(single_batch_with_batchsize_1):
     )
 
     # get methane input
-    methane = single_batch_with_batchsize_1.nnp_input
+    methane = single_batch_with_batchsize_1.model_input
     pairlist_output = mf_sake.input_preparation.prepare_inputs(methane)
     prepared_methane = mf_sake.core_module._model_specific_input_preparation(
         methane, pairlist_output
@@ -595,7 +595,7 @@ def test_model_invariance(single_batch_with_batchsize_1):
         postprocessing_parameter=config["potential"]["postprocessing_parameter"],
     )
     # get methane input
-    methane = single_batch_with_batchsize_1.nnp_input
+    methane = single_batch_with_batchsize_1.model_input
 
     rotation_matrix = torch.tensor([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
     perturbed_methane_input = replace(methane)

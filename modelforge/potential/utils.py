@@ -8,7 +8,7 @@ from loguru import logger as log
 from openff.units import unit
 from pint import Quantity
 from typing import Union
-from modelforge.dataset.dataset import NNPInput
+from modelforge.dataset.dataset import ModelInput
 
 
 @dataclass
@@ -60,7 +60,7 @@ class Metadata:
 
 @dataclass
 class BatchData:
-    nnp_input: NNPInput
+    model_input: ModelInput
     metadata: Metadata
 
     def to(
@@ -68,7 +68,7 @@ class BatchData:
         device: Optional[torch.device] = None,
         dtype: Optional[torch.dtype] = None,
     ):
-        self.nnp_input = self.nnp_input.to(device=device, dtype=dtype)
+        self.model_input = self.model_input.to(device=device, dtype=dtype)
         self.metadata = self.metadata.to(device=device, dtype=dtype)
         return self
 

@@ -8,10 +8,10 @@ from openff.units import unit
 
 if TYPE_CHECKING:
     from .models import PairListOutputs
-    from modelforge.dataset.dataset import NNPInput
+    from modelforge.dataset.dataset import ModelInput
 
 from modelforge.potential.utils import NeuralNetworkData
-from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
+from .models import InputPreparation, ModelInput, BaseNetwork, CoreNetwork
 
 
 @dataclass
@@ -151,11 +151,11 @@ class SchNetCore(CoreNetwork):
         )
 
     def _model_specific_input_preparation(
-        self, data: "NNPInput", pairlist_output: "PairListOutputs"
+        self, data: "ModelInput", pairlist_output: "PairListOutputs"
     ) -> SchnetNeuralNetworkData:
         number_of_atoms = data.atomic_numbers.shape[0]
 
-        nnp_input = SchnetNeuralNetworkData(
+        model_input = SchnetNeuralNetworkData(
             pair_indices=pairlist_output.pair_indices,
             d_ij=pairlist_output.d_ij,
             r_ij=pairlist_output.r_ij,
@@ -169,7 +169,7 @@ class SchNetCore(CoreNetwork):
             ),  # atom embedding
         )
 
-        return nnp_input
+        return model_input
 
     def compute_properties(
         self, data: SchnetNeuralNetworkData
@@ -206,7 +206,7 @@ class SchNetCore(CoreNetwork):
         E_i = self.energy_layer(x).squeeze(1)
 
         return {
-            'per_atom_energy': E_i,
+            "per_atom_energy": E_i,
             "scalar_representation": x,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
@@ -297,7 +297,7 @@ class SchNETInteractionModule(nn.Module):
         # Perform continuous-filter convolution
         x_j = x[idx_j]
         x_ij = x_j * W_ij
-        
+
         out = torch.zeros_like(x)
         out.scatter_add_(0, idx_i.unsqueeze(-1).expand_as(x_ij), x_ij)
 

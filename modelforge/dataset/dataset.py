@@ -49,7 +49,7 @@ class Metadata:
 
 
 @dataclass
-class NNPInput:
+class ModelInput:
     """
     A dataclass to structure the inputs for neural network potentials.
 
@@ -159,7 +159,7 @@ class NNPInput:
 
 @dataclass
 class BatchData:
-    nnp_input: NNPInput
+    model_input: ModelInput
     metadata: Metadata
 
     def to(
@@ -167,7 +167,7 @@ class BatchData:
         device: Optional[torch.device] = None,
         dtype: Optional[torch.dtype] = None,
     ):
-        self.nnp_input = self.nnp_input.to(device=device, dtype=dtype)
+        self.model_input = self.model_input.to(device=device, dtype=dtype)
         self.metadata = self.metadata.to(device=device, dtype=dtype)
         return self
 
@@ -362,7 +362,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
                 :, pair_list_indices_start:pair_list_indices_end
             ]
 
-        nnp_input = NNPInput(
+        model_input = ModelInput(
             atomic_numbers=atomic_numbers,
             positions=positions,
             pair_list=pair_list,
@@ -380,7 +380,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             number_of_atoms=number_of_atoms,
         )
 
-        return BatchData(nnp_input, metadata)
+        return BatchData(model_input, metadata)
 
 
 class HDF5Dataset:
@@ -1313,7 +1313,7 @@ class DataModule(pl.LightningDataModule):
         ):
             pairs_batch, n_pairs_batch = (
                 self.pairlist.construct_initial_pairlist_using_numpy(
-                    batch.nnp_input.atomic_subsystem_indices.to("cpu")
+                    batch.model_input.atomic_subsystem_indices.to("cpu")
                 )
             )
             all_pairs.append(torch.from_numpy(pairs_batch))
@@ -1393,8 +1393,8 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
     offset = torch.tensor([0], dtype=torch.int32)
     pair_list_present = (
         True
-        if hasattr(conf_list[0].nnp_input, "pair_list")
-        and isinstance(conf_list[0].nnp_input.pair_list, torch.Tensor)
+        if hasattr(conf_list[0].model_input, "pair_list")
+        and isinstance(conf_list[0].model_input.pair_list, torch.Tensor)
         else False
     )
 
@@ -1402,14 +1402,14 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
         if pair_list_present:
             ## pairlist
             # generate pairlist without padded values
-            pair_list = conf.nnp_input.pair_list.to(dtype=torch.int32) + offset
+            pair_list = conf.model_input.pair_list.to(dtype=torch.int32) + offset
             # update offset (for making sure the pair_list indices are pointing to the correct molecule)
-            offset += conf.nnp_input.atomic_numbers.shape[0]
+            offset += conf.model_input.atomic_numbers.shape[0]
             ij_list.append(pair_list)
 
-        atomic_numbers_list.append(conf.nnp_input.atomic_numbers)
-        positions_list.append(conf.nnp_input.positions)
-        total_charge_list.append(conf.nnp_input.total_charge)
+        atomic_numbers_list.append(conf.model_input.atomic_numbers)
+        positions_list.append(conf.model_input.positions)
+        total_charge_list.append(conf.model_input.total_charge)
         E_list.append(conf.metadata.E)
         F_list.append(conf.metadata.F)
         atomic_subsystem_counts_list.append(conf.metadata.atomic_subsystem_counts)
@@ -1434,7 +1434,7 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
     else:
         IJ_cat = None
 
-    nnp_input = NNPInput(
+    model_input = ModelInput(
         atomic_numbers=atomic_numbers,
         positions=positions,
         total_charge=total_charge,
@@ -1448,4 +1448,4 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
         atomic_subsystem_indices_referencing_dataset=atomic_subsystem_indices_referencing_dataset,
         number_of_atoms=atomic_numbers.numel(),
     )
-    return BatchData(nnp_input, metadata)
+    return BatchData(model_input, metadata)

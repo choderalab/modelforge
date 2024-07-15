@@ -51,11 +51,11 @@ The :py:class:`modelforge.potential.models.CoreNetwork` class is used to store t
   :align: center
   :alt: Alternative text
 
-The input of every neural network is the :py:class:`modelforge.dataset.dataset.NNPInput` dataclass as shown below.
+The input of every neural network is the :py:class:`modelforge.dataset.dataset.ModelInput` dataclass as shown below.
 Note that, for certain applications, it is useful to convert the dataclass to a `NamedTuple`, 
-which can be done using the :py:meth:`modelforge.dataset.dataset.NNPInput.as_namedtuple` function.
+which can be done using the :py:meth:`modelforge.dataset.dataset.ModelInput.as_namedtuple` function.
 
-.. autoclass:: modelforge.dataset.dataset.NNPInput
+.. autoclass:: modelforge.dataset.dataset.ModelInput
     :members:
 
 

@@ -16,8 +16,8 @@ def visualize_model(
         "inference", model_name
     )
 
-    nnp_input = next(iter(dm.train_dataloader())).nnp_input
-    yhat = inference_model(nnp_input)
+    model_input = next(iter(dm.train_dataloader())).model_input
+    yhat = inference_model(model_input)
     make_dot(yhat, params=dict(list(inference_model.named_parameters()))).render(
         f"compute_graph_{inference_model.__class__.__name__}", format="png"
     )

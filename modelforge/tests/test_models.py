@@ -42,13 +42,13 @@ def test_JAX_wrapping(model_name, single_batch_with_batchsize_64):
     )
 
     assert "JAX" in str(type(model))
-    nnp_input = single_batch_with_batchsize_64.nnp_input.as_jax_namedtuple()
-    out = model(nnp_input)["per_molecule_energy"]
+    model_input = single_batch_with_batchsize_64.model_input.as_jax_namedtuple()
+    out = model(model_input)["per_molecule_energy"]
     import jax
 
     grad_fn = jax.grad(lambda pos: out.sum())  # Create a gradient function
     forces = -grad_fn(
-        nnp_input.positions
+        model_input.positions
     )  # Evaluate gradient function and apply negative sign
 
 
@@ -110,7 +110,7 @@ def test_energy_scaling_and_offset():
     dataset.prepare_data()
     dataset.setup()
     # get methane input
-    methane = next(iter(dataset.train_dataloader(shuffle=False))).nnp_input
+    methane = next(iter(dataset.train_dataloader(shuffle=False))).model_input
     # load dataset statistic
     import toml
 
@@ -293,7 +293,7 @@ def test_energy_between_simulation_environments(
     import numpy as np
     import torch
 
-    nnp_input = single_batch_with_batchsize_64.nnp_input
+    model_input = single_batch_with_batchsize_64.model_input
     # test the forward pass through each of the models
     # cast input and model to torch.float64
     # read default parameters
@@ -309,7 +309,7 @@ def test_energy_between_simulation_environments(
         model_parameter=config["potential"],
     )
 
-    output_torch = model(nnp_input)["per_molecule_energy"]
+    output_torch = model(model_input)["per_molecule_energy"]
 
     torch.manual_seed(42)
     model = NeuralNetworkPotentialFactory.generate_model(
@@ -317,8 +317,8 @@ def test_energy_between_simulation_environments(
         simulation_environment="JAX",
         model_parameter=config["potential"],
     )
-    nnp_input = nnp_input.as_jax_namedtuple()
-    output_jax = model(nnp_input)["per_molecule_energy"]
+    model_input = model_input.as_jax_namedtuple()
+    output_jax = model(model_input)["per_molecule_energy"]
 
     # test tat we get an energie per molecule
     assert np.isclose(output_torch.sum().detach().numpy(), output_jax.sum())
@@ -354,16 +354,16 @@ def test_forward_pass_with_all_datasets(model_name, dataset_name, datamodule_fac
         model_parameter=config["potential"],
         dataset_statistic=dataset_statistic,
     )
-    output = model(batch.nnp_input)
+    output = model(batch.model_input)
 
     # test that the output has the following keys and follwing dim
     assert "per_molecule_energy" in output
     assert "per_atom_energy" in output
 
     assert output["per_molecule_energy"].shape[0] == 64
-    assert output["per_atom_energy"].shape == batch.nnp_input.atomic_numbers.shape
+    assert output["per_atom_energy"].shape == batch.model_input.atomic_numbers.shape
 
-    pair_list = batch.nnp_input.pair_list
+    pair_list = batch.model_input.pair_list
     # pairlist is in ascending order in row 0
     assert torch.all(pair_list[0, 1:] >= pair_list[0, :-1])
 
@@ -376,11 +376,11 @@ def test_forward_pass(
     # this test sends a single batch from different datasets through the model
     import torch
 
-    nnp_input = single_batch_with_batchsize_64.nnp_input
+    model_input = single_batch_with_batchsize_64.model_input
 
     # read default parameters
     config = load_configs(f"{model_name.lower()}", "qm9")
-    nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
+    nr_of_mols = model_input.atomic_subsystem_indices.unique().shape[0]
 
     # test the forward pass through each of the models
     model = NeuralNetworkPotentialFactory.generate_model(
@@ -389,9 +389,9 @@ def test_forward_pass(
         model_parameter=config["potential"],
     )
     if "JAX" in str(type(model)):
-        nnp_input = nnp_input.as_jax_namedtuple()
+        model_input = model_input.as_jax_namedtuple()
 
-    output = model(nnp_input)
+    output = model(model_input)
 
     # test tat we get an energie per molecule
     assert len(output["per_molecule_energy"]) == nr_of_mols
@@ -437,7 +437,7 @@ def test_calculate_energies_and_forces(model_name, single_batch_with_batchsize_6
     training_parameter = config["training"].get("training_parameter", {})
 
     # get batch
-    nnp_input = single_batch_with_batchsize_64.nnp_input
+    model_input = single_batch_with_batchsize_64.model_input
 
     # test the pass through each of the models
     torch.manual_seed(42)
@@ -445,16 +445,16 @@ def test_calculate_energies_and_forces(model_name, single_batch_with_batchsize_6
         use="inference",
         model_parameter=config["potential"],
     )
-    E_inference = model_inference(nnp_input)["per_molecule_energy"]
+    E_inference = model_inference(model_input)["per_molecule_energy"]
 
     # backpropagation
     F_inference = -torch.autograd.grad(
-        E_inference.sum(), nnp_input.positions, create_graph=True, retain_graph=True
+        E_inference.sum(), model_input.positions, create_graph=True, retain_graph=True
     )[0]
 
     # make sure that dimension are as expected
-    nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
-    nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
+    nr_of_mols = model_input.atomic_subsystem_indices.unique().shape[0]
+    nr_of_atoms_per_batch = model_input.atomic_subsystem_indices.shape[0]
 
     assert E_inference.shape == torch.Size([nr_of_mols])
     assert F_inference.shape == (nr_of_atoms_per_batch, 3)  #  only one molecule
@@ -466,9 +466,9 @@ def test_calculate_energies_and_forces(model_name, single_batch_with_batchsize_6
         training_parameter=training_parameter,
     )
 
-    E_training = model_training.model.forward(nnp_input)["per_molecule_energy"]
+    E_training = model_training.model.forward(model_input)["per_molecule_energy"]
     F_training = -torch.autograd.grad(
-        E_training.sum(), nnp_input.positions, create_graph=True, retain_graph=True
+        E_training.sum(), model_input.positions, create_graph=True, retain_graph=True
     )[0]
 
     # make sure that both agree on E and F
@@ -488,10 +488,10 @@ def test_calculate_energies_and_forces_with_jax(
     # read default parameters
     config = load_configs(f"{model_name.lower()}", "qm9")
 
-    nnp_input = single_batch_with_batchsize_64.nnp_input
+    model_input = single_batch_with_batchsize_64.model_input
     # test the backward pass through each of the models
-    nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
-    nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
+    nr_of_mols = model_input.atomic_subsystem_indices.unique().shape[0]
+    nr_of_atoms_per_batch = model_input.atomic_subsystem_indices.shape[0]
 
     # The inference_model fixture now returns a function that expects an environment
     model = NeuralNetworkPotentialFactory.generate_model(
@@ -500,15 +500,15 @@ def test_calculate_energies_and_forces_with_jax(
         simulation_environment="JAX",
     )
 
-    nnp_input = nnp_input.as_jax_namedtuple()
+    model_input = model_input.as_jax_namedtuple()
 
-    result = model(nnp_input)["per_molecule_energy"]
+    result = model(model_input)["per_molecule_energy"]
 
     import jax
 
     grad_fn = jax.grad(lambda pos: result.sum())  # Create a gradient function
     forces = -grad_fn(
-        nnp_input.positions
+        model_input.positions
     )  # Evaluate gradient function and apply negative sign
     assert result.shape == torch.Size([nr_of_mols])  #  only one molecule
     assert forces.shape == (nr_of_atoms_per_batch, 3)  #  only one molecule
@@ -754,7 +754,7 @@ def test_pairlist_on_dataset():
     # -------------------------------#
     # -------------------------------#
     # get methane input
-    batch = next(iter(dataset.train_dataloader(shuffle=False))).nnp_input
+    batch = next(iter(dataset.train_dataloader(shuffle=False))).model_input
     import torch
 
     # make sure that the pairlist of methane is correct (single molecule)
@@ -782,7 +782,7 @@ def test_pairlist_on_dataset():
     # -------------------------------#
     # -------------------------------#
     # get methane input
-    batch = next(iter(dataset.train_dataloader(shuffle=False))).nnp_input
+    batch = next(iter(dataset.train_dataloader(shuffle=False))).model_input
 
     assert torch.equal(
         batch.pair_list,
@@ -873,15 +873,15 @@ def test_casting(model_name, single_batch_with_batchsize_64):
 
     batch = single_batch_with_batchsize_64
     batch_ = batch.to(dtype=torch.float64)
-    assert batch_.nnp_input.positions.dtype == torch.float64
+    assert batch_.model_input.positions.dtype == torch.float64
     batch_ = batch_.to(dtype=torch.float32)
-    assert batch_.nnp_input.positions.dtype == torch.float32
+    assert batch_.model_input.positions.dtype == torch.float32
 
-    nnp_input = batch.nnp_input.to(dtype=torch.float64)
-    assert nnp_input.positions.dtype == torch.float64
-    nnp_input = batch.nnp_input.to(dtype=torch.float32)
-    assert nnp_input.positions.dtype == torch.float32
-    nnp_input = batch.metadata.to(dtype=torch.float64)
+    model_input = batch.model_input.to(dtype=torch.float64)
+    assert model_input.positions.dtype == torch.float64
+    model_input = batch.model_input.to(dtype=torch.float32)
+    assert model_input.positions.dtype == torch.float32
+    model_input = batch.metadata.to(dtype=torch.float64)
 
     # cast input and model to torch.float64
     # read default parameters
@@ -893,9 +893,9 @@ def test_casting(model_name, single_batch_with_batchsize_64):
         model_parameter=config["potential"],
     )
     model = model.to(dtype=torch.float64)
-    nnp_input = batch.nnp_input.to(dtype=torch.float64)
+    model_input = batch.model_input.to(dtype=torch.float64)
 
-    model(nnp_input)
+    model(model_input)
 
     # cast input and model to torch.float64
     model = NeuralNetworkPotentialFactory.generate_model(
@@ -904,9 +904,9 @@ def test_casting(model_name, single_batch_with_batchsize_64):
         model_parameter=config["potential"],
     )
     model = model.to(dtype=torch.float32)
-    nnp_input = batch.nnp_input.to(dtype=torch.float32)
+    model_input = batch.model_input.to(dtype=torch.float32)
 
-    model(nnp_input)
+    model(model_input)
 
 
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
@@ -937,7 +937,7 @@ def test_equivariant_energies_and_forces(
     translation, rotation, reflection = equivariance_utils
     # define the tolerance
     atol = 1e-3
-    nnp_input = single_batch_with_batchsize_64.nnp_input
+    model_input = single_batch_with_batchsize_64.model_input
 
     # initialize the models
     model = model.to(dtype=torch.float64)
@@ -945,15 +945,15 @@ def test_equivariant_energies_and_forces(
     # ------------------- #
     # start the test
     # reference values
-    nnp_input = single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float64)
-    reference_result = model(nnp_input)["per_molecule_energy"].to(dtype=torch.float64)
+    model_input = single_batch_with_batchsize_64.model_input.to(dtype=torch.float64)
+    reference_result = model(model_input)["per_molecule_energy"].to(dtype=torch.float64)
     reference_forces = -torch.autograd.grad(
         reference_result.sum(),
-        nnp_input.positions,
+        model_input.positions,
     )[0]
 
     # translation test
-    translation_nnp_input = replace(nnp_input)
+    translation_nnp_input = replace(model_input)
     translation_nnp_input.positions = translation(translation_nnp_input.positions)
     translation_result = model(translation_nnp_input)["per_molecule_energy"]
     assert torch.allclose(
@@ -978,7 +978,7 @@ def test_equivariant_energies_and_forces(
     )
 
     # rotation test
-    rotation_input_data = replace(nnp_input)
+    rotation_input_data = replace(model_input)
     rotation_input_data.positions = rotation(rotation_input_data.positions)
     rotation_result = model(rotation_input_data)["per_molecule_energy"]
 
@@ -1007,7 +1007,7 @@ def test_equivariant_energies_and_forces(
     )
 
     # reflection test
-    reflection_input_data = replace(nnp_input)
+    reflection_input_data = replace(model_input)
     reflection_input_data.positions = reflection(reflection_input_data.positions)
     reflection_result = model(reflection_input_data)["per_molecule_energy"]
     reflection_forces = -torch.autograd.grad(

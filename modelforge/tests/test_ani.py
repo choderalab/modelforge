@@ -24,16 +24,16 @@ def setup_methane():
         [0, 0, 0, 0, 0], dtype=torch.int32, device=device
     )
 
-    from modelforge.dataset.dataset import NNPInput
+    from modelforge.dataset.dataset import ModelInput
 
-    nnp_input = NNPInput(
+    model_input = ModelInput(
         atomic_numbers=torch.tensor([6, 1, 1, 1, 1], device=device),
         positions=coordinates.squeeze(0) / 10,
         atomic_subsystem_indices=atomic_subsystem_indices,
         total_charge=torch.tensor([0.0]),
     )
 
-    return species, coordinates, device, nnp_input
+    return species, coordinates, device, model_input
 
 
 def setup_two_methanes():
@@ -69,15 +69,15 @@ def setup_two_methanes():
     )
 
     atomic_numbers = mf_species
-    from modelforge.dataset.dataset import NNPInput
+    from modelforge.dataset.dataset import ModelInput
 
-    nnp_input = NNPInput(
+    model_input = ModelInput(
         atomic_numbers=atomic_numbers,
         positions=torch.cat((coordinates[0], coordinates[1]), dim=0) / 10,
         atomic_subsystem_indices=atomic_subsystem_indices,
         total_charge=torch.tensor([0.0, 0.0]),
     )
-    return ani_species, coordinates, device, nnp_input
+    return ani_species, coordinates, device, model_input
 
 
 @pytest.mark.xfail
@@ -316,11 +316,11 @@ def test_compare_aev():
     mf_model.input_preparation._input_checks(mf_input)
     # prepare the input for the forward pass
     pairlist_output = mf_model.input_preparation.prepare_inputs(mf_input)
-    nnp_input = mf_model.core_module._model_specific_input_preparation(
+    model_input = mf_model.core_module._model_specific_input_preparation(
         mf_input, pairlist_output
     )
     representation_module_output = mf_model.core_module.ani_representation_module(
-        nnp_input
+        model_input
     )
 
     reference_aev = provide_input_for_test_ani_test_compare_aev()

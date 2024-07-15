@@ -4,7 +4,7 @@ import torch.nn as nn
 from loguru import logger as log
 from typing import Dict, Tuple
 from openff.units import unit
-from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
+from .models import InputPreparation, ModelInput, BaseNetwork, CoreNetwork
 
 from .models import PairListOutputs
 from .utils import (
@@ -13,7 +13,7 @@ from .utils import (
     SAKERadialSymmetryFunction,
     SAKERadialBasisFunction,
 )
-from modelforge.dataset.dataset import NNPInput
+from modelforge.dataset.dataset import ModelInput
 import torch
 import torch.nn.functional as F
 
@@ -120,7 +120,7 @@ class SAKECore(CoreNetwork):
         )
 
     def _model_specific_input_preparation(
-        self, data: "NNPInput", pairlist_output: "PairListOutputs"
+        self, data: "ModelInput", pairlist_output: "PairListOutputs"
     ) -> SAKENeuralNetworkInput:
         # Perform atomic embedding
 
@@ -132,7 +132,7 @@ class SAKECore(CoreNetwork):
             )
         )
 
-        nnp_input = SAKENeuralNetworkInput(
+        model_input = SAKENeuralNetworkInput(
             pair_indices=pairlist_output.pair_indices,
             number_of_atoms=number_of_atoms,
             positions=data.positions.to(self.embedding.weight.dtype),
@@ -141,7 +141,7 @@ class SAKECore(CoreNetwork):
             atomic_embedding=atomic_embedding,
         )
 
-        return nnp_input
+        return model_input
 
     def compute_properties(self, data: SAKENeuralNetworkInput):
         """

@@ -33,7 +33,7 @@ def test_forward(single_batch_with_batchsize_64):
     )
     model = model.to(torch.float32)
     print(model)
-    yhat = model(single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float32))
+    yhat = model(single_batch_with_batchsize_64.model_input.to(dtype=torch.float32))
 
 
 def test_compare_representation():

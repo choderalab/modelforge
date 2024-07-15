@@ -258,9 +258,9 @@ class ANIRepresentation(nn.Module):
                 radial_sublength,
             )
         )
-        atom_index12 = data.pair_indices
-        species = data.atom_index
-        species12 = species[atom_index12]
+        atom_index12 = data.pair_indices.squeeze(1)
+        species = data.atom_index.squeeze(1)
+        species12 = species[atom_index12].squeeze(1)
 
         index12 = atom_index12 * self.nr_of_supported_elements + species12.flip(0)
         radial_aev.index_add_(0, index12[0], radial_feature_vector)
@@ -418,16 +418,16 @@ class ANIInteraction(nn.Module):
     def forward(self, input: Tuple[torch.Tensor, torch.Tensor]):
 
         species, aev = input
-        output = aev.new_zeros(species.shape)
+        output = aev.new_zeros(species.shape) # return shape (nr_of_atoms, 1)
 
         for i, model in enumerate(self.atomic_networks):
             mask = torch.eq(species, i)
             midx = mask.nonzero().flatten()
             if midx.shape[0] > 0:
                 input_ = aev.index_select(0, midx)
-                output[midx] = model(input_).flatten()
+                output[midx] = model(input_)
 
-        return output.view_as(species)
+        return output
 
 
 class ANI2xCore(CoreNetwork):

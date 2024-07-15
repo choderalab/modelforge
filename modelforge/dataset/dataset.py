@@ -96,9 +96,9 @@ class NNPInput:
 
     def __post_init__(self):
         # Set dtype and convert units if necessary
-        self.atomic_numbers = self.atomic_numbers.to(torch.int32)
+        self.atomic_numbers = self.atomic_numbers.to(torch.int32).unsqueeze(1)
         self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(torch.int32)
-        self.total_charge = self.total_charge.to(torch.int32)
+        self.total_charge = self.total_charge.to(torch.int32).unsqueeze(1)
 
         # Unit conversion for positions
         if isinstance(self.positions, Quantity):

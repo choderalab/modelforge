@@ -63,6 +63,31 @@ def test_forward():
     )
     calculated_results = spookynet.core_module.forward(model_input, pairlist_output)
 
+    ref_spookynet = RefSpookyNet(
+        num_features=config["potential"]["core_parameter"]["number_of_atom_features"],
+        num_basis_functions=config["potential"]["core_parameter"]["number_of_radial_basis_functions"],
+        num_modules=config["potential"]["core_parameter"]["number_of_interaction_modules"],
+        num_residual_electron=config["potential"]["core_parameter"]["number_of_residual_blocks"],
+        num_residual_pre=config["potential"]["core_parameter"]["number_of_residual_blocks"],
+        num_residual_local_x=config["potential"]["core_parameter"]["number_of_residual_blocks"],
+        num_residual_local_s=config["potential"]["core_parameter"]["number_of_residual_blocks"],
+        num_residual_local_p=config["potential"]["core_parameter"]["number_of_residual_blocks"],
+        num_residual_local_d=config["potential"]["core_parameter"]["number_of_residual_blocks"],
+        num_residual_local=config["potential"]["core_parameter"]["number_of_residual_blocks"],
+        num_residual_nonlocal_q=config["potential"]["core_parameter"]["number_of_residual_blocks"],
+        num_residual_nonlocal_k=config["potential"]["core_parameter"]["number_of_residual_blocks"],
+        num_residual_nonlocal_v=config["potential"]["core_parameter"]["number_of_residual_blocks"],
+        num_residual_post=config["potential"]["core_parameter"]["number_of_residual_blocks"],
+        num_residual_output=config["potential"]["core_parameter"]["number_of_residual_blocks"],
+    )
+
+    ref_spookynet(
+        prepared_input["atomic_numbers"],
+        prepared_input["total_charge"],
+
+
+    )
+
 
 def test_spookynet_forward(single_batch_with_batchsize_64, model_parameter):
     """

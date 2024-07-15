@@ -264,9 +264,9 @@ class PaiNNRepresentation(nn.Module):
         Parameters
         ----------
         inputs (Dict[str, torch.Tensor]): A dictionary containing the input tensors.
-            - "d_ij" (torch.Tensor): Pairwise distances between atoms. Shape: (n_pairs, 1, 1).
-            - "r_ij" (torch.Tensor): Displacement vector between atoms. Shape: (n_pairs, 1, 3).
-            - "atomic_embedding" (torch.Tensor): Embeddings of atomic numbers. Shape: (n_atoms, 1, embedding_dim).
+            - "d_ij" (torch.Tensor): Pairwise distances between atoms. Shape: (n_pairs, 1).
+            - "r_ij" (torch.Tensor): Displacement vector between atoms. Shape: (n_pairs, 3).
+            - "atomic_embedding" (torch.Tensor): Embeddings of atomic numbers. Shape: (n_atoms, embedding_dim).
 
         Returns
         ----------
@@ -296,12 +296,12 @@ class PaiNNRepresentation(nn.Module):
         else:
             filter_list = torch.split(filters, 3 * self.nr_atom_basis, dim=-1)
 
-        # generate q and mu
-        atomic_embedding = data.atomic_embedding
-        q = atomic_embedding[:, None]  # nr_of_atoms, 1, nr_atom_basis
-        q_shape = q.shape
+        # generate q and mu #NOTE the shape
+        # scalar feature
+        q = data.atomic_embedding.unsqueeze(1) # nr_of_atoms, 1, nr_atom_basis
+        # vector feature
         mu = torch.zeros(
-            (q_shape[0], 3, q_shape[2]), device=q.device, dtype=q.dtype
+            (q.shape[0], 3, q.shape[2]), device=q.device, dtype=q.dtype
         )  # nr_of_atoms, 3, nr_atom_basis
 
         return {"filters": filter_list, "dir_ij": dir_ij, "q": q, "mu": mu}
@@ -490,7 +490,6 @@ class PaiNNMixing(nn.Module):
 
 
 from .models import InputPreparation, ModelInput, BaseNetwork
-from typing import List
 
 
 class PaiNN(BaseNetwork):

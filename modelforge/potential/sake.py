@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import torch.nn as nn
 from loguru import logger as log
-from typing import Dict, Tuple, Union
+from typing import Dict, Tuple
 from openff.units import unit
 from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
 

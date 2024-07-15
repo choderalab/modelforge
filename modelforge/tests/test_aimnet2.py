@@ -19,12 +19,6 @@ def test_initialize_model():
     assert aimnet is not None, "Aimnet2 model should be initialized."
 
 
-# TODO: Does this need to be tested since we're using the default GaussianRadialBasisFunction?
-@pytest.mark.xfail(raises=NotImplementedError)
-def test_rbf():
-    raise NotImplementedError
-
-
 def test_radial_symmetry_function_regression():
 
     # define radial symmetry function bounds and subdivisions

@@ -10,6 +10,7 @@ from pint import Quantity
 from typing import Union
 from modelforge.dataset.dataset import NNPInput
 
+
 @dataclass
 class NeuralNetworkData:
     pair_indices: torch.Tensor
@@ -20,7 +21,6 @@ class NeuralNetworkData:
     positions: torch.Tensor
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
-
 
 
 import torch
@@ -203,7 +203,9 @@ class Dense(nn.Linear):
         in_features: int,
         out_features: int,
         bias: bool = True,
-        activation: Optional[Union[nn.Module, Callable[[torch.Tensor], torch.Tensor]]] = None,
+        activation: Optional[
+            Union[nn.Module, Callable[[torch.Tensor], torch.Tensor]]
+        ] = None,
         weight_init: Callable = xavier_uniform_,
         bias_init: Callable = zeros_,
     ):
@@ -236,13 +238,16 @@ from openff.units import unit
 
 
 class CosineCutoff(nn.Module):
+    """
+    Behler-style cosine cutoff module.
+    NOTE: The cutoff is converted to nanometer and the input MUST be in
+    nanomter too.
+    """
+
     def __init__(self, cutoff: unit.Quantity):
         """
-        Behler-style cosine cutoff module.
-        NOTE: The cutoff is converted to nanometer and the input MUST be in nanomter too.
-
-        Parameters:
-        ----------
+        Parameters
+        ------------
         cutoff: unit.Quantity
             The cutoff distance.
 
@@ -254,7 +259,8 @@ class CosineCutoff(nn.Module):
     def forward(self, d_ij: torch.Tensor):
         """
         Compute the cosine cutoff for a distance tensor.
-        NOTE: the cutoff function doesn't care about units as long as they are consisten,
+        NOTE: the cutoff function doesn't care about units as long as they are
+        consisten,
 
         Parameters
         ----------
@@ -275,9 +281,6 @@ class CosineCutoff(nn.Module):
         return input_cut
 
 
-from typing import Dict
-
-
 class ShiftedSoftplus(nn.Module):
     def __init__(self):
         super().__init__()
@@ -290,7 +293,7 @@ class ShiftedSoftplus(nn.Module):
 
         y = \ln\left(1 + e^{-x}\right) - \ln(2)
 
-        Parameters:
+        Parameters
         -----------
         x:torch.Tensor
             input tensor

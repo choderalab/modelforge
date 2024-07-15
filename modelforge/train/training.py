@@ -27,7 +27,7 @@ class Error(nn.Module):
         """
         Calculates the error between the predicted and true values.
 
-        Parameters:
+        Parameters
             predicted_tensor (torch.Tensor): The predicted values.
             reference_tensor (torch.Tensor): The values provided by the dataset.
 
@@ -46,7 +46,7 @@ class Error(nn.Module):
         """
         Scales the error by the number of atoms in the atomic subsystems.
 
-        Parameters:
+        Parameters
             error: The error to be scaled.
             atomic_subsystem_counts: The number of atoms in the atomic subsystems.
 
@@ -990,7 +990,7 @@ def perform_training(
         version_select=version_select,
         local_cache_dir=local_cache_dir,
         splitting_strategy=REGISTERED_SPLITTING_STRATEGIES[splitting_strategy["name"]](
-            seed=splitting_strategy.get('splitting_seed', 42),
+            seed=splitting_strategy.get("splitting_seed", 42),
             split=splitting_strategy["data_split"],
         ),
     )

@@ -10,6 +10,8 @@ setup(
             "curation/yaml_files/*",
             "tests/data/potential_defaults/*",
             "tests/data/training_defaults/*",
+            "tests/data/dataset_defaults/*",
+
         ]
     },
     url="https://github.com/choderalab/modelforge",

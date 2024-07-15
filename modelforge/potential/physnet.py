@@ -124,7 +124,7 @@ class GatingModule(nn.Module):
         Initializes a gating module that
         optionally applies a sigmoid gating mechanism to input features.
 
-        Parameters:
+        Parameters
         -----------
         input_dim : int
             The dimensionality of the input (and output) features.
@@ -136,7 +136,7 @@ class GatingModule(nn.Module):
         """
         Apply gating to the input tensor.
 
-        Parameters:
+        Parameters
         -----------
         x : torch.Tensor
             The input tensor to gate.
@@ -162,7 +162,7 @@ class PhysNetResidual(nn.Module):
     enhances gradient flow and supports effective deep network training by employing a
     preactivation scheme.
 
-    Parameters:
+    Parameters
     -----------
     input_dim: int
         Dimensionality of the input feature vector.
@@ -179,7 +179,7 @@ class PhysNetResidual(nn.Module):
         """
         Forward pass of the ResidualBlock.
 
-        Parameters:
+        Parameters
         -----------
         x: torch.Tensor
             Input tensor containing feature vectors of atoms.

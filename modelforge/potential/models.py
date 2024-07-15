@@ -56,7 +56,7 @@ class Pairlist(Module):
         """
         Initialize the Pairlist object.
 
-        Parameters:
+        Parameters
             only_unique_pairs (bool, optional): If True, only unique pairs are returned (default is False).
                 Otherwise, all pairs are returned.
         """
@@ -592,15 +592,20 @@ class NeuralNetworkPotentialFactory:
 
 
 class InputPreparation(torch.nn.Module):
+
     def __init__(self, cutoff: unit.Quantity, only_unique_pairs: bool = True):
         """
-        A module for preparing input data, including the calculation of pair lists, distances (d_ij), and displacement vectors (r_ij) for molecular simulations.
+        A module for preparing input data, including the calculation of pair lists,
+        distances (d_ij), and displacement vectors (r_ij) for molecular simulations.
+
         Parameters
         ----------
         cutoff : unit.Quantity
             The cutoff distance for neighbor list calculations.
         only_unique_pairs : bool, optional
-            Whether to only use unique pairs in the pair list calculation, by default True. This should be set to True for all message passing networks.
+            Whether to only use unique pairs in the pair list calculation, by
+            default True. This should be set to True for all message passing
+            networks.
 
         """
 

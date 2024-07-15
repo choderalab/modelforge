@@ -79,8 +79,6 @@ def test_error_calculation(single_batch_with_batchsize_16_with_force):
         FromPerAtomToPerMoleculeError,
         PerMoleculeError,
     )
-    from torch_scatter import scatter_sum
-
     # generate data
     data = single_batch_with_batchsize_16_with_force
     true_E = data.metadata.E
@@ -109,11 +107,17 @@ def test_error_calculation(single_batch_with_batchsize_16_with_force):
 
     # compare error (mean squared error scaled by number of atoms in the molecule)
 
-    scaled_error = torch.linalg.vector_norm(predicted_F - true_F, dim=1, keepdim=True) ** 2
-    per_mol_error = scatter_sum(
-        scaled_error,
-        data.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
+    scaled_error = (
+        torch.linalg.vector_norm(predicted_F - true_F, dim=1, keepdim=True) ** 2
+    )
+
+    per_mol_error = torch.zeros_like(data.metadata.E)
+    per_mol_error.scatter_add_(
         0,
+        data.nnp_input.atomic_subsystem_indices.unsqueeze(-1)
+        .expand(-1, scaled_error.size(1))
+        .to(torch.int64),
+        scaled_error,
     )
 
     reference_F_error = torch.mean(

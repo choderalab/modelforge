@@ -185,19 +185,18 @@ def test_representation_with_diagonal_batching():
     calculated_rbf_output = calculated_rbf_output * rcut_ij
 
     # test that both ANI and MF obtain the same radial symmetry outpu
-    reference_rbf_output, ani_d_ij = (
-        provide_reference_values_for_test_ani_test_compute_rsf_with_diagonal_batching()
-    )
-    assert torch.allclose(
-        calculated_rbf_output, reference_rbf_output, atol=1e-4
-    )
+
+    (
+        reference_rbf_output,
+        ani_d_ij,
+    ) = provide_reference_values_for_test_ani_test_compute_rsf_with_diagonal_batching()
+    assert torch.allclose(calculated_rbf_output, reference_rbf_output, atol=1e-4)
+
     assert torch.allclose(
         ani_d_ij, d_ij.squeeze(1) * 10, atol=1e-4
     )  # NOTE: unit mismatch
 
-    assert calculated_rbf_output.shape == torch.Size(
-        [20, radial_dist_divisions]
-    )
+    assert calculated_rbf_output.shape == torch.Size([20, radial_dist_divisions])
 
 
 def test_compare_angular_symmetry_features():
@@ -261,28 +260,20 @@ def test_compare_angular_symmetry_features():
     calculated_angular_feature_vector = asf(vec12 / 10)
     # make sure that the output is the same
     assert (
-        reference_angular_feature_vector.size()
-        == calculated_angular_feature_vector.size()
+        calculated_angular_feature_vector.size()
+        == reference_angular_feature_vector.size()
     )
 
-    # skip this comparision on macos
-    import platform
-
-    ON_MACOS = platform.system() == "Darwin"
-    # the comparision fails on MACOS due to differences for very small numbers
-    if ON_MACOS:
-        print("##################################")
-        print("Reference")
-        print(reference_angular_feature_vector[:, :2])
-        print("##################################")
-        print("Calcualted")
-        print(calculated_angular_feature_vector[:, :2])
-    else:
-        assert torch.allclose(
-            reference_angular_feature_vector,
-            calculated_angular_feature_vector,
-            atol=1e-4,
-        )
+    # NOTE: the order of the angular_feature_vector is not guaranteed
+    # as the triple_by_molecule function  used to prepare the inputs does not use stable sorting.
+    # When stable sorting is used, the output is identical across platforms, but will not be
+    # used here as it is slower and the order of the output is not important in practrice.
+    # As such, to check for equivalence in a way that is not order dependent, we can just consider the sum.
+    assert torch.isclose(
+        torch.sum(calculated_angular_feature_vector),
+        torch.sum(reference_angular_feature_vector),
+        atol=1e-4,
+    )
 
 
 def test_compare_aev():

@@ -6,7 +6,6 @@ from loguru import logger as log
 from modelforge.dataset.dataset import BatchData, NNPInput
 import torchmetrics
 from torch import nn
-from torch_scatter import scatter_sum
 
 
 class Error(nn.Module):
@@ -100,11 +99,16 @@ class FromPerAtomToPerMoleculeError(Error):
         per_atom_squared_error = self.calculate_error(
             per_atom_prediction, per_atom_reference
         )
+
+        per_molecule_squared_error = torch.zeros_like(
+            batch.metadata.E, dtype=per_atom_squared_error.dtype
+        )
         # Aggregate error per molecule
-        per_molecule_squared_error = scatter_sum(
-            per_atom_squared_error,
-            batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
+
+        per_molecule_squared_error.scatter_add_(
             0,
+            batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
+            per_atom_squared_error,
         )
         # divide by number of atoms
         per_molecule_square_error_scaled = self.scale_by_number_of_atoms(
@@ -433,7 +437,9 @@ class TrainingAdapter(pl.LightningModule):
         per_molecule_energy_true = batch.metadata.E.to(torch.float32)
         per_molecule_energy_predict = self.model.forward(nnp_input)[
             "per_molecule_energy"
-        ].unsqueeze(1) #FIXME: ensure that all per-molecule properties have dimension (N, 1)
+        ].unsqueeze(
+            1
+        )  # FIXME: ensure that all per-molecule properties have dimension (N, 1)
         assert per_molecule_energy_true.shape == per_molecule_energy_predict.shape, (
             f"Shapes of true and predicted energies do not match: "
             f"{per_molecule_energy_true.shape} != {per_molecule_energy_predict.shape}"
@@ -870,6 +876,10 @@ def log_training_arguments(
     else:
         log.info(f"Removing self energies: {remove_self_energies}")
 
+    splitting_strategy = training_config["splitting_strategy"]["name"]
+    data_split = training_config["splitting_strategy"]["data_split"]
+    log.info(f"Using splitting strategy: {splitting_strategy} with split: {data_split}")
+
     early_stopping_config = training_config.get("early_stopping", None)
     if early_stopping_config is None:
         log.info(f"Using default: No early stopping performed")
@@ -930,7 +940,7 @@ def perform_training(
     """
 
     from pytorch_lightning.loggers import TensorBoardLogger
-    from modelforge.dataset.utils import RandomRecordSplittingStrategy
+    from modelforge.dataset.utils import REGISTERED_SPLITTING_STRATEGIES
     from lightning import Trainer
     from modelforge.potential import NeuralNetworkPotentialFactory
     from modelforge.dataset.dataset import DataModule
@@ -956,6 +966,7 @@ def perform_training(
 
     version_select = dataset_config.get("version_select", "latest")
     accelerator = runtime_config.get("accelerator", "cpu")
+    splitting_strategy = training_config["splitting_strategy"]
     nr_of_epochs = runtime_config.get("nr_of_epochs", 10)
     num_nodes = runtime_config.get("num_nodes", 1)
     devices = runtime_config.get("devices", 1)
@@ -975,10 +986,13 @@ def perform_training(
     dm = DataModule(
         name=dataset_name,
         batch_size=batch_size,
-        splitting_strategy=RandomRecordSplittingStrategy(),
         remove_self_energies=remove_self_energies,
         version_select=version_select,
         local_cache_dir=local_cache_dir,
+        splitting_strategy=REGISTERED_SPLITTING_STRATEGIES[splitting_strategy["name"]](
+            seed=splitting_strategy.get('splitting_seed', 42),
+            split=splitting_strategy["data_split"],
+        ),
     )
     dm.prepare_data()
     dm.setup()

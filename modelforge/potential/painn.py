@@ -91,7 +91,6 @@ class PaiNNCore(CoreNetwork):
         shared_filters: bool = False,
         epsilon: float = 1e-8,
     ):
-
         log.debug("Initializing PaiNN model.")
         super().__init__()
 
@@ -229,9 +228,9 @@ class PaiNNRepresentation(nn.Module):
         self.cutoff_module = CosineCutoff(cutoff)
 
         # radial symmetry function
-        from .utils import SchnetRadialSymmetryFunction
+        from .utils import SchnetRadialBasisFunction
 
-        self.radial_symmetry_function_module = SchnetRadialSymmetryFunction(
+        self.radial_symmetry_function_module = SchnetRadialBasisFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             max_distance=cutoff,
             dtype=torch.float32,
@@ -264,9 +263,9 @@ class PaiNNRepresentation(nn.Module):
         Parameters
         ----------
         inputs (Dict[str, torch.Tensor]): A dictionary containing the input tensors.
-            - "d_ij" (torch.Tensor): Pairwise distances between atoms. Shape: (n_pairs, 1).
-            - "r_ij" (torch.Tensor): Displacement vector between atoms. Shape: (n_pairs, 3).
-            - "atomic_embedding" (torch.Tensor): Embeddings of atomic numbers. Shape: (n_atoms, embedding_dim).
+            - "d_ij" (torch.Tensor): Pairwise distances between atoms. Shape: (n_pairs, 1, 1).
+            - "r_ij" (torch.Tensor): Displacement vector between atoms. Shape: (n_pairs, 1, 3).
+            - "atomic_embedding" (torch.Tensor): Embeddings of atomic numbers. Shape: (n_atoms, 1, embedding_dim).
 
         Returns
         ----------
@@ -282,6 +281,7 @@ class PaiNNRepresentation(nn.Module):
         # compute normalized pairwise distances
         d_ij = data.d_ij
         r_ij = data.r_ij
+        # normalize the direction vectors
         dir_ij = r_ij / d_ij
 
         f_ij = self.radial_symmetry_function_module(d_ij)
@@ -300,7 +300,7 @@ class PaiNNRepresentation(nn.Module):
         q = atomic_embedding[:, None]  # nr_of_atoms, 1, nr_atom_basis
         q_shape = q.shape
         mu = torch.zeros(
-            (q_shape[0], 3, q_shape[2]), device=q.device
+            (q_shape[0], 3, q_shape[2]), device=q.device, dtype=q.dtype
         )  # nr_of_atoms, 3, nr_atom_basis
 
         return {"filters": filter_list, "dir_ij": dir_ij, "q": q, "mu": mu}
@@ -339,9 +339,9 @@ class PaiNNInteraction(nn.Module):
 
     def forward(
         self,
-        q: torch.Tensor,  # shape [nr_of_atoms, nr_atom_basis]
-        mu: torch.Tensor,  # shape [nr_of_atoms, nr_atom_basis]
-        W_ij: torch.Tensor,  # shape
+        q: torch.Tensor,
+        mu: torch.Tensor,
+        W_ij: torch.Tensor,
         dir_ij: torch.Tensor,
         pairlist: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -364,33 +364,56 @@ class PaiNNInteraction(nn.Module):
         Tuple[torch.Tensor, torch.Tensor]
             Updated scalar and vector representations (q, mu).
         """
-        # inter-atomic
+        # perform the scalar operations (same as in SchNet)
         idx_i, idx_j = pairlist[0], pairlist[1]
 
-        x = self.interatomic_net(q)
-        nr_of_atoms = q.shape[0]
+        x_per_atom = self.interatomic_net(q)  # per atom
 
-        xj = x[idx_j]
-        muj = mu[idx_j]  # shape (nr_of_pairs, nr_atom_basis)
-        W_ij = W_ij.unsqueeze(1)
-        x = W_ij * xj
+        x_j = x_per_atom[idx_j]  # per pair
+        x_per_pair = W_ij.unsqueeze(1) * x_j  # per_pair
 
-        dq, dmuR, dmumu = torch.split(x, self.nr_atom_basis, dim=-1)
-        from torch_scatter import scatter_add
+        # split the output into dq, dmuR, dmumu to excchange information between the scalar and vector outputs
+        dq_per_pair, dmuR, dmumu = torch.split(x_per_pair, self.nr_atom_basis, dim=-1)
 
-        dq = scatter_add(
-            dq, idx_i, dim=0
-        )  # dq: (nr_of_pairs, nr_atom_basis); idx_i: (nr_of_pairs)
-        ##########
-        dmuR * dir_ij[..., None]
-        dmumu * muj
-        dmu = (
-            dmuR * dir_ij[..., None] + dmumu * muj
+        # for scalar output only dq is used
+        # scatter the dq to the atoms (reducton from pairs to atoms)
+        dq_per_atom = torch.zeros_like(q)  # Shape: (nr_of_pairs, 1, nr_atom_basis)
+        # Expand idx_i to match the shape of dq for scatter_add operation
+        expanded_idx_i = idx_i.unsqueeze(-1).expand(-1, dq_per_pair.size(2))
+
+        dq_per_atom.scatter_add_(0, expanded_idx_i.unsqueeze(1), dq_per_pair)
+
+        q = q + dq_per_atom
+
+        # ----------------- vector output -----------------
+        # for vector output dmuR and dmumu are used
+        # dmuR: (nr_of_pairs, 1, nr_atom_basis)
+        # dir_ij: (nr_of_pairs, 3)
+        # dmumu: (nr_of_pairs, 1, nr_atom_basis)
+        # muj: (nr_of_pairs, 1, nr_atom_basis)
+        # idx_i: (nr_of_pairs)
+        # mu: (nr_of_atoms, 3, nr_atom_basis)
+
+        muj = mu[idx_j]  # shape (nr_of_pairs, 1, nr_atom_basis)
+
+        dmu_per_pair = (
+            dmuR * dir_ij.unsqueeze(-1) + dmumu * muj
         )  # shape (nr_of_pairs, 3, nr_atom_basis)
-        dmu = scatter_add(dmu, idx_i, dim=0)  # nr_of_atoms, 3, nr_atom_basis
 
-        q = q + dq
-        mu = mu + dmu
+        # Create a tensor to store the result, matching the size of `mu`
+        dmu_per_atom = torch.zeros_like(mu)  # Shape: (nr_of_atoms, 3, nr_atom_basis)
+
+        # Expand idx_i to match the shape of dmu for scatter_add operation
+        expanded_idx_i = (
+            idx_i.unsqueeze(-1)
+            .unsqueeze(-1)
+            .expand(-1, dmu_per_atom.size(1), dmu_per_atom.size(2))
+        )
+
+        # Perform scatter_add_ operation
+        dmu_per_atom.scatter_add_(0, expanded_idx_i, dmu_per_pair)
+
+        mu = mu + dmu_per_atom
 
         return q, mu
 
@@ -506,7 +529,10 @@ class PaiNN(BaseNetwork):
 
     def _config_prior(self):
         log.info("Configuring PaiNN model hyperparameter prior distribution")
-        from ray import tune
+        from modelforge.utils.io import import_
+
+        tune = import_("ray").tune
+        # from ray import tune
 
         from modelforge.potential.utils import shared_config_prior
 

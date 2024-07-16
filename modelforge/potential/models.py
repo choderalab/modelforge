@@ -466,11 +466,21 @@ class PyTorch2JAXConverter:
             A tuple containing the JAX function, parameters, and buffers.
         """
 
+        # make sure
+        from modelforge.utils.io import import_
+
+        jax = import_("jax")
+        # use the wrapper to check if pytorch2jax is in the environment
+
+        custom_vjp = import_("jax").custom_vjp
+
+        # from jax import custom_vjp
+        convert_to_jax = import_("pytorch2jax").pytorch2jax.convert_to_jax
+        convert_to_pyt = import_("pytorch2jax").pytorch2jax.convert_to_pyt
+        # from pytorch2jax.pytorch2jax import convert_to_jax, convert_to_pyt
+
         import functorch
-        import jax
         from functorch import make_functional_with_buffers
-        from jax import custom_vjp
-        from pytorch2jax.pytorch2jax import convert_to_jax, convert_to_pyt
 
         # Convert the PyTorch model to a functional representation and extract the model function and parameters
         model_fn, model_params, model_buffer = make_functional_with_buffers(
@@ -535,11 +545,11 @@ class NeuralNetworkPotentialFactory:
         Parameters
         ----------
         use : str
-            The use case for the NNP instance.
+            The use case for the model instance, either 'training' or 'inference'.
         simulation_environment : str
             The ML framework to use, either 'PyTorch' or 'JAX'.
-        nnp_parameters : dict, optional
-            Parameters specific to the NNP model, by default {}.
+        model_parameter : dict, optional
+            Parameters specific to the model, by default {}.
         training_parameter : dict, optional
             Parameters for configuring the training, by default {}.
 
@@ -594,10 +604,14 @@ class NeuralNetworkPotentialFactory:
 class InputPreparation(torch.nn.Module):
     def __init__(self, cutoff: unit.Quantity, only_unique_pairs: bool = True):
         """
+        A module for preparing input data, including the calculation of pair lists, distances (d_ij), and displacement vectors (r_ij) for molecular simulations.
         Parameters
         ----------
+        cutoff : unit.Quantity
+            The cutoff distance for neighbor list calculations.
         only_unique_pairs : bool, optional
-            Whether to only use unique pairs in the pair list calculation, by default True.
+            Whether to only use unique pairs in the pair list calculation, by default True. This should be set to True for all message passing networks.
+
         """
 
         super().__init__()
@@ -615,13 +629,13 @@ class InputPreparation(torch.nn.Module):
 
         Parameters
         ----------
-        data : NNPInput
-            The input data provided by the dataset, containing atomic numbers, positions,
-            and other necessary information.
+        data : Union[NNPInput, NamedTuple]
+            The input data provided by the dataset, containing atomic numbers, positions, and other necessary information.
 
         Returns
         -------
-        The processed input data, ready for the models forward pass.
+        PairListOutputs
+            A namedtuple containing the pair indices, Euclidean distances (d_ij), and displacement vectors (r_ij).
         """
         # ---------------------------
         # general input manipulation
@@ -686,6 +700,9 @@ from torch.nn import ModuleDict
 
 
 class PostProcessing(torch.nn.Module):
+    """
+    A module for handling post-processing operations on model outputs, including normalization, calculation of atomic self-energies, and reduction operations to compute per-molecule properties from per-atom properties.
+    """
 
     _SUPPORTED_PROPERTIES = ["per_atom_energy", "general_postprocessing_operation"]
     _SUPPORTED_OPERATIONS = ["normalize", "from_atom_to_molecule_reduction"]
@@ -700,7 +717,7 @@ class PostProcessing(torch.nn.Module):
         ----------
         postprocessing_parameter: Dict[str, Dict[str, bool]] # TODO: update
         dataset_statistic : Dict[str, float]
-            The dataset statistics.
+            A dictionary containing the dataset statistics for normalization and other calculations.
         """
         super().__init__()
 
@@ -874,7 +891,6 @@ class PostProcessing(torch.nn.Module):
 
 
 class BaseNetwork(Module):
-
     def __init__(
         self, *, postprocessing_parameter: Dict[str, Dict[str, bool]], dataset_statistic
     ):
@@ -969,7 +985,6 @@ class BaseNetwork(Module):
 
 
 class CoreNetwork(Module, ABC):
-
     def __init__(
         self,
     ):

@@ -52,9 +52,9 @@ def test_compare_representation():
     # RBF comparision
     #############################
     # Initialize the rbf class
-    from modelforge.potential.utils import PhysNetRadialSymmetryFunction
+    from modelforge.potential.utils import PhysNetRadialBasisFunction
 
-    rbf = PhysNetRadialSymmetryFunction(
+    rbf = PhysNetRadialBasisFunction(
         number_of_radial_basis_functions,
         max_distance=_max_distance_in_nanometer * unit.nanometer,
     )
@@ -67,5 +67,5 @@ def test_compare_representation():
     reference_rbf = provide_reference_for_test_physnet_test_rbf()
     D = np.array([[1.0394776], [3.375541]], dtype=np.float32)
 
-    calculated_rbf = rbf(torch.tensor(D / 10).squeeze())
+    calculated_rbf = rbf(torch.tensor(D / 10))
     assert np.allclose(np.flip(reference_rbf.squeeze(), axis=1), calculated_rbf.numpy())

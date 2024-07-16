@@ -21,7 +21,6 @@ dependencies:
   - rdkit
   - retry
   - sqlitedict
-  - pytorch_scatter
   - jax
   - flax
 

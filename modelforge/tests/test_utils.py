@@ -99,18 +99,24 @@ def test_cosine_cutoff():
     # NOTE: Cutoff function doesn't care about the units as long as they are the same
     assert np.isclose(actual_output, expected_output)
 
+    # input in angstrom
+    cutoff = 2.0 * unit.angstrom
+    expected_output = torch.tensor([0.5, 0.0, 0.0])
+    cosine_cutoff_module = CosineCutoff(cutoff)
 
 def test_cosine_cutoff_module():
     # Test CosineCutoff module
     from openff.units import unit
 
     # test the cutoff on this distance vector (NOTE: it is in angstrom)
-    d_ij_angstrom = torch.tensor([1.0, 2.0, 3.0])
+    d_ij_angstrom = torch.tensor([1.0, 2.0, 3.0]).unsqueeze(1)
     # the expected outcome is that entry 1 and 2 become zero
     # and entry 0 becomes 0.5 (since the cutoff is 2.0 angstrom)
+    # input in angstrom
+    cutoff = 2.0 * unit.angstrom
 
-    cutoff = unit.Quantity(2.0, unit.angstrom)
-    expected_output = torch.tensor([0.5, 0.0, 0.0])
+
+    expected_output = torch.tensor([0.5, 0.0, 0.0]).unsqueeze(1)
     cosine_cutoff_module = CosineCutoff(cutoff)
 
     output = cosine_cutoff_module(d_ij_angstrom / 10)  # input is in nanometer

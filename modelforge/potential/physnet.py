@@ -5,7 +5,6 @@ import torch
 from loguru import logger as log
 from openff.units import unit
 from torch import nn
-from torch_scatter import scatter_add
 from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
 
 from modelforge.potential.utils import NeuralNetworkData
@@ -295,7 +294,10 @@ class PhysNetInteractionModule(nn.Module):
         # Multiply the gathered features by g
         x_j_modulated = x_j * g
         # Aggregate modulated contributions for each atom i
-        x_j_prime = scatter_add(x_j_modulated, idx_i, dim=0, dim_size=x.shape[0])
+        x_j_prime = torch.zeros_like(x_i)
+        x_j_prime.scatter_add_(
+            0, idx_i.unsqueeze(-1).expand(-1, x_j_modulated.size(-1)), x_j_modulated
+        )
 
         # Draft proto message v_tilde
         m = x_i + x_j_prime

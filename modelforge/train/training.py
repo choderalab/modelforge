@@ -294,6 +294,7 @@ class TrainingAdapter(pl.LightningModule):
         loss_parameter: Dict[str, Any],
         dataset_statistic: Optional[Dict[str, float]] = None,
         optimizer: Type[Optimizer] = torch.optim.AdamW,
+        verbose: bool = False,
     ):
         """
         Initializes the TrainingAdapter with the specified model and training configuration.
@@ -331,6 +332,14 @@ class TrainingAdapter(pl.LightningModule):
         self.learning_rate = lr
         self.lr_scheduler_config = lr_scheduler_config
 
+        # verbose output, only True if requested
+        if verbose:
+            self.log_histograms = True
+            self.log_on_training_step = True
+        else:
+            self.log_histograms = False
+            self.log_on_training_step = False
+
         # register metrics
         self._register_metrics(loss_parameter)
 
@@ -338,6 +347,7 @@ class TrainingAdapter(pl.LightningModule):
         self.loss = LossFactory.create_loss(**loss_parameter)
 
     def _register_metrics(self, loss_parameter: Dict[str, Any]):
+        
         from torchmetrics.regression import (
             MeanAbsoluteError,
             MeanSquaredError,
@@ -500,16 +510,10 @@ class TrainingAdapter(pl.LightningModule):
 
         for property, metrics in error_dict.items():
             for metric, error_log in metrics.items():
-                if property == "per_molecule_energy":
-                    error_log(
-                        predict_target["per_molecule_energy_predict"].detach(),
-                        predict_target["per_molecule_energy_true"].detach(),
-                    )
-                if property == "per_atom_force":
-                    error_log(
-                        predict_target["per_atom_force_predict"].detach(),
-                        predict_target["per_atom_force_true"].detach(),
-                    )
+                error_log(
+                    predict_target[f"{property}_predict"].detach(),
+                    predict_target[f"{property}_true"].detach(),
+                )
 
     def training_step(self, batch: "BatchData", batch_idx: int) -> torch.Tensor:
         """
@@ -535,14 +539,15 @@ class TrainingAdapter(pl.LightningModule):
         loss_dict = self.loss(predict_target, batch)
 
         # Update and log training error
-        self._log_metrics(self.train_error, predict_target)
+        if self.log_on_training_step:
+            self._log_metrics(self.train_error, predict_target)
 
         # log the loss
         for key, loss in loss_dict.items():
             self.log(
                 f"train/{key}",
                 torch.mean(loss),
-                on_step=True,
+                on_step=False,
                 prog_bar=True,
                 on_epoch=True,
                 batch_size=1,
@@ -610,13 +615,16 @@ class TrainingAdapter(pl.LightningModule):
         Logs histograms of weights and biases, and learning rate.
         Also, resets validation loss.
         """
-        for name, params in self.named_parameters():
-            if params is not None:
-                self.logger.experiment.add_histogram(name, params, self.current_epoch)
-            if params.grad is not None:
-                self.logger.experiment.add_histogram(
-                    f"{name}.grad", params.grad, self.current_epoch
-                )
+        if self.log_histograms == True:
+            for name, params in self.named_parameters():
+                if params is not None:
+                    self.logger.experiment.add_histogram(
+                        name, params, self.current_epoch
+                    )
+                if params.grad is not None:
+                    self.logger.experiment.add_histogram(
+                        f"{name}.grad", params.grad, self.current_epoch
+                    )
 
         sch = self.lr_schedulers()
         try:
@@ -935,12 +943,15 @@ def perform_training(
     Trainer
     """
 
-    from pytorch_lightning.loggers import TensorBoardLogger
+    from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
     from modelforge.dataset.utils import RandomRecordSplittingStrategy
     from lightning import Trainer
     from modelforge.potential import NeuralNetworkPotentialFactory
     from modelforge.dataset.dataset import DataModule
 
+    # NOTE --------------------------------------- NOTE #
+    # FIXME TODO: move this to a dataclass and control default
+    # behavior from there this current approach is hacky and error prone
     save_dir = runtime_config.get("save_dir", "lightning_logs")
     if save_dir == "lightning_logs":
         log.info(f"Saving logs to default location: {save_dir}")
@@ -956,6 +967,7 @@ def perform_training(
     experiment_name = runtime_config.get("experiment_name", "exp")
     model_name = potential_config["model_name"]
     dataset_name = dataset_config["dataset_name"]
+
     log_training_arguments(
         potential_config, training_config, dataset_config, runtime_config
     )
@@ -974,9 +986,18 @@ def perform_training(
     num_workers = dataset_config.get("number_of_worker", 4)
     pin_memory = dataset_config.get("pin_memory", False)
     local_cache_dir = runtime_config.get("local_cache_dir", "./")
-    # set up tensor board logger
-    logger = TensorBoardLogger(save_dir, name=experiment_name)
+    # NOTE --------------------------------------- NOTE #
+    # FIXME TODO: move this to a dataclass and control default
+    # behavior from there this current approach is hacky and error prone
 
+    # set up tensor board logger
+    if training_config["experiment_logger"]["logger_name"].lower() == "tensorboard":
+        logger = TensorBoardLogger(save_dir, name=experiment_name)
+    elif training_config["experiment_logger"]["logger_name"].lower() == "wandb":
+        logger = WandbLogger(save_dir=save_dir, log_model="all", name=experiment_name)
+
+    else:
+        raise ValueError(f"Unknown logger name: {training_config['logger_name']}")
     # Set up dataset
     dm = DataModule(
         name=dataset_name,

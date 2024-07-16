@@ -732,8 +732,15 @@ class PostProcessing(torch.nn.Module):
             postprocessing_parameter,
         )
 
-    def _get_mean_and_stddev_of_dataset(self) -> Tuple[float, float]:
+    def _get_per_atom_energy_mean_and_stddev_of_dataset(self) -> Tuple[float, float]:
+        """
+        Calculate the mean and standard deviation of the per-atom energy in the dataset.
 
+        Returns
+        -------
+        Tuple[float, float]
+            The mean and standard deviation of the per-atom energy.
+        """
         if self.dataset_statistic is None:
             mean = 0.0
             stddev = 1.0
@@ -756,30 +763,45 @@ class PostProcessing(torch.nn.Module):
         self,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
     ):
+        """
+        Initialize the postprocessing operations based on the given postprocessing parameters.
+
+        Parameters:
+            postprocessing_parameter (Dict[str, Dict[str, bool]]): A dictionary containing the postprocessing parameters for each property.
+
+        Raises:
+            ValueError: If a property is not supported.
+
+        Returns:
+            None
+        """
+
         from .processing import (
             FromAtomToMoleculeReduction,
             ScaleValues,
             CalculateAtomicSelfEnergy,
         )
 
-        # register properties
-        for property in postprocessing_parameter:
+
+        for property, operations in postprocessing_parameter.items():
+            # register properties for which postprocessing should be performed
             if property.lower() in self._SUPPORTED_PROPERTIES:
                 self._registered_properties.append(property.lower())
             else:
                 raise ValueError(
                     f"Property {property} is not supported. Supported properties are {self._SUPPORTED_PROPERTIES}"
                 )
-
-        # register operations
-        for property, operations in postprocessing_parameter.items():
+    
+            # register operations that are performed for the property
             postprocessing_sequence = torch.nn.Sequential()
             prostprocessing_sequence_names = []
 
             # for each property parse the requested operations
             if property == "per_atom_energy":
                 if operations.get("normalize", False):
-                    mean, stddev = self._get_mean_and_stddev_of_dataset()
+                    mean, stddev = (
+                        self._get_per_atom_energy_mean_and_stddev_of_dataset()
+                    )
                     postprocessing_sequence.append(
                         ScaleValues(
                             mean=mean,
@@ -861,8 +883,7 @@ class PostProcessing(torch.nn.Module):
 
         # NOTE: this is not very elegant, but I am unsure how to do this better
         # I am currently directly writing new keys and values in the data dictionary
-        property_keys = list(self.registered_chained_operations.keys())
-        for property in property_keys:
+        for property in PostProcessing._SUPPORTED_PROPERTIES:
             if property in self._registered_properties:
                 self.registered_chained_operations[property](data)
 

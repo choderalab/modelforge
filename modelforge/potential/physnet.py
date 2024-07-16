@@ -463,7 +463,6 @@ class PhysNetCore(CoreNetwork):
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
     ) -> PhysNetNeuralNetworkData:
         # Perform atomic embedding
-        print(f"Physnet {pairlist_output.d_ij.shape=}")
         atomic_embedding = self.embedding_module(data.atomic_numbers)
         #         Z_i, ..., Z_N
         #

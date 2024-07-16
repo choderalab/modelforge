@@ -74,11 +74,11 @@ class SPICE2Dataset(HDF5Dataset):
     from modelforge.utils import PropertyNames
 
     _property_names = PropertyNames(
-        Z="atomic_numbers",
-        R="geometry",
+        atomic_numbers="atomic_numbers",
+        positions="geometry",
         E="dft_total_energy",
         F="dft_total_force",
-        Q="mbis_charges",
+        total_charge="mbis_charges",
     )
 
     _available_properties = [

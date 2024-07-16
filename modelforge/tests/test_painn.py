@@ -44,7 +44,8 @@ def test_equivariance(single_batch_with_batchsize_64):
     painn = PaiNN(
         **config["potential"]["core_parameter"],
         postprocessing_parameter=config["potential"]["postprocessing_parameter"],
-    ).to(torch.float64)
+    ).double()
+    
     methane_input = single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float64)
     perturbed_methane_input = replace(methane_input)
     perturbed_methane_input.positions = torch.matmul(

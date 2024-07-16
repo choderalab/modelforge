@@ -438,7 +438,7 @@ class ANI2xCore(CoreNetwork):
         angle_sections: int = 4,
     ) -> None:
         """
-        Initialize the ANi NNP architecture.
+        Initialize the ANI NNP architecture.
 
         Parameters
         ----------

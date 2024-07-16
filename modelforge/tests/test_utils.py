@@ -2,7 +2,6 @@ import numpy as np
 import torch
 import pytest
 
-from modelforge.potential.utils import CosineCutoff, RadialSymmetryFunction
 
 
 @pytest.fixture(scope="session")
@@ -79,6 +78,7 @@ def test_cosine_cutoff():
     """
     Test the cosine cutoff implementation.
     """
+    from modelforge.potential.utils import CosineCutoff
     # Define inputs
     x = torch.Tensor([1, 2, 3])
     y = torch.Tensor([4, 5, 6])
@@ -99,18 +99,25 @@ def test_cosine_cutoff():
     # NOTE: Cutoff function doesn't care about the units as long as they are the same
     assert np.isclose(actual_output, expected_output)
 
+    # input in angstrom
+    cutoff = 2.0 * unit.angstrom
+    expected_output = torch.tensor([0.5, 0.0, 0.0])
+    cosine_cutoff_module = CosineCutoff(cutoff)
 
 def test_cosine_cutoff_module():
     # Test CosineCutoff module
+    from modelforge.potential.utils import CosineCutoff
     from openff.units import unit
 
     # test the cutoff on this distance vector (NOTE: it is in angstrom)
-    d_ij_angstrom = torch.tensor([1.0, 2.0, 3.0])
+    d_ij_angstrom = torch.tensor([1.0, 2.0, 3.0]).unsqueeze(1)
     # the expected outcome is that entry 1 and 2 become zero
     # and entry 0 becomes 0.5 (since the cutoff is 2.0 angstrom)
+    # input in angstrom
+    cutoff = 2.0 * unit.angstrom
 
-    cutoff = unit.Quantity(2.0, unit.angstrom)
-    expected_output = torch.tensor([0.5, 0.0, 0.0])
+
+    expected_output = torch.tensor([0.5, 0.0, 0.0]).unsqueeze(1)
     cosine_cutoff_module = CosineCutoff(cutoff)
 
     output = cosine_cutoff_module(d_ij_angstrom / 10)  # input is in nanometer
@@ -122,13 +129,46 @@ def test_radial_symmetry_function_implementation():
     """
     Test the Radial Symmetry function implementation.
     """
-    from modelforge.potential.utils import RadialSymmetryFunction, CosineCutoff
     import torch
     from openff.units import unit
     import numpy as np
+    from modelforge.potential.utils import CosineCutoff, GaussianRadialBasisFunctionWithScaling
 
     cutoff_module = CosineCutoff(cutoff=unit.Quantity(5.0, unit.angstrom))
-    RSF = RadialSymmetryFunction(
+
+    class RadialSymmetryFunctionTest(GaussianRadialBasisFunctionWithScaling):
+        @staticmethod
+        def calculate_radial_basis_centers(
+                number_of_radial_basis_functions,
+                _max_distance_in_nanometer,
+                _min_distance_in_nanometer,
+                dtype,
+        ):
+            centers = torch.linspace(
+                _min_distance_in_nanometer,
+                _max_distance_in_nanometer,
+                number_of_radial_basis_functions,
+                dtype=dtype,
+            )
+            return centers
+
+        @staticmethod
+        def calculate_radial_scale_factor(
+                number_of_radial_basis_functions,
+                _max_distance_in_nanometer,
+                _min_distance_in_nanometer,
+                dtype
+        ):
+            scale_factors = torch.full(
+                (number_of_radial_basis_functions,),
+                (_min_distance_in_nanometer - _max_distance_in_nanometer)
+                / number_of_radial_basis_functions,
+            )
+            scale_factors = (scale_factors * -15_000) ** -0.5
+            return scale_factors
+
+
+    RSF = RadialSymmetryFunctionTest(
         number_of_radial_basis_functions=18,
         max_distance=unit.Quantity(5.0, unit.angstrom),
     )

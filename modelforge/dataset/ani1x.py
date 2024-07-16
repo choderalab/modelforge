@@ -59,8 +59,8 @@ class ANI1xDataset(HDF5Dataset):
     from modelforge.utils import PropertyNames
 
     _property_names = PropertyNames(
-        Z="atomic_numbers",
-        R="geometry",
+        atomic_numbers="atomic_numbers",
+        positions="geometry",
         E="wb97x_dz.energy",
         F="wb97x_dz.forces",
     )

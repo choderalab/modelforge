@@ -91,7 +91,6 @@ class PaiNNCore(CoreNetwork):
         shared_filters: bool = False,
         epsilon: float = 1e-8,
     ):
-
         log.debug("Initializing PaiNN model.")
         super().__init__()
 
@@ -229,9 +228,9 @@ class PaiNNRepresentation(nn.Module):
         self.cutoff_module = CosineCutoff(cutoff)
 
         # radial symmetry function
-        from .utils import SchnetRadialSymmetryFunction
+        from .utils import SchnetRadialBasisFunction
 
-        self.radial_symmetry_function_module = SchnetRadialSymmetryFunction(
+        self.radial_symmetry_function_module = SchnetRadialBasisFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             max_distance=cutoff,
             dtype=torch.float32,
@@ -530,7 +529,10 @@ class PaiNN(BaseNetwork):
 
     def _config_prior(self):
         log.info("Configuring PaiNN model hyperparameter prior distribution")
-        from ray import tune
+        from modelforge.utils.io import import_
+
+        tune = import_("ray").tune
+        # from ray import tune
 
         from modelforge.potential.utils import shared_config_prior
 

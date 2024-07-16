@@ -43,7 +43,7 @@ class Metadata:
     F: torch.Tensor = torch.tensor([], dtype=torch.float32)
 
     def to(
-            self, device: Optional[torch.device] = None, dtype: Optional[torch.dtype] = None
+        self, device: Optional[torch.device] = None, dtype: Optional[torch.dtype] = None
     ):
         """Move all tensors in this instance to the specified device."""
         if device:
@@ -65,9 +65,9 @@ class BatchData:
     metadata: Metadata
 
     def to(
-            self,
-            device: Optional[torch.device] = None,
-            dtype: Optional[torch.dtype] = None,
+        self,
+        device: Optional[torch.device] = None,
+        dtype: Optional[torch.dtype] = None,
     ):
         self.nnp_input = self.nnp_input.to(device=device, dtype=dtype)
         self.metadata = self.metadata.to(device=device, dtype=dtype)
@@ -88,7 +88,7 @@ def shared_config_prior():
 
 
 def triple_by_molecule(
-        atom_pairs: torch.Tensor,
+    atom_pairs: torch.Tensor,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Input: indices for pairs of atoms that are close to each other.
     each pair only appear once, i.e. only one of the pairs (1, 2) and

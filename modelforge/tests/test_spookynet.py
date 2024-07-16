@@ -82,10 +82,11 @@ def test_forward():
     )
 
     ref_spookynet(
-        prepared_input["atomic_numbers"],
-        prepared_input["total_charge"],
-
-
+        prepared_input.atomic_numbers,
+        prepared_input.total_charge,
+        prepared_input.positions,
+        prepared_input.pair_indices[0],
+        prepared_input.pair_indices[1],
     )
 
 

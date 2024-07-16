@@ -51,9 +51,6 @@ class SpookyNetNeuralNetworkData(NeuralNetworkData):
     charge_embedding : torch.Tensor
         A 2D tensor containing embeddings or features for each atom, derived from total charge.
         Shape: [num_atoms, embedding_dim], where `embedding_dim` is the dimensionality of the embedding vectors.
-    magmom_embedding : torch.Tensor
-        A 2D tensor containing embeddings or features for each atom, derived from spin states.
-        Shape: [num_atoms, embedding_dim], where `embedding_dim` is the dimensionality of the embedding vectors.
     f_ij : Optional[torch.Tensor]
         A tensor representing the radial symmetry function expansion of distances between atom pairs, capturing the
         local chemical environment. Shape: [num_pairs, number_of_atom_features], where `number_of_atom_features` is the dimensionality of
@@ -90,7 +87,6 @@ class SpookyNetNeuralNetworkData(NeuralNetworkData):
 
     atomic_embedding: torch.Tensor
     charge_embedding: torch.Tensor
-    magmom_embedding: torch.Tensor
     f_ij: Optional[torch.Tensor] = field(default=None)
     f_cutoff: Optional[torch.Tensor] = field(default=None)
 
@@ -130,8 +126,7 @@ class SpookyNetCore(CoreNetwork):
         from modelforge.potential.utils import Embedding
 
         self.atomic_embedding_module = Embedding(max_Z, number_of_atom_features)
-        self.charge_embedding_module = Embedding(max_Z, number_of_atom_features)
-        self.magmom_embedding_module = Embedding(max_Z, number_of_atom_features)
+        self.charge_embedding_module = ElectronicEmbedding(number_of_atom_features, number_of_residual_blocks)
 
         # initialize representation block
         self.spookynet_representation_module = SpookyNetRepresentation(
@@ -178,6 +173,9 @@ class SpookyNetCore(CoreNetwork):
     ) -> SpookyNetNeuralNetworkData:
         number_of_atoms = data.atomic_numbers.shape[0]
 
+        atomic_embedding = self.atomic_embedding_module(data.atomic_numbers)
+        charge_embedding = self.charge_embedding_module(atomic_embedding, data.total_charge, num_batch=1)  # TODO: what is num_batch?
+
         nnp_input = SpookyNetNeuralNetworkData(
             pair_indices=pairlist_output.pair_indices,
             d_ij=pairlist_output.d_ij,
@@ -187,9 +185,8 @@ class SpookyNetCore(CoreNetwork):
             atomic_numbers=data.atomic_numbers,
             atomic_subsystem_indices=data.atomic_subsystem_indices,
             total_charge=data.total_charge,
-            atomic_embedding=self.embedding_module(
-                data.atomic_numbers
-            ),  # atom embedding
+            atomic_embedding=atomic_embedding,
+            charge_embedding=charge_embedding,
         )
 
         return nnp_input
@@ -212,7 +209,7 @@ class SpookyNetCore(CoreNetwork):
 
         # Compute the representation for each atom (transform to radial basis set, multiply by cutoff)
         representation = self.spookynet_representation_module(data.d_ij, data.r_ij)
-        x = data.atomic_embedding + data.charge_embedding + data.magmom_embedding
+        x = data.atomic_embedding + data.charge_embedding
 
         f = x.new_zeros(x.size())  # initialize output features to zero
         # Iterate over interaction blocks to update features
@@ -310,39 +307,21 @@ class ElectronicEmbedding(nn.Module):
     Arguments:
         num_features (int):
             Dimensions of feature space.
-        num_basis_functions (int):
-            Number of radial basis functions.
-        num_residual_pre_i (int):
-            Number of residual blocks applied to atomic features in i branch
-            (central atoms) before computing the interaction.
-        num_residual_pre_j (int):
-            Number of residual blocks applied to atomic features in j branch
-            (neighbouring atoms) before computing the interaction.
-        num_residual_post (int):
-            Number of residual blocks applied to interaction features.
-        activation (str):
-            Kind of activation function. Possible values:
-            'swish': Swish activation function.
-            'ssp': Shifted softplus activation function.
+        num_residual (int):
+            TODO
     """
 
     def __init__(
             self,
             num_features: int,
             num_residual: int,
-            activation: str = "swish",
-            is_charge: bool = False,
     ) -> None:
         """ Initializes the ElectronicEmbedding class. """
-        super(ElectronicEmbedding, self).__init__()
-        self.is_charge = is_charge
+        super().__init__()
         self.linear_q = nn.Linear(num_features, num_features)
-        if is_charge:  # charges are duplicated to use separate weights for +/-
-            self.linear_k = nn.Linear(2, num_features, bias=False)
-            self.linear_v = nn.Linear(2, num_features, bias=False)
-        else:
-            self.linear_k = nn.Linear(1, num_features, bias=False)
-            self.linear_v = nn.Linear(1, num_features, bias=False)
+        # charges are duplicated to use separate weights for +/-
+        self.linear_k = nn.Linear(2, num_features, bias=False, dtype=torch.float32)
+        self.linear_v = nn.Linear(2, num_features, bias=False)
         self.resblock = SpookyNetResidualMLP(
             num_features,
             num_residual,
@@ -373,12 +352,12 @@ class ElectronicEmbedding(nn.Module):
         """
         batch_seg = torch.zeros(x.size(0), dtype=torch.int64, device=x.device)
         q = self.linear_q(x)  # queries
-        if self.is_charge:
-            e = F.relu(torch.stack([E, -E], dim=-1))
-        else:
-            e = torch.abs(E).unsqueeze(-1)  # +/- spin is the same => abs
-        enorm = torch.maximum(e, torch.ones_like(e))
-        k = self.linear_k(e / enorm)[batch_seg]  # keys
+        e = F.relu(torch.stack([E, -E], dim=-1)).double()
+        enorm = torch.maximum(e, torch.ones_like(e, dtype=torch.float64))
+        test = e / enorm
+        print(f"{test.dtype=}")
+        print(f"{self.linear_k.weight.dtype=}")
+        k = self.linear_k(test)[batch_seg]  # keys
         v = self.linear_v(e)[batch_seg]  # values
         dot = torch.sum(k * q, dim=-1) / k.shape[-1] ** 0.5  # scaled dot product
         a = nn.functional.softplus(dot)  # unnormalized attention weights

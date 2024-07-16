@@ -482,7 +482,7 @@ def test_sake_model_against_reference(single_batch_with_batchsize_1):
         if layer_name.startswith("d")
     )
     for (layer_name, layer), mf_sake_block in zip(
-            layers, mf_sake.core_module.interaction_modules.children()
+        layers, mf_sake.core_module.interaction_modules.children()
     ):
         layer["edge_model"]["kernel"]["betas"] = (
             mf_sake_block.radial_symmetry_function_module.radial_scale_factor.detach()

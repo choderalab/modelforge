@@ -62,7 +62,6 @@ class PhysNetNeuralNetworkData(NeuralNetworkData):
 
 
 class PhysNetRepresentation(nn.Module):
-
     def __init__(
         self,
         cutoff: unit = 5 * unit.angstrom,
@@ -194,7 +193,6 @@ class PhysNetResidual(nn.Module):
 
 
 class PhysNetInteractionModule(nn.Module):
-
     def __init__(
         self,
         number_of_atom_features: int = 64,
@@ -316,7 +314,6 @@ class PhysNetInteractionModule(nn.Module):
 
 
 class PhysNetOutput(nn.Module):
-
     def __init__(
         self,
         number_of_atom_features: int,
@@ -345,7 +342,6 @@ class PhysNetOutput(nn.Module):
 
 
 class PhysNetModule(nn.Module):
-
     def __init__(
         self,
         number_of_atom_features: int = 64,
@@ -468,7 +464,6 @@ class PhysNetCore(CoreNetwork):
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
     ) -> PhysNetNeuralNetworkData:
-
         # Perform atomic embedding
         atomic_embedding = self.embedding_module(data.atomic_numbers)
         #         Z_i, ..., Z_N
@@ -622,7 +617,10 @@ class PhysNet(BaseNetwork):
 
     def _config_prior(self):
         log.info("Configuring SchNet model hyperparameter prior distribution")
-        from ray import tune
+        from modelforge.utils.io import import_
+
+        tune = import_("ray").tune
+        # from ray import tune
 
         from modelforge.potential.utils import shared_config_prior
 

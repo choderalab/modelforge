@@ -466,11 +466,21 @@ class PyTorch2JAXConverter:
             A tuple containing the JAX function, parameters, and buffers.
         """
 
+        # make sure
+        from modelforge.utils.io import import_
+
+        jax = import_("jax")
+        # use the wrapper to check if pytorch2jax is in the environment
+
+        custom_vjp = import_("jax").custom_vjp
+
+        # from jax import custom_vjp
+        convert_to_jax = import_("pytorch2jax").pytorch2jax.convert_to_jax
+        convert_to_pyt = import_("pytorch2jax").pytorch2jax.convert_to_pyt
+        # from pytorch2jax.pytorch2jax import convert_to_jax, convert_to_pyt
+
         import functorch
-        import jax
         from functorch import make_functional_with_buffers
-        from jax import custom_vjp
-        from pytorch2jax.pytorch2jax import convert_to_jax, convert_to_pyt
 
         # Convert the PyTorch model to a functional representation and extract the model function and parameters
         model_fn, model_params, model_buffer = make_functional_with_buffers(
@@ -860,7 +870,6 @@ class PostProcessing(torch.nn.Module):
 
 
 class BaseNetwork(Module):
-
     def __init__(
         self, *, postprocessing_parameter: Dict[str, Dict[str, bool]], dataset_statistic
     ):
@@ -955,7 +964,6 @@ class BaseNetwork(Module):
 
 
 class CoreNetwork(Module, ABC):
-
     def __init__(
         self,
     ):

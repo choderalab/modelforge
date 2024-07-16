@@ -167,7 +167,6 @@ class ANIRepresentation(nn.Module):
         )
 
     def forward(self, data: AniNeuralNetworkData) -> SpeciesAEV:
-
         # calculate the atomic environment vectors
         # used for the ANI architecture of NNPs
 
@@ -246,7 +245,6 @@ class ANIRepresentation(nn.Module):
         radial_feature_vector: torch.Tensor,
         data: AniNeuralNetworkData,
     ) -> Dict[str, torch.tensor]:
-
         radial_feature_vector = radial_feature_vector.squeeze(1)
         number_of_atoms = data.number_of_atoms
         radial_sublength = self.radial_symmetry_functions.radial_sublength
@@ -288,7 +286,6 @@ class ANIRepresentation(nn.Module):
         }
 
     def _preprocess_angular_aev(self, data: Dict[str, torch.Tensor]):
-
         atom_index12 = data["atom_index12"]
         species12 = data["species12"]
         r_ij = data["r_ij"]
@@ -311,7 +308,6 @@ class ANIRepresentation(nn.Module):
 
 
 class ANIInteraction(nn.Module):
-
     def __init__(self, aev_dim: int):
         super().__init__()
         # define atomic neural network
@@ -336,7 +332,6 @@ class ANIInteraction(nn.Module):
         )
 
     def intialize_atomic_neural_network(self, aev_dim: int) -> Dict[str, nn.Module]:
-
         H_network = torch.nn.Sequential(
             torch.nn.Linear(aev_dim, 256),
             torch.nn.CELU(0.1),
@@ -418,7 +413,6 @@ class ANIInteraction(nn.Module):
         }
 
     def forward(self, input: Tuple[torch.Tensor, torch.Tensor]):
-
         species, aev = input
         output = aev.new_zeros(species.shape)
 
@@ -433,7 +427,6 @@ class ANIInteraction(nn.Module):
 
 
 class ANI2xCore(CoreNetwork):
-
     def __init__(
         self,
         radial_max_distance: unit.Quantity = 5.1 * unit.angstrom,
@@ -519,7 +512,6 @@ class ANI2xCore(CoreNetwork):
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
     ) -> AniNeuralNetworkData:
-
         number_of_atoms = data.atomic_numbers.shape[0]
 
         nnp_data = AniNeuralNetworkData(
@@ -581,7 +573,6 @@ class ANI2x(BaseNetwork):
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
-
         super().__init__(
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=postprocessing_parameter,
@@ -606,7 +597,10 @@ class ANI2x(BaseNetwork):
 
     def _config_prior(self):
         log.info("Configuring ANI2x model hyperparameter prior distribution")
-        from ray import tune
+        from modelforge.utils.io import import_
+
+        tune = import_("ray").tune
+        # from ray import tune
 
         from modelforge.train.utils import shared_config_prior
 

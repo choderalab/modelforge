@@ -147,7 +147,10 @@ class NNPInput:
 
         from dataclasses import dataclass, fields
         import collections
-        from pytorch2jax.pytorch2jax import convert_to_jax
+        from modelforge.utils.io import import_
+
+        convert_to_jax = import_("pytorch2jax").pytorch2jax.convert_to_jax
+        # from pytorch2jax.pytorch2jax import convert_to_jax
 
         NNPInputTuple = collections.namedtuple(
             "NNPInputTuple", [field.name for field in fields(self)]
@@ -450,7 +453,6 @@ class HDF5Dataset:
         with gzip.open(
             f"{self.local_cache_dir}/{self.gz_data_file['name']}", "rb"
         ) as gz_file:
-
             from modelforge.utils.misc import OpenWithLock
 
             # rather than locking the file we are writing, we will create a lockfile.  the _from_hdf5 function will
@@ -625,7 +627,6 @@ class HDF5Dataset:
             f"{self.local_cache_dir}/{self.hdf5_data_file['name']}.lockfile", "w"
         ) as lock_file:
             with h5py.File(temp_hdf5_file, "r") as hf:
-
                 # create dicts to store data for each format type
                 single_rec_data: Dict[str, List[np.ndarray]] = OrderedDict()
                 # value shapes: (*)
@@ -672,9 +673,9 @@ class HDF5Dataset:
 
                         if all(property_found):
                             # we want to exclude conformers with NaN values for any property of interest
-                            configs_nan_by_prop: Dict[str, np.ndarray] = (
-                                OrderedDict()
-                            )  # ndarray.size (n_configs, )
+                            configs_nan_by_prop: Dict[
+                                str, np.ndarray
+                            ] = OrderedDict()  # ndarray.size (n_configs, )
                             for value in list(series_mol_data.keys()) + list(
                                 series_atom_data.keys()
                             ):
@@ -929,7 +930,6 @@ class DatasetFactory:
             and not data.force_download
             and not data.regenerate_cache
         ):
-
             data._from_file_cache()
         # check to see if the hdf5 file exists and the checksum matches
         elif (
@@ -981,7 +981,6 @@ from openff.units import unit
 
 
 class DataModule(pl.LightningDataModule):
-
     def __init__(
         self,
         name: Literal[
@@ -1200,7 +1199,6 @@ class DataModule(pl.LightningDataModule):
     def _calculate_atomic_self_energies(
         self, torch_dataset, dataset_ase
     ) -> Dict[str, float]:
-
         # Use provided ase dictionary
         if self.dict_atomic_self_energies:
             log.info("Using atomic self energies from the provided dictionary.")
@@ -1230,9 +1228,11 @@ class DataModule(pl.LightningDataModule):
         """Sets up datasets for the train, validation, and test stages based on the stage argument."""
 
         self.torch_dataset = torch.load("torch_dataset.pt")
-        self.train_dataset, self.val_dataset, self.test_dataset = (
-            self.splitting_strategy.split(self.torch_dataset)
-        )
+        (
+            self.train_dataset,
+            self.val_dataset,
+            self.test_dataset,
+        ) = self.splitting_strategy.split(self.torch_dataset)
 
     def calculate_self_energies(
         self, torch_dataset: TorchDataset, collate: bool = True
@@ -1311,10 +1311,11 @@ class DataModule(pl.LightningDataModule):
             ),
             desc="Calculating pairlist for dataset",
         ):
-            pairs_batch, n_pairs_batch = (
-                self.pairlist.construct_initial_pairlist_using_numpy(
-                    batch.nnp_input.atomic_subsystem_indices.to("cpu")
-                )
+            (
+                pairs_batch,
+                n_pairs_batch,
+            ) = self.pairlist.construct_initial_pairlist_using_numpy(
+                batch.nnp_input.atomic_subsystem_indices.to("cpu")
             )
             all_pairs.append(torch.from_numpy(pairs_batch))
             n_pairs_per_molecule_list.append(torch.from_numpy(n_pairs_batch))

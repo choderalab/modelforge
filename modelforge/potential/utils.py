@@ -460,11 +460,11 @@ class GaussianRadialBasisFunctionCore(RadialBasisFunctionCore):
     def forward(self, nondimensionalized_distances: torch.Tensor) -> torch.Tensor:
         assert nondimensionalized_distances.ndim == 2
         assert (
-                nondimensionalized_distances.shape[1]
-                == self.number_of_radial_basis_functions
+            nondimensionalized_distances.shape[1]
+            == self.number_of_radial_basis_functions
         )
 
-        return torch.exp(-(nondimensionalized_distances ** 2))
+        return torch.exp(-(nondimensionalized_distances**2))
 
 
 class RadialBasisFunction(nn.Module, ABC):
@@ -682,12 +682,11 @@ class SchnetRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
             _min_distance_in_nanometer,
             _max_distance_in_nanometer,
             number_of_radial_basis_functions,
-            dtype=dtype
+            dtype=dtype,
         )
 
-        widths = (
-                torch.abs(scale_factors[1] - scale_factors[0])
-                * torch.ones_like(scale_factors)
+        widths = torch.abs(scale_factors[1] - scale_factors[0]) * torch.ones_like(
+            scale_factors
         )
 
         scale_factors = math.sqrt(2) * widths
@@ -837,7 +836,7 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
 
         start_value = torch.exp(
             torch.scalar_tensor(
-                ((-max_distance + min_distance) / alpha).to('').m,
+                ((-max_distance + min_distance) / alpha).to("").m,
                 dtype=dtype,
             )
         )
@@ -862,15 +861,7 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
         # of radial_scale_factor in GaussianRadialBasisFunctionWithScaling
         return torch.full(
             (number_of_radial_basis_functions,),
-            (
-                    2
-                    * (
-                            1
-                            - math.exp(
-                        ((-max_distance + min_distance) / alpha).to('').m
-                    )
-                    )
-            )
+            (2 * (1 - math.exp(((-max_distance + min_distance) / alpha).to("").m)))
             / number_of_radial_basis_functions,
             dtype=dtype,
         )
@@ -881,8 +872,11 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
         # nanometers, so we multiply by 10/nanometer
 
         return (
-                torch.exp((-distances + self._min_distance_in_nanometer) / self._alpha_in_nanometer)
-                - self.radial_basis_centers
+            torch.exp(
+                (-distances + self._min_distance_in_nanometer)
+                / self._alpha_in_nanometer
+            )
+            - self.radial_basis_centers
         ) / self.radial_scale_factor
 
 
@@ -929,7 +923,7 @@ def pair_list(
 
     # filter pairs to only keep those belonging to the same molecule
     same_molecule_mask = (
-            atomic_subsystem_indices[i_indices] == atomic_subsystem_indices[j_indices]
+        atomic_subsystem_indices[i_indices] == atomic_subsystem_indices[j_indices]
     )
 
     # Apply mask to get final pair indices
@@ -943,11 +937,11 @@ def pair_list(
 
 
 def scatter_softmax(
-        src: torch.Tensor,
-        index: torch.Tensor,
-        dim: int,
-        dim_size: Optional[int] = None,
-        device: Optional[torch.device] = None,
+    src: torch.Tensor,
+    index: torch.Tensor,
+    dim: int,
+    dim_size: Optional[int] = None,
+    device: Optional[torch.device] = None,
 ) -> torch.Tensor:
     """
     Softmax operation over all values in :attr:`src` tensor that share indices
@@ -981,7 +975,7 @@ def scatter_softmax(
 
     assert dim >= 0, f"dim must be non-negative, got {dim}"
     assert (
-            dim < src.dim()
+        dim < src.dim()
     ), f"dim must be less than the number of dimensions of src {src.dim()}, got {dim}"
 
     out_shape = [

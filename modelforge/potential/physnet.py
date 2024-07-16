@@ -75,8 +75,8 @@ class PhysNetRepresentation(nn.Module):
         ----------
         cutoff : openff.units.unit.Quantity, default=5*unit.angstrom
             The cutoff distance for interactions.
-        number_of_gaussians : int, default=16
-            Number of Gaussian functions to use in the radial basis function.
+        number_of_radial_basis_functions : int, default=16
+            Number of radial basis functions to use.
         """
 
         super().__init__()
@@ -87,9 +87,9 @@ class PhysNetRepresentation(nn.Module):
         self.cutoff_module = CosineCutoff(cutoff)
 
         # radial symmetry function
-        from .utils import PhysNetRadialSymmetryFunction
+        from .utils import PhysNetRadialBasisFunction
 
-        self.radial_symmetry_function_module = PhysNetRadialSymmetryFunction(
+        self.radial_symmetry_function_module = PhysNetRadialBasisFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             max_distance=cutoff,
             dtype=torch.float32,

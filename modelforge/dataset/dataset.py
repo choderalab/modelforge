@@ -212,23 +212,23 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         self.properties_of_interest = {}
 
         self.properties_of_interest["atomic_numbers"] = torch.from_numpy(
-            dataset[property_name.Z].flatten()
+            dataset[property_name.atomic_numbers].flatten()
         ).to(torch.int32)
         self.properties_of_interest["positions"] = torch.from_numpy(
-            dataset[property_name.R]
+            dataset[property_name.positions]
         ).to(torch.float32)
         self.properties_of_interest["E"] = torch.from_numpy(
             dataset[property_name.E]
         ).to(torch.float64)
 
-        if property_name.Q is not None:
-            self.properties_of_interest["Q"] = torch.from_numpy(
-                dataset[property_name.Q]
+        if property_name.total_charge is not None:
+            self.properties_of_interest["total_charge"] = torch.from_numpy(
+                dataset[property_name.total_charge]
             ).to(torch.int32)
         else:
             # this is a per atom property, so it will match the first dimension of the geometry
-            self.properties_of_interest["Q"] = torch.zeros(
-                (dataset[property_name.R].shape[0], 1)
+            self.properties_of_interest["total_charge"] = torch.zeros(
+                (dataset[property_name.positions].shape[0], 1)
             ).to(torch.int32)
 
         if property_name.F is not None:
@@ -238,7 +238,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         else:
             # a per atom property in each direction, so it will match geometry
             self.properties_of_interest["F"] = torch.zeros(
-                dataset[property_name.R].shape
+                dataset[property_name.positions].shape
             )
 
         self.number_of_records = len(dataset["atomic_subsystem_counts"])
@@ -350,7 +350,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         ]
         E = self.properties_of_interest["E"][idx]
         F = self.properties_of_interest["F"][series_atom_start_idx:series_atom_end_idx]
-        total_charge = self.properties_of_interest["Q"][idx]
+        total_charge = self.properties_of_interest["total_charge"][idx]
         number_of_atoms = len(atomic_numbers)
         if self.properties_of_interest["pair_list"] is None:
             pair_list = None

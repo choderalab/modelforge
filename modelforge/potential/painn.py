@@ -228,9 +228,9 @@ class PaiNNRepresentation(nn.Module):
         self.cutoff_module = CosineCutoff(cutoff)
 
         # radial symmetry function
-        from .utils import SchnetRadialSymmetryFunction
+        from .utils import SchnetRadialBasisFunction
 
-        self.radial_symmetry_function_module = SchnetRadialSymmetryFunction(
+        self.radial_symmetry_function_module = SchnetRadialBasisFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             max_distance=cutoff,
             dtype=torch.float32,

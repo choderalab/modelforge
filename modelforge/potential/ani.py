@@ -138,9 +138,9 @@ class ANIRepresentation(nn.Module):
         min_distance: unit.Quantity,
         number_of_radial_basis_functions: int,
     ):
-        from .utils import AniRadialSymmetryFunction
+        from .utils import AniRadialBasisFunction
 
-        radial_symmetry_function = AniRadialSymmetryFunction(
+        radial_symmetry_function = AniRadialBasisFunction(
             number_of_radial_basis_functions,
             max_distance,
             min_distance,
@@ -247,7 +247,7 @@ class ANIRepresentation(nn.Module):
     ) -> Dict[str, torch.tensor]:
         radial_feature_vector = radial_feature_vector.squeeze(1)
         number_of_atoms = data.number_of_atoms
-        radial_sublength = self.radial_symmetry_functions.radial_sublength
+        radial_sublength = self.radial_symmetry_functions.number_of_radial_basis_functions
         radial_length = radial_sublength * self.nr_of_supported_elements
 
         radial_aev = radial_feature_vector.new_zeros(
@@ -479,10 +479,7 @@ class ANI2xCore(CoreNetwork):
             angle_sections,
         )
         # The length of radial aev
-        self.radial_length = (
-            self.num_species
-            * self.ani_representation_module.radial_symmetry_functions.radial_sublength
-        )
+        self.radial_length = self.num_species * number_of_radial_basis_functions
         # The length of angular aev
         self.angular_length = (
             (self.num_species * (self.num_species + 1))

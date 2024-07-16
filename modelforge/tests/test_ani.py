@@ -125,7 +125,7 @@ def test_representation():
     # Compare the reference radial symmetry function
     # against the the implemented radial symmetry function
     import torch
-    from modelforge.potential.utils import AniRadialSymmetryFunction, CosineCutoff
+    from modelforge.potential.utils import AniRadialBasisFunction, CosineCutoff
     from openff.units import unit
     from .precalculated_values import (
         provide_reference_values_for_test_ani_test_compare_rsf,
@@ -138,7 +138,7 @@ def test_representation():
     radial_dist_divisions = 8
 
     # NOTE: we pass in Angstrom to ANI and in nanometer to mf
-    rsf = AniRadialSymmetryFunction(
+    rsf = AniRadialBasisFunction(
         number_of_radial_basis_functions=radial_dist_divisions,
         max_distance=radial_cutoff * unit.angstrom,
         min_distance=radial_start * unit.angstrom,
@@ -154,7 +154,7 @@ def test_representation():
 
 def test_representation_with_diagonal_batching():
     import torch
-    from modelforge.potential.utils import AniRadialSymmetryFunction, CosineCutoff
+    from modelforge.potential.utils import AniRadialBasisFunction, CosineCutoff
     from openff.units import unit
     from modelforge.potential.models import Pairlist
     from .precalculated_values import (
@@ -177,7 +177,7 @@ def test_representation_with_diagonal_batching():
     # ------------ Modelforge calculation ----------#
     device = torch.device("cpu")
 
-    radial_symmetry_function = AniRadialSymmetryFunction(
+    radial_symmetry_function = AniRadialBasisFunction(
         radial_dist_divisions,
         radial_cutoff * unit.angstrom,
         radial_start * unit.angstrom,

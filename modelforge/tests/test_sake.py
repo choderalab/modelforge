@@ -48,7 +48,7 @@ def test_sake_forward(single_batch_with_batchsize_64):
     nr_of_mols = methane.atomic_subsystem_indices.unique().shape[0]
 
     assert (
-            len(energy) == nr_of_mols
+        len(energy) == nr_of_mols
     )  # Assuming energy is calculated per sample in the batch
 
 

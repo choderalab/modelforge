@@ -10,7 +10,6 @@ from modelforge.potential.sake import SAKE, SAKEInteraction
 import sake as reference_sake
 from sys import platform
 
-
 ON_MAC = platform == "darwin"
 
 
@@ -219,39 +218,31 @@ def make_equivalent_pairlist_mask(key, nr_atoms, nr_pairs, include_self_pairs):
 
 def test_radial_symmetry_function_against_reference():
     from modelforge.potential.utils import (
-        SAKERadialSymmetryFunction,
-        SAKERadialBasisFunction,
+        PhysNetRadialBasisFunction,
     )
     from sake.utils import ExpNormalSmearing as RefExpNormalSmearing
 
-    nr_atoms = 13
-    number_of_radial_basis_functions = 11
-    cutoff_upper = 6.0 * unit.bohr
-    cutoff_lower = 2.0 * unit.bohr
-    mf_unit = unit.nanometer
-    ref_unit = unit.nanometer
+    nr_atoms = 1
+    number_of_radial_basis_functions = 10
+    cutoff_upper = 6.0 * unit.nanometer
+    cutoff_lower = 2.0 * unit.nanometer
 
-    radial_symmetry_function_module = SAKERadialSymmetryFunction(
+    radial_symmetry_function_module = PhysNetRadialBasisFunction(
         number_of_radial_basis_functions=number_of_radial_basis_functions,
         max_distance=cutoff_upper,
         min_distance=cutoff_lower,
         dtype=torch.float32,
-        trainable=False,
-        radial_basis_function=SAKERadialBasisFunction(cutoff_lower),
     )
     ref_radial_basis_module = RefExpNormalSmearing(
         num_rbf=number_of_radial_basis_functions,
-        cutoff_upper=cutoff_upper.to(ref_unit).m,
-        cutoff_lower=cutoff_lower.to(ref_unit).m,
+        cutoff_upper=cutoff_upper.m,
+        cutoff_lower=cutoff_lower.m,
     )
     key = jax.random.PRNGKey(1884)
 
     # Generate random input data in JAX
-    d_ij_bohr_mag = jax.random.normal(key, (nr_atoms, nr_atoms, 1))
-    d_ij_jax = (d_ij_bohr_mag * unit.bohr).to(ref_unit).m
-    d_ij = torch.from_numpy(
-        onp.array((d_ij_bohr_mag * unit.bohr).to(mf_unit).m)
-    ).reshape(nr_atoms**2)
+    d_ij_jax = jax.random.uniform(key, (nr_atoms, nr_atoms, 1))
+    d_ij = torch.from_numpy(onp.array(d_ij_jax)).reshape((nr_atoms ** 2, 1))
 
     mf_rbf = radial_symmetry_function_module(d_ij)
     variables = ref_radial_basis_module.init(key, d_ij_jax)
@@ -261,7 +252,7 @@ def test_radial_symmetry_function_against_reference():
         radial_symmetry_function_module.radial_basis_centers.detach().T,
     )
     assert torch.allclose(
-        torch.from_numpy(onp.array(variables["params"]["betas"])),
+        torch.from_numpy(onp.array(variables["params"]["betas"])) ** -0.5,
         radial_symmetry_function_module.radial_scale_factor.detach().T,
     )
 
@@ -270,7 +261,7 @@ def test_radial_symmetry_function_against_reference():
     assert torch.allclose(
         mf_rbf,
         torch.from_numpy(onp.array(ref_rbf)).reshape(
-            nr_atoms**2, number_of_radial_basis_functions
+            nr_atoms ** 2, number_of_radial_basis_functions
         ),
     )
 
@@ -279,7 +270,6 @@ def test_radial_symmetry_function_against_reference():
 @pytest.mark.parametrize("include_self_pairs", [True, False])
 @pytest.mark.parametrize("v_is_none", [True, False])
 def test_sake_layer_against_reference(include_self_pairs, v_is_none):
-
     nr_atoms = 13
     out_features = 11
     hidden_features = 7
@@ -316,7 +306,7 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none):
     layer = variables["params"]
 
     assert torch.allclose(
-        torch.from_numpy(onp.array(layer["edge_model"]["kernel"]["betas"])),
+        torch.from_numpy(onp.array(layer["edge_model"]["kernel"]["betas"]) ** -0.5),
         mf_sake_block.radial_symmetry_function_module.radial_scale_factor.detach().T,
     )
     assert torch.allclose(

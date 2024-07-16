@@ -5,7 +5,7 @@ import pytest
 @pytest.mark.xfail
 def test_compare_radial_symmetry_features():
     # compare schnetpack RadialSymmetryFunction with modelforge RadialSymmetryFunction
-    from modelforge.potential.utils import SchnetRadialSymmetryFunction
+    from modelforge.potential.utils import SchnetRadialBasisFunction
     from schnetpack.nn import GaussianRBF as schnetpackGaussianRBF
     from openff.units import unit
 
@@ -18,7 +18,7 @@ def test_compare_radial_symmetry_features():
         cutoff=cutoff.to(unit.angstrom).m,
         start=start.to(unit.angstrom).m,
     )
-    radial_symmetry_function_module = SchnetRadialSymmetryFunction(
+    radial_symmetry_function_module = SchnetRadialBasisFunction(
         number_of_radial_basis_functions=number_of_gaussians,
         max_distance=cutoff,
         min_distance=start,
@@ -209,8 +209,6 @@ def test_painn_representation_implementation():
         for i in range(nr_of_interactions)
         for dense in schnetpack_painn.interactions[i].interatomic_context_net
     ]
-    print(modelforge_painn.core_module.interaction_modules[0].interatomic_net[0].weight)
-    print(schnetpack_painn.interactions[0].interatomic_context_net[0].weight)
 
     assert torch.allclose(
         modelforge_painn.core_module.interaction_modules[0].interatomic_net[0].weight,
@@ -400,7 +398,7 @@ def test_painn_representation_implementation():
         schnetpack_painn.filter_net.weight,
         atol=1e-4,
     )
-    modelforge_results = modelforge_painn.core_module._forward(pain_nn_input_mf)
+    modelforge_results = modelforge_painn.core_module.compute_properties(pain_nn_input_mf)
     schnetpack_results = schnetpack_painn(spk_input)
 
     assert (
@@ -496,7 +494,6 @@ def test_schnet_representation_implementation():
     spk_input = input["spk_methane_input"]
     mf_nnp_input = input["modelforge_methane_input"]
 
-    schnetpack_results = schnetpack_schnet(spk_input)
     modelforge_schnet.input_preparation._input_checks(mf_nnp_input)
 
     pairlist_output = modelforge_schnet.input_preparation.prepare_inputs(mf_nnp_input)
@@ -512,8 +509,6 @@ def test_schnet_representation_implementation():
     assert torch.allclose(spk_input["_Rij"] / 10, schnet_nn_input_mf.r_ij, atol=1e-4)
     assert torch.allclose(spk_input["_idx_i"], schnet_nn_input_mf.pair_indices[0])
     assert torch.allclose(spk_input["_idx_j"], schnet_nn_input_mf.pair_indices[1])
-    idx_i = spk_input["_idx_i"]
-    idx_j = spk_input["_idx_j"]
 
     # ---------------------------------------- #
     # test radial symmetry function
@@ -522,10 +517,10 @@ def test_schnet_representation_implementation():
     d_ij = torch.norm(r_ij, dim=1, keepdim=True)
     schnetpack_phi_ij = schnetpack_schnet.radial_basis(d_ij)
     modelforge_phi_ij = modelforge_schnet.core_module.schnet_representation_module.radial_symmetry_function_module(
-        d_ij.unsqueeze(1) / 10
+        d_ij / 10
     )  # NOTE: converting to nm
 
-    assert torch.allclose(schnetpack_phi_ij, modelforge_phi_ij)
+    assert torch.allclose(schnetpack_phi_ij, modelforge_phi_ij.unsqueeze(1))
     phi_ij = schnetpack_phi_ij
     # ---------------------------------------- #
     # test cutoff
@@ -556,7 +551,7 @@ def test_schnet_representation_implementation():
     # test representation
     # --------------------------------------- #
     f_ij_mf = modelforge_schnet.core_module.schnet_representation_module.radial_symmetry_function_module(
-        d_ij.unsqueeze(1) / 10
+        d_ij / 10
     )
     r_cut_ij_mf = (
         modelforge_schnet.core_module.schnet_representation_module.cutoff_module(
@@ -569,9 +564,8 @@ def test_schnet_representation_implementation():
     f_ij_spk = schnetpack_schnet.radial_basis(d_ij)
     rcut_ij_spk = schnetpack_schnet.cutoff_fn(d_ij)
 
-    f_ij_mf_ = f_ij_mf.squeeze(1)
     r_cut_ij_mf_ = r_cut_ij_mf.squeeze(1)
-    assert torch.allclose(f_ij_mf_, f_ij_spk)
+    assert torch.allclose(f_ij_mf, f_ij_spk)
     assert torch.allclose(r_cut_ij_mf_, rcut_ij_spk)
 
     # ---------------------------------------- #
@@ -637,14 +631,14 @@ def test_schnet_representation_implementation():
         assert torch.allclose(v_spk, v_mf)
 
     # Check full pass
-    modelforge_results = modelforge_schnet.core_module._forward(schnet_nn_input_mf)
+    modelforge_results = modelforge_schnet.core_module.compute_properties(schnet_nn_input_mf)
     schnetpack_results = schnetpack_schnet(spk_input)
 
     assert (
         schnetpack_results["scalar_representation"].shape
-        == modelforge_results["q"].shape
+        == modelforge_results["scalar_representation"].shape
     )
 
     scalar_spk = schnetpack_results["scalar_representation"]
-    scalar_mf = modelforge_results["q"]
+    scalar_mf = modelforge_results["scalar_representation"]
     assert torch.allclose(scalar_spk, scalar_mf, atol=1e-4)

@@ -166,8 +166,6 @@ def test_radial_symmetry_function_implementation():
         number_of_radial_basis_functions=18,
         max_distance=unit.Quantity(5.0, unit.angstrom),
     )
-    print(f"{RSF.radial_basis_centers=}")
-    print(f"{RSF.radial_scale_factor=}")
     # test a single distance
     d_ij = torch.tensor([[0.2]])
     radial_expension = RSF(d_ij)

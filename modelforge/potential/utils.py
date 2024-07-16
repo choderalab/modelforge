@@ -132,8 +132,8 @@ def triple_by_molecule(
         torch.tril_indices(m, m, -1, device=ai1.device).unsqueeze(1).expand(-1, n, -1)
     )
     mask = (
-            torch.arange(intra_pair_indices.shape[2], device=ai1.device)
-            < pair_sizes.unsqueeze(1)
+        torch.arange(intra_pair_indices.shape[2], device=ai1.device)
+        < pair_sizes.unsqueeze(1)
     ).flatten()
     sorted_local_index12 = intra_pair_indices.flatten(1, 2)[:, mask]
     sorted_local_index12 += cumsum_from_zero(counts).index_select(0, pair_indices)
@@ -280,7 +280,7 @@ class CosineCutoff(nn.Module):
         """
         # Compute values of cutoff function
         input_cut = 0.5 * (
-                torch.cos(d_ij * np.pi / self.cutoff) + 1.0
+            torch.cos(d_ij * np.pi / self.cutoff) + 1.0
         )  # NOTE: ANI adds 0.5 instead of 1.
         # Remove contributions beyond the cutoff radius
         input_cut *= (d_ij < self.cutoff).float()
@@ -887,8 +887,8 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
 
 
 def pair_list(
-        atomic_subsystem_indices: torch.Tensor,
-        only_unique_pairs: bool = False,
+    atomic_subsystem_indices: torch.Tensor,
+    only_unique_pairs: bool = False,
 ) -> torch.Tensor:
     """Compute all pairs of atoms and their distances.
 
@@ -940,39 +940,6 @@ def pair_list(
     pair_indices = torch.stack((i_final_pairs, j_final_pairs))
 
     return pair_indices.to(device)
-
-    def forward(
-            self,
-            coordinates: torch.Tensor,  # in nanometer
-            atomic_subsystem_indices: torch.Tensor,
-    ) -> torch.Tensor:
-        """Compute all pairs of atoms and their distances.
-
-        Parameters
-        ----------
-        coordinates : torch.Tensor, shape (nr_atoms_per_systems, 3), in nanometer
-        atomic_subsystem_indices : torch.Tensor, shape (nr_atoms_per_systems)
-            Atom indices to indicate which atoms belong to which molecule
-        """
-        positions = coordinates
-        pair_indices = self.pair_list(atomic_subsystem_indices)
-
-        # create pair_coordinates tensor
-        pair_coordinates = positions[pair_indices.T]
-        pair_coordinates = pair_coordinates.view(-1, 2, 3)
-
-        # Calculate distances
-        distances = (pair_coordinates[:, 0, :] - pair_coordinates[:, 1, :]).norm(
-            p=2, dim=-1
-        )
-
-        # Find pairs within the cutoff
-        in_cutoff = (distances <= self.cutoff).nonzero(as_tuple=False).squeeze()
-
-        # Get the atom indices within the cutoff
-        pair_indices_within_cutoff = pair_indices[:, in_cutoff]
-
-        return pair_indices_within_cutoff
 
 
 def scatter_softmax(

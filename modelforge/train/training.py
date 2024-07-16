@@ -876,6 +876,10 @@ def log_training_arguments(
     else:
         log.info(f"Removing self energies: {remove_self_energies}")
 
+    splitting_strategy = training_config["splitting_strategy"]["name"]
+    data_split = training_config["splitting_strategy"]["data_split"]
+    log.info(f"Using splitting strategy: {splitting_strategy} with split: {data_split}")
+
     early_stopping_config = training_config.get("early_stopping", None)
     if early_stopping_config is None:
         log.info(f"Using default: No early stopping performed")
@@ -936,7 +940,7 @@ def perform_training(
     """
 
     from pytorch_lightning.loggers import TensorBoardLogger
-    from modelforge.dataset.utils import RandomRecordSplittingStrategy
+    from modelforge.dataset.utils import REGISTERED_SPLITTING_STRATEGIES
     from lightning import Trainer
     from modelforge.potential import NeuralNetworkPotentialFactory
     from modelforge.dataset.dataset import DataModule
@@ -962,6 +966,7 @@ def perform_training(
 
     version_select = dataset_config.get("version_select", "latest")
     accelerator = runtime_config.get("accelerator", "cpu")
+    splitting_strategy = training_config["splitting_strategy"]
     nr_of_epochs = runtime_config.get("nr_of_epochs", 10)
     num_nodes = runtime_config.get("num_nodes", 1)
     devices = runtime_config.get("devices", 1)
@@ -981,10 +986,13 @@ def perform_training(
     dm = DataModule(
         name=dataset_name,
         batch_size=batch_size,
-        splitting_strategy=RandomRecordSplittingStrategy(),
         remove_self_energies=remove_self_energies,
         version_select=version_select,
         local_cache_dir=local_cache_dir,
+        splitting_strategy=REGISTERED_SPLITTING_STRATEGIES[splitting_strategy["name"]](
+            seed=splitting_strategy.get('splitting_seed', 42),
+            split=splitting_strategy["data_split"],
+        ),
     )
     dm.prepare_data()
     dm.setup()

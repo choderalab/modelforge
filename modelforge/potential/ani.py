@@ -300,7 +300,9 @@ class ANIRepresentation(nn.Module):
         r_ij12 = r_ij.index_select(0, pair_index12.view(-1)).view(
             2, -1, 3
         ) * sign12.unsqueeze(-1)
-        species12_ = torch.where(torch.eq(sign12, 1), species12_small[1], species12_small[0])
+        species12_ = torch.where(
+            torch.eq(sign12, 1), species12_small[1], species12_small[0]
+        )
         return {
             "angular_r_ij": r_ij12,
             "central_atom_index": central_atom_index,
@@ -443,10 +445,29 @@ class ANI2xCore(CoreNetwork):
         angle_sections: int = 4,
     ) -> None:
         """
-        Initialize the ANi NNP architeture.
-
+        ANI2x Neural Network Model.
         Parameters
         ----------
+        radial_max_distance : Union[unit.Quantity, str]
+            The maximum radial distance for the radial basis functions.
+        radial_min_distance : Union[unit.Quantity, str]
+            The minimum radial distance for the radial basis functions.
+        number_of_radial_basis_functions : int
+            The number of radial basis functions to use.
+        angular_max_distance : Union[unit.Quantity, str]
+            The maximum angular distance for the angular basis functions.
+        angular_min_distance : Union[unit.Quantity, str]
+            The minimum angular distance for the angular basis functions.
+        angular_dist_divisions : int
+            The number of divisions for the angular distance.
+        angle_sections : int
+            The number of angle sections to use.
+        processing_operation : List[Dict[str, str]]
+            A list of processing operations to apply to the input data.
+        readout_operation : List[Dict[str, str]]
+            A list of readout operations to apply to the output data.
+        dataset_statistic : Optional[Dict[str, float]], optional
+            Optional dataset statistics to use for normalization, by default None.
         """
         # number of elements in ANI2x
         self.num_species = 7

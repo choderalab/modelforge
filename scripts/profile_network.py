@@ -46,7 +46,7 @@ def setup(model_name: str):
     dataset.prepare_data()
     dataset.setup()
 
-    data = next(iter(dataset.train_dataloader())).nnp_input
+    data = next(iter(dataset.train_dataloader())).model_input
     return model, data
 
 

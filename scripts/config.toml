@@ -1,19 +1,70 @@
 [potential]
-potential_parameter = { radial_max_distance = "5.1 angstrom", radial_min_distance = "0.8 angstrom", number_of_radial_basis_functions = 16, angular_max_distance = "3.5 angstrom", angular_min_distance = "0.8 angstrom", angular_dist_divisions = 8, angle_sections = 4 }
+model_name = "SchNet"
 
+[potential.core_parameter]
+max_Z = 101
+number_of_atom_features = 32
+number_of_radial_basis_functions = 20
+cutoff = "5.0 angstrom"
+number_of_interaction_modules = 3
+number_of_filters = 32
+shared_interactions = false
 
-model_name = "ANI2x"
-[training]
-nr_of_epochs = 50
-save_dir = "test"
-experiment_name = "your_experiment_name"
-accelerator = "cpu"
-training_parameter = {}
-num_nodes = 1
-devices = 1                                                                                          #[0,1,2,3]
-early_stopping = { monitor = "val/combined_loss", min_delta = 0.001, patience = 50, verbose = true }
+[potential.postprocessing_parameter]
+[potential.postprocessing_parameter.per_atom_energy]
+normalize = true
+from_atom_to_molecule_reduction = true
+keep_per_atom_property = true
+[potential.postprocessing_parameter.general_postprocessing_operation]
+calculate_molecular_self_energy = true
 
 [dataset]
 dataset_name = "QM9"
-batch_size = 512
+
+[training]
+nr_of_epochs = 2
+save_dir = "test"
+experiment_name = "your_experiment_name"
+accelerator = "cpu"
+num_nodes = 1
+devices = 1                              # [0,1,2,3]
 remove_self_energies = true
+batch_size = 128
+
+[training.training_parameter]
+lr = 1e-3
+
+[training.training_parameter.lr_scheduler_config]
+frequency = 1
+mode = "min"
+factor = 0.1
+patience = 10
+cooldown = 5
+min_lr = 1e-8
+threshold = 0.1
+threshold_mode = "abs"
+monitor = "val/per_molecule_energy/rmse"
+interval = "epoch"
+
+[training.training_parameter.loss_parameter]
+loss_property = ['per_molecule_energy'] # use .
+[training.training_parameter.loss_parameter.weight]
+per_molecule_energy = 0.999 #NOTE: reciproce units
+per_atom_force = 0.001
+
+[training.early_stopping]
+verbose = true
+monitor = "val/per_molecule_energy/rmse"
+min_delta = 0.001
+patience = 50
+
+[training.experiment_logger]
+logger_name = "wandb"
+save_dir = "test"
+experiment_name = "{model_name}_{dataset_name}"
+
+[runtime]
+accelerator = "cpu"
+num_nodes = 1
+devices = 1                 #[0,1,2,3]
+local_cache_dir = "./cache"

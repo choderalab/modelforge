@@ -144,6 +144,7 @@ class FromPerAtomToPerMoleculeMeanSquaredError(Error):
         # return the average
         return torch.mean(per_molecule_square_error_scaled)
 
+
 class PerMoleculeMeanSquaredError(Error):
     """
     Calculates the per-molecule mean squared error.
@@ -152,7 +153,7 @@ class PerMoleculeMeanSquaredError(Error):
 
     def __init__(self):
         """
-        Initializes the PerMoleculeError class.
+        Initializes the PerMoleculeMeanSquaredError class.
         """
 
         super().__init__()
@@ -245,9 +246,9 @@ class Loss(nn.Module):
         for prop, w in weight.items():
             if prop in self._SUPPORTED_PROPERTIES:
                 if prop == "per_atom_force":
-                    self.loss[prop] = FromPerAtomToPerMoleculeError()
+                    self.loss[prop] = FromPerAtomToPerMoleculeMeanSquaredError()
                 elif prop == "per_molecule_energy":
-                    self.loss[prop] = PerMoleculeError()
+                    self.loss[prop] = PerMoleculeMeanSquaredError()
                 self.register_buffer(prop, torch.tensor(w))
             else:
                 raise NotImplementedError(f"Loss type {prop} not implemented.")
@@ -280,7 +281,7 @@ class Loss(nn.Module):
             # add total loss
             loss = loss + loss_
             # save loss
-            r[prop] = loss_
+            r[f"{prop}/mse"] = loss_
 
         # add total loss to results dict and return
         r["total_loss"] = loss
@@ -314,6 +315,39 @@ class LossFactory(object):
 
 
 from torch.optim import Optimizer
+
+
+from torch.nn import ModuleDict
+
+
+def create_error_metrics(loss_properties: List[str]) -> ModuleDict:
+    """
+    Creates a ModuleDict of MetricCollections for the given loss properties.
+
+    Parameters
+    ----------
+    loss_properties : List[str]
+        List of loss properties for which to create the metrics.
+
+    Returns
+    -------
+    ModuleDict
+        A dictionary where keys are loss properties and values are MetricCollections.
+    """
+    from torchmetrics.regression import (
+        MeanAbsoluteError,
+        MeanSquaredError,
+    )
+    from torchmetrics import MetricCollection
+
+    return ModuleDict(
+        {
+            prop: MetricCollection(
+                [MeanAbsoluteError(), MeanSquaredError(squared=False)]
+            )
+            for prop in loss_properties
+        }
+    )
 
 
 class TrainingAdapter(pl.LightningModule):
@@ -376,47 +410,13 @@ class TrainingAdapter(pl.LightningModule):
             self.log_histograms = False
             self.log_on_training_step = False
 
-        # register metrics
-        self._register_metrics(loss_parameter)
-
         # initialize loss
         self.loss = LossFactory.create_loss(**loss_parameter)
 
-    def _register_metrics(self, loss_parameter: Dict[str, Any]):
-        from torchmetrics.regression import (
-            MeanAbsoluteError,
-            MeanSquaredError,
-        )
-        from torchmetrics import MetricCollection
-
-        # register logging
-        from torch.nn import ModuleDict
-
-        self.test_error = ModuleDict(
-            {
-                prop: MetricCollection(
-                    [MeanAbsoluteError(), MeanSquaredError(squared=False)]
-                )
-                for prop in loss_parameter["loss_property"]
-            }
-        )
-        self.val_error = ModuleDict(
-            {
-                prop: MetricCollection(
-                    [MeanAbsoluteError(), MeanSquaredError(squared=False)]
-                )
-                for prop in loss_parameter["loss_property"]
-            }
-        )
-
-        self.train_error = ModuleDict(
-            {
-                prop: MetricCollection(
-                    [MeanAbsoluteError(), MeanSquaredError(squared=False)]
-                )
-                for prop in loss_parameter["loss_property"]
-            }
-        )
+        # Assign the created error metrics to the respective attributes
+        self.test_error = create_error_metrics(loss_parameter["loss_property"])
+        self.val_error = create_error_metrics(loss_parameter["loss_property"])
+        self.train_error = create_error_metrics(loss_parameter["loss_property"])
 
     def _get_forces(
         self, batch: "BatchData", energies: Dict[str, torch.Tensor]
@@ -544,7 +544,7 @@ class TrainingAdapter(pl.LightningModule):
         """
 
         for property, metrics in error_dict.items():
-            for metric, error_log in metrics.items():
+            for _, error_log in metrics.items():
                 error_log(
                     predict_target[f"{property}_predict"].detach(),
                     predict_target[f"{property}_true"].detach(),
@@ -576,10 +576,10 @@ class TrainingAdapter(pl.LightningModule):
         # Update and log training error
         self._update_metrics(self.train_error, predict_target)
 
-        # log the loss
+        # log the loss (this includes the individual contributions that the loss contains)
         for key, loss in loss_dict.items():
             self.log(
-                f"train/{key}",
+                f"loss/{key}",
                 torch.mean(loss),
                 on_step=False,
                 prog_bar=True,
@@ -642,6 +642,12 @@ class TrainingAdapter(pl.LightningModule):
         # Update and log metrics
         self._update_metrics(self.test_error, predict_target)
 
+    def on_test_epoch_end(self):
+        """
+        Operations to perform at the end of the test set pass.
+        """
+        self._log_on_epoch(log_mode="test")
+
     def on_train_epoch_end(self):
         """
         Operations to perform at the end of each training epoch.
@@ -668,25 +674,31 @@ class TrainingAdapter(pl.LightningModule):
 
         self._log_on_epoch()
 
-    def _log_on_epoch(self):
+    def _log_on_epoch(self, log_mode: str = "train"):
         # convert long names to shorter versions
         conv = {
             "MeanAbsoluteError": "mae",
             "MeanSquaredError": "rmse",
         }  # NOTE: MeanSquaredError(squared=False) is RMSE
 
-        # Log accumulated training loss metrics
-        metrics = {}
-
         # Log all accumulated metrics for train and val phases
-        for phase, error_dict in [
-            ("train", self.train_error),
-            ("val", self.val_error),
-        ]:
+        if log_mode == "train":
+            errors = [
+                ("train", self.train_error),
+                ("val", self.val_error),
+            ]
+        elif log_mode == "test":
+            errors = [
+                ("test", self.test_error),
+            ]
+        else:
+            raise RuntimeError(f"Unrecognized mode: {log_mode}")
+
+        for phase, error_dict in errors:
             # skip if log_on_training_step is not requested
             if phase == "train" and not self.log_on_training_step:
                 continue
-            
+
             metrics = {}
             for property, metrics_dict in error_dict.items():
                 for name, metric in metrics_dict.items():
@@ -989,7 +1001,8 @@ def perform_training(
     Trainer
     """
 
-    from pytorch_lightning.loggers import TensorBoardLogger
+    from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
+
     from modelforge.dataset.utils import REGISTERED_SPLITTING_STRATEGIES
     from lightning import Trainer
     from modelforge.potential import NeuralNetworkPotentialFactory
@@ -1129,6 +1142,9 @@ def perform_training(
         val_dataloaders=dm.val_dataloader(),
         ckpt_path=checkpoint_path,
     )
-    trainer.validate(model=model, dataloaders=dm.val_dataloader(), ckpt_path="best")
-    trainer.test(dataloaders=dm.test_dataloader(), ckpt_path="best")
+
+    trainer.validate(
+        model=model, dataloaders=dm.val_dataloader(), ckpt_path="best", verbose=True
+    )
+    trainer.test(dataloaders=dm.test_dataloader(), ckpt_path="best", verbose=True)
     return trainer

@@ -1,5 +1,6 @@
 name: test
 channels:
+  - pyg
   - conda-forge
   - pytorch
 dependencies:
@@ -21,6 +22,7 @@ dependencies:
   - retry
   - sqlitedict
   - jax
+  - flax
 
   # Testing
   - pytest>=2.1

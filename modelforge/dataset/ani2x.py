@@ -44,7 +44,7 @@ class ANI2xDataset(HDF5Dataset):
     from modelforge.utils import PropertyNames
 
     _property_names = PropertyNames(
-        Z="atomic_numbers", R="geometry", E="energies", F="forces"
+        atomic_numbers="atomic_numbers", positions="geometry", E="energies", F="forces"
     )
 
     _available_properties = [

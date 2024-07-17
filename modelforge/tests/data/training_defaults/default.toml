@@ -1,15 +1,19 @@
 [training]
 nr_of_epochs = 5
-save_dir = "test"
-experiment_name = "your_experiment_name"
 accelerator = "cpu"
 num_nodes = 1
 devices = 1                              # [0,1,2,3]
 remove_self_energies = true
 batch_size = 128
+local_cache_dir = "./cache"
 
 [training.training_parameter]
 lr = 1e-3
+
+[training.experiment_logger]
+logger_name = "wandb"
+save_dir = "test"
+experiment_name = "{model_name}_{dataset_name}"
 
 [training.training_parameter.lr_scheduler_config]
 frequency = 1

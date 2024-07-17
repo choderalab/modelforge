@@ -124,8 +124,8 @@ def calculate_mean_and_variance(
         online_estimator.update(E_scaled)
 
     stats = {
-        "E_i_mean": online_estimator.mean,
-        "E_i_stddev": online_estimator.stddev,
+        "per_atom_energy_mean": online_estimator.mean,
+        "per_atom_energy_stddev": online_estimator.stddev,
     }
     log.info(f"Mean and standard deviation of the dataset:{stats}")
     return stats
@@ -247,12 +247,6 @@ class SplittingStrategy(ABC):
 class RandomSplittingStrategy(SplittingStrategy):
     """
     Strategy to split a dataset randomly.
-
-    Examples
-    --------
-    >>> dataset = [1, 2, 3, 4, 5]
-    >>> strategy = RandomSplittingStrategy(seed=42)
-    >>> train_idx, val_idx, test_idx = strategy.split(dataset)
     """
 
     def __init__(self, seed: int = 42, split: List[float] = [0.8, 0.1, 0.1]):
@@ -277,8 +271,9 @@ class RandomSplittingStrategy(SplittingStrategy):
 
         Examples
         --------
-        >>> random_strategy_default = RandomSplittingStrategy()
-        >>> random_strategy_custom = RandomSplittingStrategy(seed=123, split=[0.7, 0.2, 0.1])
+        >>> dataset = [1, 2, 3, 4, 5]
+        >>> random_split = RandomSplittingStrategy(seed=123, split=[0.7, 0.2, 0.1])
+        >>> train_idx, val_idx, test_idx = random_split.split(dataset)
         """
 
         super().__init__(seed=seed, split=split)
@@ -329,17 +324,9 @@ class RandomRecordSplittingStrategy(SplittingStrategy):
     """
     Strategy to split a dataset randomly, keeping all conformers in a record in the same split.
 
-    Examples
-    --------
-    >>> dataset = [1, 2, 3, 4, 5]
-    >>> strategy = RandomSplittingStrategy(seed=42)
-    >>> train_idx, val_idx, test_idx = strategy.split(dataset)
     """
-
     def __init__(self, seed: int = 42, split: List[float] = [0.8, 0.1, 0.1]):
         """
-        Initializes the RandomSplittingStrategy with a specified seed and split ratios.
-
         This strategy splits a dataset randomly based on provided ratios for training, validation,
         and testing subsets. The sum of split ratios should be 1.0.
 
@@ -358,8 +345,9 @@ class RandomRecordSplittingStrategy(SplittingStrategy):
 
         Examples
         --------
-        >>> random_strategy_default = RandomRecordSplittingStrategy()
-        >>> random_strategy_custom = RandomRecordSplittingStrategy(seed=123, split=[0.7, 0.2, 0.1])
+        >>> dataset = [1, 2, 3, 4, 5]
+        >>> random_split = RandomRecordSplittingStrategy(seed=123, split=[0.7, 0.2, 0.1])
+        >>> train_idx, val_idx, test_idx = random_split.split(dataset)
         """
 
         super().__init__(split=split, seed=seed)
@@ -520,65 +508,9 @@ class FirstComeFirstServeSplittingStrategy(SplittingStrategy):
         return (train_d, val_d, test_d)
 
 
-def _download_from_gdrive(id: str, raw_dataset_file: str):
-    """
-    Downloads a dataset from Google Drive.
 
-    Parameters
-    ----------
-    id : str
-        Google Drive ID for the dataset.
-
-    raw_dataset_file : str
-        Path to save the downloaded dataset.
-
-    Examples
-    --------
-    >>> _download_from_gdrive("1v2gV3sG9JhMZ5QZn3gFB9j5ZIs0Xjxz8", "data_file.hdf5.gz")
-    """
-    import gdown
-
-    url = f"https://drive.google.com/uc?id={id}"
-    gdown.download(url, raw_dataset_file, quiet=False)
-
-
-def _to_file_cache(
-    data: OrderedDict[str, List[np.ndarray]], processed_dataset_file: str
-) -> None:
-    """
-    Save processed data to a numpy (.npz) file.
-
-    Parameters
-    ----------
-    data : OrderedDict[str, List[np.ndarray]]
-        Dictionary containing processed data to be saved.
-    processed_dataset_file : str
-        Path to save the processed dataset.
-
-    Examples
-    --------
-    >>> data = {"a": [1, 2, 3], "b": [4, 5, 6]}
-    >>> _to_file_cache(data, "data_file.npz")
-    """
-
-    for prop_key in data:
-        if prop_key not in data:
-            raise ValueError(f"Property {prop_key} not found in data")
-        if prop_key == "geometry":  # NOTE: here a 2d tensor is padded
-            logger.debug(prop_key)
-            data[prop_key] = pad_molecules(data[prop_key])
-        else:
-            logger.debug(data[prop_key])
-            logger.debug(prop_key)
-            try:
-                max_len_species = max(len(arr) for arr in data[prop_key])
-            except TypeError:
-                continue
-            data[prop_key] = pad_to_max_length(data[prop_key], max_len_species)
-
-    logger.debug(f"Writing data cache to {processed_dataset_file}")
-
-    np.savez(
-        processed_dataset_file,
-        **data,
-    )
+REGISTERED_SPLITTING_STRATEGIES = {
+    "first_come_first_serve": FirstComeFirstServeSplittingStrategy,
+    "random_record_splitting_strategy": RandomRecordSplittingStrategy,
+    "random_conformer_splitting_strategy": RandomSplittingStrategy,
+}

@@ -206,13 +206,10 @@ class SchNetCore(CoreNetwork):
         E_i = self.energy_layer(x).squeeze(1)
 
         return {
-            "E_i": E_i,
+            'per_atom_energy': E_i,
             "scalar_representation": x,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
-
-
-from torch_scatter import scatter_add
 
 
 class SchNETInteractionModule(nn.Module):
@@ -300,9 +297,11 @@ class SchNETInteractionModule(nn.Module):
         # Perform continuous-filter convolution
         x_j = x[idx_j]
         x_ij = x_j * W_ij
-        x = scatter_add(x_ij, idx_i, dim=0, dim_size=x.size(0))
+        
+        out = torch.zeros_like(x)
+        out.scatter_add_(0, idx_i.unsqueeze(-1).expand_as(x_ij), x_ij)
 
-        return self.feature_to_output(x)
+        return self.feature_to_output(out)
 
 
 class SchNETRepresentation(nn.Module):
@@ -376,8 +375,7 @@ class SchNet(BaseNetwork):
         cutoff: Union[unit.Quantity, str],
         number_of_filters: int,
         shared_interactions: bool,
-        processing_operation: List[Dict[str, str]],
-        readout_operation: List[Dict[str, str]],
+        postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
         """
@@ -400,8 +398,7 @@ class SchNet(BaseNetwork):
         """
         super().__init__(
             dataset_statistic=dataset_statistic,
-            processing_operation=processing_operation,
-            readout_operation=readout_operation,
+            postprocessing_parameter=postprocessing_parameter,
         )
         from modelforge.utils.units import _convert
 

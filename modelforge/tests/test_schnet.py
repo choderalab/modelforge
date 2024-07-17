@@ -31,7 +31,7 @@ def initialize_model(
             {
                 "step": "from_atom_to_molecule",
                 "mode": "sum",
-                "in": "E_i",
+                "in": "per_atom_energy",
                 "index_key": "atomic_subsystem_indices",
                 "out": "E",
             }
@@ -45,11 +45,13 @@ def test_init():
 
     from modelforge.tests.test_models import load_configs
 
-    # read default parameters
-    config = load_configs(f"schnet_without_ase", "qm9")
-    # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
-    schnet = SchNet(**potential_parameter)
+    # load default parameters
+    config = load_configs(f"schnet", "qm9")
+    # initialize model
+    schnet = SchNet(
+        **config["potential"]["core_parameter"],
+        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+    )
     assert schnet is not None, "Schnet model should be initialized."
 
 
@@ -159,15 +161,24 @@ def test_compare_forward():
     # ---------------------------------------- #
     # test the implementation of the representation part of the PaiNN model
     # ---------------------------------------- #
-    from openff.units import unit
+    from modelforge.potential.schnet import SchNet
 
-    cutoff = unit.Quantity(5.0, unit.angstrom)
-    number_of_atom_features = 12
-    n_rbf = 5
-    nr_of_interactions = 3
+    from modelforge.tests.test_models import load_configs
+
+    # load default parameters
+    config = load_configs(f"schnet", "qm9")
+
+    # override default parameters
+    config["potential"]["core_parameter"]["number_of_atom_features"] = 12
+    config["potential"]["core_parameter"]["number_of_radial_basis_functions"] = 5
+    config["potential"]["core_parameter"]["number_of_filters"] = 12
+
     torch.manual_seed(1234)
-    modelforge_schnet = initialize_model(
-        cutoff, number_of_atom_features, n_rbf, nr_of_interactions
+
+    # initialize model
+    schnet = SchNet(
+        **config["potential"]["core_parameter"],
+        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
     ).double()
 
     # ------------------------------------ #
@@ -180,10 +191,10 @@ def test_compare_forward():
     spk_input = input["spk_methane_input"]
     model_input = input["modelforge_methane_input"]
 
-    modelforge_schnet.input_preparation._input_checks(model_input)
+    schnet.input_preparation._input_checks(model_input)
 
-    pairlist_output = modelforge_schnet.input_preparation.prepare_inputs(model_input)
-    prepared_input = modelforge_schnet.core_module._model_specific_input_preparation(
+    pairlist_output = schnet.input_preparation.prepare_inputs(model_input)
+    prepared_input = schnet.core_module._model_specific_input_preparation(
         model_input, pairlist_output
     )
 
@@ -202,31 +213,33 @@ def test_compare_forward():
 
     reference_phi_ij = torch.tensor(
         [
-            [[0.6828, 0.9920, 0.5302, 0.1043, 0.0075]],
-            [[0.6828, 0.9920, 0.5302, 0.1043, 0.0075]],
-            [[0.6828, 0.9920, 0.5302, 0.1043, 0.0075]],
-            [[0.6828, 0.9920, 0.5302, 0.1043, 0.0075]],
-            [[0.6828, 0.9920, 0.5302, 0.1043, 0.0075]],
-            [[0.3615, 0.9131, 0.8484, 0.2900, 0.0365]],
-            [[0.3615, 0.9130, 0.8484, 0.2900, 0.0365]],
-            [[0.3615, 0.9130, 0.8484, 0.2900, 0.0365]],
-            [[0.6828, 0.9920, 0.5302, 0.1043, 0.0075]],
-            [[0.3615, 0.9131, 0.8484, 0.2900, 0.0365]],
-            [[0.3615, 0.9131, 0.8484, 0.2900, 0.0365]],
-            [[0.3615, 0.9131, 0.8484, 0.2900, 0.0365]],
-            [[0.6828, 0.9920, 0.5302, 0.1043, 0.0075]],
-            [[0.3615, 0.9130, 0.8484, 0.2900, 0.0365]],
-            [[0.3615, 0.9131, 0.8484, 0.2900, 0.0365]],
-            [[0.3615, 0.9131, 0.8484, 0.2900, 0.0365]],
-            [[0.6828, 0.9920, 0.5302, 0.1043, 0.0075]],
-            [[0.3615, 0.9130, 0.8484, 0.2900, 0.0365]],
-            [[0.3615, 0.9131, 0.8484, 0.2900, 0.0365]],
-            [[0.3615, 0.9131, 0.8484, 0.2900, 0.0365]],
+            [0.6828, 0.9920, 0.5302, 0.1043, 0.0075],
+            [0.6828, 0.9920, 0.5302, 0.1043, 0.0075],
+            [0.6828, 0.9920, 0.5302, 0.1043, 0.0075],
+            [0.6828, 0.9920, 0.5302, 0.1043, 0.0075],
+            [0.6828, 0.9920, 0.5302, 0.1043, 0.0075],
+            [0.3615, 0.9131, 0.8484, 0.2900, 0.0365],
+            [0.3615, 0.9130, 0.8484, 0.2900, 0.0365],
+            [0.3615, 0.9130, 0.8484, 0.2900, 0.0365],
+            [0.6828, 0.9920, 0.5302, 0.1043, 0.0075],
+            [0.3615, 0.9131, 0.8484, 0.2900, 0.0365],
+            [0.3615, 0.9131, 0.8484, 0.2900, 0.0365],
+            [0.3615, 0.9131, 0.8484, 0.2900, 0.0365],
+            [0.6828, 0.9920, 0.5302, 0.1043, 0.0075],
+            [0.3615, 0.9130, 0.8484, 0.2900, 0.0365],
+            [0.3615, 0.9131, 0.8484, 0.2900, 0.0365],
+            [0.3615, 0.9131, 0.8484, 0.2900, 0.0365],
+            [0.6828, 0.9920, 0.5302, 0.1043, 0.0075],
+            [0.3615, 0.9130, 0.8484, 0.2900, 0.0365],
+            [0.3615, 0.9131, 0.8484, 0.2900, 0.0365],
+            [0.3615, 0.9131, 0.8484, 0.2900, 0.0365],
         ],
         dtype=torch.float64,
     )
-    calculated_phi_ij = modelforge_schnet.core_module.schnet_representation_module.radial_symmetry_function_module(
-        d_ij / 10
+    calculated_phi_ij = (
+        schnet.core_module.schnet_representation_module.radial_symmetry_function_module(
+            d_ij / 10
+        )
     )  # NOTE: converting to nm
 
     assert torch.allclose(reference_phi_ij.squeeze(1), calculated_phi_ij, atol=1e-3)
@@ -258,34 +271,27 @@ def test_compare_forward():
         ],
         dtype=torch.float64,
     )
-    calculated_fcut = (
-        modelforge_schnet.core_module.schnet_representation_module.cutoff_module(
-            d_ij / 10
-        )
+    calculated_fcut = schnet.core_module.schnet_representation_module.cutoff_module(
+        d_ij / 10
     )  # NOTE: converting to nm
     assert torch.allclose(reference_fcut, calculated_fcut, atol=1e-4)
 
     # ---------------------------------------- #
     # test forward pass
     # ---------------------------------------- #
-
-    # Check full pass
+    # reset
     torch.manual_seed(1234)
-    for i in range(nr_of_interactions):
-        modelforge_schnet.core_module.interaction_modules[
-            i
-        ].intput_to_feature.reset_parameters()
+    for i in range(3):
+        schnet.core_module.interaction_modules[i].intput_to_feature.reset_parameters()
         for j in range(2):
-            modelforge_schnet.core_module.interaction_modules[i].feature_to_output[
+            schnet.core_module.interaction_modules[i].feature_to_output[
                 j
             ].reset_parameters()
-            modelforge_schnet.core_module.interaction_modules[i].filter_network[
+            schnet.core_module.interaction_modules[i].filter_network[
                 j
             ].reset_parameters()
 
-    calculated_results = modelforge_schnet.core_module.forward(
-        model_input, pairlist_output
-    )
+    calculated_results = schnet.core_module.forward(model_input, pairlist_output)
     reference_results = load_precalculated_schnet_results()
     assert (
         reference_results["scalar_representation"].shape

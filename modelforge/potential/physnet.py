@@ -5,7 +5,6 @@ import torch
 from loguru import logger as log
 from openff.units import unit
 from torch import nn
-from torch_scatter import scatter_add
 from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
 
 from modelforge.potential.utils import NeuralNetworkData
@@ -295,7 +294,10 @@ class PhysNetInteractionModule(nn.Module):
         # Multiply the gathered features by g
         x_j_modulated = x_j * g
         # Aggregate modulated contributions for each atom i
-        x_j_prime = scatter_add(x_j_modulated, idx_i, dim=0, dim_size=x.shape[0])
+        x_j_prime = torch.zeros_like(x_i)
+        x_j_prime.scatter_add_(
+            0, idx_i.unsqueeze(-1).expand(-1, x_j_modulated.size(-1)), x_j_modulated
+        )
 
         # Draft proto message v_tilde
         m = x_i + x_j_prime
@@ -563,7 +565,7 @@ class PhysNetCore(CoreNetwork):
         q_i = prediction_i_shifted_scaled[:, 1]  # shape(nr_of_atoms, 1)
 
         output = {
-            "E_i": E_i.contiguous(),  # reshape memory mapping for JAX/dlpack
+            "per_atom_energy": E_i.contiguous(),  # reshape memory mapping for JAX/dlpack
             "q_i": q_i.contiguous(),
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
             "atomic_numbers": data.atomic_numbers,
@@ -585,8 +587,7 @@ class PhysNet(BaseNetwork):
         number_of_radial_basis_functions: int,
         number_of_interaction_residual: int,
         number_of_modules: int,
-        processing_operation: List[Dict[str, str]],
-        readout_operation: List[Dict[str, str]],
+        postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
         """
@@ -597,8 +598,7 @@ class PhysNet(BaseNetwork):
         """
         super().__init__(
             dataset_statistic=dataset_statistic,
-            processing_operation=processing_operation,
-            readout_operation=readout_operation,
+            postprocessing_parameter=postprocessing_parameter,
         )
         from modelforge.utils.units import _convert
 

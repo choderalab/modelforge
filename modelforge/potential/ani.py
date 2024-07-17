@@ -438,10 +438,29 @@ class ANI2xCore(CoreNetwork):
         angle_sections: int = 4,
     ) -> None:
         """
-        Initialize the ANI NNP architecture.
-
+        ANI2x Neural Network Model.
         Parameters
         ----------
+        radial_max_distance : Union[unit.Quantity, str]
+            The maximum radial distance for the radial basis functions.
+        radial_min_distance : Union[unit.Quantity, str]
+            The minimum radial distance for the radial basis functions.
+        number_of_radial_basis_functions : int
+            The number of radial basis functions to use.
+        angular_max_distance : Union[unit.Quantity, str]
+            The maximum angular distance for the angular basis functions.
+        angular_min_distance : Union[unit.Quantity, str]
+            The minimum angular distance for the angular basis functions.
+        angular_dist_divisions : int
+            The number of divisions for the angular distance.
+        angle_sections : int
+            The number of angle sections to use.
+        processing_operation : List[Dict[str, str]]
+            A list of processing operations to apply to the input data.
+        readout_operation : List[Dict[str, str]]
+            A list of readout operations to apply to the output data.
+        dataset_statistic : Optional[Dict[str, float]], optional
+            Optional dataset statistics to use for normalization, by default None.
         """
         # number of elements in ANI2x
         self.num_species = 7
@@ -530,7 +549,7 @@ class ANI2xCore(CoreNetwork):
         E_i = self.interaction_modules(representation)
 
         return {
-            "E_i": E_i,
+            "per_atom_energy": E_i,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
 
@@ -548,14 +567,12 @@ class ANI2x(BaseNetwork):
         angular_min_distance: Union[unit.Quantity, str],
         angular_dist_divisions: int,
         angle_sections: int,
-        processing_operation: List[Dict[str, str]],
-        readout_operation: List[Dict[str, str]],
+        postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
         super().__init__(
-            processing_operation=processing_operation,
             dataset_statistic=dataset_statistic,
-            readout_operation=readout_operation,
+            postprocessing_parameter=postprocessing_parameter,
         )
 
         from modelforge.utils.units import _convert

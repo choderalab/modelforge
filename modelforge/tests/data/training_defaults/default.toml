@@ -20,17 +20,21 @@ cooldown = 5
 min_lr = 1e-8
 threshold = 0.1
 threshold_mode = "abs"
-monitor = "val/energy/rmse"
+monitor = "val/per_molecule_energy/rmse"
 interval = "epoch"
 
 [training.training_parameter.loss_parameter]
-loss_type = "EnergyAndForceLoss"
-include_force = true
-force_weight = 0.99
-energy_weight = 0.01
+loss_property = ['per_molecule_energy', 'per_atom_force'] # use .
+[training.training_parameter.loss_parameter.weight]
+per_molecule_energy = 0.999 #NOTE: reciprocal units
+per_atom_force = 0.001
 
 [training.early_stopping]
 verbose = true
-monitor = "val/energy/rmse"
+monitor = "val/per_molecule_energy/rmse"
 min_delta = 0.001
 patience = 50
+
+[training.splitting_strategy]
+name = "random_record_splitting_strategy"
+data_split = [0.8, 0.1, 0.1]

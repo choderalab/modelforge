@@ -845,7 +845,7 @@ def read_config_and_train(
     log.debug(f"Potential config: {potential_config}")
     log.debug(f"Dataset config: {dataset_config}")
     log.debug(f"Training config: {training_config}")
-    log.debug(f"Training config: {training_config}")
+    log.debug(f"Runtime config: {runtime_config}")
 
     # Call the perform_training function with extracted parameters
     perform_training(

@@ -76,8 +76,8 @@ import torch
 def test_error_calculation(single_batch_with_batchsize_16_with_force):
     # test the different Loss classes
     from modelforge.train.training import (
-        FromPerAtomToPerMoleculeError,
-        PerMoleculeError,
+        FromPerAtomToPerMoleculeMeanSquaredError,
+        PerMoleculeMeanSquaredError,
     )
 
     # generate data
@@ -90,7 +90,7 @@ def test_error_calculation(single_batch_with_batchsize_16_with_force):
     predicted_F = true_F + torch.rand_like(true_F) * 10
 
     # test error for property with shape (nr_of_molecules, 1)
-    error = PerMoleculeError()
+    error = PerMoleculeMeanSquaredError()
     E_error = error(predicted_E, true_E, data)
 
     # compare output (mean squared error scaled by number of atoms in the molecule)
@@ -103,7 +103,7 @@ def test_error_calculation(single_batch_with_batchsize_16_with_force):
     assert torch.allclose(E_error, reference_E_error)
 
     # test error for property with shape (nr_of_atoms, 3)
-    error = FromPerAtomToPerMoleculeError()
+    error = FromPerAtomToPerMoleculeMeanSquaredError()
     F_error = error(predicted_F, true_F, data)
 
     # compare error (mean squared error scaled by number of atoms in the molecule)
@@ -127,9 +127,7 @@ def test_error_calculation(single_batch_with_batchsize_16_with_force):
     assert torch.allclose(F_error, reference_F_error)
 
 
-@pytest.mark.skipif(
-    IN_GITHUB_ACTIONS, reason="Skipping this test on GitHub Actions"
-)
+@pytest.mark.skipif(IN_GITHUB_ACTIONS, reason="Skipping this test on GitHub Actions")
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 @pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_hypterparameter_tuning_with_ray(

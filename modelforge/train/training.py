@@ -6,9 +6,10 @@ from loguru import logger as log
 from modelforge.dataset.dataset import BatchData, NNPInput
 import torchmetrics
 from torch import nn
+from abc import ABC, abstractmethod
 
 
-class Error(nn.Module):
+class Error(nn.Module, ABC):
     """
     Class representing the error calculation for predicted and true values.
 
@@ -20,12 +21,21 @@ class Error(nn.Module):
             Scales the error by the number of atoms in the atomic subsystems.
     """
 
-    @staticmethod
+    @abstractmethod
     def calculate_error(
+        self, predicted: torch.Tensor, true: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Calculates the error between the predicted and true values
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def calculate_squared_error(
         predicted_tensor: torch.Tensor, reference_tensor: torch.Tensor
     ) -> torch.Tensor:
         """
-        Calculates the error between the predicted and true values.
+        Calculates the squared error between the predicted and true values.
 
         Parameters:
             predicted_tensor (torch.Tensor): The predicted values.
@@ -55,7 +65,7 @@ class Error(nn.Module):
         return scaled_by_number_of_atoms
 
 
-class FromPerAtomToPerMoleculeError(Error):
+class FromPerAtomToPerMoleculeMeanSquaredError(Error):
     """
     Calculates the per-atom error and aggregates it to per-molecule mean squared error.
     """
@@ -65,6 +75,16 @@ class FromPerAtomToPerMoleculeError(Error):
         Initializes the PerAtomToPerMoleculeError class.
         """
         super().__init__()
+
+    def calculate_error(
+        self,
+        per_atom_prediction: torch.Tensor,
+        per_atom_reference: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Computes the per-atom error.
+        """
+        return self.calculate_squared_error(per_atom_prediction, per_atom_reference)
 
     def forward(
         self,
@@ -113,7 +133,7 @@ class FromPerAtomToPerMoleculeError(Error):
         return torch.mean(per_molecule_square_error_scaled)
 
 
-class PerMoleculeError(Error):
+class PerMoleculeMeanSquaredError(Error):
     """
     Calculates the per-molecule mean squared error.
 
@@ -160,6 +180,16 @@ class PerMoleculeError(Error):
         # return the average
         return torch.mean(per_molecule_square_error_scaled)
 
+    def calculate_error(
+        self,
+        per_atom_prediction: torch.Tensor,
+        per_atom_reference: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Computes the per-atom error.
+        """
+        return self.calculate_squared_error(per_atom_prediction, per_atom_reference)
+
 
 class Loss(nn.Module):
     """
@@ -204,9 +234,9 @@ class Loss(nn.Module):
         for prop, w in weight.items():
             if prop in self._SUPPORTED_PROPERTIES:
                 if prop == "per_atom_force":
-                    self.loss[prop] = FromPerAtomToPerMoleculeError()
+                    self.loss[prop] = FromPerAtomToPerMoleculeMeanSquaredError()
                 else:
-                    self.loss[prop] = PerMoleculeError()
+                    self.loss[prop] = PerMoleculeMeanSquaredError()
                 self.register_buffer(prop, torch.tensor(w))
             else:
                 raise NotImplementedError(f"Loss type {prop} not implemented.")

@@ -79,6 +79,7 @@ def test_error_calculation(single_batch_with_batchsize_16_with_force):
         FromPerAtomToPerMoleculeError,
         PerMoleculeError,
     )
+
     # generate data
     data = single_batch_with_batchsize_16_with_force
     true_E = data.metadata.E
@@ -127,7 +128,7 @@ def test_error_calculation(single_batch_with_batchsize_16_with_force):
 
 
 @pytest.mark.skipif(
-    IN_GITHUB_ACTIONS, reason="Skipping this test on MacOS GitHub Actions"
+    IN_GITHUB_ACTIONS, reason="Skipping this test on GitHub Actions"
 )
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 @pytest.mark.parametrize("dataset_name", ["QM9"])
@@ -145,31 +146,21 @@ def test_hypterparameter_tuning_with_ray(
         training_defaults,
     )
 
-    training_path = resources.files(training_defaults) / "default.toml"
-    potential_path = resources.files(potential_defaults) / f"{model_name.lower()}.toml"
-    dataset_path = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
-    runtime_path = resources.files(training) / "runtime.toml"
+    config = load_configs(model_name, dataset_name)
 
-    config = return_toml_config(
-        training_path=training_path,
-        potential_path=potential_path,
-        dataset_path=dataset_path,
-        runtime_path=runtime_path,
-    )
+    # Extract parameters
+    potential_config = config["potential"]
+    training_config = config["training"]
+    dataset_config = config["dataset"]
+    runtime_config = config["runtime"]
 
     dm = datamodule_factory(dataset_name=dataset_name)
 
-    # Extract parameters
-    potential_parameter = config["potential"]["potential_parameter"]
-    training_parameter = config["training"]["training_parameter"]
-    # loss_config = config["training"]["training_parameter"]["loss_parameter"]
     # training model
     model = NeuralNetworkPotentialFactory.generate_model(
         use="training",
-        model_type=model_name,
-        # loss_parameter=loss_config,
-        model_parameter=potential_parameter,
-        training_parameter=training_parameter,
+        model_parameter=potential_config,
+        training_parameter=training_config["training_parameter"],
     )
 
     from modelforge.train.tuning import RayTuner

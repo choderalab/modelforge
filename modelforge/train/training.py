@@ -34,12 +34,7 @@ class Error(nn.Module):
         Returns:
             torch.Tensor: The calculated error.
         """
-        return (
-            torch.linalg.vector_norm(
-                predicted_tensor - reference_tensor, dim=1, keepdim=True
-            )
-            ** 2
-        )
+        return (predicted_tensor - reference_tensor).pow(2).sum(dim=1, keepdim=True)
 
     @staticmethod
     def scale_by_number_of_atoms(error, atomic_subsystem_counts) -> torch.Tensor:
@@ -990,7 +985,7 @@ def perform_training(
         version_select=version_select,
         local_cache_dir=local_cache_dir,
         splitting_strategy=REGISTERED_SPLITTING_STRATEGIES[splitting_strategy["name"]](
-            seed=splitting_strategy.get('splitting_seed', 42),
+            seed=splitting_strategy.get("splitting_seed", 42),
             split=splitting_strategy["data_split"],
         ),
     )

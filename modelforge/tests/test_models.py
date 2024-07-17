@@ -393,7 +393,7 @@ def test_forward_pass(
 
     output = model(nnp_input)
 
-    # test tat we get an energie per molecule
+    # test that we get an energie per molecule
     assert len(output["per_molecule_energy"]) == nr_of_mols
 
     # the batch consists of methane (CH4) and amamonium (NH3)

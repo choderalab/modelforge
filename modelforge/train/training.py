@@ -210,7 +210,7 @@ class Loss(nn.Module):
             if prop in self._SUPPORTED_PROPERTIES:
                 if prop == "per_atom_force":
                     self.loss[prop] = FromPerAtomToPerMoleculeError()
-                else:
+                elif prop == "per_molecule_energy":
                     self.loss[prop] = PerMoleculeError()
                 self.register_buffer(prop, torch.tensor(w))
             else:
@@ -487,7 +487,7 @@ class TrainingAdapter(pl.LightningModule):
         log.warning("Model does not implement _config_prior().")
         raise NotImplementedError()
 
-    def _log_metrics(
+    def _update_metrics(
         self,
         error_dict: Dict[str, torchmetrics.MetricCollection],
         predict_target: Dict[str, torch.Tensor],
@@ -539,8 +539,7 @@ class TrainingAdapter(pl.LightningModule):
         loss_dict = self.loss(predict_target, batch)
 
         # Update and log training error
-        if self.log_on_training_step:
-            self._log_metrics(self.train_error, predict_target)
+        self._update_metrics(self.train_error, predict_target)
 
         # log the loss
         for key, loss in loss_dict.items():
@@ -579,7 +578,7 @@ class TrainingAdapter(pl.LightningModule):
         # calculate the loss
         loss = self.loss(predict_target, batch)
         # log the loss
-        self._log_metrics(self.val_error, predict_target)
+        self._update_metrics(self.val_error, predict_target)
 
     @torch.enable_grad()
     def test_step(self, batch: "BatchData", batch_idx: int) -> None:
@@ -606,7 +605,7 @@ class TrainingAdapter(pl.LightningModule):
         # calculate energy and forces
         predict_target = self._get_predictions(batch)
         # Update and log metrics
-        self._log_metrics(self.test_error, predict_target)
+        self._update_metrics(self.test_error, predict_target)
 
     def on_train_epoch_end(self):
         """
@@ -640,21 +639,26 @@ class TrainingAdapter(pl.LightningModule):
             "MeanAbsoluteError": "mae",
             "MeanSquaredError": "rmse",
         }  # NOTE: MeanSquaredError(squared=False) is RMSE
+
         # Log accumulated training loss metrics
         metrics = {}
-        self.log_dict(metrics, on_epoch=True, prog_bar=True)
 
-        # Log all accumulated metrics for train, val, and test phases
+        # Log all accumulated metrics for train and val phases
         for phase, error_dict in [
             ("train", self.train_error),
             ("val", self.val_error),
-            ("test", self.test_error),
         ]:
+            # skip if log_on_training_step is not requested
+            if phase == "train" and not self.log_on_training_step:
+                continue
+            
             metrics = {}
             for property, metrics_dict in error_dict.items():
                 for name, metric in metrics_dict.items():
-                    metrics[f"{phase}/{property}/{conv[name]}"] = metric.compute()
+                    name = f"{phase}/{property}/{conv[name]}"
+                    metrics[name] = metric.compute()
                     metric.reset()
+            # log dict, print val metrics to console
             self.log_dict(metrics, on_epoch=True, prog_bar=(phase == "val"))
 
     def configure_optimizers(self) -> Dict[str, Any]:
@@ -784,7 +788,7 @@ def read_config_and_train(
     dataset_config = config["dataset"]
     training_config = config["training"]
     runtime_config = config["runtime"]
-    
+
     # Override config parameters with command-line arguments if provided
     if accelerator:
         runtime_config["accelerator"] = accelerator
@@ -795,7 +799,7 @@ def read_config_and_train(
     log.debug(f"Dataset config: {dataset_config}")
     log.debug(f"Training config: {training_config}")
     log.debug(f"Training config: {training_config}")
-    
+
     # Call the perform_training function with extracted parameters
     perform_training(
         potential_config=potential_config,

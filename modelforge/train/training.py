@@ -347,7 +347,7 @@ class TrainingAdapter(pl.LightningModule):
         self.loss = LossFactory.create_loss(**loss_parameter)
 
     def _register_metrics(self, loss_parameter: Dict[str, Any]):
-        
+
         from torchmetrics.regression import (
             MeanAbsoluteError,
             MeanSquaredError,
@@ -776,7 +776,7 @@ def read_config_and_train(
     """
     # Read the TOML file
     config = return_toml_config(
-        config_path, potential_path, dataset_path, training_path
+        config_path, potential_path, dataset_path, training_path, runtime_path
     )
 
     # Extract parameters
@@ -784,6 +784,7 @@ def read_config_and_train(
     dataset_config = config["dataset"]
     training_config = config["training"]
     runtime_config = config["runtime"]
+    
     # Override config parameters with command-line arguments if provided
     if accelerator:
         runtime_config["accelerator"] = accelerator
@@ -793,6 +794,8 @@ def read_config_and_train(
     log.debug(f"Potential config: {potential_config}")
     log.debug(f"Dataset config: {dataset_config}")
     log.debug(f"Training config: {training_config}")
+    log.debug(f"Training config: {training_config}")
+    
     # Call the perform_training function with extracted parameters
     perform_training(
         potential_config=potential_config,

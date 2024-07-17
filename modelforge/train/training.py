@@ -132,18 +132,6 @@ class FromPerAtomToPerMoleculeMeanSquaredError(Error):
         # return the average
         return torch.mean(per_molecule_square_error_scaled)
 
-        per_molecule_squared_error.scatter_add_(
-            0,
-            batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
-            per_atom_squared_error,
-        )
-        # divide by number of atoms
-        per_molecule_square_error_scaled = self.scale_by_number_of_atoms(
-            per_molecule_squared_error, batch.metadata.atomic_subsystem_counts
-        )
-        # return the average
-        return torch.mean(per_molecule_square_error_scaled)
-
 
 class PerMoleculeMeanSquaredError(Error):
     """
@@ -266,12 +254,15 @@ class Loss(nn.Module):
 
         Returns
         -------
-        torch.Tensor
-            The combined loss for the specified properties.
+        Dict{str, torch.Tensor]
+            Individual loss terms and the combined, total loss.
         """
-        loss = torch.tensor([0.0])
         # save the loss as a dictionary
-        r = {}
+        loss_dict = {}
+        # accumulate loss
+        loss = torch.tensor(
+            [0.0], dtype=batch.metadata.E.dtype, device=batch.metadata.E.device
+        )
         # iterate over loss properties
         for prop in self.loss_property:
             # calculate loss per property
@@ -281,12 +272,12 @@ class Loss(nn.Module):
             # add total loss
             loss = loss + loss_
             # save loss
-            r[f"{prop}/mse"] = loss_
+            loss_dict[f"{prop}/mse"] = loss_
 
         # add total loss to results dict and return
-        r["total_loss"] = loss
+        loss_dict["total_loss"] = loss
 
-        return r
+        return loss_dict
 
 
 class LossFactory(object):

@@ -1,7 +1,9 @@
 from typing import List, Tuple, Dict, Optional
 
 from modelforge.curation.curation_baseclass import *
-from retry import retry
+from modelforge.utils.io import import_, check_import
+
+retry = import_("retry").retry
 from tqdm import tqdm
 from openff.units import unit
 
@@ -161,9 +163,13 @@ class PhAlkEthOHCuration(DatasetCuration):
         -------
 
         """
-        from sqlitedict import SqliteDict
+
+        SqliteDict = import_("sqlitedict").SqliteDict
+        # from sqlitedict import SqliteDict
         from loguru import logger
-        from qcportal import PortalClient
+
+        PortalClient = import_("qcportal").PortalClient
+        # from qcportal import PortalClient
 
         dataset_type = "optimization"
         client = PortalClient(
@@ -255,7 +261,8 @@ class PhAlkEthOHCuration(DatasetCuration):
             total charge of the molecule (in elementary charge).
         """
 
-        from rdkit import Chem
+        Chem = import_("rdkit.Chem")
+        # from rdkit import Chem
 
         rdmol = Chem.MolFromSmiles(smiles, sanitize=False)
         total_charge = sum(atom.GetFormalCharge() for atom in rdmol.GetAtoms())
@@ -291,9 +298,12 @@ class PhAlkEthOHCuration(DatasetCuration):
         """
         from tqdm import tqdm
         import numpy as np
-        from sqlitedict import SqliteDict
+
+        SqliteDict = import_("sqlitedict").SqliteDict
+        # from sqlitedict import SqliteDict
         from loguru import logger
-        import qcelemental as qcel
+
+        qcel = import_("qcelemental")
         from numpy import newaxis
 
         for filename, dataset_name in zip(filenames, dataset_names):
@@ -308,7 +318,6 @@ class PhAlkEthOHCuration(DatasetCuration):
                 db_keys = list(db_default.keys())
 
                 for key in db_keys:
-
                     if db_default[key][0] == "complete":
                         non_error_keys.append(key)
             print(len(non_error_keys))

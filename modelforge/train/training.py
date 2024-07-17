@@ -6,9 +6,10 @@ from loguru import logger as log
 from modelforge.dataset.dataset import BatchData, NNPInput
 import torchmetrics
 from torch import nn
+from abc import ABC, abstractmethod
 
 
-class Error(nn.Module):
+class Error(nn.Module, ABC):
     """
     Class representing the error calculation for predicted and true values.
 
@@ -20,12 +21,21 @@ class Error(nn.Module):
             Scales the error by the number of atoms in the atomic subsystems.
     """
 
-    @staticmethod
+    @abstractmethod
     def calculate_error(
+        self, predicted: torch.Tensor, true: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Calculates the error between the predicted and true values
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def calculate_squared_error(
         predicted_tensor: torch.Tensor, reference_tensor: torch.Tensor
     ) -> torch.Tensor:
         """
-        Calculates the error between the predicted and true values.
+        Calculates the squared error between the predicted and true values.
 
         Parameters:
             predicted_tensor (torch.Tensor): The predicted values.
@@ -34,12 +44,7 @@ class Error(nn.Module):
         Returns:
             torch.Tensor: The calculated error.
         """
-        return (
-            torch.linalg.vector_norm(
-                predicted_tensor - reference_tensor, dim=1, keepdim=True
-            )
-            ** 2
-        )
+        return (predicted_tensor - reference_tensor).pow(2).sum(dim=1, keepdim=True)
 
     @staticmethod
     def scale_by_number_of_atoms(error, atomic_subsystem_counts) -> torch.Tensor:
@@ -60,7 +65,7 @@ class Error(nn.Module):
         return scaled_by_number_of_atoms
 
 
-class FromPerAtomToPerMoleculeError(Error):
+class FromPerAtomToPerMoleculeMeanSquaredError(Error):
     """
     Calculates the per-atom error and aggregates it to per-molecule mean squared error.
     """
@@ -70,6 +75,16 @@ class FromPerAtomToPerMoleculeError(Error):
         Initializes the PerAtomToPerMoleculeError class.
         """
         super().__init__()
+
+    def calculate_error(
+        self,
+        per_atom_prediction: torch.Tensor,
+        per_atom_reference: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Computes the per-atom error.
+        """
+        return self.calculate_squared_error(per_atom_prediction, per_atom_reference)
 
     def forward(
         self,
@@ -117,8 +132,19 @@ class FromPerAtomToPerMoleculeError(Error):
         # return the average
         return torch.mean(per_molecule_square_error_scaled)
 
+        per_molecule_squared_error.scatter_add_(
+            0,
+            batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
+            per_atom_squared_error,
+        )
+        # divide by number of atoms
+        per_molecule_square_error_scaled = self.scale_by_number_of_atoms(
+            per_molecule_squared_error, batch.metadata.atomic_subsystem_counts
+        )
+        # return the average
+        return torch.mean(per_molecule_square_error_scaled)
 
-class PerMoleculeError(Error):
+class PerMoleculeMeanSquaredError(Error):
     """
     Calculates the per-molecule mean squared error.
 
@@ -164,6 +190,16 @@ class PerMoleculeError(Error):
 
         # return the average
         return torch.mean(per_molecule_square_error_scaled)
+
+    def calculate_error(
+        self,
+        per_atom_prediction: torch.Tensor,
+        per_atom_reference: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Computes the per-atom error.
+        """
+        return self.calculate_squared_error(per_atom_prediction, per_atom_reference)
 
 
 class Loss(nn.Module):
@@ -347,7 +383,6 @@ class TrainingAdapter(pl.LightningModule):
         self.loss = LossFactory.create_loss(**loss_parameter)
 
     def _register_metrics(self, loss_parameter: Dict[str, Any]):
-
         from torchmetrics.regression import (
             MeanAbsoluteError,
             MeanSquaredError,
@@ -891,6 +926,10 @@ def log_training_arguments(
     else:
         log.info(f"Removing self energies: {remove_self_energies}")
 
+    splitting_strategy = training_config["splitting_strategy"]["name"]
+    data_split = training_config["splitting_strategy"]["data_split"]
+    log.info(f"Using splitting strategy: {splitting_strategy} with split: {data_split}")
+
     early_stopping_config = training_config.get("early_stopping", None)
     if early_stopping_config is None:
         log.info(f"Using default: No early stopping performed")
@@ -950,8 +989,8 @@ def perform_training(
     Trainer
     """
 
-    from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
-    from modelforge.dataset.utils import RandomRecordSplittingStrategy
+    from pytorch_lightning.loggers import TensorBoardLogger
+    from modelforge.dataset.utils import REGISTERED_SPLITTING_STRATEGIES
     from lightning import Trainer
     from modelforge.potential import NeuralNetworkPotentialFactory
     from modelforge.dataset.dataset import DataModule
@@ -981,6 +1020,7 @@ def perform_training(
 
     version_select = dataset_config.get("version_select", "latest")
     accelerator = runtime_config.get("accelerator", "cpu")
+    splitting_strategy = training_config["splitting_strategy"]
     nr_of_epochs = runtime_config.get("nr_of_epochs", 10)
     num_nodes = runtime_config.get("num_nodes", 1)
     devices = runtime_config.get("devices", 1)
@@ -1009,10 +1049,13 @@ def perform_training(
     dm = DataModule(
         name=dataset_name,
         batch_size=batch_size,
-        splitting_strategy=RandomRecordSplittingStrategy(),
         remove_self_energies=remove_self_energies,
         version_select=version_select,
         local_cache_dir=local_cache_dir,
+        splitting_strategy=REGISTERED_SPLITTING_STRATEGIES[splitting_strategy["name"]](
+            seed=splitting_strategy.get("splitting_seed", 42),
+            split=splitting_strategy["data_split"],
+        ),
     )
     dm.prepare_data()
     dm.setup()

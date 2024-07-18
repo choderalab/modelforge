@@ -22,7 +22,6 @@ calculate_molecular_self_energy = true
 dataset_name = "QM9"
 
 [training]
-nr_of_epochs = 2
 save_dir = "test"
 experiment_name = "your_experiment_name"
 accelerator = "cpu"
@@ -73,3 +72,4 @@ accelerator = "cpu"
 num_nodes = 1
 devices = 1                 #[0,1,2,3]
 local_cache_dir = "./cache"
+nr_of_epochs = 10

@@ -1046,7 +1046,7 @@ def perform_training(
     if training_config["experiment_logger"]["logger_name"].lower() == "tensorboard":
         logger = TensorBoardLogger(save_dir, name=experiment_name)
     elif training_config["experiment_logger"]["logger_name"].lower() == "wandb":
-        logger = WandbLogger(save_dir=save_dir, log_model="all", name=experiment_name)
+        logger = WandbLogger(save_dir=save_dir, log_model=True, name=experiment_name)
 
     else:
         raise ValueError(f"Unknown logger name: {training_config['logger_name']}")
@@ -1100,6 +1100,7 @@ def perform_training(
             StochasticWeightAveraging(**stochastic_weight_averaging_config)
         )
     if early_stopping_config:
+        log.warning("No early stopping is defined. Do you have resources to waste?")
         callbacks.append(EarlyStopping(**early_stopping_config))
 
     from lightning.pytorch.callbacks import ModelCheckpoint
@@ -1107,7 +1108,7 @@ def perform_training(
     checkpoint_callback = ModelCheckpoint(
         save_top_k=2,
         monitor="val/per_molecule_energy/rmse",
-        filename="best_{potential_name}-{dataset_name}-{epoch:02d}-{val_loss:.2f}",
+        filename="best_model",
     )
 
     callbacks.append(checkpoint_callback)

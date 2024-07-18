@@ -1015,7 +1015,7 @@ def perform_training(
         training_config["experiment_name"] = (
             experiment_name  # update the save_dir in training_config
         )
-    experiment_name = runtime_config.get("experiment_name", "exp")
+
     model_name = potential_config["model_name"]
     dataset_name = dataset_config["dataset_name"]
 

@@ -877,7 +877,7 @@ def log_training_arguments(
     else:
         log.info(f"Saving logs to custom location: {save_dir}")
 
-    experiment_name = training_config.get("experiment_name", "exp")
+    experiment_name = runtime_config.get("experiment_name", "exp")
     if experiment_name == "experiment_name":
         log.info(f"Saving logs in default dir: {experiment_name}")
     else:
@@ -895,12 +895,12 @@ def log_training_arguments(
     else:
         log.info(f"Using cache directory: {local_cache_dir}")
 
-    accelerator = training_config.get("accelerator", "cpu")
+    accelerator = runtime_config.get("accelerator", "cpu")
     if accelerator == "cpu":
         log.info(f"Using default accelerator: {accelerator}")
     else:
         log.info(f"Using accelerator: {accelerator}")
-    nr_of_epochs = runtime_config.get("nr_of_epochs", 10)
+    nr_of_epochs = training_config.get("nr_of_epochs", 10)
     if nr_of_epochs == 10:
         log.info(f"Using default number of epochs: {nr_of_epochs}")
     else:

@@ -870,7 +870,8 @@ def log_training_arguments(
         runtime_config: Dict[str, Any]
             config for the runtime
     """
-    save_dir = training_config.get("save_dir", "lightning_logs")
+
+    save_dir = runtime_config.get("save_dir", "lightning_logs")
     if save_dir == "lightning_logs":
         log.info(f"Saving logs to default location: {save_dir}")
     else:

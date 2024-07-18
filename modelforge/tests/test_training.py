@@ -15,7 +15,7 @@ def load_configs(model_name: str, dataset_name: str):
         potential_defaults,
         training_defaults,
         dataset_defaults,
-        training,
+        runtime_defaults,
     )
     from importlib import resources
     from modelforge.train.training import return_toml_config
@@ -23,7 +23,7 @@ def load_configs(model_name: str, dataset_name: str):
     potential_path = resources.files(potential_defaults) / f"{model_name.lower()}.toml"
     dataset_path = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
     training_path = resources.files(training_defaults) / "default.toml"
-    runtime_path = resources.files(training) / "runtime.toml"
+    runtime_path = resources.files(runtime_defaults) / "runtime.toml"
     return return_toml_config(
         potential_path=potential_path,
         dataset_path=dataset_path,

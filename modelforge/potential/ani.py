@@ -247,7 +247,9 @@ class ANIRepresentation(nn.Module):
     ) -> Dict[str, torch.tensor]:
         radial_feature_vector = radial_feature_vector.squeeze(1)
         number_of_atoms = data.number_of_atoms
-        radial_sublength = self.radial_symmetry_functions.number_of_radial_basis_functions
+        radial_sublength = (
+            self.radial_symmetry_functions.number_of_radial_basis_functions
+        )
         radial_length = radial_sublength * self.nr_of_supported_elements
 
         radial_aev = radial_feature_vector.new_zeros(
@@ -570,12 +572,16 @@ class ANI2x(BaseNetwork):
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
+
+        from modelforge.utils.units import _convert
+
+        self.only_unique_pairs = True  # NOTE: need to be set before super().__init__
+
         super().__init__(
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=postprocessing_parameter,
+            cutoff=_convert(radial_max_distance),
         )
-
-        from modelforge.utils.units import _convert
 
         self.core_module = ANI2xCore(
             _convert(radial_max_distance),
@@ -585,11 +591,6 @@ class ANI2x(BaseNetwork):
             _convert(angular_min_distance),
             angular_dist_divisions,
             angle_sections,
-        )
-        self.only_unique_pairs = True  # NOTE: for pairlist
-        self.input_preparation = InputPreparation(
-            cutoff=_convert(radial_max_distance),
-            only_unique_pairs=self.only_unique_pairs,
         )
 
     def _config_prior(self):

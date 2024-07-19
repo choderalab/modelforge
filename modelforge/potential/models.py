@@ -779,7 +779,6 @@ class PostProcessing(torch.nn.Module):
             CalculateAtomicSelfEnergy,
         )
 
-
         for property, operations in postprocessing_parameter.items():
             # register properties for which postprocessing should be performed
             if property.lower() in self._SUPPORTED_PROPERTIES:
@@ -788,7 +787,7 @@ class PostProcessing(torch.nn.Module):
                 raise ValueError(
                     f"Property {property} is not supported. Supported properties are {self._SUPPORTED_PROPERTIES}"
                 )
-    
+
             # register operations that are performed for the property
             postprocessing_sequence = torch.nn.Sequential()
             prostprocessing_sequence_names = []
@@ -889,7 +888,11 @@ class PostProcessing(torch.nn.Module):
 
 class BaseNetwork(Module):
     def __init__(
-        self, *, postprocessing_parameter: Dict[str, Dict[str, bool]], dataset_statistic
+        self,
+        *,
+        postprocessing_parameter: Dict[str, Dict[str, bool]],
+        dataset_statistic,
+        cutoff: unit.Quantity,
     ):
         """
         The BaseNetwork wraps the input preparation (including pairlist calculation, d_ij and r_ij calculation), the actual model as well as the output preparation in a wrapper class.
@@ -902,8 +905,19 @@ class BaseNetwork(Module):
         """
 
         super().__init__()
+        from modelforge.utils.units import _convert
+
         self.postprocessing = PostProcessing(
             postprocessing_parameter, dataset_statistic
+        )
+
+        # check if self.only_unique_pairs is set in child class
+        if not hasattr(self, "only_unique_pairs"):
+            raise RuntimeError(
+                "The only_unique_pairs attribute is not set in the child class. Please set it to True or False before calling super().__init__."
+            )
+        self.input_preparation = InputPreparation(
+            cutoff=_convert(cutoff), only_unique_pairs=self.only_unique_pairs
         )
 
     def load_state_dict(
@@ -949,6 +963,7 @@ class BaseNetwork(Module):
         super().load_state_dict(filtered_state_dict, strict=strict, assign=assign)
 
     def prepare_input(self, data):
+
         self.input_preparation._input_checks(data)
         return self.input_preparation.prepare_inputs(data)
 

@@ -206,7 +206,7 @@ class SchNetCore(CoreNetwork):
         E_i = self.energy_layer(x).squeeze(1)
 
         return {
-            'per_atom_energy': E_i,
+            "per_atom_energy": E_i,
             "scalar_representation": x,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
@@ -297,7 +297,7 @@ class SchNETInteractionModule(nn.Module):
         # Perform continuous-filter convolution
         x_j = x[idx_j]
         x_ij = x_j * W_ij
-        
+
         out = torch.zeros_like(x)
         out.scatter_add_(0, idx_i.unsqueeze(-1).expand_as(x_ij), x_ij)
 
@@ -396,11 +396,15 @@ class SchNet(BaseNetwork):
         cutoff : openff.units.unit.Quantity, default=5*unit.angstrom
             The cutoff distance for interactions.
         """
+        from modelforge.utils.units import _convert
+
+        self.only_unique_pairs = False  # NOTE: need to be set before super().__init__
+
         super().__init__(
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=postprocessing_parameter,
+            cutoff=_convert(cutoff),
         )
-        from modelforge.utils.units import _convert
 
         self.core_module = SchNetCore(
             max_Z=max_Z,
@@ -409,10 +413,6 @@ class SchNet(BaseNetwork):
             number_of_interaction_modules=number_of_interaction_modules,
             number_of_filters=number_of_filters,
             shared_interactions=shared_interactions,
-        )
-        self.only_unique_pairs = False  # NOTE: for pairlist
-        self.input_preparation = InputPreparation(
-            cutoff=_convert(cutoff), only_unique_pairs=self.only_unique_pairs
         )
 
     def _config_prior(self):

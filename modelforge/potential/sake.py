@@ -4,7 +4,7 @@ import torch.nn as nn
 from loguru import logger as log
 from typing import Dict, Tuple
 from openff.units import unit
-from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
+from .models import ComputeInteractingAtomPairs, NNPInput, BaseNetwork, CoreNetwork
 
 from .models import PairListOutputs
 from .utils import (
@@ -323,9 +323,9 @@ class SAKEInteraction(nn.Module):
             Intermediate edge features. Shape [nr_pairs, nr_edge_basis].
         """
         h_ij_cat = torch.cat([h_i_by_pair, h_j_by_pair], dim=-1)
-        h_ij_filtered = self.radial_symmetry_function_module(d_ij.unsqueeze(-1)).squeeze(-2) * self.edge_mlp_in(
-            h_ij_cat
-        )
+        h_ij_filtered = self.radial_symmetry_function_module(
+            d_ij.unsqueeze(-1)
+        ).squeeze(-2) * self.edge_mlp_in(h_ij_cat)
         return self.edge_mlp_out(
             torch.cat([h_ij_cat, h_ij_filtered, d_ij.unsqueeze(-1)], dim=-1)
         )
@@ -559,6 +559,7 @@ class SAKE(BaseNetwork):
         epsilon: float = 1e-8,
     ):
         from modelforge.utils.units import _convert
+
         self.only_unique_pairs = False  # NOTE: for pairlist
         super().__init__(
             dataset_statistic=dataset_statistic,
@@ -575,7 +576,6 @@ class SAKE(BaseNetwork):
             cutoff=_convert(cutoff),
             epsilon=epsilon,
         )
-
 
     def _config_prior(self):
         log.info("Configuring SAKE model hyperparameter prior distribution")

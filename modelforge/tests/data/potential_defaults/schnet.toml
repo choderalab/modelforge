@@ -9,7 +9,7 @@ cutoff = "5.0 angstrom"
 number_of_interaction_modules = 3
 number_of_filters = 32
 shared_interactions = false
-embed = ['atomic_number', 'total_charge']
+properties_to_embed = ['atomic_number', 'total_charge']
 
 [potential.postprocessing_parameter]
 [potential.postprocessing_parameter.per_atom_energy]

@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from modelforge.dataset.dataset import NNPInput
 
 from modelforge.potential.utils import NeuralNetworkData
-from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
+from .models import ComputeInteractingAtomPairs, NNPInput, BaseNetwork, CoreNetwork
 
 
 @dataclass
@@ -86,13 +86,14 @@ class SchnetNeuralNetworkData(NeuralNetworkData):
 class SchNetCore(CoreNetwork):
     def __init__(
         self,
-        max_Z: int = 100,
-        number_of_atom_features: int = 64,
-        number_of_radial_basis_functions: int = 20,
-        number_of_interaction_modules: int = 3,
-        number_of_filters: int = 64,
-        shared_interactions: bool = False,
-        cutoff: unit.Quantity = 5.0 * unit.angstrom,
+        max_Z: int,
+        number_of_atom_features: int,
+        number_of_radial_basis_functions: int,
+        number_of_interaction_modules: int,
+        number_of_filters: int,
+        shared_interactions: bool,
+        properties_to_embed: List[str],
+        cutoff: unit.Quantity,
     ) -> None:
         """
         Initialize the SchNet class.
@@ -107,6 +108,7 @@ class SchNetCore(CoreNetwork):
         number_of_interaction_modules : int, default=2
         cutoff : openff.units.unit.Quantity, default=5*unit.angstrom
             The cutoff distance for interactions.
+        properties_to_embed : List[str]
         """
         from .utils import Dense, ShiftedSoftplus
 
@@ -119,6 +121,11 @@ class SchNetCore(CoreNetwork):
         # embedding
         from modelforge.potential.utils import Embedding
 
+        if len(properties_to_embed) == 1:
+
+            self.embedding_contraction = Dense(
+                number_of_atom_features, self.number_of_filters
+            )
         self.embedding_module = Embedding(max_Z, number_of_atom_features)
 
         # Initialize representation block
@@ -375,6 +382,7 @@ class SchNet(BaseNetwork):
         cutoff: Union[unit.Quantity, str],
         number_of_filters: int,
         shared_interactions: bool,
+        properties_to_embed: List[str],
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
@@ -413,6 +421,8 @@ class SchNet(BaseNetwork):
             number_of_interaction_modules=number_of_interaction_modules,
             number_of_filters=number_of_filters,
             shared_interactions=shared_interactions,
+            cutoff=cutoff,
+            properties_to_embed=properties_to_embed,
         )
 
     def _config_prior(self):

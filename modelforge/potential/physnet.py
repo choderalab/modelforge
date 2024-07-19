@@ -5,7 +5,7 @@ import torch
 from loguru import logger as log
 from openff.units import unit
 from torch import nn
-from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
+from .models import ComputeInteractingAtomPairs, NNPInput, BaseNetwork, CoreNetwork
 
 from modelforge.potential.utils import NeuralNetworkData
 
@@ -574,7 +574,7 @@ class PhysNetCore(CoreNetwork):
         return output
 
 
-from .models import InputPreparation, NNPInput, BaseNetwork
+from .models import ComputeInteractingAtomPairs, NNPInput, BaseNetwork
 from typing import List
 
 
@@ -597,6 +597,7 @@ class PhysNet(BaseNetwork):
 
         """
         from modelforge.utils.units import _convert
+
         self.only_unique_pairs = False  # NOTE: for pairlist
         super().__init__(
             dataset_statistic=dataset_statistic,

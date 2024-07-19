@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from loguru import logger as log
 from openff.units import unit
-from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
+from .models import ComputeInteractingAtomPairs, NNPInput, BaseNetwork, CoreNetwork
 
 from .utils import Dense
 
@@ -488,7 +488,7 @@ class PaiNNMixing(nn.Module):
         return q, mu
 
 
-from .models import InputPreparation, NNPInput, BaseNetwork
+from .models import ComputeInteractingAtomPairs, NNPInput, BaseNetwork
 from typing import List
 
 

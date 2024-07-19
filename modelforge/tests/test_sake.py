@@ -116,13 +116,15 @@ def test_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize_64):
     perturbed_methane_input.positions = torch.matmul(methane.positions, rotation_matrix)
 
     # prepare reference and perturbed inputs
-    pairlist_output = sake.input_preparation.prepare_inputs(methane)
+    pairlist_output = sake.compute_interacting_pairs.prepare_inputs(methane)
     reference_prepared_input = sake.core_module._model_specific_input_preparation(
         methane, pairlist_output
     )
     reference_v_torch = torch.randn_like(reference_prepared_input.positions)
 
-    pairlist_output = sake.input_preparation.prepare_inputs(perturbed_methane_input)
+    pairlist_output = sake.compute_interacting_pairs.prepare_inputs(
+        perturbed_methane_input
+    )
     perturbed_prepared_input = sake.core_module._model_specific_input_preparation(
         perturbed_methane_input, pairlist_output
     )
@@ -246,7 +248,7 @@ def test_radial_symmetry_function_against_reference():
 
     # Generate random input data in JAX
     d_ij_jax = jax.random.uniform(key, (nr_atoms, nr_atoms, 1))
-    d_ij = torch.from_numpy(onp.array(d_ij_jax)).reshape((nr_atoms ** 2, 1))
+    d_ij = torch.from_numpy(onp.array(d_ij_jax)).reshape((nr_atoms**2, 1))
 
     mf_rbf = radial_symmetry_function_module(d_ij)
     variables = ref_radial_basis_module.init(key, d_ij_jax)
@@ -265,7 +267,7 @@ def test_radial_symmetry_function_against_reference():
     assert torch.allclose(
         mf_rbf,
         torch.from_numpy(onp.array(ref_rbf)).reshape(
-            nr_atoms ** 2, number_of_radial_basis_functions
+            nr_atoms**2, number_of_radial_basis_functions
         ),
     )
 
@@ -441,7 +443,7 @@ def test_model_against_reference(single_batch_with_batchsize_1):
 
     # get methane input
     methane = single_batch_with_batchsize_1.nnp_input
-    pairlist_output = mf_sake.input_preparation.prepare_inputs(methane)
+    pairlist_output = mf_sake.compute_interacting_pairs.prepare_inputs(methane)
     prepared_methane = mf_sake.core_module._model_specific_input_preparation(
         methane, pairlist_output
     )

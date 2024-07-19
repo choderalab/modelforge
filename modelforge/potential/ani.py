@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, Tuple
-from .models import InputPreparation, BaseNetwork, CoreNetwork
+from .models import ComputeInteractingAtomPairs, BaseNetwork, CoreNetwork
 
 import torch
 from loguru import logger as log

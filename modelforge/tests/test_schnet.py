@@ -191,9 +191,9 @@ def test_compare_forward():
     spk_input = input["spk_methane_input"]
     model_input = input["modelforge_methane_input"]
 
-    schnet.input_preparation._input_checks(model_input)
+    schnet.compute_interacting_pairs._input_checks(model_input)
 
-    pairlist_output = schnet.input_preparation.prepare_inputs(model_input)
+    pairlist_output = schnet.compute_interacting_pairs.prepare_inputs(model_input)
     prepared_input = schnet.core_module._model_specific_input_preparation(
         model_input, pairlist_output
     )

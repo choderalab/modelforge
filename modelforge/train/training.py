@@ -848,7 +848,7 @@ def log_training_arguments(
     else:
         log.info(f"Saving logs to custom location: {save_dir}")
 
-    experiment_name = training_config.get("experiment_name", "exp")
+    experiment_name = runtime_config["experiment_name"]
     if experiment_name == "experiment_name":
         log.info(f"Saving logs in default dir: {experiment_name}")
     else:
@@ -974,7 +974,7 @@ def perform_training(
     if save_dir == "lightning_logs":
         log.info(f"Saving logs to default location: {save_dir}")
 
-    experiment_name = training_config.get("experiment_name", "exp")
+    experiment_name = training_config["experiment_name"]
     if experiment_name == "{model_name}_{dataset_name}":
         experiment_name = (
             f"{potential_config['model_name']}_{dataset_config['dataset_name']}"

@@ -74,6 +74,7 @@ class NNPInput:
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
     pair_list: Optional[torch.Tensor] = None
+    partial_charge: Optional[torch.Tensor] = None
 
     def to(
         self,
@@ -88,8 +89,10 @@ class NNPInput:
             self.positions = self.positions.to(device)
             self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(device)
             self.total_charge = self.total_charge.to(device)
-            if self.pair_list is not None:
-                self.pair_list = self.pair_list.to(device)
+            self.pair_list = self.pair_list.to(device) if self.pair_list else None
+            self.partial_charge = (
+                self.partial_charge.to(device) if self.partial_charge else None
+            )
         if dtype:
             self.positions = self.positions.to(dtype)
         return self
@@ -97,6 +100,10 @@ class NNPInput:
     def __post_init__(self):
         # Set dtype and convert units if necessary
         self.atomic_numbers = self.atomic_numbers.to(torch.int32)
+
+        self.partial_charge = (
+            self.atomic_numbers.to(torch.int32) if self.partial_charge else None
+        )
         self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(torch.int32)
         self.total_charge = self.total_charge.to(torch.int32)
 
@@ -673,9 +680,9 @@ class HDF5Dataset:
 
                         if all(property_found):
                             # we want to exclude conformers with NaN values for any property of interest
-                            configs_nan_by_prop: Dict[
-                                str, np.ndarray
-                            ] = OrderedDict()  # ndarray.size (n_configs, )
+                            configs_nan_by_prop: Dict[str, np.ndarray] = (
+                                OrderedDict()
+                            )  # ndarray.size (n_configs, )
                             for value in list(series_mol_data.keys()) + list(
                                 series_atom_data.keys()
                             ):

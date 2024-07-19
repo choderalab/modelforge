@@ -253,14 +253,15 @@ class Dense(nn.Linear):
         bias_init : Callable, optional
             Function to initialize the bias. Default is zeros_.
         """
-
-        super().__init__(in_features, out_features, bias)
-
+        # NOTE: these two variables need to come before the initi
         self.weight_init_distribution = weight_init
         self.bias_init_distribution = bias_init
+
+        super().__init__(
+            in_features, out_features, bias
+        )  # NOTE: the `reseet_paramters` method is called in the super class
+
         self.activation = activation or nn.Identity()
-        # initialize weights and bias from passed distributions
-        self.reset_parameters()
 
     def reset_parameters(self):
         """

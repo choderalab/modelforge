@@ -871,17 +871,11 @@ def log_training_arguments(
             config for the runtime
     """
 
-    save_dir = runtime_config.get("save_dir", "lightning_logs")
-    if save_dir == "lightning_logs":
-        log.info(f"Saving logs to default location: {save_dir}")
-    else:
-        log.info(f"Saving logs to custom location: {save_dir}")
+    save_dir = runtime_config["save_dir"]
+    log.info(f"Saving logs to location: {save_dir}")
 
-    experiment_name = runtime_config.get("experiment_name", "exp")
-    if experiment_name == "experiment_name":
-        log.info(f"Saving logs in default dir: {experiment_name}")
-    else:
-        log.info(f"Saving logs in custom dir: {experiment_name}")
+    experiment_name = runtime_config["experiment_name"]
+    log.info(f"Saving logs in dir: {experiment_name}")
 
     version_select = dataset_config.get("version_select", "latest")
     if version_select == "latest":
@@ -1003,17 +997,13 @@ def perform_training(
     # NOTE --------------------------------------- NOTE #
     # FIXME TODO: move this to a dataclass and control default
     # behavior from there this current approach is hacky and error prone
-    save_dir = runtime_config.get("save_dir", "lightning_logs")
-    if save_dir == "lightning_logs":
-        log.info(f"Saving logs to default location: {save_dir}")
+    save_dir = runtime_config["save_dir"]
+    log.info(f"Saving logs to location: {save_dir}")
 
-    experiment_name = training_config.get("experiment_name", "exp")
+    experiment_name = runtime_config["experiment_name"]
     if experiment_name == "{model_name}_{dataset_name}":
         experiment_name = (
             f"{potential_config['model_name']}_{dataset_config['dataset_name']}"
-        )
-        training_config["experiment_name"] = (
-            experiment_name  # update the save_dir in training_config
         )
 
     model_name = potential_config["model_name"]

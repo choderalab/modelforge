@@ -895,7 +895,7 @@ class BaseNetwork(Module):
         *,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic,
-        cutoff: Union[unit.Quantity, str],
+        cutoff: unit.Quantity,
     ):
         """
         The BaseNetwork wraps the input preparation (including pairlist calculation, d_ij and r_ij calculation), the actual model as well as the output preparation in a wrapper class.

@@ -596,11 +596,13 @@ class PhysNet(BaseNetwork):
 
 
         """
+        from modelforge.utils.units import _convert
+        self.only_unique_pairs = False  # NOTE: for pairlist
         super().__init__(
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=postprocessing_parameter,
+            cutoff=_convert(cutoff),
         )
-        from modelforge.utils.units import _convert
 
         self.core_module = PhysNetCore(
             max_Z=max_Z,
@@ -609,10 +611,6 @@ class PhysNet(BaseNetwork):
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             number_of_interaction_residual=number_of_interaction_residual,
             number_of_modules=number_of_modules,
-        )
-        self.only_unique_pairs = False  # NOTE: for pairlist
-        self.input_preparation = InputPreparation(
-            cutoff=_convert(cutoff), only_unique_pairs=self.only_unique_pairs
         )
 
     def _config_prior(self):

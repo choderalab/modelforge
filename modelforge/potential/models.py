@@ -569,9 +569,6 @@ class NeuralNetworkPotentialFactory:
         from modelforge.potential import _Implemented_NNPs
         from modelforge.train.training import TrainingAdapter
 
-        log.debug(f"{training_parameter=}")
-        log.debug(f"{model_parameter=}")
-
         # obtain model for training
         if use == "training":
             if simulation_environment == "JAX":

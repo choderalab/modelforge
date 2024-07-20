@@ -147,7 +147,10 @@ class NNPInput:
 
         from dataclasses import dataclass, fields
         import collections
-        from pytorch2jax.pytorch2jax import convert_to_jax
+        from modelforge.utils.io import import_
+
+        convert_to_jax = import_("pytorch2jax").pytorch2jax.convert_to_jax
+        # from pytorch2jax.pytorch2jax import convert_to_jax
 
         NNPInputTuple = collections.namedtuple(
             "NNPInputTuple", [field.name for field in fields(self)]
@@ -209,23 +212,23 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         self.properties_of_interest = {}
 
         self.properties_of_interest["atomic_numbers"] = torch.from_numpy(
-            dataset[property_name.Z].flatten()
+            dataset[property_name.atomic_numbers].flatten()
         ).to(torch.int32)
         self.properties_of_interest["positions"] = torch.from_numpy(
-            dataset[property_name.R]
+            dataset[property_name.positions]
         ).to(torch.float32)
         self.properties_of_interest["E"] = torch.from_numpy(
             dataset[property_name.E]
         ).to(torch.float64)
 
-        if property_name.Q is not None:
-            self.properties_of_interest["Q"] = torch.from_numpy(
-                dataset[property_name.Q]
+        if property_name.total_charge is not None:
+            self.properties_of_interest["total_charge"] = torch.from_numpy(
+                dataset[property_name.total_charge]
             ).to(torch.int32)
         else:
             # this is a per atom property, so it will match the first dimension of the geometry
-            self.properties_of_interest["Q"] = torch.zeros(
-                (dataset[property_name.R].shape[0], 1)
+            self.properties_of_interest["total_charge"] = torch.zeros(
+                (dataset[property_name.positions].shape[0], 1)
             ).to(torch.int32)
 
         if property_name.F is not None:
@@ -235,7 +238,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         else:
             # a per atom property in each direction, so it will match geometry
             self.properties_of_interest["F"] = torch.zeros(
-                dataset[property_name.R].shape
+                dataset[property_name.positions].shape
             )
 
         self.number_of_records = len(dataset["atomic_subsystem_counts"])
@@ -347,7 +350,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         ]
         E = self.properties_of_interest["E"][idx]
         F = self.properties_of_interest["F"][series_atom_start_idx:series_atom_end_idx]
-        total_charge = self.properties_of_interest["Q"][idx]
+        total_charge = self.properties_of_interest["total_charge"][idx]
         number_of_atoms = len(atomic_numbers)
         if self.properties_of_interest["pair_list"] is None:
             pair_list = None
@@ -450,7 +453,6 @@ class HDF5Dataset:
         with gzip.open(
             f"{self.local_cache_dir}/{self.gz_data_file['name']}", "rb"
         ) as gz_file:
-
             from modelforge.utils.misc import OpenWithLock
 
             # rather than locking the file we are writing, we will create a lockfile.  the _from_hdf5 function will
@@ -625,7 +627,6 @@ class HDF5Dataset:
             f"{self.local_cache_dir}/{self.hdf5_data_file['name']}.lockfile", "w"
         ) as lock_file:
             with h5py.File(temp_hdf5_file, "r") as hf:
-
                 # create dicts to store data for each format type
                 single_rec_data: Dict[str, List[np.ndarray]] = OrderedDict()
                 # value shapes: (*)
@@ -672,9 +673,9 @@ class HDF5Dataset:
 
                         if all(property_found):
                             # we want to exclude conformers with NaN values for any property of interest
-                            configs_nan_by_prop: Dict[str, np.ndarray] = (
-                                OrderedDict()
-                            )  # ndarray.size (n_configs, )
+                            configs_nan_by_prop: Dict[
+                                str, np.ndarray
+                            ] = OrderedDict()  # ndarray.size (n_configs, )
                             for value in list(series_mol_data.keys()) + list(
                                 series_atom_data.keys()
                             ):
@@ -929,7 +930,6 @@ class DatasetFactory:
             and not data.force_download
             and not data.regenerate_cache
         ):
-
             data._from_file_cache()
         # check to see if the hdf5 file exists and the checksum matches
         elif (
@@ -981,7 +981,6 @@ from openff.units import unit
 
 
 class DataModule(pl.LightningDataModule):
-
     def __init__(
         self,
         name: Literal[
@@ -1091,10 +1090,10 @@ class DataModule(pl.LightningDataModule):
                 f"Loading dataset statistics from disk: {self.dataset_statistic_filename}"
             )
             atomic_self_energies = self._read_atomic_self_energies()
-            atomic_energies_stats = self._read_atomic_energies_stats()
+            training_dataset_statistics = self._read_atomic_energies_stats()
         else:
             atomic_self_energies = None
-            atomic_energies_stats = None
+            training_dataset_statistics = None
             # obtain the atomic self energies from the dataset
             dataset_ase = dataset.atomic_self_energies.energies
 
@@ -1113,17 +1112,17 @@ class DataModule(pl.LightningDataModule):
 
         # calculate the dataset statistic of the dataset
         # This is done __after__ self energies are removed (if requested)
-        if atomic_energies_stats is None:
+        if training_dataset_statistics is None:
             from modelforge.dataset.utils import calculate_mean_and_variance
 
-            atomic_energies_stats = calculate_mean_and_variance(torch_dataset)
+            training_dataset_statistics = calculate_mean_and_variance(torch_dataset)
             # wrap everything in a dictionary and save it to disk
             dataset_statistic = {
                 "atomic_self_energies": atomic_self_energies,
-                "atomic_energies_stats": atomic_energies_stats,
+                "training_dataset_statistics": training_dataset_statistics,
             }
 
-            if atomic_self_energies and atomic_energies_stats:
+            if atomic_self_energies and training_dataset_statistics:
                 log.info(dataset_statistic)
                 # save dataset_statistic dictionary to disk as yaml files
                 self._log_dataset_statistic(dataset_statistic)
@@ -1138,7 +1137,6 @@ class DataModule(pl.LightningDataModule):
     def _log_dataset_statistic(self, dataset_statistic):
         """Save the dataset statistics to a file with units"""
         import toml
-        
 
         # cast units to string
         atomic_self_energies = {
@@ -1146,14 +1144,18 @@ class DataModule(pl.LightningDataModule):
             for key, value in dataset_statistic["atomic_self_energies"].items()
         }
         # cast float and kJ/mol on pytorch tensors and then convert to string
-        atomic_energies_stats = {
-            key: str(unit.Quantity(value.item(), unit.kilojoule_per_mole)) if isinstance(value, torch.Tensor) else value
-            for key, value in dataset_statistic["atomic_energies_stats"].items()
+        training_dataset_statistics = {
+            key: (
+                str(unit.Quantity(value.item(), unit.kilojoule_per_mole))
+                if isinstance(value, torch.Tensor)
+                else value
+            )
+            for key, value in dataset_statistic["training_dataset_statistics"].items()
         }
 
         dataset_statistic = {
             "atomic_self_energies": atomic_self_energies,
-            "atomic_energies_stats": atomic_energies_stats,
+            "training_dataset_statistics": training_dataset_statistics,
         }
         toml.dump(
             dataset_statistic,
@@ -1170,17 +1172,13 @@ class DataModule(pl.LightningDataModule):
         """Read the atomic self energies from a file."""
         from modelforge.potential.processing import load_atomic_self_energies
 
-        return load_atomic_self_energies(
-            self.dataset_statistic_filename
-        )
+        return load_atomic_self_energies(self.dataset_statistic_filename)
 
     def _read_atomic_energies_stats(self) -> Dict[str, torch.Tensor]:
         """Read the atomic energies statistics from a file."""
-        from modelforge.potential.processing import load_atomic_energies_stats
+        from modelforge.potential.processing import load_dataset_energy_statistics
 
-        return load_atomic_energies_stats(
-            self.dataset_statistic_filename
-        )
+        return load_dataset_energy_statistics(self.dataset_statistic_filename)
 
     def _create_torch_dataset(self, dataset):
         """Create a PyTorch dataset from the provided dataset instance."""
@@ -1201,12 +1199,9 @@ class DataModule(pl.LightningDataModule):
     def _calculate_atomic_self_energies(
         self, torch_dataset, dataset_ase
     ) -> Dict[str, float]:
-
         # Use provided ase dictionary
         if self.dict_atomic_self_energies:
-            log.info(
-                "Using atomic self energies from the provided dictionary."
-            )
+            log.info("Using atomic self energies from the provided dictionary.")
             return self.dict_atomic_self_energies
 
         # Use regression to calculate ase
@@ -1233,9 +1228,11 @@ class DataModule(pl.LightningDataModule):
         """Sets up datasets for the train, validation, and test stages based on the stage argument."""
 
         self.torch_dataset = torch.load("torch_dataset.pt")
-        self.train_dataset, self.val_dataset, self.test_dataset = (
-            self.splitting_strategy.split(self.torch_dataset)
-        )
+        (
+            self.train_dataset,
+            self.val_dataset,
+            self.test_dataset,
+        ) = self.splitting_strategy.split(self.torch_dataset)
 
     def calculate_self_energies(
         self, torch_dataset: TorchDataset, collate: bool = True
@@ -1314,10 +1311,11 @@ class DataModule(pl.LightningDataModule):
             ),
             desc="Calculating pairlist for dataset",
         ):
-            pairs_batch, n_pairs_batch = (
-                self.pairlist.construct_initial_pairlist_using_numpy(
-                    batch.nnp_input.atomic_subsystem_indices.to("cpu")
-                )
+            (
+                pairs_batch,
+                n_pairs_batch,
+            ) = self.pairlist.construct_initial_pairlist_using_numpy(
+                batch.nnp_input.atomic_subsystem_indices.to("cpu")
             )
             all_pairs.append(torch.from_numpy(pairs_batch))
             n_pairs_per_molecule_list.append(torch.from_numpy(n_pairs_batch))

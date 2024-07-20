@@ -10,8 +10,7 @@ from .models import PairListOutputs
 from .utils import (
     Dense,
     scatter_softmax,
-    SAKERadialSymmetryFunction,
-    SAKERadialBasisFunction,
+    PhysNetRadialBasisFunction,
 )
 from modelforge.dataset.dataset import NNPInput
 import torch
@@ -99,8 +98,6 @@ class SAKECore(CoreNetwork):
             nn.SiLU(),
             Dense(number_of_atom_features, 1),
         )
-        self.readout_module = FromAtomToMoleculeReduction()
-
         # initialize the interaction networks
         self.interaction_modules = nn.ModuleList(
             SAKEInteraction(
@@ -171,7 +168,10 @@ class SAKECore(CoreNetwork):
         # Use squeeze to remove dimensions of size 1
         E_i = self.energy_layer(h).squeeze(1)
 
-        return {"E_i": E_i, "atomic_subsystem_indices": data.atomic_subsystem_indices}
+        return {
+            "per_atom_energy": E_i,
+            "atomic_subsystem_indices": data.atomic_subsystem_indices,
+        }
 
 
 class SAKEInteraction(nn.Module):
@@ -235,12 +235,10 @@ class SAKEInteraction(nn.Module):
         self.nr_coefficients = nr_coefficients
         self.nr_heads = nr_heads
         self.epsilon = epsilon
-        self.radial_symmetry_function_module = SAKERadialSymmetryFunction(
+        self.radial_symmetry_function_module = PhysNetRadialBasisFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             max_distance=cutoff,
             dtype=torch.float32,
-            trainable=False,
-            radial_basis_function=SAKERadialBasisFunction(0.0 * unit.nanometer),
         )
 
         self.node_mlp = nn.Sequential(
@@ -325,7 +323,7 @@ class SAKEInteraction(nn.Module):
             Intermediate edge features. Shape [nr_pairs, nr_edge_basis].
         """
         h_ij_cat = torch.cat([h_i_by_pair, h_j_by_pair], dim=-1)
-        h_ij_filtered = self.radial_symmetry_function_module(d_ij) * self.edge_mlp_in(
+        h_ij_filtered = self.radial_symmetry_function_module(d_ij.unsqueeze(-1)).squeeze(-2) * self.edge_mlp_in(
             h_ij_cat
         )
         return self.edge_mlp_out(
@@ -544,11 +542,10 @@ class SAKEInteraction(nn.Module):
         return h_updated, x_updated, v_updated
 
 
-from typing import Optional, List
+from typing import Optional, List, Union
 
 
 class SAKE(BaseNetwork):
-
     def __init__(
         self,
         max_Z: int,
@@ -557,17 +554,17 @@ class SAKE(BaseNetwork):
         number_of_spatial_attention_heads: int,
         number_of_radial_basis_functions: int,
         cutoff: unit.Quantity,
-        processing_operation: List[Dict[str, str]],
-        readout_operation: List[Dict[str, str]],
+        postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
         epsilon: float = 1e-8,
     ):
+        from modelforge.utils.units import _convert
+        self.only_unique_pairs = False  # NOTE: for pairlist
         super().__init__(
             dataset_statistic=dataset_statistic,
-            processing_operation=processing_operation,
-            readout_operation=readout_operation,
+            postprocessing_parameter=postprocessing_parameter,
+            cutoff=_convert(cutoff),
         )
-        from modelforge.utils.units import _convert
 
         self.core_module = SAKECore(
             max_Z=max_Z,
@@ -579,14 +576,13 @@ class SAKE(BaseNetwork):
             epsilon=epsilon,
         )
 
-        self.only_unique_pairs = False  # NOTE: for pairlist
-        self.input_preparation = InputPreparation(
-            cutoff=_convert(cutoff), only_unique_pairs=self.only_unique_pairs
-        )
 
     def _config_prior(self):
         log.info("Configuring SAKE model hyperparameter prior distribution")
-        from ray import tune
+        from modelforge.utils.io import import_
+
+        tune = import_("ray").tune
+        # from ray import tune
 
         from modelforge.potential.utils import shared_config_prior
 

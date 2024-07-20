@@ -1,11 +1,10 @@
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING, Dict, Optional, Union
 
 import torch
 from loguru import logger as log
 from openff.units import unit
 from torch import nn
-from torch_scatter import scatter_add
 from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
 
 from modelforge.potential.utils import NeuralNetworkData
@@ -63,7 +62,6 @@ class PhysNetNeuralNetworkData(NeuralNetworkData):
 
 
 class PhysNetRepresentation(nn.Module):
-
     def __init__(
         self,
         cutoff: unit = 5 * unit.angstrom,
@@ -77,8 +75,8 @@ class PhysNetRepresentation(nn.Module):
         ----------
         cutoff : openff.units.unit.Quantity, default=5*unit.angstrom
             The cutoff distance for interactions.
-        number_of_gaussians : int, default=16
-            Number of Gaussian functions to use in the radial basis function.
+        number_of_radial_basis_functions : int, default=16
+            Number of radial basis functions to use.
         """
 
         super().__init__()
@@ -89,9 +87,9 @@ class PhysNetRepresentation(nn.Module):
         self.cutoff_module = CosineCutoff(cutoff)
 
         # radial symmetry function
-        from .utils import PhysNetRadialSymmetryFunction
+        from .utils import PhysNetRadialBasisFunction
 
-        self.radial_symmetry_function_module = PhysNetRadialSymmetryFunction(
+        self.radial_symmetry_function_module = PhysNetRadialBasisFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             max_distance=cutoff,
             dtype=torch.float32,
@@ -195,7 +193,6 @@ class PhysNetResidual(nn.Module):
 
 
 class PhysNetInteractionModule(nn.Module):
-
     def __init__(
         self,
         number_of_atom_features: int = 64,
@@ -297,7 +294,10 @@ class PhysNetInteractionModule(nn.Module):
         # Multiply the gathered features by g
         x_j_modulated = x_j * g
         # Aggregate modulated contributions for each atom i
-        x_j_prime = scatter_add(x_j_modulated, idx_i, dim=0, dim_size=x.shape[0])
+        x_j_prime = torch.zeros_like(x_i)
+        x_j_prime.scatter_add_(
+            0, idx_i.unsqueeze(-1).expand(-1, x_j_modulated.size(-1)), x_j_modulated
+        )
 
         # Draft proto message v_tilde
         m = x_i + x_j_prime
@@ -314,7 +314,6 @@ class PhysNetInteractionModule(nn.Module):
 
 
 class PhysNetOutput(nn.Module):
-
     def __init__(
         self,
         number_of_atom_features: int,
@@ -343,7 +342,6 @@ class PhysNetOutput(nn.Module):
 
 
 class PhysNetModule(nn.Module):
-
     def __init__(
         self,
         number_of_atom_features: int = 64,
@@ -466,7 +464,6 @@ class PhysNetCore(CoreNetwork):
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
     ) -> PhysNetNeuralNetworkData:
-
         # Perform atomic embedding
         atomic_embedding = self.embedding_module(data.atomic_numbers)
         #         Z_i, ..., Z_N
@@ -494,7 +491,9 @@ class PhysNetCore(CoreNetwork):
 
         return nnp_input
 
-    def compute_properties(self, data: PhysNetNeuralNetworkData) -> Dict[str, torch.Tensor]:
+    def compute_properties(
+        self, data: PhysNetNeuralNetworkData
+    ) -> Dict[str, torch.Tensor]:
         """
         Calculate the energy for a given input batch.
         Parameters
@@ -566,7 +565,7 @@ class PhysNetCore(CoreNetwork):
         q_i = prediction_i_shifted_scaled[:, 1]  # shape(nr_of_atoms, 1)
 
         output = {
-            "E_i": E_i.contiguous(),  # reshape memory mapping for JAX/dlpack
+            "per_atom_energy": E_i.contiguous(),  # reshape memory mapping for JAX/dlpack
             "q_i": q_i.contiguous(),
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
             "atomic_numbers": data.atomic_numbers,
@@ -583,13 +582,12 @@ class PhysNet(BaseNetwork):
     def __init__(
         self,
         max_Z: int,
-        cutoff: unit.Quantity,
+        cutoff: Union[unit.Quantity, str],
         number_of_atom_features: int,
         number_of_radial_basis_functions: int,
         number_of_interaction_residual: int,
         number_of_modules: int,
-        processing_operation: List[Dict[str, str]],
-        readout_operation: List[Dict[str, str]],
+        postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
         """
@@ -598,12 +596,13 @@ class PhysNet(BaseNetwork):
 
 
         """
+        from modelforge.utils.units import _convert
+        self.only_unique_pairs = False  # NOTE: for pairlist
         super().__init__(
             dataset_statistic=dataset_statistic,
-            processing_operation=processing_operation,
-            readout_operation=readout_operation,
+            postprocessing_parameter=postprocessing_parameter,
+            cutoff=_convert(cutoff),
         )
-        from modelforge.utils.units import _convert
 
         self.core_module = PhysNetCore(
             max_Z=max_Z,
@@ -613,14 +612,13 @@ class PhysNet(BaseNetwork):
             number_of_interaction_residual=number_of_interaction_residual,
             number_of_modules=number_of_modules,
         )
-        self.only_unique_pairs = False  # NOTE: for pairlist
-        self.input_preparation = InputPreparation(
-            cutoff=_convert(cutoff), only_unique_pairs=self.only_unique_pairs
-        )
 
     def _config_prior(self):
         log.info("Configuring SchNet model hyperparameter prior distribution")
-        from ray import tune
+        from modelforge.utils.io import import_
+
+        tune = import_("ray").tune
+        # from ray import tune
 
         from modelforge.potential.utils import shared_config_prior
 

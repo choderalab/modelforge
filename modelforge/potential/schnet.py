@@ -1,17 +1,13 @@
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import Dict, Optional
 
 import torch
 import torch.nn as nn
 from loguru import logger as log
 from openff.units import unit
 
-if TYPE_CHECKING:
-    from .models import PairListOutputs
-    from modelforge.dataset.dataset import NNPInput
-
 from modelforge.potential.utils import NeuralNetworkData
-from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
+from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork, PairListOutputs
 
 
 @dataclass
@@ -206,13 +202,10 @@ class SchNetCore(CoreNetwork):
         E_i = self.energy_layer(x).squeeze(1)
 
         return {
-            "E_i": E_i,
+            "per_atom_energy": E_i,
             "scalar_representation": x,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
-
-
-from torch_scatter import scatter_add
 
 
 class SchNETInteractionModule(nn.Module):
@@ -268,7 +261,7 @@ class SchNETInteractionModule(nn.Module):
         self,
         x: torch.Tensor,
         pairlist: torch.Tensor,  # shape [n_pairs, 2]
-        f_ij: torch.Tensor,  # shape [n_pairs, 1, number_of_radial_basis_functions]
+        f_ij: torch.Tensor,  # shape [n_pairs, number_of_radial_basis_functions]
         f_ij_cutoff: torch.Tensor,  # shape [n_pairs, 1]
     ) -> torch.Tensor:
         """
@@ -277,7 +270,7 @@ class SchNETInteractionModule(nn.Module):
         Parameters
         ----------
         x : torch.Tensor, shape [nr_of_atoms_in_systems, nr_atom_basis]
-            Input feature tensor for atoms.
+            Input feature tensor for atoms (output of embedding).
         pairlist : torch.Tensor, shape [n_pairs, 2]
         f_ij : torch.Tensor, shape [n_pairs, 1, number_of_radial_basis_functions]
             Radial basis functions for pairs of atoms.
@@ -294,15 +287,16 @@ class SchNETInteractionModule(nn.Module):
         x = self.intput_to_feature(x)
 
         # Generate interaction filters based on radial basis functions
-        W_ij = self.filter_network(f_ij.squeeze(1))
+        W_ij = self.filter_network(f_ij.squeeze(1)) # FIXME
         W_ij = W_ij * f_ij_cutoff
 
         # Perform continuous-filter convolution
         x_j = x[idx_j]
-        x_ij = x_j * W_ij
-        x = scatter_add(x_ij, idx_i, dim=0, dim_size=x.size(0))
+        x_ij = x_j * W_ij # (nr_of_atom_pairs, nr_atom_basis)
+        out = torch.zeros_like(x)
+        out.scatter_add_(0, idx_i.unsqueeze(-1).expand_as(x_ij), x_ij) # from per_atom_pair to _per_atom
 
-        return self.feature_to_output(x)
+        return self.feature_to_output(out) # shape: (nr_of_atoms, 1)
 
 
 class SchNETRepresentation(nn.Module):
@@ -331,9 +325,9 @@ class SchNETRepresentation(nn.Module):
     def _setup_radial_symmetry_functions(
         self, radial_cutoff: unit.Quantity, number_of_radial_basis_functions: int
     ):
-        from .utils import SchnetRadialSymmetryFunction
+        from .utils import SchnetRadialBasisFunction
 
-        radial_symmetry_function = SchnetRadialSymmetryFunction(
+        radial_symmetry_function = SchnetRadialBasisFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             max_distance=radial_cutoff,
             dtype=torch.float32,
@@ -356,14 +350,14 @@ class SchNETRepresentation(nn.Module):
         # Convert distances to radial basis functions
         f_ij = self.radial_symmetry_function_module(
             d_ij
-        )  # shape (n_pairs, 1, number_of_radial_basis_functions)
+        )  # shape (n_pairs, number_of_radial_basis_functions)
 
         f_cutoff = self.cutoff_module(d_ij)  # shape (n_pairs, 1)
 
         return {"f_ij": f_ij, "f_cutoff": f_cutoff}
 
 
-from typing import List
+from typing import List, Union
 
 
 class SchNet(BaseNetwork):
@@ -373,11 +367,10 @@ class SchNet(BaseNetwork):
         number_of_atom_features: int,
         number_of_radial_basis_functions: int,
         number_of_interaction_modules: int,
-        cutoff: unit.Quantity,
+        cutoff: Union[unit.Quantity, str],
         number_of_filters: int,
         shared_interactions: bool,
-        processing_operation: List[Dict[str, str]],
-        readout_operation: List[Dict[str, str]],
+        postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
         """
@@ -398,12 +391,15 @@ class SchNet(BaseNetwork):
         cutoff : openff.units.unit.Quantity, default=5*unit.angstrom
             The cutoff distance for interactions.
         """
+        from modelforge.utils.units import _convert
+
+        self.only_unique_pairs = False  # NOTE: need to be set before super().__init__
+
         super().__init__(
             dataset_statistic=dataset_statistic,
-            processing_operation=processing_operation,
-            readout_operation=readout_operation,
+            postprocessing_parameter=postprocessing_parameter,
+            cutoff=_convert(cutoff),
         )
-        from modelforge.utils.units import _convert
 
         self.core_module = SchNetCore(
             max_Z=max_Z,
@@ -413,14 +409,13 @@ class SchNet(BaseNetwork):
             number_of_filters=number_of_filters,
             shared_interactions=shared_interactions,
         )
-        self.only_unique_pairs = False  # NOTE: for pairlist
-        self.input_preparation = InputPreparation(
-            cutoff=_convert(cutoff), only_unique_pairs=self.only_unique_pairs
-        )
 
     def _config_prior(self):
         log.info("Configuring SchNet model hyperparameter prior distribution")
-        from ray import tune
+        from modelforge.utils.io import import_
+
+        tune = import_("ray").tune
+        # from ray import tune
 
         from modelforge.potential.utils import shared_config_prior
 

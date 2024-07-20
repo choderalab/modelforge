@@ -534,8 +534,7 @@ class NeuralNetworkPotentialFactory:
     def generate_model(
         *,
         use: Literal["training", "inference"],
-        model_type: Literal["ANI2x", "SchNet", "PaiNN", "SAKE", "PhysNet"],
-        model_parameter: Dict[str, Union[int, float, str, List[str]]],
+        model_parameter: Dict[str, Union[str, Any]],
         simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
         training_parameter: Optional[Dict[str, Any]] = None,
         dataset_statistic: Optional[Dict[str, float]] = None,
@@ -546,13 +545,11 @@ class NeuralNetworkPotentialFactory:
         Parameters
         ----------
         use : str
-            The use case for the NNP instance.
-        model_name : str
-            The type of NNP to instantiate.
+            The use case for the model instance, either 'training' or 'inference'.
         simulation_environment : str
             The ML framework to use, either 'PyTorch' or 'JAX'.
-        nnp_parameters : dict, optional
-            Parameters specific to the NNP model, by default {}.
+        model_parameter : dict, optional
+            Parameters specific to the model, by default {}.
         training_parameter : dict, optional
             Parameters for configuring the training, by default {}.
 
@@ -572,46 +569,46 @@ class NeuralNetworkPotentialFactory:
         from modelforge.potential import _Implemented_NNPs
         from modelforge.train.training import TrainingAdapter
 
-        log.debug(f"{training_parameter=}")
-        # get model
-        nnp_class: Type = _Implemented_NNPs.get_neural_network_class(model_type)
-        if nnp_class is None:
-            raise NotImplementedError(f"NNP type {model_type} is not implemented.")
-
-        # add modifications to NNP if requested
+        # obtain model for training
         if use == "training":
             if simulation_environment == "JAX":
                 log.warning(
                     "Training in JAX is not availalbe. Falling back to PyTorch."
                 )
-            model_parameter["model_name"] = model_type
             model = TrainingAdapter(
                 model_parameter=model_parameter,
                 **training_parameter,
                 dataset_statistic=dataset_statistic,
             )
             return model
+        # obtain model for inference
         elif use == "inference":
-            # if this model_parameter dictionary ahs already been used
-            # for training the `model_name` might have been set
-            if "model_name" in model_parameter:
-                del model_parameter["model_name"]
-            model = nnp_class(**model_parameter, dataset_statistic=dataset_statistic)
+            model_type = model_parameter["model_name"]
+            nnp_class: Type = _Implemented_NNPs.get_neural_network_class(model_type)
+            model = nnp_class(
+                **model_parameter["core_parameter"],
+                postprocessing_parameter=model_parameter["postprocessing_parameter"],
+                dataset_statistic=dataset_statistic,
+            )
             if simulation_environment == "JAX":
                 return PyTorch2JAXConverter().convert_to_jax_model(model)
             else:
                 return model
         else:
-            raise ValueError(f"Unsupported 'use' value: {use}")
+            raise NotImplementedError(f"Unsupported 'use' value: {use}")
 
 
 class InputPreparation(torch.nn.Module):
     def __init__(self, cutoff: unit.Quantity, only_unique_pairs: bool = True):
         """
+        A module for preparing input data, including the calculation of pair lists, distances (d_ij), and displacement vectors (r_ij) for molecular simulations.
         Parameters
         ----------
+        cutoff : unit.Quantity
+            The cutoff distance for neighbor list calculations.
         only_unique_pairs : bool, optional
-            Whether to only use unique pairs in the pair list calculation, by default True.
+            Whether to only use unique pairs in the pair list calculation, by default True. This should be set to True for all message passing networks.
+
         """
 
         super().__init__()
@@ -629,13 +626,13 @@ class InputPreparation(torch.nn.Module):
 
         Parameters
         ----------
-        data : NNPInput
-            The input data provided by the dataset, containing atomic numbers, positions,
-            and other necessary information.
+        data : Union[NNPInput, NamedTuple]
+            The input data provided by the dataset, containing atomic numbers, positions, and other necessary information.
 
         Returns
         -------
-        The processed input data, ready for the models forward pass.
+        PairListOutputs
+            A namedtuple containing the pair indices, Euclidean distances (d_ij), and displacement vectors (r_ij).
         """
         # ---------------------------
         # general input manipulation
@@ -696,125 +693,206 @@ class InputPreparation(torch.nn.Module):
         assert data.positions.shape == torch.Size([nr_of_atoms, 3])
 
 
-from torch.nn import ModuleList
+from torch.nn import ModuleDict
 
 
 class PostProcessing(torch.nn.Module):
+    """
+    A module for handling post-processing operations on model outputs, including normalization, calculation of atomic self-energies, and reduction operations to compute per-molecule properties from per-atom properties.
+    """
+
+    _SUPPORTED_PROPERTIES = ["per_atom_energy", "general_postprocessing_operation"]
+    _SUPPORTED_OPERATIONS = ["normalize", "from_atom_to_molecule_reduction"]
+
     def __init__(
         self,
-        processing_operation: List[Dict[str, str]],
-        readout_operation: List[Dict[str, str]],
-        dataset_statistic,
+        postprocessing_parameter: Dict[str, Dict[str, bool]],
+        dataset_statistic: Dict[str, Dict[str, float]],
     ):
         """
         Parameters
         ----------
-        model_parameter : Dict[str, Any]
-            The model parameters.
+        postprocessing_parameter: Dict[str, Dict[str, bool]] # TODO: update
         dataset_statistic : Dict[str, float]
-            The dataset statistics.
+            A dictionary containing the dataset statistics for normalization and other calculations.
         """
         super().__init__()
 
+        self._registered_properties: List[str] = []
+
+        # operations that use nn.Sequence to pass the output of the model to the next
+        self.registered_chained_operations = ModuleDict()
+
+        self.dataset_statistic = dataset_statistic
+
         self._initialize_postprocessing(
-            processing_operation,
-            readout_operation,
-            dataset_statistic,
+            postprocessing_parameter,
         )
+
+    def _get_per_atom_energy_mean_and_stddev_of_dataset(self) -> Tuple[float, float]:
+        """
+        Calculate the mean and standard deviation of the per-atom energy in the dataset.
+
+        Returns
+        -------
+        Tuple[float, float]
+            The mean and standard deviation of the per-atom energy.
+        """
+        if self.dataset_statistic is None:
+            mean = 0.0
+            stddev = 1.0
+            log.warning(
+                f"No mean and stddev provided for dataset. Setting to default value {mean=} and {stddev=}!"
+            )
+        else:
+            training_dataset_statistics = self.dataset_statistic[
+                "training_dataset_statistics"
+            ]
+            mean = unit.Quantity(
+                training_dataset_statistics["per_atom_energy_mean"]
+            ).m_as(unit.kilojoule_per_mole)
+            stddev = unit.Quantity(
+                training_dataset_statistics["per_atom_energy_stddev"]
+            ).m_as(unit.kilojoule_per_mole)
+        return mean, stddev
 
     def _initialize_postprocessing(
         self,
-        processing_operation: List[Dict[str, str]],
-        readout_operation: List[Dict[str, str]],
-        dataset_statistic,
+        postprocessing_parameter: Dict[str, Dict[str, bool]],
     ):
+        """
+        Initialize the postprocessing operations based on the given postprocessing parameters.
+
+        Parameters:
+            postprocessing_parameter (Dict[str, Dict[str, bool]]): A dictionary containing the postprocessing parameters for each property.
+
+        Raises:
+            ValueError: If a property is not supported.
+
+        Returns:
+            None
+        """
+
         from .processing import (
             FromAtomToMoleculeReduction,
             ScaleValues,
             CalculateAtomicSelfEnergy,
         )
 
-        # initialize per atom processing
-        work_to_be_done_per_property = []
-        props = []
-        for proc in processing_operation:
-            if proc["step"] == "normalization":
-                if dataset_statistic is None:
-                    log.warning(
-                        f"No mean and stddev provided for property {proc['in']}. Setting to default values!"
-                    )
-                    mean = 0.0
-                    stddev = 1.0
-                else:
-                    atomic_energies_stats = dataset_statistic["atomic_energies_stats"]
-                    mean = unit.Quantity(atomic_energies_stats[proc["mean"]]).m_as(
-                        unit.kilojoule_per_mole
-                    )
-                    stddev = unit.Quantity(atomic_energies_stats[proc["stddev"]]).m_as(
-                        unit.kilojoule_per_mole
-                    )
-                operation = ScaleValues(mean=mean, stddev=stddev)
-                work_to_be_done_per_property.append(operation)
-                props.append(proc)
-
-            elif proc["step"] == "calculate_ase":
-                if dataset_statistic is None:
-                    raise RuntimeError(
-                        "No dataset statistics provided for ASE calculation. Skipping!"
-                    )
-                else:
-                    atomic_self_energies = dataset_statistic["atomic_self_energies"]
-                    operation = CalculateAtomicSelfEnergy(atomic_self_energies)
-                    work_to_be_done_per_property.append(operation)
-
-                props.append(proc)
-
-        self.per_atom_operations = ModuleList(work_to_be_done_per_property)
-        self.per_atom_operations_prop = props
-
-        # initialize per molecule reduction
-        work_to_be_done_per_property = []
-        props = []
-        for proc in readout_operation:
-            if proc["step"] == "from_atom_to_molecule":
-                operation = FromAtomToMoleculeReduction(
-                    reduction_mode=proc["mode"],
+        for property, operations in postprocessing_parameter.items():
+            # register properties for which postprocessing should be performed
+            if property.lower() in self._SUPPORTED_PROPERTIES:
+                self._registered_properties.append(property.lower())
+            else:
+                raise ValueError(
+                    f"Property {property} is not supported. Supported properties are {self._SUPPORTED_PROPERTIES}"
                 )
-            work_to_be_done_per_property.append(operation)
-            props.append(proc)
 
-        self.readout_operation = ModuleList(work_to_be_done_per_property)
-        self.readout_prop = props
+            # register operations that are performed for the property
+            postprocessing_sequence = torch.nn.Sequential()
+            prostprocessing_sequence_names = []
 
-    def forward(self, outputs: Dict[str, torch.Tensor]):
+            # for each property parse the requested operations
+            if property == "per_atom_energy":
+                if operations.get("normalize", False):
+                    mean, stddev = (
+                        self._get_per_atom_energy_mean_and_stddev_of_dataset()
+                    )
+                    postprocessing_sequence.append(
+                        ScaleValues(
+                            mean=mean,
+                            stddev=stddev,
+                            property="per_atom_energy",
+                            output_name="per_atom_energy",
+                        )
+                    )
+                    prostprocessing_sequence_names.append("normalize")
+                # check if also reduction is requested
+                if operations.get("from_atom_to_molecule_reduction", False):
+                    postprocessing_sequence.append(
+                        FromAtomToMoleculeReduction(
+                            per_atom_property_name="per_atom_energy",
+                            index_name="atomic_subsystem_indices",
+                            output_name="per_molecule_energy",
+                            keep_per_atom_property=operations.get(
+                                "keep_per_atom_property", False
+                            ),
+                        )
+                    )
+                    prostprocessing_sequence_names.append(
+                        "from_atom_to_molecule_reduction"
+                    )
+            elif property == "general_postprocessing_operation":
+                # check if also self-energies are requested
+                if operations.get("calculate_molecular_self_energy", False):
+
+                    if self.dataset_statistic is None:
+                        log.warning(
+                            "Dataset statistics are required to calculate the molecular self-energies but haven't been provided."
+                        )
+                    else:
+                        atomic_self_energies = self.dataset_statistic[
+                            "atomic_self_energies"
+                        ]
+
+                        postprocessing_sequence.append(
+                            CalculateAtomicSelfEnergy(atomic_self_energies)
+                        )
+                        prostprocessing_sequence_names.append(
+                            "calculate_molecular_self_energy"
+                        )
+
+                        postprocessing_sequence.append(
+                            FromAtomToMoleculeReduction(
+                                per_atom_property_name="ase_tensor",
+                                index_name="atomic_subsystem_indices",
+                                output_name="per_molecule_self_energy",
+                            )
+                        )
+
+                # check if also self-energies are requested
+                elif operations.get("calculate_atomic_self_energy", False):
+                    if self.dataset_statistic is None:
+                        log.warning(
+                            "Dataset statistics are required to calculate the molecular self-energies but haven't been provided."
+                        )
+                    else:
+                        atomic_self_energies = self.dataset_statistic[
+                            "atomic_self_energies"
+                        ]
+
+                        postprocessing_sequence.append(
+                            CalculateAtomicSelfEnergy(atomic_self_energies)()
+                        )
+                        prostprocessing_sequence_names.append(
+                            "calculate_atomic_self_energy"
+                        )
+
+            log.debug(prostprocessing_sequence_names)
+
+            self.registered_chained_operations[property] = postprocessing_sequence
+
+    def forward(self, data: Dict[str, torch.Tensor]):
         """
-        Perform post-processing operations on per-atom properties and reduction operations to calculate per-molecule properties.
+        Perform post-processing operations for all registered properties.
         """
-        for property, processing in zip(
-            self.per_atom_operations_prop, self.per_atom_operations
-        ):
-            inputs = [outputs[in_key] for in_key in property["in"]]
-            outputs[property["out"]] = processing(*inputs)
 
-        # if per atom properties need to be combined
-        # TODO: Not Implemented yet!
+        # NOTE: this is not very elegant, but I am unsure how to do this better
+        # I am currently directly writing new keys and values in the data dictionary
+        for property in PostProcessing._SUPPORTED_PROPERTIES:
+            if property in self._registered_properties:
+                self.registered_chained_operations[property](data)
 
-        # perform readout_operation on properties
-        for property, processing in zip(self.readout_prop, self.readout_operation):
-            outputs[property["out"]] = processing(
-                outputs[property["in"]], outputs[property["index_key"]]
-            )
-
-        return outputs
+        return data
 
 
 class BaseNetwork(Module):
     def __init__(
         self,
         *,
-        processing_operation: List[Dict[str, str]],
-        readout_operation: List[Dict[str, str]],
-        dataset_statistic: Optional[Dict[str, float]] = None,
+        postprocessing_parameter: Dict[str, Dict[str, bool]],
+        dataset_statistic,
+        cutoff: unit.Quantity,
     ):
         """
         The BaseNetwork wraps the input preparation (including pairlist calculation, d_ij and r_ij calculation), the actual model as well as the output preparation in a wrapper class.
@@ -823,19 +901,23 @@ class BaseNetwork(Module):
 
         Parameters
         ----------
-        processing_operation : List[Dict[str, str]]
-            A list of dictionaries containing the processing steps to be applied to the model output.
-        readout_operation : List[Dict[str, str]]
-            A list of dictionaries containing the readout_operation steps to be applied to the model output.
-        dataset_statistic : Dict[str, float], optional
-            A dictionary containing the dataset statistics for the model, by default None.
+        postprocessing_parameter : Dict[str, Dict[str, bool]] # TODO: update
         """
 
         super().__init__()
+        from modelforge.utils.units import _convert
+
         self.postprocessing = PostProcessing(
-            processing_operation=processing_operation,
-            dataset_statistic=dataset_statistic,
-            readout_operation=readout_operation,
+            postprocessing_parameter, dataset_statistic
+        )
+
+        # check if self.only_unique_pairs is set in child class
+        if not hasattr(self, "only_unique_pairs"):
+            raise RuntimeError(
+                "The only_unique_pairs attribute is not set in the child class. Please set it to True or False before calling super().__init__."
+            )
+        self.input_preparation = InputPreparation(
+            cutoff=_convert(cutoff), only_unique_pairs=self.only_unique_pairs
         )
 
     def load_state_dict(
@@ -861,7 +943,7 @@ class BaseNetwork(Module):
 
         # Prefix to remove
         prefix = "model."
-        excluded_keys = ["loss_module.energy_weight", "loss_module.force_weight"]
+        excluded_keys = ["loss.per_molecule_energy", "loss.per_atom_force"]
 
         # Create a new dictionary without the prefix in the keys if prefix exists
         if any(key.startswith(prefix) for key in state_dict.keys()):
@@ -881,6 +963,7 @@ class BaseNetwork(Module):
         super().load_state_dict(filtered_state_dict, strict=strict, assign=assign)
 
     def prepare_input(self, data):
+
         self.input_preparation._input_checks(data)
         return self.input_preparation.prepare_inputs(data)
 

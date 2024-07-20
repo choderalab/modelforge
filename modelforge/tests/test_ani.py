@@ -93,7 +93,7 @@ def test_forward_and_backward_using_torchani():
 
     energy = model((species, coordinates)).energies
     derivative = torch.autograd.grad(energy.sum(), coordinates)[0]
-    force = -derivative
+    per_atom_force = -derivative
 
 
 def test_forward_and_backward():
@@ -104,16 +104,21 @@ def test_forward_and_backward():
     import torch
 
     # read default parameters
-    config = load_configs("ani2x_without_ase", "qm9")
-    # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
+    config = load_configs("ani2x", "qm9")
 
     _, _, _, mf_input = setup_two_methanes()
     device = torch.device("cpu")
-    model = ANI2x(**potential_parameter).to(device=device)
+
+    # initialize model
+    model = ANI2x(
+        **config["potential"]["core_parameter"],
+        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+    ).to(device=device)
     energy = model(mf_input)
-    derivative = torch.autograd.grad(energy["E"].sum(), mf_input.positions)[0]
-    force = -derivative
+    derivative = torch.autograd.grad(
+        energy["per_molecule_energy"].sum(), mf_input.positions
+    )[0]
+    per_atom_force = -derivative
 
 
 def test_representation():
@@ -185,13 +190,10 @@ def test_representation_with_diagonal_batching():
     calculated_rbf_output = calculated_rbf_output * rcut_ij
 
     # test that both ANI and MF obtain the same radial symmetry outpu
-
-    (
-        reference_rbf_output,
-        ani_d_ij,
-    ) = provide_reference_values_for_test_ani_test_compute_rsf_with_diagonal_batching()
+    reference_rbf_output, ani_d_ij = (
+        provide_reference_values_for_test_ani_test_compute_rsf_with_diagonal_batching()
+    )
     assert torch.allclose(calculated_rbf_output, reference_rbf_output, atol=1e-4)
-
     assert torch.allclose(
         ani_d_ij, d_ij.squeeze(1) * 10, atol=1e-4
     )  # NOTE: unit mismatch
@@ -293,12 +295,15 @@ def test_compare_aev():
     from modelforge.tests.test_models import load_configs
 
     # read default parameters
-    config = load_configs("ani2x_without_ase", "qm9")
+    config = load_configs("ani2x", "qm9")
 
     # Extract parameters
     potential_parameter = config["potential"].get("potential_parameter", {})
 
-    mf_model = ANI2x(**potential_parameter)
+    mf_model = ANI2x(
+        **config["potential"]["core_parameter"],
+        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+    )
     # perform input checks
     mf_model.input_preparation._input_checks(mf_input)
     # prepare the input for the forward pass

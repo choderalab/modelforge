@@ -98,8 +98,6 @@ class SAKECore(CoreNetwork):
             nn.SiLU(),
             Dense(number_of_atom_features, 1),
         )
-        self.readout_module = FromAtomToMoleculeReduction()
-
         # initialize the interaction networks
         self.interaction_modules = nn.ModuleList(
             SAKEInteraction(
@@ -171,7 +169,10 @@ class SAKECore(CoreNetwork):
         # Use squeeze to remove dimensions of size 1
         E_i = self.energy_layer(h).squeeze(1)
 
-        return {"E_i": E_i, "atomic_subsystem_indices": data.atomic_subsystem_indices}
+        return {
+            "per_atom_energy": E_i,
+            "atomic_subsystem_indices": data.atomic_subsystem_indices,
+        }
 
 
 class SAKEInteraction(nn.Module):
@@ -558,18 +559,18 @@ class SAKE(BaseNetwork):
         number_of_interaction_modules: int,
         number_of_spatial_attention_heads: int,
         number_of_radial_basis_functions: int,
-        cutoff: Union[unit.Quantity, str],
-        processing_operation: List[Dict[str, str]],
-        readout_operation: List[Dict[str, str]],
+        cutoff: unit.Quantity,
+        postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
         epsilon: float = 1e-8,
     ):
+        from modelforge.utils.units import _convert
+        self.only_unique_pairs = False  # NOTE: for pairlist
         super().__init__(
             dataset_statistic=dataset_statistic,
-            processing_operation=processing_operation,
-            readout_operation=readout_operation,
+            postprocessing_parameter=postprocessing_parameter,
+            cutoff=_convert(cutoff),
         )
-        from modelforge.utils.units import _convert
 
         self.core_module = SAKECore(
             max_Z=max_Z,
@@ -581,10 +582,6 @@ class SAKE(BaseNetwork):
             epsilon=epsilon,
         )
 
-        self.only_unique_pairs = False  # NOTE: for pairlist
-        self.input_preparation = InputPreparation(
-            cutoff=_convert(cutoff), only_unique_pairs=self.only_unique_pairs
-        )
 
     def _config_prior(self):
         log.info("Configuring SAKE model hyperparameter prior distribution")

@@ -1,13 +1,17 @@
-def test_tensornet_init():
-    import torch
-
+def test_init():
+    """Test initialization of the TensorNet model."""
     from modelforge.potential.tensornet import TensorNet
 
-    seed = 0
-    torch.manual_seed(seed)
+    from modelforge.tests.test_models import load_configs
 
-    net = TensorNet()
-    assert net is not None
+    # load default parameters
+    config = load_configs(f"tensornet", "qm9")
+    # initialize model
+    tensornet = TensorNet(
+        **config["potential"]["core_parameter"],
+        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+    )
+    assert tensornet is not None, "TensorNet model should be initialized."
 
 
 def test_tensornet_forward():  # TODO
@@ -49,7 +53,9 @@ def test_tensornet_input():
     from modelforge.dataset.dataset import DataModule
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
     from modelforge.potential.tensornet import TensorNet
-    from modelforge.tests.precalculated_values import prepare_values_for_test_tensornet_input
+    from modelforge.tests.precalculated_values import (
+        prepare_values_for_test_tensornet_input,
+    )
 
     seed = 0
     torch.manual_seed(seed)
@@ -75,7 +81,9 @@ def test_tensornet_input():
     # get methane input
     mf_input = next(iter(dataset.train_dataloader())).nnp_input
     # modelforge TensorNet
-    model = TensorNet(radial_max_distance=100 * unit.angstrom)  # no max distance for test purposes
+    model = TensorNet(
+        radial_max_distance=100 * unit.angstrom
+    )  # no max distance for test purposes
     model.input_preparation._input_checks(mf_input)
     pairlist_output = model.input_preparation.prepare_inputs(mf_input)
 
@@ -92,7 +100,9 @@ def test_tensornet_input():
     pair_indices = pairlist_output.pair_indices.t()
     edge_index = edge_index.t()
     for _, pair_index in enumerate(pair_indices):
-        idx = ((edge_index == pair_index).sum(axis=1) == 2).nonzero()[0][0]  # select [True, True]
+        idx = ((edge_index == pair_index).sum(axis=1) == 2).nonzero()[0][
+            0
+        ]  # select [True, True]
         print(pairlist_output.d_ij[_][0])
         print(edge_weight[idx])
         assert torch.allclose(pairlist_output.d_ij[_][0], edge_weight[idx])
@@ -109,7 +119,9 @@ def test_tensornet_compare_radial_symmetry_features():
 
     from modelforge.potential.utils import CosineCutoff
     from modelforge.potential.utils import TensorNetRadialSymmetryFunction
-    from modelforge.tests.precalculated_values import prepare_values_for_test_tensornet_compare_radial_symmetry_features
+    from modelforge.tests.precalculated_values import (
+        prepare_values_for_test_tensornet_compare_radial_symmetry_features,
+    )
 
     seed = 0
     torch.manual_seed(seed)
@@ -161,7 +173,9 @@ def test_tensornet_representation():
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
     from modelforge.potential.tensornet import TensorNet
     from modelforge.potential.tensornet import TensorNetRepresentation
-    from modelforge.tests.precalculated_values import prepare_values_for_test_tensornet_representation
+    from modelforge.tests.precalculated_values import (
+        prepare_values_for_test_tensornet_representation,
+    )
 
     seed = 0
     torch.manual_seed(seed)
@@ -217,7 +231,9 @@ def test_tensornet_representation():
         # representation_unit,
     )
     # tensornet_representation_module = model.core_module.representation_module
-    nnp_input = model.core_module._model_specific_input_preparation(mf_input, pairlist_output)
+    nnp_input = model.core_module._model_specific_input_preparation(
+        mf_input, pairlist_output
+    )
     mf_X = tensornet_representation_module(nnp_input)
     ################ modelforge TensorNet ################
 
@@ -251,7 +267,9 @@ def test_tensornet_interaction():
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
     from modelforge.potential.tensornet import TensorNet
     from modelforge.potential.tensornet import TensorNetInteraction
-    from modelforge.tests.precalculated_values import prepare_values_for_test_tensornet_interaction
+    from modelforge.tests.precalculated_values import (
+        prepare_values_for_test_tensornet_interaction,
+    )
 
     seed = 0
     torch.manual_seed(seed)
@@ -293,7 +311,9 @@ def test_tensornet_interaction():
 
     ################ modelforge TensorNet ################
     tensornet_representation_module = model.core_module.representation_module
-    nnp_input = model.core_module._model_specific_input_preparation(mf_input, pairlist_output)
+    nnp_input = model.core_module._model_specific_input_preparation(
+        mf_input, pairlist_output
+    )
     X = tensornet_representation_module(nnp_input)
 
     radial_feature_vector = tensornet_representation_module.radial_symmetry_function(

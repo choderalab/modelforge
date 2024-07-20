@@ -3,21 +3,23 @@ from dataclasses import dataclass
 import torch
 from openff.units import unit
 from torch import nn
+
 # from torchmdnet.models.tensornet import decompose_tensor
 # from torchmdnet.models.tensornet import tensor_message_passing
 # from torchmdnet.models.tensornet import tensor_norm
 # from torchmdnet.models.tensornet import vector_to_skewtensor
 # from torchmdnet.models.tensornet import vector_to_symtensor
-from typing import Tuple
+from typing import Tuple, Dict, Optional, Type
 
 from modelforge.potential.models import InputPreparation
 from modelforge.potential.models import BaseNetwork
 from modelforge.potential.models import CoreNetwork
 from modelforge.potential.utils import CosineCutoff
-from modelforge.potential.utils import TensorNetRadialSymmetryFunction
+from modelforge.potential.utils import PhysNetRadialBasisFunction
 from modelforge.potential.utils import NeuralNetworkData
 from modelforge.potential.utils import NNPInput
 from .models import PairListOutputs
+from ..utils.units import _convert
 
 
 def vector_to_skewtensor(vector):
@@ -41,6 +43,7 @@ def vector_to_skewtensor(vector):
     tensor = tensor.view(-1, 3, 3)
     return tensor.squeeze(0)
 
+
 def vector_to_symtensor(vector):
     """Creates a symmetric traceless tensor from the outer product of a vector with itself."""
     tensor = torch.matmul(vector.unsqueeze(-1), vector.unsqueeze(-2))
@@ -49,6 +52,7 @@ def vector_to_symtensor(vector):
     ] * torch.eye(3, 3, device=tensor.device, dtype=tensor.dtype)
     S = 0.5 * (tensor + tensor.transpose(-2, -1)) - I
     return S
+
 
 def decompose_tensor(tensor):
     """Full tensor decomposition into irreducible components."""
@@ -59,9 +63,11 @@ def decompose_tensor(tensor):
     S = 0.5 * (tensor + tensor.transpose(-2, -1)) - I
     return I, A, S
 
+
 def tensor_norm(tensor):
     """Computes Frobenius norm."""
     return (tensor**2).sum((-2, -1))
+
 
 def tensor_message_passing(
     edge_index: torch.Tensor, factor: torch.Tensor, tensor: torch.Tensor, natoms: int
@@ -100,46 +106,41 @@ class TensorNetNeuralNetworkData(NeuralNetworkData):
     total_charge : torch.Tensor
         An tensor with the total charge of each system or molecule. Shape: [num_systems].
     """
+
     pass
 
 
 class TensorNet(BaseNetwork):
     def __init__(
             self,
-            hidden_channels: int = 8,
-            number_of_interaction_layers: int = 2,
-            number_of_radial_basis_functions: int = 16,
-            activation_function: nn.Module = nn.SiLU,
-            radial_max_distance: unit.Quantity = 5.1 * unit.angstrom,
-            radial_min_distance: unit.Quantity = 0.0 * unit.angstrom,
-            trainable_rbf: bool = False,
-            max_atomic_number: int = 128,
-            equivariance_invariance_group: str = "O(3)",
-            dtype: torch.dtype = torch.float32,
-            # representation_unit: unit.Quantity = unit.angstrom,
+            hidden_channels: int,
+            number_of_interaction_layers: int,
+            number_of_radial_basis_functions: int,
+            radial_max_distance: unit.Quantity,
+            radial_min_distance: unit.Quantity,
+            max_Z: int,
+            equivariance_invariance_group: str,
+            postprocessing_parameter: Dict[str, Dict[str, bool]],
+            dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
+        self.only_unique_pairs = False
         super().__init__(
-            processing_operation = [],
-            readout_operation = [],
+            dataset_statistic=dataset_statistic,
+            postprocessing_parameter=postprocessing_parameter,
+            cutoff=_convert(radial_max_distance),
         )
 
         self.core_module = TensorNetCore(
-            hidden_channels,
-            number_of_interaction_layers,
-            number_of_radial_basis_functions,
-            activation_function,
-            radial_max_distance,
-            radial_min_distance,
-            trainable_rbf,
-            max_atomic_number,
-            equivariance_invariance_group,
-            dtype,
-            # representation_unit,
+            hidden_channels=hidden_channels,
+            number_of_interaction_layers=number_of_interaction_layers,
+            number_of_radial_basis_functions=number_of_radial_basis_functions,
+            radial_max_distance=_convert(radial_max_distance),
+            radial_min_distance=_convert(radial_min_distance),
+            trainable_centers_and_scale_factors=False,
+            max_Z=max_Z,
+            equivariance_invariance_group=equivariance_invariance_group,
         )
-        self.only_unique_pairs = False
-        self.input_preparation = InputPreparation(
-            cutoff=radial_max_distance, only_unique_pairs=self.only_unique_pairs
-        )
+
 
 class TensorNetCore(CoreNetwork):
     def __init__(
@@ -147,44 +148,39 @@ class TensorNetCore(CoreNetwork):
             hidden_channels: int,
             number_of_interaction_layers: int,
             number_of_radial_basis_functions: int,
-            activation_function: nn.Module,
             radial_max_distance: unit.Quantity,
             radial_min_distance: unit.Quantity,
-            trainable_rbf: bool,
-            max_atomic_number: int,
+            trainable_centers_and_scale_factors: bool,
+            max_Z: int,
             equivariance_invariance_group: str,
-            dtype: torch.dtype,
-            # representation_unit: unit.Quantity,
     ):
         super().__init__()
 
         torch.manual_seed(0)
         self.representation_module = TensorNetRepresentation(
-            hidden_channels,
-            number_of_radial_basis_functions,
-            activation_function,
-            radial_max_distance,
-            radial_min_distance,
-            trainable_rbf,
-            max_atomic_number,
-            dtype,
-            # representation_unit,
+            hidden_channels=hidden_channels,
+            number_of_radial_basis_functions=number_of_radial_basis_functions,
+            activation_function=nn.SiLU,
+            radial_max_distance=radial_max_distance,
+            radial_min_distance=radial_min_distance,
+            trainable_centers_and_scale_factors=trainable_centers_and_scale_factors,
+            max_Z=max_Z,
         )
-        self.interaction_modules = nn.ModuleList()
-        if number_of_interaction_layers > 0:
-            for _ in range(number_of_interaction_layers):
-                self.interaction_modules.append(
-                    TensorNetInteraction(
-                        hidden_channels,
-                        number_of_radial_basis_functions,
-                        activation_function,
-                        radial_max_distance,
-                        equivariance_invariance_group,
-                        dtype,
-                        # representation_unit,
-                    )
+        self.interaction_modules = nn.ModuleList(
+            [
+                TensorNetInteraction(
+                    hidden_channels=hidden_channels,
+                    number_of_radial_basis_functions=number_of_radial_basis_functions,
+                    activation_function=nn.SiLU,
+                    radial_max_distance=radial_max_distance,
+                    equivariance_invariance_group=equivariance_invariance_group,
                 )
+                for _ in range(number_of_interaction_layers)
+            ]
+        )
+
     def compute_properties(self):
+        # TODO: implement the forward pass
         pass
 
     def _model_specific_input_preparation(
@@ -211,67 +207,57 @@ class TensorNetRepresentation(torch.nn.Module):
             self,
             hidden_channels: int,
             number_of_radial_basis_functions: int,
-            activation_function: nn.Module,
+            activation_function: Type[nn.Module],
             radial_max_distance: unit.Quantity,
             radial_min_distance: unit.Quantity,
-            trainable_rbf: bool,  # TODO
-            max_atomic_number: int,
-            dtype: torch.dtype,
-            # representation_unit: unit.Quantity,
+            trainable_centers_and_scale_factors: bool,
+            max_Z: int,
     ):
         super().__init__()
 
-        # TensorNet uses angstrom
         self.hidden_channels = hidden_channels
-        self.dtype = dtype
-        # self.representation_unit = representation_unit
 
         self.cutoff_module = CosineCutoff(radial_max_distance)
-        # self.cutoff_module = CosineCutoff(radial_max_distance, representation_unit)
-        self.radial_symmetry_function = self._setup_radial_symmetry_functions(
-            radial_max_distance,
-            radial_min_distance,
-            number_of_radial_basis_functions,
+
+        self.radial_symmetry_function = PhysNetRadialBasisFunction(
+            number_of_radial_basis_functions=number_of_radial_basis_functions,
+            max_distance=radial_max_distance,
+            min_distance=radial_min_distance,
+            alpha=(1.0 * unit.angstrom),  # TensorNet uses angstrom
+            trainable_centers_and_scale_factors=trainable_centers_and_scale_factors,
         )
         self.rsf_projection_I = nn.Linear(
             number_of_radial_basis_functions,
             hidden_channels,
-            dtype=dtype,
         )
         self.rsf_projection_A = nn.Linear(
             number_of_radial_basis_functions,
             hidden_channels,
-            dtype=dtype,
         )
         self.rsf_projection_S = nn.Linear(
             number_of_radial_basis_functions,
             hidden_channels,
-            dtype=dtype,
         )
         self.atomic_number_i_embedding_layer = nn.Embedding(
-            max_atomic_number,
+            max_Z,
             hidden_channels,
-            dtype=dtype,
         )
         self.atomic_number_ij_embedding_layer = nn.Linear(
             2 * hidden_channels,
             hidden_channels,
-            dtype=dtype,
         )
         self.activation_function = activation_function()
-        self.linears_tensor = nn.ModuleList()
-        for _ in range(3):
-            self.linears_tensor.append(
-                nn.Linear(hidden_channels, hidden_channels, bias=False)
-            )
-        self.linears_scalar = nn.ModuleList()
-        self.linears_scalar.append(
-            nn.Linear(hidden_channels, 2 * hidden_channels, bias=True, dtype=dtype)
+        self.linears_tensor = nn.ModuleList(
+            [nn.Linear(hidden_channels, hidden_channels, bias=False) for _ in range(3)]
         )
-        self.linears_scalar.append(
-            nn.Linear(2 * hidden_channels, 3 * hidden_channels, bias=True, dtype=dtype)
+        self.linears_scalar = nn.ModuleList(
+            [
+                nn.Linear(hidden_channels, 2 * hidden_channels, bias=True),
+                nn.Linear(2 * hidden_channels, 3 * hidden_channels, bias=True),
+            ]
         )
-        self.init_norm = nn.LayerNorm(hidden_channels, dtype=dtype)
+
+        self.init_norm = nn.LayerNorm(hidden_channels)
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -287,36 +273,37 @@ class TensorNetRepresentation(torch.nn.Module):
         self.init_norm.reset_parameters()
 
     def _get_atomic_number_message(
-            self,
-            atomic_number: torch.Tensor,
-            pair_indices: torch.Tensor
+            self, atomic_number: torch.Tensor, pair_indices: torch.Tensor
     ) -> torch.Tensor:
         atomic_number_i_embedding = self.atomic_number_i_embedding_layer(atomic_number)
         atomic_number_ij_embedding = self.atomic_number_ij_embedding_layer(
             atomic_number_i_embedding.index_select(
-                0,
-                pair_indices.t().reshape(-1)
-            ).view(
-                -1, self.hidden_channels * 2
-            )
+                0, pair_indices.t().reshape(-1)
+            ).view(-1, self.hidden_channels * 2)
         )[..., None, None]
         return atomic_number_ij_embedding
 
     def _get_tensor_messages(
             self,
             atomic_number_embedding: torch.Tensor,
-            d_ij_in_angstrom: torch.Tensor,
-            # d_ij_in_representation_unit: torch.Tensor,
+            d_ij: torch.Tensor,
             r_ij_norm: torch.Tensor,
-            radial_feature_vector: torch.Tensor
+            radial_feature_vector: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        C = self.cutoff_module(
-            d_ij_in_angstrom / 10  # in nanometer
-        ).reshape(-1, 1, 1, 1) * atomic_number_embedding
+        C = (
+                self.cutoff_module(d_ij).reshape(
+                    -1, 1, 1, 1
+                )
+                * atomic_number_embedding
+        )
         eye = torch.eye(3, 3, device=r_ij_norm.device, dtype=r_ij_norm.dtype)[
             None, None, ...
         ]
-        Iij = self.rsf_projection_I(radial_feature_vector).permute(0, 2, 1)[..., None] * C * eye
+        Iij = (
+                self.rsf_projection_I(radial_feature_vector).permute(0, 2, 1)[..., None]
+                * C
+                * eye
+        )
         Aij = (
                 self.rsf_projection_A(radial_feature_vector).permute(0, 2, 1)[..., None]
                 * C
@@ -329,43 +316,23 @@ class TensorNetRepresentation(torch.nn.Module):
         )
         return Iij, Aij, Sij
 
-    def _setup_radial_symmetry_functions(
-            self,
-            max_distance: unit.Quantity,
-            min_distance: unit.Quantity,
-            number_of_radial_basis_functions: int,
-    ):
-        radial_symmetry_function = TensorNetRadialSymmetryFunction(
-            number_of_radial_basis_functions,
-            max_distance,
-            min_distance,
-            dtype=self.dtype,
-            # representation_unit=self.representation_unit,
-        )
-        return radial_symmetry_function
-
     def forward(self, data: TensorNetNeuralNetworkData):
         atomic_number_embedding = self._get_atomic_number_message(
             data.atomic_numbers,
             data.pair_indices,
         )
-        _r_ij_in_angstrom = data.r_ij * 10
-        _d_ij_in_angstrom = data.d_ij * 10
-        # _r_ij_in_representation_unit = (data.r_ij * unit.nanometer).to(self.representation_unit).m
-        # _d_ij_in_representation_unit = (data.d_ij * unit.nanometer).to(self.representation_unit).m
-        _r_ij_norm = _r_ij_in_angstrom / _d_ij_in_angstrom
+        _r_ij_norm = data.r_ij / data.d_ij
 
         radial_feature_vector = self.radial_symmetry_function(data.d_ij)  # in nanometer
         # cutoff
         rcut_ij = self.cutoff_module(data.d_ij)  # cutoff function applied twice
-        # rcut_ij = self.cutoff_module(_d_ij_in_angstrom)  # cutoff function applied twice
         radial_feature_vector = radial_feature_vector * rcut_ij.unsqueeze(-1)
 
         Iij, Aij, Sij = self._get_tensor_messages(
             atomic_number_embedding,
-            _d_ij_in_angstrom,
+            data.d_ij,
             _r_ij_norm,
-            radial_feature_vector
+            radial_feature_vector,
         )
         source = torch.zeros(
             data.atomic_numbers.shape[0],
@@ -373,7 +340,7 @@ class TensorNetRepresentation(torch.nn.Module):
             3,
             3,
             device=data.atomic_numbers.device,
-            dtype=Iij.dtype
+            dtype=Iij.dtype,
         )
         I = source.index_add(dim=0, index=data.pair_indices[0], source=Iij)
         A = source.index_add(dim=0, index=data.pair_indices[0], source=Aij)
@@ -403,11 +370,9 @@ class TensorNetInteraction(torch.nn.Module):
             self,
             hidden_channels: int,
             number_of_radial_basis_functions: int,
-            activation_function: nn.Module,
+            activation_function: Type[nn.Module],
             radial_max_distance: unit.Quantity,
             equivariance_invariance_group,
-            dtype: torch.dtype,
-            # representation_unit: unit.Quantity,
     ):
         super().__init__()
 
@@ -418,13 +383,13 @@ class TensorNetInteraction(torch.nn.Module):
         # self.cutoff_module = CosineCutoff(radial_max_distance, representation_unit)
         self.linears_scalar = nn.ModuleList()
         self.linears_scalar.append(
-            nn.Linear(number_of_radial_basis_functions, hidden_channels, bias=True, dtype=dtype)
+            nn.Linear(number_of_radial_basis_functions, hidden_channels, bias=True)
         )
         self.linears_scalar.append(
-            nn.Linear(hidden_channels, 2 * hidden_channels, bias=True, dtype=dtype)
+            nn.Linear(hidden_channels, 2 * hidden_channels, bias=True)
         )
         self.linears_scalar.append(
-            nn.Linear(2 * hidden_channels, 3 * hidden_channels, bias=True, dtype=dtype)
+            nn.Linear(2 * hidden_channels, 3 * hidden_channels, bias=True)
         )
         self.linears_tensor = nn.ModuleList()
         for _ in range(6):

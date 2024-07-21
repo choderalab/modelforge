@@ -9,7 +9,7 @@ number_of_interaction_modules = 6
 number_of_spatial_attention_heads = 4
 [potential.core_parameter.featurization]
 number_of_per_atom_features = 64
-properties_to_featurize = ['atomic_number', 'per_molecule_total_charge']
+properties_to_featurize = ['atomic_number']
 max_Z = 101
 
 [potential.postprocessing_parameter]

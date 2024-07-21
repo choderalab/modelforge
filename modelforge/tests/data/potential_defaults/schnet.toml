@@ -8,7 +8,7 @@ number_of_interaction_modules = 3
 number_of_filters = 32
 shared_interactions = false
 [potential.core_parameter.featurization]
-properties_to_featurize = ['atomic_number', 'per_molecule_total_charge']
+properties_to_featurize = ['atomic_number']
 max_Z = 101
 number_of_per_atom_features = 32
 

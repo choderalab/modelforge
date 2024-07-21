@@ -213,24 +213,6 @@ class AddPerMoleculeValue(nn.Module):
 
     def forward(self, per_atom_property_tensor: torch.Tensor, data: NNPInput):
 
-        nr_of_atoms, embedding_dim = per_atom_property_tensor.shape
-        values_to_append = getattr(data, self.key)
-        unique_elements, counts = torch.unique(
-            data.atomic_subsystem_indices, return_counts=True
-        )
-        expanded_values = torch.repeat_interleave(values_to_append, counts).unsqueeze(1)
-        new_tensor = torch.cat((per_atom_property_tensor, expanded_values), dim=1)
-        return new_tensor
-
-
-class AddPerMoleculeValue(nn.Module):
-
-    def __init__(self, key: str):
-        super().__init__()
-        self.key = key
-
-    def forward(self, per_atom_property_tensor: torch.Tensor, data: NNPInput):
-
         values_to_append = getattr(data, self.key)
         _, counts = torch.unique(data.atomic_subsystem_indices, return_counts=True)
         expanded_values = torch.repeat_interleave(values_to_append, counts).unsqueeze(1)
@@ -297,10 +279,15 @@ class FeaturizeInput(nn.Module):
                 self.add_to_embedding.append(AddPerAtomValue("partial_charge"))
                 self.increase_dims += 1
 
-        self.mixing = Dense(
-            featurization_config["number_of_per_atom_features"] + self.increase_dims,
-            featurization_config["number_of_per_atom_features"],
-        )
+        # if only nuclear charges are embedded no mixing is performed
+        if self.increase_dims == 0:
+            self.mixing = nn.Identity()
+        else:
+            self.mixing = Dense(
+                featurization_config["number_of_per_atom_features"]
+                + self.increase_dims,
+                featurization_config["number_of_per_atom_features"],
+            )
 
     def forward(self, data: NNPInput):
         """

@@ -169,7 +169,9 @@ def test_compare_forward():
     config = load_configs(f"schnet", "qm9")
 
     # override default parameters
-    config["potential"]["core_parameter"]["number_of_atom_features"] = 12
+    config["potential"]["core_parameter"]["featurization"][
+        "number_of_per_atom_features"
+    ] = 12
     config["potential"]["core_parameter"]["number_of_radial_basis_functions"] = 5
     config["potential"]["core_parameter"]["number_of_filters"] = 12
 

@@ -195,11 +195,11 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
     assert isinstance(raw_data_item, BatchData)
     assert len(raw_data_item.__dataclass_fields__) == 2
     assert (
-        len(raw_data_item.nnp_input.__dataclass_fields__) == 5
-    )  # 8 properties are returned
+        len(raw_data_item.nnp_input.__dataclass_fields__) == 6
+    )  # 6 properties are returned
     assert (
         len(raw_data_item.metadata.__dataclass_fields__) == 5
-    )  # 8 properties are returned
+    )  # 5 properties are returned
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])

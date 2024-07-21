@@ -83,7 +83,7 @@ class PaiNNCore(CoreNetwork):
     def __init__(
         self,
         max_Z: int = 100,
-        number_of_atom_features: int = 64,
+        number_of_per_atom_features: int = 64,
         number_of_radial_basis_functions: int = 16,
         cutoff: unit.Quantity = 5 * unit.angstrom,
         number_of_interaction_modules: int = 2,
@@ -95,39 +95,41 @@ class PaiNNCore(CoreNetwork):
         super().__init__()
 
         self.number_of_interaction_modules = number_of_interaction_modules
-        self.number_of_atom_features = number_of_atom_features
+        self.number_of_per_atom_features = number_of_per_atom_features
         self.shared_filters = shared_filters
 
         # embedding
         from modelforge.potential.utils import Embedding
 
-        self.embedding_module = Embedding(max_Z, number_of_atom_features)
+        self.embedding_module = Embedding(max_Z, number_of_per_atom_features)
 
         # initialize representation block
         self.representation_module = PaiNNRepresentation(
             cutoff,
             number_of_radial_basis_functions,
             number_of_interaction_modules,
-            number_of_atom_features,
+            number_of_per_atom_features,
             shared_filters,
         )
 
         # initialize the interaction and mixing networks
         self.interaction_modules = nn.ModuleList(
-            PaiNNInteraction(number_of_atom_features, activation=F.silu)
+            PaiNNInteraction(number_of_per_atom_features, activation=F.silu)
             for _ in range(number_of_interaction_modules)
         )
         self.mixing_modules = nn.ModuleList(
-            PaiNNMixing(number_of_atom_features, activation=F.silu, epsilon=epsilon)
+            PaiNNMixing(number_of_per_atom_features, activation=F.silu, epsilon=epsilon)
             for _ in range(number_of_interaction_modules)
         )
 
         self.energy_layer = nn.Sequential(
             Dense(
-                number_of_atom_features, number_of_atom_features, activation=nn.ReLU()
+                number_of_per_atom_features,
+                number_of_per_atom_features,
+                activation=nn.ReLU(),
             ),
             Dense(
-                number_of_atom_features,
+                number_of_per_atom_features,
                 1,
             ),
         )
@@ -496,7 +498,7 @@ class PaiNN(BaseNetwork):
     def __init__(
         self,
         max_Z: int,
-        number_of_atom_features: int,
+        number_of_per_atom_features: int,
         number_of_radial_basis_functions: int,
         cutoff: Union[unit.Quantity, str],
         number_of_interaction_modules: int,
@@ -519,7 +521,7 @@ class PaiNN(BaseNetwork):
 
         self.core_module = PaiNNCore(
             max_Z=max_Z,
-            number_of_atom_features=number_of_atom_features,
+            number_of_per_atom_features=number_of_per_atom_features,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             cutoff=_convert(cutoff),
             number_of_interaction_modules=number_of_interaction_modules,
@@ -538,7 +540,7 @@ class PaiNN(BaseNetwork):
         from modelforge.potential.utils import shared_config_prior
 
         prior = {
-            "number_of_atom_features": tune.randint(2, 256),
+            "number_of_per_atom_features": tune.randint(2, 256),
             "number_of_interaction_modules": tune.randint(1, 5),
             "cutoff": tune.uniform(5, 10),
             "number_of_radial_basis_functions": tune.randint(8, 32),

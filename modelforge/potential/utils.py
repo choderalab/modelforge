@@ -147,6 +147,9 @@ def triple_by_molecule(
     return central_atom_index, local_index12 % n, sign12
 
 
+from typing import List
+
+
 class Embedding(nn.Module):
     def __init__(self, num_embeddings: int, embedding_dim: int):
         """
@@ -197,6 +200,129 @@ class Embedding(nn.Module):
         """
 
         return self.embedding(x)
+
+
+from typing import Dict
+
+
+class AddPerMoleculeValue(nn.Module):
+
+    def __init__(self, key: str):
+        super().__init__()
+        self.key = key
+
+    def forward(self, per_atom_property_tensor: torch.Tensor, data: NNPInput):
+
+        nr_of_atoms, embedding_dim = per_atom_property_tensor.shape
+        values_to_append = getattr(data, self.key)
+        unique_elements, counts = torch.unique(
+            data.atomic_subsystem_indices, return_counts=True
+        )
+        expanded_values = torch.repeat_interleave(values_to_append, counts).unsqueeze(1)
+        new_tensor = torch.cat((per_atom_property_tensor, expanded_values), dim=1)
+        return new_tensor
+
+
+class AddPerMoleculeValue(nn.Module):
+
+    def __init__(self, key: str):
+        super().__init__()
+        self.key = key
+
+    def forward(self, per_atom_property_tensor: torch.Tensor, data: NNPInput):
+
+        values_to_append = getattr(data, self.key)
+        _, counts = torch.unique(data.atomic_subsystem_indices, return_counts=True)
+        expanded_values = torch.repeat_interleave(values_to_append, counts).unsqueeze(1)
+        return torch.cat((per_atom_property_tensor, expanded_values), dim=1)
+
+
+class AddPerAtomValue(nn.Module):
+
+    def __init__(self, key: str):
+        super().__init__()
+        self.key = key
+
+    def forward(self, per_atom_property_tensor: torch.Tensor, data: NNPInput):
+
+        values_to_append = getattr(data, self.key)
+        return torch.cat((per_atom_property_tensor, values_to_append), dim=1)
+
+
+class FeaturizeInput(nn.Module):
+
+    _SUPPORTED_FEATURIZATION_TYPES = ["atomic_number", "per_molecule_total_charge"]
+
+    def __init__(self, featurization_config: Dict[str, Union[List[str], int]]):
+        super().__init__()
+
+        # for per-atom non-categorial properties and per-molecule properties (both categorial and non-categorial) we append the embedded nuclear charges and mix them using a lienar layer
+
+        # for per-atom categorial properties we define an additional embedding and add the embedding to the nuclear charge embedding
+
+        self.add_to_embedding = nn.ModuleList()
+        self.additional_embedding = nn.ModuleList()
+        self.increase_dims = 0
+
+        for featurization in self._SUPPORTED_FEATURIZATION_TYPES:
+            if (
+                featurization == "atomic_number"
+                and featurization not in featurization_config["properties_to_featurize"]
+            ):
+                raise RuntimeError(
+                    "Atomic number embedding is required for featurization. Please add it to the featurization config."
+                )
+
+            if featurization in featurization_config["properties_to_featurize"]:
+                
+            self.nuclear_charge_embedding = Embedding(
+                featurization_config["max_Z"],
+                featurization_config["number_of_per_atom_features"],
+            )
+
+            if (
+                "per_molecule_total_charge"
+                in featurization_config["properties_to_featurize"]
+            ):
+
+                # transform output o f embedding with shape (nr_atoms, nr_features) to (nr_atoms, nr_features + 1). The added features is the total charge (which will be transformed to a per-atom property)
+                self.add_to_embedding.append(AddPerMoleculeValue("total_charge"))
+                self.increase_dims += 1
+
+        if "per_atom_partial_charge" in featurization_config["properties_to_featurize"]:
+
+            # transform output o f embedding with shape (nr_atoms, nr_features) to (nr_atoms, nr_features + 1). The added features is the total charge (which will be transformed to a per-atom property)
+            self.add_to_embedding.append(AddPerAtomValue("partial_charge"))
+            self.increase_dims += 1
+
+        if "per_atom_partial_charge" in featurization_config["properties_to_featurize"]:
+
+            # transform output o f embedding with shape (nr_atoms, nr_features) to (nr_atoms, nr_features + 1). The added features is the total charge (which will be transformed to a per-atom property)
+            self.add_to_embedding.append(AddPerAtomValue("partial_charge"))
+            self.increase_dims += 1
+
+        self.mixing = Dense(
+            featurization_config["number_of_per_atom_features"] + self.increase_dims,
+            featurization_config["number_of_per_atom_features"],
+        )
+
+    def forward(self, data: NNPInput):
+        """
+        Featurize the input data.
+        """
+
+        # embed atomic_numbers
+        atomic_numbers = data.atomic_numbers
+        embedded_nuclear_charges = self.nuclear_charge_embedding(atomic_numbers)
+
+        # embed per-atom categories (e.g. Spin)
+        for embedding in self.additional_embedding:
+            embedded_nuclear_charges = c(embedded_nuclear_charges, data)
+
+        for c in self.add_to_embedding:
+
+            embedded_nuclear_charges = c(embedded_nuclear_charges, data)
+        return self.mixing(embedded_nuclear_charges)
 
 
 import torch.nn.functional as F

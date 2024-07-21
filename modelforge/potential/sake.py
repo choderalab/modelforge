@@ -77,7 +77,7 @@ class SAKECore(CoreNetwork):
     def __init__(
         self,
         max_Z: int = 100,
-        number_of_atom_features: int = 64,
+        number_of_per_atom_features: int = 64,
         number_of_interaction_modules: int = 6,
         number_of_spatial_attention_heads: int = 4,
         number_of_radial_basis_functions: int = 50,
@@ -92,23 +92,23 @@ class SAKECore(CoreNetwork):
         self.nr_heads = number_of_spatial_attention_heads
         self.max_Z = max_Z
 
-        self.embedding = Dense(max_Z, number_of_atom_features)
+        self.embedding = Dense(max_Z, number_of_per_atom_features)
         self.energy_layer = nn.Sequential(
-            Dense(number_of_atom_features, number_of_atom_features),
+            Dense(number_of_per_atom_features, number_of_per_atom_features),
             nn.SiLU(),
-            Dense(number_of_atom_features, 1),
+            Dense(number_of_per_atom_features, 1),
         )
         # initialize the interaction networks
         self.interaction_modules = nn.ModuleList(
             SAKEInteraction(
-                nr_atom_basis=number_of_atom_features,
-                nr_edge_basis=number_of_atom_features,
-                nr_edge_basis_hidden=number_of_atom_features,
-                nr_atom_basis_hidden=number_of_atom_features,
-                nr_atom_basis_spatial_hidden=number_of_atom_features,
-                nr_atom_basis_spatial=number_of_atom_features,
-                nr_atom_basis_velocity=number_of_atom_features,
-                nr_coefficients=(self.nr_heads * number_of_atom_features),
+                nr_atom_basis=number_of_per_atom_features,
+                nr_edge_basis=number_of_per_atom_features,
+                nr_edge_basis_hidden=number_of_per_atom_features,
+                nr_atom_basis_hidden=number_of_per_atom_features,
+                nr_atom_basis_spatial_hidden=number_of_per_atom_features,
+                nr_atom_basis_spatial=number_of_per_atom_features,
+                nr_atom_basis_velocity=number_of_per_atom_features,
+                nr_coefficients=(self.nr_heads * number_of_per_atom_features),
                 nr_heads=self.nr_heads,
                 activation=torch.nn.SiLU(),
                 cutoff=cutoff,
@@ -549,7 +549,7 @@ class SAKE(BaseNetwork):
     def __init__(
         self,
         max_Z: int,
-        number_of_atom_features: int,
+        number_of_per_atom_features: int,
         number_of_interaction_modules: int,
         number_of_spatial_attention_heads: int,
         number_of_radial_basis_functions: int,
@@ -569,7 +569,7 @@ class SAKE(BaseNetwork):
 
         self.core_module = SAKECore(
             max_Z=max_Z,
-            number_of_atom_features=number_of_atom_features,
+            number_of_per_atom_features=number_of_per_atom_features,
             number_of_interaction_modules=number_of_interaction_modules,
             number_of_spatial_attention_heads=number_of_spatial_attention_heads,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
@@ -587,7 +587,7 @@ class SAKE(BaseNetwork):
         from modelforge.potential.utils import shared_config_prior
 
         prior = {
-            "number_of_atom_features": tune.randint(2, 256),
+            "number_of_per_atom_features": tune.randint(2, 256),
             "number_of_modules": tune.randint(3, 8),
             "number_of_spatial_attention_heads": tune.randint(2, 5),
             "cutoff": tune.uniform(5, 10),

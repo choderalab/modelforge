@@ -3,12 +3,14 @@ model_name = "PhysNet"
 
 [potential.core_parameter]
 
-max_Z = 101
-number_of_atom_features = 64
 number_of_radial_basis_functions = 16
 cutoff = "5.0 angstrom"
 number_of_interaction_residual = 3
 number_of_modules = 5
+[potential.core_parameter.featurization]
+properties_to_featurize = ['atomic_number', 'per_molecule_total_charge']
+max_Z = 101
+number_of_per_atom_features = 32
 
 [potential.postprocessing_parameter]
 [potential.postprocessing_parameter.per_atom_energy]

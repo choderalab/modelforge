@@ -2,11 +2,9 @@ from dataclasses import dataclass
 
 import torch.nn as nn
 from loguru import logger as log
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Union, List
 from openff.units import unit
-from .models import ComputeInteractingAtomPairs, NNPInput, BaseNetwork, CoreNetwork
-
-from .models import PairListOutputs
+from .models import NNPInput, BaseNetwork, CoreNetwork, PairListOutputs
 from .utils import (
     Dense,
     scatter_softmax,
@@ -76,23 +74,26 @@ class SAKECore(CoreNetwork):
 
     def __init__(
         self,
-        max_Z: int = 100,
-        number_of_per_atom_features: int = 64,
-        number_of_interaction_modules: int = 6,
-        number_of_spatial_attention_heads: int = 4,
-        number_of_radial_basis_functions: int = 50,
-        cutoff: unit.Quantity = 5.0 * unit.angstrom,
+        featurization_config: Dict[str, Union[List[str], int]],
+        number_of_interaction_modules: int,
+        number_of_spatial_attention_heads: int,
+        number_of_radial_basis_functions: int,
+        cutoff: unit.Quantity,
         epsilon: float = 1e-8,
     ):
-        from .processing import FromAtomToMoleculeReduction
 
         log.debug("Initializing SAKE model.")
         super().__init__()
         self.nr_interaction_blocks = number_of_interaction_modules
+        number_of_per_atom_features = featurization_config[
+            "number_of_per_atom_features"
+        ]
         self.nr_heads = number_of_spatial_attention_heads
-        self.max_Z = max_Z
+        self.number_of_per_atom_features = number_of_per_atom_features
+        # featurize the atomic input
+        from modelforge.potential.utils import FeaturizeInput
 
-        self.embedding = Dense(max_Z, number_of_per_atom_features)
+        self.featurize_input = FeaturizeInput(featurization_config)
         self.energy_layer = nn.Sequential(
             Dense(number_of_per_atom_features, number_of_per_atom_features),
             nn.SiLU(),
@@ -125,20 +126,20 @@ class SAKECore(CoreNetwork):
 
         number_of_atoms = data.atomic_numbers.shape[0]
 
-        atomic_embedding = self.embedding(
-            F.one_hot(data.atomic_numbers.long(), num_classes=self.max_Z).to(
-                self.embedding.weight.dtype
-            )
-        )
+        # atomic_embedding = self.embedding(
+        #     F.one_hot(data.atomic_numbers.long(), num_classes=self.max_Z).to(
+        #         self.embedding.weight.dtype
+        #     )
+        # )
 
         nnp_input = SAKENeuralNetworkInput(
             pair_indices=pairlist_output.pair_indices,
             number_of_atoms=number_of_atoms,
-            positions=data.positions.to(self.embedding.weight.dtype),
+            positions=data.positions,  # .to(self.embedding.weight.dtype),
             atomic_numbers=data.atomic_numbers,
             atomic_subsystem_indices=data.atomic_subsystem_indices,
-            atomic_embedding=atomic_embedding,
-        )
+            atomic_embedding=self.featurize_input(data),
+        )  # add per-atom properties and embedding,
 
         return nnp_input
 
@@ -548,8 +549,7 @@ from typing import Optional, List, Union
 class SAKE(BaseNetwork):
     def __init__(
         self,
-        max_Z: int,
-        number_of_per_atom_features: int,
+        featurization: Dict[str, Union[List[str], int]],
         number_of_interaction_modules: int,
         number_of_spatial_attention_heads: int,
         number_of_radial_basis_functions: int,
@@ -559,6 +559,7 @@ class SAKE(BaseNetwork):
         epsilon: float = 1e-8,
     ):
         from modelforge.utils.units import _convert
+
         self.only_unique_pairs = False  # NOTE: for pairlist
         super().__init__(
             dataset_statistic=dataset_statistic,
@@ -567,8 +568,7 @@ class SAKE(BaseNetwork):
         )
 
         self.core_module = SAKECore(
-            max_Z=max_Z,
-            number_of_per_atom_features=number_of_per_atom_features,
+            featurization_config=featurization,
             number_of_interaction_modules=number_of_interaction_modules,
             number_of_spatial_attention_heads=number_of_spatial_attention_heads,
             number_of_radial_basis_functions=number_of_radial_basis_functions,

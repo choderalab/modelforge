@@ -251,7 +251,11 @@ class AddPerAtomValue(nn.Module):
 
 class FeaturizeInput(nn.Module):
 
-    _SUPPORTED_FEATURIZATION_TYPES = ["atomic_number", "per_molecule_total_charge"]
+    _SUPPORTED_FEATURIZATION_TYPES = [
+        "atomic_number",
+        "per_molecule_total_charge",
+        "spin_state",
+    ]
 
     def __init__(self, featurization_config: Dict[str, Union[List[str], int]]):
         super().__init__()
@@ -267,39 +271,31 @@ class FeaturizeInput(nn.Module):
         for featurization in self._SUPPORTED_FEATURIZATION_TYPES:
             if (
                 featurization == "atomic_number"
-                and featurization not in featurization_config["properties_to_featurize"]
+                and featurization in featurization_config["properties_to_featurize"]
             ):
-                raise RuntimeError(
-                    "Atomic number embedding is required for featurization. Please add it to the featurization config."
+
+                self.nuclear_charge_embedding = Embedding(
+                    featurization_config["max_Z"],
+                    featurization_config["number_of_per_atom_features"],
                 )
 
-            if featurization in featurization_config["properties_to_featurize"]:
-                
-            self.nuclear_charge_embedding = Embedding(
-                featurization_config["max_Z"],
-                featurization_config["number_of_per_atom_features"],
-            )
-
             if (
-                "per_molecule_total_charge"
-                in featurization_config["properties_to_featurize"]
+                featurization == "per_molecule_total_charge"
+                and featurization in featurization_config["properties_to_featurize"]
             ):
 
                 # transform output o f embedding with shape (nr_atoms, nr_features) to (nr_atoms, nr_features + 1). The added features is the total charge (which will be transformed to a per-atom property)
                 self.add_to_embedding.append(AddPerMoleculeValue("total_charge"))
                 self.increase_dims += 1
 
-        if "per_atom_partial_charge" in featurization_config["properties_to_featurize"]:
+            if (
+                featurization == "per_atom_partial_charge"
+                and featurization in featurization_config["properties_to_featurize"]
+            ):
 
-            # transform output o f embedding with shape (nr_atoms, nr_features) to (nr_atoms, nr_features + 1). The added features is the total charge (which will be transformed to a per-atom property)
-            self.add_to_embedding.append(AddPerAtomValue("partial_charge"))
-            self.increase_dims += 1
-
-        if "per_atom_partial_charge" in featurization_config["properties_to_featurize"]:
-
-            # transform output o f embedding with shape (nr_atoms, nr_features) to (nr_atoms, nr_features + 1). The added features is the total charge (which will be transformed to a per-atom property)
-            self.add_to_embedding.append(AddPerAtomValue("partial_charge"))
-            self.increase_dims += 1
+                # transform output o f embedding with shape (nr_atoms, nr_features) to (nr_atoms, nr_features + 1). The added features is the total charge (which will be transformed to a per-atom property)
+                self.add_to_embedding.append(AddPerAtomValue("partial_charge"))
+                self.increase_dims += 1
 
         self.mixing = Dense(
             featurization_config["number_of_per_atom_features"] + self.increase_dims,
@@ -315,13 +311,19 @@ class FeaturizeInput(nn.Module):
         atomic_numbers = data.atomic_numbers
         embedded_nuclear_charges = self.nuclear_charge_embedding(atomic_numbers)
 
-        # embed per-atom categories (e.g. Spin)
-        for embedding in self.additional_embedding:
-            embedded_nuclear_charges = c(embedded_nuclear_charges, data)
+        # embed per-atom categories
+        for addigional_embedding in self.additional_embedding:
+            embedded_nuclear_charges = addigional_embedding(
+                embedded_nuclear_charges, data
+            )
 
-        for c in self.add_to_embedding:
+        for append_embedding_vector in self.add_to_embedding:
 
-            embedded_nuclear_charges = c(embedded_nuclear_charges, data)
+            embedded_nuclear_charges = append_embedding_vector(
+                embedded_nuclear_charges, data
+            )
+
+        # mix the final embedding with the additional embedding dimensions
         return self.mixing(embedded_nuclear_charges)
 
 

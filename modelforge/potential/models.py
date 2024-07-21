@@ -907,7 +907,7 @@ class BaseNetwork(Module):
         super().__init__()
         from modelforge.utils.units import _convert
 
-        self.perform_postprocessing = PostProcessing(
+        self.postprocessing = PostProcessing(
             postprocessing_parameter, dataset_statistic
         )
 
@@ -992,7 +992,7 @@ class BaseNetwork(Module):
         # prepare the input for the forward pass
         output = self.compute(input_data, pairwise_properties)
         # perform postprocessing operations
-        processed_output = self.perform_postprocessing(output)
+        processed_output = self.postprocessing(output)
         return processed_output
 
 

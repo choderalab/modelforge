@@ -7,7 +7,7 @@ from loguru import logger as log
 from openff.units import unit
 
 from modelforge.potential.utils import NeuralNetworkData
-from .models import ComputeInteractingAtomPairs, NNPInput, BaseNetwork, CoreNetwork
+from .models import PairListOutputs, NNPInput, BaseNetwork, CoreNetwork
 
 
 @dataclass
@@ -150,7 +150,7 @@ class SchNetCore(CoreNetwork):
         )
 
     def _model_specific_input_preparation(
-        self, data: "NNPInput", pairlist_output: "PairListOutputs"
+        self, data: "NNPInput", pairlist_output: PairListOutputs
     ) -> SchnetNeuralNetworkData:
         number_of_atoms = data.atomic_numbers.shape[0]
 
@@ -298,16 +298,18 @@ class SchNETInteractionModule(nn.Module):
         x = self.intput_to_feature(x)
 
         # Generate interaction filters based on radial basis functions
-        W_ij = self.filter_network(f_ij.squeeze(1)) # FIXME
+        W_ij = self.filter_network(f_ij.squeeze(1))  # FIXME
         W_ij = W_ij * f_ij_cutoff
 
         # Perform continuous-filter convolution
         x_j = x[idx_j]
-        x_ij = x_j * W_ij # (nr_of_atom_pairs, nr_atom_basis)
+        x_ij = x_j * W_ij  # (nr_of_atom_pairs, nr_atom_basis)
         out = torch.zeros_like(x)
-        out.scatter_add_(0, idx_i.unsqueeze(-1).expand_as(x_ij), x_ij) # from per_atom_pair to _per_atom
+        out.scatter_add_(
+            0, idx_i.unsqueeze(-1).expand_as(x_ij), x_ij
+        )  # from per_atom_pair to _per_atom
 
-        return self.feature_to_output(out) # shape: (nr_of_atoms, 1)
+        return self.feature_to_output(out)  # shape: (nr_of_atoms, 1)
 
 
 class SchNETRepresentation(nn.Module):

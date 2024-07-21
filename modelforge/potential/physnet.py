@@ -1,18 +1,13 @@
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Dict, Optional, Union
+from typing import Dict, Optional, Union, List, Dict
 
 import torch
 from loguru import logger as log
 from openff.units import unit
 from torch import nn
-from .models import ComputeInteractingAtomPairs, NNPInput, BaseNetwork, CoreNetwork
+from .models import PairListOutputs, NNPInput, BaseNetwork, CoreNetwork
 
 from modelforge.potential.utils import NeuralNetworkData
-
-if TYPE_CHECKING:
-    from modelforge.dataset.dataset import NNPInput
-
-    from .models import PairListOutputs
 
 
 @dataclass
@@ -414,9 +409,8 @@ class PhysNetModule(nn.Module):
 class PhysNetCore(CoreNetwork):
     def __init__(
         self,
-        max_Z: int,
+        featurization_config: Dict[str, Union[List[str], int]],
         cutoff: unit.Quantity,
-        number_of_per_atom_features: int,
         number_of_radial_basis_functions: int,
         number_of_interaction_residual: int,
         number_of_modules: int,
@@ -438,11 +432,13 @@ class PhysNetCore(CoreNetwork):
         log.debug("Initializing PhysNet model.")
         super().__init__()
 
-        # embedding
-        from modelforge.potential.utils import Embedding
+        # featurize the atomic input
+        from modelforge.potential.utils import FeaturizeInput
 
-        self.embedding_module = Embedding(max_Z, number_of_per_atom_features)
-
+        self.featurize_input = FeaturizeInput(featurization_config)
+        number_of_per_atom_features = featurization_config[
+            "number_of_per_atom_features"
+        ]
         self.physnet_representation_module = PhysNetRepresentation(
             cutoff=cutoff,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
@@ -462,14 +458,15 @@ class PhysNetCore(CoreNetwork):
             ]
         )
 
-        self.atomic_scale = nn.Parameter(torch.ones(max_Z, 2))
-        self.atomic_shift = nn.Parameter(torch.zeros(max_Z, 2))
+        # learnable shift and bias that is applied per-element to ech atomic energy
+        self.atomic_scale = nn.Parameter(torch.ones(featurization_config["max_Z"], 2))
+        self.atomic_shift = nn.Parameter(torch.zeros(featurization_config["max_Z"], 2))
 
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
     ) -> PhysNetNeuralNetworkData:
         # Perform atomic embedding
-        atomic_embedding = self.embedding_module(data.atomic_numbers)
+        atomic_embedding = self.featurize_input(data)
         #         Z_i, ..., Z_N
         #
         #             │
@@ -585,9 +582,8 @@ from typing import List
 class PhysNet(BaseNetwork):
     def __init__(
         self,
-        max_Z: int,
+        featurization: Dict[str, Union[List[str], int]],
         cutoff: Union[unit.Quantity, str],
-        number_of_per_atom_features: int,
         number_of_radial_basis_functions: int,
         number_of_interaction_residual: int,
         number_of_modules: int,
@@ -601,6 +597,7 @@ class PhysNet(BaseNetwork):
 
         """
         from modelforge.utils.units import _convert
+
         self.only_unique_pairs = False  # NOTE: for pairlist
         super().__init__(
             dataset_statistic=dataset_statistic,
@@ -609,9 +606,8 @@ class PhysNet(BaseNetwork):
         )
 
         self.core_module = PhysNetCore(
-            max_Z=max_Z,
+            featurization_config=featurization,
             cutoff=_convert(cutoff),
-            number_of_per_atom_features=number_of_per_atom_features,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             number_of_interaction_residual=number_of_interaction_residual,
             number_of_modules=number_of_modules,

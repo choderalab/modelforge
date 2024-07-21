@@ -89,9 +89,15 @@ class NNPInput:
             self.positions = self.positions.to(device)
             self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(device)
             self.total_charge = self.total_charge.to(device)
-            self.pair_list = self.pair_list.to(device) if self.pair_list else None
+            self.pair_list = (
+                self.pair_list.to(device)
+                if self.pair_list is not None
+                else self.pair_list
+            )
             self.partial_charge = (
-                self.partial_charge.to(device) if self.partial_charge else None
+                self.partial_charge.to(device)
+                if self.partial_charge is not None
+                else self.partial_charge
             )
         if dtype:
             self.positions = self.positions.to(dtype)

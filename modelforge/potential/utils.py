@@ -333,6 +333,20 @@ class Dense(nn.Linear):
     """
     Fully connected linear layer with activation function.
 
+    Attributes
+    ----------
+    weight_init_distribution : Callable
+        distribution used to initialize the weights.
+    bias_init_distribution : Callable
+        Distribution used to initialize the bias.
+
+    Methods
+    -------
+    reset_parameters()
+        Reset the weights and bias using the specified initialization distributions.
+    forward(input)
+        Forward pass of the layer.
+
     """
 
     def __init__(
@@ -347,26 +361,57 @@ class Dense(nn.Linear):
         bias_init: Callable = zeros_,
     ):
         """
-        Args:
-            in_features: number of input feature :math:`x`.
-            out_features: umber of output features :math:`y`.
-            bias: If False, the layer will not adapt bias :math:`b`.
-            activation: if None, no activation function is used.
-            weight_init: weight initializer from current weight.
-            bias_init: bias initializer from current bias.
+        __init__ _summary_
+
+
+        Parameters
+        ----------
+        in_features : int
+            Number of input features.
+        out_features : int
+            Number of output features.
+        bias : bool, optional
+            If set to False, the layer will not learn an additive bias. Default is True.
+        activation : nn.Module or Callable[[torch.Tensor], torch.Tensor], optional
+            Activation function to be applied. Default is None, which applies the identity function and makes this a linear transformation.
+        weight_init : Callable, optional
+            Callable to initialize the weights. Default is xavier_uniform_.
+        bias_init : Callable, optional
+            Function to initialize the bias. Default is zeros_.
         """
-        self.weight_init = weight_init
-        self.bias_init = bias_init
-        super().__init__(in_features, out_features, bias)
+        # NOTE: these two variables need to come before the initi
+        self.weight_init_distribution = weight_init
+        self.bias_init_distribution = bias_init
+
+        super().__init__(
+            in_features, out_features, bias
+        )  # NOTE: the `reseet_paramters` method is called in the super class
 
         self.activation = activation or nn.Identity()
 
     def reset_parameters(self):
-        self.weight_init(self.weight)
+        """
+        Reset the weights and bias using the specified initialization distributions.
+        """
+        self.weight_init_distribution(self.weight)
         if self.bias is not None:
-            self.bias_init(self.bias)
+            self.bias_init_distribution(self.bias)
 
     def forward(self, input: torch.Tensor):
+        """
+        Forward pass of the layer.
+
+        Parameters
+        ----------
+        input : torch.Tensor
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Output tensor after applying the linear transformation and activation function.
+
+        """
         y = F.linear(input, self.weight, self.bias)
         return self.activation(y)
 

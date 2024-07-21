@@ -601,7 +601,6 @@ class PhysNet(BaseNetwork):
 
         """
         from modelforge.utils.units import _convert
-
         self.only_unique_pairs = False  # NOTE: for pairlist
         super().__init__(
             dataset_statistic=dataset_statistic,

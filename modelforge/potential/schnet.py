@@ -1,14 +1,10 @@
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import Dict, Optional
 
 import torch
 import torch.nn as nn
 from loguru import logger as log
 from openff.units import unit
-
-if TYPE_CHECKING:
-    from .models import PairListOutputs
-    from modelforge.dataset.dataset import NNPInput
 
 from modelforge.potential.utils import NeuralNetworkData
 from .models import ComputeInteractingAtomPairs, NNPInput, BaseNetwork, CoreNetwork
@@ -276,7 +272,7 @@ class SchNETInteractionModule(nn.Module):
         self,
         x: torch.Tensor,
         pairlist: torch.Tensor,  # shape [n_pairs, 2]
-        f_ij: torch.Tensor,  # shape [n_pairs, 1, number_of_radial_basis_functions]
+        f_ij: torch.Tensor,  # shape [n_pairs, number_of_radial_basis_functions]
         f_ij_cutoff: torch.Tensor,  # shape [n_pairs, 1]
     ) -> torch.Tensor:
         """
@@ -285,7 +281,7 @@ class SchNETInteractionModule(nn.Module):
         Parameters
         ----------
         x : torch.Tensor, shape [nr_of_atoms_in_systems, nr_atom_basis]
-            Input feature tensor for atoms.
+            Input feature tensor for atoms (output of embedding).
         pairlist : torch.Tensor, shape [n_pairs, 2]
         f_ij : torch.Tensor, shape [n_pairs, 1, number_of_radial_basis_functions]
             Radial basis functions for pairs of atoms.
@@ -302,17 +298,16 @@ class SchNETInteractionModule(nn.Module):
         x = self.intput_to_feature(x)
 
         # Generate interaction filters based on radial basis functions
-        W_ij = self.filter_network(f_ij.squeeze(1))
+        W_ij = self.filter_network(f_ij.squeeze(1)) # FIXME
         W_ij = W_ij * f_ij_cutoff
 
         # Perform continuous-filter convolution
         x_j = x[idx_j]
-        x_ij = x_j * W_ij
-
+        x_ij = x_j * W_ij # (nr_of_atom_pairs, nr_atom_basis)
         out = torch.zeros_like(x)
-        out.scatter_add_(0, idx_i.unsqueeze(-1).expand_as(x_ij), x_ij)
+        out.scatter_add_(0, idx_i.unsqueeze(-1).expand_as(x_ij), x_ij) # from per_atom_pair to _per_atom
 
-        return self.feature_to_output(out)
+        return self.feature_to_output(out) # shape: (nr_of_atoms, 1)
 
 
 class SchNETRepresentation(nn.Module):
@@ -366,7 +361,7 @@ class SchNETRepresentation(nn.Module):
         # Convert distances to radial basis functions
         f_ij = self.radial_symmetry_function_module(
             d_ij
-        )  # shape (n_pairs, 1, number_of_radial_basis_functions)
+        )  # shape (n_pairs, number_of_radial_basis_functions)
 
         f_cutoff = self.cutoff_module(d_ij)  # shape (n_pairs, 1)
 

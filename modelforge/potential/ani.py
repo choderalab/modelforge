@@ -467,7 +467,7 @@ class ANI2xCore(CoreNetwork):
         # number of elements in ANI2x
         self.num_species = 7
 
-        log.debug("Initializing ANI model.")
+        log.debug("Initializing the ANI2x architecture.")
         super().__init__()
 
         # Initialize representation block

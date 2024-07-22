@@ -91,7 +91,7 @@ class PaiNNCore(CoreNetwork):
         shared_filters: bool,
         epsilon: float = 1e-8,
     ):
-        log.debug("Initializing PaiNN model.")
+        log.debug("Initializing the PaiNN architecture.")
         super().__init__()
 
         self.number_of_interaction_modules = number_of_interaction_modules

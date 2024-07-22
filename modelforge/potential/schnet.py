@@ -111,7 +111,9 @@ class SchNetCore(CoreNetwork):
             The cutoff distance for interactions.
         """
 
-        log.debug("Initializing SchNet model.")
+        log.debug("Initializing the SchNet architecture.")
+        from modelforge.potential.utils import FeaturizeInput
+
         super().__init__()
         self.number_of_filters = (
             number_of_filters or featurization_config["number_of_per_atom_features"]
@@ -465,7 +467,6 @@ class SchNet(BaseNetwork):
 
         tune = import_("ray").tune
         # from ray import tune
-
 
         prior = {
             "number_of_per_atom_features": tune.randint(2, 256),

@@ -427,7 +427,7 @@ class PhysNetCore(CoreNetwork):
         number_of_modules : int
         """
 
-        log.debug("Initializing PhysNet model.")
+        log.debug("Initializing the PhysNet architecture.")
         super().__init__()
 
         # featurize the atomic input

@@ -99,7 +99,7 @@ class SAKECore(CoreNetwork):
         epsilon : float, optional
             Small value to avoid division by zero, by default 1e-8.
         """
-        log.debug("Initializing SAKE model.")
+        log.debug("Initializing the SAKE architecture.")
         super().__init__()
         self.nr_interaction_blocks = number_of_interaction_modules
         number_of_per_atom_features = featurization_config[
@@ -108,6 +108,7 @@ class SAKECore(CoreNetwork):
         self.nr_heads = number_of_spatial_attention_heads
         self.number_of_per_atom_features = number_of_per_atom_features
         # featurize the atomic input
+        from modelforge.potential.utils import FeaturizeInput
 
         self.featurize_input = FeaturizeInput(featurization_config)
         self.energy_layer = nn.Sequential(

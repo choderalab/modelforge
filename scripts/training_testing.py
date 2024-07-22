@@ -24,12 +24,8 @@ print(model)
 
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
-trainer = Trainer(
-    max_epochs=10_000,
-    num_nodes=1,
-    accelerator="gpu", devices=1
-)
+trainer = Trainer(max_epochs=10_000, num_nodes=1, accelerator="gpu", devices=1)
 
 
-# Run training loop and validate
+# Run runtime_defaults loop and validate
 trainer.fit(model, dataset.train_dataloader(), dataset.val_dataloader())

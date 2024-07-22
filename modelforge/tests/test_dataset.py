@@ -90,7 +90,6 @@ def test_dataset_basic_operations():
 
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_different_properties_of_interest(dataset_name, dataset_factory, prep_temp_dir):
-
     local_cache_dir = str(prep_temp_dir) + "/data_test"
 
     data = _ImplementedDatasets.get_dataset_class(
@@ -216,7 +215,6 @@ def test_file_existence_after_initialization(
     )
 
     with contextlib.suppress(FileNotFoundError):
-
         os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
         os.remove(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
         os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
@@ -471,6 +469,7 @@ def test_dataset_neighborlist(model_name, single_batch_with_batchsize_64):
 
     # Extract parameters
     from modelforge.potential.models import NeuralNetworkPotentialFactory
+
     # initialize model
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
@@ -578,7 +577,7 @@ def test_dataset_generation(dataset_name, datamodule_factory):
         pass
 
     # the dataloader automatically splits and batches the dataset
-    # for the training set it batches the 800 training datapoints (of 1000 total) in 13 batches
+    # for the runtime_defaults set it batches the 800 runtime_defaults datapoints (of 1000 total) in 13 batches
     # all with 64 points until the last which has 32
 
     assert len(train_dataloader) == 13  # nr of batches
@@ -793,7 +792,6 @@ def test_energy_postprocessing():
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_function_of_self_energy(dataset_name, datamodule_factory):
-
     # test the self energy calculation on the QM9 dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 

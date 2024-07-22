@@ -73,11 +73,11 @@ class RayTuner:
 
     def train_func(self):
         """
-        Defines the training function to be used with Ray for distributed training.
+        Defines the runtime_defaults function to be used with Ray for distributed runtime_defaults.
 
         This function configures a PyTorch Lightning trainer with the Ray Distributed Data Parallel
-        (DDP) strategy for efficient distributed training. The training process utilizes a custom
-        training loop and environment setup provided by Ray.
+        (DDP) strategy for efficient distributed runtime_defaults. The runtime_defaults process utilizes a custom
+        runtime_defaults loop and environment setup provided by Ray.
 
         Note: This function should be passed to a Ray Trainer or directly used with Ray tasks.
         """
@@ -103,22 +103,22 @@ class RayTuner:
 
     def get_ray_trainer(self, number_of_workers: int = 2, use_gpu: bool = False):
         """
-        Initializes and returns a Ray Trainer for distributed training.
+        Initializes and returns a Ray Trainer for distributed runtime_defaults.
 
         Configures a Ray Trainer with a specified number of workers and GPU usage settings. This trainer
-        is prepared for distributed training using Ray, with support for checkpointing.
+        is prepared for distributed runtime_defaults using Ray, with support for checkpointing.
 
         Parameters
         ----------
         number_of_workers : int, optional
             The number of distributed workers to use, by default 2.
         use_gpu : bool, optional
-            Specifies whether to use GPUs for training, by default False.
+            Specifies whether to use GPUs for runtime_defaults, by default False.
 
         Returns
         -------
         Ray Trainer
-            The configured Ray Trainer for distributed training.
+            The configured Ray Trainer for distributed runtime_defaults.
         """
 
         from ray.train import CheckpointConfig, RunConfig, ScalingConfig
@@ -165,17 +165,17 @@ class RayTuner:
         Parameters
         ----------
         train_dataloader : DataLoader
-            The DataLoader for training data.
+            The DataLoader for runtime_defaults data.
         val_dataloader : DataLoader
             The DataLoader for validation data.
         number_of_epochs : int, optional
-            The maximum number of epochs for training, by default 5.
+            The maximum number of epochs for runtime_defaults, by default 5.
         number_of_samples : int, optional
             The number of samples (trial runs) to perform, by default 10.
         number_of_ray_workers : int, optional
-            The number of Ray workers to use for distributed training, by default 2.
+            The number of Ray workers to use for distributed runtime_defaults, by default 2.
         use_gpu : bool, optional
-            Whether to use GPUs for training, by default False.
+            Whether to use GPUs for runtime_defaults, by default False.
 
         Returns
         -------

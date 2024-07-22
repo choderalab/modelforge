@@ -527,31 +527,31 @@ class PyTorch2JAXConverter:
 
 class NeuralNetworkPotentialFactory:
     """
-    Factory class for creating instances of neural network potentials for training/inference.
+    Factory class for creating instances of neural network potentials for runtime_defaults/inference.
     """
 
     @staticmethod
     def generate_model(
         *,
-        use: Literal["training", "inference"],
+        use: Literal["runtime_defaults", "inference"],
         model_parameter: Dict[str, Union[str, Any]],
         simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
         training_parameter: Optional[Dict[str, Any]] = None,
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> Union[Type[torch.nn.Module], Type[JAXModel], Type[pl.LightningModule]]:
         """
-        Creates an NNP instance of the specified type, configured either for training or inference.
+        Creates an NNP instance of the specified type, configured either for runtime_defaults or inference.
 
         Parameters
         ----------
         use : str
-            The use case for the model instance, either 'training' or 'inference'.
+            The use case for the model instance, either 'runtime_defaults' or 'inference'.
         simulation_environment : str
             The ML framework to use, either 'PyTorch' or 'JAX'.
         model_parameter : dict, optional
             Parameters specific to the model, by default {}.
         training_parameter : dict, optional
-            Parameters for configuring the training, by default {}.
+            Parameters for configuring the runtime_defaults, by default {}.
 
         Returns
         -------
@@ -572,11 +572,11 @@ class NeuralNetworkPotentialFactory:
         log.debug(f"{training_parameter=}")
         log.debug(f"{model_parameter=}")
 
-        # obtain model for training
-        if use == "training":
+        # obtain model for runtime_defaults
+        if use == "runtime_defaults":
             if simulation_environment == "JAX":
                 log.warning(
-                    "Training in JAX is not availalbe. Falling back to PyTorch."
+                    "Training in JAX is not available. Falling back to PyTorch."
                 )
             model = TrainingAdapter(
                 model_parameter=model_parameter,
@@ -782,7 +782,6 @@ class PostProcessing(torch.nn.Module):
             CalculateAtomicSelfEnergy,
         )
 
-
         for property, operations in postprocessing_parameter.items():
             # register properties for which postprocessing should be performed
             if property.lower() in self._SUPPORTED_PROPERTIES:
@@ -791,7 +790,7 @@ class PostProcessing(torch.nn.Module):
                 raise ValueError(
                     f"Property {property} is not supported. Supported properties are {self._SUPPORTED_PROPERTIES}"
                 )
-    
+
             # register operations that are performed for the property
             postprocessing_sequence = torch.nn.Sequential()
             prostprocessing_sequence_names = []
@@ -799,9 +798,10 @@ class PostProcessing(torch.nn.Module):
             # for each property parse the requested operations
             if property == "per_atom_energy":
                 if operations.get("normalize", False):
-                    mean, stddev = (
-                        self._get_per_atom_energy_mean_and_stddev_of_dataset()
-                    )
+                    (
+                        mean,
+                        stddev,
+                    ) = self._get_per_atom_energy_mean_and_stddev_of_dataset()
                     postprocessing_sequence.append(
                         ScaleValues(
                             mean=mean,
@@ -829,7 +829,6 @@ class PostProcessing(torch.nn.Module):
             elif property == "general_postprocessing_operation":
                 # check if also self-energies are requested
                 if operations.get("calculate_molecular_self_energy", False):
-
                     if self.dataset_statistic is None:
                         log.warning(
                             "Dataset statistics are required to calculate the molecular self-energies but haven't been provided."

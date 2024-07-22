@@ -465,7 +465,7 @@ class SPICE2Curation(DatasetCuration):
         # Note, if the calculation of an individual conformer failed on qcarchive,
         # it will have been excluded from the non_error_keys list. As such, in such cases,
         # the conformer id in the record name will no longer have a one-to-one correspondence with the
-        # index of the conformers in the combined arrays.  This should not be an issue in terms of training,
+        # index of the conformers in the combined arrays.  This should not be an issue in terms of runtime_defaults,
         # but could cause some confusion when interrogating a specific set of conformers geometries for a molecule.
 
         sorted_keys = []

@@ -16,6 +16,6 @@ setup(
     license="MIT",
     author="Chodera lab, Marcus Wieder, Christopher Iacovella, and others",
     author_email="",
-    description="A library for building and training neural network potentials",
+    description="A library for building and runtime_defaults neural network potentials",
     include_package_data=True,
 )

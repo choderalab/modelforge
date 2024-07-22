@@ -158,7 +158,7 @@ class PhysNetResidual(nn.Module):
 
     The block refines atomic feature vectors by adding a residual component computed through
     two linear transformations and a non-linear activation function (Softplus). This setup
-    enhances gradient flow and supports effective deep network training by employing a
+    enhances gradient flow and supports effective deep network runtime_defaults by employing a
     preactivation scheme.
 
     Parameters:

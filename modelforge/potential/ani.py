@@ -247,7 +247,9 @@ class ANIRepresentation(nn.Module):
     ) -> Dict[str, torch.tensor]:
         radial_feature_vector = radial_feature_vector.squeeze(1)
         number_of_atoms = data.number_of_atoms
-        radial_sublength = self.radial_symmetry_functions.number_of_radial_basis_functions
+        radial_sublength = (
+            self.radial_symmetry_functions.number_of_radial_basis_functions
+        )
         radial_length = radial_sublength * self.nr_of_supported_elements
 
         radial_aev = radial_feature_vector.new_zeros(

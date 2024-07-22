@@ -120,7 +120,7 @@ class SPICE1Dataset(HDF5Dataset):
         # are included in the dataset, along with the formation_energy, which is the difference between
         # the dft_total_energy and the reference_energy.
 
-        # To be able to use the dataset for training in a consistent way with the ANI datasets, we will only consider
+        # To be able to use the dataset for runtime_defaults in a consistent way with the ANI datasets, we will only consider
         # the ase values for the uncharged isolated atoms, if available. Ions will use the values Ca 2+, K 1+, Li 1+, Mg 2+, Na 1+.
         # See spice_2_from_qcarchive_curation.py for more details.
 

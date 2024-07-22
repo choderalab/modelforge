@@ -253,7 +253,7 @@ class RandomSplittingStrategy(SplittingStrategy):
         """
         Initializes the RandomSplittingStrategy with a specified seed and split ratios.
 
-        This strategy splits a dataset randomly based on provided ratios for training, validation,
+        This strategy splits a dataset randomly based on provided ratios for runtime_defaults, validation,
         and testing subsets. The sum of split ratios should be 1.0.
 
         Parameters
@@ -262,7 +262,7 @@ class RandomSplittingStrategy(SplittingStrategy):
             Random seed for reproducibility, by default 42.
         split : List[float], optional
             List containing three float values representing the ratio of data for
-            training, validation, and testing respectively, by default [0.8, 0.1, 0.1].
+            runtime_defaults, validation, and testing respectively, by default [0.8, 0.1, 0.1].
 
         Raises
         ------
@@ -280,7 +280,7 @@ class RandomSplittingStrategy(SplittingStrategy):
 
     def split(self, dataset: "TorchDataset") -> Tuple[Subset, Subset, Subset]:
         """
-        Splits the provided dataset into training, validation, and testing subsets based on the predefined ratios.
+        Splits the provided dataset into runtime_defaults, validation, and testing subsets based on the predefined ratios.
 
         This method uses the ratios defined during initialization to randomly partition the dataset.
         The result is a tuple of indices for each subset.
@@ -293,7 +293,7 @@ class RandomSplittingStrategy(SplittingStrategy):
         Returns
         -------
         Tuple[Subset, Subset, Subset]
-            A tuple containing three Subsets for training, validation, and testing subsets, respectively.
+            A tuple containing three Subsets for runtime_defaults, validation, and testing subsets, respectively.
 
         Examples
         --------
@@ -325,9 +325,10 @@ class RandomRecordSplittingStrategy(SplittingStrategy):
     Strategy to split a dataset randomly, keeping all conformers in a record in the same split.
 
     """
+
     def __init__(self, seed: int = 42, split: List[float] = [0.8, 0.1, 0.1]):
         """
-        This strategy splits a dataset randomly based on provided ratios for training, validation,
+        This strategy splits a dataset randomly based on provided ratios for runtime_defaults, validation,
         and testing subsets. The sum of split ratios should be 1.0.
 
         Parameters
@@ -336,7 +337,7 @@ class RandomRecordSplittingStrategy(SplittingStrategy):
             Random seed for reproducibility, by default 42.
         split : List[float], optional
             List containing three float values representing the ratio of data for
-            training, validation, and testing respectively, by default [0.8, 0.1, 0.1].
+            runtime_defaults, validation, and testing respectively, by default [0.8, 0.1, 0.1].
 
         Raises
         ------
@@ -354,7 +355,7 @@ class RandomRecordSplittingStrategy(SplittingStrategy):
 
     def split(self, dataset: "TorchDataset") -> Tuple[Subset, Subset, Subset]:
         """
-        Splits the provided dataset into training, validation, and testing subsets based on the predefined ratios.
+        Splits the provided dataset into runtime_defaults, validation, and testing subsets based on the predefined ratios.
 
         This method uses the ratios defined during initialization to randomly partition the dataset.
         The result is a tuple of indices for each subset.
@@ -367,7 +368,7 @@ class RandomRecordSplittingStrategy(SplittingStrategy):
         Returns
         -------
         Tuple[Subset, Subset, Subset]
-            A tuple containing three Subsets for training, validation, and testing subsets, respectively.
+            A tuple containing three Subsets for runtime_defaults, validation, and testing subsets, respectively.
 
         Examples
         --------
@@ -506,7 +507,6 @@ class FirstComeFirstServeSplittingStrategy(SplittingStrategy):
         )
 
         return (train_d, val_d, test_d)
-
 
 
 REGISTERED_SPLITTING_STRATEGIES = {

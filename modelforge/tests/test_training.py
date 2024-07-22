@@ -15,7 +15,7 @@ def load_configs(model_name: str, dataset_name: str):
         potential_defaults,
         training_defaults,
         dataset_defaults,
-        training,
+        runtime_defaults,
     )
     from importlib import resources
     from modelforge.train.training import return_toml_config
@@ -23,7 +23,7 @@ def load_configs(model_name: str, dataset_name: str):
     potential_path = resources.files(potential_defaults) / f"{model_name.lower()}.toml"
     dataset_path = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
     training_path = resources.files(training_defaults) / "default.toml"
-    runtime_path = resources.files(training) / "runtime.toml"
+    runtime_path = resources.files(runtime_defaults) / "runtime.toml"
     return return_toml_config(
         potential_path=potential_path,
         dataset_path=dataset_path,
@@ -47,11 +47,11 @@ def test_train_with_lightning(model_name, dataset_name):
 
     # Extract parameters
     potential_config = config["potential"]
-    training_config = config["training"]
+    training_config = config["runtime_defaults"]
     dataset_config = config["dataset"]
     runtime_config = config["runtime"]
 
-    # perform training
+    # perform runtime_defaults
     trainer = perform_training(
         potential_config=potential_config,
         training_config=training_config,
@@ -60,7 +60,7 @@ def test_train_with_lightning(model_name, dataset_name):
     )
     # save checkpoint
     trainer.save_checkpoint("test.chp")
-    # continue training
+    # continue runtime_defaults
     trainer = perform_training(
         potential_config=potential_config,
         training_config=training_config,
@@ -138,7 +138,7 @@ def test_hypterparameter_tuning_with_ray(
     from modelforge.train.training import return_toml_config, LossFactory
     from importlib import resources
     from modelforge.tests.data import (
-        training,
+        runtime_defaults,
         potential_defaults,
         dataset_defaults,
         training_defaults,
@@ -148,15 +148,15 @@ def test_hypterparameter_tuning_with_ray(
 
     # Extract parameters
     potential_config = config["potential"]
-    training_config = config["training"]
+    training_config = config["runtime_defaults"]
     dataset_config = config["dataset"]
     runtime_config = config["runtime"]
 
     dm = datamodule_factory(dataset_name=dataset_name)
 
-    # training model
+    # runtime_defaults model
     model = NeuralNetworkPotentialFactory.generate_model(
-        use="training",
+        use="runtime_defaults",
         model_parameter=potential_config,
         training_parameter=training_config["training_parameter"],
     )

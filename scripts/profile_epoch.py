@@ -4,8 +4,7 @@ from typing import Dict, Any
 
 
 def perform_training(trainer, model, dm):
-
-    # Run training loop and validate
+    # Run runtime_defaults loop and validate
     trainer.fit(
         model,
         train_dataloaders=dm.train_dataloader(),
@@ -26,7 +25,7 @@ def setup(model_name: str):
     )
     # Extract parameters
     potential_config = config["potential"]
-    training_config = config["training"]
+    training_config = config["runtime_defaults"]
     dataset_config = config["dataset"]
     training_config["nr_of_epochs"] = 1
 
@@ -64,7 +63,7 @@ def setup(model_name: str):
 
     # Set up model
     model = NeuralNetworkPotentialFactory.generate_model(
-        use="training",
+        use="runtime_defaults",
         model_type=model_name,
         model_parameters=potential_config["potential_parameters"],
         training_parameters=training_config["training_parameters"],
@@ -73,7 +72,6 @@ def setup(model_name: str):
 
 
 if __name__ == "__main__":
-
     model_name = "SchNet"
 
     trainer, model, dm = setup(

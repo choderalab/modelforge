@@ -75,10 +75,10 @@ def test_model_factory(model_name, simulation_environment):
     )
 
     # Extract parameters
-    training_parameter = config["training"].get("training_parameter", {})
-    # training model
+    training_parameter = config["runtime_defaults"].get("training_parameter", {})
+    # runtime_defaults model
     model = NeuralNetworkPotentialFactory.generate_model(
-        use="training",
+        use="runtime_defaults",
         simulation_environment=simulation_environment,
         model_parameter=config["potential"],
         training_parameter=training_parameter,
@@ -182,10 +182,10 @@ def test_state_dict_saving_and_loading(model_name):
     config = load_configs(f"{model_name.lower()}", "qm9")
 
     # Extract parameters
-    training_parameter = config["training"].get("training_parameter", {})
+    training_parameter = config["runtime_defaults"].get("training_parameter", {})
 
     model1 = NeuralNetworkPotentialFactory.generate_model(
-        use="training",
+        use="runtime_defaults",
         simulation_environment="PyTorch",
         model_parameter=config["potential"],
         training_parameter=training_parameter,
@@ -203,7 +203,7 @@ def test_state_dict_saving_and_loading(model_name):
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 def test_dataset_statistic(model_name):
     # Test that the scaling parmaeters are propagated from the dataset to the
-    # training model and then via the state_dict to the inference model
+    # runtime_defaults model and then via the state_dict to the inference model
 
     from modelforge.dataset.dataset import DataModule
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
@@ -212,7 +212,7 @@ def test_dataset_statistic(model_name):
     config = load_configs(f"{model_name.lower()}", "qm9")
 
     # Extract parameters
-    training_parameter = config["training"].get("training_parameter", {})
+    training_parameter = config["runtime_defaults"].get("training_parameter", {})
 
     # test the self energy calculation on the QM9 dataset
     dataset = DataModule(
@@ -238,9 +238,9 @@ def test_dataset_statistic(model_name):
         dataset_statistic["training_dataset_statistics"]["per_atom_energy_mean"]
     ).m
 
-    # set up training model
+    # set up runtime_defaults model
     training_adapter = NeuralNetworkPotentialFactory.generate_model(
-        use="training",
+        use="runtime_defaults",
         simulation_environment="PyTorch",
         model_parameter=config["potential"],
         training_parameter=training_parameter,
@@ -432,7 +432,7 @@ def test_calculate_energies_and_forces(model_name, single_batch_with_batchsize_6
     config = load_configs(f"{model_name.lower()}", "qm9")
 
     # Extract parameters
-    training_parameter = config["training"].get("training_parameter", {})
+    training_parameter = config["runtime_defaults"].get("training_parameter", {})
 
     # get batch
     nnp_input = single_batch_with_batchsize_64.nnp_input
@@ -459,7 +459,7 @@ def test_calculate_energies_and_forces(model_name, single_batch_with_batchsize_6
 
     torch.manual_seed(42)
     model_training = NeuralNetworkPotentialFactory.generate_model(
-        use="training",
+        use="runtime_defaults",
         model_parameter=config["potential"],
         training_parameter=training_parameter,
     )

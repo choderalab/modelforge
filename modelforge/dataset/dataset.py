@@ -16,6 +16,36 @@ if TYPE_CHECKING:
     from modelforge.potential.processing import AtomicSelfEnergies
 
 
+# __all__ = [
+#     "BatchData",
+#     "HDF5Dataset",
+#     "NNPInput",
+#     "Metadata",
+#     "TorchDataset",
+#     "DatasetParameters",
+# ]
+
+from pydantic import BaseModel
+
+
+class DatasetParameters(BaseModel):
+    """
+    Class to hold the dataset parameters.
+
+    Args:
+        dataset_name (str): The name of the dataset.
+        version_select (str): The version of the dataset to use, default is "latest".
+        num_workers (int): The number of workers to use for the DataLoader, default is 4.
+        pin_memory (bool): Whether to pin memory for the DataLoader, default is True.
+
+    """
+
+    dataset_name: str
+    version_select: str = "latest"
+    num_workers: int = 4
+    pin_memory: bool = True
+
+
 @dataclass(frozen=False)
 class Metadata:
     """
@@ -1331,12 +1361,12 @@ class DataModule(pl.LightningDataModule):
         self, num_workers: int = 4, shuffle: bool = True, pin_memory: bool = False
     ) -> DataLoader:
         """
-        Create a DataLoader for the training dataset.
+        Create a DataLoader for the runtime_defaults dataset.
 
         Returns
         -------
         DataLoader
-            DataLoader containing the training dataset.
+            DataLoader containing the runtime_defaults dataset.
         """
         return DataLoader(
             self.train_dataset,

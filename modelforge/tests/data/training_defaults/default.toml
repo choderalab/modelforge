@@ -1,33 +1,28 @@
 [training]
-nr_of_epochs = 5
-save_dir = "test"
-experiment_name = "your_experiment_name"
-accelerator = "cpu"
-num_nodes = 1
-devices = 1                              # [0,1,2,3]
+nr_of_epochs = 2
 remove_self_energies = true
 batch_size = 128
-
-[training.training_parameter]
 lr = 1e-3
 
-[training.training_parameter.lr_scheduler_config]
+[training.lr_scheduler_config]
 frequency = 1
 mode = "min"
 factor = 0.1
 patience = 10
 cooldown = 5
-min_lr = 1e-8
+min_learning_rate = 1e-8
 threshold = 0.1
 threshold_mode = "abs"
 monitor = "val/per_molecule_energy/rmse"
 interval = "epoch"
 
-[training.training_parameter.loss_parameter]
-loss_property = ['per_molecule_energy', 'per_atom_force'] # use .
-[training.training_parameter.loss_parameter.weight]
+[training.loss_parameter]
+loss_property = ['per_molecule_energy', 'per_atom_force'] # use
+
+[training.loss_parameter.weight]
 per_molecule_energy = 0.999 #NOTE: reciprocal units
 per_atom_force = 0.001
+
 
 [training.early_stopping]
 verbose = true
@@ -38,3 +33,4 @@ patience = 50
 [training.splitting_strategy]
 name = "random_record_splitting_strategy"
 data_split = [0.8, 0.1, 0.1]
+seed = 42

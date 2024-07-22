@@ -165,6 +165,10 @@ class Embedding(nn.Module):
         self.embedding = nn.Embedding(num_embeddings, embedding_dim)
 
     @property
+    def weights(self):
+        return self.embedding.weight
+
+    @property
     def data(self):
         return self.embedding.weight.data
 

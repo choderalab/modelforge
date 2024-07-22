@@ -104,7 +104,7 @@ def test_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize_64):
     config = load_configs(f"sake", "qm9")
     # Extract parameters
     core_parameter = config["potential"]["core_parameter"]
-    core_parameter["number_of_atom_features"] = nr_atom_basis
+    core_parameter["featurization"]["number_of_per_atom_features"] = nr_atom_basis
     sake = SAKE(
         **core_parameter,
         postprocessing_parameter=config["potential"]["postprocessing_parameter"],
@@ -413,12 +413,14 @@ def test_model_against_reference(single_batch_with_batchsize_1):
     torch.manual_seed(1884)
     nr_interaction_blocks = 3
     cutoff = 5.0 * unit.angstrom
+    nr_atom_basis = 11
+    max_Z = 13
 
     mf_sake = SAKE(
         featurization={
             "properties_to_featurize": ["atomic_number"],
-            "max_Z": 13,
-            "number_of_per_atom_features": 11,
+            "max_Z": max_Z,
+            "number_of_per_atom_features": nr_atom_basis,
         },
         number_of_interaction_modules=nr_interaction_blocks,
         number_of_spatial_attention_heads=nr_heads,
@@ -461,13 +463,22 @@ def test_model_against_reference(single_batch_with_batchsize_1):
     h = jax.nn.one_hot(prepared_methane.atomic_numbers.detach().numpy(), max_Z)
     x = prepared_methane.positions.detach().numpy()
     variables = ref_sake.init(key, h, x, mask=mask)
+    print(mf_sake.core_module.featurize_input.nuclear_charge_embedding)
+    print(dir(mf_sake.core_module.featurize_input.nuclear_charge_embedding))
 
     variables["params"]["embedding_in"]["kernel"] = (
-        mf_sake.core_module.embedding.weight.detach().numpy().T
+        mf_sake.core_module.featurize_input.nuclear_charge_embedding.weights.detach()
+        .numpy()
+        .T
     )
-    variables["params"]["embedding_in"]["bias"] = (
-        mf_sake.core_module.embedding.bias.detach().numpy().T
-    )
+    
+    # embedding doesn't have any bias
+    # TODO FIXME
+    # variables["params"]["embedding_in"]["bias"] = (
+    #     mf_sake.core_module.featurize_input.nuclear_charge_embedding.bias.detach()
+    #     .numpy()
+    #     .T
+    # )
     variables["params"]["embedding_out"]["layers_0"]["kernel"] = (
         mf_sake.core_module.energy_layer[0].weight.detach().numpy().T
     )

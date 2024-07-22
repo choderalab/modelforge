@@ -108,7 +108,7 @@ class SAKECore(CoreNetwork):
         self.nr_heads = number_of_spatial_attention_heads
         self.number_of_per_atom_features = number_of_per_atom_features
         # featurize the atomic input
-        from modelforge.potential.utils import FeaturizeInput
+        from modelforge.potential.utils import FeaturizeInput, Dense
 
         self.featurize_input = FeaturizeInput(featurization_config)
         self.energy_layer = nn.Sequential(
@@ -158,11 +158,11 @@ class SAKECore(CoreNetwork):
 
         number_of_atoms = data.atomic_numbers.shape[0]
 
-        atomic_embedding = self.embedding(
-            F.one_hot(data.atomic_numbers.long(), num_classes=self.max_Z).to(
-                self.embedding.weight.dtype
-            )
-        )
+        # atomic_embedding = self.embedding(
+        #     F.one_hot(data.atomic_numbers.long(), num_classes=self.max_Z).to(
+        #         self.embedding.weight.dtype
+        #     )
+        # )
 
         nnp_input = SAKENeuralNetworkInput(
             pair_indices=pairlist_output.pair_indices,

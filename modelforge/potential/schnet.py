@@ -112,7 +112,7 @@ class SchNetCore(CoreNetwork):
         """
 
         log.debug("Initializing the SchNet architecture.")
-        from modelforge.potential.utils import FeaturizeInput
+        from modelforge.potential.utils import FeaturizeInput, Dense, ShiftedSoftplus
 
         super().__init__()
         self.number_of_filters = (

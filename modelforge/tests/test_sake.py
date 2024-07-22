@@ -409,16 +409,17 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none):
 
 def test_model_against_reference(single_batch_with_batchsize_1):
     nr_heads = 5
-    nr_atom_basis = 11
-    max_Z = 13
     key = jax.random.PRNGKey(1884)
     torch.manual_seed(1884)
     nr_interaction_blocks = 3
     cutoff = 5.0 * unit.angstrom
 
     mf_sake = SAKE(
-        max_Z=max_Z,
-        number_of_atom_features=nr_atom_basis,
+        featurization={
+            "properties_to_featurize": ["atomic_number"],
+            "max_Z": 13,
+            "number_of_per_atom_features": 11,
+        },
         number_of_interaction_modules=nr_interaction_blocks,
         number_of_spatial_attention_heads=nr_heads,
         cutoff=cutoff,

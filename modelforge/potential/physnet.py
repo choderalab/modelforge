@@ -420,13 +420,11 @@ class PhysNetCore(CoreNetwork):
 
         Parameters
         ----------
-        max_Z : int, default=100
-            Maximum atomic number to be embedded.
-        number_of_per_atom_features : int, default=64
-            Dimension of the embedding vectors for atomic numbers.
-        cutoff : openff.units.unit.Quantity, default=5*unit.angstrom
+        featurization_config: Dict[str, Union[List[str], int]],        
+        
+        cutoff : openff.units.unit.Quantity
             The cutoff distance for interactions.
-        number_of_modules : int, default=2(
+        number_of_modules : int
         """
 
         log.debug("Initializing PhysNet model.")
@@ -575,8 +573,11 @@ class PhysNetCore(CoreNetwork):
         return output
 
 
-from .models import ComputeInteractingAtomPairs, NNPInput, BaseNetwork
+from .models import NNPInput, BaseNetwork
 from typing import List
+from modelforge.utils.units import _convert
+from modelforge.utils.io import import_
+from modelforge.potential.utils import shared_config_prior
 
 
 class PhysNet(BaseNetwork):
@@ -591,12 +592,25 @@ class PhysNet(BaseNetwork):
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
         """
-        Unke, O. T. and Meuwly, M. "PhysNet: A Neural Network for Predicting Energies,
-        Forces, Dipole Moments and Partial Charges" arxiv:1902.08408 (2019).
+        Implementation of the PhysNet neural network potential.
 
-
+        Parameters
+        ----------
+        featurization : Dict[str, Union[List[str], int]]
+            Configuration for atomic feature generation.
+        cutoff : Union[unit.Quantity, str]
+            The cutoff distance for interactions.
+        number_of_radial_basis_functions : int
+            The number of radial basis functions.
+        number_of_interaction_residual : int
+            The number of interaction residuals.
+        number_of_modules : int
+            The number of PhysNet modules.
+        postprocessing_parameter : Dict[str, Dict[str, bool]]
+            Configuration for postprocessing parameters.
+        dataset_statistic : Optional[Dict[str, float]], optional
+            Statistics of the dataset, by default None.
         """
-        from modelforge.utils.units import _convert
 
         self.only_unique_pairs = False  # NOTE: for pairlist
         super().__init__(
@@ -614,13 +628,19 @@ class PhysNet(BaseNetwork):
         )
 
     def _config_prior(self):
-        log.info("Configuring SchNet model hyperparameter prior distribution")
-        from modelforge.utils.io import import_
+        """
+        Configure the hyperparameter prior distribution for the PhysNet model.
+
+        Returns
+        -------
+        dict
+            The hyperparameter prior distribution.
+        """
+        log.info("Configuring PhysNet model hyperparameter prior distribution")
 
         tune = import_("ray").tune
         # from ray import tune
 
-        from modelforge.potential.utils import shared_config_prior
 
         prior = {
             "number_of_per_atom_features": tune.randint(2, 256),
@@ -635,4 +655,17 @@ class PhysNet(BaseNetwork):
     def combine_per_atom_properties(
         self, values: Dict[str, torch.Tensor]
     ) -> torch.Tensor:
+        """
+        Combine the per-atom properties.
+
+        Parameters
+        ----------
+        values : Dict[str, torch.Tensor]
+            Dictionary of per-atom properties.
+
+        Returns
+        -------
+        torch.Tensor
+            Combined per-atom properties.
+        """
         return values

@@ -68,7 +68,7 @@ class SAKECore(CoreNetwork):
     """SAKE - spatial attention kinetic networks with E(n) equivariance.
 
     Reference:
-        Wang, Yuanqing and Chodera, John D. ICLR 2023. https://openreview.net/pdf?id=3DIpIf3wQMC
+    Wang, Yuanqing and Chodera, John D. ICLR 2023. https://openreview.net/pdf?id=3DIpIf3wQMC
 
     """
 
@@ -81,7 +81,24 @@ class SAKECore(CoreNetwork):
         cutoff: unit.Quantity,
         epsilon: float = 1e-8,
     ):
+        """
+        Initialize the SAKECore model.
 
+        Parameters
+        ----------
+        featurization_config : Dict[str, Union[List[str], int]]
+            Configuration for featurizing the atomic input.
+        number_of_interaction_modules : int
+            Number of interaction modules.
+        number_of_spatial_attention_heads : int
+            Number of spatial attention heads.
+        number_of_radial_basis_functions : int
+            Number of radial basis functions.
+        cutoff : unit.Quantity
+            Cutoff distance.
+        epsilon : float, optional
+            Small value to avoid division by zero, by default 1e-8.
+        """
         log.debug("Initializing SAKE model.")
         super().__init__()
         self.nr_interaction_blocks = number_of_interaction_modules
@@ -91,7 +108,6 @@ class SAKECore(CoreNetwork):
         self.nr_heads = number_of_spatial_attention_heads
         self.number_of_per_atom_features = number_of_per_atom_features
         # featurize the atomic input
-        from modelforge.potential.utils import FeaturizeInput
 
         self.featurize_input = FeaturizeInput(featurization_config)
         self.energy_layer = nn.Sequential(
@@ -122,15 +138,30 @@ class SAKECore(CoreNetwork):
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
     ) -> SAKENeuralNetworkInput:
+        """
+        Prepare the model-specific input.
+
+        Parameters
+        ----------
+        data : NNPInput
+            Input data.
+        pairlist_output : PairListOutputs
+            Pairlist output.
+
+        Returns
+        -------
+        SAKENeuralNetworkInput
+            Prepared input for the SAKE neural network.
+        """
         # Perform atomic embedding
 
         number_of_atoms = data.atomic_numbers.shape[0]
 
-        # atomic_embedding = self.embedding(
-        #     F.one_hot(data.atomic_numbers.long(), num_classes=self.max_Z).to(
-        #         self.embedding.weight.dtype
-        #     )
-        # )
+        atomic_embedding = self.embedding(
+            F.one_hot(data.atomic_numbers.long(), num_classes=self.max_Z).to(
+                self.embedding.weight.dtype
+            )
+        )
 
         nnp_input = SAKENeuralNetworkInput(
             pair_indices=pairlist_output.pair_indices,
@@ -145,19 +176,18 @@ class SAKECore(CoreNetwork):
 
     def compute_properties(self, data: SAKENeuralNetworkInput):
         """
-        Compute atomic representations/embeddings.
+        Compute atomic properties.
 
         Parameters
         ----------
-        data: SAKENeuralNetworkInput
-            Dataclass containing atomic properties, embeddings, and pairlist.
+        data : SAKENeuralNetworkInput
+            Input data for the SAKE neural network.
 
         Returns
         -------
         Dict[str, torch.Tensor]
             Dictionary containing per-atom energy predictions and atomic subsystem indices.
         """
-
         # extract properties from pairlist
         h = data.atomic_embedding
         x = data.positions

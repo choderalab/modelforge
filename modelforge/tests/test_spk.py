@@ -71,8 +71,11 @@ def setup_modelforge_painn_representation(
     from openff.units import unit
 
     return mf_PaiNN(
-        max_Z=100,
-        number_of_atom_features=nr_atom_basis,
+        featurization={
+            "properties_to_featurize": ["atomic_number"],
+            "max_Z": 101,
+            "number_of_per_atom_features": 32,
+        },
         number_of_interaction_modules=nr_of_interactions,
         number_of_radial_basis_functions=number_of_gaussians,
         cutoff=cutoff,
@@ -453,8 +456,11 @@ def setup_mf_schnet_representation(
     from modelforge.potential.schnet import SchNet as mf_SchNET
 
     return mf_SchNET(
-        max_Z=101,
-        number_of_atom_features=number_of_atom_features,
+        featurization={
+            "properties_to_featurize": ["atomic_number"],
+            "max_Z": 101,
+            "number_of_per_atom_features": 32,
+        },
         number_of_interaction_modules=nr_of_interactions,
         number_of_radial_basis_functions=number_of_radial_basis_functions,
         cutoff=cutoff,

@@ -246,11 +246,19 @@ class FeaturizeInput(nn.Module):
 
         # for per-atom categorial properties we define an additional embedding and add the embedding to the nuclear charge embedding
 
-        self.add_to_embedding = nn.ModuleList()
-        self.additional_embedding = nn.ModuleList()
-        self.increase_dims = 0
+        # expend embedding vector
+        self.append_to_embedding_tensor = nn.ModuleList()
+        self.registered_appended_properties: List[str] = []
+        # what other categorial properties are embedded
+        self.embeddings = nn.ModuleList()
+        self.registered_embedding_operations: List[str] = []
 
+        self.increase_dim_of_embedded_tensor = 0
+
+        # iterate through the supported featurization types and check if one of these is requested
         for featurization in self._SUPPORTED_FEATURIZATION_TYPES:
+
+            # embed nuclear charges
             if (
                 featurization == "atomic_number"
                 and featurization in featurization_config["properties_to_featurize"]
@@ -260,32 +268,41 @@ class FeaturizeInput(nn.Module):
                     featurization_config["max_Z"],
                     featurization_config["number_of_per_atom_features"],
                 )
+                self.registered_embedding_operations.append("nuclear_charge_embedding")
 
+            # add total charge to embedding vector
             if (
                 featurization == "per_molecule_total_charge"
                 and featurization in featurization_config["properties_to_featurize"]
             ):
 
                 # transform output o f embedding with shape (nr_atoms, nr_features) to (nr_atoms, nr_features + 1). The added features is the total charge (which will be transformed to a per-atom property)
-                self.add_to_embedding.append(AddPerMoleculeValue("total_charge"))
-                self.increase_dims += 1
+                self.append_to_embedding_tensor.append(
+                    AddPerMoleculeValue("total_charge")
+                )
+                self.increase_dim_of_embedded_tensor += 1
+                self.registered_appended_properties.append("total_charge")
 
+            # add partial charge to embedding vector
             if (
                 featurization == "per_atom_partial_charge"
                 and featurization in featurization_config["properties_to_featurize"]
             ):
 
                 # transform output o f embedding with shape (nr_atoms, nr_features) to (nr_atoms, nr_features + 1). The added features is the total charge (which will be transformed to a per-atom property)
-                self.add_to_embedding.append(AddPerAtomValue("partial_charge"))
-                self.increase_dims += 1
+                self.append_to_embedding_tensor.append(
+                    AddPerAtomValue("partial_charge")
+                )
+                self.increase_dim_of_embedded_tensor += 1
+                self.append_to_embedding_tensor("partial_charge")
 
         # if only nuclear charges are embedded no mixing is performed
-        if self.increase_dims == 0:
+        if self.increase_dim_of_embedded_tensor == 0:
             self.mixing = nn.Identity()
         else:
             self.mixing = Dense(
                 featurization_config["number_of_per_atom_features"]
-                + self.increase_dims,
+                + self.increase_dim_of_embedded_tensor,
                 featurization_config["number_of_per_atom_features"],
             )
 
@@ -299,13 +316,12 @@ class FeaturizeInput(nn.Module):
         embedded_nuclear_charges = self.nuclear_charge_embedding(atomic_numbers)
 
         # embed per-atom categories
-        for addigional_embedding in self.additional_embedding:
+        for addigional_embedding in self.embeddings:
             embedded_nuclear_charges = addigional_embedding(
                 embedded_nuclear_charges, data
             )
-
-        for append_embedding_vector in self.add_to_embedding:
-
+        # append to embedding vector
+        for append_embedding_vector in self.append_to_embedding_tensor:
             embedded_nuclear_charges = append_embedding_vector(
                 embedded_nuclear_charges, data
             )

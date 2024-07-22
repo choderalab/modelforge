@@ -19,8 +19,11 @@ def initialize_model(
     from modelforge.potential.schnet import SchNet
 
     return SchNet(
-        max_Z=101,
-        number_of_atom_features=number_of_atom_features,
+        featurization={
+            "properties_to_featurize": ["atomic_number"],
+            "max_Z": 101,
+            "number_of_per_atom_features": 32,
+        },
         number_of_interaction_modules=nr_of_interactions,
         number_of_radial_basis_functions=number_of_radial_basis_functions,
         cutoff=cutoff,

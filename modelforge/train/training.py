@@ -1016,11 +1016,11 @@ def perform_training(
     version_select = dataset_config.get("version_select", "latest")
     accelerator = runtime_config.get("accelerator", "cpu")
     splitting_strategy = training_config["splitting_strategy"]
-    nr_of_epochs = runtime_config.get("nr_of_epochs", 10)
+    nr_of_epochs = runtime_config["nr_of_epochs"]
     num_nodes = runtime_config.get("num_nodes", 1)
     devices = runtime_config.get("devices", 1)
-    batch_size = training_config.get("batch_size", 128)
-    remove_self_energies = training_config.get("remove_self_energies", False)
+    batch_size = training_config["batch_size"]
+    remove_self_energies = training_config["remove_self_energies"]
     early_stopping_config = training_config.get("early_stopping", None)
     stochastic_weight_averaging_config = training_config.get(
         "stochastic_weight_averaging_config", None

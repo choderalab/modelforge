@@ -914,7 +914,7 @@ def read_config_and_train(
     # Extract parameters
     potential_config = config["potential"]
     dataset_config = config["dataset"]
-    training_config = config["runtime_defaults"]
+    training_config = config["training"]
     runtime_config = config["runtime"]
 
     # Override config parameters with command-line arguments if provided

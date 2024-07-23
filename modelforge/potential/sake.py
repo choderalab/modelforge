@@ -114,6 +114,7 @@ class SAKECore(CoreNetwork):
                 cutoff=cutoff,
                 number_of_radial_basis_functions=number_of_radial_basis_functions,
                 epsilon=epsilon,
+                scale_factor=(1.0 * unit.nanometer),  # TODO: switch to angstrom
             )
             for _ in range(self.nr_interaction_blocks)
         )
@@ -193,9 +194,10 @@ class SAKEInteraction(nn.Module):
         nr_coefficients: int,
         nr_heads: int,
         activation: nn.Module,
-        cutoff: float,
+        cutoff: unit.Quantity,
         number_of_radial_basis_functions: int,
         epsilon: float,
+        scale_factor: unit.Quantity,
     ):
         """
         Parameters
@@ -218,11 +220,15 @@ class SAKEInteraction(nn.Module):
             Number of coefficients for spatial attention.
         activation : Callable
             Activation function to use.
-
-        Attributes
-        ----------
-        nr_atom_basis : int
-            Number of features to describe atomic environments.
+        cutoff : unit.Quantity
+            Distance parameter for setting scale factors in radial basis functions.
+        number_of_radial_basis_functions: int
+            Number of radial basis functions.
+        epsilon : float
+            Small constant to add for stability.
+        scale_factor : unit.Quantity
+            Factor with dimensions of length used to nondimensionalize distances before being
+            passed into `edge_mlp_in`.
         """
         super().__init__()
         self.nr_atom_basis = nr_atom_basis
@@ -303,6 +309,8 @@ class SAKEInteraction(nn.Module):
 
         self.v_mixing_mlp = Dense(self.nr_coefficients, 1, bias=False)
 
+        self.scale_factor_in_nanometer = scale_factor.m_as(unit.nanometer)
+
     def update_edge(self, h_i_by_pair, h_j_by_pair, d_ij):
         """Compute intermediate edge features for semantic attention.
 
@@ -327,7 +335,7 @@ class SAKEInteraction(nn.Module):
             h_ij_cat
         )
         return self.edge_mlp_out(
-            torch.cat([h_ij_cat, h_ij_filtered, d_ij.unsqueeze(-1)], dim=-1)
+            torch.cat([h_ij_cat, h_ij_filtered, d_ij.unsqueeze(-1) / self.scale_factor_in_nanometer], dim=-1)
         )
 
     def update_node(self, h, h_i_semantic, h_i_spatial):
@@ -456,7 +464,7 @@ class SAKEInteraction(nn.Module):
         )
         return zeros.scatter_add(0, expanded_idx_i, h_ij_semantic)
 
-    def get_semantic_attention(self, h_ij_edge, idx_i, idx_j, d_ij, nr_atoms):
+    def get_semantic_attention(self, h_ij_edge, idx_i, idx_j, nr_atoms):
         """Compute semantic attention. Softmax is over all senders connected to a receiver.
 
         Wang and Chodera (2023) Sec. 5 Eq. 9-10.
@@ -469,8 +477,6 @@ class SAKEInteraction(nn.Module):
             Indices of the receiver nodes. Shape [nr_pairs, ].
         idx_j : torch.Tensor
             Indices of the sender nodes. Shape [nr_pairs, ].
-        d_ij : torch.Tensor
-            Distance between senders and receivers. Shape [nr_pairs, ].
         nr_atoms : int
             Number of atoms in all systems.
 
@@ -524,7 +530,7 @@ class SAKEInteraction(nn.Module):
 
         h_ij_edge = self.update_edge(h[idx_j], h[idx_i], d_ij)
         h_ij_semantic = self.get_semantic_attention(
-            h_ij_edge, idx_i, idx_j, d_ij, nr_of_atoms_in_all_systems
+            h_ij_edge, idx_i, idx_j, nr_of_atoms_in_all_systems
         )
         del h_ij_edge
         h_i_semantic = self.aggregate(h_ij_semantic, idx_i, nr_of_atoms_in_all_systems)

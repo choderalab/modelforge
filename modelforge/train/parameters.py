@@ -191,14 +191,14 @@ class TrainingParameters(ParametersBase):
         }
 
         @model_validator(mode="after")
-        def ensure_length_match(cls, values):
-            loss_property = values.get("loss_property")
-            loss_weight = values.get("weight")
+        def ensure_length_match(self) -> "LossParameter":
+            loss_property = self.loss_property
+            loss_weight = self.weight
             if len(loss_property) != len(loss_weight):
                 raise ValueError(
                     f"The length of loss_property ({len(loss_property)}) and weight ({len(loss_weight)}) must match."
                 )
-            return values
+            return self
 
     class EarlyStopping(ParametersBase):
         """

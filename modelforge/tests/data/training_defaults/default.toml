@@ -4,7 +4,6 @@ remove_self_energies = true
 batch_size = 128
 lr = 1e-3
 
-[training.lr_scheduler_config]
 [training.experiment_logger]
 logger_name = "tensorboard"
 

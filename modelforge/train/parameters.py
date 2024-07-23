@@ -120,6 +120,15 @@ class AnnealingStrategy(str, Enum):
     linear = "linear"
 
 
+class Loggers(str, Enum):
+    """
+    Enum class for the experiment logger
+    """
+
+    wandb = "wandb"
+    tensorboard = "tensorboard"
+
+
 class TrainingParameters(ParametersBase):
     """
     A class to hold the training parameters that inherits from the pydantic BaseModel
@@ -232,15 +241,19 @@ class TrainingParameters(ParametersBase):
         annealing_strategy: AnnealingStrategy = AnnealingStrategy.cos
         avg_fn: Optional[Callable] = None
 
+    class ExperimentLogger(ParametersBase):
+        logger_name: Loggers = Loggers.tensorboard
+
     nr_of_epochs: int = 1000
     remove_self_energies: bool = True
     batch_size: int = 128
     lr: float = 1e-3
-    lr_scheduler_config: SchedulerConfig
-    loss_parameter: LossParameter
+    lr_scheduler_config: SchedulerConfig = SchedulerConfig()
+    loss_parameter: LossParameter = LossParameter()
     early_stopping: Optional[EarlyStopping] = None
-    splitting_strategy: SplittingStrategy
+    splitting_strategy: SplittingStrategy = SplittingStrategy()
     stochastic_weight_averaging: Optional[StochasticWeightAveraging] = None
+    experiment_logger: ExperimentLogger = ExperimentLogger()
 
 
 class Accelerator(str, Enum):

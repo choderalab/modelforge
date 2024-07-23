@@ -231,7 +231,7 @@ class TrainingParameters(ParametersBase):
         name: SplittingStrategyName = (
             SplittingStrategyName.random_record_splitting_strategy
         )
-        data_split = [0.8, 0.1, 0.1]
+        data_split: List[float] = [0.8, 0.1, 0.1]
         seed: int = 42
 
     class StochasticWeightAveraging(ParametersBase):

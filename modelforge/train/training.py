@@ -1280,9 +1280,16 @@ def perform_training_pydantic_model(
     # )
 
     # set up tensor board logger
-    logger = TensorBoardLogger(
-        runtime_config.save_dir, name=runtime_config.experiment_name
-    )
+    if training_config.experiment_logger == "tensorboard":
+        logger = TensorBoardLogger(
+            runtime_config.save_dir, name=runtime_config.experiment_name
+        )
+    elif training_config.experiment_logger == "wandb":
+        logger = WandbLogger(
+            save_dir=runtime_config.save_dir,
+            log_model=True,
+            name=runtime_config.experiment_name,
+        )
 
     # Set up dataset
     dm = DataModule(

@@ -47,7 +47,7 @@ The SplittingStrategy model will have the following parameters:
 
 
 """
-from pydantic import BaseModel, model_validator, validator
+from pydantic import BaseModel, model_validator, field_validator
 from enum import Enum
 from typing import List, Union, Dict, Optional, Callable
 
@@ -312,14 +312,16 @@ class RuntimeParameters(ParametersBase):
     simulation_environment: SimulationEnvironment = SimulationEnvironment.PyTorch
     log_every_n_steps: int = 50
 
-    @validator("number_of_nodes")
-    def number_of_nodes_must_be_positive(cls, v):
+    @field_validator("number_of_nodes")
+    @classmethod
+    def number_of_nodes_must_be_positive(cls, v) -> int:
         if v < 1:
             raise ValueError("number_of_nodes must be positive and greater than 0")
         return v
 
-    @validator("devices")
-    def device_index_must_be_positive(cls, v):
+    @field_validator("devices")
+    @classmethod
+    def device_index_must_be_positive(cls, v) -> Union[int, List[int]]:
         if isinstance(v, list):
             for device in v:
                 if device < 0:

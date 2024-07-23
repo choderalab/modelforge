@@ -141,7 +141,7 @@ class PerMoleculeMeanSquaredError(Error):
 
     def __init__(self):
         """
-        Initializes the PerMoleculeError class.
+        Initializes the PerMoleculeMeanSquaredError class.
         """
 
         super().__init__()
@@ -235,7 +235,7 @@ class Loss(nn.Module):
             if prop in self._SUPPORTED_PROPERTIES:
                 if prop == "per_atom_force":
                     self.loss[prop] = FromPerAtomToPerMoleculeMeanSquaredError()
-                else:
+                elif prop == "per_molecule_energy":
                     self.loss[prop] = PerMoleculeMeanSquaredError()
                 self.register_buffer(prop, torch.tensor(w))
             else:
@@ -254,12 +254,15 @@ class Loss(nn.Module):
 
         Returns
         -------
-        torch.Tensor
-            The combined loss for the specified properties.
+        Dict{str, torch.Tensor]
+            Individual loss terms and the combined, total loss.
         """
-        loss = torch.tensor([0.0])
         # save the loss as a dictionary
-        r = {}
+        loss_dict = {}
+        # accumulate loss
+        loss = torch.tensor(
+            [0.0], dtype=batch.metadata.E.dtype, device=batch.metadata.E.device
+        )
         # iterate over loss properties
         for prop in self.loss_property:
             # calculate loss per property
@@ -269,12 +272,12 @@ class Loss(nn.Module):
             # add total loss
             loss = loss + loss_
             # save loss
-            r[prop] = loss_
+            loss_dict[f"{prop}/mse"] = loss_
 
         # add total loss to results dict and return
-        r["total_loss"] = loss
+        loss_dict["total_loss"] = loss
 
-        return r
+        return loss_dict
 
 
 class LossFactory(object):
@@ -305,9 +308,42 @@ class LossFactory(object):
 from torch.optim import Optimizer
 
 
+from torch.nn import ModuleDict
+
+
+def create_error_metrics(loss_properties: List[str]) -> ModuleDict:
+    """
+    Creates a ModuleDict of MetricCollections for the given loss properties.
+
+    Parameters
+    ----------
+    loss_properties : List[str]
+        List of loss properties for which to create the metrics.
+
+    Returns
+    -------
+    ModuleDict
+        A dictionary where keys are loss properties and values are MetricCollections.
+    """
+    from torchmetrics.regression import (
+        MeanAbsoluteError,
+        MeanSquaredError,
+    )
+    from torchmetrics import MetricCollection
+
+    return ModuleDict(
+        {
+            prop: MetricCollection(
+                [MeanAbsoluteError(), MeanSquaredError(squared=False)]
+            )
+            for prop in loss_properties
+        }
+    )
+
+
 class TrainingAdapter(pl.LightningModule):
     """
-    Adapter class for runtime_defaults neural network potentials using PyTorch Lightning.
+    Adapter class for training neural network potentials using PyTorch Lightning.
     """
 
     def __init__(
@@ -319,9 +355,10 @@ class TrainingAdapter(pl.LightningModule):
         loss_parameter: Dict[str, Any],
         dataset_statistic: Optional[Dict[str, float]] = None,
         optimizer: Type[Optimizer] = torch.optim.AdamW,
+        verbose: bool = False,
     ):
         """
-        Initializes the TrainingAdapter with the specified model and runtime_defaults configuration.
+        Initializes the TrainingAdapter with the specified model and training configuration.
 
         Parameters
         ----------
@@ -333,7 +370,7 @@ class TrainingAdapter(pl.LightningModule):
             The learning rate for the optimizer.
         loss_module : Loss, optional
         optimizer : Type[Optimizer], optional
-            The optimizer class to use for runtime_defaults, by default torch.optim.AdamW.
+            The optimizer class to use for training, by default torch.optim.AdamW.
         """
 
         from modelforge.potential import _Implemented_NNPs
@@ -356,47 +393,21 @@ class TrainingAdapter(pl.LightningModule):
         self.learning_rate = lr
         self.lr_scheduler_config = lr_scheduler_config
 
-        # register metrics
-        self._register_metrics(loss_parameter)
+        # verbose output, only True if requested
+        if verbose:
+            self.log_histograms = True
+            self.log_on_training_step = True
+        else:
+            self.log_histograms = False
+            self.log_on_training_step = False
 
         # initialize loss
         self.loss = LossFactory.create_loss(**loss_parameter)
 
-    def _register_metrics(self, loss_parameter: Dict[str, Any]):
-        from torchmetrics.regression import (
-            MeanAbsoluteError,
-            MeanSquaredError,
-        )
-        from torchmetrics import MetricCollection
-
-        # register logging
-        from torch.nn import ModuleDict
-
-        self.test_error = ModuleDict(
-            {
-                prop: MetricCollection(
-                    [MeanAbsoluteError(), MeanSquaredError(squared=False)]
-                )
-                for prop in loss_parameter["loss_property"]
-            }
-        )
-        self.val_error = ModuleDict(
-            {
-                prop: MetricCollection(
-                    [MeanAbsoluteError(), MeanSquaredError(squared=False)]
-                )
-                for prop in loss_parameter["loss_property"]
-            }
-        )
-
-        self.train_error = ModuleDict(
-            {
-                prop: MetricCollection(
-                    [MeanAbsoluteError(), MeanSquaredError(squared=False)]
-                )
-                for prop in loss_parameter["loss_property"]
-            }
-        )
+        # Assign the created error metrics to the respective attributes
+        self.test_error = create_error_metrics(loss_parameter["loss_property"])
+        self.val_error = create_error_metrics(loss_parameter["loss_property"])
+        self.train_error = create_error_metrics(loss_parameter["loss_property"])
 
     def _get_forces(
         self, batch: "BatchData", energies: Dict[str, torch.Tensor]
@@ -502,7 +513,7 @@ class TrainingAdapter(pl.LightningModule):
         log.warning("Model does not implement _config_prior().")
         raise NotImplementedError()
 
-    def _log_metrics(
+    def _update_metrics(
         self,
         error_dict: Dict[str, torchmetrics.MetricCollection],
         predict_target: Dict[str, torch.Tensor],
@@ -524,17 +535,11 @@ class TrainingAdapter(pl.LightningModule):
         """
 
         for property, metrics in error_dict.items():
-            for metric, error_log in metrics.items():
-                if property == "per_molecule_energy":
-                    error_log(
-                        predict_target["per_molecule_energy_predict"].detach(),
-                        predict_target["per_molecule_energy_true"].detach(),
-                    )
-                if property == "per_atom_force":
-                    error_log(
-                        predict_target["per_atom_force_predict"].detach(),
-                        predict_target["per_atom_force_true"].detach(),
-                    )
+            for _, error_log in metrics.items():
+                error_log(
+                    predict_target[f"{property}_predict"].detach(),
+                    predict_target[f"{property}_true"].detach(),
+                )
 
     def training_step(self, batch: "BatchData", batch_idx: int) -> torch.Tensor:
         """
@@ -543,14 +548,14 @@ class TrainingAdapter(pl.LightningModule):
         Parameters
         ----------
         batch : BatchData
-            The batch of data provided for the runtime_defaults.
+            The batch of data provided for the training.
         batch_idx : int
             The index of the current batch.
 
         Returns
         -------
         torch.Tensor
-            The loss tensor computed for the current runtime_defaults step.
+            The loss tensor computed for the current training step.
         """
 
         # calculate energy and forces
@@ -559,15 +564,15 @@ class TrainingAdapter(pl.LightningModule):
         # calculate the loss
         loss_dict = self.loss(predict_target, batch)
 
-        # Update and log runtime_defaults error
-        self._log_metrics(self.train_error, predict_target)
+        # Update and log training error
+        self._update_metrics(self.train_error, predict_target)
 
-        # log the loss
+        # log the loss (this includes the individual contributions that the loss contains)
         for key, loss in loss_dict.items():
             self.log(
-                f"train/{key}",
+                f"loss/{key}",
                 torch.mean(loss),
-                on_step=True,
+                on_step=False,
                 prog_bar=True,
                 on_epoch=True,
                 batch_size=1,
@@ -599,14 +604,14 @@ class TrainingAdapter(pl.LightningModule):
         # calculate the loss
         loss = self.loss(predict_target, batch)
         # log the loss
-        self._log_metrics(self.val_error, predict_target)
+        self._update_metrics(self.val_error, predict_target)
 
     @torch.enable_grad()
     def test_step(self, batch: "BatchData", batch_idx: int) -> None:
         """
         Test step to compute the RMSE loss for a given batch.
 
-        This method is called automatically during the test loop of the runtime_defaults process. It computes
+        This method is called automatically during the test loop of the training process. It computes
         the loss on a batch of test data and logs the results for analysis.
 
         Parameters
@@ -626,22 +631,31 @@ class TrainingAdapter(pl.LightningModule):
         # calculate energy and forces
         predict_target = self._get_predictions(batch)
         # Update and log metrics
-        self._log_metrics(self.test_error, predict_target)
+        self._update_metrics(self.test_error, predict_target)
+
+    def on_test_epoch_end(self):
+        """
+        Operations to perform at the end of the test set pass.
+        """
+        self._log_on_epoch(log_mode="test")
 
     def on_train_epoch_end(self):
         """
-        Operations to perform at the end of each runtime_defaults epoch.
+        Operations to perform at the end of each training epoch.
 
         Logs histograms of weights and biases, and learning rate.
         Also, resets validation loss.
         """
-        for name, params in self.named_parameters():
-            if params is not None:
-                self.logger.experiment.add_histogram(name, params, self.current_epoch)
-            if params.grad is not None:
-                self.logger.experiment.add_histogram(
-                    f"{name}.grad", params.grad, self.current_epoch
-                )
+        if self.log_histograms == True:
+            for name, params in self.named_parameters():
+                if params is not None:
+                    self.logger.experiment.add_histogram(
+                        name, params, self.current_epoch
+                    )
+                if params.grad is not None:
+                    self.logger.experiment.add_histogram(
+                        f"{name}.grad", params.grad, self.current_epoch
+                    )
 
         sch = self.lr_schedulers()
         try:
@@ -651,27 +665,38 @@ class TrainingAdapter(pl.LightningModule):
 
         self._log_on_epoch()
 
-    def _log_on_epoch(self):
+    def _log_on_epoch(self, log_mode: str = "train"):
         # convert long names to shorter versions
         conv = {
             "MeanAbsoluteError": "mae",
             "MeanSquaredError": "rmse",
         }  # NOTE: MeanSquaredError(squared=False) is RMSE
-        # Log accumulated runtime_defaults loss metrics
-        metrics = {}
-        self.log_dict(metrics, on_epoch=True, prog_bar=True)
 
-        # Log all accumulated metrics for train, val, and test phases
-        for phase, error_dict in [
-            ("train", self.train_error),
-            ("val", self.val_error),
-            ("test", self.test_error),
-        ]:
+        # Log all accumulated metrics for train and val phases
+        if log_mode == "train":
+            errors = [
+                ("train", self.train_error),
+                ("val", self.val_error),
+            ]
+        elif log_mode == "test":
+            errors = [
+                ("test", self.test_error),
+            ]
+        else:
+            raise RuntimeError(f"Unrecognized mode: {log_mode}")
+
+        for phase, error_dict in errors:
+            # skip if log_on_training_step is not requested
+            if phase == "train" and not self.log_on_training_step:
+                continue
+
             metrics = {}
             for property, metrics_dict in error_dict.items():
                 for name, metric in metrics_dict.items():
-                    metrics[f"{phase}/{property}/{conv[name]}"] = metric.compute()
+                    name = f"{phase}/{property}/{conv[name]}"
+                    metrics[name] = metric.compute()
                     metric.reset()
+            # log dict, print val metrics to console
             self.log_dict(metrics, on_epoch=True, prog_bar=(phase == "val"))
 
     def configure_optimizers(self) -> Dict[str, Any]:
@@ -682,7 +707,7 @@ class TrainingAdapter(pl.LightningModule):
         -------
         Dict[str, Any]
             A dictionary containing the optimizer and optionally the learning rate scheduler
-            to be used within the PyTorch Lightning runtime_defaults process.
+            to be used within the PyTorch Lightning training process.
         """
 
         optimizer = self.optimizer(self.model.parameters(), lr=self.learning_rate)
@@ -883,7 +908,7 @@ def read_config_and_train(
     """
     # Read the TOML file
     config = return_toml_config(
-        config_path, potential_path, dataset_path, training_path
+        config_path, potential_path, dataset_path, training_path, runtime_path
     )
 
     # Extract parameters
@@ -891,6 +916,7 @@ def read_config_and_train(
     dataset_config = config["dataset"]
     training_config = config["runtime_defaults"]
     runtime_config = config["runtime"]
+
     # Override config parameters with command-line arguments if provided
     if accelerator:
         runtime_config["accelerator"] = accelerator
@@ -900,6 +926,8 @@ def read_config_and_train(
     log.debug(f"Potential config: {potential_config}")
     log.debug(f"Dataset config: {dataset_config}")
     log.debug(f"Training config: {training_config}")
+    log.debug(f"Runtime config: {runtime_config}")
+
     # Call the perform_training function with extracted parameters
     perform_training(
         potential_config=potential_config,
@@ -919,7 +947,7 @@ def log_training_arguments(
     runtime_config: Dict[str, Any],
 ):
     """
-    Log arguments that are passed to the runtime_defaults routine.
+    Log arguments that are passed to the training routine.
 
     Arguments
     ----
@@ -932,17 +960,12 @@ def log_training_arguments(
         runtime_config: Dict[str, Any]
             config for the runtime
     """
-    save_dir = training_config.get("save_dir", "lightning_logs")
-    if save_dir == "lightning_logs":
-        log.info(f"Saving logs to default location: {save_dir}")
-    else:
-        log.info(f"Saving logs to custom location: {save_dir}")
 
-    experiment_name = training_config.get("experiment_name", "exp")
-    if experiment_name == "experiment_name":
-        log.info(f"Saving logs in default dir: {experiment_name}")
-    else:
-        log.info(f"Saving logs in custom dir: {experiment_name}")
+    save_dir = runtime_config["save_dir"]
+    log.info(f"Saving logs to location: {save_dir}")
+
+    experiment_name = runtime_config["experiment_name"]
+    log.info(f"Saving logs in dir: {experiment_name}")
 
     version_select = dataset_config.get("version_select", "latest")
     if version_select == "latest":
@@ -956,12 +979,12 @@ def log_training_arguments(
     else:
         log.info(f"Using cache directory: {local_cache_dir}")
 
-    accelerator = training_config.get("accelerator", "cpu")
+    accelerator = runtime_config.get("accelerator", "cpu")
     if accelerator == "cpu":
         log.info(f"Using default accelerator: {accelerator}")
     else:
         log.info(f"Using accelerator: {accelerator}")
-    nr_of_epochs = runtime_config.get("nr_of_epochs", 10)
+    nr_of_epochs = training_config.get("nr_of_epochs", 10)
     if nr_of_epochs == 10:
         log.info(f"Using default number of epochs: {nr_of_epochs}")
     else:
@@ -1038,7 +1061,7 @@ def perform_training(
     checkpoint_path: Optional[str] = None,
 ) -> Trainer:
     """
-    Performs the runtime_defaults process for a neural network potential model.
+    Performs the training process for a neural network potential model.
 
     Parameters
     ----------
@@ -1054,17 +1077,20 @@ def perform_training(
     Trainer
     """
 
-    from pytorch_lightning.loggers import TensorBoardLogger
+    from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
+
     from modelforge.dataset.utils import REGISTERED_SPLITTING_STRATEGIES
     from lightning import Trainer
     from modelforge.potential import NeuralNetworkPotentialFactory
     from modelforge.dataset.dataset import DataModule
 
-    save_dir = runtime_config.get("save_dir", "lightning_logs")
-    if save_dir == "lightning_logs":
-        log.info(f"Saving logs to default location: {save_dir}")
+    # NOTE --------------------------------------- NOTE #
+    # FIXME TODO: move this to a dataclass and control default
+    # behavior from there this current approach is hacky and error prone
+    save_dir = runtime_config["save_dir"]
+    log.info(f"Saving logs to location: {save_dir}")
 
-    experiment_name = training_config.get("experiment_name", "exp")
+    experiment_name = runtime_config["experiment_name"]
     if experiment_name == "{model_name}_{dataset_name}":
         experiment_name = (
             f"{potential_config['model_name']}_{dataset_config['dataset_name']}"
@@ -1073,8 +1099,10 @@ def perform_training(
             "experiment_name"
         ] = experiment_name  # update the save_dir in training_config
     experiment_name = runtime_config.get("experiment_name", "exp")
+
     model_name = potential_config["model_name"]
     dataset_name = dataset_config["dataset_name"]
+
     log_training_arguments(
         potential_config, training_config, dataset_config, runtime_config
     )
@@ -1094,9 +1122,18 @@ def perform_training(
     num_workers = dataset_config.get("number_of_worker", 4)
     pin_memory = dataset_config.get("pin_memory", False)
     local_cache_dir = runtime_config.get("local_cache_dir", "./")
-    # set up tensor board logger
-    logger = TensorBoardLogger(save_dir, name=experiment_name)
+    # NOTE --------------------------------------- NOTE #
+    # FIXME TODO: move this to a dataclass and control default
+    # behavior from there this current approach is hacky and error prone
 
+    # set up tensor board logger
+    if training_config["experiment_logger"]["logger_name"].lower() == "tensorboard":
+        logger = TensorBoardLogger(save_dir, name=experiment_name)
+    elif training_config["experiment_logger"]["logger_name"].lower() == "wandb":
+        logger = WandbLogger(save_dir=save_dir, log_model=True, name=experiment_name)
+
+    else:
+        raise ValueError(f"Unknown logger name: {training_config['logger_name']}")
     # Set up dataset
     dm = DataModule(
         name=dataset_name,
@@ -1128,7 +1165,7 @@ def perform_training(
 
     # Set up model
     model = NeuralNetworkPotentialFactory.generate_model(
-        use="runtime_defaults",
+        use="training",
         dataset_statistic=dataset_statistic,
         model_parameter=potential_config,
         training_parameter=training_config["training_parameter"],
@@ -1147,6 +1184,7 @@ def perform_training(
             StochasticWeightAveraging(**stochastic_weight_averaging_config)
         )
     if early_stopping_config:
+        log.warning("No early stopping is defined. Do you have resources to waste?")
         callbacks.append(EarlyStopping(**early_stopping_config))
 
     from lightning.pytorch.callbacks import ModelCheckpoint
@@ -1154,7 +1192,7 @@ def perform_training(
     checkpoint_callback = ModelCheckpoint(
         save_top_k=2,
         monitor="val/per_molecule_energy/rmse",
-        filename="best_{potential_name}-{dataset_name}-{epoch:02d}-{val_loss:.2f}",
+        filename="best_model",
     )
 
     callbacks.append(checkpoint_callback)
@@ -1172,7 +1210,7 @@ def perform_training(
         log_every_n_steps=50,
     )
 
-    # Run runtime_defaults loop and validate
+    # Run training loop and validate
     trainer.fit(
         model,
         train_dataloaders=dm.train_dataloader(
@@ -1181,8 +1219,11 @@ def perform_training(
         val_dataloaders=dm.val_dataloader(),
         ckpt_path=checkpoint_path,
     )
-    trainer.validate(model=model, dataloaders=dm.val_dataloader(), ckpt_path="best")
-    trainer.test(dataloaders=dm.test_dataloader(), ckpt_path="best")
+
+    trainer.validate(
+        model=model, dataloaders=dm.val_dataloader(), ckpt_path="best", verbose=True
+    )
+    trainer.test(dataloaders=dm.test_dataloader(), ckpt_path="best", verbose=True)
     return trainer
 
 

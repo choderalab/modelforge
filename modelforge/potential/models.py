@@ -533,7 +533,7 @@ class NeuralNetworkPotentialFactory:
     @staticmethod
     def generate_model(
         *,
-        use: Literal["runtime_defaults", "inference"],
+        use: Literal["training", "inference"],
         model_parameter: Dict[str, Union[str, Any]],
         simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
         training_parameter: Optional[Dict[str, Any]] = None,
@@ -904,8 +904,19 @@ class BaseNetwork(Module):
         """
 
         super().__init__()
+        from modelforge.utils.units import _convert
+
         self.postprocessing = PostProcessing(
             postprocessing_parameter, dataset_statistic
+        )
+
+        # check if self.only_unique_pairs is set in child class
+        if not hasattr(self, "only_unique_pairs"):
+            raise RuntimeError(
+                "The only_unique_pairs attribute is not set in the child class. Please set it to True or False before calling super().__init__."
+            )
+        self.input_preparation = InputPreparation(
+            cutoff=_convert(cutoff), only_unique_pairs=self.only_unique_pairs
         )
 
     def load_state_dict(
@@ -951,6 +962,7 @@ class BaseNetwork(Module):
         super().load_state_dict(filtered_state_dict, strict=strict, assign=assign)
 
     def prepare_input(self, data):
+
         self.input_preparation._input_checks(data)
         return self.input_preparation.prepare_inputs(data)
 

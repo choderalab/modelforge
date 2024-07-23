@@ -5,6 +5,10 @@ batch_size = 128
 lr = 1e-3
 
 [training.lr_scheduler_config]
+[training.experiment_logger]
+logger_name = "tensorboard"
+
+[training.lr_scheduler_config]
 frequency = 1
 mode = "min"
 factor = 0.1

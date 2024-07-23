@@ -506,11 +506,16 @@ class PaiNN(BaseNetwork):
         dataset_statistic: Optional[Dict[str, float]] = None,
         epsilon: float = 1e-8,
     ) -> None:
+
+        from modelforge.utils.units import _convert
+
+        self.only_unique_pairs = False  # NOTE: for pairlist
+
         super().__init__(
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=postprocessing_parameter,
+            cutoff=_convert(cutoff),
         )
-        from modelforge.utils.units import _convert
 
         self.core_module = PaiNNCore(
             max_Z=max_Z,
@@ -521,10 +526,6 @@ class PaiNN(BaseNetwork):
             shared_interactions=shared_interactions,
             shared_filters=shared_filters,
             epsilon=epsilon,
-        )
-        self.only_unique_pairs = False  # NOTE: for pairlist
-        self.input_preparation = InputPreparation(
-            cutoff=_convert(cutoff), only_unique_pairs=self.only_unique_pairs
         )
 
     def _config_prior(self):

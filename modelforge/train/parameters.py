@@ -47,7 +47,7 @@ The SplittingStrategy model will have the following parameters:
 
 
 """
-from pydantic import BaseModel, root_validator, validator
+from pydantic import BaseModel, model_validator, validator
 from enum import Enum
 from typing import List, Union, Dict, Optional, Callable
 
@@ -190,7 +190,7 @@ class TrainingParameters(ParametersBase):
             "per_atom_force": 0.001,
         }
 
-        @root_validator
+        @model_validator(mode="after")
         def ensure_length_match(cls, values):
             loss_property = values.get("loss_property")
             loss_weight = values.get("weight")

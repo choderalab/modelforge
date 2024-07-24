@@ -1036,7 +1036,16 @@ def perform_training(
     if training_config["experiment_logger"]["logger_name"].lower() == "tensorboard":
         logger = TensorBoardLogger(save_dir, name=experiment_name)
     elif training_config["experiment_logger"]["logger_name"].lower() == "wandb":
-        logger = WandbLogger(save_dir=save_dir, log_model=True, name=experiment_name)
+        wandb_config = training_config["experiment_logger"]
+        log.debug(wandb_config)
+        logger = WandbLogger(
+            save_dir=save_dir,
+            log_model=True,
+            project=wandb_config["project_name"],
+            group=wandb_config["group"],
+            name=experiment_name,
+            job_type=wandb_config["job_type"],
+        )
 
     else:
         raise ValueError(f"Unknown logger name: {training_config['logger_name']}")

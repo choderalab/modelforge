@@ -894,11 +894,7 @@ def log_training_arguments(
         log.info(f"Using default accelerator: {accelerator}")
     else:
         log.info(f"Using accelerator: {accelerator}")
-    nr_of_epochs = training_config.get("nr_of_epochs", 10)
-    if nr_of_epochs == 10:
-        log.info(f"Using default number of epochs: {nr_of_epochs}")
-    else:
-        log.info(f"Training for {nr_of_epochs} epochs")
+    nr_of_epochs = training_config["nr_of_epochs"]
     num_nodes = runtime_config.get("num_nodes", 1)
     if num_nodes == 1:
         log.info(f"Using default number of nodes: {num_nodes}")
@@ -1016,7 +1012,7 @@ def perform_training(
     version_select = dataset_config.get("version_select", "latest")
     accelerator = runtime_config.get("accelerator", "cpu")
     splitting_strategy = training_config["splitting_strategy"]
-    nr_of_epochs = runtime_config.get("nr_of_epochs", 10)
+    nr_of_epochs = training_config["nr_of_epochs"]
     num_nodes = runtime_config.get("num_nodes", 1)
     devices = runtime_config.get("devices", 1)
     batch_size = training_config.get("batch_size", 128)

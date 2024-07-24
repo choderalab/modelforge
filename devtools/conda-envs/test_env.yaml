@@ -8,7 +8,7 @@ dependencies:
   - pip
   - h5py
   - tqdm
-  - pydantic<2.8
+  - pydantic<2.7
   - qcelemental=0.25.1
   - qcportal>=0.50
   - pytorch>=2.1
@@ -22,7 +22,7 @@ dependencies:
   - rdkit
   - retry
   - sqlitedict
-  - pydantic<2.8
+  - pydantic<2.7
 
   # Testing
   - pytest>=2.1

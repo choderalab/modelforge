@@ -573,20 +573,22 @@ class NeuralNetworkPotentialFactory:
         log.debug(f"{model_parameter=}")
 
         # obtain model for runtime_defaults
-        if use == "runtime_defaults":
+        if use == "training":
             if simulation_environment == "JAX":
                 log.warning(
                     "Training in JAX is not available. Falling back to PyTorch."
                 )
             model = TrainingAdapter(
                 model_parameter=model_parameter,
-                **training_parameter,
+                lr_scheduler_config=training_parameter["lr_scheduler_config"],
+                lr=training_parameter["lr"],
+                loss_parameter=training_parameter["loss_parameter"],
                 dataset_statistic=dataset_statistic,
             )
             return model
         # obtain model for inference
         elif use == "inference":
-            model_type = model_parameter["model_name"]
+            model_type = model_parameter["potential_name"]
             nnp_class: Type = _Implemented_NNPs.get_neural_network_class(model_type)
             model = nnp_class(
                 **model_parameter["core_parameter"],
@@ -891,7 +893,11 @@ class PostProcessing(torch.nn.Module):
 
 class BaseNetwork(Module):
     def __init__(
-        self, *, postprocessing_parameter: Dict[str, Dict[str, bool]], dataset_statistic
+        self,
+        *,
+        postprocessing_parameter: Dict[str, Dict[str, bool]],
+        dataset_statistic,
+        cutoff: unit.Quantity,
     ):
         """
         The BaseNetwork wraps the input preparation (including pairlist calculation, d_ij and r_ij calculation), the actual model as well as the output preparation in a wrapper class.

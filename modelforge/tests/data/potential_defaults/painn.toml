@@ -1,5 +1,5 @@
 [potential]
-model_name = "PaiNN"
+potential_name = "PaiNN"
 
 [potential.core_parameter]
 

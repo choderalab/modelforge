@@ -349,8 +349,8 @@ class TrainingAdapter(pl.LightningModule):
     def __init__(
         self,
         *,
-        lr_scheduler_config: Dict[str, Union[str, int, float]],
         model_parameter: Dict[str, Any],
+        lr_scheduler_config: Dict[str, Union[str, int, float]],
         lr: float,
         loss_parameter: Dict[str, Any],
         dataset_statistic: Optional[Dict[str, float]] = None,
@@ -362,7 +362,7 @@ class TrainingAdapter(pl.LightningModule):
 
         Parameters
         ----------
-        nnp_parameters : Dict[str, Any]
+        model_parameter : Dict[str, Any]
             The parameters for the neural network potential model.
         lr_scheduler_config : Dict[str, Union[str, int, float]]
             The configuration for the learning rate scheduler.
@@ -379,8 +379,8 @@ class TrainingAdapter(pl.LightningModule):
         self.save_hyperparameters()
 
         # Get requested model class
-        model_name = model_parameter["model_name"]
-        nnp_class: Type = _Implemented_NNPs.get_neural_network_class(model_name)
+        potential_name = model_parameter["potential_name"]
+        nnp_class: Type = _Implemented_NNPs.get_neural_network_class(potential_name)
 
         # initialize model
         self.model = nnp_class(
@@ -776,7 +776,7 @@ def return_toml_config(
             config["dataset"] = toml.load(dataset_path)["dataset"]
             log.info(f"Reading dataset config from : {dataset_path}")
         if training_path:
-            config["runtime_defaults"] = toml.load(training_path)["runtime_defaults"]
+            config["training"] = toml.load(training_path)["training"]
             log.info(f"Reading runtime_defaults config from : {training_path}")
         if runtime_path:
             config["runtime"] = toml.load(runtime_path)["runtime"]
@@ -843,7 +843,7 @@ def read_config_and_train_pydantic_model(
 
     from modelforge.potential import _Implemented_NNP_Parameters
 
-    potential_name = potential_config_dict["potential"]["model_name"]
+    potential_name = potential_config_dict["potential"]["potential_name"]
     PotentialParameters = (
         _Implemented_NNP_Parameters.get_neural_network_parameter_class(potential_name)
     )
@@ -1040,12 +1040,12 @@ def log_training_arguments(
     else:
         log.info(f"Using pinned_memory: {pin_memory}")
 
-    model_name = potential_config["model_name"]
+    potential_name = potential_config["potential_name"]
     dataset_name = dataset_config["dataset_name"]
     log.info(training_config["training"]["loss_parameter"])
     log.debug(
         f"""
-Training {model_name} on {dataset_name}-{version_select} dataset with {accelerator}
+Training {potential_name} on {dataset_name}-{version_select} dataset with {accelerator}
 accelerator on {num_nodes} nodes for {nr_of_epochs} epochs.
 Experiments are saved to: {save_dir}/{experiment_name}.
 Local cache directory: {local_cache_dir}
@@ -1091,16 +1091,16 @@ def perform_training(
     log.info(f"Saving logs to location: {save_dir}")
 
     experiment_name = runtime_config["experiment_name"]
-    if experiment_name == "{model_name}_{dataset_name}":
+    if experiment_name == "{potential_name}_{dataset_name}":
         experiment_name = (
-            f"{potential_config['model_name']}_{dataset_config['dataset_name']}"
+            f"{potential_config['potential_name']}_{dataset_config['dataset_name']}"
         )
-        training_config[
-            "experiment_name"
-        ] = experiment_name  # update the save_dir in training_config
+        training_config["experiment_name"] = (
+            experiment_name  # update the save_dir in training_config
+        )
     experiment_name = runtime_config.get("experiment_name", "exp")
 
-    model_name = potential_config["model_name"]
+    potential_name = potential_config["potential_name"]
     dataset_name = dataset_config["dataset_name"]
 
     log_training_arguments(
@@ -1154,7 +1154,7 @@ def perform_training(
 
     dataset_statistic = toml.load(dm.dataset_statistic_filename)
     log.info(
-        f"Setting per_atom_energy_mean and per_atom_energy_stddev for {model_name}"
+        f"Setting per_atom_energy_mean and per_atom_energy_stddev for {potential_name}"
     )
     log.info(
         f"per_atom_energy_mean: {dataset_statistic['training_dataset_statistics']['per_atom_energy_mean']}"
@@ -1313,7 +1313,7 @@ def perform_training_pydantic_model(
 
     dataset_statistic = toml.load(dm.dataset_statistic_filename)
     log.info(
-        f"Setting per_atom_energy_mean and per_atom_energy_stddev for {potential_config.model_name}"
+        f"Setting per_atom_energy_mean and per_atom_energy_stddev for {potential_config.potential_name}"
     )
     log.info(
         f"per_atom_energy_mean: {dataset_statistic['training_dataset_statistics']['per_atom_energy_mean']}"
@@ -1351,7 +1351,7 @@ def perform_training_pydantic_model(
     from lightning.pytorch.callbacks import ModelCheckpoint
 
     checkpoint_filename = (
-        f"best_{potential_config.model_name}-{dataset_config.dataset_name}"
+        f"best_{potential_config.potential_name}-{dataset_config.dataset_name}"
         + "-{epoch:02d}-{val_loss:.2f}"
     )
     checkpoint_callback = ModelCheckpoint(

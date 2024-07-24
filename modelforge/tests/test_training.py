@@ -10,7 +10,7 @@ from modelforge.potential import _Implemented_NNPs
 from modelforge.potential import NeuralNetworkPotentialFactory
 
 
-def load_configs(model_name: str, dataset_name: str):
+def load_configs(potential_name: str, dataset_name: str):
     from modelforge.tests.data import (
         potential_defaults,
         training_defaults,
@@ -20,7 +20,9 @@ def load_configs(model_name: str, dataset_name: str):
     from importlib import resources
     from modelforge.train.training import return_toml_config
 
-    potential_path = resources.files(potential_defaults) / f"{model_name.lower()}.toml"
+    potential_path = (
+        resources.files(potential_defaults) / f"{potential_name.lower()}.toml"
+    )
     dataset_path = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
     training_path = resources.files(training_defaults) / "default.toml"
     runtime_path = resources.files(runtime_defaults) / "runtime.toml"
@@ -33,9 +35,11 @@ def load_configs(model_name: str, dataset_name: str):
 
 
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
-@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
+@pytest.mark.parametrize(
+    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+)
 @pytest.mark.parametrize("dataset_name", ["QM9"])
-def test_train_with_lightning(model_name, dataset_name):
+def test_train_with_lightning(potential_name, dataset_name):
     """
     Test the forward pass for a given model and dataset.
     """
@@ -43,11 +47,11 @@ def test_train_with_lightning(model_name, dataset_name):
     from modelforge.train.training import perform_training
 
     # read default parameters
-    config = load_configs(model_name, dataset_name)
+    config = load_configs(potential_name, dataset_name)
 
     # Extract parameters
     potential_config = config["potential"]
-    training_config = config["runtime_defaults"]
+    training_config = config["training"]
     dataset_config = config["dataset"]
     runtime_config = config["runtime"]
 
@@ -128,10 +132,12 @@ def test_error_calculation(single_batch_with_batchsize_16_with_force):
 
 
 @pytest.mark.skipif(IN_GITHUB_ACTIONS, reason="Skipping this test on GitHub Actions")
-@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
+@pytest.mark.parametrize(
+    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+)
 @pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_hypterparameter_tuning_with_ray(
-    model_name,
+    potential_name,
     dataset_name,
     datamodule_factory,
 ):
@@ -144,7 +150,7 @@ def test_hypterparameter_tuning_with_ray(
         training_defaults,
     )
 
-    config = load_configs(model_name, dataset_name)
+    config = load_configs(potential_name, dataset_name)
 
     # Extract parameters
     potential_config = config["potential"]

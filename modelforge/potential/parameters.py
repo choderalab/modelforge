@@ -42,7 +42,7 @@ class ANI2xParameters(ParametersBase):
             )
         )
 
-    model_name: str = "ANI2x"
+    potential_name: str = "ANI2x"
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
 
@@ -70,7 +70,7 @@ class SchNetParameters(ParametersBase):
             )
         )
 
-    model_name: str = "SchNet"
+    potential_name: str = "SchNet"
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
 
@@ -98,7 +98,7 @@ class PaiNNParameters(ParametersBase):
             )
         )
 
-    model_name: str = "PaiNN"
+    potential_name: str = "PaiNN"
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
 
@@ -125,7 +125,7 @@ class PhysNetParameters(ParametersBase):
             )
         )
 
-    model_name: str = "PhysNet"
+    potential_name: str = "PhysNet"
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
 
@@ -152,6 +152,6 @@ class SAKEParameters(ParametersBase):
             )
         )
 
-    model_name: str = "SAKE"
+    potential_name: str = "SAKE"
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter

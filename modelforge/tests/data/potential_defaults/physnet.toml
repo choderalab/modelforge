@@ -1,5 +1,5 @@
 [potential]
-model_name = "PhysNet"
+potential_name = "PhysNet"
 
 [potential.core_parameter]
 

@@ -1,5 +1,5 @@
 [potential]
-model_name = "SAKE"
+potential_name = "SAKE"
 
 [potential.core_parameter]
 

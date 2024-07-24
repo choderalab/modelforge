@@ -5,7 +5,7 @@ from modelforge.dataset import _ImplementedDatasets
 from modelforge.potential import NeuralNetworkPotentialFactory
 
 
-def load_configs(model_name: str, dataset_name: str):
+def load_configs(potential_name: str, dataset_name: str):
     from modelforge.tests.data import (
         potential_defaults,
         training_defaults,
@@ -15,7 +15,9 @@ def load_configs(model_name: str, dataset_name: str):
     from importlib import resources
     from modelforge.train.training import return_toml_config
 
-    potential_path = resources.files(potential_defaults) / f"{model_name.lower()}.toml"
+    potential_path = (
+        resources.files(potential_defaults) / f"{potential_name.lower()}.toml"
+    )
     dataset_path = resources.files(dataset_defaults) / f"{dataset_name}.toml"
     training_path = resources.files(training_defaults) / "default.toml"
     runtime_path = resources.files(runtime_defaults) / "runtime.toml"
@@ -28,14 +30,16 @@ def load_configs(model_name: str, dataset_name: str):
     )
 
 
-@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
-def test_JAX_wrapping(model_name, single_batch_with_batchsize_64):
+@pytest.mark.parametrize(
+    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+)
+def test_JAX_wrapping(potential_name, single_batch_with_batchsize_64):
     from modelforge.potential.models import (
         NeuralNetworkPotentialFactory,
     )
 
     # read default parameters
-    config = load_configs(f"{model_name.lower()}", "qm9")
+    config = load_configs(f"{potential_name.lower()}", "qm9")
 
     # inference model
     model = NeuralNetworkPotentialFactory.generate_model(
@@ -55,16 +59,18 @@ def test_JAX_wrapping(model_name, single_batch_with_batchsize_64):
     )  # Evaluate gradient function and apply negative sign
 
 
-@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
+@pytest.mark.parametrize(
+    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+)
 @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
-def test_model_factory(model_name, simulation_environment):
+def test_model_factory(potential_name, simulation_environment):
     from modelforge.potential.models import (
         NeuralNetworkPotentialFactory,
     )
     from modelforge.train.training import TrainingAdapter
 
     # read default parameters
-    config = load_configs(f"{model_name.lower()}", "qm9")
+    config = load_configs(f"{potential_name.lower()}", "qm9")
 
     # inference model
     model = NeuralNetworkPotentialFactory.generate_model(
@@ -73,15 +79,15 @@ def test_model_factory(model_name, simulation_environment):
         model_parameter=config["potential"],
     )
     assert (
-        model_name.upper() in str(type(model)).upper()
+        potential_name.upper() in str(type(model)).upper()
         or "JAX" in str(type(model)).upper()
     )
 
     # Extract parameters
-    training_parameter = config["runtime_defaults"].get("training_parameter", {})
+    training_parameter = config["training"]
     # runtime_defaults model
     model = NeuralNetworkPotentialFactory.generate_model(
-        use="runtime_defaults",
+        use="training",
         simulation_environment=simulation_environment,
         model_parameter=config["potential"],
         training_parameter=training_parameter,
@@ -176,19 +182,21 @@ def test_energy_scaling_and_offset():
     )
 
 
-@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
-def test_state_dict_saving_and_loading(model_name):
+@pytest.mark.parametrize(
+    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+)
+def test_state_dict_saving_and_loading(potential_name):
     from modelforge.potential import NeuralNetworkPotentialFactory
     import torch
 
     # read default parameters
-    config = load_configs(f"{model_name.lower()}", "qm9")
+    config = load_configs(f"{potential_name.lower()}", "qm9")
 
     # Extract parameters
-    training_parameter = config["runtime_defaults"].get("training_parameter", {})
+    training_parameter = config["training"]
 
     model1 = NeuralNetworkPotentialFactory.generate_model(
-        use="runtime_defaults",
+        use="training",
         simulation_environment="PyTorch",
         model_parameter=config["potential"],
         training_parameter=training_parameter,
@@ -203,8 +211,10 @@ def test_state_dict_saving_and_loading(model_name):
     model2.load_state_dict(torch.load("model.pth"))
 
 
-@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
-def test_dataset_statistic(model_name):
+@pytest.mark.parametrize(
+    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+)
+def test_dataset_statistic(potential_name):
     # Test that the scaling parmaeters are propagated from the dataset to the
     # runtime_defaults model and then via the state_dict to the inference model
 
@@ -212,10 +222,10 @@ def test_dataset_statistic(model_name):
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
     # read default parameters
-    config = load_configs(f"{model_name.lower()}", "qm9")
+    config = load_configs(f"{potential_name.lower()}", "qm9")
 
     # Extract parameters
-    training_parameter = config["runtime_defaults"].get("training_parameter", {})
+    training_parameter = config["training"]
 
     # test the self energy calculation on the QM9 dataset
     dataset = DataModule(
@@ -243,7 +253,7 @@ def test_dataset_statistic(model_name):
 
     # set up runtime_defaults model
     training_adapter = NeuralNetworkPotentialFactory.generate_model(
-        use="runtime_defaults",
+        use="training",
         simulation_environment="PyTorch",
         model_parameter=config["potential"],
         training_parameter=training_parameter,
@@ -287,9 +297,11 @@ def test_dataset_statistic(model_name):
     )
 
 
-@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
+@pytest.mark.parametrize(
+    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+)
 def test_energy_between_simulation_environments(
-    model_name, single_batch_with_batchsize_64
+    potential_name, single_batch_with_batchsize_64
 ):
     # compare that the energy is the same for the JAX and PyTorch Model
     import numpy as np
@@ -299,7 +311,7 @@ def test_energy_between_simulation_environments(
     # test the forward pass through each of the models
     # cast input and model to torch.float64
     # read default parameters
-    config = load_configs(f"{model_name.lower()}", "qm9")
+    config = load_configs(f"{potential_name.lower()}", "qm9")
 
     # Setup loss
     from modelforge.train.training import return_toml_config
@@ -326,9 +338,13 @@ def test_energy_between_simulation_environments(
     assert np.isclose(output_torch.sum().detach().numpy(), output_jax.sum())
 
 
-@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
+@pytest.mark.parametrize(
+    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+)
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
-def test_forward_pass_with_all_datasets(model_name, dataset_name, datamodule_factory):
+def test_forward_pass_with_all_datasets(
+    potential_name, dataset_name, datamodule_factory
+):
     """Test forward pass with all datasets."""
     import torch
 
@@ -343,7 +359,7 @@ def test_forward_pass_with_all_datasets(model_name, dataset_name, datamodule_fac
     train_dataloader = dataset.train_dataloader()
     batch = next(iter(train_dataloader))
 
-    config = load_configs(f"{model_name.lower()}", dataset_name.lower())
+    config = load_configs(f"{potential_name.lower()}", dataset_name.lower())
 
     from modelforge.potential.models import NeuralNetworkPotentialFactory
     import toml
@@ -370,10 +386,12 @@ def test_forward_pass_with_all_datasets(model_name, dataset_name, datamodule_fac
     assert torch.all(pair_list[0, 1:] >= pair_list[0, :-1])
 
 
-@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
+@pytest.mark.parametrize(
+    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+)
 @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
 def test_forward_pass(
-    model_name, simulation_environment, single_batch_with_batchsize_64
+    potential_name, simulation_environment, single_batch_with_batchsize_64
 ):
     # this test sends a single batch from different datasets through the model
     import torch
@@ -381,7 +399,7 @@ def test_forward_pass(
     nnp_input = single_batch_with_batchsize_64.nnp_input
 
     # read default parameters
-    config = load_configs(f"{model_name.lower()}", "qm9")
+    config = load_configs(f"{potential_name.lower()}", "qm9")
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
     # test the forward pass through each of the models
@@ -424,18 +442,20 @@ def test_forward_pass(
         )
 
 
-@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
-def test_calculate_energies_and_forces(model_name, single_batch_with_batchsize_64):
+@pytest.mark.parametrize(
+    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+)
+def test_calculate_energies_and_forces(potential_name, single_batch_with_batchsize_64):
     """
     Test the calculation of energies and forces for a molecule.
     """
     import torch
 
     # read default parameters
-    config = load_configs(f"{model_name.lower()}", "qm9")
+    config = load_configs(f"{potential_name.lower()}", "qm9")
 
     # Extract parameters
-    training_parameter = config["runtime_defaults"].get("training_parameter", {})
+    training_parameter = config["training"]
 
     # get batch
     nnp_input = single_batch_with_batchsize_64.nnp_input
@@ -462,7 +482,7 @@ def test_calculate_energies_and_forces(model_name, single_batch_with_batchsize_6
 
     torch.manual_seed(42)
     model_training = NeuralNetworkPotentialFactory.generate_model(
-        use="runtime_defaults",
+        use="training",
         model_parameter=config["potential"],
         training_parameter=training_parameter,
     )
@@ -477,9 +497,11 @@ def test_calculate_energies_and_forces(model_name, single_batch_with_batchsize_6
     assert torch.allclose(F_inference, F_training, atol=1e-4)
 
 
-@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
+@pytest.mark.parametrize(
+    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+)
 def test_calculate_energies_and_forces_with_jax(
-    model_name, single_batch_with_batchsize_64
+    potential_name, single_batch_with_batchsize_64
 ):
     """
     Test the calculation of energies and forces for a molecule.
@@ -487,7 +509,7 @@ def test_calculate_energies_and_forces_with_jax(
     import torch
 
     # read default parameters
-    config = load_configs(f"{model_name.lower()}", "qm9")
+    config = load_configs(f"{potential_name.lower()}", "qm9")
 
     nnp_input = single_batch_with_batchsize_64.nnp_input
     # test the backward pass through each of the models
@@ -869,8 +891,10 @@ def test_pairlist_on_dataset():
     )  # +1 because of 0-based indexing
 
 
-@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
-def test_casting(model_name, single_batch_with_batchsize_64):
+@pytest.mark.parametrize(
+    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+)
+def test_casting(potential_name, single_batch_with_batchsize_64):
     # test dtype casting
     import torch
 
@@ -888,7 +912,7 @@ def test_casting(model_name, single_batch_with_batchsize_64):
 
     # cast input and model to torch.float64
     # read default parameters
-    config = load_configs(f"{model_name.lower()}", "qm9")
+    config = load_configs(f"{potential_name.lower()}", "qm9")
 
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
@@ -912,10 +936,12 @@ def test_casting(model_name, single_batch_with_batchsize_64):
     model(nnp_input)
 
 
-@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
+@pytest.mark.parametrize(
+    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+)
 @pytest.mark.parametrize("simulation_environment", ["PyTorch"])
 def test_equivariant_energies_and_forces(
-    model_name,
+    potential_name,
     simulation_environment,
     single_batch_with_batchsize_64,
     equivariance_utils,
@@ -928,7 +954,7 @@ def test_equivariant_energies_and_forces(
     from dataclasses import replace
 
     # load default parameters
-    config = load_configs(f"{model_name}", "qm9")
+    config = load_configs(f"{potential_name}", "qm9")
 
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",

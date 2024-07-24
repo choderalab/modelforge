@@ -455,8 +455,10 @@ def test_data_item_format_of_datamodule(
 from modelforge.potential import _Implemented_NNPs
 
 
-@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
-def test_dataset_neighborlist(model_name, single_batch_with_batchsize_64):
+@pytest.mark.parametrize(
+    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+)
+def test_dataset_neighborlist(potential_name, single_batch_with_batchsize_64):
     """Test the neighborlist."""
 
     nnp_input = single_batch_with_batchsize_64.nnp_input
@@ -465,7 +467,7 @@ def test_dataset_neighborlist(model_name, single_batch_with_batchsize_64):
     from modelforge.tests.test_models import load_configs
 
     # read default parameters
-    config = load_configs(f"{model_name}", "qm9")
+    config = load_configs(f"{potential_name}", "qm9")
 
     # Extract parameters
     from modelforge.potential.models import NeuralNetworkPotentialFactory

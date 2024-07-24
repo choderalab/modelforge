@@ -47,6 +47,7 @@ The SplittingStrategy model will have the following parameters:
 
 
 """
+
 from pydantic import BaseModel, model_validator, field_validator
 from enum import Enum
 from typing import List, Union, Dict, Optional, Callable
@@ -167,7 +168,7 @@ class TrainingParameters(ParametersBase):
         factor: float = 0.1
         patience: int = 10
         cooldown: int = 5
-        min_learning_rate: float = 1e-8
+        min_lr: float = 1e-8
         threshold: float = 0.1
         threshold_mode: ThresholdMode = ThresholdMode.abs
         monitor: str = "val/per_molecule_energy/rmse"

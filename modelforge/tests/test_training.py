@@ -154,7 +154,7 @@ def test_hypterparameter_tuning_with_ray(
 
     # Extract parameters
     potential_config = config["potential"]
-    training_config = config["runtime_defaults"]
+    training_config = config["training"]
     dataset_config = config["dataset"]
     runtime_config = config["runtime"]
 
@@ -162,9 +162,9 @@ def test_hypterparameter_tuning_with_ray(
 
     # runtime_defaults model
     model = NeuralNetworkPotentialFactory.generate_model(
-        use="runtime_defaults",
+        use="training",
         model_parameter=potential_config,
-        training_parameter=training_config["training_parameter"],
+        training_parameter=training_config,
     )
 
     from modelforge.train.tuning import RayTuner

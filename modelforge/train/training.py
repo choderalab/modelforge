@@ -1042,7 +1042,7 @@ def log_training_arguments(
 
     potential_name = potential_config["potential_name"]
     dataset_name = dataset_config["dataset_name"]
-    log.info(training_config["training"]["loss_parameter"])
+    log.info(training_config["loss_parameter"])
     log.debug(
         f"""
 Training {potential_name} on {dataset_name}-{version_select} dataset with {accelerator}
@@ -1168,7 +1168,7 @@ def perform_training(
         use="training",
         dataset_statistic=dataset_statistic,
         model_parameter=potential_config,
-        training_parameter=training_config["training_parameter"],
+        training_parameter=training_config,
     )
 
     # set up traininer

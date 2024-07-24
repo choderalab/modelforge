@@ -9,8 +9,8 @@ dependencies:
   - pip
   - h5py
   - tqdm
-  - qcelemental=0.25.1
   - qcportal>=0.50
+  - qcelemental
   - pytorch>=2.1
   - loguru
   - lightning>=2.0.8

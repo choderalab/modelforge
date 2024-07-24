@@ -1,5 +1,9 @@
 from pydantic import BaseModel
 
+"""
+This module contains pydantic models for storing the parameters of 
+"""
+
 
 # To avoid having to set use_enum_values = True in every subclass of BaseModel,
 # we will just create a parent class for all the parameters classes.

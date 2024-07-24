@@ -2,48 +2,6 @@
 This will define a pydantic model for the training parameters, meant to take the dictionary defined in the
 associated yaml file. This model will be used to validate the input dictionary and to provide default values.
 
-The main TrainingParameters model has the following arguments:
-- nr_of_epochs: int, default 1000
-- remove_self_energies: bool, default True
-- batch_size: int, default 128
-- learning_rate: float, default 1e-3
-- lr_scheduler_config: SchedulerConfig
-- loss_parameter: LossParameter
-- early_stopping: EarlyStopping
-- splitting_strategy: SplittingStrategy
-
-This model will have the following sub-models:
-- SchedulerConfig
-- LossParameter
-- EarlyStopping
-- SplittingStrategy
-
-The SchedulerConfig model has the following parameters:
-- frequency: int, default 1
-- mode: SchedulerMode, default "min"
-- factor: float, default 0.1
-- patience: int, default 10
-- cooldown: int, default 5
-- min_learning_rate: float, default 1e-8
-- threshold: float, default 0.1
-- threshold_mode: ThresholdMode, default "abs"
-- monitor: str, default "val/per_molecule_energy/rmse"
-- interval: str, default "epoch"
-
-The LossParameter model has the following parameters:
-- loss_property: List[str], default ["per_molecule_energy", "per_atom_force"]
-- loss_weight: Dict[str,float], default {"per_molecule_energy": 0.999, "per_atom_force": 0.001}
-
-The EarlyStopping model has the following parameters:
-- verbose: bool, default True
-- monitor: str, default "val/per_molecule_energy/rmse"
-- min_delta: float, default 0.001
-- patience: int, default 50
-
-The SplittingStrategy model will have the following parameters:
-- name: SplittingStrategyName, default SplittingStrategyName.random_record_splitting_strategy
-- data_split: List[float], default [0.8, 0.1, 0.1]
-- seed: int, default 42
 
 
 """
@@ -135,13 +93,13 @@ class TrainingParameters(ParametersBase):
     A class to hold the training parameters that inherits from the pydantic BaseModel
 
     args:
-        nr_of_epochs (int): The number of epochs, default is 1000
-        remove_self_energies (bool): Whether to remove self energies, default is True
-        batch_size (int): The batch size, default is 128
-        lr (float): The learning rate, default is 1e-3
+        nr_of_epochs (int): The number of epochs
+        remove_self_energies (bool): Whether to remove self energies
+        batch_size (int): The batch size,
+        lr (float): The learning rate
         lr_scheduler_config (SchedulerConfig): The learning rate scheduler configuration.
         loss_parameter (LossParameter): The loss parameter
-        early_stopping (EarlyStopping): The early stopping parameters, Optional, default is None
+        early_stopping (EarlyStopping): The early stopping parameters, Optional
         splitting_strategy (SplittingStrategy): The splitting strategy
     """
 
@@ -150,46 +108,44 @@ class TrainingParameters(ParametersBase):
         Scheduler configuration class
 
         args:
-            frequency (int): The frequency of the scheduler, default is 1
-            mode (SchedulerMode): The mode of the scheduler (options: "min", "max"), default is "min"
-            factor (float): The factor of the scheduler, default is 0.1
-            patience (int): The patience of the scheduler, default is 10
-            cooldown (int): The cooldown of the scheduler, default is 5
-            min_learning_rate (float): The minimum learning rate of the scheduler, default is 1e-8
-            threshold (float): The threshold of the scheduler, default is 0.1
-            threshold_mode (ThresholdMode): The threshold mode of the scheduler (options: "abs", "rel"), default is "abs"
-            monitor (str): The monitor of the scheduler, default is "val/per_molecule_energy/rmse"
-            interval (str): The interval of the scheduler, default is "epoch"
+            frequency (int): The frequency of the scheduler
+            mode (SchedulerMode): The mode of the scheduler (options: "min", "max")
+            factor (float): The factor of the scheduler
+            patience (int): The patience of the scheduler
+            cooldown (int): The cooldown of the scheduler
+            min_learning_rate (float): The minimum learning rate of the scheduler
+            threshold (float): The threshold of the scheduler
+            threshold_mode (ThresholdMode): The threshold mode of the scheduler (options: "abs", "rel")
+            monitor (str): The monitor of the scheduler
+            interval (str): The interval of the scheduler
 
         """
 
-        frequency: int = 1
-        mode: SchedulerMode = SchedulerMode.min
-        factor: float = 0.1
-        patience: int = 10
-        cooldown: int = 5
-        min_lr: float = 1e-8
-        threshold: float = 0.1
-        threshold_mode: ThresholdMode = ThresholdMode.abs
-        monitor: str = "val/per_molecule_energy/rmse"
-        interval: str = "epoch"
+        frequency: int
+        mode: SchedulerMode
+        factor: float
+        patience: int
+        cooldown: int
+        min_lr: float
+        threshold: float
+        threshold_mode: ThresholdMode
+        monitor: str  # note this might be better as an enum
+        interval: str
 
     class LossParameter(ParametersBase):
         """
         class to hold the loss properties
 
         args:
-            loss_property (List[str]): The loss property, default is ["per_molecule_energy", "per_atom_force"].
+            loss_property (List[str]): The loss property.
                 The length of this list must match the length of loss_weight
-            weight (Dict[str,float]): The loss weight, default is {"per_molecule_energy": 0.999, "per_atom_force": 0.001}
+            weight (Dict[str,float]): The loss weight.
+                The keys must correspond to entries in the loss_property list.
 
         """
 
-        loss_property: List = ["per_molecule_energy", "per_atom_force"]
-        weight: Dict[str, float] = {
-            "per_molecule_energy": 0.999,
-            "per_atom_force": 0.001,
-        }
+        loss_property: List
+        weight: Dict[str, float]
 
         @model_validator(mode="after")
         def ensure_length_match(self) -> "LossParameter":
@@ -206,16 +162,16 @@ class TrainingParameters(ParametersBase):
         class to hold the early stopping parameters
 
         args:
-            verbose (bool): Whether to print the early stopping information, default is True
-            monitor (str): The monitor of the early stopping, default is "val/per_molecule_energy/rmse"
-            min_delta (float): The minimum delta of the early stopping, default is 0.001
-            patience (int): The patience of the early stopping, default is 50
+            verbose (bool): Whether to print the early stopping information
+            monitor (str): The monitor of the early stopping
+            min_delta (float): The minimum delta of the early stopping
+            patience (int): The patience of the early stopping
         """
 
-        verbose: bool = True
-        monitor: str = "val/per_molecule_energy/rmse"
-        min_delta: float = 0.001
-        patience: int = 50
+        verbose: bool
+        monitor: str
+        min_delta: float
+        patience: int
 
     class SplittingStrategy(ParametersBase):
         """
@@ -224,37 +180,60 @@ class TrainingParameters(ParametersBase):
         args:
             name (SplittingStrategyName): The name of the splitting strategy, default is SplittingStrategyName.random_record_splitting_strategy
                 Options are: first_come_first_serve, random_record_splitting_strategy, random_conformer_splitting_strategy
-            data_split (List[float]): The data split, default is [0.8, 0.1, 0.1]
-            seed (int): The seed, default is 42
+            data_split (List[float]): The data split, must be a list of length of 3 that sums to 1.
+            seed (int): The seed
 
         """
 
         name: SplittingStrategyName = (
             SplittingStrategyName.random_record_splitting_strategy
         )
-        data_split: List[float] = [0.8, 0.1, 0.1]
-        seed: int = 42
+        data_split: List[float]
+        seed: int
+
+        @field_validator("data_split")
+        def data_split_must_sum_to_one_and_length_three(cls, v) -> List[float]:
+
+            if len(v) != 3:
+                raise ValueError("data_split must have length of 3")
+            if sum(v) != 1:
+                raise ValueError("data_split must sum to 1")
+            return v
 
     class StochasticWeightAveraging(ParametersBase):
-        swa_lrs: Union[float, List[float]] = 0.05
-        swa_epoch_start: float = 0.8
-        annealing_epoch: int = 10
-        annealing_strategy: AnnealingStrategy = AnnealingStrategy.cos
+        """
+        class to hold the stochastic weight averaging parameters
+
+        args:
+            swa_lrs (Union[float, List[float]]): The learning rate for stochastic weight averaging
+            swa_epoch_start (float): The epoch start for stochastic weight averaging
+            annealing_epoch (int): The annealing epoch
+            annealing_strategy (AnnealingStrategy): The annealing strategy
+            avg_fn (Optional[Callable]): The average function
+        """
+
+        swa_lrs: Union[float, List[float]]
+        swa_epoch_start: float
+        annealing_epoch: int
+        annealing_strategy: AnnealingStrategy
         avg_fn: Optional[Callable] = None
 
     class ExperimentLogger(ParametersBase):
-        logger_name: Loggers = Loggers.tensorboard
+        logger_name: Loggers
 
-    nr_of_epochs: int = 1000
-    remove_self_energies: bool = True
-    batch_size: int = 128
-    lr: float = 1e-3
-    lr_scheduler_config: SchedulerConfig = SchedulerConfig()
-    loss_parameter: LossParameter = LossParameter()
+    nr_of_epochs: int
+    remove_self_energies: bool
+    batch_size: int
+    lr: float
+    lr_scheduler_config: Optional[SchedulerConfig] = None
+    loss_parameter: LossParameter
     early_stopping: Optional[EarlyStopping] = None
-    splitting_strategy: SplittingStrategy = SplittingStrategy()
+    splitting_strategy: SplittingStrategy
     stochastic_weight_averaging: Optional[StochasticWeightAveraging] = None
-    experiment_logger: ExperimentLogger = ExperimentLogger()
+    experiment_logger: ExperimentLogger
+
+
+### Runtime Parameters
 
 
 class Accelerator(str, Enum):
@@ -290,28 +269,28 @@ class RuntimeParameters(ParametersBase):
     A class to hold the runtime parameters that inherits from the pydantic BaseModel
 
     args:
-        save_dir (str): The save directory, default is "test"
-        experiment_name (str): The experiment name, default is "my_experiment"
-        accelerator (Accelerator): The accelerator, default is Accelerator.cpu
-        number_of_nodes (int): The number of nodes, default is 1
-        devices (int or List[int]): The index/indices of the device, default is 1
-        local_cache_dir (str): The local cache directory, default is "./cache"
-        checkpoint_path (str): The checkpoint path, default is None
+        save_dir (str): The save directory
+        experiment_name (str): The experiment name
+        accelerator (Accelerator): The accelerator, options are: "cpu", "gpu", "tpu"
+        number_of_nodes (int): The number of nodes
+        devices (int or List[int]): The index/indices of the device
+        local_cache_dir (str): The local cache directory
+        checkpoint_path (str): The checkpoint path
         simulation_environment (SimulationEnvironment):
-            The simulation environment, default is SimulationEnvironment.PyTorch
-        log_every_n_steps (int): The logging frequency, default is 50
+            The simulation environment options are: PyTorch or JAX
+        log_every_n_steps (int): The logging frequency
 
     """
 
-    save_dir: str = "test"
-    experiment_name: str = "my_experiment"
-    accelerator: Accelerator = Accelerator.cpu
-    number_of_nodes: int = 1
-    devices: Union[int, List[int]] = 1
-    local_cache_dir: str = "./cache"
-    checkpoint_path: str = None
-    simulation_environment: SimulationEnvironment = SimulationEnvironment.PyTorch
-    log_every_n_steps: int = 50
+    save_dir: str
+    experiment_name: str
+    accelerator: Accelerator
+    number_of_nodes: int
+    devices: Union[int, List[int]]
+    local_cache_dir: str
+    checkpoint_path: str
+    simulation_environment: SimulationEnvironment
+    log_every_n_steps: int
 
     @field_validator("number_of_nodes")
     @classmethod

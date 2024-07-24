@@ -382,8 +382,7 @@ class QM9Curation(DatasetCuration):
         """
         from modelforge.utils.io import import_
 
-        # qcel = import_("qcelemental")
-        import qcelemental as qcel
+        qcel = import_("qcelemental")
         from modelforge.utils.misc import str_to_float
 
         with open(file_name, "r") as file:

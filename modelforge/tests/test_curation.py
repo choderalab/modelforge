@@ -347,9 +347,7 @@ def test_qm9_curation_parse_xyz(prep_temp_dir):
     assert data_dict_temp["energy_of_homo"] == [[-0.3877]] * unit.hartree
     assert data_dict_temp["energy_of_lumo"] == [[0.1171]] * unit.hartree
     assert data_dict_temp["lumo-homo_gap"] == [[0.5048]] * unit.hartree
-    assert (
-        data_dict_temp["electronic_spatial_extent"] == [[35.3641]] * unit.angstrom**2
-    )
+    assert data_dict_temp["electronic_spatial_extent"] == [[35.3641]] * unit.angstrom**2
     assert (
         data_dict_temp["zero_point_vibrational_energy"] == [[0.044749]] * unit.hartree
     )

@@ -41,6 +41,8 @@ def test_forward():
     # override default parameters
     config["potential"]["core_parameter"]["number_of_atom_features"] = 12
     config["potential"]["core_parameter"]["number_of_radial_basis_functions"] = 7
+    config["potential"]["core_parameter"]["number_of_residual_blocks"] = 1
+    config["potential"]["core_parameter"]["number_of_interaction_modules"] = 1
 
     print(f"{config['potential']['core_parameter']}=")
 
@@ -79,6 +81,14 @@ def test_forward():
         num_residual_post=config["potential"]["core_parameter"]["number_of_residual_blocks"],
         num_residual_output=config["potential"]["core_parameter"]["number_of_residual_blocks"],
     ).double()
+
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_d.residual.stack[0].activation2.beta = \
+    ref_spookynet.module[0].local_interaction.resblock_d.residual.stack[0].activation2.beta
+    for name, param in spookynet.named_parameters():
+        print(name)
+
+
+
 
     ref_spookynet(
         model_input.atomic_numbers,

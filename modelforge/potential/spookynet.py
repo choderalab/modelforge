@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from modelforge.potential.utils import NNPInput
 
 from modelforge.potential.utils import NeuralNetworkData
+from icecream import ic
 
 
 @dataclass
@@ -126,8 +127,12 @@ class SpookyNetCore(CoreNetwork):
         from modelforge.potential.utils import Embedding
 
         assert max_Z <= 87
-        self.atomic_embedding_module = SpookyNetAtomicEmbedding(number_of_atom_features, max_Z)
-        self.charge_embedding_module = ElectronicEmbedding(number_of_atom_features, number_of_residual_blocks)
+        self.atomic_embedding_module = SpookyNetAtomicEmbedding(
+            number_of_atom_features, max_Z
+        )
+        self.charge_embedding_module = ElectronicEmbedding(
+            number_of_atom_features, number_of_residual_blocks
+        )
 
         # initialize representation block
         self.spookynet_representation_module = SpookyNetRepresentation(
@@ -176,7 +181,9 @@ class SpookyNetCore(CoreNetwork):
 
         atomic_embedding = self.atomic_embedding_module(data.atomic_numbers)
 
-        charge_embedding = self.charge_embedding_module(atomic_embedding, data.total_charge, num_batch=1)  # TODO: what is num_batch?
+        charge_embedding = self.charge_embedding_module(
+            atomic_embedding, data.total_charge
+        )
 
         nnp_input = SpookyNetNeuralNetworkData(
             pair_indices=pairlist_output.pair_indices,
@@ -335,15 +342,30 @@ class SpookyNetAtomicEmbedding(nn.Module):
         ], dtype=np.float64)
         # fmt: on
         # normalize entries (between 0.0 and 1.0)
-        self.register_buffer("electron_config", torch.tensor(electron_config / np.max(electron_config, axis=0)))
-        self.register_parameter("atomic_number_weights",
-                                nn.Parameter(torch.zeros((number_of_atom_features, self.electron_config.shape[1]))))
-        self.atomic_bias = nn.Embedding(max_Z, number_of_atom_features)
+        self.register_buffer(
+            "electron_config",
+            torch.tensor(electron_config / np.max(electron_config, axis=0)),
+        )
+        self.element_embedding = nn.Embedding(max_Z, number_of_atom_features)
+        self.register_parameter(
+            "config_linear",
+            nn.Parameter(
+                torch.zeros((number_of_atom_features, self.electron_config.shape[1]))
+            ),
+        )
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        """Initialize parameters."""
+        nn.init.zeros_(self.element_embedding.weight)
+        nn.init.zeros_(self.config_linear)
 
     def forward(self, atomic_numbers):
-        return torch.einsum("fe,ne->nf", self.atomic_number_weights,
-                            self.electron_config[atomic_numbers]) + self.atomic_bias(atomic_numbers)
-
+        return torch.einsum(
+            "fe,ne->nf",
+            self.config_linear,
+            self.electron_config[atomic_numbers],
+        ) + self.element_embedding(atomic_numbers)
 
 
 class SpookyNet(BaseNetwork):
@@ -382,7 +404,7 @@ class SpookyNet(BaseNetwork):
         super().__init__(
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=postprocessing_parameter,
-            cutoff=_convert(cutoff)
+            cutoff=_convert(cutoff),
         )
         from modelforge.utils.units import _convert
 
@@ -420,7 +442,7 @@ class ElectronicEmbedding(nn.Module):
         num_features (int):
             Dimensions of feature space.
         num_residual (int):
-            TODO
+            TODO:
     """
 
     def __init__(
@@ -428,7 +450,7 @@ class ElectronicEmbedding(nn.Module):
             num_features: int,
             num_residual: int,
     ) -> None:
-        """ Initializes the ElectronicEmbedding class. """
+        """Initializes the ElectronicEmbedding class."""
         super().__init__()
         self.linear_q = nn.Linear(num_features, num_features)
         # charges are duplicated to use separate weights for +/-
@@ -442,7 +464,7 @@ class ElectronicEmbedding(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
-        """ Initialize parameters. """
+        """Initialize parameters."""
         nn.init.orthogonal_(self.linear_k.weight)
         nn.init.orthogonal_(self.linear_v.weight)
         nn.init.orthogonal_(self.linear_q.weight)
@@ -452,7 +474,6 @@ class ElectronicEmbedding(nn.Module):
             self,
             x: torch.Tensor,
             E: torch.Tensor,
-            num_batch: int,
             eps: float = 1e-8,
     ) -> torch.Tensor:
         """
@@ -462,18 +483,15 @@ class ElectronicEmbedding(nn.Module):
         x (FloatTensor [N, num_features]):
             Atomic feature vectors.
         """
-        batch_seg = torch.zeros(x.size(0), dtype=torch.int64, device=x.device)
         q = self.linear_q(x)  # queries
-        e = F.relu(torch.stack([E, -E], dim=-1))
-        enorm = torch.maximum(e, torch.ones_like(e))
-        test = e / enorm
-        k = self.linear_k(test)[batch_seg]  # keys
-        v = self.linear_v(e)[batch_seg]  # values
-        dot = torch.sum(k * q, dim=-1) / k.shape[-1] ** 0.5  # scaled dot product
+        e = F.relu(torch.stack([E, -E], dim=-1))  # charges are duplicated to use separate weights for +/-
+        enorm = torch.clamp(e, min=1)
+        k = self.linear_k(e / enorm)  # keys
+        v = self.linear_v(e)  # values
+        dot = torch.einsum("nf,nf->n", k, q) / k.shape[-1] ** 0.5  # scaled dot product
         a = nn.functional.softplus(dot)  # unnormalized attention weights
-        anorm = a.new_zeros(num_batch).index_add_(0, batch_seg, a)
-        anorm = anorm[batch_seg]
-        return self.resblock((a / (anorm + eps)).unsqueeze(-1) * v)
+        a_normalized = a / (a.sum(-1) + eps)  # TODO: why is this needed? shouldn't softplus add up to 1?
+        return self.resblock(torch.einsum("n,nf->nf", a_normalized, v))
 
 
 class SpookyNetRepresentation(nn.Module):
@@ -753,13 +771,13 @@ class SpookyNetLocalInteraction(nn.Module):
         number_of_radial_basis_functions (int):
             Number of radial basis functions.
         num_residual_x (int):
-            TODO
+            TODO:
         num_residual_s (int):
-            TODO
+            TODO:
         num_residual_p (int):
-            TODO
+            TODO:
         num_residual_d (int):
-            TODO
+            TODO:
         num_residual (int):
             Number of residual blocks to be stacked in sequence.
     """
@@ -1118,17 +1136,14 @@ class SpookyNetInteractionModule(nn.Module):
         Arguments:
             x (FloatTensor [N, number_of_atom_features]):
                 Latent atomic feature vectors.
-            rbf (FloatTensor [P, number_of_radial_basis_functions]):
-                Values of the radial basis functions for the pairwise distances.
+            pairlist:
+                TODO:
+            filters:
+                TODO:
             dir_ij (FloatTensor [P, 3]):
                 Unit vectors pointing from atom i to atom j for all atomic pairs.
             d_orbital_ij (FloatTensor [P]):
                 Distances between atom i and atom j for all atomic pairs.
-            idx_i (LongTensor [P]):
-                Index of atom i for all atomic pairs ij. Each pair must be
-                specified as both ij and ji.
-            idx_j (LongTensor [P]):
-                Same as idx_i, but for atom j.
         Returns:
             x (FloatTensor [N, number_of_atom_features]):
                 Updated latent atomic feature vectors.
@@ -1151,5 +1166,3 @@ class SpookyNetInteractionModule(nn.Module):
         x_updated = self.residual_post(x_tilde + l + n)
         del x_tilde
         return x_updated, self.resblock(x_updated)
-
-

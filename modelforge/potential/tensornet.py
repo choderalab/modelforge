@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import torch
 from openff.units import unit
 
-from modelforge.potential.models import InputPreparation
+from modelforge.potential.models import ComputeInteractingAtomPairs
 from modelforge.potential.models import BaseNetwork
 from modelforge.potential.utils import NeuralNetworkData
 
@@ -24,7 +24,7 @@ class TensorNet(BaseNetwork):
             number_of_radial_basis_functions,
         )
         self.only_unique_pairs = True  # NOTE: for pairlist
-        self.input_preparation = InputPreparation(
+        self.input_preparation = ComputeInteractingAtomPairs(
             cutoff=radial_max_distance, only_unique_pairs=self.only_unique_pairs
         )
 

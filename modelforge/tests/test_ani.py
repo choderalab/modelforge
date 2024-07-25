@@ -305,9 +305,9 @@ def test_compare_aev():
         postprocessing_parameter=config["potential"]["postprocessing_parameter"],
     )
     # perform input checks
-    mf_model.input_preparation._input_checks(mf_input)
+    mf_model.compute_interacting_pairs._input_checks(mf_input)
     # prepare the input for the forward pass
-    pairlist_output = mf_model.input_preparation.prepare_inputs(mf_input)
+    pairlist_output = mf_model.compute_interacting_pairs.prepare_inputs(mf_input)
     nnp_input = mf_model.core_module._model_specific_input_preparation(
         mf_input, pairlist_output
     )

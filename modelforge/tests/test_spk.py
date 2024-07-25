@@ -71,8 +71,11 @@ def setup_modelforge_painn_representation(
     from openff.units import unit
 
     return mf_PaiNN(
-        max_Z=100,
-        number_of_atom_features=nr_atom_basis,
+        featurization={
+            "properties_to_featurize": ["atomic_number"],
+            "max_Z": 101,
+            "number_of_per_atom_features": 32,
+        },
         number_of_interaction_modules=nr_of_interactions,
         number_of_radial_basis_functions=number_of_gaussians,
         cutoff=cutoff,
@@ -83,7 +86,7 @@ def setup_modelforge_painn_representation(
             {
                 "step": "from_atom_to_molecule",
                 "mode": "sum",
-                "in": 'per_atom_energy',
+                "in": "per_atom_energy",
                 "index_key": "atomic_subsystem_indices",
                 "out": "E",
             }
@@ -118,8 +121,10 @@ def test_painn_representation_implementation():
     mf_nnp_input = input["modelforge_methane_input"]
 
     schnetpack_results = schnetpack_painn(spk_input)
-    modelforge_painn.input_preparation._input_checks(mf_nnp_input)
-    pairlist_output = modelforge_painn.input_preparation.prepare_inputs(mf_nnp_input)
+    modelforge_painn.compute_interacting_pairs._input_checks(mf_nnp_input)
+    pairlist_output = modelforge_painn.compute_interacting_pairs.prepare_inputs(
+        mf_nnp_input
+    )
     pain_nn_input_mf = modelforge_painn.core_module._model_specific_input_preparation(
         mf_nnp_input, pairlist_output
     )
@@ -398,7 +403,9 @@ def test_painn_representation_implementation():
         schnetpack_painn.filter_net.weight,
         atol=1e-4,
     )
-    modelforge_results = modelforge_painn.core_module.compute_properties(pain_nn_input_mf)
+    modelforge_results = modelforge_painn.core_module.compute_properties(
+        pain_nn_input_mf
+    )
     schnetpack_results = schnetpack_painn(spk_input)
 
     assert (
@@ -449,8 +456,11 @@ def setup_mf_schnet_representation(
     from modelforge.potential.schnet import SchNet as mf_SchNET
 
     return mf_SchNET(
-        max_Z=101,
-        number_of_atom_features=number_of_atom_features,
+        featurization={
+            "properties_to_featurize": ["atomic_number"],
+            "max_Z": 101,
+            "number_of_per_atom_features": 32,
+        },
         number_of_interaction_modules=nr_of_interactions,
         number_of_radial_basis_functions=number_of_radial_basis_functions,
         cutoff=cutoff,
@@ -461,7 +471,7 @@ def setup_mf_schnet_representation(
             {
                 "step": "from_atom_to_molecule",
                 "mode": "sum",
-                "in": 'per_atom_energy',
+                "in": "per_atom_energy",
                 "index_key": "atomic_subsystem_indices",
                 "out": "E",
             }
@@ -494,9 +504,11 @@ def test_schnet_representation_implementation():
     spk_input = input["spk_methane_input"]
     mf_nnp_input = input["modelforge_methane_input"]
 
-    modelforge_schnet.input_preparation._input_checks(mf_nnp_input)
+    modelforge_schnet.compute_interacting_pairs._input_checks(mf_nnp_input)
 
-    pairlist_output = modelforge_schnet.input_preparation.prepare_inputs(mf_nnp_input)
+    pairlist_output = modelforge_schnet.compute_interacting_pairs.prepare_inputs(
+        mf_nnp_input
+    )
     schnet_nn_input_mf = (
         modelforge_schnet.core_module._model_specific_input_preparation(
             mf_nnp_input, pairlist_output
@@ -631,7 +643,9 @@ def test_schnet_representation_implementation():
         assert torch.allclose(v_spk, v_mf)
 
     # Check full pass
-    modelforge_results = modelforge_schnet.core_module.compute_properties(schnet_nn_input_mf)
+    modelforge_results = modelforge_schnet.core_module.compute_properties(
+        schnet_nn_input_mf
+    )
     schnetpack_results = schnetpack_schnet(spk_input)
 
     assert (

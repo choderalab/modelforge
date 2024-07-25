@@ -147,6 +147,9 @@ def triple_by_molecule(
     return central_atom_index, local_index12 % n, sign12
 
 
+from typing import List
+
+
 class Embedding(nn.Module):
     def __init__(self, num_embeddings: int, embedding_dim: int):
         """
@@ -160,6 +163,10 @@ class Embedding(nn.Module):
         """
         super().__init__()
         self.embedding = nn.Embedding(num_embeddings, embedding_dim)
+
+    @property
+    def weights(self):
+        return self.embedding.weight
 
     @property
     def data(self):
@@ -197,6 +204,248 @@ class Embedding(nn.Module):
         """
 
         return self.embedding(x)
+
+
+from typing import Dict
+
+
+class AddPerMoleculeValue(nn.Module):
+    """
+    Module that adds a per-molecule value to a per-atom property tensor.
+    The per-molecule value is expanded to match th elength of the per-atom property tensor.
+
+    Parameters
+    ----------
+    key : str
+        The key to access the per-molecule value from the input data.
+
+    Attributes
+    ----------
+    key : str
+        The key to access the per-molecule value from the input data.
+    """
+
+    def __init__(self, key: str):
+        super().__init__()
+        self.key = key
+
+    def forward(
+        self, per_atom_property_tensor: torch.Tensor, data: NNPInput
+    ) -> torch.Tensor:
+        """
+        Forward pass of the module.
+
+        Parameters
+        ----------
+        per_atom_property_tensor : torch.Tensor
+            The per-atom property tensor.
+        data : NNPInput
+            The input data containing the per-molecule value.
+
+        Returns
+        -------
+        torch.Tensor
+            The updated per-atom property tensor with the per-molecule value appended.
+        """
+        values_to_append = getattr(data, self.key)
+        _, counts = torch.unique(data.atomic_subsystem_indices, return_counts=True)
+        expanded_values = torch.repeat_interleave(values_to_append, counts).unsqueeze(1)
+        return torch.cat((per_atom_property_tensor, expanded_values), dim=1)
+
+
+class AddPerAtomValue(nn.Module):
+    """
+    Module that adds a per-atom value to a tensor.
+
+    Parameters
+    ----------
+    key : str
+        The key to access the per-atom value from the input data.
+
+    Attributes
+    ----------
+    key : str
+        The key to access the per-atom value from the input data.
+    """
+
+    def __init__(self, key: str):
+        super().__init__()
+        self.key = key
+
+    def forward(
+        self, per_atom_property_tensor: torch.Tensor, data: NNPInput
+    ) -> torch.Tensor:
+        """
+        Forward pass of the module.
+
+        Parameters
+        ----------
+        per_atom_property_tensor : torch.Tensor
+            The input tensor representing per-atom properties.
+        data : NNPInput
+            The input data object containing additional information.
+
+        Returns
+        -------
+        torch.Tensor
+            The tensor with the per-atom value appended.
+        """
+        values_to_append = getattr(data, self.key)
+        return torch.cat((per_atom_property_tensor, values_to_append), dim=1)
+
+
+class FeaturizeInput(nn.Module):
+    """
+    Module that featurizes the input data.
+
+    Parameters
+    ----------
+    featurization_config : Dict[str, Union[List[str], int]]
+        The configuration for featurization, including the properties to featurize and the maximum atomic number.
+
+    Attributes
+    ----------
+    _SUPPORTED_FEATURIZATION_TYPES : List[str]
+        The list of supported featurization types.
+    nuclear_charge_embedding : Embedding
+        The embedding layer for nuclear charges.
+    append_to_embedding_tensor : nn.ModuleList
+        The list of modules to append to the embedding tensor.
+    registered_appended_properties : List[str]
+        The list of registered appended properties.
+    embeddings : nn.ModuleList
+        The list of embedding layers for additional categorical properties.
+    registered_embedding_operations : List[str]
+        The list of registered embedding operations.
+    increase_dim_of_embedded_tensor : int
+        The increase in dimension of the embedded tensor.
+    mixing : nn.Identity or Dense
+        The mixing layer for the final embedding.
+
+    Methods
+    -------
+    forward(data: NNPInput) -> torch.Tensor:
+        Featurize the input data.
+    """
+
+    _SUPPORTED_FEATURIZATION_TYPES = [
+        "atomic_number",
+        "per_molecule_total_charge",
+        "spin_state",
+    ]
+
+    def __init__(self, featurization_config: Dict[str, Union[List[str], int]]) -> None:
+        """
+        Initialize the FeaturizeInput class.
+
+        For per-atom non-categorical properties and per-molecule properties (both categorical and non-categorical), we append the embedded nuclear charges and mix them using a linear layer.
+
+        For per-atom categorical properties, we define an additional embedding and add the embedding to the nuclear charge embedding.
+
+        Parameters
+        ----------
+        featurization_config : dict
+            A dictionary containing the featurization configuration. It should have the following keys:
+            - "properties_to_featurize" : list
+                A list of properties to featurize.
+            - "max_Z" : int
+                The maximum atomic number.
+            - "number_of_per_atom_features" : int
+                The number of per-atom features.
+
+        Returns
+        -------
+        None
+        """
+        super().__init__()
+
+        # expend embedding vector
+        self.append_to_embedding_tensor = nn.ModuleList()
+        self.registered_appended_properties: List[str] = []
+        # what other categorial properties are embedded
+        self.embeddings = nn.ModuleList()
+        self.registered_embedding_operations: List[str] = []
+
+        self.increase_dim_of_embedded_tensor: int = 0
+
+        # iterate through the supported featurization types and check if one of these is requested
+        for featurization in self._SUPPORTED_FEATURIZATION_TYPES:
+
+            # embed nuclear charges
+            if featurization == "atomic_number" and featurization in list(
+                featurization_config["properties_to_featurize"]
+            ):
+
+                self.nuclear_charge_embedding = Embedding(
+                    int(featurization_config["max_Z"]),
+                    int(featurization_config["number_of_per_atom_features"]),
+                )
+                self.registered_embedding_operations.append("nuclear_charge_embedding")
+
+            # add total charge to embedding vector
+            if featurization == "per_molecule_total_charge" and featurization in list(
+                featurization_config["properties_to_featurize"]
+            ):
+
+                # transform output o f embedding with shape (nr_atoms, nr_features) to (nr_atoms, nr_features + 1). The added features is the total charge (which will be transformed to a per-atom property)
+                self.append_to_embedding_tensor.append(
+                    AddPerMoleculeValue("total_charge")
+                )
+                self.increase_dim_of_embedded_tensor += 1
+                self.registered_appended_properties.append("total_charge")
+
+            # add partial charge to embedding vector
+            if featurization == "per_atom_partial_charge" and featurization in list(
+                featurization_config["properties_to_featurize"]
+            ):
+
+                # transform output o f embedding with shape (nr_atoms, nr_features) to (nr_atoms, nr_features + 1). The added features is the total charge (which will be transformed to a per-atom property)
+                self.append_to_embedding_tensor.append(
+                    AddPerAtomValue("partial_charge")
+                )
+                self.increase_dim_of_embedded_tensor += 1
+                self.append_to_embedding_tensor("partial_charge")
+
+        # if only nuclear charges are embedded no mixing is performed
+        self.mixing: Union[nn.Identity, Dense]
+        if self.increase_dim_of_embedded_tensor == 0:
+            self.mixing = nn.Identity()
+        else:
+            self.mixing = Dense(
+                int(featurization_config["number_of_per_atom_features"])
+                + self.increase_dim_of_embedded_tensor,
+                int(featurization_config["number_of_per_atom_features"]),
+            )
+
+    def forward(self, data: NNPInput) -> torch.Tensor:
+        """
+        Featurize the input data.
+
+        Parameters
+        ----------
+        data : NNPInput
+            The input data.
+
+        Returns
+        -------
+        torch.Tensor
+            The featurized input data.
+        """
+
+        atomic_numbers = data.atomic_numbers
+        embedded_nuclear_charges = self.nuclear_charge_embedding(atomic_numbers)
+
+        for additional_embedding in self.embeddings:
+            embedded_nuclear_charges = additional_embedding(
+                embedded_nuclear_charges, data
+            )
+
+        for append_embedding_vector in self.append_to_embedding_tensor:
+            embedded_nuclear_charges = append_embedding_vector(
+                embedded_nuclear_charges, data
+            )
+
+        return self.mixing(embedded_nuclear_charges)
 
 
 import torch.nn.functional as F
@@ -339,26 +588,26 @@ from typing import Dict
 class ShiftedSoftplus(nn.Module):
     def __init__(self):
         super().__init__()
-        import math
 
         self.log_2 = math.log(2.0)
 
     def forward(self, x: torch.Tensor):
-        """Compute shifted soft-plus activation function.
+        """
+        Compute shifted soft-plus activation function.
 
-        y = \ln\left(1 + e^{-x}\right) - \ln(2)
+        The shifted soft-plus activation function is defined as:
+        y = ln(1 + exp(-x)) - ln(2)
 
         Parameters:
         -----------
-        x:torch.Tensor
-            input tensor
+        x : torch.Tensor
+            Input tensor.
 
         Returns:
         -----------
-        torch.Tensor: shifted soft-plus of input.
-
+        torch.Tensor
+            Shifted soft-plus of the input.
         """
-        from torch.nn import functional
 
         return functional.softplus(x) - self.log_2
 
@@ -478,6 +727,8 @@ class AngularSymmetryFunction(nn.Module):
 
 
 from abc import ABC, abstractmethod
+import math
+from torch.nn import functional
 
 
 class RadialBasisFunctionCore(nn.Module, ABC):

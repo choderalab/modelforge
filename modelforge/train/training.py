@@ -1275,6 +1275,9 @@ def perform_training(
         val_dataloaders=dm.val_dataloader(),
         ckpt_path=checkpoint_path,
     )
-    trainer.validate(model=model, dataloaders=dm.val_dataloader(), ckpt_path="best")
-    trainer.test(dataloaders=dm.test_dataloader(), ckpt_path="best")
+
+    trainer.validate(
+        model=model, dataloaders=dm.val_dataloader(), ckpt_path="best", verbose=True
+    )
+    trainer.test(dataloaders=dm.test_dataloader(), ckpt_path="best", verbose=True)
     return trainer

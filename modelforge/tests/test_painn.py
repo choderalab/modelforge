@@ -45,7 +45,7 @@ def test_equivariance(single_batch_with_batchsize_64):
         **config["potential"]["core_parameter"],
         postprocessing_parameter=config["potential"]["postprocessing_parameter"],
     ).double()
-    
+
     methane_input = single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float64)
     perturbed_methane_input = replace(methane_input)
     perturbed_methane_input.positions = torch.matmul(
@@ -53,7 +53,7 @@ def test_equivariance(single_batch_with_batchsize_64):
     )
 
     # prepare reference and perturbed inputs
-    pairlist_output = painn.input_preparation.prepare_inputs(methane_input)
+    pairlist_output = painn.compute_interacting_pairs.prepare_inputs(methane_input)
     reference_prepared_input = painn.core_module._model_specific_input_preparation(
         methane_input, pairlist_output
     )
@@ -67,7 +67,9 @@ def test_equivariance(single_batch_with_batchsize_64):
         )
     )
 
-    pairlist_output = painn.input_preparation.prepare_inputs(perturbed_methane_input)
+    pairlist_output = painn.compute_interacting_pairs.prepare_inputs(
+        perturbed_methane_input
+    )
     perturbed_prepared_input = painn.core_module._model_specific_input_preparation(
         perturbed_methane_input, pairlist_output
     )
@@ -168,8 +170,10 @@ def test_compare_representation():
     torch.manual_seed(1234)
 
     # override defaults to match reference implementation in spk
-    config["potential"]["core_parameter"]["max_Z"] = 100
-    config["potential"]["core_parameter"]["number_of_atom_features"] = 8
+    config["potential"]["core_parameter"]["featurization"]["max_Z"] = 100
+    config["potential"]["core_parameter"]["featurization"][
+        "number_of_per_atom_features"
+    ] = 8
     config["potential"]["core_parameter"]["number_of_radial_basis_functions"] = 5
 
     # initialize model
@@ -184,8 +188,8 @@ def test_compare_representation():
     spk_input = input["spk_methane_input"]
     mf_nnp_input = input["modelforge_methane_input"]
 
-    model.input_preparation._input_checks(mf_nnp_input)
-    pairlist_output = model.input_preparation.prepare_inputs(mf_nnp_input)
+    model.compute_interacting_pairs._input_checks(mf_nnp_input)
+    pairlist_output = model.compute_interacting_pairs.prepare_inputs(mf_nnp_input)
     prepared_input = model.core_module._model_specific_input_preparation(
         mf_nnp_input, pairlist_output
     )

@@ -34,6 +34,91 @@ def load_configs(potential_name: str, dataset_name: str):
     )
 
 
+def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
+    from modelforge.tests.data import (
+        potential_defaults,
+        training_defaults,
+        dataset_defaults,
+        runtime_defaults,
+    )
+    from importlib import resources
+    import toml
+
+    potential_path = (
+        resources.files(potential_defaults) / f"{potential_name.lower()}.toml"
+    )
+    dataset_path = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
+    training_path = resources.files(training_defaults) / "default.toml"
+    runtime_path = resources.files(runtime_defaults) / "runtime.toml"
+
+    training_config_dict = toml.load(training_path)
+    dataset_config_dict = toml.load(dataset_path)
+    potential_config_dict = toml.load(potential_path)
+    runtime_config_dict = toml.load(runtime_path)
+
+    potential_name = potential_config_dict["potential"]["potential_name"]
+
+    from modelforge.potential import _Implemented_NNP_Parameters
+
+    PotentialParameters = (
+        _Implemented_NNP_Parameters.get_neural_network_parameter_class(potential_name)
+    )
+    potential_parameters = PotentialParameters(**potential_config_dict["potential"])
+
+    from modelforge.dataset.dataset import DatasetParameters
+    from modelforge.train.parameters import TrainingParameters, RuntimeParameters
+
+    dataset_parameters = DatasetParameters(**dataset_config_dict["dataset"])
+    training_parameters = TrainingParameters(**training_config_dict["training"])
+    runtime_parameters = RuntimeParameters(**runtime_config_dict["runtime"])
+
+    return {
+        "potential": potential_parameters,
+        "dataset": dataset_parameters,
+        "training": training_parameters,
+        "runtime": runtime_parameters,
+    }
+
+
+@pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
+@pytest.mark.parametrize(
+    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+)
+@pytest.mark.parametrize("dataset_name", ["QM9"])
+def test_train_with_lightning_pydantic(potential_name, dataset_name):
+    """
+    Test the forward pass for a given model and dataset.
+    """
+
+    from modelforge.train.training import perform_training_pydantic_model
+
+    # read default parameters
+    config = load_configs_into_pydantic_models(potential_name, dataset_name)
+
+    # Extract parameters
+    potential_config = config["potential"]
+    training_config = config["training"]
+    dataset_config = config["dataset"]
+    runtime_config = config["runtime"]
+
+    # perform runtime_defaults
+    trainer = perform_training_pydantic_model(
+        potential_config=potential_config,
+        training_config=training_config,
+        dataset_config=dataset_config,
+        runtime_config=runtime_config,
+    )
+    # save checkpoint
+    trainer.save_checkpoint("test.chp")
+    # continue runtime_defaults
+    trainer = perform_training_pydantic_model(
+        potential_config=potential_config,
+        training_config=training_config,
+        dataset_config=dataset_config,
+        runtime_config=runtime_config,
+    )
+
+
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()

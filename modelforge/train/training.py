@@ -984,12 +984,12 @@ def log_training_arguments(
         log.info(f"Using default accelerator: {accelerator}")
     else:
         log.info(f"Using accelerator: {accelerator}")
-    nr_of_epochs = training_config.get("nr_of_epochs", 10)
+    nr_of_epochs = training_config.get("number_of_epochs", 10)
     if nr_of_epochs == 10:
         log.info(f"Using default number of epochs: {nr_of_epochs}")
     else:
         log.info(f"Training for {nr_of_epochs} epochs")
-    num_nodes = runtime_config.get("num_nodes", 1)
+    num_nodes = runtime_config.get("number_of_nodes", 1)
     if num_nodes == 1:
         log.info(f"Using default number of nodes: {num_nodes}")
     else:
@@ -1110,8 +1110,8 @@ def perform_training(
     version_select = dataset_config.get("version_select", "latest")
     accelerator = runtime_config.get("accelerator", "cpu")
     splitting_strategy = training_config["splitting_strategy"]
-    nr_of_epochs = runtime_config.get("nr_of_epochs", 10)
-    num_nodes = runtime_config.get("num_nodes", 1)
+    nr_of_epochs = runtime_config.get("number_of_epochs", 10)
+    num_nodes = runtime_config.get("number_of_nodes", 1)
     devices = runtime_config.get("devices", 1)
     batch_size = training_config.get("batch_size", 128)
     remove_self_energies = training_config.get("remove_self_energies", False)
@@ -1269,7 +1269,7 @@ def perform_training_pydantic_model(
     Trainer
     """
 
-    from pytorch_lightning.loggers import TensorBoardLogger
+    from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
     from modelforge.dataset.utils import REGISTERED_SPLITTING_STRATEGIES
     from lightning import Trainer
     from modelforge.potential import NeuralNetworkPotentialFactory
@@ -1280,11 +1280,11 @@ def perform_training_pydantic_model(
     # )
 
     # set up tensor board logger
-    if training_config.experiment_logger == "tensorboard":
+    if training_config.experiment_logger.logger_name == "tensorboard":
         logger = TensorBoardLogger(
-            runtime_config.save_dir, name=runtime_config.experiment_name
+            save_dir=runtime_config.save_dir, name=runtime_config.experiment_name
         )
-    elif training_config.experiment_logger == "wandb":
+    elif training_config.experiment_logger.logger_name == "wandb":
         logger = WandbLogger(
             save_dir=runtime_config.save_dir,
             log_model=True,
@@ -1324,7 +1324,7 @@ def perform_training_pydantic_model(
 
     # Set up model
     model = NeuralNetworkPotentialFactory.generate_model(
-        use="runtime_defaults",
+        use="training",
         dataset_statistic=dataset_statistic,
         model_parameter=potential_config.dict(),
         training_parameter=training_config.dict(),
@@ -1355,7 +1355,6 @@ def perform_training_pydantic_model(
         + "-{epoch:02d}-{val_loss:.2f}"
     )
     checkpoint_callback = ModelCheckpoint(
-        dirpath=runtime_config.checkpoint_path,
         save_top_k=2,
         monitor=training_config.monitor,
         filename=checkpoint_filename,
@@ -1365,17 +1364,20 @@ def perform_training_pydantic_model(
 
     # set up trainer
     trainer = Trainer(
-        max_epochs=training_config.nr_of_epochs,
-        num_nodes=runtime_config.num_nodes,
+        max_epochs=training_config.number_of_epochs,
+        num_nodes=runtime_config.number_of_nodes,
         devices=runtime_config.devices,
         accelerator=runtime_config.accelerator,
-        logger=logger,  # Add the logger here
+        logger=logger,
         callbacks=callbacks,
         inference_mode=False,
         num_sanity_val_steps=2,
-        log_every_n_steps=training_config.log_every_n_steps,
+        log_every_n_steps=runtime_config.log_every_n_steps,
     )
-
+    if runtime_config.checkpoint_path == "None":
+        checkpoint_path = None
+    else:
+        checkpoint_path = runtime_config.checkpoint_path
     # Run runtime_defaults loop and validate
     trainer.fit(
         model,
@@ -1383,7 +1385,7 @@ def perform_training_pydantic_model(
             num_workers=dataset_config.num_workers, pin_memory=dataset_config.pin_memory
         ),
         val_dataloaders=dm.val_dataloader(),
-        ckpt_path=runtime_config.checkpoint_path,
+        ckpt_path=checkpoint_path,
     )
     trainer.validate(model=model, dataloaders=dm.val_dataloader(), ckpt_path="best")
     trainer.test(dataloaders=dm.test_dataloader(), ckpt_path="best")

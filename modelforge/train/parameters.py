@@ -6,7 +6,7 @@ associated yaml file. This model will be used to validate the input dictionary a
 
 """
 
-from pydantic import BaseModel, model_validator, field_validator
+from pydantic import BaseModel, model_validator, field_validator, ConfigDict
 from enum import Enum
 from typing import List, Union, Dict, Optional, Callable
 
@@ -14,8 +14,7 @@ from typing import List, Union, Dict, Optional, Callable
 # So we  do not need to set use_enum_values = True for each model
 # we can create a base class that will be inherited by all models
 class ParametersBase(BaseModel):
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True, arbitrary_types_allowed=True)
 
 
 class SchedulerMode(str, Enum):
@@ -221,10 +220,11 @@ class TrainingParameters(ParametersBase):
     class ExperimentLogger(ParametersBase):
         logger_name: Loggers
 
-    nr_of_epochs: int
+    number_of_epochs: int
     remove_self_energies: bool
     batch_size: int
     lr: float
+    monitor: str
     lr_scheduler_config: Optional[SchedulerConfig] = None
     loss_parameter: LossParameter
     early_stopping: Optional[EarlyStopping] = None

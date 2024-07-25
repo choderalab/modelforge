@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, ConfigDict
 from openff.units import unit
 from typing import Union
 
@@ -10,8 +10,7 @@ This module contains pydantic models for storing the parameters of
 # To avoid having to set use_enum_values = True in every subclass of BaseModel,
 # we will just create a parent class for all the parameters classes.
 class ParametersBase(BaseModel):
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True, arbitrary_types_allowed=True)
 
 
 # define a reusable validator for converting string to unit.Quantity
@@ -21,15 +20,17 @@ def convert_str_to_unit(value: Union[str, unit.Quantity]) -> unit.Quantity:
     return value
 
 
+# these will all be set by default to false
+# such that we do not need to define unused post processing operations in the datafile
 class GeneralPostProcessingOperation(ParametersBase):
-    calculate_molecular_self_energy: bool
-    calculate_atomic_self_energy: bool
+    calculate_molecular_self_energy: bool = False
+    calculate_atomic_self_energy: bool = False
 
 
 class PerAtomEnergy(ParametersBase):
-    normalize: bool
-    from_atom_to_molecule_reduction: bool
-    keep_per_atom_property: bool
+    normalize: bool = False
+    from_atom_to_molecule_reduction: bool = False
+    keep_per_atom_property: bool = False
 
 
 class ANI2xParameters(ParametersBase):
@@ -55,8 +56,10 @@ class ANI2xParameters(ParametersBase):
         #     return value
 
     class PostProcessingParameter(ParametersBase):
-        per_atom_energy: PerAtomEnergy
-        general_post_processing_operation: GeneralPostProcessingOperation
+        per_atom_energy: PerAtomEnergy = PerAtomEnergy()
+        general_postprocessing_operation: GeneralPostProcessingOperation = (
+            GeneralPostProcessingOperation()
+        )
 
     potential_name: str = "ANI2x"
     core_parameter: CoreParameter
@@ -76,8 +79,10 @@ class SchNetParameters(ParametersBase):
         converted_units = field_validator("cutoff")(convert_str_to_unit)
 
     class PostProcessingParameter(ParametersBase):
-        per_atom_energy: PerAtomEnergy
-        general_post_processing_operation: GeneralPostProcessingOperation
+        per_atom_energy: PerAtomEnergy = PerAtomEnergy()
+        general_postprocessing_operation: GeneralPostProcessingOperation = (
+            GeneralPostProcessingOperation()
+        )
 
     potential_name: str = "SchNet"
     core_parameter: CoreParameter
@@ -97,8 +102,10 @@ class PaiNNParameters(ParametersBase):
         converted_units = field_validator("cutoff")(convert_str_to_unit)
 
     class PostProcessingParameter(ParametersBase):
-        per_atom_energy: PerAtomEnergy
-        general_post_processing_operation: GeneralPostProcessingOperation
+        per_atom_energy: PerAtomEnergy = PerAtomEnergy()
+        general_postprocessing_operation: GeneralPostProcessingOperation = (
+            GeneralPostProcessingOperation()
+        )
 
     potential_name: str = "PaiNN"
     core_parameter: CoreParameter
@@ -117,8 +124,10 @@ class PhysNetParameters(ParametersBase):
         converted_units = field_validator("cutoff")(convert_str_to_unit)
 
     class PostProcessingParameter(ParametersBase):
-        per_atom_energy: PerAtomEnergy
-        general_post_processing_operation: GeneralPostProcessingOperation
+        per_atom_energy: PerAtomEnergy = PerAtomEnergy()
+        general_postprocessing_operation: GeneralPostProcessingOperation = (
+            GeneralPostProcessingOperation()
+        )
 
     potential_name: str = "PhysNet"
     core_parameter: CoreParameter
@@ -137,8 +146,10 @@ class SAKEParameters(ParametersBase):
         converted_units = field_validator("cutoff")(convert_str_to_unit)
 
     class PostProcessingParameter(ParametersBase):
-        per_atom_energy: PerAtomEnergy
-        general_post_processing_operation: GeneralPostProcessingOperation
+        per_atom_energy: PerAtomEnergy = PerAtomEnergy()
+        general_postprocessing_operation: GeneralPostProcessingOperation = (
+            GeneralPostProcessingOperation()
+        )
 
     potential_name: str = "SAKE"
     core_parameter: CoreParameter

@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 #     "DatasetParameters",
 # ]
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, ConfigDict
 
 
 class DatasetParameters(BaseModel):
@@ -40,15 +40,15 @@ class DatasetParameters(BaseModel):
 
     """
 
+    model_config = ConfigDict(use_enum_values=True, arbitrary_types_allowed=True)
+
     dataset_name: str
     version_select: str
     num_workers: int
     pin_memory: bool
 
-    class Config:
-        use_enum_values = True
-
     @field_validator("num_workers")
+    @classmethod
     def check_num_workers(cls, v):
         if v < 1:
             raise ValueError("num_workers must be greater than or equal to 1")

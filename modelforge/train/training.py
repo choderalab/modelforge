@@ -942,7 +942,7 @@ def perform_training(
     import toml
 
     dataset_statistic = toml.load(dm.dataset_statistic_filename)
-    logger.info(dataset_statistic["training_dataset_statistics"])
+    log.info(dataset_statistic["training_dataset_statistics"])
     # Set up model
     model = NeuralNetworkPotentialFactory.generate_model(
         use="training",

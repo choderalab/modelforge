@@ -5,7 +5,32 @@ from modelforge.dataset import _ImplementedDatasets
 from modelforge.potential import NeuralNetworkPotentialFactory
 
 
-def load_configs(potential_name: str, dataset_name: str):
+# def load_configs(potential_name: str, dataset_name: str):
+#     from modelforge.tests.data import (
+#         potential_defaults,
+#         training_defaults,
+#         dataset_defaults,
+#         runtime_defaults,
+#     )
+#     from importlib import resources
+#     from modelforge.train.training import return_toml_config
+#
+#     potential_path = (
+#         resources.files(potential_defaults) / f"{potential_name.lower()}.toml"
+#     )
+#     dataset_path = resources.files(dataset_defaults) / f"{dataset_name}.toml"
+#     training_path = resources.files(training_defaults) / "default.toml"
+#     runtime_path = resources.files(runtime_defaults) / "runtime.toml"
+#
+#     return return_toml_config(
+#         potential_path=potential_path,
+#         dataset_path=dataset_path,
+#         training_path=training_path,
+#         runtime_path=runtime_path,
+#     )
+
+
+def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
     from modelforge.tests.data import (
         potential_defaults,
         training_defaults,
@@ -13,21 +38,42 @@ def load_configs(potential_name: str, dataset_name: str):
         runtime_defaults,
     )
     from importlib import resources
-    from modelforge.train.training import return_toml_config
+    import toml
 
     potential_path = (
         resources.files(potential_defaults) / f"{potential_name.lower()}.toml"
     )
-    dataset_path = resources.files(dataset_defaults) / f"{dataset_name}.toml"
+    dataset_path = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
     training_path = resources.files(training_defaults) / "default.toml"
     runtime_path = resources.files(runtime_defaults) / "runtime.toml"
 
-    return return_toml_config(
-        potential_path=potential_path,
-        dataset_path=dataset_path,
-        training_path=training_path,
-        runtime_path=runtime_path,
+    training_config_dict = toml.load(training_path)
+    dataset_config_dict = toml.load(dataset_path)
+    potential_config_dict = toml.load(potential_path)
+    runtime_config_dict = toml.load(runtime_path)
+
+    potential_name = potential_config_dict["potential"]["potential_name"]
+
+    from modelforge.potential import _Implemented_NNP_Parameters
+
+    PotentialParameters = (
+        _Implemented_NNP_Parameters.get_neural_network_parameter_class(potential_name)
     )
+    potential_parameters = PotentialParameters(**potential_config_dict["potential"])
+
+    from modelforge.dataset.dataset import DatasetParameters
+    from modelforge.train.parameters import TrainingParameters, RuntimeParameters
+
+    dataset_parameters = DatasetParameters(**dataset_config_dict["dataset"])
+    training_parameters = TrainingParameters(**training_config_dict["training"])
+    runtime_parameters = RuntimeParameters(**runtime_config_dict["runtime"])
+
+    return {
+        "potential": potential_parameters,
+        "dataset": dataset_parameters,
+        "training": training_parameters,
+        "runtime": runtime_parameters,
+    }
 
 
 @pytest.mark.parametrize(
@@ -39,13 +85,13 @@ def test_JAX_wrapping(potential_name, single_batch_with_batchsize_64):
     )
 
     # read default parameters
-    config = load_configs(f"{potential_name.lower()}", "qm9")
+    config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
 
     # inference model
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         simulation_environment="JAX",
-        model_parameter=config["potential"],
+        model_parameter=config["potential"].model_dump(),
     )
 
     assert "JAX" in str(type(model))
@@ -70,13 +116,13 @@ def test_model_factory(potential_name, simulation_environment):
     from modelforge.train.training import TrainingAdapter
 
     # read default parameters
-    config = load_configs(f"{potential_name.lower()}", "qm9")
+    config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
 
     # inference model
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         simulation_environment=simulation_environment,
-        model_parameter=config["potential"],
+        model_parameter=config["potential"].model_dump(),
     )
     assert (
         potential_name.upper() in str(type(model)).upper()
@@ -84,13 +130,12 @@ def test_model_factory(potential_name, simulation_environment):
     )
 
     # Extract parameters
-    training_parameter = config["training"]
     # runtime_defaults model
     model = NeuralNetworkPotentialFactory.generate_model(
         use="training",
         simulation_environment=simulation_environment,
-        model_parameter=config["potential"],
-        training_parameter=training_parameter,
+        model_parameter=config["potential"].model_dump(),
+        training_parameter=config["training"].model_dump(),
     )
     assert type(model) == TrainingAdapter
 
@@ -127,12 +172,15 @@ def test_energy_scaling_and_offset():
     # -------------------------------#
     # initialize model without any postprocessing
     # -------------------------------#
-    config = load_configs("ani2x", "qm9")
+    config = load_configs_into_pydantic_models("ani2x", "qm9")
+    # config = load_configs("ani2x", "qm9")
 
     torch.manual_seed(42)
     model = ANI2x(
-        **config["potential"]["core_parameter"],
-        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+        **config["potential"].core_parameter.model_dump(),
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
     )
     output_no_postprocessing = model(methane)
     # -------------------------------#
@@ -140,8 +188,10 @@ def test_energy_scaling_and_offset():
 
     torch.manual_seed(42)
     model = ANI2x(
-        **config["potential"]["core_parameter"],
-        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+        **config["potential"].core_parameter.model_dump(),
+        postprocessing_parameter=config[
+            "potential"
+        ].postprocessing_parameter.model_dump(),
         dataset_statistic=dataset_statistic,
     )
     scaled_output = model(methane)
@@ -163,13 +213,16 @@ def test_energy_scaling_and_offset():
     # Calculate atomic self energies
 
     # modify postprocessing parameters
-    config["potential"]["postprocessing_parameter"][
-        "general_postprocessing_operation"
-    ] = {"calculate_molecular_self_energy": True}
-
+    config[
+        "potential"
+    ].postprocessing_parameter.general_postprocessing_operation.calculate_molecular_self_energy = (
+        True
+    )
     model = ANI2x(
-        **config["potential"]["core_parameter"],
-        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+        **config["potential"].core_parameter.model_dump(),
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
         dataset_statistic=dataset_statistic,
     )
 
@@ -190,23 +243,22 @@ def test_state_dict_saving_and_loading(potential_name):
     import torch
 
     # read default parameters
-    config = load_configs(f"{potential_name.lower()}", "qm9")
+    config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
 
     # Extract parameters
-    training_parameter = config["training"]
 
     model1 = NeuralNetworkPotentialFactory.generate_model(
         use="training",
         simulation_environment="PyTorch",
-        model_parameter=config["potential"],
-        training_parameter=training_parameter,
+        model_parameter=config["potential"].model_dump(),
+        training_parameter=config["training"].model_dump(),
     )
     torch.save(model1.state_dict(), "model.pth")
 
     model2 = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         simulation_environment="PyTorch",
-        model_parameter=config["potential"],
+        model_parameter=config["potential"].model_dump(),
     )
     model2.load_state_dict(torch.load("model.pth"))
 

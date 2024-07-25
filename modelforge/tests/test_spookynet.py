@@ -80,6 +80,9 @@ def test_forward():
         num_residual_nonlocal_v=config["potential"]["core_parameter"]["number_of_residual_blocks"],
         num_residual_post=config["potential"]["core_parameter"]["number_of_residual_blocks"],
         num_residual_output=config["potential"]["core_parameter"]["number_of_residual_blocks"],
+        use_zbl_repulsion=False,
+        use_electrostatics=False,
+        use_d4_dispersion=False,
     ).double()
 
     spookynet.core_module.interaction_modules[0].local_interaction.resblock_d.residual.stack[0].activation2.beta = \
@@ -89,6 +92,7 @@ def test_forward():
 
     spookynet.core_module.atomic_embedding_module.element_embedding.weight = ref_spookynet.nuclear_embedding.element_embedding
     spookynet.core_module.atomic_embedding_module.config_linear = ref_spookynet.nuclear_embedding.config_linear.weight
+
     spookynet.core_module.charge_embedding_module.linear_q.weight = ref_spookynet.charge_embedding.linear_q.weight
     spookynet.core_module.charge_embedding_module.linear_q.bias = ref_spookynet.charge_embedding.linear_q.bias
     spookynet.core_module.charge_embedding_module.linear_k.weight = ref_spookynet.charge_embedding.linear_k.weight
@@ -108,7 +112,9 @@ def test_forward():
     spookynet.core_module.charge_embedding_module.resblock.activation.alpha = ref_spookynet.charge_embedding.resblock.activation.alpha
     spookynet.core_module.charge_embedding_module.resblock.activation.beta = ref_spookynet.charge_embedding.resblock.activation.beta
     spookynet.core_module.charge_embedding_module.resblock.linear.weight = ref_spookynet.charge_embedding.resblock.linear.weight
+
     spookynet.core_module.spookynet_representation_module.radial_symmetry_function_module.alpha = ref_spookynet.radial_basis_functions._alpha
+
     spookynet.core_module.interaction_modules[0].local_interaction.radial_s.weight = ref_spookynet.module[
         0].local_interaction.radial_s.weight
     spookynet.core_module.interaction_modules[0].local_interaction.radial_p.weight = ref_spookynet.module[
@@ -239,6 +245,7 @@ def test_forward():
         0].local_interaction.resblock.linear.weight
     spookynet.core_module.interaction_modules[0].local_interaction.resblock.linear.bias = ref_spookynet.module[
         0].local_interaction.resblock.linear.bias
+
     spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_q.residual.stack[0].activation1.alpha = \
         ref_spookynet.module[0].nonlocal_interaction.resblock_q.residual.stack[0].activation1.alpha
     spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_q.residual.stack[0].activation1.beta = \
@@ -311,6 +318,7 @@ def test_forward():
         0].nonlocal_interaction.resblock_v.linear.weight
     spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_v.linear.bias = ref_spookynet.module[
         0].nonlocal_interaction.resblock_v.linear.bias
+
     spookynet.core_module.interaction_modules[0].residual_pre.stack[0].activation1.alpha = \
         ref_spookynet.module[0].residual_pre.stack[0].activation1.alpha
     spookynet.core_module.interaction_modules[0].residual_pre.stack[0].activation1.beta = \
@@ -327,6 +335,7 @@ def test_forward():
         ref_spookynet.module[0].residual_pre.stack[0].linear2.weight
     spookynet.core_module.interaction_modules[0].residual_pre.stack[0].linear2.bias = \
         ref_spookynet.module[0].residual_pre.stack[0].linear2.bias
+
     spookynet.core_module.interaction_modules[0].residual_post.stack[0].activation1.alpha = \
         ref_spookynet.module[0].residual_post.stack[0].activation1.alpha
     spookynet.core_module.interaction_modules[0].residual_post.stack[0].activation1.beta = \
@@ -343,6 +352,7 @@ def test_forward():
         ref_spookynet.module[0].residual_post.stack[0].linear2.weight
     spookynet.core_module.interaction_modules[0].residual_post.stack[0].linear2.bias = \
         ref_spookynet.module[0].residual_post.stack[0].linear2.bias
+
     spookynet.core_module.interaction_modules[0].resblock.residual.stack[0].activation1.alpha = \
         ref_spookynet.module[0].resblock.residual.stack[0].activation1.alpha
     spookynet.core_module.interaction_modules[0].resblock.residual.stack[0].activation1.beta = \

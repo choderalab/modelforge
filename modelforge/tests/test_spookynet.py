@@ -42,6 +42,8 @@ def test_forward():
     config["potential"]["core_parameter"]["number_of_atom_features"] = 12
     config["potential"]["core_parameter"]["number_of_radial_basis_functions"] = 7
 
+    print(f"{config['potential']['core_parameter']}=")
+
     torch.manual_seed(1234)
 
     # initialize model
@@ -79,7 +81,7 @@ def test_forward():
         num_residual_nonlocal_v=config["potential"]["core_parameter"]["number_of_residual_blocks"],
         num_residual_post=config["potential"]["core_parameter"]["number_of_residual_blocks"],
         num_residual_output=config["potential"]["core_parameter"]["number_of_residual_blocks"],
-    )
+    ).double()
 
     ref_spookynet(
         prepared_input.atomic_numbers,

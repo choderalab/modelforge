@@ -173,6 +173,8 @@ def test_compare_forward():
     config["potential"]["core_parameter"]["number_of_radial_basis_functions"] = 5
     config["potential"]["core_parameter"]["number_of_filters"] = 12
 
+    print(f"{config['potential']['core_parameter']}=")
+
     torch.manual_seed(1234)
 
     # initialize model

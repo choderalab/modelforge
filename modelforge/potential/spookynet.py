@@ -375,9 +375,14 @@ class SpookyNet(BaseNetwork):
         cutoff : openff.units.unit.Quantity
             The cutoff distance for interactions.
         """
+        from modelforge.utils.units import _convert
+
+        self.only_unique_pairs = False  # NOTE: need to be set before super().__init__
+
         super().__init__(
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=postprocessing_parameter,
+            cutoff=_convert(cutoff)
         )
         from modelforge.utils.units import _convert
 
@@ -387,10 +392,6 @@ class SpookyNet(BaseNetwork):
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             number_of_interaction_modules=number_of_interaction_modules,
             number_of_residual_blocks=number_of_residual_blocks,
-        )
-        self.only_unique_pairs = False  # NOTE: for pairlist
-        self.input_preparation = InputPreparation(
-            cutoff=_convert(cutoff), only_unique_pairs=self.only_unique_pairs
         )
 
     def _config_prior(self):

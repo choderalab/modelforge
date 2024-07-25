@@ -87,8 +87,284 @@ def test_forward():
     for name, param in spookynet.named_parameters():
         print(name)
 
-
-
+    spookynet.core_module.atomic_embedding_module.element_embedding.weight = ref_spookynet.nuclear_embedding.element_embedding
+    spookynet.core_module.atomic_embedding_module.config_linear = ref_spookynet.nuclear_embedding.config_linear.weight
+    spookynet.core_module.charge_embedding_module.linear_q.weight = ref_spookynet.charge_embedding.linear_q.weight
+    spookynet.core_module.charge_embedding_module.linear_q.bias = ref_spookynet.charge_embedding.linear_q.bias
+    spookynet.core_module.charge_embedding_module.linear_k.weight = ref_spookynet.charge_embedding.linear_k.weight
+    spookynet.core_module.charge_embedding_module.linear_v.weight = ref_spookynet.charge_embedding.linear_v.weight
+    spookynet.core_module.charge_embedding_module.resblock.residual.stack[0].activation1.alpha = \
+        ref_spookynet.charge_embedding.resblock.residual.stack[0].activation1.alpha
+    spookynet.core_module.charge_embedding_module.resblock.residual.stack[0].activation1.beta = \
+        ref_spookynet.charge_embedding.resblock.residual.stack[0].activation1.beta
+    spookynet.core_module.charge_embedding_module.resblock.residual.stack[0].linear1.weight = \
+        ref_spookynet.charge_embedding.resblock.residual.stack[0].linear1.weight
+    spookynet.core_module.charge_embedding_module.resblock.residual.stack[0].activation2.alpha = \
+        ref_spookynet.charge_embedding.resblock.residual.stack[0].activation2.alpha
+    spookynet.core_module.charge_embedding_module.resblock.residual.stack[0].activation2.beta = \
+        ref_spookynet.charge_embedding.resblock.residual.stack[0].activation2.beta
+    spookynet.core_module.charge_embedding_module.resblock.residual.stack[0].linear2.weight = \
+        ref_spookynet.charge_embedding.resblock.residual.stack[0].linear2.weight
+    spookynet.core_module.charge_embedding_module.resblock.activation.alpha = ref_spookynet.charge_embedding.resblock.activation.alpha
+    spookynet.core_module.charge_embedding_module.resblock.activation.beta = ref_spookynet.charge_embedding.resblock.activation.beta
+    spookynet.core_module.charge_embedding_module.resblock.linear.weight = ref_spookynet.charge_embedding.resblock.linear.weight
+    spookynet.core_module.spookynet_representation_module.radial_symmetry_function_module.alpha = ref_spookynet.radial_basis_functions._alpha
+    spookynet.core_module.interaction_modules[0].local_interaction.radial_s.weight = ref_spookynet.module[
+        0].local_interaction.radial_s.weight
+    spookynet.core_module.interaction_modules[0].local_interaction.radial_p.weight = ref_spookynet.module[
+        0].local_interaction.radial_p.weight
+    spookynet.core_module.interaction_modules[0].local_interaction.radial_d.weight = ref_spookynet.module[
+        0].local_interaction.radial_d.weight
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_x.residual.stack[0].activation1.alpha = \
+        ref_spookynet.module[0].local_interaction.resblock_x.residual.stack[0].activation1.alpha
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_x.residual.stack[0].activation1.beta = \
+        ref_spookynet.module[0].local_interaction.resblock_x.residual.stack[0].activation1.beta
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_x.residual.stack[0].linear1.weight = \
+        ref_spookynet.module[0].local_interaction.resblock_x.residual.stack[0].linear1.weight
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_x.residual.stack[0].linear1.bias = \
+        ref_spookynet.module[0].local_interaction.resblock_x.residual.stack[0].linear1.bias
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_x.residual.stack[0].activation2.alpha = \
+        ref_spookynet.module[0].local_interaction.resblock_x.residual.stack[0].activation2.alpha
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_x.residual.stack[0].activation2.beta = \
+        ref_spookynet.module[0].local_interaction.resblock_x.residual.stack[0].activation2.beta
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_x.residual.stack[0].linear2.weight = \
+        ref_spookynet.module[0].local_interaction.resblock_x.residual.stack[0].linear2.weight
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_x.residual.stack[0].linear2.bias = \
+        ref_spookynet.module[0].local_interaction.resblock_x.residual.stack[0].linear2.bias
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_x.activation.alpha = ref_spookynet.module[
+        0].local_interaction.resblock_x.activation.alpha
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_x.activation.beta = ref_spookynet.module[
+        0].local_interaction.resblock_x.activation.beta
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_x.linear.weight = ref_spookynet.module[
+        0].local_interaction.resblock_x.linear.weight
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_x.linear.bias = ref_spookynet.module[
+        0].local_interaction.resblock_x.linear.bias
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_s.residual.stack[0].activation1.alpha = \
+        ref_spookynet.module[0].local_interaction.resblock_s.residual.stack[0].activation1.alpha
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_s.residual.stack[0].activation1.beta = \
+        ref_spookynet.module[0].local_interaction.resblock_s.residual.stack[0].activation1.beta
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_s.residual.stack[0].linear1.weight = \
+        ref_spookynet.module[0].local_interaction.resblock_s.residual.stack[0].linear1.weight
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_s.residual.stack[0].linear1.bias = \
+        ref_spookynet.module[0].local_interaction.resblock_s.residual.stack[0].linear1.bias
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_s.residual.stack[0].activation2.alpha = \
+        ref_spookynet.module[0].local_interaction.resblock_s.residual.stack[0].activation2.alpha
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_s.residual.stack[0].activation2.beta = \
+        ref_spookynet.module[0].local_interaction.resblock_s.residual.stack[0].activation2.beta
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_s.residual.stack[0].linear2.weight = \
+        ref_spookynet.module[0].local_interaction.resblock_s.residual.stack[0].linear2.weight
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_s.residual.stack[0].linear2.bias = \
+        ref_spookynet.module[0].local_interaction.resblock_s.residual.stack[0].linear2.bias
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_s.activation.alpha = ref_spookynet.module[
+        0].local_interaction.resblock_s.activation.alpha
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_s.activation.beta = ref_spookynet.module[
+        0].local_interaction.resblock_s.activation.beta
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_s.linear.weight = ref_spookynet.module[
+        0].local_interaction.resblock_s.linear.weight
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_s.linear.bias = ref_spookynet.module[
+        0].local_interaction.resblock_s.linear.bias
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_p.residual.stack[0].activation1.alpha = \
+        ref_spookynet.module[0].local_interaction.resblock_p.residual.stack[0].activation1.alpha
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_p.residual.stack[0].activation1.beta = \
+        ref_spookynet.module[0].local_interaction.resblock_p.residual.stack[0].activation1.beta
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_p.residual.stack[0].linear1.weight = \
+        ref_spookynet.module[0].local_interaction.resblock_p.residual.stack[0].linear1.weight
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_p.residual.stack[0].linear1.bias = \
+        ref_spookynet.module[0].local_interaction.resblock_p.residual.stack[0].linear1.bias
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_p.residual.stack[0].activation2.alpha = \
+        ref_spookynet.module[0].local_interaction.resblock_p.residual.stack[0].activation2.alpha
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_p.residual.stack[0].activation2.beta = \
+        ref_spookynet.module[0].local_interaction.resblock_p.residual.stack[0].activation2.beta
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_p.residual.stack[0].linear2.weight = \
+        ref_spookynet.module[0].local_interaction.resblock_p.residual.stack[0].linear2.weight
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_p.residual.stack[0].linear2.bias = \
+        ref_spookynet.module[0].local_interaction.resblock_p.residual.stack[0].linear2.bias
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_p.activation.alpha = ref_spookynet.module[
+        0].local_interaction.resblock_p.activation.alpha
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_p.activation.beta = ref_spookynet.module[
+        0].local_interaction.resblock_p.activation.beta
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_p.linear.weight = ref_spookynet.module[
+        0].local_interaction.resblock_p.linear.weight
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_p.linear.bias = ref_spookynet.module[
+        0].local_interaction.resblock_p.linear.bias
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_d.residual.stack[0].activation1.alpha = \
+        ref_spookynet.module[0].local_interaction.resblock_d.residual.stack[0].activation1.alpha
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_d.residual.stack[0].activation1.beta = \
+        ref_spookynet.module[0].local_interaction.resblock_d.residual.stack[0].activation1.beta
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_d.residual.stack[0].linear1.weight = \
+        ref_spookynet.module[0].local_interaction.resblock_d.residual.stack[0].linear1.weight
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_d.residual.stack[0].linear1.bias = \
+        ref_spookynet.module[0].local_interaction.resblock_d.residual.stack[0].linear1.bias
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_d.residual.stack[0].activation2.alpha = \
+        ref_spookynet.module[0].local_interaction.resblock_d.residual.stack[0].activation2.alpha
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_d.residual.stack[0].activation2.beta = \
+        ref_spookynet.module[0].local_interaction.resblock_d.residual.stack[0].activation2.beta
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_d.residual.stack[0].linear2.weight = \
+        ref_spookynet.module[0].local_interaction.resblock_d.residual.stack[0].linear2.weight
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_d.residual.stack[0].linear2.bias = \
+        ref_spookynet.module[0].local_interaction.resblock_d.residual.stack[0].linear2.bias
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_d.activation.alpha = ref_spookynet.module[
+        0].local_interaction.resblock_d.activation.alpha
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_d.activation.beta = ref_spookynet.module[
+        0].local_interaction.resblock_d.activation.beta
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_d.linear.weight = ref_spookynet.module[
+        0].local_interaction.resblock_d.linear.weight
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock_d.linear.bias = ref_spookynet.module[
+        0].local_interaction.resblock_d.linear.bias
+    spookynet.core_module.interaction_modules[0].local_interaction.projection_p.weight = ref_spookynet.module[
+        0].local_interaction.projection_p.weight
+    spookynet.core_module.interaction_modules[0].local_interaction.projection_d.weight = ref_spookynet.module[
+        0].local_interaction.projection_d.weight
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock.residual.stack[0].activation1.alpha = \
+        ref_spookynet.module[0].local_interaction.resblock.residual.stack[0].activation1.alpha
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock.residual.stack[0].activation1.beta = \
+        ref_spookynet.module[0].local_interaction.resblock.residual.stack[0].activation1.beta
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock.residual.stack[0].linear1.weight = \
+        ref_spookynet.module[0].local_interaction.resblock.residual.stack[0].linear1.weight
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock.residual.stack[0].linear1.bias = \
+        ref_spookynet.module[0].local_interaction.resblock.residual.stack[0].linear1.bias
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock.residual.stack[0].activation2.alpha = \
+        ref_spookynet.module[0].local_interaction.resblock.residual.stack[0].activation2.alpha
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock.residual.stack[0].activation2.beta = \
+        ref_spookynet.module[0].local_interaction.resblock.residual.stack[0].activation2.beta
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock.residual.stack[0].linear2.weight = \
+        ref_spookynet.module[0].local_interaction.resblock.residual.stack[0].linear2.weight
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock.residual.stack[0].linear2.bias = \
+        ref_spookynet.module[0].local_interaction.resblock.residual.stack[0].linear2.bias
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock.activation.alpha = ref_spookynet.module[
+        0].local_interaction.resblock.activation.alpha
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock.activation.beta = ref_spookynet.module[
+        0].local_interaction.resblock.activation.beta
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock.linear.weight = ref_spookynet.module[
+        0].local_interaction.resblock.linear.weight
+    spookynet.core_module.interaction_modules[0].local_interaction.resblock.linear.bias = ref_spookynet.module[
+        0].local_interaction.resblock.linear.bias
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_q.residual.stack[0].activation1.alpha = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_q.residual.stack[0].activation1.alpha
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_q.residual.stack[0].activation1.beta = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_q.residual.stack[0].activation1.beta
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_q.residual.stack[0].linear1.weight = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_q.residual.stack[0].linear1.weight
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_q.residual.stack[0].linear1.bias = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_q.residual.stack[0].linear1.bias
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_q.residual.stack[0].activation2.alpha = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_q.residual.stack[0].activation2.alpha
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_q.residual.stack[0].activation2.beta = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_q.residual.stack[0].activation2.beta
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_q.residual.stack[0].linear2.weight = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_q.residual.stack[0].linear2.weight
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_q.residual.stack[0].linear2.bias = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_q.residual.stack[0].linear2.bias
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_q.activation.alpha = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_q.activation.alpha
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_q.activation.beta = ref_spookynet.module[
+        0].nonlocal_interaction.resblock_q.activation.beta
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_q.linear.weight = ref_spookynet.module[
+        0].nonlocal_interaction.resblock_q.linear.weight
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_q.linear.bias = ref_spookynet.module[
+        0].nonlocal_interaction.resblock_q.linear.bias
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_k.residual.stack[0].activation1.alpha = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_k.residual.stack[0].activation1.alpha
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_k.residual.stack[0].activation1.beta = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_k.residual.stack[0].activation1.beta
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_k.residual.stack[0].linear1.weight = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_k.residual.stack[0].linear1.weight
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_k.residual.stack[0].linear1.bias = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_k.residual.stack[0].linear1.bias
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_k.residual.stack[0].activation2.alpha = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_k.residual.stack[0].activation2.alpha
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_k.residual.stack[0].activation2.beta = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_k.residual.stack[0].activation2.beta
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_k.residual.stack[0].linear2.weight = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_k.residual.stack[0].linear2.weight
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_k.residual.stack[0].linear2.bias = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_k.residual.stack[0].linear2.bias
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_k.activation.alpha = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_k.activation.alpha
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_k.activation.beta = ref_spookynet.module[
+        0].nonlocal_interaction.resblock_k.activation.beta
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_k.linear.weight = ref_spookynet.module[
+        0].nonlocal_interaction.resblock_k.linear.weight
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_k.linear.bias = ref_spookynet.module[
+        0].nonlocal_interaction.resblock_k.linear.bias
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_v.residual.stack[0].activation1.alpha = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_v.residual.stack[0].activation1.alpha
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_v.residual.stack[0].activation1.beta = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_v.residual.stack[0].activation1.beta
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_v.residual.stack[0].linear1.weight = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_v.residual.stack[0].linear1.weight
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_v.residual.stack[0].linear1.bias = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_v.residual.stack[0].linear1.bias
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_v.residual.stack[0].activation2.alpha = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_v.residual.stack[0].activation2.alpha
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_v.residual.stack[0].activation2.beta = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_v.residual.stack[0].activation2.beta
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_v.residual.stack[0].linear2.weight = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_v.residual.stack[0].linear2.weight
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_v.residual.stack[0].linear2.bias = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_v.residual.stack[0].linear2.bias
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_v.activation.alpha = \
+        ref_spookynet.module[0].nonlocal_interaction.resblock_v.activation.alpha
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_v.activation.beta = ref_spookynet.module[
+        0].nonlocal_interaction.resblock_v.activation.beta
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_v.linear.weight = ref_spookynet.module[
+        0].nonlocal_interaction.resblock_v.linear.weight
+    spookynet.core_module.interaction_modules[0].nonlocal_interaction.resblock_v.linear.bias = ref_spookynet.module[
+        0].nonlocal_interaction.resblock_v.linear.bias
+    spookynet.core_module.interaction_modules[0].residual_pre.stack[0].activation1.alpha = \
+        ref_spookynet.module[0].residual_pre.stack[0].activation1.alpha
+    spookynet.core_module.interaction_modules[0].residual_pre.stack[0].activation1.beta = \
+        ref_spookynet.module[0].residual_pre.stack[0].activation1.beta
+    spookynet.core_module.interaction_modules[0].residual_pre.stack[0].linear1.weight = \
+        ref_spookynet.module[0].residual_pre.stack[0].linear1.weight
+    spookynet.core_module.interaction_modules[0].residual_pre.stack[0].linear1.bias = \
+        ref_spookynet.module[0].residual_pre.stack[0].linear1.bias
+    spookynet.core_module.interaction_modules[0].residual_pre.stack[0].activation2.alpha = \
+        ref_spookynet.module[0].residual_pre.stack[0].activation2.alpha
+    spookynet.core_module.interaction_modules[0].residual_pre.stack[0].activation2.beta = \
+        ref_spookynet.module[0].residual_pre.stack[0].activation2.beta
+    spookynet.core_module.interaction_modules[0].residual_pre.stack[0].linear2.weight = \
+        ref_spookynet.module[0].residual_pre.stack[0].linear2.weight
+    spookynet.core_module.interaction_modules[0].residual_pre.stack[0].linear2.bias = \
+        ref_spookynet.module[0].residual_pre.stack[0].linear2.bias
+    spookynet.core_module.interaction_modules[0].residual_post.stack[0].activation1.alpha = \
+        ref_spookynet.module[0].residual_post.stack[0].activation1.alpha
+    spookynet.core_module.interaction_modules[0].residual_post.stack[0].activation1.beta = \
+        ref_spookynet.module[0].residual_post.stack[0].activation1.beta
+    spookynet.core_module.interaction_modules[0].residual_post.stack[0].linear1.weight = \
+        ref_spookynet.module[0].residual_post.stack[0].linear1.weight
+    spookynet.core_module.interaction_modules[0].residual_post.stack[0].linear1.bias = \
+        ref_spookynet.module[0].residual_post.stack[0].linear1.bias
+    spookynet.core_module.interaction_modules[0].residual_post.stack[0].activation2.alpha = \
+        ref_spookynet.module[0].residual_post.stack[0].activation2.alpha
+    spookynet.core_module.interaction_modules[0].residual_post.stack[0].activation2.beta = \
+        ref_spookynet.module[0].residual_post.stack[0].activation2.beta
+    spookynet.core_module.interaction_modules[0].residual_post.stack[0].linear2.weight = \
+        ref_spookynet.module[0].residual_post.stack[0].linear2.weight
+    spookynet.core_module.interaction_modules[0].residual_post.stack[0].linear2.bias = \
+        ref_spookynet.module[0].residual_post.stack[0].linear2.bias
+    spookynet.core_module.interaction_modules[0].resblock.residual.stack[0].activation1.alpha = \
+        ref_spookynet.module[0].resblock.residual.stack[0].activation1.alpha
+    spookynet.core_module.interaction_modules[0].resblock.residual.stack[0].activation1.beta = \
+        ref_spookynet.module[0].resblock.residual.stack[0].activation1.beta
+    spookynet.core_module.interaction_modules[0].resblock.residual.stack[0].linear1.weight = \
+        ref_spookynet.module[0].resblock.residual.stack[0].linear1.weight
+    spookynet.core_module.interaction_modules[0].resblock.residual.stack[0].linear1.bias = \
+        ref_spookynet.module[0].resblock.residual.stack[0].linear1.bias
+    spookynet.core_module.interaction_modules[0].resblock.residual.stack[0].activation2.alpha = \
+        ref_spookynet.module[0].resblock.residual.stack[0].activation2.alpha
+    spookynet.core_module.interaction_modules[0].resblock.residual.stack[0].activation2.beta = \
+        ref_spookynet.module[0].resblock.residual.stack[0].activation2.beta
+    spookynet.core_module.interaction_modules[0].resblock.residual.stack[0].linear2.weight = \
+        ref_spookynet.module[0].resblock.residual.stack[0].linear2.weight
+    spookynet.core_module.interaction_modules[0].resblock.residual.stack[0].linear2.bias = \
+        ref_spookynet.module[0].resblock.residual.stack[0].linear2.bias
+    spookynet.core_module.interaction_modules[0].resblock.activation.alpha = ref_spookynet.module[
+        0].resblock.activation.alpha
+    spookynet.core_module.interaction_modules[0].resblock.activation.beta = ref_spookynet.module[
+        0].resblock.activation.beta
+    spookynet.core_module.interaction_modules[0].resblock.linear.weight = ref_spookynet.module[0].resblock.linear.weight
+    spookynet.core_module.interaction_modules[0].resblock.linear.bias = ref_spookynet.module[0].resblock.linear.bias
 
     ref_spookynet(
         model_input.atomic_numbers,

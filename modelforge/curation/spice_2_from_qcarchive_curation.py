@@ -227,9 +227,14 @@ class SPICE2Curation(DatasetCuration):
         -------
 
         """
-        from sqlitedict import SqliteDict
+        from modelforge.utils.io import import_
+
+        SqliteDict = import_("sqlitedict").SqliteDict
+        # from sqlitedict import SqliteDict
         from loguru import logger
-        from qcportal import PortalClient
+
+        PortalClient = import_("qcportal").PortalClient
+        # from qcportal import PortalClient
 
         dataset_type = "singlepoint"
         client = PortalClient(self.qcarchive_server)
@@ -309,7 +314,10 @@ class SPICE2Curation(DatasetCuration):
             and the total charge of the molecule (in elementary charge).
         """
 
-        from rdkit import Chem
+        from modelforge.utils.io import import_
+
+        Chem = import_("rdkit.Chem")
+        # from rdkit import Chem
         import numpy as np
 
         # Reference energies, in hartrees, computed with Psi4 1.5 wB97M-D3BJ/def2-TZVPPD.
@@ -529,12 +537,14 @@ class SPICE2Curation(DatasetCuration):
              and specification where data is stored on qcarchive (accessible with key 'specifications').
 
         """
+        from numpy import newaxis
+        from loguru import logger
         from tqdm import tqdm
         import numpy as np
-        from sqlitedict import SqliteDict
-        from loguru import logger
-        import qcelemental as qcel
-        from numpy import newaxis
+        from modelforge.utils.io import import_
+
+        SqliteDict = import_("sqlitedict").SqliteDict
+        qcel = import_("qcelemental")
 
         for filename, dataset_info in zip(filenames, dataset_sources):
             input_file_name = f"{local_path_dir}/{filename}"

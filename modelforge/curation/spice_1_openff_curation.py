@@ -1,7 +1,9 @@
 from typing import List, Tuple, Dict, Optional
 
 from modelforge.curation.curation_baseclass import *
-from retry import retry
+from modelforge.utils.io import import_
+
+retry = import_("retry").retry
 from tqdm import tqdm
 from openff.units import unit
 
@@ -203,9 +205,13 @@ class SPICE1OpenFFCuration(DatasetCuration):
         -------
 
         """
-        from sqlitedict import SqliteDict
+
+        SqliteDict = import_("sqlitedict").SqliteDict
+        # from sqlitedict import SqliteDict
         from loguru import logger
-        from qcportal import PortalClient
+
+        PortalClient = import_("qcportal").PortalClient
+        # from qcportal import PortalClient
 
         dataset_type = "singlepoint"
         client = PortalClient(
@@ -285,8 +291,8 @@ class SPICE1OpenFFCuration(DatasetCuration):
             Returns the reference energy of for the atoms in the molecule (in hartrees)
             and the total charge of the molecule (in elementary charge).
         """
-
-        from rdkit import Chem
+        Chem = import_("rdkit.Chem")
+        # from rdkit import Chem
         import numpy as np
 
         # Reference energies, in hartrees, computed with Psi4 1.5 wB97M-D3BJ/def2-TZVPPD.
@@ -448,9 +454,12 @@ class SPICE1OpenFFCuration(DatasetCuration):
         """
         from tqdm import tqdm
         import numpy as np
-        from sqlitedict import SqliteDict
+
+        SqliteDict = import_("sqlitedict").SqliteDict
+        # from sqlitedict import SqliteDict
         from loguru import logger
-        import qcelemental as qcel
+
+        qcel = import_("qcelemental")
         from numpy import newaxis
 
         for filename, dataset_name in zip(filenames, dataset_names):

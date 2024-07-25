@@ -51,7 +51,7 @@ def test_forward(single_batch_with_batchsize_64):
     nr_of_mols = methane.atomic_subsystem_indices.unique().shape[0]
 
     assert (
-            len(energy) == nr_of_mols
+        len(energy) == nr_of_mols
     )  # Assuming energy is calculated per sample in the batch
 
 
@@ -70,9 +70,10 @@ def test_interaction_forward():
         nr_coefficients=23,
         nr_heads=29,
         activation=torch.nn.ReLU(),
-        cutoff=5.0 * unit.angstrom,
+        cutoff=(5.0 * unit.angstrom),
         number_of_radial_basis_functions=53,
         epsilon=1e-5,
+        scale_factor=(1.0 * unit.nanometer),
     )
     h = torch.randn(nr_atoms, nr_atom_basis)
     x = torch.randn(nr_atoms, geometry_basis)
@@ -180,6 +181,7 @@ def make_reference_equivalent_sake_interaction(out_features, hidden_features, nr
         cutoff=cutoff,
         number_of_radial_basis_functions=50,
         epsilon=1e-5,
+        scale_factor=(1.0 * unit.nanometer),
     )
 
     # Define the reference layer
@@ -246,9 +248,7 @@ def test_radial_symmetry_function_against_reference():
 
     # Generate random input data in JAX
     d_ij_jax = jax.random.uniform(key, (nr_atoms, nr_atoms, 1))
-    d_ij = torch.from_numpy(
-        onp.array(d_ij_jax)
-    ).reshape((nr_atoms ** 2, 1))
+    d_ij = torch.from_numpy(onp.array(d_ij_jax)).reshape((nr_atoms ** 2, 1))
 
     mf_rbf = radial_symmetry_function_module(d_ij)
     variables = ref_radial_basis_module.init(key, d_ij_jax)
@@ -485,7 +485,7 @@ def test_model_against_reference(single_batch_with_batchsize_1):
         if layer_name.startswith("d")
     )
     for (layer_name, layer), mf_sake_block in zip(
-            layers, mf_sake.core_module.interaction_modules.children()
+        layers, mf_sake.core_module.interaction_modules.children()
     ):
         layer["edge_model"]["kernel"]["betas"] = (
             mf_sake_block.radial_symmetry_function_module.radial_scale_factor.detach()

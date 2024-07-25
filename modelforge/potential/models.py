@@ -466,11 +466,21 @@ class PyTorch2JAXConverter:
             A tuple containing the JAX function, parameters, and buffers.
         """
 
+        # make sure
+        from modelforge.utils.io import import_
+
+        jax = import_("jax")
+        # use the wrapper to check if pytorch2jax is in the environment
+
+        custom_vjp = import_("jax").custom_vjp
+
+        # from jax import custom_vjp
+        convert_to_jax = import_("pytorch2jax").pytorch2jax.convert_to_jax
+        convert_to_pyt = import_("pytorch2jax").pytorch2jax.convert_to_pyt
+        # from pytorch2jax.pytorch2jax import convert_to_jax, convert_to_pyt
+
         import functorch
-        import jax
         from functorch import make_functional_with_buffers
-        from jax import custom_vjp
-        from pytorch2jax.pytorch2jax import convert_to_jax, convert_to_pyt
 
         # Convert the PyTorch model to a functional representation and extract the model function and parameters
         model_fn, model_params, model_buffer = make_functional_with_buffers(
@@ -535,11 +545,11 @@ class NeuralNetworkPotentialFactory:
         Parameters
         ----------
         use : str
-            The use case for the NNP instance.
+            The use case for the model instance, either 'training' or 'inference'.
         simulation_environment : str
             The ML framework to use, either 'PyTorch' or 'JAX'.
-        nnp_parameters : dict, optional
-            Parameters specific to the NNP model, by default {}.
+        model_parameter : dict, optional
+            Parameters specific to the model, by default {}.
         training_parameter : dict, optional
             Parameters for configuring the training, by default {}.
 
@@ -558,9 +568,6 @@ class NeuralNetworkPotentialFactory:
 
         from modelforge.potential import _Implemented_NNPs
         from modelforge.train.training import TrainingAdapter
-
-        log.debug(f"{training_parameter=}")
-        log.debug(f"{model_parameter=}")
 
         # obtain model for training
         if use == "training":
@@ -594,10 +601,14 @@ class NeuralNetworkPotentialFactory:
 class InputPreparation(torch.nn.Module):
     def __init__(self, cutoff: unit.Quantity, only_unique_pairs: bool = True):
         """
+        A module for preparing input data, including the calculation of pair lists, distances (d_ij), and displacement vectors (r_ij) for molecular simulations.
         Parameters
         ----------
+        cutoff : unit.Quantity
+            The cutoff distance for neighbor list calculations.
         only_unique_pairs : bool, optional
-            Whether to only use unique pairs in the pair list calculation, by default True.
+            Whether to only use unique pairs in the pair list calculation, by default True. This should be set to True for all message passing networks.
+
         """
 
         super().__init__()
@@ -615,13 +626,13 @@ class InputPreparation(torch.nn.Module):
 
         Parameters
         ----------
-        data : NNPInput
-            The input data provided by the dataset, containing atomic numbers, positions,
-            and other necessary information.
+        data : Union[NNPInput, NamedTuple]
+            The input data provided by the dataset, containing atomic numbers, positions, and other necessary information.
 
         Returns
         -------
-        The processed input data, ready for the models forward pass.
+        PairListOutputs
+            A namedtuple containing the pair indices, Euclidean distances (d_ij), and displacement vectors (r_ij).
         """
         # ---------------------------
         # general input manipulation
@@ -686,6 +697,9 @@ from torch.nn import ModuleDict
 
 
 class PostProcessing(torch.nn.Module):
+    """
+    A module for handling post-processing operations on model outputs, including normalization, calculation of atomic self-energies, and reduction operations to compute per-molecule properties from per-atom properties.
+    """
 
     _SUPPORTED_PROPERTIES = ["per_atom_energy", "general_postprocessing_operation"]
     _SUPPORTED_OPERATIONS = ["normalize", "from_atom_to_molecule_reduction"]
@@ -700,7 +714,7 @@ class PostProcessing(torch.nn.Module):
         ----------
         postprocessing_parameter: Dict[str, Dict[str, bool]] # TODO: update
         dataset_statistic : Dict[str, float]
-            The dataset statistics.
+            A dictionary containing the dataset statistics for normalization and other calculations.
         """
         super().__init__()
 
@@ -715,8 +729,15 @@ class PostProcessing(torch.nn.Module):
             postprocessing_parameter,
         )
 
-    def _get_mean_and_stddev_of_dataset(self) -> Tuple[float, float]:
+    def _get_per_atom_energy_mean_and_stddev_of_dataset(self) -> Tuple[float, float]:
+        """
+        Calculate the mean and standard deviation of the per-atom energy in the dataset.
 
+        Returns
+        -------
+        Tuple[float, float]
+            The mean and standard deviation of the per-atom energy.
+        """
         if self.dataset_statistic is None:
             mean = 0.0
             stddev = 1.0
@@ -739,14 +760,27 @@ class PostProcessing(torch.nn.Module):
         self,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
     ):
+        """
+        Initialize the postprocessing operations based on the given postprocessing parameters.
+
+        Parameters:
+            postprocessing_parameter (Dict[str, Dict[str, bool]]): A dictionary containing the postprocessing parameters for each property.
+
+        Raises:
+            ValueError: If a property is not supported.
+
+        Returns:
+            None
+        """
+
         from .processing import (
             FromAtomToMoleculeReduction,
             ScaleValues,
             CalculateAtomicSelfEnergy,
         )
 
-        # register properties
-        for property in postprocessing_parameter:
+        for property, operations in postprocessing_parameter.items():
+            # register properties for which postprocessing should be performed
             if property.lower() in self._SUPPORTED_PROPERTIES:
                 self._registered_properties.append(property.lower())
             else:
@@ -754,15 +788,16 @@ class PostProcessing(torch.nn.Module):
                     f"Property {property} is not supported. Supported properties are {self._SUPPORTED_PROPERTIES}"
                 )
 
-        # register operations
-        for property, operations in postprocessing_parameter.items():
+            # register operations that are performed for the property
             postprocessing_sequence = torch.nn.Sequential()
             prostprocessing_sequence_names = []
 
             # for each property parse the requested operations
             if property == "per_atom_energy":
                 if operations.get("normalize", False):
-                    mean, stddev = self._get_mean_and_stddev_of_dataset()
+                    mean, stddev = (
+                        self._get_per_atom_energy_mean_and_stddev_of_dataset()
+                    )
                     postprocessing_sequence.append(
                         ScaleValues(
                             mean=mean,
@@ -844,8 +879,7 @@ class PostProcessing(torch.nn.Module):
 
         # NOTE: this is not very elegant, but I am unsure how to do this better
         # I am currently directly writing new keys and values in the data dictionary
-        property_keys = list(self.registered_chained_operations.keys())
-        for property in property_keys:
+        for property in PostProcessing._SUPPORTED_PROPERTIES:
             if property in self._registered_properties:
                 self.registered_chained_operations[property](data)
 
@@ -853,9 +887,12 @@ class PostProcessing(torch.nn.Module):
 
 
 class BaseNetwork(Module):
-
     def __init__(
-        self, *, postprocessing_parameter: Dict[str, Dict[str, bool]], dataset_statistic
+        self,
+        *,
+        postprocessing_parameter: Dict[str, Dict[str, bool]],
+        dataset_statistic,
+        cutoff: unit.Quantity,
     ):
         """
         The BaseNetwork wraps the input preparation (including pairlist calculation, d_ij and r_ij calculation), the actual model as well as the output preparation in a wrapper class.
@@ -868,8 +905,19 @@ class BaseNetwork(Module):
         """
 
         super().__init__()
+        from modelforge.utils.units import _convert
+
         self.postprocessing = PostProcessing(
             postprocessing_parameter, dataset_statistic
+        )
+
+        # check if self.only_unique_pairs is set in child class
+        if not hasattr(self, "only_unique_pairs"):
+            raise RuntimeError(
+                "The only_unique_pairs attribute is not set in the child class. Please set it to True or False before calling super().__init__."
+            )
+        self.input_preparation = InputPreparation(
+            cutoff=_convert(cutoff), only_unique_pairs=self.only_unique_pairs
         )
 
     def load_state_dict(
@@ -915,6 +963,7 @@ class BaseNetwork(Module):
         super().load_state_dict(filtered_state_dict, strict=strict, assign=assign)
 
     def prepare_input(self, data):
+
         self.input_preparation._input_checks(data)
         return self.input_preparation.prepare_inputs(data)
 
@@ -948,7 +997,6 @@ class BaseNetwork(Module):
 
 
 class CoreNetwork(Module, ABC):
-
     def __init__(
         self,
     ):

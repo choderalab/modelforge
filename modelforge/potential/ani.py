@@ -167,7 +167,6 @@ class ANIRepresentation(nn.Module):
         )
 
     def forward(self, data: AniNeuralNetworkData) -> SpeciesAEV:
-
         # calculate the atomic environment vectors
         # used for the ANI architecture of NNPs
 
@@ -246,10 +245,11 @@ class ANIRepresentation(nn.Module):
         radial_feature_vector: torch.Tensor,
         data: AniNeuralNetworkData,
     ) -> Dict[str, torch.tensor]:
-
         radial_feature_vector = radial_feature_vector.squeeze(1)
         number_of_atoms = data.number_of_atoms
-        radial_sublength = self.radial_symmetry_functions.number_of_radial_basis_functions
+        radial_sublength = (
+            self.radial_symmetry_functions.number_of_radial_basis_functions
+        )
         radial_length = radial_sublength * self.nr_of_supported_elements
 
         radial_aev = radial_feature_vector.new_zeros(
@@ -288,7 +288,6 @@ class ANIRepresentation(nn.Module):
         }
 
     def _preprocess_angular_aev(self, data: Dict[str, torch.Tensor]):
-
         atom_index12 = data["atom_index12"]
         species12 = data["species12"]
         r_ij = data["r_ij"]
@@ -300,7 +299,9 @@ class ANIRepresentation(nn.Module):
         r_ij12 = r_ij.index_select(0, pair_index12.view(-1)).view(
             2, -1, 3
         ) * sign12.unsqueeze(-1)
-        species12_ = torch.where(torch.eq(sign12, 1), species12_small[1], species12_small[0])
+        species12_ = torch.where(
+            torch.eq(sign12, 1), species12_small[1], species12_small[0]
+        )
         return {
             "angular_r_ij": r_ij12,
             "central_atom_index": central_atom_index,
@@ -309,7 +310,6 @@ class ANIRepresentation(nn.Module):
 
 
 class ANIInteraction(nn.Module):
-
     def __init__(self, aev_dim: int):
         super().__init__()
         # define atomic neural network
@@ -334,7 +334,6 @@ class ANIInteraction(nn.Module):
         )
 
     def intialize_atomic_neural_network(self, aev_dim: int) -> Dict[str, nn.Module]:
-
         H_network = torch.nn.Sequential(
             torch.nn.Linear(aev_dim, 256),
             torch.nn.CELU(0.1),
@@ -416,7 +415,6 @@ class ANIInteraction(nn.Module):
         }
 
     def forward(self, input: Tuple[torch.Tensor, torch.Tensor]):
-
         species, aev = input
         output = aev.new_zeros(species.shape)
 
@@ -431,7 +429,6 @@ class ANIInteraction(nn.Module):
 
 
 class ANI2xCore(CoreNetwork):
-
     def __init__(
         self,
         radial_max_distance: unit.Quantity = 5.1 * unit.angstrom,
@@ -443,10 +440,29 @@ class ANI2xCore(CoreNetwork):
         angle_sections: int = 4,
     ) -> None:
         """
-        Initialize the ANi NNP architecture.
-
+        ANI2x Neural Network Model.
         Parameters
         ----------
+        radial_max_distance : Union[unit.Quantity, str]
+            The maximum radial distance for the radial basis functions.
+        radial_min_distance : Union[unit.Quantity, str]
+            The minimum radial distance for the radial basis functions.
+        number_of_radial_basis_functions : int
+            The number of radial basis functions to use.
+        angular_max_distance : Union[unit.Quantity, str]
+            The maximum angular distance for the angular basis functions.
+        angular_min_distance : Union[unit.Quantity, str]
+            The minimum angular distance for the angular basis functions.
+        angular_dist_divisions : int
+            The number of divisions for the angular distance.
+        angle_sections : int
+            The number of angle sections to use.
+        processing_operation : List[Dict[str, str]]
+            A list of processing operations to apply to the input data.
+        readout_operation : List[Dict[str, str]]
+            A list of readout operations to apply to the output data.
+        dataset_statistic : Optional[Dict[str, float]], optional
+            Optional dataset statistics to use for normalization, by default None.
         """
         # number of elements in ANI2x
         self.num_species = 7
@@ -495,7 +511,6 @@ class ANI2xCore(CoreNetwork):
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
     ) -> AniNeuralNetworkData:
-
         number_of_atoms = data.atomic_numbers.shape[0]
 
         nnp_data = AniNeuralNetworkData(
@@ -558,12 +573,15 @@ class ANI2x(BaseNetwork):
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
 
+        from modelforge.utils.units import _convert
+
+        self.only_unique_pairs = True  # NOTE: need to be set before super().__init__
+
         super().__init__(
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=postprocessing_parameter,
+            cutoff=_convert(radial_max_distance),
         )
-
-        from modelforge.utils.units import _convert
 
         self.core_module = ANI2xCore(
             _convert(radial_max_distance),
@@ -574,15 +592,13 @@ class ANI2x(BaseNetwork):
             angular_dist_divisions,
             angle_sections,
         )
-        self.only_unique_pairs = True  # NOTE: for pairlist
-        self.input_preparation = InputPreparation(
-            cutoff=_convert(radial_max_distance),
-            only_unique_pairs=self.only_unique_pairs,
-        )
 
     def _config_prior(self):
         log.info("Configuring ANI2x model hyperparameter prior distribution")
-        from ray import tune
+        from modelforge.utils.io import import_
+
+        tune = import_("ray").tune
+        # from ray import tune
 
         from modelforge.train.utils import shared_config_prior
 

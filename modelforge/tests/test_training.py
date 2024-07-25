@@ -15,7 +15,7 @@ def load_configs(model_name: str, dataset_name: str):
         potential_defaults,
         training_defaults,
         dataset_defaults,
-        training,
+        runtime_defaults,
     )
     from importlib import resources
     from modelforge.train.training import return_toml_config
@@ -23,7 +23,7 @@ def load_configs(model_name: str, dataset_name: str):
     potential_path = resources.files(potential_defaults) / f"{model_name.lower()}.toml"
     dataset_path = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
     training_path = resources.files(training_defaults) / "default.toml"
-    runtime_path = resources.files(training) / "runtime.toml"
+    runtime_path = resources.files(runtime_defaults) / "runtime.toml"
     return return_toml_config(
         potential_path=potential_path,
         dataset_path=dataset_path,
@@ -76,10 +76,9 @@ import torch
 def test_error_calculation(single_batch_with_batchsize_16_with_force):
     # test the different Loss classes
     from modelforge.train.training import (
-        FromPerAtomToPerMoleculeError,
-        PerMoleculeError,
+        FromPerAtomToPerMoleculeMeanSquaredError,
+        PerMoleculeMeanSquaredError,
     )
-    from torch_scatter import scatter_sum
 
     # generate data
     data = single_batch_with_batchsize_16_with_force
@@ -89,35 +88,46 @@ def test_error_calculation(single_batch_with_batchsize_16_with_force):
     # make predictions
     predicted_E = true_E + torch.rand_like(true_E) * 10
     predicted_F = true_F + torch.rand_like(true_F) * 10
-    # test energy error
-    error = PerMoleculeError()
+
+    # test error for property with shape (nr_of_molecules, 1)
+    error = PerMoleculeMeanSquaredError()
     E_error = error(predicted_E, true_E, data)
 
-    # test energy error (mean squared error scaled by number of atoms in the molecule)
-    reference_E_error = torch.mean(
-        ((predicted_E - true_E) ** 2) / data.metadata.atomic_subsystem_counts
-    )
+    # compare output (mean squared error scaled by number of atoms in the molecule)
+    scale_squared_error = (
+        (predicted_E - true_E) ** 2
+    ) / data.metadata.atomic_subsystem_counts.unsqueeze(
+        1
+    )  # FIXME : fi
+    reference_E_error = torch.mean(scale_squared_error)
     assert torch.allclose(E_error, reference_E_error)
 
-    # test force error
-    error = FromPerAtomToPerMoleculeError()
+    # test error for property with shape (nr_of_atoms, 3)
+    error = FromPerAtomToPerMoleculeMeanSquaredError()
     F_error = error(predicted_F, true_F, data)
 
-    # test force error (mean squared error scaled by number of atoms in the molecule)
+    # compare error (mean squared error scaled by number of atoms in the molecule)
+
+    scaled_error = (
+        torch.linalg.vector_norm(predicted_F - true_F, dim=1, keepdim=True) ** 2
+    )
+
+    per_mol_error = torch.zeros_like(data.metadata.E)
+    per_mol_error.scatter_add_(
+        0,
+        data.nnp_input.atomic_subsystem_indices.unsqueeze(-1)
+        .expand(-1, scaled_error.size(1))
+        .to(torch.int64),
+        scaled_error,
+    )
+
     reference_F_error = torch.mean(
-        scatter_sum(
-            torch.norm(predicted_F - true_F, dim=1) ** 2,
-            data.nnp_input.atomic_subsystem_indices.long(),
-            0,
-        )
-        / data.metadata.atomic_subsystem_counts
+        per_mol_error / data.metadata.atomic_subsystem_counts.unsqueeze(1)
     )
     assert torch.allclose(F_error, reference_F_error)
 
 
-@pytest.mark.skipif(
-    IN_GITHUB_ACTIONS, reason="Skipping this test on MacOS GitHub Actions"
-)
+@pytest.mark.skipif(IN_GITHUB_ACTIONS, reason="Skipping this test on GitHub Actions")
 @pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
 @pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_hypterparameter_tuning_with_ray(
@@ -134,31 +144,21 @@ def test_hypterparameter_tuning_with_ray(
         training_defaults,
     )
 
-    training_path = resources.files(training_defaults) / "default.toml"
-    potential_path = resources.files(potential_defaults) / f"{model_name.lower()}.toml"
-    dataset_path = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
-    runtime_path = resources.files(training) / "runtime.toml"
+    config = load_configs(model_name, dataset_name)
 
-    config = return_toml_config(
-        training_path=training_path,
-        potential_path=potential_path,
-        dataset_path=dataset_path,
-        runtime_path=runtime_path,
-    )
+    # Extract parameters
+    potential_config = config["potential"]
+    training_config = config["training"]
+    dataset_config = config["dataset"]
+    runtime_config = config["runtime"]
 
     dm = datamodule_factory(dataset_name=dataset_name)
 
-    # Extract parameters
-    potential_parameter = config["potential"]["potential_parameter"]
-    training_parameter = config["training"]["training_parameter"]
-    # loss_config = config["training"]["training_parameter"]["loss_parameter"]
     # training model
     model = NeuralNetworkPotentialFactory.generate_model(
         use="training",
-        model_type=model_name,
-        # loss_parameter=loss_config,
-        model_parameter=potential_parameter,
-        training_parameter=training_parameter,
+        model_parameter=potential_config,
+        training_parameter=training_config["training_parameter"],
     )
 
     from modelforge.train.tuning import RayTuner

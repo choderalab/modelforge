@@ -75,8 +75,10 @@ class BatchData:
 
 
 def shared_config_prior():
-    import ray
-    from ray import tune
+    from modelforge.utils.io import import_
+
+    tune = import_("ray").tune
+    # from ray import tune
 
     return {
         "lr": tune.loguniform(1e-5, 1e-1),
@@ -103,6 +105,14 @@ def triple_by_molecule(
 
     # convert representation from pair to central-others
     ai1 = atom_pairs.view(-1)
+
+    # Note, torch.sort doesn't guarantee stable sort by default.
+    # This means that the order of rev_indices is not guaranteed when there are "ties"
+    # (i.e., identical values in the input tensor).
+    # Stable sort is more expensive and ultimately unnecessary, so we will not use it here,
+    # but it does mean that vector-wise comparison of the outputs of this function may be
+    # inconsistent for the same input, and thus tests must be designed accordingly.
+
     sorted_ai1, rev_indices = ai1.sort()
 
     # sort and compute unique key
@@ -197,6 +207,20 @@ class Dense(nn.Linear):
     """
     Fully connected linear layer with activation function.
 
+    Attributes
+    ----------
+    weight_init_distribution : Callable
+        distribution used to initialize the weights.
+    bias_init_distribution : Callable
+        Distribution used to initialize the bias.
+
+    Methods
+    -------
+    reset_parameters()
+        Reset the weights and bias using the specified initialization distributions.
+    forward(input)
+        Forward pass of the layer.
+
     """
 
     def __init__(
@@ -204,31 +228,64 @@ class Dense(nn.Linear):
         in_features: int,
         out_features: int,
         bias: bool = True,
-        activation: Optional[Union[nn.Module, Callable[[torch.Tensor], torch.Tensor]]] = None,
+        activation: Optional[
+            Union[nn.Module, Callable[[torch.Tensor], torch.Tensor]]
+        ] = None,
         weight_init: Callable = xavier_uniform_,
         bias_init: Callable = zeros_,
     ):
         """
-        Args:
-            in_features: number of input feature :math:`x`.
-            out_features: umber of output features :math:`y`.
-            bias: If False, the layer will not adapt bias :math:`b`.
-            activation: if None, no activation function is used.
-            weight_init: weight initializer from current weight.
-            bias_init: bias initializer from current bias.
+        __init__ _summary_
+
+
+        Parameters
+        ----------
+        in_features : int
+            Number of input features.
+        out_features : int
+            Number of output features.
+        bias : bool, optional
+            If set to False, the layer will not learn an additive bias. Default is True.
+        activation : nn.Module or Callable[[torch.Tensor], torch.Tensor], optional
+            Activation function to be applied. Default is None, which applies the identity function and makes this a linear transformation.
+        weight_init : Callable, optional
+            Callable to initialize the weights. Default is xavier_uniform_.
+        bias_init : Callable, optional
+            Function to initialize the bias. Default is zeros_.
         """
-        self.weight_init = weight_init
-        self.bias_init = bias_init
-        super().__init__(in_features, out_features, bias)
+        # NOTE: these two variables need to come before the initi
+        self.weight_init_distribution = weight_init
+        self.bias_init_distribution = bias_init
+
+        super().__init__(
+            in_features, out_features, bias
+        )  # NOTE: the `reseet_paramters` method is called in the super class
 
         self.activation = activation or nn.Identity()
 
     def reset_parameters(self):
-        self.weight_init(self.weight)
+        """
+        Reset the weights and bias using the specified initialization distributions.
+        """
+        self.weight_init_distribution(self.weight)
         if self.bias is not None:
-            self.bias_init(self.bias)
+            self.bias_init_distribution(self.bias)
 
     def forward(self, input: torch.Tensor):
+        """
+        Forward pass of the layer.
+
+        Parameters
+        ----------
+        input : torch.Tensor
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Output tensor after applying the linear transformation and activation function.
+
+        """
         y = F.linear(input, self.weight, self.bias)
         return self.activation(y)
 
@@ -240,6 +297,7 @@ class CosineCutoff(nn.Module):
     def __init__(self, cutoff: unit.Quantity):
         """
         Behler-style cosine cutoff module.
+        NOTE: The cutoff is converted to nanometer and the input MUST be in nanomter too.
 
         Parameters:
         ----------
@@ -259,12 +317,12 @@ class CosineCutoff(nn.Module):
         Parameters
         ----------
         d_ij : Tensor
-            Pairwise distance tensor. Shape: [n_pairs, distance]
+            Pairwise distance tensor in nanometer. Shape: [n_pairs, 1]
 
         Returns
         -------
         Tensor
-            The cosine cutoff tensor. Shape: [..., N]
+            Cosine cutoff tensor. Shape: [n_pairs, 1]
         """
         # Compute values of cutoff function
         input_cut = 0.5 * (
@@ -273,42 +331,6 @@ class CosineCutoff(nn.Module):
         # Remove contributions beyond the cutoff radius
         input_cut *= (d_ij < self.cutoff).float()
         return input_cut
-
-
-class SpookyNetCutoff(nn.Module):
-    """
-    Implements Eq. 16 from
-        Unke, O.T., Chmiela, S., Gastegger, M. et al. SpookyNet: Learning force fields with
-        electronic degrees of freedom and nonlocal effects. Nat Commun 12, 7273 (2021).
-    Adapted from https://github.com/OUnke/SpookyNet/blob/d57b1fc02c4f1304a9445b2b9aa55a906818dd1b/spookynet/functional.py#L19 # noqa
-    """
-
-    def __init__(self, cutoff: unit.Quantity):
-        """
-
-        Parameters:
-        ----------
-        cutoff: unit.Quantity
-            The cutoff distance.
-
-        """
-        super().__init__()
-        cutoff = cutoff.to(unit.nanometer).m
-        self.register_buffer("cutoff", torch.tensor([cutoff]))
-
-    def forward(self, d_ij: torch.Tensor):
-        """
-        Cutoff function that smoothly goes from f(r) = 1 to f(r) = 0 in the interval
-        from r = 0 to r = cutoff. For r >= cutoff, f(r) = 0. This function has
-        infinitely many smooth derivatives. Only positive r should be used as input.
-        """
-        zeros = torch.zeros_like(d_ij)
-        r_ = torch.where(d_ij < self.cutoff, d_ij, zeros)  # prevent nan in backprop
-        return torch.where(
-            d_ij < self.cutoff,
-            torch.exp(-(r_**2) / ((self.cutoff - r_) * (self.cutoff + r_))),
-            zeros,
-        )
 
 
 from typing import Dict
@@ -399,14 +421,12 @@ class AngularSymmetryFunction(nn.Module):
         # ShfZ
         angle_start = math.pi / (2 * angle_sections)
         ShfZ = (torch.linspace(0, math.pi, angle_sections + 1) + angle_start)[:-1]
-
         # ShfA
         ShfA = torch.linspace(
             _unitless_angular_start,
             _unitless_angular_cutoff,
             number_of_gaussians_for_asf + 1,
         )[:-1]
-
         # register shifts
         if trainable:
             self.ShfZ = ShfZ
@@ -443,7 +463,6 @@ class AngularSymmetryFunction(nn.Module):
             vectors12[0], vectors12[1], dim=-5
         )
         angles = torch.acos(cos_angles)
-
         fcj12 = self.cosine_cutoff(distances12)
         factor1 = ((1 + torch.cos(angles - self.ShfZ)) / 2) ** self.Zeta
         factor2 = torch.exp(
@@ -492,70 +511,6 @@ class GaussianRadialBasisFunctionCore(RadialBasisFunctionCore):
         )
 
         return torch.exp(-(nondimensionalized_distances**2))
-
-
-class ExponentialBernsteinPolynomialsCore(RadialBasisFunctionCore):
-    """
-    Taken from SpookyNet.
-    Radial basis functions based on exponential Bernstein polynomials given by:
-    b_{v,n}(x) = (n over v) * exp(-alpha*x)**v * (1-exp(-alpha*x))**(n-v)
-    (see https://en.wikipedia.org/wiki/Bernstein_polynomial)
-    Here, n = num_basis_functions-1 and v takes values from 0 to n. This
-    implementation operates in log space to prevent multiplication of very large
-    (n over v) and very small numbers (exp(-alpha*x)**v and
-    (1-exp(-alpha*x))**(n-v)) for numerical stability.
-    NOTE: There is a problem for x = 0, as log(-expm1(0)) will be log(0) = -inf.
-    This itself is not an issue, but the buffer v contains an entry 0 and
-    0*(-inf)=nan. The correct behaviour could be recovered by replacing the nan
-    with 0.0, but should not be necessary because issues are only present when
-    r = 0, which will not occur with chemically meaningful inputs.
-
-    Arguments:
-        number_of_radial_basis_functions (int):
-            Number of radial basis functions.
-            x = infinity.
-    """
-
-    def __init__(self, number_of_radial_basis_functions: int):
-        super().__init__(number_of_radial_basis_functions)
-        logfactorial = np.zeros(number_of_radial_basis_functions)
-        for i in range(2, number_of_radial_basis_functions):
-            logfactorial[i] = logfactorial[i - 1] + np.log(i)
-        v = np.arange(0, number_of_radial_basis_functions)
-        n = (number_of_radial_basis_functions - 1) - v
-        logbinomial = logfactorial[-1] - logfactorial[v] - logfactorial[n]
-        # register buffers and parameters
-        dtype = torch.float64  # TODO: make this a parameter
-        self.logc = torch.tensor(logbinomial, dtype=dtype)
-        self.n = torch.tensor(n, dtype=dtype)
-        self.v = torch.tensor(v, dtype=dtype)
-
-    def forward(self, nondimensionalized_distances: torch.Tensor) -> torch.Tensor:
-        """
-        Evaluates radial basis functions given distances
-        N: Number of input values.
-        num_basis_functions: Number of radial basis functions.
-
-        Arguments:
-            nondimensionalized_distances (FloatTensor [N]):
-                Input distances.
-
-        Returns:
-            rbf (FloatTensor [N, num_basis_functions]):
-                Values of the radial basis functions for the distances r.
-        """
-        assert nondimensionalized_distances.ndim == 2
-        assert (
-            nondimensionalized_distances.shape[1]
-            == self.number_of_radial_basis_functions
-        )
-        x = (
-            self.logc
-            + (self.n + 1) * nondimensionalized_distances
-            + self.v * torch.log(-torch.expm1(nondimensionalized_distances))
-        )
-
-        return torch.exp(x)
 
 
 class RadialBasisFunction(nn.Module, ABC):
@@ -773,12 +728,12 @@ class SchnetRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
             _min_distance_in_nanometer,
             _max_distance_in_nanometer,
             number_of_radial_basis_functions,
+            dtype=dtype,
         )
 
-        widths = (
-            torch.abs(scale_factors[1] - scale_factors[0])
-            * torch.ones_like(scale_factors)
-        ).to(dtype)
+        widths = torch.abs(scale_factors[1] - scale_factors[0]) * torch.ones_like(
+            scale_factors
+        )
 
         scale_factors = math.sqrt(2) * widths
         return scale_factors
@@ -860,6 +815,7 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
         number_of_radial_basis_functions: int,
         max_distance: unit.Quantity,
         min_distance: unit.Quantity = 0.0 * unit.nanometer,
+        alpha: unit.Quantity = 1.0 * unit.angstrom,
         dtype: torch.dtype = torch.float32,
         trainable_centers_and_scale_factors: bool = False,
     ):
@@ -870,8 +826,12 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
             Number of radial basis functions to use.
         max_distance : unit.Quantity
             Maximum distance to consider for symmetry functions.
-        min_distance : unit.Quantity, optional
+        min_distance : unit.Quantity
             Minimum distance to consider, by default 0.0 * unit.nanometer.
+        alpha: unit.Quantity
+            Scale factor used to nondimensionalize the input to all exp calls. The PhysNet paper implicitly divides by 1
+            Angstrom within exponentials. Note that this is distinct from the unitless scale factors used outside the
+            exp but within the Gaussian.
         dtype : torch.dtype, optional
             Data type for computations, by default torch.float32.
         trainable_centers_and_scale_factors : bool, optional
@@ -883,19 +843,21 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
             trainable_prefactor=False,
             dtype=dtype,
         )
-        self._max_distance_in_nanometer = max_distance.to(unit.nanometer).m
         self._min_distance_in_nanometer = min_distance.to(unit.nanometer).m
+        self._alpha_in_nanometer = alpha.to(unit.nanometer).m
         radial_basis_centers = self.calculate_radial_basis_centers(
             number_of_radial_basis_functions,
-            self._max_distance_in_nanometer,
-            self._min_distance_in_nanometer,
+            max_distance,
+            min_distance,
+            alpha,
             dtype,
         )
         # calculate scale factors
         radial_scale_factor = self.calculate_radial_scale_factor(
             number_of_radial_basis_functions,
-            self._max_distance_in_nanometer,
-            self._min_distance_in_nanometer,
+            max_distance,
+            min_distance,
+            alpha,
             dtype,
         )
 
@@ -909,21 +871,21 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
     @staticmethod
     def calculate_radial_basis_centers(
         number_of_radial_basis_functions,
-        _max_distance_in_nanometer,
-        _min_distance_in_nanometer,
+        max_distance,
+        min_distance,
+        alpha,
         dtype,
     ):
         # initialize centers according to the default values in PhysNet
         # (see mu_k in Figure 2 caption of https://pubs.acs.org/doi/10.1021/acs.jctc.9b00181)
-        # NOTE: Unlike RadialBasisFunctionWithCenters, the centers are unitless.
+        # NOTE: Unlike GaussianRadialBasisFunctionWithScaling, the centers are unitless.
 
         start_value = torch.exp(
             torch.scalar_tensor(
-                (-_max_distance_in_nanometer + _min_distance_in_nanometer) * 10,
+                ((-max_distance + min_distance) / alpha).to("").m,
                 dtype=dtype,
             )
-        )  # NOTE: the PhysNet paper implicitly multiplies by 1/Angstrom within the exp, so we multiply
-        # _max_distance_in_nanometers and _min_distance_in_nanometers by 10/nanometer
+        )
         centers = torch.linspace(
             start_value, 1, number_of_radial_basis_functions, dtype=dtype
         )
@@ -932,27 +894,20 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
     @staticmethod
     def calculate_radial_scale_factor(
         number_of_radial_basis_functions,
-        _max_distance_in_nanometer,
-        _min_distance_in_nanometer,
+        max_distance,
+        min_distance,
+        alpha,
         dtype,
     ):
         # initialize according to the default values in PhysNet (see beta_k in Figure 2 caption)
         # NOTES:
-        # - Unlike RadialBasisFunctionWithCenters, the scale factors are unitless.
+        # - Unlike GaussianRadialBasisFunctionWithScaling, the scale factors are unitless.
         # - Each element of radial_square_factor here is the reciprocal of the square root of beta_k in the
         # Eq. 7 of the PhysNet paper. This way, it is consistent with the sqrt(2) * standard deviation interpretation
         # of radial_scale_factor in GaussianRadialBasisFunctionWithScaling
         return torch.full(
             (number_of_radial_basis_functions,),
-            (
-                2
-                * (
-                    1
-                    - math.exp(
-                        10 * (-_max_distance_in_nanometer + _min_distance_in_nanometer)
-                    )
-                )
-            )
+            (2 * (1 - math.exp(((-max_distance + min_distance) / alpha).to("").m)))
             / number_of_radial_basis_functions,
             dtype=dtype,
         )
@@ -963,36 +918,12 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
         # nanometers, so we multiply by 10/nanometer
 
         return (
-            torch.exp((-distances + self._min_distance_in_nanometer) * 10)
+            torch.exp(
+                (-distances + self._min_distance_in_nanometer)
+                / self._alpha_in_nanometer
+            )
             - self.radial_basis_centers
         ) / self.radial_scale_factor
-
-
-class ExponentialBernsteinRadialBasisFunction(RadialBasisFunction):
-
-    def __init__(self,
-                 number_of_radial_basis_functions: int,
-                 ini_alpha: unit.Quantity = 2.0 * unit.bohr,
-                 dtype=torch.int64):
-        """
-        ini_alpha (float):
-            Initial value for scaling parameter alpha (alpha here is the reciprocal of alpha in the paper. The original
-            default is 0.5/bohr, so we use 2 bohr).
-        """
-        super().__init__(
-            ExponentialBernsteinPolynomialsCore(number_of_radial_basis_functions),
-            trainable_prefactor=False,
-            dtype=dtype,
-        )
-        self.register_parameter("alpha", nn.Parameter(torch.tensor(ini_alpha.m_as(unit.nanometer))))
-
-    def nondimensionalize_distances(self, d_ij: torch.Tensor) -> torch.Tensor:
-        return -(
-            d_ij.broadcast_to(
-                (len(d_ij), self.radial_basis_function.number_of_radial_basis_functions)
-            )
-            / self.alpha
-        )
 
 
 def pair_list(
@@ -1049,39 +980,6 @@ def pair_list(
     pair_indices = torch.stack((i_final_pairs, j_final_pairs))
 
     return pair_indices.to(device)
-
-    def forward(
-        self,
-        coordinates: torch.Tensor,  # in nanometer
-        atomic_subsystem_indices: torch.Tensor,
-    ) -> torch.Tensor:
-        """Compute all pairs of atoms and their distances.
-
-        Parameters
-        ----------
-        coordinates : torch.Tensor, shape (nr_atoms_per_systems, 3), in nanometer
-        atomic_subsystem_indices : torch.Tensor, shape (nr_atoms_per_systems)
-            Atom indices to indicate which atoms belong to which molecule
-        """
-        positions = coordinates
-        pair_indices = self.pair_list(atomic_subsystem_indices)
-
-        # create pair_coordinates tensor
-        pair_coordinates = positions[pair_indices.T]
-        pair_coordinates = pair_coordinates.view(-1, 2, 3)
-
-        # Calculate distances
-        distances = (pair_coordinates[:, 0, :] - pair_coordinates[:, 1, :]).norm(
-            p=2, dim=-1
-        )
-
-        # Find pairs within the cutoff
-        in_cutoff = (distances <= self.cutoff).nonzero(as_tuple=False).squeeze()
-
-        # Get the atom indices within the cutoff
-        pair_indices_within_cutoff = pair_indices[:, in_cutoff]
-
-        return pair_indices_within_cutoff
 
 
 def scatter_softmax(

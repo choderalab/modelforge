@@ -19,8 +19,11 @@ def initialize_model(
     from modelforge.potential.schnet import SchNet
 
     return SchNet(
-        max_Z=101,
-        number_of_atom_features=number_of_atom_features,
+        featurization={
+            "properties_to_featurize": ["atomic_number"],
+            "max_Z": 101,
+            "number_of_per_atom_features": 32,
+        },
         number_of_interaction_modules=nr_of_interactions,
         number_of_radial_basis_functions=number_of_radial_basis_functions,
         cutoff=cutoff,
@@ -169,7 +172,9 @@ def test_compare_forward():
     config = load_configs(f"schnet", "qm9")
 
     # override default parameters
-    config["potential"]["core_parameter"]["number_of_atom_features"] = 12
+    config["potential"]["core_parameter"]["featurization"][
+        "number_of_per_atom_features"
+    ] = 12
     config["potential"]["core_parameter"]["number_of_radial_basis_functions"] = 5
     config["potential"]["core_parameter"]["number_of_filters"] = 12
 
@@ -191,9 +196,9 @@ def test_compare_forward():
     spk_input = input["spk_methane_input"]
     model_input = input["modelforge_methane_input"]
 
-    schnet.input_preparation._input_checks(model_input)
+    schnet.compute_interacting_pairs._input_checks(model_input)
 
-    pairlist_output = schnet.input_preparation.prepare_inputs(model_input)
+    pairlist_output = schnet.compute_interacting_pairs.prepare_inputs(model_input)
     prepared_input = schnet.core_module._model_specific_input_preparation(
         model_input, pairlist_output
     )

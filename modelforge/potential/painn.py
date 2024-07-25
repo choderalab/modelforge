@@ -5,9 +5,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from loguru import logger as log
 from openff.units import unit
-from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
+from .models import NNPInput, BaseNetwork, CoreNetwork
 
 from .utils import Dense
+from typing import List
 
 if TYPE_CHECKING:
     from .models import PairListOutputs
@@ -82,52 +83,54 @@ class PaiNNCore(CoreNetwork):
 
     def __init__(
         self,
-        max_Z: int = 100,
-        number_of_atom_features: int = 64,
-        number_of_radial_basis_functions: int = 16,
-        cutoff: unit.Quantity = 5 * unit.angstrom,
-        number_of_interaction_modules: int = 2,
-        shared_interactions: bool = False,
-        shared_filters: bool = False,
+        featurization_config: Dict[str, Union[List[str], int]],
+        number_of_radial_basis_functions: int,
+        cutoff: unit.Quantity,
+        number_of_interaction_modules: int,
+        shared_interactions: bool,
+        shared_filters: bool,
         epsilon: float = 1e-8,
     ):
-        log.debug("Initializing PaiNN model.")
+        log.debug("Initializing the PaiNN architecture.")
         super().__init__()
 
         self.number_of_interaction_modules = number_of_interaction_modules
-        self.number_of_atom_features = number_of_atom_features
         self.shared_filters = shared_filters
 
-        # embedding
-        from modelforge.potential.utils import Embedding
+        # featurize the atomic input
+        from modelforge.potential.utils import FeaturizeInput
 
-        self.embedding_module = Embedding(max_Z, number_of_atom_features)
-
+        self.featurize_input = FeaturizeInput(featurization_config)
+        number_of_per_atom_features = featurization_config[
+            "number_of_per_atom_features"
+        ]
         # initialize representation block
         self.representation_module = PaiNNRepresentation(
             cutoff,
             number_of_radial_basis_functions,
             number_of_interaction_modules,
-            number_of_atom_features,
+            number_of_per_atom_features,
             shared_filters,
         )
 
         # initialize the interaction and mixing networks
         self.interaction_modules = nn.ModuleList(
-            PaiNNInteraction(number_of_atom_features, activation=F.silu)
+            PaiNNInteraction(number_of_per_atom_features, activation=F.silu)
             for _ in range(number_of_interaction_modules)
         )
         self.mixing_modules = nn.ModuleList(
-            PaiNNMixing(number_of_atom_features, activation=F.silu, epsilon=epsilon)
+            PaiNNMixing(number_of_per_atom_features, activation=F.silu, epsilon=epsilon)
             for _ in range(number_of_interaction_modules)
         )
 
         self.energy_layer = nn.Sequential(
             Dense(
-                number_of_atom_features, number_of_atom_features, activation=nn.ReLU()
+                number_of_per_atom_features,
+                number_of_per_atom_features,
+                activation=nn.ReLU(),
             ),
             Dense(
-                number_of_atom_features,
+                number_of_per_atom_features,
                 1,
             ),
         )
@@ -148,10 +151,8 @@ class PaiNNCore(CoreNetwork):
             atomic_numbers=data.atomic_numbers,
             atomic_subsystem_indices=data.atomic_subsystem_indices,
             total_charge=data.total_charge,
-            atomic_embedding=self.embedding_module(
-                data.atomic_numbers
-            ),  # atom embedding
-        )
+            atomic_embedding=self.featurize_input(data),
+        )  # add per-atom properties and embedding
 
         return nnp_input
 
@@ -488,15 +489,14 @@ class PaiNNMixing(nn.Module):
         return q, mu
 
 
-from .models import InputPreparation, NNPInput, BaseNetwork
+from .models import ComputeInteractingAtomPairs, NNPInput, BaseNetwork
 from typing import List
 
 
 class PaiNN(BaseNetwork):
     def __init__(
         self,
-        max_Z: int,
-        number_of_atom_features: int,
+        featurization: Dict[str, Union[List[str], int]],
         number_of_radial_basis_functions: int,
         cutoff: Union[unit.Quantity, str],
         number_of_interaction_modules: int,
@@ -518,8 +518,7 @@ class PaiNN(BaseNetwork):
         )
 
         self.core_module = PaiNNCore(
-            max_Z=max_Z,
-            number_of_atom_features=number_of_atom_features,
+            featurization_config=featurization,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             cutoff=_convert(cutoff),
             number_of_interaction_modules=number_of_interaction_modules,
@@ -538,7 +537,7 @@ class PaiNN(BaseNetwork):
         from modelforge.potential.utils import shared_config_prior
 
         prior = {
-            "number_of_atom_features": tune.randint(2, 256),
+            "number_of_per_atom_features": tune.randint(2, 256),
             "number_of_interaction_modules": tune.randint(1, 5),
             "cutoff": tune.uniform(5, 10),
             "number_of_radial_basis_functions": tune.randint(8, 32),

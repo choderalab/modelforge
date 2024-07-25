@@ -3,13 +3,15 @@ model_name = "PaiNN"
 
 [potential.core_parameter]
 
-max_Z = 101
-number_of_atom_features = 32
 number_of_radial_basis_functions = 20
 cutoff = "5.0 angstrom"
 number_of_interaction_modules = 3
 shared_interactions = false
 shared_filters = false
+[potential.core_parameter.featurization]
+properties_to_featurize = ['atomic_number']
+max_Z = 101
+number_of_per_atom_features = 32
 
 [potential.postprocessing_parameter]
 [potential.postprocessing_parameter.per_atom_energy]

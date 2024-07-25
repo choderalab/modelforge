@@ -598,7 +598,7 @@ class NeuralNetworkPotentialFactory:
             raise NotImplementedError(f"Unsupported 'use' value: {use}")
 
 
-class InputPreparation(torch.nn.Module):
+class ComputeInteractingAtomPairs(torch.nn.Module):
     def __init__(self, cutoff: unit.Quantity, only_unique_pairs: bool = True):
         """
         A module for preparing input data, including the calculation of pair lists, distances (d_ij), and displacement vectors (r_ij) for molecular simulations.
@@ -891,7 +891,7 @@ class BaseNetwork(Module):
         self,
         *,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
-        dataset_statistic,
+        dataset_statistic: Optional[Dict[str, float]],
         cutoff: unit.Quantity,
     ):
         """
@@ -916,7 +916,7 @@ class BaseNetwork(Module):
             raise RuntimeError(
                 "The only_unique_pairs attribute is not set in the child class. Please set it to True or False before calling super().__init__."
             )
-        self.input_preparation = InputPreparation(
+        self.compute_interacting_pairs = ComputeInteractingAtomPairs(
             cutoff=_convert(cutoff), only_unique_pairs=self.only_unique_pairs
         )
 
@@ -962,15 +962,15 @@ class BaseNetwork(Module):
 
         super().load_state_dict(filtered_state_dict, strict=strict, assign=assign)
 
-    def prepare_input(self, data):
+    def prepare_pairwise_properties(self, data):
 
-        self.input_preparation._input_checks(data)
-        return self.input_preparation.prepare_inputs(data)
+        self.compute_interacting_pairs._input_checks(data)
+        return self.compute_interacting_pairs.prepare_inputs(data)
 
     def compute(self, data, core_input):
         return self.core_module(data, core_input)
 
-    def forward(self, data: NNPInput):
+    def forward(self, input_data: NNPInput):
         """
         Executes the forward pass of the model.
         This method performs input checks, prepares the inputs,
@@ -987,10 +987,10 @@ class BaseNetwork(Module):
             The outputs computed by the core network.
         """
 
-        # perform input checks
-        core_input = self.prepare_input(data)
+        # compute all interacting pairs with distances
+        pairwise_properties = self.prepare_pairwise_properties(input_data)
         # prepare the input for the forward pass
-        output = self.compute(data, core_input)
+        output = self.compute(input_data, pairwise_properties)
         # perform postprocessing operations
         processed_output = self.postprocessing(output)
         return processed_output

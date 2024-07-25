@@ -7,7 +7,7 @@ from loguru import logger as log
 from openff.units import unit
 
 from modelforge.potential.utils import NeuralNetworkData
-from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork, PairListOutputs
+from .models import PairListOutputs, NNPInput, BaseNetwork, CoreNetwork
 
 
 @dataclass
@@ -79,44 +79,50 @@ class SchnetNeuralNetworkData(NeuralNetworkData):
     f_cutoff: Optional[torch.Tensor] = field(default=None)
 
 
+from typing import Union, List
+
+
 class SchNetCore(CoreNetwork):
     def __init__(
         self,
-        max_Z: int = 100,
-        number_of_atom_features: int = 64,
-        number_of_radial_basis_functions: int = 20,
-        number_of_interaction_modules: int = 3,
-        number_of_filters: int = 64,
-        shared_interactions: bool = False,
-        cutoff: unit.Quantity = 5.0 * unit.angstrom,
+        featurization_config: Dict[str, Union[List[str], int]],
+        number_of_radial_basis_functions: int,
+        number_of_interaction_modules: int,
+        number_of_filters: int,
+        shared_interactions: bool,
+        cutoff: unit.Quantity,
     ) -> None:
         """
         Initialize the SchNet class.
 
         Parameters
         ----------
-        max_Z : int, default=100
-            Maximum atomic number to be embedded.
-        number_of_atom_features : int, default=64
-            Dimension of the embedding vectors for atomic numbers.
-        number_of_radial_basis_functions:int, default=16
-        number_of_interaction_modules : int, default=2
-        cutoff : openff.units.unit.Quantity, default=5*unit.angstrom
+        featurization_config : Dict[str, Union[List[str], int]]
+            Configuration for featurization, including the number of per-atom features and the maximum atomic number to be embedded.
+        number_of_radial_basis_functions : int
+            Number of radial basis functions.
+        number_of_interaction_modules : int
+            Number of interaction modules.
+        number_of_filters : int
+            Number of filters, defines the dimensionality of the intermediate features.
+        shared_interactions : bool
+            Whether to share interaction parameters across all interaction modules.
+        cutoff : openff.units.unit.Quantity
             The cutoff distance for interactions.
         """
-        from .utils import Dense, ShiftedSoftplus
 
-        log.debug("Initializing SchNet model.")
+        log.debug("Initializing the SchNet architecture.")
+        from modelforge.potential.utils import FeaturizeInput, Dense, ShiftedSoftplus
+
         super().__init__()
-        self.number_of_atom_features = number_of_atom_features
-        self.number_of_filters = number_of_filters or self.number_of_atom_features
+        self.number_of_filters = (
+            number_of_filters or featurization_config["number_of_per_atom_features"]
+        )
         self.number_of_radial_basis_functions = number_of_radial_basis_functions
 
-        # embedding
-        from modelforge.potential.utils import Embedding
+        # featurize the atomic input
 
-        self.embedding_module = Embedding(max_Z, number_of_atom_features)
-
+        self.featurize_input = FeaturizeInput(featurization_config)
         # Initialize representation block
         self.schnet_representation_module = SchNETRepresentation(
             cutoff, number_of_radial_basis_functions
@@ -125,7 +131,7 @@ class SchNetCore(CoreNetwork):
         self.interaction_modules = nn.ModuleList(
             [
                 SchNETInteractionModule(
-                    self.number_of_atom_features,
+                    featurization_config["number_of_per_atom_features"],
                     self.number_of_filters,
                     number_of_radial_basis_functions,
                 )
@@ -136,19 +142,34 @@ class SchNetCore(CoreNetwork):
         # output layer to obtain per-atom energies
         self.energy_layer = nn.Sequential(
             Dense(
-                number_of_atom_features,
-                number_of_atom_features,
+                featurization_config["number_of_per_atom_features"],
+                featurization_config["number_of_per_atom_features"],
                 activation=ShiftedSoftplus(),
             ),
             Dense(
-                number_of_atom_features,
+                featurization_config["number_of_per_atom_features"],
                 1,
             ),
         )
 
     def _model_specific_input_preparation(
-        self, data: "NNPInput", pairlist_output: "PairListOutputs"
+        self, data: "NNPInput", pairlist_output: PairListOutputs
     ) -> SchnetNeuralNetworkData:
+        """
+        Prepare the input data for the SchNet model.
+
+        Parameters
+        ----------
+        data : NNPInput
+            The input data for the model.
+        pairlist_output : PairListOutputs
+            The pairlist output.
+
+        Returns
+        -------
+        SchnetNeuralNetworkData
+            The prepared input data for the SchNet model.
+        """
         number_of_atoms = data.atomic_numbers.shape[0]
 
         nnp_input = SchnetNeuralNetworkData(
@@ -160,9 +181,9 @@ class SchNetCore(CoreNetwork):
             atomic_numbers=data.atomic_numbers,
             atomic_subsystem_indices=data.atomic_subsystem_indices,
             total_charge=data.total_charge,
-            atomic_embedding=self.embedding_module(
-                data.atomic_numbers
-            ),  # atom embedding
+            atomic_embedding=self.featurize_input(
+                data
+            ),  # add per-atom properties and embedding
         )
 
         return nnp_input
@@ -171,18 +192,18 @@ class SchNetCore(CoreNetwork):
         self, data: SchnetNeuralNetworkData
     ) -> Dict[str, torch.Tensor]:
         """
-        Calculate the energy for a given input batch.
+        Calculate the properties for a given input batch.
 
         Parameters
         ----------
-        data : NamedTuple
+        data : SchnetNeuralNetworkData
+            The input data for the model.
 
         Returns
         -------
         Dict[str, torch.Tensor]
-            Calculated energies; shape (nr_systems,).
+            The calculated properties.
         """
-
         # Compute the representation for each atom (transform to radial basis set, multiply by cutoff)
         representation = self.schnet_representation_module(data.d_ij)
         data.f_ij = representation["f_ij"]
@@ -211,7 +232,7 @@ class SchNetCore(CoreNetwork):
 class SchNETInteractionModule(nn.Module):
     def __init__(
         self,
-        number_of_atom_features: int,
+        number_of_per_atom_features: int,
         number_of_filters: int,
         number_of_radial_basis_functions: int,
     ) -> None:
@@ -220,7 +241,7 @@ class SchNETInteractionModule(nn.Module):
 
         Parameters
         ----------
-        number_of_atom_features : int
+        number_of_per_atom_features : int
             Number of atom ffeatures, defines the dimensionality of the embedding.
         number_of_filters : int
             Number of filters, defines the dimensionality of the intermediate features.
@@ -235,18 +256,26 @@ class SchNETInteractionModule(nn.Module):
         ), "Number of radial basis functions must be larger than 10."
         assert number_of_filters > 1, "Number of filters must be larger than 1."
         assert (
-            number_of_atom_features > 10
+            number_of_per_atom_features > 10
         ), "Number of atom basis must be larger than 10."
 
-        self.number_of_atom_features = number_of_atom_features  # Initialize parameters
+        self.number_of_per_atom_features = (
+            number_of_per_atom_features  # Initialize parameters
+        )
         self.intput_to_feature = Dense(
-            number_of_atom_features, number_of_filters, bias=False, activation=None
+            number_of_per_atom_features, number_of_filters, bias=False, activation=None
         )
         self.feature_to_output = nn.Sequential(
             Dense(
-                number_of_filters, number_of_atom_features, activation=ShiftedSoftplus()
+                number_of_filters,
+                number_of_per_atom_features,
+                activation=ShiftedSoftplus(),
             ),
-            Dense(number_of_atom_features, number_of_atom_features, activation=None),
+            Dense(
+                number_of_per_atom_features,
+                number_of_per_atom_features,
+                activation=None,
+            ),
         )
         self.filter_network = nn.Sequential(
             Dense(
@@ -287,16 +316,18 @@ class SchNETInteractionModule(nn.Module):
         x = self.intput_to_feature(x)
 
         # Generate interaction filters based on radial basis functions
-        W_ij = self.filter_network(f_ij.squeeze(1)) # FIXME
+        W_ij = self.filter_network(f_ij.squeeze(1))  # FIXME
         W_ij = W_ij * f_ij_cutoff
 
         # Perform continuous-filter convolution
         x_j = x[idx_j]
-        x_ij = x_j * W_ij # (nr_of_atom_pairs, nr_atom_basis)
+        x_ij = x_j * W_ij  # (nr_of_atom_pairs, nr_atom_basis)
         out = torch.zeros_like(x)
-        out.scatter_add_(0, idx_i.unsqueeze(-1).expand_as(x_ij), x_ij) # from per_atom_pair to _per_atom
+        out.scatter_add_(
+            0, idx_i.unsqueeze(-1).expand_as(x_ij), x_ij
+        )  # from per_atom_pair to _per_atom
 
-        return self.feature_to_output(out) # shape: (nr_of_atoms, 1)
+        return self.feature_to_output(out)  # shape: (nr_of_atoms, 1)
 
 
 class SchNETRepresentation(nn.Module):
@@ -358,13 +389,15 @@ class SchNETRepresentation(nn.Module):
 
 
 from typing import List, Union
+from modelforge.utils.units import _convert
+from modelforge.utils.io import import_
+from modelforge.potential.utils import shared_config_prior
 
 
 class SchNet(BaseNetwork):
     def __init__(
         self,
-        max_Z: int,
-        number_of_atom_features: int,
+        featurization: Dict[str, Union[List[str], int]],
         number_of_radial_basis_functions: int,
         number_of_interaction_modules: int,
         cutoff: Union[unit.Quantity, str],
@@ -382,16 +415,27 @@ class SchNet(BaseNetwork):
 
         Parameters
         ----------
-        max_Z : int, default=100
-            Maximum atomic number to be embedded.
-        number_of_atom_features : int, default=64
-            Dimension of the embedding vectors for atomic numbers.
-        number_of_radial_basis_functions:int, default=16
-        number_of_interaction_modules : int, default=2
-        cutoff : openff.units.unit.Quantity, default=5*unit.angstrom
+        featurization : Dict[str, Union[List[str], int]]
+            Configuration for atom featurization.
+        number_of_radial_basis_functions : int
+            Number of radial basis functions.
+        number_of_interaction_modules : int
+            Number of interaction modules.
+        cutoff : Union[unit.Quantity, str]
             The cutoff distance for interactions.
+        number_of_filters : int
+            Number of filters.
+        shared_interactions : bool
+            Whether to use shared interactions.
+        postprocessing_parameter : Dict[str, Dict[str, bool]]
+            Configuration for postprocessing parameters.
+        dataset_statistic : Optional[Dict[str, float]], default=None
+            Statistics of the dataset.
+
+        Returns
+        -------
+        None
         """
-        from modelforge.utils.units import _convert
 
         self.only_unique_pairs = False  # NOTE: need to be set before super().__init__
 
@@ -402,25 +446,30 @@ class SchNet(BaseNetwork):
         )
 
         self.core_module = SchNetCore(
-            max_Z=max_Z,
-            number_of_atom_features=number_of_atom_features,
+            featurization_config=featurization,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             number_of_interaction_modules=number_of_interaction_modules,
             number_of_filters=number_of_filters,
             shared_interactions=shared_interactions,
+            cutoff=_convert(cutoff),
         )
 
     def _config_prior(self):
+        """
+        Configure the SchNet model hyperparameter prior distribution.
+
+        Returns
+        -------
+        dict
+            The prior distribution of hyperparameters.
+        """
         log.info("Configuring SchNet model hyperparameter prior distribution")
-        from modelforge.utils.io import import_
 
         tune = import_("ray").tune
         # from ray import tune
 
-        from modelforge.potential.utils import shared_config_prior
-
         prior = {
-            "number_of_atom_features": tune.randint(2, 256),
+            "number_of_per_atom_features": tune.randint(2, 256),
             "number_of_interaction_modules": tune.randint(1, 5),
             "cutoff": tune.uniform(5, 10),
             "number_of_radial_basis_functions": tune.randint(8, 32),
@@ -433,4 +482,17 @@ class SchNet(BaseNetwork):
     def combine_per_atom_properties(
         self, values: Dict[str, torch.Tensor]
     ) -> torch.Tensor:
+        """
+        Combine per-atom properties.
+
+        Parameters
+        ----------
+        values : Dict[str, torch.Tensor]
+            Dictionary of per-atom properties.
+
+        Returns
+        -------
+        torch.Tensor
+            Combined per-atom properties.
+        """
         return values

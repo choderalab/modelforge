@@ -11,7 +11,7 @@ from torch import nn
 # from torchmdnet.models.tensornet import vector_to_symtensor
 from typing import Tuple, Dict, Optional, Type
 
-from modelforge.potential.models import InputPreparation
+from modelforge.potential.models import ComputeInteractingAtomPairs
 from modelforge.potential.models import BaseNetwork
 from modelforge.potential.models import CoreNetwork
 from modelforge.potential.utils import CosineCutoff

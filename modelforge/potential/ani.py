@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, Tuple
-from .models import InputPreparation, BaseNetwork, CoreNetwork
+from .models import ComputeInteractingAtomPairs, BaseNetwork, CoreNetwork
 
 import torch
 from loguru import logger as log
@@ -467,7 +467,7 @@ class ANI2xCore(CoreNetwork):
         # number of elements in ANI2x
         self.num_species = 7
 
-        log.debug("Initializing ANI model.")
+        log.debug("Initializing the ANI2x architecture.")
         super().__init__()
 
         # Initialize representation block

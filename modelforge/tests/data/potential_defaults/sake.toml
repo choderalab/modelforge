@@ -3,12 +3,14 @@ model_name = "SAKE"
 
 [potential.core_parameter]
 
-max_Z = 101
-number_of_atom_features = 64
 number_of_radial_basis_functions = 50
 cutoff = "5.0 angstrom"
 number_of_interaction_modules = 6
 number_of_spatial_attention_heads = 4
+[potential.core_parameter.featurization]
+number_of_per_atom_features = 64
+properties_to_featurize = ['atomic_number']
+max_Z = 101
 
 [potential.postprocessing_parameter]
 [potential.postprocessing_parameter.per_atom_energy]

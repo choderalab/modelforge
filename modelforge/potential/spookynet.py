@@ -432,7 +432,7 @@ class ElectronicEmbedding(nn.Module):
         super().__init__()
         self.linear_q = nn.Linear(num_features, num_features)
         # charges are duplicated to use separate weights for +/-
-        self.linear_k = nn.Linear(2, num_features, bias=False, dtype=torch.float32)
+        self.linear_k = nn.Linear(2, num_features, bias=False)
         self.linear_v = nn.Linear(2, num_features, bias=False)
         self.resblock = SpookyNetResidualMLP(
             num_features,
@@ -464,8 +464,8 @@ class ElectronicEmbedding(nn.Module):
         """
         batch_seg = torch.zeros(x.size(0), dtype=torch.int64, device=x.device)
         q = self.linear_q(x)  # queries
-        e = F.relu(torch.stack([E, -E], dim=-1)).double()
-        enorm = torch.maximum(e, torch.ones_like(e, dtype=torch.float64))
+        e = F.relu(torch.stack([E, -E], dim=-1))
+        enorm = torch.maximum(e, torch.ones_like(e))
         test = e / enorm
         k = self.linear_k(test)[batch_seg]  # keys
         v = self.linear_v(e)[batch_seg]  # values
@@ -503,7 +503,6 @@ class SpookyNetRepresentation(nn.Module):
 
         self.radial_symmetry_function_module = ExponentialBernsteinRadialBasisFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
-            dtype=torch.float32,
         )
 
         self.cutoff_module = CosineCutoff(cutoff=cutoff)
@@ -887,7 +886,7 @@ class SpookyNetAttention(nn.Module):
         super(SpookyNetAttention, self).__init__()
         self.num_random_features = num_random_features
         omega = self._omega(num_random_features, dim_qk)
-        self.register_buffer("omega", torch.tensor(omega, dtype=torch.float32))
+        self.register_buffer("omega", torch.tensor(omega))
         self.reset_parameters()
 
     def reset_parameters(self) -> None:

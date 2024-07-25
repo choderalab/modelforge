@@ -4,7 +4,7 @@ from modelforge.tests.precalculated_values import (
     setup_single_methane_input,
 )
 import torch
-
+from icecream import ic
 import pytest
 
 
@@ -54,15 +54,12 @@ def test_forward():
 
     input = setup_single_methane_input()
     model_input = input["modelforge_methane_input"]
-
+    model_input.positions = model_input.positions.double()
+    model_input.total_charge = model_input.total_charge.double()
 
     spookynet.input_preparation._input_checks(model_input)
 
     pairlist_output = spookynet.input_preparation.prepare_inputs(model_input)
-    print(f"{pairlist_output.d_ij.shape=}")
-    prepared_input = spookynet.core_module._model_specific_input_preparation(
-        model_input, pairlist_output
-    )
     calculated_results = spookynet.core_module.forward(model_input, pairlist_output)
 
     ref_spookynet = RefSpookyNet(
@@ -84,11 +81,11 @@ def test_forward():
     ).double()
 
     ref_spookynet(
-        prepared_input.atomic_numbers,
-        prepared_input.total_charge,
-        prepared_input.positions,
-        prepared_input.pair_indices[0],
-        prepared_input.pair_indices[1],
+        model_input.atomic_numbers,
+        model_input.total_charge,
+        model_input.positions,
+        pairlist_output.pair_indices[0],
+        pairlist_output.pair_indices[1],
     )
 
 
@@ -261,7 +258,8 @@ def test_spookynet_interaction_module_against_reference():
 
 
 def test_spookynet_bernstein_polynomial_equivalence():
-    from spookynet.modules.exponential_bernstein_polynomials import ExponentialBernsteinPolynomials as RefExponentialBernsteinPolynomials
+    from spookynet.modules.exponential_bernstein_polynomials import \
+        ExponentialBernsteinPolynomials as RefExponentialBernsteinPolynomials
     from modelforge.potential.utils import ExponentialBernsteinRadialBasisFunction as MfExponentialBernSteinPolynomials
 
     num_basis_functions = 3

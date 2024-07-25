@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 #     "DatasetParameters",
 # ]
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class DatasetParameters(BaseModel):
@@ -34,16 +34,25 @@ class DatasetParameters(BaseModel):
 
     Args:
         dataset_name (str): The name of the dataset.
-        version_select (str): The version of the dataset to use, default is "latest".
-        num_workers (int): The number of workers to use for the DataLoader, default is 4.
-        pin_memory (bool): Whether to pin memory for the DataLoader, default is True.
+        version_select (str): The version of the dataset to use
+        num_workers (int): The number of workers to use for the DataLoader
+        pin_memory (bool): Whether to pin memory for the DataLoader
 
     """
 
     dataset_name: str
-    version_select: str = "latest"
-    num_workers: int = 4
-    pin_memory: bool = True
+    version_select: str
+    num_workers: int
+    pin_memory: bool
+
+    class Config:
+        use_enum_values = True
+
+    @field_validator("num_workers")
+    def check_num_workers(cls, v):
+        if v < 1:
+            raise ValueError("num_workers must be greater than or equal to 1")
+        return v
 
 
 @dataclass(frozen=False)
@@ -703,9 +712,9 @@ class HDF5Dataset:
 
                         if all(property_found):
                             # we want to exclude conformers with NaN values for any property of interest
-                            configs_nan_by_prop: Dict[
-                                str, np.ndarray
-                            ] = OrderedDict()  # ndarray.size (n_configs, )
+                            configs_nan_by_prop: Dict[str, np.ndarray] = (
+                                OrderedDict()
+                            )  # ndarray.size (n_configs, )
                             for value in list(series_mol_data.keys()) + list(
                                 series_atom_data.keys()
                             ):

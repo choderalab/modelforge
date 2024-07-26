@@ -93,3 +93,55 @@ def test_potential_parameter_model(potential_name):
 
     # test to ensure we can properly initialize
     potential_parameters = PotentialParameters(**potential_config_dict["potential"])
+
+
+def test_runtime_parameter_model():
+    from modelforge.train.parameters import RuntimeParameters
+    from modelforge.tests.data import runtime_defaults
+
+    from importlib import resources
+    import toml
+
+    runtime_path = resources.files(runtime_defaults) / "runtime.toml"
+    runtime_config_dict = toml.load(runtime_path)
+
+    # test to ensure we can properly initialize
+    runtime_parameters = RuntimeParameters(**runtime_config_dict["runtime"])
+
+    with pytest.raises(ValidationError):
+        runtime_parameters.number_of_nodes = -1
+
+    with pytest.raises(ValidationError):
+        runtime_parameters.devices = -1
+
+    with pytest.raises(ValidationError):
+        runtime_parameters.devices = [-1, 0]
+
+    with pytest.raises(ValidationError):
+        runtime_parameters.accelerator = "not_a_valid_accelerator"
+
+
+def test_training_parameter_model():
+    from modelforge.train.parameters import TrainingParameters
+    from modelforge.tests.data import training_defaults
+
+    from importlib import resources
+    import toml
+
+    training_path = resources.files(training_defaults) / "default.toml"
+    training_config_dict = toml.load(training_path)
+
+    # test to ensure we can properly initialize
+    training_parameters = TrainingParameters(**training_config_dict["training"])
+
+    # this will throw an error because the split should sum to 1
+    with pytest.raises(ValidationError):
+        training_parameters.splitting_strategy.dataset_split = [0.1, 0.1, 0.1]
+
+    # this will throw an error because the split should be of length 3
+    with pytest.raises(ValidationError):
+        training_parameters.splitting_strategy.dataset_split = [0.7, 0.1, 0.1, 0.1]
+
+    # this will throw an error because the datafile has 2 entries for the loss_property dictionary
+    with pytest.raises(ValidationError):
+        training_parameters.loss_parameter.loss_property = ["per_molecule_energy"]

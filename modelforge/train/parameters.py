@@ -11,10 +11,12 @@ from enum import Enum
 from typing import List, Union, Dict, Optional, Callable
 
 
-# So we  do not need to set use_enum_values = True for each model
+# So we  do not need to set Config parameters in each model
 # we can create a base class that will be inherited by all models
 class ParametersBase(BaseModel):
-    model_config = ConfigDict(use_enum_values=True, arbitrary_types_allowed=True)
+    model_config = ConfigDict(
+        use_enum_values=True, arbitrary_types_allowed=True, validate_assignment=True
+    )
 
 
 class SchedulerMode(str, Enum):

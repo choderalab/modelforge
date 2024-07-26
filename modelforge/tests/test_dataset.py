@@ -464,10 +464,10 @@ def test_dataset_neighborlist(potential_name, single_batch_with_batchsize_64):
     nnp_input = single_batch_with_batchsize_64.nnp_input
 
     # test that the neighborlist is correctly generated
-    from modelforge.tests.test_models import load_configs
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
     # read default parameters
-    config = load_configs(f"{potential_name}", "qm9")
+    config = load_configs_into_pydantic_models(f"{potential_name}", "qm9")
 
     # Extract parameters
     from modelforge.potential.models import NeuralNetworkPotentialFactory
@@ -476,7 +476,7 @@ def test_dataset_neighborlist(potential_name, single_batch_with_batchsize_64):
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         simulation_environment="PyTorch",
-        model_parameter=config["potential"],
+        model_parameter=config["potential"].model_dump(),
     )
     model(nnp_input)
 

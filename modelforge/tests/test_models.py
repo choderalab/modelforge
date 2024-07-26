@@ -5,31 +5,6 @@ from modelforge.dataset import _ImplementedDatasets
 from modelforge.potential import NeuralNetworkPotentialFactory
 
 
-# def load_configs(potential_name: str, dataset_name: str):
-#     from modelforge.tests.data import (
-#         potential_defaults,
-#         training_defaults,
-#         dataset_defaults,
-#         runtime_defaults,
-#     )
-#     from importlib import resources
-#     from modelforge.train.training import return_toml_config
-#
-#     potential_path = (
-#         resources.files(potential_defaults) / f"{potential_name.lower()}.toml"
-#     )
-#     dataset_path = resources.files(dataset_defaults) / f"{dataset_name}.toml"
-#     training_path = resources.files(training_defaults) / "default.toml"
-#     runtime_path = resources.files(runtime_defaults) / "runtime.toml"
-#
-#     return return_toml_config(
-#         potential_path=potential_path,
-#         dataset_path=dataset_path,
-#         training_path=training_path,
-#         runtime_path=runtime_path,
-#     )
-
-
 def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
     from modelforge.tests.data import (
         potential_defaults,

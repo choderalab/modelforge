@@ -1,18 +1,18 @@
-from .test_models import load_configs
+from .test_models import load_configs_into_pydantic_models
 
 
 def test_embedding(single_batch_with_batchsize_64):
     # test the input featurization, including:
     # - nuclear charge embedding
     # - total charge mixing
-    
+
     import torch
 
     nnp_input = single_batch_with_batchsize_64.nnp_input
     model_name = "SchNet"
     # read default parameters and extract featurization
-    config = load_configs(f"{model_name.lower()}", "qm9")
-    featurization_config = config["potential"]["core_parameter"]["featurization"]
+    config = load_configs_into_pydantic_models(f"{model_name.lower()}", "qm9")
+    featurization_config = config["potential"].core_parameter.featurization.model_dump()
 
     # featurize the atomic input (default is only nuclear charge embedding)
     from modelforge.potential.utils import FeaturizeInput

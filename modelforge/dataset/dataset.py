@@ -40,7 +40,9 @@ class DatasetParameters(BaseModel):
 
     """
 
-    model_config = ConfigDict(use_enum_values=True, arbitrary_types_allowed=True)
+    model_config = ConfigDict(
+        use_enum_values=True, arbitrary_types_allowed=True, validate_assignment=True
+    )
 
     dataset_name: str
     version_select: str

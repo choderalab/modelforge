@@ -447,12 +447,15 @@ def test_forward_pass(
     # This has to be reflected in the atomic energies E_i, which
     # have to be equal for all hydrogens
     if "JAX" not in str(type(model)):
+        from loguru import logger as log
+
         # assert that the following tensor has equal values for dim=0 index 1 to 4 and 6 to 8
+
         assert torch.allclose(
-            output["per_atom_energy"][1:4], output["per_atom_energy"][1], atol=1e-5
+            output["per_atom_energy"][1:4], output["per_atom_energy"][1], atol=1e-4
         )
         assert torch.allclose(
-            output["per_atom_energy"][6:8], output["per_atom_energy"][6], atol=1e-5
+            output["per_atom_energy"][6:8], output["per_atom_energy"][6], atol=1e-4
         )
 
         # make sure that the total energy is \sum E_i

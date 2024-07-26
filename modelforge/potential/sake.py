@@ -57,10 +57,10 @@ class SAKENeuralNetworkInput:
     """
 
     pair_indices: torch.Tensor
-    r_ij: torch.Tensor
-    d_ij: torch.Tensor
     number_of_atoms: int
     positions: torch.Tensor
+    r_ij: torch.Tensor
+    d_ij: torch.Tensor
     atomic_numbers: torch.Tensor
     atomic_subsystem_indices: torch.Tensor
     atomic_embedding: torch.Tensor
@@ -160,6 +160,12 @@ class SAKECore(CoreNetwork):
         # Perform atomic embedding
 
         number_of_atoms = data.atomic_numbers.shape[0]
+
+        # atomic_embedding = self.embedding(
+        #     F.one_hot(data.atomic_numbers.long(), num_classes=self.max_Z).to(
+        #         self.embedding.weight.dtype
+        #     )
+        # )
 
         nnp_input = SAKENeuralNetworkInput(
             pair_indices=pairlist_output.pair_indices,
@@ -362,18 +368,10 @@ class SAKEInteraction(nn.Module):
         """
         h_ij_cat = torch.cat([h_i_by_pair, h_j_by_pair], dim=-1)
         h_ij_filtered = self.radial_symmetry_function_module(
-            d_ij# .unsqueeze(-1)
+            d_ij
         ).squeeze(-2) * self.edge_mlp_in(h_ij_cat)
         return self.edge_mlp_out(
-            torch.cat(
-                [
-                    h_ij_cat,
-                    h_ij_filtered,
-                    d_ij#.unsqueeze(-1) 
-                    / self.scale_factor_in_nanometer,
-                ],
-                dim=-1,
-            )
+            torch.cat([h_ij_cat, h_ij_filtered, d_ij / self.scale_factor_in_nanometer], dim=-1)
         )
 
     def update_node(self, h, h_i_semantic, h_i_spatial):
@@ -396,9 +394,7 @@ class SAKEInteraction(nn.Module):
             Updated node features. Shape [nr_of_atoms_in_systems, nr_atom_basis].
         """
 
-        return h.add_(
-            self.node_mlp(torch.cat([h, h_i_semantic, h_i_spatial], dim=-1))
-        )  # NOTE: changed to inplace operation
+        return h + self.node_mlp(torch.cat([h, h_i_semantic, h_i_spatial], dim=-1))
 
     def update_velocity(self, v, h, combinations, idx_i):
         """Update node velocity features for the next layer.
@@ -423,9 +419,9 @@ class SAKEInteraction(nn.Module):
         """
         v_ij = self.v_mixing_mlp(combinations.transpose(-1, -2)).squeeze(-1)
         expanded_idx_i = idx_i.view(-1, 1).expand_as(v_ij)
-        dv = torch.zeros_like(v).scatter_reduce(
+        dv = torch.zeros_like(v).scatter_reduce_(
             0, expanded_idx_i, v_ij, "mean", include_self=False
-        )
+        ) # NOTE: changed to inplace reduction
         return self.velocity_mlp(h) * v + dv
 
     def get_combinations(self, h_ij_semantic, dir_ij):
@@ -469,12 +465,12 @@ class SAKEInteraction(nn.Module):
         """
         expanded_idx_i = idx_i.view(-1, 1, 1).expand_as(combinations)
         out_shape = (nr_atoms, self.nr_coefficients, combinations.shape[-1])
-        zeros = torch.zeros(
+        combinations_mean = torch.zeros(
             out_shape, dtype=combinations.dtype, device=combinations.device
         )
-        combinations_mean = zeros.scatter_reduce(
+        combinations_mean.scatter_reduce_(
             0, expanded_idx_i, combinations, "mean", include_self=False
-        )
+        ) # NOTE: changed to inplace reduction
         combinations_norm_square = (combinations_mean**2).sum(dim=-1)
         return self.post_norm_mlp(combinations_norm_square)
 
@@ -499,10 +495,11 @@ class SAKEInteraction(nn.Module):
         """
         expanded_idx_i = idx_i.view(-1, 1).expand_as(h_ij_semantic)
         out_shape = (nr_atoms, self.nr_heads * self.nr_edge_basis)
-        zeros = torch.zeros(
+        aggregate = torch.zeros(
             out_shape, dtype=h_ij_semantic.dtype, device=h_ij_semantic.device
         )
-        return zeros.scatter_add(0, expanded_idx_i, h_ij_semantic)
+         aggregate.scatter_add_(0, expanded_idx_i, h_ij_semantic) # NOTE: changed to inplace reduction
+        return aggregate
 
     def get_semantic_attention(self, h_ij_edge, idx_i, idx_j, nr_atoms):
         """Compute semantic attention. Softmax is over all senders connected to a receiver.
@@ -543,11 +540,7 @@ class SAKEInteraction(nn.Module):
         )
 
     def forward(
-        self,
-        h: torch.Tensor,
-        x: torch.Tensor,
-        v: torch.Tensor,
-        input_data: SAKENeuralNetworkInput,
+        self, h: torch.Tensor, x: torch.Tensor, v: torch.Tensor, input_data
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Compute interaction layer output.
 
@@ -576,17 +569,13 @@ class SAKEInteraction(nn.Module):
         h_ij_semantic = self.get_semantic_attention(
             h_ij_edge, idx_i, idx_j, nr_of_atoms_in_all_systems
         )
-        # del h_ij_edge
         h_i_semantic = self.aggregate(h_ij_semantic, idx_i, nr_of_atoms_in_all_systems)
         combinations = self.get_combinations(h_ij_semantic, dir_ij)
-        # del h_ij_semantic
         h_i_spatial = self.get_spatial_attention(
             combinations, idx_i, nr_of_atoms_in_all_systems
         )
         h_updated = self.update_node(h, h_i_semantic, h_i_spatial)
-        # del h, h_i_semantic, h_i_spatial
         v_updated = self.update_velocity(v, h_updated, combinations, idx_i)
-        # del v
         x_updated = x + v_updated
 
         return h_updated, x_updated, v_updated

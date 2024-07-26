@@ -95,12 +95,12 @@ class SpookyNetNeuralNetworkData(NeuralNetworkData):
 class SpookyNetCore(CoreNetwork):
     def __init__(
         self,
-            max_Z: int = 87,  # need to update electron_config if we want to use higher atomic numbers
-        number_of_atom_features: int = 64,
-        number_of_radial_basis_functions: int = 20,
-        number_of_interaction_modules: int = 3,
-        number_of_residual_blocks: int = 7,
-        cutoff: unit.Quantity = 5.0 * unit.angstrom,
+            max_Z,
+            cutoff: unit.Quantity,
+            number_of_atom_features,
+            number_of_radial_basis_functions,
+            number_of_interaction_modules,
+            number_of_residual_blocks,
     ) -> None:
         """
         Initialize the SpookyNet class.
@@ -123,9 +123,6 @@ class SpookyNetCore(CoreNetwork):
         self.number_of_atom_features = number_of_atom_features
         self.number_of_radial_basis_functions = number_of_radial_basis_functions
 
-        # embedding
-        from modelforge.potential.utils import Embedding
-
         assert max_Z <= 87
         self.atomic_embedding_module = SpookyNetAtomicEmbedding(
             number_of_atom_features, max_Z
@@ -139,6 +136,7 @@ class SpookyNetCore(CoreNetwork):
             cutoff, number_of_radial_basis_functions
         )
 
+        ic(number_of_interaction_modules)
         # Intialize interaction blocks
         self.interaction_modules = nn.ModuleList(
             [
@@ -162,17 +160,17 @@ class SpookyNetCore(CoreNetwork):
         )
 
         # final output layer
-        self.energy_layer = nn.Sequential(
+        self.energy_and_charge_readout = nn.Sequential(
             Dense(
                 number_of_atom_features,
-                number_of_atom_features,
-                activation=ShiftedSoftplus(),
-            ),
-            Dense(
-                number_of_atom_features,
-                1,
+                2,
+                activation=None,
+                bias=False,
             ),
         )
+
+        # learnable shift and bias that is applied per-element to ech atomic energy
+        self.atomic_shift = nn.Parameter(torch.zeros(max_Z, 2))
 
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
@@ -232,13 +230,22 @@ class SpookyNetCore(CoreNetwork):
             )
             f += y  # accumulate module output to features
 
-        E_i = self.energy_layer(x).squeeze(1)
+        per_atom_energy_and_charge = self.energy_and_charge_readout(x)
 
-        return {
-            "E_i": E_i,
-            "q": x,
+        per_atom_energy_and_charge_shifted = self.atomic_shift[data.atomic_numbers] + per_atom_energy_and_charge
+
+        E_i = per_atom_energy_and_charge_shifted[:, 0]  # shape(nr_of_atoms, 1)
+        q_i = per_atom_energy_and_charge_shifted[:, 1]  # shape(nr_of_atoms, 1)
+
+        output = {
+            "per_atom_energy": E_i.contiguous(),  # reshape memory mapping for JAX/dlpack
+            "q_i": q_i.contiguous(),
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
+            "atomic_numbers": data.atomic_numbers,
         }
+
+        return output
+
 
 
 from .models import InputPreparation, NNPInput, BaseNetwork
@@ -410,6 +417,7 @@ class SpookyNet(BaseNetwork):
 
         self.core_module = SpookyNetCore(
             max_Z=max_Z,
+            cutoff=_convert(cutoff),
             number_of_atom_features=number_of_atom_features,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             number_of_interaction_modules=number_of_interaction_modules,
@@ -879,6 +887,8 @@ class SpookyNetLocalInteraction(nn.Module):
         pa, pb = torch.split(self.projection_p(p), p.shape[-1], dim=-1)
         da, db = torch.split(self.projection_d(d), d.shape[-1], dim=-1)
         # n: number_of_atoms_in_system, x: 3 (geometry axis), f: number_of_atom_features
+        ic(pa.shape)
+        ic(f_ij_after_cutoff.shape)
         return self.resblock(
             s
             + torch.einsum("nxf,nxf->nf", pa, pb)

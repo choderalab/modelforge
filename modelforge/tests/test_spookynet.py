@@ -7,6 +7,8 @@ import torch
 from icecream import ic
 import pytest
 
+from modelforge.utils.units import _convert
+
 
 def test_init():
     """Test initialization of the SpookyNet model."""
@@ -43,6 +45,7 @@ def test_forward():
     config["potential"]["core_parameter"]["number_of_radial_basis_functions"] = 7
     config["potential"]["core_parameter"]["number_of_residual_blocks"] = 1
     config["potential"]["core_parameter"]["number_of_interaction_modules"] = 1
+    config["potential"]["core_parameter"]["cutoff"] = "2.4 meter"
 
     print(f"{config['potential']['core_parameter']}=")
 
@@ -83,6 +86,7 @@ def test_forward():
         use_zbl_repulsion=False,
         use_electrostatics=False,
         use_d4_dispersion=False,
+        cutoff=_convert(config["potential"]["core_parameter"]["cutoff"]).m_as(unit.angstrom),
     ).double()
 
     spookynet.core_module.interaction_modules[0].local_interaction.resblock_d.residual.stack[0].activation2.beta = \
@@ -90,6 +94,10 @@ def test_forward():
     for name, param in spookynet.named_parameters():
         print(name)
 
+    for param in spookynet.parameters():
+        torch.nn.init.normal_(param, 5.0, 3.0)
+
+    spookynet.core_module.atomic_shift = ref_spookynet.element_bias
     spookynet.core_module.atomic_embedding_module.element_embedding.weight = ref_spookynet.nuclear_embedding.element_embedding
     spookynet.core_module.atomic_embedding_module.config_linear = ref_spookynet.nuclear_embedding.config_linear.weight
 
@@ -376,13 +384,16 @@ def test_forward():
     spookynet.core_module.interaction_modules[0].resblock.linear.weight = ref_spookynet.module[0].resblock.linear.weight
     spookynet.core_module.interaction_modules[0].resblock.linear.bias = ref_spookynet.module[0].resblock.linear.bias
 
-    ref_spookynet(
+    reference_calculated_results = ref_spookynet(
         model_input.atomic_numbers,
         model_input.total_charge,
-        model_input.positions,
+        (model_input.positions * unit.nanometer).m_as(unit.angstrom),
         pairlist_output.pair_indices[0],
         pairlist_output.pair_indices[1],
     )
+
+    ic(calculated_results.keys())
+    ic(reference_calculated_results)
 
 
 def test_spookynet_forward(single_batch_with_batchsize_64, model_parameter):

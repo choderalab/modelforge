@@ -367,11 +367,13 @@ class SAKEInteraction(nn.Module):
             Intermediate edge features. Shape [nr_pairs, nr_edge_basis].
         """
         h_ij_cat = torch.cat([h_i_by_pair, h_j_by_pair], dim=-1)
-        h_ij_filtered = self.radial_symmetry_function_module(
-            d_ij
-        ).squeeze(-2) * self.edge_mlp_in(h_ij_cat)
+        h_ij_filtered = self.radial_symmetry_function_module(d_ij).squeeze(
+            -2
+        ) * self.edge_mlp_in(h_ij_cat)
         return self.edge_mlp_out(
-            torch.cat([h_ij_cat, h_ij_filtered, d_ij / self.scale_factor_in_nanometer], dim=-1)
+            torch.cat(
+                [h_ij_cat, h_ij_filtered, d_ij / self.scale_factor_in_nanometer], dim=-1
+            )
         )
 
     def update_node(self, h, h_i_semantic, h_i_spatial):
@@ -421,7 +423,7 @@ class SAKEInteraction(nn.Module):
         expanded_idx_i = idx_i.view(-1, 1).expand_as(v_ij)
         dv = torch.zeros_like(v).scatter_reduce_(
             0, expanded_idx_i, v_ij, "mean", include_self=False
-        ) # NOTE: changed to inplace reduction
+        )  # NOTE: changed to inplace reduction
         return self.velocity_mlp(h) * v + dv
 
     def get_combinations(self, h_ij_semantic, dir_ij):
@@ -470,7 +472,7 @@ class SAKEInteraction(nn.Module):
         )
         combinations_mean.scatter_reduce_(
             0, expanded_idx_i, combinations, "mean", include_self=False
-        ) # NOTE: changed to inplace reduction
+        )  # NOTE: changed to inplace reduction
         combinations_norm_square = (combinations_mean**2).sum(dim=-1)
         return self.post_norm_mlp(combinations_norm_square)
 
@@ -498,7 +500,9 @@ class SAKEInteraction(nn.Module):
         aggregate = torch.zeros(
             out_shape, dtype=h_ij_semantic.dtype, device=h_ij_semantic.device
         )
-        aggregate.scatter_add_(0, expanded_idx_i, h_ij_semantic)  # NOTE: changed to inplace reduction
+        aggregate.scatter_add_(
+            0, expanded_idx_i, h_ij_semantic
+        )  # NOTE: changed to inplace reduction
         return aggregate
 
     def get_semantic_attention(self, h_ij_edge, idx_i, idx_j, nr_atoms):

@@ -1275,21 +1275,20 @@ def scatter_softmax(
         dim < src.dim()
     ), f"dim must be less than the number of dimensions of src {src.dim()}, got {dim}"
 
-    out_shape = [
-        other_dim_size if (other_dim != dim) else dim_size
-        for (other_dim, other_dim_size) in enumerate(src.shape)
-    ]
+    out_shape = list(src.shape)
+    out_shape[dim] = dim_size
     index = index.to(torch.int64)
-    zeros = torch.zeros(out_shape, dtype=src.dtype, device=device)
-    max_value_per_index = zeros.scatter_reduce(
+    max_value_per_index = torch.zeros(out_shape, dtype=src.dtype, device=device)
+    max_value_per_index.scatter_reduce_(
         dim, index, src, "amax", include_self=False
     )
     max_per_src_element = max_value_per_index.gather(dim, index)
 
-    recentered_scores = src - max_per_src_element
-    recentered_scores_exp = recentered_scores.exp()
+    recentered_scores_exp = (src - max_per_src_element).exp()
 
-    sum_per_index = torch.zeros(out_shape, dtype=src.dtype, device=device).scatter_add(
+    sum_per_index = torch.zeros(out_shape, dtype=src.dtype, device=device)
+
+    sum_per_index.scatter_add_(
         dim, index, recentered_scores_exp
     )
     normalizing_constants = sum_per_index.gather(dim, index)

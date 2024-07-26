@@ -78,6 +78,8 @@ def test_interaction_forward():
     h = torch.randn(nr_atoms, nr_atom_basis)
     x = torch.randn(nr_atoms, geometry_basis)
     v = torch.randn(nr_atoms, geometry_basis)
+
+    # TODO: make SAKENeuralNetworkInput
     pairlist = torch.cartesian_prod(torch.arange(nr_atoms), torch.arange(nr_atoms))
     nr_pairs = 43
     edge_mask = onp.random.choice(len(pairlist), nr_pairs, replace=False)
@@ -139,7 +141,7 @@ def test_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize_64):
         reference_prepared_input.atomic_embedding,
         reference_prepared_input.positions,
         reference_v_torch,
-        reference_prepared_input.pair_indices,
+        reference_prepared_input,
     )
     (
         perturbed_h_out_torch,
@@ -149,7 +151,7 @@ def test_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize_64):
         perturbed_prepared_input.atomic_embedding,
         perturbed_prepared_input.positions,
         perturbed_v_torch,
-        perturbed_prepared_input.pair_indices,
+        perturbed_prepared_input,
     )
 
     # x and v are equivariant, h is invariant
@@ -385,6 +387,7 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none):
         mf_sake_block.x_mixing_mlp.weight.detach().numpy().T
     )
 
+    # TODO: make SAKENeuralNetworkInput
     mf_h, mf_x, mf_v = mf_sake_block(h, x, v, pairlist)
 
     ref_h, ref_x, ref_v = ref_sake_interaction.apply(

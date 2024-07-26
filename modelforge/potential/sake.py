@@ -498,7 +498,7 @@ class SAKEInteraction(nn.Module):
         aggregate = torch.zeros(
             out_shape, dtype=h_ij_semantic.dtype, device=h_ij_semantic.device
         )
-         aggregate.scatter_add_(0, expanded_idx_i, h_ij_semantic) # NOTE: changed to inplace reduction
+        aggregate.scatter_add_(0, expanded_idx_i, h_ij_semantic)  # NOTE: changed to inplace reduction
         return aggregate
 
     def get_semantic_attention(self, h_ij_edge, idx_i, idx_j, nr_atoms):
@@ -561,9 +561,10 @@ class SAKEInteraction(nn.Module):
         """
         idx_i, idx_j = input_data.pair_indices
         nr_of_atoms_in_all_systems, _ = x.shape
-        r_ij = input_data.r_ij
-        d_ij = input_data.d_ij
-        dir_ij = r_ij / d_ij
+
+        r_ij = x[idx_j] - x[idx_i]
+        d_ij = torch.sqrt((r_ij ** 2).sum(dim=1) + self.epsilon).unsqueeze(-1)
+        dir_ij = r_ij / (d_ij + self.epsilon)
 
         h_ij_edge = self.update_edge(h[idx_j], h[idx_i], d_ij)
         h_ij_semantic = self.get_semantic_attention(

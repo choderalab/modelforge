@@ -1050,7 +1050,7 @@ class DataModule(pl.LightningDataModule):
         """
         super().__init__()
 
-        self.name = name
+        self.name = name.lower()
         self.batch_size = batch_size
         self.splitting_strategy = splitting_strategy
         self.remove_self_energies = remove_self_energies

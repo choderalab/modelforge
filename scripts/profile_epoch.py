@@ -1,5 +1,4 @@
 import torch
-from modelforge.train.training import return_toml_config
 from typing import Dict, Any
 
 
@@ -18,63 +17,59 @@ def setup(model_name: str):
     from lightning import Trainer
     from modelforge.potential import NeuralNetworkPotentialFactory
     from modelforge.dataset.dataset import DataModule
-    from importlib import resources
-    from modelforge import tests as modelforge_tests
+    from modelforge.tests.test_models import load_configs
 
-    config = return_toml_config(
-        f"{resources.files(modelforge_tests)}/data/training_defaults/{model_name.lower()}_qm9.toml"
-    )
-    # Extract parameters
-    potential_config = config["potential"]
-    training_config = config["training"]
-    dataset_config = config["dataset"]
-    training_config["nr_of_epochs"] = 1
-
-    dataset_config["version_select"] = "nc_1000_v0"
-
-    model_name = potential_config["model_name"]
-    dataset_name = dataset_config["dataset_name"]
-    version_select = dataset_config.get("version_select", "latest")
-    accelerator = training_config.get("accelerator", "cpu")
-    nr_of_epochs = training_config.get("nr_of_epochs", 1)
-    num_nodes = training_config.get("num_nodes", 1)
-    devices = training_config.get("devices", 1)
-    batch_size = training_config.get("batch_size", 128)
-    remove_self_energies = dataset_config.get("remove_self_energies", False)
+    config = load_configs(f"{model_name.lower()}", "qm9")
+    accelerator = "gpu"
+    nr_of_epochs = 4
+    num_nodes = 1
+    devices = 1
+    batch_size = 64
 
     # Set up dataset
     dm = DataModule(
-        name=dataset_name,
+        name="qm9",
         batch_size=batch_size,
         splitting_strategy=RandomRecordSplittingStrategy(),
-        remove_self_energies=remove_self_energies,
-        version_select=version_select,
+        remove_self_energies=True,
     )
+    import toml
 
+    dm.prepare_data()
+    dm.setup()
+
+    dataset_statistic = toml.load(dm.dataset_statistic_filename)
+
+    from lightning.pytorch.profilers import PyTorchProfiler
+
+    profiler = PyTorchProfiler()
     trainer = Trainer(
         max_epochs=nr_of_epochs,
         num_nodes=num_nodes,
         devices=devices,
         accelerator=accelerator,
-        profiler="pytorch",  # "advanced",
+        num_sanity_val_steps=0,
+        profiler=profiler,
+        limit_train_batches=0.25,
     )
-
-    dm.prepare_data()
-    dm.setup()
 
     # Set up model
     model = NeuralNetworkPotentialFactory.generate_model(
         use="training",
-        model_type=model_name,
-        model_parameters=potential_config["potential_parameters"],
-        training_parameters=training_config["training_parameters"],
+        model_parameter=config["potential"],
+        training_parameter=config["training"]["training_parameter"],
+        dataset_statistic=dataset_statistic,
     )
     return trainer, model, dm
 
 
 if __name__ == "__main__":
 
-    model_name = "SchNet"
+    # This profile script works with the
+    # potential and training toml files that
+    # are stored in the modelforge/tests/test_models
+
+    model_name = "SAKE"
 
     trainer, model, dm = setup(
         model_name=model_name,

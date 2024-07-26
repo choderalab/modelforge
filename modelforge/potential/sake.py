@@ -57,6 +57,8 @@ class SAKENeuralNetworkInput:
     """
 
     pair_indices: torch.Tensor
+    r_ij: torch.Tensor
+    d_ij: torch.Tensor
     number_of_atoms: int
     positions: torch.Tensor
     atomic_numbers: torch.Tensor
@@ -159,14 +161,10 @@ class SAKECore(CoreNetwork):
 
         number_of_atoms = data.atomic_numbers.shape[0]
 
-        # atomic_embedding = self.embedding(
-        #     F.one_hot(data.atomic_numbers.long(), num_classes=self.max_Z).to(
-        #         self.embedding.weight.dtype
-        #     )
-        # )
-
         nnp_input = SAKENeuralNetworkInput(
             pair_indices=pairlist_output.pair_indices,
+            r_ij=pairlist_output.r_ij,
+            d_ij=pairlist_output.d_ij,
             number_of_atoms=number_of_atoms,
             positions=data.positions,  # .to(self.embedding.weight.dtype),
             atomic_numbers=data.atomic_numbers,
@@ -196,7 +194,7 @@ class SAKECore(CoreNetwork):
         v = torch.zeros_like(x)
 
         for interaction_mod in self.interaction_modules:
-            h, x, v = interaction_mod(h, x, v, data.pair_indices)
+            h, x, v = interaction_mod(h, x, v, data)
 
         # Use squeeze to remove dimensions of size 1
         E_i = self.energy_layer(h).squeeze(1)
@@ -364,10 +362,18 @@ class SAKEInteraction(nn.Module):
         """
         h_ij_cat = torch.cat([h_i_by_pair, h_j_by_pair], dim=-1)
         h_ij_filtered = self.radial_symmetry_function_module(
-            d_ij.unsqueeze(-1)
+            d_ij# .unsqueeze(-1)
         ).squeeze(-2) * self.edge_mlp_in(h_ij_cat)
         return self.edge_mlp_out(
-            torch.cat([h_ij_cat, h_ij_filtered, d_ij.unsqueeze(-1) / self.scale_factor_in_nanometer], dim=-1)
+            torch.cat(
+                [
+                    h_ij_cat,
+                    h_ij_filtered,
+                    d_ij#.unsqueeze(-1) 
+                    / self.scale_factor_in_nanometer,
+                ],
+                dim=-1,
+            )
         )
 
     def update_node(self, h, h_i_semantic, h_i_spatial):
@@ -390,7 +396,9 @@ class SAKEInteraction(nn.Module):
             Updated node features. Shape [nr_of_atoms_in_systems, nr_atom_basis].
         """
 
-        return h + self.node_mlp(torch.cat([h, h_i_semantic, h_i_spatial], dim=-1))
+        return h.add_(
+            self.node_mlp(torch.cat([h, h_i_semantic, h_i_spatial], dim=-1))
+        )  # NOTE: changed to inplace operation
 
     def update_velocity(self, v, h, combinations, idx_i):
         """Update node velocity features for the next layer.
@@ -535,7 +543,11 @@ class SAKEInteraction(nn.Module):
         )
 
     def forward(
-        self, h: torch.Tensor, x: torch.Tensor, v: torch.Tensor, pairlist: torch.Tensor
+        self,
+        h: torch.Tensor,
+        x: torch.Tensor,
+        v: torch.Tensor,
+        input_data: SAKENeuralNetworkInput,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Compute interaction layer output.
 
@@ -554,27 +566,27 @@ class SAKEInteraction(nn.Module):
         Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
             Updated scalar and vector representations (h, x, v) with same shapes as input.
         """
-        idx_i, idx_j = pairlist
+        idx_i, idx_j = input_data.pair_indices
         nr_of_atoms_in_all_systems, _ = x.shape
-        r_ij = x[idx_j] - x[idx_i]
-        d_ij = torch.sqrt((r_ij**2).sum(dim=1) + self.epsilon)
-        dir_ij = r_ij / (d_ij.unsqueeze(-1) + self.epsilon)
+        r_ij = input_data.r_ij
+        d_ij = input_data.d_ij
+        dir_ij = r_ij / d_ij
 
         h_ij_edge = self.update_edge(h[idx_j], h[idx_i], d_ij)
         h_ij_semantic = self.get_semantic_attention(
             h_ij_edge, idx_i, idx_j, nr_of_atoms_in_all_systems
         )
-        del h_ij_edge
+        # del h_ij_edge
         h_i_semantic = self.aggregate(h_ij_semantic, idx_i, nr_of_atoms_in_all_systems)
         combinations = self.get_combinations(h_ij_semantic, dir_ij)
-        del h_ij_semantic
+        # del h_ij_semantic
         h_i_spatial = self.get_spatial_attention(
             combinations, idx_i, nr_of_atoms_in_all_systems
         )
         h_updated = self.update_node(h, h_i_semantic, h_i_spatial)
-        del h, h_i_semantic, h_i_spatial
+        # del h, h_i_semantic, h_i_spatial
         v_updated = self.update_velocity(v, h_updated, combinations, idx_i)
-        del v
+        # del v
         x_updated = x + v_updated
 
         return h_updated, x_updated, v_updated

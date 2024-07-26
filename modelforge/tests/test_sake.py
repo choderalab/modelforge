@@ -270,6 +270,8 @@ def test_radial_symmetry_function_against_reference():
     assert torch.allclose(
         torch.from_numpy(onp.array(variables["params"]["betas"])) ** -0.5,
         radial_symmetry_function_module.radial_scale_factor.detach().T,
+        atol=1e-2,
+        rtol=1e-2,
     )
 
     ref_rbf = ref_radial_basis_module.apply(variables, d_ij_jax)

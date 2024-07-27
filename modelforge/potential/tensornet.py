@@ -326,7 +326,7 @@ class TensorNetRepresentation(torch.nn.Module):
         radial_feature_vector = self.radial_symmetry_function(data.d_ij)  # in nanometer
         # cutoff
         rcut_ij = self.cutoff_module(data.d_ij)  # cutoff function applied twice
-        radial_feature_vector = radial_feature_vector * rcut_ij.unsqueeze(-1)
+        radial_feature_vector = (radial_feature_vector * rcut_ij).unsqueeze(1)
 
         Iij, Aij, Sij = self._get_tensor_messages(
             atomic_number_embedding,

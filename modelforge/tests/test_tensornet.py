@@ -1,7 +1,6 @@
 def test_init():
     """Test initialization of the TensorNet model."""
     from modelforge.potential.tensornet import TensorNet
-
     from modelforge.tests.test_models import load_configs
 
     # load default parameters
@@ -19,6 +18,8 @@ def test_tensornet_forward():  # TODO
 
     from modelforge.dataset.dataset import DataModule
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
+    from modelforge.potential.tensornet import TensorNet
+    from modelforge.tests.test_models import load_configs
 
     seed = 0
     torch.manual_seed(seed)
@@ -40,9 +41,14 @@ def test_tensornet_forward():  # TODO
     # Test that we can add the reference energy correctly
     # get methane input
     batch = next(iter(dataset.train_dataloader())).nnp_input
-    from modelforge.potential.tensornet import TensorNet
 
-    net = TensorNet()
+    # load default parameters
+    config = load_configs(f"tensornet", "qm9")
+    # initialize model
+    tensornet = TensorNet(
+        **config["potential"]["core_parameter"],
+        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+    )
     # net(batch)
 
 
@@ -56,6 +62,7 @@ def test_tensornet_input():
     from modelforge.tests.precalculated_values import (
         prepare_values_for_test_tensornet_input,
     )
+    from modelforge.tests.test_models import load_configs
 
     seed = 0
     torch.manual_seed(seed)
@@ -81,11 +88,15 @@ def test_tensornet_input():
     # get methane input
     mf_input = next(iter(dataset.train_dataloader())).nnp_input
     # modelforge TensorNet
+    # load default parameters
+    config = load_configs(f"tensornet", "qm9")
+    # initialize model
     model = TensorNet(
-        radial_max_distance=100 * unit.angstrom
-    )  # no max distance for test purposes
-    model.input_preparation._input_checks(mf_input)
-    pairlist_output = model.input_preparation.prepare_inputs(mf_input)
+        **config["potential"]["core_parameter"],
+        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+    )
+    model.compute_interacting_pairs._input_checks(mf_input)
+    pairlist_output = model.compute_interacting_pairs.prepare_inputs(mf_input)
 
     # torchmd-net TensorNet
     if reference_data:
@@ -118,7 +129,7 @@ def test_tensornet_compare_radial_symmetry_features():
     from openff.units import unit
 
     from modelforge.potential.utils import CosineCutoff
-    from modelforge.potential.utils import TensorNetRadialSymmetryFunction
+    from modelforge.potential.utils import PhysNetRadialBasisFunction
     from modelforge.tests.precalculated_values import (
         prepare_values_for_test_tensornet_compare_radial_symmetry_features,
     )
@@ -137,17 +148,16 @@ def test_tensornet_compare_radial_symmetry_features():
     radial_start = 0.0  # cutoff_lower also affect cutoff function in torchmd-net
     radial_dist_divisions = 8
 
-    rsf = TensorNetRadialSymmetryFunction(
+    rsf = PhysNetRadialBasisFunction(
         number_of_radial_basis_functions=radial_dist_divisions,
         max_distance=radial_cutoff * unit.angstrom,
         min_distance=radial_start * unit.angstrom,
     )
-    mf_r = rsf(d_ij / 10)  # torch.Size([5, 1, 8]) # NOTE: nanometer
+    mf_r = rsf(d_ij / 10)  # torch.Size([5, 8]) # NOTE: nanometer
     cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom)
-    # cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom, representation_unit=unit.angstrom)
 
     rcut_ij = cutoff_module(d_ij / 10)  # torch.Size([5, 1]) # NOTE: nanometer
-    mf_r = mf_r * rcut_ij.unsqueeze(-1)
+    mf_r = (mf_r * rcut_ij).unsqueeze(1)
 
     if reference_data:
         tn_r = torch.load(reference_data)
@@ -176,12 +186,13 @@ def test_tensornet_representation():
     from modelforge.tests.precalculated_values import (
         prepare_values_for_test_tensornet_representation,
     )
+    from modelforge.tests.test_models import load_configs
 
     seed = 0
     torch.manual_seed(seed)
 
     reference_data = "modelforge/tests/data/tensornet_representation.pt"
-    # reference_data = None
+    reference_data = None
 
     hidden_channels = 8
     num_rbf = 16
@@ -190,8 +201,6 @@ def test_tensornet_representation():
     cutoff_upper = 5.1
     trainable_rbf = False
     max_z = 128
-    dtype = torch.float32
-    # representation_unit = unit.angstrom
 
     # Set up a dataset
     # prepare reference value
@@ -212,10 +221,15 @@ def test_tensornet_representation():
     mf_input = next(iter(dataset.train_dataloader())).nnp_input
     # modelforge TensorNet
     torch.manual_seed(seed)
-    model = TensorNet()
-    # model = TensorNet(representation_unit=representation_unit)
-    model.input_preparation._input_checks(mf_input)
-    pairlist_output = model.input_preparation.prepare_inputs(mf_input)
+    # load default parameters
+    config = load_configs(f"tensornet", "qm9")
+    # initialize model
+    model = TensorNet(
+        **config["potential"]["core_parameter"],
+        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+    )
+    model.compute_interacting_pairs._input_checks(mf_input)
+    pairlist_output = model.compute_interacting_pairs.prepare_inputs(mf_input)
 
     ################ modelforge TensorNet ################
     torch.manual_seed(seed)
@@ -227,10 +241,7 @@ def test_tensornet_representation():
         cutoff_lower * unit.angstrom,
         trainable_rbf,
         max_z,
-        dtype,
-        # representation_unit,
     )
-    # tensornet_representation_module = model.core_module.representation_module
     nnp_input = model.core_module._model_specific_input_preparation(
         mf_input, pairlist_output
     )
@@ -270,6 +281,7 @@ def test_tensornet_interaction():
     from modelforge.tests.precalculated_values import (
         prepare_values_for_test_tensornet_interaction,
     )
+    from modelforge.tests.test_models import load_configs
 
     seed = 0
     torch.manual_seed(seed)
@@ -282,8 +294,6 @@ def test_tensornet_interaction():
     act_class = nn.SiLU
     cutoff_lower = 0.0
     cutoff_upper = 5.1
-    dtype = torch.float32
-    # representation_unit = unit.angstrom
 
     # Set up a dataset
     # prepare reference value
@@ -304,10 +314,15 @@ def test_tensornet_interaction():
     mf_input = next(iter(dataset.train_dataloader())).nnp_input
     # modelforge TensorNet
     torch.manual_seed(seed)
-    model = TensorNet()
-    # model = TensorNet(representation_unit=unit.angstrom)
-    model.input_preparation._input_checks(mf_input)
-    pairlist_output = model.input_preparation.prepare_inputs(mf_input)
+    # load default parameters
+    config = load_configs(f"tensornet", "qm9")
+    # initialize model
+    model = TensorNet(
+        **config["potential"]["core_parameter"],
+        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+    )
+    model.compute_interacting_pairs._input_checks(mf_input)
+    pairlist_output = model.compute_interacting_pairs.prepare_inputs(mf_input)
 
     ################ modelforge TensorNet ################
     tensornet_representation_module = model.core_module.representation_module
@@ -319,12 +334,8 @@ def test_tensornet_interaction():
     radial_feature_vector = tensornet_representation_module.radial_symmetry_function(
         nnp_input.d_ij
     )
-    # _d_ij_in_representation_unit = (nnp_input.d_ij * unit.nanometer).to(representation_unit).m
-    # radial_feature_vector = tensornet_representation_module.radial_symmetry_function(
-    #     _d_ij_in_representation_unit
-    # )
     rcut_ij = tensornet_representation_module.cutoff_module(nnp_input.d_ij)
-    radial_feature_vector = radial_feature_vector * rcut_ij.unsqueeze(-1)
+    radial_feature_vector = (radial_feature_vector * rcut_ij).unsqueeze(1)
 
     total_charge = torch.zeros_like(nnp_input.atomic_numbers)
 
@@ -336,8 +347,6 @@ def test_tensornet_interaction():
         act_class,
         cutoff_upper * unit.angstrom,
         "O(3)",
-        dtype,
-        # representation_unit,
     )
     mf_X = interaction_module(
         X,
@@ -378,6 +387,6 @@ if __name__ == "__main__":
 
     # test_tensornet_input()
 
-    test_tensornet_compare_radial_symmetry_features()
+    # test_tensornet_compare_radial_symmetry_features()
 
-    # test_tensornet_representation()
+    test_tensornet_representation()

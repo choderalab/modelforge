@@ -62,11 +62,11 @@ def test_dataset_parameter_model():
 def test_convert_str_to_unit():
     # Test the validator that will automatically convert a string formated like "1.0 angstrom" to a unit.Quantity
 
-    from modelforge.potential.parameters import convert_str_to_unit
+    from modelforge.utils.units import _convert_str_to_unit
     from openff.units import unit
 
-    assert convert_str_to_unit("1.0 angstrom") == unit.Quantity("1.0 angstrom")
-    assert convert_str_to_unit(unit.Quantity("1.0 angstrom")) == unit.Quantity(
+    assert _convert_str_to_unit("1.0 angstrom") == unit.Quantity("1.0 angstrom")
+    assert _convert_str_to_unit(unit.Quantity("1.0 angstrom")) == unit.Quantity(
         "1.0 angstrom"
     )
 

@@ -736,7 +736,7 @@ class TrainingAdapter(pl.LightningModule):
 from typing import List, Optional, Union
 
 
-def read_config_and_train_pydantic_model(
+def read_config(
     condensed_config_path: Optional[str] = None,
     training_config_path: Optional[str] = None,
     dataset_config_path: Optional[str] = None,
@@ -747,7 +747,7 @@ def read_config_and_train_pydantic_model(
     number_of_nodes: Optional[int] = None,
 ):
     """
-    Reads one or more TOML configuration files and performs training based on the parameters.
+    Reads one or more TOML configuration files and loads them into the pydantic models
 
     Parameters
     ----------
@@ -771,6 +771,8 @@ def read_config_and_train_pydantic_model(
 
     Returns
     -------
+    Tuple
+        Tuple containing the potential, training, dataset, and runtime parameters.
 
     """
     import toml
@@ -818,7 +820,69 @@ def read_config_and_train_pydantic_model(
         runtime_parameters.number_of_nodes = number_of_nodes
         log.info(f"Using number of nodes: {number_of_nodes}")
 
-    perform_training_pydantic_model(
+    return (
+        potential_parameters,
+        training_parameters,
+        dataset_parameters,
+        runtime_parameters,
+    )
+
+
+def read_config_and_train(
+    condensed_config_path: Optional[str] = None,
+    training_config_path: Optional[str] = None,
+    dataset_config_path: Optional[str] = None,
+    potential_config_path: Optional[str] = None,
+    runtime_config_path: Optional[str] = None,
+    accelerator: Optional[str] = None,
+    devices: Optional[Union[int, List[int]]] = None,
+    number_of_nodes: Optional[int] = None,
+):
+    """
+    Reads one or more TOML configuration files and performs training based on the parameters.
+
+    Parameters
+    ----------
+    condensed_config_path : str, optional
+        Path to the TOML configuration that contains all parameters for the dataset, potential, training, and runtime parameters.
+        Any other provided configuration files will be ignored.
+    training_config_path : str, optional
+        Path to the TOML file defining the training parameters.
+    dataset_config_path : str, optional
+        Path to the TOML file defining the dataset parameters.
+    potential_config_path : str, optional
+        Path to the TOML file defining the potential parameters.
+    runtime_config_path : str, optional
+        Path to the TOML file defining the runtime parameters.
+    accelerator : str, optional
+        Accelerator type to use.  If provided, this  overrides the accelerator type in the runtime_defaults configuration.
+    devices : int|List[int], optional
+        Device index/indices to use.  If provided, this overrides the devices in the runtime_defaults configuration.
+    number_of_nodes : int, optional
+        Number of nodes to use.  If provided, this overrides the number of nodes in the runtime_defaults configuration.
+
+    Returns
+    -------
+
+    """
+
+    (
+        potential_parameters,
+        training_parameters,
+        dataset_parameters,
+        runtime_parameters,
+    ) = read_config(
+        condensed_config_path,
+        training_config_path,
+        dataset_config_path,
+        potential_config_path,
+        runtime_config_path,
+        accelerator,
+        devices,
+        number_of_nodes,
+    )
+
+    perform_training(
         potential_parameters=potential_parameters,
         training_parameters=training_parameters,
         dataset_parameters=dataset_parameters,
@@ -876,10 +940,6 @@ def perform_training(
     from lightning import Trainer
     from modelforge.potential import NeuralNetworkPotentialFactory
     from modelforge.dataset.dataset import DataModule
-
-    # log_training_arguments(
-    #     potential_config, training_config, dataset_config, runtime_config
-    # )
 
     # set up tensor board logger
     if training_config.experiment_logger.logger_name == "tensorboard":

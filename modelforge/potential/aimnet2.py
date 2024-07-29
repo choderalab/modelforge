@@ -87,7 +87,7 @@ class AIMNet2NeuralNetworkData(NeuralNetworkData):
 
     Examples
     --------
-    >>> inputs = SchnetNeuralNetworkInput(
+    >>> inputs = AIMNet2NeuralNetworkInput(
     ...     pair_indices=torch.tensor([[0, 1], [0, 2], [1, 2]]),
     ...     d_ij=torch.tensor([1.0, 1.0, 1.0]),
     ...     r_ij=torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),
@@ -114,12 +114,11 @@ class AIMNet2Core(CoreNetwork):
         number_of_atom_features: int = 64,
         number_of_radial_basis_functions: int = 20,
         number_of_interaction_modules: int = 3,
-        number_of_filters: int = 64,
         shared_interactions: bool = False,
         cutoff: unit.Quantity = 5.0 * unit.angstrom,
     ) -> None:
         """
-        Initialize the SchNet class.
+        Initialize the AIMNet2 class.
 
         Parameters
         ----------
@@ -128,15 +127,39 @@ class AIMNet2Core(CoreNetwork):
         number_of_atom_features : int, default=64
             Dimension of the embedding vectors for atomic numbers.
         number_of_radial_basis_functions:int, default=16
-        number_of_interaction_modules : int, default=2
+        number_of_interaction_modules : int, default=3
         cutoff : openff.units.unit.Quantity, default=5*unit.angstrom
             The cutoff distance for interactions.
         """
 
-        # classes that are modelspecific
-        self.atomic_number_embedding = None
-        self.representation_module = None
-        self.interaction_module = None
+        from modelforge.potential.utils import Embedding
+
+        super().__init__()
+
+        self.embedding_module = Embedding(max_Z, self.number_of_atom_features)
+
+        self.representation_module = AIMNet2Representation(
+            cutoff, number_of_radial_basis_functions
+        )
+
+        self.interaction_modules = nn.ModuleList(
+            [
+                # first pass
+                AIMNet2InteractionModule(
+                    number_of_atom_features,
+                    number_of_radial_basis_functions,
+                    first_pass=True,
+                ),
+            ]  # all other passes (num - 1)
+            + [
+                AIMNet2InteractionModule(
+                    number_of_atom_features,
+                    number_of_radial_basis_functions,
+                    first_pass=False,
+                ),
+            ]
+            * (number_of_interaction_modules - 1)
+        )
 
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
@@ -153,9 +176,7 @@ class AIMNet2Core(CoreNetwork):
             atomic_numbers=data.atomic_numbers,
             atomic_subsystem_indices=data.atomic_subsystem_indices,
             total_charge=data.total_charge,
-            atomic_embedding=self.embedding_module(
-                data.atomic_numbers
-            ),  # atom embedding
+            atomic_embedding=self.embedding_module(data.atomic_numbers),
         )
 
         return nnp_input
@@ -175,17 +196,98 @@ class AIMNet2Core(CoreNetwork):
         Dict[str, torch.Tensor]
             Calculated energies; shape (nr_systems,).
         """
-        pass
+
+        representation = self.representation_module(data.d_ij)
+
+        data.f_ij = representation["f_ij"]
+        data.f_cutoff = representation["f_cutoff"]
+
+        # Atomic embedding "a" Eqn. (3)
+        embedding = data.atomic_embedding
+
+        # first pass
+        delta_a, partial_point_charges = self.interaction_modules(
+            embedding,
+            data.pair_indices,
+            data.f_ij,
+            data.f_cutoff,
+        )
+
+        embedding += delta_a
+
+        # subsequent passes
+        for interaction in self.interaction_modules[1:]:
+            delta_a, delta_q = interaction(
+                embedding,
+                data.pair_indices,
+                data.f_ij,
+                data.f_cutoff,
+            )
+            embedding += delta_a
+            # TODO: implement nqe
+            self.nqe(partial_point_charges, delta_q)
+
+        raise NotImplementedError
+
+    def nqe(self, partial_point_charges, delta_q):
+        raise NotImplementedError
 
 
-class AimNet2Representation(nn.Module):
+class AIMNet2InteractionModule(nn.Module):
+
+    def __init__(
+        self,
+        number_of_atom_features: int,
+        number_of_radial_basis_functions: int,
+        first_pass: bool = False,
+    ):
+        super().__init__()
+
+        # if this is the first pass, charge information is not needed
+        self.first_pass = first_pass
+
+        # TODO: include assertions like those found in schnet?
+        self.number_of_atomic_features = number_of_atom_features
+        self.input_to_feature = None
+        self.feature_to_output = None
+
+    def forward(
+        self,
+        # input_features: torch.Tensor,
+        pairlist: torch.Tensor,
+        f_ij: torch.Tensor,  # this is already from the representation, radial symmetry function module with distances preloaded
+        f_cutoff: torch.Tensor,  # cutoff module with the distances preloaded
+        atomic_embedding: torch.Tensor,  # outputs need to be the same shape of atomic_embedding, [N_atoms, atom_basis (100?)]
+        partial_point_charges: Optional[torch.Tensor] = None,
+    ):
+
+        # NOTE: fixed "a" (atomic_embedding) and "q" (partial_point_charges)
+        # if partial_point_charges is None, then we know we're in the first
+        # pass
+
+        # Eqn (2)
+        g = f_ij * f_cutoff
+
+        idx_i, idx_j = pairlist[0], pairlist[1]
+
+        # required in all passes
+        v_radial_atomic, v_vector_atomic = None, None
+
+        # required in 1 + i passes
+        if partial_point_charges:
+            v_radial_charge, v_vector_charge = None, None
+
+        raise NotImplementedError
+
+
+class AIMNet2Representation(nn.Module):
     def __init__(
         self,
         radial_cutoff: unit.Quantity,
         number_of_radial_basis_functions: int,
     ):
         """
-        Initialize the SchNet representation layer.
+        Initialize the AIMNet2 representation layer.
 
         Parameters
         ----------
@@ -204,11 +306,7 @@ class AimNet2Representation(nn.Module):
     def _setup_radial_symmetry_functions(
         self, radial_cutoff: unit.Quantity, number_of_radial_basis_functions: int
     ):
-        # NOTE: for now we are using SchNET radial symmetry function, this
-        # should be replaced with the AIMNet2 radial symmetry function
-        from .utils import SchnetRadialSymmetryFunction
-
-        radial_symmetry_function = SchnetRadialSymmetryFunction(
+        radial_symmetry_function = AIMNet2RadialSymmetryFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             max_distance=radial_cutoff,
             dtype=torch.float32,
@@ -249,7 +347,6 @@ class AIMNet2(BaseNetwork):
         number_of_radial_basis_functions: int,
         number_of_interaction_modules: int,
         cutoff: unit.Quantity,
-        number_of_filters: int,
         shared_interactions: bool,
         processing_operation: List[Dict[str, str]],
         readout_operation: List[Dict[str, str]],
@@ -283,7 +380,6 @@ class AIMNet2(BaseNetwork):
             number_of_atom_features=number_of_atom_features,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             number_of_interaction_modules=number_of_interaction_modules,
-            number_of_filters=number_of_filters,
             shared_interactions=shared_interactions,
         )
         self.only_unique_pairs = False  # NOTE: for pairlist

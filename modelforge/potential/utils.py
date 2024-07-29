@@ -1177,6 +1177,81 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
         ) / self.radial_scale_factor
 
 
+class TensorNetRadialBasisFunction(PhysNetRadialBasisFunction):
+    def __init__(
+            self,
+            number_of_radial_basis_functions: int,
+            max_distance: unit.Quantity,
+            min_distance: unit.Quantity = 0.0 * unit.nanometer,
+            alpha: unit.Quantity = 1.0 * unit.angstrom,
+            dtype: torch.dtype = torch.float32,
+            trainable_centers_and_scale_factors: bool = False,
+    ):
+        super().__init__(
+            number_of_radial_basis_functions,
+            max_distance,
+            min_distance,
+            alpha,
+            dtype,
+            trainable_centers_and_scale_factors,
+        )
+
+    @staticmethod
+    def calculate_radial_basis_centers(
+            number_of_radial_basis_functions,
+            max_distance,
+            min_distance,
+            alpha,
+            dtype,
+    ):
+        alpha = 1 * unit.angstrom
+        start_value = torch.exp(
+            torch.scalar_tensor(
+                ((-max_distance + min_distance) / alpha).to("").m,
+                dtype=dtype,
+            )
+        )
+        centers = torch.linspace(
+            start_value, 1, number_of_radial_basis_functions, dtype=dtype
+        )
+        return centers
+
+    @staticmethod
+    def calculate_radial_scale_factor(
+            number_of_radial_basis_functions,
+            max_distance,
+            min_distance,
+            alpha,
+            dtype,
+    ):
+        alpha = 1 * unit.angstrom
+        start_value = torch.exp(
+            torch.scalar_tensor(
+                ((-max_distance + min_distance) / alpha).to("").m
+            )
+        )
+        radial_scale_factor = torch.full(
+            (number_of_radial_basis_functions,),
+            2 / number_of_radial_basis_functions * (1 - start_value),
+            dtype=dtype,
+            )
+
+        return radial_scale_factor
+
+    def nondimensionalize_distances(self, distances: torch.Tensor) -> torch.Tensor:
+        # Transformation within the outer exp of PhysNet Eq. 7
+        # NOTE: the PhysNet paper implicitly multiplies by 1/Angstrom within the inner exp but distances are in
+        # nanometers, so we multiply by 10/nanometer
+
+        return (
+                torch.exp(
+                    (-distances + self._min_distance_in_nanometer)
+                    / self._alpha_in_nanometer
+                )
+                - self.radial_basis_centers
+        ) / self.radial_scale_factor
+
+
 def pair_list(
     atomic_subsystem_indices: torch.Tensor,
     only_unique_pairs: bool = False,

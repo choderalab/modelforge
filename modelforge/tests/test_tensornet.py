@@ -129,7 +129,7 @@ def test_tensornet_compare_radial_symmetry_features():
     from openff.units import unit
 
     from modelforge.potential.utils import CosineCutoff
-    from modelforge.potential.utils import PhysNetRadialBasisFunction
+    from modelforge.potential.utils import TensorNetRadialBasisFunction
     from modelforge.tests.precalculated_values import (
         prepare_values_for_test_tensornet_compare_radial_symmetry_features,
     )
@@ -144,14 +144,15 @@ def test_tensornet_compare_radial_symmetry_features():
     d_ij = torch.rand(5, 1) * 5  # NOTE: angstrom
 
     # TensorNet constants
-    radial_cutoff = 5.0
+    radial_cutoff = 5.1
     radial_start = 0.0  # cutoff_lower also affect cutoff function in torchmd-net
     radial_dist_divisions = 8
 
-    rsf = PhysNetRadialBasisFunction(
+    rsf = TensorNetRadialBasisFunction(
         number_of_radial_basis_functions=radial_dist_divisions,
         max_distance=radial_cutoff * unit.angstrom,
         min_distance=radial_start * unit.angstrom,
+        alpha=((radial_cutoff - radial_start) / 5.0 * unit.angstrom),
     )
     mf_r = rsf(d_ij / 10)  # torch.Size([5, 8]) # NOTE: nanometer
     cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom)
@@ -192,7 +193,7 @@ def test_tensornet_representation():
     torch.manual_seed(seed)
 
     reference_data = "modelforge/tests/data/tensornet_representation.pt"
-    reference_data = None
+    # reference_data = None
 
     hidden_channels = 8
     num_rbf = 16
@@ -387,6 +388,6 @@ if __name__ == "__main__":
 
     # test_tensornet_input()
 
-    # test_tensornet_compare_radial_symmetry_features()
+    test_tensornet_compare_radial_symmetry_features()
 
     test_tensornet_representation()

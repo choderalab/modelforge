@@ -15,9 +15,9 @@ from modelforge.potential.models import ComputeInteractingAtomPairs
 from modelforge.potential.models import BaseNetwork
 from modelforge.potential.models import CoreNetwork
 from modelforge.potential.utils import CosineCutoff
-from modelforge.potential.utils import PhysNetRadialBasisFunction
 from modelforge.potential.utils import NeuralNetworkData
 from modelforge.potential.utils import NNPInput
+from modelforge.potential.utils import TensorNetRadialBasisFunction
 from .models import PairListOutputs
 from ..utils.units import _convert
 
@@ -219,11 +219,11 @@ class TensorNetRepresentation(torch.nn.Module):
 
         self.cutoff_module = CosineCutoff(radial_max_distance)
 
-        self.radial_symmetry_function = PhysNetRadialBasisFunction(
+        self.radial_symmetry_function = TensorNetRadialBasisFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             max_distance=radial_max_distance,
             min_distance=radial_min_distance,
-            alpha=(1.0 * unit.angstrom),  # TensorNet uses angstrom
+            alpha=((radial_max_distance - radial_min_distance) / 5.0),  # TensorNet uses angstrom
             trainable_centers_and_scale_factors=trainable_centers_and_scale_factors,
         )
         self.rsf_projection_I = nn.Linear(

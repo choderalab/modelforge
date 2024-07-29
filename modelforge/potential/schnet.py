@@ -389,7 +389,7 @@ class SchNETRepresentation(nn.Module):
 
 
 from typing import List, Union
-from modelforge.utils.units import _convert
+from modelforge.utils.units import _convert_str_to_unit
 from modelforge.utils.io import import_
 from modelforge.potential.utils import shared_config_prior
 
@@ -442,7 +442,7 @@ class SchNet(BaseNetwork):
         super().__init__(
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=postprocessing_parameter,
-            cutoff=_convert(cutoff),
+            cutoff=_convert_str_to_unit(cutoff),
         )
 
         self.core_module = SchNetCore(
@@ -451,7 +451,7 @@ class SchNet(BaseNetwork):
             number_of_interaction_modules=number_of_interaction_modules,
             number_of_filters=number_of_filters,
             shared_interactions=shared_interactions,
-            cutoff=_convert(cutoff),
+            cutoff=_convert_str_to_unit(cutoff),
         )
 
     def _config_prior(self):

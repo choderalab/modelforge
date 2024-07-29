@@ -1,6 +1,7 @@
 from pydantic import BaseModel, field_validator, ConfigDict
 from openff.units import unit
 from typing import Union, List
+from modelforge.utils.units import _convert_str_to_unit
 
 """
 This module contains pydantic models for storing the parameters of 
@@ -13,13 +14,6 @@ class ParametersBase(BaseModel):
     model_config = ConfigDict(
         use_enum_values=True, arbitrary_types_allowed=True, validate_assignment=True
     )
-
-
-# define a reusable validator for converting string to unit.Quantity
-def convert_str_to_unit(value: Union[str, unit.Quantity]) -> unit.Quantity:
-    if isinstance(value, str):
-        return unit.Quantity(value)
-    return value
 
 
 # these will all be set by default to false
@@ -50,7 +44,7 @@ class ANI2xParameters(ParametersBase):
             "radial_min_distance",
             "angular_max_distance",
             "angular_min_distance",
-        )(convert_str_to_unit)
+        )(_convert_str_to_unit)
 
     class PostProcessingParameter(ParametersBase):
         per_atom_energy: PerAtomEnergy = PerAtomEnergy()
@@ -77,7 +71,7 @@ class SchNetParameters(ParametersBase):
         shared_interactions: bool
         featurization: Featurization
 
-        converted_units = field_validator("cutoff")(convert_str_to_unit)
+        converted_units = field_validator("cutoff")(_convert_str_to_unit)
 
     class PostProcessingParameter(ParametersBase):
         per_atom_energy: PerAtomEnergy = PerAtomEnergy()
@@ -104,7 +98,7 @@ class PaiNNParameters(ParametersBase):
         shared_filters: bool
         featurization: Featurization
 
-        converted_units = field_validator("cutoff")(convert_str_to_unit)
+        converted_units = field_validator("cutoff")(_convert_str_to_unit)
 
     class PostProcessingParameter(ParametersBase):
         per_atom_energy: PerAtomEnergy = PerAtomEnergy()
@@ -130,7 +124,7 @@ class PhysNetParameters(ParametersBase):
         number_of_modules: int
         featurization: Featurization
 
-        converted_units = field_validator("cutoff")(convert_str_to_unit)
+        converted_units = field_validator("cutoff")(_convert_str_to_unit)
 
     class PostProcessingParameter(ParametersBase):
         per_atom_energy: PerAtomEnergy = PerAtomEnergy()
@@ -156,7 +150,7 @@ class SAKEParameters(ParametersBase):
         number_of_spatial_attention_heads: int
         featurization: Featurization
 
-        converted_units = field_validator("cutoff")(convert_str_to_unit)
+        converted_units = field_validator("cutoff")(_convert_str_to_unit)
 
     class PostProcessingParameter(ParametersBase):
         per_atom_energy: PerAtomEnergy = PerAtomEnergy()

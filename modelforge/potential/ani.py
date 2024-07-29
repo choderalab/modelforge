@@ -573,22 +573,22 @@ class ANI2x(BaseNetwork):
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
 
-        from modelforge.utils.units import _convert
+        from modelforge.utils.units import _convert_str_to_unit
 
         self.only_unique_pairs = True  # NOTE: need to be set before super().__init__
 
         super().__init__(
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=postprocessing_parameter,
-            cutoff=_convert(radial_max_distance),
+            cutoff=_convert_str_to_unit(radial_max_distance),
         )
 
         self.core_module = ANI2xCore(
-            _convert(radial_max_distance),
-            _convert(radial_min_distance),
+            _convert_str_to_unit(radial_max_distance),
+            _convert_str_to_unit(radial_min_distance),
             number_of_radial_basis_functions,
-            _convert(angular_max_distance),
-            _convert(angular_min_distance),
+            _convert_str_to_unit(angular_max_distance),
+            _convert_str_to_unit(angular_min_distance),
             angular_dist_divisions,
             angle_sections,
         )

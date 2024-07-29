@@ -910,7 +910,7 @@ class BaseNetwork(Module):
         """
 
         super().__init__()
-        from modelforge.utils.units import _convert
+        from modelforge.utils.units import _convert_str_to_unit
 
         self.postprocessing = PostProcessing(
             postprocessing_parameter, dataset_statistic
@@ -922,7 +922,8 @@ class BaseNetwork(Module):
                 "The only_unique_pairs attribute is not set in the child class. Please set it to True or False before calling super().__init__."
             )
         self.compute_interacting_pairs = ComputeInteractingAtomPairs(
-            cutoff=_convert(cutoff), only_unique_pairs=self.only_unique_pairs
+            cutoff=_convert_str_to_unit(cutoff),
+            only_unique_pairs=self.only_unique_pairs,
         )
 
     def load_state_dict(

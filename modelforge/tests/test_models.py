@@ -275,7 +275,7 @@ def test_dataset_statistic(potential_name):
         dataset_statistic["training_dataset_statistics"]["per_atom_energy_mean"]
     ).m
 
-    # set up runtime_defaults model
+    # set up training model
     training_adapter = NeuralNetworkPotentialFactory.generate_model(
         use="training",
         simulation_environment="PyTorch",

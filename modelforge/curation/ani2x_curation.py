@@ -176,7 +176,7 @@ class ANI2xCuration(DatasetCuration):
                 # may not be true, e.g., isomers, etc. (although, if generated from SMILES they will more than likely
                 # be in a different order). However, this is a reasonable way to subdivide the dataset.
                 # I'll note that this is purely a data organization issue, and not a problem with the data itself,
-                # and ultimately will not affect the results of runtime_defaults with this model.
+                # and ultimately will not affect the results of training with this model.
 
                 import numpy as np
 

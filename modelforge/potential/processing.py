@@ -279,7 +279,7 @@ class CalculateAtomicSelfEnergy(torch.nn.Module):
         self, atomic_self_energies: Dict[str, Union[unit.Quantity, str]]
     ) -> None:
         """
-        Calculates the atomic self energy for each molecule given the atomic self energies provided by the runtime_defaults dataset and the element information.
+        Calculates the atomic self energy for each molecule given the atomic self energies provided by the training dataset and the element information.
 
 
         Parameters

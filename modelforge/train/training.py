@@ -747,7 +747,7 @@ def read_config_and_train_pydantic_model(
     number_of_nodes: Optional[int] = None,
 ):
     """
-    Reads one or more TOML configuration files and performs runtime_defaults based on the parameters.
+    Reads one or more TOML configuration files and performs training based on the parameters.
 
     Parameters
     ----------
@@ -853,7 +853,7 @@ def perform_training(
     runtime_config: RuntimeParameters,
 ) -> Trainer:
     """
-    Performs the runtime_defaults process for a neural network potential model.
+    Performs the training process for a neural network potential model.
 
     Parameters
     ----------
@@ -980,7 +980,7 @@ def perform_training(
         checkpoint_path = None
     else:
         checkpoint_path = runtime_config.checkpoint_path
-    # Run runtime_defaults loop and validate
+    # Run training loop and validate
     trainer.fit(
         model,
         train_dataloaders=dm.train_dataloader(

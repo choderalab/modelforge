@@ -4,7 +4,7 @@ from typing import Dict, Any
 
 
 def perform_training(trainer, model, dm):
-    # Run runtime_defaults loop and validate
+    # Run training loop and validate
     trainer.fit(
         model,
         train_dataloaders=dm.train_dataloader(),

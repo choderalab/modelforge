@@ -153,7 +153,7 @@ class PhysNetResidual(nn.Module):
 
     The block refines atomic feature vectors by adding a residual component computed through
     two linear transformations and a non-linear activation function (Softplus). This setup
-    enhances gradient flow and supports effective deep network runtime_defaults by employing a
+    enhances gradient flow and supports effective deep network training by employing a
     preactivation scheme.
 
     Parameters:
@@ -420,8 +420,8 @@ class PhysNetCore(CoreNetwork):
 
         Parameters
         ----------
-        featurization_config: Dict[str, Union[List[str], int]],        
-        
+        featurization_config: Dict[str, Union[List[str], int]],
+
         cutoff : openff.units.unit.Quantity
             The cutoff distance for interactions.
         number_of_modules : int
@@ -640,7 +640,6 @@ class PhysNet(BaseNetwork):
 
         tune = import_("ray").tune
         # from ray import tune
-
 
         prior = {
             "number_of_per_atom_features": tune.randint(2, 256),

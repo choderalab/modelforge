@@ -579,7 +579,7 @@ def test_dataset_generation(dataset_name, datamodule_factory):
         pass
 
     # the dataloader automatically splits and batches the dataset
-    # for the runtime_defaults set it batches the 800 runtime_defaults datapoints (of 1000 total) in 13 batches
+    # for the training set it batches the 800 training datapoints (of 1000 total) in 13 batches
     # all with 64 points until the last which has 32
 
     assert len(train_dataloader) == 13  # nr of batches

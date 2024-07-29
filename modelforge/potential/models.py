@@ -527,7 +527,7 @@ class PyTorch2JAXConverter:
 
 class NeuralNetworkPotentialFactory:
     """
-    Factory class for creating instances of neural network potentials for runtime_defaults/inference.
+    Factory class for creating instances of neural network potentials for training/inference.
     """
 
     @staticmethod
@@ -540,18 +540,18 @@ class NeuralNetworkPotentialFactory:
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> Union[Type[torch.nn.Module], Type[JAXModel], Type[pl.LightningModule]]:
         """
-        Creates an NNP instance of the specified type, configured either for runtime_defaults or inference.
+        Creates an NNP instance of the specified type, configured either for training or inference.
 
         Parameters
         ----------
         use : str
-            The use case for the model instance, either 'runtime_defaults' or 'inference'.
+            The use case for the model instance, either 'training' or 'inference'.
         simulation_environment : str
             The ML framework to use, either 'PyTorch' or 'JAX'.
         model_parameter : dict, optional
             Parameters specific to the model, by default {}.
         training_parameter : dict, optional
-            Parameters for configuring the runtime_defaults, by default {}.
+            Parameters for configuring the training, by default {}.
 
         Returns
         -------
@@ -572,7 +572,7 @@ class NeuralNetworkPotentialFactory:
         log.debug(f"{training_parameter=}")
         log.debug(f"{model_parameter=}")
 
-        # obtain model for runtime_defaults
+        # obtain model for training
         if use == "training":
             if simulation_environment == "JAX":
                 log.warning(

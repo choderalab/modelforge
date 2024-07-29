@@ -16,16 +16,7 @@ if TYPE_CHECKING:
     from modelforge.potential.processing import AtomicSelfEnergies
 
 
-# __all__ = [
-#     "BatchData",
-#     "HDF5Dataset",
-#     "NNPInput",
-#     "Metadata",
-#     "TorchDataset",
-#     "DatasetParameters",
-# ]
-
-from pydantic import BaseModel, field_validator, ConfigDict
+from pydantic import BaseModel, field_validator, ConfigDict, Field
 
 
 class DatasetParameters(BaseModel):
@@ -46,15 +37,8 @@ class DatasetParameters(BaseModel):
 
     dataset_name: str
     version_select: str
-    num_workers: int
+    num_workers: int = Field(gt=0)
     pin_memory: bool
-
-    @field_validator("num_workers")
-    @classmethod
-    def check_num_workers(cls, v):
-        if v < 1:
-            raise ValueError("num_workers must be greater than or equal to 1")
-        return v
 
 
 @dataclass(frozen=False)
@@ -1385,12 +1369,12 @@ class DataModule(pl.LightningDataModule):
         self, num_workers: int = 4, shuffle: bool = True, pin_memory: bool = False
     ) -> DataLoader:
         """
-        Create a DataLoader for the runtime_defaults dataset.
+        Create a DataLoader for the training dataset.
 
         Returns
         -------
         DataLoader
-            DataLoader containing the runtime_defaults dataset.
+            DataLoader containing the training dataset.
         """
         return DataLoader(
             self.train_dataset,

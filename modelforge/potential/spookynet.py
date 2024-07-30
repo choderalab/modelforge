@@ -180,7 +180,7 @@ class SpookyNetCore(CoreNetwork):
         atomic_embedding = self.atomic_embedding_module(data.atomic_numbers)
 
         charge_embedding = self.charge_embedding_module(
-            atomic_embedding, data.total_charge
+            atomic_embedding, data.total_charge, data.atomic_subsystem_indices
         )
 
         nnp_input = SpookyNetNeuralNetworkData(
@@ -482,6 +482,7 @@ class ElectronicEmbedding(nn.Module):
             self,
             x: torch.Tensor,
             E: torch.Tensor,
+            atomic_subsystem_indices: torch.Tensor,
             eps: float = 1e-8,
     ) -> torch.Tensor:
         """
@@ -491,12 +492,16 @@ class ElectronicEmbedding(nn.Module):
         x (FloatTensor [N, num_features]):
             Atomic feature vectors.
         """
+        ic(E.shape)
         q = self.linear_q(x)  # queries
+        ic(q.shape)
         e = F.relu(torch.stack([E, -E], dim=-1))  # charges are duplicated to use separate weights for +/-
-        enorm = torch.clamp(e, min=1)
-        k = self.linear_k(e / enorm)  # keys
-        v = self.linear_v(e)  # values
-        dot = torch.einsum("nf,nf->n", k, q) / k.shape[-1] ** 0.5  # scaled dot product
+        ic(e.shape)
+        k = self.linear_k(e / torch.clamp(e, min=1))[atomic_subsystem_indices]  # keys
+        ic(k.shape)
+        v = self.linear_v(e)[atomic_subsystem_indices]  # values
+        ic(v.shape)
+        dot = torch.einsum("nf,nf->n", k, q) / math.sqrt(k.shape[-1])  # scaled dot product
         a = nn.functional.softplus(dot)  # unnormalized attention weights
         a_normalized = a / (a.sum(-1) + eps)  # TODO: why is this needed? shouldn't softplus add up to 1?
         return self.resblock(torch.einsum("n,nf->nf", a_normalized, v))
@@ -985,8 +990,18 @@ class SpookyNetAttention(nn.Module):
         """
         Q = self._phi(Q, True)  # random projection of Q
         K = self._phi(K, False)  # random projection of K
-        norm = Q @ torch.sum(K, 0, keepdim=True).T + eps
-        return (Q @ (K.T @ V)) / norm
+        ic(Q.shape)
+        ic(K.shape)
+        ic(V.shape)
+        ic(torch.sum(K, 0, keepdim=True).T)
+        norm = torch.einsum("nf,f->n", Q, torch.sum(K, dim=0)) + eps
+        ic(norm.shape)
+        # n: number of atoms, F: dim_qk, f: value features
+        rv = torch.einsum("nF,nF,nf->nf", Q, K, V) / norm.unsqueeze(-1)
+        ic((K.T @ V).shape)
+        ic((Q @ (K.T @ V)).shape)
+        ic(rv.shape)
+        return rv
 
 
 class SpookyNetNonlocalInteraction(nn.Module):

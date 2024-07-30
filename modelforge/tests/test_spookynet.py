@@ -1,3 +1,4 @@
+from modelforge.dataset.dataset import NNPInput
 from modelforge.potential.spookynet import SpookyNet
 from spookynet import SpookyNet as RefSpookyNet
 from modelforge.tests.precalculated_values import (
@@ -41,7 +42,7 @@ def test_forward():
     config = load_configs(f"spookynet", "qm9")
 
     # override default parameters
-    config["potential"]["core_parameter"]["number_of_atom_features"] = 12
+    config["potential"]["core_parameter"]["number_of_atom_features"] = 11
     config["potential"]["core_parameter"]["number_of_radial_basis_functions"] = 7
     config["potential"]["core_parameter"]["number_of_residual_blocks"] = 1
     config["potential"]["core_parameter"]["number_of_interaction_modules"] = 1
@@ -57,14 +58,25 @@ def test_forward():
         postprocessing_parameter=config["potential"]["postprocessing_parameter"],
     ).double()
 
-    input = setup_single_methane_input()
-    model_input = input["modelforge_methane_input"]
+    single_methane = setup_single_methane_input()["modelforge_methane_input"]
+    model_input = NNPInput(
+        atomic_numbers=torch.cat([single_methane.atomic_numbers] * 2, dim=0),
+        positions=torch.cat([single_methane.positions] * 2, dim=0),
+        atomic_subsystem_indices=torch.tensor([0, 0, 0, 0, 0, 1, 1, 1, 1, 1]),
+        total_charge=torch.cat([single_methane.total_charge] * 2, dim=0),
+    )
+    print(f"{torch.tensor([0, 0, 0, 0, 0, 1, 1, 1, 1, 1], dtype=torch.int64).dtype=}")
+    print(f"test: {model_input.atomic_subsystem_indices.dtype=}")
+    ic(model_input)
     model_input.positions = model_input.positions.double()
     model_input.total_charge = model_input.total_charge.double()
 
+    print(f"test: {model_input.atomic_subsystem_indices.dtype=}")
     spookynet.input_preparation._input_checks(model_input)
 
+    print(f"test: {model_input.atomic_subsystem_indices.dtype=}")
     pairlist_output = spookynet.input_preparation.prepare_inputs(model_input)
+    print(f"test: {model_input.atomic_subsystem_indices.dtype=}")
     calculated_results = spookynet.core_module.forward(model_input, pairlist_output)
 
     ref_spookynet = RefSpookyNet(
@@ -91,10 +103,8 @@ def test_forward():
 
     spookynet.core_module.interaction_modules[0].local_interaction.resblock_d.residual.stack[0].activation2.beta = \
     ref_spookynet.module[0].local_interaction.resblock_d.residual.stack[0].activation2.beta
-    for name, param in spookynet.named_parameters():
-        print(name)
 
-    for param in spookynet.parameters():
+    for param in ref_spookynet.parameters():
         torch.nn.init.normal_(param, 5.0, 3.0)
 
     spookynet.core_module.atomic_shift = ref_spookynet.element_bias
@@ -383,13 +393,20 @@ def test_forward():
         0].resblock.activation.beta
     spookynet.core_module.interaction_modules[0].resblock.linear.weight = ref_spookynet.module[0].resblock.linear.weight
     spookynet.core_module.interaction_modules[0].resblock.linear.bias = ref_spookynet.module[0].resblock.linear.bias
+    spookynet.core_module.energy_and_charge_readout.weight = ref_spookynet.output.weight
 
+    ref_spookynet.train()
+
+    # TODO: how are multiple systems passed into the reference SpookyNet
+    print(f"test: {model_input.atomic_subsystem_indices.dtype=}")
     reference_calculated_results = ref_spookynet(
         model_input.atomic_numbers,
         model_input.total_charge,
         (model_input.positions * unit.nanometer).m_as(unit.angstrom),
         pairlist_output.pair_indices[0],
         pairlist_output.pair_indices[1],
+        batch_seg=model_input.atomic_subsystem_indices.long(),
+        num_batch=2,
     )
 
     ic(calculated_results.keys())

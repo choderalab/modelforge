@@ -1,5 +1,5 @@
 [potential]
-model_name = "TensorNet"
+potential_name = "TensorNet"
 
 [potential.core_parameter]
 hidden_channels = 8

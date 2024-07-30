@@ -1,25 +1,27 @@
 def test_init():
     """Test initialization of the TensorNet model."""
     from modelforge.potential.tensornet import TensorNet
-    from modelforge.tests.test_models import load_configs
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
     # load default parameters
-    config = load_configs(f"tensornet", "qm9")
+    config = load_configs_into_pydantic_models(f"tensornet", "qm9")
     # initialize model
     tensornet = TensorNet(
-        **config["potential"]["core_parameter"],
-        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+        **config["potential"].model_dump()["core_parameter"],
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
     )
     assert tensornet is not None, "TensorNet model should be initialized."
 
 
-def test_tensornet_forward():  # TODO
+def test_forward():  # TODO
     import torch
 
     from modelforge.dataset.dataset import DataModule
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
     from modelforge.potential.tensornet import TensorNet
-    from modelforge.tests.test_models import load_configs
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
     seed = 0
     torch.manual_seed(seed)
@@ -43,16 +45,18 @@ def test_tensornet_forward():  # TODO
     batch = next(iter(dataset.train_dataloader())).nnp_input
 
     # load default parameters
-    config = load_configs(f"tensornet", "qm9")
+    config = load_configs_into_pydantic_models(f"tensornet", "qm9")
     # initialize model
     tensornet = TensorNet(
-        **config["potential"]["core_parameter"],
-        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+        **config["potential"].model_dump()["core_parameter"],
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
     )
     tensornet(batch)
 
 
-def test_tensornet_input():
+def test_input():
     import torch
     from openff.units import unit
 
@@ -62,7 +66,7 @@ def test_tensornet_input():
     from modelforge.tests.precalculated_values import (
         prepare_values_for_test_tensornet_input,
     )
-    from modelforge.tests.test_models import load_configs
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
     seed = 0
     torch.manual_seed(seed)
@@ -89,14 +93,16 @@ def test_tensornet_input():
     mf_input = next(iter(dataset.train_dataloader())).nnp_input
     # modelforge TensorNet
     # load default parameters
-    config = load_configs(f"tensornet", "qm9")
+    config = load_configs_into_pydantic_models(f"tensornet", "qm9")
     # initialize model
-    model = TensorNet(
-        **config["potential"]["core_parameter"],
-        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+    tensornet = TensorNet(
+        **config["potential"].model_dump()["core_parameter"],
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
     )
-    model.compute_interacting_pairs._input_checks(mf_input)
-    pairlist_output = model.compute_interacting_pairs.prepare_inputs(mf_input)
+    tensornet.compute_interacting_pairs._input_checks(mf_input)
+    pairlist_output = tensornet.compute_interacting_pairs.prepare_inputs(mf_input)
 
     # torchmd-net TensorNet
     if reference_data:
@@ -118,7 +124,7 @@ def test_tensornet_input():
         assert torch.allclose(pairlist_output.r_ij[_], -edge_vec[idx])
 
 
-def test_tensornet_compare_radial_symmetry_features():
+def test_compare_radial_symmetry_features():
     # Compare the TensorNet radial symmetry function
     # to the output of the modelforge radial symmetry function
     # TODO: only 'expnorm' from TensorNet implemented
@@ -173,7 +179,7 @@ def test_tensornet_compare_radial_symmetry_features():
     assert torch.allclose(mf_r, tn_r)
 
 
-def test_tensornet_representation():
+def test_representation():
     import torch
     from openff.units import unit
     from torch import nn
@@ -185,7 +191,7 @@ def test_tensornet_representation():
     from modelforge.tests.precalculated_values import (
         prepare_values_for_test_tensornet_representation,
     )
-    from modelforge.tests.test_models import load_configs
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
     seed = 0
     torch.manual_seed(seed)
@@ -221,14 +227,16 @@ def test_tensornet_representation():
     # modelforge TensorNet
     torch.manual_seed(seed)
     # load default parameters
-    config = load_configs(f"tensornet", "qm9")
+    config = load_configs_into_pydantic_models(f"tensornet", "qm9")
     # initialize model
-    model = TensorNet(
-        **config["potential"]["core_parameter"],
-        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+    tensornet = TensorNet(
+        **config["potential"].model_dump()["core_parameter"],
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
     )
-    model.compute_interacting_pairs._input_checks(mf_input)
-    pairlist_output = model.compute_interacting_pairs.prepare_inputs(mf_input)
+    tensornet.compute_interacting_pairs._input_checks(mf_input)
+    pairlist_output = tensornet.compute_interacting_pairs.prepare_inputs(mf_input)
 
     ################ modelforge TensorNet ################
     torch.manual_seed(seed)
@@ -241,7 +249,7 @@ def test_tensornet_representation():
         trainable_rbf,
         max_z,
     )
-    nnp_input = model.core_module._model_specific_input_preparation(
+    nnp_input = tensornet.core_module._model_specific_input_preparation(
         mf_input, pairlist_output
     )
     mf_X, _ = tensornet_representation_module(nnp_input)
@@ -268,7 +276,7 @@ def test_tensornet_representation():
     assert torch.allclose(mf_X, tn_X)
 
 
-def test_tensornet_interaction():
+def test_interaction():
     import torch
     from openff.units import unit
     from torch import nn
@@ -280,7 +288,7 @@ def test_tensornet_interaction():
     from modelforge.tests.precalculated_values import (
         prepare_values_for_test_tensornet_interaction,
     )
-    from modelforge.tests.test_models import load_configs
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
     seed = 0
     torch.manual_seed(seed)
@@ -314,18 +322,20 @@ def test_tensornet_interaction():
     # modelforge TensorNet
     torch.manual_seed(seed)
     # load default parameters
-    config = load_configs(f"tensornet", "qm9")
+    config = load_configs_into_pydantic_models(f"tensornet", "qm9")
     # initialize model
-    model = TensorNet(
-        **config["potential"]["core_parameter"],
-        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+    tensornet = TensorNet(
+        **config["potential"].model_dump()["core_parameter"],
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
     )
-    model.compute_interacting_pairs._input_checks(mf_input)
-    pairlist_output = model.compute_interacting_pairs.prepare_inputs(mf_input)
+    tensornet.compute_interacting_pairs._input_checks(mf_input)
+    pairlist_output = tensornet.compute_interacting_pairs.prepare_inputs(mf_input)
 
     ################ modelforge TensorNet ################
-    tensornet_representation_module = model.core_module.representation_module
-    nnp_input = model.core_module._model_specific_input_preparation(
+    tensornet_representation_module = tensornet.core_module.representation_module
+    nnp_input = tensornet.core_module._model_specific_input_preparation(
         mf_input, pairlist_output
     )
     X, _ = tensornet_representation_module(nnp_input)
@@ -384,7 +394,7 @@ if __name__ == "__main__":
 
     torch.manual_seed(0)
 
-    test_tensornet_forward()
+    test_forward()
 
     # test_tensornet_input()
 

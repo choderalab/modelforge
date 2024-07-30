@@ -9,6 +9,7 @@ from .parameters import (
     PhysNetParameters,
     PaiNNParameters,
     SAKEParameters,
+    TensorNetParameters,
 )
 from .utils import (
     CosineCutoff,
@@ -23,6 +24,7 @@ from enum import Enum
 class _Implemented_NNP_Parameters(Enum):
     ANI2X_PARAMETERS = ANI2xParameters
     SCHNET_PARAMETERS = SchNetParameters
+    TENSORNET_PARAMETERS = TensorNetParameters
     PAINN_PARAMETERS = PaiNNParameters
     PHYSNET_PARAMETERS = PhysNetParameters
     SAKE_PARAMETERS = SAKEParameters

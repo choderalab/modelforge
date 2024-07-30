@@ -93,22 +93,17 @@ def test_error_calculation(single_batch_with_batchsize_16_with_force):
     error = PerMoleculeMeanSquaredError()
     E_error = error(predicted_E, true_E, data)
 
-    # compare output (mean squared error scaled by number of atoms in the molecule)
-    scale_squared_error = (
-        (predicted_E - true_E) ** 2
-    ) / data.metadata.atomic_subsystem_counts.unsqueeze(
-        1
-    )  # FIXME : fi
-    reference_E_error = torch.mean(scale_squared_error)
+    # compare output (mean squared error)
+    squared_error = (predicted_E - true_E) ** 2  
+    reference_E_error = torch.mean(squared_error)
     assert torch.allclose(E_error, reference_E_error)
 
     # test error for property with shape (nr_of_atoms, 3)
     error = FromPerAtomToPerMoleculeMeanSquaredError()
     F_error = error(predicted_F, true_F, data)
 
-    # compare error (mean squared error scaled by number of atoms in the molecule)
-
-    scaled_error = (
+    # compare error (mean squared error)
+    squared_error = (
         torch.linalg.vector_norm(predicted_F - true_F, dim=1, keepdim=True) ** 2
     )
 
@@ -116,14 +111,12 @@ def test_error_calculation(single_batch_with_batchsize_16_with_force):
     per_mol_error.scatter_add_(
         0,
         data.nnp_input.atomic_subsystem_indices.unsqueeze(-1)
-        .expand(-1, scaled_error.size(1))
+        .expand(-1, squared_error.size(1))
         .to(torch.int64),
-        scaled_error,
+        squared_error,
     )
 
-    reference_F_error = torch.mean(
-        per_mol_error / data.metadata.atomic_subsystem_counts.unsqueeze(1)
-    )
+    reference_F_error = torch.mean(per_mol_error)
     assert torch.allclose(F_error, reference_F_error)
 
 

@@ -241,15 +241,15 @@ class Loss(nn.Module):
         # iterate over loss properties
         for prop in self.loss_property:
             # calculate loss per property
-            weight = getattr(self, f"{prop}_weight")
+            weight_for_property = getattr(self, f"{prop}_weight")
 
-            loss_scaled_by_weight = weight * self.loss[prop](
+            loss_for_property = self.loss[prop](
                 predict_target[f"{prop}_predict"], predict_target[f"{prop}_true"], batch
             )
             # add total loss
-            loss = loss + loss_scaled_by_weight
-            # save loss
-            loss_dict[f"{prop}/mse"] = loss_scaled_by_weight
+            loss = loss + loss_for_property * weight_for_property
+            # save loss (NOTE: the saved loss is not multiplied by the weight factor)
+            loss_dict[f"{prop}/mse"] = loss_for_property
 
         # add total loss to results dict and return
         loss_dict["total_loss"] = loss

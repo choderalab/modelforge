@@ -106,7 +106,6 @@ class TensorNetNeuralNetworkData(NeuralNetworkData):
     total_charge : torch.Tensor
         An tensor with the total charge of each system or molecule. Shape: [num_systems].
     """
-
     pass
 
 
@@ -178,10 +177,38 @@ class TensorNetCore(CoreNetwork):
                 for _ in range(number_of_interaction_layers)
             ]
         )
+        self.linear = nn.Linear(3* hidden_channels, hidden_channels)
+        self.out_norm = nn.LayerNorm(3 * hidden_channels)
+        # TODO: Should we define what activation function to use in toml?
+        self.activation_function = nn.SiLU()
 
-    def compute_properties(self):
-        # TODO: implement the forward pass
-        pass
+    def compute_properties(
+            self,
+            data: TensorNetNeuralNetworkData
+    ):
+        X, radial_feature_vector = self.representation_module(data)
+        for layer in self.interaction_modules:
+            X = layer(
+                X,
+                data.pair_indices,
+                data.d_ij.squeeze(-1),
+                radial_feature_vector.squeeze(1),
+                data.total_charge,
+            )
+        I, A, S = decompose_tensor(X)
+        x = torch.cat(
+            (tensor_norm(I), tensor_norm(A), tensor_norm(S)),
+            dim=-1,
+        )
+        x = self.out_norm(x)
+        x = self.activation_function(self.linear(x))
+
+        # TODO: I don't quite understand what needs to be returned.
+        return {
+            "per_atom_energy": x.sum(dim=1),
+            "positions": data.positions,
+            "atomic_subsystem_indices": data.atomic_subsystem_indices,
+        }
 
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
@@ -362,7 +389,7 @@ class TensorNetRepresentation(torch.nn.Module):
                 * norm[..., 2, None, None]
         )
         X = I + A + S
-        return X
+        return X, radial_feature_vector
 
 
 class TensorNetInteraction(torch.nn.Module):
@@ -396,7 +423,6 @@ class TensorNetInteraction(torch.nn.Module):
             self.linears_tensor.append(
                 nn.Linear(hidden_channels, hidden_channels, bias=False)
             )
-        self.act = activation_function()
         self.equivariance_invariance_group = equivariance_invariance_group
         self.reset_parameters()
 

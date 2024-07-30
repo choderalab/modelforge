@@ -49,7 +49,7 @@ def test_tensornet_forward():  # TODO
         **config["potential"]["core_parameter"],
         postprocessing_parameter=config["potential"]["postprocessing_parameter"],
     )
-    # net(batch)
+    tensornet(batch)
 
 
 def test_tensornet_input():
@@ -114,8 +114,6 @@ def test_tensornet_input():
         idx = ((edge_index == pair_index).sum(axis=1) == 2).nonzero()[0][
             0
         ]  # select [True, True]
-        print(pairlist_output.d_ij[_][0])
-        print(edge_weight[idx])
         assert torch.allclose(pairlist_output.d_ij[_][0], edge_weight[idx])
         assert torch.allclose(pairlist_output.r_ij[_], -edge_vec[idx])
 
@@ -246,7 +244,7 @@ def test_tensornet_representation():
     nnp_input = model.core_module._model_specific_input_preparation(
         mf_input, pairlist_output
     )
-    mf_X = tensornet_representation_module(nnp_input)
+    mf_X, _ = tensornet_representation_module(nnp_input)
     ################ modelforge TensorNet ################
 
     ################ torchmd-net TensorNet ################
@@ -330,7 +328,7 @@ def test_tensornet_interaction():
     nnp_input = model.core_module._model_specific_input_preparation(
         mf_input, pairlist_output
     )
-    X = tensornet_representation_module(nnp_input)
+    X, _ = tensornet_representation_module(nnp_input)
 
     radial_feature_vector = tensornet_representation_module.radial_symmetry_function(
         nnp_input.d_ij
@@ -386,8 +384,12 @@ if __name__ == "__main__":
 
     torch.manual_seed(0)
 
+    test_tensornet_forward()
+
     # test_tensornet_input()
 
-    test_tensornet_compare_radial_symmetry_features()
+    # test_tensornet_compare_radial_symmetry_features()
 
-    test_tensornet_representation()
+    # test_tensornet_representation()
+
+    # test_tensornet_interaction()

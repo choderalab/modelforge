@@ -206,7 +206,7 @@ class TensorNetCore(CoreNetwork):
         # TODO: I don't quite understand what needs to be returned.
         return {
             "per_atom_energy": x.sum(dim=1),
-            "positions": data.positions,
+            "per_atom_features": x,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
 

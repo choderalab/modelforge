@@ -19,7 +19,7 @@ from modelforge.potential.utils import NeuralNetworkData
 from modelforge.potential.utils import NNPInput
 from modelforge.potential.utils import TensorNetRadialBasisFunction
 from .models import PairListOutputs
-from ..utils.units import _convert
+from ..utils.units import _convert_str_to_unit
 
 
 def vector_to_skewtensor(vector):
@@ -106,35 +106,36 @@ class TensorNetNeuralNetworkData(NeuralNetworkData):
     total_charge : torch.Tensor
         An tensor with the total charge of each system or molecule. Shape: [num_systems].
     """
+
     pass
 
 
 class TensorNet(BaseNetwork):
     def __init__(
-            self,
-            hidden_channels: int,
-            number_of_interaction_layers: int,
-            number_of_radial_basis_functions: int,
-            radial_max_distance: unit.Quantity,
-            radial_min_distance: unit.Quantity,
-            max_Z: int,
-            equivariance_invariance_group: str,
-            postprocessing_parameter: Dict[str, Dict[str, bool]],
-            dataset_statistic: Optional[Dict[str, float]] = None,
+        self,
+        hidden_channels: int,
+        number_of_interaction_layers: int,
+        number_of_radial_basis_functions: int,
+        radial_max_distance: unit.Quantity,
+        radial_min_distance: unit.Quantity,
+        max_Z: int,
+        equivariance_invariance_group: str,
+        postprocessing_parameter: Dict[str, Dict[str, bool]],
+        dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
         self.only_unique_pairs = False
         super().__init__(
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=postprocessing_parameter,
-            cutoff=_convert(radial_max_distance),
+            cutoff=_convert_str_to_unit(radial_max_distance),
         )
 
         self.core_module = TensorNetCore(
             hidden_channels=hidden_channels,
             number_of_interaction_layers=number_of_interaction_layers,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
-            radial_max_distance=_convert(radial_max_distance),
-            radial_min_distance=_convert(radial_min_distance),
+            radial_max_distance=_convert_str_to_unit(radial_max_distance),
+            radial_min_distance=_convert_str_to_unit(radial_min_distance),
             trainable_centers_and_scale_factors=False,
             max_Z=max_Z,
             equivariance_invariance_group=equivariance_invariance_group,
@@ -143,15 +144,15 @@ class TensorNet(BaseNetwork):
 
 class TensorNetCore(CoreNetwork):
     def __init__(
-            self,
-            hidden_channels: int,
-            number_of_interaction_layers: int,
-            number_of_radial_basis_functions: int,
-            radial_max_distance: unit.Quantity,
-            radial_min_distance: unit.Quantity,
-            trainable_centers_and_scale_factors: bool,
-            max_Z: int,
-            equivariance_invariance_group: str,
+        self,
+        hidden_channels: int,
+        number_of_interaction_layers: int,
+        number_of_radial_basis_functions: int,
+        radial_max_distance: unit.Quantity,
+        radial_min_distance: unit.Quantity,
+        trainable_centers_and_scale_factors: bool,
+        max_Z: int,
+        equivariance_invariance_group: str,
     ):
         super().__init__()
 
@@ -177,15 +178,12 @@ class TensorNetCore(CoreNetwork):
                 for _ in range(number_of_interaction_layers)
             ]
         )
-        self.linear = nn.Linear(3* hidden_channels, hidden_channels)
+        self.linear = nn.Linear(3 * hidden_channels, hidden_channels)
         self.out_norm = nn.LayerNorm(3 * hidden_channels)
         # TODO: Should we define what activation function to use in toml?
         self.activation_function = nn.SiLU()
 
-    def compute_properties(
-            self,
-            data: TensorNetNeuralNetworkData
-    ):
+    def compute_properties(self, data: TensorNetNeuralNetworkData):
         X, radial_feature_vector = self.representation_module(data)
         for layer in self.interaction_modules:
             X = layer(
@@ -231,14 +229,14 @@ class TensorNetCore(CoreNetwork):
 
 class TensorNetRepresentation(torch.nn.Module):
     def __init__(
-            self,
-            hidden_channels: int,
-            number_of_radial_basis_functions: int,
-            activation_function: Type[nn.Module],
-            radial_max_distance: unit.Quantity,
-            radial_min_distance: unit.Quantity,
-            trainable_centers_and_scale_factors: bool,
-            max_Z: int,
+        self,
+        hidden_channels: int,
+        number_of_radial_basis_functions: int,
+        activation_function: Type[nn.Module],
+        radial_max_distance: unit.Quantity,
+        radial_min_distance: unit.Quantity,
+        trainable_centers_and_scale_factors: bool,
+        max_Z: int,
     ):
         super().__init__()
 
@@ -250,7 +248,9 @@ class TensorNetRepresentation(torch.nn.Module):
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             max_distance=radial_max_distance,
             min_distance=radial_min_distance,
-            alpha=((radial_max_distance - radial_min_distance) / 5.0),  # TensorNet uses angstrom
+            alpha=(
+                (radial_max_distance - radial_min_distance) / 5.0
+            ),  # TensorNet uses angstrom
             trainable_centers_and_scale_factors=trainable_centers_and_scale_factors,
         )
         self.rsf_projection_I = nn.Linear(
@@ -300,7 +300,7 @@ class TensorNetRepresentation(torch.nn.Module):
         self.init_norm.reset_parameters()
 
     def _get_atomic_number_message(
-            self, atomic_number: torch.Tensor, pair_indices: torch.Tensor
+        self, atomic_number: torch.Tensor, pair_indices: torch.Tensor
     ) -> torch.Tensor:
         atomic_number_i_embedding = self.atomic_number_i_embedding_layer(atomic_number)
         atomic_number_ij_embedding = self.atomic_number_ij_embedding_layer(
@@ -311,35 +311,30 @@ class TensorNetRepresentation(torch.nn.Module):
         return atomic_number_ij_embedding
 
     def _get_tensor_messages(
-            self,
-            atomic_number_embedding: torch.Tensor,
-            d_ij: torch.Tensor,
-            r_ij_norm: torch.Tensor,
-            radial_feature_vector: torch.Tensor,
+        self,
+        atomic_number_embedding: torch.Tensor,
+        d_ij: torch.Tensor,
+        r_ij_norm: torch.Tensor,
+        radial_feature_vector: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        C = (
-                self.cutoff_module(d_ij).reshape(
-                    -1, 1, 1, 1
-                )
-                * atomic_number_embedding
-        )
+        C = self.cutoff_module(d_ij).reshape(-1, 1, 1, 1) * atomic_number_embedding
         eye = torch.eye(3, 3, device=r_ij_norm.device, dtype=r_ij_norm.dtype)[
             None, None, ...
         ]
         Iij = (
-                self.rsf_projection_I(radial_feature_vector).permute(0, 2, 1)[..., None]
-                * C
-                * eye
+            self.rsf_projection_I(radial_feature_vector).permute(0, 2, 1)[..., None]
+            * C
+            * eye
         )
         Aij = (
-                self.rsf_projection_A(radial_feature_vector).permute(0, 2, 1)[..., None]
-                * C
-                * vector_to_skewtensor(r_ij_norm)[..., None, :, :]
+            self.rsf_projection_A(radial_feature_vector).permute(0, 2, 1)[..., None]
+            * C
+            * vector_to_skewtensor(r_ij_norm)[..., None, :, :]
         )
         Sij = (
-                self.rsf_projection_S(radial_feature_vector).permute(0, 2, 1)[..., None]
-                * C
-                * vector_to_symtensor(r_ij_norm)[..., None, :, :]
+            self.rsf_projection_S(radial_feature_vector).permute(0, 2, 1)[..., None]
+            * C
+            * vector_to_symtensor(r_ij_norm)[..., None, :, :]
         )
         return Iij, Aij, Sij
 
@@ -377,16 +372,16 @@ class TensorNetRepresentation(torch.nn.Module):
             norm = self.activation_function(linear_scalar(norm))
         norm = norm.reshape(-1, self.hidden_channels, 3)
         I = (
-                self.linears_tensor[0](I.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-                * norm[..., 0, None, None]
+            self.linears_tensor[0](I.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+            * norm[..., 0, None, None]
         )
         A = (
-                self.linears_tensor[1](A.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-                * norm[..., 1, None, None]
+            self.linears_tensor[1](A.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+            * norm[..., 1, None, None]
         )
         S = (
-                self.linears_tensor[2](S.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-                * norm[..., 2, None, None]
+            self.linears_tensor[2](S.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+            * norm[..., 2, None, None]
         )
         X = I + A + S
         return X, radial_feature_vector
@@ -394,12 +389,12 @@ class TensorNetRepresentation(torch.nn.Module):
 
 class TensorNetInteraction(torch.nn.Module):
     def __init__(
-            self,
-            hidden_channels: int,
-            number_of_radial_basis_functions: int,
-            activation_function: Type[nn.Module],
-            radial_max_distance: unit.Quantity,
-            equivariance_invariance_group,
+        self,
+        hidden_channels: int,
+        number_of_radial_basis_functions: int,
+        activation_function: Type[nn.Module],
+        radial_max_distance: unit.Quantity,
+        equivariance_invariance_group,
     ):
         super().__init__()
 
@@ -433,12 +428,12 @@ class TensorNetInteraction(torch.nn.Module):
             linear.reset_parameters()
 
     def forward(
-            self,
-            X: torch.Tensor,
-            edge_index: torch.Tensor,
-            edge_weight: torch.Tensor,
-            edge_attr: torch.Tensor,
-            q: torch.Tensor,
+        self,
+        X: torch.Tensor,
+        edge_index: torch.Tensor,
+        edge_weight: torch.Tensor,
+        edge_attr: torch.Tensor,
+        q: torch.Tensor,
     ) -> torch.Tensor:
         C = self.cutoff_module(edge_weight)
         for linear_scalar in self.linears_scalar:

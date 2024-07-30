@@ -46,24 +46,6 @@ class Error(nn.Module, ABC):
         """
         return (predicted_tensor - reference_tensor).pow(2).sum(dim=1, keepdim=True)
 
-    @staticmethod
-    def scale_by_number_of_atoms(error, atomic_subsystem_counts) -> torch.Tensor:
-        """
-        Scales the error by the number of atoms in the atomic subsystems.
-
-        Parameters:
-            error: The error to be scaled.
-            atomic_subsystem_counts: The number of atoms in the atomic subsystems.
-
-        Returns:
-            torch.Tensor: The scaled error.
-        """
-        # divide by number of atoms
-        scaled_by_number_of_atoms = error / atomic_subsystem_counts.unsqueeze(
-            1
-        )  # FIXME: ensure that all per-atom properties have dimension (N, 1)
-        return scaled_by_number_of_atoms
-
 
 class FromPerAtomToPerMoleculeMeanSquaredError(Error):
     """
@@ -125,12 +107,9 @@ class FromPerAtomToPerMoleculeMeanSquaredError(Error):
             batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
             per_atom_squared_error,
         )
-        # divide by number of atoms
-        per_molecule_square_error_scaled = self.scale_by_number_of_atoms(
-            per_molecule_squared_error, batch.metadata.atomic_subsystem_counts
-        )
+
         # return the average
-        return torch.mean(per_molecule_square_error_scaled)
+        return torch.mean(per_molecule_squared_error)
 
 
 class PerMoleculeMeanSquaredError(Error):
@@ -173,12 +152,8 @@ class PerMoleculeMeanSquaredError(Error):
         per_molecule_squared_error = self.calculate_error(
             per_molecule_prediction, per_molecule_reference
         )
-        per_molecule_square_error_scaled = self.scale_by_number_of_atoms(
-            per_molecule_squared_error, batch.metadata.atomic_subsystem_counts
-        )
-
         # return the average
-        return torch.mean(per_molecule_square_error_scaled)
+        return torch.mean(per_molecule_squared_error)
 
     def calculate_error(
         self,
@@ -207,7 +182,7 @@ class Loss(nn.Module):
 
     _SUPPORTED_PROPERTIES = ["per_molecule_energy", "per_atom_force"]
 
-    def __init__(self, loss_porperty: List[str], weight: Dict[str, float]):
+    def __init__(self, loss_property: List[str], weight: Dict[str, float]):
         """
         Initializes the Loss class.
 
@@ -226,7 +201,7 @@ class Loss(nn.Module):
         super().__init__()
         from torch.nn import ModuleDict
 
-        self.loss_property = loss_porperty
+        self.loss_property = loss_property
         self.weight = weight
 
         self.loss = ModuleDict()
@@ -237,7 +212,7 @@ class Loss(nn.Module):
                     self.loss[prop] = FromPerAtomToPerMoleculeMeanSquaredError()
                 elif prop == "per_molecule_energy":
                     self.loss[prop] = PerMoleculeMeanSquaredError()
-                self.register_buffer(prop, torch.tensor(w))
+                self.register_buffer(f"{prop}_weight", torch.tensor(w))
             else:
                 raise NotImplementedError(f"Loss type {prop} not implemented.")
 
@@ -266,13 +241,15 @@ class Loss(nn.Module):
         # iterate over loss properties
         for prop in self.loss_property:
             # calculate loss per property
-            loss_ = self.weight[prop] * self.loss[prop](
+            weight = getattr(self, f"{prop}_weight")
+
+            loss_scaled_by_weight = weight * self.loss[prop](
                 predict_target[f"{prop}_predict"], predict_target[f"{prop}_true"], batch
             )
             # add total loss
-            loss = loss + loss_
+            loss = loss + loss_scaled_by_weight
             # save loss
-            loss_dict[f"{prop}/mse"] = loss_
+            loss_dict[f"{prop}/mse"] = loss_scaled_by_weight
 
         # add total loss to results dict and return
         loss_dict["total_loss"] = loss
@@ -850,115 +827,6 @@ def read_config_and_train(
 from lightning import Trainer
 
 
-def log_training_arguments(
-    potential_config: Dict[str, Any],
-    training_config: Dict[str, Any],
-    dataset_config: Dict[str, Any],
-    runtime_config: Dict[str, Any],
-):
-    """
-    Log arguments that are passed to the training routine.
-
-    Arguments
-    ----
-        potential_config: Dict[str, Any]
-            config for the potential model
-        training_config: Dict[str, Any]
-            config for the training process
-        dataset_config: Dict[str, Any]
-            config for the dataset
-        runtime_config: Dict[str, Any]
-            config for the runtime
-    """
-
-    save_dir = runtime_config["save_dir"]
-    log.info(f"Saving logs to location: {save_dir}")
-
-    experiment_name = runtime_config["experiment_name"]
-    log.info(f"Saving logs in dir: {experiment_name}")
-
-    version_select = dataset_config.get("version_select", "latest")
-    if version_select == "latest":
-        log.info(f"Using default dataset version: {version_select}")
-    else:
-        log.info(f"Using dataset version: {version_select}")
-
-    local_cache_dir = runtime_config.get("local_cache_dir", "./")
-    if local_cache_dir is None:
-        log.info(f"Using default cache directory: {local_cache_dir}")
-    else:
-        log.info(f"Using cache directory: {local_cache_dir}")
-
-    accelerator = runtime_config.get("accelerator", "cpu")
-    if accelerator == "cpu":
-        log.info(f"Using default accelerator: {accelerator}")
-    else:
-        log.info(f"Using accelerator: {accelerator}")
-    nr_of_epochs = training_config["nr_of_epochs"]
-    num_nodes = runtime_config.get("num_nodes", 1)
-    if num_nodes == 1:
-        log.info(f"Using default number of nodes: {num_nodes}")
-    else:
-        log.info(f"Training on {num_nodes} nodes")
-    devices = runtime_config.get("devices", 1)
-    if devices == 1:
-        log.info(f"Using default device index/number: {devices}")
-    else:
-        log.info(f"Using device index/number: {devices}")
-
-    batch_size = training_config.get("batch_size", 128)
-    if batch_size == 128:
-        log.info(f"Using default batch size: {batch_size}")
-    else:
-        log.info(f"Using batch size: {batch_size}")
-
-    remove_self_energies = training_config.get("remove_self_energies", False)
-    if remove_self_energies is False:
-        log.warning(
-            f"Using default for removing self energies: Self energies are not removed"
-        )
-    else:
-        log.info(f"Removing self energies: {remove_self_energies}")
-
-    splitting_strategy = training_config["splitting_strategy"]["name"]
-    data_split = training_config["splitting_strategy"]["data_split"]
-    log.info(f"Using splitting strategy: {splitting_strategy} with split: {data_split}")
-
-    early_stopping_config = training_config.get("early_stopping", None)
-    if early_stopping_config is None:
-        log.info(f"Using default: No early stopping performed")
-
-    stochastic_weight_averaging_config = training_config.get(
-        "stochastic_weight_averaging_config", None
-    )
-
-    num_workers = dataset_config.get("number_of_worker", 4)
-    if num_workers == 4:
-        log.info(
-            f"Using default number of workers for training data loader: {num_workers}"
-        )
-    else:
-        log.info(f"Using {num_workers} workers for training data loader")
-
-    pin_memory = dataset_config.get("pin_memory", False)
-    if pin_memory is False:
-        log.info(f"Using default value for pinned_memory: {pin_memory}")
-    else:
-        log.info(f"Using pinned_memory: {pin_memory}")
-
-    model_name = potential_config["model_name"]
-    dataset_name = dataset_config["dataset_name"]
-    log.info(training_config["training_parameter"]["loss_parameter"])
-    log.debug(
-        f"""
-Training {model_name} on {dataset_name}-{version_select} dataset with {accelerator}
-accelerator on {num_nodes} nodes for {nr_of_epochs} epochs.
-Experiments are saved to: {save_dir}/{experiment_name}.
-Local cache directory: {local_cache_dir}
-"""
-    )
-
-
 def perform_training(
     potential_config: Dict[str, Any],
     training_config: Dict[str, Any],
@@ -1005,18 +873,14 @@ def perform_training(
     model_name = potential_config["model_name"]
     dataset_name = dataset_config["dataset_name"]
 
-    log_training_arguments(
-        potential_config, training_config, dataset_config, runtime_config
-    )
-
     version_select = dataset_config.get("version_select", "latest")
     accelerator = runtime_config.get("accelerator", "cpu")
     splitting_strategy = training_config["splitting_strategy"]
     nr_of_epochs = training_config["nr_of_epochs"]
     num_nodes = runtime_config.get("num_nodes", 1)
     devices = runtime_config.get("devices", 1)
-    batch_size = training_config.get("batch_size", 128)
-    remove_self_energies = training_config.get("remove_self_energies", False)
+    batch_size = training_config["batch_size"]
+    remove_self_energies = training_config["remove_self_energies"]
     early_stopping_config = training_config.get("early_stopping", None)
     stochastic_weight_averaging_config = training_config.get(
         "stochastic_weight_averaging_config", None
@@ -1064,16 +928,7 @@ def perform_training(
     import toml
 
     dataset_statistic = toml.load(dm.dataset_statistic_filename)
-    log.info(
-        f"Setting per_atom_energy_mean and per_atom_energy_stddev for {model_name}"
-    )
-    log.info(
-        f"per_atom_energy_mean: {dataset_statistic['training_dataset_statistics']['per_atom_energy_mean']}"
-    )
-    log.info(
-        f"per_atom_energy_stddev: {dataset_statistic['training_dataset_statistics']['per_atom_energy_stddev']}"
-    )
-
+    log.info(dataset_statistic["training_dataset_statistics"])
     # Set up model
     model = NeuralNetworkPotentialFactory.generate_model(
         use="training",
@@ -1122,6 +977,7 @@ def perform_training(
     )
 
     # Run training loop and validate
+    # training
     trainer.fit(
         model,
         train_dataloaders=dm.train_dataloader(
@@ -1130,9 +986,10 @@ def perform_training(
         val_dataloaders=dm.val_dataloader(),
         ckpt_path=checkpoint_path,
     )
-
+    # retrieve best model on validation set and calculate validation metric again
     trainer.validate(
         model=model, dataloaders=dm.val_dataloader(), ckpt_path="best", verbose=True
     )
+    # retrieve best model on test set and calculate metric
     trainer.test(dataloaders=dm.test_dataloader(), ckpt_path="best", verbose=True)
     return trainer

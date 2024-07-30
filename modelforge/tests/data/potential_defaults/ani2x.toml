@@ -1,5 +1,5 @@
 [potential]
-model_name = "ANI2x"
+potential_name = "ANI2x"
 
 [potential.core_parameter]
 angle_sections = 4

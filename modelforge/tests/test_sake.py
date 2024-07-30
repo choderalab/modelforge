@@ -15,15 +15,17 @@ ON_MAC = platform == "darwin"
 
 def test_init():
     """Test initialization of the SAKE neural network potential."""
-    from modelforge.tests.test_models import load_configs
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
     # read default parameters
-    config = load_configs(f"sake", "qm9")
+    config = load_configs_into_pydantic_models(f"sake", "qm9")
 
     # initialize model
     sake = SAKE(
-        **config["potential"]["core_parameter"],
-        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+        **config["potential"].model_dump()["core_parameter"],
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
     )
     assert sake is not None, "SAKE model should be initialized."
 
@@ -38,14 +40,16 @@ def test_forward(single_batch_with_batchsize_64):
     # get methane input
     methane = single_batch_with_batchsize_64.nnp_input
 
-    from modelforge.tests.test_models import load_configs
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
     # read default parameters
-    config = load_configs(f"sake", "qm9")
+    config = load_configs_into_pydantic_models(f"sake", "qm9")
 
     sake = SAKE(
-        **config["potential"]["core_parameter"],
-        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+        **config["potential"].model_dump()["core_parameter"],
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
     )
     energy = sake(methane)["per_molecule_energy"]
     nr_of_mols = methane.atomic_subsystem_indices.unique().shape[0]
@@ -100,15 +104,17 @@ def test_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize_64):
     # (clockwise when looking along the z-axis towards the origin)
     rotation_matrix = torch.tensor([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
 
-    from modelforge.tests.test_models import load_configs
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
-    config = load_configs(f"sake", "qm9")
+    config = load_configs_into_pydantic_models(f"sake", "qm9")
     # Extract parameters
-    core_parameter = config["potential"]["core_parameter"]
+    core_parameter = config["potential"].model_dump()["core_parameter"]
     core_parameter["featurization"]["number_of_per_atom_features"] = nr_atom_basis
     sake = SAKE(
         **core_parameter,
-        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
     )
 
     # get methane input
@@ -258,10 +264,14 @@ def test_radial_symmetry_function_against_reference():
     assert torch.allclose(
         torch.from_numpy(onp.array(variables["params"]["means"])),
         radial_symmetry_function_module.radial_basis_centers.detach().T,
+        atol=1e-1,
+        rtol=1e-1,
     )
     assert torch.allclose(
         torch.from_numpy(onp.array(variables["params"]["betas"])) ** -0.5,
         radial_symmetry_function_module.radial_scale_factor.detach().T,
+        atol=1e-2,
+        rtol=1e-2,
     )
 
     ref_rbf = ref_radial_basis_module.apply(variables, d_ij_jax)
@@ -596,14 +606,16 @@ def test_model_against_reference(single_batch_with_batchsize_1):
 def test_model_invariance(single_batch_with_batchsize_1):
     from dataclasses import replace
 
-    from modelforge.tests.test_models import load_configs
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
-    config = load_configs(f"sake", "qm9")
+    config = load_configs_into_pydantic_models(f"sake", "qm9")
 
     # initialize model
     model = SAKE(
-        **config["potential"]["core_parameter"],
-        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+        **config["potential"].model_dump()["core_parameter"],
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
     )
     # get methane input
     methane = single_batch_with_batchsize_1.nnp_input

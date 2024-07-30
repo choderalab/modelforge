@@ -4,7 +4,6 @@ from typing import Dict, Any
 
 
 def perform_training(trainer, model, dm):
-
     # Run training loop and validate
     trainer.fit(
         model,
@@ -13,7 +12,7 @@ def perform_training(trainer, model, dm):
     )
 
 
-def setup(model_name: str):
+def setup(potential_name: str):
     from modelforge.dataset.utils import RandomRecordSplittingStrategy
     from lightning import Trainer
     from modelforge.potential import NeuralNetworkPotentialFactory
@@ -22,17 +21,17 @@ def setup(model_name: str):
     from modelforge import tests as modelforge_tests
 
     config = return_toml_config(
-        f"{resources.files(modelforge_tests)}/data/training_defaults/{model_name.lower()}_qm9.toml"
+        f"{resources.files(modelforge_tests)}/data/training_defaults/{potential_name.lower()}_qm9.toml"
     )
     # Extract parameters
     potential_config = config["potential"]
-    training_config = config["training"]
+    training_config = config["runtime_defaults"]
     dataset_config = config["dataset"]
     training_config["nr_of_epochs"] = 1
 
     dataset_config["version_select"] = "nc_1000_v0"
 
-    model_name = potential_config["model_name"]
+    potential_name = potential_config["potential_name"]
     dataset_name = dataset_config["dataset_name"]
     version_select = dataset_config.get("version_select", "latest")
     accelerator = training_config.get("accelerator", "cpu")
@@ -64,20 +63,19 @@ def setup(model_name: str):
 
     # Set up model
     model = NeuralNetworkPotentialFactory.generate_model(
-        use="training",
-        model_type=model_name,
-        model_parameters=potential_config["potential_parameters"],
-        training_parameters=training_config["training_parameters"],
+        use="runtime_defaults",
+        potential_name=potential_name,
+        model_parameters=potential_config["potential"],
+        training_parameters=training_config["training"],
     )
     return trainer, model, dm
 
 
 if __name__ == "__main__":
-
-    model_name = "SchNet"
+    potential_name = "SchNet"
 
     trainer, model, dm = setup(
-        model_name=model_name,
+        potential_name=potential_name,
     )
 
     perform_training(trainer, model, dm)

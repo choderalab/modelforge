@@ -569,21 +569,26 @@ class NeuralNetworkPotentialFactory:
         from modelforge.potential import _Implemented_NNPs
         from modelforge.train.training import TrainingAdapter
 
+        log.debug(f"{training_parameter=}")
+        log.debug(f"{model_parameter=}")
+
         # obtain model for training
         if use == "training":
             if simulation_environment == "JAX":
                 log.warning(
-                    "Training in JAX is not availalbe. Falling back to PyTorch."
+                    "Training in JAX is not available. Falling back to PyTorch."
                 )
             model = TrainingAdapter(
                 model_parameter=model_parameter,
-                **training_parameter,
+                lr_scheduler_config=training_parameter["lr_scheduler_config"],
+                lr=training_parameter["lr"],
+                loss_parameter=training_parameter["loss_parameter"],
                 dataset_statistic=dataset_statistic,
             )
             return model
         # obtain model for inference
         elif use == "inference":
-            model_type = model_parameter["model_name"]
+            model_type = model_parameter["potential_name"]
             nnp_class: Type = _Implemented_NNPs.get_neural_network_class(model_type)
             model = nnp_class(
                 **model_parameter["core_parameter"],
@@ -795,9 +800,10 @@ class PostProcessing(torch.nn.Module):
             # for each property parse the requested operations
             if property == "per_atom_energy":
                 if operations.get("normalize", False):
-                    mean, stddev = (
-                        self._get_per_atom_energy_mean_and_stddev_of_dataset()
-                    )
+                    (
+                        mean,
+                        stddev,
+                    ) = self._get_per_atom_energy_mean_and_stddev_of_dataset()
                     postprocessing_sequence.append(
                         ScaleValues(
                             mean=mean,
@@ -825,7 +831,6 @@ class PostProcessing(torch.nn.Module):
             elif property == "general_postprocessing_operation":
                 # check if also self-energies are requested
                 if operations.get("calculate_molecular_self_energy", False):
-
                     if self.dataset_statistic is None:
                         log.warning(
                             "Dataset statistics are required to calculate the molecular self-energies but haven't been provided."
@@ -905,7 +910,7 @@ class BaseNetwork(Module):
         """
 
         super().__init__()
-        from modelforge.utils.units import _convert
+        from modelforge.utils.units import _convert_str_to_unit
 
         self.postprocessing = PostProcessing(
             postprocessing_parameter, dataset_statistic
@@ -917,7 +922,8 @@ class BaseNetwork(Module):
                 "The only_unique_pairs attribute is not set in the child class. Please set it to True or False before calling super().__init__."
             )
         self.compute_interacting_pairs = ComputeInteractingAtomPairs(
-            cutoff=_convert(cutoff), only_unique_pairs=self.only_unique_pairs
+            cutoff=_convert_str_to_unit(cutoff),
+            only_unique_pairs=self.only_unique_pairs,
         )
 
     def load_state_dict(

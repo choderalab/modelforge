@@ -10,7 +10,7 @@ from modelforge.potential import _Implemented_NNPs
 from modelforge.potential import NeuralNetworkPotentialFactory
 
 
-def load_configs(model_name: str, dataset_name: str):
+def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
     from modelforge.tests.data import (
         potential_defaults,
         training_defaults,
@@ -18,24 +18,50 @@ def load_configs(model_name: str, dataset_name: str):
         runtime_defaults,
     )
     from importlib import resources
-    from modelforge.train.training import return_toml_config
+    import toml
 
-    potential_path = resources.files(potential_defaults) / f"{model_name.lower()}.toml"
+    potential_path = (
+        resources.files(potential_defaults) / f"{potential_name.lower()}.toml"
+    )
     dataset_path = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
     training_path = resources.files(training_defaults) / "default.toml"
     runtime_path = resources.files(runtime_defaults) / "runtime.toml"
-    return return_toml_config(
-        potential_path=potential_path,
-        dataset_path=dataset_path,
-        training_path=training_path,
-        runtime_path=runtime_path,
+
+    training_config_dict = toml.load(training_path)
+    dataset_config_dict = toml.load(dataset_path)
+    potential_config_dict = toml.load(potential_path)
+    runtime_config_dict = toml.load(runtime_path)
+
+    potential_name = potential_config_dict["potential"]["potential_name"]
+
+    from modelforge.potential import _Implemented_NNP_Parameters
+
+    PotentialParameters = (
+        _Implemented_NNP_Parameters.get_neural_network_parameter_class(potential_name)
     )
+    potential_parameters = PotentialParameters(**potential_config_dict["potential"])
+
+    from modelforge.dataset.dataset import DatasetParameters
+    from modelforge.train.parameters import TrainingParameters, RuntimeParameters
+
+    dataset_parameters = DatasetParameters(**dataset_config_dict["dataset"])
+    training_parameters = TrainingParameters(**training_config_dict["training"])
+    runtime_parameters = RuntimeParameters(**runtime_config_dict["runtime"])
+
+    return {
+        "potential": potential_parameters,
+        "dataset": dataset_parameters,
+        "training": training_parameters,
+        "runtime": runtime_parameters,
+    }
 
 
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
-@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
+@pytest.mark.parametrize(
+    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+)
 @pytest.mark.parametrize("dataset_name", ["QM9"])
-def test_train_with_lightning(model_name, dataset_name):
+def test_train_with_lightning(potential_name, dataset_name):
     """
     Test the forward pass for a given model and dataset.
     """
@@ -43,7 +69,7 @@ def test_train_with_lightning(model_name, dataset_name):
     from modelforge.train.training import perform_training
 
     # read default parameters
-    config = load_configs(model_name, dataset_name)
+    config = load_configs_into_pydantic_models(potential_name, dataset_name)
 
     # Extract parameters
     potential_config = config["potential"]
@@ -66,7 +92,6 @@ def test_train_with_lightning(model_name, dataset_name):
         training_config=training_config,
         dataset_config=dataset_config,
         runtime_config=runtime_config,
-        checkpoint_path="test.chp",
     )
 
 
@@ -128,23 +153,26 @@ def test_error_calculation(single_batch_with_batchsize_16_with_force):
 
 
 @pytest.mark.skipif(IN_GITHUB_ACTIONS, reason="Skipping this test on GitHub Actions")
-@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
+@pytest.mark.parametrize(
+    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+)
 @pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_hypterparameter_tuning_with_ray(
-    model_name,
+    potential_name,
     dataset_name,
     datamodule_factory,
 ):
-    from modelforge.train.training import return_toml_config, LossFactory
+    from modelforge.train.training import LossFactory
     from importlib import resources
     from modelforge.tests.data import (
-        training,
+        runtime_defaults,
         potential_defaults,
         dataset_defaults,
         training_defaults,
     )
 
-    config = load_configs(model_name, dataset_name)
+    config = load_configs_into_pydantic_models(potential_name, dataset_name)
+    # config = load_configs_(potential_name, dataset_name)
 
     # Extract parameters
     potential_config = config["potential"]
@@ -157,8 +185,8 @@ def test_hypterparameter_tuning_with_ray(
     # training model
     model = NeuralNetworkPotentialFactory.generate_model(
         use="training",
-        model_parameter=potential_config,
-        training_parameter=training_config["training_parameter"],
+        model_parameter=potential_config.model_dump(),
+        training_parameter=training_config.model_dump(),
     )
 
     from modelforge.train.tuning import RayTuner

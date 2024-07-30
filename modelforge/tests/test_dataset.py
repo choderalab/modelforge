@@ -90,7 +90,6 @@ def test_dataset_basic_operations():
 
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_different_properties_of_interest(dataset_name, dataset_factory, prep_temp_dir):
-
     local_cache_dir = str(prep_temp_dir) + "/data_test"
 
     data = _ImplementedDatasets.get_dataset_class(
@@ -216,7 +215,6 @@ def test_file_existence_after_initialization(
     )
 
     with contextlib.suppress(FileNotFoundError):
-
         os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
         os.remove(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
         os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
@@ -457,25 +455,28 @@ def test_data_item_format_of_datamodule(
 from modelforge.potential import _Implemented_NNPs
 
 
-@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
-def test_dataset_neighborlist(model_name, single_batch_with_batchsize_64):
+@pytest.mark.parametrize(
+    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+)
+def test_dataset_neighborlist(potential_name, single_batch_with_batchsize_64):
     """Test the neighborlist."""
 
     nnp_input = single_batch_with_batchsize_64.nnp_input
 
     # test that the neighborlist is correctly generated
-    from modelforge.tests.test_models import load_configs
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
     # read default parameters
-    config = load_configs(f"{model_name}", "qm9")
+    config = load_configs_into_pydantic_models(f"{potential_name}", "qm9")
 
     # Extract parameters
     from modelforge.potential.models import NeuralNetworkPotentialFactory
+
     # initialize model
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         simulation_environment="PyTorch",
-        model_parameter=config["potential"],
+        model_parameter=config["potential"].model_dump(),
     )
     model(nnp_input)
 
@@ -793,7 +794,6 @@ def test_energy_postprocessing():
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_function_of_self_energy(dataset_name, datamodule_factory):
-
     # test the self energy calculation on the QM9 dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 

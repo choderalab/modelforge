@@ -420,8 +420,8 @@ class PhysNetCore(CoreNetwork):
 
         Parameters
         ----------
-        featurization_config: Dict[str, Union[List[str], int]],        
-        
+        featurization_config: Dict[str, Union[List[str], int]],
+
         cutoff : openff.units.unit.Quantity
             The cutoff distance for interactions.
         number_of_modules : int
@@ -575,7 +575,7 @@ class PhysNetCore(CoreNetwork):
 
 from .models import NNPInput, BaseNetwork
 from typing import List
-from modelforge.utils.units import _convert
+from modelforge.utils.units import _convert_str_to_unit
 from modelforge.utils.io import import_
 from modelforge.potential.utils import shared_config_prior
 
@@ -616,12 +616,12 @@ class PhysNet(BaseNetwork):
         super().__init__(
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=postprocessing_parameter,
-            cutoff=_convert(cutoff),
+            cutoff=_convert_str_to_unit(cutoff),
         )
 
         self.core_module = PhysNetCore(
             featurization_config=featurization,
-            cutoff=_convert(cutoff),
+            cutoff=_convert_str_to_unit(cutoff),
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             number_of_interaction_residual=number_of_interaction_residual,
             number_of_modules=number_of_modules,
@@ -640,7 +640,6 @@ class PhysNet(BaseNetwork):
 
         tune = import_("ray").tune
         # from ray import tune
-
 
         prior = {
             "number_of_per_atom_features": tune.randint(2, 256),

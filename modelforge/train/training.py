@@ -349,8 +349,8 @@ class TrainingAdapter(pl.LightningModule):
     def __init__(
         self,
         *,
-        lr_scheduler_config: Dict[str, Union[str, int, float]],
         model_parameter: Dict[str, Any],
+        lr_scheduler_config: Dict[str, Union[str, int, float]],
         lr: float,
         loss_parameter: Dict[str, Any],
         dataset_statistic: Optional[Dict[str, float]] = None,
@@ -362,7 +362,7 @@ class TrainingAdapter(pl.LightningModule):
 
         Parameters
         ----------
-        nnp_parameters : Dict[str, Any]
+        model_parameter : Dict[str, Any]
             The parameters for the neural network potential model.
         lr_scheduler_config : Dict[str, Union[str, int, float]]
             The configuration for the learning rate scheduler.
@@ -379,8 +379,8 @@ class TrainingAdapter(pl.LightningModule):
         self.save_hyperparameters()
 
         # Get requested model class
-        model_name = model_parameter["model_name"]
-        nnp_class: Type = _Implemented_NNPs.get_neural_network_class(model_name)
+        potential_name = model_parameter["potential_name"]
+        nnp_class: Type = _Implemented_NNPs.get_neural_network_class(potential_name)
 
         # initialize model
         self.model = nnp_class(
@@ -733,141 +733,202 @@ class TrainingAdapter(pl.LightningModule):
         return {"optimizer": optimizer, "lr_scheduler": lr_scheduler_config}
 
 
-def return_toml_config(
-    config_path: Optional[str] = None,
-    potential_path: Optional[str] = None,
-    dataset_path: Optional[str] = None,
-    training_path: Optional[str] = None,
-    runtime_path: Optional[str] = None,
-):
-    """
-    Read one or more TOML configuration files and return the parsed configuration.
-
-    Parameters
-    ----------
-    config_path : str, optional
-        The path to the TOML configuration file.
-    potential_path : str, optional
-        The path to the TOML file defining the potential configuration.
-    dataset_path : str, optional
-        The path to the TOML file defining the dataset configuration.
-    training_path : str, optional
-        The path to the TOML file defining the training configuration.
-    runtime_path : str, optional
-        The path to the TOML file defining the runtime configuration.
-
-    Returns
-    -------
-    dict
-        The merged parsed configuration from the TOML files.
-    """
-    import toml
-
-    config = {}
-
-    if config_path:
-        config = toml.load(config_path)
-        log.info(f"Reading config from : {config_path}")
-    else:
-        if potential_path:
-            config["potential"] = toml.load(potential_path)["potential"]
-            log.info(f"Reading potential config from : {potential_path}")
-        if dataset_path:
-            config["dataset"] = toml.load(dataset_path)["dataset"]
-            log.info(f"Reading dataset config from : {dataset_path}")
-        if training_path:
-            config["training"] = toml.load(training_path)["training"]
-            log.info(f"Reading training config from : {training_path}")
-        if runtime_path:
-            config["runtime"] = toml.load(runtime_path)["runtime"]
-            log.info(f"Reading runtime config from : {runtime_path}")
-    return config
-
-
 from typing import List, Optional, Union
 
 
-def read_config_and_train(
-    config_path: Optional[str] = None,
-    potential_path: Optional[str] = None,
-    dataset_path: Optional[str] = None,
-    training_path: Optional[str] = None,
-    runtime_path: Optional[str] = None,
+def read_config(
+    condensed_config_path: Optional[str] = None,
+    training_config_path: Optional[str] = None,
+    dataset_config_path: Optional[str] = None,
+    potential_config_path: Optional[str] = None,
+    runtime_config_path: Optional[str] = None,
     accelerator: Optional[str] = None,
-    device: Optional[Union[int, List[int]]] = None,
+    devices: Optional[Union[int, List[int]]] = None,
+    number_of_nodes: Optional[int] = None,
+):
+    """
+    Reads one or more TOML configuration files and loads them into the pydantic models
+
+    Parameters
+    ----------
+    condensed_config_path : str, optional
+        Path to the TOML configuration that contains all parameters for the dataset, potential, training, and runtime parameters.
+        Any other provided configuration files will be ignored.
+    training_config_path : str, optional
+        Path to the TOML file defining the training parameters.
+    dataset_config_path : str, optional
+        Path to the TOML file defining the dataset parameters.
+    potential_config_path : str, optional
+        Path to the TOML file defining the potential parameters.
+    runtime_config_path : str, optional
+        Path to the TOML file defining the runtime parameters.
+    accelerator : str, optional
+        Accelerator type to use.  If provided, this  overrides the accelerator type in the runtime_defaults configuration.
+    devices : int|List[int], optional
+        Device index/indices to use.  If provided, this overrides the devices in the runtime_defaults configuration.
+    number_of_nodes : int, optional
+        Number of nodes to use.  If provided, this overrides the number of nodes in the runtime_defaults configuration.
+
+    Returns
+    -------
+    Tuple
+        Tuple containing the potential, training, dataset, and runtime parameters.
+
+    """
+    import toml
+
+    if condensed_config_path is not None:
+        config = toml.load(condensed_config_path)
+        log.info(f"Reading config from : {condensed_config_path}")
+
+        training_config_dict = config["training"]
+        dataset_config_dict = config["dataset"]
+        potential_config_dict = config["potential"]
+        runtime_config_dict = config["runtime"]
+
+    else:
+        training_config_dict = toml.load(training_config_path)
+        dataset_config_dict = toml.load(dataset_config_path)
+        potential_config_dict = toml.load(potential_config_path)
+        runtime_config_dict = toml.load(runtime_config_path)
+
+    from modelforge.potential import _Implemented_NNP_Parameters
+
+    potential_name = potential_config_dict["potential"]["potential_name"]
+    PotentialParameters = (
+        _Implemented_NNP_Parameters.get_neural_network_parameter_class(potential_name)
+    )
+
+    potential_parameters = PotentialParameters(**potential_config_dict["potential"])
+
+    from modelforge.dataset.dataset import DatasetParameters
+    from modelforge.train.parameters import TrainingParameters, RuntimeParameters
+
+    dataset_parameters = DatasetParameters(**dataset_config_dict["dataset"])
+    training_parameters = TrainingParameters(**training_config_dict["training"])
+    runtime_parameters = RuntimeParameters(**runtime_config_dict["runtime"])
+
+    # if accelerator, devices, or number_of_nodes are provided, override the runtime_defaults parameters
+    # note, since these are being set in the runtime data model, they will be validated by the model
+    if accelerator:
+        runtime_parameters.accelerator = accelerator
+        log.info(f"Using accelerator: {accelerator}")
+    if devices:
+        runtime_parameters.device_index = devices
+        log.info(f"Using device index: {devices}")
+    if number_of_nodes:
+        runtime_parameters.number_of_nodes = number_of_nodes
+        log.info(f"Using number of nodes: {number_of_nodes}")
+
+    return (
+        potential_parameters,
+        training_parameters,
+        dataset_parameters,
+        runtime_parameters,
+    )
+
+
+def read_config_and_train(
+    condensed_config_path: Optional[str] = None,
+    training_config_path: Optional[str] = None,
+    dataset_config_path: Optional[str] = None,
+    potential_config_path: Optional[str] = None,
+    runtime_config_path: Optional[str] = None,
+    accelerator: Optional[str] = None,
+    devices: Optional[Union[int, List[int]]] = None,
+    number_of_nodes: Optional[int] = None,
 ):
     """
     Reads one or more TOML configuration files and performs training based on the parameters.
 
     Parameters
     ----------
-    config_path : str, optional
-        Path to the TOML configuration file.
-    potential_path : str, optional
-        Path to the TOML file defining the potential configuration.
-    dataset_path : str, optional
-        Path to the TOML file defining the dataset configuration.
-    training_path : str, optional
-        Path to the TOML file defining the training configuration.
-    runtime_path : str, optional
-        Path to the TOML file defining the runtime configuration.
+    condensed_config_path : str, optional
+        Path to the TOML configuration that contains all parameters for the dataset, potential, training, and runtime parameters.
+        Any other provided configuration files will be ignored.
+    training_config_path : str, optional
+        Path to the TOML file defining the training parameters.
+    dataset_config_path : str, optional
+        Path to the TOML file defining the dataset parameters.
+    potential_config_path : str, optional
+        Path to the TOML file defining the potential parameters.
+    runtime_config_path : str, optional
+        Path to the TOML file defining the runtime parameters.
     accelerator : str, optional
-        Accelerator type to use for training.
-    device : int|List[int], optional
-        Device index to use for training.
+        Accelerator type to use.  If provided, this  overrides the accelerator type in the runtime_defaults configuration.
+    devices : int|List[int], optional
+        Device index/indices to use.  If provided, this overrides the devices in the runtime_defaults configuration.
+    number_of_nodes : int, optional
+        Number of nodes to use.  If provided, this overrides the number of nodes in the runtime_defaults configuration.
+
+    Returns
+    -------
+
     """
-    # Read the TOML file
-    config = return_toml_config(
-        config_path, potential_path, dataset_path, training_path, runtime_path
+
+    (
+        potential_parameters,
+        training_parameters,
+        dataset_parameters,
+        runtime_parameters,
+    ) = read_config(
+        condensed_config_path,
+        training_config_path,
+        dataset_config_path,
+        potential_config_path,
+        runtime_config_path,
+        accelerator,
+        devices,
+        number_of_nodes,
     )
 
-    # Extract parameters
-    potential_config = config["potential"]
-    dataset_config = config["dataset"]
-    training_config = config["training"]
-    runtime_config = config["runtime"]
-
-    # Override config parameters with command-line arguments if provided
-    if accelerator:
-        runtime_config["accelerator"] = accelerator
-    if device is not None:
-        runtime_config["devices"] = device
-
-    log.debug(f"Potential config: {potential_config}")
-    log.debug(f"Dataset config: {dataset_config}")
-    log.debug(f"Training config: {training_config}")
-    log.debug(f"Runtime config: {runtime_config}")
-
-    # Call the perform_training function with extracted parameters
     perform_training(
-        potential_config=potential_config,
-        training_config=training_config,
-        dataset_config=dataset_config,
-        runtime_config=runtime_config,
+        potential_parameters=potential_parameters,
+        training_parameters=training_parameters,
+        dataset_parameters=dataset_parameters,
+        runtime_parameters=runtime_parameters,
     )
 
 
 from lightning import Trainer
 
 
+from modelforge.train.parameters import RuntimeParameters, TrainingParameters
+from modelforge.dataset.dataset import DatasetParameters
+from modelforge.potential import (
+    ANI2xParameters,
+    PhysNetParameters,
+    SchNetParameters,
+    PaiNNParameters,
+    SAKEParameters,
+)
+
+
 def perform_training(
-    potential_config: Dict[str, Any],
-    training_config: Dict[str, Any],
-    dataset_config: Dict[str, Any],
-    runtime_config: Dict[str, Any],
-    checkpoint_path: Optional[str] = None,
+    dataset_config: DatasetParameters,
+    potential_config: Union[
+        ANI2xParameters,
+        SAKEParameters,
+        SchNetParameters,
+        PhysNetParameters,
+        PaiNNParameters,
+    ],
+    training_config: TrainingParameters,
+    runtime_config: RuntimeParameters,
 ) -> Trainer:
     """
     Performs the training process for a neural network potential model.
 
     Parameters
     ----------
-    potential_config : Dict[str, Any], optional
-        Additional parameters for the potential model.
-    training_config : Dict[str, Any], optional
-        Additional parameters for the training process.
     dataset_config : Dict[str, Any], optional
-        Additional parameters for the dataset.
+        Parameters for the dataset.
+    potential_config : BaseModel
+        Parameters for the potential model.
+    training_config : BaseModel
+       Parameters for the training process.
+    runtime_config : BaseModel
+        Parameters for runtime configuration.
 
     Returns
     -------
@@ -875,64 +936,35 @@ def perform_training(
     """
 
     from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
-
     from modelforge.dataset.utils import REGISTERED_SPLITTING_STRATEGIES
     from lightning import Trainer
     from modelforge.potential import NeuralNetworkPotentialFactory
     from modelforge.dataset.dataset import DataModule
 
-    # NOTE --------------------------------------- NOTE #
-    # FIXME TODO: move this to a dataclass and control default
-    # behavior from there this current approach is hacky and error prone
-    save_dir = runtime_config["save_dir"]
-    log.info(f"Saving logs to location: {save_dir}")
-
-    experiment_name = runtime_config["experiment_name"]
-    if experiment_name == "{model_name}_{dataset_name}":
-        experiment_name = (
-            f"{potential_config['model_name']}_{dataset_config['dataset_name']}"
+    # set up tensor board logger
+    if training_config.experiment_logger.logger_name == "tensorboard":
+        logger = TensorBoardLogger(
+            save_dir=runtime_config.save_dir, name=runtime_config.experiment_name
+        )
+    elif training_config.experiment_logger.logger_name == "wandb":
+        logger = WandbLogger(
+            save_dir=runtime_config.save_dir,
+            log_model=True,
+            name=runtime_config.experiment_name,
         )
 
-    model_name = potential_config["model_name"]
-    dataset_name = dataset_config["dataset_name"]
-
-    version_select = dataset_config.get("version_select", "latest")
-    accelerator = runtime_config.get("accelerator", "cpu")
-    splitting_strategy = training_config["splitting_strategy"]
-    nr_of_epochs = training_config["nr_of_epochs"]
-    num_nodes = runtime_config.get("num_nodes", 1)
-    devices = runtime_config.get("devices", 1)
-    batch_size = training_config["batch_size"]
-    remove_self_energies = training_config["remove_self_energies"]
-    early_stopping_config = training_config.get("early_stopping", None)
-    stochastic_weight_averaging_config = training_config.get(
-        "stochastic_weight_averaging_config", None
-    )
-    num_workers = dataset_config.get("number_of_worker", 4)
-    pin_memory = dataset_config.get("pin_memory", False)
-    local_cache_dir = runtime_config.get("local_cache_dir", "./")
-    # NOTE --------------------------------------- NOTE #
-    # FIXME TODO: move this to a dataclass and control default
-    # behavior from there this current approach is hacky and error prone
-
-    # set up tensor board logger
-    if training_config["experiment_logger"]["logger_name"].lower() == "tensorboard":
-        logger = TensorBoardLogger(save_dir, name=experiment_name)
-    elif training_config["experiment_logger"]["logger_name"].lower() == "wandb":
-        logger = WandbLogger(save_dir=save_dir, log_model=True, name=experiment_name)
-
-    else:
-        raise ValueError(f"Unknown logger name: {training_config['logger_name']}")
     # Set up dataset
     dm = DataModule(
-        name=dataset_name,
-        batch_size=batch_size,
-        remove_self_energies=remove_self_energies,
-        version_select=version_select,
-        local_cache_dir=local_cache_dir,
-        splitting_strategy=REGISTERED_SPLITTING_STRATEGIES[splitting_strategy["name"]](
-            seed=splitting_strategy.get("splitting_seed", 42),
-            split=splitting_strategy["data_split"],
+        name=dataset_config.dataset_name,
+        batch_size=training_config.batch_size,
+        remove_self_energies=training_config.remove_self_energies,
+        version_select=dataset_config.version_select,
+        local_cache_dir=runtime_config.local_cache_dir,
+        splitting_strategy=REGISTERED_SPLITTING_STRATEGIES[
+            training_config.splitting_strategy.name
+        ](
+            seed=training_config.splitting_strategy.seed,
+            split=training_config.splitting_strategy.data_split,
         ),
     )
     dm.prepare_data()
@@ -942,13 +974,22 @@ def perform_training(
     import toml
 
     dataset_statistic = toml.load(dm.dataset_statistic_filename)
-    log.info(dataset_statistic["training_dataset_statistics"])
+    log.info(
+        f"Setting per_atom_energy_mean and per_atom_energy_stddev for {potential_config.potential_name}"
+    )
+    log.info(
+        f"per_atom_energy_mean: {dataset_statistic['training_dataset_statistics']['per_atom_energy_mean']}"
+    )
+    log.info(
+        f"per_atom_energy_stddev: {dataset_statistic['training_dataset_statistics']['per_atom_energy_stddev']}"
+    )
+
     # Set up model
     model = NeuralNetworkPotentialFactory.generate_model(
         use="training",
         dataset_statistic=dataset_statistic,
-        model_parameter=potential_config,
-        training_parameter=training_config["training_parameter"],
+        model_parameter=potential_config.model_dump(),
+        training_parameter=training_config.model_dump(),
     )
 
     # set up traininer
@@ -959,51 +1000,58 @@ def perform_training(
 
     # set up callbacks
     callbacks = []
-    if stochastic_weight_averaging_config:
+    if training_config.stochastic_weight_averaging is not None:
         callbacks.append(
-            StochasticWeightAveraging(**stochastic_weight_averaging_config)
+            StochasticWeightAveraging(
+                **training_config.stochastic_weight_averaging.model_dump()
+            )
         )
-    if early_stopping_config:
-        log.warning("No early stopping is defined. Do you have resources to waste?")
-        callbacks.append(EarlyStopping(**early_stopping_config))
+
+    if training_config.early_stopping is not None:
+        callbacks.append(EarlyStopping(**training_config.early_stopping.model_dump()))
 
     from lightning.pytorch.callbacks import ModelCheckpoint
 
+    checkpoint_filename = (
+        f"best_{potential_config.potential_name}-{dataset_config.dataset_name}"
+        + "-{epoch:02d}-{val_loss:.2f}"
+    )
     checkpoint_callback = ModelCheckpoint(
         save_top_k=2,
-        monitor="val/per_molecule_energy/rmse",
-        filename="best_model",
+        monitor=training_config.monitor,
+        filename=checkpoint_filename,
     )
 
     callbacks.append(checkpoint_callback)
 
     # set up trainer
     trainer = Trainer(
-        max_epochs=nr_of_epochs,
-        num_nodes=num_nodes,
-        devices=devices,
-        accelerator=accelerator,
-        logger=logger,  # Add the logger here
+        max_epochs=training_config.number_of_epochs,
+        num_nodes=runtime_config.number_of_nodes,
+        devices=runtime_config.devices,
+        accelerator=runtime_config.accelerator,
+        logger=logger,
         callbacks=callbacks,
         inference_mode=False,
         num_sanity_val_steps=2,
-        log_every_n_steps=50,
+        log_every_n_steps=runtime_config.log_every_n_steps,
     )
-
+    if runtime_config.checkpoint_path == "None":
+        checkpoint_path = None
+    else:
+        checkpoint_path = runtime_config.checkpoint_path
     # Run training loop and validate
-    # training
     trainer.fit(
         model,
         train_dataloaders=dm.train_dataloader(
-            num_workers=num_workers, pin_memory=pin_memory
+            num_workers=dataset_config.num_workers, pin_memory=dataset_config.pin_memory
         ),
         val_dataloaders=dm.val_dataloader(),
         ckpt_path=checkpoint_path,
     )
-    # retrieve best model on validation set and calculate validation metric again
+
     trainer.validate(
         model=model, dataloaders=dm.val_dataloader(), ckpt_path="best", verbose=True
     )
-    # retrieve best model on test set and calculate metric
     trainer.test(dataloaders=dm.test_dataloader(), ckpt_path="best", verbose=True)
     return trainer

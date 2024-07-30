@@ -5,14 +5,16 @@ from modelforge.potential.painn import PaiNN
 def test_forward(single_batch_with_batchsize_64):
     """Test initialization of the PaiNN neural network potential."""
     # read default parameters
-    from modelforge.tests.test_models import load_configs
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
     # read default parameters
-    config = load_configs("painn", "qm9")
+    config = load_configs_into_pydantic_models("painn", "qm9")
 
     painn = PaiNN(
-        **config["potential"]["core_parameter"],
-        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+        **config["potential"].model_dump()["core_parameter"],
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
     )
     assert painn is not None, "PaiNN model should be initialized."
 
@@ -30,10 +32,10 @@ def test_equivariance(single_batch_with_batchsize_64):
     from dataclasses import replace
     import torch
 
-    from modelforge.tests.test_models import load_configs
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
     # read default parameters
-    config = load_configs("painn", "qm9")
+    config = load_configs_into_pydantic_models("painn", "qm9")
 
     # define a rotation matrix in 3D that rotates by 90 degrees around the z-axis
     # (clockwise when looking along the z-axis towards the origin)
@@ -42,8 +44,10 @@ def test_equivariance(single_batch_with_batchsize_64):
     )
 
     painn = PaiNN(
-        **config["potential"]["core_parameter"],
-        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+        **config["potential"].model_dump()["core_parameter"],
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
     ).double()
 
     methane_input = single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float64)
@@ -162,24 +166,24 @@ def test_compare_representation():
     # ---------------------------------------- #
     from openff.units import unit
     from .precalculated_values import load_precalculated_painn_results
-    from modelforge.tests.test_models import load_configs
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
     # read default parameters
-    config = load_configs("painn", "qm9")
+    config = load_configs_into_pydantic_models("painn", "qm9")
 
     torch.manual_seed(1234)
 
     # override defaults to match reference implementation in spk
-    config["potential"]["core_parameter"]["featurization"]["max_Z"] = 100
-    config["potential"]["core_parameter"]["featurization"][
-        "number_of_per_atom_features"
-    ] = 8
-    config["potential"]["core_parameter"]["number_of_radial_basis_functions"] = 5
+    config["potential"].core_parameter.featurization.max_Z = 100
+    config["potential"].core_parameter.featurization.number_of_per_atom_features = 8
+    config["potential"].core_parameter.number_of_radial_basis_functions = 5
 
     # initialize model
     model = PaiNN(
-        **config["potential"]["core_parameter"],
-        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+        **config["potential"].model_dump()["core_parameter"],
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
     ).to(torch.float64)
 
     # ------------------------------------ #

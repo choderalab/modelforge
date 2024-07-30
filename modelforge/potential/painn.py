@@ -507,20 +507,20 @@ class PaiNN(BaseNetwork):
         epsilon: float = 1e-8,
     ) -> None:
 
-        from modelforge.utils.units import _convert
+        from modelforge.utils.units import _convert_str_to_unit
 
         self.only_unique_pairs = False  # NOTE: for pairlist
 
         super().__init__(
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=postprocessing_parameter,
-            cutoff=_convert(cutoff),
+            cutoff=_convert_str_to_unit(cutoff),
         )
 
         self.core_module = PaiNNCore(
             featurization_config=featurization,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
-            cutoff=_convert(cutoff),
+            cutoff=_convert_str_to_unit(cutoff),
             number_of_interaction_modules=number_of_interaction_modules,
             shared_interactions=shared_interactions,
             shared_filters=shared_filters,

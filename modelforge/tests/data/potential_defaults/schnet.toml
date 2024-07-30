@@ -1,5 +1,5 @@
 [potential]
-model_name = "SchNet"
+potential_name = "SchNet"
 
 [potential.core_parameter]
 number_of_radial_basis_functions = 20

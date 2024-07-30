@@ -46,14 +46,16 @@ def test_init():
     """Test initialization of the Schnet model."""
     from modelforge.potential.schnet import SchNet
 
-    from modelforge.tests.test_models import load_configs
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
     # load default parameters
-    config = load_configs(f"schnet", "qm9")
+    config = load_configs_into_pydantic_models(f"schnet", "qm9")
     # initialize model
     schnet = SchNet(
-        **config["potential"]["core_parameter"],
-        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+        **config["potential"].model_dump()["core_parameter"],
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
     )
     assert schnet is not None, "Schnet model should be initialized."
 
@@ -166,24 +168,24 @@ def test_compare_forward():
     # ---------------------------------------- #
     from modelforge.potential.schnet import SchNet
 
-    from modelforge.tests.test_models import load_configs
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
     # load default parameters
-    config = load_configs(f"schnet", "qm9")
+    config = load_configs_into_pydantic_models(f"schnet", "qm9")
 
     # override default parameters
-    config["potential"]["core_parameter"]["featurization"][
-        "number_of_per_atom_features"
-    ] = 12
-    config["potential"]["core_parameter"]["number_of_radial_basis_functions"] = 5
-    config["potential"]["core_parameter"]["number_of_filters"] = 12
+    config["potential"].core_parameter.featurization.number_of_per_atom_features = 12
+    config["potential"].core_parameter.number_of_radial_basis_functions = 5
+    config["potential"].core_parameter.number_of_filters = 12
 
     torch.manual_seed(1234)
 
     # initialize model
     schnet = SchNet(
-        **config["potential"]["core_parameter"],
-        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+        **config["potential"].model_dump()["core_parameter"],
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
     ).double()
 
     # ------------------------------------ #

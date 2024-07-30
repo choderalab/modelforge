@@ -324,6 +324,7 @@ class RandomRecordSplittingStrategy(SplittingStrategy):
     Strategy to split a dataset randomly, keeping all conformers in a record in the same split.
 
     """
+
     def __init__(self, seed: int = 42, split: List[float] = [0.8, 0.1, 0.1]):
         """
         This strategy splits a dataset randomly based on provided ratios for training, validation,
@@ -505,7 +506,6 @@ class FirstComeFirstServeSplittingStrategy(SplittingStrategy):
         )
 
         return (train_d, val_d, test_d)
-
 
 
 REGISTERED_SPLITTING_STRATEGIES = {

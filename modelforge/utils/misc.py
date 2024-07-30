@@ -6,7 +6,8 @@ from modelforge.dataset.dataset import DataModule
 
 
 def visualize_model(
-    dm: DataModule, model_name: Literal["ANI2x", "PhysNet", "SchNet", "PaiNN", "SAKE"]
+    dm: DataModule,
+    potential_name: Literal["ANI2x", "PhysNet", "SchNet", "PaiNN", "SAKE"],
 ):
     # visualize the compute graph
     from modelforge.utils.io import import_
@@ -15,7 +16,7 @@ def visualize_model(
     from modelforge.potential import NeuralNetworkPotentialFactory
 
     inference_model = NeuralNetworkPotentialFactory.generate_model(
-        "inference", model_name
+        "inference", potential_name
     )
 
     nnp_input = next(iter(dm.train_dataloader())).nnp_input

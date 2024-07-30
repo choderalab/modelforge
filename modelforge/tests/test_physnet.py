@@ -2,14 +2,16 @@ def test_init():
 
     from modelforge.potential.physnet import PhysNet
 
-    from modelforge.tests.test_models import load_configs
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
     # read default parameters
-    config = load_configs(f"physnet", "qm9")
+    config = load_configs_into_pydantic_models(f"physnet", "qm9")
 
     model = PhysNet(
-        **config["potential"]["core_parameter"],
-        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+        **config["potential"].model_dump()["core_parameter"],
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
     )
 
 
@@ -18,18 +20,20 @@ def test_forward(single_batch_with_batchsize_64):
     from modelforge.potential.physnet import PhysNet
 
     # read default parameters
-    from modelforge.tests.test_models import load_configs
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
     # read default parameters
-    config = load_configs(f"physnet", "qm9")
+    config = load_configs_into_pydantic_models(f"physnet", "qm9")
 
     # Extract parameters
-    config["potential"]["core_parameter"]["number_of_modules"] = 1
-    config["potential"]["core_parameter"]["number_of_interaction_residual"] = 1
+    config["potential"].core_parameter.number_of_modules = 1
+    config["potential"].core_parameter.number_of_interaction_residual = 1
 
     model = PhysNet(
-        **config["potential"]["core_parameter"],
-        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+        **config["potential"].model_dump()["core_parameter"],
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
     )
     model = model.to(torch.float32)
     print(model)

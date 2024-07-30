@@ -3,7 +3,6 @@ import torch
 import pytest
 
 
-
 @pytest.fixture(scope="session")
 def prep_temp_dir(tmp_path_factory):
     fn = tmp_path_factory.mktemp("utils_test")
@@ -79,6 +78,7 @@ def test_cosine_cutoff():
     Test the cosine cutoff implementation.
     """
     from modelforge.potential.utils import CosineCutoff
+
     # Define inputs
     x = torch.Tensor([1, 2, 3])
     y = torch.Tensor([4, 5, 6])
@@ -104,6 +104,7 @@ def test_cosine_cutoff():
     expected_output = torch.tensor([0.5, 0.0, 0.0])
     cosine_cutoff_module = CosineCutoff(cutoff)
 
+
 def test_cosine_cutoff_module():
     # Test CosineCutoff module
     from modelforge.potential.utils import CosineCutoff
@@ -115,7 +116,6 @@ def test_cosine_cutoff_module():
     # and entry 0 becomes 0.5 (since the cutoff is 2.0 angstrom)
     # input in angstrom
     cutoff = 2.0 * unit.angstrom
-
 
     expected_output = torch.tensor([0.5, 0.0, 0.0]).unsqueeze(1)
     cosine_cutoff_module = CosineCutoff(cutoff)
@@ -132,17 +132,20 @@ def test_radial_symmetry_function_implementation():
     import torch
     from openff.units import unit
     import numpy as np
-    from modelforge.potential.utils import CosineCutoff, GaussianRadialBasisFunctionWithScaling
+    from modelforge.potential.utils import (
+        CosineCutoff,
+        GaussianRadialBasisFunctionWithScaling,
+    )
 
     cutoff_module = CosineCutoff(cutoff=unit.Quantity(5.0, unit.angstrom))
 
     class RadialSymmetryFunctionTest(GaussianRadialBasisFunctionWithScaling):
         @staticmethod
         def calculate_radial_basis_centers(
-                number_of_radial_basis_functions,
-                _max_distance_in_nanometer,
-                _min_distance_in_nanometer,
-                dtype,
+            number_of_radial_basis_functions,
+            _max_distance_in_nanometer,
+            _min_distance_in_nanometer,
+            dtype,
         ):
             centers = torch.linspace(
                 _min_distance_in_nanometer,
@@ -154,10 +157,10 @@ def test_radial_symmetry_function_implementation():
 
         @staticmethod
         def calculate_radial_scale_factor(
-                number_of_radial_basis_functions,
-                _max_distance_in_nanometer,
-                _min_distance_in_nanometer,
-                dtype
+            number_of_radial_basis_functions,
+            _max_distance_in_nanometer,
+            _min_distance_in_nanometer,
+            dtype,
         ):
             scale_factors = torch.full(
                 (number_of_radial_basis_functions,),
@@ -166,7 +169,6 @@ def test_radial_symmetry_function_implementation():
             )
             scale_factors = (scale_factors * -15_000) ** -0.5
             return scale_factors
-
 
     RSF = RadialSymmetryFunctionTest(
         number_of_radial_basis_functions=18,
@@ -546,7 +548,7 @@ def test_filelocking(prep_temp_dir):
                 if not check_file_lock(f):
                     lock_file(f)
                     self.did_I_lock_it = True
-                    time.sleep(2)
+                    time.sleep(3)
                     unlock_file(f)
 
                 else:

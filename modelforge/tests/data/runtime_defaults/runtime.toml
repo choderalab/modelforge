@@ -1,7 +1,10 @@
 [runtime]
-experiment_name = "exp_test"
-accelerator = "cpu"
-num_nodes = 1
-devices = 1                                     #[0,1,2,3]
+save_dir = "lightning_logs"
+experiment_name = "test_exp"
 local_cache_dir = "./cache"
-save_dir = "test"
+accelerator = "cpu"
+number_of_nodes = 1
+devices = 1                  #[0,1,2,3]
+checkpoint_path = "None"
+simulation_environment = "PyTorch"
+log_every_n_steps = 50

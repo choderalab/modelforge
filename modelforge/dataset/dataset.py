@@ -16,6 +16,31 @@ if TYPE_CHECKING:
     from modelforge.potential.processing import AtomicSelfEnergies
 
 
+from pydantic import BaseModel, field_validator, ConfigDict, Field
+
+
+class DatasetParameters(BaseModel):
+    """
+    Class to hold the dataset parameters.
+
+    Args:
+        dataset_name (str): The name of the dataset.
+        version_select (str): The version of the dataset to use
+        num_workers (int): The number of workers to use for the DataLoader
+        pin_memory (bool): Whether to pin memory for the DataLoader
+
+    """
+
+    model_config = ConfigDict(
+        use_enum_values=True, arbitrary_types_allowed=True, validate_assignment=True
+    )
+
+    dataset_name: str
+    version_select: str
+    num_workers: int = Field(gt=0)
+    pin_memory: bool
+
+
 @dataclass(frozen=False)
 class Metadata:
     """

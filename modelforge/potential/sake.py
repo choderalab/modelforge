@@ -367,7 +367,14 @@ class SAKEInteraction(nn.Module):
             d_ij.unsqueeze(-1)
         ).squeeze(-2) * self.edge_mlp_in(h_ij_cat)
         return self.edge_mlp_out(
-            torch.cat([h_ij_cat, h_ij_filtered, d_ij.unsqueeze(-1) / self.scale_factor_in_nanometer], dim=-1)
+            torch.cat(
+                [
+                    h_ij_cat,
+                    h_ij_filtered,
+                    d_ij.unsqueeze(-1) / self.scale_factor_in_nanometer,
+                ],
+                dim=-1,
+            )
         )
 
     def update_node(self, h, h_i_semantic, h_i_spatial):
@@ -595,13 +602,13 @@ class SAKE(BaseNetwork):
         dataset_statistic: Optional[Dict[str, float]] = None,
         epsilon: float = 1e-8,
     ):
-        from modelforge.utils.units import _convert
+        from modelforge.utils.units import _convert_str_to_unit
 
         self.only_unique_pairs = False  # NOTE: for pairlist
         super().__init__(
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=postprocessing_parameter,
-            cutoff=_convert(cutoff),
+            cutoff=_convert_str_to_unit(cutoff),
         )
 
         self.core_module = SAKECore(
@@ -609,7 +616,7 @@ class SAKE(BaseNetwork):
             number_of_interaction_modules=number_of_interaction_modules,
             number_of_spatial_attention_heads=number_of_spatial_attention_heads,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
-            cutoff=_convert(cutoff),
+            cutoff=_convert_str_to_unit(cutoff),
             epsilon=epsilon,
         )
 

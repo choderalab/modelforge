@@ -100,19 +100,21 @@ def test_forward_and_backward():
     # Test modelforge ANI implementation
     # Test forward pass and backpropagation through network
     from modelforge.potential.ani import ANI2x
-    from modelforge.tests.test_models import load_configs
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
     import torch
 
     # read default parameters
-    config = load_configs("ani2x", "qm9")
+    config = load_configs_into_pydantic_models("ani2x", "qm9")
 
     _, _, _, mf_input = setup_two_methanes()
     device = torch.device("cpu")
 
     # initialize model
     model = ANI2x(
-        **config["potential"]["core_parameter"],
-        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+        **config["potential"].model_dump()["core_parameter"],
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
     ).to(device=device)
     energy = model(mf_input)
     derivative = torch.autograd.grad(
@@ -292,17 +294,18 @@ def test_compare_aev():
     from modelforge.potential import ANI2x
 
     # read default parameters
-    from modelforge.tests.test_models import load_configs
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
     # read default parameters
-    config = load_configs("ani2x", "qm9")
+    config = load_configs_into_pydantic_models("ani2x", "qm9")
 
     # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
 
     mf_model = ANI2x(
-        **config["potential"]["core_parameter"],
-        postprocessing_parameter=config["potential"]["postprocessing_parameter"],
+        **config["potential"].model_dump()["core_parameter"],
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
     )
     # perform input checks
     mf_model.compute_interacting_pairs._input_checks(mf_input)

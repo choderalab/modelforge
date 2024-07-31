@@ -113,6 +113,7 @@ class TensorNet(BaseNetwork):
         minimum_interaction_radius: unit.Quantity,
         highest_atomic_number: int,
         equivariance_invariance_group: str,
+        activation_function: str,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
@@ -132,6 +133,7 @@ class TensorNet(BaseNetwork):
             trainable_centers_and_scale_factors=False,
             highest_atomic_number=highest_atomic_number,
             equivariance_invariance_group=equivariance_invariance_group,
+            activation_function=activation_function,
         )
 
 
@@ -146,14 +148,15 @@ class TensorNetCore(CoreNetwork):
         trainable_centers_and_scale_factors: bool,
         highest_atomic_number: int,
         equivariance_invariance_group: str,
+        activation_function: str,
     ):
-        super().__init__()
+        super().__init__(activation_function)
 
         torch.manual_seed(0)
         self.representation_module = TensorNetRepresentation(
             number_of_per_atom_features=number_of_per_atom_features,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
-            activation_function=nn.SiLU,
+            activation_function=self.activation_function_class,
             maximum_interaction_radius=maximum_interaction_radius,
             minimum_interaction_radius=minimum_interaction_radius,
             trainable_centers_and_scale_factors=trainable_centers_and_scale_factors,
@@ -164,7 +167,7 @@ class TensorNetCore(CoreNetwork):
                 TensorNetInteraction(
                     number_of_per_atom_features=number_of_per_atom_features,
                     number_of_radial_basis_functions=number_of_radial_basis_functions,
-                    activation_function=nn.SiLU,
+                    activation_function=self.activation_function_class,
                     maximum_interaction_radius=maximum_interaction_radius,
                     equivariance_invariance_group=equivariance_invariance_group,
                 )
@@ -174,7 +177,7 @@ class TensorNetCore(CoreNetwork):
         self.linear = nn.Linear(3 * number_of_per_atom_features, number_of_per_atom_features)
         self.out_norm = nn.LayerNorm(3 * number_of_per_atom_features)
         # TODO: Should we define what activation function to use in toml?
-        self.activation_function = nn.SiLU()
+        self.activation_function = self.activation_function_class()
 
     def compute_properties(self, data: TensorNetNeuralNetworkData):
         X, radial_feature_vector = self.representation_module(data)

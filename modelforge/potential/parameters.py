@@ -102,6 +102,7 @@ class TensorNetParameters(ParametersBase):
         minimum_interaction_radius: Union[str, unit.Quantity]
         highest_atomic_number: int
         equivariance_invariance_group: str
+        activation_function: str
 
         converted_units = field_validator("maximum_interaction_radius")(_convert_str_to_unit)
         converted_units = field_validator("minimum_interaction_radius")(_convert_str_to_unit)

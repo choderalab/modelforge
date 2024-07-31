@@ -21,7 +21,7 @@ def initialize_model(
     return SchNet(
         featurization={
             "properties_to_featurize": ["atomic_number"],
-            "maximum_atomic_number": 101,
+            "highest_atomic_number": 101,
             "number_of_per_atom_features": 32,
         },
         number_of_interaction_modules=nr_of_interactions,

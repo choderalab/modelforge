@@ -62,7 +62,7 @@ class SchNetParameters(ParametersBase):
     class CoreParameter(ParametersBase):
         class Featurization(ParametersBase):
             properties_to_featurize: List[str]
-            maximum_atomic_number: int
+            highest_atomic_number: int
             number_of_per_atom_features: int
 
         number_of_radial_basis_functions: int
@@ -92,7 +92,7 @@ class PaiNNParameters(ParametersBase):
     class CoreParameter(ParametersBase):
         class Featurization(ParametersBase):
             properties_to_featurize: List[str]
-            maximum_atomic_number: int
+            highest_atomic_number: int
             number_of_per_atom_features: int
 
         number_of_radial_basis_functions: int
@@ -122,7 +122,7 @@ class PhysNetParameters(ParametersBase):
     class CoreParameter(ParametersBase):
         class Featurization(ParametersBase):
             properties_to_featurize: List[str]
-            maximum_atomic_number: int
+            highest_atomic_number: int
             number_of_per_atom_features: int
 
         number_of_radial_basis_functions: int
@@ -151,7 +151,7 @@ class SAKEParameters(ParametersBase):
     class CoreParameter(ParametersBase):
         class Featurization(ParametersBase):
             properties_to_featurize: List[str]
-            maximum_atomic_number: int
+            highest_atomic_number: int
             number_of_per_atom_features: int
 
         number_of_radial_basis_functions: int

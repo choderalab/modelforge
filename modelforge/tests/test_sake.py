@@ -431,12 +431,12 @@ def test_model_against_reference(single_batch_with_batchsize_1):
     nr_interaction_blocks = 3
     cutoff = 5.0 * unit.angstrom
     nr_atom_basis = 11
-    maximum_atomic_number = 13
+    highest_atomic_number = 13
 
     mf_sake = SAKE(
         featurization={
             "properties_to_featurize": ["atomic_number"],
-            "maximum_atomic_number": maximum_atomic_number,
+            "highest_atomic_number": highest_atomic_number,
             "number_of_per_atom_features": nr_atom_basis,
         },
         number_of_interaction_modules=nr_interaction_blocks,
@@ -478,7 +478,7 @@ def test_model_against_reference(single_batch_with_batchsize_1):
         ].set(1)
 
     h = jax.nn.one_hot(
-        prepared_methane.atomic_numbers.detach().numpy(), maximum_atomic_number
+        prepared_methane.atomic_numbers.detach().numpy(), highest_atomic_number
     )
     x = prepared_methane.positions.detach().numpy()
     variables = ref_sake.init(key, h, x, mask=mask)

@@ -454,11 +454,11 @@ def test_embedding():
     """
     from modelforge.potential.utils import Embedding
 
-    maximum_atomic_number = 100
+    highest_atomic_number = 100
     embedding_dim = 7
 
     # Create Embedding instance
-    embedding = Embedding(maximum_atomic_number, embedding_dim)
+    embedding = Embedding(highest_atomic_number, embedding_dim)
 
     # Test embedding_dim property
     assert embedding.embedding_dim == embedding_dim

@@ -11,7 +11,7 @@ activation_function = "SiLU"
 
 [potential.core_parameter.featurization]
 properties_to_featurize = ['atomic_number']
-maximum_atomic_number = 101
+highest_atomic_number = 101
 number_of_per_atom_features = 32
 
 [potential.postprocessing_parameter]

@@ -59,8 +59,8 @@ class PhysNetNeuralNetworkData(NeuralNetworkData):
 class PhysNetRepresentation(nn.Module):
     def __init__(
         self,
-        cutoff: unit = 5 * unit.angstrom,
-        number_of_radial_basis_functions: int = 16,
+        maximum_interaction_radius: unit.Quantity,
+        number_of_radial_basis_functions: int,
     ):
         """
         Representation module for the PhysNet potential, handling the generation of
@@ -68,9 +68,9 @@ class PhysNetRepresentation(nn.Module):
 
         Parameters
         ----------
-        cutoff : openff.units.unit.Quantity, default=5*unit.angstrom
+        maximum_interaction_radius : openff.units.unit.Quantity
             The cutoff distance for interactions.
-        number_of_radial_basis_functions : int, default=16
+        number_of_radial_basis_functions : int
             Number of radial basis functions to use.
         """
 
@@ -79,14 +79,14 @@ class PhysNetRepresentation(nn.Module):
         # cutoff
         from modelforge.potential import CosineCutoff
 
-        self.cutoff_module = CosineCutoff(cutoff)
+        self.cutoff_module = CosineCutoff(maximum_interaction_radius)
 
         # radial symmetry function
         from .utils import PhysNetRadialBasisFunction
 
         self.radial_symmetry_function_module = PhysNetRadialBasisFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
-            max_distance=cutoff,
+            max_distance=maximum_interaction_radius,
             dtype=torch.float32,
         )
 
@@ -164,9 +164,16 @@ class PhysNetResidual(nn.Module):
         Dimensionality of the output feature vector, which typically matches the input dimension.
     """
 
-    def __init__(self, input_dim: int, output_dim: int):
+    def __init__(
+        self,
+        input_dim: int,
+        output_dim: int,
+        activation_function_class: torch.nn.Module,
+    ):
         super().__init__()
-        self.dense = Dense(input_dim, output_dim, activation=ShiftedSoftplus())
+        self.dense = Dense(
+            input_dim, output_dim, activation_function=activation_function_class()
+        )
         self.residual = Dense(output_dim, output_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -190,9 +197,10 @@ class PhysNetResidual(nn.Module):
 class PhysNetInteractionModule(nn.Module):
     def __init__(
         self,
-        number_of_per_atom_features: int = 64,
-        number_of_radial_basis_functions: int = 16,
-        number_of_interaction_residual: int = 3,
+        number_of_per_atom_features: int,
+        number_of_radial_basis_functions: int,
+        number_of_interaction_residual: int,
+        activation_function_class: torch.nn.Module,
     ):
         """
         Module to compute interaction terms based on atomic distances and features.
@@ -207,7 +215,9 @@ class PhysNetInteractionModule(nn.Module):
         """
 
         super().__init__()
-        from .utils import ShiftedSoftplus, Dense
+        from .utils import Dense
+
+        self.activation_function = activation_function_class()
 
         self.attention_mask = Dense(
             number_of_radial_basis_functions,
@@ -215,18 +225,17 @@ class PhysNetInteractionModule(nn.Module):
             bias=False,
             weight_init=torch.nn.init.zeros_,
         )
-        self.activation_function = ShiftedSoftplus()
 
         # Networks for processing atomic embeddings of i and j atoms
         self.interaction_i = Dense(
             number_of_per_atom_features,
             number_of_per_atom_features,
-            activation=self.activation_function,
+            activation_function=activation_function_class(),
         )
         self.interaction_j = Dense(
             number_of_per_atom_features,
             number_of_per_atom_features,
-            activation=self.activation_function,
+            activation_function=activation_function_class(),
         )
 
         self.process_v = Dense(number_of_per_atom_features, number_of_per_atom_features)
@@ -235,7 +244,9 @@ class PhysNetInteractionModule(nn.Module):
         self.residuals = nn.ModuleList(
             [
                 PhysNetResidual(
-                    number_of_per_atom_features, number_of_per_atom_features
+                    input_dim=number_of_per_atom_features,
+                    output_dim=number_of_per_atom_features,
+                    activation_function_class=activation_function_class,
                 )
                 for _ in range(number_of_interaction_residual)
             ]
@@ -314,8 +325,9 @@ class PhysNetOutput(nn.Module):
     def __init__(
         self,
         number_of_per_atom_features: int,
-        number_of_atomic_properties: int = 2,
-        number_of_residuals_in_output: int = 2,
+        number_of_atomic_properties: int,
+        number_of_residuals_in_output: int,
+        activation_function_class: torch.nn.Module,
     ):
         from .utils import Dense
 
@@ -323,7 +335,9 @@ class PhysNetOutput(nn.Module):
         self.residuals = nn.Sequential(
             *[
                 PhysNetResidual(
-                    number_of_per_atom_features, number_of_per_atom_features
+                    number_of_per_atom_features,
+                    number_of_per_atom_features,
+                    activation_function_class,
                 )
                 for _ in range(number_of_residuals_in_output)
             ]
@@ -343,14 +357,13 @@ class PhysNetOutput(nn.Module):
 class PhysNetModule(nn.Module):
     def __init__(
         self,
-        number_of_per_atom_features: int = 64,
-        number_of_radial_basis_functions: int = 16,
-        number_of_interaction_residual: int = 2,
+        number_of_per_atom_features: int,
+        number_of_radial_basis_functions: int,
+        number_of_interaction_residual: int,
+        activation_function_class: torch.nn.Module,
     ):
         """
-        Wrapper module that combines the PhysNetInteraction, PhysNetResidual, and
-        PhysNetOutput classes into a single module. This serves as the building
-        block for the PhysNet model.
+        Wrapper module that combines the PhysNetInteraction, PhysNetResidual, and PhysNetOutput classes into a single module. This serves as the building block for the PhysNet model.
 
         This is a skeletal implementation that needs to be expanded upon.
         """
@@ -364,10 +377,13 @@ class PhysNetModule(nn.Module):
             number_of_per_atom_features=number_of_per_atom_features,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             number_of_interaction_residual=number_of_interaction_residual,
+            activation_function_class=activation_function_class,
         )
         self.output = PhysNetOutput(
             number_of_per_atom_features=number_of_per_atom_features,
             number_of_atomic_properties=2,
+            number_of_residuals_in_output=2,
+            activation_function_class=activation_function_class,
         )
 
     def forward(self, data: PhysNetNeuralNetworkData) -> Dict[str, torch.Tensor]:
@@ -410,10 +426,11 @@ class PhysNetCore(CoreNetwork):
     def __init__(
         self,
         featurization_config: Dict[str, Union[List[str], int]],
-        cutoff: unit.Quantity,
+        maximum_interaction_radius: unit.Quantity,
         number_of_radial_basis_functions: int,
         number_of_interaction_residual: int,
         number_of_modules: int,
+        activation_function: str,
     ) -> None:
         """
         Implementation of the PhysNet neural network potential.
@@ -422,23 +439,24 @@ class PhysNetCore(CoreNetwork):
         ----------
         featurization_config: Dict[str, Union[List[str], int]],
 
-        cutoff : openff.units.unit.Quantity
+        maximum_interaction_radius : openff.units.unit.Quantity
             The cutoff distance for interactions.
         number_of_modules : int
         """
 
         log.debug("Initializing the PhysNet architecture.")
-        super().__init__()
+        super().__init__(activation_function)
 
         # featurize the atomic input
         from modelforge.potential.utils import FeaturizeInput
 
         self.featurize_input = FeaturizeInput(featurization_config)
-        number_of_per_atom_features = featurization_config[
-            "number_of_per_atom_features"
-        ]
+        number_of_per_atom_features = int(
+            featurization_config["number_of_per_atom_features"]
+        )
+        highest_atomic_number = int(featurization_config["highest_atomic_number"])
         self.physnet_representation_module = PhysNetRepresentation(
-            cutoff=cutoff,
+            maximum_interaction_radius=maximum_interaction_radius,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
         )
 
@@ -451,14 +469,15 @@ class PhysNetCore(CoreNetwork):
                     number_of_per_atom_features,
                     number_of_radial_basis_functions,
                     number_of_interaction_residual,
+                    activation_function_class=self.activation_function_class,
                 )
                 for _ in range(number_of_modules)
             ]
         )
 
         # learnable shift and bias that is applied per-element to ech atomic energy
-        self.atomic_scale = nn.Parameter(torch.ones(featurization_config["max_Z"], 2))
-        self.atomic_shift = nn.Parameter(torch.zeros(featurization_config["max_Z"], 2))
+        self.atomic_scale = nn.Parameter(torch.ones(highest_atomic_number, 2))
+        self.atomic_shift = nn.Parameter(torch.zeros(highest_atomic_number, 2))
 
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
@@ -584,10 +603,11 @@ class PhysNet(BaseNetwork):
     def __init__(
         self,
         featurization: Dict[str, Union[List[str], int]],
-        cutoff: Union[unit.Quantity, str],
+        maximum_interaction_radius: Union[unit.Quantity, str],
         number_of_radial_basis_functions: int,
         number_of_interaction_residual: int,
         number_of_modules: int,
+        activation_function: str,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
@@ -598,7 +618,7 @@ class PhysNet(BaseNetwork):
         ----------
         featurization : Dict[str, Union[List[str], int]]
             Configuration for atomic feature generation.
-        cutoff : Union[unit.Quantity, str]
+        maximum_interaction_radius : Union[unit.Quantity, str]
             The cutoff distance for interactions.
         number_of_radial_basis_functions : int
             The number of radial basis functions.
@@ -616,15 +636,16 @@ class PhysNet(BaseNetwork):
         super().__init__(
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=postprocessing_parameter,
-            cutoff=_convert_str_to_unit(cutoff),
+            maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
         )
 
         self.core_module = PhysNetCore(
             featurization_config=featurization,
-            cutoff=_convert_str_to_unit(cutoff),
+            maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             number_of_interaction_residual=number_of_interaction_residual,
             number_of_modules=number_of_modules,
+            activation_function=activation_function,
         )
 
     def _config_prior(self):
@@ -650,21 +671,3 @@ class PhysNet(BaseNetwork):
         }
         prior.update(shared_config_prior())
         return prior
-
-    def combine_per_atom_properties(
-        self, values: Dict[str, torch.Tensor]
-    ) -> torch.Tensor:
-        """
-        Combine the per-atom properties.
-
-        Parameters
-        ----------
-        values : Dict[str, torch.Tensor]
-            Dictionary of per-atom properties.
-
-        Returns
-        -------
-        torch.Tensor
-            Combined per-atom properties.
-        """
-        return values

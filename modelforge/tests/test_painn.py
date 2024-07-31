@@ -160,7 +160,7 @@ import torch
 from modelforge.tests.test_schnet import setup_single_methane_input
 
 
-def test_compare_representation():
+def test_compare_implementation_agains_reference_implementation():
     # ---------------------------------------- #
     # setup the PaiNN model
     # ---------------------------------------- #
@@ -174,7 +174,7 @@ def test_compare_representation():
     torch.manual_seed(1234)
 
     # override defaults to match reference implementation in spk
-    config["potential"].core_parameter.featurization.max_Z = 100
+    config["potential"].core_parameter.featurization.highest_atomic_number = 100
     config["potential"].core_parameter.featurization.number_of_per_atom_features = 8
     config["potential"].core_parameter.number_of_radial_basis_functions = 5
 

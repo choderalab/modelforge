@@ -1,13 +1,11 @@
 import math
-from dataclasses import dataclass, field
-from typing import Any, Callable, Optional, Tuple, NamedTuple, Type
+from dataclasses import dataclass
+from typing import Callable, Optional, Tuple
 
 import numpy as np
 import torch
 import torch.nn as nn
-from loguru import logger as log
 from openff.units import unit
-from pint import Quantity
 from typing import Union
 from modelforge.dataset.dataset import NNPInput
 
@@ -348,7 +346,7 @@ class FeaturizeInput(nn.Module):
             A dictionary containing the featurization configuration. It should have the following keys:
             - "properties_to_featurize" : list
                 A list of properties to featurize.
-            - "max_Z" : int
+            - "highest_atomic_number" : int
                 The maximum atomic number.
             - "number_of_per_atom_features" : int
                 The number of per-atom features.
@@ -377,7 +375,7 @@ class FeaturizeInput(nn.Module):
             ):
 
                 self.nuclear_charge_embedding = Embedding(
-                    int(featurization_config["max_Z"]),
+                    int(featurization_config["highest_atomic_number"]),
                     int(featurization_config["number_of_per_atom_features"]),
                 )
                 self.registered_embedding_operations.append("nuclear_charge_embedding")
@@ -477,15 +475,12 @@ class Dense(nn.Linear):
         in_features: int,
         out_features: int,
         bias: bool = True,
-        activation: Optional[
-            Union[nn.Module, Callable[[torch.Tensor], torch.Tensor]]
-        ] = None,
+        activation_function: Optional[nn.Module] = None,
         weight_init: Callable = xavier_uniform_,
         bias_init: Callable = zeros_,
     ):
         """
-        __init__ _summary_
-
+        A linear or non-linear transformation
 
         Parameters
         ----------
@@ -495,8 +490,8 @@ class Dense(nn.Linear):
             Number of output features.
         bias : bool, optional
             If set to False, the layer will not learn an additive bias. Default is True.
-        activation : nn.Module or Callable[[torch.Tensor], torch.Tensor], optional
-            Activation function to be applied. Default is None, which applies the identity function and makes this a linear transformation.
+        activation_function : nn.Module , optional
+            Activation function to be applied. Default is nn.Identity(), which applies the identity function and makes this a linear ransformation.
         weight_init : Callable, optional
             Callable to initialize the weights. Default is xavier_uniform_.
         bias_init : Callable, optional
@@ -510,7 +505,9 @@ class Dense(nn.Linear):
             in_features, out_features, bias
         )  # NOTE: the `reseet_paramters` method is called in the super class
 
-        self.activation = activation or nn.Identity()
+        self.activation_function = (
+            activation_function if activation_function is not None else nn.Identity()
+        )
 
     def reset_parameters(self):
         """
@@ -536,7 +533,7 @@ class Dense(nn.Linear):
 
         """
         y = F.linear(input, self.weight, self.bias)
-        return self.activation(y)
+        return self.activation_function(y)
 
 
 from openff.units import unit
@@ -1352,3 +1349,17 @@ def scatter_softmax(
     normalizing_constants = sum_per_index.gather(dim, index)
 
     return recentered_scores_exp.div(normalizing_constants)
+
+
+ACTIVATION_FUNCTIONS = {
+    "ReLU": nn.ReLU,
+    "CeLU": nn.CELU,
+    "Sigmoid": nn.Sigmoid,
+    "Softmax": nn.Softmax,
+    "ShiftedSoftplus": ShiftedSoftplus,
+    "SiLU": nn.SiLU,
+    "Tanh": nn.Tanh,
+    "LeakyReLU": nn.LeakyReLU,
+    "ELU": nn.ELU,
+    # Add more activation functions as needed
+}

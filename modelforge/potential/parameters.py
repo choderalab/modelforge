@@ -91,16 +91,16 @@ class TensorNetParameters(ParametersBase):
         #     max_Z: int
         #     number_of_per_atom_features: int
 
-        hidden_channels: int
+        number_of_per_atom_features: int
         number_of_interaction_layers: int
         number_of_radial_basis_functions: int
-        radial_max_distance: Union[str, unit.Quantity]
-        radial_min_distance: Union[str, unit.Quantity]
-        max_Z: int
+        maximum_interaction_radius: Union[str, unit.Quantity]
+        minimum_interaction_radius: Union[str, unit.Quantity]
+        highest_atomic_number: int
         equivariance_invariance_group: str
 
-        converted_units = field_validator("radial_max_distance")(_convert_str_to_unit)
-        converted_units = field_validator("radial_min_distance")(_convert_str_to_unit)
+        converted_units = field_validator("maximum_interaction_radius")(_convert_str_to_unit)
+        converted_units = field_validator("minimum_interaction_radius")(_convert_str_to_unit)
 
     class PostProcessingParameter(ParametersBase):
         per_atom_energy: PerAtomEnergy = PerAtomEnergy()

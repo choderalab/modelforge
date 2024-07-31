@@ -128,7 +128,6 @@ def test_compare_radial_symmetry_features():
     # Compare the TensorNet radial symmetry function
     # to the output of the modelforge radial symmetry function
     # TODO: only 'expnorm' from TensorNet implemented
-
     import torch
     from openff.units import unit
 
@@ -148,18 +147,18 @@ def test_compare_radial_symmetry_features():
     d_ij = torch.rand(5, 1) * 5  # NOTE: angstrom
 
     # TensorNet constants
-    radial_cutoff = 5.1
-    radial_start = 0.0  # cutoff_lower also affect cutoff function in torchmd-net
-    radial_dist_divisions = 8
+    maximum_interaction_radius = 5.1
+    minimum_interaction_radius = 0.0  # cutoff_lower also affect cutoff function in torchmd-net
+    number_of_per_atom_features = 8
 
     rsf = TensorNetRadialBasisFunction(
-        number_of_radial_basis_functions=radial_dist_divisions,
-        max_distance=radial_cutoff * unit.angstrom,
-        min_distance=radial_start * unit.angstrom,
-        alpha=((radial_cutoff - radial_start) / 5.0 * unit.angstrom),
+        number_of_radial_basis_functions=number_of_per_atom_features,
+        max_distance=maximum_interaction_radius * unit.angstrom,
+        min_distance=minimum_interaction_radius * unit.angstrom,
+        alpha=((maximum_interaction_radius - minimum_interaction_radius) / 5.0 * unit.angstrom),
     )
     mf_r = rsf(d_ij / 10)  # torch.Size([5, 8]) # NOTE: nanometer
-    cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom)
+    cutoff_module = CosineCutoff(maximum_interaction_radius * unit.angstrom)
 
     rcut_ij = cutoff_module(d_ij / 10)  # torch.Size([5, 1]) # NOTE: nanometer
     mf_r = (mf_r * rcut_ij).unsqueeze(1)
@@ -169,9 +168,9 @@ def test_compare_radial_symmetry_features():
     else:
         tn_r = prepare_values_for_test_tensornet_compare_radial_symmetry_features(
             d_ij,
-            radial_start,
-            radial_cutoff,
-            radial_dist_divisions,
+            minimum_interaction_radius,
+            maximum_interaction_radius,
+            number_of_per_atom_features,
             trainable=False,
             seed=seed,
         )
@@ -199,13 +198,13 @@ def test_representation():
     reference_data = "modelforge/tests/data/tensornet_representation.pt"
     # reference_data = None
 
-    hidden_channels = 8
+    number_of_per_atom_features = 8
     num_rbf = 16
     act_class = nn.SiLU
     cutoff_lower = 0.0
     cutoff_upper = 5.1
     trainable_rbf = False
-    max_z = 128
+    highest_atomic_number = 128
 
     # Set up a dataset
     # prepare reference value
@@ -241,13 +240,13 @@ def test_representation():
     ################ modelforge TensorNet ################
     torch.manual_seed(seed)
     tensornet_representation_module = TensorNetRepresentation(
-        hidden_channels,
+        number_of_per_atom_features,
         num_rbf,
         act_class,
         cutoff_upper * unit.angstrom,
         cutoff_lower * unit.angstrom,
         trainable_rbf,
-        max_z,
+        highest_atomic_number,
     )
     nnp_input = tensornet.core_module._model_specific_input_preparation(
         mf_input, pairlist_output
@@ -261,13 +260,13 @@ def test_representation():
     else:
         tn_X = prepare_values_for_test_tensornet_representation(
             nnp_input,
-            hidden_channels,
+            number_of_per_atom_features,
             num_rbf,
             act_class,
             cutoff_lower,
             cutoff_upper,
             trainable_rbf,
-            max_z,
+            highest_atomic_number,
             seed,
         )
     ################ torchmd-net TensorNet ################
@@ -296,7 +295,7 @@ def test_interaction():
     reference_data = "modelforge/tests/data/tensornet_interaction.pt"
     # reference_data = None
 
-    hidden_channels = 8
+    number_of_per_atom_features = 8
     num_rbf = 16
     act_class = nn.SiLU
     cutoff_lower = 0.0
@@ -351,7 +350,7 @@ def test_interaction():
     # interaction
     torch.manual_seed(seed)
     interaction_module = TensorNetInteraction(
-        hidden_channels,
+        number_of_per_atom_features,
         num_rbf,
         act_class,
         cutoff_upper * unit.angstrom,
@@ -367,7 +366,6 @@ def test_interaction():
     ################ modelforge TensorNet ################
 
     ################ TensorNet ################
-
     if reference_data:
         tn_X = torch.load(reference_data)
     else:
@@ -376,7 +374,7 @@ def test_interaction():
             nnp_input,
             radial_feature_vector,
             total_charge,
-            hidden_channels,
+            number_of_per_atom_features,
             num_rbf,
             act_class,
             cutoff_lower,

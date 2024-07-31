@@ -1,14 +1,14 @@
 [potential]
-potential_name = "SchNet"
+potential_name = "TensorNet"
 
 [potential.core_parameter]
-max_Z = 101
-number_of_atom_features = 32
-number_of_radial_basis_functions = 20
-cutoff = "5.0 angstrom"
-number_of_interaction_modules = 3
-number_of_filters = 32
-shared_interactions = false
+hidden_channels = 8
+number_of_interaction_layers = 2
+number_of_radial_basis_functions = 16
+radial_max_distance = "5.1 angstrom"
+radial_min_distance = "0.0 angstrom"
+max_Z = 128
+equivariance_invariance_group = "O(3)"
 
 [potential.postprocessing_parameter]
 [potential.postprocessing_parameter.per_atom_energy]
@@ -16,9 +16,7 @@ normalize = true
 from_atom_to_molecule_reduction = true
 keep_per_atom_property = true
 [potential.postprocessing_parameter.general_postprocessing_operation]
-calculate_molecular_self_energy = true
-
-[dataset]
+calculate_molecular_self_energy = true[dataset]
 dataset_name = "QM9"
 
 [training]

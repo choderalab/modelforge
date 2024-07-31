@@ -620,7 +620,7 @@ class AngularSymmetryFunction(nn.Module):
 
     def __init__(
         self,
-        max_distance: unit.Quantity,
+        maximum_interaction_radius: unit.Quantity,
         min_distance: unit.Quantity,
         number_of_gaussians_for_asf: int = 8,
         angle_sections: int = 4,
@@ -640,9 +640,9 @@ class AngularSymmetryFunction(nn.Module):
         from loguru import logger as log
 
         self.number_of_gaussians_asf = number_of_gaussians_for_asf
-        self.angular_cutoff = max_distance
+        self.angular_cutoff = maximum_interaction_radius
         self.cosine_cutoff = CosineCutoff(self.angular_cutoff)
-        _unitless_angular_cutoff = max_distance.to(unit.nanometer).m
+        _unitless_angular_cutoff = maximum_interaction_radius.to(unit.nanometer).m
         self.angular_start = min_distance
         _unitless_angular_start = min_distance.to(unit.nanometer).m
 
@@ -1178,24 +1178,6 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
 
 
 class TensorNetRadialBasisFunction(PhysNetRadialBasisFunction):
-    def __init__(
-            self,
-            number_of_radial_basis_functions: int,
-            max_distance: unit.Quantity,
-            min_distance: unit.Quantity = 0.0 * unit.nanometer,
-            alpha: unit.Quantity = 1.0 * unit.angstrom,
-            dtype: torch.dtype = torch.float32,
-            trainable_centers_and_scale_factors: bool = False,
-    ):
-        super().__init__(
-            number_of_radial_basis_functions,
-            max_distance,
-            min_distance,
-            alpha,
-            dtype,
-            trainable_centers_and_scale_factors,
-        )
-
     @staticmethod
     def calculate_radial_basis_centers(
             number_of_radial_basis_functions,

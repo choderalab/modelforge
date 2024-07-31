@@ -897,7 +897,7 @@ class BaseNetwork(Module):
         *,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]],
-        cutoff: unit.Quantity,
+        maximum_interaction_radius: unit.Quantity,
     ):
         """
         The BaseNetwork wraps the input preparation (including pairlist calculation, d_ij and r_ij calculation), the actual model as well as the output preparation in a wrapper class.
@@ -922,7 +922,7 @@ class BaseNetwork(Module):
                 "The only_unique_pairs attribute is not set in the child class. Please set it to True or False before calling super().__init__."
             )
         self.compute_interacting_pairs = ComputeInteractingAtomPairs(
-            cutoff=_convert_str_to_unit(cutoff),
+            cutoff=_convert_str_to_unit(maximum_interaction_radius),
             only_unique_pairs=self.only_unique_pairs,
         )
 

@@ -73,7 +73,7 @@ def setup_modelforge_painn_representation(
     return mf_PaiNN(
         featurization={
             "properties_to_featurize": ["atomic_number"],
-            "max_Z": 101,
+            "maximum_atomic_number": 101,
             "number_of_per_atom_features": 32,
         },
         number_of_interaction_modules=nr_of_interactions,
@@ -458,7 +458,7 @@ def setup_mf_schnet_representation(
     return mf_SchNET(
         featurization={
             "properties_to_featurize": ["atomic_number"],
-            "max_Z": 101,
+            "maximum_atomic_number": 101,
             "number_of_per_atom_features": 32,
         },
         number_of_interaction_modules=nr_of_interactions,

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, Tuple
-from .models import ComputeInteractingAtomPairs, BaseNetwork, CoreNetwork
+from .models import BaseNetwork, CoreNetwork
 
 import torch
 from loguru import logger as log
@@ -101,8 +101,8 @@ class ANIRepresentation(nn.Module):
         radial_max_distance: unit.Quantity,
         radial_min_distanc: unit.Quantity,
         number_of_radial_basis_functions: int,
-        angular_max_distance: unit.Quantity,
-        angular_min_distance: unit.Quantity,
+        maximum_interaction_radius_for_angular_features: unit.Quantity,
+        minimum_interaction_radius_for_angular_features: unit.Quantity,
         angular_dist_divisions: int,
         angle_sections: int,
         nr_of_supported_elements: int = 7,
@@ -112,7 +112,9 @@ class ANIRepresentation(nn.Module):
         super().__init__()
         from modelforge.potential.utils import CosineCutoff
 
-        self.angular_max_distance = angular_max_distance
+        self.maximum_interaction_radius_for_angular_features = (
+            maximum_interaction_radius_for_angular_features
+        )
         self.nr_of_supported_elements = nr_of_supported_elements
 
         self.cutoff_module = CosineCutoff(radial_max_distance)
@@ -121,8 +123,8 @@ class ANIRepresentation(nn.Module):
             radial_max_distance, radial_min_distanc, number_of_radial_basis_functions
         )
         self.angular_symmetry_functions = self._setup_angular_symmetry_functions(
-            angular_max_distance,
-            angular_min_distance,
+            maximum_interaction_radius_for_angular_features,
+            minimum_interaction_radius_for_angular_features,
             angular_dist_divisions,
             angle_sections,
         )
@@ -271,7 +273,12 @@ class ANIRepresentation(nn.Module):
         # compute new neighbors with radial_cutoff
         distances = data.d_ij.T.flatten()
         even_closer_indices = (
-            (distances <= self.angular_max_distance.to(unit.nanometer).m)
+            (
+                distances
+                <= self.maximum_interaction_radius_for_angular_features.to(
+                    unit.nanometer
+                ).m
+            )
             .nonzero()
             .flatten()
         )
@@ -310,10 +317,12 @@ class ANIRepresentation(nn.Module):
 
 
 class ANIInteraction(nn.Module):
-    def __init__(self, aev_dim: int):
+    def __init__(self, *, aev_dim: int, activation_function_class: torch.nn.Module):
         super().__init__()
         # define atomic neural network
-        atomic_neural_networks = self.intialize_atomic_neural_network(aev_dim)
+        atomic_neural_networks = self.intialize_atomic_neural_network(
+            aev_dim, activation_function_class
+        )
         H_network = atomic_neural_networks["H"]
         C_network = atomic_neural_networks["C"]
         O_network = atomic_neural_networks["O"]
@@ -333,74 +342,76 @@ class ANIInteraction(nn.Module):
             ]
         )
 
-    def intialize_atomic_neural_network(self, aev_dim: int) -> Dict[str, nn.Module]:
+    def intialize_atomic_neural_network(
+        self, aev_dim: int, activation_function_class: torch.nn.Module
+    ) -> Dict[str, nn.Module]:
         H_network = torch.nn.Sequential(
             torch.nn.Linear(aev_dim, 256),
-            torch.nn.CELU(0.1),
+            activation_function_class(0.1),
             torch.nn.Linear(256, 192),
-            torch.nn.CELU(0.1),
+            activation_function_class(0.1),
             torch.nn.Linear(192, 160),
-            torch.nn.CELU(0.1),
+            activation_function_class(0.1),
             torch.nn.Linear(160, 1),
         )
 
         C_network = torch.nn.Sequential(
             torch.nn.Linear(aev_dim, 224),
-            torch.nn.CELU(0.1),
+            activation_function_class(0.1),
             torch.nn.Linear(224, 192),
-            torch.nn.CELU(0.1),
+            activation_function_class(0.1),
             torch.nn.Linear(192, 160),
-            torch.nn.CELU(0.1),
+            activation_function_class(0.1),
             torch.nn.Linear(160, 1),
         )
 
         N_network = torch.nn.Sequential(
             torch.nn.Linear(aev_dim, 192),
-            torch.nn.CELU(0.1),
+            activation_function_class(0.1),
             torch.nn.Linear(192, 160),
-            torch.nn.CELU(0.1),
+            activation_function_class(0.1),
             torch.nn.Linear(160, 128),
-            torch.nn.CELU(0.1),
+            activation_function_class(0.1),
             torch.nn.Linear(128, 1),
         )
 
         O_network = torch.nn.Sequential(
             torch.nn.Linear(aev_dim, 192),
-            torch.nn.CELU(0.1),
+            activation_function_class(0.1),
             torch.nn.Linear(192, 160),
-            torch.nn.CELU(0.1),
+            activation_function_class(0.1),
             torch.nn.Linear(160, 128),
-            torch.nn.CELU(0.1),
+            activation_function_class(0.1),
             torch.nn.Linear(128, 1),
         )
 
         S_network = torch.nn.Sequential(
             torch.nn.Linear(aev_dim, 160),
-            torch.nn.CELU(0.1),
+            activation_function_class(0.1),
             torch.nn.Linear(160, 128),
-            torch.nn.CELU(0.1),
+            activation_function_class(0.1),
             torch.nn.Linear(128, 96),
-            torch.nn.CELU(0.1),
+            activation_function_class(0.1),
             torch.nn.Linear(96, 1),
         )
 
         F_network = torch.nn.Sequential(
             torch.nn.Linear(aev_dim, 160),
-            torch.nn.CELU(0.1),
+            activation_function_class(0.1),
             torch.nn.Linear(160, 128),
-            torch.nn.CELU(0.1),
+            activation_function_class(0.1),
             torch.nn.Linear(128, 96),
-            torch.nn.CELU(0.1),
+            activation_function_class(0.1),
             torch.nn.Linear(96, 1),
         )
 
         Cl_network = torch.nn.Sequential(
             torch.nn.Linear(aev_dim, 160),
-            torch.nn.CELU(0.1),
+            activation_function_class(0.1),
             torch.nn.Linear(160, 128),
-            torch.nn.CELU(0.1),
+            activation_function_class(0.1),
             torch.nn.Linear(128, 96),
-            torch.nn.CELU(0.1),
+            activation_function_class(0.1),
             torch.nn.Linear(96, 1),
         )
 
@@ -431,27 +442,29 @@ class ANIInteraction(nn.Module):
 class ANI2xCore(CoreNetwork):
     def __init__(
         self,
-        radial_max_distance: unit.Quantity = 5.1 * unit.angstrom,
-        radial_min_distanc: unit.Quantity = 0.8 * unit.angstrom,
-        number_of_radial_basis_functions: int = 16,
-        angular_max_distance: unit.Quantity = 3.5 * unit.angstrom,
-        angular_min_distance: unit.Quantity = 0.8 * unit.angstrom,
-        angular_dist_divisions: int = 8,
-        angle_sections: int = 4,
+        *,
+        maximum_interaction_radius: unit.Quantity,
+        minimum_interaction_radius: unit.Quantity,
+        number_of_radial_basis_functions: int,
+        maximum_interaction_radius_for_angular_features: unit.Quantity,
+        minimum_interaction_radius_for_angular_features: unit.Quantity,
+        activation_function: str,
+        angular_dist_divisions: int,
+        angle_sections: int,
     ) -> None:
         """
         ANI2x Neural Network Model.
         Parameters
         ----------
-        radial_max_distance : Union[unit.Quantity, str]
+        maximum_interaction_radius : Union[unit.Quantity, str]
             The maximum radial distance for the radial basis functions.
-        radial_min_distance : Union[unit.Quantity, str]
+        minimum_interaction_radius : Union[unit.Quantity, str]
             The minimum radial distance for the radial basis functions.
         number_of_radial_basis_functions : int
             The number of radial basis functions to use.
-        angular_max_distance : Union[unit.Quantity, str]
+        maximum_interaction_radius_for_angular_features : Union[unit.Quantity, str]
             The maximum angular distance for the angular basis functions.
-        angular_min_distance : Union[unit.Quantity, str]
+        minimum_interaction_radius_for_angular_features : Union[unit.Quantity, str]
             The minimum angular distance for the angular basis functions.
         angular_dist_divisions : int
             The number of divisions for the angular distance.
@@ -468,15 +481,15 @@ class ANI2xCore(CoreNetwork):
         self.num_species = 7
 
         log.debug("Initializing the ANI2x architecture.")
-        super().__init__()
+        super().__init__(activation_function)
 
         # Initialize representation block
         self.ani_representation_module = ANIRepresentation(
-            radial_max_distance,
-            radial_min_distanc,
+            maximum_interaction_radius,
+            minimum_interaction_radius,
             number_of_radial_basis_functions,
-            angular_max_distance,
-            angular_min_distance,
+            maximum_interaction_radius_for_angular_features,
+            minimum_interaction_radius_for_angular_features,
             angular_dist_divisions,
             angle_sections,
         )
@@ -493,14 +506,17 @@ class ANI2xCore(CoreNetwork):
         self.aev_length = self.radial_length + self.angular_length
 
         # Intialize interaction blocks
-        self.interaction_modules = ANIInteraction(self.aev_length)
+        self.interaction_modules = ANIInteraction(
+            aev_dim=self.aev_length,
+            activation_function_class=self.activation_function_class,
+        )
 
         # ----- ATOMIC NUMBER LOOKUP --------
         # Create a tensor for direct lookup. The size of this tensor will be
         # # the max atomic number in map. Initialize with a default value (e.g., -1 for not found).
 
-        max_atomic_number = max(ATOMIC_NUMBER_TO_INDEX_MAP.keys())
-        lookup_tensor = torch.full((max_atomic_number + 1,), -1, dtype=torch.long)
+        maximum_atomic_number = max(ATOMIC_NUMBER_TO_INDEX_MAP.keys())
+        lookup_tensor = torch.full((maximum_atomic_number + 1,), -1, dtype=torch.long)
 
         # Populate the lookup tensor with indices from your map
         for atomic_number, index in ATOMIC_NUMBER_TO_INDEX_MAP.items():
@@ -562,13 +578,14 @@ from typing import Union, Optional, List, Dict
 class ANI2x(BaseNetwork):
     def __init__(
         self,
-        radial_max_distance: Union[unit.Quantity, str],
-        radial_min_distance: Union[unit.Quantity, str],
+        maximum_interaction_radius: Union[unit.Quantity, str],
+        minimum_interaction_radius: Union[unit.Quantity, str],
         number_of_radial_basis_functions: int,
-        angular_max_distance: Union[unit.Quantity, str],
-        angular_min_distance: Union[unit.Quantity, str],
+        maximum_interaction_radius_for_angular_features: Union[unit.Quantity, str],
+        minimum_interaction_radius_for_angular_features: Union[unit.Quantity, str],
         angular_dist_divisions: int,
         angle_sections: int,
+        activation_function: str,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
@@ -580,17 +597,22 @@ class ANI2x(BaseNetwork):
         super().__init__(
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=postprocessing_parameter,
-            cutoff=_convert_str_to_unit(radial_max_distance),
+            maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
         )
 
         self.core_module = ANI2xCore(
-            _convert_str_to_unit(radial_max_distance),
-            _convert_str_to_unit(radial_min_distance),
-            number_of_radial_basis_functions,
-            _convert_str_to_unit(angular_max_distance),
-            _convert_str_to_unit(angular_min_distance),
-            angular_dist_divisions,
-            angle_sections,
+            maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
+            minimum_interaction_radius=_convert_str_to_unit(minimum_interaction_radius),
+            number_of_radial_basis_functions=number_of_radial_basis_functions,
+            maximum_interaction_radius_for_angular_features=_convert_str_to_unit(
+                maximum_interaction_radius_for_angular_features
+            ),
+            minimum_interaction_radius_for_angular_features=_convert_str_to_unit(
+                minimum_interaction_radius_for_angular_features
+            ),
+            activation_function=activation_function,
+            angular_dist_divisions=angular_dist_divisions,
+            angle_sections=angle_sections,
         )
 
     def _config_prior(self):
@@ -606,14 +628,9 @@ class ANI2x(BaseNetwork):
             "radial_max_distance": tune.uniform(5, 10),
             "radial_min_distance": tune.uniform(0.6, 1.4),
             "number_of_radial_basis_functions": tune.randint(12, 20),
-            "angular_max_distance": tune.uniform(2.5, 4.5),
-            "angular_min_distance": tune.uniform(0.6, 1.4),
+            "maximum_interaction_radius_for_angular_features": tune.uniform(2.5, 4.5),
+            "minimum_interaction_radius_for_angular_features": tune.uniform(0.6, 1.4),
             "angle_sections": tune.randint(3, 8),
         }
         prior.update(shared_config_prior())
         return prior
-
-    def combine_per_atom_properties(
-        self, values: Dict[str, torch.Tensor]
-    ) -> torch.Tensor:
-        return values

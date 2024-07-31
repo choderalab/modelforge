@@ -143,9 +143,9 @@ def _calculate_self_energies(torch_dataset, collate_fn) -> Dict[str, unit.Quanti
     # Determine the size of the counts tensor
     num_molecules = torch_dataset.number_of_records
     # Determine up to which Z we detect elements
-    max_atomic_number = 100
+    maximum_atomic_number = 100
     # Initialize the counts tensor
-    counts = torch.zeros(num_molecules, max_atomic_number + 1, dtype=torch.int16)
+    counts = torch.zeros(num_molecules, maximum_atomic_number + 1, dtype=torch.int16)
     # save energies in list
     energy_array = torch.zeros(torch_dataset.number_of_records, dtype=torch.float64)
     # for filling in the element count matrix

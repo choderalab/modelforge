@@ -897,7 +897,7 @@ class BaseNetwork(Module):
         *,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]],
-        cutoff: unit.Quantity,
+        maximum_interaction_radius: unit.Quantity,
     ):
         """
         The BaseNetwork wraps the input preparation (including pairlist calculation, d_ij and r_ij calculation), the actual model as well as the output preparation in a wrapper class.
@@ -922,7 +922,7 @@ class BaseNetwork(Module):
                 "The only_unique_pairs attribute is not set in the child class. Please set it to True or False before calling super().__init__."
             )
         self.compute_interacting_pairs = ComputeInteractingAtomPairs(
-            cutoff=_convert_str_to_unit(cutoff),
+            cutoff=_convert_str_to_unit(maximum_interaction_radius),
             only_unique_pairs=self.only_unique_pairs,
         )
 
@@ -1002,10 +1002,11 @@ class BaseNetwork(Module):
         return processed_output
 
 
+from modelforge.potential.utils import ACTIVATION_FUNCTIONS
+
+
 class CoreNetwork(Module, ABC):
-    def __init__(
-        self,
-    ):
+    def __init__(self, activation_function: str):
         """
         The CoreNetwork implements methods that are used by all neural network potentials. Every network inherits from CoreNetwork.
         Networks are taking in a NNPInput and pairlist and returning a dictionary of **atomic** properties.
@@ -1014,7 +1015,11 @@ class CoreNetwork(Module, ABC):
         """
 
         super().__init__()
-        self._dtype: Optional[bool] = None  # set at runtime
+        # initialize the activation funtion
+        activation_function_class = ACTIVATION_FUNCTIONS.get(activation_function, None)
+        if activation_function_class is None:
+            raise ValueError(f"Unknown activation function: {activation_function}")
+        self.activation_function_class = activation_function_class
 
     @abstractmethod
     def _model_specific_input_preparation(

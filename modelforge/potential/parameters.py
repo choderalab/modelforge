@@ -32,18 +32,19 @@ class PerAtomEnergy(ParametersBase):
 class ANI2xParameters(ParametersBase):
     class CoreParameter(ParametersBase):
         angle_sections: int
-        radial_max_distance: Union[str, unit.Quantity]
-        radial_min_distance: Union[str, unit.Quantity]
+        maximum_interaction_radius: Union[str, unit.Quantity]
+        minimum_interaction_radius: Union[str, unit.Quantity]
         number_of_radial_basis_functions: int
-        angular_max_distance: Union[str, unit.Quantity]
-        angular_min_distance: Union[str, unit.Quantity]
+        maximum_interaction_radius_for_angular_features: Union[str, unit.Quantity]
+        minimum_interaction_radius_for_angular_features: Union[str, unit.Quantity]
         angular_dist_divisions: int
+        activation_function: str
 
         converted_units = field_validator(
-            "radial_max_distance",
-            "radial_min_distance",
-            "angular_max_distance",
-            "angular_min_distance",
+            "maximum_interaction_radius",
+            "minimum_interaction_radius",
+            "maximum_interaction_radius_for_angular_features",
+            "minimum_interaction_radius_for_angular_features",
         )(_convert_str_to_unit)
 
     class PostProcessingParameter(ParametersBase):
@@ -61,17 +62,20 @@ class SchNetParameters(ParametersBase):
     class CoreParameter(ParametersBase):
         class Featurization(ParametersBase):
             properties_to_featurize: List[str]
-            max_Z: int
+            maximum_atomic_number: int
             number_of_per_atom_features: int
 
         number_of_radial_basis_functions: int
-        cutoff: Union[str, unit.Quantity]
+        maximum_interaction_radius: Union[str, unit.Quantity]
         number_of_interaction_modules: int
         number_of_filters: int
         shared_interactions: bool
+        activation_function: str
         featurization: Featurization
 
-        converted_units = field_validator("cutoff")(_convert_str_to_unit)
+        converted_units = field_validator("maximum_interaction_radius")(
+            _convert_str_to_unit
+        )
 
     class PostProcessingParameter(ParametersBase):
         per_atom_energy: PerAtomEnergy = PerAtomEnergy()
@@ -88,17 +92,20 @@ class PaiNNParameters(ParametersBase):
     class CoreParameter(ParametersBase):
         class Featurization(ParametersBase):
             properties_to_featurize: List[str]
-            max_Z: int
+            maximum_atomic_number: int
             number_of_per_atom_features: int
 
         number_of_radial_basis_functions: int
-        cutoff: Union[str, unit.Quantity]
+        maximum_interaction_radius: Union[str, unit.Quantity]
         number_of_interaction_modules: int
         shared_interactions: bool
         shared_filters: bool
         featurization: Featurization
+        activation_function: str
 
-        converted_units = field_validator("cutoff")(_convert_str_to_unit)
+        converted_units = field_validator("maximum_interaction_radius")(
+            _convert_str_to_unit
+        )
 
     class PostProcessingParameter(ParametersBase):
         per_atom_energy: PerAtomEnergy = PerAtomEnergy()
@@ -115,16 +122,19 @@ class PhysNetParameters(ParametersBase):
     class CoreParameter(ParametersBase):
         class Featurization(ParametersBase):
             properties_to_featurize: List[str]
-            max_Z: int
+            maximum_atomic_number: int
             number_of_per_atom_features: int
 
         number_of_radial_basis_functions: int
-        cutoff: Union[str, unit.Quantity]
+        maximum_interaction_radius: Union[str, unit.Quantity]
         number_of_interaction_residual: int
         number_of_modules: int
         featurization: Featurization
+        activation_function: str
 
-        converted_units = field_validator("cutoff")(_convert_str_to_unit)
+        converted_units = field_validator("maximum_interaction_radius")(
+            _convert_str_to_unit
+        )
 
     class PostProcessingParameter(ParametersBase):
         per_atom_energy: PerAtomEnergy = PerAtomEnergy()
@@ -141,16 +151,19 @@ class SAKEParameters(ParametersBase):
     class CoreParameter(ParametersBase):
         class Featurization(ParametersBase):
             properties_to_featurize: List[str]
-            max_Z: int
+            maximum_atomic_number: int
             number_of_per_atom_features: int
 
         number_of_radial_basis_functions: int
-        cutoff: Union[str, unit.Quantity]
+        maximum_interaction_radius: Union[str, unit.Quantity]
         number_of_interaction_modules: int
         number_of_spatial_attention_heads: int
         featurization: Featurization
+        activation_function: str
 
-        converted_units = field_validator("cutoff")(_convert_str_to_unit)
+        converted_units = field_validator("maximum_interaction_radius")(
+            _convert_str_to_unit
+        )
 
     class PostProcessingParameter(ParametersBase):
         per_atom_energy: PerAtomEnergy = PerAtomEnergy()

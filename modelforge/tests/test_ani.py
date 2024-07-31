@@ -80,6 +80,22 @@ def setup_two_methanes():
     return ani_species, coordinates, device, nnp_input
 
 
+def test_init():
+    from modelforge.potential.ani import ANI2x
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
+
+    # read default parameters
+    config = load_configs_into_pydantic_models("ani2x", "qm9")
+
+    # initialize model
+    model = ANI2x(
+        **config["potential"].model_dump()["core_parameter"],
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
+    )
+
+
 @pytest.mark.xfail
 def test_forward_and_backward_using_torchani():
     # Test torchani ANI implementation

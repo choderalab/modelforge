@@ -1175,6 +1175,10 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
 
 
 class TensorNetRadialBasisFunction(PhysNetRadialBasisFunction):
+    """
+    The only difference from PhysNetRadialBasisFunction is that alpha is set
+    to 1 angstrom only for the purpose of unitless calculations.
+    """
     @staticmethod
     def calculate_radial_basis_centers(
             number_of_radial_basis_functions,

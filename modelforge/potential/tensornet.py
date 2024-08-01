@@ -17,7 +17,21 @@ from ..utils.units import _convert_str_to_unit
 
 
 def vector_to_skewtensor(vector):
-    """Creates a skew-symmetric tensor from a vector."""
+    """
+    Creates a skew-symmetric tensor (A) from a vector
+    (equation 3 in TensorNet paper).
+
+    Parameters
+    ----------
+    vector : torch.Tensor
+        Displacement vectors of given atom pairs.
+
+    Returns
+    -------
+    torch.Tensor
+        Matrix A from equation 3 in TensorNet paper.
+    """
+
     batch_size = vector.size(0)
     zero = torch.zeros(batch_size, device=vector.device, dtype=vector.dtype)
     tensor = torch.stack(
@@ -39,7 +53,21 @@ def vector_to_skewtensor(vector):
 
 
 def vector_to_symtensor(vector):
-    """Creates a symmetric traceless tensor from the outer product of a vector with itself."""
+    """
+    Creates a symmetric traceless tensor (S) from the outer product of a vector
+    with itself (equation 3 in TensorNet paper).
+
+    Parameters
+    ----------
+    vector : torch.Tensor
+        Displacement vectors of given atom pairs.
+
+    Returns
+    -------
+    torch.Tensor
+        Matrix S from equation 3 in TensorNet paper.
+    """
+
     tensor = torch.matmul(vector.unsqueeze(-1), vector.unsqueeze(-2))
     I = (tensor.diagonal(offset=0, dim1=-1, dim2=-2)).mean(-1)[
         ..., None, None
@@ -49,7 +77,22 @@ def vector_to_symtensor(vector):
 
 
 def decompose_tensor(tensor):
-    """Full tensor decomposition into irreducible components."""
+    """
+    Full tensor decomposition into irreducible components
+    (X=I+A+S, equation 2 and 3 in TensorNet paper).
+
+    Parameters
+    ----------
+    tensor : torch.Tensor
+        X tensor that specifies pair-wise features of the atomic system,
+        initialized with I+A+S, and is updated along interaction layers.
+
+    Returns
+    -------
+    Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+        Decomposed tensors, I, A, and S from tensor feature X.
+    """
+
     I = (tensor.diagonal(offset=0, dim1=-1, dim2=-2)).mean(-1)[
         ..., None, None
     ] * torch.eye(3, 3, device=tensor.device, dtype=tensor.dtype)
@@ -59,47 +102,61 @@ def decompose_tensor(tensor):
 
 
 def tensor_norm(tensor):
-    """Computes Frobenius norm."""
+    """
+    Compute Frobenius norm
+    (mentioned at the end of section 3.1 in TensorNet paper).
+
+    Parameters
+    ----------
+    tensor : torch.Tensor
+        X tensor that specifies pair-wise features of the atomic system,
+        initialized with I+A+S, and is updated along interaction layers.
+
+    Returns
+    -------
+    torch.Tensor
+        Normalized tensor X.
+    """
+
     return (tensor**2).sum((-2, -1))
 
 
 def tensor_message_passing(
-    edge_index: torch.Tensor, factor: torch.Tensor, tensor: torch.Tensor, natoms: int
+    pair_indices: torch.Tensor,
+    radial_feature_vector: torch.Tensor,
+    tensor: torch.Tensor, natoms: int,
 ) -> torch.Tensor:
-    """Message passing for tensors."""
-    msg = factor * tensor.index_select(0, edge_index[1])
+    """
+    Helper function to calculate message passing tensor M
+    ("Interaction and node update", section 3.2 in TensorNet paper).
+    Tensor I, A, and S are parsed separately into this helper function.
+
+    Parameters
+    ----------
+    pair_indices : torch.Tensor
+        A pair-wise index tensor specifying the corresponding atomic pairs.
+    radial_feature_vector : torch.Tensor
+        Radial feature vector calculated through TensorNetRadialBasisFunction.
+    tensor : torch.Tensor
+        A pair-wise feature tensor decomposed term (I, A, or S).
+    natoms : int
+        Number of atoms in the system.
+
+    Returns
+    -------
+    torch.Tensor
+        A Message tensor calculated from I, A, or S.
+    """
+
+    msg = radial_feature_vector * tensor.index_select(0, pair_indices[1])
     shape = (natoms, tensor.shape[1], tensor.shape[2], tensor.shape[3])
     tensor_m = torch.zeros(*shape, device=tensor.device, dtype=tensor.dtype)
-    tensor_m = tensor_m.index_add(0, edge_index[0], msg)
+    tensor_m = tensor_m.index_add(0, pair_indices[0], msg)
     return tensor_m
 
 
 @dataclass
 class TensorNetNeuralNetworkData(NeuralNetworkData):
-    """
-    A dataclass to structure the inputs for TensorNet neural network potentials, designed to
-    facilitate the efficient representation of atomic systems for energy computation and
-    property prediction.
-
-    Attributes
-    ----------
-    pair_indices : torch.Tensor
-        A 2D tensor indicating the indices of atom pairs. Shape: [2, num_pairs].
-    d_ij : torch.Tensor
-        A 1D tensor containing distances between each pair of atoms. Shape: [num_pairs, 1].
-    r_ij : torch.Tensor
-        A 2D tensor representing displacement vectors between atom pairs. Shape: [num_pairs, 3].
-    number_of_atoms : int
-        An integer indicating the number of atoms in the batch.
-    positions : torch.Tensor
-        A 2D tensor representing the XYZ coordinates of each atom. Shape: [num_atoms, 3].
-    atom_index : torch.Tensor
-        A 1D tensor containing atomic numbers for each atom in the system(s). Shape: [num_atoms].
-    atomic_subsystem_indices : torch.Tensor
-        A 1D tensor mapping each atom to its respective subsystem or molecule. Shape: [num_atoms].
-    total_charge : torch.Tensor
-        An tensor with the total charge of each system or molecule. Shape: [num_systems].
-    """
     pass
 
 
@@ -117,6 +174,28 @@ class TensorNet(BaseNetwork):
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
+        """
+        Initializes the TensorNet network.
+
+        Guillem Simeon, Gianni De Fabritiis:
+        TensorNet: Cartesian Tensor Representations for Efficient Learning of
+        Molecular Potentials.
+
+        Parameters
+        ----------
+        number_of_per_atom_features : int
+        number_of_interaction_layers : int
+        number_of_radial_basis_functions : int
+        maximum_interaction_radius : unit.Quantity
+        minimum_interaction_radius : unit.Quantity
+        highest_atomic_number : int
+        equivariance_invariance_group : str
+            Available equivariance groups in TensorNet are "O(3)" and "SO(3)".
+        activation_function : str
+        postprocessing_parameter : Dict[str, Dict[str, bool]]
+        dataset_statistic : Dict[str, float]
+        """
+
         self.only_unique_pairs = False
         super().__init__(
             dataset_statistic=dataset_statistic,
@@ -150,6 +229,26 @@ class TensorNetCore(CoreNetwork):
         equivariance_invariance_group: str,
         activation_function: str,
     ):
+        """
+        Initializes the TensorNet class.
+
+        Guillem Simeon, Gianni De Fabritiis:
+        TensorNet: Cartesian Tensor Representations for Efficient Learning of
+        Molecular Potentials.
+
+        Parameters
+        ----------
+        number_of_per_atom_features : int
+        number_of_interaction_layers : int
+        number_of_radial_basis_functions : int
+        maximum_interaction_radius : unit.Quantity
+        minimum_interaction_radius : unit.Quantity
+        highest_atomic_number : int
+        equivariance_invariance_group : str
+            Available equivariance groups in TensorNet are "O(3)" and "SO(3)".
+        activation_function : str
+        """
+
         super().__init__(activation_function)
 
         torch.manual_seed(0)
@@ -176,10 +275,23 @@ class TensorNetCore(CoreNetwork):
         )
         self.linear = nn.Linear(3 * number_of_per_atom_features, number_of_per_atom_features)
         self.out_norm = nn.LayerNorm(3 * number_of_per_atom_features)
-        # TODO: Should we define what activation function to use in toml?
         self.activation_function = self.activation_function_class()
 
     def compute_properties(self, data: TensorNetNeuralNetworkData):
+        """
+
+        Parameters
+        ----------
+        data : TensorNetNeuralNetworkData
+            The input data about the system to build the model.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The calculated properties. In the case of TensorNet, a scalar,
+            a tensor, and atomic subsystem indices are returned.
+        """
+
         X, radial_feature_vector = self.representation_module(data)
         for layer in self.interaction_modules:
             X = layer(
@@ -187,7 +299,10 @@ class TensorNetCore(CoreNetwork):
                 data.pair_indices,
                 data.d_ij.squeeze(-1),
                 radial_feature_vector.squeeze(1),
-                data.total_charge,
+                torch.full(
+                    data.atomic_numbers.shape,
+                    data.total_charge.item(),
+                ),
             )
         I, A, S = decompose_tensor(X)
         x = torch.cat(
@@ -206,6 +321,21 @@ class TensorNetCore(CoreNetwork):
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
     ) -> TensorNetNeuralNetworkData:
+        """
+        Prepare the input data for the TensorNet model.
+
+        Parameters
+        ----------
+        data : NNPInput
+            The input data for the model.
+        pairlist_output : PairListOutputs
+            The pairlist output.
+
+        Returns
+        -------
+        TensorNetNeuralNetworkData
+            The prepared input data for the TensorNet model.
+        """
         number_of_atoms = data.atomic_numbers.shape[0]
 
         nnpdata = TensorNetNeuralNetworkData(
@@ -233,6 +363,19 @@ class TensorNetRepresentation(torch.nn.Module):
         trainable_centers_and_scale_factors: bool,
         highest_atomic_number: int,
     ):
+        """
+        Initialize the TensorNet representation layer.
+
+        Parameters
+        ----------
+        number_of_per_atom_features : int
+        number_of_radial_basis_functions : int
+        activation_function : Type[nn.Module]
+        maximum_interaction_radius : unit.Quantity
+        minimum_interaction_radius : unit.Quantity
+        trainable_centers_and_scale_factors : bool
+        highest_atomic_number : int
+        """
         super().__init__()
 
         self.number_of_per_atom_features = number_of_per_atom_features
@@ -278,11 +421,13 @@ class TensorNetRepresentation(torch.nn.Module):
                 nn.Linear(2 * number_of_per_atom_features, 3 * number_of_per_atom_features, bias=True),
             ]
         )
-
         self.init_norm = nn.LayerNorm(number_of_per_atom_features)
         self.reset_parameters()
 
     def reset_parameters(self):
+        """
+        Initialize neural network parameters of the representation layer.
+        """
         self.rsf_projection_I.reset_parameters()
         self.rsf_projection_A.reset_parameters()
         self.rsf_projection_S.reset_parameters()
@@ -297,7 +442,28 @@ class TensorNetRepresentation(torch.nn.Module):
     def _get_atomic_number_message(
         self, atomic_number: torch.Tensor, pair_indices: torch.Tensor
     ) -> torch.Tensor:
-        atomic_number_i_embedding = self.atomic_number_i_embedding_layer(atomic_number)
+        """
+        Embedding layers for atom types of atom pairs
+        (mentioned in equation 8 in TensorNet paper, not explicitly defined).
+        This embedding consists of two steps:
+        1. embed atom type of each atom into a vector
+        2. the embedding of an atom pair is the linear combination of the
+            embedding vector of these two atoms in the atom pair
+
+        Parameters
+        ----------
+        atomic_number : torch.Tensor
+            A tensor includes atomic numbers for every atom in the system.
+        pair_indices : torch.Tensor
+            A pair-wise index tensor specifying the corresponding atomic pairs.
+
+        Returns
+        -------
+        torch.Tensor
+            The embedding tensor for atomic numbers of atom pairs.
+        """
+        atomic_number_i_embedding = self.atomic_number_i_embedding_layer(
+            atomic_number)
         atomic_number_ij_embedding = self.atomic_number_ij_embedding_layer(
             atomic_number_i_embedding.index_select(
                 0, pair_indices.t().reshape(-1)
@@ -312,6 +478,29 @@ class TensorNetRepresentation(torch.nn.Module):
         r_ij_norm: torch.Tensor,
         radial_feature_vector: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Initialize pair-wise tensor representations of atoms
+        (equation 8 in TensorNet paper).
+
+        Parameters
+        ----------
+        atomic_number_embedding : torch.Tensor
+            The embedding tensor for atomic numbers of atom pairs.
+        d_ij : torch.Tensor
+            Atomic pair-wise distances.
+        r_ij_norm : torch.Tensor
+            normalized displacement vectors, by dividing r_ij by d_ij
+        radial_feature_vector : torch.Tensor
+            Radial feature vector calculated through
+            TensorNetRadialBasisFunction.
+
+        Returns
+        -------
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+        The Iij, Aij, Sij terms in equation 8, before adding up since these
+        three terms are treated separately.
+        """
+
         C = self.cutoff_module(d_ij).reshape(-1, 1, 1, 1) * atomic_number_embedding
         eye = torch.eye(3, 3, device=r_ij_norm.device, dtype=r_ij_norm.dtype)[
             None, None, ...
@@ -334,6 +523,22 @@ class TensorNetRepresentation(torch.nn.Module):
         return Iij, Aij, Sij
 
     def forward(self, data: TensorNetNeuralNetworkData):
+        """
+        Compute the output of the representation layer
+        (equation 10 in TensorNet paper).
+
+        Parameters
+        ----------
+        data : TensorNetNeuralNetworkData
+            The input data about the system to build the model.
+
+        Returns
+        -------
+        Tuple[torch.Tensor, torch.Tensor]
+            The first value is the X tensor as a representation of the system.
+            The second value is the radial feature vector that is required
+            by compute_properties of TensorNetCore.
+        """
         atomic_number_embedding = self._get_atomic_number_message(
             data.atomic_numbers,
             data.pair_indices,
@@ -361,21 +566,21 @@ class TensorNetRepresentation(torch.nn.Module):
         I = source.index_add(dim=0, index=data.pair_indices[0], source=Iij)
         A = source.index_add(dim=0, index=data.pair_indices[0], source=Aij)
         S = source.index_add(dim=0, index=data.pair_indices[0], source=Sij)
-        norm = self.init_norm(tensor_norm(I + A + S))
+        nomalized_tensor_I_A_S = self.init_norm(tensor_norm(I + A + S))
         for linear_scalar in self.linears_scalar:
-            norm = self.activation_function(linear_scalar(norm))
-        norm = norm.reshape(-1, self.number_of_per_atom_features, 3)
+            nomalized_tensor_I_A_S = self.activation_function(linear_scalar(nomalized_tensor_I_A_S))
+        nomalized_tensor_I_A_S = nomalized_tensor_I_A_S.reshape(-1, self.number_of_per_atom_features, 3)
         I = (
             self.linears_tensor[0](I.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-            * norm[..., 0, None, None]
+            * nomalized_tensor_I_A_S[..., 0, None, None]
         )
         A = (
             self.linears_tensor[1](A.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-            * norm[..., 1, None, None]
+            * nomalized_tensor_I_A_S[..., 1, None, None]
         )
         S = (
             self.linears_tensor[2](S.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-            * norm[..., 2, None, None]
+            * nomalized_tensor_I_A_S[..., 2, None, None]
         )
         X = I + A + S
         return X, radial_feature_vector
@@ -388,8 +593,20 @@ class TensorNetInteraction(torch.nn.Module):
         number_of_radial_basis_functions: int,
         activation_function: Type[nn.Module],
         maximum_interaction_radius: unit.Quantity,
-        equivariance_invariance_group,
+        equivariance_invariance_group: str,
     ):
+        """
+        Initialize the TensorNet interaction layer.
+
+        Parameters
+        ----------
+        number_of_per_atom_features : int
+        number_of_radial_basis_functions : int
+        activation_function : Type[nn.Module]
+        maximum_interaction_radius : unit.Quantity
+        equivariance_invariance_group : str
+            Available equivariance groups in TensorNet are "O(3)" and "SO(3)".
+        """
         super().__init__()
 
         self.number_of_per_atom_features = number_of_per_atom_features
@@ -415,6 +632,9 @@ class TensorNetInteraction(torch.nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
+        """
+        Initialize neural network parameters of the interaction layer.
+        """
         for linear in self.linears_scalar:
             linear.reset_parameters()
         for linear in self.linears_tensor:
@@ -423,16 +643,43 @@ class TensorNetInteraction(torch.nn.Module):
     def forward(
         self,
         X: torch.Tensor,
-        edge_index: torch.Tensor,
-        edge_weight: torch.Tensor,
-        edge_attr: torch.Tensor,
-        q: torch.Tensor,
+        pair_indices: torch.Tensor,
+        d_ij: torch.Tensor,
+        radial_feature_vector: torch.Tensor,
+        atomic_charges: torch.Tensor,
     ) -> torch.Tensor:
-        C = self.cutoff_module(edge_weight)
+        """
+        Compute the output of the interaction layer and update X tensor.
+        ("Interaction and node update" from section 3.2 in TensorNet paper).
+        X^(i) <- X^(i) + Delta X^(i)
+
+        Parameters
+        ----------
+        X : torch.Tensor
+            X tensor specifies pair-wise features of the atomic system.
+        pair_indices : torch.Tensor
+            A pair-wise index tensor specifying the corresponding atomic pairs.
+        d_ij : torch.Tensor
+            Atomic pair-wise distances.
+        radial_feature_vector : torch.Tensor
+            Radial feature vector calculated through
+            TensorNetRadialBasisFunction.
+        atomic_charges: torch.Tensor
+            Total charge q is a molecule-wise property.
+            We transform it into an atom-wise property,
+            with all atoms belonging to the same molecule being assigned
+            the same charge q (https://github.com/torchmd/torchmd-net/blob/6dea4b61e24de3e18921397866b7d9c5fd6b8bf1/torchmdnet/models/tensornet.py#L237)
+
+        Returns
+        -------
+        torch.Tensor
+            The updated X tensor.
+        """
+        C = self.cutoff_module(d_ij)
         for linear_scalar in self.linears_scalar:
-            edge_attr = self.activation_function(linear_scalar(edge_attr))
-        edge_attr = (edge_attr * C.view(-1, 1)).reshape(
-            edge_attr.shape[0], self.number_of_per_atom_features, 3
+            radial_feature_vector = self.activation_function(linear_scalar(radial_feature_vector))
+        radial_feature_vector = (radial_feature_vector * C.view(-1, 1)).reshape(
+            radial_feature_vector.shape[0], self.number_of_per_atom_features, 3
         )
         X = X / (tensor_norm(X) + 1)[..., None, None]
         I, A, S = decompose_tensor(X)
@@ -441,19 +688,19 @@ class TensorNetInteraction(torch.nn.Module):
         S = self.linears_tensor[2](S.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
         Y = I + A + S
         Im = tensor_message_passing(
-            edge_index, edge_attr[..., 0, None, None], I, X.shape[0]
+            pair_indices, radial_feature_vector[..., 0, None, None], I, X.shape[0]
         )
         Am = tensor_message_passing(
-            edge_index, edge_attr[..., 1, None, None], A, X.shape[0]
+            pair_indices, radial_feature_vector[..., 1, None, None], A, X.shape[0]
         )
         Sm = tensor_message_passing(
-            edge_index, edge_attr[..., 2, None, None], S, X.shape[0]
+            pair_indices, radial_feature_vector[..., 2, None, None], S, X.shape[0]
         )
         msg = Im + Am + Sm
         if self.equivariance_invariance_group == "O(3)":
             A = torch.matmul(msg, Y)
             B = torch.matmul(Y, msg)
-            I, A, S = decompose_tensor((1 + 0.1 * q[..., None, None, None]) * (A + B))
+            I, A, S = decompose_tensor((1 + 0.1 * atomic_charges[..., None, None, None]) * (A + B))
         if self.equivariance_invariance_group == "SO(3)":
             B = torch.matmul(Y, msg)
             I, A, S = decompose_tensor(2 * B)
@@ -463,5 +710,5 @@ class TensorNetInteraction(torch.nn.Module):
         A = self.linears_tensor[4](A.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
         S = self.linears_tensor[5](S.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
         dX = I + A + S
-        X = X + dX + (1 + 0.1 * q[..., None, None, None]) * torch.matrix_power(dX, 2)
+        X = X + dX + (1 + 0.1 * atomic_charges[..., None, None, None]) * torch.matrix_power(dX, 2)
         return X

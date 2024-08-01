@@ -2380,7 +2380,7 @@ def prepare_values_for_test_tensornet_interaction(
         X,
         nnp_input,
         radial_feature_vector,
-        total_charge,
+        atomic_charges,
         hidden_channels,
         number_of_radial_basis_functions,
         activation_function,
@@ -2404,7 +2404,7 @@ def prepare_values_for_test_tensornet_interaction(
         nnp_input.pair_indices,
         nnp_input.d_ij.squeeze(-1) * 10,
         radial_feature_vector.squeeze(1),
-        total_charge,
+        atomic_charges,
     )
     torch.save(tn_X, "modelforge/tests/data/tensornet_interaction.pt")
 

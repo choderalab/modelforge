@@ -345,7 +345,7 @@ def test_interaction():
     rcut_ij = tensornet_representation_module.cutoff_module(nnp_input.d_ij)
     radial_feature_vector = (radial_feature_vector * rcut_ij).unsqueeze(1)
 
-    total_charge = torch.zeros_like(nnp_input.atomic_numbers)
+    atomic_charges = torch.zeros_like(nnp_input.atomic_numbers)
 
     # interaction
     torch.manual_seed(seed)
@@ -361,7 +361,7 @@ def test_interaction():
         nnp_input.pair_indices,
         nnp_input.d_ij.squeeze(-1),
         radial_feature_vector.squeeze(1),
-        total_charge,
+        atomic_charges,
     )
     ################ modelforge TensorNet ################
 
@@ -373,7 +373,7 @@ def test_interaction():
             X,
             nnp_input,
             radial_feature_vector,
-            total_charge,
+            atomic_charges,
             number_of_per_atom_features,
             num_rbf,
             act_class,
@@ -392,12 +392,12 @@ if __name__ == "__main__":
 
     torch.manual_seed(0)
 
-    test_forward()
+    # test_forward()
 
-    # test_tensornet_input()
+    # test_input()
 
-    # test_tensornet_compare_radial_symmetry_features()
+    # test_compare_radial_symmetry_features()
 
-    # test_tensornet_representation()
+    # test_representation()
 
-    # test_tensornet_interaction()
+    test_interaction()

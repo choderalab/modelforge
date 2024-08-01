@@ -1002,22 +1002,11 @@ class BaseNetwork(Module):
         return processed_output
 
 
-from modelforge.potential.utils import ActivationFunction
-from typing import Type
-import torch.nn as nn
-
-
-def get_activation_function(activation_name: str) -> Type[nn.Module]:
-    try:
-        # Convert the string to the corresponding Enum member
-        activation_function = ActivationFunction[activation_name]
-        return activation_function.value
-    except KeyError:
-        raise ValueError(f"Unknown activation function: {activation_name}")
+from modelforge.potential.utils import ACTIVATION_FUNCTIONS
 
 
 class CoreNetwork(Module, ABC):
-    def __init__(self, activation_name: str):
+    def __init__(self, activation_function: str):
         """
         The CoreNetwork implements methods that are used by all neural network potentials. Every network inherits from CoreNetwork.
         Networks are taking in a NNPInput and pairlist and returning a dictionary of **atomic** properties.
@@ -1027,9 +1016,10 @@ class CoreNetwork(Module, ABC):
 
         super().__init__()
         # initialize the activation funtion
-        self.activation_function_class = get_activation_function(
-            activation_name=activation_name
-        )
+        activation_function_class = ACTIVATION_FUNCTIONS.get(activation_function, None)
+        if activation_function_class is None:
+            raise ValueError(f"Unknown activation function: {activation_function}")
+        self.activation_function_class = activation_function_class
 
     @abstractmethod
     def _model_specific_input_preparation(

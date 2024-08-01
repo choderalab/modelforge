@@ -42,7 +42,11 @@ from .precalculated_values import setup_single_methane_input
 
 
 def setup_spk_painn_representation(
-    cutoff, nr_atom_basis, number_of_gaussians, nr_of_interactions
+    cutoff,
+    nr_atom_basis,
+    number_of_gaussians,
+    nr_of_interactions,
+    maximum_atomic_number,
 ):
     # ------------------------------------ #
     # set up the schnetpack Painn representation model
@@ -58,11 +62,16 @@ def setup_spk_painn_representation(
         n_interactions=nr_of_interactions,
         radial_basis=radial_basis,
         cutoff_fn=CosineCutoff(cutoff.to(unit.angstrom).m),
+        max_z=maximum_atomic_number,
     )
 
 
 def setup_modelforge_painn_representation(
-    cutoff, nr_atom_basis, number_of_gaussians, nr_of_interactions
+    cutoff,
+    nr_atom_basis,
+    number_of_gaussians,
+    nr_of_interactions,
+    maximum_atomic_number,
 ):
     # ------------------------------------ #
     # set up the modelforge Painn representation model
@@ -74,7 +83,7 @@ def setup_modelforge_painn_representation(
     return mf_PaiNN(
         featurization={
             "properties_to_featurize": ["atomic_number"],
-            "maximum_atomic_number": 101,
+            "maximum_atomic_number": maximum_atomic_number,
             "number_of_per_atom_features": nr_atom_basis,
         },
         number_of_interaction_modules=nr_of_interactions,
@@ -108,14 +117,23 @@ def test_painn_representation_implementation():
     nr_atom_basis = 128
     number_of_gaussians = 5
     nr_of_interactions = 3
+    maximum_atomic_number = 23
     torch.manual_seed(1234)
     schnetpack_painn = setup_spk_painn_representation(
-        cutoff, nr_atom_basis, number_of_gaussians, nr_of_interactions
+        cutoff,
+        nr_atom_basis,
+        number_of_gaussians,
+        nr_of_interactions,
+        maximum_atomic_number,
     ).double()
     torch.manual_seed(1234)
 
     modelforge_painn = setup_modelforge_painn_representation(
-        cutoff, nr_atom_basis, number_of_gaussians, nr_of_interactions
+        cutoff,
+        nr_atom_basis,
+        number_of_gaussians,
+        nr_of_interactions,
+        maximum_atomic_number,
     ).double()
     # ------------------------------------ #
     # set up the input for the spk Painn model
@@ -436,6 +454,7 @@ def setup_spk_schnet_representation(
     number_of_atom_features: int,
     n_rbf: int,
     nr_of_interactions: int,
+    maximum_atomic_number: int,
 ):
     # ------------------------------------ #
     # set up the schnetpack Painn representation model
@@ -448,6 +467,7 @@ def setup_spk_schnet_representation(
         n_atom_basis=number_of_atom_features,
         n_interactions=nr_of_interactions,
         radial_basis=radial_basis,
+        max_z=maximum_atomic_number,
         cutoff_fn=CosineCutoff(cutoff.to(unit.angstrom).m),
     )
 
@@ -458,6 +478,7 @@ def setup_mf_schnet_representation(
     number_of_atom_features: int,
     number_of_radial_basis_functions: int,
     nr_of_interactions: int,
+    maximum_atomic_number: int,
 ):
     # ------------------------------------ #
     # set up the modelforge Painn representation model
@@ -468,7 +489,7 @@ def setup_mf_schnet_representation(
     return mf_SchNET(
         featurization={
             "properties_to_featurize": ["atomic_number"],
-            "maximum_atomic_number": 101,
+            "maximum_atomic_number": maximum_atomic_number,
             "number_of_per_atom_features": number_of_atom_features,
         },
         number_of_interaction_modules=nr_of_interactions,
@@ -502,13 +523,22 @@ def test_schnet_representation_implementation():
     number_of_atom_features = 12
     n_rbf = 5
     nr_of_interactions = 3
+    maximum_atomic_number = 23
     torch.manual_seed(1234)
     schnetpack_schnet = setup_spk_schnet_representation(
-        cutoff, number_of_atom_features, n_rbf, nr_of_interactions
+        cutoff,
+        number_of_atom_features,
+        n_rbf,
+        nr_of_interactions,
+        maximum_atomic_number,
     ).double()
     torch.manual_seed(1234)
     modelforge_schnet = setup_mf_schnet_representation(
-        cutoff, number_of_atom_features, n_rbf, nr_of_interactions
+        cutoff,
+        number_of_atom_features,
+        n_rbf,
+        nr_of_interactions,
+        maximum_atomic_number,
     ).double()
     # ------------------------------------ #
     # set up the input for the spk Schnet model

@@ -694,3 +694,5 @@ def test_schnet_representation_implementation():
     )
 
     scalar_spk = schnetpack_results["scalar_representation"]
+    scalar_mf = modelforge_results["scalar_representation"]
+    assert torch.allclose(scalar_spk, scalar_mf, atol=1e-4)

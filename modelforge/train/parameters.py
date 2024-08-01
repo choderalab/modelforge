@@ -80,6 +80,7 @@ class AnnealingStrategy(str, Enum):
     linear = "linear"
 
 
+#
 class Loggers(str, Enum):
     """
     Enum class for the experiment logger
@@ -87,6 +88,20 @@ class Loggers(str, Enum):
 
     wandb = "wandb"
     tensorboard = "tensorboard"
+
+
+class TensorboardConfig(BaseModel):
+    save_dir: str
+
+
+class WandbConfig(BaseModel):
+    save_dir: str
+    project: str
+    group: str
+    log_model: bool
+    job_type: Optional[str]
+    tags: Optional[List[str]]
+    notes: Optional[str]
 
 
 class TrainingParameters(ParametersBase):
@@ -221,6 +236,19 @@ class TrainingParameters(ParametersBase):
 
     class ExperimentLogger(ParametersBase):
         logger_name: Loggers
+        tensorboard_configuration: Optional[TensorboardConfig] = None
+        wandb_configuration: Optional[WandbConfig] = None
+
+        @model_validator(mode="after")
+        def ensure_logger_configuration(self) -> "ExperimentLogger":
+            if (
+                self.logger_name == Loggers.tensorboard
+                and self.tensorboard_configuration is None
+            ):
+                raise ValueError("tensorboard_configuration must be provided")
+            if self.logger_name == Loggers.wandb and self.wandb_configuration is None:
+                raise ValueError("wandb_configuration must be provided")
+            return self
 
     number_of_epochs: int
     remove_self_energies: bool

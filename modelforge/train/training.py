@@ -944,12 +944,18 @@ def perform_training(
     # set up tensor board logger
     if training_config.experiment_logger.logger_name == "tensorboard":
         logger = TensorBoardLogger(
-            save_dir=runtime_config.save_dir, name=runtime_config.experiment_name
+            save_dir=training_config.experiment_logger.save_dir,
+            name=runtime_config.experiment_name,
         )
     elif training_config.experiment_logger.logger_name == "wandb":
         logger = WandbLogger(
-            save_dir=runtime_config.save_dir,
-            log_model=True,
+            save_dir=training_config.experiment_logger.save_dir,
+            log_model=training_config.experiment_logger.wandb_configuration.log_model,
+            project=training_config.experiment_logger.wandb_configuration.project,
+            group=training_config.experiment_logger.wandb_configuration.group,
+            job_type=training_config.experiment_logger.wandb_configuration.job_type,
+            tags=training_config.experiment_logger.wandb_configuration.tags,
+            notes=training_config.experiment_logger.wandb_configuration.notes,
             name=runtime_config.experiment_name,
         )
 

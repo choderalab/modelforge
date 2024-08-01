@@ -62,16 +62,15 @@ class SchNetCore(CoreNetwork):
     activation_name : str
         Name of the activation function to use.
     """
-
     def __init__(
-            self,
-            featurization_config: Dict[str, Union[List[str], int]],
-            number_of_radial_basis_functions: int,
-            number_of_interaction_modules: int,
-            number_of_filters: int,
-            shared_interactions: bool,
-            activation_name: str,
-            maximum_interaction_radius: unit.Quantity,
+        self,
+        featurization_config: Dict[str, Union[List[str], int]],
+        number_of_radial_basis_functions: int,
+        number_of_interaction_modules: int,
+        number_of_filters: int,
+        shared_interactions: bool,
+        activation_name: str,
+        maximum_interaction_radius: unit.Quantity,
     ) -> None:
 
         log.debug("Initializing the SchNet architecture.")
@@ -196,7 +195,7 @@ class SchNetCore(CoreNetwork):
                 representation["f_cutoff"],
             )
             per_atom_features = (
-                    per_atom_features + v
+                per_atom_features + v
             )  # Update per atom features given the environment
 
         E_i = self.energy_layer(per_atom_features).squeeze(1)
@@ -223,13 +222,12 @@ class SchNETInteractionModule(nn.Module):
     activation_function: torch.nn.Module
         The activation function to use in the interaction module.
     """
-
     def __init__(
-            self,
-            number_of_per_atom_features: int,
-            number_of_filters: int,
-            number_of_radial_basis_functions: int,
-            activation_function: torch.nn.Module,
+        self,
+        number_of_per_atom_features: int,
+        number_of_filters: int,
+        number_of_radial_basis_functions: int,
+        activation_function: torch.nn.Module,
     ) -> None:
 
         super().__init__()
@@ -420,18 +418,17 @@ class SchNet(BaseNetwork):
     dataset_statistic : Optional[Dict[str, float]], default=None
         Statistics of the dataset.
     """
-
     def __init__(
-            self,
-            featurization: Dict[str, Union[List[str], int]],
-            number_of_radial_basis_functions: int,
-            number_of_interaction_modules: int,
-            maximum_interaction_radius: Union[unit.Quantity, str],
-            number_of_filters: int,
-            activation_function: str,
-            shared_interactions: bool,
-            postprocessing_parameter: Dict[str, Dict[str, bool]],
-            dataset_statistic: Optional[Dict[str, float]] = None,
+        self,
+        featurization: Dict[str, Union[List[str], int]],
+        number_of_radial_basis_functions: int,
+        number_of_interaction_modules: int,
+        maximum_interaction_radius: Union[unit.Quantity, str],
+        number_of_filters: int,
+        activation_function: str,
+        shared_interactions: bool,
+        postprocessing_parameter: Dict[str, Dict[str, bool]],
+        dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
 
         self.only_unique_pairs = False  # NOTE: need to be set before super().__init__

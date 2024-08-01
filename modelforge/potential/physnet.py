@@ -34,8 +34,8 @@ class PhysNetNeuralNetworkData(NeuralNetworkData):
 class PhysNetRepresentation(nn.Module):
     def __init__(
         self,
-            maximum_interaction_radius: unit.Quantity,
-            number_of_radial_basis_functions: int,
+        maximum_interaction_radius: unit.Quantity,
+        number_of_radial_basis_functions: int,
     ):
         """
         Representation module for the PhysNet potential, handling the generation of
@@ -138,10 +138,10 @@ class PhysNetResidual(nn.Module):
     """
 
     def __init__(
-            self,
-            input_dim: int,
-            output_dim: int,
-            activation_function_class: torch.nn.Module,
+        self,
+        input_dim: int,
+        output_dim: int,
+        activation_function_class: torch.nn.Module,
     ):
         super().__init__()
         # Initialize dense layers and residual connection
@@ -171,10 +171,10 @@ class PhysNetResidual(nn.Module):
 class PhysNetInteractionModule(nn.Module):
     def __init__(
         self,
-            number_of_per_atom_features: int,
-            number_of_radial_basis_functions: int,
-            number_of_interaction_residual: int,
-            activation_function_class: torch.nn.Module,
+        number_of_per_atom_features: int,
+        number_of_radial_basis_functions: int,
+        number_of_interaction_residual: int,
+        activation_function_class: torch.nn.Module,
     ):
         """
         Module to compute interaction terms based on atomic distances and features.
@@ -304,9 +304,9 @@ class PhysNetOutput(nn.Module):
     def __init__(
         self,
         number_of_per_atom_features: int,
-            number_of_atomic_properties: int,
-            number_of_residuals_in_output: int,
-            activation_function_class: torch.nn.Module,
+        number_of_atomic_properties: int,
+        number_of_residuals_in_output: int,
+        activation_function_class: torch.nn.Module,
     ):
         """
         Output module for the PhysNet model.
@@ -378,10 +378,10 @@ class PhysNetModule(nn.Module):
 
     def __init__(
         self,
-            number_of_per_atom_features: int,
-            number_of_radial_basis_functions: int,
-            number_of_interaction_residual: int,
-            activation_function_class: torch.nn.Module,
+        number_of_per_atom_features: int,
+        number_of_radial_basis_functions: int,
+        number_of_interaction_residual: int,
+        activation_function_class: torch.nn.Module,
     ):
 
         super().__init__()
@@ -469,11 +469,11 @@ class PhysNetCore(CoreNetwork):
     def __init__(
         self,
         featurization_config: Dict[str, Union[List[str], int]],
-            maximum_interaction_radius: unit.Quantity,
+        maximum_interaction_radius: unit.Quantity,
         number_of_radial_basis_functions: int,
         number_of_interaction_residual: int,
         number_of_modules: int,
-            activation_name: str,
+        activation_name: str,
     ) -> None:
 
         log.debug("Initializing the PhysNet architecture.")
@@ -669,17 +669,16 @@ class PhysNet(BaseNetwork):
     dataset_statistic : Optional[Dict[str, float]], optional
         Statistics of the dataset, by default None.
     """
-
     def __init__(
-            self,
-            featurization: Dict[str, Union[List[str], int]],
-            maximum_interaction_radius: Union[unit.Quantity, str],
-            number_of_radial_basis_functions: int,
-            number_of_interaction_residual: int,
-            number_of_modules: int,
-            activation_function: str,
-            postprocessing_parameter: Dict[str, Dict[str, bool]],
-            dataset_statistic: Optional[Dict[str, float]] = None,
+        self,
+        featurization: Dict[str, Union[List[str], int]],
+        maximum_interaction_radius: Union[unit.Quantity, str],
+        number_of_radial_basis_functions: int,
+        number_of_interaction_residual: int,
+        number_of_modules: int,
+        activation_function: str,
+        postprocessing_parameter: Dict[str, Dict[str, bool]],
+        dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
 
         self.only_unique_pairs = False  # NOTE: for pairlist

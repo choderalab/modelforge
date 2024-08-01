@@ -96,8 +96,8 @@ class ANIRepresentation(nn.Module):
         radial_max_distance: unit.Quantity,
         radial_min_distanc: unit.Quantity,
         number_of_radial_basis_functions: int,
-            maximum_interaction_radius_for_angular_features: unit.Quantity,
-            minimum_interaction_radius_for_angular_features: unit.Quantity,
+        maximum_interaction_radius_for_angular_features: unit.Quantity,
+        minimum_interaction_radius_for_angular_features: unit.Quantity,
         angular_dist_divisions: int,
         angle_sections: int,
         nr_of_supported_elements: int = 7,
@@ -310,10 +310,10 @@ class ANIRepresentation(nn.Module):
         distances = data.d_ij.T.flatten()
         even_closer_indices = (
             (
-                    distances
-                    <= self.maximum_interaction_radius_for_angular_features.to(
-                unit.nanometer
-            ).m
+                distances
+                <= self.maximum_interaction_radius_for_angular_features.to(
+                    unit.nanometer
+                ).m
             )
             .nonzero()
             .flatten()
@@ -392,7 +392,7 @@ class ANIInteraction(nn.Module):
         )
 
     def intialize_atomic_neural_network(
-            self, aev_dim: int, activation_function_class: torch.nn.Module
+        self, aev_dim: int, activation_function_class: torch.nn.Module
     ) -> Dict[str, nn.Module]:
         """
         Initialize the atomic neural networks for each element.
@@ -498,16 +498,16 @@ class ANI2xCore(CoreNetwork):
     """
 
     def __init__(
-            self,
-            *,
-            maximum_interaction_radius: unit.Quantity,
-            minimum_interaction_radius: unit.Quantity,
-            number_of_radial_basis_functions: int,
-            maximum_interaction_radius_for_angular_features: unit.Quantity,
-            minimum_interaction_radius_for_angular_features: unit.Quantity,
-            activation_function: str,
-            angular_dist_divisions: int,
-            angle_sections: int,
+        self,
+        *,
+        maximum_interaction_radius: unit.Quantity,
+        minimum_interaction_radius: unit.Quantity,
+        number_of_radial_basis_functions: int,
+        maximum_interaction_radius_for_angular_features: unit.Quantity,
+        minimum_interaction_radius_for_angular_features: unit.Quantity,
+        activation_function: str,
+        angular_dist_divisions: int,
+        angle_sections: int,
     ) -> None:
 
         # number of elements in ANI2x
@@ -650,14 +650,14 @@ class ANI2x(BaseNetwork):
 
     def __init__(
         self,
-            maximum_interaction_radius: Union[unit.Quantity, str],
-            minimum_interaction_radius: Union[unit.Quantity, str],
+        maximum_interaction_radius: Union[unit.Quantity, str],
+        minimum_interaction_radius: Union[unit.Quantity, str],
         number_of_radial_basis_functions: int,
-            maximum_interaction_radius_for_angular_features: Union[unit.Quantity, str],
-            minimum_interaction_radius_for_angular_features: Union[unit.Quantity, str],
+        maximum_interaction_radius_for_angular_features: Union[unit.Quantity, str],
+        minimum_interaction_radius_for_angular_features: Union[unit.Quantity, str],
         angular_dist_divisions: int,
         angle_sections: int,
-            activation_function: str,
+        activation_function: str,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:

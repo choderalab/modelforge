@@ -36,11 +36,11 @@ class PaiNNCore(CoreNetwork):
         self,
         featurization_config: Dict[str, Union[List[str], int]],
         number_of_radial_basis_functions: int,
-            maximum_interaction_radius: unit.Quantity,
+        maximum_interaction_radius: unit.Quantity,
         number_of_interaction_modules: int,
         shared_interactions: bool,
         shared_filters: bool,
-            activation_name: str,
+        activation_name: str,
         epsilon: float = 1e-8,
     ):
         """
@@ -134,7 +134,7 @@ class PaiNNCore(CoreNetwork):
         )
 
     def _model_specific_input_preparation(
-            self, data: NNPInput, pairlist_output: PairListOutputs
+        self, data: NNPInput, pairlist_output: PairListOutputs
     ) -> PaiNNNeuralNetworkData:
         """
         Prepare the model-specific input for the PaiNN network.
@@ -223,11 +223,11 @@ class PaiNNRepresentation(nn.Module):
 
     def __init__(
         self,
-            maximum_interaction_radius: unit.Quantity,
-            number_of_radial_basis_functions: int,
-            nr_interaction_blocks: int,
-            nr_atom_basis: int,
-            shared_filters: bool,
+        maximum_interaction_radius: unit.Quantity,
+        number_of_radial_basis_functions: int,
+        nr_interaction_blocks: int,
+        nr_atom_basis: int,
+        shared_filters: bool,
     ):
         """
         Initialize the PaiNNRepresentation module.
@@ -445,10 +445,10 @@ class PaiNNMixing(nn.Module):
     r"""PaiNN interaction block for mixing on atom features."""
 
     def __init__(
-            self,
-            nr_atom_basis: int,
-            activation_function: torch.nn.Module,
-            epsilon: float = 1e-8,
+        self,
+        nr_atom_basis: int,
+        activation_function: torch.nn.Module,
+        epsilon: float = 1e-8,
     ):
         """
         Initialize the PaiNNMixing module.
@@ -490,7 +490,7 @@ class PaiNNMixing(nn.Module):
         self.epsilon = epsilon
 
     def forward(
-            self, q: torch.Tensor, mu: torch.Tensor
+        self, q: torch.Tensor, mu: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Compute intratomic mixing.
@@ -532,9 +532,9 @@ class PaiNN(BaseNetwork):
         self,
         featurization: Dict[str, Union[List[str], int]],
         number_of_radial_basis_functions: int,
-            maximum_interaction_radius: Union[unit.Quantity, str],
+        maximum_interaction_radius: Union[unit.Quantity, str],
         number_of_interaction_modules: int,
-            activation_function: str,
+        activation_function: str,
         shared_interactions: bool,
         shared_filters: bool,
         postprocessing_parameter: Dict[str, Dict[str, bool]],

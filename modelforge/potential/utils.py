@@ -500,7 +500,7 @@ class Dense(nn.Linear):
         in_features: int,
         out_features: int,
         bias: bool = True,
-            activation_function: Optional[nn.Module] = None,
+        activation_function: Optional[nn.Module] = None,
         weight_init: Callable = xavier_uniform_,
         bias_init: Callable = zeros_,
     ):
@@ -1320,6 +1320,8 @@ def scatter_softmax(
 
 
 from enum import Enum
+
+
 
 ACTIVATION_FUNCTIONS = {
     "ReLU": nn.ReLU,

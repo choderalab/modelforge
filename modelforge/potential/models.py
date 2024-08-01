@@ -933,7 +933,7 @@ class BaseNetwork(Module):
         *,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]],
-            maximum_interaction_radius: unit.Quantity,
+        maximum_interaction_radius: unit.Quantity,
     ):
         """
         Initialize the BaseNetwork.

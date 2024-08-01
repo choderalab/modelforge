@@ -69,18 +69,20 @@ def setup_modelforge_painn_representation(
     # which means that we only want to call the
     # _transform_input() method
     from modelforge.potential.painn import PaiNN as mf_PaiNN
+    from openff.units import unit
 
     return mf_PaiNN(
         featurization={
             "properties_to_featurize": ["atomic_number"],
-            "max_Z": 101,
+            "maximum_atomic_number": 101,
             "number_of_per_atom_features": nr_atom_basis,
         },
         number_of_interaction_modules=nr_of_interactions,
         number_of_radial_basis_functions=number_of_gaussians,
-        cutoff=cutoff,
+        maximum_interaction_radius=cutoff,
         shared_interactions=False,
         shared_filters=False,
+        activation_function="SiLU",
         postprocessing_parameter={'per_atom_energy': {'normalize': True, 'from_atom_to_molecule_reduction': True,
                                                       'keep_per_atom_property': True},
                                   'general_postprocessing_operation': {'calculate_molecular_self_energy': True,
@@ -452,14 +454,15 @@ def setup_mf_schnet_representation(
     return mf_SchNET(
         featurization={
             "properties_to_featurize": ["atomic_number"],
-            "max_Z": 101,
+            "maximum_atomic_number": 101,
             "number_of_per_atom_features": number_of_atom_features,
         },
         number_of_interaction_modules=nr_of_interactions,
         number_of_radial_basis_functions=number_of_radial_basis_functions,
-        cutoff=cutoff,
+        maximum_interaction_radius=cutoff,
         number_of_filters=number_of_atom_features,
         shared_interactions=False,
+        activation_function="ShiftedSoftplus",
         postprocessing_parameter={'per_atom_energy': {'normalize': True, 'from_atom_to_molecule_reduction': True,
                                                       'keep_per_atom_property': True},
                                   'general_postprocessing_operation': {'calculate_molecular_self_energy': True,

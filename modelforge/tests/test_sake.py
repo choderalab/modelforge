@@ -74,7 +74,7 @@ def test_interaction_forward():
         nr_coefficients=23,
         nr_heads=29,
         activation=torch.nn.ReLU(),
-        cutoff=(5.0 * unit.angstrom),
+        maximum_interaction_radius=(5.0 * unit.angstrom),
         number_of_radial_basis_functions=53,
         epsilon=1e-5,
         scale_factor=(1.0 * unit.nanometer),
@@ -173,7 +173,7 @@ def test_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize_64):
 
 
 def make_reference_equivalent_sake_interaction(out_features, hidden_features, nr_heads):
-    cutoff = 5.0 * unit.angstrom
+    radial_max_distance = 5.0 * unit.angstrom
     # Define the modelforge layer
     mf_sake_block = SAKEInteraction(
         nr_atom_basis=out_features,
@@ -186,7 +186,7 @@ def make_reference_equivalent_sake_interaction(out_features, hidden_features, nr
         nr_coefficients=(nr_heads * hidden_features),
         nr_heads=nr_heads,
         activation=torch.nn.SiLU(),
-        cutoff=cutoff,
+        maximum_interaction_radius=radial_max_distance,
         number_of_radial_basis_functions=50,
         epsilon=1e-5,
         scale_factor=(1.0 * unit.nanometer),
@@ -431,17 +431,17 @@ def test_model_against_reference(single_batch_with_batchsize_1):
     nr_interaction_blocks = 3
     cutoff = 5.0 * unit.angstrom
     nr_atom_basis = 11
-    max_Z = 13
+    maximum_atomic_number = 13
 
     mf_sake = SAKE(
         featurization={
             "properties_to_featurize": ["atomic_number"],
-            "max_Z": max_Z,
+            "maximum_atomic_number": maximum_atomic_number,
             "number_of_per_atom_features": nr_atom_basis,
         },
         number_of_interaction_modules=nr_interaction_blocks,
         number_of_spatial_attention_heads=nr_heads,
-        cutoff=cutoff,
+        radial_max_distance=cutoff,
         number_of_radial_basis_functions=50,
         epsilon=1e-8,
         postprocessing_parameter={
@@ -458,7 +458,7 @@ def test_model_against_reference(single_batch_with_batchsize_1):
         out_features=1,
         depth=nr_interaction_blocks,
         n_heads=nr_heads,
-        cutoff=None,
+        radial_max_distance=None,
     )
 
     # get methane input
@@ -477,7 +477,9 @@ def test_model_against_reference(single_batch_with_batchsize_1):
             prepared_methane.pair_indices[1, i].item(),
         ].set(1)
 
-    h = jax.nn.one_hot(prepared_methane.atomic_numbers.detach().numpy(), max_Z)
+    h = jax.nn.one_hot(
+        prepared_methane.atomic_numbers.detach().numpy(), maximum_atomic_number
+    )
     x = prepared_methane.positions.detach().numpy()
     variables = ref_sake.init(key, h, x, mask=mask)
     print(mf_sake.core_module.featurize_input.nuclear_charge_embedding)

@@ -13,30 +13,13 @@ from .models import PairListOutputs, NNPInput, BaseNetwork, CoreNetwork
 @dataclass
 class SchnetNeuralNetworkData(NeuralNetworkData):
     """
-    A dataclass to structure the inputs specifically for SchNet-based neural network potentials, including the necessary
+    A dataclass to structure the inputs specifically for SchNet-based neuraletwork potentials, including the necessary
     geometric and chemical information, along with the radial symmetry function expansion (`f_ij`) and the cosine cutoff
     (`f_cutoff`) to accurately represent atomistic systems for energy predictions.
 
-    Attributes
-    ----------
-    pair_indices : torch.Tensor
-        A 2D tensor of shape [2, num_pairs], indicating the indices of atom pairs within a molecule or system.
-    d_ij : torch.Tensor
-        A 1D tensor containing the distances between each pair of atoms identified in `pair_indices`. Shape: [num_pairs, 1].
-    r_ij : torch.Tensor
-        A 2D tensor of shape [num_pairs, 3], representing the displacement vectors between each pair of atoms.
-    number_of_atoms : int
-        A integer indicating the number of atoms in the batch.
-    positions : torch.Tensor
-        A 2D tensor of shape [num_atoms, 3], representing the XYZ coordinates of each atom within the system.
-    atomic_numbers : torch.Tensor
-        A 1D tensor containing atomic numbers for each atom, used to identify the type of each atom in the system(s).
-    atomic_subsystem_indices : torch.Tensor
-        A 1D tensor mapping each atom to its respective subsystem or molecule, useful for systems involving multiple
-        molecules or distinct subsystems.
-    total_charge : torch.Tensor
-        A tensor with the total charge of each system or molecule. Shape: [num_systems], where each entry corresponds
-        to a distinct system or molecule.
+
+    Note that only the arguments not present in the baseclass are described here.
+    
     atomic_embedding : torch.Tensor
         A 2D tensor containing embeddings or features for each atom, derived from atomic numbers.
         Shape: [num_atoms, embedding_dim], where `embedding_dim` is the dimensionality of the embedding vectors.
@@ -48,30 +31,6 @@ class SchnetNeuralNetworkData(NeuralNetworkData):
         A tensor representing the cosine cutoff function applied to the radial symmetry function expansion, ensuring
         that atom pair contributions diminish smoothly to zero at the cutoff radius. Shape: [num_pairs]. This field
         will be populated after initialization.
-
-    Notes
-    -----
-    The `SchnetNeuralNetworkInput` class is designed to encapsulate all necessary inputs for SchNet-based neural network
-    potentials in a structured and type-safe manner, facilitating efficient and accurate processing of input data by
-    the model. The inclusion of radial symmetry functions (`f_ij`) and cosine cutoff functions (`f_cutoff`) allows
-    for a detailed and nuanced representation of the atomistic systems, crucial for the accurate prediction of system
-    energies and properties.
-
-    Examples
-    --------
-    >>> inputs = SchnetNeuralNetworkInput(
-    ...     pair_indices=torch.tensor([[0, 1], [0, 2], [1, 2]]),
-    ...     d_ij=torch.tensor([1.0, 1.0, 1.0]),
-    ...     r_ij=torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),
-    ...     number_of_atoms=3,
-    ...     positions=torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0]]),
-    ...     atomic_numbers=torch.tensor([1, 6, 8]),
-    ...     atomic_subsystem_indices=torch.tensor([0, 0, 0]),
-    ...     total_charge=torch.tensor([0.0]),
-    ...     atomic_embedding=torch.randn(3, 5),  # Example atomic embeddings
-    ...     f_ij=torch.randn(3, 4),  # Example radial symmetry function expansion
-    ...     f_cutoff=torch.tensor([0.5, 0.5, 0.5])  # Example cosine cutoff function
-    ... )
     """
 
     atomic_embedding: torch.Tensor
@@ -83,71 +42,91 @@ from typing import Union, List
 
 
 class SchNetCore(CoreNetwork):
-    def __init__(
-        self,
-        featurization_config: Dict[str, Union[List[str], int]],
-        number_of_radial_basis_functions: int,
-        number_of_interaction_modules: int,
-        number_of_filters: int,
-        shared_interactions: bool,
-        cutoff: unit.Quantity,
-    ) -> None:
-        """
-        Initialize the SchNet class.
+    """
+    Core network class for the SchNet neural network potential.
 
-        Parameters
-        ----------
-        featurization_config : Dict[str, Union[List[str], int]]
-            Configuration for featurization, including the number of per-atom features and the maximum atomic number to be embedded.
-        number_of_radial_basis_functions : int
-            Number of radial basis functions.
-        number_of_interaction_modules : int
-            Number of interaction modules.
-        number_of_filters : int
-            Number of filters, defines the dimensionality of the intermediate features.
-        shared_interactions : bool
-            Whether to share interaction parameters across all interaction modules.
-        cutoff : openff.units.unit.Quantity
-            The cutoff distance for interactions.
-        """
+    Parameters
+    ----------
+    featurization_config : Dict[str, Union[List[str], int]]
+        Configuration for featurization, including the number of per-atom features and the maximum atomic number to be embedded.
+    number_of_radial_basis_functions : int
+        Number of radial basis functions.
+    number_of_interaction_modules : int
+        Number of interaction modules.
+    number_of_filters : int
+        Number of filters, defines the dimensionality of the intermediate features.
+    shared_interactions : bool
+        Whether to share interaction parameters across all interaction modules.
+    maximum_interaction_radius : openff.units.unit.Quantity
+        The cutoff distance for interactions.
+    activation_name : str
+        Name of the activation function to use.
+    """
+
+    def __init__(
+            self,
+            featurization_config: Dict[str, Union[List[str], int]],
+            number_of_radial_basis_functions: int,
+            number_of_interaction_modules: int,
+            number_of_filters: int,
+            shared_interactions: bool,
+            activation_name: str,
+            maximum_interaction_radius: unit.Quantity,
+    ) -> None:
 
         log.debug("Initializing the SchNet architecture.")
-        from modelforge.potential.utils import FeaturizeInput, Dense, ShiftedSoftplus
+        from modelforge.potential.utils import FeaturizeInput, Dense
 
-        super().__init__()
-        self.number_of_filters = (
-            number_of_filters or featurization_config["number_of_per_atom_features"]
+        super().__init__(activation_name)
+        self.number_of_filters = number_of_filters or int(
+            featurization_config["number_of_per_atom_features"]
         )
         self.number_of_radial_basis_functions = number_of_radial_basis_functions
-
-        # featurize the atomic input
+        number_of_per_atom_features = int(
+            featurization_config["number_of_per_atom_features"]
+        )
 
         self.featurize_input = FeaturizeInput(featurization_config)
         # Initialize representation block
         self.schnet_representation_module = SchNETRepresentation(
-            cutoff, number_of_radial_basis_functions
+            maximum_interaction_radius, number_of_radial_basis_functions
         )
         # Intialize interaction blocks
-        self.interaction_modules = nn.ModuleList(
-            [
-                SchNETInteractionModule(
-                    featurization_config["number_of_per_atom_features"],
-                    self.number_of_filters,
-                    number_of_radial_basis_functions,
-                )
-                for _ in range(number_of_interaction_modules)
-            ]
-        )
+        if shared_interactions:
+            self.interaction_modules = nn.ModuleList(
+                [
+                    SchNETInteractionModule(
+                        number_of_per_atom_features,
+                        self.number_of_filters,
+                        number_of_radial_basis_functions,
+                        activation_function=self.activation_function_class(),
+                    )
+                ]
+                * number_of_interaction_modules
+            )
+
+        else:
+            self.interaction_modules = nn.ModuleList(
+                [
+                    SchNETInteractionModule(
+                        number_of_per_atom_features,
+                        self.number_of_filters,
+                        number_of_radial_basis_functions,
+                        activation_function=self.activation_function_class,
+                    )
+                    for _ in range(number_of_interaction_modules)
+                ]
+            )
 
         # output layer to obtain per-atom energies
         self.energy_layer = nn.Sequential(
             Dense(
-                featurization_config["number_of_per_atom_features"],
-                featurization_config["number_of_per_atom_features"],
-                activation=ShiftedSoftplus(),
+                number_of_per_atom_features,
+                number_of_per_atom_features,
+                activation_function=self.activation_function_class(),
             ),
             Dense(
-                featurization_config["number_of_per_atom_features"],
+                number_of_per_atom_features,
                 1,
             ),
         )
@@ -206,50 +185,55 @@ class SchNetCore(CoreNetwork):
         """
         # Compute the representation for each atom (transform to radial basis set, multiply by cutoff)
         representation = self.schnet_representation_module(data.d_ij)
-        data.f_ij = representation["f_ij"]
-        data.f_cutoff = representation["f_cutoff"]
 
-        x = data.atomic_embedding
+        per_atom_features = data.atomic_embedding
         # Iterate over interaction blocks to update features
         for interaction in self.interaction_modules:
             v = interaction(
-                x,
+                per_atom_features,
                 data.pair_indices,
                 representation["f_ij"],
                 representation["f_cutoff"],
             )
-            x = x + v  # Update atomic features
+            per_atom_features = (
+                    per_atom_features + v
+            )  # Update per atom features given the environment
 
-        E_i = self.energy_layer(x).squeeze(1)
+        E_i = self.energy_layer(per_atom_features).squeeze(1)
 
         return {
             "per_atom_energy": E_i,
-            "scalar_representation": x,
+            "scalar_representation": per_atom_features,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
 
 
 class SchNETInteractionModule(nn.Module):
-    def __init__(
-        self,
-        number_of_per_atom_features: int,
-        number_of_filters: int,
-        number_of_radial_basis_functions: int,
-    ) -> None:
-        """
-        Initialize the SchNet interaction block.
+    """
+    SchNet interaction module to compute interaction terms based on atomic distances and features.
 
-        Parameters
-        ----------
-        number_of_per_atom_features : int
-            Number of atom ffeatures, defines the dimensionality of the embedding.
-        number_of_filters : int
-            Number of filters, defines the dimensionality of the intermediate features.
-        number_of_radial_basis_functions : int
-            Number of radial basis functions.
-        """
+    Parameters
+    ----------
+    number_of_per_atom_features : int
+        Number of atom features, defines the dimensionality of the embedding.
+    number_of_filters : int
+        Number of filters, defines the dimensionality of the intermediate features.
+    number_of_radial_basis_functions : int
+        Number of radial basis functions.
+    activation_function: torch.nn.Module
+        The activation function to use in the interaction module.
+    """
+
+    def __init__(
+            self,
+            number_of_per_atom_features: int,
+            number_of_filters: int,
+            number_of_radial_basis_functions: int,
+            activation_function: torch.nn.Module,
+    ) -> None:
+
         super().__init__()
-        from .utils import Dense, ShiftedSoftplus
+        from .utils import Dense
 
         assert (
             number_of_radial_basis_functions > 4
@@ -263,27 +247,34 @@ class SchNETInteractionModule(nn.Module):
             number_of_per_atom_features  # Initialize parameters
         )
         self.intput_to_feature = Dense(
-            number_of_per_atom_features, number_of_filters, bias=False, activation=None
+            number_of_per_atom_features,
+            number_of_filters,
+            bias=False,
+            activation_function=None,
         )
         self.feature_to_output = nn.Sequential(
             Dense(
                 number_of_filters,
                 number_of_per_atom_features,
-                activation=ShiftedSoftplus(),
+                activation_function=activation_function(),
             ),
             Dense(
                 number_of_per_atom_features,
                 number_of_per_atom_features,
-                activation=None,
+                activation_function=None,
             ),
         )
         self.filter_network = nn.Sequential(
             Dense(
                 number_of_radial_basis_functions,
                 number_of_filters,
-                activation=ShiftedSoftplus(),
+                activation_function=activation_function(),
             ),
-            Dense(number_of_filters, number_of_filters, activation=None),
+            Dense(
+                number_of_filters,
+                number_of_filters,
+                activation_function=None,
+            ),
         )
 
     def forward(
@@ -301,9 +292,11 @@ class SchNETInteractionModule(nn.Module):
         x : torch.Tensor, shape [nr_of_atoms_in_systems, nr_atom_basis]
             Input feature tensor for atoms (output of embedding).
         pairlist : torch.Tensor, shape [n_pairs, 2]
-        f_ij : torch.Tensor, shape [n_pairs, 1, number_of_radial_basis_functions]
+            List of atom pairs.
+        f_ij : torch.Tensor, shape [n_pairs, number_of_radial_basis_functions]
             Radial basis functions for pairs of atoms.
         f_ij_cutoff : torch.Tensor, shape [n_pairs, 1]
+            Cutoff values for the pairs.
 
         Returns
         -------
@@ -331,24 +324,27 @@ class SchNETInteractionModule(nn.Module):
 
 
 class SchNETRepresentation(nn.Module):
+    """
+    SchNet representation module to generate the radial symmetry representation of pairwise distances.
+
+    Parameters
+    ----------
+    radial_cutoff : unit.Quantity
+        The cutoff distance for interactions.
+    number_of_radial_basis_functions : int
+        Number of radial basis functions.
+    """
     def __init__(
         self,
         radial_cutoff: unit.Quantity,
         number_of_radial_basis_functions: int,
     ):
-        """
-        Initialize the SchNet representation layer.
-
-        Parameters
-        ----------
-        Radial Basis Function Module
-        """
         super().__init__()
 
         self.radial_symmetry_function_module = self._setup_radial_symmetry_functions(
             radial_cutoff, number_of_radial_basis_functions
         )
-        # cutoff
+        # Initialize cutoff module
         from modelforge.potential import CosineCutoff
 
         self.cutoff_module = CosineCutoff(radial_cutoff)
@@ -371,11 +367,13 @@ class SchNETRepresentation(nn.Module):
 
         Parameters
         ----------
-        d_ij : Pairwise distances between atoms; shape [n_pairs, 1]
+        d_ij : torch.Tensor
+            Pairwise distances between atoms; shape [n_pairs, 1]
 
         Returns
         -------
-        Radial basis functions for pairs of atoms; shape [n_pairs, 1, number_of_radial_basis_functions]
+        Dict[str, torch.Tensor]
+            Radial basis functions and cutoff values for pairs of atoms.
         """
 
         # Convert distances to radial basis functions
@@ -395,54 +393,53 @@ from modelforge.potential.utils import shared_config_prior
 
 
 class SchNet(BaseNetwork):
+    """
+    SchNet network for modeling quantum interactions.
+
+    Schütt, Kindermans, Sauceda, Chmiela, Tkatchenko, Müller: SchNet: A continuous-filter
+    convolutional neural network for modeling quantum interactions.
+
+    Parameters
+    ----------
+    featurization : Dict[str, Union[List[str], int]]
+        Configuration for atom featurization.
+    number_of_radial_basis_functions : int
+        Number of radial basis functions.
+    number_of_interaction_modules : int
+        Number of interaction modules.
+    maximum_interaction_radius : Union[unit.Quantity, str]
+        The cutoff distance for interactions.
+    number_of_filters : int
+        Number of filters.
+    shared_interactions : bool
+        Whether to use shared interactions.
+    activation_function : str
+        Name of the activation function to use.
+    postprocessing_parameter : Dict[str, Dict[str, bool]]
+        Configuration for postprocessing parameters.
+    dataset_statistic : Optional[Dict[str, float]], default=None
+        Statistics of the dataset.
+    """
+
     def __init__(
-        self,
-        featurization: Dict[str, Union[List[str], int]],
-        number_of_radial_basis_functions: int,
-        number_of_interaction_modules: int,
-        cutoff: Union[unit.Quantity, str],
-        number_of_filters: int,
-        shared_interactions: bool,
-        postprocessing_parameter: Dict[str, Dict[str, bool]],
-        dataset_statistic: Optional[Dict[str, float]] = None,
+            self,
+            featurization: Dict[str, Union[List[str], int]],
+            number_of_radial_basis_functions: int,
+            number_of_interaction_modules: int,
+            maximum_interaction_radius: Union[unit.Quantity, str],
+            number_of_filters: int,
+            activation_function: str,
+            shared_interactions: bool,
+            postprocessing_parameter: Dict[str, Dict[str, bool]],
+            dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
-        """
-        Initialize the SchNet network.
-
-        Schütt, Kindermans, Sauceda, Chmiela, Tkatchenko, Müller:
-        SchNet: A continuous-filter convolutional neural network for modeling quantum
-        interactions.
-
-        Parameters
-        ----------
-        featurization : Dict[str, Union[List[str], int]]
-            Configuration for atom featurization.
-        number_of_radial_basis_functions : int
-            Number of radial basis functions.
-        number_of_interaction_modules : int
-            Number of interaction modules.
-        cutoff : Union[unit.Quantity, str]
-            The cutoff distance for interactions.
-        number_of_filters : int
-            Number of filters.
-        shared_interactions : bool
-            Whether to use shared interactions.
-        postprocessing_parameter : Dict[str, Dict[str, bool]]
-            Configuration for postprocessing parameters.
-        dataset_statistic : Optional[Dict[str, float]], default=None
-            Statistics of the dataset.
-
-        Returns
-        -------
-        None
-        """
 
         self.only_unique_pairs = False  # NOTE: need to be set before super().__init__
 
         super().__init__(
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=postprocessing_parameter,
-            cutoff=_convert_str_to_unit(cutoff),
+            maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
         )
 
         self.core_module = SchNetCore(
@@ -451,7 +448,8 @@ class SchNet(BaseNetwork):
             number_of_interaction_modules=number_of_interaction_modules,
             number_of_filters=number_of_filters,
             shared_interactions=shared_interactions,
-            cutoff=_convert_str_to_unit(cutoff),
+            activation_name=activation_function,
+            maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
         )
 
     def _config_prior(self):
@@ -471,28 +469,10 @@ class SchNet(BaseNetwork):
         prior = {
             "number_of_per_atom_features": tune.randint(2, 256),
             "number_of_interaction_modules": tune.randint(1, 5),
-            "cutoff": tune.uniform(5, 10),
+            "maximum_interaction_radius": tune.uniform(5, 10),
             "number_of_radial_basis_functions": tune.randint(8, 32),
             "number_of_filters": tune.randint(32, 128),
             "shared_interactions": tune.choice([True, False]),
         }
         prior.update(shared_config_prior())
         return prior
-
-    def combine_per_atom_properties(
-        self, values: Dict[str, torch.Tensor]
-    ) -> torch.Tensor:
-        """
-        Combine per-atom properties.
-
-        Parameters
-        ----------
-        values : Dict[str, torch.Tensor]
-            Dictionary of per-atom properties.
-
-        Returns
-        -------
-        torch.Tensor
-            Combined per-atom properties.
-        """
-        return values

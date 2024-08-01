@@ -1,19 +1,42 @@
 import math
-from dataclasses import dataclass, field
-from typing import Any, Callable, Optional, Tuple, NamedTuple, Type
+from dataclasses import dataclass
+from typing import Callable, Optional, Tuple
 
 import numpy as np
 import torch
 import torch.nn as nn
-from loguru import logger as log
 from openff.units import unit
-from pint import Quantity
 from typing import Union
 from modelforge.dataset.dataset import NNPInput
 
 
 @dataclass
 class NeuralNetworkData:
+    """
+    A dataclass to structure the inputs specifically for SchNet-based neural network potentials, including the necessary geometric and chemical information, along with the radial symmetry function expansion (`f_ij`) and the cosine cutoff (`f_cutoff`) to accurately represent atomistic systems for energy predictions.
+
+    Attributes
+    ----------
+    pair_indices : torch.Tensor
+        A 2D tensor of shape [2, num_pairs], indicating the indices of atom pairs within a molecule or system.
+    d_ij : torch.Tensor
+        A 1D tensor containing the distances between each pair of atoms identified in `pair_indices`. Shape: [num_pairs, 1].
+    r_ij : torch.Tensor
+        A 2D tensor of shape [num_pairs, 3], representing the displacement vectors between each pair of atoms.
+    number_of_atoms : int
+        A integer indicating the number of atoms in the batch.
+    positions : torch.Tensor
+        A 2D tensor of shape [num_atoms, 3], representing the XYZ coordinates of each atom within the system.
+    atomic_numbers : torch.Tensor
+        A 1D tensor containing atomic numbers for each atom, used to identify the type of each atom in the system(s).
+    atomic_subsystem_indices : torch.Tensor
+        A 1D tensor mapping each atom to its respective subsystem or molecule, useful for systems involving multiple
+        molecules or distinct subsystems.
+    total_charge : torch.Tensor
+        A tensor with the total charge of each system or molecule. Shape: [num_systems], where each entry corresponds
+        to a distinct system or molecule.
+    """
+
     pair_indices: torch.Tensor
     d_ij: torch.Tensor
     r_ij: torch.Tensor
@@ -348,7 +371,7 @@ class FeaturizeInput(nn.Module):
             A dictionary containing the featurization configuration. It should have the following keys:
             - "properties_to_featurize" : list
                 A list of properties to featurize.
-            - "max_Z" : int
+            - "maximum_atomic_number" : int
                 The maximum atomic number.
             - "number_of_per_atom_features" : int
                 The number of per-atom features.
@@ -377,7 +400,7 @@ class FeaturizeInput(nn.Module):
             ):
 
                 self.nuclear_charge_embedding = Embedding(
-                    int(featurization_config["max_Z"]),
+                    int(featurization_config["maximum_atomic_number"]),
                     int(featurization_config["number_of_per_atom_features"]),
                 )
                 self.registered_embedding_operations.append("nuclear_charge_embedding")
@@ -477,15 +500,12 @@ class Dense(nn.Linear):
         in_features: int,
         out_features: int,
         bias: bool = True,
-        activation: Optional[
-            Union[nn.Module, Callable[[torch.Tensor], torch.Tensor]]
-        ] = None,
+            activation_function: Optional[nn.Module] = None,
         weight_init: Callable = xavier_uniform_,
         bias_init: Callable = zeros_,
     ):
         """
-        __init__ _summary_
-
+        A linear or non-linear transformation
 
         Parameters
         ----------
@@ -495,8 +515,8 @@ class Dense(nn.Linear):
             Number of output features.
         bias : bool, optional
             If set to False, the layer will not learn an additive bias. Default is True.
-        activation : nn.Module or Callable[[torch.Tensor], torch.Tensor], optional
-            Activation function to be applied. Default is None, which applies the identity function and makes this a linear transformation.
+        activation_function : nn.Module , optional
+            Activation function to be applied. Default is nn.Identity(), which applies the identity function and makes this a linear ransformation.
         weight_init : Callable, optional
             Callable to initialize the weights. Default is xavier_uniform_.
         bias_init : Callable, optional
@@ -510,7 +530,9 @@ class Dense(nn.Linear):
             in_features, out_features, bias
         )  # NOTE: the `reseet_paramters` method is called in the super class
 
-        self.activation = activation or nn.Identity()
+        self.activation_function = (
+            activation_function if activation_function is not None else nn.Identity()
+        )
 
     def reset_parameters(self):
         """
@@ -536,7 +558,7 @@ class Dense(nn.Linear):
 
         """
         y = F.linear(input, self.weight, self.bias)
-        return self.activation(y)
+        return self.activation_function(y)
 
 
 from openff.units import unit
@@ -1295,3 +1317,19 @@ def scatter_softmax(
     normalizing_constants = sum_per_index.gather(dim, index)
 
     return recentered_scores_exp.div(normalizing_constants)
+
+
+from enum import Enum
+
+ACTIVATION_FUNCTIONS = {
+    "ReLU": nn.ReLU,
+    "CeLU": nn.CELU,
+    "Sigmoid": nn.Sigmoid,
+    "Softmax": nn.Softmax,
+    "ShiftedSoftplus": ShiftedSoftplus,
+    "SiLU": nn.SiLU,
+    "Tanh": nn.Tanh,
+    "LeakyReLU": nn.LeakyReLU,
+    "ELU": nn.ELU,
+    # Add more activation functions as needed
+}

@@ -515,8 +515,8 @@ class ANI2xCore(CoreNetwork):
         # Create a tensor for direct lookup. The size of this tensor will be
         # # the max atomic number in map. Initialize with a default value (e.g., -1 for not found).
 
-        highest_atomic_number = max(ATOMIC_NUMBER_TO_INDEX_MAP.keys())
-        lookup_tensor = torch.full((highest_atomic_number + 1,), -1, dtype=torch.long)
+        maximum_atomic_number = max(ATOMIC_NUMBER_TO_INDEX_MAP.keys())
+        lookup_tensor = torch.full((maximum_atomic_number + 1,), -1, dtype=torch.long)
 
         # Populate the lookup tensor with indices from your map
         for atomic_number, index in ATOMIC_NUMBER_TO_INDEX_MAP.items():

@@ -174,7 +174,7 @@ def test_compare_implementation_agains_reference_implementation():
     torch.manual_seed(1234)
 
     # override defaults to match reference implementation in spk
-    config["potential"].core_parameter.featurization.highest_atomic_number = 100
+    config["potential"].core_parameter.featurization.maximum_atomic_number = 100
     config["potential"].core_parameter.featurization.number_of_per_atom_features = 8
     config["potential"].core_parameter.number_of_radial_basis_functions = 5
 

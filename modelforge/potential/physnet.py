@@ -454,7 +454,7 @@ class PhysNetCore(CoreNetwork):
         number_of_per_atom_features = int(
             featurization_config["number_of_per_atom_features"]
         )
-        highest_atomic_number = int(featurization_config["highest_atomic_number"])
+        maximum_atomic_number = int(featurization_config["maximum_atomic_number"])
         self.physnet_representation_module = PhysNetRepresentation(
             maximum_interaction_radius=maximum_interaction_radius,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
@@ -476,8 +476,8 @@ class PhysNetCore(CoreNetwork):
         )
 
         # learnable shift and bias that is applied per-element to ech atomic energy
-        self.atomic_scale = nn.Parameter(torch.ones(highest_atomic_number, 2))
-        self.atomic_shift = nn.Parameter(torch.zeros(highest_atomic_number, 2))
+        self.atomic_scale = nn.Parameter(torch.ones(maximum_atomic_number, 2))
+        self.atomic_shift = nn.Parameter(torch.zeros(maximum_atomic_number, 2))
 
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"

@@ -346,7 +346,7 @@ class FeaturizeInput(nn.Module):
             A dictionary containing the featurization configuration. It should have the following keys:
             - "properties_to_featurize" : list
                 A list of properties to featurize.
-            - "highest_atomic_number" : int
+            - "maximum_atomic_number" : int
                 The maximum atomic number.
             - "number_of_per_atom_features" : int
                 The number of per-atom features.
@@ -375,7 +375,7 @@ class FeaturizeInput(nn.Module):
             ):
 
                 self.nuclear_charge_embedding = Embedding(
-                    int(featurization_config["highest_atomic_number"]),
+                    int(featurization_config["maximum_atomic_number"]),
                     int(featurization_config["number_of_per_atom_features"]),
                 )
                 self.registered_embedding_operations.append("nuclear_charge_embedding")
@@ -1295,6 +1295,7 @@ def scatter_softmax(
 
 
 from enum import Enum
+
 
 class ActivationFunction(Enum):
     ReLU = nn.ReLU

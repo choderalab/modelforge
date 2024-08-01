@@ -787,10 +787,10 @@ def read_config(
         runtime_config_dict = config["runtime"]
 
     else:
-        training_config_dict = toml.load(training_config_path)
-        dataset_config_dict = toml.load(dataset_config_path)
-        potential_config_dict = toml.load(potential_config_path)
-        runtime_config_dict = toml.load(runtime_config_path)
+        training_config_dict = toml.load(training_config_path)["training"]
+        dataset_config_dict = toml.load(dataset_config_path)["dataset"]
+        potential_config_dict = toml.load(potential_config_path)["potential"]
+        runtime_config_dict = toml.load(runtime_config_path)["runtime"]
 
     from modelforge.potential import _Implemented_NNP_Parameters
 

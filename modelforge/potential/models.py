@@ -1003,13 +1003,15 @@ class BaseNetwork(Module):
 
 
 from modelforge.potential.utils import ActivationFunction
+from typing import Type
+import torch.nn as nn
 
 
-def get_activation_function(activation_name: str) -> torch.nn.Module:
+def get_activation_function(activation_name: str) -> Type[nn.Module]:
     try:
         # Convert the string to the corresponding Enum member
         activation_function = ActivationFunction[activation_name]
-        return activation_function.value()
+        return activation_function.value
     except KeyError:
         raise ValueError(f"Unknown activation function: {activation_name}")
 
@@ -1025,7 +1027,7 @@ class CoreNetwork(Module, ABC):
 
         super().__init__()
         # initialize the activation funtion
-        activation_function_class = get_activation_function(
+        self.activation_function_class = get_activation_function(
             activation_name=activation_name
         )
 

@@ -90,7 +90,7 @@ class SchNetCore(CoreNetwork):
         number_of_interaction_modules: int,
         number_of_filters: int,
         shared_interactions: bool,
-        activation_function: str,
+        activation_name: str,
         maximum_interaction_radius: unit.Quantity,
     ) -> None:
         """
@@ -115,7 +115,7 @@ class SchNetCore(CoreNetwork):
         log.debug("Initializing the SchNet architecture.")
         from modelforge.potential.utils import FeaturizeInput, Dense
 
-        super().__init__(activation_function)
+        super().__init__(activation_name)
         self.number_of_filters = number_of_filters or int(
             featurization_config["number_of_per_atom_features"]
         )
@@ -137,7 +137,7 @@ class SchNetCore(CoreNetwork):
                         number_of_per_atom_features,
                         self.number_of_filters,
                         number_of_radial_basis_functions,
-                        activation_function=self.activation_function_class,
+                        activation_function=self.activation_function_class(),
                     )
                 ]
                 * number_of_interaction_modules
@@ -478,7 +478,7 @@ class SchNet(BaseNetwork):
             number_of_interaction_modules=number_of_interaction_modules,
             number_of_filters=number_of_filters,
             shared_interactions=shared_interactions,
-            activation_function=activation_function,
+            activation_name=activation_function,
             maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
         )
 

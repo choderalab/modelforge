@@ -430,7 +430,7 @@ class PhysNetCore(CoreNetwork):
         number_of_radial_basis_functions: int,
         number_of_interaction_residual: int,
         number_of_modules: int,
-        activation_function: str,
+        activation_name: str,
     ) -> None:
         """
         Implementation of the PhysNet neural network potential.
@@ -445,7 +445,7 @@ class PhysNetCore(CoreNetwork):
         """
 
         log.debug("Initializing the PhysNet architecture.")
-        super().__init__(activation_function)
+        super().__init__(activation_name)
 
         # featurize the atomic input
         from modelforge.potential.utils import FeaturizeInput
@@ -645,7 +645,7 @@ class PhysNet(BaseNetwork):
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             number_of_interaction_residual=number_of_interaction_residual,
             number_of_modules=number_of_modules,
-            activation_function=activation_function,
+            activation_name=activation_function,
         )
 
     def _config_prior(self):

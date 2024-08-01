@@ -148,6 +148,18 @@ SqliteDict can be installed via conda:
     
 """
 
+MESSAGES[
+    "wandb"
+] = """
+
+Weights and Biases is a tool for tracking and visualizing machine learning experiments.
+
+Weights and Biases can be installed via conda:
+
+    conda install conda-forge::wandb
+    
+"""
+
 
 def import_(module: str):
     """Import a module or print a descriptive message and raise an ImportError
@@ -225,7 +237,7 @@ def check_import(module: str):
         and an ImportError is raised.
     Examples
     --------
-    >>> from modelforge.utils.package_import import check_import
+    >>> from modelforge.utils.io import check_import
     >>> check_import(module="ray")
     >>> from ray import tune
     """

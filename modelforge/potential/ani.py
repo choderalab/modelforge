@@ -14,6 +14,19 @@ if TYPE_CHECKING:
 
 
 def triu_index(num_species: int) -> torch.Tensor:
+    """
+    Generate a tensor representing the upper triangular indices for species pairs.
+
+    Parameters
+    ----------
+    num_species : int
+        The number of species in the system.
+
+    Returns
+    -------
+    torch.Tensor
+        A tensor containing the pair indices.
+    """
     species1, species2 = torch.triu_indices(num_species, num_species).unbind(0)
     pair_index = torch.arange(species1.shape[0], dtype=torch.long)
     ret = torch.zeros(num_species, num_species, dtype=torch.long)
@@ -39,51 +52,13 @@ ATOMIC_NUMBER_TO_INDEX_MAP = {
 @dataclass
 class AniNeuralNetworkData(NeuralNetworkData):
     """
-    A dataclass to structure the inputs for ANI neural network potentials, designed to
-    facilitate the efficient representation of atomic systems for energy computation and
-    property prediction.
+    A dataclass to structure the inputs for ANI neural network potentials, designed to facilitate the efficient representation of atomic systems for energy computation and property prediction.
 
     Attributes
     ----------
-    pair_indices : torch.Tensor
-        A 2D tensor indicating the indices of atom pairs. Shape: [2, num_pairs].
-    d_ij : torch.Tensor
-        A 1D tensor containing distances between each pair of atoms. Shape: [num_pairs, 1].
-    r_ij : torch.Tensor
-        A 2D tensor representing displacement vectors between atom pairs. Shape: [num_pairs, 3].
-    number_of_atoms : int
-        An integer indicating the number of atoms in the batch.
-    positions : torch.Tensor
-        A 2D tensor representing the XYZ coordinates of each atom. Shape: [num_atoms, 3].
-    atom_index : torch.Tensor
-        A 1D tensor containing atomic numbers for each atom in the system(s). Shape: [num_atoms].
-    atomic_subsystem_indices : torch.Tensor
-        A 1D tensor mapping each atom to its respective subsystem or molecule. Shape: [num_atoms].
-    total_charge : torch.Tensor
-        An tensor with the total charge of each system or molecule. Shape: [num_systems].
     atomic_numbers : torch.Tensor
         A 1D tensor containing the atomic numbers for atoms, used for identifying the atom types within the model. Shape: [num_atoms].
 
-    Notes
-    -----
-    The `AniNeuralNetworkInput` dataclass encapsulates essential inputs required by the
-    ANI neural network model to predict system energies and properties accurately. It
-    includes atomic positions, types, and connectivity information, crucial for representing
-    atomistic systems in detail.
-
-    Examples
-    --------
-    >>> ani_input = AniNeuralNetworkData(
-    ...     pair_indices=torch.tensor([[0, 1], [0, 2], [1, 2]]).T,  # Transpose for correct shape
-    ...     d_ij=torch.tensor([[1.0], [1.0], [1.0]]),  # Distances between pairs
-    ...     r_ij=torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),  # Displacement vectors
-    ...     number_of_atoms=4,  # Total number of atoms
-    ...     positions=torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]),
-    ...     atom_index=torch.tensor([1, 6, 6, 8]),  # Atomic numbers for H, C, C, O
-    ...     atomic_subsystem_indices=torch.tensor([0, 0, 0, 0]),  # All atoms belong to the same molecule
-    ...     total_charge=torch.tensor([0.0]),  # Assuming the molecule is neutral
-    ...     atomic_numbers=torch.tensor([1, 6, 6, 8])  # Repeated for completeness
-    ... )
     """
 
     atom_index: torch.Tensor
@@ -93,8 +68,28 @@ from openff.units import unit
 
 
 class ANIRepresentation(nn.Module):
-    # calculate the atomic environment vectors
-    # used for the ANI architecture of NNPs
+    """
+    Compute the Atomic Environment Vectors (AEVs) for the ANI architecture.
+
+    Parameters
+    ----------
+    radial_max_distance : unit.Quantity
+        The maximum distance for radial symmetry functions.
+    radial_min_distance : unit.Quantity
+        The minimum distance for radial symmetry functions.
+    number_of_radial_basis_functions : int
+        The number of radial basis functions.
+    maximum_interaction_radius_for_angular_features : unit.Quantity
+        The maximum interaction radius for angular features.
+    minimum_interaction_radius_for_angular_features : unit.Quantity
+        The minimum interaction radius for angular features.
+    angular_dist_divisions : int
+        The number of angular distance divisions.
+    angle_sections : int
+        The number of angle sections.
+    nr_of_supported_elements : int, optional
+        The number of supported elements, by default 7.
+    """
 
     def __init__(
         self,
@@ -107,7 +102,6 @@ class ANIRepresentation(nn.Module):
         angle_sections: int,
         nr_of_supported_elements: int = 7,
     ):
-        # radial symmetry functions
 
         super().__init__()
         from modelforge.potential.utils import CosineCutoff
@@ -169,18 +163,29 @@ class ANIRepresentation(nn.Module):
         )
 
     def forward(self, data: AniNeuralNetworkData) -> SpeciesAEV:
-        # calculate the atomic environment vectors
-        # used for the ANI architecture of NNPs
+        """
+        Forward pass to compute Atomic Environment Vectors (AEVs).
+
+        Parameters
+        ----------
+        data : AniNeuralNetworkData
+            The input data for the ANI model.
+
+        Returns
+        -------
+        SpeciesAEV
+            The computed atomic environment vectors (AEVs) for each species.
+        """
 
         # ----------------- Radial symmetry vector ---------------- #
         # compute radial aev
 
         radial_feature_vector = self.radial_symmetry_functions(data.d_ij)
-        # cutoff
+        # Apply cutoff to radial features
         rcut_ij = self.cutoff_module(data.d_ij)
         radial_feature_vector = radial_feature_vector * rcut_ij
 
-        # process output to prepare for agular symmetry vector
+        # Process output to prepare for angular symmetry vector
         postprocessed_radial_aev_and_additional_data = self._postprocess_radial_aev(
             radial_feature_vector, data=data
         )
@@ -189,7 +194,7 @@ class ANIRepresentation(nn.Module):
         ]
 
         # ----------------- Angular symmetry vector ---------------- #
-        # preprocess
+        # Compute angular AEV
         angular_data = self._preprocess_angular_aev(
             postprocessed_radial_aev_and_additional_data
         )
@@ -202,6 +207,7 @@ class ANIRepresentation(nn.Module):
         processed_angular_feature_vector = self._postprocess_angular_aev(
             data, angular_data
         )
+        # Concatenate radial and angular features
         aevs = torch.cat(
             [processed_radial_feature_vector, processed_angular_feature_vector], dim=-1
         )
@@ -211,8 +217,21 @@ class ANIRepresentation(nn.Module):
     def _postprocess_angular_aev(
         self, data: AniNeuralNetworkData, angular_data: Dict[str, torch.Tensor]
     ):
-        # postprocess the angular aev
-        # used for the ANI architecture of NNPs
+        """
+        Postprocess the angular AEVs.
+
+        Parameters
+        ----------
+        data : AniNeuralNetworkData
+            The input data for the ANI model.
+        angular_data : Dict[str, torch.Tensor]
+            The angular data including species and displacement vectors.
+
+        Returns
+        -------
+        torch.Tensor
+            The processed angular AEVs.
+        """
         angular_sublength = self.angular_symmetry_functions.angular_sublength
         angular_length = (
             (self.nr_of_supported_elements * (self.nr_of_supported_elements + 1))
@@ -229,6 +248,7 @@ class ANIRepresentation(nn.Module):
         angular_r_ij = angular_data["angular_r_ij"]
 
         angular_terms_ = angular_data["angular_feature_vector"]
+        # Initialize tensor to store angular AEVs
 
         angular_aev = angular_terms_.new_zeros(
             (number_of_atoms * num_species_pairs, angular_sublength)
@@ -246,7 +266,22 @@ class ANIRepresentation(nn.Module):
         self,
         radial_feature_vector: torch.Tensor,
         data: AniNeuralNetworkData,
-    ) -> Dict[str, torch.tensor]:
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Postprocess the radial AEVs.
+
+        Parameters
+        ----------
+        radial_feature_vector : torch.Tensor
+            The radial feature vectors.
+        data : AniNeuralNetworkData
+            The input data for the ANI model.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            A dictionary containing the radial AEVs and additional data.
+        """
         radial_feature_vector = radial_feature_vector.squeeze(1)
         number_of_atoms = data.number_of_atoms
         radial_sublength = (
@@ -254,6 +289,7 @@ class ANIRepresentation(nn.Module):
         )
         radial_length = radial_sublength * self.nr_of_supported_elements
 
+        # Initialize tensor to store radial AEVs
         radial_aev = radial_feature_vector.new_zeros(
             (
                 number_of_atoms * self.nr_of_supported_elements,
@@ -295,6 +331,19 @@ class ANIRepresentation(nn.Module):
         }
 
     def _preprocess_angular_aev(self, data: Dict[str, torch.Tensor]):
+        """
+        Preprocess the angular AEVs.
+
+        Parameters
+        ----------
+        data : Dict[str, torch.Tensor]
+            The data dictionary containing radial AEVs and additional data.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            A dictionary containing the preprocessed angular AEV data.
+        """
         atom_index12 = data["atom_index12"]
         species12 = data["species12"]
         r_ij = data["r_ij"]
@@ -317,115 +366,100 @@ class ANIRepresentation(nn.Module):
 
 
 class ANIInteraction(nn.Module):
+    """
+    Atomic neural network interaction module for ANI.
+
+    Parameters
+    ----------
+    aev_dim : int
+        The dimensionality of the AEVs.
+    activation_function_class : torch.nn.Module
+        The activation function class to use.
+    """
+
     def __init__(self, *, aev_dim: int, activation_function_class: torch.nn.Module):
+
         super().__init__()
         # define atomic neural network
         atomic_neural_networks = self.intialize_atomic_neural_network(
             aev_dim, activation_function_class
         )
-        H_network = atomic_neural_networks["H"]
-        C_network = atomic_neural_networks["C"]
-        O_network = atomic_neural_networks["O"]
-        N_network = atomic_neural_networks["N"]
-        S_network = atomic_neural_networks["S"]
-        F_network = atomic_neural_networks["F"]
-        Cl_network = atomic_neural_networks["Cl"]
         self.atomic_networks = nn.ModuleList(
             [
-                H_network,
-                C_network,
-                O_network,
-                N_network,
-                S_network,
-                F_network,
-                Cl_network,
+                atomic_neural_networks[element]
+                for element in ["H", "C", "O", "N", "S", "F", "Cl"]
             ]
         )
 
     def intialize_atomic_neural_network(
         self, aev_dim: int, activation_function_class: torch.nn.Module
     ) -> Dict[str, nn.Module]:
-        H_network = torch.nn.Sequential(
-            torch.nn.Linear(aev_dim, 256),
-            activation_function_class(0.1),
-            torch.nn.Linear(256, 192),
-            activation_function_class(0.1),
-            torch.nn.Linear(192, 160),
-            activation_function_class(0.1),
-            torch.nn.Linear(160, 1),
-        )
+        """
+        Initialize the atomic neural networks for each element.
 
-        C_network = torch.nn.Sequential(
-            torch.nn.Linear(aev_dim, 224),
-            activation_function_class(0.1),
-            torch.nn.Linear(224, 192),
-            activation_function_class(0.1),
-            torch.nn.Linear(192, 160),
-            activation_function_class(0.1),
-            torch.nn.Linear(160, 1),
-        )
+        Parameters
+        ----------
+        aev_dim : int
+            The dimensionality of the AEVs.
+        activation_function_class : torch.nn.Module
+            The activation function class to use.
 
-        N_network = torch.nn.Sequential(
-            torch.nn.Linear(aev_dim, 192),
-            activation_function_class(0.1),
-            torch.nn.Linear(192, 160),
-            activation_function_class(0.1),
-            torch.nn.Linear(160, 128),
-            activation_function_class(0.1),
-            torch.nn.Linear(128, 1),
-        )
+        Returns
+        -------
+        Dict[str, nn.Module]
+            A dictionary mapping element symbols to their corresponding neural networks.
+        """
 
-        O_network = torch.nn.Sequential(
-            torch.nn.Linear(aev_dim, 192),
-            activation_function_class(0.1),
-            torch.nn.Linear(192, 160),
-            activation_function_class(0.1),
-            torch.nn.Linear(160, 128),
-            activation_function_class(0.1),
-            torch.nn.Linear(128, 1),
-        )
+        def create_network(layers):
+            """
+            Create a neural network with the specified layers.
 
-        S_network = torch.nn.Sequential(
-            torch.nn.Linear(aev_dim, 160),
-            activation_function_class(0.1),
-            torch.nn.Linear(160, 128),
-            activation_function_class(0.1),
-            torch.nn.Linear(128, 96),
-            activation_function_class(0.1),
-            torch.nn.Linear(96, 1),
-        )
+            Parameters
+            ----------
+            layers : List[int]
+                A list of integers specifying the number of units in each layer.
 
-        F_network = torch.nn.Sequential(
-            torch.nn.Linear(aev_dim, 160),
-            activation_function_class(0.1),
-            torch.nn.Linear(160, 128),
-            activation_function_class(0.1),
-            torch.nn.Linear(128, 96),
-            activation_function_class(0.1),
-            torch.nn.Linear(96, 1),
-        )
-
-        Cl_network = torch.nn.Sequential(
-            torch.nn.Linear(aev_dim, 160),
-            activation_function_class(0.1),
-            torch.nn.Linear(160, 128),
-            activation_function_class(0.1),
-            torch.nn.Linear(128, 96),
-            activation_function_class(0.1),
-            torch.nn.Linear(96, 1),
-        )
+            Returns
+            -------
+            nn.Sequential
+                The created neural network.
+            """
+            network_layers = []
+            input_dim = aev_dim
+            for units in layers:
+                network_layers.append(nn.Linear(input_dim, units))
+                network_layers.append(activation_function_class(0.1))
+                input_dim = units
+            network_layers.append(nn.Linear(input_dim, 1))
+            return nn.Sequential(*network_layers)
 
         return {
-            "H": H_network,
-            "C": C_network,
-            "N": N_network,
-            "O": O_network,
-            "S": S_network,
-            "F": F_network,
-            "Cl": Cl_network,
+            element: create_network(layers)
+            for element, layers in {
+                "H": [256, 192, 160],
+                "C": [224, 192, 160],
+                "N": [192, 160, 128],
+                "O": [192, 160, 128],
+                "S": [160, 128, 96],
+                "F": [160, 128, 96],
+                "Cl": [160, 128, 96],
+            }.items()
         }
 
     def forward(self, input: Tuple[torch.Tensor, torch.Tensor]):
+        """
+        Forward pass to compute atomic energies from AEVs.
+
+        Parameters
+        ----------
+        input : Tuple[torch.Tensor, torch.Tensor]
+            A tuple containing the species tensor and the AEV tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            The computed atomic energies.
+        """
         species, aev = input
         output = aev.new_zeros(species.shape)
 
@@ -440,6 +474,29 @@ class ANIInteraction(nn.Module):
 
 
 class ANI2xCore(CoreNetwork):
+    """
+    Core network class for the ANI2x neural network potential.
+
+    Parameters
+    ----------
+    maximum_interaction_radius : unit.Quantity
+        The maximum radial distance for the radial basis functions.
+    minimum_interaction_radius : unit.Quantity
+        The minimum radial distance for the radial basis functions.
+    number_of_radial_basis_functions : int
+        The number of radial basis functions to use.
+    maximum_interaction_radius_for_angular_features : unit.Quantity
+        The maximum angular distance for the angular basis functions.
+    minimum_interaction_radius_for_angular_features : unit.Quantity
+        The minimum angular distance for the angular basis functions.
+    activation_function : str
+        The name of the activation function to use.
+    angular_dist_divisions : int
+        The number of divisions for the angular distance.
+    angle_sections : int
+        The number of angle sections to use.
+    """
+
     def __init__(
         self,
         *,
@@ -452,31 +509,7 @@ class ANI2xCore(CoreNetwork):
         angular_dist_divisions: int,
         angle_sections: int,
     ) -> None:
-        """
-        ANI2x Neural Network Model.
-        Parameters
-        ----------
-        maximum_interaction_radius : Union[unit.Quantity, str]
-            The maximum radial distance for the radial basis functions.
-        minimum_interaction_radius : Union[unit.Quantity, str]
-            The minimum radial distance for the radial basis functions.
-        number_of_radial_basis_functions : int
-            The number of radial basis functions to use.
-        maximum_interaction_radius_for_angular_features : Union[unit.Quantity, str]
-            The maximum angular distance for the angular basis functions.
-        minimum_interaction_radius_for_angular_features : Union[unit.Quantity, str]
-            The minimum angular distance for the angular basis functions.
-        angular_dist_divisions : int
-            The number of divisions for the angular distance.
-        angle_sections : int
-            The number of angle sections to use.
-        processing_operation : List[Dict[str, str]]
-            A list of processing operations to apply to the input data.
-        readout_operation : List[Dict[str, str]]
-            A list of readout operations to apply to the output data.
-        dataset_statistic : Optional[Dict[str, float]], optional
-            Optional dataset statistics to use for normalization, by default None.
-        """
+
         # number of elements in ANI2x
         self.num_species = 7
 
@@ -527,6 +560,21 @@ class ANI2xCore(CoreNetwork):
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
     ) -> AniNeuralNetworkData:
+        """
+        Prepare the model-specific input data for the ANI2x model.
+
+        Parameters
+        ----------
+        data : NNPInput
+            The input data for the model.
+        pairlist_output : PairListOutputs
+            The pairlist output.
+
+        Returns
+        -------
+        AniNeuralNetworkData
+            The prepared input data for the ANI2x model.
+        """
         number_of_atoms = data.atomic_numbers.shape[0]
 
         nnp_data = AniNeuralNetworkData(
@@ -549,16 +597,13 @@ class ANI2xCore(CoreNetwork):
 
         Parameters
         ----------
-        data : AniNeuralNetworkInput
-        - pairlist:  shape (n_pairs, 2)
-        - r_ij:  shape (n_pairs, 1)
-        - d_ij:  shape (n_pairs, 3)
-        - positions:  shape (nr_of_atoms_per_molecules, 3)
+        data : AniNeuralNetworkData
+            The input data for the ANI model.
 
         Returns
         -------
-        torch.Tensor
-            Calculated energies; shape (nr_systems,).
+        Dict[str, torch.Tensor]
+            The calculated energies.
         """
 
         # compute the representation (atomic environment vectors) for each atom
@@ -572,10 +617,37 @@ class ANI2xCore(CoreNetwork):
         }
 
 
-from typing import Union, Optional, List, Dict
+from typing import Union, Optional, Dict
 
 
 class ANI2x(BaseNetwork):
+    """
+    ANI2x network class for the ANI2x neural network potential.
+
+    Parameters
+    ----------
+    maximum_interaction_radius : Union[unit.Quantity, str]
+        The maximum radial distance for the radial basis functions.
+    minimum_interaction_radius : Union[unit.Quantity, str]
+        The minimum radial distance for the radial basis functions.
+    number_of_radial_basis_functions : int
+        The number of radial basis functions to use.
+    maximum_interaction_radius_for_angular_features : Union[unit.Quantity, str]
+        The maximum angular distance for the angular basis functions.
+    minimum_interaction_radius_for_angular_features : Union[unit.Quantity, str]
+        The minimum angular distance for the angular basis functions.
+    angular_dist_divisions : int
+        The number of divisions for the angular distance.
+    angle_sections : int
+        The number of angle sections to use.
+    activation_function : str
+        The name of the activation function to use.
+    postprocessing_parameter : Dict[str, Dict[str, bool]]
+        Configuration for postprocessing parameters.
+    dataset_statistic : Optional[Dict[str, float]], optional
+        Statistics of the dataset, by default None.
+    """
+
     def __init__(
         self,
         maximum_interaction_radius: Union[unit.Quantity, str],

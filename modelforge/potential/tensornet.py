@@ -52,6 +52,7 @@ def vector_to_skewtensor(vector):
     return tensor.squeeze(0)
 
 
+
 def vector_to_symtensor(vector):
     """
     Creates a symmetric traceless tensor (S) from the outer product of a vector

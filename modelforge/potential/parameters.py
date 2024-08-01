@@ -2,10 +2,24 @@ from pydantic import BaseModel, field_validator, ConfigDict
 from openff.units import unit
 from typing import Union, List
 from modelforge.utils.units import _convert_str_to_unit
+from enum import Enum
 
 """
 This module contains pydantic models for storing the parameters of 
 """
+
+
+class ActivationFunction(str, Enum):
+    ReLU = "ReLU"
+    CeLU = "CeLU"
+    Sigmoid = "Sigmoid"
+    Softmax = "Softmax"
+    ShiftedSoftplus = "ShiftedSoftplus"
+    SiLU = "SiLU"
+    Tanh = "Tanh"
+    LeakyReLU = "LeakyReLU"
+    ELU = "ELU"
+
 
 
 # To avoid having to set config parameters for each class,
@@ -38,7 +52,7 @@ class ANI2xParameters(ParametersBase):
         maximum_interaction_radius_for_angular_features: Union[str, unit.Quantity]
         minimum_interaction_radius_for_angular_features: Union[str, unit.Quantity]
         angular_dist_divisions: int
-        activation_function: str
+        activation_function: ActivationFunction
 
         converted_units = field_validator(
             "maximum_interaction_radius",
@@ -62,7 +76,7 @@ class SchNetParameters(ParametersBase):
     class CoreParameter(ParametersBase):
         class Featurization(ParametersBase):
             properties_to_featurize: List[str]
-            highest_atomic_number: int
+            maximum_atomic_number: int
             number_of_per_atom_features: int
 
         number_of_radial_basis_functions: int
@@ -70,7 +84,7 @@ class SchNetParameters(ParametersBase):
         number_of_interaction_modules: int
         number_of_filters: int
         shared_interactions: bool
-        activation_function: str
+        activation_function: ActivationFunction
         featurization: Featurization
 
         converted_units = field_validator("maximum_interaction_radius")(
@@ -122,7 +136,7 @@ class PaiNNParameters(ParametersBase):
     class CoreParameter(ParametersBase):
         class Featurization(ParametersBase):
             properties_to_featurize: List[str]
-            highest_atomic_number: int
+            maximum_atomic_number: int
             number_of_per_atom_features: int
 
         number_of_radial_basis_functions: int
@@ -131,7 +145,7 @@ class PaiNNParameters(ParametersBase):
         shared_interactions: bool
         shared_filters: bool
         featurization: Featurization
-        activation_function: str
+        activation_function: ActivationFunction
 
         converted_units = field_validator("maximum_interaction_radius")(
             _convert_str_to_unit
@@ -152,7 +166,7 @@ class PhysNetParameters(ParametersBase):
     class CoreParameter(ParametersBase):
         class Featurization(ParametersBase):
             properties_to_featurize: List[str]
-            highest_atomic_number: int
+            maximum_atomic_number: int
             number_of_per_atom_features: int
 
         number_of_radial_basis_functions: int
@@ -160,7 +174,7 @@ class PhysNetParameters(ParametersBase):
         number_of_interaction_residual: int
         number_of_modules: int
         featurization: Featurization
-        activation_function: str
+        activation_function: ActivationFunction
 
         converted_units = field_validator("maximum_interaction_radius")(
             _convert_str_to_unit
@@ -181,7 +195,7 @@ class SAKEParameters(ParametersBase):
     class CoreParameter(ParametersBase):
         class Featurization(ParametersBase):
             properties_to_featurize: List[str]
-            highest_atomic_number: int
+            maximum_atomic_number: int
             number_of_per_atom_features: int
 
         number_of_radial_basis_functions: int
@@ -189,7 +203,7 @@ class SAKEParameters(ParametersBase):
         number_of_interaction_modules: int
         number_of_spatial_attention_heads: int
         featurization: Featurization
-        activation_function: str
+        activation_function: ActivationFunction
 
         converted_units = field_validator("maximum_interaction_radius")(
             _convert_str_to_unit

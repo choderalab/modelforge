@@ -19,37 +19,12 @@ class PhysNetNeuralNetworkData(NeuralNetworkData):
 
     Attributes
     ----------
-    f_ij : Optional[torch.Tensor]
-        A tensor representing the radial basis function (RBF) expansion applied to distances between atom pairs,
-        capturing the local chemical environment. Will be added after initialization. Shape: [num_pairs, num_rbf].
-    number_of_atoms : int
-        An integer indicating the number of atoms in the batch.
     atomic_embedding : torch.Tensor
         A 2D tensor containing embeddings or features for each atom, derived from atomic numbers or other properties.
         Shape: [num_atoms, embedding_dim].
-
-    Notes
-    -----
-    The `PhysNetNeuralNetworkInput` class encapsulates essential geometric and chemical information required by
-    the PhysNet model to predict system energies and properties. It includes information on atomic positions, types,
-    and connectivity, alongside derived features such as radial basis functions (RBF) for detailed representation
-    of atomic environments. This structured input format ensures that all relevant data is readily available for
-    the PhysNet model, supporting its complex network architecture and computation requirements.
-
-    Examples
-    --------
-    >>> physnet_input = PhysNetNeuralNetworkInput(
-    ...     atomic_numbers=torch.tensor([1, 6, 6, 8]),
-    ...     positions=torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]),
-    ...     atomic_subsystem_indices=torch.tensor([0, 0, 0, 0]),
-    ...     total_charge=torch.tensor([0.0]),
-    ...     pair_indices=torch.tensor([[0, 1], [0, 2], [1, 2]]),
-    ...     d_ij=torch.tensor([1.0, 1.0, 1.0]),
-    ...     r_ij=torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),
-    ...     f_ij=torch.randn(3, 4),  # Radial basis function expansion
-    ...     number_of_atoms=torch.tensor([4]),
-    ...     atomic_embedding=torch.randn(4, 5)  # Example atomic embeddings/features
-    ... )
+    f_ij : Optional[torch.Tensor]
+        A tensor representing the radial basis function (RBF) expansion applied to distances between atom pairs,
+        capturing the local chemical environment. Will be added after initialization. Shape: [num_pairs, num_rbf].
     """
 
     atomic_embedding: torch.Tensor
@@ -76,12 +51,12 @@ class PhysNetRepresentation(nn.Module):
 
         super().__init__()
 
-        # cutoff
+        # Initialize cutoff module
         from modelforge.potential import CosineCutoff
 
         self.cutoff_module = CosineCutoff(maximum_interaction_radius)
 
-        # radial symmetry function
+        # Initialize radial symmetry function module
         from .utils import PhysNetRadialBasisFunction
 
         self.radial_symmetry_function_module = PhysNetRadialBasisFunction(
@@ -115,12 +90,11 @@ class PhysNetRepresentation(nn.Module):
 class GatingModule(nn.Module):
     def __init__(self, number_of_atom_basis: int):
         """
-        Initializes a gating module that
-        optionally applies a sigmoid gating mechanism to input features.
+        Initializes a gating module that optionally applies a sigmoid gating mechanism to input features.
 
-        Parameters:
-        -----------
-        input_dim : int
+        Parameters
+        ----------
+        number_of_atom_basis : int
             The dimensionality of the input (and output) features.
         """
         super().__init__()
@@ -144,24 +118,23 @@ class GatingModule(nn.Module):
         return gating_signal * x
 
 
-from .utils import ShiftedSoftplus, Dense
+from .utils import Dense
 
 
 class PhysNetResidual(nn.Module):
     """
     Implements a preactivation residual block as described in Equation 4 of the PhysNet paper.
 
-    The block refines atomic feature vectors by adding a residual component computed through
-    two linear transformations and a non-linear activation function (Softplus). This setup
-    enhances gradient flow and supports effective deep network training by employing a
-    preactivation scheme.
+    The block refines atomic feature vectors by adding a residual component computed through two linear transformations and a non-linear activation function (Softplus). This setup enhances gradient flow and supports effective deep network training by employing a preactivation scheme.
 
-    Parameters:
-    -----------
-    input_dim: int
+    Parameters
+    ----------
+    input_dim : int
         Dimensionality of the input feature vector.
-    output_dim: int
+    output_dim : int
         Dimensionality of the output feature vector, which typically matches the input dimension.
+    activation_function_class : torch.nn.Module
+        The activation function class to be used in the residual block.
     """
 
     def __init__(
@@ -171,6 +144,7 @@ class PhysNetResidual(nn.Module):
         activation_function_class: torch.nn.Module,
     ):
         super().__init__()
+        # Initialize dense layers and residual connection
         self.dense = Dense(
             input_dim, output_dim, activation_function=activation_function_class()
         )
@@ -207,18 +181,23 @@ class PhysNetInteractionModule(nn.Module):
 
         Parameters
         ----------
-        number_of_per_atom_features : int, default=64
+        number_of_per_atom_features : int
             Dimensionality of the atomic embeddings.
-        number_of_radial_basis_functions : int, default=16
-            Specifies the number of basis functions for the Gaussian Logarithm Attention,
-            essentially defining the output feature dimension for attention-weighted interactions.
+        number_of_radial_basis_functions : int
+            Number of radial basis functions for the interaction.
+        number_of_interaction_residual : int
+            Number of residual blocks in the interaction module.
+        activation_function_class : torch.nn.Module
+            The activation function class to be used in the interaction module.
         """
 
         super().__init__()
         from .utils import Dense
 
+        # Initialize activation function
         self.activation_function = activation_function_class()
 
+        # Initialize attention mask
         self.attention_mask = Dense(
             number_of_radial_basis_functions,
             number_of_per_atom_features,
@@ -226,7 +205,7 @@ class PhysNetInteractionModule(nn.Module):
             weight_init=torch.nn.init.zeros_,
         )
 
-        # Networks for processing atomic embeddings of i and j atoms
+        # Initialize networks for processing atomic embeddings of i and j atoms
         self.interaction_i = Dense(
             number_of_per_atom_features,
             number_of_per_atom_features,
@@ -238,9 +217,10 @@ class PhysNetInteractionModule(nn.Module):
             activation_function=activation_function_class(),
         )
 
+        # Initialize processing network
         self.process_v = Dense(number_of_per_atom_features, number_of_per_atom_features)
 
-        # Residual block
+        # Initialize residual blocks
         self.residuals = nn.ModuleList(
             [
                 PhysNetResidual(
@@ -252,19 +232,19 @@ class PhysNetInteractionModule(nn.Module):
             ]
         )
 
-        # Gating
+        # Initialize gating and dropout
         self.gate = nn.Parameter(torch.ones(number_of_per_atom_features))
         self.dropout = nn.Dropout(p=0.05)
 
     def forward(self, data: PhysNetNeuralNetworkData) -> torch.Tensor:
         """
-        Processes input tensors through the interaction module, applying
-        Gaussian Logarithm Attention to modulate the influence of pairwise distances
-        on the interaction features, followed by aggregation to update atomic embeddings.
+        Processes input tensors through the interaction module, applying Gaussian Logarithm Attention to modulate
+        the influence of pairwise distances on the interaction features, followed by aggregation to update atomic embeddings.
 
         Parameters
         ----------
-        inputs : PhysNetNeuralNetworkInput
+        data : PhysNetNeuralNetworkData
+            Input data containing pair indices, distances, and atomic embeddings.
 
         Returns
         -------
@@ -287,8 +267,7 @@ class PhysNetInteractionModule(nn.Module):
         # # Apply activation to atomic embeddings
         xa = self.dropout(self.activation_function(x))
 
-        # calculate attention weights and
-        # transform to
+        # calculate attention weights and transform to
         # input shape: (number_of_pairs, number_of_radial_basis_functions)
         # output shape: (number_of_pairs, number_of_per_atom_features)
         g = self.attention_mask(f_ij)
@@ -329,9 +308,24 @@ class PhysNetOutput(nn.Module):
         number_of_residuals_in_output: int,
         activation_function_class: torch.nn.Module,
     ):
+        """
+        Output module for the PhysNet model.
+
+        Parameters
+        ----------
+        number_of_per_atom_features : int
+            Dimensionality of the atomic embeddings.
+        number_of_atomic_properties : int
+            Number of atomic properties to predict.
+        number_of_residuals_in_output : int
+            Number of residual blocks in the output module.
+        activation_function_class : torch.nn.Module
+            The activation function class to be used in the output module.
+        """
         from .utils import Dense
 
         super().__init__()
+        # Initialize residual blocks
         self.residuals = nn.Sequential(
             *[
                 PhysNetResidual(
@@ -342,6 +336,7 @@ class PhysNetOutput(nn.Module):
                 for _ in range(number_of_residuals_in_output)
             ]
         )
+        # Initialize output layer
         self.output = Dense(
             number_of_per_atom_features,
             number_of_atomic_properties,
@@ -350,11 +345,37 @@ class PhysNetOutput(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor containing atomic feature vectors.
+
+        Returns
+        -------
+        torch.Tensor
+            Predicted atomic properties.
+        """
         x = self.output(self.residuals(x))
         return x
 
 
 class PhysNetModule(nn.Module):
+    """
+    Wrapper module that combines the PhysNetInteraction, PhysNetResidual, and PhysNetOutput classes into a single module.
+
+    Parameters
+    ----------
+    number_of_per_atom_features : int
+        Dimensionality of the atomic embeddings.
+    number_of_radial_basis_functions : int
+        Number of radial basis functions for the interaction.
+    number_of_interaction_residual : int
+        Number of residual blocks in the interaction module.
+    activation_function_class : torch.nn.Module
+        The activation function class to be used in the modules.
+    """
+
     def __init__(
         self,
         number_of_per_atom_features: int,
@@ -362,23 +383,17 @@ class PhysNetModule(nn.Module):
         number_of_interaction_residual: int,
         activation_function_class: torch.nn.Module,
     ):
-        """
-        Wrapper module that combines the PhysNetInteraction, PhysNetResidual, and PhysNetOutput classes into a single module. This serves as the building block for the PhysNet model.
-
-        This is a skeletal implementation that needs to be expanded upon.
-        """
 
         super().__init__()
 
-        # this class combines the PhysNetInteraction, PhysNetResidual and
-        # PhysNetOutput class
-
+        # Initialize interaction module
         self.interaction = PhysNetInteractionModule(
             number_of_per_atom_features=number_of_per_atom_features,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             number_of_interaction_residual=number_of_interaction_residual,
             activation_function_class=activation_function_class,
         )
+        # Initialize output module
         self.output = PhysNetOutput(
             number_of_per_atom_features=number_of_per_atom_features,
             number_of_atomic_properties=2,
@@ -389,8 +404,17 @@ class PhysNetModule(nn.Module):
     def forward(self, data: PhysNetNeuralNetworkData) -> Dict[str, torch.Tensor]:
         """
         Forward pass for the PhysNet module.
-        """
 
+        Parameters
+        ----------
+        data : PhysNetNeuralNetworkData
+            Input data containing atomic features and pairwise information.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            Dictionary containing predictions and updated embeddings.
+        """
         # The PhysNet module is a sequence of interaction modules and residual modules.
         #              x_1, ..., x_N
         #                     |
@@ -423,6 +447,25 @@ class PhysNetModule(nn.Module):
 
 
 class PhysNetCore(CoreNetwork):
+    """
+    Core network class for the PhysNet neural network potential.
+
+    Parameters
+    ----------
+    featurization_config : Dict[str, Union[List[str], int]]
+        Configuration for atomic feature generation.
+    maximum_interaction_radius : openff.units.unit.Quantity
+        The cutoff distance for interactions.
+    number_of_radial_basis_functions : int
+        Number of radial basis functions.
+    number_of_interaction_residual : int
+        Number of interaction residual blocks.
+    number_of_modules : int
+        Number of PhysNet modules.
+    activation_name : str
+        Name of the activation function to use.
+    """
+
     def __init__(
         self,
         featurization_config: Dict[str, Union[List[str], int]],
@@ -430,31 +473,19 @@ class PhysNetCore(CoreNetwork):
         number_of_radial_basis_functions: int,
         number_of_interaction_residual: int,
         number_of_modules: int,
-        activation_function: str,
+        activation_name: str,
     ) -> None:
-        """
-        Implementation of the PhysNet neural network potential.
-
-        Parameters
-        ----------
-        featurization_config: Dict[str, Union[List[str], int]],
-
-        maximum_interaction_radius : openff.units.unit.Quantity
-            The cutoff distance for interactions.
-        number_of_modules : int
-        """
 
         log.debug("Initializing the PhysNet architecture.")
-        super().__init__(activation_function)
+        super().__init__(activation_name)
 
         # featurize the atomic input
         from modelforge.potential.utils import FeaturizeInput
-
         self.featurize_input = FeaturizeInput(featurization_config)
         number_of_per_atom_features = int(
             featurization_config["number_of_per_atom_features"]
         )
-        highest_atomic_number = int(featurization_config["highest_atomic_number"])
+        maximum_atomic_number = int(featurization_config["maximum_atomic_number"])
         self.physnet_representation_module = PhysNetRepresentation(
             maximum_interaction_radius=maximum_interaction_radius,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
@@ -476,13 +507,27 @@ class PhysNetCore(CoreNetwork):
         )
 
         # learnable shift and bias that is applied per-element to ech atomic energy
-        self.atomic_scale = nn.Parameter(torch.ones(highest_atomic_number, 2))
-        self.atomic_shift = nn.Parameter(torch.zeros(highest_atomic_number, 2))
+        self.atomic_scale = nn.Parameter(torch.ones(maximum_atomic_number, 2))
+        self.atomic_shift = nn.Parameter(torch.zeros(maximum_atomic_number, 2))
 
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
     ) -> PhysNetNeuralNetworkData:
-        # Perform atomic embedding
+        """
+        Prepare model-specific input data.
+
+        Parameters
+        ----------
+        data : NNPInput
+            Input data containing atomic information.
+        pairlist_output : PairListOutputs
+            Output from the pairlist calculation.
+
+        Returns
+        -------
+        PhysNetNeuralNetworkData
+            Prepared input data for the PhysNet model.
+        """
         atomic_embedding = self.featurize_input(data)
         #         Z_i, ..., Z_N
         #
@@ -513,15 +558,17 @@ class PhysNetCore(CoreNetwork):
         self, data: PhysNetNeuralNetworkData
     ) -> Dict[str, torch.Tensor]:
         """
-        Calculate the energy for a given input batch.
+        Compute properties for a given input batch.
+
         Parameters
         ----------
-        inputs : PhysNetNeutralNetworkInput
+        data : PhysNetNeuralNetworkData
+            Input data containing atomic features and pairwise information.
 
         Returns
         -------
-        torch.Tensor
-            Calculated energies; shape (nr_systems,).
+        Dict[str, torch.Tensor]
+            Calculated properties including per-atom energies.
         """
 
         # Computed representation
@@ -600,6 +647,28 @@ from modelforge.potential.utils import shared_config_prior
 
 
 class PhysNet(BaseNetwork):
+    """
+    Implementation of the PhysNet neural network potential.
+
+    Parameters
+    ----------
+    featurization : Dict[str, Union[List[str], int]]
+        Configuration for atomic feature generation.
+    maximum_interaction_radius : Union[unit.Quantity, str]
+        The cutoff distance for interactions.
+    number_of_radial_basis_functions : int
+        Number of radial basis functions.
+    number_of_interaction_residual : int
+        Number of interaction residual blocks.
+    number_of_modules : int
+        Number of PhysNet modules.
+    activation_function : str
+        Name of the activation function to use.
+    postprocessing_parameter : Dict[str, Dict[str, bool]]
+        Configuration for postprocessing parameters.
+    dataset_statistic : Optional[Dict[str, float]], optional
+        Statistics of the dataset, by default None.
+    """
     def __init__(
         self,
         featurization: Dict[str, Union[List[str], int]],
@@ -611,26 +680,6 @@ class PhysNet(BaseNetwork):
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
-        """
-        Implementation of the PhysNet neural network potential.
-
-        Parameters
-        ----------
-        featurization : Dict[str, Union[List[str], int]]
-            Configuration for atomic feature generation.
-        maximum_interaction_radius : Union[unit.Quantity, str]
-            The cutoff distance for interactions.
-        number_of_radial_basis_functions : int
-            The number of radial basis functions.
-        number_of_interaction_residual : int
-            The number of interaction residuals.
-        number_of_modules : int
-            The number of PhysNet modules.
-        postprocessing_parameter : Dict[str, Dict[str, bool]]
-            Configuration for postprocessing parameters.
-        dataset_statistic : Optional[Dict[str, float]], optional
-            Statistics of the dataset, by default None.
-        """
 
         self.only_unique_pairs = False  # NOTE: for pairlist
         super().__init__(
@@ -645,7 +694,7 @@ class PhysNet(BaseNetwork):
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             number_of_interaction_residual=number_of_interaction_residual,
             number_of_modules=number_of_modules,
-            activation_function=activation_function,
+            activation_name=activation_function,
         )
 
     def _config_prior(self):

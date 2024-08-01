@@ -95,6 +95,17 @@ def test_train_with_lightning(potential_name, dataset_name):
     )
 
 
+def test_train_from_single_toml_file():
+    from modelforge.train.training import read_config_and_train
+    from modelforge.tests import data
+    from importlib import resources
+    import toml
+
+    config_path = resources.files(data) / f"config.toml"
+
+    read_config_and_train(config_path)
+
+
 import torch
 
 

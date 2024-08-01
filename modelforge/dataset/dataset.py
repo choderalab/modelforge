@@ -213,7 +213,7 @@ class BatchData:
         return self
 
 
-class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
+class TorchDataset(torch.utils.data.Dataset[BatchData]):
     """
     Wraps a numpy dataset to make it compatible with PyTorch DataLoader.
 

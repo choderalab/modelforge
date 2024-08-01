@@ -787,26 +787,24 @@ def read_config(
         runtime_config_dict = config["runtime"]
 
     else:
-        training_config_dict = toml.load(training_config_path)
-        dataset_config_dict = toml.load(dataset_config_path)
-        potential_config_dict = toml.load(potential_config_path)
-        runtime_config_dict = toml.load(runtime_config_path)
+        training_config_dict = toml.load(training_config_path)["training"]
+        dataset_config_dict = toml.load(dataset_config_path)["dataset"]
+        potential_config_dict = toml.load(potential_config_path)["potential"]
+        runtime_config_dict = toml.load(runtime_config_path)["runtime"]
 
     from modelforge.potential import _Implemented_NNP_Parameters
+    from modelforge.dataset.dataset import DatasetParameters
+    from modelforge.train.parameters import TrainingParameters, RuntimeParameters
 
-    potential_name = potential_config_dict["potential"]["potential_name"]
+    potential_name = potential_config_dict["potential_name"]
     PotentialParameters = (
         _Implemented_NNP_Parameters.get_neural_network_parameter_class(potential_name)
     )
 
-    potential_parameters = PotentialParameters(**potential_config_dict["potential"])
-
-    from modelforge.dataset.dataset import DatasetParameters
-    from modelforge.train.parameters import TrainingParameters, RuntimeParameters
-
-    dataset_parameters = DatasetParameters(**dataset_config_dict["dataset"])
-    training_parameters = TrainingParameters(**training_config_dict["training"])
-    runtime_parameters = RuntimeParameters(**runtime_config_dict["runtime"])
+    dataset_parameters = DatasetParameters(**dataset_config_dict)
+    training_parameters = TrainingParameters(**training_config_dict)
+    runtime_parameters = RuntimeParameters(**runtime_config_dict)
+    potential_parameters = PotentialParameters(**potential_config_dict)
 
     # if accelerator, devices, or number_of_nodes are provided, override the runtime_defaults parameters
     # note, since these are being set in the runtime data model, they will be validated by the model
@@ -867,10 +865,10 @@ def read_config_and_train(
     """
 
     (
-        potential_parameters,
-        training_parameters,
-        dataset_parameters,
-        runtime_parameters,
+        potential_config,
+        training_config,
+        dataset_config,
+        runtime_config,
     ) = read_config(
         condensed_config_path,
         training_config_path,
@@ -882,11 +880,11 @@ def read_config_and_train(
         number_of_nodes,
     )
 
-    perform_training(
-        potential_parameters=potential_parameters,
-        training_parameters=training_parameters,
-        dataset_parameters=dataset_parameters,
-        runtime_parameters=runtime_parameters,
+    return perform_training(
+        potential_config=potential_config,
+        training_config=training_config,
+        dataset_config=dataset_config,
+        runtime_config=runtime_config,
     )
 
 

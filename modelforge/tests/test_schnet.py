@@ -21,12 +21,12 @@ def initialize_model(
     return SchNet(
         featurization={
             "properties_to_featurize": ["atomic_number"],
-            "max_Z": 101,
+            "maximum_atomic_number": 101,
             "number_of_per_atom_features": 32,
         },
         number_of_interaction_modules=nr_of_interactions,
         number_of_radial_basis_functions=number_of_radial_basis_functions,
-        cutoff=cutoff,
+        radial_max_distance=cutoff,
         number_of_filters=number_of_atom_features,
         shared_interactions=False,
         processing_operation=[],

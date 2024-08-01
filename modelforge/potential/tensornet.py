@@ -25,7 +25,7 @@ class TensorNet(BaseNetwork):
         )
         self.only_unique_pairs = True  # NOTE: for pairlist
         self.input_preparation = ComputeInteractingAtomPairs(
-            cutoff=radial_max_distance, only_unique_pairs=self.only_unique_pairs
+            maximum_interaction_radius=radial_max_distance, only_unique_pairs=self.only_unique_pairs
         )
 
 

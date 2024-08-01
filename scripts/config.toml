@@ -2,7 +2,7 @@
 potential_name = "SchNet"
 
 [potential.core_parameter]
-max_Z = 101
+maximum_atomic_number = 101
 number_of_atom_features = 32
 number_of_radial_basis_functions = 20
 cutoff = "5.0 angstrom"

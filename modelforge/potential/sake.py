@@ -78,7 +78,8 @@ class SAKECore(CoreNetwork):
         number_of_interaction_modules: int,
         number_of_spatial_attention_heads: int,
         number_of_radial_basis_functions: int,
-        cutoff: unit.Quantity,
+        maximum_interaction_radius: unit.Quantity,
+        activation_name: str,
         epsilon: float = 1e-8,
     ):
         """
@@ -94,17 +95,17 @@ class SAKECore(CoreNetwork):
             Number of spatial attention heads.
         number_of_radial_basis_functions : int
             Number of radial basis functions.
-        cutoff : unit.Quantity
+        maximum_interaction_radius : unit.Quantity
             Cutoff distance.
         epsilon : float, optional
             Small value to avoid division by zero, by default 1e-8.
         """
         log.debug("Initializing the SAKE architecture.")
-        super().__init__()
+        super().__init__(activation_name)
         self.nr_interaction_blocks = number_of_interaction_modules
-        number_of_per_atom_features = featurization_config[
-            "number_of_per_atom_features"
-        ]
+        number_of_per_atom_features = int(
+            featurization_config["number_of_per_atom_features"]
+        )
         self.nr_heads = number_of_spatial_attention_heads
         self.number_of_per_atom_features = number_of_per_atom_features
         # featurize the atomic input
@@ -113,7 +114,7 @@ class SAKECore(CoreNetwork):
         self.featurize_input = FeaturizeInput(featurization_config)
         self.energy_layer = nn.Sequential(
             Dense(number_of_per_atom_features, number_of_per_atom_features),
-            nn.SiLU(),
+            self.activation_function_class(),
             Dense(number_of_per_atom_features, 1),
         )
         # initialize the interaction networks
@@ -128,8 +129,8 @@ class SAKECore(CoreNetwork):
                 nr_atom_basis_velocity=number_of_per_atom_features,
                 nr_coefficients=(self.nr_heads * number_of_per_atom_features),
                 nr_heads=self.nr_heads,
-                activation=torch.nn.SiLU(),
-                cutoff=cutoff,
+                activation=self.activation_function_class(),
+                maximum_interaction_radius=maximum_interaction_radius,
                 number_of_radial_basis_functions=number_of_radial_basis_functions,
                 epsilon=epsilon,
                 scale_factor=(1.0 * unit.nanometer),  # TODO: switch to angstrom
@@ -158,12 +159,6 @@ class SAKECore(CoreNetwork):
         # Perform atomic embedding
 
         number_of_atoms = data.atomic_numbers.shape[0]
-
-        # atomic_embedding = self.embedding(
-        #     F.one_hot(data.atomic_numbers.long(), num_classes=self.max_Z).to(
-        #         self.embedding.weight.dtype
-        #     )
-        # )
 
         nnp_input = SAKENeuralNetworkInput(
             pair_indices=pairlist_output.pair_indices,
@@ -226,7 +221,7 @@ class SAKEInteraction(nn.Module):
         nr_coefficients: int,
         nr_heads: int,
         activation: nn.Module,
-        cutoff: unit.Quantity,
+        maximum_interaction_radius: unit.Quantity,
         number_of_radial_basis_functions: int,
         epsilon: float,
         scale_factor: unit.Quantity,
@@ -252,7 +247,7 @@ class SAKEInteraction(nn.Module):
             Number of coefficients for spatial attention.
         activation : Callable
             Activation function to use.
-        cutoff : unit.Quantity
+        maximum_interaction_radius : unit.Quantity
             Distance parameter for setting scale factors in radial basis functions.
         number_of_radial_basis_functions: int
             Number of radial basis functions.
@@ -275,7 +270,7 @@ class SAKEInteraction(nn.Module):
         self.epsilon = epsilon
         self.radial_symmetry_function_module = PhysNetRadialBasisFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
-            max_distance=cutoff,
+            max_distance=maximum_interaction_radius,
             dtype=torch.float32,
         )
 
@@ -285,21 +280,25 @@ class SAKEInteraction(nn.Module):
                 + self.nr_heads * self.nr_edge_basis
                 + self.nr_atom_basis_spatial,
                 self.nr_atom_basis_hidden,
-                activation=activation,
+                activation_function=activation,
             ),
-            Dense(self.nr_atom_basis_hidden, self.nr_atom_basis, activation=activation),
+            Dense(
+                self.nr_atom_basis_hidden,
+                self.nr_atom_basis,
+                activation_function=activation,
+            ),
         )
 
         self.post_norm_mlp = nn.Sequential(
             Dense(
                 self.nr_coefficients,
                 self.nr_atom_basis_spatial_hidden,
-                activation=activation,
+                activation_function=activation,
             ),
             Dense(
                 self.nr_atom_basis_spatial_hidden,
                 self.nr_atom_basis_spatial,
-                activation=activation,
+                activation_function=activation,
             ),
         )
 
@@ -311,23 +310,25 @@ class SAKEInteraction(nn.Module):
             Dense(
                 self.nr_atom_basis * 2 + number_of_radial_basis_functions + 1,
                 self.nr_edge_basis_hidden,
-                activation=activation,
+                activation_function=activation,
             ),
             nn.Linear(nr_edge_basis_hidden, nr_edge_basis),
         )
 
         self.semantic_attention_mlp = Dense(
-            self.nr_edge_basis, self.nr_heads, activation=nn.CELU(alpha=2.0)
+            self.nr_edge_basis, self.nr_heads, activation_function=nn.CELU(alpha=2.0)
         )
 
         self.velocity_mlp = nn.Sequential(
             Dense(
-                self.nr_atom_basis, self.nr_atom_basis_velocity, activation=activation
+                self.nr_atom_basis,
+                self.nr_atom_basis_velocity,
+                activation_function=activation,
             ),
             Dense(
                 self.nr_atom_basis_velocity,
                 1,
-                activation=lambda x: 2.0 * F.sigmoid(x),
+                activation_function=lambda x: 2.0 * F.sigmoid(x),
                 bias=False,
             ),
         )
@@ -336,7 +337,7 @@ class SAKEInteraction(nn.Module):
             self.nr_heads * self.nr_edge_basis,
             self.nr_coefficients,
             bias=False,
-            activation=nn.Tanh(),
+            activation_function=nn.Tanh(),
         )
 
         self.v_mixing_mlp = Dense(self.nr_coefficients, 1, bias=False)
@@ -597,7 +598,8 @@ class SAKE(BaseNetwork):
         number_of_interaction_modules: int,
         number_of_spatial_attention_heads: int,
         number_of_radial_basis_functions: int,
-        cutoff: unit.Quantity,
+        maximum_interaction_radius: unit.Quantity,
+        activation_function: str,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
         epsilon: float = 1e-8,
@@ -608,7 +610,7 @@ class SAKE(BaseNetwork):
         super().__init__(
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=postprocessing_parameter,
-            cutoff=_convert_str_to_unit(cutoff),
+            maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
         )
 
         self.core_module = SAKECore(
@@ -616,7 +618,8 @@ class SAKE(BaseNetwork):
             number_of_interaction_modules=number_of_interaction_modules,
             number_of_spatial_attention_heads=number_of_spatial_attention_heads,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
-            cutoff=_convert_str_to_unit(cutoff),
+            maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
+            activation_name=activation_function,
             epsilon=epsilon,
         )
 
@@ -633,13 +636,8 @@ class SAKE(BaseNetwork):
             "number_of_per_atom_features": tune.randint(2, 256),
             "number_of_modules": tune.randint(3, 8),
             "number_of_spatial_attention_heads": tune.randint(2, 5),
-            "cutoff": tune.uniform(5, 10),
+            "maximum_interaction_radius": tune.uniform(5, 10),
             "number_of_radial_basis_functions": tune.randint(8, 32),
         }
         prior.update(shared_config_prior())
         return prior
-
-    def combine_per_atom_properties(
-        self, values: Dict[str, torch.Tensor]
-    ) -> torch.Tensor:
-        return values

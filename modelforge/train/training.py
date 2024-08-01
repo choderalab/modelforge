@@ -793,20 +793,18 @@ def read_config(
         runtime_config_dict = toml.load(runtime_config_path)["runtime"]
 
     from modelforge.potential import _Implemented_NNP_Parameters
+    from modelforge.dataset.dataset import DatasetParameters
+    from modelforge.train.parameters import TrainingParameters, RuntimeParameters
 
     potential_name = potential_config_dict["potential_name"]
     PotentialParameters = (
         _Implemented_NNP_Parameters.get_neural_network_parameter_class(potential_name)
     )
 
-    potential_parameters = PotentialParameters(**potential_config_dict)
-
-    from modelforge.dataset.dataset import DatasetParameters
-    from modelforge.train.parameters import TrainingParameters, RuntimeParameters
-
     dataset_parameters = DatasetParameters(**dataset_config_dict)
     training_parameters = TrainingParameters(**training_config_dict)
     runtime_parameters = RuntimeParameters(**runtime_config_dict)
+    potential_parameters = PotentialParameters(**potential_config_dict)
 
     # if accelerator, devices, or number_of_nodes are provided, override the runtime_defaults parameters
     # note, since these are being set in the runtime data model, they will be validated by the model

@@ -38,6 +38,7 @@ def vector_to_skewtensor(vector):
     return tensor.squeeze(0)
 
 
+
 def vector_to_symtensor(vector):
     """Creates a symmetric traceless tensor from the outer product of a vector with itself."""
     tensor = torch.matmul(vector.unsqueeze(-1), vector.unsqueeze(-2))

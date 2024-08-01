@@ -1,13 +1,12 @@
 [potential]
 potential_name = "TensorNet"
 
-[potential.core_parameter]
 hidden_channels = 8
 number_of_interaction_layers = 2
 number_of_radial_basis_functions = 16
 radial_max_distance = "5.1 angstrom"
 radial_min_distance = "0.0 angstrom"
-max_Z = 128
+maximum_atomic_number = 101
 equivariance_invariance_group = "O(3)"
 
 [potential.postprocessing_parameter]

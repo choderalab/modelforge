@@ -79,7 +79,7 @@ class SAKECore(CoreNetwork):
         number_of_spatial_attention_heads: int,
         number_of_radial_basis_functions: int,
         maximum_interaction_radius: unit.Quantity,
-        activation_function: str,
+        activation_name: str,
         epsilon: float = 1e-8,
     ):
         """
@@ -101,7 +101,7 @@ class SAKECore(CoreNetwork):
             Small value to avoid division by zero, by default 1e-8.
         """
         log.debug("Initializing the SAKE architecture.")
-        super().__init__(activation_function)
+        super().__init__(activation_name)
         self.nr_interaction_blocks = number_of_interaction_modules
         number_of_per_atom_features = int(
             featurization_config["number_of_per_atom_features"]
@@ -619,7 +619,7 @@ class SAKE(BaseNetwork):
             number_of_spatial_attention_heads=number_of_spatial_attention_heads,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
-            activation_function=activation_function,
+            activation_name=activation_function,
             epsilon=epsilon,
         )
 

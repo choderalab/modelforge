@@ -40,7 +40,7 @@ class PaiNNCore(CoreNetwork):
         number_of_interaction_modules: int,
         shared_interactions: bool,
         shared_filters: bool,
-        activation_function: str,
+        activation_name: str,
         epsilon: float = 1e-8,
     ):
         """
@@ -60,14 +60,15 @@ class PaiNNCore(CoreNetwork):
             Whether to share interactions across modules.
         shared_filters : bool
             Whether to share filters across modules.
-        activation_function : str
+        activation_name : str
             Activation function to use.
         epsilon : float, optional
             Stability constant added in norm to prevent numerical instabilities. Default is 1e-8.
         """
         from modelforge.potential.utils import FeaturizeInput
+
         log.debug("Initializing the PaiNN architecture.")
-        super().__init__(activation_function)
+        super().__init__(activation_name)
 
         self.number_of_interaction_modules = number_of_interaction_modules
 
@@ -580,7 +581,7 @@ class PaiNN(BaseNetwork):
             number_of_interaction_modules=number_of_interaction_modules,
             shared_interactions=shared_interactions,
             shared_filters=shared_filters,
-            activation_function=activation_function,
+            activation_name=activation_function,
             epsilon=epsilon,
         )
 

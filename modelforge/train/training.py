@@ -772,7 +772,7 @@ def read_config(
     Returns
     -------
     Tuple
-        Tuple containing the potential, training, dataset, and runtime parameters.
+        Tuple containing the training, dataset, potential, and runtime parameters.
 
     """
     import toml
@@ -819,9 +819,9 @@ def read_config(
         log.info(f"Using number of nodes: {number_of_nodes}")
 
     return (
-        potential_parameters,
         training_parameters,
         dataset_parameters,
+        potential_parameters,
         runtime_parameters,
     )
 
@@ -865,9 +865,9 @@ def read_config_and_train(
     """
 
     (
-        potential_config,
         training_config,
         dataset_config,
+        potential_config,
         runtime_config,
     ) = read_config(
         condensed_config_path,

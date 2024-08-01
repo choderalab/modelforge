@@ -191,7 +191,7 @@ def test_painn_representation_implementation():
     assert torch.allclose(q_spk_initial, q_mf_initial)
 
     mu_spk_initial = torch.zeros((spk_qs[0], 3, spk_qs[2]))
-    mu_mf_initial = torch.zeros((mf_qs[0], 3, mf_qs[2]))
+    mu_mf_initial = torch.zeros((mf_qs[0], 3, mf_qs[2]), dtype=torch.float64)
     assert mu_spk_initial.shape == mu_mf_initial.shape
 
     # set up the filter and interaction, pass the input and compare the results
@@ -328,7 +328,7 @@ def test_painn_representation_implementation():
         q_spk, mu_spk = mixing(q_spk, mu_spk)
 
     mf_filter_list = torch.split(
-        filters_mf, 3 * modelforge_painn.core_module.number_of_atom_features, dim=-1
+        filters_mf, 3 * modelforge_painn.core_module.representation_module.nr_atom_basis, dim=-1
     )
     # q_mf = q_mf_initial
     # mu_mf = mu_mf_initial
@@ -354,7 +354,7 @@ def test_painn_representation_implementation():
         filters_spk, 3 * schnetpack_painn.n_atom_basis, dim=-1
     )
     mf_filter_list = torch.split(
-        filters_mf, 3 * modelforge_painn.core_module.number_of_atom_features, dim=-1
+        filters_mf, 3 * modelforge_painn.core_module.representation_module.nr_atom_basis, dim=-1
     )
 
     # q_spk = q_spk_initial

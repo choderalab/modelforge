@@ -1294,15 +1294,15 @@ def scatter_softmax(
     return recentered_scores_exp.div(normalizing_constants)
 
 
-ACTIVATION_FUNCTIONS = {
-    "ReLU": nn.ReLU,
-    "CeLU": nn.CELU,
-    "Sigmoid": nn.Sigmoid,
-    "Softmax": nn.Softmax,
-    "ShiftedSoftplus": ShiftedSoftplus,
-    "SiLU": nn.SiLU,
-    "Tanh": nn.Tanh,
-    "LeakyReLU": nn.LeakyReLU,
-    "ELU": nn.ELU,
-    # Add more activation functions as needed
-}
+from enum import Enum
+
+class ActivationFunction(Enum):
+    ReLU = nn.ReLU
+    CeLU = nn.CELU
+    Sigmoid = nn.Sigmoid
+    Softmax = nn.Softmax
+    ShiftedSoftplus = ShiftedSoftplus
+    SiLU = nn.SiLU
+    Tanh = nn.Tanh
+    LeakyReLU = nn.LeakyReLU
+    ELU = nn.ELU

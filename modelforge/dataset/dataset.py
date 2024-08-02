@@ -18,6 +18,27 @@ if TYPE_CHECKING:
 
 from pydantic import BaseModel, field_validator, ConfigDict, Field
 
+from enum import Enum
+
+
+class CaseInsensitiveEnum(str, Enum):
+    @classmethod
+    def _missing_(cls, value):
+        for member in cls:
+            if member.value.lower() == value.lower():
+                return member
+        return super()._missing_(value)
+
+
+class DataSetName(CaseInsensitiveEnum):
+    QM9 = "QM9"
+    ANI1X = "ANI1X"
+    ANI2X = "ANI2X"
+    SPICE114 = "SPICE114"
+    SPICE2 = "SPICE2"
+    SPICE114_OPENFF = "SPICE114_OPENFF"
+    PhAlkEthOH = "PhAlkEthOH"
+
 
 class DatasetParameters(BaseModel):
     """
@@ -35,7 +56,7 @@ class DatasetParameters(BaseModel):
         use_enum_values=True, arbitrary_types_allowed=True, validate_assignment=True
     )
 
-    dataset_name: str
+    dataset_name: DataSetName
     version_select: str
     num_workers: int = Field(gt=0)
     pin_memory: bool

@@ -538,7 +538,7 @@ class ANI2xCore(CoreNetwork):
         # The length of full aev
         self.aev_length = self.radial_length + self.angular_length
 
-        # Intialize interaction blocks
+        # Initialize interaction blocks
         self.interaction_modules = ANIInteraction(
             aev_dim=self.aev_length,
             activation_function_class=self.activation_function_class,

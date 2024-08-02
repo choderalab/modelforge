@@ -1,6 +1,11 @@
 import numpy as np
 import torch
 import pytest
+import platform
+import os
+
+ON_MACOS = platform.system() == "Darwin"
+IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 
 
 @pytest.fixture(scope="session")
@@ -526,6 +531,10 @@ def test_welford():
         assert np.isclose(online_estimator.stddev / target_stddev, 1.0, rtol=1e-1)
 
 
+@pytest.mark.skipif(
+    ON_MACOS and IN_GITHUB_ACTIONS,
+    reason="Test is flaky on the MacOS CI runners as it relies on spawning multiple threads. ",
+)
 def test_filelocking(prep_temp_dir):
     from modelforge.utils.misc import lock_file, unlock_file, check_file_lock
 

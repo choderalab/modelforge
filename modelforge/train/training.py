@@ -745,6 +745,12 @@ def read_config(
     accelerator: Optional[str] = None,
     devices: Optional[Union[int, List[int]]] = None,
     number_of_nodes: Optional[int] = None,
+    experiment_name: Optional[str] = None,
+    save_dir: Optional[str] = None,
+    local_cache_dir: Optional[str] = None,
+    checkpoint_path: Optional[str] = None,
+    log_every_n_steps: Optional[int] = None,
+    simulation_environment: Optional[str] = None,
 ):
     """
     Reads one or more TOML configuration files and loads them into the pydantic models
@@ -761,22 +767,36 @@ def read_config(
     potential_config_path : str, optional
         Path to the TOML file defining the potential parameters.
     runtime_config_path : str, optional
-        Path to the TOML file defining the runtime parameters.
+        Path to the TOML file defining the runtime parameters. If this is not provided, the code will attempt to use
+        the runtime parameters provided as arguments.
     accelerator : str, optional
         Accelerator type to use.  If provided, this  overrides the accelerator type in the runtime_defaults configuration.
     devices : int|List[int], optional
         Device index/indices to use.  If provided, this overrides the devices in the runtime_defaults configuration.
     number_of_nodes : int, optional
         Number of nodes to use.  If provided, this overrides the number of nodes in the runtime_defaults configuration.
+    experiment_name : str, optional
+        Name of the experiment.  If provided, this overrides the experiment name in the runtime_defaults configuration.
+    save_dir : str, optional
+        Directory to save the model.  If provided, this overrides the save directory in the runtime_defaults configuration.
+    local_cache_dir : str, optional
+        Local cache directory.  If provided, this overrides the local cache directory in the runtime_defaults configuration.
+    checkpoint_path : str, optional
+        Path to the checkpoint file.  If provided, this overrides the checkpoint path in the runtime_defaults configuration.
+    log_every_n_steps : int, optional
+        Number of steps to log.  If provided, this overrides the log_every_n_steps in the runtime_defaults configuration.
+    simulation_environment : str, optional
+        Simulation environment.  If provided, this overrides the simulation environment in the runtime_defaults configuration.
 
     Returns
     -------
     Tuple
-        Tuple containing the potential, training, dataset, and runtime parameters.
+        Tuple containing the training, dataset, potential, and runtime parameters.
 
     """
     import toml
 
+    use_runtime_variables_instead_of_toml = False
     if condensed_config_path is not None:
         config = toml.load(condensed_config_path)
         log.info(f"Reading config from : {condensed_config_path}")
@@ -787,10 +807,37 @@ def read_config(
         runtime_config_dict = config["runtime"]
 
     else:
+        if training_config_path is None:
+            raise ValueError("Training configuration not provided.")
+        if dataset_config_path is None:
+            raise ValueError("Dataset configuration not provided.")
+        if potential_config_path is None:
+            raise ValueError("Potential configuration not provided.")
+
         training_config_dict = toml.load(training_config_path)["training"]
         dataset_config_dict = toml.load(dataset_config_path)["dataset"]
         potential_config_dict = toml.load(potential_config_path)["potential"]
-        runtime_config_dict = toml.load(runtime_config_path)["runtime"]
+
+        # if the runtime_config_path is not defined, let us see if runtime variables are passed
+        if runtime_config_path is None:
+            use_runtime_variables_instead_of_toml = True
+            log.info(
+                "Runtime configuration not provided. The code will try to use runtime arguments."
+            )
+            # we can just create a dict with the runtime variables; the pydantic model will then validate them
+            runtime_config_dict = {
+                "save_dir": save_dir,
+                "experiment_name": experiment_name,
+                "local_cache_dir": local_cache_dir,
+                "checkpoint_path": checkpoint_path,
+                "log_every_n_steps": log_every_n_steps,
+                "simulation_environment": simulation_environment,
+                "accelerator": accelerator,
+                "devices": devices,
+                "number_of_nodes": number_of_nodes,
+            }
+        else:
+            runtime_config_dict = toml.load(runtime_config_path)["runtime"]
 
     from modelforge.potential import _Implemented_NNP_Parameters
     from modelforge.dataset.dataset import DatasetParameters
@@ -808,20 +855,41 @@ def read_config(
 
     # if accelerator, devices, or number_of_nodes are provided, override the runtime_defaults parameters
     # note, since these are being set in the runtime data model, they will be validated by the model
-    if accelerator:
-        runtime_parameters.accelerator = accelerator
-        log.info(f"Using accelerator: {accelerator}")
-    if devices:
-        runtime_parameters.device_index = devices
-        log.info(f"Using device index: {devices}")
-    if number_of_nodes:
-        runtime_parameters.number_of_nodes = number_of_nodes
-        log.info(f"Using number of nodes: {number_of_nodes}")
+    # if we use the runtime variables instead of the toml file, these have already been set so we can skip this step.
+
+    if use_runtime_variables_instead_of_toml == False:
+        if accelerator:
+            runtime_parameters.accelerator = accelerator
+            log.info(f"Using accelerator: {accelerator}")
+        if devices:
+            runtime_parameters.device_index = devices
+            log.info(f"Using device index: {devices}")
+        if number_of_nodes:
+            runtime_parameters.number_of_nodes = number_of_nodes
+            log.info(f"Using number of nodes: {number_of_nodes}")
+        if experiment_name:
+            runtime_parameters.experiment_name = experiment_name
+            log.info(f"Using experiment name: {experiment_name}")
+        if save_dir:
+            runtime_parameters.save_dir = save_dir
+            log.info(f"Using save directory: {save_dir}")
+        if local_cache_dir:
+            runtime_parameters.local_cache_dir = local_cache_dir
+            log.info(f"Using local cache directory: {local_cache_dir}")
+        if checkpoint_path:
+            runtime_parameters.checkpoint_path = checkpoint_path
+            log.info(f"Using checkpoint path: {checkpoint_path}")
+        if log_every_n_steps:
+            runtime_parameters.log_every_n_steps = log_every_n_steps
+            log.info(f"Logging every {log_every_n_steps} steps.")
+        if simulation_environment:
+            runtime_parameters.simulation_environment = simulation_environment
+            log.info(f"Using simulation environment: {simulation_environment}")
 
     return (
-        potential_parameters,
         training_parameters,
         dataset_parameters,
+        potential_parameters,
         runtime_parameters,
     )
 
@@ -835,6 +903,12 @@ def read_config_and_train(
     accelerator: Optional[str] = None,
     devices: Optional[Union[int, List[int]]] = None,
     number_of_nodes: Optional[int] = None,
+    experiment_name: Optional[str] = None,
+    save_dir: Optional[str] = None,
+    local_cache_dir: Optional[str] = None,
+    checkpoint_path: Optional[str] = None,
+    log_every_n_steps: Optional[int] = None,
+    simulation_environment: Optional[str] = None,
 ):
     """
     Reads one or more TOML configuration files and performs training based on the parameters.
@@ -851,13 +925,28 @@ def read_config_and_train(
     potential_config_path : str, optional
         Path to the TOML file defining the potential parameters.
     runtime_config_path : str, optional
-        Path to the TOML file defining the runtime parameters.
+        Path to the TOML file defining the runtime parameters. If this is not provided, the code will attempt to use
+        the runtime parameters provided as arguments.
     accelerator : str, optional
         Accelerator type to use.  If provided, this  overrides the accelerator type in the runtime_defaults configuration.
     devices : int|List[int], optional
         Device index/indices to use.  If provided, this overrides the devices in the runtime_defaults configuration.
     number_of_nodes : int, optional
         Number of nodes to use.  If provided, this overrides the number of nodes in the runtime_defaults configuration.
+    experiment_name : str, optional
+        Name of the experiment.  If provided, this overrides the experiment name in the runtime_defaults configuration.
+    save_dir : str, optional
+        Directory to save the model.  If provided, this overrides the save directory in the runtime_defaults configuration.
+    local_cache_dir : str, optional
+        Local cache directory.  If provided, this overrides the local cache directory in the runtime_defaults configuration.
+    checkpoint_path : str, optional
+        Path to the checkpoint file.  If provided, this overrides the checkpoint path in the runtime_defaults configuration.
+    log_every_n_steps : int, optional
+        Number of steps to log.  If provided, this overrides the log_every_n_steps in the runtime_defaults configuration.
+    simulation_environment : str, optional
+        Simulation environment.  If provided, this overrides the simulation environment in the runtime_defaults configuration.
+
+
 
     Returns
     -------
@@ -865,19 +954,25 @@ def read_config_and_train(
     """
 
     (
-        potential_config,
         training_config,
         dataset_config,
+        potential_config,
         runtime_config,
     ) = read_config(
-        condensed_config_path,
-        training_config_path,
-        dataset_config_path,
-        potential_config_path,
-        runtime_config_path,
-        accelerator,
-        devices,
-        number_of_nodes,
+        condensed_config_path=condensed_config_path,
+        training_config_path=training_config_path,
+        dataset_config_path=dataset_config_path,
+        potential_config_path=potential_config_path,
+        runtime_config_path=runtime_config_path,
+        accelerator=accelerator,
+        devices=devices,
+        number_of_nodes=number_of_nodes,
+        experiment_name=experiment_name,
+        save_dir=save_dir,
+        local_cache_dir=local_cache_dir,
+        checkpoint_path=checkpoint_path,
+        log_every_n_steps=log_every_n_steps,
+        simulation_environment=simulation_environment,
     )
 
     return perform_training(
@@ -933,7 +1028,6 @@ def perform_training(
     Trainer
     """
 
-    from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
     from modelforge.dataset.utils import REGISTERED_SPLITTING_STRATEGIES
     from lightning import Trainer
     from modelforge.potential import NeuralNetworkPotentialFactory
@@ -941,13 +1035,32 @@ def perform_training(
 
     # set up tensor board logger
     if training_config.experiment_logger.logger_name == "tensorboard":
+        from pytorch_lightning.loggers import TensorBoardLogger
+
         logger = TensorBoardLogger(
-            save_dir=runtime_config.save_dir, name=runtime_config.experiment_name
+            save_dir=training_config.experiment_logger.tensorboard_configuration.save_dir,
+            name=runtime_config.experiment_name,
         )
     elif training_config.experiment_logger.logger_name == "wandb":
+
+        # Since we are not calling the wandb api directly, but rather through the lightning logger interface
+        # we get the built in messages from lightning, which suggests we install via pip
+        # since we are trying to stay withing the condaforge ecosystem, we can use our own check_import function
+        # to raise an error and suggest the user install wandb via conda-forge.
+        from modelforge.utils.io import check_import
+
+        check_import("wandb")
+
+        from pytorch_lightning.loggers import WandbLogger
+
         logger = WandbLogger(
-            save_dir=runtime_config.save_dir,
-            log_model=True,
+            save_dir=training_config.experiment_logger.wandb_configuration.save_dir,
+            log_model=training_config.experiment_logger.wandb_configuration.log_model,
+            project=training_config.experiment_logger.wandb_configuration.project,
+            group=training_config.experiment_logger.wandb_configuration.group,
+            job_type=training_config.experiment_logger.wandb_configuration.job_type,
+            tags=training_config.experiment_logger.wandb_configuration.tags,
+            notes=training_config.experiment_logger.wandb_configuration.notes,
             name=runtime_config.experiment_name,
         )
 

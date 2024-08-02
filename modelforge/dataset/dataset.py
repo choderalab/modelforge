@@ -34,10 +34,10 @@ class DataSetName(CaseInsensitiveEnum):
     QM9 = "QM9"
     ANI1X = "ANI1X"
     ANI2X = "ANI2X"
-    SPICE114 = "SPICE114"
+    SPICE1 = "SPICE1"
     SPICE2 = "SPICE2"
-    SPICE114_OPENFF = "SPICE114_OPENFF"
-    PhAlkEthOH = "PhAlkEthOH"
+    SPICE1_OPENFF = "SPICE1_OPENFF"
+    PHALKETHOH = "PhAlkEthOH"
 
 
 class DatasetParameters(BaseModel):
@@ -1046,9 +1046,9 @@ class DataModule(pl.LightningDataModule):
             "QM9",
             "ANI1X",
             "ANI2X",
-            "SPICE114",
+            "SPICE1",
             "SPICE2",
-            "SPICE114_OPENFF",
+            "SPICE1_OPENFF",
             "PhAlkEthOH",
         ],
         splitting_strategy: SplittingStrategy = RandomRecordSplittingStrategy(),
@@ -1071,7 +1071,7 @@ class DataModule(pl.LightningDataModule):
 
         Parameters
         ---------
-            name: Literal["QM9", "ANI1X", "ANI2X", "SPICE114", "SPICE2", "SPICE114_OPENFF"]
+            name: Literal["QM9", "ANI1X", "ANI2X", "SPICE1", "SPICE2", "SPICE1_OPENFF"]
                 The name of the dataset to use.
             splitting_strategy : SplittingStrategy, defaults to RandomRecordSplittingStrategy
                 The strategy to use for splitting the dataset into train, test, and validation sets. .

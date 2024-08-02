@@ -38,6 +38,9 @@ monitor = "val/per_molecule_energy/rmse"
 [training.experiment_logger]
 logger_name = "tensorboard"
 
+[training.experiment_logger.tensorboard_configuration]
+save_dir = "logs"
+
 [training.lr_scheduler_config]
 frequency = 1
 mode = "min"

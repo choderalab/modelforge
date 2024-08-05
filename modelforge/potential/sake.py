@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import torch.nn as nn
 from loguru import logger as log
-from typing import Dict, Tuple, Union, List
+from typing import Dict, Tuple, Union, List, Type
 from openff.units import unit
 from .models import NNPInput, BaseNetwork, CoreNetwork, PairListOutputs
 from .utils import (
@@ -79,7 +79,7 @@ class SAKECore(CoreNetwork):
         number_of_spatial_attention_heads: int,
         number_of_radial_basis_functions: int,
         maximum_interaction_radius: unit.Quantity,
-        activation_name: str,
+        activation_function_class: Type[torch.nn.Module],
         epsilon: float = 1e-8,
     ):
         """
@@ -97,11 +97,13 @@ class SAKECore(CoreNetwork):
             Number of radial basis functions.
         maximum_interaction_radius : unit.Quantity
             Cutoff distance.
+        activation_function_class : Type[torch.nn.Module]
+            Activation function class to use.
         epsilon : float, optional
             Small value to avoid division by zero, by default 1e-8.
         """
         log.debug("Initializing the SAKE architecture.")
-        super().__init__(activation_name)
+        super().__init__(activation_function_class)
         self.nr_interaction_blocks = number_of_interaction_modules
         number_of_per_atom_features = int(
             featurization_config["number_of_per_atom_features"]
@@ -114,7 +116,7 @@ class SAKECore(CoreNetwork):
         self.featurize_input = FeaturizeInput(featurization_config)
         self.energy_layer = nn.Sequential(
             Dense(number_of_per_atom_features, number_of_per_atom_features),
-            self.activation_function_class(),
+            self.activation_function_class,
             Dense(number_of_per_atom_features, 1),
         )
         # initialize the interaction networks
@@ -129,7 +131,7 @@ class SAKECore(CoreNetwork):
                 nr_atom_basis_velocity=number_of_per_atom_features,
                 nr_coefficients=(self.nr_heads * number_of_per_atom_features),
                 nr_heads=self.nr_heads,
-                activation=self.activation_function_class(),
+                activation=self.activation_function_class,
                 maximum_interaction_radius=maximum_interaction_radius,
                 number_of_radial_basis_functions=number_of_radial_basis_functions,
                 epsilon=epsilon,
@@ -280,12 +282,12 @@ class SAKEInteraction(nn.Module):
                 + self.nr_heads * self.nr_edge_basis
                 + self.nr_atom_basis_spatial,
                 self.nr_atom_basis_hidden,
-                activation_function=activation,
+                activation_function_class=activation,
             ),
             Dense(
                 self.nr_atom_basis_hidden,
                 self.nr_atom_basis,
-                activation_function=activation,
+                activation_function_class=activation,
             ),
         )
 
@@ -293,12 +295,12 @@ class SAKEInteraction(nn.Module):
             Dense(
                 self.nr_coefficients,
                 self.nr_atom_basis_spatial_hidden,
-                activation_function=activation,
+                activation_function_class=activation,
             ),
             Dense(
                 self.nr_atom_basis_spatial_hidden,
                 self.nr_atom_basis_spatial,
-                activation_function=activation,
+                activation_function_class=activation,
             ),
         )
 
@@ -310,25 +312,27 @@ class SAKEInteraction(nn.Module):
             Dense(
                 self.nr_atom_basis * 2 + number_of_radial_basis_functions + 1,
                 self.nr_edge_basis_hidden,
-                activation_function=activation,
+                activation_function_class=activation,
             ),
             nn.Linear(nr_edge_basis_hidden, nr_edge_basis),
         )
 
         self.semantic_attention_mlp = Dense(
-            self.nr_edge_basis, self.nr_heads, activation_function=nn.CELU(alpha=2.0)
+            self.nr_edge_basis,
+            self.nr_heads,
+            activation_function_class=nn.CELU(alpha=2.0),
         )
 
         self.velocity_mlp = nn.Sequential(
             Dense(
                 self.nr_atom_basis,
                 self.nr_atom_basis_velocity,
-                activation_function=activation,
+                activation_function_class=activation,
             ),
             Dense(
                 self.nr_atom_basis_velocity,
                 1,
-                activation_function=lambda x: 2.0 * F.sigmoid(x),
+                activation_function_class=lambda x: 2.0 * F.sigmoid(x),
                 bias=False,
             ),
         )
@@ -337,7 +341,7 @@ class SAKEInteraction(nn.Module):
             self.nr_heads * self.nr_edge_basis,
             self.nr_coefficients,
             bias=False,
-            activation_function=nn.Tanh(),
+            activation_function_class=nn.Tanh(),
         )
 
         self.v_mixing_mlp = Dense(self.nr_coefficients, 1, bias=False)
@@ -599,7 +603,7 @@ class SAKE(BaseNetwork):
         number_of_spatial_attention_heads: int,
         number_of_radial_basis_functions: int,
         maximum_interaction_radius: unit.Quantity,
-        activation_function: str,
+        activation_function: Dict,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
         epsilon: float = 1e-8,
@@ -612,6 +616,7 @@ class SAKE(BaseNetwork):
             postprocessing_parameter=postprocessing_parameter,
             maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
         )
+        activation_function_class = activation_function["activation_function_class"]
 
         self.core_module = SAKECore(
             featurization_config=featurization,
@@ -619,7 +624,7 @@ class SAKE(BaseNetwork):
             number_of_spatial_attention_heads=number_of_spatial_attention_heads,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
-            activation_name=activation_function,
+            activation_function_class=activation_function_class,
             epsilon=epsilon,
         )
 

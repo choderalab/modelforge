@@ -9,7 +9,12 @@ number_of_radial_basis_functions = 16
 maximum_interaction_radius_for_angular_features = "3.5 angstrom"
 minimum_interaction_radius_for_angular_features = "0.8 angstrom"
 angular_dist_divisions = 8
-activation_function = "CeLU"   # for the original ANI behavior please stick with CeLu since the alpha parameter is currently hard coded and might lead to different behavior when another activation function is used.
+
+[potential.core_parameter.activation_function]
+activation_function_name = "CeLU"   # for the original ANI behavior please stick with CeLu since the alpha parameter is currently hard coded and might lead to different behavior when another activation function is used.
+
+[potential.core_parameter.activation_function.activation_function_arguments]
+alpha = 0.1
 
 [potential.postprocessing_parameter]
 [potential.postprocessing_parameter.per_atom_energy]

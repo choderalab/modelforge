@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, Tuple
+from typing import TYPE_CHECKING, Dict, Tuple, Type
 from .models import BaseNetwork, CoreNetwork
 
 import torch
@@ -428,7 +428,7 @@ class ANIInteraction(nn.Module):
             input_dim = aev_dim
             for units in layers:
                 network_layers.append(nn.Linear(input_dim, units))
-                network_layers.append(activation_function_class(0.1))
+                network_layers.append(activation_function_class)
                 input_dim = units
             network_layers.append(nn.Linear(input_dim, 1))
             return nn.Sequential(*network_layers)
@@ -489,8 +489,8 @@ class ANI2xCore(CoreNetwork):
         The maximum angular distance for the angular basis functions.
     minimum_interaction_radius_for_angular_features : unit.Quantity
         The minimum angular distance for the angular basis functions.
-    activation_function : str
-        The name of the activation function to use.
+    activation_function_class : Type[torch.nn.Module]
+        The  activation function class to use.
     angular_dist_divisions : int
         The number of divisions for the angular distance.
     angle_sections : int
@@ -505,7 +505,7 @@ class ANI2xCore(CoreNetwork):
         number_of_radial_basis_functions: int,
         maximum_interaction_radius_for_angular_features: unit.Quantity,
         minimum_interaction_radius_for_angular_features: unit.Quantity,
-        activation_function: str,
+        activation_function_class: Type[torch.nn.Module],
         angular_dist_divisions: int,
         angle_sections: int,
     ) -> None:
@@ -514,7 +514,7 @@ class ANI2xCore(CoreNetwork):
         self.num_species = 7
 
         log.debug("Initializing the ANI2x architecture.")
-        super().__init__(activation_function)
+        super().__init__(activation_function_class)
 
         # Initialize representation block
         self.ani_representation_module = ANIRepresentation(
@@ -538,7 +538,7 @@ class ANI2xCore(CoreNetwork):
         # The length of full aev
         self.aev_length = self.radial_length + self.angular_length
 
-        # Initialize interaction blocks
+        # Intialize interaction blocks
         self.interaction_modules = ANIInteraction(
             aev_dim=self.aev_length,
             activation_function_class=self.activation_function_class,
@@ -640,8 +640,9 @@ class ANI2x(BaseNetwork):
         The number of divisions for the angular distance.
     angle_sections : int
         The number of angle sections to use.
-    activation_function : str
-        The name of the activation function to use.
+    activation_function : Dict
+        Dict that contains keys: activation_function_name [str], activation_function_arguments [Dict],
+        and activation_function_class [Type[torch.nn.Module]].
     postprocessing_parameter : Dict[str, Dict[str, bool]]
         Configuration for postprocessing parameters.
     dataset_statistic : Optional[Dict[str, float]], optional
@@ -657,7 +658,7 @@ class ANI2x(BaseNetwork):
         minimum_interaction_radius_for_angular_features: Union[unit.Quantity, str],
         angular_dist_divisions: int,
         angle_sections: int,
-        activation_function: str,
+        activation_function: Dict,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
@@ -672,6 +673,8 @@ class ANI2x(BaseNetwork):
             maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
         )
 
+        activation_function_class = activation_function["activation_function_class"]
+
         self.core_module = ANI2xCore(
             maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
             minimum_interaction_radius=_convert_str_to_unit(minimum_interaction_radius),
@@ -682,7 +685,7 @@ class ANI2x(BaseNetwork):
             minimum_interaction_radius_for_angular_features=_convert_str_to_unit(
                 minimum_interaction_radius_for_angular_features
             ),
-            activation_function=activation_function,
+            activation_function_class=activation_function_class,
             angular_dist_divisions=angular_dist_divisions,
             angle_sections=angle_sections,
         )

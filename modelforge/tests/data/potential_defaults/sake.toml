@@ -7,7 +7,9 @@ number_of_radial_basis_functions = 50
 maximum_interaction_radius = "5.0 angstrom"
 number_of_interaction_modules = 6
 number_of_spatial_attention_heads = 4
-activation_function = "SiLU"
+
+[potential.core_parameter.activation_function]
+activation_function_name = "SiLU"
 
 [potential.core_parameter.featurization]
 number_of_per_atom_features = 64

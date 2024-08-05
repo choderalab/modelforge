@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Union, List, Dict
+from typing import Dict, Optional, Union, List, Dict, Type
 
 import torch
 from loguru import logger as log
@@ -146,7 +146,7 @@ class PhysNetResidual(nn.Module):
         super().__init__()
         # Initialize dense layers and residual connection
         self.dense = Dense(
-            input_dim, output_dim, activation_function=activation_function_class()
+            input_dim, output_dim, activation_function_class=activation_function_class
         )
         self.residual = Dense(output_dim, output_dim)
 
@@ -195,7 +195,7 @@ class PhysNetInteractionModule(nn.Module):
         from .utils import Dense
 
         # Initialize activation function
-        self.activation_function = activation_function_class()
+        self.activation_function_class = activation_function_class
 
         # Initialize attention mask
         self.attention_mask = Dense(
@@ -209,12 +209,12 @@ class PhysNetInteractionModule(nn.Module):
         self.interaction_i = Dense(
             number_of_per_atom_features,
             number_of_per_atom_features,
-            activation_function=activation_function_class(),
+            activation_function_class=activation_function_class,
         )
         self.interaction_j = Dense(
             number_of_per_atom_features,
             number_of_per_atom_features,
-            activation_function=activation_function_class(),
+            activation_function_class=activation_function_class,
         )
 
         # Initialize processing network
@@ -265,7 +265,7 @@ class PhysNetInteractionModule(nn.Module):
         x = data.atomic_embedding
 
         # # Apply activation to atomic embeddings
-        xa = self.dropout(self.activation_function(x))
+        xa = self.dropout(self.activation_function_class(x))
 
         # calculate attention weights and transform to
         # input shape: (number_of_pairs, number_of_radial_basis_functions)
@@ -295,7 +295,7 @@ class PhysNetInteractionModule(nn.Module):
             m = residual(
                 m
             )  # shape (nr_of_atoms_in_batch, number_of_radial_basis_functions)
-        m = self.activation_function(m)
+        m = self.activation_function_class(m)
         x = self.gate * x + self.process_v(m)
         return x
 
@@ -462,8 +462,8 @@ class PhysNetCore(CoreNetwork):
         Number of interaction residual blocks.
     number_of_modules : int
         Number of PhysNet modules.
-    activation_name : str
-        Name of the activation function to use.
+    activation_function_class : Type[torch.nn.Module]
+        The activation function class to use.
     """
 
     def __init__(
@@ -473,14 +473,15 @@ class PhysNetCore(CoreNetwork):
         number_of_radial_basis_functions: int,
         number_of_interaction_residual: int,
         number_of_modules: int,
-        activation_name: str,
+        activation_function_class: Type[torch.nn.Module],
     ) -> None:
 
         log.debug("Initializing the PhysNet architecture.")
-        super().__init__(activation_name)
+        super().__init__(activation_function_class)
 
         # featurize the atomic input
         from modelforge.potential.utils import FeaturizeInput
+
         self.featurize_input = FeaturizeInput(featurization_config)
         number_of_per_atom_features = int(
             featurization_config["number_of_per_atom_features"]
@@ -662,13 +663,15 @@ class PhysNet(BaseNetwork):
         Number of interaction residual blocks.
     number_of_modules : int
         Number of PhysNet modules.
-    activation_function : str
-        Name of the activation function to use.
+    activation_function : Dict
+        Dict that contains keys: activation_function_name [str], activation_function_arguments [Dict],
+        and activation_function_class [Type[torch.nn.Module]].
     postprocessing_parameter : Dict[str, Dict[str, bool]]
         Configuration for postprocessing parameters.
     dataset_statistic : Optional[Dict[str, float]], optional
         Statistics of the dataset, by default None.
     """
+
     def __init__(
         self,
         featurization: Dict[str, Union[List[str], int]],
@@ -676,7 +679,7 @@ class PhysNet(BaseNetwork):
         number_of_radial_basis_functions: int,
         number_of_interaction_residual: int,
         number_of_modules: int,
-        activation_function: str,
+        activation_function: Dict,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
@@ -687,6 +690,7 @@ class PhysNet(BaseNetwork):
             postprocessing_parameter=postprocessing_parameter,
             maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
         )
+        activation_function_class = activation_function["activation_function_class"]
 
         self.core_module = PhysNetCore(
             featurization_config=featurization,
@@ -694,7 +698,7 @@ class PhysNet(BaseNetwork):
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             number_of_interaction_residual=number_of_interaction_residual,
             number_of_modules=number_of_modules,
-            activation_name=activation_function,
+            activation_function_class=activation_function_class,
         )
 
     def _config_prior(self):

@@ -7,7 +7,9 @@ maximum_interaction_radius = "5.0 angstrom"
 number_of_interaction_modules = 3
 shared_interactions = false
 shared_filters = false
-activation_function = "SiLU"
+
+[potential.core_parameter.activation_function]
+activation_function_name = "SiLU"
 
 [potential.core_parameter.featurization]
 properties_to_featurize = ['atomic_number']

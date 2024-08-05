@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, Optional
+from typing import Dict, Optional, Type, Union, List
 
 import torch
 import torch.nn as nn
@@ -19,7 +19,7 @@ class SchnetNeuralNetworkData(NeuralNetworkData):
 
 
     Note that only the arguments not present in the baseclass are described here.
-    
+
     atomic_embedding : torch.Tensor
         A 2D tensor containing embeddings or features for each atom, derived from atomic numbers.
         Shape: [num_atoms, embedding_dim], where `embedding_dim` is the dimensionality of the embedding vectors.
@@ -36,9 +36,6 @@ class SchnetNeuralNetworkData(NeuralNetworkData):
     atomic_embedding: torch.Tensor
     f_ij: Optional[torch.Tensor] = field(default=None)
     f_cutoff: Optional[torch.Tensor] = field(default=None)
-
-
-from typing import Union, List
 
 
 class SchNetCore(CoreNetwork):
@@ -59,9 +56,10 @@ class SchNetCore(CoreNetwork):
         Whether to share interaction parameters across all interaction modules.
     maximum_interaction_radius : openff.units.unit.Quantity
         The cutoff distance for interactions.
-    activation_name : str
-        Name of the activation function to use.
+    activation_function_class : Type[torch.nn.Module]
+        Activation function class to use.
     """
+
     def __init__(
         self,
         featurization_config: Dict[str, Union[List[str], int]],
@@ -69,14 +67,14 @@ class SchNetCore(CoreNetwork):
         number_of_interaction_modules: int,
         number_of_filters: int,
         shared_interactions: bool,
-        activation_name: str,
+        activation_function_class: Type[torch.nn.Module],
         maximum_interaction_radius: unit.Quantity,
     ) -> None:
 
         log.debug("Initializing the SchNet architecture.")
         from modelforge.potential.utils import FeaturizeInput, Dense
 
-        super().__init__(activation_name)
+        super().__init__(activation_function_class)
         self.number_of_filters = number_of_filters or int(
             featurization_config["number_of_per_atom_features"]
         )
@@ -98,7 +96,7 @@ class SchNetCore(CoreNetwork):
                         number_of_per_atom_features,
                         self.number_of_filters,
                         number_of_radial_basis_functions,
-                        activation_function=self.activation_function_class(),
+                        activation_function_class=self.activation_function_class,
                     )
                 ]
                 * number_of_interaction_modules
@@ -111,7 +109,7 @@ class SchNetCore(CoreNetwork):
                         number_of_per_atom_features,
                         self.number_of_filters,
                         number_of_radial_basis_functions,
-                        activation_function=self.activation_function_class,
+                        activation_function_class=self.activation_function_class,
                     )
                     for _ in range(number_of_interaction_modules)
                 ]
@@ -122,7 +120,7 @@ class SchNetCore(CoreNetwork):
             Dense(
                 number_of_per_atom_features,
                 number_of_per_atom_features,
-                activation_function=self.activation_function_class(),
+                activation_function_class=self.activation_function_class,
             ),
             Dense(
                 number_of_per_atom_features,
@@ -219,15 +217,16 @@ class SchNETInteractionModule(nn.Module):
         Number of filters, defines the dimensionality of the intermediate features.
     number_of_radial_basis_functions : int
         Number of radial basis functions.
-    activation_function: torch.nn.Module
+    activation_function_class: torch.nn.Module
         The activation function to use in the interaction module.
     """
+
     def __init__(
         self,
         number_of_per_atom_features: int,
         number_of_filters: int,
         number_of_radial_basis_functions: int,
-        activation_function: torch.nn.Module,
+        activation_function_class: torch.nn.Module,
     ) -> None:
 
         super().__init__()
@@ -248,30 +247,30 @@ class SchNETInteractionModule(nn.Module):
             number_of_per_atom_features,
             number_of_filters,
             bias=False,
-            activation_function=None,
+            activation_function_class=None,
         )
         self.feature_to_output = nn.Sequential(
             Dense(
                 number_of_filters,
                 number_of_per_atom_features,
-                activation_function=activation_function(),
+                activation_function_class=activation_function_class,
             ),
             Dense(
                 number_of_per_atom_features,
                 number_of_per_atom_features,
-                activation_function=None,
+                activation_function_class=None,
             ),
         )
         self.filter_network = nn.Sequential(
             Dense(
                 number_of_radial_basis_functions,
                 number_of_filters,
-                activation_function=activation_function(),
+                activation_function_class=activation_function_class,
             ),
             Dense(
                 number_of_filters,
                 number_of_filters,
-                activation_function=None,
+                activation_function_class=None,
             ),
         )
 
@@ -332,6 +331,7 @@ class SchNETRepresentation(nn.Module):
     number_of_radial_basis_functions : int
         Number of radial basis functions.
     """
+
     def __init__(
         self,
         radial_cutoff: unit.Quantity,
@@ -411,13 +411,15 @@ class SchNet(BaseNetwork):
         Number of filters.
     shared_interactions : bool
         Whether to use shared interactions.
-    activation_function : str
-        Name of the activation function to use.
+    activation_function : Dict
+        Dict that contains keys: activation_function_name [str], activation_function_arguments [Dict],
+        and activation_function_class [Type[torch.nn.Module]].
     postprocessing_parameter : Dict[str, Dict[str, bool]]
         Configuration for postprocessing parameters.
     dataset_statistic : Optional[Dict[str, float]], default=None
         Statistics of the dataset.
     """
+
     def __init__(
         self,
         featurization: Dict[str, Union[List[str], int]],
@@ -425,7 +427,7 @@ class SchNet(BaseNetwork):
         number_of_interaction_modules: int,
         maximum_interaction_radius: Union[unit.Quantity, str],
         number_of_filters: int,
-        activation_function: str,
+        activation_function: Dict,
         shared_interactions: bool,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
@@ -439,13 +441,15 @@ class SchNet(BaseNetwork):
             maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
         )
 
+        activation_function_class = activation_function["activation_function_class"]
+
         self.core_module = SchNetCore(
             featurization_config=featurization,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             number_of_interaction_modules=number_of_interaction_modules,
             number_of_filters=number_of_filters,
             shared_interactions=shared_interactions,
-            activation_name=activation_function,
+            activation_function_class=activation_function_class,
             maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
         )
 

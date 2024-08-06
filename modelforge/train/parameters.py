@@ -19,7 +19,18 @@ class ParametersBase(BaseModel):
     )
 
 
-class SchedulerMode(str, Enum):
+# for enums over strings, we likely do not want things to be case sensitive
+# this will return the appropriate enum value regardless of case
+class CaseInsensitiveEnum(str, Enum):
+    @classmethod
+    def _missing_(cls, value):
+        for member in cls:
+            if member.value.lower() == value.lower():
+                return member
+        return super()._missing_(value)
+
+
+class SchedulerMode(CaseInsensitiveEnum):
     """
     Enum class for the scheduler mode, allowing "min" ond "max"
 
@@ -32,7 +43,7 @@ class SchedulerMode(str, Enum):
     max = "max"
 
 
-class ThresholdMode(str, Enum):
+class ThresholdMode(CaseInsensitiveEnum):
     """
     Enum class for the threshold mode, allowing "abs" and "rel"
 
@@ -56,7 +67,7 @@ class ThresholdMode(str, Enum):
 # )
 
 
-class SplittingStrategyName(str, Enum):
+class SplittingStrategyName(CaseInsensitiveEnum):
     """
     Enum class for the splitting strategy name
 
@@ -71,7 +82,7 @@ class SplittingStrategyName(str, Enum):
     random_conformer_splitting_strategy = "random_conformer_splitting_strategy"
 
 
-class AnnealingStrategy(str, Enum):
+class AnnealingStrategy(CaseInsensitiveEnum):
     """
     Enum class for the annealing strategy
     """
@@ -80,13 +91,28 @@ class AnnealingStrategy(str, Enum):
     linear = "linear"
 
 
-class Loggers(str, Enum):
+#
+class Loggers(CaseInsensitiveEnum):
     """
     Enum class for the experiment logger
     """
 
     wandb = "wandb"
     tensorboard = "tensorboard"
+
+
+class TensorboardConfig(BaseModel):
+    save_dir: str
+
+
+class WandbConfig(BaseModel):
+    save_dir: str
+    project: str
+    group: str
+    log_model: bool
+    job_type: Optional[str]
+    tags: Optional[List[str]]
+    notes: Optional[str]
 
 
 class TrainingParameters(ParametersBase):
@@ -221,6 +247,19 @@ class TrainingParameters(ParametersBase):
 
     class ExperimentLogger(ParametersBase):
         logger_name: Loggers
+        tensorboard_configuration: Optional[TensorboardConfig] = None
+        wandb_configuration: Optional[WandbConfig] = None
+
+        @model_validator(mode="after")
+        def ensure_logger_configuration(self) -> "ExperimentLogger":
+            if (
+                self.logger_name == Loggers.tensorboard
+                and self.tensorboard_configuration is None
+            ):
+                raise ValueError("tensorboard_configuration must be provided")
+            if self.logger_name == Loggers.wandb and self.wandb_configuration is None:
+                raise ValueError("wandb_configuration must be provided")
+            return self
 
     number_of_epochs: int
     remove_self_energies: bool
@@ -238,7 +277,7 @@ class TrainingParameters(ParametersBase):
 ### Runtime Parameters
 
 
-class Accelerator(str, Enum):
+class Accelerator(CaseInsensitiveEnum):
     """
     Enum class for the accelerator, allowing "cpu", "gpu" and "tpu".
 
@@ -253,7 +292,7 @@ class Accelerator(str, Enum):
     tpu = "tpu"
 
 
-class SimulationEnvironment(str, Enum):
+class SimulationEnvironment(CaseInsensitiveEnum):
     """
     Enum class for the simulation environment, allowing "PyTorch"  and "JAX".
 
@@ -277,7 +316,7 @@ class RuntimeParameters(ParametersBase):
         number_of_nodes (int): The number of nodes
         devices (int or List[int]): The index/indices of the device
         local_cache_dir (str): The local cache directory
-        checkpoint_path (str): The checkpoint path
+        checkpoint_path (str,None): The checkpoint path
         simulation_environment (SimulationEnvironment):
             The simulation environment options are: PyTorch or JAX
         log_every_n_steps (int): The logging frequency
@@ -290,7 +329,7 @@ class RuntimeParameters(ParametersBase):
     number_of_nodes: int
     devices: Union[int, List[int]]
     local_cache_dir: str
-    checkpoint_path: str
+    checkpoint_path: Union[str, None]
     simulation_environment: SimulationEnvironment
     log_every_n_steps: int
 

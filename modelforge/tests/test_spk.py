@@ -1,5 +1,6 @@
 import torch
 import pytest
+from openff.units import unit
 
 
 @pytest.mark.xfail
@@ -41,7 +42,11 @@ from .precalculated_values import setup_single_methane_input
 
 
 def setup_spk_painn_representation(
-    cutoff, nr_atom_basis, number_of_gaussians, nr_of_interactions
+    cutoff,
+    nr_atom_basis,
+    number_of_gaussians,
+    nr_of_interactions,
+    maximum_atomic_number,
 ):
     # ------------------------------------ #
     # set up the schnetpack Painn representation model
@@ -57,11 +62,16 @@ def setup_spk_painn_representation(
         n_interactions=nr_of_interactions,
         radial_basis=radial_basis,
         cutoff_fn=CosineCutoff(cutoff.to(unit.angstrom).m),
+        max_z=maximum_atomic_number,
     )
 
 
 def setup_modelforge_painn_representation(
-    cutoff, nr_atom_basis, number_of_gaussians, nr_of_interactions
+    cutoff,
+    nr_atom_basis,
+    number_of_gaussians,
+    nr_of_interactions,
+    maximum_atomic_number,
 ):
     # ------------------------------------ #
     # set up the modelforge Painn representation model
@@ -73,24 +83,26 @@ def setup_modelforge_painn_representation(
     return mf_PaiNN(
         featurization={
             "properties_to_featurize": ["atomic_number"],
-            "maximum_atomic_number": 101,
-            "number_of_per_atom_features": 32,
+            "maximum_atomic_number": maximum_atomic_number,
+            "number_of_per_atom_features": nr_atom_basis,
         },
         number_of_interaction_modules=nr_of_interactions,
         number_of_radial_basis_functions=number_of_gaussians,
-        cutoff=cutoff,
+        maximum_interaction_radius=cutoff,
         shared_interactions=False,
         shared_filters=False,
-        processing_operation=[],
-        readout_operation=[
-            {
-                "step": "from_atom_to_molecule",
-                "mode": "sum",
-                "in": "per_atom_energy",
-                "index_key": "atomic_subsystem_indices",
-                "out": "E",
-            }
-        ],
+        activation_function="SiLU",
+        postprocessing_parameter={
+            "per_atom_energy": {
+                "normalize": True,
+                "from_atom_to_molecule_reduction": True,
+                "keep_per_atom_property": True,
+            },
+            "general_postprocessing_operation": {
+                "calculate_molecular_self_energy": True,
+                "calculate_atomic_self_energy": False,
+            },
+        },
     )
 
 
@@ -105,14 +117,23 @@ def test_painn_representation_implementation():
     nr_atom_basis = 128
     number_of_gaussians = 5
     nr_of_interactions = 3
+    maximum_atomic_number = 23
     torch.manual_seed(1234)
     schnetpack_painn = setup_spk_painn_representation(
-        cutoff, nr_atom_basis, number_of_gaussians, nr_of_interactions
+        cutoff,
+        nr_atom_basis,
+        number_of_gaussians,
+        nr_of_interactions,
+        maximum_atomic_number,
     ).double()
     torch.manual_seed(1234)
 
     modelforge_painn = setup_modelforge_painn_representation(
-        cutoff, nr_atom_basis, number_of_gaussians, nr_of_interactions
+        cutoff,
+        nr_atom_basis,
+        number_of_gaussians,
+        nr_of_interactions,
+        maximum_atomic_number,
     ).double()
     # ------------------------------------ #
     # set up the input for the spk Painn model
@@ -178,9 +199,7 @@ def test_painn_representation_implementation():
         spk_input[properties.Z].to(torch.int32), mf_nnp_input.atomic_numbers.squeeze()
     )
     embedding_spk = schnetpack_painn.embedding(spk_input[properties.Z])
-    embedding_mf = modelforge_painn.core_module.embedding_module(
-        mf_nnp_input.atomic_numbers
-    )
+    embedding_mf = modelforge_painn.core_module.featurize_input(mf_nnp_input)
 
     assert torch.allclose(embedding_spk, embedding_mf)
     # ---------------------------------------- #
@@ -195,7 +214,7 @@ def test_painn_representation_implementation():
     assert torch.allclose(q_spk_initial, q_mf_initial)
 
     mu_spk_initial = torch.zeros((spk_qs[0], 3, spk_qs[2]))
-    mu_mf_initial = torch.zeros((mf_qs[0], 3, mf_qs[2]))
+    mu_mf_initial = torch.zeros((mf_qs[0], 3, mf_qs[2]), dtype=torch.float64)
     assert mu_spk_initial.shape == mu_mf_initial.shape
 
     # set up the filter and interaction, pass the input and compare the results
@@ -238,7 +257,9 @@ def test_painn_representation_implementation():
     torch.manual_seed(1234)
     pair_indices = pain_nn_input_mf.pair_indices
     filter_list = torch.split(
-        filters_mf, 3 * modelforge_painn.core_module.number_of_atom_features, dim=-1
+        filters_mf,
+        3 * modelforge_painn.core_module.representation_module.nr_atom_basis,
+        dim=-1,
     )
 
     # test intra-atomic NNP
@@ -332,7 +353,9 @@ def test_painn_representation_implementation():
         q_spk, mu_spk = mixing(q_spk, mu_spk)
 
     mf_filter_list = torch.split(
-        filters_mf, 3 * modelforge_painn.core_module.number_of_atom_features, dim=-1
+        filters_mf,
+        3 * modelforge_painn.core_module.representation_module.nr_atom_basis,
+        dim=-1,
     )
     # q_mf = q_mf_initial
     # mu_mf = mu_mf_initial
@@ -358,7 +381,9 @@ def test_painn_representation_implementation():
         filters_spk, 3 * schnetpack_painn.n_atom_basis, dim=-1
     )
     mf_filter_list = torch.split(
-        filters_mf, 3 * modelforge_painn.core_module.number_of_atom_features, dim=-1
+        filters_mf,
+        3 * modelforge_painn.core_module.representation_module.nr_atom_basis,
+        dim=-1,
     )
 
     # q_spk = q_spk_initial
@@ -425,7 +450,11 @@ def test_painn_representation_implementation():
 
 
 def setup_spk_schnet_representation(
-    cutoff: float, number_of_atom_features: int, n_rbf: int, nr_of_interactions: int
+    cutoff: unit.Quantity,
+    number_of_atom_features: int,
+    n_rbf: int,
+    nr_of_interactions: int,
+    maximum_atomic_number: int,
 ):
     # ------------------------------------ #
     # set up the schnetpack Painn representation model
@@ -438,16 +467,18 @@ def setup_spk_schnet_representation(
         n_atom_basis=number_of_atom_features,
         n_interactions=nr_of_interactions,
         radial_basis=radial_basis,
+        max_z=maximum_atomic_number,
         cutoff_fn=CosineCutoff(cutoff.to(unit.angstrom).m),
     )
 
 
 @pytest.mark.xfail
 def setup_mf_schnet_representation(
-    cutoff: float,
+    cutoff: unit.Quantity,
     number_of_atom_features: int,
     number_of_radial_basis_functions: int,
     nr_of_interactions: int,
+    maximum_atomic_number: int,
 ):
     # ------------------------------------ #
     # set up the modelforge Painn representation model
@@ -458,24 +489,26 @@ def setup_mf_schnet_representation(
     return mf_SchNET(
         featurization={
             "properties_to_featurize": ["atomic_number"],
-            "maximum_atomic_number": 101,
-            "number_of_per_atom_features": 32,
+            "maximum_atomic_number": maximum_atomic_number,
+            "number_of_per_atom_features": number_of_atom_features,
         },
         number_of_interaction_modules=nr_of_interactions,
         number_of_radial_basis_functions=number_of_radial_basis_functions,
-        cutoff=cutoff,
+        maximum_interaction_radius=cutoff,
         number_of_filters=number_of_atom_features,
         shared_interactions=False,
-        processing_operation=[],
-        readout_operation=[
-            {
-                "step": "from_atom_to_molecule",
-                "mode": "sum",
-                "in": "per_atom_energy",
-                "index_key": "atomic_subsystem_indices",
-                "out": "E",
-            }
-        ],
+        activation_function="ShiftedSoftplus",
+        postprocessing_parameter={
+            "per_atom_energy": {
+                "normalize": True,
+                "from_atom_to_molecule_reduction": True,
+                "keep_per_atom_property": True,
+            },
+            "general_postprocessing_operation": {
+                "calculate_molecular_self_energy": True,
+                "calculate_atomic_self_energy": False,
+            },
+        },
     )
 
 
@@ -490,13 +523,22 @@ def test_schnet_representation_implementation():
     number_of_atom_features = 12
     n_rbf = 5
     nr_of_interactions = 3
+    maximum_atomic_number = 23
     torch.manual_seed(1234)
     schnetpack_schnet = setup_spk_schnet_representation(
-        cutoff, number_of_atom_features, n_rbf, nr_of_interactions
+        cutoff,
+        number_of_atom_features,
+        n_rbf,
+        nr_of_interactions,
+        maximum_atomic_number,
     ).double()
     torch.manual_seed(1234)
     modelforge_schnet = setup_mf_schnet_representation(
-        cutoff, number_of_atom_features, n_rbf, nr_of_interactions
+        cutoff,
+        number_of_atom_features,
+        n_rbf,
+        nr_of_interactions,
+        maximum_atomic_number,
     ).double()
     # ------------------------------------ #
     # set up the input for the spk Schnet model
@@ -553,9 +595,7 @@ def test_schnet_representation_implementation():
         schnet_nn_input_mf.atomic_numbers.squeeze(),
     )
     embedding_spk = schnetpack_schnet.embedding(spk_input[properties.Z])
-    embedding_mf = modelforge_schnet.core_module.embedding_module(
-        schnet_nn_input_mf.atomic_numbers
-    )
+    embedding_mf = modelforge_schnet.core_module.featurize_input(schnet_nn_input_mf)
 
     assert torch.allclose(embedding_spk, embedding_mf)
 

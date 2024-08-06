@@ -9,7 +9,16 @@ This module contains pydantic models for storing the parameters of
 """
 
 
-class ActivationFunction(str, Enum):
+class CaseInsensitiveEnum(str, Enum):
+    @classmethod
+    def _missing_(cls, value):
+        for member in cls:
+            if member.value.lower() == value.lower():
+                return member
+        return super()._missing_(value)
+
+
+class ActivationFunction(CaseInsensitiveEnum):
     ReLU = "ReLU"
     CeLU = "CeLU"
     Sigmoid = "Sigmoid"
@@ -19,7 +28,6 @@ class ActivationFunction(str, Enum):
     Tanh = "Tanh"
     LeakyReLU = "LeakyReLU"
     ELU = "ELU"
-
 
 
 # To avoid having to set config parameters for each class,

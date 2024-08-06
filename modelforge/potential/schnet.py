@@ -19,7 +19,7 @@ class SchnetNeuralNetworkData(NeuralNetworkData):
 
 
     Note that only the arguments not present in the baseclass are described here.
-    
+
     atomic_embedding : torch.Tensor
         A 2D tensor containing embeddings or features for each atom, derived from atomic numbers.
         Shape: [num_atoms, embedding_dim], where `embedding_dim` is the dimensionality of the embedding vectors.
@@ -62,6 +62,7 @@ class SchNetCore(CoreNetwork):
     activation_name : str
         Name of the activation function to use.
     """
+
     def __init__(
         self,
         featurization_config: Dict[str, Union[List[str], int]],
@@ -74,7 +75,7 @@ class SchNetCore(CoreNetwork):
     ) -> None:
 
         log.debug("Initializing the SchNet architecture.")
-        from modelforge.potential.utils import FeaturizeInput, Dense
+        from modelforge.potential.utils import FeaturizeInput, DenseWithCustomDist
 
         super().__init__(activation_name)
         self.number_of_filters = number_of_filters or int(
@@ -119,12 +120,12 @@ class SchNetCore(CoreNetwork):
 
         # output layer to obtain per-atom energies
         self.energy_layer = nn.Sequential(
-            Dense(
+            DenseWithCustomDist(
                 number_of_per_atom_features,
                 number_of_per_atom_features,
                 activation_function=self.activation_function_class(),
             ),
-            Dense(
+            DenseWithCustomDist(
                 number_of_per_atom_features,
                 1,
             ),
@@ -222,6 +223,7 @@ class SchNETInteractionModule(nn.Module):
     activation_function: torch.nn.Module
         The activation function to use in the interaction module.
     """
+
     def __init__(
         self,
         number_of_per_atom_features: int,
@@ -231,7 +233,7 @@ class SchNETInteractionModule(nn.Module):
     ) -> None:
 
         super().__init__()
-        from .utils import Dense
+        from .utils import DenseWithCustomDist
 
         assert (
             number_of_radial_basis_functions > 4
@@ -244,31 +246,31 @@ class SchNETInteractionModule(nn.Module):
         self.number_of_per_atom_features = (
             number_of_per_atom_features  # Initialize parameters
         )
-        self.intput_to_feature = Dense(
+        self.intput_to_feature = DenseWithCustomDist(
             number_of_per_atom_features,
             number_of_filters,
             bias=False,
             activation_function=None,
         )
         self.feature_to_output = nn.Sequential(
-            Dense(
+            DenseWithCustomDist(
                 number_of_filters,
                 number_of_per_atom_features,
                 activation_function=activation_function(),
             ),
-            Dense(
+            DenseWithCustomDist(
                 number_of_per_atom_features,
                 number_of_per_atom_features,
                 activation_function=None,
             ),
         )
         self.filter_network = nn.Sequential(
-            Dense(
+            DenseWithCustomDist(
                 number_of_radial_basis_functions,
                 number_of_filters,
                 activation_function=activation_function(),
             ),
-            Dense(
+            DenseWithCustomDist(
                 number_of_filters,
                 number_of_filters,
                 activation_function=None,
@@ -332,6 +334,7 @@ class SchNETRepresentation(nn.Module):
     number_of_radial_basis_functions : int
         Number of radial basis functions.
     """
+
     def __init__(
         self,
         radial_cutoff: unit.Quantity,
@@ -418,6 +421,7 @@ class SchNet(BaseNetwork):
     dataset_statistic : Optional[Dict[str, float]], default=None
         Statistics of the dataset.
     """
+
     def __init__(
         self,
         featurization: Dict[str, Union[List[str], int]],

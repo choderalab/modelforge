@@ -394,6 +394,7 @@ class ANIInteraction(nn.Module):
     def intialize_atomic_neural_network(
         self, aev_dim: int, activation_function_class: torch.nn.Module
     ) -> Dict[str, nn.Module]:
+
         """
         Initialize the atomic neural networks for each element.
 
@@ -509,7 +510,6 @@ class ANI2xCore(CoreNetwork):
         angular_dist_divisions: int,
         angle_sections: int,
     ) -> None:
-
         # number of elements in ANI2x
         self.num_species = 7
 

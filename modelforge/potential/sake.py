@@ -6,7 +6,7 @@ from typing import Dict, Tuple, Union, List, Type
 from openff.units import unit
 from .models import NNPInput, BaseNetwork, CoreNetwork, PairListOutputs
 from .utils import (
-    Dense,
+    DenseWithCustomDist,
     scatter_softmax,
     PhysNetRadialBasisFunction,
 )
@@ -111,13 +111,15 @@ class SAKECore(CoreNetwork):
         self.nr_heads = number_of_spatial_attention_heads
         self.number_of_per_atom_features = number_of_per_atom_features
         # featurize the atomic input
-        from modelforge.potential.utils import FeaturizeInput, Dense
+        from modelforge.potential.utils import FeaturizeInput, DenseWithCustomDist
 
         self.featurize_input = FeaturizeInput(featurization_config)
         self.energy_layer = nn.Sequential(
-            Dense(number_of_per_atom_features, number_of_per_atom_features),
-            self.activation_function,
-            Dense(number_of_per_atom_features, 1),
+            DenseWithCustomDist(
+                number_of_per_atom_features, number_of_per_atom_features
+            ),
+            self.activation_function_class(),
+            DenseWithCustomDist(number_of_per_atom_features, 1),
         )
         # initialize the interaction networks
         self.interaction_modules = nn.ModuleList(
@@ -277,14 +279,14 @@ class SAKEInteraction(nn.Module):
         )
 
         self.node_mlp = nn.Sequential(
-            Dense(
+            DenseWithCustomDist(
                 self.nr_atom_basis
                 + self.nr_heads * self.nr_edge_basis
                 + self.nr_atom_basis_spatial,
                 self.nr_atom_basis_hidden,
                 activation_function=activation,
             ),
-            Dense(
+            DenseWithCustomDist(
                 self.nr_atom_basis_hidden,
                 self.nr_atom_basis,
                 activation_function=activation,
@@ -292,12 +294,12 @@ class SAKEInteraction(nn.Module):
         )
 
         self.post_norm_mlp = nn.Sequential(
-            Dense(
+            DenseWithCustomDist(
                 self.nr_coefficients,
                 self.nr_atom_basis_spatial_hidden,
                 activation_function=activation,
             ),
-            Dense(
+            DenseWithCustomDist(
                 self.nr_atom_basis_spatial_hidden,
                 self.nr_atom_basis_spatial,
                 activation_function=activation,
@@ -309,7 +311,7 @@ class SAKEInteraction(nn.Module):
         )
 
         self.edge_mlp_out = nn.Sequential(
-            Dense(
+            DenseWithCustomDist(
                 self.nr_atom_basis * 2 + number_of_radial_basis_functions + 1,
                 self.nr_edge_basis_hidden,
                 activation_function=activation,
@@ -317,19 +319,17 @@ class SAKEInteraction(nn.Module):
             nn.Linear(nr_edge_basis_hidden, nr_edge_basis),
         )
 
-        self.semantic_attention_mlp = Dense(
-            self.nr_edge_basis,
-            self.nr_heads,
-            activation_function=nn.CELU(alpha=2.0),
+        self.semantic_attention_mlp = DenseWithCustomDist(
+            self.nr_edge_basis, self.nr_heads, activation_function=nn.CELU(alpha=2.0)
         )
 
         self.velocity_mlp = nn.Sequential(
-            Dense(
+            DenseWithCustomDist(
                 self.nr_atom_basis,
                 self.nr_atom_basis_velocity,
                 activation_function=activation,
             ),
-            Dense(
+            DenseWithCustomDist(
                 self.nr_atom_basis_velocity,
                 1,
                 activation_function=lambda x: 2.0 * F.sigmoid(x),
@@ -337,14 +337,14 @@ class SAKEInteraction(nn.Module):
             ),
         )
 
-        self.x_mixing_mlp = Dense(
+        self.x_mixing_mlp = DenseWithCustomDist(
             self.nr_heads * self.nr_edge_basis,
             self.nr_coefficients,
             bias=False,
             activation_function=nn.Tanh(),
         )
 
-        self.v_mixing_mlp = Dense(self.nr_coefficients, 1, bias=False)
+        self.v_mixing_mlp = DenseWithCustomDist(self.nr_coefficients, 1, bias=False)
 
         self.scale_factor_in_nanometer = scale_factor.m_as(unit.nanometer)
 

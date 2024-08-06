@@ -430,11 +430,11 @@ class FeaturizeInput(nn.Module):
                 self.append_to_embedding_tensor("partial_charge")
 
         # if only nuclear charges are embedded no mixing is performed
-        self.mixing: Union[nn.Identity, Dense]
+        self.mixing: Union[nn.Identity, DenseWithCustomDist]
         if self.increase_dim_of_embedded_tensor == 0:
             self.mixing = nn.Identity()
         else:
-            self.mixing = Dense(
+            self.mixing = DenseWithCustomDist(
                 int(featurization_config["number_of_per_atom_features"])
                 + self.increase_dim_of_embedded_tensor,
                 int(featurization_config["number_of_per_atom_features"]),
@@ -479,6 +479,62 @@ class Dense(nn.Linear):
     """
     Fully connected linear layer with activation function.
 
+    forward(input)
+        Forward pass of the layer.
+
+    """
+
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        bias: bool = True,
+        activation_function: Optional[nn.Module] = None,
+    ):
+        """
+        A linear or non-linear transformation
+
+        Parameters
+        ----------
+        in_features : int
+            Number of input features.
+        out_features : int
+            Number of output features.
+        bias : bool, optional
+            If set to False, the layer will not learn an additive bias. Default is True.
+        activation_function : nn.Module , optional
+            Activation function to be applied. Default is nn.Identity(), which applies the identity function and makes this a linear ransformation.
+        """
+
+        super().__init__(in_features, out_features, bias)
+
+        self.activation_function = (
+            activation_function if activation_function is not None else nn.Identity()
+        )
+
+    def forward(self, input: torch.Tensor):
+        """
+        Forward pass of the layer.
+
+        Parameters
+        ----------
+        input : torch.Tensor
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Output tensor after applying the linear transformation and activation function.
+
+        """
+        y = F.linear(input, self.weight, self.bias)
+        return self.activation_function(y)
+
+
+class DenseWithCustomDist(nn.Linear):
+    """
+    Fully connected linear layer with activation function.
+
     Attributes
     ----------
     weight_init_distribution : Callable
@@ -501,8 +557,8 @@ class Dense(nn.Linear):
         out_features: int,
         bias: bool = True,
         activation_function: Optional[nn.Module] = None,
-        weight_init: Callable = xavier_uniform_,
-        bias_init: Callable = zeros_,
+        weight_init: Optional[Callable] = xavier_uniform_,
+        bias_init: Optional[Callable] = zeros_,
     ):
         """
         A linear or non-linear transformation
@@ -522,7 +578,7 @@ class Dense(nn.Linear):
         bias_init : Callable, optional
             Function to initialize the bias. Default is zeros_.
         """
-        # NOTE: these two variables need to come before the initi
+        # NOTE: these two variables need to come before the init
         self.weight_init_distribution = weight_init
         self.bias_init_distribution = bias_init
 
@@ -642,7 +698,7 @@ class AngularSymmetryFunction(nn.Module):
 
     def __init__(
         self,
-        max_distance: unit.Quantity,
+        maximum_interaction_radius: unit.Quantity,
         min_distance: unit.Quantity,
         number_of_gaussians_for_asf: int = 8,
         angle_sections: int = 4,
@@ -662,9 +718,9 @@ class AngularSymmetryFunction(nn.Module):
         from loguru import logger as log
 
         self.number_of_gaussians_asf = number_of_gaussians_for_asf
-        self.angular_cutoff = max_distance
+        self.angular_cutoff = maximum_interaction_radius
         self.cosine_cutoff = CosineCutoff(self.angular_cutoff)
-        _unitless_angular_cutoff = max_distance.to(unit.nanometer).m
+        _unitless_angular_cutoff = maximum_interaction_radius.to(unit.nanometer).m
         self.angular_start = min_distance
         _unitless_angular_start = min_distance.to(unit.nanometer).m
 
@@ -1184,6 +1240,66 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
             / number_of_radial_basis_functions,
             dtype=dtype,
         )
+
+    def nondimensionalize_distances(self, distances: torch.Tensor) -> torch.Tensor:
+        # Transformation within the outer exp of PhysNet Eq. 7
+        # NOTE: the PhysNet paper implicitly multiplies by 1/Angstrom within the inner exp but distances are in
+        # nanometers, so we multiply by 10/nanometer
+
+        return (
+            torch.exp(
+                (-distances + self._min_distance_in_nanometer)
+                / self._alpha_in_nanometer
+            )
+            - self.radial_basis_centers
+        ) / self.radial_scale_factor
+
+
+class TensorNetRadialBasisFunction(PhysNetRadialBasisFunction):
+    """
+    The only difference from PhysNetRadialBasisFunction is that alpha is set
+    to 1 angstrom only for the purpose of unitless calculations.
+    """
+
+    @staticmethod
+    def calculate_radial_basis_centers(
+        number_of_radial_basis_functions,
+        max_distance,
+        min_distance,
+        alpha,
+        dtype,
+    ):
+        alpha = 1 * unit.angstrom
+        start_value = torch.exp(
+            torch.scalar_tensor(
+                ((-max_distance + min_distance) / alpha).to("").m,
+                dtype=dtype,
+            )
+        )
+        centers = torch.linspace(
+            start_value, 1, number_of_radial_basis_functions, dtype=dtype
+        )
+        return centers
+
+    @staticmethod
+    def calculate_radial_scale_factor(
+        number_of_radial_basis_functions,
+        max_distance,
+        min_distance,
+        alpha,
+        dtype,
+    ):
+        alpha = 1 * unit.angstrom
+        start_value = torch.exp(
+            torch.scalar_tensor(((-max_distance + min_distance) / alpha).to("").m)
+        )
+        radial_scale_factor = torch.full(
+            (number_of_radial_basis_functions,),
+            2 / number_of_radial_basis_functions * (1 - start_value),
+            dtype=dtype,
+        )
+
+        return radial_scale_factor
 
     def nondimensionalize_distances(self, distances: torch.Tensor) -> torch.Tensor:
         # Transformation within the outer exp of PhysNet Eq. 7

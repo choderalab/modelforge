@@ -6,7 +6,7 @@ from loguru import logger as log
 from openff.units import unit
 from .models import NNPInput, BaseNetwork, CoreNetwork, PairListOutputs
 
-from .utils import Dense
+from .utils import DenseWithCustomDist
 from dataclasses import dataclass
 
 from modelforge.potential.utils import NeuralNetworkData
@@ -122,12 +122,12 @@ class PaiNNCore(CoreNetwork):
 
         # reduce per-atom features to per atom scalar
         self.energy_layer = nn.Sequential(
-            Dense(
+            DenseWithCustomDist(
                 number_of_per_atom_features,
                 number_of_per_atom_features,
                 activation_function=self.activation_function,
             ),
-            Dense(
+            DenseWithCustomDist(
                 number_of_per_atom_features,
                 1,
             ),
@@ -264,13 +264,13 @@ class PaiNNRepresentation(nn.Module):
 
         # initialize the filter network
         if shared_filters:
-            filter_net = Dense(
+            filter_net = DenseWithCustomDist(
                 in_features=number_of_radial_basis_functions,
                 out_features=3 * nr_atom_basis,
             )
 
         else:
-            filter_net = Dense(
+            filter_net = DenseWithCustomDist(
                 in_features=number_of_radial_basis_functions,
                 out_features=nr_interaction_blocks * nr_atom_basis * 3,
             )
@@ -354,12 +354,10 @@ class PaiNNInteraction(nn.Module):
 
         # Initialize the intra-atomic neural network
         self.interatomic_net = nn.Sequential(
-            Dense(
-                nr_atom_basis,
-                nr_atom_basis,
-                activation_function=activation_function,
+            DenseWithCustomDist(
+                nr_atom_basis, nr_atom_basis, activation_function=activation_function
             ),
-            Dense(nr_atom_basis, 3 * nr_atom_basis),
+            DenseWithCustomDist(nr_atom_basis, 3 * nr_atom_basis),
         )
 
     def forward(
@@ -480,15 +478,19 @@ class PaiNNMixing(nn.Module):
 
         # initialize the intra-atomic neural network
         self.intra_atomic_net = nn.Sequential(
-            Dense(
+            DenseWithCustomDist(
                 2 * nr_atom_basis,
                 nr_atom_basis,
                 activation_function=activation_function,
             ),
-            Dense(nr_atom_basis, 3 * nr_atom_basis, activation_function=None),
+            DenseWithCustomDist(
+                nr_atom_basis, 3 * nr_atom_basis, activation_function=None
+            ),
         )
         # initialize the mu channel mixing network
-        self.mu_channel_mix = Dense(nr_atom_basis, 2 * nr_atom_basis, bias=False)
+        self.mu_channel_mix = DenseWithCustomDist(
+            nr_atom_basis, 2 * nr_atom_basis, bias=False
+        )
         self.epsilon = epsilon
 
     def forward(

@@ -118,7 +118,7 @@ class GatingModule(nn.Module):
         return gating_signal * x
 
 
-from .utils import Dense
+from .utils import DenseWithCustomDist
 
 
 class PhysNetResidual(nn.Module):
@@ -145,10 +145,10 @@ class PhysNetResidual(nn.Module):
     ):
         super().__init__()
         # Initialize dense layers and residual connection
-        self.dense = Dense(
-            input_dim, output_dim, activation_function=activation_function
+        self.dense = DenseWithCustomDist(
+            input_dim, output_dim, activation_function=activation_function_class()
         )
-        self.residual = Dense(output_dim, output_dim)
+        self.residual = DenseWithCustomDist(output_dim, output_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -192,13 +192,13 @@ class PhysNetInteractionModule(nn.Module):
         """
 
         super().__init__()
-        from .utils import Dense
+        from .utils import DenseWithCustomDist
 
         # Initialize activation function
         self.activation_function = activation_function
 
         # Initialize attention mask
-        self.attention_mask = Dense(
+        self.attention_mask = DenseWithCustomDist(
             number_of_radial_basis_functions,
             number_of_per_atom_features,
             bias=False,
@@ -206,19 +206,21 @@ class PhysNetInteractionModule(nn.Module):
         )
 
         # Initialize networks for processing atomic embeddings of i and j atoms
-        self.interaction_i = Dense(
+        self.interaction_i = DenseWithCustomDist(
             number_of_per_atom_features,
             number_of_per_atom_features,
             activation_function=activation_function,
         )
-        self.interaction_j = Dense(
+        self.interaction_j = DenseWithCustomDist(
             number_of_per_atom_features,
             number_of_per_atom_features,
             activation_function=activation_function,
         )
 
         # Initialize processing network
-        self.process_v = Dense(number_of_per_atom_features, number_of_per_atom_features)
+        self.process_v = DenseWithCustomDist(
+            number_of_per_atom_features, number_of_per_atom_features
+        )
 
         # Initialize residual blocks
         self.residuals = nn.ModuleList(
@@ -322,7 +324,7 @@ class PhysNetOutput(nn.Module):
         activation_function : torch.nn.Module
             The activation function to be used in the output module.
         """
-        from .utils import Dense
+        from .utils import DenseWithCustomDist
 
         super().__init__()
         # Initialize residual blocks
@@ -337,7 +339,7 @@ class PhysNetOutput(nn.Module):
             ]
         )
         # Initialize output layer
-        self.output = Dense(
+        self.output = DenseWithCustomDist(
             number_of_per_atom_features,
             number_of_atomic_properties,
             weight_init=torch.nn.init.zeros_,

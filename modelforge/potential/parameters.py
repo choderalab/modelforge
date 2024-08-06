@@ -181,6 +181,36 @@ class SchNetParameters(ParametersBase):
     postprocessing_parameter: PostProcessingParameter
 
 
+class TensorNetParameters(ParametersBase):
+    class CoreParameter(ParametersBase):
+        # class Featurization(ParametersBase):
+        #     properties_to_featurize: List[str]
+        #     max_Z: int
+        #     number_of_per_atom_features: int
+
+        number_of_per_atom_features: int
+        number_of_interaction_layers: int
+        number_of_radial_basis_functions: int
+        maximum_interaction_radius: Union[str, unit.Quantity]
+        minimum_interaction_radius: Union[str, unit.Quantity]
+        highest_atomic_number: int
+        equivariance_invariance_group: str
+        activation_function: str
+
+        converted_units = field_validator("maximum_interaction_radius")(_convert_str_to_unit)
+        converted_units = field_validator("minimum_interaction_radius")(_convert_str_to_unit)
+
+    class PostProcessingParameter(ParametersBase):
+        per_atom_energy: PerAtomEnergy = PerAtomEnergy()
+        general_postprocessing_operation: GeneralPostProcessingOperation = (
+            GeneralPostProcessingOperation()
+        )
+
+    potential_name: str = "TensorNet"
+    core_parameter: CoreParameter
+    postprocessing_parameter: PostProcessingParameter
+
+
 class PaiNNParameters(ParametersBase):
     class CoreParameter(ParametersBase):
         class Featurization(ParametersBase):

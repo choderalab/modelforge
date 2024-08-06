@@ -15,14 +15,14 @@ def prep_temp_dir(tmp_path_factory):
 
 
 def test_dense_layer():
-    from modelforge.potential.utils import Dense
+    from modelforge.potential.utils import DenseWithCustomDist
     import torch
 
     # random 2x3 torch.Tensor
     x = torch.randn(2, 3)
 
     # create a Dense layer with 3 input features and 2 output features
-    dense_layer = Dense(in_features=3, out_features=2)
+    dense_layer = DenseWithCustomDist(in_features=3, out_features=2)
     out = dense_layer(x)
 
     # create a Dense layer with 3 input features and 2 output features
@@ -31,7 +31,7 @@ def test_dense_layer():
         [torch.nn.init.zeros_, torch.nn.init.ones_],
     ):
         # test the weight initialization and correct weight multiplication
-        dense_layer = Dense(
+        dense_layer = DenseWithCustomDist(
             in_features=3, out_features=2, bias=False, weight_init=weight_init_fn
         )
 
@@ -40,7 +40,7 @@ def test_dense_layer():
         manuel_out = dense_layer.weight @ x.T
         assert torch.allclose(out, manuel_out.T)
         # test bias
-        dense_layer = Dense(
+        dense_layer = DenseWithCustomDist(
             in_features=3,
             out_features=2,
             bias=True,

@@ -1,18 +1,15 @@
 [potential]
-potential_name = "SchNet"
+potential_name = "TensorNet"
 
 [potential.core_parameter]
-number_of_radial_basis_functions = 20
-maximum_interaction_radius = "5.0 angstrom"
-number_of_interaction_modules = 3
-number_of_filters = 32
-shared_interactions = false
-activation_function = "ShiftedSoftplus"
-
-[potential.core_parameter.featurization]
-properties_to_featurize = ['atomic_number']
-maximum_atomic_number = 101
-number_of_per_atom_features = 32
+number_of_per_atom_features = 8
+number_of_interaction_layers = 2
+number_of_radial_basis_functions = 16
+maximum_interaction_radius = "5.1 angstrom"
+minimum_interaction_radius = "0.0 angstrom"
+highest_atomic_number = 128
+equivariance_invariance_group = "O(3)"
+activation_function = "SiLU"
 
 [potential.postprocessing_parameter]
 [potential.postprocessing_parameter.per_atom_energy]
@@ -36,7 +33,16 @@ lr = 1e-3
 monitor = "val/per_molecule_energy/rmse"
 
 [training.experiment_logger]
-logger_name = "tensorboard"
+logger_name = "wandb"
+
+[training.experiment_logger.wandb_configuration]
+save_dir = "logs"
+project = "training_test"
+group = "modelforge_nnps"
+log_model = true
+job_type = "training"
+tags = ["modelforge", "v_0.1.0"]
+notes = "testing training"
 
 [training.lr_scheduler_config]
 frequency = 1

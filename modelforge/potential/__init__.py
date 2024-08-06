@@ -3,12 +3,14 @@ from .physnet import PhysNet
 from .painn import PaiNN
 from .ani import ANI2x
 from .sake import SAKE
+from .tensornet import TensorNet
 from .parameters import (
     ANI2xParameters,
     SchNetParameters,
     PhysNetParameters,
     PaiNNParameters,
     SAKEParameters,
+    TensorNetParameters,
 )
 from .utils import (
     CosineCutoff,
@@ -23,6 +25,7 @@ from enum import Enum
 class _Implemented_NNP_Parameters(Enum):
     ANI2X_PARAMETERS = ANI2xParameters
     SCHNET_PARAMETERS = SchNetParameters
+    TENSORNET_PARAMETERS = TensorNetParameters
     PAINN_PARAMETERS = PaiNNParameters
     PHYSNET_PARAMETERS = PhysNetParameters
     SAKE_PARAMETERS = SAKEParameters
@@ -46,6 +49,7 @@ class _Implemented_NNPs(Enum):
     PAINN = PaiNN
     PHYSNET = PhysNet
     SAKE = SAKE
+    TENSORNET = TensorNet
 
     @classmethod
     def get_neural_network_class(cls, neural_network_name: str):
@@ -55,7 +59,7 @@ class _Implemented_NNPs(Enum):
         except KeyError:
             available_potentials = ", ".join([d.name for d in cls])
             raise ValueError(
-                f"Dataset {neural_network_name} is not implemented. Available potentials are: {available_potentials}"
+                f"Potential {neural_network_name} is not implemented. Available potentials are: {available_potentials}"
             )
 
     @staticmethod

@@ -104,14 +104,14 @@ class ANIRepresentation(nn.Module):
     ):
 
         super().__init__()
-        from modelforge.potential.utils import CosineCutoff
+        from modelforge.potential.utils import CosineAttenuationFunction
 
         self.maximum_interaction_radius_for_angular_features = (
             maximum_interaction_radius_for_angular_features
         )
         self.nr_of_supported_elements = nr_of_supported_elements
 
-        self.cutoff_module = CosineCutoff(radial_max_distance)
+        self.cutoff_module = CosineAttenuationFunction(radial_max_distance)
 
         self.radial_symmetry_functions = self._setup_radial_symmetry_functions(
             radial_max_distance, radial_min_distanc, number_of_radial_basis_functions
@@ -394,7 +394,6 @@ class ANIInteraction(nn.Module):
     def intialize_atomic_neural_network(
         self, aev_dim: int, activation_function_class: torch.nn.Module
     ) -> Dict[str, nn.Module]:
-
         """
         Initialize the atomic neural networks for each element.
 

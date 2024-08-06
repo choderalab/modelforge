@@ -13,7 +13,7 @@ from .parameters import (
     TensorNetParameters,
 )
 from .utils import (
-    CosineCutoff,
+    CosineAttenuationFunction,
     RadialBasisFunction,
     AngularSymmetryFunction,
 )

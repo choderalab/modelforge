@@ -131,7 +131,7 @@ def test_compare_radial_symmetry_features():
     import torch
     from openff.units import unit
 
-    from modelforge.potential.utils import CosineCutoff
+    from modelforge.potential.utils import CosineAttenuationFunction
     from modelforge.potential.utils import TensorNetRadialBasisFunction
     from modelforge.tests.precalculated_values import (
         prepare_values_for_test_tensornet_compare_radial_symmetry_features,
@@ -148,17 +148,25 @@ def test_compare_radial_symmetry_features():
 
     # TensorNet constants
     maximum_interaction_radius = 5.1
-    minimum_interaction_radius = 0.0  # cutoff_lower also affect cutoff function in torchmd-net
+    minimum_interaction_radius = (
+        0.0  # cutoff_lower also affect cutoff function in torchmd-net
+    )
     number_of_per_atom_features = 8
 
     rsf = TensorNetRadialBasisFunction(
         number_of_radial_basis_functions=number_of_per_atom_features,
         max_distance=maximum_interaction_radius * unit.angstrom,
         min_distance=minimum_interaction_radius * unit.angstrom,
-        alpha=((maximum_interaction_radius - minimum_interaction_radius) / 5.0 * unit.angstrom),
+        alpha=(
+            (maximum_interaction_radius - minimum_interaction_radius)
+            / 5.0
+            * unit.angstrom
+        ),
     )
     mf_r = rsf(d_ij / 10)  # torch.Size([5, 8]) # NOTE: nanometer
-    cutoff_module = CosineCutoff(maximum_interaction_radius * unit.angstrom)
+    cutoff_module = CosineAttenuationFunction(
+        maximum_interaction_radius * unit.angstrom
+    )
 
     rcut_ij = cutoff_module(d_ij / 10)  # torch.Size([5, 1]) # NOTE: nanometer
     mf_r = (mf_r * rcut_ij).unsqueeze(1)

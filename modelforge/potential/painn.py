@@ -250,9 +250,9 @@ class PaiNNRepresentation(nn.Module):
         super().__init__()
 
         # cutoff
-        from modelforge.potential import CosineCutoff
+        from modelforge.potential import CosineAttenuationFunction
 
-        self.cutoff_module = CosineCutoff(maximum_interaction_radius)
+        self.cutoff_module = CosineAttenuationFunction(maximum_interaction_radius)
 
         # radial symmetry function
 

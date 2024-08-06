@@ -620,7 +620,7 @@ class DenseWithCustomDist(nn.Linear):
 from openff.units import unit
 
 
-class CosineCutoff(nn.Module):
+class CosineAttenuationFunction(nn.Module):
     def __init__(self, cutoff: unit.Quantity):
         """
         Behler-style cosine cutoff module.
@@ -719,7 +719,7 @@ class AngularSymmetryFunction(nn.Module):
 
         self.number_of_gaussians_asf = number_of_gaussians_for_asf
         self.angular_cutoff = maximum_interaction_radius
-        self.cosine_cutoff = CosineCutoff(self.angular_cutoff)
+        self.cosine_cutoff = CosineAttenuationFunction(self.angular_cutoff)
         _unitless_angular_cutoff = maximum_interaction_radius.to(unit.nanometer).m
         self.angular_start = min_distance
         _unitless_angular_start = min_distance.to(unit.nanometer).m

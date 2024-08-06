@@ -8,7 +8,7 @@ maximum_interaction_radius = "5.0 angstrom"
 number_of_interaction_residual = 3
 number_of_modules = 5
 
-[potential.core_parameter.activation_function]
+[potential.core_parameter.activation_function_parameter]
 activation_function_name = "ShiftedSoftplus"
 
 [potential.core_parameter.featurization]

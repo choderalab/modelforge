@@ -94,7 +94,7 @@ class ActivationFunctionConfig(ParametersBase):
                 )
         return self
 
-    def return_activation_function_class(self):
+    def return_activation_function(self):
         from modelforge.potential.utils import ACTIVATION_FUNCTIONS
 
         if self.activation_function_arguments is not None:
@@ -105,8 +105,8 @@ class ActivationFunctionConfig(ParametersBase):
 
     @computed_field
     @property
-    def activation_function_class(self) -> Type[torch.nn.Module]:
-        return self.return_activation_function_class()
+    def activation_function(self) -> Type[torch.nn.Module]:
+        return self.return_activation_function()
 
 
 # these will all be set by default to false
@@ -131,7 +131,7 @@ class ANI2xParameters(ParametersBase):
         maximum_interaction_radius_for_angular_features: Union[str, unit.Quantity]
         minimum_interaction_radius_for_angular_features: Union[str, unit.Quantity]
         angular_dist_divisions: int
-        activation_function: ActivationFunctionConfig
+        activation_function_parameter: ActivationFunctionConfig
 
         converted_units = field_validator(
             "maximum_interaction_radius",
@@ -163,7 +163,7 @@ class SchNetParameters(ParametersBase):
         number_of_interaction_modules: int
         number_of_filters: int
         shared_interactions: bool
-        activation_function: ActivationFunctionConfig
+        activation_function_parameter: ActivationFunctionConfig
         featurization: Featurization
 
         converted_units = field_validator("maximum_interaction_radius")(
@@ -194,7 +194,7 @@ class PaiNNParameters(ParametersBase):
         shared_interactions: bool
         shared_filters: bool
         featurization: Featurization
-        activation_function: ActivationFunctionConfig
+        activation_function_parameter: ActivationFunctionConfig
 
         converted_units = field_validator("maximum_interaction_radius")(
             _convert_str_to_unit
@@ -223,7 +223,7 @@ class PhysNetParameters(ParametersBase):
         number_of_interaction_residual: int
         number_of_modules: int
         featurization: Featurization
-        activation_function: ActivationFunctionConfig
+        activation_function_parameter: ActivationFunctionConfig
 
         converted_units = field_validator("maximum_interaction_radius")(
             _convert_str_to_unit
@@ -252,7 +252,7 @@ class SAKEParameters(ParametersBase):
         number_of_interaction_modules: int
         number_of_spatial_attention_heads: int
         featurization: Featurization
-        activation_function: ActivationFunctionConfig
+        activation_function_parameter: ActivationFunctionConfig
 
         converted_units = field_validator("maximum_interaction_radius")(
             _convert_str_to_unit

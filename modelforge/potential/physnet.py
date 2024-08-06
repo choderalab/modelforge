@@ -133,20 +133,20 @@ class PhysNetResidual(nn.Module):
         Dimensionality of the input feature vector.
     output_dim : int
         Dimensionality of the output feature vector, which typically matches the input dimension.
-    activation_function_class : torch.nn.Module
-        The activation function class to be used in the residual block.
+    activation_function : torch.nn.Module
+        The activation function to be used in the residual block.
     """
 
     def __init__(
         self,
         input_dim: int,
         output_dim: int,
-        activation_function_class: torch.nn.Module,
+        activation_function: torch.nn.Module,
     ):
         super().__init__()
         # Initialize dense layers and residual connection
         self.dense = Dense(
-            input_dim, output_dim, activation_function_class=activation_function_class
+            input_dim, output_dim, activation_function=activation_function
         )
         self.residual = Dense(output_dim, output_dim)
 
@@ -174,7 +174,7 @@ class PhysNetInteractionModule(nn.Module):
         number_of_per_atom_features: int,
         number_of_radial_basis_functions: int,
         number_of_interaction_residual: int,
-        activation_function_class: torch.nn.Module,
+        activation_function: torch.nn.Module,
     ):
         """
         Module to compute interaction terms based on atomic distances and features.
@@ -187,15 +187,15 @@ class PhysNetInteractionModule(nn.Module):
             Number of radial basis functions for the interaction.
         number_of_interaction_residual : int
             Number of residual blocks in the interaction module.
-        activation_function_class : torch.nn.Module
-            The activation function class to be used in the interaction module.
+        activation_function : torch.nn.Module
+            The activation function to be used in the interaction module.
         """
 
         super().__init__()
         from .utils import Dense
 
         # Initialize activation function
-        self.activation_function_class = activation_function_class
+        self.activation_function = activation_function
 
         # Initialize attention mask
         self.attention_mask = Dense(
@@ -209,12 +209,12 @@ class PhysNetInteractionModule(nn.Module):
         self.interaction_i = Dense(
             number_of_per_atom_features,
             number_of_per_atom_features,
-            activation_function_class=activation_function_class,
+            activation_function=activation_function,
         )
         self.interaction_j = Dense(
             number_of_per_atom_features,
             number_of_per_atom_features,
-            activation_function_class=activation_function_class,
+            activation_function=activation_function,
         )
 
         # Initialize processing network
@@ -226,7 +226,7 @@ class PhysNetInteractionModule(nn.Module):
                 PhysNetResidual(
                     input_dim=number_of_per_atom_features,
                     output_dim=number_of_per_atom_features,
-                    activation_function_class=activation_function_class,
+                    activation_function=activation_function,
                 )
                 for _ in range(number_of_interaction_residual)
             ]
@@ -265,7 +265,7 @@ class PhysNetInteractionModule(nn.Module):
         x = data.atomic_embedding
 
         # # Apply activation to atomic embeddings
-        xa = self.dropout(self.activation_function_class(x))
+        xa = self.dropout(self.activation_function(x))
 
         # calculate attention weights and transform to
         # input shape: (number_of_pairs, number_of_radial_basis_functions)
@@ -295,7 +295,7 @@ class PhysNetInteractionModule(nn.Module):
             m = residual(
                 m
             )  # shape (nr_of_atoms_in_batch, number_of_radial_basis_functions)
-        m = self.activation_function_class(m)
+        m = self.activation_function(m)
         x = self.gate * x + self.process_v(m)
         return x
 
@@ -306,7 +306,7 @@ class PhysNetOutput(nn.Module):
         number_of_per_atom_features: int,
         number_of_atomic_properties: int,
         number_of_residuals_in_output: int,
-        activation_function_class: torch.nn.Module,
+        activation_function: torch.nn.Module,
     ):
         """
         Output module for the PhysNet model.
@@ -319,8 +319,8 @@ class PhysNetOutput(nn.Module):
             Number of atomic properties to predict.
         number_of_residuals_in_output : int
             Number of residual blocks in the output module.
-        activation_function_class : torch.nn.Module
-            The activation function class to be used in the output module.
+        activation_function : torch.nn.Module
+            The activation function to be used in the output module.
         """
         from .utils import Dense
 
@@ -331,7 +331,7 @@ class PhysNetOutput(nn.Module):
                 PhysNetResidual(
                     number_of_per_atom_features,
                     number_of_per_atom_features,
-                    activation_function_class,
+                    activation_function,
                 )
                 for _ in range(number_of_residuals_in_output)
             ]
@@ -372,8 +372,8 @@ class PhysNetModule(nn.Module):
         Number of radial basis functions for the interaction.
     number_of_interaction_residual : int
         Number of residual blocks in the interaction module.
-    activation_function_class : torch.nn.Module
-        The activation function class to be used in the modules.
+    activation_function : torch.nn.Module
+        The activation function to be used in the modules.
     """
 
     def __init__(
@@ -381,7 +381,7 @@ class PhysNetModule(nn.Module):
         number_of_per_atom_features: int,
         number_of_radial_basis_functions: int,
         number_of_interaction_residual: int,
-        activation_function_class: torch.nn.Module,
+        activation_function: torch.nn.Module,
     ):
 
         super().__init__()
@@ -391,14 +391,14 @@ class PhysNetModule(nn.Module):
             number_of_per_atom_features=number_of_per_atom_features,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             number_of_interaction_residual=number_of_interaction_residual,
-            activation_function_class=activation_function_class,
+            activation_function=activation_function,
         )
         # Initialize output module
         self.output = PhysNetOutput(
             number_of_per_atom_features=number_of_per_atom_features,
             number_of_atomic_properties=2,
             number_of_residuals_in_output=2,
-            activation_function_class=activation_function_class,
+            activation_function=activation_function,
         )
 
     def forward(self, data: PhysNetNeuralNetworkData) -> Dict[str, torch.Tensor]:
@@ -462,8 +462,8 @@ class PhysNetCore(CoreNetwork):
         Number of interaction residual blocks.
     number_of_modules : int
         Number of PhysNet modules.
-    activation_function_class : Type[torch.nn.Module]
-        The activation function class to use.
+    activation_function : Type[torch.nn.Module]
+        The activation function to use.
     """
 
     def __init__(
@@ -473,11 +473,11 @@ class PhysNetCore(CoreNetwork):
         number_of_radial_basis_functions: int,
         number_of_interaction_residual: int,
         number_of_modules: int,
-        activation_function_class: Type[torch.nn.Module],
+        activation_function: Type[torch.nn.Module],
     ) -> None:
 
         log.debug("Initializing the PhysNet architecture.")
-        super().__init__(activation_function_class)
+        super().__init__(activation_function)
 
         # featurize the atomic input
         from modelforge.potential.utils import FeaturizeInput
@@ -501,7 +501,7 @@ class PhysNetCore(CoreNetwork):
                     number_of_per_atom_features,
                     number_of_radial_basis_functions,
                     number_of_interaction_residual,
-                    activation_function_class=self.activation_function_class,
+                    activation_function=self.activation_function,
                 )
                 for _ in range(number_of_modules)
             ]
@@ -663,9 +663,9 @@ class PhysNet(BaseNetwork):
         Number of interaction residual blocks.
     number_of_modules : int
         Number of PhysNet modules.
-    activation_function : Dict
+    activation_function_parameter : Dict
         Dict that contains keys: activation_function_name [str], activation_function_arguments [Dict],
-        and activation_function_class [Type[torch.nn.Module]].
+        and activation_function [Type[torch.nn.Module]].
     postprocessing_parameter : Dict[str, Dict[str, bool]]
         Configuration for postprocessing parameters.
     dataset_statistic : Optional[Dict[str, float]], optional
@@ -679,7 +679,7 @@ class PhysNet(BaseNetwork):
         number_of_radial_basis_functions: int,
         number_of_interaction_residual: int,
         number_of_modules: int,
-        activation_function: Dict,
+        activation_function_parameter: Dict,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
@@ -690,7 +690,7 @@ class PhysNet(BaseNetwork):
             postprocessing_parameter=postprocessing_parameter,
             maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
         )
-        activation_function_class = activation_function["activation_function_class"]
+        activation_function = activation_function_parameter["activation_function"]
 
         self.core_module = PhysNetCore(
             featurization_config=featurization,
@@ -698,7 +698,7 @@ class PhysNet(BaseNetwork):
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             number_of_interaction_residual=number_of_interaction_residual,
             number_of_modules=number_of_modules,
-            activation_function_class=activation_function_class,
+            activation_function=activation_function,
         )
 
     def _config_prior(self):

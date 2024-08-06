@@ -56,8 +56,8 @@ class SchNetCore(CoreNetwork):
         Whether to share interaction parameters across all interaction modules.
     maximum_interaction_radius : openff.units.unit.Quantity
         The cutoff distance for interactions.
-    activation_function_class : Type[torch.nn.Module]
-        Activation function class to use.
+    activation_function : Type[torch.nn.Module]
+        Activation function to use.
     """
 
     def __init__(
@@ -67,14 +67,14 @@ class SchNetCore(CoreNetwork):
         number_of_interaction_modules: int,
         number_of_filters: int,
         shared_interactions: bool,
-        activation_function_class: Type[torch.nn.Module],
+        activation_function: Type[torch.nn.Module],
         maximum_interaction_radius: unit.Quantity,
     ) -> None:
 
         log.debug("Initializing the SchNet architecture.")
         from modelforge.potential.utils import FeaturizeInput, Dense
 
-        super().__init__(activation_function_class)
+        super().__init__(activation_function)
         self.number_of_filters = number_of_filters or int(
             featurization_config["number_of_per_atom_features"]
         )
@@ -96,7 +96,7 @@ class SchNetCore(CoreNetwork):
                         number_of_per_atom_features,
                         self.number_of_filters,
                         number_of_radial_basis_functions,
-                        activation_function_class=self.activation_function_class,
+                        activation_function=self.activation_function,
                     )
                 ]
                 * number_of_interaction_modules
@@ -109,7 +109,7 @@ class SchNetCore(CoreNetwork):
                         number_of_per_atom_features,
                         self.number_of_filters,
                         number_of_radial_basis_functions,
-                        activation_function_class=self.activation_function_class,
+                        activation_function=self.activation_function,
                     )
                     for _ in range(number_of_interaction_modules)
                 ]
@@ -120,7 +120,7 @@ class SchNetCore(CoreNetwork):
             Dense(
                 number_of_per_atom_features,
                 number_of_per_atom_features,
-                activation_function_class=self.activation_function_class,
+                activation_function=self.activation_function,
             ),
             Dense(
                 number_of_per_atom_features,
@@ -217,7 +217,7 @@ class SchNETInteractionModule(nn.Module):
         Number of filters, defines the dimensionality of the intermediate features.
     number_of_radial_basis_functions : int
         Number of radial basis functions.
-    activation_function_class: torch.nn.Module
+    activation_function: torch.nn.Module
         The activation function to use in the interaction module.
     """
 
@@ -226,7 +226,7 @@ class SchNETInteractionModule(nn.Module):
         number_of_per_atom_features: int,
         number_of_filters: int,
         number_of_radial_basis_functions: int,
-        activation_function_class: torch.nn.Module,
+        activation_function: torch.nn.Module,
     ) -> None:
 
         super().__init__()
@@ -247,30 +247,30 @@ class SchNETInteractionModule(nn.Module):
             number_of_per_atom_features,
             number_of_filters,
             bias=False,
-            activation_function_class=None,
+            activation_function=None,
         )
         self.feature_to_output = nn.Sequential(
             Dense(
                 number_of_filters,
                 number_of_per_atom_features,
-                activation_function_class=activation_function_class,
+                activation_function=activation_function,
             ),
             Dense(
                 number_of_per_atom_features,
                 number_of_per_atom_features,
-                activation_function_class=None,
+                activation_function=None,
             ),
         )
         self.filter_network = nn.Sequential(
             Dense(
                 number_of_radial_basis_functions,
                 number_of_filters,
-                activation_function_class=activation_function_class,
+                activation_function=activation_function,
             ),
             Dense(
                 number_of_filters,
                 number_of_filters,
-                activation_function_class=None,
+                activation_function=None,
             ),
         )
 
@@ -411,9 +411,9 @@ class SchNet(BaseNetwork):
         Number of filters.
     shared_interactions : bool
         Whether to use shared interactions.
-    activation_function : Dict
+    activation_function_parameter : Dict
         Dict that contains keys: activation_function_name [str], activation_function_arguments [Dict],
-        and activation_function_class [Type[torch.nn.Module]].
+        and activation_function [Type[torch.nn.Module]].
     postprocessing_parameter : Dict[str, Dict[str, bool]]
         Configuration for postprocessing parameters.
     dataset_statistic : Optional[Dict[str, float]], default=None
@@ -427,7 +427,7 @@ class SchNet(BaseNetwork):
         number_of_interaction_modules: int,
         maximum_interaction_radius: Union[unit.Quantity, str],
         number_of_filters: int,
-        activation_function: Dict,
+        activation_function_parameter: Dict,
         shared_interactions: bool,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
@@ -441,7 +441,7 @@ class SchNet(BaseNetwork):
             maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
         )
 
-        activation_function_class = activation_function["activation_function_class"]
+        activation_function = activation_function_parameter["activation_function"]
 
         self.core_module = SchNetCore(
             featurization_config=featurization,
@@ -449,7 +449,7 @@ class SchNet(BaseNetwork):
             number_of_interaction_modules=number_of_interaction_modules,
             number_of_filters=number_of_filters,
             shared_interactions=shared_interactions,
-            activation_function_class=activation_function_class,
+            activation_function=activation_function,
             maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
         )
 

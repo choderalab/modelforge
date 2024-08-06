@@ -500,7 +500,7 @@ class Dense(nn.Linear):
         in_features: int,
         out_features: int,
         bias: bool = True,
-        activation_function_class: Optional[nn.Module] = None,
+        activation_function: Optional[nn.Module] = None,
         weight_init: Callable = xavier_uniform_,
         bias_init: Callable = zeros_,
     ):
@@ -515,8 +515,8 @@ class Dense(nn.Linear):
             Number of output features.
         bias : bool, optional
             If set to False, the layer will not learn an additive bias. Default is True.
-        activation_function_class : nn.Module , optional
-            Activation function class to be applied. Default is nn.Identity(), which applies the identity function and makes this a linear ransformation.
+        activation_function : nn.Module , optional
+            Activation function to be applied. Default is nn.Identity(), which applies the identity function and makes this a linear ransformation.
         weight_init : Callable, optional
             Callable to initialize the weights. Default is xavier_uniform_.
         bias_init : Callable, optional
@@ -530,10 +530,8 @@ class Dense(nn.Linear):
             in_features, out_features, bias
         )  # NOTE: the `reseet_paramters` method is called in the super class
 
-        self.activation_function_class = (
-            activation_function_class
-            if activation_function_class is not None
-            else nn.Identity()
+        self.activation_function = (
+            activation_function if activation_function is not None else nn.Identity()
         )
 
     def reset_parameters(self):
@@ -560,7 +558,7 @@ class Dense(nn.Linear):
 
         """
         y = F.linear(input, self.weight, self.bias)
-        return self.activation_function_class(y)
+        return self.activation_function(y)
 
 
 from openff.units import unit

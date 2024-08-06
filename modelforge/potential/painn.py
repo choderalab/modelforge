@@ -40,7 +40,7 @@ class PaiNNCore(CoreNetwork):
         number_of_interaction_modules: int,
         shared_interactions: bool,
         shared_filters: bool,
-        activation_function_class: Type[torch.nn.Module],
+        activation_function: Type[torch.nn.Module],
         epsilon: float = 1e-8,
     ):
         """
@@ -60,15 +60,15 @@ class PaiNNCore(CoreNetwork):
             Whether to share interactions across modules.
         shared_filters : bool
             Whether to share filters across modules.
-        activation_function_class : Type[torch.nn.Module]
-            Activation function class to use.
+        activation_function : Type[torch.nn.Module]
+            Activation function to use.
         epsilon : float, optional
             Stability constant added in norm to prevent numerical instabilities. Default is 1e-8.
         """
         from modelforge.potential.utils import FeaturizeInput
 
         log.debug("Initializing the PaiNN architecture.")
-        super().__init__(activation_function_class)
+        super().__init__(activation_function)
 
         self.number_of_interaction_modules = number_of_interaction_modules
 
@@ -93,7 +93,7 @@ class PaiNNCore(CoreNetwork):
                 [
                     PaiNNInteraction(
                         number_of_per_atom_features,
-                        activation_function_class=self.activation_function_class,
+                        activation_function=self.activation_function,
                     )
                 ]
                 * number_of_interaction_modules
@@ -103,7 +103,7 @@ class PaiNNCore(CoreNetwork):
                 [
                     PaiNNInteraction(
                         number_of_per_atom_features,
-                        activation_function_class=self.activation_function_class,
+                        activation_function=self.activation_function,
                     )
                     for _ in range(number_of_interaction_modules)
                 ]
@@ -113,7 +113,7 @@ class PaiNNCore(CoreNetwork):
             [
                 PaiNNMixing(
                     number_of_per_atom_features,
-                    activation_function_class=self.activation_function_class,
+                    activation_function=self.activation_function,
                     epsilon=epsilon,
                 )
                 for _ in range(number_of_interaction_modules)
@@ -125,7 +125,7 @@ class PaiNNCore(CoreNetwork):
             Dense(
                 number_of_per_atom_features,
                 number_of_per_atom_features,
-                activation_function_class=self.activation_function_class,
+                activation_function=self.activation_function,
             ),
             Dense(
                 number_of_per_atom_features,
@@ -331,7 +331,7 @@ class PaiNNInteraction(nn.Module):
 
     """
 
-    def __init__(self, nr_atom_basis: int, activation_function_class: torch.nn.Module):
+    def __init__(self, nr_atom_basis: int, activation_function: torch.nn.Module):
         """
         Initialize the PaiNNInteraction module.
 
@@ -339,8 +339,8 @@ class PaiNNInteraction(nn.Module):
         ----------
         nr_atom_basis : int
             Number of features to describe atomic environments.
-        activation_function_class : torch.nn.Module
-            Activation function class to use.
+        activation_function : torch.nn.Module
+            Activation function to use.
 
         Attributes
         ----------
@@ -357,7 +357,7 @@ class PaiNNInteraction(nn.Module):
             Dense(
                 nr_atom_basis,
                 nr_atom_basis,
-                activation_function_class=activation_function_class,
+                activation_function=activation_function,
             ),
             Dense(nr_atom_basis, 3 * nr_atom_basis),
         )
@@ -449,7 +449,7 @@ class PaiNNMixing(nn.Module):
     def __init__(
         self,
         nr_atom_basis: int,
-        activation_function_class: torch.nn.Module,
+        activation_function: torch.nn.Module,
         epsilon: float = 1e-8,
     ):
         """
@@ -459,7 +459,7 @@ class PaiNNMixing(nn.Module):
         ----------
         nr_atom_basis : int
             Number of features to describe atomic environments.
-        activation_function_class : torch.nn.Module
+        activation_function : torch.nn.Module
             Activation function to use.
         epsilon : float, optional
             Stability constant added in norm to prevent numerical instabilities. Default is 1e-8.
@@ -483,9 +483,9 @@ class PaiNNMixing(nn.Module):
             Dense(
                 2 * nr_atom_basis,
                 nr_atom_basis,
-                activation_function_class=activation_function_class,
+                activation_function=activation_function,
             ),
-            Dense(nr_atom_basis, 3 * nr_atom_basis, activation_function_class=None),
+            Dense(nr_atom_basis, 3 * nr_atom_basis, activation_function=None),
         )
         # initialize the mu channel mixing network
         self.mu_channel_mix = Dense(nr_atom_basis, 2 * nr_atom_basis, bias=False)
@@ -536,7 +536,7 @@ class PaiNN(BaseNetwork):
         number_of_radial_basis_functions: int,
         maximum_interaction_radius: Union[unit.Quantity, str],
         number_of_interaction_modules: int,
-        activation_function: Dict,
+        activation_function_parameter: Dict,
         shared_interactions: bool,
         shared_filters: bool,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
@@ -556,9 +556,9 @@ class PaiNN(BaseNetwork):
             Maximum interaction radius.
         number_of_interaction_modules : int
             Number of interaction modules.
-        activation_function : Dict
+        activation_function_parameter : Dict
             Dict that contains keys: activation_function_name [str], activation_function_arguments [Dict],
-            and activation_function_class [Type[torch.nn.Module]].
+            and activation_function [Type[torch.nn.Module]].
         shared_interactions : bool
             Whether to share interactions across modules.
         shared_filters : bool
@@ -577,7 +577,7 @@ class PaiNN(BaseNetwork):
             maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
         )
 
-        activation_function_class = activation_function["activation_function_class"]
+        activation_function = activation_function_parameter["activation_function"]
 
         self.core_module = PaiNNCore(
             featurization_config=featurization,
@@ -586,7 +586,7 @@ class PaiNN(BaseNetwork):
             number_of_interaction_modules=number_of_interaction_modules,
             shared_interactions=shared_interactions,
             shared_filters=shared_filters,
-            activation_function_class=activation_function_class,
+            activation_function=activation_function,
             epsilon=epsilon,
         )
 

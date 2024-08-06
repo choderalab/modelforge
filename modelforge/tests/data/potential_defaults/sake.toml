@@ -8,7 +8,7 @@ maximum_interaction_radius = "5.0 angstrom"
 number_of_interaction_modules = 6
 number_of_spatial_attention_heads = 4
 
-[potential.core_parameter.activation_function]
+[potential.core_parameter.activation_function_parameter]
 activation_function_name = "SiLU"
 
 [potential.core_parameter.featurization]

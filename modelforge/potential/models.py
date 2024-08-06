@@ -1080,19 +1080,19 @@ class CoreNetwork(Module, ABC):
     Operations performed outside the network (e.g., pairlist calculation and operations that reduce atomic properties to molecule properties) are not part of the network and are implemented in the BaseNetwork, which is a wrapper around the CoreNetwork.
     """
 
-    def __init__(self, activation_function_class: Type[torch.nn.Module]):
+    def __init__(self, activation_function: Type[torch.nn.Module]):
         """
         Initialize the CoreNetwork.
 
         Parameters
         ----------
-        activation_function_class : torch.nn.Module
+        activation_function : torch.nn.Module
             The activation function to use.
         """
 
         super().__init__()
 
-        self.activation_function_class = activation_function_class
+        self.activation_function = activation_function
 
     @abstractmethod
     def _model_specific_input_preparation(

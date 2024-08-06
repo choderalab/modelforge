@@ -454,6 +454,7 @@ class TensorNetRepresentation(torch.nn.Module):
             number_of_per_atom_features,
         )
         self.activation_function = activation_function()
+        # initialize linear layer for I, A and S
         self.linears_tensor = nn.ModuleList(
             [
                 nn.Linear(
@@ -478,7 +479,7 @@ class TensorNetRepresentation(torch.nn.Module):
                 ),
             ]
         )
-        self.init_norm = nn.LayerNorm(number_of_per_atom_features)
+        self.batch_layer_normalization = nn.LayerNorm(number_of_per_atom_features)
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -494,7 +495,7 @@ class TensorNetRepresentation(torch.nn.Module):
             linear.reset_parameters()
         for linear in self.linears_scalar:
             linear.reset_parameters()
-        self.init_norm.reset_parameters()
+        self.batch_layer_normalization.reset_parameters()
 
     def _get_atomic_number_message(
         self, atomic_number: torch.Tensor, pair_indices: torch.Tensor
@@ -628,17 +629,14 @@ class TensorNetRepresentation(torch.nn.Module):
         # equation 9 in TensorNet paper
         # batch normalization
         # NOTE: call init_norm differently
-        nomalized_tensor_I_A_S = self.init_norm(tensor_norm(I + A + S))
+        nomalized_tensor_I_A_S = self.batch_layer_normalization(tensor_norm(I + A + S))
 
-        nomalized_tensor_I_A_S = self.linears_scalar(nomalized_tensor_I_A_S)
-
-        nomalized_tensor_I_A_S = nomalized_tensor_I_A_S.reshape(
+        nomalized_tensor_I_A_S = self.linears_scalar(nomalized_tensor_I_A_S).reshape(
             -1, self.number_of_per_atom_features, 3
         )
 
         # now equation 10
-        # apply linear layers to I, A, S and
-        # FIXME: call linears_tensor differently
+        # apply linear layers to I, A, S and return
         I = (
             self.linears_tensor[0](I.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
             * nomalized_tensor_I_A_S[..., 0, None, None]
@@ -709,7 +707,7 @@ class TensorNetInteraction(torch.nn.Module):
             ),
         )
 
-        self.linears_tensor = nn.Sequential(
+        self.linear_layer = nn.Sequential(
             *[
                 Dense(
                     number_of_per_atom_features, number_of_per_atom_features, bias=False
@@ -729,7 +727,7 @@ class TensorNetInteraction(torch.nn.Module):
                 linear.reset_parameters()
             except AttributeError:
                 pass
-        for linear in self.linears_tensor:
+        for linear in self.linear_layer:
             try:
                 linear.reset_parameters()
             except AttributeError:
@@ -782,11 +780,14 @@ class TensorNetInteraction(torch.nn.Module):
         )
 
         X = X / (tensor_norm(X) + 1)[..., None, None]
+
         I, A, S = decompose_tensor(X)
-        I = self.linears_tensor[0](I.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-        A = self.linears_tensor[1](A.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-        S = self.linears_tensor[2](S.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+        I = self.linear_layer[0](I.transpose(1, 3)).transpose(1, 3)
+        A = self.linear_layer[1](A.transpose(1, 3)).transpose(1, 3)
+        S = self.linear_layer[2](S.transpose(1, 3)).transpose(1, 3)
+
         Y = I + A + S
+
         Im = tensor_message_passing(
             pair_indices, radial_feature_vector[..., 0, None, None], I, X.shape[0]
         )
@@ -809,9 +810,9 @@ class TensorNetInteraction(torch.nn.Module):
 
         normp1 = (tensor_norm(I + A + S) + 1)[..., None, None]
         I, A, S = I / normp1, A / normp1, S / normp1
-        I = self.linears_tensor[3](I.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-        A = self.linears_tensor[4](A.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-        S = self.linears_tensor[5](S.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+        I = self.linear_layer[3](I.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+        A = self.linear_layer[4](A.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+        S = self.linear_layer[5](S.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
         dX = I + A + S
         X = (
             X

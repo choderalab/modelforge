@@ -1422,7 +1422,7 @@ class DataModule(pl.LightningDataModule):
             num_workers=num_workers,
         )
 
-    def test_dataloader(self) -> DataLoader:
+    def test_dataloader(self, num_workers: int = 4) -> DataLoader:
         """
         Create a DataLoader for the test dataset.
 
@@ -1432,7 +1432,9 @@ class DataModule(pl.LightningDataModule):
             DataLoader containing the test dataset.
         """
         return DataLoader(
-            self.test_dataset, batch_size=self.batch_size, collate_fn=collate_conformers
+            self.test_dataset, batch_size=self.batch_size, collate_fn=collate_conformers,
+            num_workers=num_workers,
+
         )
 
 

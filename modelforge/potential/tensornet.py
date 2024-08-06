@@ -94,9 +94,10 @@ def decompose_tensor(
         Decomposed tensors, I, A, and S from tensor feature X.
     """
 
-    I = (tensor.diagonal(offset=0, dim1=-1, dim2=-2)).mean(-1)[
-        ..., None, None
-    ] * torch.eye(3, 3, device=tensor.device, dtype=tensor.dtype)
+    diag_mean = tensor.diagonal(offset=0, dim1=-1, dim2=-2).mean(-1)
+    I = diag_mean[..., None, None] * torch.eye(
+        3, 3, device=tensor.device, dtype=tensor.dtype
+    )
     A = 0.5 * (tensor - tensor.transpose(-2, -1))
     S = 0.5 * (tensor + tensor.transpose(-2, -1)) - I
 
@@ -119,7 +120,7 @@ def tensor_norm(tensor: torch.Tensor) -> torch.Tensor:
     torch.Tensor
         Normalized tensor X.
     """
-
+    # Note: the Frobenius norm is actually the square root of the sum of squares, so assert torch.allclose(torch.norm(tensor, p="fro", dim=(-2, -1))**2, (tensor**2).sum((-2, -1)) == True
     return (tensor**2).sum((-2, -1))
 
 
@@ -151,11 +152,14 @@ def tensor_message_passing(
         A Message tensor calculated from I, A, or S.
     """
 
+    # Compute the message for each pair
     msg = radial_feature_vector * tensor.index_select(0, pair_indices[1])
+    # Pre-allocate tensor for the aggregated messages
     tensor_m = torch.zeros(
         number_of_atoms, *tensor.shape[1:], device=tensor.device, dtype=tensor.dtype
     )
-    tensor_m = tensor_m.index_add(0, pair_indices[0], msg)
+    # Aggregate the messages, using in-place addition to avoid unnecessary copies
+    tensor_m.index_add_(0, pair_indices[0], msg)
     return tensor_m
 
 
@@ -331,7 +335,7 @@ class TensorNetCore(CoreNetwork):
                 radial_feature_vector.squeeze(1),
                 expanded_total_charge,
             )
-        
+
         I, A, S = decompose_tensor(X)
         x = torch.cat(
             (tensor_norm(I), tensor_norm(A), tensor_norm(S)),
@@ -413,6 +417,7 @@ class TensorNetRepresentation(torch.nn.Module):
         highest_atomic_number: int,
     ):
         super().__init__()
+        from modelforge.potential.utils import Dense
 
         self.number_of_per_atom_features = number_of_per_atom_features
 
@@ -459,15 +464,17 @@ class TensorNetRepresentation(torch.nn.Module):
         )
         self.linears_scalar = nn.Sequential(
             *[
-                nn.Linear(
+                Dense(
                     number_of_per_atom_features,
                     2 * number_of_per_atom_features,
                     bias=True,
+                    activation_function=self.activation_function,
                 ),
-                nn.Linear(
+                Dense(
                     2 * number_of_per_atom_features,
                     3 * number_of_per_atom_features,
                     bias=True,
+                    activation_function=self.activation_function,
                 ),
             ]
         )
@@ -513,10 +520,12 @@ class TensorNetRepresentation(torch.nn.Module):
             The embedding tensor for atomic numbers of atom pairs.
         """
         atomic_number_i_embedding = self.atomic_number_i_embedding_layer(atomic_number)
+        pair_indices_flat = pair_indices.t().reshape(-1)
+
         atomic_number_ij_embedding = self.atomic_number_ij_embedding_layer(
-            atomic_number_i_embedding.index_select(
-                0, pair_indices.t().reshape(-1)
-            ).view(-1, self.number_of_per_atom_features * 2)
+            atomic_number_i_embedding[pair_indices_flat].view(
+                -1, self.number_of_per_atom_features * 2
+            )
         )[..., None, None]
         return atomic_number_ij_embedding
 
@@ -621,11 +630,7 @@ class TensorNetRepresentation(torch.nn.Module):
         # NOTE: call init_norm differently
         nomalized_tensor_I_A_S = self.init_norm(tensor_norm(I + A + S))
 
-        # FIXME:
-        for linear_scalar in self.linears_scalar:
-            nomalized_tensor_I_A_S = self.activation_function(
-                linear_scalar(nomalized_tensor_I_A_S)
-            )
+        nomalized_tensor_I_A_S = self.linears_scalar(nomalized_tensor_I_A_S)
 
         nomalized_tensor_I_A_S = nomalized_tensor_I_A_S.reshape(
             -1, self.number_of_per_atom_features, 3
@@ -767,13 +772,12 @@ class TensorNetInteraction(torch.nn.Module):
         """
 
         # see equation 11
-        C = self.cutoff_module(d_ij)
+        C = self.cutoff_module(d_ij).view(-1, 1)
 
-        # equation 11
-        # apply scalar MLP to radial feature vector
-        radial_feature_vector = self.mlp_scalar(radial_feature_vector)
+        # apply scalar MLP to radial feature vector and combine with cutoff
+        radial_feature_vector = self.mlp_scalar(radial_feature_vector) * C
 
-        radial_feature_vector = (radial_feature_vector * C.view(-1, 1)).reshape(
+        radial_feature_vector = radial_feature_vector.view(
             radial_feature_vector.shape[0], self.number_of_per_atom_features, 3
         )
 
@@ -802,7 +806,7 @@ class TensorNetInteraction(torch.nn.Module):
         if self.equivariance_invariance_group == "SO(3)":
             B = torch.matmul(Y, msg)
             I, A, S = decompose_tensor(2 * B)
-        
+
         normp1 = (tensor_norm(I + A + S) + 1)[..., None, None]
         I, A, S = I / normp1, A / normp1, S / normp1
         I = self.linears_tensor[3](I.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)

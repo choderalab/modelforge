@@ -30,7 +30,7 @@ def test_forward():  # TODO
     # prepare reference value
     dataset = DataModule(
         name="QM9",
-        batch_size=1,
+        batch_size=64,
         version_select="nc_1000_v0",
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         remove_self_energies=True,

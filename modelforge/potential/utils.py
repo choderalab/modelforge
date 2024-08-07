@@ -1,6 +1,6 @@
 import math
 from dataclasses import dataclass
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional, Tuple, Type
 
 import numpy as np
 import torch

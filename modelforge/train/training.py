@@ -1211,12 +1211,6 @@ class ModelTrainer:
         """
         from lightning import Trainer
 
-        checkpoint_path = (
-            None
-            if self.runtime_config.checkpoint_path == "None"
-            else self.runtime_config.checkpoint_path
-        )
-
         trainer = Trainer(
             max_epochs=self.training_config.number_of_epochs,
             num_nodes=self.runtime_config.number_of_nodes,
@@ -1250,7 +1244,7 @@ class ModelTrainer:
                 self.runtime_config.checkpoint_path
                 if self.runtime_config.checkpoint_path != "None"
                 else None
-            ),
+            ), # NOTE: automatically resumes training from checkpoint
         )
 
         self.trainer.validate(

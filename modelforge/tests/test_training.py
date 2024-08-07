@@ -92,7 +92,7 @@ def test_train_with_lightning(potential_name, dataset_name):
         training_config=training_config,
         dataset_config=dataset_config,
         runtime_config=runtime_config,
-    )
+    ).train()
 
 
 def test_train_from_single_toml_file():

@@ -1086,7 +1086,7 @@ class CoreNetwork(Module, ABC):
 
         Parameters
         ----------
-        activation_function : torch.nn.Module
+        activation_function : Type[torch.nn.Module]
             The activation function to use.
         """
 

@@ -217,7 +217,7 @@ class SchNETInteractionModule(nn.Module):
         Number of filters, defines the dimensionality of the intermediate features.
     number_of_radial_basis_functions : int
         Number of radial basis functions.
-    activation_function: torch.nn.Module
+    activation_function: Type[torch.nn.Module]
         The activation function to use in the interaction module.
     """
 
@@ -226,7 +226,7 @@ class SchNETInteractionModule(nn.Module):
         number_of_per_atom_features: int,
         number_of_filters: int,
         number_of_radial_basis_functions: int,
-        activation_function: torch.nn.Module,
+        activation_function: Type[torch.nn.Module],
     ) -> None:
 
         super().__init__()

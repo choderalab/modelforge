@@ -489,7 +489,7 @@ class Dense(nn.Linear):
         in_features: int,
         out_features: int,
         bias: bool = True,
-        activation_function: Optional[nn.Module] = None,
+        activation_function: Optional[Type[torch.nn.Module]] = None,
     ):
         """
         A linear or non-linear transformation
@@ -502,8 +502,8 @@ class Dense(nn.Linear):
             Number of output features.
         bias : bool, optional
             If set to False, the layer will not learn an additive bias. Default is True.
-        activation_function : nn.Module , optional
-            Activation function to be applied. Default is nn.Identity(), which applies the identity function and makes this a linear ransformation.
+        activation_function : Type[torch.nn.Module] , optional
+            Activation function to be applied. Default is nn.Identity(), which applies the identity function and makes this a linear transformation.
         """
 
         super().__init__(in_features, out_features, bias)

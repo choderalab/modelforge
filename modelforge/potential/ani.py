@@ -373,11 +373,11 @@ class ANIInteraction(nn.Module):
     ----------
     aev_dim : int
         The dimensionality of the AEVs.
-    activation_function : torch.nn.Module
+    activation_function : Type[torch.nn.Module]
         The activation function to use.
     """
 
-    def __init__(self, *, aev_dim: int, activation_function: torch.nn.Module):
+    def __init__(self, *, aev_dim: int, activation_function: Type[torch.nn.Module]):
 
         super().__init__()
         # define atomic neural network
@@ -392,9 +392,8 @@ class ANIInteraction(nn.Module):
         )
 
     def intialize_atomic_neural_network(
-        self, aev_dim: int, activation_function: torch.nn.Module
+        self, aev_dim: int, activation_function: Type[torch.nn.Module]
     ) -> Dict[str, nn.Module]:
-
         """
         Initialize the atomic neural networks for each element.
 
@@ -402,7 +401,7 @@ class ANIInteraction(nn.Module):
         ----------
         aev_dim : int
             The dimensionality of the AEVs.
-        activation_function : torch.nn.Module
+        activation_function : Type[torch.nn.Module]
             The activation function to use.
 
         Returns

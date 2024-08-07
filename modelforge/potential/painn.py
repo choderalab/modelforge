@@ -331,7 +331,7 @@ class PaiNNInteraction(nn.Module):
 
     """
 
-    def __init__(self, nr_atom_basis: int, activation_function: torch.nn.Module):
+    def __init__(self, nr_atom_basis: int, activation_function: Type[torch.nn.Module]):
         """
         Initialize the PaiNNInteraction module.
 
@@ -339,7 +339,7 @@ class PaiNNInteraction(nn.Module):
         ----------
         nr_atom_basis : int
             Number of features to describe atomic environments.
-        activation_function : torch.nn.Module
+        activation_function : Type[torch.nn.Module]
             Activation function to use.
 
         Attributes
@@ -447,7 +447,7 @@ class PaiNNMixing(nn.Module):
     def __init__(
         self,
         nr_atom_basis: int,
-        activation_function: torch.nn.Module,
+        activation_function: Type[torch.nn.Module],
         epsilon: float = 1e-8,
     ):
         """
@@ -457,7 +457,7 @@ class PaiNNMixing(nn.Module):
         ----------
         nr_atom_basis : int
             Number of features to describe atomic environments.
-        activation_function : torch.nn.Module
+        activation_function : Type[torch.nn.Module]
             Activation function to use.
         epsilon : float, optional
             Stability constant added in norm to prevent numerical instabilities. Default is 1e-8.

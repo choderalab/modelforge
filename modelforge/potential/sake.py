@@ -118,7 +118,7 @@ class SAKECore(CoreNetwork):
             DenseWithCustomDist(
                 number_of_per_atom_features, number_of_per_atom_features
             ),
-            self.activation_function_class(),
+            self.activation_function,
             DenseWithCustomDist(number_of_per_atom_features, 1),
         )
         # initialize the interaction networks

@@ -133,7 +133,7 @@ class PhysNetResidual(nn.Module):
         Dimensionality of the input feature vector.
     output_dim : int
         Dimensionality of the output feature vector, which typically matches the input dimension.
-    activation_function : torch.nn.Module
+    activation_function : Type[torch.nn.Module]
         The activation function to be used in the residual block.
     """
 
@@ -141,12 +141,12 @@ class PhysNetResidual(nn.Module):
         self,
         input_dim: int,
         output_dim: int,
-        activation_function: torch.nn.Module,
+        activation_function: Type[torch.nn.Module],
     ):
         super().__init__()
         # Initialize dense layers and residual connection
         self.dense = DenseWithCustomDist(
-            input_dim, output_dim, activation_function=activation_function_class()
+            input_dim, output_dim, activation_function=activation_function
         )
         self.residual = DenseWithCustomDist(output_dim, output_dim)
 
@@ -174,7 +174,7 @@ class PhysNetInteractionModule(nn.Module):
         number_of_per_atom_features: int,
         number_of_radial_basis_functions: int,
         number_of_interaction_residual: int,
-        activation_function: torch.nn.Module,
+        activation_function: Type[torch.nn.Module],
     ):
         """
         Module to compute interaction terms based on atomic distances and features.
@@ -187,7 +187,7 @@ class PhysNetInteractionModule(nn.Module):
             Number of radial basis functions for the interaction.
         number_of_interaction_residual : int
             Number of residual blocks in the interaction module.
-        activation_function : torch.nn.Module
+        activation_function : Type[torch.nn.Module]
             The activation function to be used in the interaction module.
         """
 
@@ -308,7 +308,7 @@ class PhysNetOutput(nn.Module):
         number_of_per_atom_features: int,
         number_of_atomic_properties: int,
         number_of_residuals_in_output: int,
-        activation_function: torch.nn.Module,
+        activation_function: Type[torch.nn.Module],
     ):
         """
         Output module for the PhysNet model.
@@ -321,7 +321,7 @@ class PhysNetOutput(nn.Module):
             Number of atomic properties to predict.
         number_of_residuals_in_output : int
             Number of residual blocks in the output module.
-        activation_function : torch.nn.Module
+        activation_function : Type[torch.nn.Module]
             The activation function to be used in the output module.
         """
         from .utils import DenseWithCustomDist
@@ -374,7 +374,7 @@ class PhysNetModule(nn.Module):
         Number of radial basis functions for the interaction.
     number_of_interaction_residual : int
         Number of residual blocks in the interaction module.
-    activation_function : torch.nn.Module
+    activation_function : Type[torch.nn.Module]
         The activation function to be used in the modules.
     """
 
@@ -383,7 +383,7 @@ class PhysNetModule(nn.Module):
         number_of_per_atom_features: int,
         number_of_radial_basis_functions: int,
         number_of_interaction_residual: int,
-        activation_function: torch.nn.Module,
+        activation_function: Type[torch.nn.Module],
     ):
 
         super().__init__()

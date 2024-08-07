@@ -699,7 +699,7 @@ class TrainingAdapter(pl.LightningModule):
             # log dict, print val metrics to console
             self.log_dict(metrics, on_epoch=True, prog_bar=(phase == "val"))
 
-    def configure_optimizers(self) -> Dict[str, Any]:
+    def configure_optimizers(self):
         """
         Configures the model's optimizers (and optionally schedulers).
 

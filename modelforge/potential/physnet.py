@@ -52,9 +52,9 @@ class PhysNetRepresentation(nn.Module):
         super().__init__()
 
         # Initialize cutoff module
-        from modelforge.potential import CosineCutoff
+        from modelforge.potential import CosineAttenuationFunction
 
-        self.cutoff_module = CosineCutoff(maximum_interaction_radius)
+        self.cutoff_module = CosineAttenuationFunction(maximum_interaction_radius)
 
         # Initialize radial symmetry function module
         from .utils import PhysNetRadialBasisFunction
@@ -82,8 +82,7 @@ class PhysNetRepresentation(nn.Module):
         """
 
         f_ij = self.radial_symmetry_function_module(d_ij).squeeze()
-        cutoff = self.cutoff_module(d_ij)
-        f_ij = torch.mul(f_ij, cutoff)
+        f_ij = torch.mul(f_ij, self.cutoff_module(d_ij))
         return f_ij
 
 

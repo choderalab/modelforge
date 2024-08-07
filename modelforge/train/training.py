@@ -946,13 +946,11 @@ def read_config_and_train(
     simulation_environment : str, optional
         Simulation environment.  If provided, this overrides the simulation environment in the runtime_defaults configuration.
 
-
-
     Returns
     -------
-
+    Trainer
+        The configured trainer instance after running the training process.
     """
-
     (
         training_config,
         dataset_config,
@@ -975,12 +973,13 @@ def read_config_and_train(
         simulation_environment=simulation_environment,
     )
 
-    return perform_training(
+    trainer_instance = ModelTrainer(
+        dataset_config=dataset_config,
         potential_config=potential_config,
         training_config=training_config,
-        dataset_config=dataset_config,
         runtime_config=runtime_config,
     )
+    return trainer_instance.train()
 
 
 from lightning import Trainer
@@ -994,175 +993,269 @@ from modelforge.potential import (
     SchNetParameters,
     PaiNNParameters,
     SAKEParameters,
+    TensorNetParameters,
 )
 
 
-def perform_training(
-    dataset_config: DatasetParameters,
-    potential_config: Union[
-        ANI2xParameters,
-        SAKEParameters,
-        SchNetParameters,
-        PhysNetParameters,
-        PaiNNParameters,
-    ],
-    training_config: TrainingParameters,
-    runtime_config: RuntimeParameters,
-) -> Trainer:
-    """
-    Performs the training process for a neural network potential model.
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from typing import Any, Union, Dict, Type, Optional, List
+import torch
+from loguru import logger as log
+from modelforge.dataset.dataset import BatchData, NNPInput
+import torchmetrics
+from torch import nn
+from abc import ABC, abstractmethod
+from modelforge.dataset.dataset import DataModule
+import lightning as L
 
-    Parameters
-    ----------
-    dataset_config : Dict[str, Any], optional
-        Parameters for the dataset.
-    potential_config : BaseModel
-        Parameters for the potential model.
-    training_config : BaseModel
-       Parameters for the training process.
-    runtime_config : BaseModel
-        Parameters for runtime configuration.
 
-    Returns
-    -------
-    Trainer
-    """
+class ModelTrainer:
+    def __init__(
+        self,
+        dataset_config: DatasetParameters,
+        potential_config: Union[
+            ANI2xParameters,
+            SAKEParameters,
+            SchNetParameters,
+            PhysNetParameters,
+            PaiNNParameters,
+            TensorNetParameters,
+        ],
+        training_config: TrainingParameters,
+        runtime_config: RuntimeParameters,
+    ):
+        """
+        Initialize the ModelTrainer class with the necessary configurations.
 
-    from modelforge.dataset.utils import REGISTERED_SPLITTING_STRATEGIES
-    from lightning import Trainer
-    from modelforge.potential import NeuralNetworkPotentialFactory
-    from modelforge.dataset.dataset import DataModule
+        Parameters
+        ----------
+        dataset_config : DatasetParameters
+            Parameters for the dataset.
+        potential_config : Union[ANI2xParameters, SAKEParameters, SchNetParameters, PhysNetParameters, PaiNNParameters, TensorNetParameters]
+            Parameters for the potential model.
+        training_config : TrainingParameters
+            Parameters for the training process.
+        runtime_config : RuntimeParameters
+            Parameters for runtime configuration.
+        """
+        self.dataset_config = dataset_config
+        self.potential_config = potential_config
+        self.training_config = training_config
+        self.runtime_config = runtime_config
+        self.logger = self.setup_logger()
+        self.datamodule = self.setup_datamodule()
+        self.dataset_statistic = self.read_dataset_statistics()
+        self.model = self.setup_model()
+        self.callbacks = self.setup_callbacks()
+        self.trainer = self.setup_trainer()
 
-    # set up tensor board logger
-    if training_config.experiment_logger.logger_name == "tensorboard":
-        from pytorch_lightning.loggers import TensorBoardLogger
+    def setup_logger(self) -> L.pytorch.loggers.Logger:
+        """
+        Set up the experiment logger based on the configuration.
 
-        logger = TensorBoardLogger(
-            save_dir=training_config.experiment_logger.tensorboard_configuration.save_dir,
-            name=runtime_config.experiment_name,
-        )
-    elif training_config.experiment_logger.logger_name == "wandb":
+        Returns
+        -------
+        pl.loggers.Logger
+            Configured logger instance.
+        """
+        if self.training_config.experiment_logger.logger_name == "tensorboard":
+            from lightning.pytorch.loggers import TensorBoardLogger
 
-        # Since we are not calling the wandb api directly, but rather through the lightning logger interface
-        # we get the built in messages from lightning, which suggests we install via pip
-        # since we are trying to stay withing the condaforge ecosystem, we can use our own check_import function
-        # to raise an error and suggest the user install wandb via conda-forge.
-        from modelforge.utils.io import check_import
-
-        check_import("wandb")
-
-        from pytorch_lightning.loggers import WandbLogger
-
-        logger = WandbLogger(
-            save_dir=training_config.experiment_logger.wandb_configuration.save_dir,
-            log_model=training_config.experiment_logger.wandb_configuration.log_model,
-            project=training_config.experiment_logger.wandb_configuration.project,
-            group=training_config.experiment_logger.wandb_configuration.group,
-            job_type=training_config.experiment_logger.wandb_configuration.job_type,
-            tags=training_config.experiment_logger.wandb_configuration.tags,
-            notes=training_config.experiment_logger.wandb_configuration.notes,
-            name=runtime_config.experiment_name,
-        )
-
-    # Set up dataset
-    dm = DataModule(
-        name=dataset_config.dataset_name,
-        batch_size=training_config.batch_size,
-        remove_self_energies=training_config.remove_self_energies,
-        version_select=dataset_config.version_select,
-        local_cache_dir=runtime_config.local_cache_dir,
-        splitting_strategy=REGISTERED_SPLITTING_STRATEGIES[
-            training_config.splitting_strategy.name
-        ](
-            seed=training_config.splitting_strategy.seed,
-            split=training_config.splitting_strategy.data_split,
-        ),
-    )
-    dm.prepare_data()
-    dm.setup()
-
-    # read dataset statistics
-    import toml
-
-    dataset_statistic = toml.load(dm.dataset_statistic_filename)
-    log.info(
-        f"Setting per_atom_energy_mean and per_atom_energy_stddev for {potential_config.potential_name}"
-    )
-    log.info(
-        f"per_atom_energy_mean: {dataset_statistic['training_dataset_statistics']['per_atom_energy_mean']}"
-    )
-    log.info(
-        f"per_atom_energy_stddev: {dataset_statistic['training_dataset_statistics']['per_atom_energy_stddev']}"
-    )
-
-    # Set up model
-    model = NeuralNetworkPotentialFactory.generate_model(
-        use="training",
-        dataset_statistic=dataset_statistic,
-        model_parameter=potential_config.model_dump(),
-        training_parameter=training_config.model_dump(),
-    )
-
-    # set up traininer
-    from lightning.pytorch.callbacks.early_stopping import EarlyStopping
-    from lightning.pytorch.callbacks.stochastic_weight_avg import (
-        StochasticWeightAveraging,
-    )
-
-    # set up callbacks
-    callbacks = []
-    if training_config.stochastic_weight_averaging is not None:
-        callbacks.append(
-            StochasticWeightAveraging(
-                **training_config.stochastic_weight_averaging.model_dump()
+            logger = TensorBoardLogger(
+                save_dir=str(
+                    self.training_config.experiment_logger.tensorboard_configuration.save_dir
+                ),
+                name=self.runtime_config.experiment_name,
             )
+        elif self.training_config.experiment_logger.logger_name == "wandb":
+            from modelforge.utils.io import check_import
+
+            check_import("wandb")
+            from lightning.pytorch.loggers import WandbLogger
+
+            logger = WandbLogger(
+                save_dir=str(
+                    self.training_config.experiment_logger.wandb_configuration.save_dir
+                ),
+                log_model=str(
+                    self.training_config.experiment_logger.wandb_configuration.log_model
+                ),
+                project=self.training_config.experiment_logger.wandb_configuration.project,
+                group=self.training_config.experiment_logger.wandb_configuration.group,
+                job_type=self.training_config.experiment_logger.wandb_configuration.job_type,
+                tags=self.training_config.experiment_logger.wandb_configuration.tags,
+                notes=self.training_config.experiment_logger.wandb_configuration.notes,
+                name=self.runtime_config.experiment_name,
+            )
+        return logger
+
+    def setup_datamodule(self) -> DataModule:
+        """
+        Set up the DataModule for the dataset.
+
+        Returns
+        -------
+        DataModule
+            Configured DataModule instance.
+        """
+        from modelforge.dataset.utils import REGISTERED_SPLITTING_STRATEGIES
+        from modelforge.dataset.dataset import DataModule
+
+        dm = DataModule(
+            name=self.dataset_config.dataset_name,
+            batch_size=self.training_config.batch_size,
+            remove_self_energies=self.training_config.remove_self_energies,
+            version_select=self.dataset_config.version_select,
+            local_cache_dir=self.runtime_config.local_cache_dir,
+            splitting_strategy=REGISTERED_SPLITTING_STRATEGIES[
+                self.training_config.splitting_strategy.name
+            ](
+                seed=self.training_config.splitting_strategy.seed,
+                split=self.training_config.splitting_strategy.data_split,
+            ),
+        )
+        dm.prepare_data()
+        dm.setup()
+        return dm
+
+    def read_dataset_statistics(self) -> Dict[str, float]:
+        """
+        Read and log dataset statistics.
+
+        Returns
+        -------
+        Dict[str, float]
+            The dataset statistics.
+        """
+        import toml
+
+        dataset_statistic = toml.load(self.datamodule.dataset_statistic_filename)
+        log.info(
+            f"Setting per_atom_energy_mean and per_atom_energy_stddev for {self.potential_config.potential_name}"
+        )
+        log.info(
+            f"per_atom_energy_mean: {dataset_statistic['training_dataset_statistics']['per_atom_energy_mean']}"
+        )
+        log.info(
+            f"per_atom_energy_stddev: {dataset_statistic['training_dataset_statistics']['per_atom_energy_stddev']}"
+        )
+        return dataset_statistic
+
+    def setup_model(self) -> nn.Module:
+        """
+        Set up the model for training.
+
+        Returns
+        -------
+        nn.Module
+            Configured model instance.
+        """
+        from modelforge.potential import NeuralNetworkPotentialFactory
+
+        model = NeuralNetworkPotentialFactory.generate_model(
+            use="training",
+            dataset_statistic=self.dataset_statistic,
+            model_parameter=self.potential_config.model_dump(),
+            training_parameter=self.training_config.model_dump(),
+        )
+        return model
+
+    def setup_callbacks(self) -> List[Any]:
+        """
+        Set up the callbacks for the trainer.
+
+        Returns
+        -------
+        List[Any]
+            List of configured callbacks.
+        """
+        from lightning.pytorch.callbacks import (
+            ModelCheckpoint,
+            EarlyStopping,
+            StochasticWeightAveraging,
         )
 
-    if training_config.early_stopping is not None:
-        callbacks.append(EarlyStopping(**training_config.early_stopping.model_dump()))
+        callbacks = []
+        if self.training_config.stochastic_weight_averaging is not None:
+            callbacks.append(
+                StochasticWeightAveraging(
+                    **self.training_config.stochastic_weight_averaging.model_dump()
+                )
+            )
 
-    from lightning.pytorch.callbacks import ModelCheckpoint
+        if self.training_config.early_stopping is not None:
+            callbacks.append(
+                EarlyStopping(**self.training_config.early_stopping.model_dump())
+            )
 
-    checkpoint_filename = (
-        f"best_{potential_config.potential_name}-{dataset_config.dataset_name}"
-        + "-{epoch:02d}-{val_loss:.2f}"
-    )
-    checkpoint_callback = ModelCheckpoint(
-        save_top_k=2,
-        monitor=training_config.monitor,
-        filename=checkpoint_filename,
-    )
+        checkpoint_filename = (
+            f"best_{self.potential_config.potential_name}-{self.dataset_config.dataset_name}"
+            + "-{epoch:02d}-{val_loss:.2f}"
+        )
+        checkpoint_callback = ModelCheckpoint(
+            save_top_k=2,
+            monitor=self.training_config.monitor,
+            filename=checkpoint_filename,
+        )
+        callbacks.append(checkpoint_callback)
+        return callbacks
 
-    callbacks.append(checkpoint_callback)
+    def setup_trainer(self) -> Trainer:
+        """
+        Set up the Trainer for training.
 
-    # set up trainer
-    trainer = Trainer(
-        max_epochs=training_config.number_of_epochs,
-        num_nodes=runtime_config.number_of_nodes,
-        devices=runtime_config.devices,
-        accelerator=runtime_config.accelerator,
-        logger=logger,
-        callbacks=callbacks,
-        inference_mode=False,
-        num_sanity_val_steps=2,
-        log_every_n_steps=runtime_config.log_every_n_steps,
-    )
-    if runtime_config.checkpoint_path == "None":
-        checkpoint_path = None
-    else:
-        checkpoint_path = runtime_config.checkpoint_path
-    # Run training loop and validate
-    trainer.fit(
-        model,
-        train_dataloaders=dm.train_dataloader(
-            num_workers=dataset_config.num_workers, pin_memory=dataset_config.pin_memory
-        ),
-        val_dataloaders=dm.val_dataloader(),
-        ckpt_path=checkpoint_path,
-    )
+        Returns
+        -------
+        Trainer
+            Configured Trainer instance.
+        """
+        from lightning import Trainer
 
-    trainer.validate(
-        model=model, dataloaders=dm.val_dataloader(), ckpt_path="best", verbose=True
-    )
-    trainer.test(dataloaders=dm.test_dataloader(), ckpt_path="best", verbose=True)
-    return trainer
+        trainer = Trainer(
+            max_epochs=self.training_config.number_of_epochs,
+            num_nodes=self.runtime_config.number_of_nodes,
+            devices=self.runtime_config.devices,
+            accelerator=self.runtime_config.accelerator,
+            logger=self.logger,
+            callbacks=self.callbacks,
+            inference_mode=False,
+            num_sanity_val_steps=2,
+            log_every_n_steps=self.runtime_config.log_every_n_steps,
+        )
+        return trainer
+
+    def train(self) -> Trainer:
+        """
+        Run the training process.
+
+        Returns
+        -------
+        Trainer
+            The configured trainer instance.
+        """
+        self.trainer.fit(
+            self.model,
+            train_dataloaders=self.datamodule.train_dataloader(
+                num_workers=self.dataset_config.num_workers,
+                pin_memory=self.dataset_config.pin_memory,
+            ),
+            val_dataloaders=self.datamodule.val_dataloader(),
+            ckpt_path=(
+                self.runtime_config.checkpoint_path
+                if self.runtime_config.checkpoint_path != "None"
+                else None
+            ), # NOTE: automatically resumes training from checkpoint
+        )
+
+        self.trainer.validate(
+            model=self.model,
+            dataloaders=self.datamodule.val_dataloader(),
+            ckpt_path="best",
+            verbose=True,
+        )
+        self.trainer.test(
+            dataloaders=self.datamodule.test_dataloader(),
+            ckpt_path="best",
+            verbose=True,
+        )
+        return self.trainer

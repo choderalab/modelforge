@@ -66,7 +66,7 @@ def test_train_with_lightning(potential_name, dataset_name):
     Test the forward pass for a given model and dataset.
     """
 
-    from modelforge.train.training import perform_training
+    from modelforge.train.training import ModelTrainer
 
     # read default parameters
     config = load_configs_into_pydantic_models(potential_name, dataset_name)
@@ -78,21 +78,21 @@ def test_train_with_lightning(potential_name, dataset_name):
     runtime_config = config["runtime"]
 
     # perform training
-    trainer = perform_training(
+    trainer = ModelTrainer(
         potential_config=potential_config,
         training_config=training_config,
         dataset_config=dataset_config,
         runtime_config=runtime_config,
-    )
+    ).train()
     # save checkpoint
     trainer.save_checkpoint("test.chp")
     # continue training
-    trainer = perform_training(
+    trainer = ModelTrainer(
         potential_config=potential_config,
         training_config=training_config,
         dataset_config=dataset_config,
         runtime_config=runtime_config,
-    )
+    ).train()
 
 
 def test_train_from_single_toml_file():

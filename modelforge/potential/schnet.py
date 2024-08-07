@@ -343,9 +343,9 @@ class SchNETRepresentation(nn.Module):
             radial_cutoff, number_of_radial_basis_functions
         )
         # Initialize cutoff module
-        from modelforge.potential import CosineCutoff
+        from modelforge.potential import CosineAttenuationFunction
 
-        self.cutoff_module = CosineCutoff(radial_cutoff)
+        self.cutoff_module = CosineAttenuationFunction(radial_cutoff)
 
     def _setup_radial_symmetry_functions(
         self, radial_cutoff: unit.Quantity, number_of_radial_basis_functions: int

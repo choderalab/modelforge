@@ -143,7 +143,10 @@ def test_representation():
     # Compare the reference radial symmetry function
     # against the the implemented radial symmetry function
     import torch
-    from modelforge.potential.utils import AniRadialBasisFunction, CosineCutoff
+    from modelforge.potential.utils import (
+        AniRadialBasisFunction,
+        CosineAttenuationFunction,
+    )
     from openff.units import unit
     from .precalculated_values import (
         provide_reference_values_for_test_ani_test_compare_rsf,
@@ -162,7 +165,7 @@ def test_representation():
         min_distance=radial_start * unit.angstrom,
     )
     calculated_rsf = rsf(d_ij / 10)  # torch.Size([5,1, 8]) # NOTE: nanometer
-    cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom)
+    cutoff_module = CosineAttenuationFunction(radial_cutoff * unit.angstrom)
 
     rcut_ij = cutoff_module(d_ij / 10)  # torch.Size([5]) # NOTE: nanometer
     reference_rsf = provide_reference_values_for_test_ani_test_compare_rsf()
@@ -172,7 +175,10 @@ def test_representation():
 
 def test_representation_with_diagonal_batching():
     import torch
-    from modelforge.potential.utils import AniRadialBasisFunction, CosineCutoff
+    from modelforge.potential.utils import (
+        AniRadialBasisFunction,
+        CosineAttenuationFunction,
+    )
     from openff.units import unit
     from modelforge.potential.models import Pairlist
     from .precalculated_values import (
@@ -201,7 +207,9 @@ def test_representation_with_diagonal_batching():
         radial_start * unit.angstrom,
     ).to(device=device)
 
-    cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom).to(device=device)
+    cutoff_module = CosineAttenuationFunction(radial_cutoff * unit.angstrom).to(
+        device=device
+    )
     rcut_ij = cutoff_module(d_ij)
 
     calculated_rbf_output = radial_symmetry_function(d_ij)

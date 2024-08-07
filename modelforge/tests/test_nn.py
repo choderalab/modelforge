@@ -64,12 +64,15 @@ def test_embedding(single_batch_with_batchsize_64):
 
 def test_radial_symmetry_function():
 
-    from modelforge.potential.utils import SchnetRadialBasisFunction, CosineCutoff
+    from modelforge.potential.utils import (
+        SchnetRadialBasisFunction,
+        CosineAttenuationFunction,
+    )
     import torch
     from openff.units import unit
 
     # set cutoff and radial symmetry function
-    cutoff = CosineCutoff(cutoff=unit.Quantity(5.0, unit.angstrom))
+    cutoff = CosineAttenuationFunction(cutoff=unit.Quantity(5.0, unit.angstrom))
     rbf_expension = SchnetRadialBasisFunction(
         number_of_radial_basis_functions=18,
         max_distance=unit.Quantity(5.0, unit.angstrom),

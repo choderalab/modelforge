@@ -82,7 +82,7 @@ def test_cosine_cutoff():
     """
     Test the cosine cutoff implementation.
     """
-    from modelforge.potential.utils import CosineCutoff
+    from modelforge.potential.utils import CosineAttenuationFunction
 
     # Define inputs
     x = torch.Tensor([1, 2, 3])
@@ -97,7 +97,7 @@ def test_cosine_cutoff():
     cutoff = 0.6 * unit.nanometer
 
     # Calculate actual output
-    cutoff_module = CosineCutoff(cutoff)
+    cutoff_module = CosineAttenuationFunction(cutoff)
     actual_output = cutoff_module(d_ij / 10)
 
     # Check if the results are equal
@@ -107,12 +107,12 @@ def test_cosine_cutoff():
     # input in angstrom
     cutoff = 2.0 * unit.angstrom
     expected_output = torch.tensor([0.5, 0.0, 0.0])
-    cosine_cutoff_module = CosineCutoff(cutoff)
+    cosine_cutoff_module = CosineAttenuationFunction(cutoff)
 
 
 def test_cosine_cutoff_module():
     # Test CosineCutoff module
-    from modelforge.potential.utils import CosineCutoff
+    from modelforge.potential.utils import CosineAttenuationFunction
     from openff.units import unit
 
     # test the cutoff on this distance vector (NOTE: it is in angstrom)
@@ -123,7 +123,7 @@ def test_cosine_cutoff_module():
     cutoff = 2.0 * unit.angstrom
 
     expected_output = torch.tensor([0.5, 0.0, 0.0]).unsqueeze(1)
-    cosine_cutoff_module = CosineCutoff(cutoff)
+    cosine_cutoff_module = CosineAttenuationFunction(cutoff)
 
     output = cosine_cutoff_module(d_ij_angstrom / 10)  # input is in nanometer
 
@@ -138,11 +138,11 @@ def test_radial_symmetry_function_implementation():
     from openff.units import unit
     import numpy as np
     from modelforge.potential.utils import (
-        CosineCutoff,
+        CosineAttenuationFunction,
         GaussianRadialBasisFunctionWithScaling,
     )
 
-    cutoff_module = CosineCutoff(cutoff=unit.Quantity(5.0, unit.angstrom))
+    cutoff_module = CosineAttenuationFunction(cutoff=unit.Quantity(5.0, unit.angstrom))
 
     class RadialSymmetryFunctionTest(GaussianRadialBasisFunctionWithScaling):
         @staticmethod

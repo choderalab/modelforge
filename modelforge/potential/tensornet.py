@@ -8,7 +8,7 @@ from typing import Tuple, Dict, Optional, Type
 
 from modelforge.potential.models import BaseNetwork
 from modelforge.potential.models import CoreNetwork
-from modelforge.potential.utils import CosineCutoff
+from modelforge.potential.utils import CosineAttenuationFunction
 from modelforge.potential.utils import NeuralNetworkData
 from modelforge.potential.utils import NNPInput
 from modelforge.potential.utils import TensorNetRadialBasisFunction
@@ -423,7 +423,7 @@ class TensorNetRepresentation(torch.nn.Module):
 
         self.number_of_per_atom_features = number_of_per_atom_features
 
-        self.cutoff_module = CosineCutoff(maximum_interaction_radius)
+        self.cutoff_module = CosineAttenuationFunction(maximum_interaction_radius)
 
         self.radial_symmetry_function = TensorNetRadialBasisFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
@@ -687,7 +687,7 @@ class TensorNetInteraction(torch.nn.Module):
         self.number_of_per_atom_features = number_of_per_atom_features
         self.number_of_radial_basis_functions = number_of_radial_basis_functions
         self.activation_function = activation_function
-        self.cutoff_module = CosineCutoff(maximum_interaction_radius)
+        self.cutoff_module = CosineAttenuationFunction(maximum_interaction_radius)
         self.mlp_scalar = nn.Sequential(
             Dense(
                 number_of_radial_basis_functions,

@@ -623,11 +623,12 @@ from openff.units import unit
 class CosineAttenuationFunction(nn.Module):
     def __init__(self, cutoff: unit.Quantity):
         """
-        Behler-style cosine cutoff module.
+        Behler-style cosine cutoff module. This anneals the signal smoothly to zero at the cutoff distance.
+        
         NOTE: The cutoff is converted to nanometer and the input MUST be in nanomter too.
 
         Parameters:
-        ----------
+        -----------
         cutoff: unit.Quantity
             The cutoff distance.
 
@@ -642,12 +643,12 @@ class CosineAttenuationFunction(nn.Module):
         NOTE: the cutoff function doesn't care about units as long as they are consisten,
 
         Parameters
-        ----------
+        -----------
         d_ij : Tensor
             Pairwise distance tensor in nanometer. Shape: [n_pairs, 1]
 
         Returns
-        -------
+        --------
         Tensor
             Cosine cutoff tensor. Shape: [n_pairs, 1]
         """

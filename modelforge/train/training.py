@@ -1244,7 +1244,7 @@ class ModelTrainer:
                 self.runtime_config.checkpoint_path
                 if self.runtime_config.checkpoint_path != "None"
                 else None
-            ), # NOTE: automatically resumes training from checkpoint
+            ),  # NOTE: automatically resumes training from checkpoint
         )
 
         self.trainer.validate(

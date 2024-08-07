@@ -57,6 +57,10 @@ napoleon_google_docstring = False
 napoleon_use_param = False
 napoleon_use_ivar = True
 
+autodoc_docstring_signature = True
+autoclass_content = "both"  # Add this line to combine class and __init__ docstrings
+
+
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 

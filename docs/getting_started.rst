@@ -77,7 +77,7 @@ By default, models predict the total energy and per-atom forces within a given c
 In the following example, we will train a SchNet model on the ANI1x dataset with energies and forces as the target properties.
 
 Defining the Potential
-============================
++++++++++++++++++++++++++++++++++++++++
 
 The potential is defined in a TOML file. Here is an example of a potential definition for a SchNet model. Note that we use 16 radial basis functions, a maximum interaction radius of 5.0 angstroms, and 16 filters. We use a `ShiftedSoftplus`` activation (the fully differentiable version of ReLu) function and featurize the atomic number of the atoms in the dataset. Finally, we normalize the per-atom energy and reduce the per-atom energy to the per-molecule energy (which will then be returned)..
 
@@ -109,7 +109,7 @@ The potential is defined in a TOML file. Here is an example of a potential defin
     keep_per_atom_property = true
 
 Defining the Dataset
-============================
++++++++++++++++++++++++++++++++++++++++
 
 The dataset is also defined in a TOML file. Here is an example of a dataset definition for the ANI1x dataset:
 
@@ -123,7 +123,7 @@ The dataset is also defined in a TOML file. Here is an example of a dataset defi
 
 
 Defining the Training Routine
-============================
++++++++++++++++++++++++++++++++++++++++
 
 
 The training routine is also defined in a TOML file. The training TOML file includes the number of epochs, batch size, learning rate, logger, callback parameters, and other training parameters (including dataset splitting).
@@ -184,7 +184,7 @@ Here is an example of a training routine definition:
     seed = 42  # Random seed for reproducibility
 
 Defining Runtime Variables
-============================
++++++++++++++++++++++++++++++++++++++++
 
 These variables are not part of the potential, dataset, or training routine but define the computational environment. Here is an example of a runtime variable definition:
 
@@ -211,7 +211,7 @@ All of the above TOML files can be combined into a single TOML file that defines
 
 
 Using a Pretrained Model
-+++++++++++++++++++++++++++++++++++++++
+============================
 .. warning:: This feature is currently a work in progress.
 
 
@@ -219,7 +219,7 @@ All training runs performed with *modelforge* are logged in a `wandb` project. Y
 
 
 Investigating Hyperparameter Impact on Model Performance
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+========================================================
 
 For each supported architecture, modelforge provides reasonable priors for hyperparameters. Hyperparameter optimization is conducted using `Ray`.
 

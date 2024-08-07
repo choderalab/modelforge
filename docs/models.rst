@@ -4,14 +4,15 @@ Models
 Introduction
 ----------------
 
-A model contains all the operations that are needed to map the cartisian coordinates, atomic numbers and total charge of a system to, at minimum, an energy. A model takes as input a :py:class:`modelforge.dataset.dataset.NNPInput` dataclass, and returns a dictionary of PyTorch tensors representing per-atom and/or per-molecule properties (including per-molecule energies). 
-The model consists of three functional compounds:
+A model in modelforge encapsulates all the operations required to map the Cartesian coordinates, atomic numbers, and total charge of a system to, at a minimum, its energy. Specifically, a model takes as input a :py:class:modelforge.dataset.dataset.NNPInput dataclass and outputs a dictionary of PyTorch tensors representing per-atom and/or per-molecule properties, including per-molecule energies. The model comprises three main components:
 
-- the input preparation module (:class:`modelforge.potential.model.InputPreparation`): responsible for generating the pairlist, pair distances and pair displacement vectors given the atomic coordinates and the cutoff.
-- the core model (:class:`modelforge.potential.model.CoreNetwork`): the neural network containing learnable parameters (what is considered the "core" of the potential).
-- the postprocessing module(:class:`modelforge.potential.model.PostProcessing`): contains operations that are applied to per-atom and per-molecule outputs, as well as the reduction operations that are performed to obtain the per-molecule properties. Examples of per-atom operations are atomic energy scaling or charge equilibration, examples for reduction operations are summation of per-atom energies to obtain per-molecule energies.
+1. **Input Preparation Module** (:class:modelforge.potential.model.InputPreparation): Responsible for generating the pair list, pair distances, and pair displacement vectors based on atomic coordinates and the specified cutoff.
 
-A given neural network (e.g., SchNet) implements the core model, the input prepartion and postprocessing modules are independent of the neural network. 
+2. **Core Model** (:class:modelforge.potential.model.CoreNetwork): The neural network containing the learnable parameters, which forms the core of the potential.
+
+3. **Postprocessing Module** (:class:modelforge.potential.model.PostProcessing): Contains operations applied to both per-atom and per-molecule outputs, as well as reduction operations to obtain per-molecule properties. Examples include atomic energy scaling or charge equilibration for per-atom operations, and summation of per-atom energies to obtain per-molecule energies for reduction operations.
+
+A specific neural network (e.g., PhysNet) implements the core model, while the input preparation and postprocessing modules are independent of the neural network architecture.
 
 To initialize a model, the model factory is used: :class:`modelforge.potential.models.NeuralNetworkPotentialFactory`.
 
@@ -21,14 +22,13 @@ To initialize a model, the model factory is used: :class:`modelforge.potential.m
 Using toml files to configure models
 ------------------------------------
 
-A neural network model is defined by a configuration file, which is a TOML file. The configuration file contains the parameters for the neural network, as well as the parameters for the input preparation and postprocessing modules.
-Below is an example of a configuration file for the SchNet model:
+A neural network model is defined by a configuration file in the TOML format. This configuration file includes parameters for the neural network, as well as for the input preparation and postprocessing modules. Below is an example configuration file for the PhysNet model:
 
-.. literalinclude:: ../modelforge/tests/data/potential_defaults/schnet.toml
+.. literalinclude:: ../modelforge/tests/data/potential_defaults/physnet.toml
    :language: toml
-   :caption: SchNet Configuration
+   :caption: PhysNet Configuration
 
-Explanation of fields in `schnet.toml`:
+Explanation of fields in `physnet.toml`:
 
 * `model_name`: Specifies the type of model to use, in this case, SchNet.
 * `max_Z`: Maximum atomic number.

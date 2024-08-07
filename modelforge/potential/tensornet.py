@@ -192,8 +192,9 @@ class TensorNet(BaseNetwork):
         Highest atomic number in the dataset.
     equivariance_invariance_group : str
         Equivariance invariance group, either "O(3)" or "SO(3)".
-    activation_function : str
-        Activation function name.
+    activation_function_parameter : Dict
+        Dict that contains keys: activation_function_name [str], activation_function_arguments [Dict],
+        and callable activation_function [Type[torch.nn.Module]].
     postprocessing_parameter : Dict[str, Dict[str, bool]]
         Postprocessing parameters.
     dataset_statistic : Optional[Dict[str, float]]
@@ -209,10 +210,12 @@ class TensorNet(BaseNetwork):
         minimum_interaction_radius: unit.Quantity,
         highest_atomic_number: int,
         equivariance_invariance_group: str,
-        activation_function: str,
+        activation_function_parameter: Dict,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
+
+        activation_function = activation_function_parameter["activation_function"]
 
         self.only_unique_pairs = False
         super().__init__(
@@ -256,8 +259,8 @@ class TensorNetCore(CoreNetwork):
         Highest atomic number in the dataset.
     equivariance_invariance_group : str
         Equivariance invariance group, either "O(3)" or "SO(3)".
-    activation_function : str
-        Activation function name.
+    activation_function : Type[torch.nn.Module]
+        Activation function to use.
     """
 
     def __init__(
@@ -270,7 +273,7 @@ class TensorNetCore(CoreNetwork):
         trainable_centers_and_scale_factors: bool,
         highest_atomic_number: int,
         equivariance_invariance_group: str,
-        activation_function: str,
+        activation_function: Type[torch.nn.Module],
     ) -> None:
         super().__init__(activation_function)
 
@@ -278,7 +281,7 @@ class TensorNetCore(CoreNetwork):
         self.representation_module = TensorNetRepresentation(
             number_of_per_atom_features=number_of_per_atom_features,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
-            activation_function=self.activation_function_class,
+            activation_function=self.activation_function,
             maximum_interaction_radius=maximum_interaction_radius,
             minimum_interaction_radius=minimum_interaction_radius,
             trainable_centers_and_scale_factors=trainable_centers_and_scale_factors,
@@ -289,7 +292,7 @@ class TensorNetCore(CoreNetwork):
                 TensorNetInteraction(
                     number_of_per_atom_features=number_of_per_atom_features,
                     number_of_radial_basis_functions=number_of_radial_basis_functions,
-                    activation_function=self.activation_function_class,
+                    activation_function=self.activation_function,
                     maximum_interaction_radius=maximum_interaction_radius,
                     equivariance_invariance_group=equivariance_invariance_group,
                 )
@@ -300,7 +303,6 @@ class TensorNetCore(CoreNetwork):
             3 * number_of_per_atom_features, number_of_per_atom_features
         )
         self.out_norm = nn.LayerNorm(3 * number_of_per_atom_features)
-        self.activation_function = self.activation_function_class()
 
     def compute_properties(
         self, data: TensorNetNeuralNetworkData
@@ -453,7 +455,7 @@ class TensorNetRepresentation(torch.nn.Module):
             2 * number_of_per_atom_features,
             number_of_per_atom_features,
         )
-        self.activation_function = activation_function()
+        self.activation_function = activation_function
         # initialize linear layer for I, A and S
         self.linears_tensor = nn.ModuleList(
             [

@@ -9,7 +9,9 @@ maximum_interaction_radius = "5.1 angstrom"
 minimum_interaction_radius = "0.0 angstrom"
 highest_atomic_number = 128
 equivariance_invariance_group = "O(3)"
-activation_function = "SiLU"
+
+[potential.core_parameter.activation_function_parameter]
+activation_function_name = "SiLU"
 
 [potential.postprocessing_parameter]
 [potential.postprocessing_parameter.per_atom_energy]

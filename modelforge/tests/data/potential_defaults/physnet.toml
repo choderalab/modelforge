@@ -7,7 +7,9 @@ number_of_radial_basis_functions = 16
 maximum_interaction_radius = "5.0 angstrom"
 number_of_interaction_residual = 3
 number_of_modules = 5
-activation_function = "ShiftedSoftplus"
+
+[potential.core_parameter.activation_function_parameter]
+activation_function_name = "ShiftedSoftplus"
 
 [potential.core_parameter.featurization]
 properties_to_featurize = ['atomic_number']

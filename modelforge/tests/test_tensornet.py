@@ -70,8 +70,12 @@ def test_input():
 
     seed = 0
     torch.manual_seed(seed)
+    from importlib import resources
+    from modelforge.tests import data
 
-    reference_data = "modelforge/tests/data/tensornet_input.pt"
+    reference_data = resources.files(data) / "tensornet_input.pt"
+
+    # reference_data = "modelforge/tests/data/tensornet_input.pt"
     # reference_data = None
 
     # Set up a dataset
@@ -139,8 +143,11 @@ def test_compare_radial_symmetry_features():
 
     seed = 0
     torch.manual_seed(seed)
+    from importlib import resources
+    from modelforge.tests import data
 
-    reference_data = "modelforge/tests/data/tensornet_radial_symmetry_features.pt"
+    reference_data = resources.files(data) / "tensornet_radial_symmetry_features.pt"
+    # reference_data = "modelforge/tests/data/tensornet_radial_symmetry_features.pt"
     # reference_data = None
 
     # generate a random list of distances, all < 5
@@ -148,14 +155,20 @@ def test_compare_radial_symmetry_features():
 
     # TensorNet constants
     maximum_interaction_radius = 5.1
-    minimum_interaction_radius = 0.0  # cutoff_lower also affect cutoff function in torchmd-net
+    minimum_interaction_radius = (
+        0.0  # cutoff_lower also affect cutoff function in torchmd-net
+    )
     number_of_per_atom_features = 8
 
     rsf = TensorNetRadialBasisFunction(
         number_of_radial_basis_functions=number_of_per_atom_features,
         max_distance=maximum_interaction_radius * unit.angstrom,
         min_distance=minimum_interaction_radius * unit.angstrom,
-        alpha=((maximum_interaction_radius - minimum_interaction_radius) / 5.0 * unit.angstrom),
+        alpha=(
+            (maximum_interaction_radius - minimum_interaction_radius)
+            / 5.0
+            * unit.angstrom
+        ),
     )
     mf_r = rsf(d_ij / 10)  # torch.Size([5, 8]) # NOTE: nanometer
     cutoff_module = CosineCutoff(maximum_interaction_radius * unit.angstrom)
@@ -194,8 +207,11 @@ def test_representation():
 
     seed = 0
     torch.manual_seed(seed)
+    from importlib import resources
+    from modelforge.tests import data
 
-    reference_data = "modelforge/tests/data/tensornet_representation.pt"
+    reference_data = resources.files(data) / "tensornet_representation.pt"
+    # reference_data = "modelforge/tests/data/tensornet_representation.pt"
     # reference_data = None
 
     number_of_per_atom_features = 8
@@ -242,7 +258,7 @@ def test_representation():
     tensornet_representation_module = TensorNetRepresentation(
         number_of_per_atom_features,
         num_rbf,
-        act_class,
+        act_class(),
         cutoff_upper * unit.angstrom,
         cutoff_lower * unit.angstrom,
         trainable_rbf,
@@ -291,8 +307,13 @@ def test_interaction():
 
     seed = 0
     torch.manual_seed(seed)
+    from importlib import resources
 
-    reference_data = "modelforge/tests/data/tensornet_interaction.pt"
+    from modelforge.tests import data
+
+    reference_data = resources.files(data) / "tensornet_interaction.pt"
+
+    # reference_data = "modelforge/tests/data/tensornet_interaction.pt"
     # reference_data = None
 
     number_of_per_atom_features = 8
@@ -352,7 +373,7 @@ def test_interaction():
     interaction_module = TensorNetInteraction(
         number_of_per_atom_features,
         num_rbf,
-        act_class,
+        act_class(),
         cutoff_upper * unit.angstrom,
         "O(3)",
     )

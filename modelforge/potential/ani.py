@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, Tuple
+from typing import TYPE_CHECKING, Dict, Tuple, Type
 from .models import BaseNetwork, CoreNetwork
 
 import torch
@@ -373,16 +373,16 @@ class ANIInteraction(nn.Module):
     ----------
     aev_dim : int
         The dimensionality of the AEVs.
-    activation_function_class : torch.nn.Module
-        The activation function class to use.
+    activation_function : Type[torch.nn.Module]
+        The activation function to use.
     """
 
-    def __init__(self, *, aev_dim: int, activation_function_class: torch.nn.Module):
+    def __init__(self, *, aev_dim: int, activation_function: Type[torch.nn.Module]):
 
         super().__init__()
         # define atomic neural network
         atomic_neural_networks = self.intialize_atomic_neural_network(
-            aev_dim, activation_function_class
+            aev_dim, activation_function
         )
         self.atomic_networks = nn.ModuleList(
             [
@@ -392,9 +392,8 @@ class ANIInteraction(nn.Module):
         )
 
     def intialize_atomic_neural_network(
-        self, aev_dim: int, activation_function_class: torch.nn.Module
+        self, aev_dim: int, activation_function: Type[torch.nn.Module]
     ) -> Dict[str, nn.Module]:
-
         """
         Initialize the atomic neural networks for each element.
 
@@ -402,8 +401,8 @@ class ANIInteraction(nn.Module):
         ----------
         aev_dim : int
             The dimensionality of the AEVs.
-        activation_function_class : torch.nn.Module
-            The activation function class to use.
+        activation_function : Type[torch.nn.Module]
+            The activation function to use.
 
         Returns
         -------
@@ -429,7 +428,7 @@ class ANIInteraction(nn.Module):
             input_dim = aev_dim
             for units in layers:
                 network_layers.append(nn.Linear(input_dim, units))
-                network_layers.append(activation_function_class(0.1))
+                network_layers.append(activation_function)
                 input_dim = units
             network_layers.append(nn.Linear(input_dim, 1))
             return nn.Sequential(*network_layers)
@@ -490,8 +489,8 @@ class ANI2xCore(CoreNetwork):
         The maximum angular distance for the angular basis functions.
     minimum_interaction_radius_for_angular_features : unit.Quantity
         The minimum angular distance for the angular basis functions.
-    activation_function : str
-        The name of the activation function to use.
+    activation_function : Type[torch.nn.Module]
+        The  activation function to use.
     angular_dist_divisions : int
         The number of divisions for the angular distance.
     angle_sections : int
@@ -506,7 +505,7 @@ class ANI2xCore(CoreNetwork):
         number_of_radial_basis_functions: int,
         maximum_interaction_radius_for_angular_features: unit.Quantity,
         minimum_interaction_radius_for_angular_features: unit.Quantity,
-        activation_function: str,
+        activation_function: Type[torch.nn.Module],
         angular_dist_divisions: int,
         angle_sections: int,
     ) -> None:
@@ -538,10 +537,10 @@ class ANI2xCore(CoreNetwork):
         # The length of full aev
         self.aev_length = self.radial_length + self.angular_length
 
-        # Initialize interaction blocks
+        # Intialize interaction blocks
         self.interaction_modules = ANIInteraction(
             aev_dim=self.aev_length,
-            activation_function_class=self.activation_function_class,
+            activation_function=self.activation_function,
         )
 
         # ----- ATOMIC NUMBER LOOKUP --------
@@ -640,8 +639,9 @@ class ANI2x(BaseNetwork):
         The number of divisions for the angular distance.
     angle_sections : int
         The number of angle sections to use.
-    activation_function : str
-        The name of the activation function to use.
+    activation_function_parameter : Dict
+        Dict that contains keys: activation_function_name [str], activation_function_arguments [Dict],
+        and activation_function [Type[torch.nn.Module]].
     postprocessing_parameter : Dict[str, Dict[str, bool]]
         Configuration for postprocessing parameters.
     dataset_statistic : Optional[Dict[str, float]], optional
@@ -657,7 +657,7 @@ class ANI2x(BaseNetwork):
         minimum_interaction_radius_for_angular_features: Union[unit.Quantity, str],
         angular_dist_divisions: int,
         angle_sections: int,
-        activation_function: str,
+        activation_function_parameter: Dict,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
     ) -> None:
@@ -671,6 +671,8 @@ class ANI2x(BaseNetwork):
             postprocessing_parameter=postprocessing_parameter,
             maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
         )
+
+        activation_function = activation_function_parameter["activation_function"]
 
         self.core_module = ANI2xCore(
             maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),

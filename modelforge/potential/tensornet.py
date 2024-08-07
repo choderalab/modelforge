@@ -686,7 +686,7 @@ class TensorNetInteraction(torch.nn.Module):
 
         self.number_of_per_atom_features = number_of_per_atom_features
         self.number_of_radial_basis_functions = number_of_radial_basis_functions
-        self.activation_function = activation_function()
+        self.activation_function = activation_function
         self.cutoff_module = CosineAttenuationFunction(maximum_interaction_radius)
         self.mlp_scalar = nn.Sequential(
             Dense(

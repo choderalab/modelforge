@@ -8,7 +8,6 @@ dependencies:
   - pip
   - h5py
   - tqdm
-  - pydantic>=2
   - qcportal>=0.50
   - qcelemental
   - pytorch>=2.1
@@ -35,7 +34,7 @@ dependencies:
   - sphinx_rtd_theme
 
   - pip:
-      - pytorch2jax
-      - git+https://github.com/ArnNag/sake.git@nanometer
-      - "ray[data,train,tune,serve]"
+      - jax
       - flax
+      - pytorch2jax
+      - "ray[data,train,tune,serve]"

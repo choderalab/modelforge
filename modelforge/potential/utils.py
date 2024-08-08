@@ -98,10 +98,8 @@ class BatchData:
 
 
 def shared_config_prior():
-    from modelforge.utils.io import import_
 
-    tune = import_("ray").tune
-    # from ray import tune
+    from ray import tune
 
     return {
         "lr": tune.loguniform(1e-5, 1e-1),

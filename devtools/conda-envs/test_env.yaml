@@ -22,6 +22,7 @@ dependencies:
   - retry
   - sqlitedict
   - pydantic>=2
+  - ray-all
 
   # Testing
   - pytest>=2.1
@@ -34,5 +35,6 @@ dependencies:
       - jax
       - flax
       - pytorch2jax
-      - "ray[data,train,tune,serve]"
       - git+https://github.com/ArnNag/sake.git@nanometer
+      #- "ray[data,train,tune,serve]"
+      - flax

@@ -464,8 +464,7 @@ class SchNet(BaseNetwork):
         """
         log.info("Configuring SchNet model hyperparameter prior distribution")
 
-        tune = import_("ray").tune
-        # from ray import tune
+        from ray import tune
 
         prior = {
             "number_of_per_atom_features": tune.randint(2, 256),

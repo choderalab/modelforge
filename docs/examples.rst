@@ -32,7 +32,4 @@ on the `QM9` dataset on a single GPU using the default parameters, run the follo
         --accelerator="gpu"
         --device=1
 
-This command initializes the :py:class:`modelforge.train.training.ModelTrainer` class. This class takes at initialization time the TOML files defining the potential, dataset, training routine and runtime and sets up a `Lightning` `Trainer` class. It then trains the model on the dataset using the potential and training routine, and at the end of training prints performance metrics on the validation and test sets.
-
-.. autoclass:: modelforge.train.training.ModelTrainer
-    :members:
+This command initializes the :py:class:`~modelforge.train.training.ModelTrainer` class. This class takes at initialization time the TOML files defining the potential, dataset, training routine and runtime and sets up a `Lightning` `Trainer` class. It then trains the model on the dataset using the potential and training routine, and at the end of training prints performance metrics on the validation and test sets.

@@ -11,7 +11,7 @@ The properties a given model can be trained on are deterimend by the model itsel
 *Modelforge* uses Pytorch Lightning to train models. The training process is controlled by a :class:`~modelforge.train.training.ModelTrainer` object, which is responsible for managing the training loop, the optimizer, the learning rate scheduler, and the early stopping criteria. The training process is controlled by a configuration file, `training.toml`, which specifies the number of epochs, the learning rate, the loss function, and the splitting strategy for the dataset. The training process can be started by 
 
 Training Configuration
-^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------------------------
 
 The training process is controlled by a configuration file. The configuration file contains sections for the logger, the learning rate scheduler, the loss functions, splitting strategy and early stopping criteria.
 
@@ -27,11 +27,11 @@ The learning rate scheduler is responsible for adjusting the learning rate durin
 
 Loss function
 ^^^^^^^^^^^^^^^^^^^^^^^^
-The loss function quantifies the discrepancy between the model's predictions and the target properties, providing a scalar value that guides the optimizer in updating the model's parameters. This function is configured in the `[training.loss]`` section of the training TOML file.
+The loss function quantifies the discrepancy between the model's predictions and the target properties, providing a scalar value that guides the optimizer in updating the model's parameters. This function is configured in the `[training.loss]` section of the training TOML file.
 
-Depending on the specified loss_property section, the loss function can combine various individual loss functions. *Modelforge* always includes the mean squared error (MSE) for energy prediction, and may also incorporate MSE for force prediction, dipole moment prediction, and partial charge prediction.
+Depending on the specified `loss_property`` section, the loss function can combine various individual loss functions. *Modelforge* always includes the mean squared error (MSE) for energy prediction, and may also incorporate MSE for force prediction, dipole moment prediction, and partial charge prediction.
 
-The design of the loss function is intrinsically linked to the structure of the energy function. For instance, if the energy function aggregates atomic energies, then loss_property should include `per_molecule_energy`` and optionally, `per_atom_force`.
+The design of the loss function is intrinsically linked to the structure of the energy function. For instance, if the energy function aggregates atomic energies, then loss_property should include `per_molecule_energy` and optionally, `per_atom_force`.
 
 
 Predicting Short-Range Atomic Energies
@@ -45,7 +45,7 @@ In that case the total energy is calculated as
 
 The loss function can then be formulated as:
 
-.. math:: L = w_E * (E - E^{pred})^2
+.. math:: L = (E - E^{pred})^2
 
 Alternatively, if the dataset includes per atom forces, the loss function can be expressed as:
 
@@ -53,18 +53,23 @@ Alternatively, if the dataset includes per atom forces, the loss function can be
 
 where `w_E` and `w_F` are the weights for the energy and force components, respectively.
 
-Predicting Short-Range Atomic Energy with Long-Range Electrostatics
+Predicting Short-Range Atomic Energy with Long-Range Interactions
 *************************************************************************
 
-In that case additional terms are added to the loss function to account for the
-long range electrostatics. Instead of directly predicting the per atom
-contribution of the atomic energy, the model predicts atomic charges. The atomic
+In scenarios where long-range interactions are considered, additional terms are incorporated into the loss function. There are two long range interactions that are of interest: long range dispersion interactions and electrostatics.
+
+To calculate long range electrostatics the first moment of the charge density  (partial charges) is predicted by the machine learing potential.  The atomic
 charges are then used to calculate the long range electrostatics. The expression
 for the total energy is then:
 
 .. math:: E = \sum_i^N E_i + k_c \sum_i^N \sum_{j>i}^N \frac{q_i q_j}{r_{ij}}
 
-where `k_c` is the Coulomb constant, `q_i` and `q_j` are the atomic charges, and
+where `k_c` is the Coulomb constant, `q_i` and `q_j` are the atomic charges, and the loss function is:
+
+.. math:: L = w_E * (E - E^{pred})^2 + w_F \frac{1}{3N} \sum_i^N \sum_j^3 (F_{ij} - F_{ij}^{pred})^2 + w_Q (\sum_i^N q_i - Q_i^{pred})^2 + \frac{w_p}{3} \sum_j^3 \sum_i^N q_i r_i,j - p_j^{ref})^2
+
+where `w_Q` is the weight for the charge component, `w_p` the weight for the dipole moment component, and `p_j^{ref}` is the reference dipole moment. 
+
 
 
 

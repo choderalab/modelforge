@@ -618,7 +618,8 @@ class NeuralNetworkPotentialFactory:
 
 class ComputeInteractingAtomPairs(torch.nn.Module):
     """
-    A module for preparing input data, including the calculation of pair lists, distances (d_ij), and displacement vectors (r_ij) for molecular simulations.
+    A module for preparing input data, including the calculation of pair lists,
+    distances (d_ij), and displacement vectors (r_ij) for molecular simulations.
     """
 
     def __init__(self, cutoff: unit.Quantity, only_unique_pairs: bool = True):
@@ -630,7 +631,9 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
         cutoff : unit.Quantity
             The cutoff distance for neighbor list calculations.
         only_unique_pairs : bool, optional
-            Whether to only use unique pairs in the pair list calculation, by default True. This should be set to True for all message passing networks.
+            Whether to only use unique pairs in the pair list calculation, by
+            default True. This should be set to True for all message passing
+            networks.
         """
 
         super().__init__()
@@ -643,18 +646,21 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
         """
         Prepares the input tensors for passing to the model.
 
-        This method handles general input manipulation, such as calculating distances
-        and generating the pair list. It also calls the model-specific input preparation.
+        This method handles general input manipulation, such as calculating
+        distances and generating the pair list. It also calls the model-specific
+        input preparation.
 
         Parameters
         ----------
         data : Union[NNPInput, NamedTuple]
-            The input data provided by the dataset, containing atomic numbers, positions, and other necessary information.
+            The input data provided by the dataset, containing atomic numbers,
+            positions, and other necessary information.
 
         Returns
         -------
         PairListOutputs
-            A namedtuple containing the pair indices, Euclidean distances (d_ij), and displacement vectors (r_ij).
+            A namedtuple containing the pair indices, Euclidean distances
+            (d_ij), and displacement vectors (r_ij).
         """
         # ---------------------------
         # general input manipulation
@@ -719,7 +725,9 @@ from torch.nn import ModuleDict
 
 class PostProcessing(torch.nn.Module):
     """
-    A module for handling post-processing operations on model outputs, including normalization, calculation of atomic self-energies, and reduction operations to compute per-molecule properties from per-atom properties.
+    A module for handling post-processing operations on model outputs, including
+    normalization, calculation of atomic self-energies, and reduction operations
+    to compute per-molecule properties from per-atom properties.
     """
 
     _SUPPORTED_PROPERTIES = ["per_atom_energy", "general_postprocessing_operation"]
@@ -736,9 +744,11 @@ class PostProcessing(torch.nn.Module):
         Parameters
         ----------
         postprocessing_parameter : Dict[str, Dict[str, bool]]
-            A dictionary containing the postprocessing parameters for each property.
+            A dictionary containing the postprocessing parameters for each
+            property.
         dataset_statistic : Dict[str, Dict[str, float]]
-            A dictionary containing the dataset statistics for normalization and other calculations.
+            A dictionary containing the dataset statistics for normalization and
+            other calculations.
         """
         super().__init__()
 
@@ -755,7 +765,8 @@ class PostProcessing(torch.nn.Module):
 
     def _get_per_atom_energy_mean_and_stddev_of_dataset(self) -> Tuple[float, float]:
         """
-        Calculate the mean and standard deviation of the per-atom energy in the dataset.
+        Calculate the mean and standard deviation of the per-atom energy in the
+        dataset.
 
         Returns
         -------
@@ -785,12 +796,14 @@ class PostProcessing(torch.nn.Module):
         postprocessing_parameter: Dict[str, Dict[str, bool]],
     ):
         """
-        Initialize the postprocessing operations based on the given postprocessing parameters.
+        Initialize the postprocessing operations based on the given
+        postprocessing parameters.
 
         Parameters
         ----------
         postprocessing_parameter : Dict[str, Dict[str, bool]]
-            A dictionary containing the postprocessing parameters for each property.
+            A dictionary containing the postprocessing parameters for each
+            property.
 
         Raises
         ------
@@ -923,9 +936,12 @@ class PostProcessing(torch.nn.Module):
 
 class BaseNetwork(Module):
     """
-    The BaseNetwork wraps the input preparation (including pairlist calculation, d_ij and r_ij calculation), the actual model as well as the output preparation in a wrapper class.
+    The BaseNetwork wraps the input preparation (including pairlist calculation,
+    d_ij and r_ij calculation), the actual model as well as the output
+    preparation in a wrapper class.
 
-    Learned parameters are present only in the core model, the input preparation and output preparation are not learned.
+    Learned parameters are present only in the core model, the input preparation
+    and output preparation are not learned.
     """
 
     def __init__(
@@ -969,20 +985,26 @@ class BaseNetwork(Module):
         self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False
     ):
         """
-        Load the state dictionary into the model, with optional prefix removal and key exclusions.
+        Load the state dictionary into the model, with optional prefix removal
+        and key exclusions.
 
         Parameters
         ----------
         state_dict : Mapping[str, Any]
             The state dictionary to load.
         strict : bool, optional
-            Whether to strictly enforce that the keys in `state_dict` match the keys returned by this module's `state_dict()` function (default is True).
+            Whether to strictly enforce that the keys in `state_dict` match the
+            keys returned by this module's `state_dict()` function (default is
+            True).
         assign : bool, optional
-            Whether to assign the state dictionary to the model directly (default is False).
+            Whether to assign the state dictionary to the model directly
+            (default is False).
 
         Notes
         -----
-        This function can remove a specific prefix from the keys in the state dictionary. It can also exclude certain keys from being loaded into the model.
+        This function can remove a specific prefix from the keys in the state
+        dictionary. It can also exclude certain keys from being loaded into the
+        model.
         """
 
         # Prefix to remove
@@ -1046,12 +1068,14 @@ class BaseNetwork(Module):
         """
         Executes the forward pass of the model.
 
-        This method performs input checks, prepares the inputs, and computes the outputs using the core network.
+        This method performs input checks, prepares the inputs, and computes the
+        outputs using the core network.
 
         Parameters
         ----------
         input_data : NNPInput
-            The input data provided by the dataset, containing atomic numbers, positions, and other necessary information.
+            The input data provided by the dataset, containing atomic numbers,
+            positions, and other necessary information.
 
         Returns
         -------
@@ -1073,11 +1097,14 @@ from modelforge.potential.utils import ACTIVATION_FUNCTIONS
 
 class CoreNetwork(Module, ABC):
     """
-    The CoreNetwork implements methods that are used by all neural network potentials.
-    Every network inherits from CoreNetwork.
-    Networks take in a NNPInput and pairlist and return a dictionary of atomic properties.
+    The CoreNetwork implements methods that are used by all neural network
+    potentials. Every network inherits from CoreNetwork. Networks take in a
+    NNPInput and pairlist and return a dictionary of atomic properties.
 
-    Operations performed outside the network (e.g., pairlist calculation and operations that reduce atomic properties to molecule properties) are not part of the network and are implemented in the BaseNetwork, which is a wrapper around the CoreNetwork.
+    Operations performed outside the network (e.g., pairlist calculation and
+    operations that reduce atomic properties to molecule properties) are not
+    part of the network and are implemented in the BaseNetwork, which is a
+    wrapper around the CoreNetwork.
     """
 
     def __init__(self, activation_function: Type[torch.nn.Module]):
@@ -1107,15 +1134,17 @@ class CoreNetwork(Module, ABC):
         """
         Prepares model-specific inputs before the forward pass.
 
-        This abstract method should be implemented by subclasses to accommodate any
-        model-specific preprocessing of inputs.
+        This abstract method should be implemented by subclasses to accommodate
+        any model-specific preprocessing of inputs.
 
         Parameters
         ----------
         data : NNPInput
-            The initial inputs to the neural network model, including atomic numbers, positions, and other relevant data.
+            The initial inputs to the neural network model, including atomic
+            numbers, positions, and other relevant data.
         pairlist : PairListOutputs
-            The outputs of a pairlist calculation, including pair indices, distances, and displacement vectors.
+            The outputs of a pairlist calculation, including pair indices,
+            distances, and displacement vectors.
 
         Returns
         -------
@@ -1138,15 +1167,15 @@ class CoreNetwork(Module, ABC):
         """
         Defines the forward pass of the model.
 
-        This abstract method should be implemented by subclasses to specify the model's computation from inputs (processed input data) to outputs (per atom properties).
+        This abstract method should be implemented by subclasses to specify the
+        model's computation from inputs (processed input data) to outputs (per
+        atom properties).
 
         Parameters
         ----------
         data : Union[
-            "PhysNetNeuralNetworkData",
-            "PaiNNNeuralNetworkData",
-            "SchnetNeuralNetworkData",
-            "AniNeuralNetworkData",
+            "PhysNetNeuralNetworkData", "PaiNNNeuralNetworkData",
+            "SchnetNeuralNetworkData", "AniNeuralNetworkData",
             "SAKENeuralNetworkInput",
         ]
             The processed input data, specific to the model's requirements.
@@ -1180,15 +1209,18 @@ class CoreNetwork(Module, ABC):
         Parameters
         ----------
         data : NNPInput
-            Contains input data for the batch obtained directly from the dataset, including atomic numbers, positions,
-            and other relevant fields.
+            Contains input data for the batch obtained directly from the
+            dataset, including atomic numbers, positions, and other relevant
+            fields.
         pairlist_output : PairListOutputs
-            Contains the indices for the selected pairs and their associated distances and displacement vectors.
+            Contains the indices for the selected pairs and their associated
+            distances and displacement vectors.
 
         Returns
         -------
         Dict[str, torch.Tensor]
-            The calculated per-atom properties and other properties from the forward pass.
+            The calculated per-atom properties and other properties from the
+            forward pass.
         """
         # perform model specific modifications
         nnp_input = self._model_specific_input_preparation(data, pairlist_output)

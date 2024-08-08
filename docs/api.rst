@@ -3,5 +3,6 @@ API Documentation
 
 .. autosummary::
    :toctree: autosummary
+   :recursive:
 
-   modelforge.canvas
+   modelforge.potential.models

@@ -1,13 +1,8 @@
 import torch
 
-from modelforge.utils.io import import_
+from ray import air, tune
 
-air = import_("ray").air
-tune = import_("ray").tune
-# from ray import air, tune
-
-ASHAScheduler = import_("ray").tune.scheduleres.ASHAScheduler
-# from ray.tune.schedulers import ASHAScheduler
+from ray.tune.schedulers import ASHAScheduler
 
 
 def tune_model(
@@ -155,6 +150,7 @@ class RayTuner:
         number_of_samples: int = 10,
         number_of_ray_workers: int = 2,
         train_on_gpu: bool = False,
+        metric: str = "val/per_molecule_energy/rmse",
     ):
         """
         Performs hyperparameter tuning using Ray Tune.
@@ -174,21 +170,20 @@ class RayTuner:
             The number of samples (trial runs) to perform, by default 10.
         number_of_ray_workers : int, optional
             The number of Ray workers to use for distributed training, by default 2.
-        use_gpu : bool, optional
+        train_on_gpu : bool, optional
             Whether to use GPUs for training, by default False.
+        metric : str, optional
+            The metric to use for evaluation and early stopping, by default "val/per_molecule_energy/rmse
 
         Returns
         -------
         Tune experiment analysis object
             The result of the hyperparameter tuning session, containing performance metrics and the best hyperparameters found.
         """
-        from modelforge.utils.io import import_
 
-        tune = import_("ray").tune
-        # from ray import tune
+        from ray import tune
 
-        ASHAScheduler = import_("ray").tune.schedulers.ASHAScheduler
-        # from ray.tune.schedulers import ASHAScheduler
+        from ray.tune.schedulers import ASHAScheduler
 
         self.train_dataloader = train_dataloader
         self.val_dataloader = val_dataloader
@@ -201,7 +196,7 @@ class RayTuner:
         )
 
         tune_config = tune.TuneConfig(
-            metric="val/energy/rmse",
+            metric=metric,
             mode="min",
             scheduler=scheduler,
             num_samples=number_of_samples,

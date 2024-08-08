@@ -57,7 +57,8 @@ Using toml files to configure models
 ------------------------------------
 
 To initialize a model, a model factory is used:
-:class:`~modelforge.potential.models.NeuralNetworkPotentialFactory`.
+:class:`~modelforge.potential.models.NeuralNetworkPotentialFactory`. 
+This takes care of initialization of the model and the input preparation and postprocessing modules.
 
 A neural network model is defined by a configuration file in the TOML format.
 This configuration file includes parameters for the neural network, as well as
@@ -77,23 +78,15 @@ the parameters for the postprocessing operations. Explanation of fields in
 * `potential_name`: Specifies the type of model to use, in this case, PhysNet.
 * `number_of_radial_basis_functions`: Number of radial basis functions.
 * `maximum_interaction_radius`: Cutoff radius for considering neighboring atoms.
-* `number_of_interaction_residual`: PhysNet hyperparamter defining the depth of
-   the network.
-* `number_of_modules`: PhysNet hyperparamter defining the depth of the network;
-   which scales with (number_of_interaction_residual * number_of_modules).
+* `number_of_interaction_residual`: PhysNet hyperparamter defining the depth of the network.
+* `number_of_modules`: PhysNet hyperparamter defining the depth of the network;which scales with (number_of_interaction_residual * number_of_modules).
 * `activation_function_name`: Activation function used in the neural network.
 * `properties_to_featurize`: List of properties to featurize.
 * `maximum_atomic_number```: Maximum atomic number in the dataset.
-* `number_of_per_atom_features`: Number of features for each atom used for the
-   embedding. This is the number of features that are used to represent each
-   atom in the neural network.
-* `normalize`: Whether to normalize energies for training. If this is set to
-   true the mean and standard deviation of the energies are calculated and used
-   to normalize the energies.
-* `from_atom_to_molecule_reduction`: Whether to reduce the per-atom properties
-   to per-molecule properties.
-* `keep_per_atom_property`: If this is set to true the per-atom energies are
-   returned as well.
+* `number_of_per_atom_features`: Number of features for each atom used for the embedding. This is the number of features that are used to represent each atom in the neural network.
+* `normalize`: Whether to normalize energies for training. If this is set to true the mean and standard deviation of the energies are calculated and used to normalize the energies.
+* `from_atom_to_molecule_reduction`: Whether to reduce the per-atom properties to per-molecule properties.
+* `keep_per_atom_property`: If this is set to true the per-atom energies are returned as well.
 
 
 Default parameter files for each model are available in `modelforge/tests/data/potential_defaults`. These files can be used as starting points for creating new model configuration files. Note that all parameters in the configuration files have units attached where applicable.

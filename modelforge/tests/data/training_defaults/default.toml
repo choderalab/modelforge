@@ -22,7 +22,7 @@ job_type = "training"
 tags = ["modelforge", "v_0.1.0"]
 notes = "testing training"
 
-[training.lr_scheduler_config]
+[training.lr_scheduler]
 frequency = 1
 mode = "min"
 factor = 0.1

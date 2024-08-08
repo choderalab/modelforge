@@ -153,7 +153,7 @@ Here is an example of a training routine definition:
     tags = ["modelforge", "v_0.1.0"]  # Tags for WandB logging
     notes = "testing training"  # Notes for WandB logging
 
-    [training.lr_scheduler_config]
+    [training.lr_scheduler]
     frequency = 1  # Frequency of learning rate updates
     mode = "min"  # Mode for the learning rate scheduler (minimizing the monitored metric)
     factor = 0.1  # Factor by which the learning rate will be reduced

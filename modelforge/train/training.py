@@ -350,7 +350,7 @@ class TrainingAdapter(pl.LightningModule):
         self,
         *,
         model_parameter: Dict[str, Any],
-        lr_scheduler_config: Dict[str, Union[str, int, float]],
+        lr_scheduler: Dict[str, Union[str, int, float]],
         lr: float,
         loss_parameter: Dict[str, Any],
         dataset_statistic: Optional[Dict[str, float]] = None,
@@ -364,7 +364,7 @@ class TrainingAdapter(pl.LightningModule):
         ----------
         model_parameter : Dict[str, Any]
             The parameters for the neural network potential model.
-        lr_scheduler_config : Dict[str, Union[str, int, float]]
+        lr_scheduler : Dict[str, Union[str, int, float]]
             The configuration for the learning rate scheduler.
         lr : float
             The learning rate for the optimizer.
@@ -391,7 +391,7 @@ class TrainingAdapter(pl.LightningModule):
 
         self.optimizer = optimizer
         self.learning_rate = lr
-        self.lr_scheduler_config = lr_scheduler_config
+        self.lr_scheduler = lr_scheduler
 
         # verbose output, only True if requested
         if verbose:
@@ -712,25 +712,23 @@ class TrainingAdapter(pl.LightningModule):
 
         optimizer = self.optimizer(self.model.parameters(), lr=self.learning_rate)
 
-        lr_scheduler_config = self.lr_scheduler_config
+        lr_scheduler = self.lr_scheduler.copy()
+        interval = lr_scheduler.pop("interval")
+        frequency = lr_scheduler.pop("frequency")
+        monitor = lr_scheduler.pop("monitor")
+
         lr_scheduler = ReduceLROnPlateau(
             optimizer,
-            mode=lr_scheduler_config["mode"],
-            factor=lr_scheduler_config["factor"],
-            patience=lr_scheduler_config["patience"],
-            cooldown=lr_scheduler_config["cooldown"],
-            min_lr=lr_scheduler_config["min_lr"],
-            threshold=lr_scheduler_config["threshold"],
-            threshold_mode="abs",
+            **lr_scheduler,
         )
 
-        lr_scheduler_config = {
+        lr_scheduler = {
             "scheduler": lr_scheduler,
-            "monitor": lr_scheduler_config["monitor"],  # Name of the metric to monitor
-            "interval": "epoch",
-            "frequency": 1,
+            "monitor": monitor,  # Name of the metric to monitor
+            "interval": interval,
+            "frequency": frequency,
         }
-        return {"optimizer": optimizer, "lr_scheduler": lr_scheduler_config}
+        return {"optimizer": optimizer, "lr_scheduler": lr_scheduler}
 
 
 from typing import List, Optional, Union

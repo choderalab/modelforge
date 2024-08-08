@@ -593,7 +593,7 @@ class NeuralNetworkPotentialFactory:
                 )
             model = TrainingAdapter(
                 model_parameter=model_parameter,
-                lr_scheduler_config=training_parameter["lr_scheduler_config"],
+                lr_scheduler=training_parameter["lr_scheduler"],
                 lr=training_parameter["lr"],
                 loss_parameter=training_parameter["loss_parameter"],
                 dataset_statistic=dataset_statistic,

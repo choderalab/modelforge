@@ -27,30 +27,33 @@ The learning rate scheduler is responsible for adjusting the learning rate durin
 
 Loss function
 ^^^^^^^^^^^^^^^^^^^^^^^^
-The loss function calculate the difference between the model's predictions and the target properties. The loss function is responsible for providing a scalar value that the optimizer can use to update the model's parameters. The loss function is controlled by the parameters in the `[training.loss]` section of the `training.toml` file.
+The loss function quantifies the discrepancy between the model's predictions and the target properties, providing a scalar value that guides the optimizer in updating the model's parameters. This function is configured in the `[training.loss]`` section of the training TOML file.
 
-Depending on what is included in the `loss_property` section the loss function can be a combination of different loss functions. *Modelforge* always computes the mean squared loss for the energy prediction, but can also include the mean squared loss for the force prediction, the mean squared loss for the dipole moment prediction, and the mean squared loss for the partial charge prediction.
+Depending on the specified loss_property section, the loss function can combine various individual loss functions. *Modelforge* always includes the mean squared error (MSE) for energy prediction, and may also incorporate MSE for force prediction, dipole moment prediction, and partial charge prediction.
 
-The formulation of the loss function is closely linked to the form of the energy function. For example, if the energy function is a sum of atomic energies, `loss_property` should only include `per_molecule_energy` and, optionally, `per_atom_force`. 
+The design of the loss function is intrinsically linked to the structure of the energy function. For instance, if the energy function aggregates atomic energies, then loss_property should include `per_molecule_energy`` and optionally, `per_atom_force`.
 
-Predict short-range atomic energies
+
+Predicting Short-Range Atomic Energies
 ************************************************************
 
-If the total atomic energy is calculated with a short cutoff radius, we can directly match the sum of the atomic energies (as predicted by the model architecture) to the total energy of the molecule (provided by the dataset).
+If the total atomic energy is calculated with a short cutoff radius, we can directly match the sum of the atomic energies `E_i` (as predicted by the model architecture) to the total energy of the molecule (provided by the dataset).
 
 In that case the total energy is calculated as
 
 .. math:: E = \sum_i^N E_i
 
-and the loss is either
+The loss function can then be formulated as:
 
 .. math:: L = w_E * (E - E^{pred})^2
 
-or, if the dataset provides per atom forces, we can formulate the loss as
+Alternatively, if the dataset includes per atom forces, the loss function can be expressed as:
 
 .. math:: L = w_E * (E - E^{pred})^2 + w_F \frac{1}{3N} \sum_i^N \sum_j^3 (F_{ij} - F_{ij}^{pred})^2
 
-Predict short range atomic energy with long range electrostatics
+where `w_E` and `w_F` are the weights for the energy and force components, respectively.
+
+Predicting Short-Range Atomic Energy with Long-Range Electrostatics
 *************************************************************************
 
 In that case additional terms are added to the loss function to account for the
@@ -59,6 +62,9 @@ contribution of the atomic energy, the model predicts atomic charges. The atomic
 charges are then used to calculate the long range electrostatics. The expression
 for the total energy is then:
 
+.. math:: E = \sum_i^N E_i + k_c \sum_i^N \sum_{j>i}^N \frac{q_i q_j}{r_{ij}}
+
+where `k_c` is the Coulomb constant, `q_i` and `q_j` are the atomic charges, and
 
 
 

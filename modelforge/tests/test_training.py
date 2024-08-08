@@ -208,4 +208,5 @@ def test_hypterparameter_tuning_with_ray(
         number_of_ray_workers=1,
         number_of_epochs=1,
         number_of_samples=1,
+        train_on_gpu=False,
     )

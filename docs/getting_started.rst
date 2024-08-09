@@ -16,7 +16,9 @@ To ensure a clean environment for *modelforge*, we recommend creating a new cond
 
     conda env create -f devtools/conda-envs/test_env.yml --name modelforge
 
-This command will create a new conda environment named *modelforge* with all necessary dependencies installed. Next, clone the source code from the GitHub repository:
+This command will create a new conda environment named *modelforge* with all necessary dependencies installed. Note, this package has currently been tested and validated with Python 3.10 and 3.11.
+
+Next, clone the source code from the GitHub repository:
 
 
 .. code-block:: bash
@@ -29,12 +31,14 @@ Navigate to the top level of the *modelforge* directory and install the package 
    
     pip install  .
 
+.. note::
+    Modelforge has currently been tested and validated with Python 3.10 and 3.11 on various Linux distributions. While it may work on other platforms, at this time we recommend using a Linux environment.
 
 Use Cases for *Modelforge* 
 ****************************
 
 
-*Modelforge* might be a good fit for your project if you are interested in:
+*Modelforge* may be a good fit for your project if you are interested in:
 
 - Training machine-learned interatomic potentials using PyTorch and PyTorch Lightning.
 - Utilizing pre-trained models for inference tasks.
@@ -52,16 +56,23 @@ Training a Model
 
 Before training a model, consider the following:
 
-1. **Architecture**: Which neural network architecture do you want to use?
+1. **Potential Architecture**: Which neural network architecture do you want to use?
 2. **Training Set**: What dataset will you use for training?
 3. **Loss Function**: Which properties will you include in the loss function?
 
-*Modelforge* currently supports the following architectures:
+*Modelforge* currently supports the following potential architectures:
 
-- Invariant arhitectures: SchNet, ANI2x
-- Equivariant architectures: PaiNN, PhysNet, TensorNet, SAKE
+- Invariant architectures:
+    * SchNet
+    * ANI2x
 
-These architectures can be trained on the following datasets:
+- Equivariant architectures:
+    * PaiNN
+    * PhysNet
+    * TensorNet
+    * SAKE
+
+These architectures can be trained on the following datasets (distributed via zenodo https://zenodo.org/communities/modelforge/ ):
 
 - Ani1x
 - Ani2x
@@ -70,16 +81,16 @@ These architectures can be trained on the following datasets:
 - SPICE1 (/openff)
 - SPICE2
 
-By default, models predict the total energy and per-atom forces within a given cutoff radius and can be trained on energies and forces.
+By default, potentials predict the total energy  and per-atom forces within a given cutoff radius and can be trained on energies and forces.
 
 .. note:: PaiNN and PhysNet can also predict partial charges and calculate long-range interactions. PaiNN can additionally use multipole expansions. These features will introduce additional terms to the loss function.
 
-In the following example, we will train a SchNet model on the ANI1x dataset with energies and forces as the target properties.
+In the following example, we will train a SchNet model on the ANI1x dataset with energies and forces as the target properties. TOML files are used to define the potential architecture, dataset, training routine, and runtime parameters.
 
 Defining the Potential
 +++++++++++++++++++++++++++++++++++++++
 
-The potential is defined in a TOML file. Here is an example of a potential definition for a SchNet model. Note that we use 16 radial basis functions, a maximum interaction radius of 5.0 angstroms, and 16 filters. We use a `ShiftedSoftplus`` activation (the fully differentiable version of ReLu) function and featurize the atomic number of the atoms in the dataset. Finally, we normalize the per-atom energy and reduce the per-atom energy to the per-molecule energy (which will then be returned)..
+The potential architecture and relevant parameters are defined in a TOML configuration file. Here is an example of a potential definition for a SchNet model. Note that we use 16 radial basis functions, a maximum interaction radius of 5.0 angstroms, and 16 filters. We use a `ShiftedSoftplus`` activation (the fully differentiable version of ReLu) function and featurize the atomic number of the atoms in the dataset. Finally, we normalize the per-atom energy and reduce the per-atom energy to the per-molecule energy (which will then be returned)..
 
 
 .. code-block:: toml
@@ -111,7 +122,7 @@ The potential is defined in a TOML file. Here is an example of a potential defin
 Defining the Dataset
 +++++++++++++++++++++++++++++++++++++++
 
-The dataset is also defined in a TOML file. Here is an example of a dataset definition for the ANI1x dataset:
+The following TOML file defines the ANI1x dataset, allowing users to specify a specific version, as well as parameters used by the torch dataloaders (num_workers and pin_memory):
 
 .. code-block:: toml
 
@@ -126,8 +137,8 @@ Defining the Training Routine
 +++++++++++++++++++++++++++++++++++++++
 
 
-The training routine is also defined in a TOML file. The training TOML file includes the number of epochs, batch size, learning rate, logger, callback parameters, and other training parameters (including dataset splitting).
-Each of these settings plays a crucial role in the training process:
+The training TOML file includes the number of epochs, batch size, learning rate, logger, callback parameters, and other training parameters (including dataset splitting).
+Each of these settings plays a crucial role in the training process.
 
 Here is an example of a training routine definition:
 
@@ -186,7 +197,7 @@ Here is an example of a training routine definition:
 Defining Runtime Variables
 +++++++++++++++++++++++++++++++++++++++
 
-These variables are not part of the potential, dataset, or training routine but define the computational environment. Here is an example of a runtime variable definition:
+To define various aspects of the compute environment, various runtime parameters can be set. Here is an example of a runtime variable definition:
 
 .. code-block:: toml
 
@@ -201,7 +212,7 @@ These variables are not part of the potential, dataset, or training routine but 
     simulation_environment = "PyTorch"  # Simulation environment
     log_every_n_steps = 50  # Frequency of logging steps
 
-All of the above TOML files can be combined into a single TOML file that defines the training run. Assuming the combined TOML file is called `training.toml`, start the training by passing the TOML file to the perform_training.py script.
+All of the above TOML files can be passed invididually or combined into a single TOML file that defines the training run. Assuming the combined TOML file is called `training.toml`, start the training by passing the TOML file to the perform_training.py script.
 
 
 .. code-block:: bash
@@ -209,6 +220,7 @@ All of the above TOML files can be combined into a single TOML file that defines
     python scripts/perform_training.py
         --condensed_config_path="training.toml"
 
+*modelforge* uses Pydantic to validate the TOML files, ensuring that all required fields are present and that the values are of the correct type before any expensive computational operations are performed. This validation process helps to catch errors early in the training process. If the TOML file is not valid, an error message will be displayed, indicating the missing or incorrect fields.
 
 Using a Pretrained Model
 ============================

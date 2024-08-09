@@ -50,7 +50,7 @@ def setup_spk_painn_representation(
 ):
     # ------------------------------------ #
     # set up the schnetpack Painn representation model
-    from schnetpack.nn import GaussianRBF, CosineCutoff
+    from schnetpack.nn import GaussianRBF, CosineAttenuationFunction
     from schnetpack.representation import PaiNN as schnetpack_PaiNN
     from openff.units import unit
 
@@ -61,7 +61,7 @@ def setup_spk_painn_representation(
         n_atom_basis=nr_atom_basis,
         n_interactions=nr_of_interactions,
         radial_basis=radial_basis,
-        cutoff_fn=CosineCutoff(cutoff.to(unit.angstrom).m),
+        cutoff_fn=CosineAttenuationFunction(cutoff.to(unit.angstrom).m),
         max_z=maximum_atomic_number,
     )
 
@@ -458,7 +458,7 @@ def setup_spk_schnet_representation(
 ):
     # ------------------------------------ #
     # set up the schnetpack Painn representation model
-    from schnetpack.nn import GaussianRBF, CosineCutoff
+    from schnetpack.nn import GaussianRBF, CosineAttenuationFunction
     from schnetpack.representation import SchNet as schnetpack_SchNET
     from openff.units import unit
 
@@ -468,7 +468,7 @@ def setup_spk_schnet_representation(
         n_interactions=nr_of_interactions,
         radial_basis=radial_basis,
         max_z=maximum_atomic_number,
-        cutoff_fn=CosineCutoff(cutoff.to(unit.angstrom).m),
+        cutoff_fn=CosineAttenuationFunction(cutoff.to(unit.angstrom).m),
     )
 
 

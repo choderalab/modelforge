@@ -1,3 +1,7 @@
+"""
+SchNet neural network potential for modeling quantum interactions.
+"""
+
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Type, Union, List
 
@@ -33,7 +37,7 @@ class SchnetNeuralNetworkData(NeuralNetworkData):
         will be populated after initialization.
     """
 
-    atomic_embedding: torch.Tensor
+    atomic_embedding: Optional[torch.Tensor] = field(default=None)
     f_ij: Optional[torch.Tensor] = field(default=None)
     f_cutoff: Optional[torch.Tensor] = field(default=None)
 
@@ -72,7 +76,7 @@ class SchNetCore(CoreNetwork):
     ) -> None:
 
         log.debug("Initializing the SchNet architecture.")
-        from modelforge.potential.utils import FeaturizeInput, DenseWithCustomDist
+        from modelforge.potential.utils import DenseWithCustomDist
 
         super().__init__(activation_function)
         self.number_of_filters = number_of_filters or int(
@@ -83,10 +87,11 @@ class SchNetCore(CoreNetwork):
             featurization_config["number_of_per_atom_features"]
         )
 
-        self.featurize_input = FeaturizeInput(featurization_config)
         # Initialize representation block
         self.schnet_representation_module = SchNETRepresentation(
-            maximum_interaction_radius, number_of_radial_basis_functions
+            maximum_interaction_radius,
+            number_of_radial_basis_functions,
+            featurization_config=featurization_config,
         )
         # Intialize interaction blocks
         if shared_interactions:
@@ -157,15 +162,12 @@ class SchNetCore(CoreNetwork):
             atomic_numbers=data.atomic_numbers,
             atomic_subsystem_indices=data.atomic_subsystem_indices,
             total_charge=data.total_charge,
-            atomic_embedding=self.featurize_input(
-                data
-            ),  # add per-atom properties and embedding
         )
 
         return nnp_input
 
     def compute_properties(
-        self, data: SchnetNeuralNetworkData
+        self, data: Type[SchnetNeuralNetworkData]
     ) -> Dict[str, torch.Tensor]:
         """
         Calculate the properties for a given input batch.
@@ -180,27 +182,26 @@ class SchNetCore(CoreNetwork):
         Dict[str, torch.Tensor]
             The calculated properties.
         """
-        # Compute the representation for each atom (transform to radial basis set, multiply by cutoff)
-        representation = self.schnet_representation_module(data.d_ij)
-
-        per_atom_features = data.atomic_embedding
+        # Compute the representation for each atom (transform to radial basis set, multiply by cutoff and add embedding)
+        representation = self.schnet_representation_module(data)
+        atomic_embedding = representation["atomic_embedding"]
         # Iterate over interaction blocks to update features
         for interaction in self.interaction_modules:
             v = interaction(
-                per_atom_features,
+                atomic_embedding,
                 data.pair_indices,
                 representation["f_ij"],
                 representation["f_cutoff"],
             )
-            per_atom_features = (
-                per_atom_features + v
+            atomic_embedding = (
+                atomic_embedding + v
             )  # Update per atom features given the environment
 
-        E_i = self.energy_layer(per_atom_features).squeeze(1)
+        E_i = self.energy_layer(atomic_embedding).squeeze(1)
 
         return {
             "per_atom_energy": E_i,
-            "scalar_representation": per_atom_features,
+            "per_atom_scalar_representation": atomic_embedding,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
 
@@ -330,12 +331,15 @@ class SchNETRepresentation(nn.Module):
         The cutoff distance for interactions.
     number_of_radial_basis_functions : int
         Number of radial basis functions.
+    featurization_config : Dict[str, Union[List[str], int]]
+        Configuration for atom featurization.
     """
 
     def __init__(
         self,
         radial_cutoff: unit.Quantity,
         number_of_radial_basis_functions: int,
+        featurization_config: Dict[str, Union[List[str], int]],
     ):
         super().__init__()
 
@@ -343,8 +347,9 @@ class SchNETRepresentation(nn.Module):
             radial_cutoff, number_of_radial_basis_functions
         )
         # Initialize cutoff module
-        from modelforge.potential import CosineAttenuationFunction
+        from modelforge.potential import CosineAttenuationFunction, FeaturizeInput
 
+        self.featurize_input = FeaturizeInput(featurization_config)
         self.cutoff_module = CosineAttenuationFunction(radial_cutoff)
 
     def _setup_radial_symmetry_functions(
@@ -359,29 +364,34 @@ class SchNETRepresentation(nn.Module):
         )
         return radial_symmetry_function
 
-    def forward(self, d_ij: torch.Tensor) -> Dict[str, torch.Tensor]:
+    def forward(self, data: Type[SchnetNeuralNetworkData]) -> Dict[str, torch.Tensor]:
         """
         Generate the radial symmetry representation of the pairwise distances.
 
         Parameters
         ----------
-        d_ij : torch.Tensor
-            Pairwise distances between atoms; shape [n_pairs, 1]
+        data : SchnetNeuralNetworkData
 
         Returns
         -------
         Dict[str, torch.Tensor]
-            Radial basis functions and cutoff values for pairs of atoms.
+            Radial basis functions, cutoff values for pairs of atoms and atomic embedding.
         """
 
         # Convert distances to radial basis functions
         f_ij = self.radial_symmetry_function_module(
-            d_ij
+            data.d_ij
         )  # shape (n_pairs, number_of_radial_basis_functions)
 
-        f_cutoff = self.cutoff_module(d_ij)  # shape (n_pairs, 1)
+        f_cutoff = self.cutoff_module(data.d_ij)  # shape (n_pairs, 1)
 
-        return {"f_ij": f_ij, "f_cutoff": f_cutoff}
+        return {
+            "f_ij": f_ij,
+            "f_cutoff": f_cutoff,
+            "atomic_embedding": self.featurize_input(
+                data
+            ),  # add per-atom properties and embedding
+        }
 
 
 from typing import List, Union

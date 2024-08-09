@@ -1,3 +1,7 @@
+"""
+This module contains classes and functions for managing datasets.
+"""
+
 import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, List, Literal, Optional, Union, NamedTuple
@@ -1432,9 +1436,10 @@ class DataModule(pl.LightningDataModule):
             DataLoader containing the test dataset.
         """
         return DataLoader(
-            self.test_dataset, batch_size=self.batch_size, collate_fn=collate_conformers,
+            self.test_dataset,
+            batch_size=self.batch_size,
+            collate_fn=collate_conformers,
             num_workers=num_workers,
-
         )
 
 

@@ -111,7 +111,7 @@ def test_cosine_cutoff():
 
 
 def test_cosine_cutoff_module():
-    # Test CosineCutoff module
+    # Test CosineAttenuationFunction module
     from modelforge.potential.utils import CosineAttenuationFunction
     from openff.units import unit
 

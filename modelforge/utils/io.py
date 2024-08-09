@@ -1,4 +1,4 @@
-""" Module for handling importing of external libraries.
+""" Module for handling importing external libraries that are optional dependencies.
 
 The general approach here is to wrap an import in a try/except structure, where failure
 to import a module results in a descriptive message being printed to the console, e.g.,

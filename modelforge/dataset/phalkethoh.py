@@ -1,3 +1,7 @@
+"""
+Data class for handling OpenFF Sandbox CHO PhAlkEthOH v1.0 dataset.
+"""
+
 from typing import List
 
 from .dataset import HDF5Dataset

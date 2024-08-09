@@ -43,7 +43,7 @@ logger_name = "tensorboard"
 [training.experiment_logger.tensorboard_configuration]
 save_dir = "logs"
 
-[training.lr_scheduler_config]
+[training.lr_scheduler]
 frequency = 1
 mode = "min"
 factor = 0.1

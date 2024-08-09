@@ -1,9 +1,5 @@
 """
-This will define a pydantic model for the training parameters, meant to take the dictionary defined in the
-associated yaml file. This model will be used to validate the input dictionary and to provide default values.
-
-
-
+This defines pydantic models for the training parameters and runtime parameters.
 """
 
 from pydantic import BaseModel, model_validator, field_validator, ConfigDict
@@ -124,7 +120,7 @@ class TrainingParameters(ParametersBase):
         remove_self_energies (bool): Whether to remove self energies
         batch_size (int): The batch size,
         lr (float): The learning rate
-        lr_scheduler_config (SchedulerConfig): The learning rate scheduler configuration.
+        lr_scheduler (SchedulerConfig): The learning rate scheduler configuration.
         loss_parameter (LossParameter): The loss parameter
         early_stopping (EarlyStopping): The early stopping parameters, Optional
         splitting_strategy (SplittingStrategy): The splitting strategy
@@ -266,7 +262,7 @@ class TrainingParameters(ParametersBase):
     batch_size: int
     lr: float
     monitor: str
-    lr_scheduler_config: Optional[SchedulerConfig] = None
+    lr_scheduler: Optional[SchedulerConfig] = None
     loss_parameter: LossParameter
     early_stopping: Optional[EarlyStopping] = None
     splitting_strategy: SplittingStrategy

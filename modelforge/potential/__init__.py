@@ -1,3 +1,7 @@
+"""
+This module contains the implemented neural network potentials and their parameters.
+"""
+
 from .schnet import SchNet
 from .physnet import PhysNet
 from .painn import PaiNN
@@ -16,6 +20,7 @@ from .utils import (
     CosineAttenuationFunction,
     RadialBasisFunction,
     AngularSymmetryFunction,
+    FeaturizeInput,
 )
 from .processing import FromAtomToMoleculeReduction
 from .models import NeuralNetworkPotentialFactory

@@ -32,9 +32,6 @@ dependencies:
   - requests
   - versioneer
 
-  # Docs
-  - sphinx_rtd_theme
-
   # pip installs
   - pip:
       - pytorch2jax

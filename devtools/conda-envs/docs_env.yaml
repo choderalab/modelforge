@@ -8,7 +8,7 @@ dependencies:
   - pip
   - h5py
   - tqdm
-  - qcelemental=0.25.1
+  - qcelemental
   - qcportal>=0.50
   - pytorch>=2.1
   - loguru
@@ -21,6 +21,8 @@ dependencies:
   - rdkit
   - retry
   - sqlitedict
+  - pydantic>=2
+  - ray-all
 
   # Testing
   - pytest>=2.1
@@ -36,5 +38,5 @@ dependencies:
       - jax
       - flax
       - pytorch2jax
+      #- "ray[data,train,tune,serve]"
       - git+https://github.com/ArnNag/sake.git@nanometer
-      - "ray[data,train,tune,serve]"

@@ -14,17 +14,24 @@ The properties a given model can be trained on are deterimend by the model itsel
 Training Configuration
 ------------------------------------------
 
-The training process is controlled by a configuration file. The configuration file contains sections for the logger, the learning rate scheduler, the loss functions, splitting strategy and early stopping criteria.
+The training process is controlled by a configuration file, typically written in TOML format. This file includes various sections for configuring different aspects of the training, such as logging, learning rate scheduling, loss functions, dataset splitting strategies, and early stopping criteria.
+
 
 .. literalinclude:: ../modelforge/tests/data/training_defaults/default.toml
    :language: toml
    :caption: Training Configuration
 
+The TOML files are split into four categories: `potential`, `training`,
+`runtime` and `dataset`. While it is possible to read in a single TOML file
+defining fields for all three categories, often it is useful to read them in
+separately (a common use case where this is useful is when a model is trained on
+different datasets — instead of repeating the `training` and `potential`
+sections in each TOML file, only the `dataset.toml` file needs to be changed).
 
 Learning rate scheduler
-^^^^^^^^^^^^^^^^^^^^^^^^
+ ^^^^^^^^^^^^^^^^^^^^^^^^
 
-The learning rate scheduler is responsible for adjusting the learning rate during training. *Modelforge* uses the REduceLROnPlateau scheduler, which reduces the learning rate by a factor of 0.1 when the RMSE of the energy prediction on the validation set does not improve for a given number of epochs. The scheduler is controlled by the parameters in the `[training.lr_scheduler]` section of the `training.toml` file.
+The learning rate scheduler is responsible for adjusting the learning rate during training. *Modelforge* uses the REduceLROnPlateau scheduler, which reduces the learning rate by a factor when the RMSE of the energy prediction on the validation set does not improve for a given number of epochs. The scheduler is controlled by the parameters in the `[training.lr_scheduler]` section of the `training.toml` file.
 
 Loss function
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -78,11 +85,10 @@ where `w_Q` is the weight for the charge component, `w_p` the weight for the dip
 Splitting Strategies
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-The recommended splitting strategy for datasets in `modelforge` is to randomly split the dataset into 80% training, 10% validation, and 10% test set based on
-molecules. This approach ensures that different conformations of a molecule are
-always part of the same split, thereby avoiding data leakage. 
+The dataset splitting strategy is crucial for ensuring that the model generalizes well to unseen data. The recommended approach in *modelforge* is to randomly split the dataset into 80% training, 10% validation, and 10% test sets, based on molecules rather than individual conformations. This ensures that different conformations of the same molecule are consistently assigned to the same split, preventing data leakage and ensuring robust model evaluation.
 
-`modelforge` also provides other splitting strategies, including:
+
+*Modelforge* also provides other splitting strategies, including:
 
 - :class:`~modelforge.dataset.utils.FirstComeFirstServeStrategy`: Splits the dataset based on the order of records (molecules).
 - :class:`~modelforge.dataset.utils.RandomSplittingStrategy`: Splits the dataset randomly based on conformations.
@@ -91,4 +97,26 @@ To use a different data split ratio, you can specify a custom split list in the
 splitting strategy. The most effective way to pass this information to the
 training process is by defining the appropriate fields in the TOML file providing the training parameters, see the TOML file above. 
 
+
+Train a Model
+----------------------
+
+The best way to get started is to train a model. We provide a script to
+train one of the implemented models on a dataset using default configurations.
+The script, along with a default configuration TOML file, can be found in the `scripts`` directory. The TOML file provides parameters to train a `TensorNet` potential on the `QM9` dataset on a single GPU.
+
+The recommended method for training models is through the `perform_training.py`` script. This script automates the training process by reading the TOML configuration files, which define the potential (model), dataset, training routine, and runtime environment. The script then initializes a Trainer class from PyTorch Lightning, which handles the training loop, gradient updates, and evaluation metrics. During training, the model is optimized on the specified dataset according to the defined potential and training routine. After training completes, the script outputs performance metrics on the validation and test sets, providing insights into the model's accuracy and generalization.
+
+Additionally, the script saves the trained model and checkpoint files in the directory specified by the `[save_dir]`` field in the runtime section of the TOML file, enabling you to resume training or use the model for inference later.
+
+To initiate the training process, execute the following command in your terminal (inside the `scripts` directory):
+
+.. code-block:: bash
+   
+    python perform_training.py
+        --condensed_config_path="config.toml"
+        --accelerator="gpu"
+        --device=1
+
+This command specifies the path to the configuration file, selects GPU acceleration, and designates the device index to be used during training. Adjust these parameters as necessary to fit your computational setup and training needs.
 

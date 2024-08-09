@@ -21,7 +21,7 @@ calculate_molecular_self_energy = true
 
 [dataset]
 dataset_name = "QM9"
-version_select = "nc_1000_v0"
+version_select = "nc_1000_v0" # NOTE: this defines a small subset, for full dataset change this variable to "latest"
 num_workers = 4
 pin_memory = true
 

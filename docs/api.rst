@@ -6,7 +6,6 @@ API Documentation
     :recursive:
 
     modelforge.potential
-    modelforge.potential
     modelforge.dataset
     modelforge.train
     modelforge.utils

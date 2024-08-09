@@ -60,7 +60,7 @@ def test_init():
     assert schnet is not None, "Schnet model should be initialized."
 
 
-def test_compare_representation():
+def test_compare_rbf():
     # compare schnetpack RadialSymmetryFunction with modelforge RadialSymmetryFunction
     from modelforge.potential.utils import SchnetRadialBasisFunction
     from openff.units import unit
@@ -302,9 +302,9 @@ def test_compare_forward():
     reference_results = load_precalculated_schnet_results()
     assert (
         reference_results["scalar_representation"].shape
-        == calculated_results["scalar_representation"].shape
+        == calculated_results["per_atom_scalar_representation"].shape
     )
 
     scalar_spk = reference_results["scalar_representation"]
-    scalar_mf = calculated_results["scalar_representation"]
+    scalar_mf = calculated_results["per_atom_scalar_representation"]
     assert torch.allclose(scalar_spk, scalar_mf, atol=1e-4)

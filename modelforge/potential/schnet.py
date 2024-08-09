@@ -201,7 +201,7 @@ class SchNetCore(CoreNetwork):
 
         return {
             "per_atom_energy": E_i,
-            "per_atom_representation": atomic_embedding,
+            "per_atom_scalar_representation": atomic_embedding,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
 

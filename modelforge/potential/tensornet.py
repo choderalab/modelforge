@@ -278,7 +278,7 @@ class TensorNetCore(CoreNetwork):
         highest_atomic_number: int,
         equivariance_invariance_group: str,
         activation_function: Type[torch.nn.Module],
-        seed: int = 9,
+        seed: int = 0,
     ) -> None:
         super().__init__(activation_function)
 

@@ -251,12 +251,13 @@ class PaiNNRepresentation(nn.Module):
             Whether to share filters across blocks.
         """
         from .utils import SchnetRadialBasisFunction
+        from modelforge.potential import CosineAttenuationFunction, FeaturizeInput
 
         super().__init__()
 
-        # cutoff
-        from modelforge.potential import CosineAttenuationFunction
+        self.featurize_input = FeaturizeInput(featurization_config)
 
+        # cutoff
         self.cutoff_module = CosineAttenuationFunction(maximum_interaction_radius)
 
         # radial symmetry function
@@ -280,10 +281,6 @@ class PaiNNRepresentation(nn.Module):
             )
 
         self.filter_net = filter_net
-
-        from modelforge.potential.utils import FeaturizeInput
-
-        self.featurize_input = FeaturizeInput(featurization_config)
 
         self.shared_filters = shared_filters
         self.nr_interaction_blocks = nr_interaction_blocks

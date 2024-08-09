@@ -1,3 +1,7 @@
+"""
+Module that handles unit system definitions/conversion.
+"""
+
 from typing import Union
 
 from openff.units import unit

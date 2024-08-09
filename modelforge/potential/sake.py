@@ -1,3 +1,7 @@
+"""
+SAKE - Spatial Attention Kinetic Networks with E(n) Equivariance
+"""
+
 from dataclasses import dataclass
 
 import torch.nn as nn
@@ -44,16 +48,6 @@ class SAKENeuralNetworkInput:
     model for accurately predicting system energies and properties. It includes atomic positions, atomic types,
     and connectivity information, crucial for a detailed representation of atomistic systems.
 
-    Examples
-    --------
-    >>> sake_input = SAKENeuralNetworkInput(
-    ...     atomic_numbers=torch.tensor([1, 6, 6, 8]),
-    ...     positions=torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]),
-    ...     atomic_subsystem_indices=torch.tensor([0, 0, 0, 0]),
-    ...     pair_indices=torch.tensor([[0, 1], [0, 2], [1, 2]]).T,
-    ...     number_of_atoms=4,
-    ...     atomic_embedding=torch.randn(4, 5)  # Example atomic embeddings
-    ... )
     """
 
     pair_indices: torch.Tensor
@@ -116,9 +110,10 @@ class SAKECore(CoreNetwork):
         self.featurize_input = FeaturizeInput(featurization_config)
         self.energy_layer = nn.Sequential(
             DenseWithCustomDist(
-                number_of_per_atom_features, number_of_per_atom_features
+                number_of_per_atom_features,
+                number_of_per_atom_features,
+                activation_function=self.activation_function,
             ),
-            self.activation_function,
             DenseWithCustomDist(number_of_per_atom_features, 1),
         )
         # initialize the interaction networks

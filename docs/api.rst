@@ -2,6 +2,11 @@ API Documentation
 =================
 
 .. autosummary::
-   :toctree: autosummary
+    :toctree: autosummary
+    :recursive:
 
-   modelforge.canvas
+    modelforge.potential
+    modelforge.dataset
+    modelforge.utils
+    modelforge.curation
+

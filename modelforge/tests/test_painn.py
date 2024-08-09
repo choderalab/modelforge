@@ -112,25 +112,25 @@ def test_equivariance(single_batch_with_batchsize_64):
     )
 
     assert torch.allclose(
-        reference_tranformed_inputs["q"], perturbed_tranformed_inputs["q"]
+        reference_tranformed_inputs["per_atom_scalar_feature"], perturbed_tranformed_inputs["per_atom_scalar_feature"]
     )
     assert torch.allclose(
-        reference_tranformed_inputs["mu"], perturbed_tranformed_inputs["mu"]
+        reference_tranformed_inputs["per_atom_vector_feature"], perturbed_tranformed_inputs["per_atom_vector_feature"]
     )
 
     painn_interaction = painn.core_module.interaction_modules[0]
 
     reference_r = painn_interaction(
-        reference_tranformed_inputs["q"],
-        reference_tranformed_inputs["mu"],
+        reference_tranformed_inputs["per_atom_scalar_feature"],
+        reference_tranformed_inputs["per_atom_vector_feature"],
         reference_tranformed_inputs["filters"][0],
         reference_dir_ij,
         reference_prepared_input.pair_indices,
     )
 
     perturbed_r = painn_interaction(
-        perturbed_tranformed_inputs["q"],
-        perturbed_tranformed_inputs["mu"],
+        perturbed_tranformed_inputs["per_atom_scalar_feature"],
+        perturbed_tranformed_inputs["per_atom_vector_feature"],
         reference_tranformed_inputs["filters"][0],
         perturbed_dir_ij,
         perturbed_prepared_input.pair_indices,
@@ -213,21 +213,21 @@ def test_compare_implementation_agains_reference_implementation():
     # start with scalar representation
     assert (
         reference_results["scalar_representation"].shape
-        == calculated_results["q"].shape
+        == calculated_results["per_atom_scalar_representation"].shape
     )
 
     scalar_spk = reference_results["scalar_representation"].double()
-    scalar_mf = calculated_results["q"].double()
+    scalar_mf = calculated_results["per_atom_scalar_representation"].double()
 
     assert torch.allclose(scalar_spk, scalar_mf, atol=1e-4)
     # check vector representation
     assert (
         reference_results["vector_representation"].shape
-        == calculated_results["mu"].shape
+        == calculated_results["per_atom_vector_representation"].shape
     )
 
     assert torch.allclose(
         reference_results["vector_representation"].double(),
-        calculated_results["mu"].double(),
+        calculated_results["per_atom_vector_representation"].double(),
         atol=1e-4,
     )

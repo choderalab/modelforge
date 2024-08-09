@@ -1,3 +1,7 @@
+"""
+Utility functions for dataset handling.
+"""
+
 from __future__ import annotations
 
 import warnings

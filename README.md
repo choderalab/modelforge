@@ -3,6 +3,7 @@ modelforge
 [//]: # (Badges)
 [![CI](https://github.com/choderalab/modelforge/actions/workflows/CI.yaml/badge.svg)](https://github.com/choderalab/modelforge/actions/workflows/CI.yaml)
 [![codecov](https://codecov.io/gh/choderalab/modelforge/branch/main/graph/badge.svg)](https://codecov.io/gh/choderalab/modelforge/branch/main)
+[![Documentation Status](https://readthedocs.org/projects/modelforge/badge/?version=latest)](https://modelforge.readthedocs.io/en/latest/?badge=latest)
 [![Github release](https://badgen.net/github/release/choderalab/modelforge)](https://github.com/choderalab/modelforge/)
 [![GitHub license](https://img.shields.io/github/license/choderalab/modelforge?color=green)](https://github.com/choderalab/modelforge/blob/main/LICENSE)
 [![GitHub issues](https://img.shields.io/github/issues/choderalab/modelforge?style=flat)](https://github.com/choderalab/modelforge/issues)

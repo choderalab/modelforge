@@ -1,3 +1,7 @@
+"""
+This module contains pydantic models for storing the parameters of the potentials.
+"""
+
 from __future__ import annotations
 
 from pydantic import (

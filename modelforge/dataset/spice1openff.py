@@ -1,3 +1,7 @@
+"""
+Data class for handling SPICE 1 dataset at the OpenForceField level of theory.
+"""
+
 from typing import List
 
 from .dataset import HDF5Dataset

@@ -1,4 +1,4 @@
-"""Module for querying and fetching datafiles from remote sources"""
+"""Module for querying remote sources and fetching datafiles"""
 
 from typing import Optional, List, Dict
 from loguru import logger

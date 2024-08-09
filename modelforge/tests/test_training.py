@@ -172,23 +172,12 @@ def test_hypterparameter_tuning_with_ray(
     dataset_name,
     datamodule_factory,
 ):
-    from modelforge.train.training import LossFactory
-    from importlib import resources
-    from modelforge.tests.data import (
-        runtime_defaults,
-        potential_defaults,
-        dataset_defaults,
-        training_defaults,
-    )
-
     config = load_configs_into_pydantic_models(potential_name, dataset_name)
     # config = load_configs_(potential_name, dataset_name)
 
     # Extract parameters
     potential_config = config["potential"]
     training_config = config["training"]
-    dataset_config = config["dataset"]
-    runtime_config = config["runtime"]
 
     dm = datamodule_factory(dataset_name=dataset_name)
 

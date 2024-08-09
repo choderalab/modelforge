@@ -1,3 +1,7 @@
+"""
+Data class for handling QM9 data.
+"""
+
 from typing import List
 
 from .dataset import HDF5Dataset

@@ -1,6 +1,4 @@
-# This is an example script that trains an implemented model on the QM9 dataset.
-# tensorboard --logdir tb_logs
-
+# This script can be used with a toml file to train an neurtal network model.
 
 if __name__ == "__main__":
 

@@ -1,3 +1,7 @@
+"""
+Data class for handling SPICE 2 dataset.
+"""
+
 from typing import List
 
 from .dataset import HDF5Dataset

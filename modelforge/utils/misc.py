@@ -1,3 +1,7 @@
+"""
+Module of miscellaneous utilities.
+"""
+
 from typing import Literal
 
 import torch

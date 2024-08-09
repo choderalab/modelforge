@@ -1,3 +1,7 @@
+"""
+Module of dataclass definitions of properties.
+"""
+
 from dataclasses import dataclass
 import torch
 from typing import NamedTuple, Optional

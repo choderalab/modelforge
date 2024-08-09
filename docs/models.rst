@@ -4,7 +4,7 @@ Models
 Models: Overview
 ----------------
 
-A model in modelforge encapsulates all the operations required to map a
+A model in *modelforge* encapsulates all the operations required to map a
 description of a molecular system (which includes the Cartesian coordinates,
 atomic numbers, and total charge of a system (optionally also the spin state))
 to, at a minimum, its energy. Specifically, a model takes as input a
@@ -16,12 +16,13 @@ components:
 1. **Input Preparation Module**
    (:class:`~modelforge.potential.model.InputPreparation`): Responsible for
    generating the pair list, pair distances, and pair displacement vectors based
-   on atomic coordinates and the specified cutoff.This module processes the raw
+   on atomic coordinates and the specified cutoff. This module processes the raw
    input data into a format suitable for the neural network.
 
 2. **Core Model** (:class:`~modelforge.potential.model.CoreNetwork`): The neural
    network containing the learnable parameters, which forms the core of the
-   potential. This module generates per-atom scalar and, optionally, tensor properties. The inputs to the core model include atom pair indices, pair distances, pair displacement vectors, and atomic properties such as atomic numbers, charges, and spin state.
+   potential. This module generates per-atom scalar and, optionally, tensor properties. The inputs to the core model
+   include atom pair indices, pair distances, pair displacement vectors, and atomic properties such as atomic numbers, charges, and spin state.
 
 3. **Postprocessing Module**
    (:class:`~modelforge.potential.model.PostProcessing`): Contains operations
@@ -38,8 +39,14 @@ Implemented Models
 
 *Modelforge* currently supports the following models:
 
-- Invariant architectures: SchNet, ANI2x
-- Equivariant architectures: PaiNN, PhysNet, TensorNet, SAKE
+- Invariant architectures:
+   * SchNet
+   * ANI2x
+- Equivariant architectures:
+   * PaiNN
+   * PhysNet
+   * TensorNet
+   * SAKE
 
 Additionally, the following models are currently under development and can be expected in the near future:
 
@@ -53,7 +60,7 @@ forces. PaiNN and PhysNet can also predict partial charges and
 calculate long-range interactions using reaction fields or Coulomb potential.
 PaiNN can additionally use multipole expansions.
 
-Using toml files to configure models
+Using TOML files to configure models
 ------------------------------------
 
 To initialize a model, a model factory is used:
@@ -89,12 +96,14 @@ the parameters for the postprocessing operations. Explanation of fields in
 * `keep_per_atom_property`: If this is set to true the per-atom energies are returned as well.
 
 
-Default parameter files for each model are available in `modelforge/tests/data/potential_defaults`. These files can be used as starting points for creating new model configuration files. Note that all parameters in the configuration files have units attached where applicable.
+Default parameter files for each model are available in `modelforge/tests/data/potential_defaults`. These files can be used as starting points for creating new model configuration files.
+
+.. note:: All parameters in the configuration files have units attached where applicable. Units within modelforge a represented using the `openff.units` package (https://docs.openforcefield.org/projects/units/en/stable/index.html), which is a wrapper around the `pint` package. Definition of units within the TOML files must unit names available in the `openff.units` package (https://github.com/openforcefield/openff-units/blob/main/openff/units/data/defaults.txt).
 
 Example
 ------------------------------------
 
-Below is an example of how to create a SchNet model using the model factory:
+Below is an example of how to create a SchNet model using the model factory, although we note these operations do not typically need to be performed directly by a user and are handled by routines available in the training module:
 
 .. code-block:: python
    :linenos:

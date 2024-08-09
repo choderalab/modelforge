@@ -56,11 +56,11 @@ Training a Model
 
 Before training a model, consider the following:
 
-1. **Potential Architecture**: Which neural network architecture do you want to use?
+1. **Architecture**: Which neural network architecture do you want to use?
 2. **Training Set**: What dataset will you use for training?
 3. **Loss Function**: Which properties will you include in the loss function?
 
-*Modelforge* currently supports the following potential architectures:
+*Modelforge* currently supports the following architectures:
 
 - Invariant architectures:
     * SchNet

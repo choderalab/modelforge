@@ -29,7 +29,7 @@ different datasets — instead of repeating the `training` and `potential`
 sections in each TOML file, only the `dataset.toml` file needs to be changed).
 
 Learning rate scheduler
- ^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^
 
 The learning rate scheduler is responsible for adjusting the learning rate during training. *Modelforge* uses the `REduceLROnPlateau scheduler`, which reduces the learning rate by a factor when the RMSE of the energy prediction on the validation set does not improve for a given number of epochs. The scheduler is controlled by the parameters in the `[training.lr_scheduler]` section of the `training.toml` file.
 

@@ -20,6 +20,7 @@ from .utils import (
     CosineAttenuationFunction,
     RadialBasisFunction,
     AngularSymmetryFunction,
+    FeaturizeInput,
 )
 from .processing import FromAtomToMoleculeReduction
 from .models import NeuralNetworkPotentialFactory

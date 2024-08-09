@@ -278,10 +278,11 @@ class TensorNetCore(CoreNetwork):
         highest_atomic_number: int,
         equivariance_invariance_group: str,
         activation_function: Type[torch.nn.Module],
+        seed: int = 9,
     ) -> None:
         super().__init__(activation_function)
 
-        torch.manual_seed(0)
+        torch.manual_seed(seed)
         self.representation_module = TensorNetRepresentation(
             number_of_per_atom_features=number_of_per_atom_features,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
@@ -303,8 +304,13 @@ class TensorNetCore(CoreNetwork):
                 for _ in range(number_of_interaction_layers)
             ]
         )
-        self.linear = nn.Linear(
-            3 * number_of_per_atom_features, number_of_per_atom_features
+
+        from modelforge.potential.utils import Dense
+
+        self.readout = Dense(
+            3 * number_of_per_atom_features,
+            number_of_per_atom_features,
+            activation_function=self.activation_function,
         )
         self.out_norm = nn.LayerNorm(3 * number_of_per_atom_features)
 
@@ -343,16 +349,16 @@ class TensorNetCore(CoreNetwork):
             )
 
         I, A, S = decompose_tensor(X)
-        x = torch.cat(
+        per_atom_scalar_representation = torch.cat(
             (tensor_norm(I), tensor_norm(A), tensor_norm(S)),
             dim=-1,
         )
-        x = self.out_norm(x)
-        x = self.activation_function(self.linear(x))
+        per_atom_scalar_representation = self.out_norm(per_atom_scalar_representation)
+        per_atom_scalar_representation = self.readout(per_atom_scalar_representation)
 
         return {
-            "per_atom_energy": x.sum(dim=1),
-            "per_atom_features": x,
+            "per_atom_energy": per_atom_scalar_representation.sum(dim=1),
+            "per_atom_scalar_representation": per_atom_scalar_representation,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
 
@@ -612,7 +618,7 @@ class TensorNetRepresentation(torch.nn.Module):
 
         radial_feature_vector = self.radial_symmetry_function(data.d_ij)  # in nanometer
         rcut_ij = self.cutoff_module(data.d_ij)  # cutoff function applied twice
-        radial_feature_vector = (radial_feature_vector * rcut_ij).unsqueeze(1)
+        radial_feature_vector = torch.mul(radial_feature_vector, rcut_ij).unsqueeze(1)
 
         Iij, Aij, Sij = self._get_tensor_messages(
             atomic_number_embedding,

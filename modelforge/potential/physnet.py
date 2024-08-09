@@ -31,7 +31,7 @@ class PhysNetNeuralNetworkData(NeuralNetworkData):
         capturing the local chemical environment. Will be added after initialization. Shape: [num_pairs, num_rbf].
     """
 
-    atomic_embedding: torch.Tensor
+    atomic_embedding: Optional[torch.Tensor] = field(default=None)
     f_ij: Optional[torch.Tensor] = field(default=None)
 
 
@@ -40,10 +40,11 @@ class PhysNetRepresentation(nn.Module):
         self,
         maximum_interaction_radius: unit.Quantity,
         number_of_radial_basis_functions: int,
+        featurization_config: Dict[str, Union[List[str], int]],
     ):
         """
-        Representation module for the PhysNet potential, handling the generation of
-        the radial basis functions (RBFs) with a cutoff.
+        Representation module for the PhysNet potential, handling the generation
+        of the radial basis functions (RBFs) with a cutoff and atom number embedding.
 
         Parameters
         ----------
@@ -51,6 +52,8 @@ class PhysNetRepresentation(nn.Module):
             The cutoff distance for interactions.
         number_of_radial_basis_functions : int
             Number of radial basis functions to use.
+        featurization_config : Dict[str, Union[List[str], int]]
+            Configuration for atomic feature generation.
         """
 
         super().__init__()
@@ -62,6 +65,9 @@ class PhysNetRepresentation(nn.Module):
 
         # Initialize radial symmetry function module
         from .utils import PhysNetRadialBasisFunction
+        from modelforge.potential.utils import FeaturizeInput
+
+        self.featurize_input = FeaturizeInput(featurization_config)
 
         self.radial_symmetry_function_module = PhysNetRadialBasisFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
@@ -69,25 +75,29 @@ class PhysNetRepresentation(nn.Module):
             dtype=torch.float32,
         )
 
-    def forward(self, d_ij: torch.Tensor) -> torch.Tensor:
+    def forward(self, data: Type[PhysNetNeuralNetworkData]) -> Dict[str, torch.Tensor]:
         """
         Forward pass of the representation module.
 
         Parameters
         ----------
-        d_ij : torch.Tensor
+        data : PhysnetNeuralNetworkData
             pairwise distances between atoms, shape (n_pairs).
 
         Returns
         -------
-        torch.Tensor
+        Dict[str, torch.Tensor]
             The radial basis function expansion applied to the input distances,
             shape (n_pairs, n_gaussians), after applying the cutoff function.
         """
-
-        f_ij = self.radial_symmetry_function_module(d_ij).squeeze()
-        f_ij = torch.mul(f_ij, self.cutoff_module(d_ij))
-        return f_ij
+        f_ij = self.radial_symmetry_function_module(data.d_ij).squeeze()
+        return {
+            "f_ij": f_ij,
+            "f_ij_cutoff": self.cutoff_module(data.d_ij),
+            "atomic_embedding": self.featurize_input(
+                data
+            ),  # add per-atom properties and embedding
+        }
 
 
 class GatingModule(nn.Module):
@@ -256,13 +266,16 @@ class PhysNetInteractionModule(nn.Module):
         torch.Tensor
             Updated atomic feature representations incorporating interaction information.
         """
-        # Equation 6: Formation of the Proto-Message ṽ_i for an Atom i
-        # ṽ_i = σ(Wl_I * x_i^l + bl_I) + Σ_j (G_g * Wl * (σ(σl_J * x_j^l + bl_J)) * g(r_ij))
-        # Equation 6 implementation overview:
-        # ṽ_i = x_i_prime + sum_over_j(x_j_prime * f_ij_prime)
-        # where:
-        # - x_i_prime and x_j_prime are the features of atoms i and j, respectively, processed through separate networks.
-        # - f_ij_prime represents the modulated radial basis functions (f_ij) by the Gaussian Logarithm Attention weights.
+        # Equation 6: Formation of the Proto-Message ṽ_i for an Atom i ṽ_i =
+        # σ(Wl_I * x_i^l + bl_I) + Σ_j (G_g * Wl * (σ(σl_J * x_j^l + bl_J)) *
+        # g(r_ij))
+        #
+        # Equation 6 implementation overview: ṽ_i = x_i_prime +
+        # sum_over_j(x_j_prime * f_ij_prime) where:
+        # - x_i_prime and x_j_prime are the features of atoms i and j,
+        #   respectively, processed through separate networks.
+        # - f_ij_prime represents the modulated radial basis functions (f_ij) by
+        #   the Gaussian Logarithm Attention weights.
 
         # extract relevant variables
         idx_i, idx_j = data.pair_indices
@@ -485,9 +498,6 @@ class PhysNetCore(CoreNetwork):
         super().__init__(activation_function)
 
         # featurize the atomic input
-        from modelforge.potential.utils import FeaturizeInput
-
-        self.featurize_input = FeaturizeInput(featurization_config)
         number_of_per_atom_features = int(
             featurization_config["number_of_per_atom_features"]
         )
@@ -495,6 +505,7 @@ class PhysNetCore(CoreNetwork):
         self.physnet_representation_module = PhysNetRepresentation(
             maximum_interaction_radius=maximum_interaction_radius,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
+            featurization_config=featurization_config,
         )
 
         # initialize the PhysNetModule building blocks
@@ -534,15 +545,6 @@ class PhysNetCore(CoreNetwork):
         PhysNetNeuralNetworkData
             Prepared input data for the PhysNet model.
         """
-        atomic_embedding = self.featurize_input(data)
-        #         Z_i, ..., Z_N
-        #
-        #             │
-        #             ∨
-        #        ┌────────────┐
-        #        │ embedding  │
-        #        └────────────┘
-
         number_of_atoms = data.atomic_numbers.shape[0]
 
         nnp_input = PhysNetNeuralNetworkData(
@@ -555,7 +557,6 @@ class PhysNetCore(CoreNetwork):
             atomic_numbers=data.atomic_numbers,
             atomic_subsystem_indices=data.atomic_subsystem_indices,
             total_charge=data.total_charge,
-            atomic_embedding=atomic_embedding,  # atom embedding
         )
 
         return nnp_input
@@ -578,10 +579,11 @@ class PhysNetCore(CoreNetwork):
         """
 
         # Computed representation
-        data.f_ij = self.physnet_representation_module(data.d_ij).squeeze(
-            1
-        )  # shape: (n_pairs, number_of_radial_basis_functions)
+        representation = self.physnet_representation_module(data)
         nr_of_atoms_in_batch = data.number_of_atoms
+
+        data.atomic_embedding = representation["atomic_embedding"]
+        data.f_ij = torch.mul(representation["f_ij"], representation["f_ij_cutoff"])
 
         #         d_i, ..., d_N
         #
@@ -595,10 +597,10 @@ class PhysNetCore(CoreNetwork):
         # in the following we are implementing the calculations analoguous
         # to the modules outlined in Figure 1
 
-        # NOTE: both embedding and f_ij (the output of the Radial Symmetry Function) are
-        # stored in `inputs`
-        # inputs are the embedding vectors and f_ij
-        # the embedding vector will get updated in each pass through the modules
+        # NOTE: both embedding and f_ij (the output of the Radial Symmetry
+        # Function) are stored in `inputs` inputs are the embedding vectors and
+        # f_ij the embedding vector will get updated in each pass through the
+        # modules
 
         #             ┌────────────┐         ┌────────────┐
         #             │ embedding  │         │    RBF     │
@@ -621,7 +623,7 @@ class PhysNetCore(CoreNetwork):
 
         for module in self.physnet_module:
             output_of_module = module(data)
-            # accumulate output for atomic energies
+            # accumulate output for atomic properties
             prediction_i += output_of_module["prediction"]
             # update embedding for next module
             data.atomic_embedding = output_of_module["updated_embedding"]
@@ -635,14 +637,12 @@ class PhysNetCore(CoreNetwork):
         E_i = prediction_i_shifted_scaled[:, 0]  # shape(nr_of_atoms, 1)
         q_i = prediction_i_shifted_scaled[:, 1]  # shape(nr_of_atoms, 1)
 
-        output = {
+        return {
             "per_atom_energy": E_i.contiguous(),  # reshape memory mapping for JAX/dlpack
-            "q_i": q_i.contiguous(),
+            "per_atom_charge": q_i.contiguous(),
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
             "atomic_numbers": data.atomic_numbers,
         }
-
-        return output
 
 
 from .models import NNPInput, BaseNetwork

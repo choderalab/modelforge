@@ -1,3 +1,7 @@
+"""
+This module contains utility functions and classes for processing the output of the potential model.
+"""
+
 import torch
 from typing import Dict
 from openff.units import unit

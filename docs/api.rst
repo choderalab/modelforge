@@ -5,4 +5,8 @@ API Documentation
    :toctree: autosummary
    :recursive:
 
-   modelforge.potential.models
+   modelforge.potential
+   modelforge.dataset
+   modelforge.train
+   modelforge.utils
+   modelforge.curation

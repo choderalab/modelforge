@@ -1,3 +1,7 @@
+"""
+This module contains the base classes for the neural network potentials.
+"""
+
 from abc import ABC, abstractmethod
 from typing import (
     TYPE_CHECKING,

@@ -1,3 +1,7 @@
+"""
+TensorNet network for molecular potential learning.
+"""
+
 from dataclasses import dataclass
 
 import torch

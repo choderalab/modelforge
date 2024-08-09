@@ -1,3 +1,7 @@
+"""
+PaiNN - polarizable interaction neural network
+"""
+
 from typing import Dict, Optional, Tuple, Union, List, Type
 
 import torch

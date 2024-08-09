@@ -1,3 +1,7 @@
+"""
+SchNet neural network potential for modeling quantum interactions.
+"""
+
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Type, Union, List
 

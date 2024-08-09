@@ -1,3 +1,7 @@
+"""
+This module contains classes and functions for managing datasets.
+"""
+
 import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, List, Literal, Optional, Union, NamedTuple

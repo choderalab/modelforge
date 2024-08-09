@@ -1,3 +1,7 @@
+"""
+This module contains the implemented neural network potentials and their parameters.
+"""
+
 from .schnet import SchNet
 from .physnet import PhysNet
 from .painn import PaiNN

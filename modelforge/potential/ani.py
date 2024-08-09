@@ -1,3 +1,7 @@
+"""
+This module contains the classes for the ANI2x neural network potential.
+"""
+
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, Tuple, Type
 from .models import BaseNetwork, CoreNetwork

@@ -3,7 +3,8 @@
 Modules
 =======
 
-.. toctree::
-   :maxdepth: 2
 
-   modelforge.potential.models
+.. automodule:: modelforge.potential
+    :members:
+    :undoc-members:
+    :show-inheritance:

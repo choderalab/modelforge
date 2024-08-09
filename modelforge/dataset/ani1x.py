@@ -1,3 +1,7 @@
+"""
+Data class for handling ANI1x dataset.
+"""
+
 from typing import List
 
 from .dataset import HDF5Dataset

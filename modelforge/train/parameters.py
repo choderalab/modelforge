@@ -1,9 +1,5 @@
 """
-This will define a pydantic model for the training parameters, meant to take the dictionary defined in the
-associated yaml file. This model will be used to validate the input dictionary and to provide default values.
-
-
-
+This defines pydantic models for the training parameters and runtime parameters.
 """
 
 from pydantic import BaseModel, model_validator, field_validator, ConfigDict

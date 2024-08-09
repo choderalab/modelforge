@@ -1,3 +1,7 @@
+"""
+SAKE - Spatial Attention Kinetic Networks with E(n) Equivariance
+"""
+
 from dataclasses import dataclass
 
 import torch.nn as nn

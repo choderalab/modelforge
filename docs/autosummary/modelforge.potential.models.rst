@@ -1,17 +1,8 @@
-﻿modelforge.potential.models
+modelforge.potential.models
 ===========================
 
 .. automodule:: modelforge.potential.models
 
-   
-   
-   
-
-   
-   
-   
-
-   
    
    .. rubric:: Classes
 
@@ -28,11 +19,3 @@
       PostProcessing
       PyTorch2JAXConverter
    
-   
-
-   
-   
-   
-
-
-

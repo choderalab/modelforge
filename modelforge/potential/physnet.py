@@ -1,3 +1,7 @@
+"""
+Implementation of the PhysNet neural network potential.
+"""
+
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Union, List, Dict, Type
 

@@ -1,3 +1,7 @@
+"""
+This module contains functions and classes for hyperparameter tuning and distributed training using Ray Tune.
+"""
+
 import torch
 
 from ray import air, tune
@@ -194,7 +198,6 @@ class RayTuner:
         ExperimentAnalysis
             The result of the hyperparameter tuning session, containing performance metrics and the best hyperparameters found.
         """
-
 
         from ray import tune
 

@@ -1,3 +1,7 @@
+"""
+Utility functions for neural network potentials.
+"""
+
 import math
 from dataclasses import dataclass
 from typing import Callable, Optional, Tuple, Type
@@ -622,7 +626,7 @@ class CosineAttenuationFunction(nn.Module):
     def __init__(self, cutoff: unit.Quantity):
         """
         Behler-style cosine cutoff module. This anneals the signal smoothly to zero at the cutoff distance.
-        
+
         NOTE: The cutoff is converted to nanometer and the input MUST be in nanomter too.
 
         Parameters:

@@ -224,6 +224,7 @@ Investigating Hyperparameter Impact on Model Performance
 For each supported architecture, modelforge provides reasonable priors for hyperparameters. Hyperparameter optimization is conducted using `Ray`.
 
 .. autoclass:: modelforge.train.tuning.RayTuner
+    :noindex:
 
 
 *Modelforge* offers the :py:class:`~modelforge.train.tuning.RayTuner` class, which facilitates the exploration of hyperparameter impacts on model performance given specific training and dataset parameters within a defined computational budget.

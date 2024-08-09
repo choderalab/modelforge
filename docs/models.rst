@@ -1,7 +1,7 @@
 Models
 ===============
 
-Introduction
+Models: Overview
 ----------------
 
 A model in modelforge encapsulates all the operations required to map a

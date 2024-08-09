@@ -10,6 +10,7 @@ The properties a given model can be trained on are deterimend by the model itsel
 
 *Modelforge* uses Pytorch Lightning to train models. The training process is controlled by a :class:`~modelforge.train.training.ModelTrainer` object, which is responsible for managing the training loop, the optimizer, the learning rate scheduler, and the early stopping criteria. The training process is controlled by a configuration file, `training.toml`, which specifies the number of epochs, the learning rate, the loss function, and the splitting strategy for the dataset. The training process can be started by 
 
+
 Training Configuration
 ------------------------------------------
 
@@ -45,16 +46,19 @@ In that case the total energy is calculated as
 
 The loss function can then be formulated as:
 
-.. math:: L = (E - E^{pred})^2
+.. math:: L(E) = (E - E^{pred})^2
 
 Alternatively, if the dataset includes per atom forces, the loss function can be expressed as:
 
-.. math:: L = w_E * (E - E^{pred})^2 + w_F \frac{1}{3N} \sum_i^N \sum_j^3 (F_{ij} - F_{ij}^{pred})^2
+.. math:: L(E,F) = w_E * (E - E^{pred})^2 + w_F \frac{1}{3N} \sum_i^N \sum_j^3 (F_{ij} - F_{ij}^{pred})^2
 
 where `w_E` and `w_F` are the weights for the energy and force components, respectively.
 
 Predicting Short-Range Atomic Energy with Long-Range Interactions
 *************************************************************************
+
+.. warning::
+    The following section is under development and may not be fully implemented in the current version of *modelforge*.
 
 In scenarios where long-range interactions are considered, additional terms are incorporated into the loss function. There are two long range interactions that are of interest: long range dispersion interactions and electrostatics.
 
@@ -66,27 +70,25 @@ for the total energy is then:
 
 where `k_c` is the Coulomb constant, `q_i` and `q_j` are the atomic charges, and the loss function is:
 
-.. math:: L = w_E * (E - E^{pred})^2 + w_F \frac{1}{3N} \sum_i^N \sum_j^3 (F_{ij} - F_{ij}^{pred})^2 + w_Q (\sum_i^N q_i - Q_i^{pred})^2 + \frac{w_p}{3} \sum_j^3 \sum_i^N q_i r_i,j - p_j^{ref})^2
+.. math:: L(E,F,Q) = L(E,F) + w_Q (\sum_i^N q_i - Q_i^{pred})^2 + \frac{w_p}{3} \sum_j^3 (\sum_i^N q_i r_i,j - p_j^{ref})^2
 
 where `w_Q` is the weight for the charge component, `w_p` the weight for the dipole moment component, and `p_j^{ref}` is the reference dipole moment. 
-
-
 
 
 Splitting Strategies
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-The default splitting strategy for datasets in `modelforge` is to randomly split
-the dataset into 80% training, 10% validation, and 10% test set based on
+The recommended splitting strategy for datasets in `modelforge` is to randomly split the dataset into 80% training, 10% validation, and 10% test set based on
 molecules. This approach ensures that different conformations of a molecule are
 always part of the same split, thereby avoiding data leakage. 
 
 `modelforge` also provides other splitting strategies, including:
 
-- :class:`modelforge.dataset.utils.FirstComeFirstServeStrategy`: Splits the dataset based on the order of records (molecules).
-- :class:`modelforge.dataset.utils.RandomSplittingStrategy`: Splits the dataset randomly based on conformations.
+- :class:`~modelforge.dataset.utils.FirstComeFirstServeStrategy`: Splits the dataset based on the order of records (molecules).
+- :class:`~modelforge.dataset.utils.RandomSplittingStrategy`: Splits the dataset randomly based on conformations.
 
-To use a different data split ratio, you can specify a custom split list in the splitting strategy. 
-The most effective way to pass this information to the training process is by defining the appropriate fields in the `dataset.toml` file, as shown in :ref:`dataset-configuration`.
+To use a different data split ratio, you can specify a custom split list in the
+splitting strategy. The most effective way to pass this information to the
+training process is by defining the appropriate fields in the TOML file providing the training parameters, see the TOML file above. 
 
 

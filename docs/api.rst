@@ -2,11 +2,13 @@ API Documentation
 =================
 
 .. autosummary::
-   :toctree: autosummary
-   :recursive:
+    :toctree: autosummary
+    :recursive:
 
-   modelforge.potential
-   modelforge.dataset
-   modelforge.train
-   modelforge.utils
-   modelforge.curation
+    modelforge.potential
+    modelforge.potential
+    modelforge.dataset
+    modelforge.train
+    modelforge.utils
+    modelforge.curation
+

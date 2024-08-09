@@ -81,6 +81,7 @@ The following example demonstrates how to use the :class:`~modelforge.dataset.Da
     # Setup the data for training, validation, and testing
     data_module.setup()
 
+.. _dataset-configuration:
 
 Dataset Configuration
 ------------------------------------

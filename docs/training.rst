@@ -6,7 +6,7 @@ Training: Overview
 
 During training the parameters of a model are fitted to reproduce the target properties provided by a dataset. These are typically energies and forces, but can also be other properties provided by a dataset (e.g., dipole moments).
 
-The properties a given model can be trained on are deterimend by the model itself and by the loss function used to train the model. Each of the models implemented in *modelforge* have flexible numbers of output heads, each of which can be fitted against a different scalar/tensor property. 
+The properties a given model can be trained on are determined by the model itself and by the loss function used to train the model. Each of the models implemented in *modelforge* have flexible numbers of output heads, each of which can be fitted against a different scalar/tensor property.
 
 *Modelforge* uses Pytorch Lightning to train models. The training process is controlled by a :class:`~modelforge.train.training.ModelTrainer` object, which is responsible for managing the training loop, the optimizer, the learning rate scheduler, and the early stopping criteria. The training process is controlled by a configuration file, `training.toml`, which specifies the number of epochs, the learning rate, the loss function, and the splitting strategy for the dataset. The training process can be started by 
 
@@ -31,7 +31,7 @@ sections in each TOML file, only the `dataset.toml` file needs to be changed).
 Learning rate scheduler
  ^^^^^^^^^^^^^^^^^^^^^^^^
 
-The learning rate scheduler is responsible for adjusting the learning rate during training. *Modelforge* uses the REduceLROnPlateau scheduler, which reduces the learning rate by a factor when the RMSE of the energy prediction on the validation set does not improve for a given number of epochs. The scheduler is controlled by the parameters in the `[training.lr_scheduler]` section of the `training.toml` file.
+The learning rate scheduler is responsible for adjusting the learning rate during training. *Modelforge* uses the `REduceLROnPlateau scheduler`, which reduces the learning rate by a factor when the RMSE of the energy prediction on the validation set does not improve for a given number of epochs. The scheduler is controlled by the parameters in the `[training.lr_scheduler]` section of the `training.toml` file.
 
 Loss function
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -69,7 +69,7 @@ Predicting Short-Range Atomic Energy with Long-Range Interactions
 
 In scenarios where long-range interactions are considered, additional terms are incorporated into the loss function. There are two long range interactions that are of interest: long range dispersion interactions and electrostatics.
 
-To calculate long range electrostatics the first moment of the charge density  (partial charges) is predicted by the machine learing potential.  The atomic
+To calculate long range electrostatics the first moment of the charge density (partial charges) is predicted by the machine learning potential.  The atomic
 charges are then used to calculate the long range electrostatics. The expression
 for the total energy is then:
 

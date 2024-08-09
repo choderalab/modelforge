@@ -4,7 +4,7 @@ For Developers
 .. note::
     
         This section is intended for developers who want to extend the functionality of the `modelforge` package
-        or who want to develop their own machine learned potentials. This section explains design decicions 
+        or who want to develop their own machine learned potentials. This section explains design decisions
         and the structure of neural network potentials.
 
 
@@ -44,10 +44,10 @@ The :py:class:`~modelforge.potential.models.BaseNetwork` class is the main class
 The :py:class:`~modelforge.potential.models.CoreNetwork` class is used to store the neural network that is used to predict the potential.
 
 
-.. image:: image/overview_network_v2.png
-  :width: 400
-  :align: center
-  :alt: Alternative text
+#.. image:: image/overview_network_v2.png
+#  :width: 400
+#  :align: center
+#  :alt: Alternative text
 
 The input of every neural network is the :py:class:`~modelforge.dataset.dataset.NNPInput` dataclass as shown below.
 Note that, for certain applications, it is useful to convert the dataclass to a `NamedTuple`, 

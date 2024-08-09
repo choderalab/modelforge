@@ -7,7 +7,6 @@ API Documentation
 
     modelforge.potential
     modelforge.dataset
-    modelforge.train
     modelforge.utils
     modelforge.curation
 

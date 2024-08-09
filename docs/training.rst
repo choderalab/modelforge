@@ -1,7 +1,7 @@
 Training
 ========
 
-Introduction
+Training: Overview
 ------------------------------------------
 
 During training the parameters of a model are fitted to reproduce the target properties provided by a dataset. These are typically energies and forces, but can also be other properties provided by a dataset (e.g., dipole moments).

@@ -18,9 +18,7 @@ The best way to get started is to read the :doc:`getting_started` guide, which o
    models
    datasets
    training
-   examples
    for_developer
-   tuning
    api
 
 

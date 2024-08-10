@@ -1080,16 +1080,11 @@ class ModelTrainer:
         # add version
         import modelforge
 
-        print(tags)
-        version = modelforge.__version__
-        tags += version
-        print(tags)
+        tags.append(str(modelforge.__version__))
         # add dataset
-        tags += self.dataset_config.dataset_name
-        print(tags)
+        tags.append(self.dataset_config.dataset_name)
         # add potential name
-        tags += self.potential_config.potential_name
-        print(tags)
+        tags.append(self.potential_config.potential_name)
         return tags
 
     def _replace_placeholder_in_experimental_name(self, experiment_name: str) -> str:

@@ -1062,6 +1062,34 @@ class ModelTrainer:
         self.callbacks = self.setup_callbacks()
         self.trainer = self.setup_trainer()
 
+    def _add_tags(self, tags: List[str]) -> List[str]:
+        """
+        Add tags to the wandb tags.
+
+        Parameters
+        ----------
+        tags : List[str]
+            List of tags to add to the experiment.
+
+        Returns
+        -------
+        List[str]
+            List of tags for the experiment.
+        """
+        
+        # add version
+        import modelforge
+        version = modelforge.__version__
+        tags += version
+        
+        # add dataset
+        tags += self.dataset_config.dataset_name
+        
+        # add potential name
+        tags += self.potential_config.potential_name
+        
+        return tags
+
     def setup_logger(self) -> L.pytorch.loggers.Logger:
         """
         Set up the experiment logger based on the configuration.
@@ -1096,7 +1124,9 @@ class ModelTrainer:
                 project=self.training_config.experiment_logger.wandb_configuration.project,
                 group=self.training_config.experiment_logger.wandb_configuration.group,
                 job_type=self.training_config.experiment_logger.wandb_configuration.job_type,
-                tags=self.training_config.experiment_logger.wandb_configuration.tags,
+                tags=self._add_tags(
+                    self.training_config.experiment_logger.wandb_configuration.tags
+                ),
                 notes=self.training_config.experiment_logger.wandb_configuration.notes,
                 name=self.runtime_config.experiment_name,
             )

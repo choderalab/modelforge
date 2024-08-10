@@ -1076,19 +1076,43 @@ class ModelTrainer:
         List[str]
             List of tags for the experiment.
         """
-        
+
         # add version
         import modelforge
+
         version = modelforge.__version__
         tags += version
-        
+
         # add dataset
         tags += self.dataset_config.dataset_name
-        
+
         # add potential name
         tags += self.potential_config.potential_name
-        
+
         return tags
+
+    def _replace_placeholder_in_experimental_name(self, experiment_name: str) -> str:
+        """
+        Replace the placeholders in the experiment name with the actual values.
+
+        Parameters
+        ----------
+        experiment_name : str
+            The experiment name with placeholders.
+
+        Returns
+        -------
+        str
+            The experiment name with the placeholders replaced.
+        """
+        # replace placeholders in the experiment name
+        experiment_name = experiment_name.replace(
+            "{potential_name}", self.potential_config.potential_name
+        )
+        experiment_name = experiment_name.replace(
+            "{dataset_name}", self.dataset_config.dataset_name
+        )
+        return experiment_name
 
     def setup_logger(self) -> L.pytorch.loggers.Logger:
         """
@@ -1105,8 +1129,10 @@ class ModelTrainer:
             logger = TensorBoardLogger(
                 save_dir=str(
                     self.training_config.experiment_logger.tensorboard_configuration.save_dir
+                ), # FIXME: same variable for all logger, maybe we can use a varable not bound to a logger for this?
+                name=self._replace_placeholder_in_experimental_name(
+                    self.runtime_config.experiment_name
                 ),
-                name=self.runtime_config.experiment_name,
             )
         elif self.training_config.experiment_logger.logger_name == "wandb":
             from modelforge.utils.io import check_import
@@ -1128,7 +1154,9 @@ class ModelTrainer:
                     self.training_config.experiment_logger.wandb_configuration.tags
                 ),
                 notes=self.training_config.experiment_logger.wandb_configuration.notes,
-                name=self.runtime_config.experiment_name,
+                name=self._replace_placeholder_in_experimental_name(
+                    self.runtime_config.experiment_name
+                ),
             )
         return logger
 

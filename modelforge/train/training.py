@@ -860,7 +860,7 @@ class ModelTrainer(pL.LightningModule):
         loss_dict = self.loss(predict_target, batch)
 
         # Update and log training error
-        self._update_metrics(self.train_error, predict_target)
+        self._update_metrics(self.train_error, predict_target) # FIXME: use pytorchmetrics to log the loss
 
         # log the loss (this includes the individual contributions that the loss contains)
         for key, loss in loss_dict.items():

@@ -1086,8 +1086,8 @@ class ModelTrainer:
         # add potential name
         tags.append(self.potential_config.potential_name)
         # add information about what is included in the loss
-        tags.append(f"loss-{self.training_config.loss.loss_property}")
-        
+        tags.append(f"loss-{self.training_config.loss_parameter.loss_property}")
+
         return tags
 
     def _replace_placeholder_in_experimental_name(self, experiment_name: str) -> str:

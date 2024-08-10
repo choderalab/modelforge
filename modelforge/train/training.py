@@ -1080,15 +1080,16 @@ class ModelTrainer:
         # add version
         import modelforge
 
+        print(tags)
         version = modelforge.__version__
         tags += version
-
+        print(tags)
         # add dataset
         tags += self.dataset_config.dataset_name
-
+        print(tags)
         # add potential name
         tags += self.potential_config.potential_name
-
+        print(tags)
         return tags
 
     def _replace_placeholder_in_experimental_name(self, experiment_name: str) -> str:
@@ -1129,7 +1130,7 @@ class ModelTrainer:
             logger = TensorBoardLogger(
                 save_dir=str(
                     self.training_config.experiment_logger.tensorboard_configuration.save_dir
-                ), # FIXME: same variable for all logger, maybe we can use a varable not bound to a logger for this?
+                ),  # FIXME: same variable for all logger, maybe we can use a varable not bound to a logger for this?
                 name=self._replace_placeholder_in_experimental_name(
                     self.runtime_config.experiment_name
                 ),

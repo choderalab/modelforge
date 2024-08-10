@@ -63,12 +63,17 @@ class Error(nn.Module, ABC):
         """
         Calculates the squared error between the predicted and true values.
 
-        Parameters:
-            predicted_tensor (torch.Tensor): The predicted values.
-            reference_tensor (torch.Tensor): The values provided by the dataset.
+        Parameters
+        ----------
+        predicted_tensor : torch.Tensor
+            The predicted values.
+        reference_tensor : torch.Tensor
+            The reference values provided by the dataset.
 
-        Returns:
-            torch.Tensor: The calculated error.
+        Returns
+        -------
+        torch.Tensor
+            The calculated error.
         """
         return (predicted_tensor - reference_tensor).pow(2).sum(dim=1, keepdim=True)
 
@@ -77,12 +82,17 @@ class Error(nn.Module, ABC):
         """
         Scales the error by the number of atoms in the atomic subsystems.
 
-        Parameters:
-            error: The error to be scaled.
-            atomic_subsystem_counts: The number of atoms in the atomic subsystems.
+        Parameters
+        ----------
+        error : torch.Tensor
+            The error to be scaled.
+        atomic_subsystem_counts : torch.Tensor
+            The number of atoms in the atomic subsystems.
 
-        Returns:
-            torch.Tensor: The scaled error.
+        Returns
+        -------
+        torch.Tensor
+            The scaled error.
         """
         # divide by number of atoms
         scaled_by_number_of_atoms = error / atomic_subsystem_counts.unsqueeze(
@@ -372,7 +382,7 @@ from modelforge.train.parameters import RuntimeParameters, TrainingParameters
 
 class ModelTrainer(pL.LightningModule):
     """
-    Adapter class for training neural network potentials using PyTorch Lightning.
+    Class for training neural network potentials using PyTorch Lightning.
     """
 
     def __init__(
@@ -389,7 +399,6 @@ class ModelTrainer(pL.LightningModule):
         ],
         training_parameter: TrainingParameters,
         runtime_parameter: RuntimeParameters,
-        dataset_statistic: Dict[str, torch.Tensor],
         optimizer: Type[Optimizer] = torch.optim.AdamW,
         verbose: bool = False,
     ):

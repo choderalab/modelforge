@@ -621,7 +621,6 @@ class NeuralNetworkPotentialFactory:
                 potential_parameter=potential_parameter,
                 training_parameter=training_parameter,
                 dataset_parameter=dataset_parameter,
-                dataset_statistic=dataset_statistic,
                 runtime_parameter=runtime_parameter
             )
             return model

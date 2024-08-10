@@ -492,13 +492,30 @@ def test_calculate_energies_and_forces(potential_name, single_batch_with_batchsi
 
     # test the pass through each of the models
     torch.manual_seed(42)
+    model_training = NeuralNetworkPotentialFactory.generate_model(
+        use="training",
+        potential_parameter=config["potential"],
+        training_parameter=config["training"],
+        dataset_parameter=config["dataset"],
+        runtime_parameter=config["runtime"],
+    )
+
+    # get energy and force
+    E_training = model_training.model.forward(nnp_input)["per_molecule_energy"]
+    F_training = -torch.autograd.grad(
+        E_training.sum(), nnp_input.positions, create_graph=True, retain_graph=True
+    )[0]
+
+    # compare to inference model
+    torch.manual_seed(42)
     model_inference = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
-        potential_parameter=config["potential"].model_dump(),
+        potential_parameter=config["potential"],
+        dataset_statistic=model_training.dataset_statistic,
     )
-    E_inference = model_inference(nnp_input)["per_molecule_energy"]
 
-    # backpropagation
+    # get energy and force
+    E_inference = model_inference(nnp_input)["per_molecule_energy"]
     F_inference = -torch.autograd.grad(
         E_inference.sum(), nnp_input.positions, create_graph=True, retain_graph=True
     )[0]
@@ -509,18 +526,6 @@ def test_calculate_energies_and_forces(potential_name, single_batch_with_batchsi
 
     assert E_inference.shape == torch.Size([nr_of_mols])
     assert F_inference.shape == (nr_of_atoms_per_batch, 3)  #  only one molecule
-
-    torch.manual_seed(42)
-    model_training = NeuralNetworkPotentialFactory.generate_model(
-        use="training",
-        potential_parameter=config["potential"].model_dump(),
-        training_parameter=config["training"].model_dump(),
-    )
-
-    E_training = model_training.model.forward(nnp_input)["per_molecule_energy"]
-    F_training = -torch.autograd.grad(
-        E_training.sum(), nnp_input.positions, create_graph=True, retain_graph=True
-    )[0]
 
     # make sure that both agree on E and F
     assert torch.allclose(E_inference, E_training, atol=1e-4)
@@ -549,7 +554,7 @@ def test_calculate_energies_and_forces_with_jax(
     # The inference_model fixture now returns a function that expects an environment
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
-        potential_parameter=config["potential"].model_dump(),
+        potential_parameter=config["potential"],
         simulation_environment="JAX",
     )
 
@@ -947,7 +952,7 @@ def test_casting(potential_name, single_batch_with_batchsize_64):
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         simulation_environment="PyTorch",
-        potential_parameter=config["potential"].model_dump(),
+        potential_parameter=config["potential"],
     )
     model = model.to(dtype=torch.float64)
     nnp_input = batch.nnp_input.to(dtype=torch.float64)
@@ -958,7 +963,7 @@ def test_casting(potential_name, single_batch_with_batchsize_64):
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         simulation_environment="PyTorch",
-        potential_parameter=config["potential"].model_dump(),
+        potential_parameter=config["potential"],
     )
     model = model.to(dtype=torch.float32)
     nnp_input = batch.nnp_input.to(dtype=torch.float32)

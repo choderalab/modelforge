@@ -476,7 +476,7 @@ def test_dataset_neighborlist(potential_name, single_batch_with_batchsize_64):
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         simulation_environment="PyTorch",
-        model_parameter=config["potential"].model_dump(),
+        potential_parameter=config["potential"].model_dump(),
     )
     model(nnp_input)
 

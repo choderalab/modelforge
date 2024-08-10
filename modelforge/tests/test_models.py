@@ -66,7 +66,7 @@ def test_JAX_wrapping(potential_name, single_batch_with_batchsize_64):
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         simulation_environment="JAX",
-        model_parameter=config["potential"].model_dump(),
+        potential_parameter=config["potential"].model_dump(),
     )
 
     assert "JAX" in str(type(model))
@@ -88,7 +88,7 @@ def test_model_factory(potential_name, simulation_environment):
     from modelforge.potential.models import (
         NeuralNetworkPotentialFactory,
     )
-    from modelforge.train.training import TrainingAdapter
+    from modelforge.train.training import ModelTrainer
 
     # read default parameters
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
@@ -97,7 +97,7 @@ def test_model_factory(potential_name, simulation_environment):
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         simulation_environment=simulation_environment,
-        model_parameter=config["potential"].model_dump(),
+        potential_parameter=config["potential"],
     )
     assert (
         potential_name.upper() in str(type(model)).upper()
@@ -109,10 +109,12 @@ def test_model_factory(potential_name, simulation_environment):
     model = NeuralNetworkPotentialFactory.generate_model(
         use="training",
         simulation_environment=simulation_environment,
-        model_parameter=config["potential"].model_dump(),
-        training_parameter=config["training"].model_dump(),
+        potential_parameter=config["potential"],
+        training_parameter=config["training"],
+        dataset_parameter=config["dataset"],
+        runtime_parameter=config["runtime"],
     )
-    assert type(model) == TrainingAdapter
+    assert type(model) == ModelTrainer
 
 
 def test_energy_scaling_and_offset():
@@ -225,7 +227,7 @@ def test_state_dict_saving_and_loading(potential_name):
     model1 = NeuralNetworkPotentialFactory.generate_model(
         use="training",
         simulation_environment="PyTorch",
-        model_parameter=config["potential"].model_dump(),
+        potential_parameter=config["potential"].model_dump(),
         training_parameter=config["training"].model_dump(),
     )
     torch.save(model1.state_dict(), "model.pth")
@@ -233,7 +235,7 @@ def test_state_dict_saving_and_loading(potential_name):
     model2 = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         simulation_environment="PyTorch",
-        model_parameter=config["potential"].model_dump(),
+        potential_parameter=config["potential"].model_dump(),
     )
     model2.load_state_dict(torch.load("model.pth"))
 
@@ -251,19 +253,6 @@ def test_dataset_statistic(potential_name):
     # read default parameters
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
 
-    # test the self energy calculation on the QM9 dataset
-    dataset = DataModule(
-        name="QM9",
-        batch_size=64,
-        version_select="nc_1000_v0",
-        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        remove_self_energies=True,
-        regression_ase=False,
-        regenerate_dataset_statistic=True,
-    )
-    dataset.prepare_data()
-    dataset.setup()
-
     import toml
     from openff.units import unit
 
@@ -279,7 +268,7 @@ def test_dataset_statistic(potential_name):
     training_adapter = NeuralNetworkPotentialFactory.generate_model(
         use="training",
         simulation_environment="PyTorch",
-        model_parameter=config["potential"].model_dump(),
+        potential_parameter=config["potential"].model_dump(),
         training_parameter=config["training"].model_dump(),
         dataset_statistic=dataset_statistic,
     )
@@ -304,7 +293,7 @@ def test_dataset_statistic(potential_name):
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         simulation_environment="PyTorch",
-        model_parameter=config["potential"].model_dump(),
+        potential_parameter=config["potential"].model_dump(),
         dataset_statistic=dataset_statistic,
     )
     model.load_state_dict(torch.load("model.pth"))
@@ -344,7 +333,7 @@ def test_energy_between_simulation_environments(
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         simulation_environment="PyTorch",
-        model_parameter=config["potential"].model_dump(),
+        potential_parameter=config["potential"].model_dump(),
     )
 
     output_torch = model(nnp_input)["per_molecule_energy"]
@@ -353,7 +342,7 @@ def test_energy_between_simulation_environments(
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         simulation_environment="JAX",
-        model_parameter=config["potential"].model_dump(),
+        potential_parameter=config["potential"].model_dump(),
     )
     nnp_input = nnp_input.as_jax_namedtuple()
     output_jax = model(nnp_input)["per_molecule_energy"]
@@ -395,7 +384,7 @@ def test_forward_pass_with_all_datasets(
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         simulation_environment="PyTorch",
-        model_parameter=config["potential"].model_dump(),
+        potential_parameter=config["potential"],
         dataset_statistic=dataset_statistic,
     )
     output = model(batch.nnp_input)
@@ -432,7 +421,7 @@ def test_forward_pass(
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         simulation_environment=simulation_environment,
-        model_parameter=config["potential"].model_dump(),
+        potential_parameter=config["potential"],
     )
     if "JAX" in str(type(model)):
         nnp_input = nnp_input.as_jax_namedtuple()
@@ -490,7 +479,7 @@ def test_calculate_energies_and_forces(potential_name, single_batch_with_batchsi
     torch.manual_seed(42)
     model_inference = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
-        model_parameter=config["potential"].model_dump(),
+        potential_parameter=config["potential"].model_dump(),
     )
     E_inference = model_inference(nnp_input)["per_molecule_energy"]
 
@@ -509,7 +498,7 @@ def test_calculate_energies_and_forces(potential_name, single_batch_with_batchsi
     torch.manual_seed(42)
     model_training = NeuralNetworkPotentialFactory.generate_model(
         use="training",
-        model_parameter=config["potential"].model_dump(),
+        potential_parameter=config["potential"].model_dump(),
         training_parameter=config["training"].model_dump(),
     )
 
@@ -545,7 +534,7 @@ def test_calculate_energies_and_forces_with_jax(
     # The inference_model fixture now returns a function that expects an environment
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
-        model_parameter=config["potential"].model_dump(),
+        potential_parameter=config["potential"].model_dump(),
         simulation_environment="JAX",
     )
 
@@ -943,7 +932,7 @@ def test_casting(potential_name, single_batch_with_batchsize_64):
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         simulation_environment="PyTorch",
-        model_parameter=config["potential"].model_dump(),
+        potential_parameter=config["potential"].model_dump(),
     )
     model = model.to(dtype=torch.float64)
     nnp_input = batch.nnp_input.to(dtype=torch.float64)
@@ -954,7 +943,7 @@ def test_casting(potential_name, single_batch_with_batchsize_64):
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         simulation_environment="PyTorch",
-        model_parameter=config["potential"].model_dump(),
+        potential_parameter=config["potential"].model_dump(),
     )
     model = model.to(dtype=torch.float32)
     nnp_input = batch.nnp_input.to(dtype=torch.float32)
@@ -985,7 +974,7 @@ def test_equivariant_energies_and_forces(
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         simulation_environment=simulation_environment,
-        model_parameter=config["potential"].model_dump(),
+        potential_parameter=config["potential"].model_dump(),
     )
 
     # define the symmetry operations

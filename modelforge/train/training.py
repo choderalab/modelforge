@@ -379,10 +379,11 @@ def create_error_metrics(loss_properties: List[str]) -> ModuleDict:
 
 from modelforge.train.parameters import RuntimeParameters, TrainingParameters
 
-class CalculateProperties(torch.nn.Modules):
+
+class CalculateProperties(torch.nn.Module):
 
     def __init__(self, model):
-    	.self.model=model
+        self.model = model
 
     def _get_forces(
         self, batch: "BatchData", energies: Dict[str, torch.Tensor]
@@ -478,6 +479,7 @@ class CalculateProperties(torch.nn.Modules):
         forces = self._get_forces(batch, energies)
         return {**energies, **forces}
 
+
 class TrainingAdapter(pL.LightningModule):
     """
     Adapter class for training neural network potentials using PyTorch Lightning.
@@ -494,9 +496,9 @@ class TrainingAdapter(pL.LightningModule):
             PaiNNParameters,
             TensorNetParameters,
         ],
-        dataset_statistic:Dict[str, float],
+        dataset_statistic: Dict[str, float],
         training_parameter: TrainingParameters,
-        model_seed:Optional[int]=None,
+        model_seed: Optional[int] = None,
         optimizer: Type[Optimizer],
         verbose: bool = False,
     ):
@@ -521,7 +523,7 @@ class TrainingAdapter(pL.LightningModule):
         super().__init__()
         self.save_hyperparameters()
         self.training_parameter = training_parameter
-        
+
         # Get requested model class
         nnp_class = _Implemented_NNPs.get_neural_network_class(
             potential_parameter.potential_name
@@ -530,7 +532,7 @@ class TrainingAdapter(pL.LightningModule):
             **potential_parameter.core_parameter.model_dump(),
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=potential_parameter.postprocessing_parameter.model_dump(),
-            model_seed=model_seed
+            model_seed=model_seed,
         )
 
         self.calculate_prediction = CalculateProperties(self.model)
@@ -547,7 +549,9 @@ class TrainingAdapter(pL.LightningModule):
             self.log_on_training_step = False
 
         # initialize loss
-        self.loss = LossFactory.create_loss(**training_parameter.loss_parameter.model_dump())
+        self.loss = LossFactory.create_loss(
+            **training_parameter.loss_parameter.model_dump()
+        )
 
         # Assign the created error metrics to the respective attributes
         self.test_error = create_error_metrics(loss_parameter["loss_property"])
@@ -880,7 +884,6 @@ class ModelTrainer:
         self.callbacks = self.setup_callbacks()
         self.trainer = self.setup_trainer()
 
-
     def read_dataset_statistics(self) -> Dict[str, float]:
         """
         Read and log dataset statistics.
@@ -933,7 +936,7 @@ class ModelTrainer:
         dm.setup()
         return dm
 
-    def setup_model(self, model_seed:Optional[int] = None) -> nn.Module:
+    def setup_model(self, model_seed: Optional[int] = None) -> nn.Module:
         """
         Set up the model for training.
         Parameters:
@@ -947,16 +950,11 @@ class ModelTrainer:
             Configured model instance.
         """
         # Initialize model
-        from modelforge.potential import _Implemented_NNPs
-
-        nnp_class = _Implemented_NNPs.get_neural_network_class(
-            self.potential_parameter.potential_name
-        )
         return TrainingAdapter(
             self.potential_parameter,
             dataset_statistic=self.dataset_statistic,
             postprocessing_parameter=self.potential_parameter.postprocessing_parameter.model_dump(),
-            model_seed=model_seed
+            model_seed=model_seed,
         )
 
     def setup_logger(self) -> pL.loggers.Logger:
@@ -1722,4 +1720,3 @@ def read_config_and_train(
     )
 
     return model.train()
-

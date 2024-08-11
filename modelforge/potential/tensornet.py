@@ -217,7 +217,8 @@ class TensorNet(BaseNetwork):
         activation_function_parameter: Dict,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
-    ) -> None:
+        model_seed : Optional[int] = None
+        ) -> None:
 
         activation_function = activation_function_parameter["activation_function"]
 
@@ -226,6 +227,7 @@ class TensorNet(BaseNetwork):
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=postprocessing_parameter,
             maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
+            model_seed=model_seed
         )
 
         self.core_module = TensorNetCore(

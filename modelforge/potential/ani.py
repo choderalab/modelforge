@@ -664,6 +664,7 @@ class ANI2x(BaseNetwork):
         activation_function_parameter: Dict,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
+        model_seed: Optional[int] = None,
     ) -> None:
 
         from modelforge.utils.units import _convert_str_to_unit
@@ -674,6 +675,7 @@ class ANI2x(BaseNetwork):
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=postprocessing_parameter,
             maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
+            model_seed=model_seed,
         )
 
         activation_function = activation_function_parameter["activation_function"]

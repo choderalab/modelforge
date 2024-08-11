@@ -687,13 +687,15 @@ class PhysNet(BaseNetwork):
         activation_function_parameter: Dict,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
-    ) -> None:
+        model_seed : Optional[int] = None
+        ) -> None:
 
         self.only_unique_pairs = False  # NOTE: for pairlist
         super().__init__(
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=postprocessing_parameter,
             maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
+            model_seed = model_seed
         )
         activation_function = activation_function_parameter["activation_function"]
 

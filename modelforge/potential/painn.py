@@ -560,7 +560,8 @@ class PaiNN(BaseNetwork):
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
         epsilon: float = 1e-8,
-    ) -> None:
+        model_seed : Optional[int] = None,
+        ) -> None:
         """
         Initialize the PaiNN network.
 
@@ -593,6 +594,7 @@ class PaiNN(BaseNetwork):
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=postprocessing_parameter,
             maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
+            model_seed=model_seed,
         )
 
         activation_function = activation_function_parameter["activation_function"]

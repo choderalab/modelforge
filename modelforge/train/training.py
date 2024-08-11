@@ -379,8 +379,410 @@ def create_error_metrics(loss_properties: List[str]) -> ModuleDict:
 
 from modelforge.train.parameters import RuntimeParameters, TrainingParameters
 
+class CalculateProperties(torch.nn.Modules):
 
-class ModelTrainer(pL.LightningModule):
+    def __init__(self, model):
+    	.self.model=model
+
+    def _get_forces(
+        self, batch: "BatchData", energies: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Computes the forces from a given batch using the model.
+
+        Parameters
+        ----------
+        batch : BatchData
+            A single batch of data, including input features and target energies.
+        energies : dict
+            Dictionary containing predicted energies.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The true forces from the dataset and the predicted forces by the model.
+        """
+        nnp_input = batch.nnp_input
+        per_atom_force_true = batch.metadata.F.to(torch.float32)
+
+        if per_atom_force_true.numel() < 1:
+            raise RuntimeError("No force can be calculated.")
+
+        per_molecule_energy_predict = energies["per_molecule_energy_predict"]
+
+        # Ensure E_predict and nnp_input.positions require gradients and are on the same device
+        if not per_molecule_energy_predict.requires_grad:
+            per_molecule_energy_predict.requires_grad = True
+        if not nnp_input.positions.requires_grad:
+            nnp_input.positions.requires_grad = True
+
+        # Compute the gradient (forces) from the predicted energies
+        grad = torch.autograd.grad(
+            per_molecule_energy_predict.sum(),
+            nnp_input.positions,
+            create_graph=False,
+            retain_graph=True,
+        )[0]
+        per_atom_force_predict = -1 * grad  # Forces are the negative gradient of energy
+
+        return {
+            "per_atom_force_true": per_atom_force_true,
+            "per_atom_force_predict": per_atom_force_predict,
+        }
+
+    def _get_energies(self, batch: "BatchData") -> Dict[str, torch.Tensor]:
+        """
+        Computes the energies from a given batch using the model.
+
+        Parameters
+        ----------
+        batch : BatchData
+            A single batch of data, including input features and target energies.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The true energies from the dataset and the predicted energies by the model.
+        """
+        nnp_input = batch.nnp_input
+        per_molecule_energy_true = batch.metadata.E.to(torch.float32)
+        per_molecule_energy_predict = self.model.forward(nnp_input)[
+            "per_molecule_energy"
+        ].unsqueeze(
+            1
+        )  # FIXME: ensure that all per-molecule properties have dimension (N, 1)
+        assert per_molecule_energy_true.shape == per_molecule_energy_predict.shape, (
+            f"Shapes of true and predicted energies do not match: "
+            f"{per_molecule_energy_true.shape} != {per_molecule_energy_predict.shape}"
+        )
+        return {
+            "per_molecule_energy_true": per_molecule_energy_true,
+            "per_molecule_energy_predict": per_molecule_energy_predict,
+        }
+
+    def forward(self, batch: "BatchData") -> Dict[str, torch.Tensor]:
+        """
+        Computes the energies and forces from a given batch using the model.
+
+        Parameters
+        ----------
+        batch : BatchData
+            A single batch of data, including input features and target energies.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The true and predicted energies and forces from the dataset and the model.
+        """
+        energies = self._get_energies(batch)
+        forces = self._get_forces(batch, energies)
+        return {**energies, **forces}
+
+class TrainingAdapter(pL.LightningModule):
+    """
+    Adapter class for training neural network potentials using PyTorch Lightning.
+    """
+
+    def __init__(
+        self,
+        *,
+        potential_parameter: Union[
+            ANI2xParameters,
+            SAKEParameters,
+            SchNetParameters,
+            PhysNetParameters,
+            PaiNNParameters,
+            TensorNetParameters,
+        ],
+        dataset_statistic:Dict[str, float],
+        training_parameter: TrainingParameters,
+        model_seed:Optional[int]=None,
+        optimizer: Type[Optimizer],
+        verbose: bool = False,
+    ):
+        """
+        Initializes the TrainingAdapter with the specified model and training configuration.
+
+        Parameters
+        ----------
+        model_parameter : Dict[str, Any]
+            The parameters for the neural network potential model.
+        lr_scheduler : Dict[str, Union[str, int, float]]
+            The configuration for the learning rate scheduler.
+        lr : float
+            The learning rate for the optimizer.
+        loss_module : Loss, optional
+        optimizer : Type[Optimizer], optional
+            The optimizer class to use for training, by default torch.optim.AdamW.
+        """
+
+        from modelforge.potential import _Implemented_NNPs
+
+        super().__init__()
+        self.save_hyperparameters()
+        self.training_parameter = training_parameter
+        
+        # Get requested model class
+        nnp_class = _Implemented_NNPs.get_neural_network_class(
+            potential_parameter.potential_name
+        )
+        self.model = nnp_class(
+            **potential_parameter.core_parameter.model_dump(),
+            dataset_statistic=dataset_statistic,
+            postprocessing_parameter=potential_parameter.postprocessing_parameter.model_dump(),
+            model_seed=model_seed
+        )
+
+        self.calculate_prediction = CalculateProperties(self.model)
+        self.optimizer = training_parameter.optimizer
+        self.learning_rate = training_parameter.lr
+        self.lr_scheduler = training_parameter.lr_scheduler
+
+        # verbose output, only True if requested
+        if verbose:
+            self.log_histograms = True
+            self.log_on_training_step = True
+        else:
+            self.log_histograms = False
+            self.log_on_training_step = False
+
+        # initialize loss
+        self.loss = LossFactory.create_loss(**training_parameter.loss_parameter.model_dump())
+
+        # Assign the created error metrics to the respective attributes
+        self.test_error = create_error_metrics(loss_parameter["loss_property"])
+        self.val_error = create_error_metrics(loss_parameter["loss_property"])
+        self.train_error = create_error_metrics(loss_parameter["loss_property"])
+
+    def config_prior(self):
+        """
+        Configures model-specific priors if the model implements them.
+        """
+        if hasattr(self.model, "_config_prior"):
+            return self.model._config_prior()
+
+        log.warning("Model does not implement _config_prior().")
+        raise NotImplementedError()
+
+    def _update_metrics(
+        self,
+        error_dict: Dict[str, torchmetrics.MetricCollection],
+        predict_target: Dict[str, torch.Tensor],
+    ):
+        """
+        Updates the provided metric collections with the predicted and true targets.
+
+        Parameters
+        ----------
+        error_dict : dict
+            Dictionary containing metric collections for energy and force.
+        predict_target : dict
+            Dictionary containing predicted and true values for energy and force.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            Dictionary containing updated metrics.
+        """
+
+        for property, metrics in error_dict.items():
+            for _, error_log in metrics.items():
+                error_log(
+                    predict_target[f"{property}_predict"].detach(),
+                    predict_target[f"{property}_true"].detach(),
+                )
+
+    def training_step(self, batch: "BatchData", batch_idx: int) -> torch.Tensor:
+        """
+        Training step to compute the MSE loss for a given batch.
+
+        Parameters
+        ----------
+        batch : BatchData
+            The batch of data provided for the training.
+        batch_idx : int
+            The index of the current batch.
+
+        Returns
+        -------
+        torch.Tensor
+            The loss tensor computed for the current training step.
+        """
+
+        # calculate energy and forces
+        predict_target = self.calculate_predictions(batch)
+
+        # calculate the loss
+        loss_dict = self.loss(predict_target, batch)
+
+        # Update and log training error
+        self._update_metrics(self.train_error, predict_target)
+
+        # log the loss (this includes the individual contributions that the loss contains)
+        for key, loss in loss_dict.items():
+            self.log(
+                f"loss/{key}",
+                torch.mean(loss),
+                on_step=False,
+                prog_bar=True,
+                on_epoch=True,
+                batch_size=1,
+            )  # batch size is 1 because the mean of the batch is logged
+
+        return loss_dict["total_loss"]
+
+    @torch.enable_grad()
+    def validation_step(self, batch: "BatchData", batch_idx: int) -> None:
+        """
+        Validation step to compute the RMSE/MAE across epochs.
+
+        Parameters
+        ----------
+        batch : BatchData
+            The batch of data provided for validation.
+        batch_idx : int
+            The index of the current batch.
+
+        Returns
+        -------
+        None
+        """
+
+        # Ensure positions require gradients for force calculation
+        batch.nnp_input.positions.requires_grad_(True)
+        # calculate energy and forces
+        predict_target = self._get_predictions(batch)
+        # calculate the loss
+        loss = self.loss(predict_target, batch)
+        # log the loss
+        self._update_metrics(self.val_error, predict_target)
+
+    @torch.enable_grad()
+    def test_step(self, batch: "BatchData", batch_idx: int) -> None:
+        """
+        Test step to compute the RMSE loss for a given batch.
+
+        This method is called automatically during the test loop of the training process. It computes
+        the loss on a batch of test data and logs the results for analysis.
+
+        Parameters
+        ----------
+        batch : BatchData
+            The batch of data to test the model on.
+        batch_idx : int
+            The index of the batch within the test dataset.
+
+        Returns
+        -------
+        None
+            The results are logged and not directly returned.
+        """
+        # Ensure positions require gradients for force calculation
+        batch.nnp_input.positions.requires_grad_(True)
+        # calculate energy and forces
+        predict_target = self._get_predictions(batch)
+        # Update and log metrics
+        self._update_metrics(self.test_error, predict_target)
+
+    def on_test_epoch_end(self):
+        """
+        Operations to perform at the end of the test set pass.
+        """
+        self._log_on_epoch(log_mode="test")
+
+    def on_train_epoch_end(self):
+        """
+        Operations to perform at the end of each training epoch.
+
+        Logs histograms of weights and biases, and learning rate.
+        Also, resets validation loss.
+        """
+        if self.log_histograms == True:
+            for name, params in self.named_parameters():
+                if params is not None:
+                    self.logger.experiment.add_histogram(
+                        name, params, self.current_epoch
+                    )
+                if params.grad is not None:
+                    self.logger.experiment.add_histogram(
+                        f"{name}.grad", params.grad, self.current_epoch
+                    )
+
+        sch = self.lr_schedulers()
+        try:
+            self.log("lr", sch.get_last_lr()[0], on_epoch=True, prog_bar=True)
+        except AttributeError:
+            pass
+
+        self._log_on_epoch()
+
+    def _log_on_epoch(self, log_mode: str = "train"):
+        # convert long names to shorter versions
+        conv = {
+            "MeanAbsoluteError": "mae",
+            "MeanSquaredError": "rmse",
+        }  # NOTE: MeanSquaredError(squared=False) is RMSE
+
+        # Log all accumulated metrics for train and val phases
+        if log_mode == "train":
+            errors = [
+                ("train", self.train_error),
+                ("val", self.val_error),
+            ]
+        elif log_mode == "test":
+            errors = [
+                ("test", self.test_error),
+            ]
+        else:
+            raise RuntimeError(f"Unrecognized mode: {log_mode}")
+
+        for phase, error_dict in errors:
+            # skip if log_on_training_step is not requested
+            if phase == "train" and not self.log_on_training_step:
+                continue
+
+            metrics = {}
+            for property, metrics_dict in error_dict.items():
+                for name, metric in metrics_dict.items():
+                    name = f"{phase}/{property}/{conv[name]}"
+                    metrics[name] = metric.compute()
+                    metric.reset()
+            # log dict, print val metrics to console
+            self.log_dict(metrics, on_epoch=True, prog_bar=(phase == "val"))
+
+    def configure_optimizers(self):
+        """
+        Configures the model's optimizers (and optionally schedulers).
+
+        Returns
+        -------
+        Dict[str, Any]
+            A dictionary containing the optimizer and optionally the learning rate scheduler
+            to be used within the PyTorch Lightning training process.
+        """
+
+        optimizer = self.optimizer(self.model.parameters(), lr=self.learning_rate)
+
+        lr_scheduler = self.lr_scheduler.copy()
+        interval = lr_scheduler.pop("interval")
+        frequency = lr_scheduler.pop("frequency")
+        monitor = lr_scheduler.pop("monitor")
+
+        lr_scheduler = ReduceLROnPlateau(
+            optimizer,
+            **lr_scheduler,
+        )
+
+        lr_scheduler = {
+            "scheduler": lr_scheduler,
+            "monitor": monitor,  # Name of the metric to monitor
+            "interval": interval,
+            "frequency": frequency,
+        }
+        return {"optimizer": optimizer, "lr_scheduler": lr_scheduler}
+
+
+class ModelTrainer:
     """
     Class for training neural network potentials using PyTorch Lightning.
     """
@@ -400,6 +802,7 @@ class ModelTrainer(pL.LightningModule):
         training_parameter: TrainingParameters,
         runtime_parameter: RuntimeParameters,
         optimizer: Type[Optimizer] = torch.optim.AdamW,
+        model_seed: Optional[int] = None,
         verbose: bool = False,
     ):
         """
@@ -438,10 +841,10 @@ class ModelTrainer(pL.LightningModule):
         self.runtime_parameter = runtime_parameter
 
         self.datamodule = self.setup_datamodule()
-        self.experiment_logger = self.setup_logger()
         self.dataset_statistic = self.read_dataset_statistics()
+        self.experiment_logger = self.setup_logger()
 
-        self.model = self.setup_model()
+        self.model = self.setup_model(model_seed)
         self.callbacks = self.setup_callbacks()
 
         self.trainer = self.setup_trainer()
@@ -476,6 +879,7 @@ class ModelTrainer(pL.LightningModule):
         # Setup callbacks and Trainer
         self.callbacks = self.setup_callbacks()
         self.trainer = self.setup_trainer()
+
 
     def read_dataset_statistics(self) -> Dict[str, float]:
         """
@@ -529,9 +933,13 @@ class ModelTrainer(pL.LightningModule):
         dm.setup()
         return dm
 
-    def setup_model(self) -> nn.Module:
+    def setup_model(self, model_seed:Optional[int] = None) -> nn.Module:
         """
         Set up the model for training.
+        Parameters:
+        -----------
+        model_seed : int, optional
+            Seed to be used to initialize the model, default is None.
 
         Returns
         -------
@@ -544,10 +952,11 @@ class ModelTrainer(pL.LightningModule):
         nnp_class = _Implemented_NNPs.get_neural_network_class(
             self.potential_parameter.potential_name
         )
-        return nnp_class(
-            **self.potential_parameter.core_parameter.model_dump(),
+        return TrainingAdapter(
+            self.potential_parameter,
             dataset_statistic=self.dataset_statistic,
             postprocessing_parameter=self.potential_parameter.postprocessing_parameter.model_dump(),
+            model_seed=model_seed
         )
 
     def setup_logger(self) -> pL.loggers.Logger:
@@ -869,7 +1278,9 @@ class ModelTrainer(pL.LightningModule):
         loss_dict = self.loss(predict_target, batch)
 
         # Update and log training error
-        self._update_metrics(self.train_error, predict_target) # FIXME: use pytorchmetrics to log the loss
+        self._update_metrics(
+            self.train_error, predict_target
+        )  # FIXME: use pytorchmetrics to log the loss
 
         # log the loss (this includes the individual contributions that the loss contains)
         for key, loss in loss_dict.items():
@@ -1312,312 +1723,3 @@ def read_config_and_train(
 
     return model.train()
 
-
-# class ModelTrainer:
-#     def __init__(
-#         self,
-#         dataset_config: DatasetParameters,
-#         potential_config: Union[
-#             ANI2xParameters,
-#             SAKEParameters,
-#             SchNetParameters,
-#             PhysNetParameters,
-#             PaiNNParameters,
-#             TensorNetParameters,
-#         ],
-#         training_config: TrainingParameters,
-#         runtime_config: RuntimeParameters,
-#     ):
-#         """
-#         Initialize the ModelTrainer class with the necessary configurations.
-
-#         Parameters
-#         ----------
-#         dataset_config : DatasetParameters
-#             Parameters for the dataset.
-#         potential_config : Union[ANI2xParameters, SAKEParameters, SchNetParameters, PhysNetParameters, PaiNNParameters, TensorNetParameters]
-#             Parameters for the potential model.
-#         training_config : TrainingParameters
-#             Parameters for the training process.
-#         runtime_config : RuntimeParameters
-#             Parameters for runtime configuration.
-#         """
-#         self.dataset_config = dataset_config
-#         self.potential_config = potential_config
-#         self.training_config = training_config
-#         self.runtime_config = runtime_config
-#         self.logger = self.setup_logger()
-#         self.datamodule = self.setup_datamodule()
-#         self.dataset_statistic = self.read_dataset_statistics()
-#         self.model = self.setup_model()
-#         self.callbacks = self.setup_callbacks()
-#         self.trainer = self.setup_trainer()
-
-#     def _add_tags(self, tags: List[str]) -> List[str]:
-#         """
-#         Add tags to the wandb tags.
-
-#         Parameters
-#         ----------
-#         tags : List[str]
-#             List of tags to add to the experiment.
-
-#         Returns
-#         -------
-#         List[str]
-#             List of tags for the experiment.
-#         """
-
-#         # add version
-#         import modelforge
-
-#         tags.append(str(modelforge.__version__))
-#         # add dataset
-#         tags.append(self.dataset_config.dataset_name)
-#         # add potential name
-#         tags.append(self.potential_config.potential_name)
-#         # add information about what is included in the loss
-#         str_loss_property = "-".join(self.training_config.loss_parameter.loss_property)
-#         tags.append(f"loss-{str_loss_property}")
-
-#         return tags
-
-#     def _replace_placeholder_in_experimental_name(self, experiment_name: str) -> str:
-#         """
-#         Replace the placeholders in the experiment name with the actual values.
-
-#         Parameters
-#         ----------
-#         experiment_name : str
-#             The experiment name with placeholders.
-
-#         Returns
-#         -------
-#         str
-#             The experiment name with the placeholders replaced.
-#         """
-#         # replace placeholders in the experiment name
-#         experiment_name = experiment_name.replace(
-#             "{potential_name}", self.potential_config.potential_name
-#         )
-#         experiment_name = experiment_name.replace(
-#             "{dataset_name}", self.dataset_config.dataset_name
-#         )
-#         return experiment_name
-
-#     def setup_logger(self) -> L.pytorch.loggers.Logger:
-#         """
-#         Set up the experiment logger based on the configuration.
-
-#         Returns
-#         -------
-#         pl.loggers.Logger
-#             Configured logger instance.
-#         """
-#         if self.training_config.experiment_logger.logger_name == "tensorboard":
-#             from lightning.pytorch.loggers import TensorBoardLogger
-
-#             logger = TensorBoardLogger(
-#                 save_dir=str(
-#                     self.training_config.experiment_logger.tensorboard_configuration.save_dir
-#                 ),  # FIXME: same variable for all logger, maybe we can use a varable not bound to a logger for this?
-#                 name=self._replace_placeholder_in_experimental_name(
-#                     self.runtime_config.experiment_name
-#                 ),
-#             )
-#         elif self.training_config.experiment_logger.logger_name == "wandb":
-#             from modelforge.utils.io import check_import
-
-#             check_import("wandb")
-#             from lightning.pytorch.loggers import WandbLogger
-
-#             logger = WandbLogger(
-#                 save_dir=str(
-#                     self.training_config.experiment_logger.wandb_configuration.save_dir
-#                 ),
-#                 log_model=str(
-#                     self.training_config.experiment_logger.wandb_configuration.log_model
-#                 ),
-#                 project=self.training_config.experiment_logger.wandb_configuration.project,
-#                 group=self.training_config.experiment_logger.wandb_configuration.group,
-#                 job_type=self.training_config.experiment_logger.wandb_configuration.job_type,
-#                 tags=self._add_tags(
-#                     self.training_config.experiment_logger.wandb_configuration.tags
-#                 ),
-#                 notes=self.training_config.experiment_logger.wandb_configuration.notes,
-#                 name=self._replace_placeholder_in_experimental_name(
-#                     self.runtime_config.experiment_name
-#                 ),
-#             )
-#         return logger
-
-#     def setup_datamodule(self) -> DataModule:
-#         """
-#         Set up the DataModule for the dataset.
-
-#         Returns
-#         -------
-#         DataModule
-#             Configured DataModule instance.
-#         """
-#         from modelforge.dataset.utils import REGISTERED_SPLITTING_STRATEGIES
-#         from modelforge.dataset.dataset import DataModule
-
-#         dm = DataModule(
-#             name=self.dataset_config.dataset_name,
-#             batch_size=self.training_config.batch_size,
-#             remove_self_energies=self.training_config.remove_self_energies,
-#             version_select=self.dataset_config.version_select,
-#             local_cache_dir=self.runtime_config.local_cache_dir,
-#             splitting_strategy=REGISTERED_SPLITTING_STRATEGIES[
-#                 self.training_config.splitting_strategy.name
-#             ](
-#                 seed=self.training_config.splitting_strategy.seed,
-#                 split=self.training_config.splitting_strategy.data_split,
-#             ),
-#         )
-#         dm.prepare_data()
-#         dm.setup()
-#         return dm
-
-#     def read_dataset_statistics(self) -> Dict[str, float]:
-#         """
-#         Read and log dataset statistics.
-
-#         Returns
-#         -------
-#         Dict[str, float]
-#             The dataset statistics.
-#         """
-#         import toml
-
-#         dataset_statistic = toml.load(self.datamodule.dataset_statistic_filename)
-#         log.info(
-#             f"Setting per_atom_energy_mean and per_atom_energy_stddev for {self.potential_config.potential_name}"
-#         )
-#         log.info(
-#             f"per_atom_energy_mean: {dataset_statistic['training_dataset_statistics']['per_atom_energy_mean']}"
-#         )
-#         log.info(
-#             f"per_atom_energy_stddev: {dataset_statistic['training_dataset_statistics']['per_atom_energy_stddev']}"
-#         )
-#         return dataset_statistic
-
-#     def setup_model(self) -> nn.Module:
-#         """
-#         Set up the model for training.
-
-#         Returns
-#         -------
-#         nn.Module
-#             Configured model instance.
-#         """
-#         from modelforge.potential import NeuralNetworkPotentialFactory
-
-#         model = NeuralNetworkPotentialFactory.generate_model(
-#             use="training",
-#             dataset_statistic=self.dataset_statistic,
-#             model_parameter=self.potential_config.model_dump(),
-#             training_parameter=self.training_config.model_dump(),
-#         )
-#         return model
-
-#     def setup_callbacks(self) -> List[Any]:
-#         """
-#         Set up the callbacks for the trainer.
-
-#         Returns
-#         -------
-#         List[Any]
-#             List of configured callbacks.
-#         """
-#         from lightning.pytorch.callbacks import (
-#             ModelCheckpoint,
-#             EarlyStopping,
-#             StochasticWeightAveraging,
-#         )
-
-#         callbacks = []
-#         if self.training_config.stochastic_weight_averaging is not None:
-#             callbacks.append(
-#                 StochasticWeightAveraging(
-#                     **self.training_config.stochastic_weight_averaging.model_dump()
-#                 )
-#             )
-
-#         if self.training_config.early_stopping is not None:
-#             callbacks.append(
-#                 EarlyStopping(**self.training_config.early_stopping.model_dump())
-#             )
-
-#         checkpoint_filename = (
-#             f"best_{self.potential_config.potential_name}-{self.dataset_config.dataset_name}"
-#             + "-{epoch:02d}-{val_loss:.2f}"
-#         )
-#         checkpoint_callback = ModelCheckpoint(
-#             save_top_k=2,
-#             monitor=self.training_config.monitor,
-#             filename=checkpoint_filename,
-#         )
-#         callbacks.append(checkpoint_callback)
-#         return callbacks
-
-#     def setup_trainer(self) -> Trainer:
-#         """
-#         Set up the Trainer for training.
-
-#         Returns
-#         -------
-#         Trainer
-#             Configured Trainer instance.
-#         """
-#         from lightning import Trainer
-
-#         trainer = Trainer(
-#             max_epochs=self.training_config.number_of_epochs,
-#             num_nodes=self.runtime_config.number_of_nodes,
-#             devices=self.runtime_config.devices,
-#             accelerator=self.runtime_config.accelerator,
-#             logger=self.logger,
-#             callbacks=self.callbacks,
-#             inference_mode=False,
-#             num_sanity_val_steps=2,
-#             log_every_n_steps=self.runtime_config.log_every_n_steps,
-#         )
-#         return trainer
-
-#     def train(self) -> Trainer:
-#         """
-#         Run the training process.
-
-#         Returns
-#         -------
-#         Trainer
-#             The configured trainer instance.
-#         """
-#         self.trainer.fit(
-#             self.model,
-#             train_dataloaders=self.datamodule.train_dataloader(
-#                 num_workers=self.dataset_config.num_workers,
-#                 pin_memory=self.dataset_config.pin_memory,
-#             ),
-#             val_dataloaders=self.datamodule.val_dataloader(),
-#             ckpt_path=(
-#                 self.runtime_config.checkpoint_path
-#                 if self.runtime_config.checkpoint_path != "None"
-#                 else None
-#             ),  # NOTE: automatically resumes training from checkpoint
-#         )
-
-#         self.trainer.validate(
-#             model=self.model,
-#             dataloaders=self.datamodule.val_dataloader(),
-#             ckpt_path="best",
-#             verbose=True,
-#         )
-#         self.trainer.test(
-#             dataloaders=self.datamodule.test_dataloader(),
-#             ckpt_path="best",
-#             verbose=True,
-#         )
-#         return self.trainer

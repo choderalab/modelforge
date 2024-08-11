@@ -574,6 +574,7 @@ class NeuralNetworkPotentialFactory:
         training_parameter: Optional[TrainingParameters] = None,
         dataset_parameter: Optional[DatasetParameters] = None,
         dataset_statistic: Optional[Dict[str, float]] = None,
+        model_seed: Optional[int] = None,
     ) -> Union[Type[torch.nn.Module], Type[JAXModel], Type[pl.LightningModule]]:
         """
         Creates an NNP instance of the specified type, configured either for training or inference.
@@ -621,7 +622,8 @@ class NeuralNetworkPotentialFactory:
                 potential_parameter=potential_parameter,
                 training_parameter=training_parameter,
                 dataset_parameter=dataset_parameter,
-                runtime_parameter=runtime_parameter
+                runtime_parameter=runtime_parameter,
+                model_seed=model_seed,
             )
             return model
         # obtain model for inference
@@ -632,6 +634,7 @@ class NeuralNetworkPotentialFactory:
                 **potential_parameter.core_parameter.model_dump(),
                 postprocessing_parameter=potential_parameter.postprocessing_parameter.model_dump(),
                 dataset_statistic=dataset_statistic,
+                model_seed=model_seed,
             )
             if simulation_environment == "JAX":
                 return PyTorch2JAXConverter().convert_to_jax_model(model)
@@ -975,6 +978,7 @@ class BaseNetwork(Module):
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]],
         maximum_interaction_radius: unit.Quantity,
+        model_seed: Optional[int] = None,
     ):
         """
         Initialize the BaseNetwork.
@@ -991,6 +995,11 @@ class BaseNetwork(Module):
 
         super().__init__()
         from modelforge.utils.units import _convert_str_to_unit
+
+        if model_seed:
+            import torch
+
+            torch.manual_seed(model_seed)
 
         self.postprocessing = PostProcessing(
             postprocessing_parameter, dataset_statistic

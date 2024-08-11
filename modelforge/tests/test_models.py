@@ -491,13 +491,13 @@ def test_calculate_energies_and_forces(potential_name, single_batch_with_batchsi
     nnp_input = single_batch_with_batchsize_64.nnp_input
 
     # test the pass through each of the models
-    torch.manual_seed(42)
     model_training = NeuralNetworkPotentialFactory.generate_model(
         use="training",
         potential_parameter=config["potential"],
         training_parameter=config["training"],
         dataset_parameter=config["dataset"],
         runtime_parameter=config["runtime"],
+        model_seed=42
     )
 
     # get energy and force
@@ -507,11 +507,11 @@ def test_calculate_energies_and_forces(potential_name, single_batch_with_batchsi
     )[0]
 
     # compare to inference model
-    torch.manual_seed(42)
     model_inference = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         potential_parameter=config["potential"],
         dataset_statistic=model_training.dataset_statistic,
+        model_seed=42
     )
 
     # get energy and force
@@ -994,7 +994,7 @@ def test_equivariant_energies_and_forces(
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
         simulation_environment=simulation_environment,
-        potential_parameter=config["potential"].model_dump(),
+        potential_parameter=config["potential"],
     )
 
     # define the symmetry operations

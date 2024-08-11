@@ -837,7 +837,6 @@ class ModelTrainer:
         """
 
         super().__init__()
-        self.save_hyperparameters()
 
         self.dataset_parameter = dataset_parameter
         self.potential_parameter = potential_parameter

@@ -80,7 +80,7 @@ def test_train_with_lightning(potential_name, dataset_name):
     )
 
     trainer = (
-        NeuralNetworkPotentialFactory.generate_model(
+        NeuralNetworkPotentialFactory.generate_potential(
             use="training",
             potential_parameter=potential_parameter,
             training_parameter=training_parameter,
@@ -91,7 +91,7 @@ def test_train_with_lightning(potential_name, dataset_name):
         .save_checkpoint("test.chp")  # save checkpoint
     )
     # continue training
-    NeuralNetworkPotentialFactory.generate_model(
+    NeuralNetworkPotentialFactory.generate_potential(
         use="training",
         potential_parameter=potential_parameter,
         training_parameter=training_parameter,
@@ -187,7 +187,7 @@ def test_hypterparameter_tuning_with_ray(
     dm = datamodule_factory(dataset_name=dataset_name)
 
     # training model
-    model = NeuralNetworkPotentialFactory.generate_model(
+    model = NeuralNetworkPotentialFactory.generate_potential(
         use="training",
         potential_parameter=potential_config.model_dump(),
         training_parameter=training_config.model_dump(),

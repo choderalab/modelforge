@@ -63,7 +63,7 @@ def test_JAX_wrapping(potential_name, single_batch_with_batchsize_64):
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
 
     # inference model
-    model = NeuralNetworkPotentialFactory.generate_model(
+    model = NeuralNetworkPotentialFactory.generate_potential(
         use="inference",
         simulation_environment="JAX",
         potential_parameter=config["potential"],
@@ -94,7 +94,7 @@ def test_model_factory(potential_name, simulation_environment):
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
 
     # inference model
-    model = NeuralNetworkPotentialFactory.generate_model(
+    model = NeuralNetworkPotentialFactory.generate_potential(
         use="inference",
         simulation_environment=simulation_environment,
         potential_parameter=config["potential"],
@@ -106,7 +106,7 @@ def test_model_factory(potential_name, simulation_environment):
 
     # Extract parameters
     # runtime_defaults model
-    model = NeuralNetworkPotentialFactory.generate_model(
+    model = NeuralNetworkPotentialFactory.generate_potential(
         use="training",
         simulation_environment=simulation_environment,
         potential_parameter=config["potential"],
@@ -224,7 +224,7 @@ def test_state_dict_saving_and_loading(potential_name):
 
     # Extract parameters
 
-    model1 = NeuralNetworkPotentialFactory.generate_model(
+    trainer = NeuralNetworkPotentialFactory.generate_potential(
         use="training",
         simulation_environment="PyTorch",
         potential_parameter=config["potential"],
@@ -232,9 +232,9 @@ def test_state_dict_saving_and_loading(potential_name):
         runtime_parameter=config["runtime"],
         dataset_parameter=config["dataset"],
     )
-    torch.save(model1.state_dict(), "model.pth")
+    torch.save(trainer.model.state_dict(), "model.pth")
 
-    model2 = NeuralNetworkPotentialFactory.generate_model(
+    model2 = NeuralNetworkPotentialFactory.generate_potential(
         use="inference",
         simulation_environment="PyTorch",
         potential_parameter=config["potential"],
@@ -285,7 +285,7 @@ def test_dataset_statistic(potential_name):
         dataset_statistic["training_dataset_statistics"]["per_atom_energy_mean"]
     ).m
 
-    model = NeuralNetworkPotentialFactory.generate_model(
+    model = NeuralNetworkPotentialFactory.generate_potential(
         use="training",
         potential_parameter=potential_parameter,
         training_parameter=training_parameter,
@@ -296,18 +296,18 @@ def test_dataset_statistic(potential_name):
     assert np.isclose(
         toml_E_i_mean,
         unit.Quantity(
-            model.model.postprocessing.dataset_statistic["training_dataset_statistics"][
+            model.dataset_statistic["training_dataset_statistics"][
                 "per_atom_energy_mean"
             ]
         ).m,
     )
     import torch
 
-    torch.save(model.state_dict(), "model.pth")
+    torch.save(model.model.state_dict(), "model.pth")
 
     # NOTE: we are passing dataset statistics explicit to the constructor
     # this is not saved with the state_dict
-    model = NeuralNetworkPotentialFactory.generate_model(
+    model = NeuralNetworkPotentialFactory.generate_potential(
         use="inference",
         simulation_environment="PyTorch",
         potential_parameter=config["potential"],
@@ -345,7 +345,7 @@ def test_energy_between_simulation_environments(
     # from modelforge.train.training import return_toml_config
 
     torch.manual_seed(42)
-    model = NeuralNetworkPotentialFactory.generate_model(
+    model = NeuralNetworkPotentialFactory.generate_potential(
         use="inference",
         simulation_environment="PyTorch",
         potential_parameter=config["potential"],
@@ -354,7 +354,7 @@ def test_energy_between_simulation_environments(
     output_torch = model(nnp_input)["per_molecule_energy"]
 
     torch.manual_seed(42)
-    model = NeuralNetworkPotentialFactory.generate_model(
+    model = NeuralNetworkPotentialFactory.generate_potential(
         use="inference",
         simulation_environment="JAX",
         potential_parameter=config["potential"],
@@ -396,7 +396,7 @@ def test_forward_pass_with_all_datasets(
 
     dataset_statistic = toml.load(dataset.dataset_statistic_filename)
 
-    model = NeuralNetworkPotentialFactory.generate_model(
+    model = NeuralNetworkPotentialFactory.generate_potential(
         use="inference",
         simulation_environment="PyTorch",
         potential_parameter=config["potential"],
@@ -433,7 +433,7 @@ def test_forward_pass(
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
     # test the forward pass through each of the models
-    model = NeuralNetworkPotentialFactory.generate_model(
+    model = NeuralNetworkPotentialFactory.generate_potential(
         use="inference",
         simulation_environment=simulation_environment,
         potential_parameter=config["potential"],
@@ -491,13 +491,13 @@ def test_calculate_energies_and_forces(potential_name, single_batch_with_batchsi
     nnp_input = single_batch_with_batchsize_64.nnp_input
 
     # test the pass through each of the models
-    model_training = NeuralNetworkPotentialFactory.generate_model(
+    model_training = NeuralNetworkPotentialFactory.generate_potential(
         use="training",
         potential_parameter=config["potential"],
         training_parameter=config["training"],
         dataset_parameter=config["dataset"],
         runtime_parameter=config["runtime"],
-        model_seed=42
+        model_seed=42,
     )
 
     # get energy and force
@@ -507,11 +507,11 @@ def test_calculate_energies_and_forces(potential_name, single_batch_with_batchsi
     )[0]
 
     # compare to inference model
-    model_inference = NeuralNetworkPotentialFactory.generate_model(
+    model_inference = NeuralNetworkPotentialFactory.generate_potential(
         use="inference",
         potential_parameter=config["potential"],
         dataset_statistic=model_training.dataset_statistic,
-        model_seed=42
+        model_seed=42,
     )
 
     # get energy and force
@@ -552,7 +552,7 @@ def test_calculate_energies_and_forces_with_jax(
     nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
 
     # The inference_model fixture now returns a function that expects an environment
-    model = NeuralNetworkPotentialFactory.generate_model(
+    model = NeuralNetworkPotentialFactory.generate_potential(
         use="inference",
         potential_parameter=config["potential"],
         simulation_environment="JAX",
@@ -949,7 +949,7 @@ def test_casting(potential_name, single_batch_with_batchsize_64):
     # read default parameters
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
 
-    model = NeuralNetworkPotentialFactory.generate_model(
+    model = NeuralNetworkPotentialFactory.generate_potential(
         use="inference",
         simulation_environment="PyTorch",
         potential_parameter=config["potential"],
@@ -960,7 +960,7 @@ def test_casting(potential_name, single_batch_with_batchsize_64):
     model(nnp_input)
 
     # cast input and model to torch.float64
-    model = NeuralNetworkPotentialFactory.generate_model(
+    model = NeuralNetworkPotentialFactory.generate_potential(
         use="inference",
         simulation_environment="PyTorch",
         potential_parameter=config["potential"],
@@ -991,7 +991,7 @@ def test_equivariant_energies_and_forces(
     # load default parameters
     config = load_configs_into_pydantic_models(f"{potential_name}", "qm9")
 
-    model = NeuralNetworkPotentialFactory.generate_model(
+    model = NeuralNetworkPotentialFactory.generate_potential(
         use="inference",
         simulation_environment=simulation_environment,
         potential_parameter=config["potential"],

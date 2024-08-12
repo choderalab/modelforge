@@ -342,8 +342,6 @@ class LossFactory(object):
 
 
 from torch.optim import Optimizer
-
-
 from torch.nn import ModuleDict
 
 
@@ -382,8 +380,8 @@ from modelforge.train.parameters import RuntimeParameters, TrainingParameters
 
 class CalculateProperties(torch.nn.Module):
 
-    def __init__(self, model):
-        self.model = model
+    def __init__(self):
+        super().__init__()
 
     def _get_forces(
         self, batch: "BatchData", energies: Dict[str, torch.Tensor]
@@ -431,7 +429,9 @@ class CalculateProperties(torch.nn.Module):
             "per_atom_force_predict": per_atom_force_predict,
         }
 
-    def _get_energies(self, batch: "BatchData") -> Dict[str, torch.Tensor]:
+    def _get_energies(
+        self, batch: "BatchData", model: Type[torch.nn.Module]
+    ) -> Dict[str, torch.Tensor]:
         """
         Computes the energies from a given batch using the model.
 
@@ -447,7 +447,7 @@ class CalculateProperties(torch.nn.Module):
         """
         nnp_input = batch.nnp_input
         per_molecule_energy_true = batch.metadata.E.to(torch.float32)
-        per_molecule_energy_predict = self.model.forward(nnp_input)[
+        per_molecule_energy_predict = model.forward(nnp_input)[
             "per_molecule_energy"
         ].unsqueeze(
             1
@@ -461,7 +461,9 @@ class CalculateProperties(torch.nn.Module):
             "per_molecule_energy_predict": per_molecule_energy_predict,
         }
 
-    def forward(self, batch: "BatchData") -> Dict[str, torch.Tensor]:
+    def forward(
+        self, batch: "BatchData", model: Type[torch.nn.Module]
+    ) -> Dict[str, torch.Tensor]:
         """
         Computes the energies and forces from a given batch using the model.
 
@@ -475,7 +477,7 @@ class CalculateProperties(torch.nn.Module):
         Dict[str, torch.Tensor]
             The true and predicted energies and forces from the dataset and the model.
         """
-        energies = self._get_energies(batch)
+        energies = self._get_energies(batch, model)
         forces = self._get_forces(batch, energies)
         return {**energies, **forces}
 
@@ -499,8 +501,6 @@ class TrainingAdapter(pL.LightningModule):
         dataset_statistic: Dict[str, float],
         training_parameter: TrainingParameters,
         model_seed: Optional[int] = None,
-        optimizer: Type[Optimizer],
-        verbose: bool = False,
     ):
         """
         Initializes the TrainingAdapter with the specified model and training configuration.
@@ -528,20 +528,20 @@ class TrainingAdapter(pL.LightningModule):
         nnp_class = _Implemented_NNPs.get_neural_network_class(
             potential_parameter.potential_name
         )
-        self.model = nnp_class(
+        self.potential = nnp_class(
             **potential_parameter.core_parameter.model_dump(),
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=potential_parameter.postprocessing_parameter.model_dump(),
             model_seed=model_seed,
         )
 
-        self.calculate_prediction = CalculateProperties(self.model)
+        self.calculate_predictions = CalculateProperties()
         self.optimizer = training_parameter.optimizer
         self.learning_rate = training_parameter.lr
         self.lr_scheduler = training_parameter.lr_scheduler
 
         # verbose output, only True if requested
-        if verbose:
+        if training_parameter.verbose:
             self.log_histograms = True
             self.log_on_training_step = True
         else:
@@ -554,16 +554,38 @@ class TrainingAdapter(pL.LightningModule):
         )
 
         # Assign the created error metrics to the respective attributes
-        self.test_error = create_error_metrics(loss_parameter["loss_property"])
-        self.val_error = create_error_metrics(loss_parameter["loss_property"])
-        self.train_error = create_error_metrics(loss_parameter["loss_property"])
+        self.test_error = create_error_metrics(
+            training_parameter.loss_parameter.loss_property
+        )
+        self.val_error = create_error_metrics(
+            training_parameter.loss_parameter.loss_property
+        )
+        self.train_error = create_error_metrics(
+            training_parameter.loss_parameter.loss_property
+        )
+
+    def forward(self, batch: "BatchData") -> Dict[str, torch.Tensor]:
+        """
+        Computes the energies and forces from a given batch using the model.
+
+        Parameters
+        ----------
+        batch : BatchData
+            A single batch of data, including input features and target energies.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The true and predicted energies and forces from the dataset and the model.
+        """
+        return self.potential(batch)
 
     def config_prior(self):
         """
         Configures model-specific priors if the model implements them.
         """
-        if hasattr(self.model, "_config_prior"):
-            return self.model._config_prior()
+        if hasattr(self.potential, "_config_prior"):
+            return self.potential._config_prior()
 
         log.warning("Model does not implement _config_prior().")
         raise NotImplementedError()
@@ -614,7 +636,7 @@ class TrainingAdapter(pL.LightningModule):
         """
 
         # calculate energy and forces
-        predict_target = self.calculate_predictions(batch)
+        predict_target = self.calculate_predictions(batch, self.potential)
 
         # calculate the loss
         loss_dict = self.loss(predict_target, batch)
@@ -655,7 +677,7 @@ class TrainingAdapter(pL.LightningModule):
         # Ensure positions require gradients for force calculation
         batch.nnp_input.positions.requires_grad_(True)
         # calculate energy and forces
-        predict_target = self._get_predictions(batch)
+        predict_target = self.calculate_predictions(batch)
         # calculate the loss
         loss = self.loss(predict_target, batch)
         # log the loss
@@ -684,7 +706,7 @@ class TrainingAdapter(pL.LightningModule):
         # Ensure positions require gradients for force calculation
         batch.nnp_input.positions.requires_grad_(True)
         # calculate energy and forces
-        predict_target = self._get_predictions(batch)
+        predict_target = self.calculate_predictions(batch)
         # Update and log metrics
         self._update_metrics(self.test_error, predict_target)
 
@@ -765,9 +787,9 @@ class TrainingAdapter(pL.LightningModule):
             to be used within the PyTorch Lightning training process.
         """
 
-        optimizer = self.optimizer(self.model.parameters(), lr=self.learning_rate)
+        optimizer = self.optimizer(self.potential.parameters(), lr=self.learning_rate)
 
-        lr_scheduler = self.lr_scheduler.copy()
+        lr_scheduler = self.lr_scheduler.model_dump().copy()
         interval = lr_scheduler.pop("interval")
         frequency = lr_scheduler.pop("frequency")
         monitor = lr_scheduler.pop("monitor")
@@ -846,10 +868,8 @@ class ModelTrainer:
         self.datamodule = self.setup_datamodule()
         self.dataset_statistic = self.read_dataset_statistics()
         self.experiment_logger = self.setup_logger()
-
-        self.model = self.setup_model(model_seed)
+        self.model = self.setup_potential(model_seed)
         self.callbacks = self.setup_callbacks()
-
         self.trainer = self.setup_trainer()
         self.optimizer = optimizer
         self.learning_rate = self.training_parameter.lr
@@ -878,10 +898,6 @@ class ModelTrainer:
         self.train_error = create_error_metrics(
             self.training_parameter.loss_parameter.loss_property
         )
-
-        # Setup callbacks and Trainer
-        self.callbacks = self.setup_callbacks()
-        self.trainer = self.setup_trainer()
 
     def read_dataset_statistics(self) -> Dict[str, float]:
         """
@@ -935,7 +951,7 @@ class ModelTrainer:
         dm.setup()
         return dm
 
-    def setup_model(self, model_seed: Optional[int] = None) -> nn.Module:
+    def setup_potential(self, model_seed: Optional[int] = None) -> nn.Module:
         """
         Set up the model for training.
         Parameters:
@@ -950,9 +966,9 @@ class ModelTrainer:
         """
         # Initialize model
         return TrainingAdapter(
-            self.potential_parameter,
+            potential_parameter=self.potential_parameter,
             dataset_statistic=self.dataset_statistic,
-            postprocessing_parameter=self.potential_parameter.postprocessing_parameter.model_dump(),
+            training_parameter=self.training_parameter,
             model_seed=model_seed,
         )
 
@@ -1058,7 +1074,7 @@ class ModelTrainer:
             num_nodes=self.runtime_parameter.number_of_nodes,
             devices=self.runtime_parameter.devices,
             accelerator=self.runtime_parameter.accelerator,
-            logger=self.logger,
+            logger=self.experiment_logger,
             callbacks=self.callbacks,
             inference_mode=False,
             num_sanity_val_steps=2,
@@ -1094,7 +1110,7 @@ class ModelTrainer:
             The configured trainer instance.
         """
         self.trainer.fit(
-            self,
+            self.model,
             train_dataloaders=self.datamodule.train_dataloader(
                 num_workers=self.dataset_parameter.num_workers,
                 pin_memory=self.dataset_parameter.pin_memory,
@@ -1119,100 +1135,6 @@ class ModelTrainer:
         )
         return self.trainer
 
-    def _get_forces(
-        self, batch: "BatchData", energies: Dict[str, torch.Tensor]
-    ) -> Dict[str, torch.Tensor]:
-        """
-        Computes the forces from a given batch using the model.
-
-        Parameters
-        ----------
-        batch : BatchData
-            A single batch of data, including input features and target energies.
-        energies : dict
-            Dictionary containing predicted energies.
-
-        Returns
-        -------
-        Dict[str, torch.Tensor]
-            The true forces from the dataset and the predicted forces by the model.
-        """
-        nnp_input = batch.nnp_input
-        per_atom_force_true = batch.metadata.F.to(torch.float32)
-
-        if per_atom_force_true.numel() < 1:
-            raise RuntimeError("No force can be calculated.")
-
-        per_molecule_energy_predict = energies["per_molecule_energy_predict"]
-
-        # Ensure E_predict and nnp_input.positions require gradients and are on the same device
-        if not per_molecule_energy_predict.requires_grad:
-            per_molecule_energy_predict.requires_grad = True
-        if not nnp_input.positions.requires_grad:
-            nnp_input.positions.requires_grad = True
-
-        # Compute the gradient (forces) from the predicted energies
-        grad = torch.autograd.grad(
-            per_molecule_energy_predict.sum(),
-            nnp_input.positions,
-            create_graph=False,
-            retain_graph=True,
-        )[0]
-        per_atom_force_predict = -1 * grad  # Forces are the negative gradient of energy
-
-        return {
-            "per_atom_force_true": per_atom_force_true,
-            "per_atom_force_predict": per_atom_force_predict,
-        }
-
-    def _get_energies(self, batch: "BatchData") -> Dict[str, torch.Tensor]:
-        """
-        Computes the energies from a given batch using the model.
-
-        Parameters
-        ----------
-        batch : BatchData
-            A single batch of data, including input features and target energies.
-
-        Returns
-        -------
-        Dict[str, torch.Tensor]
-            The true energies from the dataset and the predicted energies by the model.
-        """
-        nnp_input = batch.nnp_input
-        per_molecule_energy_true = batch.metadata.E.to(torch.float32)
-        per_molecule_energy_predict = self.model.forward(nnp_input)[
-            "per_molecule_energy"
-        ].unsqueeze(
-            1
-        )  # FIXME: ensure that all per-molecule properties have dimension (N, 1)
-        assert per_molecule_energy_true.shape == per_molecule_energy_predict.shape, (
-            f"Shapes of true and predicted energies do not match: "
-            f"{per_molecule_energy_true.shape} != {per_molecule_energy_predict.shape}"
-        )
-        return {
-            "per_molecule_energy_true": per_molecule_energy_true,
-            "per_molecule_energy_predict": per_molecule_energy_predict,
-        }
-
-    def _get_predictions(self, batch: "BatchData") -> Dict[str, torch.Tensor]:
-        """
-        Computes the energies and forces from a given batch using the model.
-
-        Parameters
-        ----------
-        batch : BatchData
-            A single batch of data, including input features and target energies.
-
-        Returns
-        -------
-        Dict[str, torch.Tensor]
-            The true and predicted energies and forces from the dataset and the model.
-        """
-        energies = self._get_energies(batch)
-        forces = self._get_forces(batch, energies)
-        return {**energies, **forces}
-
     def config_prior(self):
         """
         Configures model-specific priors if the model implements them.
@@ -1222,225 +1144,6 @@ class ModelTrainer:
 
         log.warning("Model does not implement _config_prior().")
         raise NotImplementedError()
-
-    def _update_metrics(
-        self,
-        error_dict: Dict[str, torchmetrics.MetricCollection],
-        predict_target: Dict[str, torch.Tensor],
-    ):
-        """
-        Updates the provided metric collections with the predicted and true targets.
-
-        Parameters
-        ----------
-        error_dict : dict
-            Dictionary containing metric collections for energy and force.
-        predict_target : dict
-            Dictionary containing predicted and true values for energy and force.
-
-        Returns
-        -------
-        Dict[str, torch.Tensor]
-            Dictionary containing updated metrics.
-        """
-
-        for property, metrics in error_dict.items():
-            for _, error_log in metrics.items():
-                error_log(
-                    predict_target[f"{property}_predict"].detach(),
-                    predict_target[f"{property}_true"].detach(),
-                )
-
-    def training_step(self, batch: "BatchData", batch_idx: int) -> torch.Tensor:
-        """
-        Training step to compute the MSE loss for a given batch.
-
-        Parameters
-        ----------
-        batch : BatchData
-            The batch of data provided for the training.
-        batch_idx : int
-            The index of the current batch.
-
-        Returns
-        -------
-        torch.Tensor
-            The loss tensor computed for the current training step.
-        """
-
-        # calculate energy and forces
-        predict_target = self._get_predictions(batch)
-
-        # calculate the loss
-        loss_dict = self.loss(predict_target, batch)
-
-        # Update and log training error
-        self._update_metrics(
-            self.train_error, predict_target
-        )  # FIXME: use pytorchmetrics to log the loss
-
-        # log the loss (this includes the individual contributions that the loss contains)
-        for key, loss in loss_dict.items():
-            self.log(
-                f"loss/{key}",
-                torch.mean(loss),
-                on_step=False,
-                prog_bar=True,
-                on_epoch=True,
-                batch_size=1,
-            )  # batch size is 1 because the mean of the batch is logged
-
-        return loss_dict["total_loss"]
-
-    @torch.enable_grad()
-    def validation_step(self, batch: "BatchData", batch_idx: int) -> None:
-        """
-        Validation step to compute the RMSE/MAE across epochs.
-
-        Parameters
-        ----------
-        batch : BatchData
-            The batch of data provided for validation.
-        batch_idx : int
-            The index of the current batch.
-
-        Returns
-        -------
-        None
-        """
-
-        # Ensure positions require gradients for force calculation
-        batch.nnp_input.positions.requires_grad_(True)
-        # calculate energy and forces
-        predict_target = self._get_predictions(batch)
-        # calculate the loss
-        loss = self.loss(predict_target, batch)
-        # log the loss
-        self._update_metrics(self.val_error, predict_target)
-
-    @torch.enable_grad()
-    def test_step(self, batch: "BatchData", batch_idx: int) -> None:
-        """
-        Test step to compute the RMSE loss for a given batch.
-
-        This method is called automatically during the test loop of the training process. It computes
-        the loss on a batch of test data and logs the results for analysis.
-
-        Parameters
-        ----------
-        batch : BatchData
-            The batch of data to test the model on.
-        batch_idx : int
-            The index of the batch within the test dataset.
-
-        Returns
-        -------
-        None
-            The results are logged and not directly returned.
-        """
-        # Ensure positions require gradients for force calculation
-        batch.nnp_input.positions.requires_grad_(True)
-        # calculate energy and forces
-        predict_target = self._get_predictions(batch)
-        # Update and log metrics
-        self._update_metrics(self.test_error, predict_target)
-
-    def on_test_epoch_end(self):
-        """
-        Operations to perform at the end of the test set pass.
-        """
-        self._log_on_epoch(log_mode="test")
-
-    def on_train_epoch_end(self):
-        """
-        Operations to perform at the end of each training epoch.
-
-        Logs histograms of weights and biases, and learning rate.
-        Also, resets validation loss.
-        """
-        if self.log_histograms == True:
-            for name, params in self.named_parameters():
-                if params is not None:
-                    self.logger.experiment.add_histogram(
-                        name, params, self.current_epoch
-                    )
-                if params.grad is not None:
-                    self.logger.experiment.add_histogram(
-                        f"{name}.grad", params.grad, self.current_epoch
-                    )
-
-        sch = self.lr_schedulers()
-        try:
-            self.log("lr", sch.get_last_lr()[0], on_epoch=True, prog_bar=True)
-        except AttributeError:
-            pass
-
-        self._log_on_epoch()
-
-    def _log_on_epoch(self, log_mode: str = "train"):
-        # convert long names to shorter versions
-        conv = {
-            "MeanAbsoluteError": "mae",
-            "MeanSquaredError": "rmse",
-        }  # NOTE: MeanSquaredError(squared=False) is RMSE
-
-        # Log all accumulated metrics for train and val phases
-        if log_mode == "train":
-            errors = [
-                ("train", self.train_error),
-                ("val", self.val_error),
-            ]
-        elif log_mode == "test":
-            errors = [
-                ("test", self.test_error),
-            ]
-        else:
-            raise RuntimeError(f"Unrecognized mode: {log_mode}")
-
-        for phase, error_dict in errors:
-            # skip if log_on_training_step is not requested
-            if phase == "train" and not self.log_on_training_step:
-                continue
-
-            metrics = {}
-            for property, metrics_dict in error_dict.items():
-                for name, metric in metrics_dict.items():
-                    name = f"{phase}/{property}/{conv[name]}"
-                    metrics[name] = metric.compute()
-                    metric.reset()
-            # log dict, print val metrics to console
-            self.log_dict(metrics, on_epoch=True, prog_bar=(phase == "val"))
-
-    def configure_optimizers(self):
-        """
-        Configures the model's optimizers (and optionally schedulers).
-
-        Returns
-        -------
-        Dict[str, Any]
-            A dictionary containing the optimizer and optionally the learning rate scheduler
-            to be used within the PyTorch Lightning training process.
-        """
-
-        optimizer = self.optimizer(self.model.parameters(), lr=self.learning_rate)
-
-        lr_scheduler = self.lr_scheduler.model_dump()
-        interval = lr_scheduler.pop("interval")
-        frequency = lr_scheduler.pop("frequency")
-        monitor = lr_scheduler.pop("monitor")
-
-        lr_scheduler = ReduceLROnPlateau(
-            optimizer,
-            **lr_scheduler,
-        )
-
-        lr_scheduler = {
-            "scheduler": lr_scheduler,
-            "monitor": monitor,  # Name of the metric to monitor
-            "interval": interval,
-            "frequency": frequency,
-        }
-        return {"optimizer": optimizer, "lr_scheduler": lr_scheduler}
 
     def _replace_placeholder_in_experimental_name(self, experiment_name: str) -> str:
         """
@@ -1709,7 +1412,7 @@ def read_config_and_train(
         NeuralNetworkPotentialFactory,
     )
 
-    model = NeuralNetworkPotentialFactory.generate_model(
+    model = NeuralNetworkPotentialFactory.generate_potential(
         use="training",
         simulation_environment=simulation_environment,
         potential_parameter=potential_parameter,

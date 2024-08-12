@@ -558,7 +558,7 @@ class NeuralNetworkPotentialFactory:
     """
 
     @staticmethod
-    def generate_model(
+    def generate_potential(
         *,
         use: Literal["training", "inference"],
         potential_parameter: Union[
@@ -1042,7 +1042,7 @@ class BaseNetwork(Module):
         """
 
         # Prefix to remove
-        prefix = "model."
+        prefix = "potential."
         excluded_keys = ["loss.per_molecule_energy", "loss.per_atom_force"]
 
         # Create a new dictionary without the prefix in the keys if prefix exists

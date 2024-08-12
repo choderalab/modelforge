@@ -677,7 +677,7 @@ class TrainingAdapter(pL.LightningModule):
         # Ensure positions require gradients for force calculation
         batch.nnp_input.positions.requires_grad_(True)
         # calculate energy and forces
-        predict_target = self.calculate_predictions(batch)
+        predict_target = self.calculate_predictions(batch, self.potential)
         # calculate the loss
         loss = self.loss(predict_target, batch)
         # log the loss
@@ -706,7 +706,7 @@ class TrainingAdapter(pL.LightningModule):
         # Ensure positions require gradients for force calculation
         batch.nnp_input.positions.requires_grad_(True)
         # calculate energy and forces
-        predict_target = self.calculate_predictions(batch)
+        predict_target = self.calculate_predictions(batch, self.potential)
         # Update and log metrics
         self._update_metrics(self.test_error, predict_target)
 

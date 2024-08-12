@@ -381,6 +381,18 @@ from modelforge.train.parameters import RuntimeParameters, TrainingParameters
 class CalculateProperties(torch.nn.Module):
 
     def __init__(self):
+        """
+        A utility class for calculating properties such as energies and forces from batches using a neural network model.
+
+        Methods
+        -------
+        _get_forces(batch: BatchData, energies: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]
+            Computes the forces from a given batch using the model.
+        _get_energies(batch: BatchData, model: Type[torch.nn.Module]) -> Dict[str, torch.Tensor]
+            Computes the energies from a given batch using the model.
+        forward(batch: BatchData, model: Type[torch.nn.Module]) -> Dict[str, torch.Tensor]
+            Computes the energies and forces from a given batch using the model.
+        """
         super().__init__()
 
     def _get_forces(
@@ -393,8 +405,8 @@ class CalculateProperties(torch.nn.Module):
         ----------
         batch : BatchData
             A single batch of data, including input features and target energies.
-        energies : dict
-            Dictionary containing predicted energies.
+        energies : Dict[str, torch.Tensor]
+            A dictionary containing the predicted energies from the model.
 
         Returns
         -------
@@ -439,6 +451,8 @@ class CalculateProperties(torch.nn.Module):
         ----------
         batch : BatchData
             A single batch of data, including input features and target energies.
+        model : Type[torch.nn.Module]
+            The neural network model used to compute the energies.
 
         Returns
         -------
@@ -471,6 +485,8 @@ class CalculateProperties(torch.nn.Module):
         ----------
         batch : BatchData
             A single batch of data, including input features and target energies.
+        model : Type[torch.nn.Module]
+            The neural network model used to compute the properties.
 
         Returns
         -------
@@ -483,9 +499,6 @@ class CalculateProperties(torch.nn.Module):
 
 
 class TrainingAdapter(pL.LightningModule):
-    """
-    Adapter class for training neural network potentials using PyTorch Lightning.
-    """
 
     def __init__(
         self,
@@ -507,17 +520,15 @@ class TrainingAdapter(pL.LightningModule):
 
         Parameters
         ----------
-        model_parameter : Dict[str, Any]
-            The parameters for the neural network potential model.
-        lr_scheduler : Dict[str, Union[str, int, float]]
-            The configuration for the learning rate scheduler.
-        lr : float
-            The learning rate for the optimizer.
-        loss_module : Loss, optional
-        optimizer : Type[Optimizer], optional
-            The optimizer class to use for training, by default torch.optim.AdamW.
+        potential_parameter : Union[ANI2xParameters, SAKEParameters, SchNetParameters, PhysNetParameters, PaiNNParameters, TensorNetParameters]
+            Parameters for the potential model.
+        dataset_statistic : Dict[str, float]
+            The statistics of the dataset, such as mean and standard deviation.
+        training_parameter : TrainingParameters
+            Parameters for the training process.
+        model_seed : Optional[int], optional
+            The seed to use for initializing the model, by default None.
         """
-
         from modelforge.potential import _Implemented_NNPs
 
         super().__init__()
@@ -600,15 +611,10 @@ class TrainingAdapter(pL.LightningModule):
 
         Parameters
         ----------
-        error_dict : dict
+        error_dict : Dict[str, torchmetrics.MetricCollection]
             Dictionary containing metric collections for energy and force.
-        predict_target : dict
+        predict_target : Dict[str, torch.Tensor]
             Dictionary containing predicted and true values for energy and force.
-
-        Returns
-        -------
-        Dict[str, torch.Tensor]
-            Dictionary containing updated metrics.
         """
 
         for property, metrics in error_dict.items():
@@ -713,6 +719,9 @@ class TrainingAdapter(pL.LightningModule):
     def on_test_epoch_end(self):
         """
         Operations to perform at the end of the test set pass.
+
+        This method is automatically called by PyTorch Lightning at the end of
+        the test epoch. It logs the accumulated metrics for the test phase.
         """
         self._log_on_epoch(log_mode="test")
 
@@ -720,8 +729,9 @@ class TrainingAdapter(pL.LightningModule):
         """
         Operations to perform at the end of each training epoch.
 
-        Logs histograms of weights and biases, and learning rate.
-        Also, resets validation loss.
+        This method is automatically called by PyTorch Lightning at the end of
+        each training epoch. It logs histograms of weights and biases, learning
+        rate, and resets validation loss.
         """
         if self.log_histograms == True:
             for name, params in self.named_parameters():
@@ -743,6 +753,15 @@ class TrainingAdapter(pL.LightningModule):
         self._log_on_epoch()
 
     def _log_on_epoch(self, log_mode: str = "train"):
+        """
+        Logs all accumulated metrics at the end of an epoch.
+
+        Parameters
+        ----------
+        log_mode : str, optional
+            The phase of training for which metrics are being logged, by default "train".
+            It can be "train", "val", or "test".
+        """
         # convert long names to shorter versions
         conv = {
             "MeanAbsoluteError": "mae",
@@ -951,18 +970,19 @@ class ModelTrainer:
         dm.setup()
         return dm
 
-    def setup_potential(self, model_seed: Optional[int] = None) -> nn.Module:
+    def setup_potential(self, model_seed: Optional[int] = None) -> pL.LightningModule:
         """
         Set up the model for training.
-        Parameters:
-        -----------
+
+        Parameters
+        ----------
         model_seed : int, optional
-            Seed to be used to initialize the model, default is None.
+            Seed to be used to initialize the model, by default None.
 
         Returns
         -------
         nn.Module
-            Configured model instance.
+            Configured model instance, wrapped in a TrainingAdapter.
         """
         # Initialize model
         return TrainingAdapter(
@@ -1082,24 +1102,6 @@ class ModelTrainer:
         )
         return trainer
 
-    def train_dataloader(self):
-        """
-        Fetch the train dataloader from the DataModule.
-        """
-        return self.datamodule.train_dataloader()
-
-    def val_dataloader(self):
-        """
-        Fetch the validation dataloader from the DataModule.
-        """
-        return self.datamodule.val_dataloader()
-
-    def test_dataloader(self):
-        """
-        Fetch the test dataloader from the DataModule.
-        """
-        return self.datamodule.test_dataloader()
-
     def train_potential(self) -> Trainer:
         """
         Run the training process.
@@ -1107,7 +1109,7 @@ class ModelTrainer:
         Returns
         -------
         Trainer
-            The configured trainer instance.
+            The configured trainer instance after running the training process.
         """
         self.trainer.fit(
             self.model,
@@ -1124,10 +1126,11 @@ class ModelTrainer:
         )
 
         self.trainer.validate(
-            dataloaders=self.datamodule.val_dataloader(),
+            dataloaders=self.datamodule.test_dataloader(),
             ckpt_path="best",
             verbose=True,
         )
+
         self.trainer.test(
             dataloaders=self.datamodule.test_dataloader(),
             ckpt_path="best",
@@ -1421,4 +1424,4 @@ def read_config_and_train(
         runtime_parameter=runtime_parameter,
     )
 
-    return model.train()
+    return model.train_potential()

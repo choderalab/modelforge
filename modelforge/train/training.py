@@ -1179,7 +1179,7 @@ def read_config(
     condensed_config_path: Optional[str] = None,
     training_parameter_path: Optional[str] = None,
     dataset_parameter_path: Optional[str] = None,
-    potential_parameter_path_path: Optional[str] = None,
+    potential_parameter_path: Optional[str] = None,
     runtime_parameter_path: Optional[str] = None,
     accelerator: Optional[str] = None,
     devices: Optional[Union[int, List[int]]] = None,
@@ -1203,7 +1203,7 @@ def read_config(
         Path to the TOML file defining the training parameters.
     dataset_parameter_path : str, optional
         Path to the TOML file defining the dataset parameters.
-    potential_parameter_path_path : str, optional
+    potential_parameter_path : str, optional
         Path to the TOML file defining the potential parameters.
     runtime_parameter_path : str, optional
         Path to the TOML file defining the runtime parameters. If this is not provided, the code will attempt to use
@@ -1250,12 +1250,12 @@ def read_config(
             raise ValueError("Training configuration not provided.")
         if dataset_parameter_path is None:
             raise ValueError("Dataset configuration not provided.")
-        if potential_parameter_path_path is None:
+        if potential_parameter_path is None:
             raise ValueError("Potential configuration not provided.")
 
         training_config_dict = toml.load(training_parameter_path)["training"]
         dataset_config_dict = toml.load(dataset_parameter_path)["dataset"]
-        potential_config_dict = toml.load(potential_parameter_path_path)["potential"]
+        potential_config_dict = toml.load(potential_parameter_path)["potential"]
 
         # if the runtime_parameter_path is not defined, let us see if runtime variables are passed
         if runtime_parameter_path is None:
@@ -1337,7 +1337,7 @@ def read_config_and_train(
     condensed_config_path: Optional[str] = None,
     training_parameter_path: Optional[str] = None,
     dataset_parameter_path: Optional[str] = None,
-    potential_parameter_path_path: Optional[str] = None,
+    potential_parameter_path: Optional[str] = None,
     runtime_parameter_path: Optional[str] = None,
     accelerator: Optional[str] = None,
     devices: Optional[Union[int, List[int]]] = None,
@@ -1361,7 +1361,7 @@ def read_config_and_train(
         Path to the TOML file defining the training parameters.
     dataset_parameter_path : str, optional
         Path to the TOML file defining the dataset parameters.
-    potential_parameter_path_path : str, optional
+    potential_parameter_path : str, optional
         Path to the TOML file defining the potential parameters.
     runtime_parameter_path : str, optional
         Path to the TOML file defining the runtime parameters. If this is not provided, the code will attempt to use
@@ -1399,7 +1399,7 @@ def read_config_and_train(
         condensed_config_path=condensed_config_path,
         training_parameter_path=training_parameter_path,
         dataset_parameter_path=dataset_parameter_path,
-        potential_parameter_path_path=potential_parameter_path_path,
+        potential_parameter_path=potential_parameter_path,
         runtime_parameter_path=runtime_parameter_path,
         accelerator=accelerator,
         devices=devices,

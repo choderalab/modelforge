@@ -1126,7 +1126,7 @@ class ModelTrainer:
         )
 
         self.trainer.validate(
-            dataloaders=self.datamodule.test_dataloader(),
+            dataloaders=self.datamodule.val_dataloader(),
             ckpt_path="best",
             verbose=True,
         )

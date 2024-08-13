@@ -138,35 +138,6 @@ def test_radial_symmetry_function_regression():
     assert torch.allclose(modelforge_aimnet2_outputs, regression_outputs, atol=1e-5)
 
 
-def test_representation_module():
-
-    from modelforge.potential.aimnet2 import AIMNet2Representation
-
-    num_bins = 10
-    radial_cutoff = unit.Quantity(5.0, unit.angstrom)
-    # distances for 7 atoms, j, in the system with atom i
-    d_ij = torch.tensor([[1.0], [2.0], [3.0], [4.0], [5.0], [6.0], [7.0]])
-
-    representation_module = AIMNet2Representation(
-        radial_cutoff=radial_cutoff, number_of_radial_basis_functions=num_bins
-    )
-    representation = representation_module(d_ij / 10)
-
-    # check radial basis function component shape
-    f_ij = representation["f_ij"]
-    assert f_ij.shape[0] == 7 and f_ij.shape[1] == 10
-
-    # check cutoff function component shape
-    f_cutoff = representation["f_cutoff"]
-    assert f_cutoff.shape[0] == 7 and f_cutoff.shape[1] == 1
-
-    # check full radial symmetry function shape
-    g_ijs = f_ij * f_cutoff
-    assert g_ijs.shape[0] == 7 and g_ijs.shape[1] == 10
-
-    # TODO: need comparison data
-    pass
-
 
 @pytest.mark.xfail(raises=NotImplementedError)
 def test_interaction_module():

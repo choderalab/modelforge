@@ -49,32 +49,9 @@ class AIMNet2NeuralNetworkData(NeuralNetworkData):
         that atom pair contributions diminish smoothly to zero at the cutoff radius. Shape: [num_pairs]. This field
         will be populated after initialization.
 
-    Notes
-    -----
-    The `SchnetNeuralNetworkInput` class is designed to encapsulate all necessary inputs for SchNet-based neural network
-    potentials in a structured and type-safe manner, facilitating efficient and accurate processing of input data by
-    the model. The inclusion of radial symmetry functions (`f_ij`) and cosine cutoff functions (`f_cutoff`) allows
-    for a detailed and nuanced representation of the atomistic systems, crucial for the accurate prediction of system
-    energies and properties.
 
-    Examples
-    --------
-    >>> inputs = AIMNet2NeuralNetworkInput(
-    ...     pair_indices=torch.tensor([[0, 1], [0, 2], [1, 2]]),
-    ...     d_ij=torch.tensor([1.0, 1.0, 1.0]),
-    ...     r_ij=torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),
-    ...     number_of_atoms=3,
-    ...     positions=torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0]]),
-    ...     atomic_numbers=torch.tensor([1, 6, 8]),
-    ...     atomic_subsystem_indices=torch.tensor([0, 0, 0]),
-    ...     total_charge=torch.tensor([0.0]),
-    ...     atomic_embedding=torch.randn(3, 5),  # Example atomic embeddings
-    ...     f_ij=torch.randn(3, 4),  # Example radial symmetry function expansion
-    ...     f_cutoff=torch.tensor([0.5, 0.5, 0.5])  # Example cosine cutoff function
-    ... )
     """
 
-    atomic_embedding: torch.Tensor
     f_ij: Optional[torch.Tensor] = field(default=None)
     f_cutoff: Optional[torch.Tensor] = field(default=None)
 
@@ -118,6 +95,9 @@ class AIMNet2Core(CoreNetwork):
             number_of_radial_basis_functions,
             featurization_config=featurization_config,
         )
+        number_of_atom_features = int(
+            featurization_config["number_of_per_atom_features"]
+        )
 
         self.interaction_modules = nn.ModuleList(
             [
@@ -139,7 +119,7 @@ class AIMNet2Core(CoreNetwork):
         )
 
     def _model_specific_input_preparation(
-        self, data: "NNPInput", pairlist_output: "PairListOutputs"
+        self, data: "NNPInput", pairlist_output
     ) -> AIMNet2NeuralNetworkData:
 
         number_of_atoms = data.atomic_numbers.shape[0]
@@ -153,7 +133,6 @@ class AIMNet2Core(CoreNetwork):
             atomic_numbers=data.atomic_numbers,
             atomic_subsystem_indices=data.atomic_subsystem_indices,
             total_charge=data.total_charge,
-            atomic_embedding=self.embedding_module(data.atomic_numbers),
         )
 
         return nnp_input

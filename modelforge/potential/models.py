@@ -978,7 +978,7 @@ class BaseNetwork(Module):
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]],
         maximum_interaction_radius: unit.Quantity,
-        model_seed: Optional[int] = None,
+        potential_seed: Optional[int] = None,
     ):
         """
         Initialize the BaseNetwork.
@@ -991,15 +991,17 @@ class BaseNetwork(Module):
             Dataset statistics for normalization.
         maximum_interaction_radius : unit.Quantity
             cutoff radius.
+        potential_seed : Optional[int], optional
+            Value used for torch.manual_seed, by default None.
         """
 
         super().__init__()
         from modelforge.utils.units import _convert_str_to_unit
 
-        if model_seed:
+        if potential_seed:
             import torch
 
-            torch.manual_seed(model_seed)
+            torch.manual_seed(potential_seed)
 
         self.postprocessing = PostProcessing(
             postprocessing_parameter, dataset_statistic

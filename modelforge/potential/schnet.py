@@ -428,6 +428,8 @@ class SchNet(BaseNetwork):
         Configuration for postprocessing parameters.
     dataset_statistic : Optional[Dict[str, float]], default=None
         Statistics of the dataset.
+    potential_seed : Optional[int], optional
+        Value used for torch.manual_seed, by default None.
     """
 
     def __init__(
@@ -441,7 +443,7 @@ class SchNet(BaseNetwork):
         shared_interactions: bool,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
-        model_seed: Optional[int] = None
+        potential_seed: Optional[int] = None,
     ) -> None:
 
         self.only_unique_pairs = False  # NOTE: need to be set before super().__init__
@@ -450,7 +452,7 @@ class SchNet(BaseNetwork):
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=postprocessing_parameter,
             maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
-            model_seed=model_seed,
+            potential_seed=potential_seed,
         )
 
         activation_function = activation_function_parameter["activation_function"]

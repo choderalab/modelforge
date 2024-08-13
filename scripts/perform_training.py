@@ -3,6 +3,7 @@
 import argparse
 from modelforge.train.training import read_config_and_train
 from typing import Union, List
+from modelforge.utils.io import parse_devices
 
 parse = argparse.ArgumentParser(description="Perform Training Using Modelforge")
 
@@ -25,7 +26,7 @@ parse.add_argument(
 )
 parse.add_argument("--accelerator", type=str, help="Accelerator to use for training")
 parse.add_argument(
-    "--devices", type=Union[int, List[int]], help="Device(s) to use for training"
+    "--devices", type=parse_devices, help="Device(s) to use for training"
 )
 parse.add_argument(
     "--number_of_nodes", type=int, help="Number of nodes to use for training"

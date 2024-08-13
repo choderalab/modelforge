@@ -204,7 +204,7 @@ class TensorNet(BaseNetwork):
     dataset_statistic : Optional[Dict[str, float]]
         Dataset statistics.
     potential_seed : Optional[int], optional
-        Value used for torch.manual_seed, by default None.
+        Seed for the random number generator, default None.
     """
 
     def __init__(

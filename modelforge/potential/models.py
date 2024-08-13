@@ -574,7 +574,7 @@ class NeuralNetworkPotentialFactory:
         training_parameter: Optional[TrainingParameters] = None,
         dataset_parameter: Optional[DatasetParameters] = None,
         dataset_statistic: Optional[Dict[str, float]] = None,
-        model_seed: Optional[int] = None,
+        potential_seed: Optional[int] = None,
     ) -> Union[Type[torch.nn.Module], Type[JAXModel], Type[pl.LightningModule]]:
         """
         Creates an NNP instance of the specified type, configured either for training or inference.
@@ -591,6 +591,8 @@ class NeuralNetworkPotentialFactory:
             Parameters for configuring the training.
         dataset_statistic : Optional[Dict[str, float]], optional
             Statistics of the dataset for normalization purposes.
+        potential_seed : Optional[int], optional
+            Seed for the random number generator, default None.
 
         Returns
         -------
@@ -623,7 +625,7 @@ class NeuralNetworkPotentialFactory:
                 training_parameter=training_parameter,
                 dataset_parameter=dataset_parameter,
                 runtime_parameter=runtime_parameter,
-                model_seed=model_seed,
+                potential_seed=potential_seed,
             )
             return model
         # obtain model for inference
@@ -634,7 +636,7 @@ class NeuralNetworkPotentialFactory:
                 **potential_parameter.core_parameter.model_dump(),
                 postprocessing_parameter=potential_parameter.postprocessing_parameter.model_dump(),
                 dataset_statistic=dataset_statistic,
-                model_seed=model_seed,
+                potential_seed=potential_seed,
             )
             if simulation_environment == "JAX":
                 return PyTorch2JAXConverter().convert_to_jax_model(model)
@@ -1002,6 +1004,18 @@ class BaseNetwork(Module):
             import torch
 
             torch.manual_seed(potential_seed)
+
+            # according to https://docs.ray.io/en/latest/tune/faq.html#how-can-i-reproduce-experiments
+            # we should also set the same seed for numpy.random and python random module
+            # when doing hyperparameter optimization with ray tune.  E.g., the ASHA scheduler relies on numpy.random
+            # and doesn't take a seed as an argument, so we need to set it here.
+            import numpy as np
+
+            np.random.seed(potential_seed)
+
+            import random
+
+            random.seed(potential_seed)
 
         self.postprocessing = PostProcessing(
             postprocessing_parameter, dataset_statistic

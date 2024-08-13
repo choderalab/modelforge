@@ -584,7 +584,7 @@ class PaiNN(BaseNetwork):
             Whether to share filters across modules.
             epsilon=epsilon,
         potential_seed : Optional[int], optional
-            Value used for torch.manual_seed, by default None.
+            Seed for the random number generator, default None.
         """
 
         from modelforge.utils.units import _convert_str_to_unit

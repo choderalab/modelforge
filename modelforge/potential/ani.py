@@ -651,7 +651,7 @@ class ANI2x(BaseNetwork):
     dataset_statistic : Optional[Dict[str, float]], optional
         Statistics of the dataset, by default None.
     potential_seed : Optional[int], optional
-        Value used for torch.manual_seed, by default None.
+        Seed for the random number generator, default None.
     """
 
     def __init__(

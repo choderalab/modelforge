@@ -621,9 +621,10 @@ class NeuralNetworkPotentialFactory:
 
         if simulation_environment is None:
             if runtime_parameter is None:
-                raise ValueError(
-                    "Either 'simulate_environment' or 'runtime_parameter' must be provided."
+                log.warning(
+                    "No runtime paramters or simulation_environment specified, defaulting to PyTorch"
                 )
+                simulation_environment = "PyTorch"
             simulation_environment = runtime_parameter.simulation_environment
         # obtain model for training
         if use == "training":

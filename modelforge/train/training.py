@@ -1197,7 +1197,9 @@ class ModelTrainer:
         # add potential name
         tags.append(self.potential_parameter.potential_name)
         # add information about what is included in the loss
-        str_loss_property = "-".join(self.training_parameter.loss_parameter.loss_property)
+        str_loss_property = "-".join(
+            self.training_parameter.loss_parameter.loss_property
+        )
         tags.append(f"loss-{str_loss_property}")
 
         return tags
@@ -1332,7 +1334,7 @@ def read_config(
             runtime_parameters.accelerator = accelerator
             log.info(f"Using accelerator: {accelerator}")
         if devices:
-            runtime_parameters.device_index = devices
+            runtime_parameters.devices = devices
             log.info(f"Using device index: {devices}")
         if number_of_nodes:
             runtime_parameters.number_of_nodes = number_of_nodes

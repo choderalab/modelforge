@@ -223,7 +223,7 @@ class SpookyNetCore(CoreNetwork):
         for interaction in self.interaction_modules:
             x, y = interaction(
                 x=x,
-                pairlist=data.pair_indices,
+                pair_indices=data.pair_indices,
                 filters=representation["filters"],
                 dir_ij=representation["dir_ij"],
                 d_orbital_ij=representation["d_orbital_ij"],
@@ -776,34 +776,34 @@ class SpookyNetResidualMLP(nn.Module):
 class SpookyNetLocalInteraction(nn.Module):
     """
     Block for updating atomic features through local interactions with
-    neighboring atoms (message-passing).
+    neighboring atoms (message-passing) described in Eq. 12.
 
     Arguments:
         number_of_atom_features (int):
             Dimensions of feature space.
         number_of_radial_basis_functions (int):
             Number of radial basis functions.
-        num_residual_x (int):
-            TODO:
-        num_residual_s (int):
-            TODO:
-        num_residual_p (int):
-            TODO:
-        num_residual_d (int):
-            TODO:
-        num_residual (int):
-            Number of residual blocks to be stacked in sequence.
+        num_residual_local_x (int):
+            Number of residual blocks applied to atomic features in resmlp_c in Eq. 12.
+        num_residual_local_s (int):
+            Number of residual blocks applied to atomic features in resmlp_s in Eq. 12.
+        num_residual_local_p (int):
+            Number of residual blocks applied to atomic features in resmlp_p in Eq. 12.
+        num_residual_local_d (int):
+            Number of residual blocks applied to atomic features in resmlp_d in Eq. 12.
+        num_residual_local (int):
+            Number of residual blocks applied to atomic features in resmlp_l in Eq. 12.
     """
 
     def __init__(
         self,
         number_of_atom_features: int,
         number_of_radial_basis_functions: int,
-        num_residual_x: int,
-        num_residual_s: int,
-        num_residual_p: int,
-        num_residual_d: int,
-        num_residual: int,
+            num_residual_local_x: int,
+            num_residual_local_s: int,
+            num_residual_local_p: int,
+            num_residual_local_d: int,
+            num_residual_local: int,
     ) -> None:
         """Initializes the LocalInteraction class."""
         super(SpookyNetLocalInteraction, self).__init__()
@@ -816,17 +816,17 @@ class SpookyNetLocalInteraction(nn.Module):
         self.radial_d = nn.Linear(
             number_of_radial_basis_functions, number_of_atom_features, bias=False
         )
-        self.resblock_x = SpookyNetResidualMLP(number_of_atom_features, num_residual_x)
-        self.resblock_s = SpookyNetResidualMLP(number_of_atom_features, num_residual_s)
-        self.resblock_p = SpookyNetResidualMLP(number_of_atom_features, num_residual_p)
-        self.resblock_d = SpookyNetResidualMLP(number_of_atom_features, num_residual_d)
+        self.resmlp_x = SpookyNetResidualMLP(number_of_atom_features, num_residual_local_x)
+        self.resmlp_s = SpookyNetResidualMLP(number_of_atom_features, num_residual_local_s)
+        self.resmlp_p = SpookyNetResidualMLP(number_of_atom_features, num_residual_local_p)
+        self.resmlp_d = SpookyNetResidualMLP(number_of_atom_features, num_residual_local_d)
         self.projection_p = nn.Linear(
             number_of_atom_features, 2 * number_of_atom_features, bias=False
         )
         self.projection_d = nn.Linear(
             number_of_atom_features, 2 * number_of_atom_features, bias=False
         )
-        self.resblock = SpookyNetResidualMLP(number_of_atom_features, num_residual)
+        self.resmlp_l = SpookyNetResidualMLP(number_of_atom_features, num_residual_local)
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
@@ -871,10 +871,10 @@ class SpookyNetLocalInteraction(nn.Module):
         gp = torch.einsum("pf,pr->prf", self.radial_p(f_ij_after_cutoff), dir_ij)
         gd = torch.einsum("pf,pr->prf", self.radial_d(f_ij_after_cutoff), d_orbital_ij)
         # atom featurizations
-        xx = self.resblock_x(x_tilde)
-        xs = self.resblock_s(x_tilde)
-        xp = self.resblock_p(x_tilde)
-        xd = self.resblock_d(x_tilde)
+        xx = self.resmlp_x(x_tilde)
+        xs = self.resmlp_s(x_tilde)
+        xp = self.resmlp_p(x_tilde)
+        xd = self.resmlp_d(x_tilde)
         # collect neighbors
         xs = xs[idx_j]  # L=0
         xp = xp[idx_j]  # L=1
@@ -894,7 +894,7 @@ class SpookyNetLocalInteraction(nn.Module):
         # n: number_of_atoms_in_system, x: 3 (geometry axis), f: number_of_atom_features
         ic(pa.shape)
         ic(f_ij_after_cutoff.shape)
-        return self.resblock(
+        return self.resmlp_l(
             s
             + torch.einsum("nxf,nxf->nf", pa, pb)
             + torch.einsum("nxf,nxf->nf", da, db)
@@ -1071,15 +1071,15 @@ class SpookyNetInteractionModule(nn.Module):
             Number of residual blocks applied to atomic features before
             interaction with neighbouring atoms.
         num_residual_local_x (int):
-            TODO
+            Number of residual blocks applied to atomic features in resmlp_c in Eq. 12.
         num_residual_local_s (int):
-            TODO
+            Number of residual blocks applied to atomic features in resmlp_s in Eq. 12.
         num_residual_local_p (int):
-            TODO
+            Number of residual blocks applied to atomic features in resmlp_p in Eq. 12.
         num_residual_local_d (int):
-            TODO
+            Number of residual blocks applied to atomic features in resmlp_d in Eq. 12.
         num_residual_local (int):
-            TODO
+            Number of residual blocks applied to atomic features in resmlp_l in Eq. 12.
         num_residual_nonlocal_q (int):
             Number of residual blocks for queries in nonlocal interactions.
         num_residual_nonlocal_k (int):
@@ -1116,11 +1116,11 @@ class SpookyNetInteractionModule(nn.Module):
         self.local_interaction = SpookyNetLocalInteraction(
             number_of_atom_features=number_of_atom_features,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
-            num_residual_x=num_residual_local_x,
-            num_residual_s=num_residual_local_s,
-            num_residual_p=num_residual_local_p,
-            num_residual_d=num_residual_local_d,
-            num_residual=num_residual_local,
+            num_residual_local_x=num_residual_local_x,
+            num_residual_local_s=num_residual_local_s,
+            num_residual_local_p=num_residual_local_p,
+            num_residual_local_d=num_residual_local_d,
+            num_residual_local=num_residual_local,
         )
         self.nonlocal_interaction = SpookyNetNonlocalInteraction(
             number_of_atom_features=number_of_atom_features,
@@ -1147,7 +1147,7 @@ class SpookyNetInteractionModule(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        pairlist: torch.Tensor,  # shape [n_pairs, 2]
+            pair_indices: torch.Tensor,  # shape [n_pairs, 2]
         filters: torch.Tensor,  # shape [n_pairs, 1, number_of_radial_basis_functions] TODO: why the 1?
         dir_ij: torch.Tensor,  # shape [n_pairs, 1]
         d_orbital_ij: torch.Tensor,  # shape [n_pairs, 1]
@@ -1161,8 +1161,8 @@ class SpookyNetInteractionModule(nn.Module):
         Arguments:
             x (FloatTensor [N, number_of_atom_features]):
                 Latent atomic feature vectors.
-            pairlist:
-                TODO:
+            pair_indices :
+                Indices of atom pairs within the maximum interaction radius.
             filters:
                 TODO:
             dir_ij (FloatTensor [P, 3]):
@@ -1176,7 +1176,7 @@ class SpookyNetInteractionModule(nn.Module):
                 Contribution to output atomic features (environment
                 descriptors).
         """
-        idx_i, idx_j = pairlist[0], pairlist[1]
+        idx_i, idx_j = pair_indices[0], pair_indices[1]
         x_tilde = self.residual_pre(x)
         del x
         l = self.local_interaction(

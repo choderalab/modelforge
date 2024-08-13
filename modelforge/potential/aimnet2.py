@@ -1,41 +1,13 @@
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import Dict, Optional, List
 
 import torch
 import torch.nn as nn
 from loguru import logger as log
 from openff.units import unit
 
-if TYPE_CHECKING:
-    from .models import PairListOutputs
-    from modelforge.dataset.dataset import NNPInput
-
 from modelforge.potential.utils import NeuralNetworkData
-from .models import InputPreparation, NNPInput, BaseNetwork, CoreNetwork
-from .utils import RadialSymmetryFunction
-
-
-class AIMNet2RadialSymmetryFunction(RadialSymmetryFunction):
-
-    def calculate_radial_scale_factor(
-        self,
-        _min_distance_in_nanometer,
-        _max_distance_in_nanometer,
-        number_of_radial_basis_functions,
-    ):
-        scale_factors = torch.linspace(
-            _min_distance_in_nanometer,
-            _max_distance_in_nanometer,
-            number_of_radial_basis_functions,
-        )
-
-        widths = (
-            torch.abs(scale_factors[1] - scale_factors[0])
-            * torch.ones_like(scale_factors)
-        ).to(self.dtype)
-
-        scale_factors = 0.5 / torch.square_(widths)
-        return scale_factors
+from .models import NNPInput, BaseNetwork, CoreNetwork
 
 
 @dataclass
@@ -107,15 +79,19 @@ class AIMNet2NeuralNetworkData(NeuralNetworkData):
     f_cutoff: Optional[torch.Tensor] = field(default=None)
 
 
+from typing import Union, Type
+
+
 class AIMNet2Core(CoreNetwork):
     def __init__(
         self,
-        max_Z: int = 100,
-        number_of_atom_features: int = 64,
-        number_of_radial_basis_functions: int = 20,
-        number_of_interaction_modules: int = 3,
-        shared_interactions: bool = False,
-        cutoff: unit.Quantity = 5.0 * unit.angstrom,
+        featurization_config: Dict[str, Union[List[str], int]],
+        number_of_radial_basis_functions: int,
+        number_of_interaction_modules: int,
+        number_of_filters: int,
+        shared_interactions: bool,
+        activation_function: Type[torch.nn.Module],
+        maximum_interaction_radius: unit.Quantity,
     ) -> None:
         """
         Initialize the AIMNet2 class.
@@ -132,14 +108,15 @@ class AIMNet2Core(CoreNetwork):
             The cutoff distance for interactions.
         """
 
-        from modelforge.potential.utils import Embedding
+        log.debug("Initializing the AimNet2 architecture.")
 
-        super().__init__()
+        super().__init__(activation_function)
 
-        self.embedding_module = Embedding(max_Z, self.number_of_atom_features)
-
-        self.representation_module = AIMNet2Representation(
-            cutoff, number_of_radial_basis_functions
+        # Initialize representation block
+        self.schnet_representation_module = AIMNet2Representation(
+            maximum_interaction_radius,
+            number_of_radial_basis_functions,
+            featurization_config=featurization_config,
         )
 
         self.interaction_modules = nn.ModuleList(
@@ -285,6 +262,7 @@ class AIMNet2Representation(nn.Module):
         self,
         radial_cutoff: unit.Quantity,
         number_of_radial_basis_functions: int,
+        featurization_config: Dict[str, Union[List[str], int]],
     ):
         """
         Initialize the AIMNet2 representation layer.
@@ -298,22 +276,25 @@ class AIMNet2Representation(nn.Module):
         self.radial_symmetry_function_module = self._setup_radial_symmetry_functions(
             radial_cutoff, number_of_radial_basis_functions
         )
-        # cutoff
-        from modelforge.potential import CosineCutoff
+        # Initialize cutoff module
+        from modelforge.potential import CosineAttenuationFunction, FeaturizeInput
 
-        self.cutoff_module = CosineCutoff(radial_cutoff)
+        self.featurize_input = FeaturizeInput(featurization_config)
+        self.cutoff_module = CosineAttenuationFunction(radial_cutoff)
 
     def _setup_radial_symmetry_functions(
         self, radial_cutoff: unit.Quantity, number_of_radial_basis_functions: int
     ):
-        radial_symmetry_function = AIMNet2RadialSymmetryFunction(
+        from .utils import SchnetRadialBasisFunction
+
+        radial_symmetry_function = SchnetRadialBasisFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             max_distance=radial_cutoff,
             dtype=torch.float32,
         )
         return radial_symmetry_function
 
-    def forward(self, d_ij: torch.Tensor) -> Dict[str, torch.Tensor]:
+    def forward(self, data: Type[AIMNet2NeuralNetworkData]) -> Dict[str, torch.Tensor]:
         """
         Generate the radial symmetry representation of the pairwise distances.
 
@@ -328,12 +309,18 @@ class AIMNet2Representation(nn.Module):
 
         # Convert distances to radial basis functions
         f_ij = self.radial_symmetry_function_module(
-            d_ij
+            data.d_ij
         )  # shape (n_pairs, 1, number_of_radial_basis_functions)
 
-        f_cutoff = self.cutoff_module(d_ij)  # shape (n_pairs, 1)
+        f_cutoff = self.cutoff_module(data.d_ij)  # shape (n_pairs, 1)
 
-        return {"f_ij": f_ij, "f_cutoff": f_cutoff}
+        return {
+            "f_ij": f_ij,
+            "f_cutoff": f_cutoff,
+            "atomic_embedding": self.featurize_input(
+                data
+            ),  # add per-atom properties and embedding
+        }
 
 
 from typing import List
@@ -342,15 +329,16 @@ from typing import List
 class AIMNet2(BaseNetwork):
     def __init__(
         self,
-        max_Z: int,
-        number_of_atom_features: int,
+        featurization: Dict[str, Union[List[str], int]],
         number_of_radial_basis_functions: int,
         number_of_interaction_modules: int,
-        cutoff: unit.Quantity,
+        maximum_interaction_radius: Union[unit.Quantity, str],
+        number_of_filters: int,
+        activation_function_parameter: Dict,
         shared_interactions: bool,
-        processing_operation: List[Dict[str, str]],
-        readout_operation: List[Dict[str, str]],
+        postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
+        potential_seed: Optional[int] = None,
     ) -> None:
         """
         Initialize the AIMNet2 network.
@@ -368,23 +356,26 @@ class AIMNet2(BaseNetwork):
         cutoff : openff.units.unit.Quantity, default=5*unit.angstrom
             The cutoff distance for interactions.
         """
+        self.only_unique_pairs = False  # NOTE: need to be set before super().__init__
+        from modelforge.utils.units import _convert_str_to_unit
+
         super().__init__(
             dataset_statistic=dataset_statistic,
-            processing_operation=processing_operation,
-            readout_operation=readout_operation,
+            postprocessing_parameter=postprocessing_parameter,
+            maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
+            potential_seed=potential_seed,
         )
-        from modelforge.utils.units import _convert
+
+        activation_function = activation_function_parameter["activation_function"]
 
         self.core_module = AIMNet2Core(
-            max_Z=max_Z,
-            number_of_atom_features=number_of_atom_features,
+            featurization_config=featurization,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             number_of_interaction_modules=number_of_interaction_modules,
+            number_of_filters=number_of_filters,
             shared_interactions=shared_interactions,
-        )
-        self.only_unique_pairs = False  # NOTE: for pairlist
-        self.input_preparation = InputPreparation(
-            cutoff=_convert(cutoff), only_unique_pairs=self.only_unique_pairs
+            activation_function=activation_function,
+            maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
         )
 
     def _config_prior(self):

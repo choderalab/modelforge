@@ -396,7 +396,6 @@ class SchNETRepresentation(nn.Module):
 
 from typing import List, Union
 from modelforge.utils.units import _convert_str_to_unit
-from modelforge.utils.io import import_
 from modelforge.potential.utils import shared_config_prior
 
 

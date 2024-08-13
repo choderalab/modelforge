@@ -3,19 +3,24 @@ import pytest
 from openff.units import unit
 import torch
 
-from modelforge.potential.aimnet2 import AIMNet2, AIMNet2RadialSymmetryFunction
-from modelforge.tests.test_models import load_configs
+from modelforge.potential.aimnet2 import AIMNet2
+from modelforge.potential.utils import SchnetRadialBasisFunction
+from modelforge.tests.test_models import load_configs_into_pydantic_models
 
 
 def test_initialize_model():
     """Test initialization of the Schnet model."""
 
     # read default parameters
-    config = load_configs(f"schnet_without_ase", "qm9")
+    config = load_configs_into_pydantic_models(f"aimnet2", "qm9")
 
-    # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
-    aimnet = AIMNet2(**potential_parameter)
+    aimnet = AIMNet2(
+        **config["potential"].model_dump()["core_parameter"],
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
+    )
+
     assert aimnet is not None, "Aimnet2 model should be initialized."
 
 
@@ -26,7 +31,7 @@ def test_radial_symmetry_function_regression():
     lower_bound = unit.Quantity(0.5, unit.angstrom)
     upper_bound = unit.Quantity(5.0, unit.angstrom)
 
-    radial_symmetry_function_module = AIMNet2RadialSymmetryFunction(
+    radial_symmetry_function_module = SchnetRadialBasisFunction(
         num_bins,
         min_distance=lower_bound,
         max_distance=upper_bound,
@@ -186,10 +191,16 @@ def test_interaction_module():
 def test_forward(single_batch_with_batchsize_64):
     """Test initialization of the AIMNet2 model."""
     # read default parameters
-    config = load_configs(f"schnet_without_ase", "qm9")
+    config = load_configs_into_pydantic_models(f"aimnet2", "qm9")
     # Extract parameters
     potential_parameter = config["potential"].get("potential_parameter", {})
-    aimnet = AIMNet2(**potential_parameter)
+    aimnet = AIMNet2(
+        **config["potential"].model_dump()["core_parameter"],
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
+    )
+
     assert aimnet is not None, "Aimnet model should be initialized."
 
     y_hat = aimnet(single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float32))

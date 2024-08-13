@@ -1298,9 +1298,6 @@ def read_config(
         runtime_parameters,
     )
 
-
-
-
 def read_config_and_train(
     condensed_config_path: Optional[str] = None,
     training_parameter_path: Optional[str] = None,

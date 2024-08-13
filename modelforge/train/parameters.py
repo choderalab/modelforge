@@ -346,6 +346,7 @@ class RuntimeParameters(ParametersBase):
             for device in v:
                 if device < 0:
                     raise ValueError("device_index must be positive")
-        if v < 0:
-            raise ValueError("device_index must be positive")
+        else:
+            if v < 0:
+                raise ValueError("device_index must be positive")
         return v

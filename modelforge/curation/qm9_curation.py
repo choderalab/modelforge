@@ -380,7 +380,9 @@ class QM9Curation(DatasetCuration):
         17  cal/mol/K   Heat capacity at 298.15K
 
         """
-        import qcelemental as qcel
+        from modelforge.utils.io import import_
+
+        qcel = import_("qcelemental")
         from modelforge.utils.misc import str_to_float
 
         with open(file_name, "r") as file:

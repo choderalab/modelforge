@@ -2,15 +2,14 @@ name: test
 channels:
   - conda-forge
   - pytorch
-  - pyg
 dependencies:
   # Base depends
   - python
   - pip
   - h5py
   - tqdm
-  - qcelemental=0.25.1
   - qcportal>=0.50
+  - qcelemental
   - pytorch>=2.1
   - loguru
   - lightning>=2.0.8
@@ -18,11 +17,12 @@ dependencies:
   - torchvision
   - openff-units
   - torchmetrics>=1.4
-  - pint
+  - pint=0.23
   - rdkit
   - retry
   - sqlitedict
-  - pytorch_scatter
+  - pydantic>=2
+  - ray-all
 
   # Testing
   - pytest>=2.1
@@ -31,14 +31,10 @@ dependencies:
   - requests
   - versioneer
 
-  # Docs
-  - sphinx_rtd_theme
-
   - pip:
       - jax
-      - pytorch2jax
-      - versioneer
       - flax
+      - pytorch2jax
       - git+https://github.com/ArnNag/sake.git@nanometer
-      # - tensorflow
-      - "ray[data,train,tune,serve]"
+      #- "ray[data,train,tune,serve]"
+      - flax

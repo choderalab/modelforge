@@ -1,27 +1,23 @@
 [potential]
-model_name = "PhysNet"
+potential_name = "PhysNet"
 
-[potential.potential_parameter]
+[potential.core_parameter]
 
-max_Z = 101
-number_of_atom_features = 64
 number_of_radial_basis_functions = 16
-cutoff = "5.0 angstrom"
+maximum_interaction_radius = "5.0 angstrom"
 number_of_interaction_residual = 3
 number_of_modules = 5
 
-processing_operation = [
-  { in = [
-    "E_i",
-  ], out = "E_i", step = "normalization", mean = "E_i_mean", stddev = "E_i_mean" },
-  { in = [
-    "atomic_numbers",
-    'atomic_subsystem_indices',
-  ], out = "ase", step = "calculate_ase" },
+[potential.core_parameter.activation_function_parameter]
+activation_function_name = "ShiftedSoftplus"
 
-]
-readout_operation = [
-  { step = "from_atom_to_molecule", mode = 'sum', in = 'E_i', index_key = 'atomic_subsystem_indices', out = 'E' },
-  { step = "from_atom_to_molecule", mode = 'sum', in = 'ase', index_key = 'atomic_subsystem_indices', out = 'mse' },
+[potential.core_parameter.featurization]
+properties_to_featurize = ['atomic_number']
+maximum_atomic_number = 101
+number_of_per_atom_features = 32
 
-]
+[potential.postprocessing_parameter]
+[potential.postprocessing_parameter.per_atom_energy]
+normalize = true
+from_atom_to_molecule_reduction = true
+keep_per_atom_property = true

@@ -1,8 +1,11 @@
 import numpy as np
 import torch
 import pytest
+import platform
+import os
 
-from modelforge.potential.utils import CosineCutoff, RadialSymmetryFunction
+ON_MACOS = platform.system() == "Darwin"
+IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 
 
 @pytest.fixture(scope="session")
@@ -12,14 +15,14 @@ def prep_temp_dir(tmp_path_factory):
 
 
 def test_dense_layer():
-    from modelforge.potential.utils import Dense
+    from modelforge.potential.utils import DenseWithCustomDist
     import torch
 
     # random 2x3 torch.Tensor
     x = torch.randn(2, 3)
 
     # create a Dense layer with 3 input features and 2 output features
-    dense_layer = Dense(in_features=3, out_features=2)
+    dense_layer = DenseWithCustomDist(in_features=3, out_features=2)
     out = dense_layer(x)
 
     # create a Dense layer with 3 input features and 2 output features
@@ -28,7 +31,7 @@ def test_dense_layer():
         [torch.nn.init.zeros_, torch.nn.init.ones_],
     ):
         # test the weight initialization and correct weight multiplication
-        dense_layer = Dense(
+        dense_layer = DenseWithCustomDist(
             in_features=3, out_features=2, bias=False, weight_init=weight_init_fn
         )
 
@@ -37,7 +40,7 @@ def test_dense_layer():
         manuel_out = dense_layer.weight @ x.T
         assert torch.allclose(out, manuel_out.T)
         # test bias
-        dense_layer = Dense(
+        dense_layer = DenseWithCustomDist(
             in_features=3,
             out_features=2,
             bias=True,
@@ -79,6 +82,8 @@ def test_cosine_cutoff():
     """
     Test the cosine cutoff implementation.
     """
+    from modelforge.potential.utils import CosineAttenuationFunction
+
     # Define inputs
     x = torch.Tensor([1, 2, 3])
     y = torch.Tensor([4, 5, 6])
@@ -92,26 +97,33 @@ def test_cosine_cutoff():
     cutoff = 0.6 * unit.nanometer
 
     # Calculate actual output
-    cutoff_module = CosineCutoff(cutoff)
+    cutoff_module = CosineAttenuationFunction(cutoff)
     actual_output = cutoff_module(d_ij / 10)
 
     # Check if the results are equal
     # NOTE: Cutoff function doesn't care about the units as long as they are the same
     assert np.isclose(actual_output, expected_output)
 
+    # input in angstrom
+    cutoff = 2.0 * unit.angstrom
+    expected_output = torch.tensor([0.5, 0.0, 0.0])
+    cosine_cutoff_module = CosineAttenuationFunction(cutoff)
+
 
 def test_cosine_cutoff_module():
-    # Test CosineCutoff module
+    # Test CosineAttenuationFunction module
+    from modelforge.potential.utils import CosineAttenuationFunction
     from openff.units import unit
 
     # test the cutoff on this distance vector (NOTE: it is in angstrom)
-    d_ij_angstrom = torch.tensor([1.0, 2.0, 3.0])
+    d_ij_angstrom = torch.tensor([1.0, 2.0, 3.0]).unsqueeze(1)
     # the expected outcome is that entry 1 and 2 become zero
     # and entry 0 becomes 0.5 (since the cutoff is 2.0 angstrom)
+    # input in angstrom
+    cutoff = 2.0 * unit.angstrom
 
-    cutoff = unit.Quantity(2.0, unit.angstrom)
-    expected_output = torch.tensor([0.5, 0.0, 0.0])
-    cosine_cutoff_module = CosineCutoff(cutoff)
+    expected_output = torch.tensor([0.5, 0.0, 0.0]).unsqueeze(1)
+    cosine_cutoff_module = CosineAttenuationFunction(cutoff)
 
     output = cosine_cutoff_module(d_ij_angstrom / 10)  # input is in nanometer
 
@@ -122,13 +134,48 @@ def test_radial_symmetry_function_implementation():
     """
     Test the Radial Symmetry function implementation.
     """
-    from modelforge.potential.utils import RadialSymmetryFunction, CosineCutoff
     import torch
     from openff.units import unit
     import numpy as np
+    from modelforge.potential.utils import (
+        CosineAttenuationFunction,
+        GaussianRadialBasisFunctionWithScaling,
+    )
 
-    cutoff_module = CosineCutoff(cutoff=unit.Quantity(5.0, unit.angstrom))
-    RSF = RadialSymmetryFunction(
+    cutoff_module = CosineAttenuationFunction(cutoff=unit.Quantity(5.0, unit.angstrom))
+
+    class RadialSymmetryFunctionTest(GaussianRadialBasisFunctionWithScaling):
+        @staticmethod
+        def calculate_radial_basis_centers(
+            number_of_radial_basis_functions,
+            _max_distance_in_nanometer,
+            _min_distance_in_nanometer,
+            dtype,
+        ):
+            centers = torch.linspace(
+                _min_distance_in_nanometer,
+                _max_distance_in_nanometer,
+                number_of_radial_basis_functions,
+                dtype=dtype,
+            )
+            return centers
+
+        @staticmethod
+        def calculate_radial_scale_factor(
+            number_of_radial_basis_functions,
+            _max_distance_in_nanometer,
+            _min_distance_in_nanometer,
+            dtype,
+        ):
+            scale_factors = torch.full(
+                (number_of_radial_basis_functions,),
+                (_min_distance_in_nanometer - _max_distance_in_nanometer)
+                / number_of_radial_basis_functions,
+            )
+            scale_factors = (scale_factors * -15_000) ** -0.5
+            return scale_factors
+
+    RSF = RadialSymmetryFunctionTest(
         number_of_radial_basis_functions=18,
         max_distance=unit.Quantity(5.0, unit.angstrom),
     )
@@ -412,11 +459,11 @@ def test_embedding():
     """
     from modelforge.potential.utils import Embedding
 
-    max_Z = 100
+    maximum_atomic_number = 100
     embedding_dim = 7
 
     # Create Embedding instance
-    embedding = Embedding(max_Z, embedding_dim)
+    embedding = Embedding(maximum_atomic_number, embedding_dim)
 
     # Test embedding_dim property
     assert embedding.embedding_dim == embedding_dim
@@ -438,11 +485,16 @@ def test_energy_readout():
     # the input for the EnergyReadout module is vector (E_i) that will be scatter_added, and
     # a second tensor supplying the indixes for the summation
 
-    E_i = torch.tensor([3, 3, 1, 1, 1, 1, 1, 1], dtype=torch.float32)
-    atomic_subsystem_indices = torch.tensor([0, 0, 1, 1, 1, 1, 1, 1])
-
-    energy_readout = FromAtomToMoleculeReduction()
-    E = energy_readout(E_i, atomic_subsystem_indices)
+    r = {
+        "per_atom_energy": torch.tensor([3, 3, 1, 1, 1, 1, 1, 1], dtype=torch.float32),
+        "atomic_subsystem_index": torch.tensor([0, 0, 1, 1, 1, 1, 1, 1]),
+    }
+    energy_readout = FromAtomToMoleculeReduction(
+        per_atom_property_name="per_atom_energy",
+        index_name="atomic_subsystem_index",
+        output_name="per_molecule_energy",
+    )
+    E = energy_readout(r)["per_molecule_energy"]
 
     # check that output has length of total number of molecules in batch
     assert E.size() == torch.Size(
@@ -479,6 +531,10 @@ def test_welford():
         assert np.isclose(online_estimator.stddev / target_stddev, 1.0, rtol=1e-1)
 
 
+@pytest.mark.skipif(
+    ON_MACOS and IN_GITHUB_ACTIONS,
+    reason="Test is flaky on the MacOS CI runners as it relies on spawning multiple threads. ",
+)
 def test_filelocking(prep_temp_dir):
     from modelforge.utils.misc import lock_file, unlock_file, check_file_lock
 
@@ -501,7 +557,7 @@ def test_filelocking(prep_temp_dir):
                 if not check_file_lock(f):
                     lock_file(f)
                     self.did_I_lock_it = True
-                    time.sleep(2)
+                    time.sleep(3)
                     unlock_file(f)
 
                 else:

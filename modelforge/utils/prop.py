@@ -1,3 +1,7 @@
+"""
+Module of dataclass definitions of properties.
+"""
+
 from dataclasses import dataclass
 import torch
 from typing import NamedTuple, Optional
@@ -6,11 +10,11 @@ from loguru import logger
 
 @dataclass
 class PropertyNames:
-    Z: str
-    R: str
+    atomic_numbers: str
+    positions: str
     E: str
     F: Optional[str] = None
-    Q: Optional[str] = None
+    total_charge: Optional[str] = None
 
 
 class SpeciesEnergies(NamedTuple):

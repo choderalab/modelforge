@@ -90,7 +90,6 @@ def test_dataset_basic_operations():
 
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_different_properties_of_interest(dataset_name, dataset_factory, prep_temp_dir):
-
     local_cache_dir = str(prep_temp_dir) + "/data_test"
 
     data = _ImplementedDatasets.get_dataset_class(
@@ -195,11 +194,11 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
     assert isinstance(raw_data_item, BatchData)
     assert len(raw_data_item.__dataclass_fields__) == 2
     assert (
-        len(raw_data_item.nnp_input.__dataclass_fields__) == 5
-    )  # 8 properties are returned
+        len(raw_data_item.nnp_input.__dataclass_fields__) == 6
+    )  # 6 properties are returned
     assert (
         len(raw_data_item.metadata.__dataclass_fields__) == 5
-    )  # 8 properties are returned
+    )  # 5 properties are returned
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
@@ -216,7 +215,6 @@ def test_file_existence_after_initialization(
     )
 
     with contextlib.suppress(FileNotFoundError):
-
         os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
         os.remove(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
         os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
@@ -457,29 +455,28 @@ def test_data_item_format_of_datamodule(
 from modelforge.potential import _Implemented_NNPs
 
 
-@pytest.mark.parametrize("model_name", _Implemented_NNPs.get_all_neural_network_names())
-def test_dataset_neighborlist(model_name, single_batch_with_batchsize_64):
+@pytest.mark.parametrize(
+    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+)
+def test_dataset_neighborlist(potential_name, single_batch_with_batchsize_64):
     """Test the neighborlist."""
 
     nnp_input = single_batch_with_batchsize_64.nnp_input
 
     # test that the neighborlist is correctly generated
-    # cast input and model to torch.float64
-    # read default parameters
-    from modelforge.tests.test_models import load_configs
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
     # read default parameters
-    config = load_configs(f"{model_name}_without_ase", "qm9")
+    config = load_configs_into_pydantic_models(f"{potential_name}", "qm9")
 
     # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
     from modelforge.potential.models import NeuralNetworkPotentialFactory
 
-    model = NeuralNetworkPotentialFactory.generate_model(
+    # initialize model
+    model = NeuralNetworkPotentialFactory.generate_potential(
         use="inference",
-        model_type=model_name,
         simulation_environment="PyTorch",
-        model_parameter=potential_parameter,
+        potential_parameter=config["potential"],
     )
     model(nnp_input)
 
@@ -770,12 +767,16 @@ def test_energy_postprocessing():
     from openff.units import unit
 
     assert np.isclose(
-        unit.Quantity(dataset_statistic["atomic_energies_stats"]["E_i_mean"]).m,
+        unit.Quantity(
+            dataset_statistic["training_dataset_statistics"]["per_atom_energy_mean"]
+        ).m,
         -402.916561,
     )
 
     assert np.isclose(
-        unit.Quantity(dataset_statistic["atomic_energies_stats"]["E_i_stddev"]).m,
+        unit.Quantity(
+            dataset_statistic["training_dataset_statistics"]["per_atom_energy_stddev"]
+        ).m,
         25.013382078330697,
     )
 
@@ -793,7 +794,6 @@ def test_energy_postprocessing():
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_function_of_self_energy(dataset_name, datamodule_factory):
-
     # test the self energy calculation on the QM9 dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 

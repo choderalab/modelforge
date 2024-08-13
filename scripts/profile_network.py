@@ -12,19 +12,19 @@ def profile_network(model, data):
     )[0]
 
 
-def setup(model_name: str):
+def setup(potential_name: str):
     from importlib import resources
     from modelforge import tests as modelforge_tests
 
     config = return_toml_config(
-        f"{resources.files(modelforge_tests)}data/training_defaults/{model_name.lower()}_qm9.toml"
+        f"{resources.files(modelforge_tests)}data/training_defaults/{potential_name.lower()}_qm9.toml"
     )
     # Extract parameters
     potential_parameter = config["potential"].get("potential_parameter", {})
 
     model = NeuralNetworkPotentialFactory.generate_model(
         use="inference",
-        model_type=model_name,
+        model_type=potential_name,
         simulation_environment="PyTorch",
         model_parameters=potential_parameter,
     )
@@ -46,7 +46,7 @@ def setup(model_name: str):
     dataset.prepare_data()
     dataset.setup()
 
-    data = next(iter(dataset.train_dataloader())).nnp_input
+    data = next(iter(dataset.train_dataloader())).model_input
     return model, data
 
 
@@ -54,9 +54,9 @@ if __name__ == "__main__":
     from torch.profiler import profile, record_function, ProfilerActivity
     import torch
 
-    model_name = "SchNet"
+    potential_name = "SchNet"
 
-    model, data = setup(model_name)
+    model, data = setup(potential_name)
     with profile(
         activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
         # record_shapes=True,

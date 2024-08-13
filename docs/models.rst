@@ -1,0 +1,128 @@
+Models
+===============
+
+Models: Overview
+----------------
+
+A model in *modelforge* encapsulates all the operations required to map a
+description of a molecular system (which includes the Cartesian coordinates,
+atomic numbers, and total charge of a system (optionally also the spin state))
+to, at a minimum, its energy. Specifically, a model takes as input a
+:py:class:`~modelforge.dataset.dataset.NNPInput` dataclass and outputs a
+dictionary of PyTorch tensors representing per-atom and/or per-molecule
+properties, including per-molecule energies. The model comprises three main
+components:
+
+1. **Input Preparation Module**
+   (:class:`~modelforge.potential.model.InputPreparation`): Responsible for
+   generating the pair list, pair distances, and pair displacement vectors based
+   on atomic coordinates and the specified cutoff. This module processes the raw
+   input data into a format suitable for the neural network.
+
+2. **Core Model** (:class:`~modelforge.potential.model.CoreNetwork`): The neural
+   network containing the learnable parameters, which forms the core of the
+   potential. This module generates per-atom scalar and, optionally, tensor properties. The inputs to the core model
+   include atom pair indices, pair distances, pair displacement vectors, and atomic properties such as atomic numbers, charges, and spin state.
+
+3. **Postprocessing Module**
+   (:class:`~modelforge.potential.model.PostProcessing`): Contains operations
+   applied to per-atom properties as well as reduction operations to obtain
+   per-molecule properties. Examples include atomic energy scaling and summation of per-atom energies to obtain per-molecule energies for reduction operations.
+
+A specific neural network (e.g., PhysNet) implements the core model, while the
+input preparation and postprocessing modules are independent of the neural
+network architecture.
+
+
+Implemented Models
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+*Modelforge* currently supports the following models:
+
+- Invariant architectures:
+   * SchNet
+   * ANI2x
+- Equivariant architectures:
+   * PaiNN
+   * PhysNet
+   * TensorNet
+   * SAKE
+
+Additionally, the following models are currently under development and can be expected in the near future:
+
+- SpookyNet
+- DimeNet
+- AimNet2
+
+Each model currently implements the total energy prediction with per-atom
+forces within a given cutoff radius. The models can be trained on energies and
+forces. PaiNN and PhysNet can also predict partial charges and
+calculate long-range interactions using reaction fields or Coulomb potential.
+PaiNN can additionally use multipole expansions.
+
+Using TOML files to configure models
+------------------------------------
+
+To initialize a model, a model factory is used:
+:class:`~modelforge.potential.models.NeuralNetworkPotentialFactory`. 
+This takes care of initialization of the model and the input preparation and postprocessing modules.
+
+A neural network model is defined by a configuration file in the TOML format.
+This configuration file includes parameters for the neural network, as well as
+for the input preparation and postprocessing modules. Below is an example
+configuration file for the PhysNet model:
+
+.. literalinclude:: ../modelforge/tests/data/potential_defaults/physnet.toml
+   :language: toml
+   :caption: PhysNet Configuration
+
+There are two main sections in the configuration file: `core_parameter` and
+`postprocessing_parameter`. The `core_parameter` section contains the parameters
+for the neural network, while the `postprocessing_parameter` section contains
+the parameters for the postprocessing operations. Explanation of fields in
+`physnet.toml`:
+
+* `potential_name`: Specifies the type of model to use, in this case, PhysNet.
+* `number_of_radial_basis_functions`: Number of radial basis functions.
+* `maximum_interaction_radius`: Cutoff radius for considering neighboring atoms.
+* `number_of_interaction_residual`: PhysNet hyperparamter defining the depth of the network.
+* `number_of_modules`: PhysNet hyperparamter defining the depth of the network;which scales with (number_of_interaction_residual * number_of_modules).
+* `activation_function_name`: Activation function used in the neural network.
+* `properties_to_featurize`: List of properties to featurize.
+* `maximum_atomic_number```: Maximum atomic number in the dataset.
+* `number_of_per_atom_features`: Number of features for each atom used for the embedding. This is the number of features that are used to represent each atom in the neural network.
+* `normalize`: Whether to normalize energies for training. If this is set to true the mean and standard deviation of the energies are calculated and used to normalize the energies.
+* `from_atom_to_molecule_reduction`: Whether to reduce the per-atom properties to per-molecule properties.
+* `keep_per_atom_property`: If this is set to true the per-atom energies are returned as well.
+
+
+Default parameter files for each model are available in `modelforge/tests/data/potential_defaults`. These files can be used as starting points for creating new model configuration files.
+
+.. note:: All parameters in the configuration files have units attached where applicable. Units within modelforge a represented using the `openff.units` package (https://docs.openforcefield.org/projects/units/en/stable/index.html), which is a wrapper around the `pint` package. Definition of units within the TOML files must unit names available in the `openff.units` package (https://github.com/openforcefield/openff-units/blob/main/openff/units/data/defaults.txt).
+
+Example
+------------------------------------
+
+Below is an example of how to create a SchNet model using the model factory, although we note these operations do not typically need to be performed directly by a user and are handled by routines available in the training module:
+
+.. code-block:: python
+   :linenos:
+
+   model_name = "SchNet"
+
+   # reading default parameters
+   from modelforge.tests.data import potential_defaults
+   from importlib import 
+   import toml
+
+   filename = (
+      resources.files(potential_defaults) / f"{model_name.lower()}_defaults.toml"
+   )
+   potential_parameters = toml.load(filename)
+
+   # initialize the models with the given parameter set
+   model = NeuralNetworkPotentialFactory.create_nnp(
+      use="inference",
+      model_type=model_name,
+      model_parameter=potential_parameters,
+   )

@@ -153,6 +153,7 @@ class ANI2xParameters(ParametersBase):
     potential_name: str = "ANI2x"
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
+    potential_seed: Optional[int] = None
 
 
 class SchNetParameters(ParametersBase):
@@ -183,6 +184,7 @@ class SchNetParameters(ParametersBase):
     potential_name: str = "SchNet"
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
+    potential_seed: Optional[int] = None
 
 
 class TensorNetParameters(ParametersBase):
@@ -214,6 +216,7 @@ class TensorNetParameters(ParametersBase):
     potential_name: str = "TensorNet"
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
+    potential_seed: Optional[int] = None
 
 
 class PaiNNParameters(ParametersBase):
@@ -244,6 +247,7 @@ class PaiNNParameters(ParametersBase):
     potential_name: str = "PaiNN"
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
+    potential_seed: Optional[int] = None
 
 
 class PhysNetParameters(ParametersBase):
@@ -273,6 +277,7 @@ class PhysNetParameters(ParametersBase):
     potential_name: str = "PhysNet"
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
+    potential_seed: Optional[int] = None
 
 
 class SAKEParameters(ParametersBase):
@@ -302,3 +307,4 @@ class SAKEParameters(ParametersBase):
     potential_name: str = "SAKE"
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
+    potential_seed: Optional[int] = None

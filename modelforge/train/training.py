@@ -1172,7 +1172,7 @@ class ModelTrainer:
             "{dataset_name}", self.dataset_parameter.dataset_name
         )
         return experiment_name
-    
+
     def _add_tags(self, tags: List[str]) -> List[str]:
         """
         Add tags to the wandb tags.
@@ -1193,14 +1193,15 @@ class ModelTrainer:
 
         tags.append(str(modelforge.__version__))
         # add dataset
-        tags.append(self.dataset_config.dataset_name)
+        tags.append(self.dataset_parameter.dataset_name)
         # add potential name
-        tags.append(self.potential_config.potential_name)
+        tags.append(self.potential_parameter.potential_name)
         # add information about what is included in the loss
-        str_loss_property = "-".join(self.training_config.loss_parameter.loss_property)
+        str_loss_property = "-".join(self.training_parameter.loss_parameter.loss_property)
         tags.append(f"loss-{str_loss_property}")
 
         return tags
+
 
 from typing import List, Optional, Union
 

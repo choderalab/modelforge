@@ -267,8 +267,9 @@ def parse_devices(value: str) -> Union[int, List[int]]:
     """
     import ast
 
-    if value.startswith("[") and value.endswith("]"):
+    # if multiple comma delimited values are passed, split them into a list
+    if "," in value:
         # Safely evaluate the string as a Python literal (list of ints)
-        return ast.literal_eval(value)
+        return list(ast.literal_eval(value))
     else:
         return int(value)

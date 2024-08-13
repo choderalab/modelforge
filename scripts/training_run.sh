@@ -2,4 +2,4 @@
 # training run with a small number of epochs with default
 # parameters
 
-python perform_training.py config.toml
+python perform_training.py --condensed_config_path config.toml

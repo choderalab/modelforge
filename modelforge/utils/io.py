@@ -244,3 +244,32 @@ def check_import(module: str):
 
     imported_module = import_(module)
     del imported_module
+
+
+from typing import Union, List
+
+
+def parse_devices(value: str) -> Union[int, List[int]]:
+    """
+    Parse the devices argument which can be either a single integer or a list of
+    integers.
+
+    Parameters
+    ----------
+    value : str
+        The input string representing either a single integer or a list of
+        integers.
+
+    Returns
+    -------
+    Union[int, List[int]]
+        Either a single integer or a list of integers.
+    """
+    import ast
+
+    # if multiple comma delimited values are passed, split them into a list
+    if value.startswith("[") and value.endswith("]"):
+        # Safely evaluate the string as a Python literal (list of ints)
+        return list(ast.literal_eval(value))
+    else:
+        return int(value)

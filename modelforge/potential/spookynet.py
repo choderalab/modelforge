@@ -464,7 +464,7 @@ class ElectronicEmbedding(nn.Module):
         # charges are duplicated to use separate weights for +/-
         self.linear_k = nn.Linear(2, num_features, bias=False)
         self.linear_v = nn.Linear(2, num_features, bias=False)
-        self.resblock = SpookyNetResidualMLP(
+        self.resmlp = SpookyNetResidualMLP(
             num_features,
             num_residual,
             bias=False,
@@ -504,7 +504,7 @@ class ElectronicEmbedding(nn.Module):
         dot = torch.einsum("nf,nf->n", k, q) / math.sqrt(k.shape[-1])  # scaled dot product
         a = nn.functional.softplus(dot)  # unnormalized attention weights
         a_normalized = a / (a.sum(-1) + eps)  # TODO: why is this needed? shouldn't softplus add up to 1?
-        return self.resblock(torch.einsum("n,nf->nf", a_normalized, v))
+        return self.resmlp(torch.einsum("n,nf->nf", a_normalized, v))
 
 
 class SpookyNetRepresentation(nn.Module):
@@ -1029,9 +1029,9 @@ class SpookyNetNonlocalInteraction(nn.Module):
     ) -> None:
         """Initializes the NonlocalInteraction class."""
         super(SpookyNetNonlocalInteraction, self).__init__()
-        self.resblock_q = SpookyNetResidualMLP(number_of_atom_features, num_residual_q)
-        self.resblock_k = SpookyNetResidualMLP(number_of_atom_features, num_residual_k)
-        self.resblock_v = SpookyNetResidualMLP(number_of_atom_features, num_residual_v)
+        self.resmlp_q = SpookyNetResidualMLP(number_of_atom_features, num_residual_q)
+        self.resmlp_k = SpookyNetResidualMLP(number_of_atom_features, num_residual_k)
+        self.resmlp_v = SpookyNetResidualMLP(number_of_atom_features, num_residual_v)
         self.attention = SpookyNetAttention(
             dim_qk=number_of_atom_features, num_random_features=number_of_atom_features
         )
@@ -1052,9 +1052,9 @@ class SpookyNetNonlocalInteraction(nn.Module):
         x (FloatTensor [N, number_of_atom_features]):
             Atomic feature vectors.
         """
-        q = self.resblock_q(x_tilde)  # queries
-        k = self.resblock_k(x_tilde)  # keys
-        v = self.resblock_v(x_tilde)  # values
+        q = self.resmlp_q(x_tilde)  # queries
+        k = self.resmlp_k(x_tilde)  # keys
+        v = self.resmlp_v(x_tilde)  # values
         return self.attention(q, k, v)
 
 
@@ -1135,7 +1135,7 @@ class SpookyNetInteractionModule(nn.Module):
         self.residual_post = SpookyNetResidualStack(
             number_of_atom_features, num_residual_post
         )
-        self.resblock = SpookyNetResidualMLP(
+        self.resmlp = SpookyNetResidualMLP(
             number_of_atom_features, num_residual_output
         )
         self.reset_parameters()
@@ -1190,4 +1190,4 @@ class SpookyNetInteractionModule(nn.Module):
         n = self.nonlocal_interaction(x_tilde)
         x_updated = self.residual_post(x_tilde + l + n)
         del x_tilde
-        return x_updated, self.resblock(x_updated)
+        return x_updated, self.resmlp(x_updated)

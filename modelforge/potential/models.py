@@ -624,8 +624,10 @@ class NeuralNetworkPotentialFactory:
                 log.warning(
                     "No runtime paramters or simulation_environment specified, defaulting to PyTorch"
                 )
+
                 simulation_environment = "PyTorch"
-            simulation_environment = runtime_parameter.simulation_environment
+            else:
+                simulation_environment = runtime_parameter.simulation_environment
         # obtain model for training
         if use == "training":
             if simulation_environment == "JAX":

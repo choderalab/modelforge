@@ -97,8 +97,12 @@ class AIMNet2Core(CoreNetwork):
             featurization_config["number_of_per_atom_features"]
         )
 
-        self.interaction_modules_first_pass = AIMNet2InteractionModule(
-            number_of_atom_features,
+        self.interaction_modules_first_pass = AIMNet2Interaction(
+            FirstMessageModule(number_of_atom_features)
+        )
+        # Initialize the module as a SubsequentMessageModule
+        self.interaction_modules_subsequent_pass = AIMNet2Interaction(
+            SubsequentMessageModule(number_of_atom_features)
         )
 
     def _model_specific_input_preparation(
@@ -144,25 +148,25 @@ class AIMNet2Core(CoreNetwork):
         # Atomic embedding "a" Eqn. (3)
         atomic_embedding = representation["atomic_embedding"]
 
-        updated_embedding, partial_charge = self.interaction_modules_first_pass(
+        result_first = self.interaction_modules_first_pass(
+            atomic_embedding, data.pair_indices, f_ij_cutoff, data.r_ij
+        )
+
+        result_second = self.interaction_modules_first_pass(
             atomic_embedding, data.pair_indices, f_ij_cutoff, data.r_ij
         )
 
         a = 7
         # first pass
 
-        raise NotImplementedError
 
-    def nqe(self, partial_point_charges, delta_q):
-        raise NotImplementedError
+import torch
+import torch.nn as nn
+from typing import Optional
 
 
-class AIMNet2InteractionModule(nn.Module):
-
-    def __init__(
-        self,
-        number_of_atom_features: int,
-    ):
+class BaseMessageModule(nn.Module):
+    def __init__(self, number_of_atom_features: int):
         super().__init__()
         self.number_of_atomic_features = number_of_atom_features
         self.linear = nn.Linear(number_of_atom_features, number_of_atom_features)
@@ -175,56 +179,157 @@ class AIMNet2InteractionModule(nn.Module):
         r_ij: torch.Tensor,
         partial_point_charges: Optional[torch.Tensor] = None,
     ):
+        # Step 1: Calculate weighted embeddings
+        weighted_embeddings = self.calculate_weighted_embeddings(
+            atomic_embedding, pairlist, f_ij_cutoff, partial_point_charges
+        )
 
-        # calculate the radial contributions (equation 4)
-        idx_i, idx_j = pairlist[0], pairlist[1]
-        # Get the atomic embeddings for atoms i and j
-        a_j = atomic_embedding[idx_j]  # Shape: (num_atom_pairs, 16)
-        # Compute the weighted sum for each atom i Multiply the radial basis
-        # functions (f_ij_cutoff) with the embeddings of j (a_j)
-        weighted_embeddings = (
-            f_ij_cutoff * a_j
-        )  # Element-wise multiplication, shape: (num_atom_pairs, 16)
-        # Now, sum the contributions from all j atoms to the corresponding i Use
-        # scatter_add to sum over the pairs associated with each atom i
+        # Step 2: Calculate radial contributions (Equation 4)
+        radial_contributions = self.calculate_radial_contributions(
+            atomic_embedding, pairlist, weighted_embeddings
+        )
+
+        # Step 3: Calculate vector contributions (Equation 5)
+        vector_norms = self.calculate_vector_contributions(
+            pairlist, weighted_embeddings, r_ij
+        )
+
+        # Step 4: Combine radial and vector contributions to form the final message
+        combined_message = self.combine_messages(vector_norms, radial_contributions)
+
+        return combined_message
+
+    def calculate_radial_contributions(
+        self,
+        atomic_embedding: torch.Tensor,
+        pairlist: torch.Tensor,
+        weighted_embeddings: torch.Tensor,
+    ) -> torch.Tensor:
+        """Calculate the radial contributions (Equation 4)."""
+        idx_i = pairlist[0]
         radial_contributions = torch.zeros_like(
             atomic_embedding
         )  # Shape: (num_atoms, 16)
-        radial_contributions.index_add_(0, idx_i, weighted_embeddings)
-        # now continue with equation 5
+        radial_contributions.index_add_(
+            0, idx_i, weighted_embeddings[:, : self.number_of_atomic_features]
+        )
+        return radial_contributions
+
+    def calculate_vector_contributions(
+        self,
+        pairlist: torch.Tensor,
+        weighted_embeddings: torch.Tensor,
+        r_ij: torch.Tensor,
+    ) -> torch.Tensor:
+        """Calculate the vector contributions and norms (Equation 5)."""
+        idx_i = pairlist[0]
+
         # Calculate the unit vector u_ij
         r_ij_norm = torch.norm(r_ij, dim=1, keepdim=True)  # Shape: (num_atom_pairs, 1)
         u_ij = r_ij / r_ij_norm  # Shape: (num_atom_pairs, 3)
-        # Multiply the resulting weighted embeddings with the unit vector u_ij
-        u_weighted_embeddings = u_ij.unsqueeze(-1) * weighted_embeddings.unsqueeze(
-            -2
-        )  # Shape: (num_atom_pairs, 3, 16)
+
+        # Multiply u_ij with weighted embeddings
+        u_weighted_embeddings = u_ij.unsqueeze(-1) * weighted_embeddings.unsqueeze(-2)
 
         # Apply the linear transformation using nn.Linear
-        # Reshape u_weighted_embeddings to apply linear transformation
-        u_weighted_embeddings_flat = u_weighted_embeddings.view(
-            -1, u_weighted_embeddings.shape[-1]
-        )  # Shape: (num_atom_pairs * 3, 16)
-        transformed_embeddings_flat = self.linear(
-            u_weighted_embeddings_flat
-        )  # Shape: (num_atom_pairs * 3, 16)
-
-        # Reshape back to (num_atom_pairs, 3, embedding_dim)
-        transformed_embeddings = transformed_embeddings_flat.view(
-            u_weighted_embeddings.shape
-        )  # Shape: (num_atom_pairs, 3, 16)
+        transformed_embeddings = self.apply_linear_transformation(u_weighted_embeddings)
 
         # Sum over j to get the contributions for each i
         vector_contributions = torch.zeros(
-            (atomic_embedding.shape[0], 3, atomic_embedding.shape[1]),
-            device=atomic_embedding.device,
-        )  # Shape: (num_atoms, 3, 16)
+            (weighted_embeddings.shape[0], 3, weighted_embeddings.shape[-1]),
+            device=weighted_embeddings.device,
+        )
         vector_contributions.index_add_(0, idx_i, transformed_embeddings)
 
         # Calculate the norm of the resulting vectors for each atom
         vector_norms = torch.norm(vector_contributions, dim=1)  # Shape: (num_atoms, 16)
+
+        return vector_norms
+
+    def apply_linear_transformation(
+        self, u_weighted_embeddings: torch.Tensor
+    ) -> torch.Tensor:
+        """Apply the linear transformation to the weighted embeddings."""
+        u_weighted_embeddings_flat = u_weighted_embeddings.view(
+            -1, u_weighted_embeddings.shape[-1]
+        )
+        transformed_embeddings_flat = self.linear(u_weighted_embeddings_flat)
+        transformed_embeddings = transformed_embeddings_flat.view(
+            u_weighted_embeddings.shape
+        )
+        return transformed_embeddings
+
+    def combine_messages(
+        self, vector_norms: torch.Tensor, radial_contributions: torch.Tensor
+    ) -> torch.Tensor:
+        """Combine radial and vector contributions."""
         combined_message = torch.cat([vector_norms, radial_contributions], dim=-1)
         return combined_message
+
+    def calculate_weighted_embeddings(
+        self,
+        atomic_embedding: torch.Tensor,
+        pairlist: torch.Tensor,
+        f_ij_cutoff: torch.Tensor,
+        partial_point_charges: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        """To be implemented by subclasses."""
+        raise NotImplementedError("This method should be implemented by subclasses")
+
+
+class FirstMessageModule(BaseMessageModule):
+    def calculate_weighted_embeddings(
+        self,
+        atomic_embedding: torch.Tensor,
+        pairlist: torch.Tensor,
+        f_ij_cutoff: torch.Tensor,
+        partial_point_charges: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        """Calculate the weighted embeddings for the first message round."""
+        idx_j = pairlist[1]
+        a_j = atomic_embedding[idx_j]  # Shape: (num_atom_pairs, 16)
+        weighted_embeddings = f_ij_cutoff * a_j  # Element-wise multiplication
+        return weighted_embeddings
+
+
+class SubsequentMessageModule(BaseMessageModule):
+    def __init__(self, number_of_atom_features: int):
+        super().__init__(number_of_atom_features + 1)  # Adjust for partial charge
+
+    def calculate_weighted_embeddings(
+        self,
+        atomic_embedding: torch.Tensor,
+        pairlist: torch.Tensor,
+        f_ij_cutoff: torch.Tensor,
+        partial_point_charges: torch.Tensor,
+    ) -> torch.Tensor:
+        """Calculate the weighted embeddings for subsequent message rounds."""
+        idx_j = pairlist[1]
+        a_j = atomic_embedding[idx_j]
+        q_j = partial_point_charges[idx_j].unsqueeze(-1)  # Shape: (num_atom_pairs, 1)
+        combined_features = torch.cat(
+            [a_j, q_j], dim=-1
+        )  # Combine embeddings with charges
+        weighted_embeddings = f_ij_cutoff * combined_features
+        return weighted_embeddings
+
+
+class AIMNet2Interaction(nn.Module):
+    def __init__(self, message_module: nn.Module):
+        super().__init__()
+        self.message_module = message_module
+
+    def forward(
+        self,
+        atomic_embedding: torch.Tensor,
+        pairlist: torch.Tensor,
+        f_ij_cutoff: torch.Tensor,
+        r_ij: torch.Tensor,
+        partial_point_charges: Optional[torch.Tensor] = None,
+    ):
+        return self.message_module(
+            atomic_embedding, pairlist, f_ij_cutoff, r_ij, partial_point_charges
+        )
 
 
 class AIMNet2Representation(nn.Module):

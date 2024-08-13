@@ -145,9 +145,7 @@ class AIMNet2Core(CoreNetwork):
         atomic_embedding = representation["atomic_embedding"]
 
         updated_embedding, partial_charge = self.interaction_modules_first_pass(
-            atomic_embedding,
-            data.pair_indices,
-            f_ij_cutoff,
+            atomic_embedding, data.pair_indices, f_ij_cutoff, data.r_ij
         )
 
         a = 7
@@ -204,20 +202,30 @@ class AIMNet2InteractionModule(nn.Module):
 
         # Apply the linear transformation using nn.Linear
         # Reshape u_weighted_embeddings to apply linear transformation
-        u_weighted_embeddings_flat = u_weighted_embeddings.view(-1, u_weighted_embeddings.shape[-1])  # Shape: (num_atom_pairs * 3, 16)
-        transformed_embeddings_flat = self.linear(u_weighted_embeddings_flat)  # Shape: (num_atom_pairs * 3, 16)
+        u_weighted_embeddings_flat = u_weighted_embeddings.view(
+            -1, u_weighted_embeddings.shape[-1]
+        )  # Shape: (num_atom_pairs * 3, 16)
+        transformed_embeddings_flat = self.linear(
+            u_weighted_embeddings_flat
+        )  # Shape: (num_atom_pairs * 3, 16)
 
         # Reshape back to (num_atom_pairs, 3, embedding_dim)
-        transformed_embeddings = transformed_embeddings_flat.view(u_weighted_embeddings.shape)  # Shape: (num_atom_pairs, 3, 16)
-        
+        transformed_embeddings = transformed_embeddings_flat.view(
+            u_weighted_embeddings.shape
+        )  # Shape: (num_atom_pairs, 3, 16)
+
         # Sum over j to get the contributions for each i
-        vector_contributions = torch.zeros((atomic_embedding.shape[0], 3, atomic_embedding.shape[1]), device=atomic_embedding.device)  # Shape: (num_atoms, 3, 16)
+        vector_contributions = torch.zeros(
+            (atomic_embedding.shape[0], 3, atomic_embedding.shape[1]),
+            device=atomic_embedding.device,
+        )  # Shape: (num_atoms, 3, 16)
         vector_contributions.index_add_(0, idx_i, transformed_embeddings)
-        
+
         # Calculate the norm of the resulting vectors for each atom
         vector_norms = torch.norm(vector_contributions, dim=1)  # Shape: (num_atoms, 16)
-        combined_message = torch.cat([vector_norms, weighted_embeddings], dim=-1)
-        a = 7
+        combined_message = torch.cat([vector_norms, radial_contributions], dim=-1)
+        return combined_message
+
 
 class AIMNet2Representation(nn.Module):
     def __init__(

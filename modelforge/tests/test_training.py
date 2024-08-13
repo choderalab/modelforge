@@ -189,8 +189,8 @@ def test_hypterparameter_tuning_with_ray(
     # training model
     model = NeuralNetworkPotentialFactory.generate_potential(
         use="training",
-        potential_parameter=potential_config.model_dump(),
-        training_parameter=training_config.model_dump(),
+        potential_parameter=potential_config,
+        training_parameter=training_config,
     )
 
     from modelforge.train.tuning import RayTuner

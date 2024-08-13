@@ -574,6 +574,7 @@ class NeuralNetworkPotentialFactory:
         dataset_parameter: Optional[DatasetParameters] = None,
         dataset_statistic: Optional[Dict[str, float]] = None,
         potential_seed: Optional[int] = None,
+        simulation_environment: Optional[Literal["PyTorch", "JAX"]] = None,
     ) -> Union[Type[torch.nn.Module], Type[JAXModel], Type[pl.LightningModule]]:
         """
         Creates an NNP instance of the specified type, configured either for training or inference.
@@ -594,6 +595,8 @@ class NeuralNetworkPotentialFactory:
             Statistics of the dataset for normalization purposes.
         potential_seed : Optional[int], optional
             Seed for the random number generator.
+        simulation_environment : Optional[Literal["PyTorch", "JAX"]], optional, None
+            The simulation environment to use for training/inference. Will override the runtime parameter if provided.
 
 
         Returns
@@ -616,9 +619,15 @@ class NeuralNetworkPotentialFactory:
         log.debug(f"{potential_parameter=}")
         log.debug(f"{dataset_parameter=}")
 
+        if simulation_environment is None:
+            if runtime_parameter is None:
+                raise ValueError(
+                    "Either 'simulate_environment' or 'runtime_parameter' must be provided."
+                )
+            simulation_environment = runtime_parameter.simulation_environment
         # obtain model for training
         if use == "training":
-            if runtime_parameter.simulation_environment == "JAX":
+            if simulation_environment == "JAX":
                 log.warning(
                     "Training in JAX is not available. Falling back to PyTorch."
                 )
@@ -640,7 +649,7 @@ class NeuralNetworkPotentialFactory:
                 dataset_statistic=dataset_statistic,
                 potential_seed=potential_seed,
             )
-            if runtime_parameter.simulation_environment == "JAX":
+            if simulation_environment == "JAX":
                 return PyTorch2JAXConverter().convert_to_jax_model(model)
             else:
                 return model

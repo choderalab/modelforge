@@ -66,33 +66,38 @@ def test_train_with_lightning(potential_name, dataset_name):
     Test the forward pass for a given model and dataset.
     """
 
-    from modelforge.train.training import ModelTrainer
-
     # read default parameters
     config = load_configs_into_pydantic_models(potential_name, dataset_name)
 
     # Extract parameters
-    potential_config = config["potential"]
-    training_config = config["training"]
-    dataset_config = config["dataset"]
-    runtime_config = config["runtime"]
+    potential_parameter = config["potential"]
+    training_parameter = config["training"]
+    dataset_parameter = config["dataset"]
+    runtime_parameter = config["runtime"]
 
-    # perform training
-    trainer = ModelTrainer(
-        potential_config=potential_config,
-        training_config=training_config,
-        dataset_config=dataset_config,
-        runtime_config=runtime_config,
-    ).train()
-    # save checkpoint
-    trainer.save_checkpoint("test.chp")
+    from modelforge.potential.models import (
+        NeuralNetworkPotentialFactory,
+    )
+
+    trainer = (
+        NeuralNetworkPotentialFactory.generate_potential(
+            use="training",
+            potential_parameter=potential_parameter,
+            training_parameter=training_parameter,
+            dataset_parameter=dataset_parameter,
+            runtime_parameter=runtime_parameter,
+        )
+        .train_potential()
+        .save_checkpoint("test.chp")  # save checkpoint
+    )
     # continue training
-    trainer = ModelTrainer(
-        potential_config=potential_config,
-        training_config=training_config,
-        dataset_config=dataset_config,
-        runtime_config=runtime_config,
-    ).train()
+    NeuralNetworkPotentialFactory.generate_potential(
+        use="training",
+        potential_parameter=potential_parameter,
+        training_parameter=training_parameter,
+        dataset_parameter=dataset_parameter,
+        runtime_parameter=runtime_parameter,
+    ).train_potential()
 
 
 def test_train_from_single_toml_file():
@@ -182,10 +187,10 @@ def test_hypterparameter_tuning_with_ray(
     dm = datamodule_factory(dataset_name=dataset_name)
 
     # training model
-    model = NeuralNetworkPotentialFactory.generate_model(
+    model = NeuralNetworkPotentialFactory.generate_potential(
         use="training",
-        model_parameter=potential_config.model_dump(),
-        training_parameter=training_config.model_dump(),
+        potential_parameter=potential_config,
+        training_parameter=training_config,
     )
 
     from modelforge.train.tuning import RayTuner

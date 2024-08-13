@@ -650,6 +650,8 @@ class ANI2x(BaseNetwork):
         Configuration for postprocessing parameters.
     dataset_statistic : Optional[Dict[str, float]], optional
         Statistics of the dataset, by default None.
+    potential_seed : Optional[int], optional
+        Seed for the random number generator, default None.
     """
 
     def __init__(
@@ -664,6 +666,7 @@ class ANI2x(BaseNetwork):
         activation_function_parameter: Dict,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
+        potential_seed: Optional[int] = None,
     ) -> None:
 
         from modelforge.utils.units import _convert_str_to_unit
@@ -674,6 +677,7 @@ class ANI2x(BaseNetwork):
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=postprocessing_parameter,
             maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
+            potential_seed=potential_seed,
         )
 
         activation_function = activation_function_parameter["activation_function"]

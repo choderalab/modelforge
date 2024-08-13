@@ -1,15 +1,20 @@
 [potential]
-potential_name = "TensorNet"
+potential_name = "SchNet"
 
 [potential.core_parameter]
-number_of_per_atom_features = 8
-number_of_interaction_layers = 2
-number_of_radial_basis_functions = 16
-maximum_interaction_radius = "5.1 angstrom"
-minimum_interaction_radius = "0.0 angstrom"
-highest_atomic_number = 128
-equivariance_invariance_group = "O(3)"
-activation_function = "SiLU"
+number_of_radial_basis_functions = 20
+maximum_interaction_radius = "5.0 angstrom"
+number_of_interaction_modules = 3
+number_of_filters = 32
+shared_interactions = false
+
+[potential.core_parameter.activation_function_parameter]
+activation_function_name = "ShiftedSoftplus"
+
+[potential.core_parameter.featurization]
+properties_to_featurize = ['atomic_number']
+maximum_atomic_number = 101
+number_of_per_atom_features = 32
 
 [potential.postprocessing_parameter]
 [potential.postprocessing_parameter.per_atom_energy]
@@ -21,28 +26,22 @@ calculate_molecular_self_energy = true
 
 [dataset]
 dataset_name = "QM9"
-version_select = "nc_1000_v0" # NOTE: this defines a small subset, for full dataset change this variable to "latest"
+version_select = "nc_1000_v0"
 num_workers = 4
 pin_memory = true
 
 [training]
-number_of_epochs = 2
+number_of_epochs = 4
 remove_self_energies = true
 batch_size = 128
 lr = 1e-3
 monitor = "val/per_molecule_energy/rmse"
 
 [training.experiment_logger]
-logger_name = "wandb"
+logger_name = "tensorboard"
 
-[training.experiment_logger.wandb_configuration]
+[training.experiment_logger.tensorboard_configuration]
 save_dir = "logs"
-project = "training_test"
-group = "modelforge_nnps"
-log_model = true
-job_type = "training"
-tags = ["modelforge", "v_0.1.0"]
-notes = "testing training"
 
 [training.lr_scheduler]
 frequency = 1
@@ -77,11 +76,11 @@ seed = 42
 
 [runtime]
 save_dir = "lightning_logs"
-experiment_name = "test_exp"
+experiment_name = "{potential_name}_{dataset_name}"
 local_cache_dir = "./cache"
 accelerator = "cpu"
 number_of_nodes = 1
 devices = 1                        #[0,1,2,3]
 checkpoint_path = "None"
 simulation_environment = "PyTorch"
-log_every_n_steps = 50
+log_every_n_steps = 1

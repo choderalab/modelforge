@@ -473,10 +473,10 @@ def test_dataset_neighborlist(potential_name, single_batch_with_batchsize_64):
     from modelforge.potential.models import NeuralNetworkPotentialFactory
 
     # initialize model
-    model = NeuralNetworkPotentialFactory.generate_model(
+    model = NeuralNetworkPotentialFactory.generate_potential(
         use="inference",
         simulation_environment="PyTorch",
-        model_parameter=config["potential"].model_dump(),
+        potential_parameter=config["potential"],
     )
     model(nnp_input)
 

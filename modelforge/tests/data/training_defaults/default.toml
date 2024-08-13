@@ -15,11 +15,11 @@ save_dir = "logs"
 
 [training.experiment_logger.wandb_configuration]
 save_dir = "logs"
-project = "training_test"
-group = "modelforge_nnps"
+project = "training_potentials"
+group = "exp00"
 log_model = true
-job_type = "training"
-tags = ["modelforge", "v_0.1.0"]
+job_type = "testing"
+tags = ["v_0.1.0"]
 notes = "testing training"
 
 [training.lr_scheduler]

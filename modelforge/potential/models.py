@@ -540,19 +540,41 @@ class PyTorch2JAXConverter:
         return apply, model_params, model_buffer
 
 
+from modelforge.potential.parameters import (
+    ANI2xParameters,
+    PhysNetParameters,
+    SchNetParameters,
+    PaiNNParameters,
+    SAKEParameters,
+    TensorNetParameters,
+)
+from modelforge.train.parameters import TrainingParameters, RuntimeParameters
+from modelforge.dataset.dataset import DatasetParameters
+
+
 class NeuralNetworkPotentialFactory:
     """
     Factory class for creating instances of neural network potentials for training/inference.
     """
 
     @staticmethod
-    def generate_model(
+    def generate_potential(
         *,
         use: Literal["training", "inference"],
-        model_parameter: Dict[str, Union[str, Any]],
-        simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
-        training_parameter: Optional[Dict[str, Any]] = None,
+        potential_parameter: Union[
+            ANI2xParameters,
+            SAKEParameters,
+            SchNetParameters,
+            PhysNetParameters,
+            PaiNNParameters,
+            TensorNetParameters,
+        ],
+        runtime_parameter: Optional[RuntimeParameters] = None,
+        training_parameter: Optional[TrainingParameters] = None,
+        dataset_parameter: Optional[DatasetParameters] = None,
         dataset_statistic: Optional[Dict[str, float]] = None,
+        potential_seed: Optional[int] = None,
+        simulation_environment: Optional[Literal["PyTorch", "JAX"]] = None,
     ) -> Union[Type[torch.nn.Module], Type[JAXModel], Type[pl.LightningModule]]:
         """
         Creates an NNP instance of the specified type, configured either for training or inference.
@@ -561,14 +583,21 @@ class NeuralNetworkPotentialFactory:
         ----------
         use : Literal["training", "inference"]
             The use case for the model instance, either 'training' or 'inference'.
-        simulation_environment : Literal["PyTorch", "JAX"]
-            The ML framework to use, either 'PyTorch' or 'JAX'.
-        model_parameter : Dict[str, Union[str, Any]]
-            Parameters specific to the model.
-        training_parameter : Optional[Dict[str, Any]], optional
+        potential_parameter : Union[ANI2xParameters, SAKEParameters, SchNetParameters, PhysNetParameters, PaiNNParameters, TensorNetParameters]
+            Parameters specific to the potential.
+        runtime_parameter : Optional[RuntimeParameters], optional
+            Parameters for configuring the runtime environment.
+        training_parameter : Optional[TrainingParameters], optional
             Parameters for configuring the training.
+        dataset_parameter : Optional[DatasetParameters], optional
+            Parameters for configuring the dataset.
         dataset_statistic : Optional[Dict[str, float]], optional
             Statistics of the dataset for normalization purposes.
+        potential_seed : Optional[int], optional
+            Seed for the random number generator.
+        simulation_environment : Optional[Literal["PyTorch", "JAX"]], optional, None
+            The simulation environment to use for training/inference. Will override the runtime parameter if provided.
+
 
         Returns
         -------
@@ -584,33 +613,44 @@ class NeuralNetworkPotentialFactory:
         """
 
         from modelforge.potential import _Implemented_NNPs
-        from modelforge.train.training import TrainingAdapter
+        from modelforge.train.training import ModelTrainer
 
         log.debug(f"{training_parameter=}")
-        log.debug(f"{model_parameter=}")
+        log.debug(f"{potential_parameter=}")
+        log.debug(f"{dataset_parameter=}")
 
+        if simulation_environment is None:
+            if runtime_parameter is None:
+                log.warning(
+                    "No runtime paramters or simulation_environment specified, defaulting to PyTorch"
+                )
+
+                simulation_environment = "PyTorch"
+            else:
+                simulation_environment = runtime_parameter.simulation_environment
         # obtain model for training
         if use == "training":
             if simulation_environment == "JAX":
                 log.warning(
                     "Training in JAX is not available. Falling back to PyTorch."
                 )
-            model = TrainingAdapter(
-                model_parameter=model_parameter,
-                lr_scheduler=training_parameter["lr_scheduler"],
-                lr=training_parameter["lr"],
-                loss_parameter=training_parameter["loss_parameter"],
-                dataset_statistic=dataset_statistic,
+            model = ModelTrainer(
+                potential_parameter=potential_parameter,
+                training_parameter=training_parameter,
+                dataset_parameter=dataset_parameter,
+                runtime_parameter=runtime_parameter,
+                potential_seed=potential_seed,
             )
             return model
         # obtain model for inference
         elif use == "inference":
-            model_type = model_parameter["potential_name"]
+            model_type = potential_parameter.potential_name
             nnp_class: Type = _Implemented_NNPs.get_neural_network_class(model_type)
             model = nnp_class(
-                **model_parameter["core_parameter"],
-                postprocessing_parameter=model_parameter["postprocessing_parameter"],
+                **potential_parameter.core_parameter.model_dump(),
+                postprocessing_parameter=potential_parameter.postprocessing_parameter.model_dump(),
                 dataset_statistic=dataset_statistic,
+                potential_seed=potential_seed,
             )
             if simulation_environment == "JAX":
                 return PyTorch2JAXConverter().convert_to_jax_model(model)
@@ -954,6 +994,7 @@ class BaseNetwork(Module):
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]],
         maximum_interaction_radius: unit.Quantity,
+        potential_seed: Optional[int] = None,
     ):
         """
         Initialize the BaseNetwork.
@@ -966,10 +1007,29 @@ class BaseNetwork(Module):
             Dataset statistics for normalization.
         maximum_interaction_radius : unit.Quantity
             cutoff radius.
+        potential_seed : Optional[int], optional
+            Value used for torch.manual_seed, by default None.
         """
 
         super().__init__()
         from modelforge.utils.units import _convert_str_to_unit
+
+        if potential_seed:
+            import torch
+
+            torch.manual_seed(potential_seed)
+
+            # according to https://docs.ray.io/en/latest/tune/faq.html#how-can-i-reproduce-experiments
+            # we should also set the same seed for numpy.random and python random module
+            # when doing hyperparameter optimization with ray tune.  E.g., the ASHA scheduler relies on numpy.random
+            # and doesn't take a seed as an argument, so we need to set it here.
+            import numpy as np
+
+            np.random.seed(potential_seed)
+
+            import random
+
+            random.seed(potential_seed)
 
         self.postprocessing = PostProcessing(
             postprocessing_parameter, dataset_statistic
@@ -1012,7 +1072,7 @@ class BaseNetwork(Module):
         """
 
         # Prefix to remove
-        prefix = "model."
+        prefix = "potential."
         excluded_keys = ["loss.per_molecule_energy", "loss.per_atom_force"]
 
         # Create a new dictionary without the prefix in the keys if prefix exists

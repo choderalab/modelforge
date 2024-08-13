@@ -560,6 +560,7 @@ class PaiNN(BaseNetwork):
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
         epsilon: float = 1e-8,
+        potential_seed: Optional[int] = None,
     ) -> None:
         """
         Initialize the PaiNN network.
@@ -582,7 +583,8 @@ class PaiNN(BaseNetwork):
         shared_filters : bool
             Whether to share filters across modules.
             epsilon=epsilon,
-        )
+        potential_seed : Optional[int], optional
+            Seed for the random number generator, default None.
         """
 
         from modelforge.utils.units import _convert_str_to_unit
@@ -593,6 +595,7 @@ class PaiNN(BaseNetwork):
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=postprocessing_parameter,
             maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
+            potential_seed=potential_seed,
         )
 
         activation_function = activation_function_parameter["activation_function"]

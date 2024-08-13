@@ -4,7 +4,8 @@ This defines pydantic models for the training parameters and runtime parameters.
 
 from pydantic import BaseModel, model_validator, field_validator, ConfigDict
 from enum import Enum
-from typing import List, Union, Dict, Optional, Callable
+from typing import List, Union, Dict, Optional, Callable, Type
+import torch
 
 
 # So we  do not need to set Config parameters in each model
@@ -268,6 +269,8 @@ class TrainingParameters(ParametersBase):
     splitting_strategy: SplittingStrategy
     stochastic_weight_averaging: Optional[StochasticWeightAveraging] = None
     experiment_logger: ExperimentLogger
+    verbose: bool = False
+    optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam
 
 
 ### Runtime Parameters

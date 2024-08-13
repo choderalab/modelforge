@@ -19,7 +19,7 @@ def visualize_model(
     torchviz = import_("torchviz")
     from modelforge.potential import NeuralNetworkPotentialFactory
 
-    inference_model = NeuralNetworkPotentialFactory.generate_model(
+    inference_model = NeuralNetworkPotentialFactory.generate_potential(
         "inference", potential_name
     )
 

@@ -1,6 +1,6 @@
 [runtime]
 save_dir = "lightning_logs"
-experiment_name = "test_exp2"
+experiment_name = "{potential_name}_{dataset_name}"
 local_cache_dir = "./cache"
 accelerator = "cpu"
 number_of_nodes = 1

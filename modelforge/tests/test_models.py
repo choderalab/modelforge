@@ -497,7 +497,7 @@ def test_calculate_energies_and_forces(potential_name, single_batch_with_batchsi
         training_parameter=config["training"],
         dataset_parameter=config["dataset"],
         runtime_parameter=config["runtime"],
-        model_seed=42,
+        potential_seed=42,
     )
 
     # get energy and force
@@ -511,7 +511,7 @@ def test_calculate_energies_and_forces(potential_name, single_batch_with_batchsi
         use="inference",
         potential_parameter=config["potential"],
         dataset_statistic=model_training.dataset_statistic,
-        model_seed=42,
+        potential_seed=42,
     )
 
     # get energy and force

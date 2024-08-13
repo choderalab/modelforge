@@ -569,7 +569,6 @@ class NeuralNetworkPotentialFactory:
             PaiNNParameters,
             TensorNetParameters,
         ],
-        simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
         runtime_parameter: Optional[RuntimeParameters] = None,
         training_parameter: Optional[TrainingParameters] = None,
         dataset_parameter: Optional[DatasetParameters] = None,
@@ -583,16 +582,19 @@ class NeuralNetworkPotentialFactory:
         ----------
         use : Literal["training", "inference"]
             The use case for the model instance, either 'training' or 'inference'.
-        simulation_environment : Literal["PyTorch", "JAX"]
-            The ML framework to use, either 'PyTorch' or 'JAX'.
-        model_parameter : Dict[str, Union[str, Any]]
-            Parameters specific to the model.
-        training_parameter : Optional[Dict[str, Any]], optional
+        potential_parameter : Union[ANI2xParameters, SAKEParameters, SchNetParameters, PhysNetParameters, PaiNNParameters, TensorNetParameters]
+            Parameters specific to the potential.
+        runtime_parameter : Optional[RuntimeParameters], optional
+            Parameters for configuring the runtime environment.
+        training_parameter : Optional[TrainingParameters], optional
             Parameters for configuring the training.
+        dataset_parameter : Optional[DatasetParameters], optional
+            Parameters for configuring the dataset.
         dataset_statistic : Optional[Dict[str, float]], optional
             Statistics of the dataset for normalization purposes.
         potential_seed : Optional[int], optional
-            Seed for the random number generator, default None.
+            Seed for the random number generator.
+
 
         Returns
         -------
@@ -616,7 +618,7 @@ class NeuralNetworkPotentialFactory:
 
         # obtain model for training
         if use == "training":
-            if simulation_environment == "JAX":
+            if runtime_parameter.simulation_environment == "JAX":
                 log.warning(
                     "Training in JAX is not available. Falling back to PyTorch."
                 )
@@ -638,7 +640,7 @@ class NeuralNetworkPotentialFactory:
                 dataset_statistic=dataset_statistic,
                 potential_seed=potential_seed,
             )
-            if simulation_environment == "JAX":
+            if runtime_parameter.simulation_environment == "JAX":
                 return PyTorch2JAXConverter().convert_to_jax_model(model)
             else:
                 return model

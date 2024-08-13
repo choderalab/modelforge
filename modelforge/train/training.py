@@ -513,7 +513,7 @@ class TrainingAdapter(pL.LightningModule):
         ],
         dataset_statistic: Dict[str, float],
         training_parameter: TrainingParameters,
-        model_seed: Optional[int] = None,
+        potential_seed: Optional[int] = None,
     ):
         """
         Initializes the TrainingAdapter with the specified model and training configuration.
@@ -526,7 +526,7 @@ class TrainingAdapter(pL.LightningModule):
             The statistics of the dataset, such as mean and standard deviation.
         training_parameter : TrainingParameters
             Parameters for the training process.
-        model_seed : Optional[int], optional
+        potential_seed : Optional[int], optional
             The seed to use for initializing the model, by default None.
         """
         from modelforge.potential import _Implemented_NNPs
@@ -543,7 +543,7 @@ class TrainingAdapter(pL.LightningModule):
             **potential_parameter.core_parameter.model_dump(),
             dataset_statistic=dataset_statistic,
             postprocessing_parameter=potential_parameter.postprocessing_parameter.model_dump(),
-            model_seed=model_seed,
+            potential_seed=potential_seed,
         )
 
         self.calculate_predictions = CalculateProperties()
@@ -847,7 +847,7 @@ class ModelTrainer:
         training_parameter: TrainingParameters,
         runtime_parameter: RuntimeParameters,
         optimizer: Type[Optimizer] = torch.optim.AdamW,
-        model_seed: Optional[int] = None,
+        potential_seed: Optional[int] = None,
         verbose: bool = False,
     ):
         """
@@ -887,7 +887,7 @@ class ModelTrainer:
         self.datamodule = self.setup_datamodule()
         self.dataset_statistic = self.read_dataset_statistics()
         self.experiment_logger = self.setup_logger()
-        self.model = self.setup_potential(model_seed)
+        self.model = self.setup_potential(potential_seed)
         self.callbacks = self.setup_callbacks()
         self.trainer = self.setup_trainer()
         self.optimizer = optimizer
@@ -970,14 +970,16 @@ class ModelTrainer:
         dm.setup()
         return dm
 
-    def setup_potential(self, model_seed: Optional[int] = None) -> pL.LightningModule:
+    def setup_potential(
+        self, potential_seed: Optional[int] = None
+    ) -> pL.LightningModule:
         """
         Set up the model for training.
 
         Parameters
         ----------
-        model_seed : int, optional
-            Seed to be used to initialize the model, by default None.
+        potential_seed : int, optional
+            Seed to be used to initialize the potential, by default None.
 
         Returns
         -------
@@ -989,7 +991,7 @@ class ModelTrainer:
             potential_parameter=self.potential_parameter,
             dataset_statistic=self.dataset_statistic,
             training_parameter=self.training_parameter,
-            model_seed=model_seed,
+            potential_seed=potential_seed,
         )
 
     def setup_logger(self) -> pL.loggers.Logger:
@@ -1417,7 +1419,6 @@ def read_config_and_train(
 
     model = NeuralNetworkPotentialFactory.generate_potential(
         use="training",
-        simulation_environment=simulation_environment,
         potential_parameter=potential_parameter,
         training_parameter=training_parameter,
         dataset_parameter=dataset_parameter,

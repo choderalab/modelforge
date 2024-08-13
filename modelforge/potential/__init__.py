@@ -8,6 +8,8 @@ from .painn import PaiNN
 from .ani import ANI2x
 from .sake import SAKE
 from .tensornet import TensorNet
+from .aimnet2 import AIMNet2
+
 from .parameters import (
     ANI2xParameters,
     SchNetParameters,
@@ -15,6 +17,7 @@ from .parameters import (
     PaiNNParameters,
     SAKEParameters,
     TensorNetParameters,
+    AimNet2Parameters,
 )
 from .utils import (
     CosineAttenuationFunction,
@@ -34,6 +37,7 @@ class _Implemented_NNP_Parameters(Enum):
     PAINN_PARAMETERS = PaiNNParameters
     PHYSNET_PARAMETERS = PhysNetParameters
     SAKE_PARAMETERS = SAKEParameters
+    AIMNET2_PARAMETERS = AimNet2Parameters
 
     @classmethod
     def get_neural_network_parameter_class(cls, neural_network_name: str):
@@ -55,6 +59,7 @@ class _Implemented_NNPs(Enum):
     PHYSNET = PhysNet
     SAKE = SAKE
     TENSORNET = TensorNet
+    AIMNET2 = AIMNet2
 
     @classmethod
     def get_neural_network_class(cls, neural_network_name: str):

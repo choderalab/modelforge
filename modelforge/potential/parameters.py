@@ -187,6 +187,35 @@ class SchNetParameters(ParametersBase):
     potential_seed: Optional[int] = None
 
 
+class AimNet2Parameters(ParametersBase):
+    class CoreParameter(ParametersBase):
+        class Featurization(ParametersBase):
+            properties_to_featurize: List[str]
+            maximum_atomic_number: int
+            number_of_per_atom_features: int
+
+        number_of_radial_basis_functions: int
+        maximum_interaction_radius: Union[str, unit.Quantity]
+        number_of_interaction_modules: int
+        activation_function_parameter: ActivationFunctionConfig
+        featurization: Featurization
+
+        converted_units = field_validator("maximum_interaction_radius")(
+            _convert_str_to_unit
+        )
+
+    class PostProcessingParameter(ParametersBase):
+        per_atom_energy: PerAtomEnergy = PerAtomEnergy()
+        general_postprocessing_operation: GeneralPostProcessingOperation = (
+            GeneralPostProcessingOperation()
+        )
+
+    potential_name: str = "AimNet2"
+    core_parameter: CoreParameter
+    postprocessing_parameter: PostProcessingParameter
+    potential_seed: Optional[int] = None
+
+
 class TensorNetParameters(ParametersBase):
     class CoreParameter(ParametersBase):
         # class Featurization(ParametersBase):

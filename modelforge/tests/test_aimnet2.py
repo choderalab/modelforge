@@ -138,36 +138,15 @@ def test_radial_symmetry_function_regression():
     assert torch.allclose(modelforge_aimnet2_outputs, regression_outputs, atol=1e-5)
 
 
-
-@pytest.mark.xfail(raises=NotImplementedError)
-def test_interaction_module():
-
-    from modelforge.potential.aimnet2 import AIMNet2InteractionModule
-
-    number_of_atomic_features = 10
-    number_of_radial_basis_functions = 10
-
-    first_pass_interaction_module = AIMNet2InteractionModule(
-        number_of_atomic_features, number_of_radial_basis_functions, first_pass=True
-    )
-
-    second_pass_interaction_module = AIMNet2InteractionModule(
-        number_of_atomic_features, number_of_radial_basis_functions, first_pass=False
-    )
-
-    raise NotImplementedError
-
-
-@pytest.mark.xfail(raises=AttributeError)
 def test_forward(single_batch_with_batchsize_64):
     """Test initialization of the AIMNet2 model."""
     # read default parameters
     config = load_configs_into_pydantic_models(f"aimnet2", "qm9")
     # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
+    potential_parameter = config["potential"]
     aimnet = AIMNet2(
-        **config["potential"].model_dump()["core_parameter"],
-        postprocessing_parameter=config["potential"].model_dump()[
+        **potential_parameter.model_dump()["core_parameter"],
+        postprocessing_parameter=potential_parameter.model_dump()[
             "postprocessing_parameter"
         ],
     )

@@ -65,8 +65,6 @@ class AIMNet2Core(CoreNetwork):
         featurization_config: Dict[str, Union[List[str], int]],
         number_of_radial_basis_functions: int,
         number_of_interaction_modules: int,
-        number_of_filters: int,
-        shared_interactions: bool,
         activation_function: Type[torch.nn.Module],
         maximum_interaction_radius: unit.Quantity,
     ) -> None:
@@ -90,7 +88,7 @@ class AIMNet2Core(CoreNetwork):
         super().__init__(activation_function)
 
         # Initialize representation block
-        self.schnet_representation_module = AIMNet2Representation(
+        self.representation_module = AIMNet2Representation(
             maximum_interaction_radius,
             number_of_radial_basis_functions,
             featurization_config=featurization_config,
@@ -99,23 +97,8 @@ class AIMNet2Core(CoreNetwork):
             featurization_config["number_of_per_atom_features"]
         )
 
-        self.interaction_modules = nn.ModuleList(
-            [
-                # first pass
-                AIMNet2InteractionModule(
-                    number_of_atom_features,
-                    number_of_radial_basis_functions,
-                    first_pass=True,
-                ),
-            ]  # all other passes (num - 1)
-            + [
-                AIMNet2InteractionModule(
-                    number_of_atom_features,
-                    number_of_radial_basis_functions,
-                    first_pass=False,
-                ),
-            ]
-            * (number_of_interaction_modules - 1)
+        self.interaction_modules_first_pass = AIMNet2InteractionModule(
+            number_of_atom_features,
         )
 
     def _model_specific_input_preparation(
@@ -153,35 +136,22 @@ class AIMNet2Core(CoreNetwork):
             Calculated energies; shape (nr_systems,).
         """
 
-        representation = self.representation_module(data.d_ij)
+        representation = self.representation_module(data)
 
         data.f_ij = representation["f_ij"]
         data.f_cutoff = representation["f_cutoff"]
-
+        f_ij_cutoff = torch.mul(data.f_ij, data.f_cutoff)
         # Atomic embedding "a" Eqn. (3)
-        embedding = data.atomic_embedding
+        atomic_embedding = representation["atomic_embedding"]
 
-        # first pass
-        delta_a, partial_point_charges = self.interaction_modules(
-            embedding,
+        updated_embedding, partial_charge = self.interaction_modules_first_pass(
+            atomic_embedding,
             data.pair_indices,
-            data.f_ij,
-            data.f_cutoff,
+            f_ij_cutoff,
         )
 
-        embedding += delta_a
-
-        # subsequent passes
-        for interaction in self.interaction_modules[1:]:
-            delta_a, delta_q = interaction(
-                embedding,
-                data.pair_indices,
-                data.f_ij,
-                data.f_cutoff,
-            )
-            embedding += delta_a
-            # TODO: implement nqe
-            self.nqe(partial_point_charges, delta_q)
+        a = 7
+        # first pass
 
         raise NotImplementedError
 
@@ -194,47 +164,60 @@ class AIMNet2InteractionModule(nn.Module):
     def __init__(
         self,
         number_of_atom_features: int,
-        number_of_radial_basis_functions: int,
-        first_pass: bool = False,
     ):
         super().__init__()
-
-        # if this is the first pass, charge information is not needed
-        self.first_pass = first_pass
-
-        # TODO: include assertions like those found in schnet?
         self.number_of_atomic_features = number_of_atom_features
-        self.input_to_feature = None
-        self.feature_to_output = None
+        self.linear = nn.Linear(number_of_atom_features, number_of_atom_features)
 
     def forward(
         self,
-        # input_features: torch.Tensor,
+        atomic_embedding: torch.Tensor,
         pairlist: torch.Tensor,
-        f_ij: torch.Tensor,  # this is already from the representation, radial symmetry function module with distances preloaded
-        f_cutoff: torch.Tensor,  # cutoff module with the distances preloaded
-        atomic_embedding: torch.Tensor,  # outputs need to be the same shape of atomic_embedding, [N_atoms, atom_basis (100?)]
+        f_ij_cutoff: torch.Tensor,
+        r_ij: torch.Tensor,
         partial_point_charges: Optional[torch.Tensor] = None,
     ):
 
-        # NOTE: fixed "a" (atomic_embedding) and "q" (partial_point_charges)
-        # if partial_point_charges is None, then we know we're in the first
-        # pass
-
-        # Eqn (2)
-        g = f_ij * f_cutoff
-
+        # calculate the radial contributions (equation 4)
         idx_i, idx_j = pairlist[0], pairlist[1]
+        # Get the atomic embeddings for atoms i and j
+        a_j = atomic_embedding[idx_j]  # Shape: (num_atom_pairs, 16)
+        # Compute the weighted sum for each atom i Multiply the radial basis
+        # functions (f_ij_cutoff) with the embeddings of j (a_j)
+        weighted_embeddings = (
+            f_ij_cutoff * a_j
+        )  # Element-wise multiplication, shape: (num_atom_pairs, 16)
+        # Now, sum the contributions from all j atoms to the corresponding i Use
+        # scatter_add to sum over the pairs associated with each atom i
+        radial_contributions = torch.zeros_like(
+            atomic_embedding
+        )  # Shape: (num_atoms, 16)
+        radial_contributions.index_add_(0, idx_i, weighted_embeddings)
+        # now continue with equation 5
+        # Calculate the unit vector u_ij
+        r_ij_norm = torch.norm(r_ij, dim=1, keepdim=True)  # Shape: (num_atom_pairs, 1)
+        u_ij = r_ij / r_ij_norm  # Shape: (num_atom_pairs, 3)
+        # Multiply the resulting weighted embeddings with the unit vector u_ij
+        u_weighted_embeddings = u_ij.unsqueeze(-1) * weighted_embeddings.unsqueeze(
+            -2
+        )  # Shape: (num_atom_pairs, 3, 16)
 
-        # required in all passes
-        v_radial_atomic, v_vector_atomic = None, None
+        # Apply the linear transformation using nn.Linear
+        # Reshape u_weighted_embeddings to apply linear transformation
+        u_weighted_embeddings_flat = u_weighted_embeddings.view(-1, u_weighted_embeddings.shape[-1])  # Shape: (num_atom_pairs * 3, 16)
+        transformed_embeddings_flat = self.linear(u_weighted_embeddings_flat)  # Shape: (num_atom_pairs * 3, 16)
 
-        # required in 1 + i passes
-        if partial_point_charges:
-            v_radial_charge, v_vector_charge = None, None
-
-        raise NotImplementedError
-
+        # Reshape back to (num_atom_pairs, 3, embedding_dim)
+        transformed_embeddings = transformed_embeddings_flat.view(u_weighted_embeddings.shape)  # Shape: (num_atom_pairs, 3, 16)
+        
+        # Sum over j to get the contributions for each i
+        vector_contributions = torch.zeros((atomic_embedding.shape[0], 3, atomic_embedding.shape[1]), device=atomic_embedding.device)  # Shape: (num_atoms, 3, 16)
+        vector_contributions.index_add_(0, idx_i, transformed_embeddings)
+        
+        # Calculate the norm of the resulting vectors for each atom
+        vector_norms = torch.norm(vector_contributions, dim=1)  # Shape: (num_atoms, 16)
+        combined_message = torch.cat([vector_norms, weighted_embeddings], dim=-1)
+        a = 7
 
 class AIMNet2Representation(nn.Module):
     def __init__(
@@ -312,9 +295,7 @@ class AIMNet2(BaseNetwork):
         number_of_radial_basis_functions: int,
         number_of_interaction_modules: int,
         maximum_interaction_radius: Union[unit.Quantity, str],
-        number_of_filters: int,
         activation_function_parameter: Dict,
-        shared_interactions: bool,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]] = None,
         potential_seed: Optional[int] = None,
@@ -351,8 +332,6 @@ class AIMNet2(BaseNetwork):
             featurization_config=featurization,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             number_of_interaction_modules=number_of_interaction_modules,
-            number_of_filters=number_of_filters,
-            shared_interactions=shared_interactions,
             activation_function=activation_function,
             maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
         )

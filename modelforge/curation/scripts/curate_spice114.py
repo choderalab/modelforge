@@ -68,7 +68,7 @@ def spice114_wrapper(
     """
     from modelforge.curation.spice_1_curation import SPICE1Curation
 
-    spice_114 = SPICE114Curation(
+    spice_114 = SPICE1Curation(
         hdf5_file_name=hdf5_file_name,
         output_file_dir=output_file_dir,
         local_cache_dir=local_cache_dir,

@@ -83,7 +83,7 @@ class ANI1xCuration(DatasetCuration):
         self.dataset_md5_checksum = data_inputs[self.version_select][
             "dataset_md5_checksum"
         ]
-        self.dataset_length = data_inputs[self.version_select]["length"]
+        self.dataset_length = data_inputs[self.version_select]["dataset_length"]
         self.dataset_filename = data_inputs[self.version_select]["dataset_filename"]
         logger.debug(
             f"Dataset: {self.version_select} version: {data_inputs[self.version_select]['version']}"

@@ -111,7 +111,7 @@ def download_from_url(
     output_filename: str,
     length: Optional[int] = None,
     force_download=False,
-) -> str:
+):
 
     import requests
     import os

@@ -83,6 +83,8 @@ class ANI1xCuration(DatasetCuration):
         self.dataset_md5_checksum = data_inputs[self.version_select][
             "dataset_md5_checksum"
         ]
+        self.dataset_length = data_inputs[self.version_select]["length"]
+        self.dataset_filename = data_inputs[self.version_select]["dataset_filename"]
         logger.debug(
             f"Dataset: {self.version_select} version: {data_inputs[self.version_select]['version']}"
         )
@@ -407,26 +409,27 @@ class ANI1xCuration(DatasetCuration):
                 "max_records and total_conformers cannot be set at the same time."
             )
 
-        from modelforge.utils.remote import download_from_figshare
+        from modelforge.utils.remote import download_from_url
 
         url = self.dataset_download_url
 
         # download the dataset
-        self.name = download_from_figshare(
+        download_from_url(
             url=url,
             md5_checksum=self.dataset_md5_checksum,
             output_path=self.local_cache_dir,
+            output_filename=self.dataset_filename,
+            length=self.dataset_length,
             force_download=force_download,
         )
 
         self._clear_data()
 
         # process the rest of the dataset
-        if self.name is None:
-            raise Exception("Failed to retrieve name of file from figshare.")
+
         self._process_downloaded(
             self.local_cache_dir,
-            self.name,
+            self.dataset_filename,
             max_records=max_records,
             max_conformers_per_record=max_conformers_per_record,
             total_conformers=total_conformers,

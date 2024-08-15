@@ -60,4 +60,3 @@ def test_embedding(single_batch_with_batchsize_64):
     assert out.shape == torch.Size(
         [557, 32]
     )  # nr_of_atoms, nr_of_per_atom_features (the total charge is mixed in)
-

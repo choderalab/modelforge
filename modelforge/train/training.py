@@ -1206,6 +1206,8 @@ class ModelTrainer:
 
 
 from typing import List, Optional, Union
+
+
 def read_config(
     condensed_config_path: Optional[str] = None,
     training_parameter_path: Optional[str] = None,
@@ -1224,7 +1226,7 @@ def read_config(
 ):
     """
     Reads one or more TOML configuration files and loads them into the pydantic models.
-    
+
     Parameters
     ----------
     (Parameters as described earlier...)
@@ -1253,11 +1255,15 @@ def read_config(
 
     else:
         if training_parameter_path:
-            training_config_dict = toml.load(training_parameter_path).get("training", {})
+            training_config_dict = toml.load(training_parameter_path).get(
+                "training", {}
+            )
         if dataset_parameter_path:
             dataset_config_dict = toml.load(dataset_parameter_path).get("dataset", {})
         if potential_parameter_path:
-            potential_config_dict = toml.load(potential_parameter_path).get("potential", {})
+            potential_config_dict = toml.load(potential_parameter_path).get(
+                "potential", {}
+            )
         if runtime_parameter_path:
             runtime_config_dict = toml.load(runtime_parameter_path).get("runtime", {})
 
@@ -1284,7 +1290,9 @@ def read_config(
     from modelforge.train.parameters import TrainingParameters, RuntimeParameters
 
     potential_name = potential_config_dict["potential_name"]
-    PotentialParameters = _Implemented_NNP_Parameters.get_neural_network_parameter_class(potential_name)
+    PotentialParameters = (
+        _Implemented_NNP_Parameters.get_neural_network_parameter_class(potential_name)
+    )
 
     dataset_parameters = DatasetParameters(**dataset_config_dict)
     training_parameters = TrainingParameters(**training_config_dict)
@@ -1297,6 +1305,7 @@ def read_config(
         potential_parameter,
         runtime_parameters,
     )
+
 
 def read_config_and_train(
     condensed_config_path: Optional[str] = None,

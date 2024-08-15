@@ -88,5 +88,9 @@ These components work together to enable the accurate prediction of molecular pr
 Contributing to the modelforge package
 ---------------------------------------
 
-The `modelforge` package is an open-source project, and we welcome contributions from the community. In general, modelforge uses the `Fork & Pull <https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/getting-started/about-collaborative-development-models#>`_ approach for contributions; any github users can fork the project and submit a pull request with their changes. The modelforge team will review the pull request and merge it if it meets the project's standards.  *modelforge* follows the `PEP8 <https://pep8.org/>`_ style guide for Python code and uses `black <https://black.readthedocs.io/en/stable/>`_ for code formatting; Python type hints are also used to improve code readability and maintainability.  Docstrings are included and formatted using `numpydoc <https://numpydoc.readthedocs.io/en/latest/>`_ style.
-
+The `modelforge` package is an open-source project, and we welcome contributions from the community.
+In general, modelforge uses the `Fork & Pull <https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/getting-started/about-collaborative-development-models#>`_ approach for contributions; any github users can fork the project and submit a pull request with their changes.
+The modelforge team will review the pull request and merge it if it meets the project's standards.
+*modelforge* follows the `PEP8 <https://pep8.org/>`_ style guide for Python code and uses `black <https://black.readthedocs.io/en/stable/>`_ for code formatting, with a default maximum line length of 88 characters.
+Python type hints are also used to improve code readability and maintainability.
+Docstrings are included and formatted using the `numpydoc <https://numpydoc.readthedocs.io/en/latest/>`_ style.

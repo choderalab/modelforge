@@ -2282,12 +2282,7 @@ def provide_reference_for_test_physnet_test_rbf():
 
 
 def prepare_values_for_test_tensornet_compare_radial_symmetry_features(
-        d_ij,
-        min_distance,
-        max_distance,
-        number_of_radial_basis_functions,
-        trainable,
-        seed
+    d_ij, min_distance, max_distance, number_of_radial_basis_functions, trainable, seed
 ):
     from torchmdnet.models.utils import ExpNormalSmearing
 
@@ -2307,10 +2302,7 @@ def prepare_values_for_test_tensornet_compare_radial_symmetry_features(
 def prepare_values_for_test_tensornet_input(mf_input, seed):
     from torchmdnet.models.utils import OptimizedDistance
 
-    pos, batch = (
-        mf_input.positions,
-        mf_input.atomic_subsystem_indices
-    )
+    pos, batch = (mf_input.positions, mf_input.atomic_subsystem_indices)
 
     torch.manual_seed(seed)
     distance_module = OptimizedDistance(
@@ -2326,21 +2318,23 @@ def prepare_values_for_test_tensornet_input(mf_input, seed):
     )
 
     edge_index, edge_weight, edge_vec = distance_module(pos, batch, None)
-    torch.save((edge_index, edge_weight, edge_vec), "modelforge/tests/data/tensornet_input.pt")
+    torch.save(
+        (edge_index, edge_weight, edge_vec), "modelforge/tests/data/tensornet_input.pt"
+    )
 
     return edge_index, edge_weight, edge_vec
 
 
 def prepare_values_for_test_tensornet_representation(
-        nnp_input,
-        hidden_channels,
-        number_of_radial_basis_functions,
-        activation_function,
-        min_distance,
-        max_distance,
-        trainable_rbf,
-        max_atomic_number,
-        seed,
+    nnp_input,
+    hidden_channels,
+    number_of_radial_basis_functions,
+    activation_function,
+    min_distance,
+    max_distance,
+    trainable_rbf,
+    max_atomic_number,
+    seed,
 ):
     from torchmdnet.models.tensornet import TensorEmbedding
     from torchmdnet.models.utils import ExpNormalSmearing
@@ -2377,16 +2371,16 @@ def prepare_values_for_test_tensornet_representation(
 
 
 def prepare_values_for_test_tensornet_interaction(
-        X,
-        nnp_input,
-        radial_feature_vector,
-        atomic_charges,
-        hidden_channels,
-        number_of_radial_basis_functions,
-        activation_function,
-        min_distance,
-        max_distance,
-        seed,
+    X,
+    nnp_input,
+    radial_feature_vector,
+    atomic_charges,
+    hidden_channels,
+    number_of_radial_basis_functions,
+    activation_function,
+    min_distance,
+    max_distance,
+    seed,
 ):
     from torchmdnet.models.tensornet import Interaction
 

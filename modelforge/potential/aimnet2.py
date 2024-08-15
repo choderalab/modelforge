@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Dict, Optional, List, Tuple
+from typing import Union, Type
 
 import torch
 import torch.nn as nn
@@ -10,53 +11,39 @@ from modelforge.potential.utils import NeuralNetworkData, Dense
 from .models import NNPInput, BaseNetwork, CoreNetwork
 
 
+def _perform_charge_normalization(partial_point_charges, total_charge):
+    """
+    Normalize the partial charges to ensure that the total charge of the system is preserved.
+
+    Parameters
+    ----------
+    partial_point_charges : torch.Tensor
+        The partial charges for each atom.
+    total_charge : torch.Tensor
+        The total charge of the system.
+    """
+
+    total_charge = total_charge.unsqueeze(1)
+    total_charge = total_charge.expand_as(partial_point_charges)
+    partial_point_charges = partial_point_charges - torch.mean(partial_point_charges)
+    partial_point_charges = (
+        partial_point_charges * total_charge / torch.sum(partial_point_charges)
+    )
+    return partial_point_charges
+
+
 @dataclass
 class AIMNet2NeuralNetworkData(NeuralNetworkData):
     """
-    A dataclass to structure the inputs specifically for AIMNet2-based neural network potentials, including the necessary
-    geometric and chemical information, along with the radial symmetry function expansion (`f_ij`) and the cosine cutoff
-    (`f_cutoff`) to accurately represent atomistic systems for energy predictions.
+    A dataclass to structure the inputs specifically for AIMNet2-based neural
+    network potentials, including the necessary geometric and chemical
+    information, along with the radial symmetry function expansion (`f_ij`) and
+    the cosine cutoff (`f_cutoff`) to accurately represent atomistic systems for
+    energy predictions.
 
-    Attributes
-    ----------
-    pair_indices : torch.Tensor
-        A 2D tensor of shape [2, num_pairs], indicating the indices of atom pairs within a molecule or system.
-    d_ij : torch.Tensor
-        A 1D tensor containing the distances between each pair of atoms identified in `pair_indices`. Shape: [num_pairs, 1].
-    r_ij : torch.Tensor
-        A 2D tensor of shape [num_pairs, 3], representing the displacement vectors between each pair of atoms.
-    number_of_atoms : int
-        A integer indicating the number of atoms in the batch.
-    positions : torch.Tensor
-        A 2D tensor of shape [num_atoms, 3], representing the XYZ coordinates of each atom within the system.
-    atomic_numbers : torch.Tensor
-        A 1D tensor containing atomic numbers for each atom, used to identify the type of each atom in the system(s).
-    atomic_subsystem_indices : torch.Tensor
-        A 1D tensor mapping each atom to its respective subsystem or molecule, useful for systems involving multiple
-        molecules or distinct subsystems.
-    total_charge : torch.Tensor
-        A tensor with the total charge of each system or molecule. Shape: [num_systems], where each entry corresponds
-        to a distinct system or molecule.
-    atomic_embedding : torch.Tensor
-        A 2D tensor containing embeddings or features for each atom, derived from atomic numbers.
-        Shape: [num_atoms, embedding_dim], where `embedding_dim` is the dimensionality of the embedding vectors.
-    f_ij : Optional[torch.Tensor]
-        A tensor representing the radial symmetry function expansion of distances between atom pairs, capturing the
-        local chemical environment. Shape: [num_pairs, num_features], where `num_features` is the dimensionality of
-        the radial symmetry function expansion. This field will be populated after initialization.
-    f_cutoff : Optional[torch.Tensor]
-        A tensor representing the cosine cutoff function applied to the radial symmetry function expansion, ensuring
-        that atom pair contributions diminish smoothly to zero at the cutoff radius. Shape: [num_pairs]. This field
-        will be populated after initialization.
-
-
+    Note: Only the properties not present in the `NeuralNetworkData` class are
+    documented.
     """
-
-    f_ij: Optional[torch.Tensor] = field(default=None)
-    f_cutoff: Optional[torch.Tensor] = field(default=None)
-
-
-from typing import Union, Type
 
 
 class AIMNet2Core(CoreNetwork):
@@ -193,9 +180,7 @@ class AIMNet2Core(CoreNetwork):
 
         representation = self.representation_module(data)
 
-        data.f_ij = representation["f_ij"]
-        data.f_cutoff = representation["f_cutoff"]
-        f_ij_cutoff = torch.mul(data.f_ij, data.f_cutoff)
+        f_ij_cutoff = torch.mul(representation["f_ij"], representation["f_cutoff"])
         # Atomic embedding "a" Eqn. (3)
         atomic_embedding = representation["atomic_embedding"]
         partial_point_charges = torch.zeros(
@@ -217,6 +202,8 @@ class AIMNet2Core(CoreNetwork):
             # Update atomic embeddings and partial charges
             atomic_embedding = atomic_embedding + delta_a
             partial_point_charges = partial_point_charges + delta_q
+
+            _perform_charge_normalization(partial_point_charges, data.total_charge)
 
         E_i = self.energy_layer(atomic_embedding).squeeze(1)
 
@@ -261,7 +248,7 @@ class BaseMessageModule(nn.Module):
 
         Parameters
         ----------
-        feature_tensor : torch.Tensor
+        per_atom_feature_tensor : torch.Tensor
             The feature tensor (either atomic embeddings or repeated partial charges).
         pairlist : torch.Tensor
             The list of atom pairs.
@@ -274,7 +261,7 @@ class BaseMessageModule(nn.Module):
 
         Returns
         -------
-        torch.Tensor, torch.Tensor
+        Tuple[torch.Tensor, torch.Tensor]
             Radial and vector contributions.
         """
 
@@ -372,7 +359,7 @@ class FirstMessageModule(BaseMessageModule):
 
         Returns
         -------
-        torch.Tensor, torch.Tensor
+        torch.Tensor
             Updated atomic embeddings and partial charges.
         """
 
@@ -493,9 +480,12 @@ class AIMNet2Interaction(nn.Module):
         ----------
         message_module : nn.Module
             The message passing module to be used.
+        number_of_input_features : int
+            The number of input features for the interaction.
         number_of_per_atom_features : int
             The number of features per atom.
-
+        activation_function : Type[torch.nn.Module]
+            The activation function to be used in the interaction module.
         """
         super().__init__()
         self.message_module = message_module
@@ -562,8 +552,8 @@ class AIMNet2Interaction(nn.Module):
 
         Returns
         -------
-        torch.Tensor
-            The result of the message passing.
+        torch.Tensor, torch.Tensor
+            Updated atomic embeddings and partial charges.
         """
         combined_message = self.message_module(
             atomic_embedding, pairlist, f_ij_cutoff, r_ij, partial_point_charges
@@ -664,18 +654,24 @@ class AIMNet2(BaseNetwork):
         """
         Initialize the AIMNet2 network.
 
-        # NOTE: set correct reference
-
         Parameters
         ----------
-        max_Z : int, default=100
-            Maximum atomic number to be embedded.
-        number_of_per_atom_features : int, default=64
-            Dimension of the embedding vectors for atomic numbers.
-        number_of_radial_basis_functions:int, default=16
-        number_of_interaction_modules : int, default=2
-        cutoff : openff.units.unit.Quantity, default=5*unit.angstrom
-            The cutoff distance for interactions.
+        featurization : Dict[str, Union[List[str], int]]
+            Configuration for the featurization process.
+        number_of_radial_basis_functions : int
+            Number of radial basis functions to use.
+        number_of_interaction_modules : int
+            Number of interaction modules in the network.
+        maximum_interaction_radius : Union[unit.Quantity, str]
+            The maximum interaction radius for the network.
+        activation_function_parameter : Dict
+            Dictionary containing parameters for the activation function.
+        postprocessing_parameter : Dict[str, Dict[str, bool]]
+            Dictionary containing postprocessing parameters.
+        dataset_statistic : Optional[Dict[str, float]], optional
+            Optional dataset statistics, by default None.
+        potential_seed : Optional[int], optional
+            Optional seed for potential initialization, by default None.
         """
         self.only_unique_pairs = False  # NOTE: need to be set before super().__init__
         from modelforge.utils.units import _convert_str_to_unit

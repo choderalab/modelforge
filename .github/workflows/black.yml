@@ -1,6 +1,12 @@
 name: Lint
 
-on: [push, pull_request]
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
 
 jobs:
   lint:
@@ -11,4 +17,3 @@ jobs:
         with:
           options: "--check --verbose"
           src: "./modelforge"
-          use_pyproject: true

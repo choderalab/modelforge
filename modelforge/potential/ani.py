@@ -660,7 +660,7 @@ class ANI2xCore(CoreNetwork):
         }
         # extract predictions per property
         for dim, property in enumerate(self.predicted_properties):
-            results[property["name"]] = predictions[:, dim]
+            results[property["name"]] = predictions[:, dim].contiguous()
 
         return results
 

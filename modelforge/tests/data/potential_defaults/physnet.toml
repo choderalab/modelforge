@@ -7,6 +7,11 @@ number_of_radial_basis_functions = 16
 maximum_interaction_radius = "5.0 angstrom"
 number_of_interaction_residual = 3
 number_of_modules = 5
+predicted_properties = [
+    { name = "per_atom_energy", type = "scalar" },
+    { name = "per_atom_charge", type = "scalar" },
+    # we could also define per_atom_force to be consistent?
+]
 
 [potential.core_parameter.activation_function_parameter]
 activation_function_name = "ShiftedSoftplus"

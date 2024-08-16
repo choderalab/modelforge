@@ -180,7 +180,7 @@ class SchNetParameters(ParametersBase):
         shared_interactions: bool
         activation_function_parameter: ActivationFunctionConfig
         featurization: Featurization
-        predicted_properties: List[PredictedPropertiesParameter]  # Add the outputs here
+        predicted_properties: List[PredictedPropertiesParameter]
 
         converted_units = field_validator("maximum_interaction_radius")(
             _convert_str_to_unit
@@ -274,7 +274,8 @@ class PhysNetParameters(ParametersBase):
         number_of_modules: int
         featurization: Featurization
         activation_function_parameter: ActivationFunctionConfig
-
+        predicted_properties: List[PredictedPropertiesParameter]
+        
         converted_units = field_validator("maximum_interaction_radius")(
             _convert_str_to_unit
         )

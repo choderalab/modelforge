@@ -26,7 +26,7 @@ def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
     dataset_config_dict = toml.load(dataset_path)
     potential_config_dict = toml.load(potential_path)
     runtime_config_dict = toml.load(runtime_path)
-
+    print(potential_config_dict)
     potential_name = potential_config_dict["potential"]["potential_name"]
 
     from modelforge.potential import _Implemented_NNP_Parameters
@@ -445,6 +445,10 @@ def test_forward_pass(
 
     # test that we get an energie per molecule
     assert len(output["per_molecule_energy"]) == nr_of_mols
+
+    # check that per-atom charge/energies are present
+    assert "per_atom_energy" in output
+    assert "per_atom_charge" in output
 
     # the batch consists of methane (CH4) and amamonium (NH3)
     # which have chemically equivalent hydrogens at the minimum geometry.

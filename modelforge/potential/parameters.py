@@ -64,6 +64,16 @@ class ActivationFunctionName(CaseInsensitiveEnum):
     ELU = "ELU"
 
 
+class OutputTypeEnum(CaseInsensitiveEnum):
+    scalar = "scalar"
+    vector = "vector"
+
+
+class PredictedPropertiesParameter(ParametersBase):
+    name: str
+    type: OutputTypeEnum
+
+
 # this enum will tell us if we need to pass additional parameters to the activation function
 class ActivationFunctionParamsEnum(CaseInsensitiveEnum):
     ReLU = "None"
@@ -170,6 +180,7 @@ class SchNetParameters(ParametersBase):
         shared_interactions: bool
         activation_function_parameter: ActivationFunctionConfig
         featurization: Featurization
+        predicted_properties: List[PredictedPropertiesParameter]  # Add the outputs here
 
         converted_units = field_validator("maximum_interaction_radius")(
             _convert_str_to_unit

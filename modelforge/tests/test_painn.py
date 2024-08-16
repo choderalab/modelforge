@@ -112,10 +112,12 @@ def test_equivariance(single_batch_with_batchsize_64):
     )
 
     assert torch.allclose(
-        reference_tranformed_inputs["per_atom_scalar_feature"], perturbed_tranformed_inputs["per_atom_scalar_feature"]
+        reference_tranformed_inputs["per_atom_scalar_feature"],
+        perturbed_tranformed_inputs["per_atom_scalar_feature"],
     )
     assert torch.allclose(
-        reference_tranformed_inputs["per_atom_vector_feature"], perturbed_tranformed_inputs["per_atom_vector_feature"]
+        reference_tranformed_inputs["per_atom_vector_feature"],
+        perturbed_tranformed_inputs["per_atom_vector_feature"],
     )
 
     painn_interaction = painn.core_module.interaction_modules[0]

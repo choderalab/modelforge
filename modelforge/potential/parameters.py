@@ -146,6 +146,7 @@ class ANI2xParameters(ParametersBase):
         minimum_interaction_radius_for_angular_features: Union[str, unit.Quantity]
         angular_dist_divisions: int
         activation_function_parameter: ActivationFunctionConfig
+        predicted_properties: List[PredictedPropertiesParameter]
 
         converted_units = field_validator(
             "maximum_interaction_radius",
@@ -275,7 +276,7 @@ class PhysNetParameters(ParametersBase):
         featurization: Featurization
         activation_function_parameter: ActivationFunctionConfig
         predicted_properties: List[PredictedPropertiesParameter]
-        
+
         converted_units = field_validator("maximum_interaction_radius")(
             _convert_str_to_unit
         )

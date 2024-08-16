@@ -74,6 +74,7 @@ class SAKECore(CoreNetwork):
         number_of_radial_basis_functions: int,
         maximum_interaction_radius: unit.Quantity,
         activation_function: Type[torch.nn.Module],
+        predicted_properties: List[Dict[str, str]],
         epsilon: float = 1e-8,
     ):
         """
@@ -108,14 +109,7 @@ class SAKECore(CoreNetwork):
         from modelforge.potential.utils import FeaturizeInput, DenseWithCustomDist
 
         self.featurize_input = FeaturizeInput(featurization_config)
-        self.energy_layer = nn.Sequential(
-            DenseWithCustomDist(
-                number_of_per_atom_features,
-                number_of_per_atom_features,
-                activation_function=self.activation_function,
-            ),
-            DenseWithCustomDist(number_of_per_atom_features, 1),
-        )
+
         # initialize the interaction networks
         self.interaction_modules = nn.ModuleList(
             SAKEInteraction(
@@ -136,6 +130,27 @@ class SAKECore(CoreNetwork):
             )
             for _ in range(self.nr_interaction_blocks)
         )
+
+        # Initialize output layers based on configuration
+        self.output_layers = nn.ModuleDict()
+        for property in predicted_properties:
+            output_name = property["name"]
+            output_type = property["type"]
+            output_dimension = (
+                1 if output_type == "scalar" else 3
+            )  # vector means 3D output
+
+            self.output_layers[output_name] = nn.Sequential(
+                DenseWithCustomDist(
+                    number_of_per_atom_features,
+                    number_of_per_atom_features,
+                    activation_function=self.activation_function,
+                ),
+                DenseWithCustomDist(
+                    number_of_per_atom_features,
+                    output_dimension,
+                ),
+            )
 
     def _model_specific_input_preparation(
         self, data: "NNPInput", pairlist_output: "PairListOutputs"
@@ -192,13 +207,17 @@ class SAKECore(CoreNetwork):
         for interaction_mod in self.interaction_modules:
             h, x, v = interaction_mod(h, x, v, data.pair_indices)
 
-        # Use squeeze to remove dimensions of size 1
-        E_i = self.energy_layer(h).squeeze(1)
-
-        return {
-            "per_atom_energy": E_i,
+        results = {
+            "per_atom_scalar_representation": h,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
+
+        # Compute all specified outputs
+        for output_name, output_layer in self.output_layers.items():
+            results[output_name] = output_layer(h).squeeze(-1)
+
+        return results
+
 
 
 class SAKEInteraction(nn.Module):
@@ -600,6 +619,7 @@ class SAKE(BaseNetwork):
         maximum_interaction_radius: unit.Quantity,
         activation_function_parameter: Dict,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
+        predicted_properties: List[Dict[str, str]],
         dataset_statistic: Optional[Dict[str, float]] = None,
         epsilon: float = 1e-8,
         potential_seed: Optional[int] = None,
@@ -622,6 +642,7 @@ class SAKE(BaseNetwork):
             number_of_radial_basis_functions=number_of_radial_basis_functions,
             maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
             activation_function=activation_function,
+            predicted_properties=predicted_properties,
             epsilon=epsilon,
         )
 

@@ -214,6 +214,7 @@ class TensorNetParameters(ParametersBase):
         highest_atomic_number: int
         equivariance_invariance_group: str
         activation_function_parameter: ActivationFunctionConfig
+        predicted_properties: List[PredictedPropertiesParameter]
 
         converted_units = field_validator(
             "maximum_interaction_radius", "minimum_interaction_radius"
@@ -245,6 +246,7 @@ class PaiNNParameters(ParametersBase):
         shared_filters: bool
         featurization: Featurization
         activation_function_parameter: ActivationFunctionConfig
+        predicted_properties: List[PredictedPropertiesParameter]
 
         converted_units = field_validator(
             "maximum_interaction_radius",
@@ -306,6 +308,7 @@ class SAKEParameters(ParametersBase):
         number_of_spatial_attention_heads: int
         featurization: Featurization
         activation_function_parameter: ActivationFunctionConfig
+        predicted_properties: List[PredictedPropertiesParameter]
 
         converted_units = field_validator("maximum_interaction_radius")(
             _convert_str_to_unit

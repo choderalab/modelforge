@@ -121,18 +121,6 @@ class SchNetCore(CoreNetwork):
                 ]
             )
 
-        # output layer to obtain per-atom energies
-        self.energy_layer = nn.Sequential(
-            DenseWithCustomDist(
-                number_of_per_atom_features,
-                number_of_per_atom_features,
-                activation_function=self.activation_function,
-            ),
-            DenseWithCustomDist(
-                number_of_per_atom_features,
-                1,
-            ),
-        )
         # Initialize output layers based on configuration
         self.output_layers = nn.ModuleDict()
         for property in predicted_properties:

@@ -774,8 +774,16 @@ class PostProcessing(torch.nn.Module):
     to compute per-molecule properties from per-atom properties.
     """
 
-    _SUPPORTED_PROPERTIES = ["per_atom_energy", "general_postprocessing_operation"]
-    _SUPPORTED_OPERATIONS = ["normalize", "from_atom_to_molecule_reduction"]
+    _SUPPORTED_PROPERTIES = [
+        "per_atom_energy",
+        "per_atom_charge",
+        "general_postprocessing_operation",
+    ]
+    _SUPPORTED_OPERATIONS = [
+        "normalize",
+        "from_atom_to_molecule_reduction",
+        "conserve_integer_charge",
+    ]
 
     def __init__(
         self,
@@ -859,6 +867,7 @@ class PostProcessing(torch.nn.Module):
             FromAtomToMoleculeReduction,
             ScaleValues,
             CalculateAtomicSelfEnergy,
+            ChargeConservation,
         )
 
         for property, operations in postprocessing_parameter.items():
@@ -875,7 +884,13 @@ class PostProcessing(torch.nn.Module):
             prostprocessing_sequence_names = []
 
             # for each property parse the requested operations
-            if property == "per_atom_energy":
+            if property == "per_atom_charge":
+                if operations.get("conserve_integer_charge", False):
+                    postprocessing_sequence.append(
+                        ChargeConservation(operations["strategy"])
+                    )
+                    prostprocessing_sequence_names.append("conserve_charge")
+            elif property == "per_atom_energy":
                 if operations.get("normalize", False):
                     (
                         mean,

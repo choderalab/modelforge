@@ -450,14 +450,23 @@ def test_forward_pass(
     assert "per_atom_energy" in output
     assert "per_atom_charge" in output
 
-    # check that the per-atom charges sum to integer charges
+    # retrieve per-molecule charge from per-atom (corrected) charges
     per_molecule_charge = torch.zeros_like(output["per_molecule_energy"]).index_add_(
         0, nnp_input.atomic_subsystem_indices, output["per_atom_charge"]
     )
     per_molecule_corrected_charge = torch.zeros_like(
         output["per_molecule_energy"]
     ).index_add_(
-        0, nnp_input.atomic_subsystem_indices, output["per_atom_corrected_charge"]
+        0, nnp_input.atomic_subsystem_indices, output["per_atom_charge_corrected"]
+    )
+    per_molecule_charge_from_dataset = output["per_molecule_charge"].to(torch.float32)
+
+    # make sure that corrected and uncorrected partial charges differ
+    assert not torch.allclose(per_molecule_charge, per_molecule_corrected_charge)
+
+    # make sure that the experimental charges are the same as the sum over the corrected partial charges
+    assert torch.allclose(
+        per_molecule_charge_from_dataset, per_molecule_corrected_charge
     )
 
     # the batch consists of methane (CH4) and amamonium (NH3)

@@ -306,14 +306,21 @@ class ChargeConservation(torch.nn.Module):
         torch.Tensor
             Tensor of corrected partial charges.
         """
-        data["corrected_partial_charges"] = self.correct_partial_charges(
+        data["per_atom_charge_corrected"] = self.correct_partial_charges(
             data["per_atom_charge"],
             data["atomic_subsystem_indices"],
             data["per_molecule_charge"],
+            data["pair_list"],
         )
         return data
 
-    def physnet_charge_conservation(self, partial_charges, mol_indices, total_charges):
+    def physnet_charge_conservation(
+        self,
+        partial_charges: torch.Tensor,
+        mol_indices: torch.Tensor,
+        total_charges: torch.Tensor,
+        pair_list: torch.Tensor,
+    ):
         """
         PhysNet charge conservation method based on equation 14 from the PhysNet
         paper.
@@ -335,16 +342,33 @@ class ChargeConservation(torch.nn.Module):
         torch.Tensor
             Tensor of corrected partial charges.
         """
+        # the general approach here is outline in equation 14 in the PhysNet
+        # paper: For each atom in a given molecule, we calculate the sum over
+        # the partial charge of all other atoms in the molecule. The difference
+        # between the sum of partial charges for all atoms j plus the partial
+        # charge for atom i and the total charge of the molecule is the
+        # correction factor that has to be added to the partial charge of atom
+        # i.
+
         # Calculate the sum of partial charges for each molecule
-        charge_sums = torch.zeros_like(total_charges.long()).scatter_add_(
-            0, mol_indices.long(), partial_charges.long()
-        ) # FIXME: why do I have to change the scr/dst to long?
+        partial_charges_for_atom_j = partial_charges[pair_list[1]]
+
+        # for each atom i, calculate the sum of partial charges for all other
+        per_atom_i_correction = torch.zeros(
+            partial_charges.shape, dtype=torch.float32, device=total_charges.device
+        ).scatter_add_(0, pair_list[1].long(), partial_charges_for_atom_j)
 
         # Calculate the correction factor for each molecule
-        correction_factors = (total_charges - charge_sums) / mol_indices.bincount()
+        correction_factors = (
+            total_charges[mol_indices] - per_atom_i_correction
+        ) / mol_indices.bincount()[mol_indices]
 
         # Apply the correction to each atom's charge
-        corrected_charges = partial_charges + correction_factors[mol_indices]
+        corrected_charges = partial_charges - correction_factors
+
+        charge_sums_corrected = torch.zeros(
+            total_charges.shape, dtype=torch.float32, device=total_charges.device
+        ).scatter_add_(0, mol_indices.long(), corrected_charges)
 
         return corrected_charges
 

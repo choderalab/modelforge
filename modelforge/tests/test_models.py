@@ -450,6 +450,16 @@ def test_forward_pass(
     assert "per_atom_energy" in output
     assert "per_atom_charge" in output
 
+    # check that the per-atom charges sum to integer charges
+    per_molecule_charge = torch.zeros_like(output["per_molecule_energy"]).index_add_(
+        0, nnp_input.atomic_subsystem_indices, output["per_atom_charge"]
+    )
+    per_molecule_corrected_charge = torch.zeros_like(
+        output["per_molecule_energy"]
+    ).index_add_(
+        0, nnp_input.atomic_subsystem_indices, output["per_atom_corrected_charge"]
+    )
+
     # the batch consists of methane (CH4) and amamonium (NH3)
     # which have chemically equivalent hydrogens at the minimum geometry.
     # This has to be reflected in the atomic energies E_i, which

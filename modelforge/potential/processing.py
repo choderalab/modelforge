@@ -123,6 +123,7 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         property_per_molecule = property_per_molecule_zeros.scatter_reduce(
             0, indices, per_atom_property, reduce=self.reduction_mode
         )
+
         data[self.output_name] = property_per_molecule
         if self.keep_per_atom_property is False:
             del data[self.per_atom_property_name]
@@ -279,12 +280,14 @@ class ChargeConservation(torch.nn.Module):
 
         super().__init__()
         self.method = method
+        if self.method == "physnet":
+            self.correct_partial_charges = self.physnet_charge_conservation
+        else:
+            raise ValueError(f"Unknown charge conservation method: {self.method}")
 
     def forward(
         self,
-        per_atom_partial_charge: torch.Tensor,
-        atomic_subsystem_indices: torch.Tensor,
-        total_charges: torch.Tensor,
+        data: Dict[str, torch.Tensor],
     ):
         """
         Apply charge conservation to partial charges.
@@ -303,12 +306,12 @@ class ChargeConservation(torch.nn.Module):
         torch.Tensor
             Tensor of corrected partial charges.
         """
-        if self.method == "physnet":
-            return self.physnet_charge_conservation(
-                per_atom_partial_charge, atomic_subsystem_indices, total_charges
-            )
-        else:
-            raise ValueError(f"Unknown charge conservation method: {self.method}")
+        data["corrected_partial_charges"] = self.correct_partial_charges(
+            data["per_atom_charge"],
+            data["atomic_subsystem_indices"],
+            data["per_molecule_charge"],
+        )
+        return data
 
     def physnet_charge_conservation(self, partial_charges, mol_indices, total_charges):
         """
@@ -333,9 +336,9 @@ class ChargeConservation(torch.nn.Module):
             Tensor of corrected partial charges.
         """
         # Calculate the sum of partial charges for each molecule
-        charge_sums = torch.zeros_like(total_charges).scatter_add_(
-            0, mol_indices, partial_charges
-        )
+        charge_sums = torch.zeros_like(total_charges.long()).scatter_add_(
+            0, mol_indices.long(), partial_charges.long()
+        ) # FIXME: why do I have to change the scr/dst to long?
 
         # Calculate the correction factor for each molecule
         correction_factors = (total_charges - charge_sums) / mol_indices.bincount()

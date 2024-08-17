@@ -885,7 +885,7 @@ class PostProcessing(torch.nn.Module):
 
             # for each property parse the requested operations
             if property == "per_atom_charge":
-                if operations.get("conserve_integer_charge", False):
+                if operations.get("conserve", False):
                     postprocessing_sequence.append(
                         ChargeConservation(operations["strategy"])
                     )
@@ -1125,6 +1125,27 @@ class BaseNetwork(Module):
         self.compute_interacting_pairs._input_checks(data)
         return self.compute_interacting_pairs.prepare_inputs(data)
 
+    def _add_addiontal_properties(
+        self, data, output: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Add additional properties to the output dictionary.
+
+        Parameters
+        ----------
+        data : Union[NNPInput, NamedTuple]
+            The input data.
+        output: Dict[str, torch.Tensor]
+            The output dictionary to add properties to.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+        """
+
+        output["per_molecule_charge"] = data.total_charge
+        return output
+
     def compute(self, data, core_input):
         """
         Compute the core model's output.
@@ -1143,7 +1164,7 @@ class BaseNetwork(Module):
         """
         return self.core_module(data, core_input)
 
-    def forward(self, input_data: NNPInput):
+    def forward(self, input_data: NNPInput) -> Dict[str, torch.Tensor]:
         """
         Executes the forward pass of the model.
 
@@ -1165,8 +1186,11 @@ class BaseNetwork(Module):
         # compute all interacting pairs with distances
         pairwise_properties = self.prepare_pairwise_properties(input_data)
         # prepare the input for the forward pass
-        output = self.compute(input_data, pairwise_properties)
+        output = self.compute(
+            input_data, pairwise_properties
+        )  # FIXME: putput and processed_output are currently a dictionary, we really want to change this to a dataclass
         # perform postprocessing operations
+        output = self._add_addiontal_properties(input_data, output)
         processed_output = self.postprocessing(output)
         return processed_output
 

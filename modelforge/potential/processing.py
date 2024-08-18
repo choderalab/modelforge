@@ -349,7 +349,9 @@ class ChargeConservation(torch.nn.Module):
 
         # for each atom i, calculate the sum of partial charges for all other
         predicted_per_molecule_charge = torch.zeros(
-            total_charges.shape, dtype=torch.float32, device=total_charges.device
+            total_charges.shape,
+            dtype=per_atom_charge.dtype,
+            device=total_charges.device,
         ).scatter_add_(0, mol_indices.long(), per_atom_charge)
 
         # Calculate the correction factor for each molecule

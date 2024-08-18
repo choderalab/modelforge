@@ -136,10 +136,20 @@ class PerAtomEnergy(ParametersBase):
     keep_per_atom_property: bool = False
 
 
+class CoulomPotential(ParametersBase):
+    electrostatic_strategy: str = "coulomb"
+    maximum_interaction_radius: Union[str, unit.Quantity]
+    
+    converted_units = field_validator(
+        "maximum_interaction_radius",
+    )(_convert_str_to_unit)
+
+
 class PerAtomCharge(ParametersBase):
     conserve: bool = False
-    strategy: str = "default"
+    conserve_strategy: str = "default"
     keep_per_atom_property: bool = False
+    coulomb_potential: Optional[CoulomPotential] = None
 
 
 class ANI2xParameters(ParametersBase):

@@ -2,9 +2,15 @@
 This module contains utility functions and classes for processing the output of the potential model.
 """
 
+from dataclasses import dataclass, field
+from typing import Dict, Iterator, List, Type, Union
+
 import torch
-from typing import Dict
 from openff.units import unit
+
+from modelforge.dataset.utils import _ATOMIC_NUMBER_TO_ELEMENT
+
+from .models import PairListOutputs
 
 
 def load_atomic_self_energies(path: str) -> Dict[str, unit.Quantity]:
@@ -129,13 +135,6 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
             del data[self.per_atom_property_name]
 
         return data
-
-
-from dataclasses import dataclass, field
-from typing import Dict, Iterator
-
-from openff.units import unit
-from modelforge.dataset.utils import _ATOMIC_NUMBER_TO_ELEMENT
 
 
 @dataclass
@@ -272,16 +271,13 @@ class ScaleValues(torch.nn.Module):
         return data
 
 
-from typing import Union
-
-
 class ChargeConservation(torch.nn.Module):
-    def __init__(self, method="physnet"):
+    def __init__(self, method="default"):
 
         super().__init__()
         self.method = method
-        if self.method == "physnet":
-            self.correct_partial_charges = self.physnet_charge_conservation
+        if self.method == "default":
+            self.correct_partial_charges = self.default_charge_conservation
         else:
             raise ValueError(f"Unknown charge conservation method: {self.method}")
 
@@ -313,7 +309,7 @@ class ChargeConservation(torch.nn.Module):
         )
         return data
 
-    def physnet_charge_conservation(
+    def default_charge_conservation(
         self,
         per_atom_charge: torch.Tensor,
         mol_indices: torch.Tensor,
@@ -361,10 +357,6 @@ class ChargeConservation(torch.nn.Module):
 
         # Apply the correction to each atom's charge
         per_atom_charge_corrected = per_atom_charge + correction_factors[mol_indices]
-
-        per_molecule_corrected_charge = torch.zeros_like(per_atom_charge).scatter_add_(
-            0, mol_indices.long(), per_atom_charge_corrected
-        )
 
         return per_atom_charge_corrected
 
@@ -428,4 +420,95 @@ class CalculateAtomicSelfEnergy(torch.nn.Module):
         ase_tensor = ase_tensor_for_indexing[atomic_numbers]
 
         data["ase_tensor"] = ase_tensor
+        return data
+
+
+class LongRangeElectrostaticEnergy(torch.nn.Module):
+    def __init__(self, strategy: str, cutoff: unit.Quantity):
+        """
+        Computes the long-range electrostatic energy for a molecular system
+        based on predicted partial charges and pairwise distances between atoms.
+
+        The implementation follows the methodology described in the PhysNet
+        paper, using a cutoff function to handle long-range interactions.
+
+        Parameters
+        ----------
+        strategy : str
+            The strategy to be used for computing the long-range electrostatic
+            energy.
+        cutoff : unit.Quantity
+            The cutoff distance beyond which the interactions are not
+            considered.
+
+        Attributes
+        ----------
+        strategy : str
+            The strategy for computing long-range interactions.
+        cutoff_function : nn.Module
+            The cutoff function applied to the pairwise distances.
+        """
+        super().__init__()
+        from .utils import CosineAttenuationFunction
+
+        self.strategy = strategy
+        self.cutoff_function = CosineAttenuationFunction(cutoff)
+
+    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        """
+        Forward pass to compute the long-range electrostatic energy.
+
+        This function calculates the long-range electrostatic energy by considering
+        pairwise Coulomb interactions between atoms, applying a cutoff function to
+        handle long-range interactions.
+
+        Parameters
+        ----------
+        data : Dict[str, torch.Tensor]
+            Input data containing the following keys:
+            - 'per_atom_charge': Tensor of shape (N,) with partial charges for each atom.
+            - 'atomic_subsystem_indices': Tensor indicating the molecule each atom belongs to.
+            - 'pairwise_properties': Object containing pairwise distances and indices.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The input data dictionary with an additional key 'long_range_electrostatic_energy'
+            containing the computed long-range electrostatic energy.
+        """
+        per_atom_charge = data["per_atom_charge"]
+        mol_indices = data["atomic_subsystem_indices"]
+        pairwise_properties = data["pairwise_properties"]
+        idx_i, idx_j = pairwise_properties.pair_indices
+        pairwise_distances = pairwise_properties.d_ij
+
+        # Initialize the long-range electrostatic energy
+        long_range_energy = torch.zeros_like(per_atom_charge)
+
+        # Apply the cutoff function to pairwise distances
+        phi_2r = self.cutoff_function(2 * pairwise_distances)
+        chi_r = phi_2r * (1 / torch.sqrt(pairwise_distances**2 + 1)) + (
+            1 - phi_2r
+        ) * (1 / pairwise_distances)
+
+        # Compute the Coulomb interaction term
+        coulomb_interactions = (
+            (per_atom_charge[idx_i] * per_atom_charge[idx_j])
+            * chi_r
+            / pairwise_distances
+        )
+
+        # Zero out diagonal terms (self-interaction)
+        mask = torch.eye(
+            coulomb_interactions.size(0), device=coulomb_interactions.device
+        ).bool()
+        coulomb_interactions.masked_fill_(mask, 0)
+
+        # Aggregate the interactions for each atom
+        coulomb_interactions_per_atom = torch.zeros_like(per_atom_charge).scatter_add_(
+            0, idx_j.long(), coulomb_interactions
+        )
+
+        data["per_atom_electrostatic_energy"] = coulomb_interactions_per_atom
+
         return data

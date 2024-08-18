@@ -782,7 +782,7 @@ class PostProcessing(torch.nn.Module):
     _SUPPORTED_OPERATIONS = [
         "normalize",
         "from_atom_to_molecule_reduction",
-        "conserve_integer_charge",
+        "long_range_electrostatics" "conserve_integer_charge",
     ]
 
     def __init__(
@@ -868,6 +868,7 @@ class PostProcessing(torch.nn.Module):
             ScaleValues,
             CalculateAtomicSelfEnergy,
             ChargeConservation,
+            LongRangeElectrostaticEnergy,
         )
 
         for property, operations in postprocessing_parameter.items():
@@ -887,9 +888,32 @@ class PostProcessing(torch.nn.Module):
             if property == "per_atom_charge":
                 if operations.get("conserve", False):
                     postprocessing_sequence.append(
-                        ChargeConservation(operations["strategy"])
+                        ChargeConservation(operations["conserve_strategy"])
                     )
                     prostprocessing_sequence_names.append("conserve_charge")
+
+                if operations.get("coulomb_potential", False):
+                    coulomb_potential = operations["coulomb_potential"]
+                    postprocessing_sequence.append(
+                        LongRangeElectrostaticEnergy(
+                            coulomb_potential["electrostatic_strategy"],
+                            coulomb_potential["maximum_interaction_radius"],
+                        )
+                    )
+                    prostprocessing_sequence_names.append("coulomb_potential")
+
+                    if coulomb_potential.get("from_atom_to_molecule_reduction, False"):
+                        postprocessing_sequence.append(
+                            FromAtomToMoleculeReduction(
+                                per_atom_property_name="per_atom_energy",
+                                index_name="atomic_subsystem_indices",
+                                output_name="per_molecule_energy",
+                                keep_per_atom_property=operations.get(
+                                    "keep_per_atom_property", False
+                                ),
+                            )
+                        )
+
             elif property == "per_atom_energy":
                 if operations.get("normalize", False):
                     (
@@ -990,6 +1014,10 @@ class PostProcessing(torch.nn.Module):
             if property in self._registered_properties:
                 self.registered_chained_operations[property](data)
 
+        # delte pairwise property object before returning
+        if 'pairwise_properties' in data:
+            del data['pairwise_properties']
+            
         return data
 
 
@@ -1126,7 +1154,10 @@ class BaseNetwork(Module):
         return self.compute_interacting_pairs.prepare_inputs(data)
 
     def _add_addiontal_properties(
-        self, data, output: Dict[str, torch.Tensor]
+        self,
+        data,
+        output: Dict[str, torch.Tensor],
+        pairwise_properties: PairListOutputs,
     ) -> Dict[str, torch.Tensor]:
         """
         Add additional properties to the output dictionary.
@@ -1144,6 +1175,7 @@ class BaseNetwork(Module):
         """
 
         output["per_molecule_charge"] = data.total_charge
+        output["pairwise_properties"] = pairwise_properties
         return output
 
     def compute(self, data, core_input):
@@ -1190,7 +1222,11 @@ class BaseNetwork(Module):
             input_data, pairwise_properties
         )  # FIXME: putput and processed_output are currently a dictionary, we really want to change this to a dataclass
         # perform postprocessing operations
-        output = self._add_addiontal_properties(input_data, output)
+        output = self._add_addiontal_properties(
+            input_data,
+            output,
+            pairwise_properties,
+        )
         processed_output = self.postprocessing(output)
         return processed_output
 

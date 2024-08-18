@@ -1144,7 +1144,6 @@ class BaseNetwork(Module):
         """
 
         output["per_molecule_charge"] = data.total_charge
-        output["pair_list"] = data.pair_list
         return output
 
     def compute(self, data, core_input):

@@ -28,7 +28,6 @@ from_atom_to_molecule_reduction = true
 keep_per_atom_property = true
 
 [potential.postprocessing_parameter.per_atom_charge]
-conserve_integer_charge = true
+conserve = true
 strategy = "physnet"
-from_atom_to_molecule_reduction = false
 keep_per_atom_property = true

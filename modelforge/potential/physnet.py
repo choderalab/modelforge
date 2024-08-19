@@ -410,25 +410,6 @@ class PhysNetModule(nn.Module):
         Dict[str, torch.Tensor]
             Dictionary containing predictions and updated embeddings.
         """
-        # The PhysNet module is a sequence of interaction modules and residual modules.
-        #              x_1, ..., x_N
-        #                     |
-        #                     v
-        #               ┌─────────────┐
-        #               │ interaction │ <-- g(d_ij)
-        #               └─────────────┘
-        #                     │
-        #                     v
-        #                ┌───────────┐
-        #                │  residual │
-        #                └───────────┘
-        #                ┌───────────┐
-        #                │  residual │
-        #                └───────────┘
-        # ┌───────────┐      │
-        # │   output  │<-----│
-        # └───────────┘      │
-        #                    v
 
         # calculate the interaction
         v = self.interaction(data)

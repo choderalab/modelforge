@@ -22,7 +22,8 @@ def set_postprocessing_based_on_energy_expression(config, energy_expression):
         conf_section.keep_per_atom_property = True
 
         conf_section.coulomb_potential = CoulomPotential(
-            electrostatic_strategy="coulomb", maximum_interaction_radius=10.0 * unit.angstrom
+            electrostatic_strategy="coulomb",
+            maximum_interaction_radius=10.0 * unit.angstrom,
         )
 
         return config
@@ -115,13 +116,18 @@ def convert_to_pytorch_if_needed(output, nnp_input, model):
     if "JAX" in str(type(model)):
         convert_to_pyt = import_("pytorch2jax").pytorch2jax.convert_to_pyt
         output["per_molecule_energy"] = convert_to_pyt(output["per_molecule_energy"])
-        output["per_atom_charge"] = convert_to_pyt(output["per_atom_charge"])
-        output["per_atom_charge_corrected"] = convert_to_pyt(
-            output["per_atom_charge_corrected"]
-        )
-        output["per_molecule_charge"] = convert_to_pyt(
-            output["per_molecule_charge"]
-        ).to(torch.float32)
+
+        if "per_atom_energy" in output:
+            output["per_atom_charge"] = convert_to_pyt(output["per_atom_charge"])
+        if "per_atom_charge_corrected" in output:
+            output["per_atom_charge_corrected"] = convert_to_pyt(
+                output["per_atom_charge_corrected"]
+            )
+        if "per_molecule_charge" in output:
+            output["per_molecule_charge"] = convert_to_pyt(
+                output["per_molecule_charge"]
+            ).to(torch.float32)
+
         atomic_subsystem_indices = convert_to_pyt(nnp_input.atomic_subsystem_indices)
     else:
         atomic_subsystem_indices = nnp_input.atomic_subsystem_indices

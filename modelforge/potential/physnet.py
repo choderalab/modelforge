@@ -109,39 +109,6 @@ class PhysNetRepresentation(nn.Module):
         }
 
 
-class GatingModule(nn.Module):
-    def __init__(self, number_of_atom_basis: int):
-        """
-        Initializes a gating module that optionally applies a sigmoid gating mechanism to input features.
-
-        Parameters
-        ----------
-        number_of_atom_basis : int
-            The dimensionality of the input (and output) features.
-        """
-        super().__init__()
-        self.gate = nn.Parameter(torch.ones(number_of_atom_basis))
-
-    def forward(self, x: torch.Tensor, activation_fn: bool = False) -> torch.Tensor:
-        """
-        Apply gating to the input tensor.
-
-        Parameters
-        ----------
-        x : torch.Tensor
-            The input tensor to gate.
-        activation_fn : bool, optional
-            Whether to apply an activation function, by default False.
-
-        Returns
-        -------
-        torch.Tensor
-            The gated input tensor.
-        """
-        gating_signal = torch.sigmoid(self.gate)
-        return gating_signal * x
-
-
 class PhysNetResidual(nn.Module):
     """
     Implements a preactivation residual block as described in Equation 4 of the
@@ -323,8 +290,10 @@ class PhysNetInteractionModule(nn.Module):
             per_atom_updated_embedding
         )
 
-        x = self.gate * per_atom_embedding + self.process_v(per_atom_updated_embedding)
-        return x
+        per_atom_embedding = self.gate * per_atom_embedding + self.process_v(
+            per_atom_updated_embedding
+        )
+        return per_atom_embedding
 
 
 class PhysNetOutput(nn.Module):

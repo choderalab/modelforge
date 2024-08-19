@@ -10,7 +10,6 @@ shared_interactions = false
 predicted_properties = [
     { name = "per_atom_energy", type = "scalar" },
     { name = "per_atom_charge", type = "scalar" },
-    # we could also define per_atom_force to be consistent?
 ]
 
 [potential.core_parameter.activation_function_parameter]
@@ -31,9 +30,12 @@ keep_per_atom_property = true
 conserve = true
 conserve_strategy = "default"
 keep_per_atom_property = true
+
 [potential.postprocessing_parameter.per_atom_charge.coulomb_potential]
 electrostatic_strategy = "coulomb"
 maximum_interaction_radius = "10.0 angstrom"
+from_atom_to_molecule_reduction = true
+keep_per_atom_property = true
 
 [potential.postprocessing_parameter.general_postprocessing_operation]
 calculate_molecular_self_energy = true

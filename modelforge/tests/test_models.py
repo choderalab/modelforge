@@ -29,6 +29,7 @@ def validate_output_shapes(output, nr_of_mols):
     assert "per_atom_energy" in output
     assert "per_atom_charge" in output
     assert "per_atom_charge_corrected" in output
+    assert "per_atom_electrostatic_energy" in output
 
 
 def validate_charge_conservation(

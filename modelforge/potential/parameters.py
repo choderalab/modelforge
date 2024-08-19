@@ -4,26 +4,20 @@ This module contains pydantic models for storing the parameters of the potential
 
 from __future__ import annotations
 
-from pydantic import (
-    BaseModel,
-    field_validator,
-    ConfigDict,
-    model_validator,
-    computed_field,
-)
-from openff.units import unit
-from typing import Union, List, Optional, Type
-from modelforge.utils.units import _convert_str_to_unit
 from enum import Enum
+from typing import List, Optional, Type, Union
 
 import torch
+from openff.units import unit
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
-
-# needed to typecast to torch.nn.Module
-
-"""
-This module contains pydantic models for storing the parameters of 
-"""
+from modelforge.utils.units import _convert_str_to_unit
 
 
 class CaseInsensitiveEnum(str, Enum):
@@ -139,6 +133,9 @@ class PerAtomEnergy(ParametersBase):
 class CoulomPotential(ParametersBase):
     electrostatic_strategy: str = "coulomb"
     maximum_interaction_radius: Union[str, unit.Quantity]
+    from_atom_to_molecule_reduction: bool = False
+    keep_per_atom_property: bool = False
+    
     
     converted_units = field_validator(
         "maximum_interaction_radius",

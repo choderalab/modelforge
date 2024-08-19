@@ -504,10 +504,8 @@ class LongRangeElectrostaticEnergy(torch.nn.Module):
         ).bool()
         coulomb_interactions.masked_fill_(mask, 0)
 
-        # Aggregate the interactions for each atom
-        coulomb_interactions_per_atom = torch.zeros_like(per_atom_charge).scatter_add_(
-            0, idx_j.long(), coulomb_interactions
-        )
+        # Sum over all interactions for each atom
+        coulomb_interactions_per_atom = coulomb_interactions.sum(dim=1)
 
         data["per_atom_electrostatic_energy"] = coulomb_interactions_per_atom
 

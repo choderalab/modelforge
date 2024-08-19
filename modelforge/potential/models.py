@@ -905,9 +905,9 @@ class PostProcessing(torch.nn.Module):
                     if coulomb_potential.get("from_atom_to_molecule_reduction, False"):
                         postprocessing_sequence.append(
                             FromAtomToMoleculeReduction(
-                                per_atom_property_name="per_atom_energy",
+                                per_atom_property_name="per_atom_electrostatic_energy",
                                 index_name="atomic_subsystem_indices",
-                                output_name="per_molecule_energy",
+                                output_name="per_molecule_electrostatic_energy",
                                 keep_per_atom_property=operations.get(
                                     "keep_per_atom_property", False
                                 ),
@@ -1015,9 +1015,9 @@ class PostProcessing(torch.nn.Module):
                 self.registered_chained_operations[property](data)
 
         # delte pairwise property object before returning
-        if 'pairwise_properties' in data:
-            del data['pairwise_properties']
-            
+        if "pairwise_properties" in data:
+            del data["pairwise_properties"]
+
         return data
 
 

@@ -367,7 +367,7 @@ class TensorNetCore(CoreNetwork):
         }
 
     def _model_specific_input_preparation(
-        self, data: "NNPInput", pairlist_output: "PairListOutputs"
+        self, data: NNPInput, pairlist_output: Dict[str, PairListOutputs]
     ) -> TensorNetNeuralNetworkData:
         """
         Prepare the input data for the TensorNet model.
@@ -376,8 +376,8 @@ class TensorNetCore(CoreNetwork):
         ----------
         data : NNPInput
             The input data for the model.
-        pairlist_output : PairListOutputs
-            The pairlist output.
+        pairlist_output : Dict[str, PairListOutputs]
+            The pairlist output(s)
 
         Returns
         -------
@@ -385,6 +385,11 @@ class TensorNetCore(CoreNetwork):
             The prepared input data for the TensorNet model.
         """
         number_of_atoms = data.atomic_numbers.shape[0]
+
+        # Note, pairlist_output is a Dict where the key corresponds to the name of the cutoff parameter
+        # e.g. "maximum_interaction_radius"
+
+        pairlist_output = pairlist_output["maximum_interaction_radius"]
 
         nnpdata = TensorNetNeuralNetworkData(
             pair_indices=pairlist_output.pair_indices,

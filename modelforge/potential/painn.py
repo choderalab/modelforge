@@ -221,7 +221,7 @@ class PaiNNCore(CoreNetwork):
             )
 
         results = {
-            "per_atom_scalar_representation": per_atom_scalar_feature,
+            "per_atom_scalar_representation": per_atom_scalar_feature.squeeze(1),
             "per_atom_vector_representation": per_atom_vector_feature,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }

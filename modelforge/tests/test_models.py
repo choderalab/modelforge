@@ -5,6 +5,27 @@ from modelforge.dataset import _ImplementedDatasets
 from modelforge.potential import NeuralNetworkPotentialFactory
 import torch
 from modelforge.utils.io import import_
+from openff.units import unit
+
+
+def set_postprocessing_based_on_energy_expression(config, energy_expression):
+    if energy_expression == "short_range":
+        return config
+    elif energy_expression == "short_range_and_long_range_electrostatic":
+        from modelforge.potential.parameters import CoulomPotential
+
+        conf_section = config["potential"].postprocessing_parameter.per_atom_charge
+
+        # set parameters
+        conf_section.conserve = True
+        conf_section.conserve_strategy = "default"
+        conf_section.keep_per_atom_property = True
+
+        conf_section.coulomb_potential = CoulomPotential(
+            electrostatic_strategy="coulomb", maximum_interaction_radius=10.0 * unit.angstrom
+        )
+
+        return config
 
 
 def initialize_model(simulation_environment: str, config):
@@ -23,13 +44,14 @@ def prepare_input_for_model(nnp_input, model):
     return nnp_input
 
 
-def validate_output_shapes(output, nr_of_mols):
+def validate_output_shapes(output, nr_of_mols: int, energy_expression: str):
     """Validate the output shapes to ensure they are correct."""
     assert len(output["per_molecule_energy"]) == nr_of_mols
     assert "per_atom_energy" in output
     assert "per_atom_charge" in output
-    assert "per_atom_charge_corrected" in output
-    assert "per_atom_electrostatic_energy" in output
+    if energy_expression == "short_range_and_long_range_electrostatic":
+        assert "per_atom_charge_corrected" in output
+        assert "per_atom_electrostatic_energy" in output
 
 
 def validate_charge_conservation(
@@ -518,17 +540,29 @@ def test_forward_pass_with_all_datasets(
 
 
 @pytest.mark.parametrize(
+    "energy_expression",
+    [
+        "short_range",
+        "short_range_and_long_range_electrostatic",
+    ],  # , "short_range_vdw"],
+)
+@pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
 @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
 def test_forward_pass(
-    potential_name, simulation_environment, single_batch_with_batchsize_64
+    energy_expression,
+    potential_name,
+    simulation_environment,
+    single_batch_with_batchsize_64,
 ):
     # this test sends a single batch from different datasets through the model
 
     # get input and set up model
     nnp_input = single_batch_with_batchsize_64.nnp_input
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
+    set_postprocessing_based_on_energy_expression(config, energy_expression)
+
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
     model = initialize_model(simulation_environment, config)
     nnp_input = prepare_input_for_model(nnp_input, model)
@@ -537,21 +571,23 @@ def test_forward_pass(
     output = model(nnp_input)
 
     # validate the output
-    validate_output_shapes(output, nr_of_mols)
+    validate_output_shapes(output, nr_of_mols, energy_expression)
     output, atomic_subsystem_indices = convert_to_pytorch_if_needed(
         output, nnp_input, model
     )
 
     # test that charge correction is working
-    per_molecule_charge, per_molecule_charge_corrected = retrieve_molecular_charges(
-        output, atomic_subsystem_indices
-    )
-    validate_charge_conservation(
-        per_molecule_charge,
-        per_molecule_charge_corrected,
-        output["per_molecule_charge"],
-        potential_name,
-    )
+    if energy_expression == "short_range_and_long_range_electrostatic":
+        per_molecule_charge, per_molecule_charge_corrected = retrieve_molecular_charges(
+            output, atomic_subsystem_indices
+        )
+        validate_charge_conservation(
+            per_molecule_charge,
+            per_molecule_charge_corrected,
+            output["per_molecule_charge"],
+            potential_name,
+        )
+
     # check that per-atom energies are correct
     if "JAX" not in simulation_environment:
         validate_chemical_equivalence(output)

@@ -38,14 +38,16 @@ __all__ = [
 class Error(nn.Module, ABC):
     """
     Class representing the error calculation for predicted and true values.
-
-    Methods:
-        calculate_error(predicted: torch.Tensor, true: torch.Tensor) -> torch.Tensor:
-            Calculates the error between the predicted and true values.
-
-        scale_by_number_of_atoms(error, atomic_subsystem_counts) -> torch.Tensor:
-            Scales the error by the number of atoms in the atomic subsystems.
     """
+
+    def __init__(self, scale_by_number_of_atoms: bool = True):
+
+        super().__init__()
+        if not scale_by_number_of_atoms:
+            # If scaling is not desired, override the method to just return the input error unchanged
+            self.scale_by_number_of_atoms = (
+                lambda error, atomic_subsystem_counts, prefactor=1: error
+            )
 
     @abstractmethod
     def calculate_error(
@@ -75,10 +77,13 @@ class Error(nn.Module, ABC):
         torch.Tensor
             The calculated error.
         """
-        return (predicted_tensor - reference_tensor).pow(2).sum(dim=1, keepdim=True)
+        error = (predicted_tensor - reference_tensor).pow(2).sum(dim=1, keepdim=True)
+        return error
 
     @staticmethod
-    def scale_by_number_of_atoms(error, atomic_subsystem_counts) -> torch.Tensor:
+    def scale_by_number_of_atoms(
+        error, atomic_subsystem_counts, prefactor: int = 1
+    ) -> torch.Tensor:
         """
         Scales the error by the number of atoms in the atomic subsystems.
 
@@ -88,15 +93,16 @@ class Error(nn.Module, ABC):
             The error to be scaled.
         atomic_subsystem_counts : torch.Tensor
             The number of atoms in the atomic subsystems.
-
+        prefactor : int
+           To consider the shape of the property, e.g., if the reference property has shape (N,3) it is necessary to further devide the result by 3
         Returns
         -------
         torch.Tensor
             The scaled error.
         """
         # divide by number of atoms
-        scaled_by_number_of_atoms = error / atomic_subsystem_counts.unsqueeze(
-            1
+        scaled_by_number_of_atoms = error / (
+            prefactor * atomic_subsystem_counts.unsqueeze(1)
         )  # FIXME: ensure that all per-atom properties have dimension (N, 1)
         return scaled_by_number_of_atoms
 
@@ -106,11 +112,8 @@ class FromPerAtomToPerMoleculeMeanSquaredError(Error):
     Calculates the per-atom error and aggregates it to per-molecule mean squared error.
     """
 
-    def __init__(self):
-        """
-        Initializes the PerAtomToPerMoleculeError class.
-        """
-        super().__init__()
+    def __init__(self, scale_by_number_of_atoms: bool = True):
+        super().__init__(scale_by_number_of_atoms)
 
     def calculate_error(
         self,
@@ -163,7 +166,9 @@ class FromPerAtomToPerMoleculeMeanSquaredError(Error):
         )
         # divide by number of atoms
         per_molecule_square_error_scaled = self.scale_by_number_of_atoms(
-            per_molecule_squared_error, batch.metadata.atomic_subsystem_counts
+            per_molecule_squared_error,
+            batch.metadata.atomic_subsystem_counts,
+            prefactor=per_atom_prediction.shape[-1],
         )
         # return the average
         return torch.mean(per_molecule_square_error_scaled)
@@ -172,15 +177,10 @@ class FromPerAtomToPerMoleculeMeanSquaredError(Error):
 class PerMoleculeMeanSquaredError(Error):
     """
     Calculates the per-molecule mean squared error.
-
     """
 
-    def __init__(self):
-        """
-        Initializes the PerMoleculeMeanSquaredError class.
-        """
-
-        super().__init__()
+    def __init__(self, scale_by_number_of_atoms: bool = True):
+        super().__init__(scale_by_number_of_atoms)
 
     def forward(
         self,
@@ -210,7 +210,8 @@ class PerMoleculeMeanSquaredError(Error):
             per_molecule_prediction, per_molecule_reference
         )
         per_molecule_square_error_scaled = self.scale_by_number_of_atoms(
-            per_molecule_squared_error, batch.metadata.atomic_subsystem_counts
+            per_molecule_squared_error,
+            batch.metadata.atomic_subsystem_counts,
         )
 
         # return the average
@@ -228,24 +229,12 @@ class PerMoleculeMeanSquaredError(Error):
 
 
 class Loss(nn.Module):
-    """
-    Calculates the combined loss for energy and force predictions.
 
-    Attributes
-    ----------
-    loss_property : List[str]
-        List of properties to include in the loss calculation.
-    weight : Dict[str, float]
-        Dictionary containing the weights for each property in the loss calculation.
-    loss : nn.ModuleDict
-        Module dictionary containing the loss functions for each property.
-    """
-
-    _SUPPORTED_PROPERTIES = ["per_molecule_energy", "per_atom_force"]
+    _SUPPORTED_PROPERTIES = ["per_atom_energy", "per_molecule_energy", "per_atom_force"]
 
     def __init__(self, loss_porperty: List[str], weight: Dict[str, float]):
         """
-        Initializes the Loss class.
+        Calculates the combined loss for energy and force predictions.
 
         Parameters
         ----------
@@ -270,9 +259,17 @@ class Loss(nn.Module):
         for prop, w in weight.items():
             if prop in self._SUPPORTED_PROPERTIES:
                 if prop == "per_atom_force":
-                    self.loss[prop] = FromPerAtomToPerMoleculeMeanSquaredError()
+                    self.loss[prop] = FromPerAtomToPerMoleculeMeanSquaredError(
+                        scale_by_number_of_atoms=True
+                    )
+                elif prop == "per_atom_energy":
+                    self.loss[prop] = PerMoleculeMeanSquaredError(
+                        scale_by_number_of_atoms=True
+                    )  # FIXME: this is currently not working
                 elif prop == "per_molecule_energy":
-                    self.loss[prop] = PerMoleculeMeanSquaredError()
+                    self.loss[prop] = PerMoleculeMeanSquaredError(
+                        scale_by_number_of_atoms=False
+                    )
                 self.register_buffer(prop, torch.tensor(w))
             else:
                 raise NotImplementedError(f"Loss type {prop} not implemented.")
@@ -302,11 +299,11 @@ class Loss(nn.Module):
         # iterate over loss properties
         for prop in self.loss_property:
             # calculate loss per property
-            loss_ = self.weight[prop] * self.loss[prop](
+            loss_ = self.loss[prop](
                 predict_target[f"{prop}_predict"], predict_target[f"{prop}_true"], batch
             )
             # add total loss
-            loss = loss + loss_
+            loss = loss + (self.weight[prop] * loss_)
             # save loss
             loss_dict[f"{prop}/mse"] = loss_
 
@@ -431,7 +428,7 @@ class CalculateProperties(torch.nn.Module):
         grad = torch.autograd.grad(
             per_molecule_energy_predict.sum(),
             nnp_input.positions,
-            create_graph=False,
+            create_graph=True,
             retain_graph=True,
         )[0]
         per_atom_force_predict = -1 * grad  # Forces are the negative gradient of energy
@@ -1173,6 +1170,37 @@ class ModelTrainer:
         )
         return experiment_name
 
+    def _add_tags(self, tags: List[str]) -> List[str]:
+        """
+        Add tags to the wandb tags.
+
+        Parameters
+        ----------
+        tags : List[str]
+            List of tags to add to the experiment.
+
+        Returns
+        -------
+        List[str]
+            List of tags for the experiment.
+        """
+
+        # add version
+        import modelforge
+
+        tags.append(str(modelforge.__version__))
+        # add dataset
+        tags.append(self.dataset_parameter.dataset_name)
+        # add potential name
+        tags.append(self.potential_parameter.potential_name)
+        # add information about what is included in the loss
+        str_loss_property = "-".join(
+            self.training_parameter.loss_parameter.loss_property
+        )
+        tags.append(f"loss-{str_loss_property}")
+
+        return tags
+
 
 from typing import List, Optional, Union
 
@@ -1194,92 +1222,66 @@ def read_config(
     simulation_environment: Optional[str] = None,
 ):
     """
-    Reads one or more TOML configuration files and loads them into the pydantic models
+    Reads one or more TOML configuration files and loads them into the pydantic models.
 
     Parameters
     ----------
-    condensed_config_path : str, optional
-        Path to the TOML configuration that contains all parameters for the dataset, potential, training, and runtime parameters.
-        Any other provided configuration files will be ignored.
-    training_parameter_path : str, optional
-        Path to the TOML file defining the training parameters.
-    dataset_parameter_path : str, optional
-        Path to the TOML file defining the dataset parameters.
-    potential_parameter_path : str, optional
-        Path to the TOML file defining the potential parameters.
-    runtime_parameter_path : str, optional
-        Path to the TOML file defining the runtime parameters. If this is not provided, the code will attempt to use
-        the runtime parameters provided as arguments.
-    accelerator : str, optional
-        Accelerator type to use.  If provided, this  overrides the accelerator type in the runtime_defaults configuration.
-    devices : int|List[int], optional
-        Device index/indices to use.  If provided, this overrides the devices in the runtime_defaults configuration.
-    number_of_nodes : int, optional
-        Number of nodes to use.  If provided, this overrides the number of nodes in the runtime_defaults configuration.
-    experiment_name : str, optional
-        Name of the experiment.  If provided, this overrides the experiment name in the runtime_defaults configuration.
-    save_dir : str, optional
-        Directory to save the model.  If provided, this overrides the save directory in the runtime_defaults configuration.
-    local_cache_dir : str, optional
-        Local cache directory.  If provided, this overrides the local cache directory in the runtime_defaults configuration.
-    checkpoint_path : str, optional
-        Path to the checkpoint file.  If provided, this overrides the checkpoint path in the runtime_defaults configuration.
-    log_every_n_steps : int, optional
-        Number of steps to log.  If provided, this overrides the log_every_n_steps in the runtime_defaults configuration.
-    simulation_environment : str, optional
-        Simulation environment.  If provided, this overrides the simulation environment in the runtime_defaults configuration.
+    (Parameters as described earlier...)
 
     Returns
     -------
     Tuple
         Tuple containing the training, dataset, potential, and runtime parameters.
-
     """
     import toml
 
-    use_runtime_variables_instead_of_toml = False
+    # Initialize the config dictionaries
+    training_config_dict = {}
+    dataset_config_dict = {}
+    potential_config_dict = {}
+    runtime_config_dict = {}
+
     if condensed_config_path is not None:
         config = toml.load(condensed_config_path)
         log.info(f"Reading config from : {condensed_config_path}")
 
-        training_config_dict = config["training"]
-        dataset_config_dict = config["dataset"]
-        potential_config_dict = config["potential"]
-        runtime_config_dict = config["runtime"]
+        training_config_dict = config.get("training", {})
+        dataset_config_dict = config.get("dataset", {})
+        potential_config_dict = config.get("potential", {})
+        runtime_config_dict = config.get("runtime", {})
 
     else:
-        if training_parameter_path is None:
-            raise ValueError("Training configuration not provided.")
-        if dataset_parameter_path is None:
-            raise ValueError("Dataset configuration not provided.")
-        if potential_parameter_path is None:
-            raise ValueError("Potential configuration not provided.")
-
-        training_config_dict = toml.load(training_parameter_path)["training"]
-        dataset_config_dict = toml.load(dataset_parameter_path)["dataset"]
-        potential_config_dict = toml.load(potential_parameter_path)["potential"]
-
-        # if the runtime_parameter_path is not defined, let us see if runtime variables are passed
-        if runtime_parameter_path is None:
-            use_runtime_variables_instead_of_toml = True
-            log.info(
-                "Runtime configuration not provided. The code will try to use runtime arguments."
+        if training_parameter_path:
+            training_config_dict = toml.load(training_parameter_path).get(
+                "training", {}
             )
-            # we can just create a dict with the runtime variables; the pydantic model will then validate them
-            runtime_config_dict = {
-                "save_dir": save_dir,
-                "experiment_name": experiment_name,
-                "local_cache_dir": local_cache_dir,
-                "checkpoint_path": checkpoint_path,
-                "log_every_n_steps": log_every_n_steps,
-                "simulation_environment": simulation_environment,
-                "accelerator": accelerator,
-                "devices": devices,
-                "number_of_nodes": number_of_nodes,
-            }
-        else:
-            runtime_config_dict = toml.load(runtime_parameter_path)["runtime"]
+        if dataset_parameter_path:
+            dataset_config_dict = toml.load(dataset_parameter_path).get("dataset", {})
+        if potential_parameter_path:
+            potential_config_dict = toml.load(potential_parameter_path).get(
+                "potential", {}
+            )
+        if runtime_parameter_path:
+            runtime_config_dict = toml.load(runtime_parameter_path).get("runtime", {})
 
+    # Override runtime configuration with command-line arguments if provided
+    runtime_overrides = {
+        "accelerator": accelerator,
+        "devices": devices,
+        "number_of_nodes": number_of_nodes,
+        "experiment_name": experiment_name,
+        "save_dir": save_dir,
+        "local_cache_dir": local_cache_dir,
+        "checkpoint_path": checkpoint_path,
+        "log_every_n_steps": log_every_n_steps,
+        "simulation_environment": simulation_environment,
+    }
+
+    for key, value in runtime_overrides.items():
+        if value is not None:
+            runtime_config_dict[key] = value
+
+    # Load and instantiate the data classes with the merged configuration
     from modelforge.potential import _Implemented_NNP_Parameters
     from modelforge.dataset.dataset import DatasetParameters
     from modelforge.train.parameters import TrainingParameters, RuntimeParameters
@@ -1292,45 +1294,12 @@ def read_config(
     dataset_parameters = DatasetParameters(**dataset_config_dict)
     training_parameters = TrainingParameters(**training_config_dict)
     runtime_parameters = RuntimeParameters(**runtime_config_dict)
-    potential_parameter_paths = PotentialParameters(**potential_config_dict)
-
-    # if accelerator, devices, or number_of_nodes are provided, override the runtime_defaults parameters
-    # note, since these are being set in the runtime data model, they will be validated by the model
-    # if we use the runtime variables instead of the toml file, these have already been set so we can skip this step.
-
-    if use_runtime_variables_instead_of_toml == False:
-        if accelerator:
-            runtime_parameters.accelerator = accelerator
-            log.info(f"Using accelerator: {accelerator}")
-        if devices:
-            runtime_parameters.device_index = devices
-            log.info(f"Using device index: {devices}")
-        if number_of_nodes:
-            runtime_parameters.number_of_nodes = number_of_nodes
-            log.info(f"Using number of nodes: {number_of_nodes}")
-        if experiment_name:
-            runtime_parameters.experiment_name = experiment_name
-            log.info(f"Using experiment name: {experiment_name}")
-        if save_dir:
-            runtime_parameters.save_dir = save_dir
-            log.info(f"Using save directory: {save_dir}")
-        if local_cache_dir:
-            runtime_parameters.local_cache_dir = local_cache_dir
-            log.info(f"Using local cache directory: {local_cache_dir}")
-        if checkpoint_path:
-            runtime_parameters.checkpoint_path = checkpoint_path
-            log.info(f"Using checkpoint path: {checkpoint_path}")
-        if log_every_n_steps:
-            runtime_parameters.log_every_n_steps = log_every_n_steps
-            log.info(f"Logging every {log_every_n_steps} steps.")
-        if simulation_environment:
-            runtime_parameters.simulation_environment = simulation_environment
-            log.info(f"Using simulation environment: {simulation_environment}")
+    potential_parameter = PotentialParameters(**potential_config_dict)
 
     return (
         training_parameters,
         dataset_parameters,
-        potential_parameter_paths,
+        potential_parameter,
         runtime_parameters,
     )
 

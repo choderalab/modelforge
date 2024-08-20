@@ -176,7 +176,7 @@ class FromPerAtomToPerMoleculeMeanSquaredError(Error):
 
 class PerMoleculeMeanSquaredError(Error):
     """
-    Calculates the per-molecule mean squared error. 
+    Calculates the per-molecule mean squared error.
     """
 
     def __init__(self, scale_by_number_of_atoms: bool = True):

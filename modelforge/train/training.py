@@ -40,6 +40,15 @@ class Error(nn.Module, ABC):
     Class representing the error calculation for predicted and true values.
     """
 
+    def __init__(self, scale_by_number_of_atoms: bool = True):
+
+        super().__init__()
+        if not scale_by_number_of_atoms:
+            # If scaling is not desired, override the method to just return the input error unchanged
+            self.scale_by_number_of_atoms = (
+                lambda error, atomic_subsystem_counts, prefactor=1: error
+            )
+
     @abstractmethod
     def calculate_error(
         self, predicted: torch.Tensor, true: torch.Tensor
@@ -103,6 +112,9 @@ class FromPerAtomToPerMoleculeMeanSquaredError(Error):
     Calculates the per-atom error and aggregates it to per-molecule mean squared error.
     """
 
+    def __init__(self, scale_by_number_of_atoms: bool = True):
+        super().__init__(scale_by_number_of_atoms)
+
     def calculate_error(
         self,
         per_atom_prediction: torch.Tensor,
@@ -164,9 +176,11 @@ class FromPerAtomToPerMoleculeMeanSquaredError(Error):
 
 class PerMoleculeMeanSquaredError(Error):
     """
-    Calculates the per-molecule mean squared error. Note that the
-    error is divided by the number of atoms in the molecule, to remove any bias due to the number of atoms.
+    Calculates the per-molecule mean squared error. 
     """
+
+    def __init__(self, scale_by_number_of_atoms: bool = True):
+        super().__init__(scale_by_number_of_atoms)
 
     def forward(
         self,
@@ -216,7 +230,7 @@ class PerMoleculeMeanSquaredError(Error):
 
 class Loss(nn.Module):
 
-    _SUPPORTED_PROPERTIES = ["per_molecule_energy", "per_atom_force"]
+    _SUPPORTED_PROPERTIES = ["per_atom_energy", "per_molecule_energy", "per_atom_force"]
 
     def __init__(self, loss_porperty: List[str], weight: Dict[str, float]):
         """
@@ -245,9 +259,17 @@ class Loss(nn.Module):
         for prop, w in weight.items():
             if prop in self._SUPPORTED_PROPERTIES:
                 if prop == "per_atom_force":
-                    self.loss[prop] = FromPerAtomToPerMoleculeMeanSquaredError()
+                    self.loss[prop] = FromPerAtomToPerMoleculeMeanSquaredError(
+                        scale_by_number_of_atoms=True
+                    )
+                elif prop == "per_atom_energy":
+                    self.loss[prop] = PerMoleculeMeanSquaredError(
+                        scale_by_number_of_atoms=True
+                    )  # FIXME: this is currently not working
                 elif prop == "per_molecule_energy":
-                    self.loss[prop] = PerMoleculeMeanSquaredError()
+                    self.loss[prop] = PerMoleculeMeanSquaredError(
+                        scale_by_number_of_atoms=False
+                    )
                 self.register_buffer(prop, torch.tensor(w))
             else:
                 raise NotImplementedError(f"Loss type {prop} not implemented.")

@@ -139,7 +139,6 @@ def test_error_calculation(single_batch_with_batchsize_16_with_force):
     F_error = error(predicted_F, true_F, data)
 
     # compare error (mean squared error scaled by number of atoms in the molecule)
-
     scaled_error = (
         torch.linalg.vector_norm(predicted_F - true_F, dim=1, keepdim=True) ** 2
     )
@@ -190,7 +189,6 @@ def test_loss(single_batch_with_batchsize_16_with_force):
                 - prediction["per_molecule_energy_true"]
             ).pow(2)
         )
-        / batch.metadata.atomic_subsystem_counts.unsqueeze(1)
     )
     assert torch.allclose(loss_output["per_molecule_energy/mse"], E_loss)
 

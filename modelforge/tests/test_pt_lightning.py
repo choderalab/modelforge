@@ -8,4 +8,3 @@ def test_datamodule():
         name="QM9",
         batch_size=512,
     )
-

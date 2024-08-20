@@ -51,4 +51,4 @@ def test_download_download(dataset_name, version, prep_temp_dir):
     data = _ImplementedDatasets.get_dataset_class(dataset_name)(
         version_select=version, local_cache_dir=local_cache_dir, force_download=True
     )
-    data._download()
+    e

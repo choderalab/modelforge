@@ -68,6 +68,9 @@ class QM9Curation(DatasetCuration):
         self.dataset_md5_checksum = data_inputs[self.version_select][
             "dataset_md5_checksum"
         ]
+        self.dataset_filename = data_inputs[self.version_select]["dataset_filename"]
+        self.dataset_length = data_inputs[self.version_select]["dataset_length"]
+
         logger.debug(
             f"Dataset: {self.version_select} version: {data_inputs[self.version_select]['version']}"
         )
@@ -380,7 +383,9 @@ class QM9Curation(DatasetCuration):
         17  cal/mol/K   Heat capacity at 298.15K
 
         """
-        import qcelemental as qcel
+        from modelforge.utils.io import import_
+
+        qcel = import_("qcelemental")
         from modelforge.utils.misc import str_to_float
 
         with open(file_name, "r") as file:
@@ -638,23 +643,21 @@ class QM9Curation(DatasetCuration):
                 "max_records and total_conformers cannot be set at the same time."
             )
 
-        from modelforge.utils.remote import download_from_figshare
+        from modelforge.utils.remote import download_from_url
 
         url = self.dataset_download_url
 
         # download the dataset
-        self.name = download_from_figshare(
+        download_from_url(
             url=url,
             md5_checksum=self.dataset_md5_checksum,
             output_path=self.local_cache_dir,
+            output_filename=self.dataset_filename,
+            length=self.dataset_length,
             force_download=force_download,
         )
         # clear out the data array before we process
         self._clear_data()
-
-        # process the rest of the dataset
-        if self.name is None:
-            raise Exception("Failed to retrieve name of file from figshare.")
 
         # untar the dataset
         from modelforge.utils.misc import extract_tarred_file
@@ -663,7 +666,7 @@ class QM9Curation(DatasetCuration):
         # creating a directory called qm9_xyz_files to hold the contents
         extract_tarred_file(
             input_path_dir=self.local_cache_dir,
-            file_name=self.name,
+            file_name=self.dataset_filename,
             output_path_dir=f"{self.local_cache_dir}/qm9_xyz_files",
             mode="r:bz2",
         )

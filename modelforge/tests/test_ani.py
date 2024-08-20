@@ -80,8 +80,24 @@ def setup_two_methanes():
     return ani_species, coordinates, device, nnp_input
 
 
+def test_init():
+    from modelforge.potential.ani import ANI2x
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
+
+    # read default parameters
+    config = load_configs_into_pydantic_models("ani2x", "qm9")
+
+    # initialize model
+    model = ANI2x(
+        **config["potential"].model_dump()["core_parameter"],
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
+    )
+
+
 @pytest.mark.xfail
-def test_torchani_ani():
+def test_forward_and_backward_using_torchani():
     # Test torchani ANI implementation
     # Test forward pass and backpropagation through network
 
@@ -93,34 +109,44 @@ def test_torchani_ani():
 
     energy = model((species, coordinates)).energies
     derivative = torch.autograd.grad(energy.sum(), coordinates)[0]
-    force = -derivative
+    per_atom_force = -derivative
 
 
-def test_modelforge_ani_forward_and_backward_pass():
+def test_forward_and_backward():
     # Test modelforge ANI implementation
     # Test forward pass and backpropagation through network
     from modelforge.potential.ani import ANI2x
-    from modelforge.tests.test_models import load_configs
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
     import torch
 
     # read default parameters
-    config = load_configs("ani2x_without_ase", "qm9")
-    # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
+    config = load_configs_into_pydantic_models("ani2x", "qm9")
 
     _, _, _, mf_input = setup_two_methanes()
     device = torch.device("cpu")
-    model = ANI2x(**potential_parameter).to(device=device)
+
+    # initialize model
+    model = ANI2x(
+        **config["potential"].model_dump()["core_parameter"],
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
+    ).to(device=device)
     energy = model(mf_input)
-    derivative = torch.autograd.grad(energy["E"].sum(), mf_input.positions)[0]
-    force = -derivative
+    derivative = torch.autograd.grad(
+        energy["per_molecule_energy"].sum(), mf_input.positions
+    )[0]
+    per_atom_force = -derivative
 
 
-def test_compare_rsf():
-    # Compare the ANI radial symmetry function
-    # to the output of the modelforge radial symmetry function
+def test_representation():
+    # Compare the reference radial symmetry function
+    # against the the implemented radial symmetry function
     import torch
-    from modelforge.potential.utils import AniRadialSymmetryFunction, CosineCutoff
+    from modelforge.potential.utils import (
+        AniRadialBasisFunction,
+        CosineAttenuationFunction,
+    )
     from openff.units import unit
     from .precalculated_values import (
         provide_reference_values_for_test_ani_test_compare_rsf,
@@ -133,23 +159,26 @@ def test_compare_rsf():
     radial_dist_divisions = 8
 
     # NOTE: we pass in Angstrom to ANI and in nanometer to mf
-    rsf = AniRadialSymmetryFunction(
+    rsf = AniRadialBasisFunction(
         number_of_radial_basis_functions=radial_dist_divisions,
         max_distance=radial_cutoff * unit.angstrom,
         min_distance=radial_start * unit.angstrom,
     )
-    r_mf = rsf(d_ij / 10)  # torch.Size([5,1, 8]) # NOTE: nanometer
-    cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom)
+    calculated_rsf = rsf(d_ij / 10)  # torch.Size([5,1, 8]) # NOTE: nanometer
+    cutoff_module = CosineAttenuationFunction(radial_cutoff * unit.angstrom)
 
     rcut_ij = cutoff_module(d_ij / 10)  # torch.Size([5]) # NOTE: nanometer
-    r_ani = provide_reference_values_for_test_ani_test_compare_rsf()
-    r_mf = r_mf * rcut_ij
-    assert torch.allclose(r_mf, r_ani, rtol=1e-4)
+    reference_rsf = provide_reference_values_for_test_ani_test_compare_rsf()
+    calculated_rsf = calculated_rsf * rcut_ij
+    assert torch.allclose(calculated_rsf, reference_rsf, rtol=1e-4)
 
 
-def test_compute_rsf_with_diagonal_batching():
+def test_representation_with_diagonal_batching():
     import torch
-    from modelforge.potential.utils import AniRadialSymmetryFunction, CosineCutoff
+    from modelforge.potential.utils import (
+        AniRadialBasisFunction,
+        CosineAttenuationFunction,
+    )
     from openff.units import unit
     from modelforge.potential.models import Pairlist
     from .precalculated_values import (
@@ -172,35 +201,35 @@ def test_compute_rsf_with_diagonal_batching():
     # ------------ Modelforge calculation ----------#
     device = torch.device("cpu")
 
-    radial_symmetry_function = AniRadialSymmetryFunction(
+    radial_symmetry_function = AniRadialBasisFunction(
         radial_dist_divisions,
         radial_cutoff * unit.angstrom,
         radial_start * unit.angstrom,
     ).to(device=device)
 
-    cutoff_module = CosineCutoff(radial_cutoff * unit.angstrom).to(device=device)
+    cutoff_module = CosineAttenuationFunction(radial_cutoff * unit.angstrom).to(
+        device=device
+    )
     rcut_ij = cutoff_module(d_ij)
 
-    radial_symmetry_feature_vector_mf = radial_symmetry_function(d_ij)
-    radial_symmetry_feature_vector_mf = radial_symmetry_feature_vector_mf * rcut_ij
+    calculated_rbf_output = radial_symmetry_function(d_ij)
+    calculated_rbf_output = calculated_rbf_output * rcut_ij
 
     # test that both ANI and MF obtain the same radial symmetry outpu
-    ani_rsf, ani_d_ij = (
+    reference_rbf_output, ani_d_ij = (
         provide_reference_values_for_test_ani_test_compute_rsf_with_diagonal_batching()
     )
-    assert torch.allclose(radial_symmetry_feature_vector_mf, ani_rsf, atol=1e-4)
+    assert torch.allclose(calculated_rbf_output, reference_rbf_output, atol=1e-4)
     assert torch.allclose(
         ani_d_ij, d_ij.squeeze(1) * 10, atol=1e-4
     )  # NOTE: unit mismatch
 
-    assert radial_symmetry_feature_vector_mf.shape == torch.Size(
-        [20, radial_dist_divisions]
-    )
+    assert calculated_rbf_output.shape == torch.Size([20, radial_dist_divisions])
 
 
 def test_compare_angular_symmetry_features():
-    # Compare the Modelforge angular symmetry function
-    # against the original torchani implementation
+    # Compare the calculated angular symmetry function output
+    # against the reference angular symmetry functino output
 
     import torch
     from modelforge.potential.utils import AngularSymmetryFunction, triple_by_molecule
@@ -240,11 +269,11 @@ def test_compare_angular_symmetry_features():
 
     # ref value
     from .precalculated_values import (
-        provide_input_for_test_ani_test_compare_angular_symmetry_features,
+        provide_input_for_test_test_compare_angular_symmetry_features,
     )
 
-    angular_feature_vector_ani = (
-        provide_input_for_test_ani_test_compare_angular_symmetry_features()
+    reference_angular_feature_vector = (
+        provide_input_for_test_test_compare_angular_symmetry_features()
     )
 
     # set up modelforge angular features
@@ -255,17 +284,30 @@ def test_compare_angular_symmetry_features():
         angle_sections=4,
     )
     # NOTE: ANI works with Angstrom, modelforge with nanometer
-    vec12 = vec12 / 10
     # NOTE: ANI operates on a [nr_of_molecules, nr_of_atoms, 3] tensor
-    angular_feature_vector_mf = asf(vec12)
+    calculated_angular_feature_vector = asf(vec12 / 10)
     # make sure that the output is the same
-    assert angular_feature_vector_ani.size() == angular_feature_vector_mf.size()
-    assert torch.allclose(
-        angular_feature_vector_ani, angular_feature_vector_mf, atol=1e-4
+    assert (
+        calculated_angular_feature_vector.size()
+        == reference_angular_feature_vector.size()
+    )
+
+    # NOTE: the order of the angular_feature_vector is not guaranteed
+    # as the triple_by_molecule function  used to prepare the inputs does not use stable sorting.
+    # When stable sorting is used, the output is identical across platforms, but will not be
+    # used here as it is slower and the order of the output is not important in practrice.
+    # As such, to check for equivalence in a way that is not order dependent, we can just consider the sum.
+    assert torch.isclose(
+        torch.sum(calculated_angular_feature_vector),
+        torch.sum(reference_angular_feature_vector),
+        atol=1e-4,
     )
 
 
 def test_compare_aev():
+    """
+    Compare the atomic enviornment vector generated by the reference implementation (torchani) and modelforge for the same input
+    """
     import torch
     from .precalculated_values import provide_input_for_test_ani_test_compare_aev
 
@@ -276,26 +318,34 @@ def test_compare_aev():
     from modelforge.potential import ANI2x
 
     # read default parameters
-    from modelforge.tests.test_models import load_configs
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
     # read default parameters
-    config = load_configs("ani2x_without_ase", "qm9")
+    config = load_configs_into_pydantic_models("ani2x", "qm9")
 
     # Extract parameters
-    potential_parameter = config["potential"].get("potential_parameter", {})
 
-    mf_model = ANI2x(**potential_parameter)
+    mf_model = ANI2x(
+        **config["potential"].model_dump()["core_parameter"],
+        postprocessing_parameter=config["potential"].model_dump()[
+            "postprocessing_parameter"
+        ],
+    )
     # perform input checks
-    mf_model.input_preparation._input_checks(mf_input)
+    mf_model.compute_interacting_pairs._input_checks(mf_input)
     # prepare the input for the forward pass
-    pairlist_output = mf_model.input_preparation.prepare_inputs(mf_input)
+    pairlist_output = mf_model.compute_interacting_pairs.prepare_inputs(mf_input)
     nnp_input = mf_model.core_module._model_specific_input_preparation(
         mf_input, pairlist_output
     )
-    representation = mf_model.core_module.ani_representation_module(nnp_input)
+    representation_module_output = mf_model.core_module.ani_representation_module(
+        nnp_input
+    )
 
-    tochani_aev = provide_input_for_test_ani_test_compare_aev()
+    reference_aev = provide_input_for_test_ani_test_compare_aev()
     # test for equivalence
-    assert torch.Size([5, 1008]) == representation.aevs.shape
+    assert torch.Size([5, 1008]) == representation_module_output.aevs.shape
     # compare a selected subsection
-    assert torch.allclose(tochani_aev, representation.aevs[::2, :50:5], atol=1e-4)
+    assert torch.allclose(
+        reference_aev, representation_module_output.aevs[::2, :50:5], atol=1e-4
+    )

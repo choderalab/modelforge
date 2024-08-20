@@ -1,3 +1,7 @@
+"""
+Module of miscellaneous utilities.
+"""
+
 from typing import Literal
 
 import torch
@@ -6,21 +10,24 @@ from modelforge.dataset.dataset import DataModule
 
 
 def visualize_model(
-    dm: DataModule, model_name: Literal["ANI2x", "PhysNet", "SchNet", "PaiNN", "SAKE"]
+    dm: DataModule,
+    potential_name: Literal["ANI2x", "PhysNet", "SchNet", "PaiNN", "SAKE"],
 ):
     # visualize the compute graph
-    from torchviz import make_dot
+    from modelforge.utils.io import import_
+
+    torchviz = import_("torchviz")
     from modelforge.potential import NeuralNetworkPotentialFactory
 
-    inference_model = NeuralNetworkPotentialFactory.generate_model(
-        "inference", model_name
+    inference_model = NeuralNetworkPotentialFactory.generate_potential(
+        "inference", potential_name
     )
 
     nnp_input = next(iter(dm.train_dataloader())).nnp_input
     yhat = inference_model(nnp_input)
-    make_dot(yhat, params=dict(list(inference_model.named_parameters()))).render(
-        f"compute_graph_{inference_model.__class__.__name__}", format="png"
-    )
+    torchviz.make_dot(
+        yhat, params=dict(list(inference_model.named_parameters()))
+    ).render(f"compute_graph_{inference_model.__class__.__name__}", format="png")
 
 
 class Welford:
@@ -302,7 +309,6 @@ class OpenWithLock:
         return self._file_handle
 
     def __exit__(self, *args):
-
         # unlock the file and close the file stream
         # import fcntl
         # fcntl.flock(self._file_handle.fileno(), fcntl.LOCK_UN)

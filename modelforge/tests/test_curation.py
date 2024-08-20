@@ -1618,7 +1618,10 @@ def test_ani2x(prep_temp_dir):
 
 def test_spice1_openff_test_fetching(prep_temp_dir):
     from tqdm import tqdm
-    from sqlitedict import SqliteDict
+    from modelforge.utils.io import import_
+
+    SqliteDict = import_("sqlitedict").SqliteDict
+    # from sqlitedict import SqliteDict
 
     local_path_dir = str(prep_temp_dir)
     local_database_name = "test.sqlite"

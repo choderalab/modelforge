@@ -1,4 +1,10 @@
-from openff.units import unit, Quantity
+"""
+Module that handles unit system definitions/conversion.
+"""
+
+from typing import Union
+
+from openff.units import unit
 
 # define new context for converting energy (e.g., hartree)
 # to energy/mol (e.g., kJ/mol)
@@ -37,8 +43,28 @@ chem_context.add_transformation(
 )
 
 
-def _convert(val):
-    """Convert a string representation of a openff unit to a unit.Quantity"""
+def _convert_str_to_unit(val: Union[unit.Quantity, str]) -> unit.Quantity:
+    """Convert a string representation of an OpenFF unit to a unit.Quantity
+
+    If the input is already a unit.Quantity, it is returned as is.
+    Parameters
+    ----------
+    val : Union[unit.Quantity, str]
+        The value to convert to a unit.Quantity
+
+    Returns
+    -------
+    unit.Quantity
+        The value and unit as a unit.Quantity
+
+    Examples
+    --------
+    >>> _convert_str_to_unit("1.0 * kilocalorie / mole")
+    Quantity(value=1.0, unit=kilocalorie/mole)
+    >>> _convert_str_to_unit(unit.Quantity(1.0, unit.kilocalorie / unit.mole))
+    Quantity(value=1.0, unit=kilocalorie/mole)
+
+    """
     if isinstance(val, str):
         return unit.Quantity(val)
     return val

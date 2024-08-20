@@ -1,3 +1,7 @@
+"""
+Data class for handling SPICE 1 dataset at the OpenForceField level of theory.
+"""
+
 from typing import List
 
 from .dataset import HDF5Dataset
@@ -60,11 +64,11 @@ class SPICE1OpenFFDataset(HDF5Dataset):
     from modelforge.utils import PropertyNames
 
     _property_names = PropertyNames(
-        Z="atomic_numbers",
-        R="geometry",
+        atomic_numbers="atomic_numbers",
+        positions="geometry",
         E="dft_total_energy",
         F="dft_total_force",
-        Q="mbis_charges",
+        total_charge="mbis_charges",
     )
 
     _available_properties = [

@@ -1,3 +1,5 @@
 [dataset]
 dataset_name = "SPICE1_OPENFF"
 version_select = "nc_1000_v0"
+num_workers = 4
+pin_memory = true

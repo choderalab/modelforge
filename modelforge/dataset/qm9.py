@@ -1,3 +1,7 @@
+"""
+Data class for handling QM9 data.
+"""
+
 from typing import List
 
 from .dataset import HDF5Dataset
@@ -35,8 +39,8 @@ class QM9Dataset(HDF5Dataset):
     from modelforge.utils import PropertyNames
 
     _property_names = PropertyNames(
-        Z="atomic_numbers",
-        R="geometry",
+        atomic_numbers="atomic_numbers",
+        positions="geometry",
         E="internal_energy_at_0K",  # Q="charges"
     )
 

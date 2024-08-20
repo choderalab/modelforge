@@ -176,6 +176,10 @@ def test_loss(single_batch_with_batchsize_16_with_force):
     # pass prediction through loss module
     loss_output = loss(prediction, batch)
     # let's recalculate the loss (NOTE: we scale the loss by the number of atoms)
+    # --------------------------------------------- #
+    # make sure that both have gradients
+    assert prediction["per_molecule_energy_predict"].requires_grad
+    assert prediction["per_atom_force_predict"].requires_grad
 
     # --------------------------------------------- #
     # first, calculate E_loss

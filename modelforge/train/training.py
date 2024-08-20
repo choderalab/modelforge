@@ -406,7 +406,7 @@ class CalculateProperties(torch.nn.Module):
         grad = torch.autograd.grad(
             per_molecule_energy_predict.sum(),
             nnp_input.positions,
-            create_graph=False,
+            create_graph=True,
             retain_graph=True,
         )[0]
         per_atom_force_predict = -1 * grad  # Forces are the negative gradient of energy

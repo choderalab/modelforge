@@ -108,8 +108,8 @@ def test_train_from_single_toml_file():
 def test_error_calculation(single_batch_with_batchsize_16_with_force):
     # test the different Loss classes
     from modelforge.train.training import (
-        FromPerAtomToPerMoleculeMeanSquaredError,
-        PerMoleculeMeanSquaredError,
+        FromPerAtomToPerMoleculeSquaredError,
+        PerMoleculeSquaredError,
     )
 
     # generate data
@@ -122,7 +122,7 @@ def test_error_calculation(single_batch_with_batchsize_16_with_force):
     predicted_F = true_F + torch.rand_like(true_F) * 10
 
     # test error for property with shape (nr_of_molecules, 1)
-    error = PerMoleculeMeanSquaredError()
+    error = PerMoleculeSquaredError()
     E_error = error(predicted_E, true_E, data)
 
     # compare output (mean squared error scaled by number of atoms in the molecule)
@@ -135,7 +135,7 @@ def test_error_calculation(single_batch_with_batchsize_16_with_force):
     assert torch.allclose(E_error, reference_E_error)
 
     # test error for property with shape (nr_of_atoms, 3)
-    error = FromPerAtomToPerMoleculeMeanSquaredError()
+    error = FromPerAtomToPerMoleculeSquaredError()
     F_error = error(predicted_F, true_F, data)
 
     # compare error (mean squared error scaled by number of atoms in the molecule)

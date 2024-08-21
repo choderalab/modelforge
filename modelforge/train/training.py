@@ -25,10 +25,10 @@ from modelforge.dataset.dataset import DataModule
 
 __all__ = [
     "Error",
-    "FromPerAtomToPerMoleculeMeanSquaredError",
+    "FromPerAtomToPerMoleculeSquaredError",
     "Loss",
     "LossFactory",
-    "PerMoleculeMeanSquaredError",
+    "PerMoleculeSquaredError",
     "ModelTrainer",
     "create_error_metrics",
     "ModelTrainer",
@@ -107,7 +107,7 @@ class Error(nn.Module, ABC):
         return scaled_by_number_of_atoms
 
 
-class FromPerAtomToPerMoleculeMeanSquaredError(Error):
+class FromPerAtomToPerMoleculeSquaredError(Error):
     """
     Calculates the per-atom error and aggregates it to per-molecule mean squared error.
     """
@@ -170,11 +170,11 @@ class FromPerAtomToPerMoleculeMeanSquaredError(Error):
             batch.metadata.atomic_subsystem_counts,
             prefactor=per_atom_prediction.shape[-1],
         )
-        # return the average
-        return torch.mean(per_molecule_square_error_scaled)
+
+        return per_molecule_square_error_scaled
 
 
-class PerMoleculeMeanSquaredError(Error):
+class PerMoleculeSquaredError(Error):
     """
     Calculates the per-molecule mean squared error.
     """
@@ -214,8 +214,7 @@ class PerMoleculeMeanSquaredError(Error):
             batch.metadata.atomic_subsystem_counts,
         )
 
-        # return the average
-        return torch.mean(per_molecule_square_error_scaled)
+        return per_molecule_square_error_scaled
 
     def calculate_error(
         self,
@@ -259,15 +258,15 @@ class Loss(nn.Module):
         for prop, w in weight.items():
             if prop in self._SUPPORTED_PROPERTIES:
                 if prop == "per_atom_force":
-                    self.loss[prop] = FromPerAtomToPerMoleculeMeanSquaredError(
+                    self.loss[prop] = FromPerAtomToPerMoleculeSquaredError(
                         scale_by_number_of_atoms=True
                     )
                 elif prop == "per_atom_energy":
-                    self.loss[prop] = PerMoleculeMeanSquaredError(
+                    self.loss[prop] = PerMoleculeSquaredError(
                         scale_by_number_of_atoms=True
                     )  # FIXME: this is currently not working
                 elif prop == "per_molecule_energy":
-                    self.loss[prop] = PerMoleculeMeanSquaredError(
+                    self.loss[prop] = PerMoleculeSquaredError(
                         scale_by_number_of_atoms=False
                     )
                 self.register_buffer(prop, torch.tensor(w))
@@ -638,27 +637,32 @@ class TrainingAdapter(pL.LightningModule):
             The loss tensor computed for the current training step.
         """
 
-        # calculate energy and forces
+        # calculate energy and forces, Note that `predict_target` is a
+        # dictionary containing the predicted and true values for energy and
+        # force`
         predict_target = self.calculate_predictions(batch, self.potential)
 
-        # calculate the loss
+        # calculate the loss (for every entry in predict_target the squared
+        # error is calculated)
         loss_dict = self.loss(predict_target, batch)
 
-        # Update and log training error
-        self._update_metrics(self.train_error, predict_target)
+        # Update and log training error (if requested)
+        if self.log_on_training_step:
+            self._update_metrics(self.train_error, predict_target)
 
         # log the loss (this includes the individual contributions that the loss contains)
         for key, loss in loss_dict.items():
             self.log(
                 f"loss/{key}",
-                loss,
+                torch.mean(loss),
                 on_step=False,
                 prog_bar=True,
                 on_epoch=True,
                 sync_dist=True,
+                batch_size=batch.batch_size(),
             )
 
-        return loss_dict["total_loss"]
+        return torch.mean(loss_dict["total_loss"])
 
     @torch.enable_grad()
     def validation_step(self, batch: "BatchData", batch_idx: int) -> None:

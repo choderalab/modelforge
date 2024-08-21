@@ -713,7 +713,8 @@ def test_numpy_dataset_assignment(dataset_name):
 
 
 def test_energy_postprocessing():
-    # setup test dataset
+    # test that the mean and stddev of the dataset 
+    # are correct
     from modelforge.dataset.dataset import DataModule
 
     # test the self energy calculation on the QM9 dataset

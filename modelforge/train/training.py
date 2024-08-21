@@ -651,12 +651,12 @@ class TrainingAdapter(pL.LightningModule):
         for key, loss in loss_dict.items():
             self.log(
                 f"loss/{key}",
-                torch.mean(loss),
+                loss,
                 on_step=False,
                 prog_bar=True,
                 on_epoch=True,
-                batch_size=1,
-            )  # batch size is 1 because the mean of the batch is logged
+                sync_dist=True,
+            )
 
         return loss_dict["total_loss"]
 
@@ -790,7 +790,9 @@ class TrainingAdapter(pL.LightningModule):
                     metrics[name] = metric.compute()
                     metric.reset()
             # log dict, print val metrics to console
-            self.log_dict(metrics, on_epoch=True, prog_bar=(phase == "val"))
+            self.log_dict(
+                metrics, on_epoch=True, prog_bar=(phase == "val"), sync_dist=True
+            )
 
     def configure_optimizers(self):
         """

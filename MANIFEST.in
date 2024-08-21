@@ -1,3 +1,5 @@
 include CODE_OF_CONDUCT.md
 
+include modelforge/dataset/yaml_files/*.yaml
+
 global-exclude *.py[cod] __pycache__ *.so

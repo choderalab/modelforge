@@ -1,3 +1,8 @@
 include CODE_OF_CONDUCT.md
 
+include modelforge/dataset/yaml_files/*.yaml
+include modelforge/curation/yaml_files/*.yaml
+include modelforge/tests/data/potential_defaults/*.toml
+include modelforge/tests/data/training_defaults/*.toml
+
 global-exclude *.py[cod] __pycache__ *.so

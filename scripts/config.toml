@@ -2,11 +2,11 @@
 potential_name = "SchNet"
 
 [potential.core_parameter]
-number_of_radial_basis_functions = 20
+number_of_radial_basis_functions = 32
 maximum_interaction_radius = "5.0 angstrom"
-number_of_interaction_modules = 3
-number_of_filters = 32
-shared_interactions = false
+number_of_interaction_modules = 5
+number_of_filters = 64
+shared_interactions = true
 
 [potential.core_parameter.activation_function_parameter]
 activation_function_name = "ShiftedSoftplus"
@@ -14,7 +14,7 @@ activation_function_name = "ShiftedSoftplus"
 [potential.core_parameter.featurization]
 properties_to_featurize = ['atomic_number']
 maximum_atomic_number = 101
-number_of_per_atom_features = 32
+number_of_per_atom_features = 128
 
 [potential.postprocessing_parameter]
 [potential.postprocessing_parameter.per_atom_energy]
@@ -31,10 +31,10 @@ num_workers = 4
 pin_memory = true
 
 [training]
-number_of_epochs = 4
+number_of_epochs = 1000
 remove_self_energies = true
-batch_size = 128
-lr = 1e-3
+batch_size = 16
+lr = 0.5e-3
 monitor = "val/per_molecule_energy/rmse"
 
 [training.experiment_logger]
@@ -56,11 +56,10 @@ monitor = "val/per_molecule_energy/rmse"
 interval = "epoch"
 
 [training.loss_parameter]
-loss_property = ['per_molecule_energy', 'per_atom_force'] # use
+loss_property = ['per_molecule_energy'] # use
 
 [training.loss_parameter.weight]
-per_molecule_energy = 0.999 #NOTE: reciprocal units
-per_atom_force = 0.001
+per_molecule_energy = 1.0 #NOTE: reciprocal units
 
 
 [training.early_stopping]

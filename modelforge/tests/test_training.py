@@ -80,7 +80,7 @@ def get_trainer(potential_name: str, dataset_name: str):
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
-@pytest.mark.parametrize("dataset_name", ["QM9"])
+@pytest.mark.parametrize("dataset_name", ["QM9", "SPICE2"])
 def test_train_with_lightning(potential_name, dataset_name):
     """
     Test that we can train, save and load checkpoints.
@@ -105,7 +105,7 @@ def test_train_from_single_toml_file():
     read_config_and_train(config_path)
 
 
-def test_error_calculation(single_batch_with_batchsize_16_with_force):
+def test_error_calculation(single_batch_with_batchsize):
     # test the different Loss classes
     from modelforge.train.training import (
         FromPerAtomToPerMoleculeSquaredError,
@@ -113,7 +113,9 @@ def test_error_calculation(single_batch_with_batchsize_16_with_force):
     )
 
     # generate data
-    data = single_batch_with_batchsize_16_with_force
+    batch = single_batch_with_batchsize(batch_size=16, dataset_name="PHALKETHOH")
+
+    data = batch
     true_E = data.metadata.E
     true_F = data.metadata.F
 
@@ -158,10 +160,10 @@ def test_error_calculation(single_batch_with_batchsize_16_with_force):
     assert torch.allclose(F_error, reference_F_error)
 
 
-def test_loss(single_batch_with_batchsize_16_with_force):
+def test_loss(single_batch_with_batchsize):
     from modelforge.train.training import Loss
 
-    batch = single_batch_with_batchsize_16_with_force
+    batch = single_batch_with_batchsize(batch_size=16, dataset_name="PHALKETHOH")
 
     loss_porperty = ["per_molecule_energy", "per_atom_force"]
     loss_weights = {"per_molecule_energy": 0.5, "per_atom_force": 0.5}

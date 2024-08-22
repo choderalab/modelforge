@@ -458,10 +458,11 @@ from modelforge.potential import _Implemented_NNPs
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
-def test_dataset_neighborlist(potential_name, single_batch_with_batchsize_64):
+def test_dataset_neighborlist(potential_name, single_batch_with_batchsize):
     """Test the neighborlist."""
 
-    nnp_input = single_batch_with_batchsize_64.nnp_input
+    batch = single_batch_with_batchsize(64, 'QM9')
+    nnp_input = batch.nnp_input
 
     # test that the neighborlist is correctly generated
     from modelforge.tests.test_models import load_configs_into_pydantic_models

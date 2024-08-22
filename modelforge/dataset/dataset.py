@@ -1343,7 +1343,7 @@ class DataModule(pl.LightningDataModule):
         from tqdm import tqdm
 
         # remove the self energies if requested
-        log.info("Precalculating pairlist for dataset")
+        log.info("Performing per datapoint operations in the dataset dataset")
         if self.remove_self_energies:
             log.info("Removing self energies from the dataset")
 

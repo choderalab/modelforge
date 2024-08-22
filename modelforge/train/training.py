@@ -267,7 +267,7 @@ class Loss(nn.Module):
                     )  # FIXME: this is currently not working
                 elif prop == "per_molecule_energy":
                     self.loss[prop] = PerMoleculeSquaredError(
-                        scale_by_number_of_atoms=False
+                        scale_by_number_of_atoms=True
                     )
                 self.register_buffer(prop, torch.tensor(w))
             else:
@@ -376,20 +376,18 @@ from modelforge.train.parameters import RuntimeParameters, TrainingParameters
 
 class CalculateProperties(torch.nn.Module):
 
-    def __init__(self):
+    def __init__(self, requested_properties: List[str]):
         """
         A utility class for calculating properties such as energies and forces from batches using a neural network model.
 
-        Methods
-        -------
-        _get_forces(batch: BatchData, energies: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]
-            Computes the forces from a given batch using the model.
-        _get_energies(batch: BatchData, model: Type[torch.nn.Module]) -> Dict[str, torch.Tensor]
-            Computes the energies from a given batch using the model.
-        forward(batch: BatchData, model: Type[torch.nn.Module]) -> Dict[str, torch.Tensor]
-            Computes the energies and forces from a given batch using the model.
+        Parameters
+
         """
         super().__init__()
+        self.requested_properties = requested_properties
+        self.include_force = False
+        if "force" in self.requested_properties:
+            self.include_force = True
 
     def _get_forces(
         self, batch: "BatchData", energies: Dict[str, torch.Tensor]
@@ -490,7 +488,10 @@ class CalculateProperties(torch.nn.Module):
             The true and predicted energies and forces from the dataset and the model.
         """
         energies = self._get_energies(batch, model)
-        forces = self._get_forces(batch, energies)
+        if self.include_force:
+            forces = self._get_forces(batch, energies)
+        else:
+            forces = {}
         return {**energies, **forces}
 
 
@@ -542,7 +543,9 @@ class TrainingAdapter(pL.LightningModule):
             potential_seed=potential_seed,
         )
 
-        self.calculate_predictions = CalculateProperties()
+        self.calculate_predictions = CalculateProperties(
+            training_parameter.loss_parameter.loss_property
+        )
         self.optimizer = training_parameter.optimizer
         self.learning_rate = training_parameter.lr
         self.lr_scheduler = training_parameter.lr_scheduler
@@ -659,10 +662,12 @@ class TrainingAdapter(pL.LightningModule):
                 prog_bar=True,
                 on_epoch=True,
                 sync_dist=True,
-                batch_size=batch.batch_size(),
+                batch_size=1,  # batch.batch_size(),
             )
 
-        return torch.mean(loss_dict["total_loss"])
+        loss = torch.mean(loss_dict["total_loss"])
+
+        return loss
 
     @torch.enable_grad()
     def validation_step(self, batch: "BatchData", batch_idx: int) -> None:
@@ -685,10 +690,15 @@ class TrainingAdapter(pL.LightningModule):
         batch.nnp_input.positions.requires_grad_(True)
         # calculate energy and forces
         predict_target = self.calculate_predictions(batch, self.potential)
-        # calculate the loss
-        loss = self.loss(predict_target, batch)
-        # log the loss
         self._update_metrics(self.val_error, predict_target)
+        # calculate the MSE with torch
+        l1 = torch.nn.functional.l1_loss(
+            predict_target["per_molecule_energy_predict"],
+            predict_target["per_molecule_energy_true"],
+        )
+
+        self.mae_validation_set += l1.item()
+        self.nr_of_batches += 1
 
     @torch.enable_grad()
     def test_step(self, batch: "BatchData", batch_idx: int) -> None:
@@ -797,6 +807,11 @@ class TrainingAdapter(pL.LightningModule):
             self.log_dict(
                 metrics, on_epoch=True, prog_bar=(phase == "val"), sync_dist=True
             )
+
+            mse_loss = self.mse_training_set / self.nr_of_batches
+            mae_val = self.mae_validation_set / self.nr_of_batches
+
+            a = 7
 
     def configure_optimizers(self):
         """

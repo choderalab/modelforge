@@ -96,35 +96,15 @@ def single_batch(batch_size: int = 64, dataset_name="QM9"):
 
 
 @pytest.fixture(scope="session")
-def single_batch_with_batchsize_64():
+def single_batch_with_batchsize():
     """
     Utility fixture to create a single batch of data for testing.
     """
-    return single_batch(batch_size=64)
 
+    def _create_single_batch(batch_size: int, dataset_name: str):
+        return single_batch(batch_size=batch_size, dataset_name=dataset_name)
 
-@pytest.fixture(scope="session")
-def single_batch_with_batchsize_1():
-    """
-    Utility fixture to create a single batch of data for testing.
-    """
-    return single_batch(batch_size=1)
-
-
-@pytest.fixture(scope="session")
-def single_batch_with_batchsize_2_with_force():
-    """
-    Utility fixture to create a single batch of data for testing.
-    """
-    return single_batch(batch_size=2, dataset_name="PHALKETHOH")
-
-
-@pytest.fixture(scope="session")
-def single_batch_with_batchsize_16_with_force():
-    """
-    Utility fixture to create a single batch of data for testing.
-    """
-    return single_batch(batch_size=16, dataset_name="PHALKETHOH")
+    return _create_single_batch
 
 
 def initialize_dataset(

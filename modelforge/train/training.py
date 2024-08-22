@@ -273,7 +273,9 @@ class Loss(nn.Module):
             else:
                 raise NotImplementedError(f"Loss type {prop} not implemented.")
 
-    def forward(self, predict_target: Dict[str, torch.Tensor], batch):
+    def forward(
+        self, predict_target: Dict[str, torch.Tensor], batch
+    ) -> Dict[str, torch.Tensor]:
         """
         Calculates the combined loss for the specified properties.
 
@@ -341,7 +343,7 @@ from torch.optim import Optimizer
 from torch.nn import ModuleDict
 
 
-def create_error_metrics(loss_properties: List[str]) -> ModuleDict:
+def create_error_metrics(loss_properties: List[str], loss: bool = False) -> ModuleDict:
     """
     Creates a ModuleDict of MetricCollections for the given loss properties.
 
@@ -361,14 +363,36 @@ def create_error_metrics(loss_properties: List[str]) -> ModuleDict:
     )
     from torchmetrics import MetricCollection
 
-    return ModuleDict(
-        {
-            prop: MetricCollection(
-                [MeanAbsoluteError(), MeanSquaredError(squared=False)]
-            )
-            for prop in loss_properties
-        }
-    )
+    if loss:
+        return ModuleDict({prop: MeanLossMetric() for prop in loss_properties})
+    else:
+        return ModuleDict(
+            {
+                prop: MetricCollection(
+                    [MeanAbsoluteError(), MeanSquaredError(squared=False)]
+                )
+                for prop in loss_properties
+            }
+        )
+
+
+import torchmetrics
+
+
+class MeanLossMetric(torchmetrics.Metric):
+    def __init__(self):
+        super().__init__()
+        self.add_state("sum_loss", default=torch.tensor(0.0), dist_reduce_fx="sum")
+        self.add_state("total_batches", default=torch.tensor(0), dist_reduce_fx="sum")
+
+    def update(self, loss: torch.Tensor, batch_size: int):
+        # Accumulate the loss sum and batch count
+        self.sum_loss += loss.sum()
+        self.total_batches += batch_size
+
+    def compute(self):
+        # Compute the mean loss
+        return self.sum_loss / self.total_batches
 
 
 from modelforge.train.parameters import RuntimeParameters, TrainingParameters
@@ -573,6 +597,10 @@ class TrainingAdapter(pL.LightningModule):
         self.train_error = create_error_metrics(
             training_parameter.loss_parameter.loss_property
         )
+        # Initialize your custom metric
+        self.train_loss_metric = create_error_metrics(
+            training_parameter.loss_parameter.loss_property, loss=True
+        )
 
     def forward(self, batch: "BatchData") -> Dict[str, torch.Tensor]:
         """
@@ -645,29 +673,18 @@ class TrainingAdapter(pL.LightningModule):
         # force`
         predict_target = self.calculate_predictions(batch, self.potential)
 
-        # calculate the loss (for every entry in predict_target the squared
-        # error is calculated)
+        # Calculate the loss
         loss_dict = self.loss(predict_target, batch)
 
-        # Update and log training error (if requested)
-        if self.log_on_training_step:
-            self._update_metrics(self.train_error, predict_target)
-
-        # log the loss (this includes the individual contributions that the loss contains)
-        for key, loss in loss_dict.items():
+        # Update the custom metric with the different loss components
+        for key, value in loss_dict.items():
+            self.train_loss_metric[key].update(value, batch.batch_size())
+            # Log the metric instead of the mean loss directly
             self.log(
-                f"loss/{key}",
-                torch.mean(loss),
-                on_step=False,
-                prog_bar=True,
-                on_epoch=True,
-                sync_dist=True,
-                batch_size=1,  # batch.batch_size(),
+                "loss/{key}", self.train_loss_metric[key], on_epoch=True, prog_bar=True
             )
 
-        loss = torch.mean(loss_dict["total_loss"])
-
-        return loss
+        return torch.mean(loss_dict["total_loss"])
 
     @torch.enable_grad()
     def validation_step(self, batch: "BatchData", batch_idx: int) -> None:
@@ -691,7 +708,6 @@ class TrainingAdapter(pL.LightningModule):
         # calculate energy and forces
         predict_target = self.calculate_predictions(batch, self.potential)
         self._update_metrics(self.val_error, predict_target)
-
 
     @torch.enable_grad()
     def test_step(self, batch: "BatchData", batch_idx: int) -> None:
@@ -798,9 +814,10 @@ class TrainingAdapter(pL.LightningModule):
                     metric.reset()
             # log dict, print val metrics to console
             self.log_dict(
-                metrics, on_epoch=True, prog_bar=(phase == "val"), sync_dist=True
+                metrics,
+                on_epoch=True,
+                prog_bar=(phase == "val"),
             )
-
 
     def configure_optimizers(self):
         """

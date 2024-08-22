@@ -270,7 +270,7 @@ class TrainingParameters(ParametersBase):
     stochastic_weight_averaging: Optional[StochasticWeightAveraging] = None
     experiment_logger: ExperimentLogger
     verbose: bool = False
-    optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam
+    optimizer: Type[torch.optim.Optimizer] = torch.optim.AdamW
 
 
 ### Runtime Parameters

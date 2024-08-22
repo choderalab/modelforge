@@ -691,14 +691,7 @@ class TrainingAdapter(pL.LightningModule):
         # calculate energy and forces
         predict_target = self.calculate_predictions(batch, self.potential)
         self._update_metrics(self.val_error, predict_target)
-        # calculate the MSE with torch
-        l1 = torch.nn.functional.l1_loss(
-            predict_target["per_molecule_energy_predict"],
-            predict_target["per_molecule_energy_true"],
-        )
 
-        self.mae_validation_set += l1.item()
-        self.nr_of_batches += 1
 
     @torch.enable_grad()
     def test_step(self, batch: "BatchData", batch_idx: int) -> None:
@@ -808,10 +801,6 @@ class TrainingAdapter(pL.LightningModule):
                 metrics, on_epoch=True, prog_bar=(phase == "val"), sync_dist=True
             )
 
-            mse_loss = self.mse_training_set / self.nr_of_batches
-            mae_val = self.mae_validation_set / self.nr_of_batches
-
-            a = 7
 
     def configure_optimizers(self):
         """

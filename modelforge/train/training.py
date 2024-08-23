@@ -829,7 +829,7 @@ class TrainingAdapter(pL.LightningModule):
             for property, metrics_dict in error_dict.items():
                 for name, metric in metrics_dict.items():
                     name = f"{phase}/{property}/{conv.get(name, name)}"
-                    self.log(name, metric.compute(), prog_bar=True)
+                    self.log(name, metric.compute(), prog_bar=True, sync_dist=True)
                     metric.reset()
 
     def configure_optimizers(self):

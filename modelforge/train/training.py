@@ -2,26 +2,32 @@
 This module contains classes and functions for training neural network potentials using PyTorch Lightning.
 """
 
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-from typing import Any, Union, Dict, Type, Optional, List
-import torch
-from loguru import logger as log
-from modelforge.dataset.dataset import BatchData, NNPInput
-import torchmetrics
-from torch import nn
 from abc import ABC, abstractmethod
-from modelforge.dataset.dataset import DatasetParameters
+from typing import Any, Dict, List, Optional, Type, Union
+
+import lightning.pytorch as pL
+import torch
+import torchmetrics
+from lightning import Trainer
+from loguru import logger as log
+from torch import nn
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+
+from modelforge.dataset.dataset import (
+    BatchData,
+    DataModule,
+    DatasetParameters,
+    NNPInput,
+)
 from modelforge.potential.parameters import (
     ANI2xParameters,
-    PhysNetParameters,
-    SchNetParameters,
     PaiNNParameters,
+    PhysNetParameters,
     SAKEParameters,
+    SchNetParameters,
     TensorNetParameters,
 )
-from lightning import Trainer
-import lightning.pytorch as pL
-from modelforge.dataset.dataset import DataModule
+from modelforge.train.parameters import RuntimeParameters, TrainingParameters
 
 __all__ = [
     "Error",
@@ -306,7 +312,7 @@ class Loss(nn.Module):
             # add total loss
             loss = loss + (self.weight[prop] * loss_)
             # save loss
-            loss_dict[f"{prop}/mse"] = loss_
+            loss_dict[f"{prop}"] = loss_
 
         # add total loss to results dict and return
         loss_dict["total_loss"] = loss
@@ -339,8 +345,8 @@ class LossFactory(object):
         return Loss(loss_property, weight)
 
 
-from torch.optim import Optimizer
 from torch.nn import ModuleDict
+from torch.optim import Optimizer
 
 
 def create_error_metrics(loss_properties: List[str], loss: bool = False) -> ModuleDict:
@@ -351,22 +357,25 @@ def create_error_metrics(loss_properties: List[str], loss: bool = False) -> Modu
     ----------
     loss_properties : List[str]
         List of loss properties for which to create the metrics.
-
+    loss : bool, optional
+        If True, only the loss metric is created, by default False.
     Returns
     -------
     ModuleDict
         A dictionary where keys are loss properties and values are MetricCollections.
     """
-    from torchmetrics.regression import (
-        MeanAbsoluteError,
-        MeanSquaredError,
-    )
     from torchmetrics import MetricCollection
+    from torchmetrics.regression import MeanAbsoluteError, MeanSquaredError
+    from torchmetrics.aggregation import MeanMetric
 
     if loss:
-        return ModuleDict({prop: MeanLossMetric() for prop in loss_properties})
+        metric_dict = ModuleDict(
+            {prop: MetricCollection([MeanMetric()]) for prop in loss_properties}
+        )
+        metric_dict["total_loss"] = MetricCollection([MeanMetric()])
+        return metric_dict
     else:
-        return ModuleDict(
+        metric_dict = ModuleDict(
             {
                 prop: MetricCollection(
                     [MeanAbsoluteError(), MeanSquaredError(squared=False)]
@@ -374,12 +383,13 @@ def create_error_metrics(loss_properties: List[str], loss: bool = False) -> Modu
                 for prop in loss_properties
             }
         )
+        return metric_dict
 
 
-import torchmetrics
+from torchmetrics import Metric
 
 
-class MeanLossMetric(torchmetrics.Metric):
+class MeanLossMetric(Metric):
     def __init__(self):
         super().__init__()
         self.add_state("sum_loss", default=torch.tensor(0.0), dist_reduce_fx="sum")
@@ -393,9 +403,6 @@ class MeanLossMetric(torchmetrics.Metric):
     def compute(self):
         # Compute the mean loss
         return self.sum_loss / self.total_batches
-
-
-from modelforge.train.parameters import RuntimeParameters, TrainingParameters
 
 
 class CalculateProperties(torch.nn.Module):
@@ -597,8 +604,9 @@ class TrainingAdapter(pL.LightningModule):
         self.train_error = create_error_metrics(
             training_parameter.loss_parameter.loss_property
         )
-        # Initialize your custom metric
-        self.train_loss_metric = create_error_metrics(
+
+        # Initialize loss  metric
+        self.loss_metric = create_error_metrics(
             training_parameter.loss_parameter.loss_property, loss=True
         )
 
@@ -676,13 +684,9 @@ class TrainingAdapter(pL.LightningModule):
         # Calculate the loss
         loss_dict = self.loss(predict_target, batch)
 
-        # Update the custom metric with the different loss components
-        for key, value in loss_dict.items():
-            self.train_loss_metric[key].update(value, batch.batch_size())
-            # Log the metric instead of the mean loss directly
-            self.log(
-                "loss/{key}", self.train_loss_metric[key], on_epoch=True, prog_bar=True
-            )
+        # Update the loss metric with the different loss components
+        for key, metric in loss_dict.items():
+            self.loss_metric[key].update(metric, batch.batch_size())
 
         return torch.mean(loss_dict["total_loss"])
 
@@ -793,6 +797,7 @@ class TrainingAdapter(pL.LightningModule):
             errors = [
                 ("train", self.train_error),
                 ("val", self.val_error),
+                ("loss", self.loss_metric),
             ]
         elif log_mode == "test":
             errors = [
@@ -809,7 +814,7 @@ class TrainingAdapter(pL.LightningModule):
             metrics = {}
             for property, metrics_dict in error_dict.items():
                 for name, metric in metrics_dict.items():
-                    name = f"{phase}/{property}/{conv[name]}"
+                    name = f"{phase}/{property}/{conv.get(name, name)}"
                     metrics[name] = metric.compute()
                     metric.reset()
             # log dict, print val metrics to console
@@ -974,8 +979,8 @@ class ModelTrainer:
         DataModule
             Configured DataModule instance.
         """
-        from modelforge.dataset.utils import REGISTERED_SPLITTING_STRATEGIES
         from modelforge.dataset.dataset import DataModule
+        from modelforge.dataset.utils import REGISTERED_SPLITTING_STRATEGIES
 
         dm = DataModule(
             name=self.dataset_parameter.dataset_name,
@@ -1074,8 +1079,8 @@ class ModelTrainer:
             List of configured callbacks.
         """
         from lightning.pytorch.callbacks import (
-            ModelCheckpoint,
             EarlyStopping,
+            ModelCheckpoint,
             StochasticWeightAveraging,
         )
 
@@ -1309,9 +1314,9 @@ def read_config(
             runtime_config_dict[key] = value
 
     # Load and instantiate the data classes with the merged configuration
-    from modelforge.potential import _Implemented_NNP_Parameters
     from modelforge.dataset.dataset import DatasetParameters
-    from modelforge.train.parameters import TrainingParameters, RuntimeParameters
+    from modelforge.potential import _Implemented_NNP_Parameters
+    from modelforge.train.parameters import RuntimeParameters, TrainingParameters
 
     potential_name = potential_config_dict["potential_name"]
     PotentialParameters = (
@@ -1409,9 +1414,7 @@ def read_config_and_train(
         log_every_n_steps=log_every_n_steps,
         simulation_environment=simulation_environment,
     )
-    from modelforge.potential.models import (
-        NeuralNetworkPotentialFactory,
-    )
+    from modelforge.potential.models import NeuralNetworkPotentialFactory
 
     model = NeuralNetworkPotentialFactory.generate_potential(
         use="training",

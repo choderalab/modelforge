@@ -790,6 +790,7 @@ class TrainingAdapter(pL.LightningModule):
         conv = {
             "MeanAbsoluteError": "mae",
             "MeanSquaredError": "rmse",
+            "MeanMetric": "mse",  # NOTE: MeanMetric is the MSE since we accumulate the squared error
         }  # NOTE: MeanSquaredError(squared=False) is RMSE
 
         # Log all accumulated metrics for train and val phases

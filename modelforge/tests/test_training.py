@@ -85,7 +85,11 @@ def test_train_with_lightning(potential_name, dataset_name):
     """
     Test that we can train, save and load checkpoints.
     """
+    # train potential
 
+    # SKIP if potential is ANI and dataset is SPICE2
+    if potential_name == "ANI" and dataset_name == "SPICE2":
+        pytest.skip("ANI potential is not compatible with SPICE2 dataset")
     get_trainer(potential_name, dataset_name).train_potential().save_checkpoint(
         "test.chp"
     )  # save checkpoint

@@ -417,7 +417,7 @@ class CalculateProperties(torch.nn.Module):
         super().__init__()
         self.requested_properties = requested_properties
         self.include_force = False
-        if "force" in self.requested_properties:
+        if "per_atom_force" in self.requested_properties:
             self.include_force = True
 
     def _get_forces(
@@ -822,7 +822,7 @@ class TrainingAdapter(pL.LightningModule):
             self.log_dict(
                 metrics,
                 on_epoch=True,
-                prog_bar=(phase == "val"),
+                prog_bar=(phase == "val" or phase == "loss"),
             )
 
     def configure_optimizers(self):

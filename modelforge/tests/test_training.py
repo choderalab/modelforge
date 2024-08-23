@@ -10,7 +10,9 @@ IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 from modelforge.potential import NeuralNetworkPotentialFactory, _Implemented_NNPs
 
 
-def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
+def load_configs_into_pydantic_models(
+    potential_name: str, dataset_name: str, training_toml: str
+):
     from importlib import resources
 
     import toml
@@ -26,7 +28,7 @@ def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
         resources.files(potential_defaults) / f"{potential_name.lower()}.toml"
     )
     dataset_path = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
-    training_path = resources.files(training_defaults) / "default.toml"
+    training_path = resources.files(training_defaults) / f"{training_toml}.toml"
     runtime_path = resources.files(runtime_defaults) / "runtime.toml"
 
     training_config_dict = toml.load(training_path)
@@ -58,8 +60,10 @@ def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
     }
 
 
-def get_trainer(potential_name: str, dataset_name: str):
-    config = load_configs_into_pydantic_models(potential_name, dataset_name)
+def get_trainer(potential_name: str, dataset_name: str, training_toml: str):
+    config = load_configs_into_pydantic_models(
+        potential_name, dataset_name, training_toml
+    )
 
     # Extract parameters
     potential_parameter = config["potential"]
@@ -81,21 +85,24 @@ def get_trainer(potential_name: str, dataset_name: str):
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
 @pytest.mark.parametrize("dataset_name", ["QM9", "SPICE2"])
-def test_train_with_lightning(potential_name, dataset_name):
+@pytest.mark.parametrize("training", ["with_force", "without_force"])
+def test_train_with_lightning(training, potential_name, dataset_name):
     """
     Test that we can train, save and load checkpoints.
     """
     # train potential
-
+    training_toml = "default_with_force" if training == "with_force" else "default"
     # SKIP if potential is ANI and dataset is SPICE2
-    if potential_name == "ANI" and dataset_name == "SPICE2":
+    if "ANI" in potential_name  and dataset_name == "SPICE2":
         pytest.skip("ANI potential is not compatible with SPICE2 dataset")
-    get_trainer(potential_name, dataset_name).train_potential().save_checkpoint(
+    get_trainer(
+        potential_name, dataset_name, training_toml
+    ).train_potential().save_checkpoint(
         "test.chp"
     )  # save checkpoint
 
     # continue training from checkpoint
-    get_trainer(potential_name, dataset_name).train_potential()
+    get_trainer(potential_name, dataset_name, training_toml).train_potential()
 
 
 def test_train_from_single_toml_file():

@@ -93,7 +93,7 @@ def test_train_with_lightning(training, potential_name, dataset_name):
     # train potential
     training_toml = "default_with_force" if training == "with_force" else "default"
     # SKIP if potential is ANI and dataset is SPICE2
-    if "ANI" in potential_name  and dataset_name == "SPICE2":
+    if "ANI" in potential_name and dataset_name == "SPICE2":
         pytest.skip("ANI potential is not compatible with SPICE2 dataset")
     get_trainer(
         potential_name, dataset_name, training_toml
@@ -103,6 +103,8 @@ def test_train_with_lightning(training, potential_name, dataset_name):
 
     # continue training from checkpoint
     get_trainer(potential_name, dataset_name, training_toml).train_potential()
+
+    assert False
 
 
 def test_train_from_single_toml_file():

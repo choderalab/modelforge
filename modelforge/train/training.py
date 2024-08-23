@@ -574,6 +574,19 @@ class TrainingAdapter(pL.LightningModule):
             potential_seed=potential_seed,
         )
 
+        # def check_strides(module, grad_input, grad_output):
+        #     print(f"Layer: {module.__class__.__name__}")
+
+        #     for i, grad in enumerate(grad_input):
+        #         if grad is not None:
+        #             print(
+        #                 f"Grad input {i}: size {grad.size()}, strides {grad.stride()}"
+        #             )
+
+        # # Register the hook
+        # for module in self.potential.modules():
+        #     module.register_backward_hook(check_strides)
+
         self.calculate_predictions = CalculateProperties(
             training_parameter.loss_parameter.loss_property
         )
@@ -688,7 +701,8 @@ class TrainingAdapter(pL.LightningModule):
         for key, metric in loss_dict.items():
             self.loss_metric[key].update(metric, batch.batch_size())
 
-        return torch.mean(loss_dict["total_loss"])
+        loss = torch.mean(loss_dict["total_loss"]).contiguous()
+        return loss
 
     @torch.enable_grad()
     def validation_step(self, batch: "BatchData", batch_idx: int) -> None:

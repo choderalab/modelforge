@@ -812,18 +812,11 @@ class TrainingAdapter(pL.LightningModule):
             if phase == "train" and not self.log_on_training_step:
                 continue
 
-            metrics = {}
             for property, metrics_dict in error_dict.items():
                 for name, metric in metrics_dict.items():
                     name = f"{phase}/{property}/{conv.get(name, name)}"
-                    metrics[name] = metric.compute()
+                    self.log(name, metric.compute(), prog_bar=True)
                     metric.reset()
-            # log dict, print val metrics to console
-            self.log_dict(
-                metrics,
-                on_epoch=True,
-                prog_bar=(phase == "val" or phase == "loss"),
-            )
 
     def configure_optimizers(self):
         """

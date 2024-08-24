@@ -463,7 +463,7 @@ class CalculateProperties(torch.nn.Module):
 
         return {
             "per_atom_force_true": per_atom_force_true,
-            "per_atom_force_predict": per_atom_force_predict,
+            "per_atom_force_predict": per_atom_force_predict.contiguous(),
         }
 
     def _get_energies(
@@ -1127,6 +1127,10 @@ class ModelTrainer:
             Configured Trainer instance.
         """
         from lightning import Trainer
+
+        # if devices is a list
+        if isinstance(self.runtime_parameter.devices, list):
+            strategy = "ddp"
 
         trainer = Trainer(
             max_epochs=self.training_parameter.number_of_epochs,

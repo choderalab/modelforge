@@ -175,7 +175,7 @@ class FromPerAtomToPerMoleculeSquaredError(Error):
             per_molecule_squared_error,
             batch.metadata.atomic_subsystem_counts,
             prefactor=per_atom_prediction.shape[-1],
-        )
+        ).contiguous()
 
         return per_molecule_square_error_scaled
 
@@ -542,6 +542,7 @@ class TrainingAdapter(pL.LightningModule):
         dataset_statistic: Dict[str, float],
         training_parameter: TrainingParameters,
         potential_seed: Optional[int] = None,
+        debugging: bool = True,
     ):
         """
         Initializes the TrainingAdapter with the specified model and training configuration.
@@ -576,16 +577,21 @@ class TrainingAdapter(pL.LightningModule):
 
         def check_strides(module, grad_input, grad_output):
             print(f"Layer: {module.__class__.__name__}")
-
             for i, grad in enumerate(grad_input):
                 if grad is not None:
                     print(
                         f"Grad input {i}: size {grad.size()}, strides {grad.stride()}"
                     )
+            for i, grad in enumerate(grad_output):
+                if grad is not None:
+                    print(
+                        f"Grad output {i}: size {grad.size()}, strides {grad.stride()}"
+                    )
 
-        # Register the hook
-        for module in self.potential.modules():
-            module.register_backward_hook(check_strides)
+        # Register the full backward hook
+        if debugging is True:
+            for module in self.potential.modules():
+                module.register_full_backward_hook(check_strides)
 
         self.calculate_predictions = CalculateProperties(
             training_parameter.loss_parameter.loss_property

@@ -582,11 +582,22 @@ class TrainingAdapter(pL.LightningModule):
                     print(
                         f"Grad input {i}: size {grad.size()}, strides {grad.stride()}"
                     )
-            for i, grad in enumerate(grad_output):
-                if grad is not None:
-                    print(
-                        f"Grad output {i}: size {grad.size()}, strides {grad.stride()}"
-                    )
+            # Handle grad_output
+            if isinstance(grad_output, tuple) and isinstance(grad_output[0], dict):
+                # If the output is a dict wrapped in a tuple, extract the dict
+                grad_output = grad_output[0]
+            if isinstance(grad_output, dict):
+                for key, grad in grad_output.items():
+                    if grad is not None:
+                        print(
+                            f"Grad output [{key}]: size {grad.size()}, strides {grad.stride()}"
+                        )
+            else:
+                for i, grad in enumerate(grad_output):
+                    if grad is not None:
+                        print(
+                            f"Grad output {i}: size {grad.size()}, strides {grad.stride()}"
+                        )
 
         # Register the full backward hook
         if debugging is True:

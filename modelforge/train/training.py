@@ -169,7 +169,7 @@ class FromPerAtomToPerMoleculeSquaredError(Error):
             0,
             batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
             per_atom_squared_error,
-        )
+        ).contiguous()
         # divide by number of atoms
         per_molecule_square_error_scaled = self.scale_by_number_of_atoms(
             per_molecule_squared_error,
@@ -574,18 +574,18 @@ class TrainingAdapter(pL.LightningModule):
             potential_seed=potential_seed,
         )
 
-        # def check_strides(module, grad_input, grad_output):
-        #     print(f"Layer: {module.__class__.__name__}")
+        def check_strides(module, grad_input, grad_output):
+            print(f"Layer: {module.__class__.__name__}")
 
-        #     for i, grad in enumerate(grad_input):
-        #         if grad is not None:
-        #             print(
-        #                 f"Grad input {i}: size {grad.size()}, strides {grad.stride()}"
-        #             )
+            for i, grad in enumerate(grad_input):
+                if grad is not None:
+                    print(
+                        f"Grad input {i}: size {grad.size()}, strides {grad.stride()}"
+                    )
 
-        # # Register the hook
-        # for module in self.potential.modules():
-        #     module.register_backward_hook(check_strides)
+        # Register the hook
+        for module in self.potential.modules():
+            module.register_backward_hook(check_strides)
 
         self.calculate_predictions = CalculateProperties(
             training_parameter.loss_parameter.loss_property

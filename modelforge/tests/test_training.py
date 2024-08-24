@@ -80,6 +80,8 @@ def get_trainer(potential_name: str, dataset_name: str, training_toml: str):
     )
 
 
+
+
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
@@ -90,11 +92,13 @@ def test_train_with_lightning(training, potential_name, dataset_name):
     """
     Test that we can train, save and load checkpoints.
     """
-    # train potential
+    # get correct training toml
     training_toml = "default_with_force" if training == "with_force" else "default"
     # SKIP if potential is ANI and dataset is SPICE2
     if "ANI" in potential_name and dataset_name == "SPICE2":
         pytest.skip("ANI potential is not compatible with SPICE2 dataset")
+
+    # train potential
     get_trainer(
         potential_name, dataset_name, training_toml
     ).train_potential().save_checkpoint(

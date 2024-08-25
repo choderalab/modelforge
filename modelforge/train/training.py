@@ -421,7 +421,7 @@ class CalculateProperties(torch.nn.Module):
             self.include_force = True
 
     def _get_forces(
-        self, batch: "BatchData", energies: Dict[str, torch.Tensor]
+        self, batch: "BatchData", energies: Dict[str, torch.Tensor], train_mode: bool
     ) -> Dict[str, torch.Tensor]:
         """
         Computes the forces from a given batch using the model.
@@ -454,11 +454,17 @@ class CalculateProperties(torch.nn.Module):
 
         # Compute the gradient (forces) from the predicted energies
         grad = torch.autograd.grad(
-            per_molecule_energy_predict.sum(),
+            per_molecule_energy_predict,
             nnp_input.positions,
-            create_graph=True,
-            retain_graph=True,
+            grad_outputs=torch.ones_like(per_molecule_energy_predict),
+            create_graph=train_mode,
+            retain_graph=train_mode,
+            allow_unused=True,
         )[0]
+
+        if grad is None:
+            raise RuntimeWarning("Force calculation did not return a gradient")
+
         per_atom_force_predict = -1 * grad  # Forces are the negative gradient of energy
 
         return {
@@ -501,7 +507,7 @@ class CalculateProperties(torch.nn.Module):
         }
 
     def forward(
-        self, batch: "BatchData", model: Type[torch.nn.Module]
+        self, batch: "BatchData", model: Type[torch.nn.Module], train_mode: bool = False
     ) -> Dict[str, torch.Tensor]:
         """
         Computes the energies and forces from a given batch using the model.
@@ -520,7 +526,7 @@ class CalculateProperties(torch.nn.Module):
         """
         energies = self._get_energies(batch, model)
         if self.include_force:
-            forces = self._get_forces(batch, energies)
+            forces = self._get_forces(batch, energies, train_mode)
         else:
             forces = {}
         return {**energies, **forces}
@@ -542,7 +548,6 @@ class TrainingAdapter(pL.LightningModule):
         dataset_statistic: Dict[str, float],
         training_parameter: TrainingParameters,
         potential_seed: Optional[int] = None,
-        debugging: bool = True,
     ):
         """
         Initializes the TrainingAdapter with the specified model and training configuration.
@@ -600,9 +605,13 @@ class TrainingAdapter(pL.LightningModule):
                         )
 
         # Register the full backward hook
-        if debugging is True:
+        if training_parameter.verbose is True:
             for module in self.potential.modules():
                 module.register_full_backward_hook(check_strides)
+
+        self.include_force = False
+        if "per_atom_force" in training_parameter.loss_parameter.loss_property:
+            self.include_force = True
 
         self.calculate_predictions = CalculateProperties(
             training_parameter.loss_parameter.loss_property
@@ -709,7 +718,9 @@ class TrainingAdapter(pL.LightningModule):
         # calculate energy and forces, Note that `predict_target` is a
         # dictionary containing the predicted and true values for energy and
         # force`
-        predict_target = self.calculate_predictions(batch, self.potential)
+        predict_target = self.calculate_predictions(
+            batch, self.potential, self.training
+        )
 
         # Calculate the loss
         loss_dict = self.loss(predict_target, batch)
@@ -721,7 +732,6 @@ class TrainingAdapter(pL.LightningModule):
         loss = torch.mean(loss_dict["total_loss"]).contiguous()
         return loss
 
-    @torch.enable_grad()
     def validation_step(self, batch: "BatchData", batch_idx: int) -> None:
         """
         Validation step to compute the RMSE/MAE across epochs.
@@ -740,11 +750,15 @@ class TrainingAdapter(pL.LightningModule):
 
         # Ensure positions require gradients for force calculation
         batch.nnp_input.positions.requires_grad_(True)
-        # calculate energy and forces
-        predict_target = self.calculate_predictions(batch, self.potential)
+        with torch.inference_mode(False):
+
+            # calculate energy and forces
+            predict_target = self.calculate_predictions(
+                batch, self.potential, self.training
+            )
+    
         self._update_metrics(self.val_error, predict_target)
 
-    @torch.enable_grad()
     def test_step(self, batch: "BatchData", batch_idx: int) -> None:
         """
         Test step to compute the RMSE loss for a given batch.
@@ -767,7 +781,10 @@ class TrainingAdapter(pL.LightningModule):
         # Ensure positions require gradients for force calculation
         batch.nnp_input.positions.requires_grad_(True)
         # calculate energy and forces
-        predict_target = self.calculate_predictions(batch, self.potential)
+        with torch.inference_mode(False):
+            predict_target = self.calculate_predictions(
+                batch, self.potential, self.training
+            )
         # Update and log metrics
         self._update_metrics(self.test_error, predict_target)
 

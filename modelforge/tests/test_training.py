@@ -80,8 +80,6 @@ def get_trainer(potential_name: str, dataset_name: str, training_toml: str):
     )
 
 
-
-
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
@@ -107,8 +105,6 @@ def test_train_with_lightning(training, potential_name, dataset_name):
 
     # continue training from checkpoint
     get_trainer(potential_name, dataset_name, training_toml).train_potential()
-
-    assert False
 
 
 def test_train_from_single_toml_file():
@@ -188,8 +184,17 @@ def test_loss(single_batch_with_batchsize):
     assert loss is not None
 
     # get trainer
-    trainer = get_trainer("schnet", "QM9")
-    prediction = trainer.model.calculate_predictions(batch, trainer.model.potential)
+    trainer = get_trainer("schnet", "QM9", "default_with_force")
+    prediction = trainer.model.calculate_predictions(
+        batch, trainer.model.potential, train_mode=True
+    )  # train_mode=True is required for gradients in force prediction
+
+    assert prediction["per_molecule_energy_predict"].size(
+        dim=0
+    ) == batch.metadata.E.size(dim=0)
+    assert prediction["per_molecule_force_predict"].size(
+        dim=0
+    ) == batch.metadata.E.size(dim=0)
 
     # pass prediction through loss module
     loss_output = loss(prediction, batch)
@@ -209,7 +214,7 @@ def test_loss(single_batch_with_batchsize):
             ).pow(2)
         )
     )
-    assert torch.allclose(loss_output["per_molecule_energy/mse"], E_loss)
+    assert torch.allclose(loss_output["per_molecule_energy"], E_loss)
 
     # --------------------------------------------- #
     # now calculate F_loss

@@ -83,7 +83,8 @@ class Error(nn.Module, ABC):
         torch.Tensor
             The calculated error.
         """
-        error = (predicted_tensor - reference_tensor).pow(2).sum(dim=1, keepdim=True)
+        squared_diff = (predicted_tensor - reference_tensor).pow(2)
+        error = squared_diff.sum(dim=1, keepdim=True)
         return error
 
     @staticmethod

@@ -192,9 +192,9 @@ def test_loss(single_batch_with_batchsize):
     assert prediction["per_molecule_energy_predict"].size(
         dim=0
     ) == batch.metadata.E.size(dim=0)
-    assert prediction["per_molecule_force_predict"].size(
+    assert prediction["per_atom_force_predict"].size(dim=0) == batch.metadata.F.size(
         dim=0
-    ) == batch.metadata.E.size(dim=0)
+    )
 
     # pass prediction through loss module
     loss_output = loss(prediction, batch)
@@ -212,9 +212,12 @@ def test_loss(single_batch_with_batchsize):
                 prediction["per_molecule_energy_predict"]
                 - prediction["per_molecule_energy_true"]
             ).pow(2)
+            / batch.metadata.atomic_subsystem_counts.unsqueeze(1)
         )
     )
-    assert torch.allclose(loss_output["per_molecule_energy"], E_loss)
+    # compare to referenc evalue obtained from Loos class
+    ref = torch.mean(loss_output["per_molecule_energy"])
+    assert torch.allclose(ref, E_loss)
 
     # --------------------------------------------- #
     # now calculate F_loss
@@ -239,15 +242,15 @@ def test_loss(single_batch_with_batchsize):
     )
 
     per_atom_force_mse = torch.mean(per_molecule_squared_error)
-    assert torch.allclose(loss_output["per_atom_force/mse"], per_atom_force_mse)
+    assert torch.allclose(torch.mean(loss_output["per_atom_force"]), per_atom_force_mse)
 
     # --------------------------------------------- #
     # let's double check that the loss is calculated correctly
     # calculate the total loss
 
     assert torch.allclose(
-        loss_weights["per_molecule_energy"] * loss_output["per_molecule_energy/mse"]
-        + loss_weights["per_atom_force"] * loss_output["per_atom_force/mse"],
+        loss_weights["per_molecule_energy"] * loss_output["per_molecule_energy"]
+        + loss_weights["per_atom_force"] * loss_output["per_atom_force"],
         loss_output["total_loss"].to(torch.float32),
     )
 

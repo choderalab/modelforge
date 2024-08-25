@@ -756,7 +756,7 @@ class TrainingAdapter(pL.LightningModule):
             predict_target = self.calculate_predictions(
                 batch, self.potential, self.training
             )
-    
+
         self._update_metrics(self.val_error, predict_target)
 
     def test_step(self, batch: "BatchData", batch_idx: int) -> None:

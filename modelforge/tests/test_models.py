@@ -450,7 +450,6 @@ def test_forward_pass(
 
     output = model(nnp_input)
 
-
     # test that we get an energie per molecule
     assert len(output["per_molecule_energy"]) == nr_of_mols
 
@@ -459,7 +458,7 @@ def test_forward_pass(
     # This has to be reflected in the atomic energies E_i, which
     # have to be equal for all hydrogens
     if "JAX" not in str(type(model)) and dataset_name == "QM9":
-    # make sure that we are correctly reducing
+        # make sure that we are correctly reducing
         ref = torch.zeros_like(output["per_molecule_energy"]).scatter_add_(
             0, nnp_input.atomic_subsystem_indices.long(), output["per_atom_energy"]
         )

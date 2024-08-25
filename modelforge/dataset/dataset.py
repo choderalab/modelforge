@@ -237,10 +237,10 @@ class BatchData:
         self.metadata = self.metadata.to(device=device, dtype=dtype)
         return self
 
-
     def batch_size(self):
         return self.metadata.E.size(dim=0)
-    
+
+
 class TorchDataset(torch.utils.data.Dataset[BatchData]):
     """
     Wraps a numpy dataset to make it compatible with PyTorch DataLoader.

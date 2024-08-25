@@ -461,7 +461,7 @@ from modelforge.potential import _Implemented_NNPs
 def test_dataset_neighborlist(potential_name, single_batch_with_batchsize):
     """Test the neighborlist."""
 
-    batch = single_batch_with_batchsize(64, 'QM9')
+    batch = single_batch_with_batchsize(64, "QM9")
     nnp_input = batch.nnp_input
 
     # test that the neighborlist is correctly generated
@@ -714,7 +714,7 @@ def test_numpy_dataset_assignment(dataset_name):
 
 
 def test_energy_postprocessing():
-    # test that the mean and stddev of the dataset 
+    # test that the mean and stddev of the dataset
     # are correct
     from modelforge.dataset.dataset import DataModule
 

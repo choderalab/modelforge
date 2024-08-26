@@ -147,7 +147,7 @@ def test_error_calculation(single_batch_with_batchsize):
         1
     )  # FIXME : fi
     reference_E_error = torch.mean(scale_squared_error)
-    assert torch.allclose(E_error, reference_E_error)
+    assert torch.allclose(torch.mean(E_error), reference_E_error)
 
     # test error for property with shape (nr_of_atoms, 3)
     error = FromPerAtomToPerMoleculeSquaredError()
@@ -170,7 +170,7 @@ def test_error_calculation(single_batch_with_batchsize):
     reference_F_error = torch.mean(
         per_mol_error / (3 * data.metadata.atomic_subsystem_counts.unsqueeze(1))
     )
-    assert torch.allclose(F_error, reference_F_error)
+    assert torch.allclose(torch.mean(F_error), reference_F_error)
 
 
 def test_loss(single_batch_with_batchsize):

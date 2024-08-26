@@ -624,7 +624,7 @@ def test_model_invariance(single_batch_with_batchsize):
         ],
     )
     # get methane input
-    batch = single_batch_with_batchsize(batch_size=1)
+    batch = single_batch_with_batchsize(batch_size=1, dataset_name="QM9")
     methane = batch.nnp_input
 
     rotation_matrix = torch.tensor([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])

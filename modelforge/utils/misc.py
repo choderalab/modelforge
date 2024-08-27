@@ -353,7 +353,7 @@ def lock_with_attribute(attribute_name):
             instance = args[0]
             # Get the lock file path from the specified attribute
             lock_file_path = getattr(instance, attribute_name)
-            with open(lock_file_path, "w") as f:
+            with open(lock_file_path, "w+") as f:
                 # Lock the file
                 lock_file(f)
 

@@ -730,7 +730,6 @@ def test_energy_postprocessing():
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         remove_self_energies=True,
         regenerate_dataset_statistic=True,
-        regenerate_processed_cache=True,
     )
     dm.prepare_data()
     dm.setup()

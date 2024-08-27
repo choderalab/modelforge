@@ -475,7 +475,6 @@ class HDF5Dataset:
         local_cache_dir: str,
         force_download: bool = False,
         regenerate_cache: bool = False,
-        regenerate_processed_cache: bool = False,
     ):
         """
         Initializes the HDF5Dataset with paths to raw and processed data files.
@@ -505,11 +504,6 @@ class HDF5Dataset:
         self.local_cache_dir = os.path.expanduser(local_cache_dir)
         self.force_download = force_download
         self.regenerate_cache = regenerate_cache
-
-        # is True if regenerate_cache is True
-        self.regenerate_processed_cache = (
-            regenerate_processed_cache or self.regenerate_cache
-        )
 
         self.hdf5data: Optional[Dict[str, List[np.ndarray]]] = None
         self.numpy_data: Optional[np.ndarray] = None
@@ -1131,6 +1125,8 @@ class DataModule(pl.LightningDataModule):
 
         # make sure we can handle a path with a ~ in it
         self.local_cache_dir = os.path.expanduser(local_cache_dir)
+        # create the local cache directory if it does not exist
+        os.makedirs(self.local_cache_dir, exist_ok=True)
         self.regenerate_cache = regenerate_cache
         # Use a logical OR to ensure regenerate_processed_cache is True when
         # regenerate_cache is True

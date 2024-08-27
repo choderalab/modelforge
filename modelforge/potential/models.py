@@ -311,24 +311,31 @@ class Pairlist(Module):
 
 class Neighborlist(Pairlist):
     """
-    Manage neighbor list calculations with a specified cutoff distance.
+    Manage neighbor list calculations with a specified cutoff distance(s).
 
     This class extends Pairlist to consider a cutoff distance for neighbor calculations.
     """
 
-    def __init__(self, cutoff: unit.Quantity, only_unique_pairs: bool = False):
+    def __init__(
+        self, cutoffs: Dict[str, unit.Quantity], only_unique_pairs: bool = False
+    ):
         """
         Initialize the Neighborlist with a specific cutoff distance.
 
         Parameters
         ----------
-        cutoff : unit.Quantity
-            Cutoff distance for neighbor calculations.
+        cutoffs : Dict[str, unit.Quantity]
+            Cutoff distances for neighbor calculations.
         only_unique_pairs : bool, optional
             If True, only unique pairs are returned (default is False).
         """
         super().__init__(only_unique_pairs=only_unique_pairs)
-        self.register_buffer("cutoff", torch.tensor(cutoff.to(unit.nanometer).m))
+
+        # self.register_buffer("cutoff", torch.tensor(cutoff.to(unit.nanometer).m))
+        self.register_buffer(
+            "cutoffs", torch.tensor([c.to(unit.nanometer).m for c in cutoffs.values()])
+        )
+        self.labels = list(cutoffs.keys())
 
     def forward(
         self,
@@ -364,16 +371,20 @@ class Neighborlist(Pairlist):
         r_ij = self.calculate_r_ij(pair_indices, positions)
         d_ij = self.calculate_d_ij(r_ij)
 
-        # Find pairs within the cutoff
-        in_cutoff = (d_ij <= self.cutoff).squeeze()
-        # Get the atom indices within the cutoff
-        pair_indices_within_cutoff = pair_indices[:, in_cutoff]
+        interacting_outputs = {}
+        for cutoff, label in zip(self.cutoffs, self.labels):
+            # Find pairs within the cutoff
+            in_cutoff = (d_ij <= cutoff).squeeze()
+            # Get the atom indices within the cutoff
+            pair_indices_within_cutoff = pair_indices[:, in_cutoff]
 
-        return PairListOutputs(
-            pair_indices=pair_indices_within_cutoff,
-            d_ij=d_ij[in_cutoff],
-            r_ij=r_ij[in_cutoff],
-        )
+            interacting_outputs[label] = PairListOutputs(
+                pair_indices=pair_indices_within_cutoff,
+                d_ij=d_ij[in_cutoff],
+                r_ij=r_ij[in_cutoff],
+            )
+
+        return interacting_outputs
 
 
 from typing import Callable, Literal, Optional, Union
@@ -666,14 +677,16 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
     distances (d_ij), and displacement vectors (r_ij) for molecular simulations.
     """
 
-    def __init__(self, cutoff: unit.Quantity, only_unique_pairs: bool = True):
+    def __init__(
+        self, cutoffs: Dict[str, unit.Quantity], only_unique_pairs: bool = True
+    ):
         """
         Initialize the ComputeInteractingAtomPairs module.
 
         Parameters
         ----------
-        cutoff : unit.Quantity
-            The cutoff distance for neighbor list calculations.
+        cutoffs : Dict[str, unit.Quantity]
+            The cutoff distance(s) for neighbor list calculations.
         only_unique_pairs : bool, optional
             Whether to only use unique pairs in the pair list calculation, by
             default True. This should be set to True for all message passing
@@ -684,7 +697,7 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
         from .models import Neighborlist
 
         self.only_unique_pairs = only_unique_pairs
-        self.calculate_distances_and_pairlist = Neighborlist(cutoff, only_unique_pairs)
+        self.calculate_distances_and_pairlist = Neighborlist(cutoffs, only_unique_pairs)
 
     def prepare_inputs(self, data: Union[NNPInput, NamedTuple]):
         """
@@ -703,7 +716,7 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
         Returns
         -------
         PairListOutputs
-            A namedtuple containing the pair indices, Euclidean distances
+            A Dict for each cutoff type, where each entry is a namedtuple containing the pair indices, Euclidean distances
             (d_ij), and displacement vectors (r_ij).
         """
         # ---------------------------
@@ -736,6 +749,7 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
                 pair_indices=pair_list.to(torch.int64),
             )
 
+        # this will return a Dict of the PairListOutputs for each cutoff we specify
         return pairlist_output
 
     def _input_checks(self, data: Union[NNPInput, NamedTuple]):
@@ -994,6 +1008,8 @@ class BaseNetwork(Module):
         postprocessing_parameter: Dict[str, Dict[str, bool]],
         dataset_statistic: Optional[Dict[str, float]],
         maximum_interaction_radius: unit.Quantity,
+        maximum_dispersion_interaction_radius: Optional[unit.Quantity] = None,
+        maximum_coulomb_interaction_radius: Optional[unit.Quantity] = None,
         potential_seed: Optional[int] = None,
     ):
         """
@@ -1006,7 +1022,11 @@ class BaseNetwork(Module):
         dataset_statistic : Optional[Dict[str, float]]
             Dataset statistics for normalization.
         maximum_interaction_radius : unit.Quantity
-            cutoff radius.
+            cutoff radius for local interactions
+        maximum_dispersion_interaction_radius : unit.Quantity, optional
+            cutoff radius for dispersion interactions.
+        maximum_coulomb_interaction_radius : unit.Quantity, optional
+            cutoff radius for Coulomb interactions.
         potential_seed : Optional[int], optional
             Value used for torch.manual_seed, by default None.
         """
@@ -1040,8 +1060,25 @@ class BaseNetwork(Module):
             raise RuntimeError(
                 "The only_unique_pairs attribute is not set in the child class. Please set it to True or False before calling super().__init__."
             )
+
+        # to handle multiple cutoffs, we will create a dictionary with the cutoffs
+        # the dictionary will make it more transparent which PairListOutputs belong to which cutoff
+
+        cutoffs = {}
+        cutoffs["maximum_interaction_radius"] = _convert_str_to_unit(
+            maximum_interaction_radius
+        )
+        if maximum_dispersion_interaction_radius is not None:
+            cutoffs["maximum_dispersion_interaction_radius"] = _convert_str_to_unit(
+                maximum_dispersion_interaction_radius
+            )
+        if maximum_coulomb_interaction_radius is not None:
+            cutoffs["maximum_coulomb_interaction_radius"] = _convert_str_to_unit(
+                maximum_coulomb_interaction_radius
+            )
+
         self.compute_interacting_pairs = ComputeInteractingAtomPairs(
-            cutoff=_convert_str_to_unit(maximum_interaction_radius),
+            cutoffs=cutoffs,
             only_unique_pairs=self.only_unique_pairs,
         )
 

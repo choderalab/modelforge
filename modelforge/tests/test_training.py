@@ -84,7 +84,7 @@ def get_trainer(potential_name: str, dataset_name: str, training_toml: str):
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
-@pytest.mark.parametrize("dataset_name", ["QM9", "SPICE2"])
+@pytest.mark.parametrize("dataset_name", ["PHALKETHOH"])
 @pytest.mark.parametrize("training", ["with_force", "without_force"])
 def test_train_with_lightning(training, potential_name, dataset_name):
     """

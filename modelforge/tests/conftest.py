@@ -51,6 +51,7 @@ def initialize_datamodule(
     remove_self_energies: bool = True,
     regression_ase: bool = False,
     regenerate_dataset_statistic: bool = False,
+    regenerate_cache: bool = True,
 ) -> DataModule:
     """
     Initialize a dataset for a given mode.
@@ -64,6 +65,7 @@ def initialize_datamodule(
         remove_self_energies=remove_self_energies,
         regression_ase=regression_ase,
         regenerate_dataset_statistic=regenerate_dataset_statistic,
+        regenerate_cache=regenerate_cache,
     )
     data_module.prepare_data()
     data_module.setup()

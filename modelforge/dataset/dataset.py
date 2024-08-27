@@ -1046,7 +1046,6 @@ class DatasetFactory:
 from openff.units import unit
 
 
-
 class DataModule(pl.LightningDataModule):
     def __init__(
         self,

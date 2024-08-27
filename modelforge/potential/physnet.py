@@ -486,7 +486,7 @@ class PhysNetCore(CoreNetwork):
         self.atomic_shift = nn.Parameter(torch.zeros(maximum_atomic_number, 2))
 
     def _model_specific_input_preparation(
-        self, data: "NNPInput", pairlist_output: "PairListOutputs"
+        self, data: NNPInput, pairlist_output: Dict[str, PairListOutputs]
     ) -> PhysNetNeuralNetworkData:
         """
         Prepare model-specific input data.
@@ -495,7 +495,7 @@ class PhysNetCore(CoreNetwork):
         ----------
         data : NNPInput
             Input data containing atomic information.
-        pairlist_output : PairListOutputs
+        pairlist_output : Dict[str, PairListOutputs]
             Output from the pairlist calculation.
 
         Returns
@@ -504,6 +504,11 @@ class PhysNetCore(CoreNetwork):
             Prepared input data for the PhysNet model.
         """
         number_of_atoms = data.atomic_numbers.shape[0]
+
+        # Note, pairlist_output is a Dict where the key corresponds to the name of the cutoff parameter
+        # e.g. "maximum_interaction_radius"
+
+        pairlist_output = pairlist_output["maximum_interaction_radius"]
 
         nnp_input = PhysNetNeuralNetworkData(
             pair_indices=pairlist_output.pair_indices,

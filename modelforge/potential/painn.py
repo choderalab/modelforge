@@ -138,7 +138,7 @@ class PaiNNCore(CoreNetwork):
         )
 
     def _model_specific_input_preparation(
-        self, data: NNPInput, pairlist_output: PairListOutputs
+        self, data: NNPInput, pairlist_output: Dict[str, PairListOutputs]
     ) -> PaiNNNeuralNetworkData:
         """
         Prepare the model-specific input for the PaiNN network.
@@ -147,8 +147,8 @@ class PaiNNCore(CoreNetwork):
         ----------
         data : NNPInput
             The input data.
-        pairlist_output : PairListOutputs
-            The pairlist output.
+        pairlist_output : dict[str, PairListOutputs]
+            The output from the pairlist.
 
         Returns
         -------
@@ -158,6 +158,11 @@ class PaiNNCore(CoreNetwork):
         # Perform atomic embedding
 
         number_of_atoms = data.atomic_numbers.shape[0]
+
+        # Note, pairlist_output is a Dict where the key corresponds to the name of the cutoff parameter
+        # e.g. "maximum_interaction_radius"
+
+        pairlist_output = pairlist_output["maximum_interaction_radius"]
 
         nnp_input = PaiNNNeuralNetworkData(
             pair_indices=pairlist_output.pair_indices,

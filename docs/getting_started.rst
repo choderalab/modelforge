@@ -149,7 +149,7 @@ Here is an example of a training routine definition:
     remove_self_energies = true  # Whether to remove self-energies from the dataset
     batch_size = 128  # Number of samples per batch
     lr = 1e-3  # Learning rate for the optimizer
-    monitor = "val/per_molecule_energy/rmse"  # Metric to monitor for early stopping and checkpointing
+    monitor_for_checkpoint = "val/per_molecule_energy/rmse"  # Metric to monitor for checkpointing
 
 
     [training.experiment_logger]

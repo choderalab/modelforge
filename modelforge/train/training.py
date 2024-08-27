@@ -387,25 +387,6 @@ def create_error_metrics(loss_properties: List[str], loss: bool = False) -> Modu
         return metric_dict
 
 
-from torchmetrics import Metric
-
-
-class MeanLossMetric(Metric):
-    def __init__(self):
-        super().__init__()
-        self.add_state("sum_loss", default=torch.tensor(0.0), dist_reduce_fx="sum")
-        self.add_state("total_batches", default=torch.tensor(0), dist_reduce_fx="sum")
-
-    def update(self, loss: torch.Tensor, batch_size: int):
-        # Accumulate the loss sum and batch count
-        self.sum_loss += loss.sum()
-        self.total_batches += batch_size
-
-    def compute(self):
-        # Compute the mean loss
-        return self.sum_loss / self.total_batches
-
-
 class CalculateProperties(torch.nn.Module):
 
     def __init__(self, requested_properties: List[str]):
@@ -1147,7 +1128,7 @@ class ModelTrainer:
         )
         checkpoint_callback = ModelCheckpoint(
             save_top_k=2,
-            monitor=self.training_parameter.monitor,
+            monitor=self.training_parameter.monitor_for_checkpoint,
             filename=checkpoint_filename,
         )
         callbacks.append(checkpoint_callback)
@@ -1170,6 +1151,7 @@ class ModelTrainer:
 
         trainer = Trainer(
             max_epochs=self.training_parameter.number_of_epochs,
+            min_epochs=self.training_parameter.min_number_of_epochs,
             num_nodes=self.runtime_parameter.number_of_nodes,
             devices=self.runtime_parameter.devices,
             accelerator=self.runtime_parameter.accelerator,

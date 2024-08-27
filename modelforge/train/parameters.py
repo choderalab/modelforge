@@ -262,7 +262,7 @@ class TrainingParameters(ParametersBase):
     remove_self_energies: bool
     batch_size: int
     lr: float
-    monitor: str
+    monitor_for_checkpoint: str
     lr_scheduler: Optional[SchedulerConfig] = None
     loss_parameter: LossParameter
     early_stopping: Optional[EarlyStopping] = None
@@ -271,6 +271,7 @@ class TrainingParameters(ParametersBase):
     experiment_logger: ExperimentLogger
     verbose: bool = False
     optimizer: Type[torch.optim.Optimizer] = torch.optim.AdamW
+    min_number_of_epochs: Union[int, None] = None
 
 
 ### Runtime Parameters

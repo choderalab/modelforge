@@ -4,7 +4,7 @@ This module contains classes and functions for managing datasets.
 
 import os
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, List, Literal, Optional, Union, NamedTuple
+from typing import TYPE_CHECKING, Dict, List, Literal, NamedTuple, Optional, Union
 
 import numpy as np
 import pytorch_lightning as pl
@@ -19,10 +19,9 @@ from modelforge.utils.prop import PropertyNames
 if TYPE_CHECKING:
     from modelforge.potential.processing import AtomicSelfEnergies
 
-
-from pydantic import BaseModel, field_validator, ConfigDict, Field
-
 from enum import Enum
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class CaseInsensitiveEnum(str, Enum):
@@ -208,8 +207,9 @@ class NNPInput:
         """Export the dataclass fields and values as a named tuple.
         Convert pytorch tensors to jax arrays."""
 
-        from dataclasses import dataclass, fields
         import collections
+        from dataclasses import dataclass, fields
+
         from modelforge.utils.io import import_
 
         convert_to_jax = import_("pytorch2jax").pytorch2jax.convert_to_jax
@@ -1042,7 +1042,6 @@ class DatasetFactory:
         return TorchDataset(data.numpy_data, data._property_names)
 
 
-from torch import nn
 from openff.units import unit
 
 
@@ -1101,6 +1100,9 @@ class DataModule(pl.LightningDataModule):
             regenerate_cache : bool, defaults to False
                 Whether to regenerate the cache.
         """
+        from modelforge.potential.models import Pairlist
+        import os
+
         super().__init__()
 
         self.name = name
@@ -1117,28 +1119,41 @@ class DataModule(pl.LightningDataModule):
         self.train_dataset = None
         self.test_dataset = None
         self.val_dataset = None
-        import os
 
         # make sure we can handle a path with a ~ in it
         self.local_cache_dir = os.path.expanduser(local_cache_dir)
         self.regenerate_cache = regenerate_cache
-        from modelforge.potential.models import Pairlist
 
         self.pairlist = Pairlist()
         self.dataset_statistic_filename = (
             f"{self.local_cache_dir}/{self.name}_dataset_statistic.toml"
         )
+        self.cache_processed_dataset_filename = f"{self.local_cache_dir}/{self.name}_{self.version_select}processed_dataset.pt"
 
     def prepare_data(
         self,
     ) -> None:
         """
-        Prepares the dataset for use. This method is responsible for the initial processing of the data such as calculating self energies, atomic energy statistics, and splitting. It is executed only once per node.
+        Prepares the dataset for use. This method is responsible for the initial
+        processing of the data such as calculating self energies, atomic energy
+        statistics, and splitting. It is executed only once per node.
         """
-        from modelforge.dataset import _ImplementedDatasets
-        import toml
+        # if the dataset has already been processed, skip this step
+        if (
+            os.path.exists(self.cache_processed_dataset_filename)
+            and not self.regenerate_cache
+        ):
+            if not os.path.exists(self.dataset_statistic_filename):
+                raise FileNotFoundError(
+                    f"Dataset statistics file {self.dataset_statistic_filename} not found. Please regenerate the cache."
+                )
+            log.info('Processed dataset already exists. Skipping "prepare_data" step.')
+            return None
 
-        dataset_class = _ImplementedDatasets.get_dataset_class(self.name)
+        # if the dataset is not already processed, process it
+        from modelforge.dataset import _ImplementedDatasets
+
+        dataset_class = _ImplementedDatasets.get_dataset_class(str(self.name))
         dataset = dataset_class(
             force_download=self.force_download,
             version_select=self.version_select,
@@ -1284,11 +1299,11 @@ class DataModule(pl.LightningDataModule):
 
     def _cache_dataset(self, torch_dataset):
         """Cache the dataset and its statistics using PyTorch's serialization."""
-        torch.save(torch_dataset, "torch_dataset.pt")
-        # sleep for 1 second to make sure that the dataset was written to disk
+        torch.save(torch_dataset, self.cache_processed_dataset_filename)
+        # sleep for 5 second to make sure that the dataset was written to disk
         import time
 
-        time.sleep(1)
+        time.sleep(5)
 
     def setup(self, stage: Optional[str] = None) -> None:
         """Sets up datasets for the train, validation, and test stages based on the stage argument."""

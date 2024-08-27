@@ -2,15 +2,18 @@
 Module of miscellaneous utilities.
 """
 
-from typing import Literal
+from typing import Literal, TYPE_CHECKING
 
 import torch
 from loguru import logger
-from modelforge.dataset.dataset import DataModule
+
+# import DataModule for typing hint
+if TYPE_CHECKING:
+    from modelforge.dataset.dataset import DataModule
 
 
 def visualize_model(
-    dm: DataModule,
+    dm: 'DataModule',
     potential_name: Literal["ANI2x", "PhysNet", "SchNet", "PaiNN", "SAKE"],
 ):
     # visualize the compute graph
@@ -314,3 +317,58 @@ class OpenWithLock:
         # fcntl.flock(self._file_handle.fileno(), fcntl.LOCK_UN)
         unlock_file(self._file_handle)
         self._file_handle.close()
+
+
+import os
+from functools import wraps
+
+
+def lock_with_attribute(attribute_name):
+    """
+    Decorator for locking a method using a lock file path stored in an instance
+    attribute. The attribute is accessed on the instance (`self`) at runtime.
+
+    Parameters
+    ----------
+    attribute_name : str
+        The name of the instance attribute that contains the lock file path.
+
+    Examples
+    --------
+    >>> from modelforge.utils.misc import lock_with_attribute
+    >>>
+    >>> class MyClass:
+    >>>     def __init__(self, lock_file):
+    >>>         self.method_lock = lock_file
+    >>>
+    >>>     @lock_with_attribute('method_lock')
+    >>>     def critical_section(self):
+    >>>         print("Executing critical section")
+    """
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Retrieve the instance (`self`)
+            instance = args[0]
+            # Get the lock file path from the specified attribute
+            lock_file_path = getattr(instance, attribute_name)
+            with open(lock_file_path, 'w') as lock_file:
+                # Lock the file
+                lock_file(lock_file)
+
+                try:
+                    # Execute the wrapped function
+                    result = func(*args, **kwargs)
+                finally:
+                    # Unlock the file
+                    unlock_file(lock_file)
+
+                    # Optionally, remove the lock file
+                    os.remove(lock_file_path)
+
+                return result
+
+        return wrapper
+
+    return decorator

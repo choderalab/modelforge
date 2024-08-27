@@ -1037,6 +1037,7 @@ class ModelTrainer:
                 seed=self.training_parameter.splitting_strategy.seed,
                 split=self.training_parameter.splitting_strategy.data_split,
             ),
+            regenerate_processed_cache=self.dataset_parameter.regenerate_processed_cache,
         )
         dm.prepare_data()
         dm.setup()

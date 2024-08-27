@@ -64,6 +64,7 @@ class DatasetParameters(BaseModel):
     version_select: str
     num_workers: int = Field(gt=0)
     pin_memory: bool
+    regenerate_processed_cache: bool = False
 
 
 @dataclass(frozen=False)
@@ -474,6 +475,7 @@ class HDF5Dataset:
         local_cache_dir: str,
         force_download: bool = False,
         regenerate_cache: bool = False,
+        regenerate_processed_cache: bool = False,
     ):
         """
         Initializes the HDF5Dataset with paths to raw and processed data files.
@@ -503,6 +505,11 @@ class HDF5Dataset:
         self.local_cache_dir = os.path.expanduser(local_cache_dir)
         self.force_download = force_download
         self.regenerate_cache = regenerate_cache
+
+        # is True if regenerate_cache is True
+        self.regenerate_processed_cache = (
+            regenerate_processed_cache or self.regenerate_cache
+        )
 
         self.hdf5data: Optional[Dict[str, List[np.ndarray]]] = None
         self.numpy_data: Optional[np.ndarray] = None
@@ -1068,6 +1075,7 @@ class DataModule(pl.LightningDataModule):
         local_cache_dir: str = "./",
         regenerate_cache: bool = False,
         regenerate_dataset_statistic: bool = False,
+        regenerate_processed_cache: bool = True,
     ):
         """
         Initializes adData module for PyTorch Lightning handling data preparation and loading object with the specified configuration.
@@ -1124,6 +1132,11 @@ class DataModule(pl.LightningDataModule):
         # make sure we can handle a path with a ~ in it
         self.local_cache_dir = os.path.expanduser(local_cache_dir)
         self.regenerate_cache = regenerate_cache
+        # Use a logical OR to ensure regenerate_processed_cache is True when
+        # regenerate_cache is True
+        self.regenerate_processed_cache = (
+            regenerate_processed_cache or self.regenerate_cache
+        )
 
         self.pairlist = Pairlist()
         self.dataset_statistic_filename = (
@@ -1148,7 +1161,7 @@ class DataModule(pl.LightningDataModule):
         # if the dataset has already been processed, skip this step
         if (
             os.path.exists(self.cache_processed_dataset_filename)
-            and not self.regenerate_cache
+            and not self.regenerate_processed_cache
         ):
             if not os.path.exists(self.dataset_statistic_filename):
                 raise FileNotFoundError(

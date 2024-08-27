@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 
 def visualize_model(
-    dm: 'DataModule',
+    dm: "DataModule",
     potential_name: Literal["ANI2x", "PhysNet", "SchNet", "PaiNN", "SAKE"],
 ):
     # visualize the compute graph
@@ -353,16 +353,16 @@ def lock_with_attribute(attribute_name):
             instance = args[0]
             # Get the lock file path from the specified attribute
             lock_file_path = getattr(instance, attribute_name)
-            with open(lock_file_path, 'w') as lock_file:
+            with open(lock_file_path, "w") as f:
                 # Lock the file
-                lock_file(lock_file)
+                lock_file(f)
 
                 try:
                     # Execute the wrapped function
                     result = func(*args, **kwargs)
                 finally:
                     # Unlock the file
-                    unlock_file(lock_file)
+                    unlock_file(f)
 
                     # Optionally, remove the lock file
                     os.remove(lock_file_path)

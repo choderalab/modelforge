@@ -16,11 +16,6 @@ from torch import nn
 from modelforge.utils.prop import SpeciesAEV
 
 
-# if TYPE_CHECKING:
-#     from modelforge.dataset.dataset import NNPInput
-#     from .models import PairListOutputs
-
-
 def triu_index(num_species: int) -> torch.Tensor:
     """
     Generate a tensor representing the upper triangular indices for species pairs.
@@ -110,7 +105,6 @@ class ANIRepresentation(nn.Module):
         angle_sections: int,
         nr_of_supported_elements: int = 7,
     ):
-
         super().__init__()
         from modelforge.potential.utils import CosineAttenuationFunction
 
@@ -386,7 +380,6 @@ class ANIInteraction(nn.Module):
     """
 
     def __init__(self, *, aev_dim: int, activation_function: Type[torch.nn.Module]):
-
         super().__init__()
         # define atomic neural network
         atomic_neural_networks = self.intialize_atomic_neural_network(
@@ -677,7 +670,6 @@ class ANI2x(BaseNetwork):
         dataset_statistic: Optional[Dict[str, float]] = None,
         potential_seed: Optional[int] = None,
     ) -> None:
-
         from modelforge.utils.units import _convert_str_to_unit
 
         self.only_unique_pairs = True  # NOTE: need to be set before super().__init__

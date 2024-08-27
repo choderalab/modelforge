@@ -385,12 +385,6 @@ class Neighborlist(Pairlist):
             )
 
         return interacting_outputs
-        #
-        # return PairListOutputs(
-        #     pair_indices=pair_indices_within_cutoff,
-        #     d_ij=d_ij[in_cutoff],
-        #     r_ij=r_ij[in_cutoff],
-        # )
 
 
 from typing import Callable, Literal, Optional, Union

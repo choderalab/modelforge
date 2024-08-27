@@ -15,13 +15,14 @@ from torch.utils.data import DataLoader
 
 from modelforge.dataset.utils import RandomRecordSplittingStrategy, SplittingStrategy
 from modelforge.utils.prop import PropertyNames
+from modelforge.utils.misc import lock_with_attribute
 
 if TYPE_CHECKING:
     from modelforge.potential.processing import AtomicSelfEnergies
 
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CaseInsensitiveEnum(str, Enum):
@@ -1045,6 +1046,7 @@ class DatasetFactory:
 from openff.units import unit
 
 
+
 class DataModule(pl.LightningDataModule):
     def __init__(
         self,
@@ -1128,8 +1130,12 @@ class DataModule(pl.LightningDataModule):
         self.dataset_statistic_filename = (
             f"{self.local_cache_dir}/{self.name}_dataset_statistic.toml"
         )
-        self.cache_processed_dataset_filename = f"{self.local_cache_dir}/{self.name}_{self.version_select}processed_dataset.pt"
+        self.cache_processed_dataset_filename = (
+            f"{self.local_cache_dir}/{self.name}_{self.version_select}_processed.pt"
+        )
+        self.lock_file = f"{self.cache_processed_dataset_filename}.lockfile"
 
+    @lock_with_attribute("lock_file")
     def prepare_data(
         self,
     ) -> None:
@@ -1138,6 +1144,8 @@ class DataModule(pl.LightningDataModule):
         processing of the data such as calculating self energies, atomic energy
         statistics, and splitting. It is executed only once per node.
         """
+        # check if there is a filelock present, if so, wait until it is removed
+
         # if the dataset has already been processed, skip this step
         if (
             os.path.exists(self.cache_processed_dataset_filename)
@@ -1151,6 +1159,7 @@ class DataModule(pl.LightningDataModule):
             return None
 
         # if the dataset is not already processed, process it
+
         from modelforge.dataset import _ImplementedDatasets
 
         dataset_class = _ImplementedDatasets.get_dataset_class(str(self.name))
@@ -1161,7 +1170,6 @@ class DataModule(pl.LightningDataModule):
             regenerate_cache=self.regenerate_cache,
         )
         torch_dataset = self._create_torch_dataset(dataset)
-
         # if dataset statistics is present load it from disk
         if (
             os.path.exists(self.dataset_statistic_filename)
@@ -1308,7 +1316,7 @@ class DataModule(pl.LightningDataModule):
     def setup(self, stage: Optional[str] = None) -> None:
         """Sets up datasets for the train, validation, and test stages based on the stage argument."""
 
-        self.torch_dataset = torch.load("torch_dataset.pt")
+        self.torch_dataset = torch.load(self.cache_processed_dataset_filename)
         (
             self.train_dataset,
             self.val_dataset,

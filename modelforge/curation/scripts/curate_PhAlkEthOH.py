@@ -21,6 +21,7 @@ def PhAlkEthOH_openff_wrapper(
     total_conformers=None,
     limit_atomic_species=None,
     max_force=None,
+    final_conformer_only=False,
 ):
     """
     This curates and processes the SPICE 114 dataset at the OpenFF level of theory into an hdf5 file.
@@ -52,6 +53,8 @@ def PhAlkEthOH_openff_wrapper(
         will be ignored. If not defined, no filtering by atomic species will be performed.
     max_force: float, optional, default=None
         The maximum force to allow in the dataset. Any conformers with forces greater than this value will be ignored.
+    final_conformer_only: bool, optional, default=False
+        If True, only the final conformer for each molecule will be processed. If False, all conformers will be processed.
 
     """
     from modelforge.curation.phalkethoh_curation import PhAlkEthOHCuration
@@ -70,6 +73,7 @@ def PhAlkEthOH_openff_wrapper(
         limit_atomic_species=limit_atomic_species,
         n_threads=1,
         max_force=max_force,
+        final_conformer_only=final_conformer_only,
     )
     print(f"Total records: {PhAlkEthOH_dataset.total_records}")
     print(f"Total conformers: {PhAlkEthOH_dataset.total_conformers}")
@@ -88,9 +92,9 @@ def main():
 
     # We'll want to provide some simple means of versioning
     # if we make updates to either the underlying dataset, curation modules, or parameters given to the code
-    version = "0"
+    version = "1"
     # version of the dataset to curate
-    version_select = f"v_{version}"
+    version_select = f"v_0"
 
     # curate dataset with 1000 total conformers, max of 10 conformers per record
     hdf5_file_name = f"PhAlkEthOH_openff_dataset_v{version}_ntc_1000.hdf5"
@@ -117,6 +121,35 @@ def main():
         force_download=False,
         version_select=version_select,
         max_force=1.0 * unit.hartree / unit.bohr,
+    )
+
+    # curate dataset with 1000 total conformers, max of 10 conformers per record
+    hdf5_file_name = f"PhAlkEthOH_openff_dataset_v{version}_ntc_1000_minimal.hdf5"
+
+    PhAlkEthOH_openff_wrapper(
+        hdf5_file_name,
+        output_file_dir,
+        local_cache_dir,
+        force_download=False,
+        version_select=version_select,
+        max_records=1000,
+        total_conformers=1000,
+        max_conformers_per_record=10,
+        max_force=1.0 * unit.hartree / unit.bohr,
+        final_conformer_only=True,
+    )
+
+    # curate the full dataset
+    hdf5_file_name = f"PhAlkEthOH_openff_dataset_v{version}_minimal.hdf5"
+    print("total dataset")
+    PhAlkEthOH_openff_wrapper(
+        hdf5_file_name,
+        output_file_dir,
+        local_cache_dir,
+        force_download=False,
+        version_select=version_select,
+        max_force=1.0 * unit.hartree / unit.bohr,
+        final_conformer_only=True,
     )
 
 

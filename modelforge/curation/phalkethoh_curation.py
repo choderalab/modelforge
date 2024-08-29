@@ -278,6 +278,7 @@ class PhAlkEthOHCuration(DatasetCuration):
         total_conformers: Optional[int] = None,
         atomic_numbers_to_limit: Optional[List[int]] = None,
         max_force: Optional[unit.Quantity] = None,
+        final_conformer_only: Optional[bool] = None,
     ):
         """
         Processes a downloaded dataset: extracts relevant information.
@@ -298,6 +299,9 @@ class PhAlkEthOHCuration(DatasetCuration):
             If set, this will limit the dataset to only include molecules with atomic numbers in the list.
         max_force: Optional[float], optional, default=None
             If set, this will exclude any conformers with a force that exceeds this value.
+        final_conformer_only: Optional[bool], optional, default=None
+            If set to True, only the final conformer of each record will be processed. This should be the final
+            energy minimized conformer.
         """
         from tqdm import tqdm
         import numpy as np
@@ -380,6 +384,8 @@ class PhAlkEthOHCuration(DatasetCuration):
                     name = key
                     index = self.molecule_names[name]
 
+                    if final_conformer_only:
+                        trajectory = [trajectory[-1]]
                     for state in trajectory:
                         add_record = True
                         properties, config = state
@@ -584,6 +590,7 @@ class PhAlkEthOHCuration(DatasetCuration):
         total_conformers: Optional[int] = None,
         limit_atomic_species: Optional[list] = None,
         max_force: Optional[unit.Quantity] = None,
+        final_conformer_only=None,
         n_threads=2,
     ) -> None:
         """
@@ -608,6 +615,8 @@ class PhAlkEthOHCuration(DatasetCuration):
             If set to a list of element symbols, records that contain any elements not in this list will be ignored.
         max_force: Optional[float], optional, default=None
             If set this any confirugrations with a force that exceeds this value will be excluded.
+        final_conformer_only: Optional[bool], optional, default=None
+            If set to True, only the final conformer of each record will be processed.
         n_threads, int, default=2
             Number of concurrent threads for retrieving data from QCArchive
         Examples
@@ -687,6 +696,7 @@ class PhAlkEthOHCuration(DatasetCuration):
             total_conformers=total_conformers,
             atomic_numbers_to_limit=self.atomic_numbers_to_limit,
             max_force=max_force,
+            final_conformer_only=final_conformer_only,
         )
 
         self._generate_hdf5()

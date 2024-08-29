@@ -1,6 +1,21 @@
 dataset: PhAlkEthOH
 latest: full_dataset_v0
 latest_test: nc_1000_v0
+full_dataset_v1:
+  version: 1
+  doi: 10.5281/zenodo.13450735
+  notes: removes high force conformers
+  gz_data_file:
+    length: 3300668359
+    md5: b051af374f3233e2925f7a1b96707772
+    name: PhAlkEthOH_dataset_v0.hdf5.gz
+  hdf5_data_file:
+    md5: f5d9dccb8e79a51892b671108bc57bde
+    name: PhAlkEthOH_dataset_v1.hdf5
+  processed_data_file:
+    md5: null
+    name: PhAlkEthOH_dataset_v1_processed.npz
+  url: https://zenodo.org/records/13450735/files/PhAlkEthOH_openff_dataset_v1.hdf5.gz
 full_dataset_v0:
   version: 0
   doi: 10.5281/zenodo.12174233

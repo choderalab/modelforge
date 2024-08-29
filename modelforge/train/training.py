@@ -709,10 +709,10 @@ class TrainingAdapter(pL.LightningModule):
 
         # Update the loss metric with the different loss components
         for key, metric in loss_dict.items():
-            self.loss_metric[key].update(metric, batch.batch_size())
+            self.loss_metric[key].update(metric.clone().detach(), batch.batch_size())
 
-        loss = torch.mean(loss_dict["total_loss"]).contiguous()
-        return loss
+        loss = torch.mean(loss_dict["total_loss"])
+        return loss.contiguous()
 
     def validation_step(self, batch: "BatchData", batch_idx: int) -> None:
         """

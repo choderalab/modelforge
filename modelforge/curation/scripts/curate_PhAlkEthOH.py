@@ -20,6 +20,7 @@ def PhAlkEthOH_openff_wrapper(
     max_conformers_per_record=None,
     total_conformers=None,
     limit_atomic_species=None,
+    max_force=None,
 ):
     """
     This curates and processes the SPICE 114 dataset at the OpenFF level of theory into an hdf5 file.
@@ -49,7 +50,8 @@ def PhAlkEthOH_openff_wrapper(
     limit_atomic_species: list, optional, default=None
         A list of atomic species to limit the dataset to. Any molecules that contain elements outside of this list
         will be ignored. If not defined, no filtering by atomic species will be performed.
-
+    max_force: float, optional, default=None
+        The maximum force to allow in the dataset. Any conformers with forces greater than this value will be ignored.
 
     """
     from modelforge.curation.phalkethoh_curation import PhAlkEthOHCuration
@@ -67,12 +69,15 @@ def PhAlkEthOH_openff_wrapper(
         total_conformers=total_conformers,
         limit_atomic_species=limit_atomic_species,
         n_threads=1,
+        max_force=max_force,
     )
     print(f"Total records: {PhAlkEthOH_dataset.total_records}")
     print(f"Total conformers: {PhAlkEthOH_dataset.total_conformers}")
 
 
 def main():
+
+    from openff.units import unit
 
     # define the location where to store and output the files
     import os
@@ -99,6 +104,7 @@ def main():
         max_records=1000,
         total_conformers=1000,
         max_conformers_per_record=10,
+        max_force=1.0 * unit.hartree / unit.bohr,
     )
 
     # curate the full dataset
@@ -110,6 +116,7 @@ def main():
         local_cache_dir,
         force_download=False,
         version_select=version_select,
+        max_force=1.0 * unit.hartree / unit.bohr,
     )
 
 

@@ -19,6 +19,7 @@ full_dataset_v1:
 nc_1000_v1:
   version: 1
   doi: 10.5281/zenodo.13560343
+  notes: removes high force conformers, 1000 conformers, max 10 per molecule
   gz_data_file:
     length: 2702091
     md5: 76b421802bef68f858757dba41f3ea2e
@@ -45,6 +46,21 @@ full_dataset_min_v1:
     md5: null
     name: PhAlkEthOH_dataset_v1_min_processed.npz
   url: https://zenodo.org/records/13561100/files/PhAlkEthOH_openff_dataset_v1_min.hdf5.gz
+nc_1000_min_v1:
+  version: 1
+  doi: 10.5281/zenodo.13576458
+  notes: removes high force conformers, 1000 conformers, only contains final optimized configuration
+  gz_data_file:
+    length: 3476870
+    md5: 7261f4738efd4bf8409268961837ba78
+    name: PhAlkEthOH_dataset_v1_nc_1000_min.hdf5.gz
+  hdf5_data_file:
+    md5: 5d347a78c6c3b45531870a05d5aab77e
+    name: PhAlkEthOH_dataset_v1_nc_1000_min.hdf5
+  processed_data_file:
+    md5: null
+    name: PhAlkEthOH_dataset_v1_nc_1000_min_processed.npz
+  url: https://zenodo.org/records/13576458/files/PhAlkEthOH_openff_dataset_v1_ntc_1000_min.hdf5.gz
 full_dataset_v0:
   version: 0
   doi: 10.5281/zenodo.12174233

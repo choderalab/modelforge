@@ -106,7 +106,9 @@ def test_input():
         ],
     )
     tensornet.compute_interacting_pairs._input_checks(mf_input)
-    pairlist_output = tensornet.compute_interacting_pairs.prepare_inputs(mf_input)
+    pairlist_output = tensornet.compute_interacting_pairs.prepare_inputs(mf_input)[
+        "maximum_interaction_radius"
+    ]
 
     # torchmd-net TensorNet
     if reference_data:

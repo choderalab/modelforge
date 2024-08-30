@@ -309,7 +309,6 @@ class RuntimeParameters(ParametersBase):
     A class to hold the runtime parameters that inherits from the pydantic BaseModel
 
     args:
-        save_dir (str): The save directory
         experiment_name (str): The experiment name
         accelerator (Accelerator): The accelerator, options are: "cpu", "gpu", "tpu"
         number_of_nodes (int): The number of nodes
@@ -322,7 +321,6 @@ class RuntimeParameters(ParametersBase):
 
     """
 
-    save_dir: str
     experiment_name: str
     accelerator: Accelerator
     number_of_nodes: int

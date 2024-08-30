@@ -1,5 +1,5 @@
 dataset: PhAlkEthOH
-latest: full_dataset_v0
+latest: full_dataset_v1
 latest_test: nc_1000_v1
 full_dataset_v1:
   version: 1

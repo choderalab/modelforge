@@ -267,7 +267,7 @@ class PhAlkEthOHCuration(DatasetCuration):
         rdmol = Chem.MolFromSmiles(smiles, sanitize=False)
         total_charge = sum(atom.GetFormalCharge() for atom in rdmol.GetAtoms())
 
-        return (int(total_charge) * unit.elementary_charge,)
+        return int(total_charge) * unit.elementary_charge
 
     def _process_downloaded(
         self,
@@ -277,6 +277,8 @@ class PhAlkEthOHCuration(DatasetCuration):
         max_conformers_per_record: Optional[int] = None,
         total_conformers: Optional[int] = None,
         atomic_numbers_to_limit: Optional[List[int]] = None,
+        max_force: Optional[unit.Quantity] = None,
+        final_conformer_only: Optional[bool] = None,
     ):
         """
         Processes a downloaded dataset: extracts relevant information.
@@ -295,6 +297,11 @@ class PhAlkEthOHCuration(DatasetCuration):
             If set, this will limit the total number of conformers to the specified number.
         atomic_numbers_to_limit: Optional[List[int]], optional, default=None
             If set, this will limit the dataset to only include molecules with atomic numbers in the list.
+        max_force: Optional[float], optional, default=None
+            If set, this will exclude any conformers with a force that exceeds this value.
+        final_conformer_only: Optional[bool], optional, default=None
+            If set to True, only the final conformer of each record will be processed. This should be the final
+            energy minimized conformer.
         """
         from tqdm import tqdm
         import numpy as np
@@ -358,7 +365,7 @@ class PhAlkEthOHCuration(DatasetCuration):
                         ]
                         data_temp["n_configs"] = 0
 
-                        (data_temp["total_charge"],) = self._calculate_total_charge(
+                        data_temp["total_charge"] = self._calculate_total_charge(
                             data_temp[
                                 "canonical_isomeric_explicit_hydrogen_mapped_smiles"
                             ]
@@ -377,105 +384,123 @@ class PhAlkEthOHCuration(DatasetCuration):
                     name = key
                     index = self.molecule_names[name]
 
+                    if final_conformer_only:
+                        trajectory = [trajectory[-1]]
                     for state in trajectory:
+                        add_record = True
                         properties, config = state
-                        self.data[index]["n_configs"] += 1
 
-                        # note, we will use the convention of names being lowercase
-                        # and spaces denoted by underscore
-                        quantity = "geometry"
-                        quantity_o = "geometry"
-                        if quantity_o not in self.data[index].keys():
-                            self.data[index][quantity_o] = config.reshape(1, -1, 3)
-                        else:
-                            self.data[index][quantity_o] = np.vstack(
-                                (
-                                    self.data[index][quantity_o],
-                                    config.reshape(1, -1, 3),
+                        # if set, let us see if the configuration has a force that exceeds the maximum
+                        if max_force is not None:
+                            force_magnitude = (
+                                np.abs(
+                                    properties["properties"]["current gradient"]
+                                    + properties["properties"][
+                                        "dispersion correction gradient"
+                                    ]
                                 )
+                                * self.qm_parameters["dft_total_force"]["u_in"]
                             )
+                            if np.any(force_magnitude > max_force):
+                                add_record = False
+                        if add_record:
+                            self.data[index]["n_configs"] += 1
 
-                        # note, we will use the convention of names being lowercase
-                        # and spaces denoted by underscore
-                        quantity = "current energy"
-                        quantity_o = "dft_total_energy"
-                        if quantity_o not in self.data[index].keys():
-                            self.data[index][quantity_o] = properties["properties"][
-                                quantity
-                            ]
-                        else:
-                            self.data[index][quantity_o] = np.vstack(
-                                (
-                                    self.data[index][quantity_o],
-                                    properties["properties"][quantity],
+                            # note, we will use the convention of names being lowercase
+                            # and spaces denoted by underscore
+                            quantity = "geometry"
+                            quantity_o = "geometry"
+                            if quantity_o not in self.data[index].keys():
+                                self.data[index][quantity_o] = config.reshape(1, -1, 3)
+                            else:
+                                self.data[index][quantity_o] = np.vstack(
+                                    (
+                                        self.data[index][quantity_o],
+                                        config.reshape(1, -1, 3),
+                                    )
                                 )
-                            )
 
-                        quantity = "dispersion correction energy"
-                        quantity_o = "dispersion_correction_energy"
-                        # Note need to typecast here because of a bug in the
-                        # qcarchive entry: see issue: https://github.com/MolSSI/QCFractal/issues/766
-                        if quantity_o not in self.data[index].keys():
-                            self.data[index][quantity_o] = np.array(
-                                float(properties["properties"][quantity])
-                            ).reshape(1, 1)
-                        else:
-                            self.data[index][quantity_o] = np.vstack(
-                                (
-                                    self.data[index][quantity_o],
-                                    np.array(
-                                        float(properties["properties"][quantity])
-                                    ).reshape(1, 1),
-                                ),
-                            )
-
-                        quantity = "current gradient"
-                        quantity_o = "dft_total_gradient"
-                        if quantity_o not in self.data[index].keys():
-                            self.data[index][quantity_o] = np.array(
-                                properties["properties"][quantity]
-                            ).reshape(1, -1, 3)
-                        else:
-                            self.data[index][quantity_o] = np.vstack(
-                                (
-                                    self.data[index][quantity_o],
-                                    np.array(
-                                        properties["properties"][quantity]
-                                    ).reshape(1, -1, 3),
+                            # note, we will use the convention of names being lowercase
+                            # and spaces denoted by underscore
+                            quantity = "current energy"
+                            quantity_o = "dft_total_energy"
+                            if quantity_o not in self.data[index].keys():
+                                self.data[index][quantity_o] = properties["properties"][
+                                    quantity
+                                ]
+                            else:
+                                self.data[index][quantity_o] = np.vstack(
+                                    (
+                                        self.data[index][quantity_o],
+                                        properties["properties"][quantity],
+                                    )
                                 )
-                            )
 
-                        quantity = "dispersion correction gradient"
-                        quantity_o = "dispersion_correction_gradient"
-                        if quantity_o not in self.data[index].keys():
-                            self.data[index][quantity_o] = np.array(
-                                properties["properties"][quantity]
-                            ).reshape(1, -1, 3)
-                        else:
-                            self.data[index][quantity_o] = np.vstack(
-                                (
-                                    self.data[index][quantity_o],
-                                    np.array(
-                                        properties["properties"][quantity]
-                                    ).reshape(1, -1, 3),
+                            quantity = "dispersion correction energy"
+                            quantity_o = "dispersion_correction_energy"
+                            # Note need to typecast here because of a bug in the
+                            # qcarchive entry: see issue: https://github.com/MolSSI/QCFractal/issues/766
+                            if quantity_o not in self.data[index].keys():
+                                self.data[index][quantity_o] = np.array(
+                                    float(properties["properties"][quantity])
+                                ).reshape(1, 1)
+                            else:
+                                self.data[index][quantity_o] = np.vstack(
+                                    (
+                                        self.data[index][quantity_o],
+                                        np.array(
+                                            float(properties["properties"][quantity])
+                                        ).reshape(1, 1),
+                                    ),
                                 )
-                            )
 
-                        quantity = "scf dipole"
-                        quantity_o = "scf_dipole"
-                        if quantity_o not in self.data[index].keys():
-                            self.data[index][quantity_o] = np.array(
-                                properties["properties"][quantity]
-                            ).reshape(1, 3)
-                        else:
-                            self.data[index][quantity_o] = np.vstack(
-                                (
-                                    self.data[index][quantity_o],
-                                    np.array(
-                                        properties["properties"][quantity]
-                                    ).reshape(1, 3),
+                            quantity = "current gradient"
+                            quantity_o = "dft_total_gradient"
+                            if quantity_o not in self.data[index].keys():
+                                self.data[index][quantity_o] = np.array(
+                                    properties["properties"][quantity]
+                                ).reshape(1, -1, 3)
+                            else:
+                                self.data[index][quantity_o] = np.vstack(
+                                    (
+                                        self.data[index][quantity_o],
+                                        np.array(
+                                            properties["properties"][quantity]
+                                        ).reshape(1, -1, 3),
+                                    )
                                 )
-                            )
+
+                            quantity = "dispersion correction gradient"
+                            quantity_o = "dispersion_correction_gradient"
+                            if quantity_o not in self.data[index].keys():
+                                self.data[index][quantity_o] = np.array(
+                                    properties["properties"][quantity]
+                                ).reshape(1, -1, 3)
+                            else:
+                                self.data[index][quantity_o] = np.vstack(
+                                    (
+                                        self.data[index][quantity_o],
+                                        np.array(
+                                            properties["properties"][quantity]
+                                        ).reshape(1, -1, 3),
+                                    )
+                                )
+
+                            quantity = "scf dipole"
+                            quantity_o = "scf_dipole"
+                            if quantity_o not in self.data[index].keys():
+                                self.data[index][quantity_o] = np.array(
+                                    properties["properties"][quantity]
+                                ).reshape(1, 3)
+                            else:
+                                self.data[index][quantity_o] = np.vstack(
+                                    (
+                                        self.data[index][quantity_o],
+                                        np.array(
+                                            properties["properties"][quantity]
+                                        ).reshape(1, 3),
+                                    )
+                                )
 
         # assign units
         for datapoint in self.data:
@@ -564,6 +589,8 @@ class PhAlkEthOHCuration(DatasetCuration):
         max_conformers_per_record: Optional[int] = None,
         total_conformers: Optional[int] = None,
         limit_atomic_species: Optional[list] = None,
+        max_force: Optional[unit.Quantity] = None,
+        final_conformer_only=None,
         n_threads=2,
     ) -> None:
         """
@@ -586,7 +613,11 @@ class PhAlkEthOHCuration(DatasetCuration):
             Note defining this will only fetch from the "SPICE PubChem Set 1 Single Points Dataset v1.2"
         limit_atomic_species: Optional[list] = None,
             If set to a list of element symbols, records that contain any elements not in this list will be ignored.
-        n_threads, int, default=6
+        max_force: Optional[float], optional, default=None
+            If set this any confirugrations with a force that exceeds this value will be excluded.
+        final_conformer_only: Optional[bool], optional, default=None
+            If set to True, only the final conformer of each record will be processed.
+        n_threads, int, default=2
             Number of concurrent threads for retrieving data from QCArchive
         Examples
         --------
@@ -664,6 +695,8 @@ class PhAlkEthOHCuration(DatasetCuration):
             max_conformers_per_record=max_conformers_per_record,
             total_conformers=total_conformers,
             atomic_numbers_to_limit=self.atomic_numbers_to_limit,
+            max_force=max_force,
+            final_conformer_only=final_conformer_only,
         )
 
         self._generate_hdf5()

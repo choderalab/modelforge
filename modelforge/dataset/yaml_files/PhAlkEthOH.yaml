@@ -1,6 +1,6 @@
 dataset: PhAlkEthOH
 latest: full_dataset_v0
-latest_test: nc_1000_v0
+latest_test: nc_1000_v1
 full_dataset_v1:
   version: 1
   doi: 10.5281/zenodo.13450735
@@ -8,7 +8,7 @@ full_dataset_v1:
   gz_data_file:
     length: 3300668359
     md5: b051af374f3233e2925f7a1b96707772
-    name: PhAlkEthOH_dataset_v0.hdf5.gz
+    name: PhAlkEthOH_dataset_v1.hdf5.gz
   hdf5_data_file:
     md5: f5d9dccb8e79a51892b671108bc57bde
     name: PhAlkEthOH_dataset_v1.hdf5
@@ -16,6 +16,35 @@ full_dataset_v1:
     md5: null
     name: PhAlkEthOH_dataset_v1_processed.npz
   url: https://zenodo.org/records/13450735/files/PhAlkEthOH_openff_dataset_v1.hdf5.gz
+nc_1000_v1:
+  version: 1
+  doi: 10.5281/zenodo.13560343
+  gz_data_file:
+    length: 2702091
+    md5: 76b421802bef68f858757dba41f3ea2e
+    name: PhAlkEthOH_dataset_v1_nc_1000.hdf5.gz
+  hdf5_data_file:
+    md5: 244eb8d1b3547b8da229fd1507fb4d4e
+    name: PhAlkEthOH_dataset_v1_nc_1000.hdf5
+  processed_data_file:
+    md5: null
+    name: PhAlkEthOH_dataset_v1_nc_1000_processed.npz
+  url: https://zenodo.org/records/13560343/files/PhAlkEthOH_openff_dataset_v1_ntc_1000.hdf5.gz
+full_dataset_min_v1:
+  version: 1
+  doi: 10.5281/zenodo.13561100
+  notes: removes high force configurations, only contains final optimized configuration
+  gz_data_file:
+    length: 31352642
+    md5: 205b0b7bc1858b1d3745480d9a29a770
+    name: PhAlkEthOH_dataset_v1_min.hdf5.gz
+  hdf5_data_file:
+    md5: 41cb40718f8872baa6c468ab08574d46
+    name: PhAlkEthOH_dataset_v1_min.hdf5
+  processed_data_file:
+    md5: null
+    name: PhAlkEthOH_dataset_v1_min_processed.npz
+  url: https://zenodo.org/records/13561100/files/PhAlkEthOH_openff_dataset_v1_min.hdf5.gz
 full_dataset_v0:
   version: 0
   doi: 10.5281/zenodo.12174233

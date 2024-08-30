@@ -38,14 +38,16 @@ __all__ = [
 class Error(nn.Module, ABC):
     """
     Class representing the error calculation for predicted and true values.
-
-    Methods:
-        calculate_error(predicted: torch.Tensor, true: torch.Tensor) -> torch.Tensor:
-            Calculates the error between the predicted and true values.
-
-        scale_by_number_of_atoms(error, atomic_subsystem_counts) -> torch.Tensor:
-            Scales the error by the number of atoms in the atomic subsystems.
     """
+
+    def __init__(self, scale_by_number_of_atoms: bool = True):
+
+        super().__init__()
+        if not scale_by_number_of_atoms:
+            # If scaling is not desired, override the method to just return the input error unchanged
+            self.scale_by_number_of_atoms = (
+                lambda error, atomic_subsystem_counts, prefactor=1: error
+            )
 
     @abstractmethod
     def calculate_error(
@@ -75,10 +77,13 @@ class Error(nn.Module, ABC):
         torch.Tensor
             The calculated error.
         """
-        return (predicted_tensor - reference_tensor).pow(2).sum(dim=1, keepdim=True)
+        error = (predicted_tensor - reference_tensor).pow(2).sum(dim=1, keepdim=True)
+        return error
 
     @staticmethod
-    def scale_by_number_of_atoms(error, atomic_subsystem_counts) -> torch.Tensor:
+    def scale_by_number_of_atoms(
+        error, atomic_subsystem_counts, prefactor: int = 1
+    ) -> torch.Tensor:
         """
         Scales the error by the number of atoms in the atomic subsystems.
 
@@ -88,15 +93,16 @@ class Error(nn.Module, ABC):
             The error to be scaled.
         atomic_subsystem_counts : torch.Tensor
             The number of atoms in the atomic subsystems.
-
+        prefactor : int
+           To consider the shape of the property, e.g., if the reference property has shape (N,3) it is necessary to further devide the result by 3
         Returns
         -------
         torch.Tensor
             The scaled error.
         """
         # divide by number of atoms
-        scaled_by_number_of_atoms = error / atomic_subsystem_counts.unsqueeze(
-            1
+        scaled_by_number_of_atoms = error / (
+            prefactor * atomic_subsystem_counts.unsqueeze(1)
         )  # FIXME: ensure that all per-atom properties have dimension (N, 1)
         return scaled_by_number_of_atoms
 
@@ -106,11 +112,8 @@ class FromPerAtomToPerMoleculeMeanSquaredError(Error):
     Calculates the per-atom error and aggregates it to per-molecule mean squared error.
     """
 
-    def __init__(self):
-        """
-        Initializes the PerAtomToPerMoleculeError class.
-        """
-        super().__init__()
+    def __init__(self, scale_by_number_of_atoms: bool = True):
+        super().__init__(scale_by_number_of_atoms)
 
     def calculate_error(
         self,
@@ -163,7 +166,9 @@ class FromPerAtomToPerMoleculeMeanSquaredError(Error):
         )
         # divide by number of atoms
         per_molecule_square_error_scaled = self.scale_by_number_of_atoms(
-            per_molecule_squared_error, batch.metadata.atomic_subsystem_counts
+            per_molecule_squared_error,
+            batch.metadata.atomic_subsystem_counts,
+            prefactor=per_atom_prediction.shape[-1],
         )
         # return the average
         return torch.mean(per_molecule_square_error_scaled)
@@ -172,15 +177,10 @@ class FromPerAtomToPerMoleculeMeanSquaredError(Error):
 class PerMoleculeMeanSquaredError(Error):
     """
     Calculates the per-molecule mean squared error.
-
     """
 
-    def __init__(self):
-        """
-        Initializes the PerMoleculeMeanSquaredError class.
-        """
-
-        super().__init__()
+    def __init__(self, scale_by_number_of_atoms: bool = True):
+        super().__init__(scale_by_number_of_atoms)
 
     def forward(
         self,
@@ -210,7 +210,8 @@ class PerMoleculeMeanSquaredError(Error):
             per_molecule_prediction, per_molecule_reference
         )
         per_molecule_square_error_scaled = self.scale_by_number_of_atoms(
-            per_molecule_squared_error, batch.metadata.atomic_subsystem_counts
+            per_molecule_squared_error,
+            batch.metadata.atomic_subsystem_counts,
         )
 
         # return the average
@@ -228,24 +229,12 @@ class PerMoleculeMeanSquaredError(Error):
 
 
 class Loss(nn.Module):
-    """
-    Calculates the combined loss for energy and force predictions.
 
-    Attributes
-    ----------
-    loss_property : List[str]
-        List of properties to include in the loss calculation.
-    weight : Dict[str, float]
-        Dictionary containing the weights for each property in the loss calculation.
-    loss : nn.ModuleDict
-        Module dictionary containing the loss functions for each property.
-    """
-
-    _SUPPORTED_PROPERTIES = ["per_molecule_energy", "per_atom_force"]
+    _SUPPORTED_PROPERTIES = ["per_atom_energy", "per_molecule_energy", "per_atom_force"]
 
     def __init__(self, loss_porperty: List[str], weight: Dict[str, float]):
         """
-        Initializes the Loss class.
+        Calculates the combined loss for energy and force predictions.
 
         Parameters
         ----------
@@ -270,9 +259,17 @@ class Loss(nn.Module):
         for prop, w in weight.items():
             if prop in self._SUPPORTED_PROPERTIES:
                 if prop == "per_atom_force":
-                    self.loss[prop] = FromPerAtomToPerMoleculeMeanSquaredError()
+                    self.loss[prop] = FromPerAtomToPerMoleculeMeanSquaredError(
+                        scale_by_number_of_atoms=True
+                    )
+                elif prop == "per_atom_energy":
+                    self.loss[prop] = PerMoleculeMeanSquaredError(
+                        scale_by_number_of_atoms=True
+                    )  # FIXME: this is currently not working
                 elif prop == "per_molecule_energy":
-                    self.loss[prop] = PerMoleculeMeanSquaredError()
+                    self.loss[prop] = PerMoleculeMeanSquaredError(
+                        scale_by_number_of_atoms=False
+                    )
                 self.register_buffer(prop, torch.tensor(w))
             else:
                 raise NotImplementedError(f"Loss type {prop} not implemented.")
@@ -302,11 +299,11 @@ class Loss(nn.Module):
         # iterate over loss properties
         for prop in self.loss_property:
             # calculate loss per property
-            loss_ = self.weight[prop] * self.loss[prop](
+            loss_ = self.loss[prop](
                 predict_target[f"{prop}_predict"], predict_target[f"{prop}_true"], batch
             )
             # add total loss
-            loss = loss + loss_
+            loss = loss + (self.weight[prop] * loss_)
             # save loss
             loss_dict[f"{prop}/mse"] = loss_
 
@@ -431,7 +428,7 @@ class CalculateProperties(torch.nn.Module):
         grad = torch.autograd.grad(
             per_molecule_energy_predict.sum(),
             nnp_input.positions,
-            create_graph=False,
+            create_graph=True,
             retain_graph=True,
         )[0]
         per_atom_force_predict = -1 * grad  # Forces are the negative gradient of energy

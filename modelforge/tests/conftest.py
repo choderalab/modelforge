@@ -1,9 +1,10 @@
-import torch
-import pytest
-from modelforge.dataset import DataModule
-
-from typing import Optional, Dict
 from dataclasses import dataclass
+from typing import Dict, Optional
+
+import pytest
+import torch
+
+from modelforge.dataset import DataModule
 
 
 # let us setup a few pytest options
@@ -37,39 +38,6 @@ def datamodule_factory():
     return create_datamodule
 
 
-from modelforge.dataset.utils import (
-    FirstComeFirstServeSplittingStrategy,
-    SplittingStrategy,
-)
-
-
-def initialize_datamodule(
-    dataset_name: str,
-    version_select: str = "nc_1000_v0",
-    batch_size: int = 64,
-    splitting_strategy: SplittingStrategy = FirstComeFirstServeSplittingStrategy(),
-    remove_self_energies: bool = True,
-    regression_ase: bool = False,
-    regenerate_dataset_statistic: bool = False,
-) -> DataModule:
-    """
-    Initialize a dataset for a given mode.
-    """
-
-    data_module = DataModule(
-        dataset_name,
-        splitting_strategy=splitting_strategy,
-        batch_size=batch_size,
-        version_select=version_select,
-        remove_self_energies=remove_self_energies,
-        regression_ase=regression_ase,
-        regenerate_dataset_statistic=regenerate_dataset_statistic,
-    )
-    data_module.prepare_data()
-    data_module.setup()
-    return data_module
-
-
 # dataset fixture
 @pytest.fixture
 def dataset_factory():
@@ -79,20 +47,11 @@ def dataset_factory():
     return create_dataset
 
 
-from modelforge.dataset.dataset import DatasetFactory, TorchDataset
-from modelforge.dataset import _ImplementedDatasets
-
-
-def single_batch(batch_size: int = 64, dataset_name="QM9"):
-    """
-    Utility function to create a single batch of data for testing.
-    """
-    data_module = initialize_datamodule(
-        dataset_name=dataset_name,
-        batch_size=batch_size,
-        version_select="nc_1000_v0",
-    )
-    return next(iter(data_module.train_dataloader(shuffle=False)))
+from modelforge.dataset.dataset import (
+    initialize_datamodule,
+    initialize_dataset,
+    single_batch,
+)
 
 
 @pytest.fixture(scope="session")
@@ -105,27 +64,6 @@ def single_batch_with_batchsize():
         return single_batch(batch_size=batch_size, dataset_name=dataset_name)
 
     return _create_single_batch
-
-
-def initialize_dataset(
-    dataset_name: str,
-    local_cache_dir: str,
-    versions_select: str = "nc_1000_v0",
-    force_download: bool = False,
-) -> DataModule:
-    """
-    Initialize a dataset for a given mode.
-    """
-
-    factory = DatasetFactory()
-    data = _ImplementedDatasets.get_dataset_class(dataset_name)(
-        local_cache_dir=local_cache_dir,
-        version_select=versions_select,
-        force_download=force_download,
-    )
-    dataset = factory.create_dataset(data)
-
-    return dataset
 
 
 @pytest.fixture(scope="session")
@@ -149,7 +87,6 @@ class DataSetContainer:
 from typing import Dict
 
 from modelforge.dataset import _ImplementedDatasets
-
 
 dataset_container: Dict[str, DataSetContainer] = {
     "QM9": DataSetContainer(
@@ -268,7 +205,7 @@ def methane() -> BatchData:
     -------
     BatchData
     """
-    from modelforge.potential.utils import Metadata, NNPInput, BatchData
+    from modelforge.potential.utils import BatchData, Metadata, NNPInput
 
     atomic_numbers = torch.tensor([6, 1, 1, 1, 1], dtype=torch.int64)
     positions = (
@@ -302,8 +239,9 @@ def methane() -> BatchData:
     )
 
 
-import torch
 import math
+
+import torch
 
 
 def generate_uniform_quaternion(u=None):

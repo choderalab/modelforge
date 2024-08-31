@@ -7,6 +7,7 @@ from modelforge.potential import NeuralNetworkPotentialFactory
 
 from modelforge.utils.misc import load_configs_into_pydantic_models
 
+
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )

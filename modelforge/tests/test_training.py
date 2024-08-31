@@ -95,9 +95,9 @@ def test_train_with_lightning(training, potential_name, dataset_name):
     # SKIP if potential is ANI and dataset is SPICE2
     if "ANI" in potential_name and dataset_name == "SPICE2":
         pytest.skip("ANI potential is not compatible with SPICE2 dataset")
-    if IN_GITHUB_ACTIONS and potential_name == "sake" and training == "with_force":
+    if potential_name == "SAKE" and training == "with_force":
         pytest.skip(
-            "Skipping Phalkethoh with sake training with forces on GitHub Actions because it allocates too much memory"
+            "Skipping Sake training with forces on GitHub Actions because it allocates too much memory"
         )
     # train potential
     get_trainer(

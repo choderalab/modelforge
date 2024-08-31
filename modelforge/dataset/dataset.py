@@ -493,6 +493,8 @@ class HDF5Dataset:
             Directory to store the files.
         force_download : bool, optional
             If set to True, the data will be downloaded even if it already exists. Default is False.
+        regenerate_cache : bool, optional
+            If set to True, the cache file will be regenerated even if it already exists. Default is False.
         """
         self.url = url
         self.gz_data_file = gz_data_file

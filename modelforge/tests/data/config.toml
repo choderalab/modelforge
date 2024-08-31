@@ -35,7 +35,7 @@ number_of_epochs = 2
 remove_self_energies = true
 batch_size = 128
 lr = 1e-3
-monitor = "val/per_molecule_energy/rmse"
+monitor_for_checkpoint = "val/per_molecule_energy/rmse"
 
 [training.experiment_logger]
 logger_name = "tensorboard"

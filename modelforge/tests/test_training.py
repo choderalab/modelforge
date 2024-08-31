@@ -10,7 +10,9 @@ IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 from modelforge.potential import NeuralNetworkPotentialFactory, _Implemented_NNPs
 
 
-def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
+def load_configs_into_pydantic_models(
+    potential_name: str, dataset_name: str, training_toml: str
+):
     from importlib import resources
 
     import toml
@@ -26,7 +28,7 @@ def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
         resources.files(potential_defaults) / f"{potential_name.lower()}.toml"
     )
     dataset_path = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
-    training_path = resources.files(training_defaults) / "default.toml"
+    training_path = resources.files(training_defaults) / f"{training_toml}.toml"
     runtime_path = resources.files(runtime_defaults) / "runtime.toml"
 
     training_config_dict = toml.load(training_path)
@@ -58,8 +60,10 @@ def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
     }
 
 
-def get_trainer(potential_name: str, dataset_name: str):
-    config = load_configs_into_pydantic_models(potential_name, dataset_name)
+def get_trainer(potential_name: str, dataset_name: str, training_toml: str):
+    config = load_configs_into_pydantic_models(
+        potential_name, dataset_name, training_toml
+    )
 
     # Extract parameters
     potential_parameter = config["potential"]
@@ -80,18 +84,30 @@ def get_trainer(potential_name: str, dataset_name: str):
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
-@pytest.mark.parametrize("dataset_name", ["QM9"])
-def test_train_with_lightning(potential_name, dataset_name):
+@pytest.mark.parametrize("dataset_name", ["PHALKETHOH"])
+@pytest.mark.parametrize("training", ["with_force", "without_force"])
+def test_train_with_lightning(training, potential_name, dataset_name):
     """
     Test that we can train, save and load checkpoints.
     """
-
-    get_trainer(potential_name, dataset_name).train_potential().save_checkpoint(
+    # get correct training toml
+    training_toml = "default_with_force" if training == "with_force" else "default"
+    # SKIP if potential is ANI and dataset is SPICE2
+    if "ANI" in potential_name and dataset_name == "SPICE2":
+        pytest.skip("ANI potential is not compatible with SPICE2 dataset")
+    if IN_GITHUB_ACTIONS and potential_name == "SAKE" and training == "with_force":
+        pytest.skip(
+            "Skipping Sake training with forces on GitHub Actions because it allocates too much memory"
+        )
+    # train potential
+    get_trainer(
+        potential_name, dataset_name, training_toml
+    ).train_potential().save_checkpoint(
         "test.chp"
     )  # save checkpoint
 
     # continue training from checkpoint
-    get_trainer(potential_name, dataset_name).train_potential()
+    get_trainer(potential_name, dataset_name, training_toml).train_potential()
 
 
 def test_train_from_single_toml_file():
@@ -105,15 +121,17 @@ def test_train_from_single_toml_file():
     read_config_and_train(config_path)
 
 
-def test_error_calculation(single_batch_with_batchsize_16_with_force):
+def test_error_calculation(single_batch_with_batchsize):
     # test the different Loss classes
     from modelforge.train.training import (
-        FromPerAtomToPerMoleculeMeanSquaredError,
-        PerMoleculeMeanSquaredError,
+        FromPerAtomToPerMoleculeSquaredError,
+        PerMoleculeSquaredError,
     )
 
     # generate data
-    data = single_batch_with_batchsize_16_with_force
+    batch = single_batch_with_batchsize(batch_size=16, dataset_name="PHALKETHOH")
+
+    data = batch
     true_E = data.metadata.E
     true_F = data.metadata.F
 
@@ -122,7 +140,7 @@ def test_error_calculation(single_batch_with_batchsize_16_with_force):
     predicted_F = true_F + torch.rand_like(true_F) * 10
 
     # test error for property with shape (nr_of_molecules, 1)
-    error = PerMoleculeMeanSquaredError()
+    error = PerMoleculeSquaredError()
     E_error = error(predicted_E, true_E, data)
 
     # compare output (mean squared error scaled by number of atoms in the molecule)
@@ -132,10 +150,10 @@ def test_error_calculation(single_batch_with_batchsize_16_with_force):
         1
     )  # FIXME : fi
     reference_E_error = torch.mean(scale_squared_error)
-    assert torch.allclose(E_error, reference_E_error)
+    assert torch.allclose(torch.mean(E_error), reference_E_error)
 
     # test error for property with shape (nr_of_atoms, 3)
-    error = FromPerAtomToPerMoleculeMeanSquaredError()
+    error = FromPerAtomToPerMoleculeSquaredError()
     F_error = error(predicted_F, true_F, data)
 
     # compare error (mean squared error scaled by number of atoms in the molecule)
@@ -155,13 +173,13 @@ def test_error_calculation(single_batch_with_batchsize_16_with_force):
     reference_F_error = torch.mean(
         per_mol_error / (3 * data.metadata.atomic_subsystem_counts.unsqueeze(1))
     )
-    assert torch.allclose(F_error, reference_F_error)
+    assert torch.allclose(torch.mean(F_error), reference_F_error)
 
 
-def test_loss(single_batch_with_batchsize_16_with_force):
+def test_loss(single_batch_with_batchsize):
     from modelforge.train.training import Loss
 
-    batch = single_batch_with_batchsize_16_with_force
+    batch = single_batch_with_batchsize(batch_size=16, dataset_name="PHALKETHOH")
 
     loss_porperty = ["per_molecule_energy", "per_atom_force"]
     loss_weights = {"per_molecule_energy": 0.5, "per_atom_force": 0.5}
@@ -169,8 +187,17 @@ def test_loss(single_batch_with_batchsize_16_with_force):
     assert loss is not None
 
     # get trainer
-    trainer = get_trainer("schnet", "QM9")
-    prediction = trainer.model.calculate_predictions(batch, trainer.model.potential)
+    trainer = get_trainer("schnet", "QM9", "default_with_force")
+    prediction = trainer.model.calculate_predictions(
+        batch, trainer.model.potential, train_mode=True
+    )  # train_mode=True is required for gradients in force prediction
+
+    assert prediction["per_molecule_energy_predict"].size(
+        dim=0
+    ) == batch.metadata.E.size(dim=0)
+    assert prediction["per_atom_force_predict"].size(dim=0) == batch.metadata.F.size(
+        dim=0
+    )
 
     # pass prediction through loss module
     loss_output = loss(prediction, batch)
@@ -188,9 +215,12 @@ def test_loss(single_batch_with_batchsize_16_with_force):
                 prediction["per_molecule_energy_predict"]
                 - prediction["per_molecule_energy_true"]
             ).pow(2)
+            / batch.metadata.atomic_subsystem_counts.unsqueeze(1)
         )
     )
-    assert torch.allclose(loss_output["per_molecule_energy/mse"], E_loss)
+    # compare to referenc evalue obtained from Loos class
+    ref = torch.mean(loss_output["per_molecule_energy"])
+    assert torch.allclose(ref, E_loss)
 
     # --------------------------------------------- #
     # now calculate F_loss
@@ -215,15 +245,15 @@ def test_loss(single_batch_with_batchsize_16_with_force):
     )
 
     per_atom_force_mse = torch.mean(per_molecule_squared_error)
-    assert torch.allclose(loss_output["per_atom_force/mse"], per_atom_force_mse)
+    assert torch.allclose(torch.mean(loss_output["per_atom_force"]), per_atom_force_mse)
 
     # --------------------------------------------- #
     # let's double check that the loss is calculated correctly
     # calculate the total loss
 
     assert torch.allclose(
-        loss_weights["per_molecule_energy"] * loss_output["per_molecule_energy/mse"]
-        + loss_weights["per_atom_force"] * loss_output["per_atom_force/mse"],
+        loss_weights["per_molecule_energy"] * loss_output["per_molecule_energy"]
+        + loss_weights["per_atom_force"] * loss_output["per_atom_force"],
         loss_output["total_loss"].to(torch.float32),
     )
 

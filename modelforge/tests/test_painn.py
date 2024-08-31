@@ -2,7 +2,7 @@ import torch
 from modelforge.potential.painn import PaiNN
 
 
-def test_forward(single_batch_with_batchsize_64):
+def test_forward(single_batch_with_batchsize):
     """Test initialization of the PaiNN neural network potential."""
     # read default parameters
     from modelforge.tests.test_models import load_configs_into_pydantic_models
@@ -17,8 +17,9 @@ def test_forward(single_batch_with_batchsize_64):
         ],
     )
     assert painn is not None, "PaiNN model should be initialized."
+    batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
 
-    nnp_input = single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float32)
+    nnp_input = batch.nnp_input.to(dtype=torch.float32)
     energy = painn(nnp_input)["per_molecule_energy"]
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
@@ -27,10 +28,12 @@ def test_forward(single_batch_with_batchsize_64):
     )  # Assuming energy is calculated per sample in the batch
 
 
-def test_equivariance(single_batch_with_batchsize_64):
+def test_equivariance(single_batch_with_batchsize):
     from modelforge.potential.painn import PaiNN
     from dataclasses import replace
     import torch
+
+    batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
 
     from modelforge.tests.test_models import load_configs_into_pydantic_models
 
@@ -50,7 +53,7 @@ def test_equivariance(single_batch_with_batchsize_64):
         ],
     ).double()
 
-    methane_input = single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float64)
+    methane_input = batch.nnp_input.to(dtype=torch.float64)
     perturbed_methane_input = replace(methane_input)
     perturbed_methane_input.positions = torch.matmul(
         methane_input.positions, rotation_matrix

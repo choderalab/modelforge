@@ -372,3 +372,49 @@ def lock_with_attribute(attribute_name):
         return wrapper
 
     return decorator
+
+
+def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
+    from modelforge.tests.data import (
+        potential_defaults,
+        training_defaults,
+        dataset_defaults,
+        runtime_defaults,
+    )
+    from importlib import resources
+    import toml
+
+    potential_path = (
+        resources.files(potential_defaults) / f"{potential_name.lower()}.toml"
+    )
+    dataset_path = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
+    training_path = resources.files(training_defaults) / "default.toml"
+    runtime_path = resources.files(runtime_defaults) / "runtime.toml"
+
+    training_config_dict = toml.load(training_path)
+    dataset_config_dict = toml.load(dataset_path)
+    potential_config_dict = toml.load(potential_path)
+    runtime_config_dict = toml.load(runtime_path)
+
+    potential_name = potential_config_dict["potential"]["potential_name"]
+
+    from modelforge.potential import _Implemented_NNP_Parameters
+
+    PotentialParameters = (
+        _Implemented_NNP_Parameters.get_neural_network_parameter_class(potential_name)
+    )
+    potential_parameters = PotentialParameters(**potential_config_dict["potential"])
+
+    from modelforge.dataset.dataset import DatasetParameters
+    from modelforge.train.parameters import TrainingParameters, RuntimeParameters
+
+    dataset_parameters = DatasetParameters(**dataset_config_dict["dataset"])
+    training_parameters = TrainingParameters(**training_config_dict["training"])
+    runtime_parameters = RuntimeParameters(**runtime_config_dict["runtime"])
+
+    return {
+        "potential": potential_parameters,
+        "dataset": dataset_parameters,
+        "training": training_parameters,
+        "runtime": runtime_parameters,
+    }

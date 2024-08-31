@@ -3,52 +3,7 @@ import pytest
 from modelforge.potential import _Implemented_NNPs
 from modelforge.dataset import _ImplementedDatasets
 from modelforge.potential import NeuralNetworkPotentialFactory
-
-
-def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
-    from modelforge.tests.data import (
-        potential_defaults,
-        training_defaults,
-        dataset_defaults,
-        runtime_defaults,
-    )
-    from importlib import resources
-    import toml
-
-    potential_path = (
-        resources.files(potential_defaults) / f"{potential_name.lower()}.toml"
-    )
-    dataset_path = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
-    training_path = resources.files(training_defaults) / "default.toml"
-    runtime_path = resources.files(runtime_defaults) / "runtime.toml"
-
-    training_config_dict = toml.load(training_path)
-    dataset_config_dict = toml.load(dataset_path)
-    potential_config_dict = toml.load(potential_path)
-    runtime_config_dict = toml.load(runtime_path)
-
-    potential_name = potential_config_dict["potential"]["potential_name"]
-
-    from modelforge.potential import _Implemented_NNP_Parameters
-
-    PotentialParameters = (
-        _Implemented_NNP_Parameters.get_neural_network_parameter_class(potential_name)
-    )
-    potential_parameters = PotentialParameters(**potential_config_dict["potential"])
-
-    from modelforge.dataset.dataset import DatasetParameters
-    from modelforge.train.parameters import TrainingParameters, RuntimeParameters
-
-    dataset_parameters = DatasetParameters(**dataset_config_dict["dataset"])
-    training_parameters = TrainingParameters(**training_config_dict["training"])
-    runtime_parameters = RuntimeParameters(**runtime_config_dict["runtime"])
-
-    return {
-        "potential": potential_parameters,
-        "dataset": dataset_parameters,
-        "training": training_parameters,
-        "runtime": runtime_parameters,
-    }
+from modelforge.utils.misc import load_configs_into_pydantic_models
 
 
 @pytest.mark.parametrize(
@@ -58,6 +13,7 @@ def test_JAX_wrapping(potential_name, single_batch_with_batchsize):
     from modelforge.potential.models import (
         NeuralNetworkPotentialFactory,
     )
+    from modelforge.dataset.dataset import convert_to_jax_namedtuple
 
     batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
 
@@ -72,7 +28,7 @@ def test_JAX_wrapping(potential_name, single_batch_with_batchsize):
     )
 
     assert "JAX" in str(type(model))
-    nnp_input = batch.nnp_input.as_jax_namedtuple()
+    nnp_input = convert_to_jax_namedtuple(batch.nnp_input)
     out = model(nnp_input)["per_molecule_energy"]
     import jax
 
@@ -336,6 +292,7 @@ def test_energy_between_simulation_environments(
     # compare that the energy is the same for the JAX and PyTorch Model
     import numpy as np
     import torch
+    from modelforge.dataset.dataset import convert_to_jax_namedtuple
 
     batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
     nnp_input = batch.nnp_input
@@ -362,7 +319,7 @@ def test_energy_between_simulation_environments(
         simulation_environment="JAX",
         potential_parameter=config["potential"],
     )
-    nnp_input = nnp_input.as_jax_namedtuple()
+    nnp_input = convert_to_jax_namedtuple(batch.nnp_input)
     output_jax = model(nnp_input)["per_molecule_energy"]
 
     # test tat we get an energie per molecule
@@ -419,6 +376,36 @@ def test_forward_pass_with_all_datasets(
     assert torch.all(pair_list[0, 1:] >= pair_list[0, :-1])
 
 
+@pytest.mark.parametrize(
+    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+)
+def test_save_as_torchscript_model(potential_name, single_batch_with_batchsize):
+    # this test sends a single batch from different datasets through the model
+    import torch
+    from modelforge.dataset.dataset import convert_to_namedtuple
+    dataset_name = "qm9"
+    batch = batch = single_batch_with_batchsize(batch_size=6, dataset_name=dataset_name)
+    nnp_input = convert_to_namedtuple(batch.nnp_input)
+
+    # read default parameters
+    config = load_configs_into_pydantic_models(
+        f"{potential_name.lower()}", dataset_name
+    )
+
+    # test the forward pass through each of the models
+    model = NeuralNetworkPotentialFactory.generate_potential(
+        use="inference",
+        potential_parameter=config["potential"],
+    )
+
+    model_scripted = torch.jit.script(model)  # Export to TorchScript
+    print(model_scripted)
+    model_scripted.save("model_scripted.pt")  # Save
+    model = torch.jit.load("model_scripted.pt")
+    model.eval()
+    output = model(nnp_input)
+
+
 @pytest.mark.parametrize("dataset_name", ["QM9", "SPICE2"])
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
@@ -429,6 +416,7 @@ def test_forward_pass(
 ):
     # this test sends a single batch from different datasets through the model
     import torch
+    from modelforge.dataset.dataset import convert_to_jax_namedtuple
 
     batch = batch = single_batch_with_batchsize(batch_size=6, dataset_name=dataset_name)
     nnp_input = batch.nnp_input
@@ -446,7 +434,7 @@ def test_forward_pass(
         potential_parameter=config["potential"],
     )
     if "JAX" in str(type(model)):
-        nnp_input = nnp_input.as_jax_namedtuple()
+        nnp_input = convert_to_jax_namedtuple(batch.nnp_input)
 
     output = model(nnp_input)
 
@@ -555,6 +543,7 @@ def test_calculate_energies_and_forces_with_jax(
     Test the calculation of energies and forces for a molecule.
     """
     import torch
+    from modelforge.dataset.dataset import convert_to_jax_namedtuple
 
     # read default parameters
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
@@ -571,7 +560,7 @@ def test_calculate_energies_and_forces_with_jax(
         simulation_environment="JAX",
     )
 
-    nnp_input = nnp_input.as_jax_namedtuple()
+    nnp_input = convert_to_jax_namedtuple(batch.nnp_input)
 
     result = model(nnp_input)["per_molecule_energy"]
 

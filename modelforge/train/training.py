@@ -101,7 +101,7 @@ class Error(nn.Module, ABC):
         atomic_subsystem_counts : torch.Tensor
             The number of atoms in the atomic subsystems.
         prefactor : int
-           To consider the shape of the property, e.g., if the reference property has shape (N,3) it is necessary to further devide the result by 3
+           To consider the shape of the property, e.g., if the reference property has shape (N,3) it is necessary to further divide the result by 3
         Returns
         -------
         torch.Tensor
@@ -164,13 +164,14 @@ class FromPerAtomToPerMoleculeSquaredError(Error):
         per_molecule_squared_error = torch.zeros_like(
             batch.metadata.E, dtype=per_atom_squared_error.dtype
         )
-        # Aggregate error per molecule
 
+        # Aggregate error per molecule
         per_molecule_squared_error.scatter_add_(
             0,
             batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
             per_atom_squared_error,
         ).contiguous()
+
         # divide by number of atoms
         per_molecule_square_error_scaled = self.scale_by_number_of_atoms(
             per_molecule_squared_error,
@@ -301,9 +302,7 @@ class Loss(nn.Module):
         # save the loss as a dictionary
         loss_dict = {}
         # accumulate loss
-        loss = torch.tensor(
-            [0.0], dtype=batch.metadata.E.dtype, device=batch.metadata.E.device
-        )
+        loss = torch.zeros_like(predict_target["per_molecule_energy_predict"])
         # iterate over loss properties
         for prop in self.loss_property:
             # calculate loss per property
@@ -845,7 +844,8 @@ class TrainingAdapter(pL.LightningModule):
             for property, metrics_dict in error_dict.items():
                 for name, metric in metrics_dict.items():
                     name = f"{phase}/{property}/{conv.get(name, name)}"
-                    self.log(name, metric.compute(), prog_bar=True, sync_dist=True)
+                    value = metric.compute()
+                    self.log(name, value, prog_bar=True, sync_dist=True)
                     metric.reset()
 
     def configure_optimizers(self):

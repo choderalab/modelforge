@@ -99,6 +99,8 @@ class Metadata:
         return self
 
 
+
+@torch.jit.script
 @dataclass
 class NNPInput:
     """
@@ -121,108 +123,42 @@ class NNPInput:
     """
 
     atomic_numbers: torch.Tensor
-    positions: Union[torch.Tensor, Quantity]
+    positions: torch.Tensor
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
-    pair_list: Optional[torch.Tensor] = None
-    partial_charge: Optional[torch.Tensor] = None
+    pair_list: torch.Tensor
 
-    def to(
-        self,
-        *,
-        device: Optional[torch.device] = None,
-        dtype: Optional[torch.dtype] = None,
-    ):
-        """Move all tensors in this instance to the specified device/dtype."""
 
-        if device:
-            self.atomic_numbers = self.atomic_numbers.to(device)
-            self.positions = self.positions.to(device)
-            self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(device)
-            self.total_charge = self.total_charge.to(device)
-            self.pair_list = (
-                self.pair_list.to(device)
-                if self.pair_list is not None
-                else self.pair_list
-            )
-            self.partial_charge = (
-                self.partial_charge.to(device)
-                if self.partial_charge is not None
-                else self.partial_charge
-            )
-        if dtype:
-            self.positions = self.positions.to(dtype)
-        return self
+def convert_to_namedtuple(input: NNPInput) -> NamedTuple:
+    """Export the dataclass fields and values as a named tuple."""
 
-    def __post_init__(self):
-        # Set dtype and convert units if necessary
-        self.atomic_numbers = self.atomic_numbers.to(torch.int32)
+    import collections
+    from dataclasses import fields
 
-        self.partial_charge = (
-            self.atomic_numbers.to(torch.int32) if self.partial_charge else None
-        )
-        self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(torch.int32)
-        self.total_charge = self.total_charge.to(torch.int32)
+    NNPInputTuple = collections.namedtuple(
+        "NNPInputTuple", [field.name for field in fields(input)]
+    )
+    return NNPInputTuple(*[getattr(input, field.name) for field in fields(input)])
 
-        # Unit conversion for positions
-        if isinstance(self.positions, Quantity):
-            positions = self.positions.to(unit.nanometer).m
-            self.positions = torch.tensor(
-                positions, dtype=torch.float32, requires_grad=True
-            )
 
-        # Validate inputs
-        self._validate_inputs()
+def convert_to_jax_namedtuple(input: NNPInput) -> NamedTuple:
+    """Export the dataclass fields and values as a named tuple.
+    Convert pytorch tensors to jax arrays."""
 
-    def _validate_inputs(self):
-        if self.atomic_numbers.dim() != 1:
-            raise ValueError("atomic_numbers must be a 1D tensor")
-        if self.positions.dim() != 2 or self.positions.size(1) != 3:
-            raise ValueError("positions must be a 2D tensor with shape [num_atoms, 3]")
-        if self.atomic_subsystem_indices.dim() != 1:
-            raise ValueError("atomic_subsystem_indices must be a 1D tensor")
-        if self.total_charge.dim() != 1:
-            raise ValueError("total_charge must be a 1D tensor")
+    import collections
+    from dataclasses import fields
 
-        # Optionally, check that the lengths match if required
-        if len(self.positions) != len(self.atomic_numbers):
-            raise ValueError(
-                "The size of atomic_numbers and the first dimension of positions must match"
-            )
-        if len(self.positions) != len(self.atomic_subsystem_indices):
-            raise ValueError(
-                "The size of atomic_subsystem_indices and the first dimension of positions must match"
-            )
+    from modelforge.utils.io import import_
 
-    def as_namedtuple(self) -> NamedTuple:
-        """Export the dataclass fields and values as a named tuple."""
+    convert_to_jax = import_("pytorch2jax").pytorch2jax.convert_to_jax
+    # from pytorch2jax.pytorch2jax import convert_to_jax
 
-        import collections
-        from dataclasses import dataclass, fields
-
-        NNPInputTuple = collections.namedtuple(
-            "NNPInputTuple", [field.name for field in fields(self)]
-        )
-        return NNPInputTuple(*[getattr(self, field.name) for field in fields(self)])
-
-    def as_jax_namedtuple(self) -> NamedTuple:
-        """Export the dataclass fields and values as a named tuple.
-        Convert pytorch tensors to jax arrays."""
-
-        import collections
-        from dataclasses import dataclass, fields
-
-        from modelforge.utils.io import import_
-
-        convert_to_jax = import_("pytorch2jax").pytorch2jax.convert_to_jax
-        # from pytorch2jax.pytorch2jax import convert_to_jax
-
-        NNPInputTuple = collections.namedtuple(
-            "NNPInputTuple", [field.name for field in fields(self)]
-        )
-        return NNPInputTuple(
-            *[convert_to_jax(getattr(self, field.name)) for field in fields(self)]
-        )
+    NNPInputTuple = collections.namedtuple(
+        "NNPInputTuple", [field.name for field in fields(input)]
+    )
+    return NNPInputTuple(
+        *[convert_to_jax(getattr(input, field.name)) for field in fields(input)]
+    )
 
 
 @dataclass
@@ -1550,3 +1486,71 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
         number_of_atoms=atomic_numbers.numel(),
     )
     return BatchData(nnp_input, metadata)
+
+
+from modelforge.dataset.dataset import DatasetFactory
+from modelforge.dataset.utils import (
+    FirstComeFirstServeSplittingStrategy,
+    SplittingStrategy,
+)
+
+
+def initialize_datamodule(
+    dataset_name: str,
+    version_select: str = "nc_1000_v0",
+    batch_size: int = 64,
+    splitting_strategy: SplittingStrategy = FirstComeFirstServeSplittingStrategy(),
+    remove_self_energies: bool = True,
+    regression_ase: bool = False,
+    regenerate_dataset_statistic: bool = False,
+) -> DataModule:
+    """
+    Initialize a dataset for a given mode.
+    """
+
+    data_module = DataModule(
+        dataset_name,
+        splitting_strategy=splitting_strategy,
+        batch_size=batch_size,
+        version_select=version_select,
+        remove_self_energies=remove_self_energies,
+        regression_ase=regression_ase,
+        regenerate_dataset_statistic=regenerate_dataset_statistic,
+    )
+    data_module.prepare_data()
+    data_module.setup()
+    return data_module
+
+
+def single_batch(batch_size: int = 64, dataset_name="QM9"):
+    """
+    Utility function to create a single batch of data for testing.
+    """
+    data_module = initialize_datamodule(
+        dataset_name=dataset_name,
+        batch_size=batch_size,
+        version_select="nc_1000_v0",
+    )
+    return next(iter(data_module.train_dataloader(shuffle=False)))
+
+
+def initialize_dataset(
+    dataset_name: str,
+    local_cache_dir: str,
+    versions_select: str = "nc_1000_v0",
+    force_download: bool = False,
+) -> DataModule:
+    """
+    Initialize a dataset for a given mode.
+    """
+    from modelforge.dataset import _ImplementedDatasets
+
+    factory = DatasetFactory()
+    data = _ImplementedDatasets.get_dataset_class(dataset_name)(
+        local_cache_dir=local_cache_dir,
+        version_select=versions_select,
+        force_download=force_download,
+    )
+    dataset = factory.create_dataset(data)
+
+    return dataset

@@ -474,6 +474,9 @@ class ANIInteraction(nn.Module):
         return output.view_as(species)
 
 
+from .models import NNPInput, PairListOutputs
+
+
 class ANI2xCore(CoreNetwork):
     """
     Core network class for the ANI2x neural network potential.
@@ -558,16 +561,16 @@ class ANI2xCore(CoreNetwork):
         self.register_buffer("lookup_tensor", lookup_tensor)
 
     def _model_specific_input_preparation(
-        self, data: NNPInput, pairlist_output: Dict[str, PairListOutputs]
+        self, nnp_input: NNPInput, pairlist: Dict[str, PairListOutputs]
     ) -> AniNeuralNetworkData:
         """
         Prepare the model-specific input data for the ANI2x model.
 
         Parameters
         ----------
-        data : NNPInput
+        nnp_input : NNPInput
             The input data for the model.
-        pairlist_output : Dict[str,PairListOutputs]
+        pairlist : Dict[str,PairListOutputs]
             The output from the pairlist.
 
         Returns
@@ -575,23 +578,23 @@ class ANI2xCore(CoreNetwork):
         AniNeuralNetworkData
             The prepared input data for the ANI2x model.
         """
-        number_of_atoms = data.atomic_numbers.shape[0]
+        number_of_atoms = nnp_input.atomic_numbers.shape[0]
 
         # Note, pairlist_output is a Dict where the key corresponds to the name of the cutoff parameter
         # e.g. "maximum_interaction_radius"
 
-        pairlist_output = pairlist_output["maximum_interaction_radius"]
+        pairlist_output = pairlist["maximum_interaction_radius"]
 
         nnp_data = AniNeuralNetworkData(
-            pair_indices=pairlist_output.pair_indices,
-            d_ij=pairlist_output.d_ij,
-            r_ij=pairlist_output.r_ij,
+            pair_indices=pairlist.pair_indices,
+            d_ij=pairlist.d_ij,
+            r_ij=pairlist.r_ij,
             number_of_atoms=number_of_atoms,
-            positions=data.positions,
-            atom_index=self.lookup_tensor[data.atomic_numbers.long()],
-            atomic_numbers=data.atomic_numbers,
-            atomic_subsystem_indices=data.atomic_subsystem_indices,
-            total_charge=data.total_charge,
+            positions=nnp_input.positions,
+            atom_index=self.lookup_tensor[nnp_input.atomic_numbers.long()],
+            atomic_numbers=nnp_input.atomic_numbers,
+            atomic_subsystem_indices=nnp_input.atomic_subsystem_indices,
+            total_charge=nnp_input.total_charge,
         )
 
         return nnp_data

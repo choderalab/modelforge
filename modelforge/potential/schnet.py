@@ -14,8 +14,9 @@ from modelforge.potential.utils import NeuralNetworkData
 from .models import PairListOutputs, NNPInput, BaseNetwork, CoreNetwork
 
 
+@torch.jit.script
 @dataclass
-class SchnetNeuralNetworkData(NeuralNetworkData):
+class SchnetNeuralNetworkData(object):
     """
     A dataclass to structure the inputs specifically for SchNet-based neuraletwork potentials, including the necessary
     geometric and chemical information, along with the radial symmetry function expansion (`f_ij`) and the cosine cutoff
@@ -37,54 +38,60 @@ class SchnetNeuralNetworkData(NeuralNetworkData):
         will be populated after initialization.
     """
 
-    atomic_embedding: Optional[torch.Tensor] = field(default=None)
-    f_ij: Optional[torch.Tensor] = field(default=None)
-    f_cutoff: Optional[torch.Tensor] = field(default=None)
+    pair_indices: torch.Tensor
+    d_ij: torch.Tensor
+    r_ij: torch.Tensor
+    atomic_numbers: torch.Tensor
+    number_of_atoms: int
+    positions: torch.Tensor
+    atomic_subsystem_indices: torch.Tensor
+    total_charge: torch.Tensor
 
 
-class SchNetCore(CoreNetwork):
-    """
-    Core network class for the SchNet neural network potential.
-
-    Parameters
-    ----------
-    featurization_config : Dict[str, Union[List[str], int]]
-        Configuration for featurization, including the number of per-atom features and the maximum atomic number to be embedded.
-    number_of_radial_basis_functions : int
-        Number of radial basis functions.
-    number_of_interaction_modules : int
-        Number of interaction modules.
-    number_of_filters : int
-        Number of filters, defines the dimensionality of the intermediate features.
-    shared_interactions : bool
-        Whether to share interaction parameters across all interaction modules.
-    maximum_interaction_radius : openff.units.unit.Quantity
-        The cutoff distance for interactions.
-    activation_function : Type[torch.nn.Module]
-        Activation function to use.
-    """
+class SchNetCore(nn.Module):
 
     def __init__(
         self,
-        featurization_config: Dict[str, Union[List[str], int]],
+        featurization_config: Dict[str, Dict[str, int]],
         number_of_radial_basis_functions: int,
         number_of_interaction_modules: int,
         number_of_filters: int,
         shared_interactions: bool,
-        activation_function: Type[torch.nn.Module],
-        maximum_interaction_radius: unit.Quantity,
+        activation_function: torch.nn.Module,
+        maximum_interaction_radius: float,
     ) -> None:
+        """
+        Core network class for the SchNet neural network potential.
 
+        Parameters
+        ----------
+        featurization_config : Dict[str, Union[List[str], int]]
+            Configuration for featurization, including the number of per-atom features and the maximum atomic number to be embedded.
+        number_of_radial_basis_functions : int
+            Number of radial basis functions.
+        number_of_interaction_modules : int
+            Number of interaction modules.
+        number_of_filters : int
+            Number of filters, defines the dimensionality of the intermediate features.
+        shared_interactions : bool
+            Whether to share interaction parameters across all interaction modules.
+        maximum_interaction_radius : openff.units.unit.Quantity
+            The cutoff distance for interactions.
+        activation_function : Type[torch.nn.Module]
+            Activation function to use.
+        """
+        super().__init__()
         log.debug("Initializing the SchNet architecture.")
         from modelforge.potential.utils import DenseWithCustomDist
 
-        super().__init__(activation_function)
+        self.activation_function = activation_function
+        atomic_number_feature = featurization_config["atomic_number"]
         self.number_of_filters = number_of_filters or int(
-            featurization_config["number_of_per_atom_features"]
+            atomic_number_feature["number_of_per_atom_features"]
         )
         self.number_of_radial_basis_functions = number_of_radial_basis_functions
         number_of_per_atom_features = int(
-            featurization_config["number_of_per_atom_features"]
+            atomic_number_feature["number_of_per_atom_features"]
         )
 
         # Initialize representation block
@@ -153,15 +160,12 @@ class SchNetCore(CoreNetwork):
         """
         number_of_atoms = data.atomic_numbers.shape[0]
 
-        # Note, pairlist_output is a Dict where the key corresponds to the name of the cutoff parameter
-        # e.g. "maximum_interaction_radius"
+        pairlist_output_section = pairlist_output["maximum_interaction_radius"]
 
-        pairlist_output = pairlist_output["maximum_interaction_radius"]
-
-        nnp_input = SchnetNeuralNetworkData(
-            pair_indices=pairlist_output.pair_indices,
-            d_ij=pairlist_output.d_ij,
-            r_ij=pairlist_output.r_ij,
+        return SchnetNeuralNetworkData(
+            pair_indices=pairlist_output_section.pair_indices,
+            d_ij=pairlist_output_section.d_ij,
+            r_ij=pairlist_output_section.r_ij,
             number_of_atoms=number_of_atoms,
             positions=data.positions,
             atomic_numbers=data.atomic_numbers,
@@ -169,10 +173,9 @@ class SchNetCore(CoreNetwork):
             total_charge=data.total_charge,
         )
 
-        return nnp_input
-
+    #    @torch.jit.script
     def compute_properties(
-        self, data: Type[SchnetNeuralNetworkData]
+        self, data: SchnetNeuralNetworkData
     ) -> Dict[str, torch.Tensor]:
         """
         Calculate the properties for a given input batch.
@@ -210,6 +213,28 @@ class SchNetCore(CoreNetwork):
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
 
+    def forward(self, nnp_input: NNPInput, pairlist_output: Dict[str, PairListOutputs]):
+
+        # Perform model-specific modifications
+        model_specific_input = self._model_specific_input_preparation(
+            nnp_input, pairlist_output
+        )
+
+        # Perform the forward pass using the provided function
+        outputs = self.compute_properties(model_specific_input)
+
+        # Add atomic numbers to the output
+        outputs["atomic_numbers"] = model_specific_input.atomic_numbers
+
+        return outputs
+
+    def load_pretrained_weights(self, path: str):
+        """
+        Loads pretrained weights into the model from the specified path.
+        """
+        self.load_state_dict(torch.load(path, map_location=self.device))
+        self.eval()
+
 
 class SchNETInteractionModule(nn.Module):
     """
@@ -232,7 +257,7 @@ class SchNETInteractionModule(nn.Module):
         number_of_per_atom_features: int,
         number_of_filters: int,
         number_of_radial_basis_functions: int,
-        activation_function: Type[torch.nn.Module],
+        activation_function: torch.nn.Module,
     ) -> None:
 
         super().__init__()
@@ -253,7 +278,6 @@ class SchNETInteractionModule(nn.Module):
             number_of_per_atom_features,
             number_of_filters,
             bias=False,
-            activation_function=None,
         )
         self.feature_to_output = nn.Sequential(
             DenseWithCustomDist(
@@ -264,7 +288,6 @@ class SchNETInteractionModule(nn.Module):
             DenseWithCustomDist(
                 number_of_per_atom_features,
                 number_of_per_atom_features,
-                activation_function=None,
             ),
         )
         self.filter_network = nn.Sequential(
@@ -276,7 +299,6 @@ class SchNETInteractionModule(nn.Module):
             DenseWithCustomDist(
                 number_of_filters,
                 number_of_filters,
-                activation_function=None,
             ),
         )
 
@@ -342,9 +364,9 @@ class SchNETRepresentation(nn.Module):
 
     def __init__(
         self,
-        radial_cutoff: unit.Quantity,
+        radial_cutoff: float,
         number_of_radial_basis_functions: int,
-        featurization_config: Dict[str, Union[List[str], int]],
+        featurization_config: Dict[str, Dict[str, int]],
     ):
         super().__init__()
 
@@ -352,13 +374,16 @@ class SchNETRepresentation(nn.Module):
             radial_cutoff, number_of_radial_basis_functions
         )
         # Initialize cutoff module
-        from modelforge.potential import CosineAttenuationFunction, FeaturizeInput
+        from modelforge.potential import CosineAttenuationFunction
 
-        self.featurize_input = FeaturizeInput(featurization_config)
+        self.featurize_input = torch.nn.Embedding(
+            int(featurization_config["atomic_number"]["maximum_atomic_number"]),
+            int(featurization_config["atomic_number"]["number_of_per_atom_features"]),
+        )
         self.cutoff_module = CosineAttenuationFunction(radial_cutoff)
 
     def _setup_radial_symmetry_functions(
-        self, radial_cutoff: unit.Quantity, number_of_radial_basis_functions: int
+        self, radial_cutoff: float, number_of_radial_basis_functions: int
     ):
         from .utils import SchnetRadialBasisFunction
 
@@ -369,7 +394,7 @@ class SchNETRepresentation(nn.Module):
         )
         return radial_symmetry_function
 
-    def forward(self, data: Type[SchnetNeuralNetworkData]) -> Dict[str, torch.Tensor]:
+    def forward(self, data: SchnetNeuralNetworkData) -> Dict[str, torch.Tensor]:
         """
         Generate the radial symmetry representation of the pairwise distances.
 
@@ -394,72 +419,37 @@ class SchNETRepresentation(nn.Module):
             "f_ij": f_ij,
             "f_cutoff": f_cutoff,
             "atomic_embedding": self.featurize_input(
-                data
+                data.atomic_numbers
             ),  # add per-atom properties and embedding
         }
 
 
-from typing import List, Union
-from modelforge.utils.units import _convert_str_to_unit
-from modelforge.utils.io import import_
 from modelforge.potential.utils import shared_config_prior
+from modelforge.potential.models import PostProcessing, ComputeInteractingAtomPairs
 
 
-class SchNet(BaseNetwork):
-    """
-    SchNet network for modeling quantum interactions.
-
-    Schütt, Kindermans, Sauceda, Chmiela, Tkatchenko, Müller: SchNet: A continuous-filter
-    convolutional neural network for modeling quantum interactions.
-
-    Parameters
-    ----------
-    featurization : Dict[str, Union[List[str], int]]
-        Configuration for atom featurization.
-    number_of_radial_basis_functions : int
-        Number of radial basis functions.
-    number_of_interaction_modules : int
-        Number of interaction modules.
-    maximum_interaction_radius : Union[unit.Quantity, str]
-        The cutoff distance for interactions.
-    number_of_filters : int
-        Number of filters.
-    shared_interactions : bool
-        Whether to use shared interactions.
-    activation_function_parameter : Dict
-        Dict that contains keys: activation_function_name [str], activation_function_arguments [Dict],
-        and activation_function [Type[torch.nn.Module]].
-    postprocessing_parameter : Dict[str, Dict[str, bool]]
-        Configuration for postprocessing parameters.
-    dataset_statistic : Optional[Dict[str, float]], default=None
-        Statistics of the dataset.
-    potential_seed : Optional[int], optional
-        Seed for the random number generator, default None.
-    """
+class SchNet(torch.nn.Module):
 
     def __init__(
         self,
-        featurization: Dict[str, Union[List[str], int]],
+        featurization: Dict[str, Dict[str, int]],
         number_of_radial_basis_functions: int,
         number_of_interaction_modules: int,
-        maximum_interaction_radius: Union[unit.Quantity, str],
+        maximum_interaction_radius: float,
         number_of_filters: int,
         activation_function_parameter: Dict,
         shared_interactions: bool,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
-        dataset_statistic: Optional[Dict[str, float]] = None,
-        potential_seed: Optional[int] = None,
+        dataset_statistic: Dict[str, Dict[str, float]],
+        potential_seed: int = -1,
     ) -> None:
+        """
+        SchNet network for modeling quantum interactions.
 
-        self.only_unique_pairs = False  # NOTE: need to be set before super().__init__
-
-        super().__init__(
-            dataset_statistic=dataset_statistic,
-            postprocessing_parameter=postprocessing_parameter,
-            maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
-            potential_seed=potential_seed,
-        )
-
+        Schütt, Kindermans, Sauceda, Chmiela, Tkatchenko, Müller: SchNet: A continuous-filter
+        convolutional neural network for modeling quantum interactions.
+        """
+        super().__init__()
         activation_function = activation_function_parameter["activation_function"]
 
         self.core_module = SchNetCore(
@@ -469,8 +459,144 @@ class SchNet(BaseNetwork):
             number_of_filters=number_of_filters,
             shared_interactions=shared_interactions,
             activation_function=activation_function,
-            maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
+            maximum_interaction_radius=maximum_interaction_radius,
         )
+
+        if potential_seed != -1:
+            import torch, numpy, random
+
+            torch.manual_seed(potential_seed)
+            numpy.random.seed(potential_seed)
+            random.seed(potential_seed)
+
+        # self.postprocessing = PostProcessing(
+        #    postprocessing_parameter, dataset_statistic
+        # )
+
+        cutoffs = {}
+        cutoffs["maximum_interaction_radius"] = maximum_interaction_radius
+
+        # create the ComputeInteractingAtomPairs object
+        self.compute_interacting_pairs = ComputeInteractingAtomPairs(
+            cutoffs=cutoffs,
+            only_unique_pairs=False,
+        )
+
+    def load_state_dict(
+        self,
+        state_dict: Dict[str, torch.Tensor],
+        strict: bool = True,
+        assign: bool = False,
+    ):
+        """
+        Load the state dictionary into the model, with optional prefix removal
+        and key exclusions.
+
+        Parameters
+        ----------
+        state_dict : Mapping[str, Any]
+            The state dictionary to load.
+        strict : bool, optional
+            Whether to strictly enforce that the keys in `state_dict` match the
+            keys returned by this module's `state_dict()` function (default is
+            True).
+        assign : bool, optional
+            Whether to assign the state dictionary to the model directly
+            (default is False).
+
+        Notes
+        -----
+        This function can remove a specific prefix from the keys in the state
+        dictionary. It can also exclude certain keys from being loaded into the
+        model.
+        """
+
+        # Prefix to remove
+        prefix = "potential."
+        excluded_keys = ["loss.per_molecule_energy", "loss.per_atom_force"]
+
+        # Create a new dictionary without the prefix in the keys if prefix exists
+        if any(key.startswith(prefix) for key in state_dict.keys()):
+            filtered_state_dict = {
+                key[len(prefix) :] if key.startswith(prefix) else key: value
+                for key, value in state_dict.items()
+                if key not in excluded_keys
+            }
+            log.debug(f"Removed prefix: {prefix}")
+        else:
+            # Create a filtered dictionary without excluded keys if no prefix exists
+            filtered_state_dict = {
+                k: v for k, v in state_dict.items() if k not in excluded_keys
+            }
+            log.debug("No prefix found. No modifications to keys in state loading.")
+
+        super().load_state_dict(filtered_state_dict, strict=strict, assign=assign)
+
+    @torch.jit.ignore
+    def prepare_pairwise_properties(self, nnp_input):
+        """
+        Prepare the pairwise properties for the model.
+
+        Parameters
+        ----------
+        nnp_input : Union[NNPInput, NamedTuple]
+            The input data to prepare.
+
+        Returns
+        -------
+        PairListOutputs
+            The prepared pairwise properties.
+        """
+
+        self.compute_interacting_pairs._input_checks(nnp_input)
+        return self.compute_interacting_pairs.prepare_inputs(nnp_input)
+
+    def compute(
+        self, data: NNPInput, neighborlist: Dict[str, PairListOutputs]
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Compute the core model's output.
+
+        Parameters
+        ----------
+        data : Union[NNPInput, NamedTuple]
+            The input data.
+        neighborlist : PairListOutputs
+            The prepared pairwise properties.
+
+        Returns
+        -------
+        Any
+            The core model's output.
+        """
+        return self.core_module(data, neighborlist)
+
+    def forward(self, input_data: NNPInput) -> Dict[str, torch.Tensor]:
+        """
+        Executes the forward pass of the model.
+
+        This method performs input checks, prepares the inputs, and computes the
+        outputs using the core network.
+
+        Parameters
+        ----------
+        input_data : NNPInput
+            The input data provided by the dataset, containing atomic numbers,
+            positions, and other necessary information.
+
+        Returns
+        -------
+        Any
+            The outputs computed by the core network.
+        """
+
+        # compute all interacting pairs with distances
+        pairwise_properties = self.prepare_pairwise_properties(input_data)
+        # prepare the input for the forward pass
+        output = self.compute(input_data, pairwise_properties)
+        # perform postprocessing operations
+        #        processed_output = self.postprocessing(output)
+        return output
 
     def _config_prior(self):
         """

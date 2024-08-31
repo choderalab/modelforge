@@ -13,6 +13,7 @@ from typing import (
     Type,
     Optional,
     List,
+    Union,
 )
 
 import lightning as pl
@@ -50,28 +51,13 @@ class PairListOutputs(NamedTuple):
     r_ij: torch.Tensor
 
 
-class Pairlist(Module):
-    """
-    Handle pair list calculations for systems, returning indices, distances and distance vectors for atom pairs within a certain cutoff.
+class CalculatePairs(Module):
 
-    Attributes
-    ----------
-    only_unique_pairs : bool
-        If True, only unique pairs are returned (default is False).
-    """
-
-    def __init__(self, only_unique_pairs: bool = False):
-        """
-        Initialize the Pairlist object.
-
-        Parameters
-        ----------
-        only_unique_pairs : bool, optional
-            If True, only unique pairs are returned (default is False).
-        """
+    def __init__(self, unique_pairs) -> None:
         super().__init__()
-        self.only_unique_pairs = only_unique_pairs
+        self.unique_pairs = unique_pairs
 
+    @torch.jit.ignore
     def enumerate_all_pairs(self, atomic_subsystem_indices: torch.Tensor):
         """
         Compute all pairs of atoms and their distances.
@@ -170,6 +156,54 @@ class Pairlist(Module):
 
         return pair_indices.to(device)
 
+    def construct_initial_pairlist_using_pytorch(
+        self, atomic_subsystem_indices: torch.Tensor
+    ):
+        """Compute all pairs of atoms and also return counts of the number of pairs for each molecule in batch.
+
+        Parameters
+        ----------
+        atomic_subsystem_indices : torch.Tensor
+            Atom indices to indicate which atoms belong to which molecule.
+
+        Returns
+        -------
+        pair_indices : torch.Tensor, shape (2, n_pairs)
+            Pairs of atom indices, 0-indexed for each molecule
+        number_of_pairs : torch.Tensor, shape (n_molecules)
+            The number to index into pair_indices for each molecule
+        """
+
+        # get the number of atoms in each molecule
+        repeats = torch.bincount(atomic_subsystem_indices)
+
+        # calculate the number of pairs for each molecule, using simple permutation
+        npairs_by_molecule = repeats * (repeats - 1)
+
+        # Generate i_indices and j_indices for each molecule
+        i_indices = torch.cat(
+            [
+                torch.repeat_interleave(torch.arange(r, dtype=torch.int16), r)
+                for r in repeats
+            ]
+        )
+        j_indices = torch.cat(
+            [
+                torch.cat([torch.arange(r, dtype=torch.int16) for _ in range(r)])
+                for r in repeats
+            ]
+        )
+
+        # filter out identical pairs where i == j
+        unique_pairs_mask = i_indices != j_indices
+        i_final_pairs = i_indices[unique_pairs_mask]
+        j_final_pairs = j_indices[unique_pairs_mask]
+
+        # concatenate to form final (2, n_pairs) vector
+        pair_indices = torch.stack((i_final_pairs, j_final_pairs))
+
+        return pair_indices, npairs_by_molecule
+
     def construct_initial_pairlist_using_numpy(
         self, atomic_subsystem_indices: torch.Tensor
     ):
@@ -199,10 +233,8 @@ class Pairlist(Module):
         # using a combination of unique and argsort would make this work for any numbering ordering
         # but that is not how the data ends up being structured internally, and thus is not needed
 
-        import numpy as np
-
         # get the number of atoms in each molecule
-        repeats = np.bincount(atomic_subsystem_indices)
+        repeats = torch.bincount(atomic_subsystem_indices)
 
         # calculate the number of pairs for each molecule, using simple permutation
         npairs_by_molecule = np.array([r * (r - 1) for r in repeats], dtype=np.int16)
@@ -273,13 +305,36 @@ class Pairlist(Module):
         torch.Tensor
             Euclidean distances. Shape: [n_pairs, 1].
         """
-        return r_ij.norm(dim=1).unsqueeze(1)
+        return r_ij.norm(p=2, dim=1, keepdim=True)
+
+
+class Pairlist(Module):
+    """
+    Handle pair list calculations for systems, returning indices, distances and distance vectors for atom pairs within a certain cutoff.
+
+    Attributes
+    ----------
+    only_unique_pairs : bool
+        If True, only unique pairs are returned (default is False).
+    """
+
+    def __init__(self, only_unique_pairs: bool = False):
+        """
+        Initialize the Pairlist object.
+
+        Parameters
+        ----------
+        only_unique_pairs : bool, optional
+            If True, only unique pairs are returned (default is False).
+        """
+        super().__init__()
+        self.calculate_pairs = CalculatePairs(only_unique_pairs)
 
     def forward(
         self,
         positions: torch.Tensor,
         atomic_subsystem_indices: torch.Tensor,
-    ) -> PairListOutputs:
+    ) -> Union[PairListOutputs, Dict[str, PairListOutputs]]:
         """
         Performs the forward pass of the Pairlist module.
 
@@ -297,28 +352,26 @@ class Pairlist(Module):
             d_ij (torch.Tensor): A tensor of shape (n_pairs, 1) containing the Euclidean distances between the atoms in each pair.
             r_ij (torch.Tensor): A tensor of shape (n_pairs, 3) containing the displacement vectors between the atoms in each pair.
         """
-        pair_indices = self.enumerate_all_pairs(
+        pair_indices = self.calculate_pairs.enumerate_all_pairs(
             atomic_subsystem_indices,
         )
-        r_ij = self.calculate_r_ij(pair_indices, positions)
+        r_ij = self.calculate_pairs.calculate_r_ij(pair_indices, positions)
 
         return PairListOutputs(
             pair_indices=pair_indices,
-            d_ij=self.calculate_d_ij(r_ij),
+            d_ij=self.calculate_pairs.calculate_d_ij(r_ij),
             r_ij=r_ij,
         )
 
 
-class Neighborlist(Pairlist):
+class Neighborlist(Module):
     """
     Manage neighbor list calculations with a specified cutoff distance(s).
 
     This class extends Pairlist to consider a cutoff distance for neighbor calculations.
     """
 
-    def __init__(
-        self, cutoffs: Dict[str, unit.Quantity], only_unique_pairs: bool = False
-    ):
+    def __init__(self, cutoffs: Dict[str, float], only_unique_pairs: bool = False):
         """
         Initialize the Neighborlist with a specific cutoff distance.
 
@@ -329,12 +382,11 @@ class Neighborlist(Pairlist):
         only_unique_pairs : bool, optional
             If True, only unique pairs are returned (default is False).
         """
-        super().__init__(only_unique_pairs=only_unique_pairs)
+        super().__init__()
+        self.calculate_pairs = CalculatePairs(only_unique_pairs)
 
         # self.register_buffer("cutoff", torch.tensor(cutoff.to(unit.nanometer).m))
-        self.register_buffer(
-            "cutoffs", torch.tensor([c.to(unit.nanometer).m for c in cutoffs.values()])
-        )
+        self.register_buffer("cutoffs", torch.tensor([c for c in cutoffs.values()]))
         self.labels = list(cutoffs.keys())
 
     def forward(
@@ -342,7 +394,7 @@ class Neighborlist(Pairlist):
         positions: torch.Tensor,
         atomic_subsystem_indices: torch.Tensor,
         pair_indices: Optional[torch.Tensor] = None,
-    ) -> PairListOutputs:
+    ) -> Dict[str, PairListOutputs]:
         """
         Forward pass to compute neighbor list considering a cutoff distance.
 
@@ -364,12 +416,12 @@ class Neighborlist(Pairlist):
         """
 
         if pair_indices is None:
-            pair_indices = self.enumerate_all_pairs(
+            pair_indices = self.calculate_pairs.enumerate_all_pairs(
                 atomic_subsystem_indices,
             )
 
-        r_ij = self.calculate_r_ij(pair_indices, positions)
-        d_ij = self.calculate_d_ij(r_ij)
+        r_ij = self.calculate_pairs.calculate_r_ij(pair_indices, positions)
+        d_ij = self.calculate_pairs.calculate_d_ij(r_ij)
 
         interacting_outputs = {}
         for cutoff, label in zip(self.cutoffs, self.labels):
@@ -584,8 +636,9 @@ class NeuralNetworkPotentialFactory:
         training_parameter: Optional[TrainingParameters] = None,
         dataset_parameter: Optional[DatasetParameters] = None,
         dataset_statistic: Optional[Dict[str, float]] = None,
-        potential_seed: Optional[int] = None,
-        simulation_environment: Optional[Literal["PyTorch", "JAX"]] = None,
+        potential_seed: int = -1,
+        simulation_environment: Optional[Literal["PyTorch", "JAX"]] = "PyTorch",
+        jit: bool = False,
     ) -> Union[Type[torch.nn.Module], Type[JAXModel], Type[pl.LightningModule]]:
         """
         Creates an NNP instance of the specified type, configured either for training or inference.
@@ -677,9 +730,7 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
     distances (d_ij), and displacement vectors (r_ij) for molecular simulations.
     """
 
-    def __init__(
-        self, cutoffs: Dict[str, unit.Quantity], only_unique_pairs: bool = True
-    ):
+    def __init__(self, cutoffs: Dict[str, float], only_unique_pairs: bool = True):
         """
         Initialize the ComputeInteractingAtomPairs module.
 
@@ -699,7 +750,7 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
         self.only_unique_pairs = only_unique_pairs
         self.calculate_distances_and_pairlist = Neighborlist(cutoffs, only_unique_pairs)
 
-    def prepare_inputs(self, data: Union[NNPInput, NamedTuple]):
+    def prepare_inputs(self, nnp_input: Union[NNPInput, NamedTuple]):
         """
         Prepares the input tensors for passing to the model.
 
@@ -709,7 +760,7 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
 
         Parameters
         ----------
-        data : Union[NNPInput, NamedTuple]
+        nnp_input : Union[NNPInput, NamedTuple]
             The input data provided by the dataset, containing atomic numbers,
             positions, and other necessary information.
 
@@ -721,27 +772,27 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
         """
         # ---------------------------
         # general input manipulation
-        positions = data.positions
-        atomic_subsystem_indices = data.atomic_subsystem_indices
+        positions = nnp_input.positions
+        atomic_subsystem_indices = nnp_input.atomic_subsystem_indices
         # calculate pairlist if none is provided
-        if data.pair_list is None:
+        if nnp_input.pair_list is None:
             pairlist_output = self.calculate_distances_and_pairlist(
                 positions=positions,
                 atomic_subsystem_indices=atomic_subsystem_indices,
                 pair_indices=None,
             )
-            pair_list = data.pair_list
+            pair_list = nnp_input.pair_list
         else:
             # pairlist is provided, remove redundant pairs if requested
             if self.only_unique_pairs:
-                i_indices = data.pair_list[0]
-                j_indices = data.pair_list[1]
+                i_indices = nnp_input.pair_list[0]
+                j_indices = nnp_input.pair_list[1]
                 unique_pairs_mask = i_indices < j_indices
                 i_final_pairs = i_indices[unique_pairs_mask]
                 j_final_pairs = j_indices[unique_pairs_mask]
                 pair_list = torch.stack((i_final_pairs, j_final_pairs))
             else:
-                pair_list = data.pair_list
+                pair_list = nnp_input.pair_list
             # only calculate d_ij and r_ij
             pairlist_output = self.calculate_distances_and_pairlist(
                 positions=positions,
@@ -749,7 +800,8 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
                 pair_indices=pair_list.to(torch.int64),
             )
 
-        # this will return a Dict of the PairListOutputs for each cutoff we specify
+        # this will return a Dict of the PairListOutputs for each cutoff we
+        # specify
         return pairlist_output
 
     def _input_checks(self, data: Union[NNPInput, NamedTuple]):
@@ -814,7 +866,6 @@ class PostProcessing(torch.nn.Module):
 
         # operations that use nn.Sequence to pass the output of the model to the next
         self.registered_chained_operations = ModuleDict()
-
         self.dataset_statistic = dataset_statistic
 
         self._initialize_postprocessing(
@@ -895,6 +946,7 @@ class PostProcessing(torch.nn.Module):
                         mean,
                         stddev,
                     ) = self._get_per_atom_energy_mean_and_stddev_of_dataset()
+
                     postprocessing_sequence.append(
                         ScaleValues(
                             mean=mean,
@@ -968,7 +1020,7 @@ class PostProcessing(torch.nn.Module):
 
             self.registered_chained_operations[property] = postprocessing_sequence
 
-    def forward(self, data: Dict[str, torch.Tensor]):
+    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
         Perform post-processing operations for all registered properties.
 
@@ -982,7 +1034,6 @@ class PostProcessing(torch.nn.Module):
         Dict[str, torch.Tensor]
             The post-processed data.
         """
-
         # NOTE: this is not very elegant, but I am unsure how to do this better
         # I am currently directly writing new keys and values in the data dictionary
         for property in PostProcessing._SUPPORTED_PROPERTIES:
@@ -1039,10 +1090,12 @@ class BaseNetwork(Module):
 
             torch.manual_seed(potential_seed)
 
-            # according to https://docs.ray.io/en/latest/tune/faq.html#how-can-i-reproduce-experiments
-            # we should also set the same seed for numpy.random and python random module
-            # when doing hyperparameter optimization with ray tune.  E.g., the ASHA scheduler relies on numpy.random
-            # and doesn't take a seed as an argument, so we need to set it here.
+            # according to
+            # https://docs.ray.io/en/latest/tune/faq.html#how-can-i-reproduce-experiments
+            # we should also set the same seed for numpy.random and python
+            # random module when doing hyperparameter optimization with ray
+            # tune.  E.g., the ASHA scheduler relies on numpy.random and doesn't
+            # take a seed as an argument, so we need to set it here.
             import numpy as np
 
             np.random.seed(potential_seed)
@@ -1061,8 +1114,9 @@ class BaseNetwork(Module):
                 "The only_unique_pairs attribute is not set in the child class. Please set it to True or False before calling super().__init__."
             )
 
-        # to handle multiple cutoffs, we will create a dictionary with the cutoffs
-        # the dictionary will make it more transparent which PairListOutputs belong to which cutoff
+        # to handle multiple cutoffs, we will create a dictionary with the
+        # cutoffs the dictionary will make it more transparent which
+        # PairListOutputs belong to which cutoff
 
         cutoffs = {}
         cutoffs["maximum_interaction_radius"] = _convert_str_to_unit(
@@ -1129,13 +1183,13 @@ class BaseNetwork(Module):
 
         super().load_state_dict(filtered_state_dict, strict=strict, assign=assign)
 
-    def prepare_pairwise_properties(self, data):
+    def prepare_pairwise_properties(self, nnp_input):
         """
         Prepare the pairwise properties for the model.
 
         Parameters
         ----------
-        data : Union[NNPInput, NamedTuple]
+        nnp_input : Union[NNPInput, NamedTuple]
             The input data to prepare.
 
         Returns
@@ -1144,10 +1198,12 @@ class BaseNetwork(Module):
             The prepared pairwise properties.
         """
 
-        self.compute_interacting_pairs._input_checks(data)
-        return self.compute_interacting_pairs.prepare_inputs(data)
+        self.compute_interacting_pairs._input_checks(nnp_input)
+        return self.compute_interacting_pairs.prepare_inputs(nnp_input)
 
-    def compute(self, data, core_input):
+    def compute(
+        self, data: NNPInput, neighborlist: Dict[str, PairListOutputs]
+    ) -> Dict[str, torch.Tensor]:
         """
         Compute the core model's output.
 
@@ -1155,7 +1211,7 @@ class BaseNetwork(Module):
         ----------
         data : Union[NNPInput, NamedTuple]
             The input data.
-        core_input : PairListOutputs
+        neighborlist : PairListOutputs
             The prepared pairwise properties.
 
         Returns
@@ -1163,9 +1219,9 @@ class BaseNetwork(Module):
         Any
             The core model's output.
         """
-        return self.core_module(data, core_input)
+        return self.core_module(data, neighborlist)
 
-    def forward(self, input_data: NNPInput):
+    def forward(self, input_data: NNPInput) -> Dict[str, torch.Tensor]:
         """
         Executes the forward pass of the model.
 
@@ -1193,7 +1249,29 @@ class BaseNetwork(Module):
         return processed_output
 
 
-from modelforge.potential.utils import ACTIVATION_FUNCTIONS
+from typing import Callable
+
+
+def compute_forward_pass(
+    nnp_input,
+    pairlist_output,
+    input_preparation_fn: Callable,
+    compute_properties_fn: Callable,
+):
+    """
+    General forward pass function that applies the input preparation and
+    property computation functions.
+    """
+    # Perform model-specific modifications
+    model_specific_input = input_preparation_fn(nnp_input, pairlist_output)
+
+    # Perform the forward pass using the provided function
+    outputs = compute_properties_fn(model_specific_input)
+
+    # Add atomic numbers to the output
+    outputs["atomic_numbers"] = model_specific_input.atomic_numbers
+
+    return outputs
 
 
 class CoreNetwork(Module, ABC):
@@ -1224,7 +1302,7 @@ class CoreNetwork(Module, ABC):
 
     @abstractmethod
     def _model_specific_input_preparation(
-        self, data: NNPInput, pairlist: PairListOutputs
+        self, nnp_input: NNPInput, pairlist: Dict[str, PairListOutputs]
     ) -> Union[
         "PhysNetNeuralNetworkData",
         "PaiNNNeuralNetworkData",
@@ -1240,7 +1318,7 @@ class CoreNetwork(Module, ABC):
 
         Parameters
         ----------
-        data : NNPInput
+        nnp_input : NNPInput
             The initial inputs to the neural network model, including atomic
             numbers, positions, and other relevant data.
         pairlist : PairListOutputs
@@ -1264,7 +1342,7 @@ class CoreNetwork(Module, ABC):
             "AniNeuralNetworkData",
             "SAKENeuralNetworkInput",
         ],
-    ):
+    ) -> Dict[str, torch.Tensor]:
         """
         Defines the forward pass of the model.
 
@@ -1302,14 +1380,14 @@ class CoreNetwork(Module, ABC):
         self.eval()  # Set the model to evaluation mode
 
     def forward(
-        self, data: NNPInput, pairlist_output: PairListOutputs
+        self, nnp_input: NNPInput, pairlist_output: Dict[str, PairListOutputs]
     ) -> Dict[str, torch.Tensor]:
         """
         Implements the forward pass through the network.
 
         Parameters
         ----------
-        data : NNPInput
+        nnp_input : NNPInput
             Contains input data for the batch obtained directly from the
             dataset, including atomic numbers, positions, and other relevant
             fields.
@@ -1324,10 +1402,12 @@ class CoreNetwork(Module, ABC):
             forward pass.
         """
         # perform model specific modifications
-        nnp_input = self._model_specific_input_preparation(data, pairlist_output)
+        model_specific_input = self._model_specific_input_preparation(
+            nnp_input, pairlist_output
+        )
         # perform the forward pass implemented in the subclass
-        outputs = self.compute_properties(nnp_input)
+        outputs = self.compute_properties(model_specific_input)
         # add atomic numbers to the output
-        outputs["atomic_numbers"] = data.atomic_numbers
+        outputs["atomic_numbers"] = model_specific_input.atomic_numbers
 
         return outputs

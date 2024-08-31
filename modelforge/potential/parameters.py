@@ -10,10 +10,11 @@ from pydantic import (
     ConfigDict,
     model_validator,
     computed_field,
+    Field,
 )
 from openff.units import unit
 from typing import Union, List, Optional, Type
-from modelforge.utils.units import _convert_str_to_unit
+from modelforge.utils.units import _convert_str_to_unit, _convert_str_to_unit_length
 from enum import Enum
 
 import torch
@@ -158,21 +159,23 @@ class ANI2xParameters(ParametersBase):
 
 class SchNetParameters(ParametersBase):
     class CoreParameter(ParametersBase):
-        class Featurization(ParametersBase):
-            properties_to_featurize: List[str]
-            maximum_atomic_number: int
-            number_of_per_atom_features: int
+        class Featurization(BaseModel):
+            class AtomicNumber(BaseModel):
+                maximum_atomic_number: int = 101
+                number_of_per_atom_features: int = 32
+
+            atomic_number: AtomicNumber = Field(default_factory=AtomicNumber)
 
         number_of_radial_basis_functions: int
-        maximum_interaction_radius: Union[str, unit.Quantity]
+        maximum_interaction_radius: float
         number_of_interaction_modules: int
         number_of_filters: int
         shared_interactions: bool
         activation_function_parameter: ActivationFunctionConfig
-        featurization: Featurization
+        featurization: Featurization = Field(default_factory=Featurization)
 
-        converted_units = field_validator("maximum_interaction_radius")(
-            _convert_str_to_unit
+        converted_units = field_validator("maximum_interaction_radius", mode="before")(
+            _convert_str_to_unit_length
         )
 
     class PostProcessingParameter(ParametersBase):
@@ -184,7 +187,7 @@ class SchNetParameters(ParametersBase):
     potential_name: str = "SchNet"
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
-    potential_seed: Optional[int] = None
+    potential_seed: int = -1
 
 
 class TensorNetParameters(ParametersBase):

@@ -111,17 +111,17 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         Dict[str, torch.Tensor]
             The output data dictionary containing the per-molecule property.
         """
-        indices = data[self.index_name].to(torch.int64)
+        indices = data[self.index_name]
         per_atom_property = data[self.per_atom_property_name]
         # Perform scatter add operation for atoms belonging to the same molecule
         property_per_molecule_zeros = torch.zeros(
-            len(indices.unique()),
+            indices.bincount().size(0),
             dtype=per_atom_property.dtype,
             device=per_atom_property.device,
         )
 
         property_per_molecule = property_per_molecule_zeros.scatter_reduce(
-            0, indices, per_atom_property, reduce=self.reduction_mode
+            0, indices.to(torch.int64), per_atom_property, reduce=self.reduction_mode
         )
         data[self.output_name] = property_per_molecule
         if self.keep_per_atom_property is False:

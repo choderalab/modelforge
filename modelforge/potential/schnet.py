@@ -14,6 +14,11 @@ from modelforge.potential.utils import NeuralNetworkData
 from .models import PairListOutputs, NNPInput, BaseNetwork, CoreNetwork
 
 
+class SchNet:
+    def __init__(self) -> None:
+        pass
+
+
 @dataclass
 class SchnetNeuralNetworkData(NeuralNetworkData):
     """
@@ -43,30 +48,9 @@ class SchnetNeuralNetworkData(NeuralNetworkData):
 
 
 class SchNetCore(CoreNetwork):
-    """
-    Core network class for the SchNet neural network potential.
-
-    Parameters
-    ----------
-    featurization_config : Dict[str, Union[List[str], int]]
-        Configuration for featurization, including the number of per-atom features and the maximum atomic number to be embedded.
-    number_of_radial_basis_functions : int
-        Number of radial basis functions.
-    number_of_interaction_modules : int
-        Number of interaction modules.
-    number_of_filters : int
-        Number of filters, defines the dimensionality of the intermediate features.
-    shared_interactions : bool
-        Whether to share interaction parameters across all interaction modules.
-    maximum_interaction_radius : openff.units.unit.Quantity
-        The cutoff distance for interactions.
-    activation_function : Type[torch.nn.Module]
-        Activation function to use.
-    """
-
     def __init__(
         self,
-        featurization_config: Dict[str, Union[List[str], int]],
+        featurization_config: Dict[str, Dict[str, int]],
         number_of_radial_basis_functions: int,
         number_of_interaction_modules: int,
         number_of_filters: int,
@@ -75,10 +59,11 @@ class SchNetCore(CoreNetwork):
         maximum_interaction_radius: unit.Quantity,
     ) -> None:
 
+        super().__init__(activation_function)
+
         log.debug("Initializing the SchNet architecture.")
         from modelforge.potential.utils import DenseWithCustomDist
 
-        super().__init__(activation_function)
         self.number_of_filters = number_of_filters or int(
             featurization_config["number_of_per_atom_features"]
         )
@@ -172,7 +157,7 @@ class SchNetCore(CoreNetwork):
         return nnp_input
 
     def compute_properties(
-        self, data: Type[SchnetNeuralNetworkData]
+        self, data: SchnetNeuralNetworkData
     ) -> Dict[str, torch.Tensor]:
         """
         Calculate the properties for a given input batch.
@@ -209,6 +194,37 @@ class SchNetCore(CoreNetwork):
             "per_atom_scalar_representation": atomic_embedding,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
+
+    def forward(
+        self, data: NNPInput, pairlist_output: PairListOutputs
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Implements the forward pass through the network.
+
+        Parameters
+        ----------
+        data : NNPInput
+            Contains input data for the batch obtained directly from the
+            dataset, including atomic numbers, positions, and other relevant
+            fields.
+        pairlist_output : PairListOutputs
+            Contains the indices for the selected pairs and their associated
+            distances and displacement vectors.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The calculated per-atom properties and other properties from the
+            forward pass.
+        """
+        # perform model specific modifications
+        nnp_input = self._model_specific_input_preparation(data, pairlist_output)
+        # perform the forward pass implemented in the subclass
+        outputs = self.compute_properties(nnp_input)
+        # add atomic numbers to the output
+        outputs["atomic_numbers"] = data.atomic_numbers
+
+        return outputs
 
 
 class SchNETInteractionModule(nn.Module):
@@ -400,98 +416,3 @@ class SchNETRepresentation(nn.Module):
 
 
 from typing import List, Union
-from modelforge.utils.units import _convert_str_to_unit
-from modelforge.utils.io import import_
-from modelforge.potential.utils import shared_config_prior
-
-
-class SchNet(BaseNetwork):
-    """
-    SchNet network for modeling quantum interactions.
-
-    Schütt, Kindermans, Sauceda, Chmiela, Tkatchenko, Müller: SchNet: A continuous-filter
-    convolutional neural network for modeling quantum interactions.
-
-    Parameters
-    ----------
-    featurization : Dict[str, Union[List[str], int]]
-        Configuration for atom featurization.
-    number_of_radial_basis_functions : int
-        Number of radial basis functions.
-    number_of_interaction_modules : int
-        Number of interaction modules.
-    maximum_interaction_radius : Union[unit.Quantity, str]
-        The cutoff distance for interactions.
-    number_of_filters : int
-        Number of filters.
-    shared_interactions : bool
-        Whether to use shared interactions.
-    activation_function_parameter : Dict
-        Dict that contains keys: activation_function_name [str], activation_function_arguments [Dict],
-        and activation_function [Type[torch.nn.Module]].
-    postprocessing_parameter : Dict[str, Dict[str, bool]]
-        Configuration for postprocessing parameters.
-    dataset_statistic : Optional[Dict[str, float]], default=None
-        Statistics of the dataset.
-    potential_seed : Optional[int], optional
-        Seed for the random number generator, default None.
-    """
-
-    def __init__(
-        self,
-        featurization: Dict[str, Union[List[str], int]],
-        number_of_radial_basis_functions: int,
-        number_of_interaction_modules: int,
-        maximum_interaction_radius: Union[unit.Quantity, str],
-        number_of_filters: int,
-        activation_function_parameter: Dict,
-        shared_interactions: bool,
-        postprocessing_parameter: Dict[str, Dict[str, bool]],
-        dataset_statistic: Optional[Dict[str, float]] = None,
-        potential_seed: Optional[int] = None,
-    ) -> None:
-
-        self.only_unique_pairs = False  # NOTE: need to be set before super().__init__
-
-        super().__init__(
-            dataset_statistic=dataset_statistic,
-            postprocessing_parameter=postprocessing_parameter,
-            maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
-            potential_seed=potential_seed,
-        )
-
-        activation_function = activation_function_parameter["activation_function"]
-
-        self.core_module = SchNetCore(
-            featurization_config=featurization,
-            number_of_radial_basis_functions=number_of_radial_basis_functions,
-            number_of_interaction_modules=number_of_interaction_modules,
-            number_of_filters=number_of_filters,
-            shared_interactions=shared_interactions,
-            activation_function=activation_function,
-            maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
-        )
-
-    def _config_prior(self):
-        """
-        Configure the SchNet model hyperparameter prior distribution.
-
-        Returns
-        -------
-        dict
-            The prior distribution of hyperparameters.
-        """
-        log.info("Configuring SchNet model hyperparameter prior distribution")
-
-        from ray import tune
-
-        prior = {
-            "number_of_per_atom_features": tune.randint(2, 256),
-            "number_of_interaction_modules": tune.randint(1, 5),
-            "maximum_interaction_radius": tune.uniform(5, 10),
-            "number_of_radial_basis_functions": tune.randint(8, 32),
-            "number_of_filters": tune.randint(32, 128),
-            "shared_interactions": tune.choice([True, False]),
-        }
-        prior.update(shared_config_prior())
-        return prior

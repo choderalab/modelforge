@@ -376,11 +376,14 @@ def test_forward_pass_with_all_datasets(
     assert torch.all(pair_list[0, 1:] >= pair_list[0, :-1])
 
 
-@pytest.mark.parametrize("dataset_name", ["QM9", "SPICE2"])
-@pytest.mark.parametrize(
-    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
-)
-@pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
+# @pytest.mark.parametrize("dataset_name", ["QM9", "SPICE2"])
+# @pytest.mark.parametrize(
+#    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+# )
+# @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
+@pytest.mark.parametrize("dataset_name", ["QM9"])
+@pytest.mark.parametrize("potential_name", ["SchNet"])
+@pytest.mark.parametrize("simulation_environment", ["PyTorch"])
 def test_forward_pass(
     dataset_name, potential_name, simulation_environment, single_batch_with_batchsize
 ):

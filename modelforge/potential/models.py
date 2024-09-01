@@ -316,9 +316,7 @@ class Neighborlist(Pairlist):
     This class extends Pairlist to consider a cutoff distance for neighbor calculations.
     """
 
-    def __init__(
-        self, cutoffs: Dict[str, unit.Quantity], only_unique_pairs: bool = False
-    ):
+    def __init__(self, cutoffs: Dict[str, float], only_unique_pairs: bool = False):
         """
         Initialize the Neighborlist with a specific cutoff distance.
 
@@ -332,9 +330,7 @@ class Neighborlist(Pairlist):
         super().__init__(only_unique_pairs=only_unique_pairs)
 
         # self.register_buffer("cutoff", torch.tensor(cutoff.to(unit.nanometer).m))
-        self.register_buffer(
-            "cutoffs", torch.tensor([c.to(unit.nanometer).m for c in cutoffs.values()])
-        )
+        self.register_buffer("cutoffs", torch.tensor([c for c in cutoffs.values()]))
         self.labels = list(cutoffs.keys())
 
     def forward(
@@ -584,9 +580,9 @@ class NeuralNetworkPotentialFactory:
         training_parameter: Optional[TrainingParameters] = None,
         dataset_parameter: Optional[DatasetParameters] = None,
         dataset_statistic: Optional[Dict[str, float]] = None,
-        potential_seed: Optional[int] = None,
-        simulation_environment: Optional[Literal["PyTorch", "JAX"]] = None,
-    ) -> Union[Type[torch.nn.Module], Type[JAXModel], Type[pl.LightningModule]]:
+        potential_seed: int = -1,
+        simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
+    ) -> Union[torch.nn.Module, JAXModel, pl.LightningModule]:
         """
         Creates an NNP instance of the specified type, configured either for training or inference.
 
@@ -623,24 +619,25 @@ class NeuralNetworkPotentialFactory:
             If the requested model type is not implemented.
         """
 
-        from modelforge.potential import _Implemented_NNPs
+        from modelforge.potential import (
+            _Implemented_NNP_Cores,
+        )
+        from modelforge.potential.models import Potential
         from modelforge.train.training import ModelTrainer
 
         log.debug(f"{training_parameter=}")
         log.debug(f"{potential_parameter=}")
         log.debug(f"{dataset_parameter=}")
 
-        if simulation_environment is None:
-            if runtime_parameter is None:
-                log.warning(
-                    "No runtime paramters or simulation_environment specified, defaulting to PyTorch"
-                )
-
-                simulation_environment = "PyTorch"
-            else:
-                simulation_environment = runtime_parameter.simulation_environment
         # obtain model for training
         if use == "training":
+            neighborlist = Neighborlist(
+                cutoffs={
+                    "maximum_interaction_radius": potential_parameter.maximum_interaction_radius,
+                    # Add more cutoffs if needed
+                },
+                only_unique_pairs=runtime_parameter.only_unique_pairs,
+            )
             if simulation_environment == "JAX":
                 log.warning(
                     "Training in JAX is not available. Falling back to PyTorch."
@@ -655,14 +652,24 @@ class NeuralNetworkPotentialFactory:
             return model
         # obtain model for inference
         elif use == "inference":
-            model_type = potential_parameter.potential_name
-            nnp_class: Type = _Implemented_NNPs.get_neural_network_class(model_type)
-            model = nnp_class(
-                **potential_parameter.core_parameter.model_dump(),
+
+            postprocessing = PostProcessing(
                 postprocessing_parameter=potential_parameter.postprocessing_parameter.model_dump(),
                 dataset_statistic=dataset_statistic,
-                potential_seed=potential_seed,
             )
+
+            neighborlist = Neighborlist(
+                cutoffs={
+                    "maximum_interaction_radius": potential_parameter.core_parameter.maximum_interaction_radius,
+                    # Add more cutoffs if needed
+                },
+                only_unique_pairs=False,
+            )
+
+            model_type = potential_parameter.potential_name
+            core_network = _Implemented_NNP_Cores.get_neural_network_class(model_type)
+
+            model = Potential(core_network, neighborlist, postprocessing)
             if simulation_environment == "JAX":
                 return PyTorch2JAXConverter().convert_to_jax_model(model)
             else:
@@ -1193,9 +1200,6 @@ class BaseNetwork(Module):
         return processed_output
 
 
-from modelforge.potential.utils import ACTIVATION_FUNCTIONS
-
-
 class CoreNetwork(Module, ABC):
     """
     The CoreNetwork implements methods that are used by all neural network
@@ -1331,3 +1335,26 @@ class CoreNetwork(Module, ABC):
         outputs["atomic_numbers"] = data.atomic_numbers
 
         return outputs
+
+
+class Potential(torch.nn.Module):
+    def __init__(self, core_network, neighborlist, postprocessing):
+        self.core_network = core_network
+        self.neighborlist = neighborlist
+        self.postprocessing = postprocessing
+
+    def forward(self, input_data):
+        # Step 1: Compute pair list and distances using Neighborlist
+        pairlist_output = self.neighborlist.compute(
+            input_data.positions, input_data.atomic_subsystem_indices
+        )
+
+        # Step 2: Compute the core network output using SchNetCore
+        core_output = self.core_network.compute_properties(
+            input_data, **pairlist_output
+        )
+
+        # Step 3: Apply postprocessing using PostProcessing
+        processed_output = self.postprocessing.process(core_output)
+
+        return processed_output

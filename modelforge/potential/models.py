@@ -686,9 +686,14 @@ class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
         """
 
         super().__init__()
-        self.cutoff_keys = list(cutoffs.keys())
+        keys_list: List[str] = []
+        cutoffs_list: List[float] = []
         for key, value in cutoffs.items():
-            self.register_buffer(key, torch.tensor(value))
+            keys_list.append(str(key))
+            cutoffs_list.append(float(value))
+
+        self.cutoff_keys = keys_list
+        self.register_buffer("cutoff", torch.tensor(cutoffs_list))
 
     def forward(self, data: NNPInputTuple):
         """
@@ -731,12 +736,16 @@ class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
         d_ij = torch.norm(r_ij, dim=1, keepdim=True, p=2)
         pair_indices = torch.stack((i_final_pairs, j_final_pairs))
 
-        mask = {}
+        # Initialize interaction mask in a TorchScript-friendly way
+        interaction_mask: Dict[str, torch.Tensor] = {}
         for key in self.cutoff_keys:
-            bool_mak = d_ij <= self.get_buffer(key)
-            mask[key] = bool_mak
+            # cutoff_value = self.get_buffer(key)
+            bool_mask = d_ij <= 0.4
+            interaction_mask[key] = bool_mask
 
-        return PairlistData(pair_indices=pair_indices, d_ij=d_ij, r_ij=r_ij, mask=mask)
+        return PairlistData(
+            pair_indices=pair_indices, d_ij=d_ij, r_ij=r_ij, mask=interaction_mask
+        )
 
 
 class ComputeInteractingAtomPairs(torch.nn.Module):
@@ -1048,14 +1057,15 @@ class PostProcessing(torch.nn.Module):
         Dict[str, torch.Tensor]
             The post-processed data.
         """
+        # Create a copy of the data dictionary to avoid in-place modification
+        new_data = data.copy()
 
         # NOTE: this is not very elegant, but I am unsure how to do this better
         # I am currently directly writing new keys and values in the data dictionary
-        for property in PostProcessing._SUPPORTED_PROPERTIES:
-            if property in self._registered_properties:
-                self.registered_chained_operations[property](data)
+        for property in self._registered_properties:
+            new_data = self.registered_chained_operations[property](new_data)
 
-        return data
+        return new_data
 
 
 class BaseNetwork(Module):
@@ -1401,7 +1411,7 @@ class Potential(torch.nn.Module):
         super().__init__()
         self.core_network = torch.jit.script(core_network)
         self.neighborlist = torch.jit.script(neighborlist)
-        self.postprocessing = postprocessing
+        self.postprocessing = torch.jit.script(postprocessing)
 
     def forward(self, input_data: NNPInputTuple):
         # Step 1: Compute pair list and distances using Neighborlist

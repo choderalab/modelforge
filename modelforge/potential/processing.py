@@ -114,8 +114,10 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         indices = data[self.index_name].to(torch.int64)
         per_atom_property = data[self.per_atom_property_name]
         # Perform scatter add operation for atoms belonging to the same molecule
+        nr_of_molecules = torch.unique(indices)
+        nr_of_molecules = nr_of_molecules.size(0)
         property_per_molecule_zeros = torch.zeros(
-            len(indices.unique()),
+            nr_of_molecules,
             dtype=per_atom_property.dtype,
             device=per_atom_property.device,
         )
@@ -250,10 +252,8 @@ class ScaleValues(torch.nn.Module):
         super().__init__()
         self.register_buffer("mean", torch.tensor([mean]))
         self.register_buffer("stddev", torch.tensor([stddev]))
-        self.property = property
-        self.output_name = output_name
 
-    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def forward(self, data: torch.Tensor) -> torch.Tensor:
         """
         Rescales values using the provided mean and standard deviation.
 
@@ -267,11 +267,20 @@ class ScaleValues(torch.nn.Module):
         Dict[str, torch.Tensor]
             The output data dictionary containing the rescaled values.
         """
-        data[self.output_name] = data[self.property] * self.stddev + self.mean
-        return data
+        return data * self.stddev + self.mean
 
 
 from typing import Union
+
+
+class PerAtomEnergy(torch.nn.Module):
+
+    def __init__(self, per_atom_energy: Dict[str, bool]):
+        super().__init__()
+        if per_atom_energy.get('normalize'):
+            self.scale = ScaleValues()
+            
+
 
 
 class CalculateAtomicSelfEnergy(torch.nn.Module):

@@ -107,10 +107,72 @@ class ANIRepresentation(nn.Module):
             angle_sections,
         )
         # generate indices
-        from modelforge.potential.utils import triple_by_molecule
-
-        self.triple_by_molecule = triple_by_molecule
         self.register_buffer("triu_index", triu_index(self.nr_of_supported_elements))
+
+    @staticmethod
+    def _cumsum_from_zero(input_: torch.Tensor) -> torch.Tensor:
+        cumsum = torch.zeros_like(input_)
+        torch.cumsum(input_[:-1], dim=0, out=cumsum[1:])
+        return cumsum
+
+    def triple_by_molecule(
+        self,
+        atom_pairs: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Input: indices for pairs of atoms that are close to each other.
+        each pair only appear once, i.e. only one of the pairs (1, 2) and
+        (2, 1) exists.
+
+        NOTE: this function is taken from https://github.com/aiqm/torchani/blob/17204c6dccf6210753bc8c0ca4c92278b60719c9/torchani/aev.py
+                with little modifications.
+        """
+
+        # convert representation from pair to central-others
+        ai1 = atom_pairs.view(-1)
+
+        # Note, torch.sort doesn't guarantee stable sort by default.
+        # This means that the order of rev_indices is not guaranteed when there are "ties"
+        # (i.e., identical values in the input tensor).
+        # Stable sort is more expensive and ultimately unnecessary, so we will not use it here,
+        # but it does mean that vector-wise comparison of the outputs of this function may be
+        # inconsistent for the same input, and thus tests must be designed accordingly.
+
+        sorted_ai1, rev_indices = ai1.sort()
+
+        # sort and compute unique key
+        uniqued_central_atom_index, counts = torch.unique_consecutive(
+            sorted_ai1, return_inverse=False, return_counts=True
+        )
+
+        # compute central_atom_index
+        pair_sizes = torch.div(counts * (counts - 1), 2, rounding_mode="trunc")
+        pair_indices = torch.repeat_interleave(pair_sizes)
+        central_atom_index = uniqued_central_atom_index.index_select(0, pair_indices)
+
+        # do local combinations within unique key, assuming sorted
+        m = counts.max().item() if counts.numel() > 0 else 0
+        n = pair_sizes.shape[0]
+        intra_pair_indices = (
+            torch.tril_indices(m, m, -1, device=ai1.device)
+            .unsqueeze(1)
+            .expand(-1, n, -1)
+        )
+        mask = (
+            torch.arange(intra_pair_indices.shape[2], device=ai1.device)
+            < pair_sizes.unsqueeze(1)
+        ).flatten()
+        sorted_local_index12 = intra_pair_indices.flatten(1, 2)[:, mask]
+        sorted_local_index12 += self._cumsum_from_zero(counts).index_select(
+            0, pair_indices
+        )
+
+        # unsort result from last part
+        local_index12 = rev_indices[sorted_local_index12]
+
+        # compute mapping between representation of central-other to pair
+        n = atom_pairs.shape[1]
+        sign12 = ((local_index12 < n).to(torch.int8) * 2) - 1
+        return central_atom_index, local_index12 % n, sign12
 
     def _setup_radial_symmetry_functions(
         self,
@@ -175,7 +237,10 @@ class ANIRepresentation(nn.Module):
 
         # Process output to prepare for angular symmetry vector
         postprocessed_radial_aev_and_additional_data = self._postprocess_radial_aev(
-            radial_feature_vector, data=data
+            radial_feature_vector,
+            data=data,
+            atom_index=atom_index,
+            pairlist_output=pairlist_output,
         )
         processed_radial_feature_vector = postprocessed_radial_aev_and_additional_data[
             "radial_aev"
@@ -255,6 +320,8 @@ class ANIRepresentation(nn.Module):
         self,
         radial_feature_vector: torch.Tensor,
         data: NNPInputTuple,
+        atom_index: torch.Tensor,
+        pairlist_output: PairlistData,
     ) -> Dict[str, torch.Tensor]:
         """
         Postprocess the radial AEVs.
@@ -285,8 +352,8 @@ class ANIRepresentation(nn.Module):
                 radial_sublength,
             )
         )
-        atom_index12 = data.pair_indices
-        species = data.atom_index
+        atom_index12 = pairlist_output.pair_indices
+        species = atom_index
         species12 = species[atom_index12]
 
         index12 = atom_index12 * self.nr_of_supported_elements + species12.flip(0)
@@ -296,18 +363,13 @@ class ANIRepresentation(nn.Module):
         radial_aev = radial_aev.reshape(number_of_atoms, radial_length)
 
         # compute new neighbors with radial_cutoff
-        distances = data.d_ij.T.flatten()
+        distances = pairlist_output.d_ij.T.flatten()
         even_closer_indices = (
-            (
-                distances
-                <= self.maximum_interaction_radius_for_angular_features.to(
-                    unit.nanometer
-                ).m
-            )
+            (distances <= self.maximum_interaction_radius_for_angular_features)
             .nonzero()
             .flatten()
         )
-        r_ij = data.r_ij
+        r_ij = pairlist_output.r_ij
         atom_index12 = atom_index12.index_select(1, even_closer_indices)
         species12 = species12.index_select(1, even_closer_indices)
         r_ij_small = r_ij.index_select(0, even_closer_indices)

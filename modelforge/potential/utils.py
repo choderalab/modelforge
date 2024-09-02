@@ -112,64 +112,6 @@ def shared_config_prior():
     }
 
 
-def triple_by_molecule(
-    atom_pairs: torch.Tensor,
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Input: indices for pairs of atoms that are close to each other.
-    each pair only appear once, i.e. only one of the pairs (1, 2) and
-    (2, 1) exists.
-
-    NOTE: this function is taken from https://github.com/aiqm/torchani/blob/17204c6dccf6210753bc8c0ca4c92278b60719c9/torchani/aev.py
-            with little modifications.
-    """
-
-    def cumsum_from_zero(input_: torch.Tensor) -> torch.Tensor:
-        cumsum = torch.zeros_like(input_)
-        torch.cumsum(input_[:-1], dim=0, out=cumsum[1:])
-        return cumsum
-
-    # convert representation from pair to central-others
-    ai1 = atom_pairs.view(-1)
-
-    # Note, torch.sort doesn't guarantee stable sort by default.
-    # This means that the order of rev_indices is not guaranteed when there are "ties"
-    # (i.e., identical values in the input tensor).
-    # Stable sort is more expensive and ultimately unnecessary, so we will not use it here,
-    # but it does mean that vector-wise comparison of the outputs of this function may be
-    # inconsistent for the same input, and thus tests must be designed accordingly.
-
-    sorted_ai1, rev_indices = ai1.sort()
-
-    # sort and compute unique key
-    uniqued_central_atom_index, counts = torch.unique_consecutive(
-        sorted_ai1, return_inverse=False, return_counts=True
-    )
-
-    # compute central_atom_index
-    pair_sizes = torch.div(counts * (counts - 1), 2, rounding_mode="trunc")
-    pair_indices = torch.repeat_interleave(pair_sizes)
-    central_atom_index = uniqued_central_atom_index.index_select(0, pair_indices)
-
-    # do local combinations within unique key, assuming sorted
-    m = counts.max().item() if counts.numel() > 0 else 0
-    n = pair_sizes.shape[0]
-    intra_pair_indices = (
-        torch.tril_indices(m, m, -1, device=ai1.device).unsqueeze(1).expand(-1, n, -1)
-    )
-    mask = (
-        torch.arange(intra_pair_indices.shape[2], device=ai1.device)
-        < pair_sizes.unsqueeze(1)
-    ).flatten()
-    sorted_local_index12 = intra_pair_indices.flatten(1, 2)[:, mask]
-    sorted_local_index12 += cumsum_from_zero(counts).index_select(0, pair_indices)
-
-    # unsort result from last part
-    local_index12 = rev_indices[sorted_local_index12]
-
-    # compute mapping between representation of central-other to pair
-    n = atom_pairs.shape[1]
-    sign12 = ((local_index12 < n).to(torch.int8) * 2) - 1
-    return central_atom_index, local_index12 % n, sign12
 
 
 from typing import Dict, List

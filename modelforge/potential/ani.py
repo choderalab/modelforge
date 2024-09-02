@@ -4,16 +4,15 @@ This module contains the classes for the ANI2x neural network potential.
 
 from __future__ import annotations
 
-
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, Tuple, Type
-from .models import BaseNetwork, CoreNetwork
 
 import torch
 from loguru import logger as log
 from torch import nn
 
 from modelforge.utils.prop import SpeciesAEV
+
+from .models import NNPInputTuple, PairlistData
 
 
 def triu_index(num_species: int) -> torch.Tensor:
@@ -39,8 +38,6 @@ def triu_index(num_species: int) -> torch.Tensor:
     return ret
 
 
-from modelforge.potential.utils import NeuralNetworkData
-
 ATOMIC_NUMBER_TO_INDEX_MAP = {
     1: 0,  # H
     6: 1,  # C
@@ -50,21 +47,6 @@ ATOMIC_NUMBER_TO_INDEX_MAP = {
     16: 5,  # S
     17: 6,  # Cl
 }
-
-
-@dataclass
-class AniNeuralNetworkData(NeuralNetworkData):
-    """
-    A dataclass to structure the inputs for ANI neural network potentials, designed to facilitate the efficient representation of atomic systems for energy computation and property prediction.
-
-    Attributes
-    ----------
-    atomic_numbers : torch.Tensor
-        A 1D tensor containing the atomic numbers for atoms, used for identifying the atom types within the model. Shape: [num_atoms].
-
-    """
-
-    atom_index: torch.Tensor
 
 
 from openff.units import unit
@@ -164,7 +146,12 @@ class ANIRepresentation(nn.Module):
             dtype=torch.float32,
         )
 
-    def forward(self, data: AniNeuralNetworkData) -> SpeciesAEV:
+    def forward(
+        self,
+        data: NNPInputTuple,
+        pairlist_output: PairlistData,
+        atom_index: torch.Tensor,
+    ) -> SpeciesAEV:
         """
         Forward pass to compute Atomic Environment Vectors (AEVs).
 
@@ -181,10 +168,9 @@ class ANIRepresentation(nn.Module):
 
         # ----------------- Radial symmetry vector ---------------- #
         # compute radial aev
-
-        radial_feature_vector = self.radial_symmetry_functions(data.d_ij)
+        radial_feature_vector = self.radial_symmetry_functions(pairlist_output.d_ij)
         # Apply cutoff to radial features
-        rcut_ij = self.cutoff_module(data.d_ij)
+        rcut_ij = self.cutoff_module(pairlist_output.d_ij)
         radial_feature_vector = radial_feature_vector * rcut_ij
 
         # Process output to prepare for angular symmetry vector
@@ -214,10 +200,10 @@ class ANIRepresentation(nn.Module):
             [processed_radial_feature_vector, processed_angular_feature_vector], dim=-1
         )
 
-        return SpeciesAEV(data.atom_index, aevs)
+        return SpeciesAEV(atom_index, aevs)
 
     def _postprocess_angular_aev(
-        self, data: AniNeuralNetworkData, angular_data: Dict[str, torch.Tensor]
+        self, data: NNPInputTuple, angular_data: Dict[str, torch.Tensor]
     ):
         """
         Postprocess the angular AEVs.
@@ -243,7 +229,8 @@ class ANIRepresentation(nn.Module):
 
         num_species_pairs = angular_length // angular_sublength
 
-        number_of_atoms = data.number_of_atoms
+        number_of_atoms = data.atomic_numbers.shape[0]
+
         # compute angular aev
         central_atom_index = angular_data["central_atom_index"]
         angular_species12 = angular_data["angular_species12"]
@@ -267,7 +254,7 @@ class ANIRepresentation(nn.Module):
     def _postprocess_radial_aev(
         self,
         radial_feature_vector: torch.Tensor,
-        data: AniNeuralNetworkData,
+        data: NNPInputTuple,
     ) -> Dict[str, torch.Tensor]:
         """
         Postprocess the radial AEVs.
@@ -285,7 +272,7 @@ class ANIRepresentation(nn.Module):
             A dictionary containing the radial AEVs and additional data.
         """
         radial_feature_vector = radial_feature_vector.squeeze(1)
-        number_of_atoms = data.number_of_atoms
+        number_of_atoms = data.atomic_numbers.shape[0]
         radial_sublength = (
             self.radial_symmetry_functions.number_of_radial_basis_functions
         )
@@ -474,47 +461,30 @@ class ANIInteraction(nn.Module):
         return output.view_as(species)
 
 
-class ANI2xCore(CoreNetwork):
-    """
-    Core network class for the ANI2x neural network potential.
-
-    Parameters
-    ----------
-    maximum_interaction_radius : unit.Quantity
-        The maximum radial distance for the radial basis functions.
-    minimum_interaction_radius : unit.Quantity
-        The minimum radial distance for the radial basis functions.
-    number_of_radial_basis_functions : int
-        The number of radial basis functions to use.
-    maximum_interaction_radius_for_angular_features : unit.Quantity
-        The maximum angular distance for the angular basis functions.
-    minimum_interaction_radius_for_angular_features : unit.Quantity
-        The minimum angular distance for the angular basis functions.
-    activation_function : Type[torch.nn.Module]
-        The  activation function to use.
-    angular_dist_divisions : int
-        The number of divisions for the angular distance.
-    angle_sections : int
-        The number of angle sections to use.
-    """
+class ANI2xCore(torch.nn.Module):
 
     def __init__(
         self,
         *,
-        maximum_interaction_radius: unit.Quantity,
-        minimum_interaction_radius: unit.Quantity,
+        maximum_interaction_radius: float,
+        minimum_interaction_radius: float,
         number_of_radial_basis_functions: int,
-        maximum_interaction_radius_for_angular_features: unit.Quantity,
-        minimum_interaction_radius_for_angular_features: unit.Quantity,
-        activation_function: Type[torch.nn.Module],
+        maximum_interaction_radius_for_angular_features: float,
+        minimum_interaction_radius_for_angular_features: float,
+        activation_function_parameter: Dict[str, str],
         angular_dist_divisions: int,
         angle_sections: int,
+        potential_seed: int = -1,
     ) -> None:
+
+        super().__init__()
+
         # number of elements in ANI2x
         self.num_species = 7
 
+        self.activation_function = activation_function_parameter["activation_function"]
+
         log.debug("Initializing the ANI2x architecture.")
-        super().__init__(activation_function)
 
         # Initialize representation block
         self.ani_representation_module = ANIRepresentation(
@@ -557,46 +527,12 @@ class ANI2xCore(CoreNetwork):
 
         self.register_buffer("lookup_tensor", lookup_tensor)
 
-    def _model_specific_input_preparation(
-        self, data: NNPInput, pairlist_output: Dict[str, PairListOutputs]
-    ) -> AniNeuralNetworkData:
-        """
-        Prepare the model-specific input data for the ANI2x model.
-
-        Parameters
-        ----------
-        data : NNPInput
-            The input data for the model.
-        pairlist_output : Dict[str,PairListOutputs]
-            The output from the pairlist.
-
-        Returns
-        -------
-        AniNeuralNetworkData
-            The prepared input data for the ANI2x model.
-        """
-        number_of_atoms = data.atomic_numbers.shape[0]
-
-        # Note, pairlist_output is a Dict where the key corresponds to the name of the cutoff parameter
-        # e.g. "maximum_interaction_radius"
-
-        pairlist_output = pairlist_output["maximum_interaction_radius"]
-
-        nnp_data = AniNeuralNetworkData(
-            pair_indices=pairlist_output.pair_indices,
-            d_ij=pairlist_output.d_ij,
-            r_ij=pairlist_output.r_ij,
-            number_of_atoms=number_of_atoms,
-            positions=data.positions,
-            atom_index=self.lookup_tensor[data.atomic_numbers.long()],
-            atomic_numbers=data.atomic_numbers,
-            atomic_subsystem_indices=data.atomic_subsystem_indices,
-            total_charge=data.total_charge,
-        )
-
-        return nnp_data
-
-    def compute_properties(self, data: AniNeuralNetworkData) -> Dict[str, torch.Tensor]:
+    def compute_properties(
+        self,
+        data: NNPInputTuple,
+        pairlist_output: PairlistData,
+        atom_index: torch.Tensor,
+    ) -> Dict[str, torch.Tensor]:
         """
         Calculate the energy for a given input batch.
 
@@ -612,7 +548,9 @@ class ANI2xCore(CoreNetwork):
         """
 
         # compute the representation (atomic environment vectors) for each atom
-        representation = self.ani_representation_module(data)
+        representation = self.ani_representation_module(
+            data, pairlist_output, atom_index
+        )
         # compute the atomic energies
         E_i = self.interaction_modules(representation)
 
@@ -621,97 +559,40 @@ class ANI2xCore(CoreNetwork):
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
 
+    def forward(
+        self, data: NNPInputTuple, pairlist_output: PairlistData
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Implements the forward pass through the network.
 
-from typing import Union, Optional, Dict
+        Parameters
+        ----------
+        data : NNPInput
+            Contains input data for the batch obtained directly from the
+            dataset, including atomic numbers, positions, and other relevant
+            fields.
+        pairlist_output : PairListOutputs
+            Contains the indices for the selected pairs and their associated
+            distances and displacement vectors.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The calculated per-atom properties and other properties from the
+            forward pass.
+        """
+        atom_index = self.lookup_tensor[data.atomic_numbers.long()]
+        # perform the forward pass implemented in the subclass
+        outputs = self.compute_properties(data, pairlist_output, atom_index)
+        # add atomic numbers to the output
+        outputs["atomic_numbers"] = data.atomic_numbers
+
+        return outputs
 
 
-class ANI2x(BaseNetwork):
-    """
-    ANI2x network class for the ANI2x neural network potential.
+from typing import Dict, Optional, Union
 
-    Parameters
-    ----------
-    maximum_interaction_radius : Union[unit.Quantity, str]
-        The maximum radial distance for the radial basis functions.
-    minimum_interaction_radius : Union[unit.Quantity, str]
-        The minimum radial distance for the radial basis functions.
-    number_of_radial_basis_functions : int
-        The number of radial basis functions to use.
-    maximum_interaction_radius_for_angular_features : Union[unit.Quantity, str]
-        The maximum angular distance for the angular basis functions.
-    minimum_interaction_radius_for_angular_features : Union[unit.Quantity, str]
-        The minimum angular distance for the angular basis functions.
-    angular_dist_divisions : int
-        The number of divisions for the angular distance.
-    angle_sections : int
-        The number of angle sections to use.
-    activation_function_parameter : Dict
-        Dict that contains keys: activation_function_name [str], activation_function_arguments [Dict],
-        and activation_function [Type[torch.nn.Module]].
-    postprocessing_parameter : Dict[str, Dict[str, bool]]
-        Configuration for postprocessing parameters.
-    dataset_statistic : Optional[Dict[str, float]], optional
-        Statistics of the dataset, by default None.
-    potential_seed : Optional[int], optional
-        Seed for the random number generator, default None.
-    """
 
-    def __init__(
-        self,
-        maximum_interaction_radius: Union[unit.Quantity, str],
-        minimum_interaction_radius: Union[unit.Quantity, str],
-        number_of_radial_basis_functions: int,
-        maximum_interaction_radius_for_angular_features: Union[unit.Quantity, str],
-        minimum_interaction_radius_for_angular_features: Union[unit.Quantity, str],
-        angular_dist_divisions: int,
-        angle_sections: int,
-        activation_function_parameter: Dict,
-        postprocessing_parameter: Dict[str, Dict[str, bool]],
-        dataset_statistic: Optional[Dict[str, float]] = None,
-        potential_seed: Optional[int] = None,
-    ) -> None:
-        from modelforge.utils.units import _convert_str_to_unit
-
-        self.only_unique_pairs = True  # NOTE: need to be set before super().__init__
-
-        super().__init__(
-            dataset_statistic=dataset_statistic,
-            postprocessing_parameter=postprocessing_parameter,
-            maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
-            potential_seed=potential_seed,
-        )
-
-        activation_function = activation_function_parameter["activation_function"]
-
-        self.core_module = ANI2xCore(
-            maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
-            minimum_interaction_radius=_convert_str_to_unit(minimum_interaction_radius),
-            number_of_radial_basis_functions=number_of_radial_basis_functions,
-            maximum_interaction_radius_for_angular_features=_convert_str_to_unit(
-                maximum_interaction_radius_for_angular_features
-            ),
-            minimum_interaction_radius_for_angular_features=_convert_str_to_unit(
-                minimum_interaction_radius_for_angular_features
-            ),
-            activation_function=activation_function,
-            angular_dist_divisions=angular_dist_divisions,
-            angle_sections=angle_sections,
-        )
-
-    def _config_prior(self):
-        log.info("Configuring ANI2x model hyperparameter prior distribution")
-
-        from ray import tune
-
-        from modelforge.train.utils import shared_config_prior
-
-        prior = {
-            "radial_max_distance": tune.uniform(5, 10),
-            "radial_min_distance": tune.uniform(0.6, 1.4),
-            "number_of_radial_basis_functions": tune.randint(12, 20),
-            "maximum_interaction_radius_for_angular_features": tune.uniform(2.5, 4.5),
-            "minimum_interaction_radius_for_angular_features": tune.uniform(0.6, 1.4),
-            "angle_sections": tune.randint(3, 8),
-        }
-        prior.update(shared_config_prior())
-        return prior
+class ANI2x:
+    def __init__(self) -> None:
+        pass

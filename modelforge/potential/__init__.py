@@ -5,7 +5,7 @@ This module contains the implemented neural network potentials and their paramet
 from .schnet import SchNet, SchNetCore
 from .physnet import PhysNet
 from .painn import PaiNN
-from .ani import ANI2x
+from .ani import ANI2x, ANI2xCore
 from .sake import SAKE
 from .tensornet import TensorNet
 from .parameters import (
@@ -74,6 +74,7 @@ class _Implemented_NNPs(Enum):
 
 class _Implemented_NNP_Cores(Enum):
     SCHNET = SchNetCore
+    ANI2X = ANI2xCore
 
     @classmethod
     def get_neural_network_class(cls, neural_network_name: str):

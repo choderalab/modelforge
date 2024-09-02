@@ -130,11 +130,11 @@ class PerAtomEnergy(ParametersBase):
 class ANI2xParameters(ParametersBase):
     class CoreParameter(ParametersBase):
         angle_sections: int
-        maximum_interaction_radius: Union[str, unit.Quantity]
-        minimum_interaction_radius: Union[str, unit.Quantity]
+        maximum_interaction_radius: float
+        minimum_interaction_radius: float
         number_of_radial_basis_functions: int
-        maximum_interaction_radius_for_angular_features: Union[str, unit.Quantity]
-        minimum_interaction_radius_for_angular_features: Union[str, unit.Quantity]
+        maximum_interaction_radius_for_angular_features: float
+        minimum_interaction_radius_for_angular_features: float
         angular_dist_divisions: int
         activation_function_parameter: ActivationFunctionConfig
 
@@ -143,7 +143,8 @@ class ANI2xParameters(ParametersBase):
             "minimum_interaction_radius",
             "maximum_interaction_radius_for_angular_features",
             "minimum_interaction_radius_for_angular_features",
-        )(_convert_str_to_unit)
+            mode="before",
+        )(_convert_str_to_unit_length)
 
     class PostProcessingParameter(ParametersBase):
         per_atom_energy: PerAtomEnergy = PerAtomEnergy()

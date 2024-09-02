@@ -7,12 +7,12 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Dict,
+    List,
     Mapping,
     NamedTuple,
+    Optional,
     Tuple,
     Type,
-    Optional,
-    List,
 )
 
 import lightning as pl
@@ -548,16 +548,16 @@ class PyTorch2JAXConverter:
         return apply, model_params, model_buffer
 
 
+from modelforge.dataset.dataset import DatasetParameters
 from modelforge.potential.parameters import (
     ANI2xParameters,
-    PhysNetParameters,
-    SchNetParameters,
     PaiNNParameters,
+    PhysNetParameters,
     SAKEParameters,
+    SchNetParameters,
     TensorNetParameters,
 )
-from modelforge.train.parameters import TrainingParameters, RuntimeParameters
-from modelforge.dataset.dataset import DatasetParameters
+from modelforge.train.parameters import RuntimeParameters, TrainingParameters
 
 
 class NeuralNetworkPotentialFactory:
@@ -625,9 +625,7 @@ class NeuralNetworkPotentialFactory:
             If the requested model type is not implemented.
         """
 
-        from modelforge.potential import (
-            _Implemented_NNP_Cores,
-        )
+        from modelforge.potential import _Implemented_NNP_Cores
         from modelforge.potential.models import Potential
         from modelforge.train.training import ModelTrainer
 
@@ -859,6 +857,7 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
 
 
 from torch.nn import ModuleDict
+
 from modelforge.potential.processing import PerAtomEnergy
 
 

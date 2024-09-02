@@ -640,8 +640,8 @@ class AngularSymmetryFunction(nn.Module):
 
     def __init__(
         self,
-        maximum_interaction_radius: unit.Quantity,
-        min_distance: unit.Quantity,
+        maximum_interaction_radius: float,
+        min_distance: float,
         number_of_gaussians_for_asf: int = 8,
         angle_sections: int = 4,
         trainable: bool = False,
@@ -662,9 +662,9 @@ class AngularSymmetryFunction(nn.Module):
         self.number_of_gaussians_asf = number_of_gaussians_for_asf
         self.angular_cutoff = maximum_interaction_radius
         self.cosine_cutoff = CosineAttenuationFunction(self.angular_cutoff)
-        _unitless_angular_cutoff = maximum_interaction_radius.to(unit.nanometer).m
+        _unitless_angular_cutoff = maximum_interaction_radius
         self.angular_start = min_distance
-        _unitless_angular_start = min_distance.to(unit.nanometer).m
+        _unitless_angular_start = min_distance
 
         # save constants
         EtaA = angular_eta = 12.5 * 100  # FIXME hardcoded eta

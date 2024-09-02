@@ -2,55 +2,18 @@
 SchNet neural network potential for modeling quantum interactions.
 """
 
-from dataclasses import dataclass, field
-from typing import Dict, Optional, Type, Union, List
+from typing import Dict, Type
 
 import torch
 import torch.nn as nn
 from loguru import logger as log
-from openff.units import unit
 
-from modelforge.potential.utils import NeuralNetworkData
-from .models import PairlistData, NNPInput
+from .models import PairlistData, NNPInputTuple
 
 
 class SchNet:
     def __init__(self) -> None:
         pass
-
-
-@dataclass
-class SchnetNeuralNetworkData:
-    """
-    A dataclass to structure the inputs specifically for SchNet-based neuraletwork potentials, including the necessary
-    geometric and chemical information, along with the radial symmetry function expansion (`f_ij`) and the cosine cutoff
-    (`f_cutoff`) to accurately represent atomistic systems for energy predictions.
-
-
-    Note that only the arguments not present in the baseclass are described here.
-
-    atomic_embedding : torch.Tensor
-        A 2D tensor containing embeddings or features for each atom, derived from atomic numbers.
-        Shape: [num_atoms, embedding_dim], where `embedding_dim` is the dimensionality of the embedding vectors.
-    f_ij : Optional[torch.Tensor]
-        A tensor representing the radial symmetry function expansion of distances between atom pairs, capturing the
-        local chemical environment. Shape: [num_pairs, num_features], where `num_features` is the dimensionality of
-        the radial symmetry function expansion. This field will be populated after initialization.
-    f_cutoff : Optional[torch.Tensor]
-        A tensor representing the cosine cutoff function applied to the radial symmetry function expansion, ensuring
-        that atom pair contributions diminish smoothly to zero at the cutoff radius. Shape: [num_pairs]. This field
-        will be populated after initialization.
-    """
-
-    pairlist: PairlistData
-    atomic_numbers: torch.Tensor
-    number_of_atoms: int
-    positions: torch.Tensor
-    atomic_subsystem_indices: torch.Tensor
-    total_charge: torch.Tensor
-    atomic_embedding: Optional[torch.Tensor] = field(default=None)
-    f_ij: Optional[torch.Tensor] = field(default=None)
-    f_cutoff: Optional[torch.Tensor] = field(default=None)
 
 
 class SchNetCore(torch.nn.Module):
@@ -126,42 +89,8 @@ class SchNetCore(torch.nn.Module):
             ),
         )
 
-    def _model_specific_input_preparation(
-        self, data: "NNPInput", pairlist: PairlistData
-    ) -> SchnetNeuralNetworkData:
-        """
-        Prepare the input data for the SchNet model.
-
-        Parameters
-        ----------
-        data : NNPInput
-            The input data for the model.
-        pairlist_output : Dict[str, PairListOutputs]
-            The pairlist output(s).
-
-        Returns
-        -------
-        SchnetNeuralNetworkData
-            The prepared input data for the SchNet model.
-        """
-        number_of_atoms = data.atomic_numbers.shape[0]
-
-        # Note, pairlist_output is a Dict where the key corresponds to the name of the cutoff parameter
-        # e.g. "maximum_interaction_radius"
-
-        nnp_input = SchnetNeuralNetworkData(
-            pairlist=pairlist,
-            number_of_atoms=number_of_atoms,
-            positions=data.positions,
-            atomic_numbers=data.atomic_numbers,
-            atomic_subsystem_indices=data.atomic_subsystem_indices,
-            total_charge=data.total_charge,
-        )
-
-        return nnp_input
-
     def compute_properties(
-        self, data: SchnetNeuralNetworkData
+        self, data: NNPInputTuple, pairlist_output: PairlistData
     ) -> Dict[str, torch.Tensor]:
         """
         Calculate the properties for a given input batch.
@@ -177,13 +106,13 @@ class SchNetCore(torch.nn.Module):
             The calculated properties.
         """
         # Compute the representation for each atom (transform to radial basis set, multiply by cutoff and add embedding)
-        representation = self.schnet_representation_module(data)
+        representation = self.schnet_representation_module(data, pairlist_output)
         atomic_embedding = representation["atomic_embedding"]
         # Iterate over interaction blocks to update features
         for interaction in self.interaction_modules:
             v = interaction(
                 atomic_embedding,
-                data.pairlist,
+                pairlist_output,
                 representation["f_ij"],
                 representation["f_cutoff"],
             )
@@ -200,7 +129,7 @@ class SchNetCore(torch.nn.Module):
         }
 
     def forward(
-        self, data: NNPInput, pairlist_output: PairlistData
+        self, data: NNPInputTuple, pairlist_output: PairlistData
     ) -> Dict[str, torch.Tensor]:
         """
         Implements the forward pass through the network.
@@ -221,10 +150,8 @@ class SchNetCore(torch.nn.Module):
             The calculated per-atom properties and other properties from the
             forward pass.
         """
-        # perform model specific modifications
-        nnp_input = self._model_specific_input_preparation(data, pairlist_output)
         # perform the forward pass implemented in the subclass
-        outputs = self.compute_properties(nnp_input)
+        outputs = self.compute_properties(data, pairlist_output)
         # add atomic numbers to the output
         outputs["atomic_numbers"] = data.atomic_numbers
 
@@ -379,7 +306,7 @@ class SchNETRepresentation(nn.Module):
         self.cutoff_module = CosineAttenuationFunction(radial_cutoff)
 
     def _setup_radial_symmetry_functions(
-        self, radial_cutoff: unit.Quantity, number_of_radial_basis_functions: int
+        self, radial_cutoff: float, number_of_radial_basis_functions: int
     ):
         from .utils import SchnetRadialBasisFunction
 
@@ -390,7 +317,9 @@ class SchNETRepresentation(nn.Module):
         )
         return radial_symmetry_function
 
-    def forward(self, data: SchnetNeuralNetworkData) -> Dict[str, torch.Tensor]:
+    def forward(
+        self, data: NNPInputTuple, pairlist_output: PairlistData
+    ) -> Dict[str, torch.Tensor]:
         """
         Generate the radial symmetry representation of the pairwise distances.
 
@@ -406,10 +335,10 @@ class SchNETRepresentation(nn.Module):
 
         # Convert distances to radial basis functions
         f_ij = self.radial_symmetry_function_module(
-            data.pairlist.d_ij
+            pairlist_output.d_ij
         )  # shape (n_pairs, number_of_radial_basis_functions)
 
-        f_cutoff = self.cutoff_module(data.pairlist.d_ij)  # shape (n_pairs, 1)
+        f_cutoff = self.cutoff_module(pairlist_output.d_ij)  # shape (n_pairs, 1)
 
         return {
             "f_ij": f_ij,

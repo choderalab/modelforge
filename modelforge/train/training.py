@@ -527,7 +527,7 @@ class TrainingAdapter(pL.LightningModule):
             PaiNNParameters,
             TensorNetParameters,
         ],
-        dataset_statistic: Dict[str, float],
+        dataset_statistic: Dict[str, Dict[str, float]],
         training_parameter: TrainingParameters,
         potential_seed: Optional[int] = None,
     ):
@@ -545,22 +545,37 @@ class TrainingAdapter(pL.LightningModule):
         potential_seed : Optional[int], optional
             The seed to use for initializing the model, by default None.
         """
-        from modelforge.potential import _Implemented_NNPs
+        from modelforge.potential import _Implemented_NNP_Cores
+        from modelforge.potential.models import (
+            PostProcessing,
+            ComputeInteractingAtomPairs,
+            Potential,
+        )
 
         super().__init__()
         self.save_hyperparameters()
         self.training_parameter = training_parameter
 
-        # Get requested model class
-        nnp_class = _Implemented_NNPs.get_neural_network_class(
-            potential_parameter.potential_name
-        )
-        self.potential = nnp_class(
-            **potential_parameter.core_parameter.model_dump(),
-            dataset_statistic=dataset_statistic,
+        postprocessing = PostProcessing(
             postprocessing_parameter=potential_parameter.postprocessing_parameter.model_dump(),
-            potential_seed=potential_seed,
+            dataset_statistic=dataset_statistic,
         )
+
+        neighborlist = ComputeInteractingAtomPairs(
+            cutoffs={
+                "maximum_interaction_radius": potential_parameter.core_parameter.maximum_interaction_radius,
+                # Add more cutoffs if needed
+            },
+            only_unique_pairs=False,
+        )
+
+        # Get requested model class
+        core_network = _Implemented_NNP_Cores.get_neural_network_class(
+            potential_parameter.potential_name
+        )(**potential_parameter.core_parameter.model_dump())
+
+        self.potential = Potential(core_network, neighborlist, postprocessing)
+
 
         def check_strides(module, grad_input, grad_output):
             print(f"Layer: {module.__class__.__name__}")
@@ -1040,6 +1055,7 @@ class ModelTrainer:
         nn.Module
             Configured model instance, wrapped in a TrainingAdapter.
         """
+
         # Initialize model
         return TrainingAdapter(
             potential_parameter=self.potential_parameter,

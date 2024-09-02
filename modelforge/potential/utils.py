@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 from openff.units import unit
 
-from modelforge.dataset.dataset import NNPInput
+from modelforge.dataset.dataset import NNPInputTuple, NNPInput
 
 
 @dataclass
@@ -196,7 +196,7 @@ class AddPerMoleculeValue(nn.Module):
         self.key = key
 
     def forward(
-        self, per_atom_property_tensor: torch.Tensor, data: NNPInput
+        self, per_atom_property_tensor: torch.Tensor, data: NNPInputTuple
     ) -> torch.Tensor:
         """
         Forward pass of the module.
@@ -239,7 +239,7 @@ class AddPerAtomValue(nn.Module):
         self.key = key
 
     def forward(
-        self, per_atom_property_tensor: torch.Tensor, data: NNPInput
+        self, per_atom_property_tensor: torch.Tensor, data: NNPInputTuple
     ) -> torch.Tensor:
         """
         Forward pass of the module.
@@ -386,7 +386,7 @@ class FeaturizeInput(nn.Module):
                 int(featurization_config["number_of_per_atom_features"]),
             )
 
-    def forward(self, data: NNPInput) -> torch.Tensor:
+    def forward(self, data: NNPInputTuple) -> torch.Tensor:
         """
         Featurize the input data.
 

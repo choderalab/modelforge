@@ -21,7 +21,7 @@ from loguru import logger as log
 from openff.units import unit
 from torch.nn import Module
 
-from modelforge.dataset.dataset import NNPInput
+from modelforge.dataset.dataset import NNPInput, NNPInputTuple
 
 if TYPE_CHECKING:
     from modelforge.potential.ani import ANI2x, AniNeuralNetworkData
@@ -632,17 +632,6 @@ class NeuralNetworkPotentialFactory:
 
         # obtain model for training
         if use == "training":
-            neighborlist = Neighborlist(
-                cutoffs={
-                    "maximum_interaction_radius": potential_parameter.maximum_interaction_radius,
-                    # Add more cutoffs if needed
-                },
-                only_unique_pairs=runtime_parameter.only_unique_pairs,
-            )
-            if simulation_environment == "JAX":
-                log.warning(
-                    "Training in JAX is not available. Falling back to PyTorch."
-                )
             model = ModelTrainer(
                 potential_parameter=potential_parameter,
                 training_parameter=training_parameter,
@@ -701,7 +690,7 @@ class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
         for key, value in cutoffs.items():
             self.register_buffer(key, torch.tensor(value))
 
-    def forward(self, data: NNPInput):
+    def forward(self, data: NNPInputTuple):
         """
         Prepares the input tensors for passing to the model.
 
@@ -711,7 +700,7 @@ class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
 
         Parameters
         ----------
-        data : NNPInput
+        data : NNPInputTuple
             The input data provided by the dataset, containing atomic numbers,
             positions, and other necessary information.
 
@@ -731,7 +720,7 @@ class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
         indices = torch.arange(n, device=atomic_subsystem_indices.device)
 
         # Create a meshgrid of indices
-        i_final_pairs, j_final_pairs = torch.meshgrid(indices, indices, indexing='ij')
+        i_final_pairs, j_final_pairs = torch.meshgrid(indices, indices, indexing="ij")
 
         # Filter out the diagonal elements (where i == j)
         mask = i_final_pairs != j_final_pairs
@@ -756,9 +745,7 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
     distances (d_ij), and displacement vectors (r_ij) for molecular simulations.
     """
 
-    def __init__(
-        self, cutoffs: Dict[str, unit.Quantity], only_unique_pairs: bool = True
-    ):
+    def __init__(self, cutoffs: Dict[str, float], only_unique_pairs: bool = True):
         """
         Initialize the ComputeInteractingAtomPairs module.
 
@@ -1412,18 +1399,18 @@ class CoreNetwork(Module, ABC):
 class Potential(torch.nn.Module):
     def __init__(self, core_network, neighborlist, postprocessing):
         super().__init__()
-        self.core_network = core_network
-        self.neighborlist = neighborlist
+        self.core_network = torch.jit.script(core_network)
+        self.neighborlist = torch.jit.script(neighborlist)
         self.postprocessing = postprocessing
 
-    def forward(self, input_data):
+    def forward(self, input_data: NNPInputTuple):
         # Step 1: Compute pair list and distances using Neighborlist
         pairlist_output = self.neighborlist.forward(input_data)
 
         # Step 2: Compute the core network output using SchNetCore
-        core_output = self.core_network(input_data, pairlist_output)
+        core_output = self.core_network.forward(input_data, pairlist_output)
 
         # Step 3: Apply postprocessing using PostProcessing
-        processed_output = self.postprocessing(core_output)
+        processed_output = self.postprocessing.forward(core_output)
 
         return processed_output

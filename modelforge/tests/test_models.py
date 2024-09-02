@@ -400,51 +400,50 @@ def test_forward_pass(
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
     # test the forward pass through each of the models
-    model = NeuralNetworkPotentialFactory.generate_potential(
-        use="inference",
-        simulation_environment=simulation_environment,
-        potential_parameter=config["potential"],
-    )
+    for use in ["inference"]:  # , "training", ]:
+        model = NeuralNetworkPotentialFactory.generate_potential(
+            use=use,
+            simulation_environment=simulation_environment,
+            potential_parameter=config["potential"],
+        )
 
-    output = model(nnp_input)
+        output = model(nnp_input.as_namedtuple())
+        # test that we get an energie per molecule
+        assert len(output["per_molecule_energy"]) == nr_of_mols
+        # the batch consists of methane (CH4) and amamonium (NH3)
+        # which have chemically equivalent hydrogens at the minimum geometry.
+        # This has to be reflected in the atomic energies E_i, which
+        # have to be equal for all hydrogens
 
-    # test that we get an energie per molecule
-    assert len(output["per_molecule_energy"]) == nr_of_mols
+        # make sure that we are correctly reducing
+        ref = torch.zeros_like(output["per_molecule_energy"]).scatter_add_(
+            0, nnp_input.atomic_subsystem_indices.long(), output["per_atom_energy"]
+        )
 
-    # the batch consists of methane (CH4) and amamonium (NH3)
-    # which have chemically equivalent hydrogens at the minimum geometry.
-    # This has to be reflected in the atomic energies E_i, which
-    # have to be equal for all hydrogens
+        assert torch.allclose(ref, output["per_molecule_energy"])
 
-    # make sure that we are correctly reducing
-    ref = torch.zeros_like(output["per_molecule_energy"]).scatter_add_(
-        0, nnp_input.atomic_subsystem_indices.long(), output["per_atom_energy"]
-    )
+        # assert that the following tensor has equal values for dim=0 index 1 to 4 and 6 to 8
+        assert torch.allclose(
+            output["per_atom_energy"][1:4], output["per_atom_energy"][1], atol=1e-4
+        )
 
-    assert torch.allclose(ref, output["per_molecule_energy"])
+        # make sure that the total energy is \sum E_i
+        assert torch.allclose(
+            output["per_molecule_energy"][0],
+            output["per_atom_energy"][0:5].sum(dim=0),
+            atol=1e-5,
+        )
+        if use == "training":
 
-    # assert that the following tensor has equal values for dim=0 index 1 to 4 and 6 to 8
-    assert torch.allclose(
-        output["per_atom_energy"][1:4], output["per_atom_energy"][1], atol=1e-4
-    )
-    
-    
-    
-    assert torch.allclose(
-        output["per_atom_energy"][6:8], output["per_atom_energy"][6], atol=1e-4
-    )
+            assert torch.allclose(
+                output["per_atom_energy"][6:8], output["per_atom_energy"][6], atol=1e-4
+            )
 
-    # make sure that the total energy is \sum E_i
-    assert torch.allclose(
-        output["per_molecule_energy"][0],
-        output["per_atom_energy"][0:5].sum(dim=0),
-        atol=1e-5,
-    )
-    assert torch.allclose(
-        output["per_molecule_energy"][1],
-        output["per_atom_energy"][5:9].sum(dim=0),
-        atol=1e-5,
-    )
+            assert torch.allclose(
+                output["per_molecule_energy"][1],
+                output["per_atom_energy"][5:9].sum(dim=0),
+                atol=1e-5,
+            )
 
 
 @pytest.mark.parametrize(

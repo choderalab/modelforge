@@ -390,7 +390,7 @@ def test_forward_pass(
     # this test sends a single batch from different datasets through the model
     import torch
 
-    batch = batch = single_batch_with_batchsize(batch_size=1, dataset_name=dataset_name)
+    batch =  single_batch_with_batchsize(batch_size=1, dataset_name=dataset_name)
     nnp_input = batch.nnp_input
 
     # read default parameters
@@ -406,7 +406,7 @@ def test_forward_pass(
             simulation_environment=simulation_environment,
             potential_parameter=config["potential"],
         )
-
+        model = torch.jit.script(model)
         output = model(nnp_input.as_namedtuple())
         # test that we get an energie per molecule
         assert len(output["per_molecule_energy"]) == nr_of_mols

@@ -580,7 +580,12 @@ class NeuralNetworkPotentialFactory:
         runtime_parameter: Optional[RuntimeParameters] = None,
         training_parameter: Optional[TrainingParameters] = None,
         dataset_parameter: Optional[DatasetParameters] = None,
-        dataset_statistic: Optional[Dict[str, float]] = None,
+        dataset_statistic: Dict[str, Dict[str, float]] = {
+            "training_dataset_statistics": {
+                "per_atom_energy_mean": 0.0,
+                "per_atom_energy_stddev": 1.0,
+            }
+        },
         potential_seed: int = -1,
         simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
     ) -> Union[torch.nn.Module, JAXModel, pl.LightningModule]:
@@ -854,6 +859,7 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
 
 
 from torch.nn import ModuleDict
+from modelforge.potential.processing import PerAtomEnergy
 
 
 class PostProcessing(torch.nn.Module):
@@ -864,7 +870,6 @@ class PostProcessing(torch.nn.Module):
     """
 
     _SUPPORTED_PROPERTIES = ["per_atom_energy", "general_postprocessing_operation"]
-    _SUPPORTED_OPERATIONS = ["normalize", "from_atom_to_molecule_reduction"]
 
     def __init__(
         self,
@@ -886,162 +891,15 @@ class PostProcessing(torch.nn.Module):
         super().__init__()
 
         self._registered_properties: List[str] = []
-
-        # operations that use nn.Sequence to pass the output of the model to the next
         self.registered_chained_operations = ModuleDict()
-
         self.dataset_statistic = dataset_statistic
 
-        self._initialize_postprocessing(
-            postprocessing_parameter,
-        )
-
-    def _get_per_atom_energy_mean_and_stddev_of_dataset(self) -> Tuple[float, float]:
-        """
-        Calculate the mean and standard deviation of the per-atom energy in the
-        dataset.
-
-        Returns
-        -------
-        Tuple[float, float]
-            The mean and standard deviation of the per-atom energy.
-        """
-        if self.dataset_statistic is None:
-            mean = 0.0
-            stddev = 1.0
-            log.warning(
-                f"No mean and stddev provided for dataset. Setting to default value {mean=} and {stddev=}!"
+        if "per_atom_energy" in postprocessing_parameter:
+            self.registered_chained_operations["per_atom_energy"] = PerAtomEnergy(
+                postprocessing_parameter["per_atom_energy"],
+                dataset_statistic["training_dataset_statistics"],
             )
-        else:
-            training_dataset_statistics = self.dataset_statistic[
-                "training_dataset_statistics"
-            ]
-            mean = unit.Quantity(
-                training_dataset_statistics["per_atom_energy_mean"]
-            ).m_as(unit.kilojoule_per_mole)
-            stddev = unit.Quantity(
-                training_dataset_statistics["per_atom_energy_stddev"]
-            ).m_as(unit.kilojoule_per_mole)
-        return mean, stddev
-
-    def _initialize_postprocessing(
-        self,
-        postprocessing_parameter: Dict[str, Dict[str, bool]],
-    ):
-        """
-        Initialize the postprocessing operations based on the given
-        postprocessing parameters.
-
-        Parameters
-        ----------
-        postprocessing_parameter : Dict[str, Dict[str, bool]]
-            A dictionary containing the postprocessing parameters for each
-            property.
-
-        Raises
-        ------
-        ValueError
-            If a property is not supported.
-        """
-
-        from .processing import (
-            FromAtomToMoleculeReduction,
-            ScaleValues,
-            CalculateAtomicSelfEnergy,
-        )
-
-        for property, operations in postprocessing_parameter.items():
-            # register properties for which postprocessing should be performed
-            if property.lower() in self._SUPPORTED_PROPERTIES:
-                self._registered_properties.append(property.lower())
-            else:
-                raise ValueError(
-                    f"Property {property} is not supported. Supported properties are {self._SUPPORTED_PROPERTIES}"
-                )
-
-            # register operations that are performed for the property
-            postprocessing_sequence = torch.nn.Sequential()
-            prostprocessing_sequence_names = []
-
-            # for each property parse the requested operations
-            if property == "per_atom_energy":
-                if operations.get("normalize", False):
-                    (
-                        mean,
-                        stddev,
-                    ) = self._get_per_atom_energy_mean_and_stddev_of_dataset()
-                    postprocessing_sequence.append(
-                        ScaleValues(
-                            mean=mean,
-                            stddev=stddev,
-                            property="per_atom_energy",
-                            output_name="per_atom_energy",
-                        )
-                    )
-                    prostprocessing_sequence_names.append("normalize")
-                # check if also reduction is requested
-                if operations.get("from_atom_to_molecule_reduction", False):
-                    postprocessing_sequence.append(
-                        FromAtomToMoleculeReduction(
-                            per_atom_property_name="per_atom_energy",
-                            index_name="atomic_subsystem_indices",
-                            output_name="per_molecule_energy",
-                            keep_per_atom_property=operations.get(
-                                "keep_per_atom_property", False
-                            ),
-                        )
-                    )
-                    prostprocessing_sequence_names.append(
-                        "from_atom_to_molecule_reduction"
-                    )
-            elif property == "general_postprocessing_operation":
-                # check if also self-energies are requested
-                if operations.get("calculate_molecular_self_energy", False):
-                    if self.dataset_statistic is None:
-                        log.warning(
-                            "Dataset statistics are required to calculate the molecular self-energies but haven't been provided."
-                        )
-                    else:
-                        atomic_self_energies = self.dataset_statistic[
-                            "atomic_self_energies"
-                        ]
-
-                        postprocessing_sequence.append(
-                            CalculateAtomicSelfEnergy(atomic_self_energies)
-                        )
-                        prostprocessing_sequence_names.append(
-                            "calculate_molecular_self_energy"
-                        )
-
-                        postprocessing_sequence.append(
-                            FromAtomToMoleculeReduction(
-                                per_atom_property_name="ase_tensor",
-                                index_name="atomic_subsystem_indices",
-                                output_name="per_molecule_self_energy",
-                            )
-                        )
-
-                # check if also self-energies are requested
-                elif operations.get("calculate_atomic_self_energy", False):
-                    if self.dataset_statistic is None:
-                        log.warning(
-                            "Dataset statistics are required to calculate the molecular self-energies but haven't been provided."
-                        )
-                    else:
-                        atomic_self_energies = self.dataset_statistic[
-                            "atomic_self_energies"
-                        ]
-
-                        postprocessing_sequence.append(
-                            CalculateAtomicSelfEnergy(atomic_self_energies)()
-                        )
-                        prostprocessing_sequence_names.append(
-                            "calculate_atomic_self_energy"
-                        )
-
-            log.debug(prostprocessing_sequence_names)
-
-            self.registered_chained_operations[property] = postprocessing_sequence
+            self._registered_properties.append("per_atom_energy")
 
     def forward(self, data: Dict[str, torch.Tensor]):
         """
@@ -1057,15 +915,17 @@ class PostProcessing(torch.nn.Module):
         Dict[str, torch.Tensor]
             The post-processed data.
         """
-        # Create a copy of the data dictionary to avoid in-place modification
-        new_data = data.copy()
+        processed_data: Dict[str, torch.Tensor] = {}
+        if "per_atom_energy" in self._registered_properties:
 
-        # NOTE: this is not very elegant, but I am unsure how to do this better
-        # I am currently directly writing new keys and values in the data dictionary
-        for property in self._registered_properties:
-            new_data = self.registered_chained_operations[property](new_data)
+            per_molecule_energy = self.registered_chained_operations[
+                "per_atom_energy"
+            ].forward(data["per_atom_energy"], data["atomic_subsystem_indices"])
 
-        return new_data
+            processed_data["per_molecule_energy"] = per_molecule_energy
+            processed_data["per_atom_energy"] = data["per_atom_energy"].detach()
+
+        return processed_data
 
 
 class BaseNetwork(Module):

@@ -143,9 +143,7 @@ def test_painn_representation_implementation():
 
     schnetpack_results = schnetpack_painn(spk_input)
     modelforge_painn.compute_interacting_pairs._input_checks(mf_nnp_input)
-    pairlist_output = modelforge_painn.compute_interacting_pairs.prepare_inputs(
-        mf_nnp_input
-    )
+    pairlist_output = modelforge_painn.compute_interacting_pairs.forward(mf_nnp_input)
     pain_nn_input_mf = modelforge_painn.core_module._model_specific_input_preparation(
         mf_nnp_input, pairlist_output
     )

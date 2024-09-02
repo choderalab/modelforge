@@ -126,15 +126,13 @@ def test_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize):
     perturbed_methane_input.positions = torch.matmul(methane.positions, rotation_matrix)
 
     # prepare reference and perturbed inputs
-    pairlist_output = sake.compute_interacting_pairs.prepare_inputs(methane)
+    pairlist_output = sake.compute_interacting_pairs.forward(methane)
     reference_prepared_input = sake.core_module._model_specific_input_preparation(
         methane, pairlist_output
     )
     reference_v_torch = torch.randn_like(reference_prepared_input.positions)
 
-    pairlist_output = sake.compute_interacting_pairs.prepare_inputs(
-        perturbed_methane_input
-    )
+    pairlist_output = sake.compute_interacting_pairs.forward(perturbed_methane_input)
     perturbed_prepared_input = sake.core_module._model_specific_input_preparation(
         perturbed_methane_input, pairlist_output
     )
@@ -467,9 +465,9 @@ def test_model_against_reference(single_batch_with_batchsize):
     # get methane input
     batch = single_batch_with_batchsize(batch_size=1)
     methane = batch.nnp_input
-    pairlist_output = mf_sake.compute_interacting_pairs.prepare_inputs(methane)
+    pairlist_output = mf_sake.compute_interacting_pairs.compute(methane)
     prepared_methane = mf_sake.core_module._model_specific_input_preparation(
-        methane, pairlist_output
+        methane, pairlist_outputforward
     )
 
     mask = jnp.zeros(

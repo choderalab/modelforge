@@ -11,7 +11,7 @@ from loguru import logger as log
 from openff.units import unit
 
 from modelforge.potential.utils import NeuralNetworkData
-from .models import PairListOutputs, NNPInput, BaseNetwork, CoreNetwork
+from .models import PairlistData, NNPInput
 
 
 class SchNet:
@@ -20,7 +20,7 @@ class SchNet:
 
 
 @dataclass
-class SchnetNeuralNetworkData(NeuralNetworkData):
+class SchnetNeuralNetworkData:
     """
     A dataclass to structure the inputs specifically for SchNet-based neuraletwork potentials, including the necessary
     geometric and chemical information, along with the radial symmetry function expansion (`f_ij`) and the cosine cutoff
@@ -42,41 +42,49 @@ class SchnetNeuralNetworkData(NeuralNetworkData):
         will be populated after initialization.
     """
 
+    pairlist: PairlistData
+    atomic_numbers: torch.Tensor
+    number_of_atoms: int
+    positions: torch.Tensor
+    atomic_subsystem_indices: torch.Tensor
+    total_charge: torch.Tensor
     atomic_embedding: Optional[torch.Tensor] = field(default=None)
     f_ij: Optional[torch.Tensor] = field(default=None)
     f_cutoff: Optional[torch.Tensor] = field(default=None)
 
 
-class SchNetCore(CoreNetwork):
+class SchNetCore(torch.nn.Module):
     def __init__(
         self,
-        featurization_config: Dict[str, Dict[str, int]],
+        featurization: Dict[str, Dict[str, int]],
         number_of_radial_basis_functions: int,
         number_of_interaction_modules: int,
+        maximum_interaction_radius: float,
         number_of_filters: int,
+        activation_function_parameter: Dict[str, str],
         shared_interactions: bool,
-        activation_function: Type[torch.nn.Module],
-        maximum_interaction_radius: unit.Quantity,
+        potential_seed: int = -1,
     ) -> None:
 
-        super().__init__(activation_function)
+        super().__init__()
+        self.activation_function = activation_function_parameter["activation_function"]
 
         log.debug("Initializing the SchNet architecture.")
         from modelforge.potential.utils import DenseWithCustomDist
 
         self.number_of_filters = number_of_filters or int(
-            featurization_config["number_of_per_atom_features"]
+            featurization["atomic_number"]["number_of_per_atom_features"]
         )
         self.number_of_radial_basis_functions = number_of_radial_basis_functions
         number_of_per_atom_features = int(
-            featurization_config["number_of_per_atom_features"]
+            featurization["atomic_number"]["number_of_per_atom_features"]
         )
 
         # Initialize representation block
         self.schnet_representation_module = SchNETRepresentation(
             maximum_interaction_radius,
             number_of_radial_basis_functions,
-            featurization_config=featurization_config,
+            featurization_config=featurization,
         )
         # Initialize interaction blocks
         if shared_interactions:
@@ -119,7 +127,7 @@ class SchNetCore(CoreNetwork):
         )
 
     def _model_specific_input_preparation(
-        self, data: "NNPInput", pairlist_output: Dict[str, PairListOutputs]
+        self, data: "NNPInput", pairlist: PairlistData
     ) -> SchnetNeuralNetworkData:
         """
         Prepare the input data for the SchNet model.
@@ -141,12 +149,8 @@ class SchNetCore(CoreNetwork):
         # Note, pairlist_output is a Dict where the key corresponds to the name of the cutoff parameter
         # e.g. "maximum_interaction_radius"
 
-        pairlist_output = pairlist_output["maximum_interaction_radius"]
-
         nnp_input = SchnetNeuralNetworkData(
-            pair_indices=pairlist_output.pair_indices,
-            d_ij=pairlist_output.d_ij,
-            r_ij=pairlist_output.r_ij,
+            pairlist=pairlist,
             number_of_atoms=number_of_atoms,
             positions=data.positions,
             atomic_numbers=data.atomic_numbers,
@@ -179,7 +183,7 @@ class SchNetCore(CoreNetwork):
         for interaction in self.interaction_modules:
             v = interaction(
                 atomic_embedding,
-                data.pair_indices,
+                data.pairlist,
                 representation["f_ij"],
                 representation["f_cutoff"],
             )
@@ -196,7 +200,7 @@ class SchNetCore(CoreNetwork):
         }
 
     def forward(
-        self, data: NNPInput, pairlist_output: PairListOutputs
+        self, data: NNPInput, pairlist_output: PairlistData
     ) -> Dict[str, torch.Tensor]:
         """
         Implements the forward pass through the network.
@@ -269,7 +273,6 @@ class SchNETInteractionModule(nn.Module):
             number_of_per_atom_features,
             number_of_filters,
             bias=False,
-            activation_function=None,
         )
         self.feature_to_output = nn.Sequential(
             DenseWithCustomDist(
@@ -280,7 +283,6 @@ class SchNETInteractionModule(nn.Module):
             DenseWithCustomDist(
                 number_of_per_atom_features,
                 number_of_per_atom_features,
-                activation_function=None,
             ),
         )
         self.filter_network = nn.Sequential(
@@ -292,14 +294,13 @@ class SchNETInteractionModule(nn.Module):
             DenseWithCustomDist(
                 number_of_filters,
                 number_of_filters,
-                activation_function=None,
             ),
         )
 
     def forward(
         self,
         x: torch.Tensor,
-        pairlist: torch.Tensor,  # shape [n_pairs, 2]
+        pairlist: PairlistData,  # shape [n_pairs, 2]
         f_ij: torch.Tensor,  # shape [n_pairs, number_of_radial_basis_functions]
         f_ij_cutoff: torch.Tensor,  # shape [n_pairs, 1]
     ) -> torch.Tensor:
@@ -322,21 +323,25 @@ class SchNETInteractionModule(nn.Module):
         torch.Tensor, shape [nr_of_atoms_in_systems, nr_atom_basis]
             Updated feature tensor after interaction block.
         """
-        idx_i, idx_j = pairlist[0], pairlist[1]
+        idx_i, idx_j = pairlist.pair_indices[0], pairlist.pair_indices[1]
 
         # Map input features to the filter space
         x = self.intput_to_feature(x)
 
         # Generate interaction filters based on radial basis functions
-        W_ij = self.filter_network(f_ij.squeeze(1))  # FIXME
+        W_ij = self.filter_network(f_ij.squeeze(1))
         W_ij = W_ij * f_ij_cutoff
 
         # Perform continuous-filter convolution
         x_j = x[idx_j]
         x_ij = x_j * W_ij  # (nr_of_atom_pairs, nr_atom_basis)
+        masked_x_ij = (
+            x_ij * pairlist.mask["maximum_interaction_radius"]
+        )  # Element-wise multiplication to apply the mask
+
         out = torch.zeros_like(x)
         out.scatter_add_(
-            0, idx_i.unsqueeze(-1).expand_as(x_ij), x_ij
+            0, idx_i.unsqueeze(-1).expand_as(masked_x_ij), masked_x_ij
         )  # from per_atom_pair to _per_atom
 
         return self.feature_to_output(out)  # shape: (nr_of_atoms, 1)
@@ -358,9 +363,9 @@ class SchNETRepresentation(nn.Module):
 
     def __init__(
         self,
-        radial_cutoff: unit.Quantity,
+        radial_cutoff: float,
         number_of_radial_basis_functions: int,
-        featurization_config: Dict[str, Union[List[str], int]],
+        featurization_config: Dict[str, Dict[str, int]],
     ):
         super().__init__()
 
@@ -385,7 +390,7 @@ class SchNETRepresentation(nn.Module):
         )
         return radial_symmetry_function
 
-    def forward(self, data: Type[SchnetNeuralNetworkData]) -> Dict[str, torch.Tensor]:
+    def forward(self, data: SchnetNeuralNetworkData) -> Dict[str, torch.Tensor]:
         """
         Generate the radial symmetry representation of the pairwise distances.
 
@@ -401,10 +406,10 @@ class SchNETRepresentation(nn.Module):
 
         # Convert distances to radial basis functions
         f_ij = self.radial_symmetry_function_module(
-            data.d_ij
+            data.pairlist.d_ij
         )  # shape (n_pairs, number_of_radial_basis_functions)
 
-        f_cutoff = self.cutoff_module(data.d_ij)  # shape (n_pairs, 1)
+        f_cutoff = self.cutoff_module(data.pairlist.d_ij)  # shape (n_pairs, 1)
 
         return {
             "f_ij": f_ij,

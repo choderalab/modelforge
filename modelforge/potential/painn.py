@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 from loguru import logger as log
 from openff.units import unit
-from .models import NNPInput, BaseNetwork, CoreNetwork, PairListOutputs
+from .models import NNPInput, BaseNetwork, CoreNetwork, PairlistData
 
 from .utils import DenseWithCustomDist
 from dataclasses import dataclass, field
@@ -138,7 +138,7 @@ class PaiNNCore(CoreNetwork):
         )
 
     def _model_specific_input_preparation(
-        self, data: NNPInput, pairlist_output: Dict[str, PairListOutputs]
+        self, data: NNPInput, pairlist_output: Dict[str, PairlistData]
     ) -> PaiNNNeuralNetworkData:
         """
         Prepare the model-specific input for the PaiNN network.

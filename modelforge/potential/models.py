@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from modelforge.potential.schnet import SchNet, SchnetNeuralNetworkData
 
 
-class PairListOutputs(NamedTuple):
+class PairlistData(NamedTuple):
     """
     A namedtuple to store the outputs of the Pairlist and Neighborlist forward methods.
 
@@ -48,6 +48,7 @@ class PairListOutputs(NamedTuple):
     pair_indices: torch.Tensor
     d_ij: torch.Tensor
     r_ij: torch.Tensor
+    mask: Dict[str, torch.Tensor]
 
 
 class Pairlist(Module):
@@ -279,7 +280,7 @@ class Pairlist(Module):
         self,
         positions: torch.Tensor,
         atomic_subsystem_indices: torch.Tensor,
-    ) -> PairListOutputs:
+    ) -> PairlistData:
         """
         Performs the forward pass of the Pairlist module.
 
@@ -302,7 +303,7 @@ class Pairlist(Module):
         )
         r_ij = self.calculate_r_ij(pair_indices, positions)
 
-        return PairListOutputs(
+        return PairlistData(
             pair_indices=pair_indices,
             d_ij=self.calculate_d_ij(r_ij),
             r_ij=r_ij,
@@ -338,7 +339,7 @@ class Neighborlist(Pairlist):
         positions: torch.Tensor,
         atomic_subsystem_indices: torch.Tensor,
         pair_indices: Optional[torch.Tensor] = None,
-    ) -> PairListOutputs:
+    ) -> PairlistData:
         """
         Forward pass to compute neighbor list considering a cutoff distance.
 
@@ -374,7 +375,7 @@ class Neighborlist(Pairlist):
             # Get the atom indices within the cutoff
             pair_indices_within_cutoff = pair_indices[:, in_cutoff]
 
-            interacting_outputs[label] = PairListOutputs(
+            interacting_outputs[label] = PairlistData(
                 pair_indices=pair_indices_within_cutoff,
                 d_ij=d_ij[in_cutoff],
                 r_ij=r_ij[in_cutoff],
@@ -658,16 +659,17 @@ class NeuralNetworkPotentialFactory:
                 dataset_statistic=dataset_statistic,
             )
 
-            neighborlist = Neighborlist(
+            neighborlist = NeighborlistForInferenceNonUniquePairs(
                 cutoffs={
                     "maximum_interaction_radius": potential_parameter.core_parameter.maximum_interaction_radius,
                     # Add more cutoffs if needed
                 },
-                only_unique_pairs=False,
             )
 
             model_type = potential_parameter.potential_name
-            core_network = _Implemented_NNP_Cores.get_neural_network_class(model_type)
+            core_network = _Implemented_NNP_Cores.get_neural_network_class(model_type)(
+                **potential_parameter.core_parameter.model_dump()
+            )
 
             model = Potential(core_network, neighborlist, postprocessing)
             if simulation_environment == "JAX":
@@ -676,6 +678,76 @@ class NeuralNetworkPotentialFactory:
                 return model
         else:
             raise NotImplementedError(f"Unsupported 'use' value: {use}")
+
+
+class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
+
+    def __init__(self, cutoffs: Dict[str, float]):
+        """
+        Initialize the ComputeInteractingAtomPairs module.
+
+        Parameters
+        ----------
+        cutoffs : Dict[str, unit.Quantity]
+            The cutoff distance(s) for neighbor list calculations.
+        only_unique_pairs : bool, optional
+            Whether to only use unique pairs in the pair list calculation, by
+            default True. This should be set to True for all message passing
+            networks.
+        """
+
+        super().__init__()
+        self.cutoff_keys = list(cutoffs.keys())
+        for key, value in cutoffs.items():
+            self.register_buffer(key, torch.tensor(value))
+
+    def forward(self, data: NNPInput):
+        """
+        Prepares the input tensors for passing to the model.
+
+        This method handles general input manipulation, such as calculating
+        distances and generating the pair list. It also calls the model-specific
+        input preparation.
+
+        Parameters
+        ----------
+        data : NNPInput
+            The input data provided by the dataset, containing atomic numbers,
+            positions, and other necessary information.
+
+        Returns
+        -------
+        PairListOutputs
+            A Dict for each cutoff type, where each entry is a namedtuple containing the pair indices, Euclidean distances
+            (d_ij), and displacement vectors (r_ij).
+        """
+        # ---------------------------
+        # general input manipulation
+        positions = data.positions
+        atomic_subsystem_indices = data.atomic_subsystem_indices
+
+        n = atomic_subsystem_indices.size(0)
+        # Generate a range of indices from 0 to n-1
+        indices = torch.arange(n, device=atomic_subsystem_indices.device)
+
+        # Create a meshgrid of indices
+        i_final_pairs, j_final_pairs = torch.meshgrid(indices, indices, indexing='ij')
+
+        # Filter out the diagonal elements (where i == j)
+        mask = i_final_pairs != j_final_pairs
+        i_final_pairs = i_final_pairs[mask]
+        j_final_pairs = j_final_pairs[mask]
+        # calculate r_ij and d_ij
+        r_ij = positions[i_final_pairs] - positions[j_final_pairs]
+        d_ij = torch.norm(r_ij, dim=1, keepdim=True, p=2)
+        pair_indices = torch.stack((i_final_pairs, j_final_pairs))
+
+        mask = {}
+        for key in self.cutoff_keys:
+            bool_mak = d_ij <= self.get_buffer(key)
+            mask[key] = bool_mak
+
+        return PairlistData(pair_indices=pair_indices, d_ij=d_ij, r_ij=r_ij, mask=mask)
 
 
 class ComputeInteractingAtomPairs(torch.nn.Module):
@@ -706,7 +778,7 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
         self.only_unique_pairs = only_unique_pairs
         self.calculate_distances_and_pairlist = Neighborlist(cutoffs, only_unique_pairs)
 
-    def prepare_inputs(self, data: Union[NNPInput, NamedTuple]):
+    def forward(self, data: Union[NNPInput, NamedTuple]):
         """
         Prepares the input tensors for passing to the model.
 
@@ -1152,7 +1224,7 @@ class BaseNetwork(Module):
         """
 
         self.compute_interacting_pairs._input_checks(data)
-        return self.compute_interacting_pairs.prepare_inputs(data)
+        return self.compute_interacting_pairs.forward(data)
 
     def compute(self, data, core_input):
         """
@@ -1228,7 +1300,7 @@ class CoreNetwork(Module, ABC):
 
     @abstractmethod
     def _model_specific_input_preparation(
-        self, data: NNPInput, pairlist: PairListOutputs
+        self, data: NNPInput, pairlist: PairlistData
     ) -> Union[
         "PhysNetNeuralNetworkData",
         "PaiNNNeuralNetworkData",
@@ -1306,7 +1378,7 @@ class CoreNetwork(Module, ABC):
         self.eval()  # Set the model to evaluation mode
 
     def forward(
-        self, data: NNPInput, pairlist_output: PairListOutputs
+        self, data: NNPInput, pairlist_output: PairlistData
     ) -> Dict[str, torch.Tensor]:
         """
         Implements the forward pass through the network.
@@ -1339,22 +1411,19 @@ class CoreNetwork(Module, ABC):
 
 class Potential(torch.nn.Module):
     def __init__(self, core_network, neighborlist, postprocessing):
+        super().__init__()
         self.core_network = core_network
         self.neighborlist = neighborlist
         self.postprocessing = postprocessing
 
     def forward(self, input_data):
         # Step 1: Compute pair list and distances using Neighborlist
-        pairlist_output = self.neighborlist.compute(
-            input_data.positions, input_data.atomic_subsystem_indices
-        )
+        pairlist_output = self.neighborlist.forward(input_data)
 
         # Step 2: Compute the core network output using SchNetCore
-        core_output = self.core_network.compute_properties(
-            input_data, **pairlist_output
-        )
+        core_output = self.core_network(input_data, pairlist_output)
 
         # Step 3: Apply postprocessing using PostProcessing
-        processed_output = self.postprocessing.process(core_output)
+        processed_output = self.postprocessing(core_output)
 
         return processed_output

@@ -16,7 +16,7 @@ from modelforge.potential.utils import CosineAttenuationFunction
 from modelforge.potential.utils import NeuralNetworkData
 from modelforge.potential.utils import NNPInput
 from modelforge.potential.utils import TensorNetRadialBasisFunction
-from .models import PairListOutputs
+from .models import PairlistData
 from ..utils.units import _convert_str_to_unit
 
 
@@ -367,7 +367,7 @@ class TensorNetCore(CoreNetwork):
         }
 
     def _model_specific_input_preparation(
-        self, data: NNPInput, pairlist_output: Dict[str, PairListOutputs]
+        self, data: NNPInput, pairlist_output: Dict[str, PairlistData]
     ) -> TensorNetNeuralNetworkData:
         """
         Prepare the input data for the TensorNet model.

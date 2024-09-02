@@ -4,13 +4,13 @@ Utility functions for neural network potentials.
 
 import math
 from dataclasses import dataclass
-from typing import Callable, Optional, Tuple, Type
+from typing import Callable, Optional, Tuple, Type, Union
 
 import numpy as np
 import torch
 import torch.nn as nn
 from openff.units import unit
-from typing import Union
+
 from modelforge.dataset.dataset import NNPInput
 
 
@@ -172,66 +172,7 @@ def triple_by_molecule(
     return central_atom_index, local_index12 % n, sign12
 
 
-from typing import List
-
-
-class Embedding(nn.Module):
-    def __init__(self, num_embeddings: int, embedding_dim: int):
-        """
-        Initialize the embedding module.
-
-        Parameters
-        ----------
-        num_embeddings: int
-        embedding_dim : int
-            Dimensionality of the embedding.
-        """
-        super().__init__()
-        self.embedding = nn.Embedding(num_embeddings, embedding_dim)
-
-    @property
-    def weights(self):
-        return self.embedding.weight
-
-    @property
-    def data(self):
-        return self.embedding.weight.data
-
-    @data.setter
-    def data(self, data):
-        self.embedding.weight.data = data
-
-    @property
-    def embedding_dim(self):
-        """
-        Get the dimensionality of the embedding.
-
-        Returns
-        -------
-        int
-            The dimensionality of the embedding.
-        """
-        return self.embedding.embedding_dim
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Embeddes the pr3ovided 1D tensor using the embedding layer.
-
-        Parameters
-        ----------
-        x : torch.Tensor
-            1D tensor to be embedded.
-
-        Returns
-        -------
-        torch.Tensor
-            with shape (num_embeddings, embedding_dim)
-        """
-
-        return self.embedding(x)
-
-
-from typing import Dict
+from typing import Dict, List
 
 
 class AddPerMoleculeValue(nn.Module):
@@ -359,7 +300,7 @@ class FeaturizeInput(nn.Module):
         "spin_state",
     ]
 
-    def __init__(self, featurization_config: Dict[str, Union[List[str], int]]) -> None:
+    def __init__(self, featurization_config: Dict[str, Dict[str, int]]) -> None:
         """
         Initialize the FeaturizeInput class.
 
@@ -397,21 +338,25 @@ class FeaturizeInput(nn.Module):
         for featurization in self._SUPPORTED_FEATURIZATION_TYPES:
 
             # embed nuclear charges
-            if featurization == "atomic_number" and featurization in list(
-                featurization_config["properties_to_featurize"]
+            if (
+                featurization == "atomic_number"
+                and featurization in featurization_config
             ):
-
-                self.nuclear_charge_embedding = Embedding(
-                    int(featurization_config["maximum_atomic_number"]),
-                    int(featurization_config["number_of_per_atom_features"]),
+                self.nuclear_charge_embedding = torch.nn.Embedding(
+                    int(featurization_config[featurization]["maximum_atomic_number"]),
+                    int(
+                        featurization_config[featurization][
+                            "number_of_per_atom_features"
+                        ]
+                    ),
                 )
                 self.registered_embedding_operations.append("nuclear_charge_embedding")
 
             # add total charge to embedding vector
-            if featurization == "per_molecule_total_charge" and featurization in list(
-                featurization_config["properties_to_featurize"]
+            if (
+                featurization == "per_molecule_total_charge"
+                and featurization in featurization_config
             ):
-
                 # transform output o f embedding with shape (nr_atoms, nr_features) to (nr_atoms, nr_features + 1). The added features is the total charge (which will be transformed to a per-atom property)
                 self.append_to_embedding_tensor.append(
                     AddPerMoleculeValue("total_charge")
@@ -420,11 +365,10 @@ class FeaturizeInput(nn.Module):
                 self.registered_appended_properties.append("total_charge")
 
             # add partial charge to embedding vector
-            if featurization == "per_atom_partial_charge" and featurization in list(
-                featurization_config["properties_to_featurize"]
-            ):
-
-                # transform output o f embedding with shape (nr_atoms, nr_features) to (nr_atoms, nr_features + 1). The added features is the total charge (which will be transformed to a per-atom property)
+            if (
+                featurization == "per_atom_partial_charge"
+                and featurization in featurization_config
+            ):  # transform output o f embedding with shape (nr_atoms, nr_features) to (nr_atoms, nr_features + 1). The added features is the total charge (which will be transformed to a per-atom property)
                 self.append_to_embedding_tensor.append(
                     AddPerAtomValue("partial_charge")
                 )
@@ -491,7 +435,7 @@ class Dense(nn.Linear):
         in_features: int,
         out_features: int,
         bias: bool = True,
-        activation_function: Optional[Type[torch.nn.Module]] = None,
+        activation_function: nn.Module = nn.Identity(),
     ):
         """
         A linear or non-linear transformation
@@ -510,9 +454,7 @@ class Dense(nn.Linear):
 
         super().__init__(in_features, out_features, bias)
 
-        self.activation_function = (
-            activation_function if activation_function is not None else nn.Identity()
-        )
+        self.activation_function = activation_function
 
     def forward(self, input: torch.Tensor):
         """
@@ -558,9 +500,9 @@ class DenseWithCustomDist(nn.Linear):
         in_features: int,
         out_features: int,
         bias: bool = True,
-        activation_function: Optional[nn.Module] = None,
-        weight_init: Optional[Callable] = xavier_uniform_,
-        bias_init: Optional[Callable] = zeros_,
+        activation_function: nn.Module = nn.Identity(),
+        weight_init: Callable = xavier_uniform_,
+        bias_init: Callable = zeros_,
     ):
         """
         A linear or non-linear transformation
@@ -586,11 +528,9 @@ class DenseWithCustomDist(nn.Linear):
 
         super().__init__(
             in_features, out_features, bias
-        )  # NOTE: the `reseet_paramters` method is called in the super class
+        )  # NOTE: the `reset_paramters` method is called in the super class
 
-        self.activation_function = (
-            activation_function if activation_function is not None else nn.Identity()
-        )
+        self.activation_function = activation_function
 
     def reset_parameters(self):
         """
@@ -623,7 +563,7 @@ from openff.units import unit
 
 
 class CosineAttenuationFunction(nn.Module):
-    def __init__(self, cutoff: unit.Quantity):
+    def __init__(self, cutoff: float):
         """
         Behler-style cosine cutoff module. This anneals the signal smoothly to zero at the cutoff distance.
 
@@ -636,7 +576,6 @@ class CosineAttenuationFunction(nn.Module):
 
         """
         super().__init__()
-        cutoff = cutoff.to(unit.nanometer).m
         self.register_buffer("cutoff", torch.tensor([cutoff]))
 
     def forward(self, d_ij: torch.Tensor):
@@ -807,8 +746,9 @@ class AngularSymmetryFunction(nn.Module):
         return ret.flatten(start_dim=-4)
 
 
-from abc import ABC, abstractmethod
 import math
+from abc import ABC, abstractmethod
+
 from torch.nn import functional
 
 
@@ -905,9 +845,9 @@ class GaussianRadialBasisFunctionWithScaling(RadialBasisFunction):
     def __init__(
         self,
         number_of_radial_basis_functions: int,
-        max_distance: unit.Quantity,
-        min_distance: unit.Quantity = 0.0 * unit.nanometer,
-        dtype: Optional[torch.dtype] = None,
+        max_distance: float,
+        min_distance: float = 0.0,
+        dtype: torch.dtype = torch.float32,
         prefactor: float = 1.0,
         trainable_prefactor: bool = False,
         trainable_centers_and_scale_factors: bool = False,
@@ -941,8 +881,8 @@ class GaussianRadialBasisFunctionWithScaling(RadialBasisFunction):
         self.dtype = dtype
         self.trainable_centers_and_scale_factors = trainable_centers_and_scale_factors
         # convert to nanometer
-        _max_distance_in_nanometer = max_distance.to(unit.nanometer).m
-        _min_distance_in_nanometer = min_distance.to(unit.nanometer).m
+        _max_distance_in_nanometer = max_distance
+        _min_distance_in_nanometer = min_distance
 
         # calculate radial basis centers
         radial_basis_centers = self.calculate_radial_basis_centers(
@@ -1007,9 +947,9 @@ class SchnetRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
     def __init__(
         self,
         number_of_radial_basis_functions: int,
-        max_distance: unit.Quantity,
-        min_distance: unit.Quantity = 0.0 * unit.nanometer,
-        dtype: Optional[torch.dtype] = None,
+        max_distance: float,
+        min_distance: float = 0.0,
+        dtype: torch.dtype = torch.float32,
         trainable_centers_and_scale_factors: bool = False,
     ):
         """
@@ -1439,7 +1379,6 @@ def scatter_softmax(
 
 
 from enum import Enum
-
 
 ACTIVATION_FUNCTIONS = {
     "ReLU": nn.ReLU,

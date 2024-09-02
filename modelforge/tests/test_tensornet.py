@@ -106,7 +106,7 @@ def test_input():
         ],
     )
     tensornet.compute_interacting_pairs._input_checks(mf_input)
-    pairlist_output = tensornet.compute_interacting_pairs.prepare_inputs(mf_input)[
+    pairlist_output = tensornet.compute_interacting_pairs.forward(mf_input)[
         "maximum_interaction_radius"
     ]
 
@@ -255,7 +255,7 @@ def test_representation():
         ],
     )
     tensornet.compute_interacting_pairs._input_checks(mf_input)
-    pairlist_output = tensornet.compute_interacting_pairs.prepare_inputs(mf_input)
+    pairlist_output = tensornet.compute_interacting_pairs.forward(mf_input)
 
     ################ modelforge TensorNet ################
     torch.manual_seed(seed)
@@ -355,7 +355,7 @@ def test_interaction():
         ],
     )
     tensornet.compute_interacting_pairs._input_checks(mf_input)
-    pairlist_output = tensornet.compute_interacting_pairs.prepare_inputs(mf_input)
+    pairlist_output = tensornet.compute_interacting_pairs.forward(mf_input)
 
     ################ modelforge TensorNet ################
     tensornet_representation_module = tensornet.core_module.representation_module

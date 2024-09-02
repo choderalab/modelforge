@@ -334,7 +334,7 @@ def test_compare_aev():
     # perform input checks
     mf_model.compute_interacting_pairs._input_checks(mf_input)
     # prepare the input for the forward pass
-    pairlist_output = mf_model.compute_interacting_pairs.prepare_inputs(mf_input)
+    pairlist_output = mf_model.compute_interacting_pairs.forward(mf_input)
     nnp_input = mf_model.core_module._model_specific_input_preparation(
         mf_input, pairlist_output
     )

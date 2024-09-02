@@ -14,7 +14,7 @@ from modelforge.potential.utils import NeuralNetworkData, shared_config_prior
 from modelforge.utils.io import import_
 from modelforge.utils.units import _convert_str_to_unit
 
-from .models import BaseNetwork, CoreNetwork, NNPInput, PairListOutputs
+from .models import BaseNetwork, CoreNetwork, NNPInput, PairlistData
 from .utils import Dense
 
 
@@ -486,7 +486,7 @@ class PhysNetCore(CoreNetwork):
         self.atomic_shift = nn.Parameter(torch.zeros(maximum_atomic_number, 2))
 
     def _model_specific_input_preparation(
-        self, data: NNPInput, pairlist_output: Dict[str, PairListOutputs]
+        self, data: NNPInput, pairlist_output: Dict[str, PairlistData]
     ) -> PhysNetNeuralNetworkData:
         """
         Prepare model-specific input data.

@@ -8,7 +8,7 @@ import torch.nn as nn
 from loguru import logger as log
 from typing import Dict, Tuple, Union, List, Type
 from openff.units import unit
-from .models import NNPInput, BaseNetwork, CoreNetwork, PairListOutputs
+from .models import NNPInput, BaseNetwork, CoreNetwork, PairlistData
 from .utils import (
     DenseWithCustomDist,
     scatter_softmax,
@@ -138,7 +138,7 @@ class SAKECore(CoreNetwork):
         )
 
     def _model_specific_input_preparation(
-        self, data: NNPInput, pairlist_output: Dict[str, PairListOutputs]
+        self, data: NNPInput, pairlist_output: Dict[str, PairlistData]
     ) -> SAKENeuralNetworkInput:
         """
         Prepare the model-specific input.

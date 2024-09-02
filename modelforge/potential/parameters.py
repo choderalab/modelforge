@@ -193,10 +193,6 @@ class SchNetParameters(ParametersBase):
 
 class TensorNetParameters(ParametersBase):
     class CoreParameter(ParametersBase):
-        # class Featurization(ParametersBase):
-        #     properties_to_featurize: List[str]
-        #     max_Z: int
-        #     number_of_per_atom_features: int
 
         number_of_per_atom_features: int
         number_of_interaction_layers: int
@@ -256,20 +252,22 @@ class PaiNNParameters(ParametersBase):
 
 class PhysNetParameters(ParametersBase):
     class CoreParameter(ParametersBase):
-        class Featurization(ParametersBase):
-            properties_to_featurize: List[str]
-            maximum_atomic_number: int
-            number_of_per_atom_features: int
+        class Featurization(BaseModel):
+            class AtomicNumber(BaseModel):
+                maximum_atomic_number: int = 101
+                number_of_per_atom_features: int = 32
+
+            atomic_number: AtomicNumber = Field(default_factory=AtomicNumber)
 
         number_of_radial_basis_functions: int
-        maximum_interaction_radius: Union[str, unit.Quantity]
+        maximum_interaction_radius: float
         number_of_interaction_residual: int
         number_of_modules: int
         featurization: Featurization
         activation_function_parameter: ActivationFunctionConfig
 
-        converted_units = field_validator("maximum_interaction_radius")(
-            _convert_str_to_unit
+        converted_units = field_validator("maximum_interaction_radius", mode="before")(
+            _convert_str_to_unit_length
         )
 
     class PostProcessingParameter(ParametersBase):

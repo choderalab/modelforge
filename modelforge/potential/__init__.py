@@ -2,29 +2,30 @@
 This module contains the implemented neural network potentials and their parameters.
 """
 
-from .schnet import SchNet, SchNetCore
-from .physnet import PhysNet
-from .painn import PaiNN
+from enum import Enum
+
 from .ani import ANI2x, ANI2xCore
-from .sake import SAKE
-from .tensornet import TensorNet
+from .models import NeuralNetworkPotentialFactory
+from .painn import PaiNN
 from .parameters import (
     ANI2xParameters,
-    SchNetParameters,
-    PhysNetParameters,
     PaiNNParameters,
+    PhysNetParameters,
     SAKEParameters,
+    SchNetParameters,
     TensorNetParameters,
 )
-from .utils import (
-    CosineAttenuationFunction,
-    RadialBasisFunction,
-    AngularSymmetryFunction,
-    FeaturizeInput,
-)
+from .physnet import PhysNet, PhysNetCore
 from .processing import FromAtomToMoleculeReduction
-from .models import NeuralNetworkPotentialFactory
-from enum import Enum
+from .sake import SAKE
+from .schnet import SchNet, SchNetCore
+from .tensornet import TensorNet
+from .utils import (
+    AngularSymmetryFunction,
+    CosineAttenuationFunction,
+    FeaturizeInput,
+    RadialBasisFunction,
+)
 
 
 class _Implemented_NNP_Parameters(Enum):
@@ -75,6 +76,7 @@ class _Implemented_NNPs(Enum):
 class _Implemented_NNP_Cores(Enum):
     SCHNET = SchNetCore
     ANI2X = ANI2xCore
+    PHYSNET = PhysNetCore
 
     @classmethod
     def get_neural_network_class(cls, neural_network_name: str):

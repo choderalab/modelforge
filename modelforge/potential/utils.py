@@ -112,8 +112,6 @@ def shared_config_prior():
     }
 
 
-
-
 from typing import Dict, List
 
 
@@ -1027,9 +1025,9 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
     def __init__(
         self,
         number_of_radial_basis_functions: int,
-        max_distance: unit.Quantity,
-        min_distance: unit.Quantity = 0.0 * unit.nanometer,
-        alpha: unit.Quantity = 1.0 * unit.angstrom,
+        max_distance: float,
+        min_distance: float = 0.0,
+        alpha: float = 1.0,
         dtype: torch.dtype = torch.float32,
         trainable_centers_and_scale_factors: bool = False,
     ):
@@ -1057,8 +1055,8 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
             trainable_prefactor=False,
             dtype=dtype,
         )
-        self._min_distance_in_nanometer = min_distance.to(unit.nanometer).m
-        self._alpha_in_nanometer = alpha.to(unit.nanometer).m
+        self._min_distance_in_nanometer = min_distance
+        self._alpha_in_nanometer = alpha
         radial_basis_centers = self.calculate_radial_basis_centers(
             number_of_radial_basis_functions,
             max_distance,
@@ -1096,7 +1094,7 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
 
         start_value = torch.exp(
             torch.scalar_tensor(
-                ((-max_distance + min_distance) / alpha).to("").m,
+                ((-max_distance + min_distance) / alpha),
                 dtype=dtype,
             )
         )
@@ -1121,7 +1119,7 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
         # of radial_scale_factor in GaussianRadialBasisFunctionWithScaling
         return torch.full(
             (number_of_radial_basis_functions,),
-            (2 * (1 - math.exp(((-max_distance + min_distance) / alpha).to("").m)))
+            (2 * (1 - math.exp(((-max_distance + min_distance) / alpha))))
             / number_of_radial_basis_functions,
             dtype=dtype,
         )

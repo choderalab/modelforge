@@ -347,6 +347,3 @@ class SchNETRepresentation(nn.Module):
                 data
             ),  # add per-atom properties and embedding
         }
-
-
-from typing import List, Union

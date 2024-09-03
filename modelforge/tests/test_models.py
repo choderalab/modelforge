@@ -382,7 +382,7 @@ def test_forward_pass_with_all_datasets(
 # )
 # @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
 @pytest.mark.parametrize("dataset_name", ["QM9"])
-@pytest.mark.parametrize("potential_name", ["Tensornet", "SchNet", "ANI2x", "PaiNN", "PhysNet"])
+@pytest.mark.parametrize("potential_name", ["SAKE", "Tensornet", "SchNet", "ANI2x", "PaiNN", "PhysNet"])
 @pytest.mark.parametrize("simulation_environment", ["PyTorch"])
 @pytest.mark.parametrize("mode", ["inference"])
 def test_forward_pass(

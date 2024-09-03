@@ -1258,32 +1258,39 @@ def scatter_softmax(
     src: torch.Tensor,
     index: torch.Tensor,
     dim: int,
-    dim_size: Optional[int] = None,
-    device: Optional[torch.device] = None,
+    dim_size: int,
 ) -> torch.Tensor:
     """
-    Softmax operation over all values in :attr:`src` tensor that share indices
-    specified in the :attr:`index` tensor along a given axis :attr:`dim`.
+    Computes the softmax operation over values in the `src` tensor that share indices specified in the `index` tensor along a given axis `dim`.
 
-    For one-dimensional tensors, the operation computes
+    For one-dimensional tensors, the operation computes:
 
     .. math::
-        \mathrm{out}_i = {\textrm{softmax}(\mathrm{src})}_i =
-        \frac{\exp(\mathrm{src}_i)}{\sum_j \exp(\mathrm{src}_j)}
+        \text{out}_i = \text{softmax}(\text{src})_i =
+        \frac{\exp(\text{src}_i)}{\sum_j \exp(\text{src}_j)}
 
-    where :math:`\sum_j` is over :math:`j` such that
-    :math:`\mathrm{index}_j = i`.
+    where the summation :math:`\sum_j` is over all :math:`j` such that :math:`\text{index}_j = i`.
 
-    Args:
-        src (Tensor): The source tensor.
-        index (LongTensor): The indices of elements to scatter.
-        dim (int, optional): The axis along which to index.
-            (default: :obj:`-1`)
-        dim_size: The number of classes, i.e. the number of unique indices in `index`.
+    Parameters
+    ----------
+    src : Tensor
+        The source tensor containing the values to which the softmax operation will be applied.
+    index : LongTensor
+        The indices of elements to scatter, determining which elements in `src` are grouped together for the softmax calculation.
+    dim : int
+        The axis along which to index. Default is `-1`.
+    dim_size : int
+        The number of classes, i.e., the number of unique indices in `index`.
 
-    :rtype: :class:`Tensor`
+    Returns
+    -------
+    Tensor
+        A tensor where the softmax operation has been applied along the specified dimension.
 
-    Adapted from: https://github.com/rusty1s/pytorch_scatter/blob/c31915e1c4ceb27b2e7248d21576f685dc45dd01/torch_scatter/composite/softmax.py
+    Notes
+    -----
+    This implementation is adapted from the following source:
+    `pytorch_scatter <https://github.com/rusty1s/pytorch_scatter/blob/c31915e1c4ceb27b2e7248d21576f685dc45dd01/torch_scatter/composite/softmax.py>`_.
     """
     if not torch.is_floating_point(src):
         raise ValueError(
@@ -1301,7 +1308,7 @@ def scatter_softmax(
         for (other_dim, other_dim_size) in enumerate(src.shape)
     ]
     index = index.to(torch.int64)
-    zeros = torch.zeros(out_shape, dtype=src.dtype, device=device)
+    zeros = torch.zeros(out_shape, dtype=src.dtype, device=src.device)
     max_value_per_index = zeros.scatter_reduce(
         dim, index, src, "amax", include_self=False
     )
@@ -1310,7 +1317,7 @@ def scatter_softmax(
     recentered_scores = src - max_per_src_element
     recentered_scores_exp = recentered_scores.exp()
 
-    sum_per_index = torch.zeros(out_shape, dtype=src.dtype, device=device).scatter_add(
+    sum_per_index = torch.zeros(out_shape, dtype=src.dtype, device=src.device).scatter_add(
         dim, index, recentered_scores_exp
     )
     normalizing_constants = sum_per_index.gather(dim, index)

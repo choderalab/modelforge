@@ -17,7 +17,7 @@ from .parameters import (
 )
 from .physnet import PhysNet, PhysNetCore
 from .processing import FromAtomToMoleculeReduction
-from .sake import SAKE
+from .sake import SAKE, SAKECore
 from .schnet import SchNet, SchNetCore
 from .tensornet import TensorNet, TensorNetCore
 from .utils import (
@@ -79,6 +79,7 @@ class _Implemented_NNP_Cores(Enum):
     PHYSNET = PhysNetCore
     TENSORNET = TensorNetCore
     PAINN = PaiNNCore
+    SAKE = SAKECore
 
     @classmethod
     def get_neural_network_class(cls, neural_network_name: str):

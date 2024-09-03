@@ -2,112 +2,60 @@
 SAKE - Spatial Attention Kinetic Networks with E(n) Equivariance
 """
 
-from dataclasses import dataclass
+from typing import Dict, Tuple
 
-import torch.nn as nn
-from loguru import logger as log
-from typing import Dict, Tuple, Union, List, Type
-from openff.units import unit
-from .models import NNPInput, BaseNetwork, CoreNetwork, PairlistData
-from .utils import (
-    DenseWithCustomDist,
-    scatter_softmax,
-    PhysNetRadialBasisFunction,
-)
-from modelforge.dataset.dataset import NNPInput
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
+from loguru import logger as log
+
+from .models import NNPInputTuple, PairlistData
+from .utils import DenseWithCustomDist, PhysNetRadialBasisFunction, scatter_softmax
 
 
-@dataclass
-class SAKENeuralNetworkInput:
+class MultiplySigmoid(nn.Module):
     """
-    A dataclass designed to structure the inputs for SAKE neural network potentials, ensuring
-    an efficient and structured representation of atomic systems for energy computation and
-    property prediction within the SAKE framework.
-
-    Attributes
-    ----------
-    atomic_numbers : torch.Tensor
-        Atomic numbers for each atom in the system(s). Shape: [num_atoms].
-    positions : torch.Tensor
-        XYZ coordinates of each atom. Shape: [num_atoms, 3].
-    atomic_subsystem_indices : torch.Tensor
-        Maps each atom to its respective subsystem or molecule, useful for systems with multiple
-        molecules. Shape: [num_atoms].
-    pair_indices : torch.Tensor
-        Indicates indices of atom pairs, essential for computing pairwise features. Shape: [2, num_pairs].
-    number_of_atoms : int
-        Total number of atoms in the batch, facilitating batch-wise operations.
-    atomic_embedding : torch.Tensor
-        Embeddings or features for each atom, potentially derived from atomic numbers or learned. Shape: [num_atoms, embedding_dim].
-
-    Notes
-    -----
-    The `SAKENeuralNetworkInput` dataclass encapsulates essential inputs required by the SAKE neural network
-    model for accurately predicting system energies and properties. It includes atomic positions, atomic types,
-    and connectivity information, crucial for a detailed representation of atomistic systems.
-
+    Custom activation module that multiplies the sigmoid output by a factor of 2.0.
+    This module is compatible with TorchScript.
     """
 
-    pair_indices: torch.Tensor
-    number_of_atoms: int
-    positions: torch.Tensor
-    atomic_numbers: torch.Tensor
-    atomic_subsystem_indices: torch.Tensor
-    atomic_embedding: torch.Tensor
+    def __init__(self, factor: float = 2.0):
+        super().__init__()
+        self.factor = factor
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.factor * torch.sigmoid(x)
 
 
-class SAKECore(CoreNetwork):
-    """SAKE - spatial attention kinetic networks with E(n) equivariance.
-
-    Reference:
-    Wang, Yuanqing and Chodera, John D. ICLR 2023. https://openreview.net/pdf?id=3DIpIf3wQMC
-
-    """
+class SAKECore(torch.nn.Module):
 
     def __init__(
         self,
-        featurization_config: Dict[str, Union[List[str], int]],
+        featurization: Dict[str, Dict[str, int]],
         number_of_interaction_modules: int,
         number_of_spatial_attention_heads: int,
         number_of_radial_basis_functions: int,
-        maximum_interaction_radius: unit.Quantity,
-        activation_function: Type[torch.nn.Module],
+        maximum_interaction_radius: float,
+        activation_function_parameter: Dict[str, str],
         epsilon: float = 1e-8,
+        potential_seed: int = -1,
     ):
-        """
-        Initialize the SAKECore model.
 
-        Parameters
-        ----------
-        featurization_config : Dict[str, Union[List[str], int]]
-            Configuration for featurizing the atomic input.
-        number_of_interaction_modules : int
-            Number of interaction modules.
-        number_of_spatial_attention_heads : int
-            Number of spatial attention heads.
-        number_of_radial_basis_functions : int
-            Number of radial basis functions.
-        maximum_interaction_radius : unit.Quantity
-            Cutoff distance.
-        activation_function : Type[torch.nn.Module]
-            Activation function to use.
-        epsilon : float, optional
-            Small value to avoid division by zero, by default 1e-8.
-        """
         log.debug("Initializing the SAKE architecture.")
-        super().__init__(activation_function)
+        super().__init__()
+
+        self.activation_function = activation_function_parameter["activation_function"]
+
         self.nr_interaction_blocks = number_of_interaction_modules
         number_of_per_atom_features = int(
-            featurization_config["number_of_per_atom_features"]
+            featurization["atomic_number"]["number_of_per_atom_features"]
         )
         self.nr_heads = number_of_spatial_attention_heads
         self.number_of_per_atom_features = number_of_per_atom_features
         # featurize the atomic input
-        from modelforge.potential.utils import FeaturizeInput, DenseWithCustomDist
+        from modelforge.potential.utils import DenseWithCustomDist, FeaturizeInput
 
-        self.featurize_input = FeaturizeInput(featurization_config)
+        self.featurize_input = FeaturizeInput(featurization)
         self.energy_layer = nn.Sequential(
             DenseWithCustomDist(
                 number_of_per_atom_features,
@@ -132,50 +80,14 @@ class SAKECore(CoreNetwork):
                 maximum_interaction_radius=maximum_interaction_radius,
                 number_of_radial_basis_functions=number_of_radial_basis_functions,
                 epsilon=epsilon,
-                scale_factor=(1.0 * unit.nanometer),  # TODO: switch to angstrom
+                scale_factor=1.0,
             )
             for _ in range(self.nr_interaction_blocks)
         )
 
-    def _model_specific_input_preparation(
-        self, data: NNPInput, pairlist_output: Dict[str, PairlistData]
-    ) -> SAKENeuralNetworkInput:
-        """
-        Prepare the model-specific input.
-
-        Parameters
-        ----------
-        data : NNPInput
-            Input data.
-        pairlist_output : Dict[str,PairListOutputs]
-            Pairlist output(s)
-
-        Returns
-        -------
-        SAKENeuralNetworkInput
-            Prepared input for the SAKE neural network.
-        """
-        # Perform atomic embedding
-
-        number_of_atoms = data.atomic_numbers.shape[0]
-
-        # Note, pairlist_output is a Dict where the key corresponds to the name of the cutoff parameter
-        # e.g. "maximum_interaction_radius"
-
-        pairlist_output = pairlist_output["maximum_interaction_radius"]
-
-        nnp_input = SAKENeuralNetworkInput(
-            pair_indices=pairlist_output.pair_indices,
-            number_of_atoms=number_of_atoms,
-            positions=data.positions,  # .to(self.embedding.weight.dtype),
-            atomic_numbers=data.atomic_numbers,
-            atomic_subsystem_indices=data.atomic_subsystem_indices,
-            atomic_embedding=self.featurize_input(data),
-        )  # add per-atom properties and embedding,
-
-        return nnp_input
-
-    def compute_properties(self, data: SAKENeuralNetworkInput):
+    def compute_properties(
+        self, data: NNPInputTuple, pairlist_output: PairlistData
+    ) -> Dict[str, torch.Tensor]:
         """
         Compute atomic properties.
 
@@ -190,12 +102,12 @@ class SAKECore(CoreNetwork):
             Dictionary containing per-atom energy predictions and atomic subsystem indices.
         """
         # extract properties from pairlist
-        h = data.atomic_embedding
+        h = self.featurize_input(data)
         x = data.positions
         v = torch.zeros_like(x)
 
         for interaction_mod in self.interaction_modules:
-            h, x, v = interaction_mod(h, x, v, data.pair_indices)
+            h, x, v = interaction_mod(h, x, v, pairlist_output.pair_indices)
 
         # Use squeeze to remove dimensions of size 1
         E_i = self.energy_layer(h).squeeze(1)
@@ -204,6 +116,35 @@ class SAKECore(CoreNetwork):
             "per_atom_energy": E_i,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
+
+    def forward(
+        self, data: NNPInputTuple, pairlist_output: PairlistData
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Implements the forward pass through the network.
+
+        Parameters
+        ----------
+        data : NNPInput
+            Contains input data for the batch obtained directly from the
+            dataset, including atomic numbers, positions, and other relevant
+            fields.
+        pairlist_output : PairListOutputs
+            Contains the indices for the selected pairs and their associated
+            distances and displacement vectors.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The calculated per-atom properties and other properties from the
+            forward pass.
+        """
+        # perform the forward pass implemented in the subclass
+        outputs = self.compute_properties(data, pairlist_output)
+        # add atomic numbers to the output
+        outputs["atomic_numbers"] = data.atomic_numbers
+
+        return outputs
 
 
 class SAKEInteraction(nn.Module):
@@ -225,10 +166,10 @@ class SAKEInteraction(nn.Module):
         nr_coefficients: int,
         nr_heads: int,
         activation: nn.Module,
-        maximum_interaction_radius: unit.Quantity,
+        maximum_interaction_radius: float,
         number_of_radial_basis_functions: int,
         epsilon: float,
-        scale_factor: unit.Quantity,
+        scale_factor: float,
     ):
         """
         Parameters
@@ -332,7 +273,7 @@ class SAKEInteraction(nn.Module):
             DenseWithCustomDist(
                 self.nr_atom_basis_velocity,
                 1,
-                activation_function=lambda x: 2.0 * F.sigmoid(x),
+                activation_function=MultiplySigmoid(factor=2.0),
                 bias=False,
             ),
         )
@@ -346,7 +287,7 @@ class SAKEInteraction(nn.Module):
 
         self.v_mixing_mlp = DenseWithCustomDist(self.nr_coefficients, 1, bias=False)
 
-        self.scale_factor_in_nanometer = scale_factor.m_as(unit.nanometer)
+        self.scale_factor_in_nanometer = scale_factor
 
     def update_edge(self, h_i_by_pair, h_j_by_pair, d_ij):
         """Compute intermediate edge features for semantic attention.
@@ -452,7 +393,9 @@ class SAKEInteraction(nn.Module):
         # p: nr_pairs, x: geometry_basis, c: nr_coefficients
         return torch.einsum("px,pc->pcx", dir_ij, self.x_mixing_mlp(h_ij_semantic))
 
-    def get_spatial_attention(self, combinations, idx_i, nr_atoms):
+    def get_spatial_attention(
+        self, combinations: torch.Tensor, idx_i: torch.Tensor, nr_atoms: int
+    ):
         """Compute spatial attention.
 
         Wang and Chodera (2023) Sec. 4 Eq. 6.
@@ -482,7 +425,9 @@ class SAKEInteraction(nn.Module):
         combinations_norm_square = (combinations_mean**2).sum(dim=-1)
         return self.post_norm_mlp(combinations_norm_square)
 
-    def aggregate(self, h_ij_semantic, idx_i, nr_atoms):
+    def aggregate(
+        self, h_ij_semantic: torch.Tensor, idx_i: torch.Tensor, nr_atoms: int
+    ):
         """Aggregate edge semantic attention over all senders connected to a receiver.
 
         Wang and Chodera (2023) Sec. 5 Algorithm 1,  step labelled "Neighborhood aggregation".
@@ -508,7 +453,13 @@ class SAKEInteraction(nn.Module):
         )
         return zeros.scatter_add(0, expanded_idx_i, h_ij_semantic)
 
-    def get_semantic_attention(self, h_ij_edge, idx_i, idx_j, nr_atoms):
+    def get_semantic_attention(
+        self,
+        h_ij_edge: torch.Tensor,
+        idx_i: torch.Tensor,
+        idx_j: torch.Tensor,
+        nr_atoms: int,
+    ):
         """Compute semantic attention. Softmax is over all senders connected to a receiver.
 
         Wang and Chodera (2023) Sec. 5 Eq. 9-10.
@@ -538,7 +489,6 @@ class SAKEInteraction(nn.Module):
             expanded_idx_i,
             dim=0,
             dim_size=nr_atoms,
-            device=h_ij_edge.device,
         )
         # p: nr_pairs, f: nr_edge_basis, h: nr_heads
         return torch.reshape(
@@ -566,8 +516,8 @@ class SAKEInteraction(nn.Module):
         Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
             Updated scalar and vector representations (h, x, v) with same shapes as input.
         """
-        idx_i, idx_j = pairlist
-        nr_of_atoms_in_all_systems, _ = x.shape
+        idx_i, idx_j = pairlist.unbind(0)
+        nr_of_atoms_in_all_systems = int(x.size(dim=0))
         r_ij = x[idx_j] - x[idx_i]
         d_ij = torch.sqrt((r_ij**2).sum(dim=1) + self.epsilon)
         dir_ij = r_ij / (d_ij.unsqueeze(-1) + self.epsilon)
@@ -592,58 +542,6 @@ class SAKEInteraction(nn.Module):
         return h_updated, x_updated, v_updated
 
 
-from typing import Optional, List, Union
-
-
-class SAKE(BaseNetwork):
-    def __init__(
-        self,
-        featurization: Dict[str, Union[List[str], int]],
-        number_of_interaction_modules: int,
-        number_of_spatial_attention_heads: int,
-        number_of_radial_basis_functions: int,
-        maximum_interaction_radius: unit.Quantity,
-        activation_function_parameter: Dict,
-        postprocessing_parameter: Dict[str, Dict[str, bool]],
-        dataset_statistic: Optional[Dict[str, float]] = None,
-        epsilon: float = 1e-8,
-        potential_seed: Optional[int] = None,
-    ):
-        from modelforge.utils.units import _convert_str_to_unit
-
-        self.only_unique_pairs = False  # NOTE: for pairlist
-        super().__init__(
-            dataset_statistic=dataset_statistic,
-            postprocessing_parameter=postprocessing_parameter,
-            maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
-            potential_seed=potential_seed,
-        )
-        activation_function = activation_function_parameter["activation_function"]
-
-        self.core_module = SAKECore(
-            featurization_config=featurization,
-            number_of_interaction_modules=number_of_interaction_modules,
-            number_of_spatial_attention_heads=number_of_spatial_attention_heads,
-            number_of_radial_basis_functions=number_of_radial_basis_functions,
-            maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
-            activation_function=activation_function,
-            epsilon=epsilon,
-        )
-
-    def _config_prior(self):
-        log.info("Configuring SAKE model hyperparameter prior distribution")
-        from modelforge.utils.io import import_
-
-        from ray import tune
-
-        from modelforge.potential.utils import shared_config_prior
-
-        prior = {
-            "number_of_per_atom_features": tune.randint(2, 256),
-            "number_of_modules": tune.randint(3, 8),
-            "number_of_spatial_attention_heads": tune.randint(2, 5),
-            "maximum_interaction_radius": tune.uniform(5, 10),
-            "number_of_radial_basis_functions": tune.randint(8, 32),
-        }
-        prior.update(shared_config_prior())
-        return prior
+class SAKE:
+    def __init__(self):
+        pass

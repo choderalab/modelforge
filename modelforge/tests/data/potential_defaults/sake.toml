@@ -12,9 +12,9 @@ number_of_spatial_attention_heads = 4
 activation_function_name = "SiLU"
 
 [potential.core_parameter.featurization]
-number_of_per_atom_features = 64
-properties_to_featurize = ['atomic_number']
+[potential.core_parameter.featurization.atomic_number]
 maximum_atomic_number = 101
+number_of_per_atom_features = 64
 
 [potential.postprocessing_parameter]
 [potential.postprocessing_parameter.per_atom_energy]

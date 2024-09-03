@@ -2,84 +2,46 @@
 PaiNN - polarizable interaction neural network
 """
 
-from typing import Dict, Optional, Tuple, Union, List, Type
+from typing import Dict, Tuple, Union, List, Type
 
 import torch
 import torch.nn as nn
 from loguru import logger as log
 from openff.units import unit
-from .models import NNPInput, BaseNetwork, CoreNetwork, PairlistData
+from .models import NNPInputTuple, PairlistData
 
 from .utils import DenseWithCustomDist
-from dataclasses import dataclass, field
-
-from modelforge.potential.utils import NeuralNetworkData
 
 
-@dataclass
-class PaiNNNeuralNetworkData(NeuralNetworkData):
-    """
-    A dataclass designed to structure the inputs for PaiNN neural network potentials, ensuring
-    an efficient and structured representation of atomic systems for energy computation and
-    property prediction within the PaiNN framework.
-    """
-
-    atomic_embedding: Optional[torch.Tensor] = field(default=None)
-    f_ij: Optional[torch.Tensor] = field(default=None)
-    f_cutoff: Optional[torch.Tensor] = field(default=None)
+class PaiNN:
+    def __init__():
+        pass
 
 
-class PaiNNCore(CoreNetwork):
-    """PaiNN - polarizable interaction neural network
-
-    References:
-       Equivariant message passing for the prediction of tensorial properties and molecular spectra.
-       ICML 2021, http://proceedings.mlr.press/v139/schutt21a.html
-
-    """
+class PaiNNCore(torch.nn.Module):
 
     def __init__(
         self,
-        featurization_config: Dict[str, Union[List[str], int]],
+        featurization: Dict[str, Dict[str, int]],
         number_of_radial_basis_functions: int,
-        maximum_interaction_radius: unit.Quantity,
+        maximum_interaction_radius: float,
         number_of_interaction_modules: int,
         shared_interactions: bool,
         shared_filters: bool,
-        activation_function: Type[torch.nn.Module],
+        activation_function_parameter: Dict[str, str],
         epsilon: float = 1e-8,
+        potential_seed: int = -1,
     ):
-        """
-        Initialize the PaiNNCore network.
-
-        Parameters
-        ----------
-        featurization_config : Dict[str, Union[List[str], int]]
-            Configuration for atomic featurization.
-        number_of_radial_basis_functions : int
-            Number of radial basis functions.
-        maximum_interaction_radius : unit.Quantity
-            Maximum interaction radius.
-        number_of_interaction_modules : int
-            Number of interaction modules.
-        shared_interactions : bool
-            Whether to share interactions across modules.
-        shared_filters : bool
-            Whether to share filters across modules.
-        activation_function : Type[torch.nn.Module]
-            Activation function to use.
-        epsilon : float, optional
-            Stability constant added in norm to prevent numerical instabilities. Default is 1e-8.
-        """
+        super().__init__()
         log.debug("Initializing the PaiNN architecture.")
-        super().__init__(activation_function)
+        self.activation_function = activation_function_parameter["activation_function"]
 
         self.number_of_interaction_modules = number_of_interaction_modules
 
         # featurize the atomic input
 
         number_of_per_atom_features = int(
-            featurization_config["number_of_per_atom_features"]
+            featurization["atomic_number"]["number_of_per_atom_features"]
         )
         # initialize representation block
         self.representation_module = PaiNNRepresentation(
@@ -88,7 +50,7 @@ class PaiNNCore(CoreNetwork):
             number_of_interaction_modules,
             number_of_per_atom_features,
             shared_filters,
-            featurization_config=featurization_config,
+            featurization_config=featurization,
         )
 
         # initialize the interaction and mixing networks
@@ -137,48 +99,8 @@ class PaiNNCore(CoreNetwork):
             ),
         )
 
-    def _model_specific_input_preparation(
-        self, data: NNPInput, pairlist_output: Dict[str, PairlistData]
-    ) -> PaiNNNeuralNetworkData:
-        """
-        Prepare the model-specific input for the PaiNN network.
-
-        Parameters
-        ----------
-        data : NNPInput
-            The input data.
-        pairlist_output : dict[str, PairListOutputs]
-            The output from the pairlist.
-
-        Returns
-        -------
-        PaiNNNeuralNetworkData
-            The prepared model-specific input.
-        """
-        # Perform atomic embedding
-
-        number_of_atoms = data.atomic_numbers.shape[0]
-
-        # Note, pairlist_output is a Dict where the key corresponds to the name of the cutoff parameter
-        # e.g. "maximum_interaction_radius"
-
-        pairlist_output = pairlist_output["maximum_interaction_radius"]
-
-        nnp_input = PaiNNNeuralNetworkData(
-            pair_indices=pairlist_output.pair_indices,
-            d_ij=pairlist_output.d_ij,
-            r_ij=pairlist_output.r_ij,
-            number_of_atoms=number_of_atoms,
-            positions=data.positions,
-            atomic_numbers=data.atomic_numbers,
-            atomic_subsystem_indices=data.atomic_subsystem_indices,
-            total_charge=data.total_charge,
-        )
-        return nnp_input
-
     def compute_properties(
-        self,
-        data: PaiNNNeuralNetworkData,
+        self, data: NNPInputTuple, pairlist_output: PairlistData
     ) -> Dict[str, torch.Tensor]:
         """
         Compute atomic representations/embeddings.
@@ -194,7 +116,7 @@ class PaiNNCore(CoreNetwork):
             Dictionary containing scalar and vector representations.
         """
         # initialize filters, q and mu
-        transformed_input = self.representation_module(data)
+        transformed_input = self.representation_module(data, pairlist_output)
 
         filter_list = transformed_input["filters"]
         per_atom_scalar_feature = transformed_input["per_atom_scalar_feature"]
@@ -209,7 +131,7 @@ class PaiNNCore(CoreNetwork):
                 per_atom_vector_feature,
                 filter_list[i],
                 dir_ij,
-                data.pair_indices,
+                pairlist_output.pair_indices,
             )
             per_atom_scalar_feature, per_atom_vector_feature = mixing_mod(
                 per_atom_scalar_feature, per_atom_vector_feature
@@ -225,6 +147,35 @@ class PaiNNCore(CoreNetwork):
             "per_atom_scalar_representation": per_atom_scalar_feature,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
+
+    def forward(
+        self, data: NNPInputTuple, pairlist_output: PairlistData
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Implements the forward pass through the network.
+
+        Parameters
+        ----------
+        data : NNPInput
+            Contains input data for the batch obtained directly from the
+            dataset, including atomic numbers, positions, and other relevant
+            fields.
+        pairlist_output : PairListOutputs
+            Contains the indices for the selected pairs and their associated
+            distances and displacement vectors.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The calculated per-atom properties and other properties from the
+            forward pass.
+        """
+        # perform the forward pass implemented in the subclass
+        outputs = self.compute_properties(data, pairlist_output)
+        # add atomic numbers to the output
+        outputs["atomic_numbers"] = data.atomic_numbers
+
+        return outputs
 
 
 class PaiNNRepresentation(nn.Module):
@@ -291,7 +242,9 @@ class PaiNNRepresentation(nn.Module):
         self.nr_interaction_blocks = nr_interaction_blocks
         self.nr_atom_basis = nr_atom_basis
 
-    def forward(self, data: PaiNNNeuralNetworkData) -> Dict[str, torch.Tensor]:
+    def forward(
+        self, data: NNPInputTuple, pairlist_output: PairlistData
+    ) -> Dict[str, torch.Tensor]:
         """
         Transforms the input data for the PaiNN potential model.
 
@@ -306,8 +259,8 @@ class PaiNNRepresentation(nn.Module):
             A dictionary containing the transformed input tensors.
         """
         # compute normalized pairwise distances
-        d_ij = data.d_ij
-        dir_ij = data.r_ij / d_ij
+        d_ij = pairlist_output.d_ij
+        dir_ij = pairlist_output.r_ij / d_ij
 
         # featurize pairwise distances using RBF
         f_ij = self.radial_symmetry_function_module(d_ij)
@@ -321,11 +274,13 @@ class PaiNNRepresentation(nn.Module):
         # shape at dim=1 (dim=0 is always the number of atom pairs) if we share
         # filters, we copy the filters and use the same filters for all blocks
         if self.shared_filters:
-            filter_list = [filters] * self.nr_interaction_blocks
+            filter_list = torch.stack([filters] * self.nr_interaction_blocks, dim=0)
         # otherwise we index into subset of the calculated filters and provide
         # each block with its own set of filters
         else:
-            filter_list = torch.split(filters, 3 * self.nr_atom_basis, dim=-1)
+            filter_list = torch.stack(
+                torch.split(filters, 3 * self.nr_atom_basis, dim=-1), dim=0
+            )
 
         # generate q and mu
         per_atom_scalar_feature = self.featurize_input(data).unsqueeze(
@@ -504,9 +459,7 @@ class PaiNNMixing(nn.Module):
                 nr_atom_basis,
                 activation_function=activation_function,
             ),
-            DenseWithCustomDist(
-                nr_atom_basis, 3 * nr_atom_basis, activation_function=None
-            ),
+            DenseWithCustomDist(nr_atom_basis, 3 * nr_atom_basis),
         )
         # initialize the mu channel mixing network
         self.mu_channel_mix = DenseWithCustomDist(
@@ -547,89 +500,3 @@ class PaiNNMixing(nn.Module):
         q = q + dq_intra + dqmu_intra
         mu = mu + dmu_intra
         return q, mu
-
-
-from .models import NNPInput, BaseNetwork
-
-
-class PaiNN(BaseNetwork):
-    def __init__(
-        self,
-        featurization: Dict[str, Union[List[str], int]],
-        number_of_radial_basis_functions: int,
-        maximum_interaction_radius: Union[unit.Quantity, str],
-        number_of_interaction_modules: int,
-        activation_function_parameter: Dict,
-        shared_interactions: bool,
-        shared_filters: bool,
-        postprocessing_parameter: Dict[str, Dict[str, bool]],
-        dataset_statistic: Optional[Dict[str, float]] = None,
-        epsilon: float = 1e-8,
-        potential_seed: Optional[int] = None,
-    ) -> None:
-        """
-        Initialize the PaiNN network.
-
-        Parameters
-        ----------
-        featurization : Dict[str, Union[List[str], int]]
-            Configuration for atomic featurization.
-        number_of_radial_basis_functions : int
-            Number of radial basis functions.
-        maximum_interaction_radius : Union[unit.Quantity, str]
-            Maximum interaction radius.
-        number_of_interaction_modules : int
-            Number of interaction modules.
-        activation_function_parameter : Dict
-            Dict that contains keys: activation_function_name [str], activation_function_arguments [Dict],
-            and activation_function [Type[torch.nn.Module]].
-        shared_interactions : bool
-            Whether to share interactions across modules.
-        shared_filters : bool
-            Whether to share filters across modules.
-            epsilon=epsilon,
-        potential_seed : Optional[int], optional
-            Seed for the random number generator, default None.
-        """
-
-        from modelforge.utils.units import _convert_str_to_unit
-
-        self.only_unique_pairs = False  # NOTE: for pairlist
-
-        super().__init__(
-            dataset_statistic=dataset_statistic,
-            postprocessing_parameter=postprocessing_parameter,
-            maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
-            potential_seed=potential_seed,
-        )
-
-        activation_function = activation_function_parameter["activation_function"]
-
-        self.core_module = PaiNNCore(
-            featurization_config=featurization,
-            number_of_radial_basis_functions=number_of_radial_basis_functions,
-            maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
-            number_of_interaction_modules=number_of_interaction_modules,
-            shared_interactions=shared_interactions,
-            shared_filters=shared_filters,
-            activation_function=activation_function,
-            epsilon=epsilon,
-        )
-
-    def _config_prior(self):
-        log.info("Configuring PaiNN model hyperparameter prior distribution")
-
-        from ray import tune
-
-        from modelforge.potential.utils import shared_config_prior
-
-        prior = {
-            "number_of_per_atom_features": tune.randint(2, 256),
-            "number_of_interaction_modules": tune.randint(1, 5),
-            "maximum_interaction_radius": tune.uniform(5, 10),
-            "number_of_radial_basis_functions": tune.randint(8, 32),
-            "shared_filters": tune.choice([True, False]),
-            "shared_interactions": tune.choice([True, False]),
-        }
-        prior.update(shared_config_prior())
-        return prior

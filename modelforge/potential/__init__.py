@@ -6,7 +6,7 @@ from enum import Enum
 
 from .ani import ANI2x, ANI2xCore
 from .models import NeuralNetworkPotentialFactory
-from .painn import PaiNN
+from .painn import PaiNN, PaiNNCore
 from .parameters import (
     ANI2xParameters,
     PaiNNParameters,
@@ -78,6 +78,7 @@ class _Implemented_NNP_Cores(Enum):
     ANI2X = ANI2xCore
     PHYSNET = PhysNetCore
     TENSORNET = TensorNetCore
+    PAINN = PaiNNCore
 
     @classmethod
     def get_neural_network_class(cls, neural_network_name: str):

@@ -19,7 +19,7 @@ from .physnet import PhysNet, PhysNetCore
 from .processing import FromAtomToMoleculeReduction
 from .sake import SAKE
 from .schnet import SchNet, SchNetCore
-from .tensornet import TensorNet
+from .tensornet import TensorNet, TensorNetCore
 from .utils import (
     AngularSymmetryFunction,
     CosineAttenuationFunction,
@@ -77,6 +77,7 @@ class _Implemented_NNP_Cores(Enum):
     SCHNET = SchNetCore
     ANI2X = ANI2xCore
     PHYSNET = PhysNetCore
+    TENSORNET = TensorNetCore
 
     @classmethod
     def get_neural_network_class(cls, neural_network_name: str):

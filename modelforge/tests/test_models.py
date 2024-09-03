@@ -382,7 +382,7 @@ def test_forward_pass_with_all_datasets(
 # )
 # @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
 @pytest.mark.parametrize("dataset_name", ["QM9"])
-@pytest.mark.parametrize("potential_name", ["SchNet", "ANI2x", "PhysNet"])
+@pytest.mark.parametrize("potential_name", ["Tensornet", "SchNet", "ANI2x", "PhysNet"])
 @pytest.mark.parametrize("simulation_environment", ["PyTorch"])
 @pytest.mark.parametrize("mode", ["inference"])
 def test_forward_pass(
@@ -410,6 +410,7 @@ def test_forward_pass(
         simulation_environment=simulation_environment,
         potential_parameter=config["potential"],
     )
+    output = model(nnp_input.as_namedtuple())
     model = torch.jit.script(model)
     output = model(nnp_input.as_namedtuple())
     # test that we get an energie per molecule

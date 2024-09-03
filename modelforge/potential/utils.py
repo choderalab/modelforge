@@ -1152,10 +1152,10 @@ class TensorNetRadialBasisFunction(PhysNetRadialBasisFunction):
         alpha,
         dtype,
     ):
-        alpha = 1 * unit.angstrom
+        alpha = 1
         start_value = torch.exp(
             torch.scalar_tensor(
-                ((-max_distance + min_distance) / alpha).to("").m,
+                ((-max_distance + min_distance) / alpha),
                 dtype=dtype,
             )
         )
@@ -1172,9 +1172,9 @@ class TensorNetRadialBasisFunction(PhysNetRadialBasisFunction):
         alpha,
         dtype,
     ):
-        alpha = 1 * unit.angstrom
+        alpha = 1
         start_value = torch.exp(
-            torch.scalar_tensor(((-max_distance + min_distance) / alpha).to("").m)
+            torch.scalar_tensor(((-max_distance + min_distance) / alpha))
         )
         radial_scale_factor = torch.full(
             (number_of_radial_basis_functions,),

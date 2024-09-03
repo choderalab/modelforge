@@ -197,15 +197,15 @@ class TensorNetParameters(ParametersBase):
         number_of_per_atom_features: int
         number_of_interaction_layers: int
         number_of_radial_basis_functions: int
-        maximum_interaction_radius: Union[str, unit.Quantity]
-        minimum_interaction_radius: Union[str, unit.Quantity]
+        maximum_interaction_radius: float
+        minimum_interaction_radius: float
         highest_atomic_number: int
         equivariance_invariance_group: str
         activation_function_parameter: ActivationFunctionConfig
 
         converted_units = field_validator(
-            "maximum_interaction_radius", "minimum_interaction_radius"
-        )(_convert_str_to_unit)
+            "maximum_interaction_radius", "minimum_interaction_radius", mode="before"
+        )(_convert_str_to_unit_length)
 
     class PostProcessingParameter(ParametersBase):
         per_atom_energy: PerAtomEnergy = PerAtomEnergy()

@@ -751,7 +751,6 @@ class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
         )
 
 
-
 class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
 
     def __init__(self, cutoffs: Dict[str, float]):
@@ -829,7 +828,6 @@ class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
         return PairlistData(
             pair_indices=pair_indices, d_ij=d_ij, r_ij=r_ij, mask=interaction_mask
         )
-
 
 
 class ComputeInteractingAtomPairs(torch.nn.Module):
@@ -1349,7 +1347,7 @@ class CoreNetwork(Module, ABC):
 class Potential(torch.nn.Module):
     def __init__(self, core_network, neighborlist, postprocessing):
         super().__init__()
-        self.core_network = torch.jit.script(core_network)
+        self.core_network = core_network  # torch.jit.script(core_network)
         self.neighborlist = torch.jit.script(neighborlist)
         self.postprocessing = torch.jit.script(postprocessing)
 

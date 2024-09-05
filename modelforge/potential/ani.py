@@ -652,9 +652,3 @@ class ANI2xCore(torch.nn.Module):
         return outputs
 
 
-from typing import Dict, Optional, Union
-
-
-class ANI2x:
-    def __init__(self) -> None:
-        pass

@@ -162,9 +162,6 @@ def tensor_message_passing(
     return tensor_m
 
 
-class TensorNet:
-    def __init__(self):
-        pass
 
 
 class TensorNetCore(torch.nn.Module):

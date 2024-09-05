@@ -532,7 +532,3 @@ class PhysNetCore(torch.nn.Module):
 
         return outputs
 
-
-class PhysNet:
-    def __init__(self) -> None:
-        pass

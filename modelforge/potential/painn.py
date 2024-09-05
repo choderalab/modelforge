@@ -12,12 +12,6 @@ from .models import NNPInputTuple, PairlistData
 
 from .utils import DenseWithCustomDist
 
-
-class PaiNN:
-    def __init__():
-        pass
-
-
 class PaiNNCore(torch.nn.Module):
 
     def __init__(

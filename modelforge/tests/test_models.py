@@ -5,6 +5,31 @@ from modelforge.dataset import _ImplementedDatasets
 from modelforge.potential import NeuralNetworkPotentialFactory, _Implemented_NNPs
 from modelforge.utils.misc import load_configs_into_pydantic_models
 from openff.units import unit
+from typing import Optional
+
+
+def setup_training_model(potential_seed: Optional[int] = None):
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
+    from modelforge.potential import NeuralNetworkPotentialFactory
+
+    # read default parameters
+    config = load_configs_into_pydantic_models("schnet", "qm9")
+    # override defaults to match reference implementation in spk
+    config[
+        "potential"
+    ].core_parameter.featurization.atomic_number.number_of_per_atom_features = 12
+    config["potential"].core_parameter.number_of_radial_basis_functions = 5
+    config["potential"].core_parameter.number_of_filters = 12
+
+    model = NeuralNetworkPotentialFactory.generate_potential(
+        use="training",
+        potential_parameter=config["potential"],
+        training_parameter=config["training"],
+        dataset_parameter=config["dataset"],
+        runtime_parameter=config["runtime"],
+        potential_seed=potential_seed,
+    ).model.potential
+    return model
 
 
 @pytest.mark.parametrize(
@@ -1020,7 +1045,6 @@ def test_equivariant_energies_and_forces(
     NOTE: test will be adapted once we have a trained model.
     """
     from dataclasses import replace
-
     import torch
 
     # load default parameters

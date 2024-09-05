@@ -1,41 +1,34 @@
-def test_init():
+from typing import Optional
 
-    from modelforge.potential.physnet import PhysNet
 
+def setup_physnet(potential_seed: Optional[int] = None):
     from modelforge.tests.test_models import load_configs_into_pydantic_models
+    from modelforge.potential import NeuralNetworkPotentialFactory
 
     # read default parameters
-    config = load_configs_into_pydantic_models(f"physnet", "qm9")
+    config = load_configs_into_pydantic_models("physnet", "qm9")
 
-    model = PhysNet(
-        **config["potential"].model_dump()["core_parameter"],
-        postprocessing_parameter=config["potential"].model_dump()[
-            "postprocessing_parameter"
-        ],
-    )
+    model = NeuralNetworkPotentialFactory.generate_potential(
+        use="training",
+        potential_parameter=config["potential"],
+        training_parameter=config["training"],
+        dataset_parameter=config["dataset"],
+        runtime_parameter=config["runtime"],
+        potential_seed=potential_seed,
+    ).model.potential
+    return model
+
+
+def test_init():
+
+    model = setup_physnet()
+    assert model is not None, "PhysNet model should be initialized."
 
 
 def test_forward(single_batch_with_batchsize):
     import torch
-    from modelforge.potential.physnet import PhysNet
 
-    # read default parameters
-    from modelforge.tests.test_models import load_configs_into_pydantic_models
-
-    # read default parameters
-    config = load_configs_into_pydantic_models(f"physnet", "qm9")
-
-    # Extract parameters
-    config["potential"].core_parameter.number_of_modules = 1
-    config["potential"].core_parameter.number_of_interaction_residual = 1
-
-    model = PhysNet(
-        **config["potential"].model_dump()["core_parameter"],
-        postprocessing_parameter=config["potential"].model_dump()[
-            "postprocessing_parameter"
-        ],
-    )
-    model = model.to(torch.float32)
+    model = setup_physnet()
     print(model)
     batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
 
@@ -43,8 +36,8 @@ def test_forward(single_batch_with_batchsize):
 
 
 def test_compare_representation():
-    # This test compares the RBF calculation of the original
-    # PhysNet implemntation against the SAKE/PhysNet implementation in modelforge
+    # This test compares the RBF calculation of the original PhysNet
+    # implemntation against the SAKE/PhysNet implementation in modelforge
     # # NOTE: input in PhysNet is expected in angstrom, in contrast to modelforge which expects input in nanomter
 
     import numpy as np
@@ -62,7 +55,9 @@ def test_compare_representation():
 
     rbf = PhysNetRadialBasisFunction(
         number_of_radial_basis_functions,
-        max_distance=_max_distance_in_nanometer * unit.nanometer,
+        max_distance=unit.Quantity(_max_distance_in_nanometer, unit.nanometer)
+        .to(unit.nanometer)
+        .m,
     )
 
     # compare the rbf output

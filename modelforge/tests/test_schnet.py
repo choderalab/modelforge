@@ -4,12 +4,12 @@ from modelforge.tests.precalculated_values import (
     load_precalculated_schnet_results,
     setup_single_methane_input,
 )
-from modelforge.potential import NeuralNetworkPotentialFactory
 from typing import Optional
 
 
 def setup_schnet_model(potential_seed: Optional[int] = None):
     from modelforge.tests.test_models import load_configs_into_pydantic_models
+    from modelforge.potential import NeuralNetworkPotentialFactory
 
     # read default parameters
     config = load_configs_into_pydantic_models("schnet", "qm9")

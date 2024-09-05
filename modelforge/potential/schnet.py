@@ -262,13 +262,13 @@ class SchNETInteractionModule(nn.Module):
         # Perform continuous-filter convolution
         x_j = x[idx_j]
         x_ij = x_j * W_ij  # (nr_of_atom_pairs, nr_atom_basis)
-        masked_x_ij = (
-            x_ij * pairlist.mask["maximum_interaction_radius"]
-        )  # Element-wise multiplication to apply the mask
+        # masked_x_ij = (
+        #    x_ij * pairlist.mask["maximum_interaction_radius"]
+        # )  # Element-wise multiplication to apply the mask
 
         out = torch.zeros_like(x)
         out.scatter_add_(
-            0, idx_i.unsqueeze(-1).expand_as(masked_x_ij), masked_x_ij
+            0, idx_i.unsqueeze(-1).expand_as(x_ij), x_ij
         )  # from per_atom_pair to _per_atom
 
         return self.feature_to_output(out)  # shape: (nr_of_atoms, 1)

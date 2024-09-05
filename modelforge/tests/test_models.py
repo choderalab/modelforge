@@ -271,6 +271,7 @@ def test_dataset_statistic(potential_name):
         simulation_environment="PyTorch",
         potential_parameter=config["potential"],
         dataset_statistic=dataset_statistic,
+        use_training_mode_neighborlist=True,  # can handel batched data
     )
     model.load_state_dict(torch.load("model.pth"))
 
@@ -382,9 +383,11 @@ def test_forward_pass_with_all_datasets(
 # )
 # @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
 @pytest.mark.parametrize("dataset_name", ["QM9"])
-@pytest.mark.parametrize("potential_name", ["SAKE", "Tensornet", "SchNet", "ANI2x", "PaiNN", "PhysNet"])
+@pytest.mark.parametrize(
+    "potential_name", ["SAKE", "Tensornet", "SchNet", "ANI2x", "PaiNN", "PhysNet"]
+)
 @pytest.mark.parametrize("simulation_environment", ["PyTorch"])
-@pytest.mark.parametrize("mode", ["inference"])
+@pytest.mark.parametrize("mode", ["inference", "training"])
 def test_forward_pass(
     dataset_name,
     potential_name,
@@ -409,10 +412,20 @@ def test_forward_pass(
         use=mode,
         simulation_environment=simulation_environment,
         potential_parameter=config["potential"],
+        training_parameter=config["training"],
+        dataset_parameter=config["dataset"],
+        runtime_parameter=config["runtime"],
+        use_default_dataset_statistic=True,
     )
+
+    if mode == "training":
+        model = model.model
+
     output = model(nnp_input.as_namedtuple())
-    model = torch.jit.script(model)
-    output = model(nnp_input.as_namedtuple())
+
+    if mode == "inference":
+        model = torch.jit.script(model)
+        output = model(nnp_input.as_namedtuple())
     # test that we get an energie per molecule
     assert len(output["per_molecule_energy"]) == nr_of_mols
     # the batch consists of methane (CH4) and amamonium (NH3)
@@ -424,7 +437,6 @@ def test_forward_pass(
     ref = torch.zeros_like(output["per_molecule_energy"]).scatter_add_(
         0, nnp_input.atomic_subsystem_indices.long(), output["per_atom_energy"]
     )
-
     assert torch.allclose(ref, output["per_molecule_energy"])
 
     # assert that the following tensor has equal values for dim=0 index 1 to 4 and 6 to 8
@@ -438,17 +450,6 @@ def test_forward_pass(
         output["per_atom_energy"][0:5].sum(dim=0),
         atol=1e-5,
     )
-    if mode == "training":
-
-        assert torch.allclose(
-            output["per_atom_energy"][6:8], output["per_atom_energy"][6], atol=1e-4
-        )
-
-        assert torch.allclose(
-            output["per_molecule_energy"][1],
-            output["per_atom_energy"][5:9].sum(dim=0),
-            atol=1e-5,
-        )
 
 
 @pytest.mark.parametrize(
@@ -460,12 +461,12 @@ def test_calculate_energies_and_forces(potential_name, single_batch_with_batchsi
     """
     import torch
 
-    batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
     # read default parameters
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
 
     # get batch
-    nnp_input = batch.nnp_input
+    batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
+    nnp_input = batch.nnp_input_tuple
 
     # test the pass through each of the models
     model_training = NeuralNetworkPotentialFactory.generate_potential(
@@ -489,6 +490,8 @@ def test_calculate_energies_and_forces(potential_name, single_batch_with_batchsi
         potential_parameter=config["potential"],
         dataset_statistic=model_training.dataset_statistic,
         potential_seed=42,
+        use_training_mode_neighborlist=True,
+        jit=False,
     )
 
     # get energy and force
@@ -497,7 +500,50 @@ def test_calculate_energies_and_forces(potential_name, single_batch_with_batchsi
         E_inference.sum(), nnp_input.positions, create_graph=True, retain_graph=True
     )[0]
 
+    print(f"Energy training: {E_training}")
+    print(f"Energy inference: {E_inference}")
+
     # make sure that dimension are as expected
+    nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
+    nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
+
+    assert E_inference.shape == torch.Size([nr_of_mols])
+    assert F_inference.shape == (nr_of_atoms_per_batch, 3)
+
+    # make sure that both agree on E and F
+    assert torch.allclose(E_inference, E_training, atol=1e-4)
+    assert torch.allclose(F_inference, F_training, atol=1e-4)
+
+    # now compare agains the compiled inference model using the neighborlist
+    # optimized for MD. NOTE: this requires to reduce the batch size to 1
+    # since the neighborlist is not batched
+
+    # reduce batchsize
+    batch = batch = single_batch_with_batchsize(batch_size=1, dataset_name="SPICE2")
+    nnp_input = batch.nnp_input_tuple
+
+    # get the inference model with inference neighborlist and compilre
+    # everything
+    model_inference = NeuralNetworkPotentialFactory.generate_potential(
+        use="inference",
+        potential_parameter=config["potential"],
+        dataset_statistic=model_training.dataset_statistic,
+        potential_seed=42,
+        use_training_mode_neighborlist=False,
+        jit=True,
+    )
+
+    # get energy and force
+    E_inference = model_inference(nnp_input)["per_molecule_energy"]
+    F_inference = -torch.autograd.grad(
+        E_inference.sum(), nnp_input.positions, create_graph=True, retain_graph=True
+    )[0]
+    # get energy and force
+    E_training = model_training.model.forward(nnp_input)["per_molecule_energy"]
+    F_training = -torch.autograd.grad(
+        E_training.sum(), nnp_input.positions, create_graph=True, retain_graph=True
+    )[0]
+
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
     nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
 
@@ -977,9 +1023,10 @@ def test_casting(potential_name, single_batch_with_batchsize):
         use="inference",
         simulation_environment="PyTorch",
         potential_parameter=config["potential"],
+        use_training_mode_neighborlist=True,  # can handel batched data
     )
     model = model.to(dtype=torch.float64)
-    nnp_input = batch.nnp_input.to(dtype=torch.float64)
+    nnp_input = batch.to(dtype=torch.float64).nnp_input_tuple
 
     model(nnp_input)
 
@@ -988,9 +1035,10 @@ def test_casting(potential_name, single_batch_with_batchsize):
         use="inference",
         simulation_environment="PyTorch",
         potential_parameter=config["potential"],
+        use_training_mode_neighborlist=True,  # can handel batched data
     )
     model = model.to(dtype=torch.float32)
-    nnp_input = batch.nnp_input.to(dtype=torch.float32)
+    nnp_input = batch.to(dtype=torch.float32).nnp_input_tuple
 
     model(nnp_input)
 

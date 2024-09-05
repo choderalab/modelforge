@@ -233,6 +233,8 @@ class NNPInput:
         )
 
 
+
+
 @dataclass
 class BatchData:
     nnp_input: NNPInput
@@ -249,6 +251,13 @@ class BatchData:
 
     def batch_size(self):
         return self.metadata.E.size(dim=0)
+
+    @property
+    def nnp_input_tuple(self):
+        """
+        Property to return the nnp_input as an NNPInputTuple.
+        """
+        return self.nnp_input.as_namedtuple()
 
 
 class TorchDataset(torch.utils.data.Dataset[BatchData]):

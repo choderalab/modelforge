@@ -48,7 +48,6 @@ class PairlistData(NamedTuple):
     pair_indices: torch.Tensor
     d_ij: torch.Tensor
     r_ij: torch.Tensor
-    mask: Dict[str, torch.Tensor]
 
 
 class Pairlist(Module):
@@ -302,7 +301,6 @@ class Pairlist(Module):
             atomic_subsystem_indices,
         )
         r_ij = self.calculate_r_ij(pair_indices, positions)
-
         return PairlistData(
             pair_indices=pair_indices,
             d_ij=self.calculate_d_ij(r_ij),
@@ -368,20 +366,17 @@ class Neighborlist(Pairlist):
         r_ij = self.calculate_r_ij(pair_indices, positions)
         d_ij = self.calculate_d_ij(r_ij)
 
-        interacting_outputs = {}
         for cutoff, label in zip(self.cutoffs, self.labels):
             # Find pairs within the cutoff
             in_cutoff = (d_ij <= cutoff).squeeze()
             # Get the atom indices within the cutoff
             pair_indices_within_cutoff = pair_indices[:, in_cutoff]
 
-            interacting_outputs[label] = PairlistData(
-                pair_indices=pair_indices_within_cutoff,
-                d_ij=d_ij[in_cutoff],
-                r_ij=r_ij[in_cutoff],
-            )
-
-        return interacting_outputs
+        return PairlistData(
+            pair_indices=pair_indices,
+            d_ij=d_ij,
+            r_ij=r_ij,
+        )
 
 
 from typing import Callable, Literal, Optional, Union
@@ -560,118 +555,6 @@ from modelforge.potential.parameters import (
 from modelforge.train.parameters import RuntimeParameters, TrainingParameters
 
 
-class NeuralNetworkPotentialFactory:
-    """
-    Factory class for creating instances of neural network potentials for training/inference.
-    """
-
-    @staticmethod
-    def generate_potential(
-        *,
-        use: Literal["training", "inference"],
-        potential_parameter: Union[
-            ANI2xParameters,
-            SAKEParameters,
-            SchNetParameters,
-            PhysNetParameters,
-            PaiNNParameters,
-            TensorNetParameters,
-        ],
-        runtime_parameter: Optional[RuntimeParameters] = None,
-        training_parameter: Optional[TrainingParameters] = None,
-        dataset_parameter: Optional[DatasetParameters] = None,
-        dataset_statistic: Dict[str, Dict[str, float]] = {
-            "training_dataset_statistics": {
-                "per_atom_energy_mean": 0.0,
-                "per_atom_energy_stddev": 1.0,
-            }
-        },
-        potential_seed: int = -1,
-        simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
-    ) -> Union[torch.nn.Module, JAXModel, pl.LightningModule]:
-        """
-        Creates an NNP instance of the specified type, configured either for training or inference.
-
-        Parameters
-        ----------
-        use : Literal["training", "inference"]
-            The use case for the model instance, either 'training' or 'inference'.
-        potential_parameter : Union[ANI2xParameters, SAKEParameters, SchNetParameters, PhysNetParameters, PaiNNParameters, TensorNetParameters]
-            Parameters specific to the potential.
-        runtime_parameter : Optional[RuntimeParameters], optional
-            Parameters for configuring the runtime environment.
-        training_parameter : Optional[TrainingParameters], optional
-            Parameters for configuring the training.
-        dataset_parameter : Optional[DatasetParameters], optional
-            Parameters for configuring the dataset.
-        dataset_statistic : Optional[Dict[str, float]], optional
-            Statistics of the dataset for normalization purposes.
-        potential_seed : Optional[int], optional
-            Seed for the random number generator.
-        simulation_environment : Optional[Literal["PyTorch", "JAX"]], optional, None
-            The simulation environment to use for training/inference. Will override the runtime parameter if provided.
-
-
-        Returns
-        -------
-        Union[Type[torch.nn.Module], Type[JAXModel], Type[pl.LightningModule]]
-            An instantiated model.
-
-        Raises
-        ------
-        ValueError
-            If an unknown use case is requested.
-        NotImplementedError
-            If the requested model type is not implemented.
-        """
-
-        from modelforge.potential import _Implemented_NNP_Cores
-        from modelforge.potential.models import Potential
-        from modelforge.train.training import ModelTrainer
-
-        log.debug(f"{training_parameter=}")
-        log.debug(f"{potential_parameter=}")
-        log.debug(f"{dataset_parameter=}")
-
-        # obtain model for training
-        if use == "training":
-            model = ModelTrainer(
-                potential_parameter=potential_parameter,
-                training_parameter=training_parameter,
-                dataset_parameter=dataset_parameter,
-                runtime_parameter=runtime_parameter,
-                potential_seed=potential_seed,
-            )
-            return model
-        # obtain model for inference
-        elif use == "inference":
-
-            postprocessing = PostProcessing(
-                postprocessing_parameter=potential_parameter.postprocessing_parameter.model_dump(),
-                dataset_statistic=dataset_statistic,
-            )
-
-            neighborlist = NeighborlistForInferenceNonUniquePairs(
-                cutoffs={
-                    "maximum_interaction_radius": potential_parameter.core_parameter.maximum_interaction_radius,
-                    # Add more cutoffs if needed
-                },
-            )
-
-            model_type = potential_parameter.potential_name
-            core_network = _Implemented_NNP_Cores.get_neural_network_class(model_type)(
-                **potential_parameter.core_parameter.model_dump()
-            )
-
-            model = Potential(core_network, neighborlist, postprocessing)
-            if simulation_environment == "JAX":
-                return PyTorch2JAXConverter().convert_to_jax_model(model)
-            else:
-                return model
-        else:
-            raise NotImplementedError(f"Unsupported 'use' value: {use}")
-
-
 class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
 
     def __init__(self, cutoffs: Dict[str, float]):
@@ -747,7 +630,9 @@ class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
             interaction_mask[key] = bool_mask
 
         return PairlistData(
-            pair_indices=pair_indices, d_ij=d_ij, r_ij=r_ij, mask=interaction_mask
+            pair_indices=pair_indices,
+            d_ij=d_ij,
+            r_ij=r_ij,
         )
 
 
@@ -826,7 +711,9 @@ class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
             interaction_mask[key] = bool_mask
 
         return PairlistData(
-            pair_indices=pair_indices, d_ij=d_ij, r_ij=r_ij, mask=interaction_mask
+            pair_indices=pair_indices,
+            d_ij=d_ij,
+            r_ij=r_ij,
         )
 
 
@@ -836,7 +723,7 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
     distances (d_ij), and displacement vectors (r_ij) for molecular simulations.
     """
 
-    def __init__(self, cutoffs: Dict[str, float], only_unique_pairs: bool = True):
+    def __init__(self, cutoffs: Dict[str, float], only_unique_pairs: bool = False):
         """
         Initialize the ComputeInteractingAtomPairs module.
 
@@ -1345,11 +1232,25 @@ class CoreNetwork(Module, ABC):
 
 
 class Potential(torch.nn.Module):
-    def __init__(self, core_network, neighborlist, postprocessing):
+    def __init__(
+        self,
+        core_network,
+        neighborlist,
+        postprocessing,
+        jit: bool = False,
+        jit_neighborlist: bool = True,
+    ):
         super().__init__()
-        self.core_network = core_network  # torch.jit.script(core_network)
-        self.neighborlist = torch.jit.script(neighborlist)
-        self.postprocessing = torch.jit.script(postprocessing)
+        if jit:
+            self.core_network = torch.jit.script(core_network)
+            self.neighborlist = (
+                torch.jit.script(neighborlist) if jit_neighborlist else neighborlist
+            )
+            self.postprocessing = torch.jit.script(postprocessing)
+        else:
+            self.core_network = core_network
+            self.neighborlist = neighborlist
+            self.postprocessing = postprocessing
 
     def forward(self, input_data: NNPInputTuple):
         # Step 1: Compute pair list and distances using Neighborlist
@@ -1362,3 +1263,166 @@ class Potential(torch.nn.Module):
         processed_output = self.postprocessing.forward(core_output)
 
         return processed_output
+
+
+def setup_potential(
+    potential_parameter: Union[
+        ANI2xParameters,
+        SAKEParameters,
+        SchNetParameters,
+        PhysNetParameters,
+        PaiNNParameters,
+        TensorNetParameters,
+    ],
+    dataset_statistic: Dict[str, Dict[str, float]] = {
+        "training_dataset_statistics": {
+            "per_atom_energy_mean": 0.0,
+            "per_atom_energy_stddev": 1.0,
+        }
+    },
+    use_training_mode_neighborlist: bool = False,
+    potential_seed: Optional[int] = None,
+    jit: bool = True,
+) -> Potential:
+    from modelforge.potential import _Implemented_NNP_Cores
+    from modelforge.utils.misc import seed_random_number
+
+    if potential_seed is not None:
+        log.info(f"Setting random seed to: {potential_seed}")
+        seed_random_number(potential_seed)
+
+    model_type = potential_parameter.potential_name
+    core_network = _Implemented_NNP_Cores.get_neural_network_class(model_type)(
+        **potential_parameter.core_parameter.model_dump()
+    )
+
+    postprocessing = PostProcessing(
+        postprocessing_parameter=potential_parameter.postprocessing_parameter.model_dump(),
+        dataset_statistic=dataset_statistic,
+    )
+    if use_training_mode_neighborlist:
+        neighborlist = ComputeInteractingAtomPairs(
+            cutoffs={
+                "maximum_interaction_radius": potential_parameter.core_parameter.maximum_interaction_radius,
+                # Add more cutoffs if needed
+            },
+            only_unique_pairs=False,
+        )
+    else:
+        neighborlist = NeighborlistForInferenceNonUniquePairs(
+            cutoffs={
+                "maximum_interaction_radius": potential_parameter.core_parameter.maximum_interaction_radius,
+                # Add more cutoffs if needed
+            },
+        )
+    model = Potential(
+        core_network,
+        neighborlist,
+        postprocessing,
+        jit=jit,
+        jit_neighborlist=False if use_training_mode_neighborlist else True,
+    )
+    return model
+
+
+class NeuralNetworkPotentialFactory:
+    """
+    Factory class for creating instances of neural network potentials for training/inference.
+    """
+
+    @staticmethod
+    def generate_potential(
+        *,
+        use: Literal["training", "inference"],
+        potential_parameter: Union[
+            ANI2xParameters,
+            SAKEParameters,
+            SchNetParameters,
+            PhysNetParameters,
+            PaiNNParameters,
+            TensorNetParameters,
+        ],
+        runtime_parameter: Optional[RuntimeParameters] = None,
+        training_parameter: Optional[TrainingParameters] = None,
+        dataset_parameter: Optional[DatasetParameters] = None,
+        dataset_statistic: Dict[str, Dict[str, float]] = {
+            "training_dataset_statistics": {
+                "per_atom_energy_mean": 0.0,
+                "per_atom_energy_stddev": 1.0,
+            }
+        },
+        potential_seed: Optional[int] = None,
+        use_default_dataset_statistic: bool = False,
+        use_training_mode_neighborlist: bool = False,
+        simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
+        jit: bool = True,
+    ) -> Union[Potential, JAXModel, pl.LightningModule]:
+        """
+        Creates an NNP instance of the specified type, configured either for training or inference.
+
+        Parameters
+        ----------
+        use : Literal["training", "inference"]
+            The use case for the model instance, either 'training' or 'inference'.
+        potential_parameter : Union[ANI2xParameters, SAKEParameters, SchNetParameters, PhysNetParameters, PaiNNParameters, TensorNetParameters]
+            Parameters specific to the potential.
+        runtime_parameter : Optional[RuntimeParameters], optional
+            Parameters for configuring the runtime environment.
+        training_parameter : Optional[TrainingParameters], optional
+            Parameters for configuring the training.
+        dataset_parameter : Optional[DatasetParameters], optional
+            Parameters for configuring the dataset.
+        dataset_statistic : Optional[Dict[str, float]], optional
+            Statistics of the dataset for normalization purposes.
+        potential_seed : Optional[int], optional
+            Seed for the random number generator.
+        simulation_environment : Optional[Literal["PyTorch", "JAX"]], optional, None
+            The simulation environment to use for training/inference. Will override the runtime parameter if provided.
+
+
+        Returns
+        -------
+        Union[Type[torch.nn.Module], Type[JAXModel], Type[pl.LightningModule]]
+            An instantiated model.
+
+        Raises
+        ------
+        ValueError
+            If an unknown use case is requested.
+        NotImplementedError
+            If the requested model type is not implemented.
+        """
+
+        from modelforge.train.training import ModelTrainer
+
+        log.debug(f"{training_parameter=}")
+        log.debug(f"{potential_parameter=}")
+        log.debug(f"{dataset_parameter=}")
+
+        # obtain model for training
+        if use == "training":
+            model = ModelTrainer(
+                potential_parameter=potential_parameter,
+                training_parameter=training_parameter,
+                dataset_parameter=dataset_parameter,
+                runtime_parameter=runtime_parameter,
+                potential_seed=potential_seed,
+                dataset_statistic=dataset_statistic,
+                use_default_dataset_statistic=use_default_dataset_statistic,
+            )
+            return model
+        # obtain model for inference
+        elif use == "inference":
+            model = setup_potential(
+                potential_parameter=potential_parameter,
+                dataset_statistic=dataset_statistic,
+                use_training_mode_neighborlist=use_training_mode_neighborlist,
+                potential_seed=potential_seed,
+                jit=jit,
+            )
+            if simulation_environment == "JAX":
+                return PyTorch2JAXConverter().convert_to_jax_model(model)
+            else:
+                return model
+        else:
+            raise NotImplementedError(f"Unsupported 'use' value: {use}")

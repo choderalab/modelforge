@@ -1254,6 +1254,24 @@ def pair_list(
     return pair_indices.to(device)
 
 
+def read_dataset_statistics(dataset_statistic_filename: str):
+    import toml
+    from openff.units import unit
+
+    # read file
+    dataset_statistic = toml.load(dataset_statistic_filename)
+    # convert to float (to kJ/mol and then strip the units)
+    # dataset statistic is a Dict[str, Dict[str, unit.Quantity]], we need to strip the units
+
+    for key, value in dataset_statistic.items():
+        for sub_key, sub_value in value.items():
+            dataset_statistic[key][sub_key] = (
+                unit.Quantity(sub_value).to(unit.kilojoule_per_mole).m
+            )
+
+    return dataset_statistic
+
+
 def scatter_softmax(
     src: torch.Tensor,
     index: torch.Tensor,
@@ -1317,9 +1335,9 @@ def scatter_softmax(
     recentered_scores = src - max_per_src_element
     recentered_scores_exp = recentered_scores.exp()
 
-    sum_per_index = torch.zeros(out_shape, dtype=src.dtype, device=src.device).scatter_add(
-        dim, index, recentered_scores_exp
-    )
+    sum_per_index = torch.zeros(
+        out_shape, dtype=src.dtype, device=src.device
+    ).scatter_add(dim, index, recentered_scores_exp)
     normalizing_constants = sum_per_index.gather(dim, index)
 
     return recentered_scores_exp.div(normalizing_constants)

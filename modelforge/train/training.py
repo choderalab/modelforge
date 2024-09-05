@@ -545,37 +545,19 @@ class TrainingAdapter(pL.LightningModule):
         potential_seed : Optional[int], optional
             The seed to use for initializing the model, by default None.
         """
-        from modelforge.potential import _Implemented_NNP_Cores
-        from modelforge.potential.models import (
-            PostProcessing,
-            ComputeInteractingAtomPairs,
-            Potential,
-        )
+        from modelforge.potential.models import Potential, setup_potential
 
         super().__init__()
         self.save_hyperparameters()
         self.training_parameter = training_parameter
 
-        postprocessing = PostProcessing(
-            postprocessing_parameter=potential_parameter.postprocessing_parameter.model_dump(),
+        self.potential = setup_potential(
+            potential_parameter=potential_parameter,
             dataset_statistic=dataset_statistic,
+            potential_seed=potential_seed,
+            jit=False,
+            use_training_mode_neighborlist=True,
         )
-
-        neighborlist = ComputeInteractingAtomPairs(
-            cutoffs={
-                "maximum_interaction_radius": potential_parameter.core_parameter.maximum_interaction_radius,
-                # Add more cutoffs if needed
-            },
-            only_unique_pairs=False,
-        )
-
-        # Get requested model class
-        core_network = _Implemented_NNP_Cores.get_neural_network_class(
-            potential_parameter.potential_name
-        )(**potential_parameter.core_parameter.model_dump())
-
-        self.potential = Potential(core_network, neighborlist, postprocessing)
-
 
         def check_strides(module, grad_input, grad_output):
             print(f"Layer: {module.__class__.__name__}")
@@ -914,6 +896,8 @@ class ModelTrainer:
         ],
         training_parameter: TrainingParameters,
         runtime_parameter: RuntimeParameters,
+        dataset_statistic: Dict[str, Dict[str, float]],
+        use_default_dataset_statistic: bool = False,
         optimizer: Type[Optimizer] = torch.optim.AdamW,
         potential_seed: Optional[int] = None,
         verbose: bool = False,
@@ -953,7 +937,9 @@ class ModelTrainer:
         self.runtime_parameter = runtime_parameter
 
         self.datamodule = self.setup_datamodule()
-        self.dataset_statistic = self.read_dataset_statistics()
+        self.dataset_statistic = self.read_dataset_statistics(
+            dataset_statistic, use_default_dataset_statistic
+        )
         self.experiment_logger = self.setup_logger()
         self.model = self.setup_potential(potential_seed)
         self.callbacks = self.setup_callbacks()
@@ -986,7 +972,11 @@ class ModelTrainer:
             self.training_parameter.loss_parameter.loss_property
         )
 
-    def read_dataset_statistics(self) -> Dict[str, float]:
+    def read_dataset_statistics(
+        self,
+        dataset_statistic: Dict[str, Dict[str, float]],
+        use_default_dataset_statistic: bool = False,
+    ) -> Dict[str, float]:
         """
         Read and log dataset statistics.
 
@@ -996,6 +986,10 @@ class ModelTrainer:
             The dataset statistics.
         """
         import toml
+        from modelforge.potential.utils import read_dataset_statistics
+
+        if use_default_dataset_statistic:
+            return dataset_statistic
 
         dataset_statistic = toml.load(self.datamodule.dataset_statistic_filename)
         log.info(
@@ -1007,7 +1001,7 @@ class ModelTrainer:
         log.info(
             f"per_atom_energy_stddev: {dataset_statistic['training_dataset_statistics']['per_atom_energy_stddev']}"
         )
-        return dataset_statistic
+        return read_dataset_statistics(self.datamodule.dataset_statistic_filename)
 
     def setup_datamodule(self) -> DataModule:
         """

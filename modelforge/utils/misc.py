@@ -374,6 +374,29 @@ def lock_with_attribute(attribute_name):
     return decorator
 
 
+def seed_random_number(seed: int):
+    """
+    Seed the random number generator for reproducibility.
+
+    Parameters
+    ----------
+    seed : int
+        The seed for the random number generator.
+    """
+    import random
+
+    random.seed(seed)
+
+    import numpy as np
+
+    np.random.seed(seed)
+    import torch
+
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+
 def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
     from modelforge.tests.data import (
         potential_defaults,

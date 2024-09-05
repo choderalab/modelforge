@@ -42,6 +42,7 @@ chem_context.add_transformation(
     lambda unit, x: x / unit.avogadro_constant,
 )
 
+
 def _convert_str_to_unit_length(val: Union[unit.Quantity, str]) -> float:
     """Convert a string representation of an OpenFF unit to a unit.Quantity
     If the input is already a unit.Quantity, it is returned as is.
@@ -104,3 +105,4 @@ def print_modelforge_unit_system():
     log.info("Distance are in nanometer.")
     log.info("Energies are in kJ/mol")
     log.info("Forces are in kJ/mol/nm**2")
+

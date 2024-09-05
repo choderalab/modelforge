@@ -925,6 +925,13 @@ class Potential(torch.nn.Module):
 
         return processed_output
 
+    def compute_core_network_output(self, input_data: NNPInputTuple):
+        # Step 1: Compute pair list and distances using Neighborlist
+        pairlist_output = self.neighborlist.forward(input_data)
+
+        # Step 2: Compute the core network output using SchNetCore
+        return self.core_network.forward(input_data, pairlist_output)
+
     def load_state_dict(
         self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False
     ):

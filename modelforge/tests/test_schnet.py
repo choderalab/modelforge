@@ -14,7 +14,9 @@ def setup_schnet_model(potential_seed: Optional[int] = None):
     # read default parameters
     config = load_configs_into_pydantic_models("schnet", "qm9")
     # override defaults to match reference implementation in spk
-    config["potential"].core_parameter.featurization.number_of_per_atom_features = 12
+    config[
+        "potential"
+    ].core_parameter.featurization.atomic_number.number_of_per_atom_features = 12
     config["potential"].core_parameter.number_of_radial_basis_functions = 5
     config["potential"].core_parameter.number_of_filters = 12
 
@@ -137,7 +139,7 @@ def test_compare_rbf():
     )  # NOTE: there is a shape mismatch between the two outputs
 
 
-def test_compare_forward():
+def test_compare_implementation_against_reference_implementation():
     # ---------------------------------------- #
     # test the implementation of the representation part of the PaiNN model
     # ---------------------------------------- #
@@ -157,8 +159,19 @@ def test_compare_forward():
     # ---------------------------------------- #
     # test forward pass
     # ---------------------------------------- #
+    # reset
+    torch.manual_seed(1234)
+    for i in range(3):
+        model.core_network.interaction_modules[i].intput_to_feature.reset_parameters()
+        for j in range(2):
+            model.core_network.interaction_modules[i].feature_to_output[
+                j
+            ].reset_parameters()
+            model.core_network.interaction_modules[i].filter_network[
+                j
+            ].reset_parameters()
 
-    calculated_results = model(model_input)
+    calculated_results = model.compute_core_network_output(model_input)
     reference_results = load_precalculated_schnet_results()
     assert (
         reference_results["scalar_representation"].shape

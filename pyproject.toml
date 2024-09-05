@@ -22,20 +22,11 @@ classifiers = [
     "Environment :: GPU :: NVIDIA CUDA",
 ]
 requires-python = ">=3.10"
-# dependencies are specified in devtools/conda-envs/test_env.yaml, setuptools
-# will not install package dependencies
-dependencies = []
 
 [project.urls]
 Source = "https://github.com/choderalab/modelforge"
 Documentation = "https://modelforge.readthedocs.io/"
 Wiki = "https://github.com/choderalab/modelforge/wiki"
-
-[project.optional-dependencies]
-test = [
-  "pytest>=6.1.2",
-  "pytest-runner"
-]
 
 [tool.setuptools]
 # Disable zipping because mypy cannot read zip imports and this may affect downstream development.

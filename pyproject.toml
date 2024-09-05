@@ -1,6 +1,5 @@
 [build-system]
-# TODO: versioningit is now in v3
-requires = ["setuptools>=61.0", "versioningit~=2.0"]
+requires = ["setuptools>=61.0", "versioningit~=3.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -16,17 +15,16 @@ license = { text = "MIT" }
 classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Operating System :: POSIX :: Linux",
     "Environment :: GPU",
     "Environment :: GPU :: NVIDIA CUDA",
-    "Intended Audience :: Science/Research",
-    "Operating System :: POSIX :: Linux",
-    "Topic :: Scientific/Engineering",
 ]
 requires-python = ">=3.10"
-# Declare any run-time dependencies that should be installed with the package.
-#dependencies = [
-#    "importlib-resources;python_version<'3.10'",
-#]
+# dependencies are specified in devtools/conda-envs/test_env.yaml, setuptools
+# will not install package dependencies
+dependencies = []
 
 [project.urls]
 Source = "https://github.com/choderalab/modelforge"
@@ -40,7 +38,7 @@ test = [
 ]
 
 [tool.setuptools]
-# Disable zipping because mypy cannot read zip imports and this will affect downstream development.
+# Disable zipping because mypy cannot read zip imports and this may affect downstream development.
 # https://mypy.readthedocs.io/en/stable/installed_packages.html?highlight=zip#using-installed-packages-with-mypy-pep-561
 # NOTE: We might consider removing this once we can test the code in a 
 # production environment since zipping the package may increase performance.

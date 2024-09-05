@@ -9,18 +9,17 @@ from modelforge.potential import NeuralNetworkPotentialFactory, _Implemented_NNP
 from modelforge.utils.misc import load_configs_into_pydantic_models
 
 
-def setup_training_model(potential_seed: Optional[int] = None):
+def setup_training_model(
+    potential_name: str,
+    potential_seed: Optional[int] = None,
+    simulation_environmen="PyTorch",
+):
     from modelforge.potential import NeuralNetworkPotentialFactory
     from modelforge.tests.test_models import load_configs_into_pydantic_models
 
     # read default parameters
-    config = load_configs_into_pydantic_models("schnet", "qm9")
+    config = load_configs_into_pydantic_models(potential_name, "qm9")
     # override defaults to match reference implementation in spk
-    config[
-        "potential"
-    ].core_parameter.featurization.atomic_number.number_of_per_atom_features = 12
-    config["potential"].core_parameter.number_of_radial_basis_functions = 5
-    config["potential"].core_parameter.number_of_filters = 12
 
     model = NeuralNetworkPotentialFactory.generate_potential(
         use="training",
@@ -29,6 +28,7 @@ def setup_training_model(potential_seed: Optional[int] = None):
         dataset_parameter=config["dataset"],
         runtime_parameter=config["runtime"],
         potential_seed=potential_seed,
+        simulation_environment=simulation_environmen,
     ).model.potential
     return model
 
@@ -78,9 +78,11 @@ def test_model_factory(potential_name, simulation_environment):
         use="inference",
         simulation_environment=simulation_environment,
         potential_parameter=config["potential"],
+        use_training_mode_neighborlist=True,
+        jit=False,
     )
     assert (
-        potential_name.upper() in str(type(model)).upper()
+        potential_name.upper() in str(type(model.core_network)).upper()
         or "JAX" in str(type(model)).upper()
     )
 
@@ -279,32 +281,24 @@ def test_energy_between_simulation_environments(
     import numpy as np
     import torch
 
-    batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
-    nnp_input = batch.nnp_input
+    batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
+    nnp_input = batch.nnp_input_tuple
     # test the forward pass through each of the models
     # cast input and model to torch.float64
     # read default parameters
-    config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
-
-    # Setup loss
-    # from modelforge.train.training import return_toml_config
-
-    torch.manual_seed(42)
-    model = NeuralNetworkPotentialFactory.generate_potential(
-        use="inference",
-        simulation_environment="PyTorch",
-        potential_parameter=config["potential"],
+    model = setup_training_model(
+        potential_seed=42,
+        potential_name=potential_name,
+        simulation_environmen="PyTorch",
     )
-
     output_torch = model(nnp_input)["per_molecule_energy"]
 
-    torch.manual_seed(42)
-    model = NeuralNetworkPotentialFactory.generate_potential(
-        use="inference",
-        simulation_environment="JAX",
-        potential_parameter=config["potential"],
+    model = setup_training_model(
+        potential_seed=42,
+        potential_name=potential_name,
+        simulation_environmen="JAX",
     )
-    nnp_input = nnp_input.as_jax_namedtuple()
+    nnp_input = batch.nnp_input.as_jax_namedtuple()
     output_jax = model(nnp_input)["per_molecule_energy"]
 
     # test tat we get an energie per molecule
@@ -350,7 +344,6 @@ def test_forward_pass_with_all_datasets(
         use_training_mode_neighborlist=True,
         jit=False,
     )
-
     # -------------------------------#
     # test the forward pass through each of the models
     output = model(batch.nnp_input_tuple)
@@ -435,28 +428,42 @@ def test_forward_pass(
 
     # test that we get an energie per molecule
     assert len(output["per_molecule_energy"]) == nr_of_mols
-    # the batch consists of methane (CH4) and amamonium (NH3)
-    # which have chemically equivalent hydrogens at the minimum geometry.
-    # This has to be reflected in the atomic energies E_i, which
-    # have to be equal for all hydrogens
+    # test that the output has the following keys and following dim
+    assert "per_molecule_energy" in output
+    assert "per_atom_energy" in output
 
-    # make sure that we are correctly reducing
-    ref = torch.zeros_like(output["per_molecule_energy"]).scatter_add_(
-        0, nnp_input.atomic_subsystem_indices.long(), output["per_atom_energy"]
-    )
-    assert torch.allclose(ref, output["per_molecule_energy"])
+    if dataset_name == "QM9":
 
-    # assert that the following tensor has equal values for dim=0 index 1 to 4 and 6 to 8
-    assert torch.allclose(
-        output["per_atom_energy"][1:4], output["per_atom_energy"][1], atol=1e-4
-    )
+        # the batch consists of methane (CH4) and amamonium (NH3)
+        # which have chemically equivalent hydrogens at the minimum geometry.
+        # This has to be reflected in the atomic energies E_i, which
+        # have to be equal for all hydrogens
 
-    # make sure that the total energy is \sum E_i
-    assert torch.allclose(
-        output["per_molecule_energy"][0],
-        output["per_atom_energy"][0:5].sum(dim=0),
-        atol=1e-5,
-    )
+        # make sure that we are correctly reducing
+        ref = torch.zeros_like(output["per_molecule_energy"]).scatter_add_(
+            0, nnp_input.atomic_subsystem_indices.long(), output["per_atom_energy"]
+        )
+        assert torch.allclose(ref, output["per_molecule_energy"])
+
+        # assert that the following tensor has equal values for dim=0 index 1 to 4 and 6 to 8
+        assert torch.allclose(
+            output["per_atom_energy"][1:4], output["per_atom_energy"][1], atol=1e-4
+        )
+        assert torch.allclose(
+            output["per_atom_energy"][6:8], output["per_atom_energy"][6], atol=1e-4
+        )
+
+        # make sure that the total energy is \sum E_i
+        assert torch.allclose(
+            output["per_molecule_energy"][0],
+            output["per_atom_energy"][0:5].sum(dim=0),
+            atol=1e-5,
+        )
+        assert torch.allclose(
+            output["per_molecule_energy"][1],
+            output["per_atom_energy"][5:9].sum(dim=0),
+            atol=1e-5,
+        )
 
 
 @pytest.mark.parametrize(
@@ -469,22 +476,7 @@ def test_calculate_energies_and_forces(potential_name, single_batch_with_batchsi
     import torch
 
     # read default parameters
-    config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
-
-    # get batch
-    batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
-    nnp_input = batch.nnp_input_tuple
-
-    # test the pass through each of the models
-    model_training = NeuralNetworkPotentialFactory.generate_potential(
-        use="training",
-        potential_parameter=config["potential"],
-        training_parameter=config["training"],
-        dataset_parameter=config["dataset"],
-        runtime_parameter=config["runtime"],
-        potential_seed=42,
-    )
-
+    model = setup_training_model(potential_name, potential_seed=42)
     # get energy and force
     E_training = model_training.model.forward(nnp_input)["per_molecule_energy"]
     F_training = -torch.autograd.grad(
@@ -1071,21 +1063,16 @@ def test_equivariant_energies_and_forces(
 
     import torch
 
-    # load default parameters
-    config = load_configs_into_pydantic_models(f"{potential_name}", "qm9")
-
-    model = NeuralNetworkPotentialFactory.generate_potential(
-        use="inference",
-        simulation_environment=simulation_environment,
-        potential_parameter=config["potential"],
+    model = setup_training_model(
+        potential_seed=42,
+        potential_name=potential_name,
+        simulation_environmen=simulation_environment,
     )
 
     # define the symmetry operations
     translation, rotation, reflection = equivariance_utils
     # define the tolerance
     atol = 1e-3
-    batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
-    nnp_input = batch.nnp_input
 
     # initialize the models
     model = model.to(dtype=torch.float64)
@@ -1093,10 +1080,15 @@ def test_equivariant_energies_and_forces(
     # ------------------- #
     # start the test
     # reference values
-    batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
+    nnp_input = (
+        single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
+        .to(dtype=torch.float64)
+        .nnp_input
+    )
 
-    nnp_input = batch.nnp_input.to(dtype=torch.float64)
-    reference_result = model(nnp_input)["per_molecule_energy"].to(dtype=torch.float64)
+    reference_result = model(nnp_input.as_namedtuple())["per_molecule_energy"].to(
+        dtype=torch.float64
+    )
     reference_forces = -torch.autograd.grad(
         reference_result.sum(),
         nnp_input.positions,

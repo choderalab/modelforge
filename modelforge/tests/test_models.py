@@ -1,16 +1,17 @@
+from typing import Optional
+
 import pytest
 import torch
+from openff.units import unit
 
 from modelforge.dataset import _ImplementedDatasets
 from modelforge.potential import NeuralNetworkPotentialFactory, _Implemented_NNPs
 from modelforge.utils.misc import load_configs_into_pydantic_models
-from openff.units import unit
-from typing import Optional
 
 
 def setup_training_model(potential_seed: Optional[int] = None):
-    from modelforge.tests.test_models import load_configs_into_pydantic_models
     from modelforge.potential import NeuralNetworkPotentialFactory
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
     # read default parameters
     config = load_configs_into_pydantic_models("schnet", "qm9")
@@ -318,8 +319,14 @@ def test_forward_pass_with_all_datasets(
     potential_name, dataset_name, datamodule_factory
 ):
     """Test forward pass with all datasets."""
+    import toml
     import torch
+    from modelforge.potential.models import NeuralNetworkPotentialFactory
 
+    # -------------------------------#
+    # setup dataset
+
+    # use a subset of the SPICE2 dataset for ANI2x
     if dataset_name.lower().startswith("spice"):
         print("using subset")
         dataset = datamodule_factory(
@@ -328,28 +335,27 @@ def test_forward_pass_with_all_datasets(
     else:
         dataset = datamodule_factory(dataset_name=dataset_name)
 
+    dataset_statistic = toml.load(dataset.dataset_statistic_filename)
     train_dataloader = dataset.train_dataloader()
     batch = next(iter(train_dataloader))
-
+    # -------------------------------#
+    # setup model
     config = load_configs_into_pydantic_models(
         f"{potential_name.lower()}", dataset_name.lower()
     )
-
-    import toml
-
-    from modelforge.potential.models import NeuralNetworkPotentialFactory
-
-    dataset_statistic = toml.load(dataset.dataset_statistic_filename)
-
     model = NeuralNetworkPotentialFactory.generate_potential(
         use="inference",
-        simulation_environment="PyTorch",
         potential_parameter=config["potential"],
         dataset_statistic=dataset_statistic,
+        use_training_mode_neighborlist=True,
+        jit=False,
     )
-    output = model(batch.nnp_input)
 
-    # test that the output has the following keys and follwing dim
+    # -------------------------------#
+    # test the forward pass through each of the models
+    output = model(batch.nnp_input_tuple)
+
+    # test that the output has the following keys and following dim
     assert "per_molecule_energy" in output
     assert "per_atom_energy" in output
 
@@ -361,14 +367,30 @@ def test_forward_pass_with_all_datasets(
     assert torch.all(pair_list[0, 1:] >= pair_list[0, :-1])
 
 
-# @pytest.mark.parametrize("dataset_name", ["QM9", "SPICE2"])
-# @pytest.mark.parametrize(
-#    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
-# )
-# @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
-@pytest.mark.parametrize("dataset_name", ["QM9"])
 @pytest.mark.parametrize(
-    "potential_name", ["SAKE", "Tensornet", "SchNet", "ANI2x", "PaiNN", "PhysNet"]
+    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+)
+def test_jit(potential_name, single_batch_with_batchsize):
+    # setup dataset
+    batch = single_batch_with_batchsize(batch_size=1, dataset_name="qm9")
+    nnp_input = batch.nnp_input_tuple
+
+    # -------------------------------#
+    # setup model
+    config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
+    # test the forward pass through each of the models
+    model = NeuralNetworkPotentialFactory.generate_potential(
+        use="inference",
+        potential_parameter=config["potential"],
+    )
+    model = torch.jit.script(model)
+    # -------------------------------#
+    model(nnp_input)
+
+
+@pytest.mark.parametrize("dataset_name", ["QM9", "SPICE2"])
+@pytest.mark.parametrize(
+    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
 @pytest.mark.parametrize("simulation_environment", ["PyTorch"])
 @pytest.mark.parametrize("mode", ["inference", "training"])
@@ -382,15 +404,16 @@ def test_forward_pass(
     # this test sends a single batch from different datasets through the model
     import torch
 
-    batch = single_batch_with_batchsize(batch_size=1, dataset_name=dataset_name)
+    # -------------------------------#
+    # setup dataset
+    batch = single_batch_with_batchsize(batch_size=32, dataset_name=dataset_name)
     nnp_input = batch.nnp_input
 
-    # read default parameters
+    # -------------------------------#
+    # setup model
     config = load_configs_into_pydantic_models(
         f"{potential_name.lower()}", dataset_name
     )
-    nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
-
     # test the forward pass through each of the models
     model = NeuralNetworkPotentialFactory.generate_potential(
         use=mode,
@@ -400,16 +423,16 @@ def test_forward_pass(
         dataset_parameter=config["dataset"],
         runtime_parameter=config["runtime"],
         use_default_dataset_statistic=True,
+        use_training_mode_neighborlist=True,
     )
 
     if mode == "training":
         model = model.model
-
+    # -------------------------------#
+    # forward pass
     output = model(nnp_input.as_namedtuple())
+    nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
-    if mode == "inference":
-        model = torch.jit.script(model)
-        output = model(nnp_input.as_namedtuple())
     # test that we get an energie per molecule
     assert len(output["per_molecule_energy"]) == nr_of_mols
     # the batch consists of methane (CH4) and amamonium (NH3)
@@ -1045,6 +1068,7 @@ def test_equivariant_energies_and_forces(
     NOTE: test will be adapted once we have a trained model.
     """
     from dataclasses import replace
+
     import torch
 
     # load default parameters

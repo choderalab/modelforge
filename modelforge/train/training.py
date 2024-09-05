@@ -10,6 +10,7 @@ import torch
 import torchmetrics
 from lightning import Trainer
 from loguru import logger as log
+from openff.units import unit
 from torch import nn
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
@@ -366,8 +367,8 @@ def create_error_metrics(loss_properties: List[str], loss: bool = False) -> Modu
         A dictionary where keys are loss properties and values are MetricCollections.
     """
     from torchmetrics import MetricCollection
-    from torchmetrics.regression import MeanAbsoluteError, MeanSquaredError
     from torchmetrics.aggregation import MeanMetric
+    from torchmetrics.regression import MeanAbsoluteError, MeanSquaredError
 
     if loss:
         metric_dict = ModuleDict(
@@ -527,7 +528,7 @@ class TrainingAdapter(pL.LightningModule):
             PaiNNParameters,
             TensorNetParameters,
         ],
-        dataset_statistic: Dict[str, Dict[str, float]],
+        dataset_statistic: Dict[str, Dict[str, unit.Quantity]],
         training_parameter: TrainingParameters,
         potential_seed: Optional[int] = None,
     ):
@@ -545,7 +546,7 @@ class TrainingAdapter(pL.LightningModule):
         potential_seed : Optional[int], optional
             The seed to use for initializing the model, by default None.
         """
-        from modelforge.potential.models import Potential, setup_potential
+        from modelforge.potential.models import setup_potential
 
         super().__init__()
         self.save_hyperparameters()
@@ -877,6 +878,9 @@ class TrainingAdapter(pL.LightningModule):
         return {"optimizer": optimizer, "lr_scheduler": lr_scheduler}
 
 
+from openff.units import unit
+
+
 class ModelTrainer:
     """
     Class for training neural network potentials using PyTorch Lightning.
@@ -896,8 +900,8 @@ class ModelTrainer:
         ],
         training_parameter: TrainingParameters,
         runtime_parameter: RuntimeParameters,
-        dataset_statistic: Dict[str, Dict[str, float]],
-        use_default_dataset_statistic: bool = False,
+        dataset_statistic: Dict[str, Dict[str, unit.Quantity]],
+        use_default_dataset_statistic: bool,
         optimizer: Type[Optimizer] = torch.optim.AdamW,
         potential_seed: Optional[int] = None,
         verbose: bool = False,
@@ -937,8 +941,10 @@ class ModelTrainer:
         self.runtime_parameter = runtime_parameter
 
         self.datamodule = self.setup_datamodule()
-        self.dataset_statistic = self.read_dataset_statistics(
-            dataset_statistic, use_default_dataset_statistic
+        self.dataset_statistic = (
+            self.read_dataset_statistics()
+            if not use_default_dataset_statistic
+            else dataset_statistic
         )
         self.experiment_logger = self.setup_logger()
         self.model = self.setup_potential(potential_seed)
@@ -974,8 +980,6 @@ class ModelTrainer:
 
     def read_dataset_statistics(
         self,
-        dataset_statistic: Dict[str, Dict[str, float]],
-        use_default_dataset_statistic: bool = False,
     ) -> Dict[str, float]:
         """
         Read and log dataset statistics.
@@ -985,13 +989,16 @@ class ModelTrainer:
         Dict[str, float]
             The dataset statistics.
         """
-        import toml
-        from modelforge.potential.utils import read_dataset_statistics
-
-        if use_default_dataset_statistic:
-            return dataset_statistic
-
-        dataset_statistic = toml.load(self.datamodule.dataset_statistic_filename)
+        from modelforge.potential.utils import (
+            read_dataset_statistics,
+            convert_str_to_unit_in_dataset_statistics,
+        )
+        # read toml file
+        dataset_statistic = read_dataset_statistics(
+            self.datamodule.dataset_statistic_filename
+        )
+        # convert dictionary of str:str to str:units
+        dataset_statistic = convert_str_to_unit_in_dataset_statistics(dataset_statistic)
         log.info(
             f"Setting per_atom_energy_mean and per_atom_energy_stddev for {self.potential_parameter.potential_name}"
         )
@@ -1001,7 +1008,7 @@ class ModelTrainer:
         log.info(
             f"per_atom_energy_stddev: {dataset_statistic['training_dataset_statistics']['per_atom_energy_stddev']}"
         )
-        return read_dataset_statistics(self.datamodule.dataset_statistic_filename)
+        return dataset_statistic
 
     def setup_datamodule(self) -> DataModule:
         """

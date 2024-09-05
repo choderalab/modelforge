@@ -1254,22 +1254,45 @@ def pair_list(
     return pair_indices.to(device)
 
 
-def read_dataset_statistics(dataset_statistic_filename: str):
+from openff.units import unit
+
+
+def convert_str_to_unit_in_dataset_statistics(
+    dataset_statistic: Dict[str, Dict[str, str]]
+) -> Dict[str, Dict[str, unit.Quantity]]:
+    for key, value in dataset_statistic.items():
+        for sub_key, sub_value in value.items():
+            dataset_statistic[key][sub_key] = unit.Quantity(sub_value)
+    return dataset_statistic
+
+
+def remove_units_from_dataset_statistics(
+    dataset_statistic: Dict[str, Dict[str, unit.Quantity]]
+) -> Dict[str, Dict[str, float]]:
+
+    dataset_statistic_without_units = {}
+    for key, value in dataset_statistic.items():
+        dataset_statistic_without_units[key] = {}
+        for sub_key, sub_value in value.items():
+            dataset_statistic_without_units[key][sub_key] = (
+                unit.Quantity(sub_value).to(unit.kilojoule_per_mole).m
+            )
+    return dataset_statistic_without_units
+
+
+def read_dataset_statistics(
+    dataset_statistic_filename: str, remove_units: bool = False
+):
     import toml
-    from openff.units import unit
 
     # read file
     dataset_statistic = toml.load(dataset_statistic_filename)
     # convert to float (to kJ/mol and then strip the units)
     # dataset statistic is a Dict[str, Dict[str, unit.Quantity]], we need to strip the units
-
-    for key, value in dataset_statistic.items():
-        for sub_key, sub_value in value.items():
-            dataset_statistic[key][sub_key] = (
-                unit.Quantity(sub_value).to(unit.kilojoule_per_mole).m
-            )
-
-    return dataset_statistic
+    if remove_units:
+        return remove_units_from_dataset_statistics(dataset_statistic=dataset_statistic)
+    else:
+        return dataset_statistic
 
 
 def scatter_softmax(

@@ -210,7 +210,6 @@ def test_dataset_statistic(potential_name):
 
     from modelforge.dataset.dataset import DataModule
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
-    import toml
     from openff.units import unit
     import numpy as np
 
@@ -237,8 +236,9 @@ def test_dataset_statistic(potential_name):
     dataset.setup()
 
     # load dataset stastics from file
-    dataset_statistic = toml.load(dataset.dataset_statistic_filename)
+    from modelforge.potential.utils import read_dataset_statistics
 
+    dataset_statistic = read_dataset_statistics(dataset.dataset_statistic_filename)
     # extract value to compare against
     toml_E_i_mean = unit.Quantity(
         dataset_statistic["training_dataset_statistics"]["per_atom_energy_mean"]
@@ -271,7 +271,6 @@ def test_dataset_statistic(potential_name):
         simulation_environment="PyTorch",
         potential_parameter=config["potential"],
         dataset_statistic=dataset_statistic,
-        use_training_mode_neighborlist=True,  # can handel batched data
     )
     model.load_state_dict(torch.load("model.pth"))
 

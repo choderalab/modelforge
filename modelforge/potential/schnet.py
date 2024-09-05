@@ -11,11 +11,6 @@ from loguru import logger as log
 from .models import PairlistData, NNPInputTuple
 
 
-class SchNet:
-    def __init__(self) -> None:
-        pass
-
-
 class SchNetCore(torch.nn.Module):
     def __init__(
         self,
@@ -26,7 +21,6 @@ class SchNetCore(torch.nn.Module):
         number_of_filters: int,
         activation_function_parameter: Dict[str, str],
         shared_interactions: bool,
-        potential_seed: int = -1,
     ) -> None:
 
         super().__init__()

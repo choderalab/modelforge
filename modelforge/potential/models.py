@@ -2,7 +2,6 @@
 This module contains the base classes for the neural network potentials.
 """
 
-from abc import ABC, abstractmethod
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -893,95 +892,38 @@ class PostProcessing(torch.nn.Module):
         return processed_data
 
 
-class BaseNetwork(Module):
-    """
-    The BaseNetwork wraps the input preparation (including pairlist calculation,
-    d_ij and r_ij calculation), the actual model as well as the output
-    preparation in a wrapper class.
-
-    Learned parameters are present only in the core model, the input preparation
-    and output preparation are not learned.
-    """
-
+class Potential(torch.nn.Module):
     def __init__(
         self,
-        *,
-        postprocessing_parameter: Dict[str, Dict[str, bool]],
-        dataset_statistic: Optional[Dict[str, float]],
-        maximum_interaction_radius: unit.Quantity,
-        maximum_dispersion_interaction_radius: Optional[unit.Quantity] = None,
-        maximum_coulomb_interaction_radius: Optional[unit.Quantity] = None,
-        potential_seed: Optional[int] = None,
+        core_network,
+        neighborlist,
+        postprocessing,
+        jit: bool = False,
+        jit_neighborlist: bool = True,
     ):
-        """
-        Initialize the BaseNetwork.
-
-        Parameters
-        ----------
-        postprocessing_parameter : Dict[str, Dict[str, bool]]
-            Parameters for postprocessing.
-        dataset_statistic : Optional[Dict[str, float]]
-            Dataset statistics for normalization.
-        maximum_interaction_radius : unit.Quantity
-            cutoff radius for local interactions
-        maximum_dispersion_interaction_radius : unit.Quantity, optional
-            cutoff radius for dispersion interactions.
-        maximum_coulomb_interaction_radius : unit.Quantity, optional
-            cutoff radius for Coulomb interactions.
-        potential_seed : Optional[int], optional
-            Value used for torch.manual_seed, by default None.
-        """
-
         super().__init__()
-        from modelforge.utils.units import _convert_str_to_unit
-
-        if potential_seed:
-            import torch
-
-            torch.manual_seed(potential_seed)
-
-            # according to https://docs.ray.io/en/latest/tune/faq.html#how-can-i-reproduce-experiments
-            # we should also set the same seed for numpy.random and python random module
-            # when doing hyperparameter optimization with ray tune.  E.g., the ASHA scheduler relies on numpy.random
-            # and doesn't take a seed as an argument, so we need to set it here.
-            import numpy as np
-
-            np.random.seed(potential_seed)
-
-            import random
-
-            random.seed(potential_seed)
-
-        self.postprocessing = PostProcessing(
-            postprocessing_parameter, dataset_statistic
-        )
-
-        # check if self.only_unique_pairs is set in child class
-        if not hasattr(self, "only_unique_pairs"):
-            raise RuntimeError(
-                "The only_unique_pairs attribute is not set in the child class. Please set it to True or False before calling super().__init__."
+        if jit:
+            self.core_network = torch.jit.script(core_network)
+            self.neighborlist = (
+                torch.jit.script(neighborlist) if jit_neighborlist else neighborlist
             )
+            self.postprocessing = torch.jit.script(postprocessing)
+        else:
+            self.core_network = core_network
+            self.neighborlist = neighborlist
+            self.postprocessing = postprocessing
 
-        # to handle multiple cutoffs, we will create a dictionary with the cutoffs
-        # the dictionary will make it more transparent which PairListOutputs belong to which cutoff
+    def forward(self, input_data: NNPInputTuple):
+        # Step 1: Compute pair list and distances using Neighborlist
+        pairlist_output = self.neighborlist.forward(input_data)
 
-        cutoffs = {}
-        cutoffs["maximum_interaction_radius"] = _convert_str_to_unit(
-            maximum_interaction_radius
-        )
-        if maximum_dispersion_interaction_radius is not None:
-            cutoffs["maximum_dispersion_interaction_radius"] = _convert_str_to_unit(
-                maximum_dispersion_interaction_radius
-            )
-        if maximum_coulomb_interaction_radius is not None:
-            cutoffs["maximum_coulomb_interaction_radius"] = _convert_str_to_unit(
-                maximum_coulomb_interaction_radius
-            )
+        # Step 2: Compute the core network output using SchNetCore
+        core_output = self.core_network.forward(input_data, pairlist_output)
 
-        self.compute_interacting_pairs = ComputeInteractingAtomPairs(
-            cutoffs=cutoffs,
-            only_unique_pairs=self.only_unique_pairs,
-        )
+        # Step 3: Apply postprocessing using PostProcessing
+        processed_output = self.postprocessing.forward(core_output)
+
+        return processed_output
 
     def load_state_dict(
         self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False
@@ -1028,241 +970,18 @@ class BaseNetwork(Module):
             }
             log.debug("No prefix found. No modifications to keys in state loading.")
 
-        super().load_state_dict(filtered_state_dict, strict=strict, assign=assign)
-
-    def prepare_pairwise_properties(self, data):
-        """
-        Prepare the pairwise properties for the model.
-
-        Parameters
-        ----------
-        data : Union[NNPInput, NamedTuple]
-            The input data to prepare.
-
-        Returns
-        -------
-        PairListOutputs
-            The prepared pairwise properties.
-        """
-
-        self.compute_interacting_pairs._input_checks(data)
-        return self.compute_interacting_pairs.forward(data)
-
-    def compute(self, data, core_input):
-        """
-        Compute the core model's output.
-
-        Parameters
-        ----------
-        data : Union[NNPInput, NamedTuple]
-            The input data.
-        core_input : PairListOutputs
-            The prepared pairwise properties.
-
-        Returns
-        -------
-        Any
-            The core model's output.
-        """
-        return self.core_module(data, core_input)
-
-    def forward(self, input_data: NNPInput):
-        """
-        Executes the forward pass of the model.
-
-        This method performs input checks, prepares the inputs, and computes the
-        outputs using the core network.
-
-        Parameters
-        ----------
-        input_data : NNPInput
-            The input data provided by the dataset, containing atomic numbers,
-            positions, and other necessary information.
-
-        Returns
-        -------
-        Any
-            The outputs computed by the core network.
-        """
-
-        # compute all interacting pairs with distances
-        pairwise_properties = self.prepare_pairwise_properties(input_data)
-        # prepare the input for the forward pass
-        output = self.compute(input_data, pairwise_properties)
-        # perform postprocessing operations
-        processed_output = self.postprocessing(output)
-        return processed_output
-
-
-class CoreNetwork(Module, ABC):
-    """
-    The CoreNetwork implements methods that are used by all neural network
-    potentials. Every network inherits from CoreNetwork. Networks take in a
-    NNPInput and pairlist and return a dictionary of atomic properties.
-
-    Operations performed outside the network (e.g., pairlist calculation and
-    operations that reduce atomic properties to molecule properties) are not
-    part of the network and are implemented in the BaseNetwork, which is a
-    wrapper around the CoreNetwork.
-    """
-
-    def __init__(self, activation_function: Type[torch.nn.Module]):
-        """
-        Initialize the CoreNetwork.
-
-        Parameters
-        ----------
-        activation_function : Type[torch.nn.Module]
-            The activation function to use.
-        """
-
-        super().__init__()
-
-        self.activation_function = activation_function
-
-    @abstractmethod
-    def _model_specific_input_preparation(
-        self, data: NNPInput, pairlist: PairlistData
-    ) -> Union[
-        "PhysNetNeuralNetworkData",
-        "PaiNNNeuralNetworkData",
-        "SchnetNeuralNetworkData",
-        "AniNeuralNetworkData",
-        "SAKENeuralNetworkInput",
-    ]:
-        """
-        Prepares model-specific inputs before the forward pass.
-
-        This abstract method should be implemented by subclasses to accommodate
-        any model-specific preprocessing of inputs.
-
-        Parameters
-        ----------
-        data : NNPInput
-            The initial inputs to the neural network model, including atomic
-            numbers, positions, and other relevant data.
-        pairlist : PairListOutputs
-            The outputs of a pairlist calculation, including pair indices,
-            distances, and displacement vectors.
-
-        Returns
-        -------
-        NeuralNetworkData
-            The processed inputs, ready for the model's forward pass.
-        """
-        pass
-
-    @abstractmethod
-    def compute_properties(
-        self,
-        data: Union[
-            "PhysNetNeuralNetworkData",
-            "PaiNNNeuralNetworkData",
-            "SchnetNeuralNetworkData",
-            "AniNeuralNetworkData",
-            "SAKENeuralNetworkInput",
-        ],
-    ):
-        """
-        Defines the forward pass of the model.
-
-        This abstract method should be implemented by subclasses to specify the
-        model's computation from inputs (processed input data) to outputs (per
-        atom properties).
-
-        Parameters
-        ----------
-        data : Union[
-            "PhysNetNeuralNetworkData", "PaiNNNeuralNetworkData",
-            "SchnetNeuralNetworkData", "AniNeuralNetworkData",
-            "SAKENeuralNetworkInput",
-        ]
-            The processed input data, specific to the model's requirements.
-
-        Returns
-        -------
-        Dict[str, torch.Tensor]
-            The model's output as computed from the inputs.
-        """
-        pass
-
-    def load_pretrained_weights(self, path: str):
-        """
-        Loads pretrained weights into the model from the specified path.
-
-        Parameters
-        ----------
-        path : str
-            The path to the file containing the pretrained weights.
-
-        """
-        self.load_state_dict(torch.load(path, map_location=self.device))
-        self.eval()  # Set the model to evaluation mode
-
-    def forward(
-        self, data: NNPInput, pairlist_output: PairlistData
-    ) -> Dict[str, torch.Tensor]:
-        """
-        Implements the forward pass through the network.
-
-        Parameters
-        ----------
-        data : NNPInput
-            Contains input data for the batch obtained directly from the
-            dataset, including atomic numbers, positions, and other relevant
-            fields.
-        pairlist_output : PairListOutputs
-            Contains the indices for the selected pairs and their associated
-            distances and displacement vectors.
-
-        Returns
-        -------
-        Dict[str, torch.Tensor]
-            The calculated per-atom properties and other properties from the
-            forward pass.
-        """
-        # perform model specific modifications
-        nnp_input = self._model_specific_input_preparation(data, pairlist_output)
-        # perform the forward pass implemented in the subclass
-        outputs = self.compute_properties(nnp_input)
-        # add atomic numbers to the output
-        outputs["atomic_numbers"] = data.atomic_numbers
-
-        return outputs
-
-
-class Potential(torch.nn.Module):
-    def __init__(
-        self,
-        core_network,
-        neighborlist,
-        postprocessing,
-        jit: bool = False,
-        jit_neighborlist: bool = True,
-    ):
-        super().__init__()
-        if jit:
-            self.core_network = torch.jit.script(core_network)
-            self.neighborlist = (
-                torch.jit.script(neighborlist) if jit_neighborlist else neighborlist
+        # remove key neighborlist.calculate_distances_and_pairlist.cutoff
+        # if present in the state_dict and replace it with 'neighborlist.cutoff'
+        if (
+            "neighborlist.calculate_distances_and_pairlist.cutoffs"
+            in filtered_state_dict
+        ):
+            filtered_state_dict["neighborlist.cutoff"] = filtered_state_dict.pop(
+                "neighborlist.calculate_distances_and_pairlist.cutoffs"
             )
-            self.postprocessing = torch.jit.script(postprocessing)
-        else:
-            self.core_network = core_network
-            self.neighborlist = neighborlist
-            self.postprocessing = postprocessing
 
-    def forward(self, input_data: NNPInputTuple):
-        # Step 1: Compute pair list and distances using Neighborlist
-        pairlist_output = self.neighborlist.forward(input_data)
-
-        # Step 2: Compute the core network output using SchNetCore
-        core_output = self.core_network.forward(input_data, pairlist_output)
-
-        # Step 3: Apply postprocessing using PostProcessing
-        processed_output = self.postprocessing.forward(core_output)
-
-        return processed_output
+        super().load_state_dict(filtered_state_dict, strict=strict, assign=assign)
+        self.eval()  # Set the model to evaluation mode
 
 
 def setup_potential(
@@ -1274,17 +993,18 @@ def setup_potential(
         PaiNNParameters,
         TensorNetParameters,
     ],
-    dataset_statistic: Dict[str, Dict[str, float]] = {
+    dataset_statistic: Dict[str, Dict[str, unit.Quantity]] = {
         "training_dataset_statistics": {
-            "per_atom_energy_mean": 0.0,
-            "per_atom_energy_stddev": 1.0,
+            "per_atom_energy_mean": unit.Quantity(0.0, unit.kilojoule_per_mole),
+            "per_atom_energy_stddev": unit.Quantity(1.0, unit.kilojoule_per_mole),
         }
     },
     use_training_mode_neighborlist: bool = False,
     potential_seed: Optional[int] = None,
     jit: bool = True,
 ) -> Potential:
-    from modelforge.potential import _Implemented_NNP_Cores
+    from modelforge.potential import _Implemented_NNPs
+    from modelforge.potential.utils import remove_units_from_dataset_statistics
     from modelforge.utils.misc import seed_random_number
 
     if potential_seed is not None:
@@ -1292,13 +1012,13 @@ def setup_potential(
         seed_random_number(potential_seed)
 
     model_type = potential_parameter.potential_name
-    core_network = _Implemented_NNP_Cores.get_neural_network_class(model_type)(
+    core_network = _Implemented_NNPs.get_neural_network_class(model_type)(
         **potential_parameter.core_parameter.model_dump()
     )
 
     postprocessing = PostProcessing(
         postprocessing_parameter=potential_parameter.postprocessing_parameter.model_dump(),
-        dataset_statistic=dataset_statistic,
+        dataset_statistic=remove_units_from_dataset_statistics(dataset_statistic),
     )
     if use_training_mode_neighborlist:
         neighborlist = ComputeInteractingAtomPairs(
@@ -1325,6 +1045,9 @@ def setup_potential(
     return model
 
 
+from openff.units import unit
+
+
 class NeuralNetworkPotentialFactory:
     """
     Factory class for creating instances of neural network potentials for training/inference.
@@ -1347,8 +1070,8 @@ class NeuralNetworkPotentialFactory:
         dataset_parameter: Optional[DatasetParameters] = None,
         dataset_statistic: Dict[str, Dict[str, float]] = {
             "training_dataset_statistics": {
-                "per_atom_energy_mean": 0.0,
-                "per_atom_energy_stddev": 1.0,
+                "per_atom_energy_mean": unit.Quantity(0.0, unit.kilojoule_per_mole),
+                "per_atom_energy_stddev": unit.Quantity(1.0, unit.kilojoule_per_mole),
             }
         },
         potential_seed: Optional[int] = None,

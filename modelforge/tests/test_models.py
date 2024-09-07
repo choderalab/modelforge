@@ -667,7 +667,10 @@ def test_pairlist_logic():
 def test_pairlist():
     import torch
 
-    from modelforge.potential.models import Neighborlist, Pairlist
+    from modelforge.potential.models import (
+        Neighborlist,
+        Pairlist,
+    )
 
     atomic_subsystem_indices = torch.tensor([0, 0, 0, 1, 1, 1])
     positions = torch.tensor(
@@ -682,9 +685,9 @@ def test_pairlist():
     )
     from openff.units import unit
 
-    cutoff = 5.0 * unit.nanometer  # no relevant cutoff
-    pairlist = Neighborlist({"cutoff1": cutoff}, only_unique_pairs=True)
-    r = pairlist(positions, atomic_subsystem_indices)["cutoff1"]
+    cutoff = unit.Quantity(5.0, unit.nanometer).to(unit.nanometer).m
+    pairlist = Neighborlist(cutoff, only_unique_pairs=True)
+    r = pairlist(positions, atomic_subsystem_indices)
     pair_indices = r.pair_indices
 
     # pairlist describes the pairs of interacting atoms within a batch
@@ -712,9 +715,9 @@ def test_pairlist():
     )
 
     # test with cutoff
-    cutoff = 2.0 * unit.nanometer
-    pairlist = Neighborlist({"cutoff1": cutoff}, only_unique_pairs=True)
-    r = pairlist(positions, atomic_subsystem_indices)["cutoff1"]
+    cutoff = unit.Quantity(2.0, unit.nanometer).to(unit.nanometer).m
+    pairlist = Neighborlist(cutoff, only_unique_pairs=True)
+    r = pairlist(positions, atomic_subsystem_indices)
     pair_indices = r.pair_indices
 
     assert torch.equal(pair_indices, torch.tensor([[0, 1, 3, 4], [1, 2, 4, 5]]))
@@ -735,100 +738,55 @@ def test_pairlist():
         r.d_ij, torch.tensor([1.7321, 1.7321, 1.7321, 1.7321]), atol=1e-3
     )
 
+    # -------------------------------- #
     # test with complete pairlist
-    cutoff = 2.0 * unit.nanometer
-    pairlist = Neighborlist({"cutoff1": cutoff}, only_unique_pairs=False)
-    r = pairlist(positions, atomic_subsystem_indices)["cutoff1"]
+    cutoff = unit.Quantity(2.0, unit.nanometer).to(unit.nanometer).m
+    neigborlist = Neighborlist(cutoff, only_unique_pairs=False)
+    r = neigborlist(positions, atomic_subsystem_indices)
     pair_indices = r.pair_indices
 
-    print(pair_indices, flush=True)
     assert torch.equal(
         pair_indices, torch.tensor([[0, 1, 1, 2, 3, 4, 4, 5], [1, 0, 2, 1, 4, 3, 5, 4]])
     )
 
+    # -------------------------------- #
     # make sure that Pairlist and Neighborlist behave the same for large cutoffs
-    cutoff = 10.0 * unit.nanometer
+    cutoff = unit.Quantity(10.0, unit.nanometer).to(unit.nanometer).m
     only_unique_pairs = False
-    neighborlist = Neighborlist(
-        {"cutoff1": cutoff}, only_unique_pairs=only_unique_pairs
-    )
+    neighborlist = Neighborlist(cutoff, only_unique_pairs=only_unique_pairs)
     pairlist = Pairlist(only_unique_pairs=only_unique_pairs)
     r = pairlist(positions, atomic_subsystem_indices)
     pair_indices = r.pair_indices
-    r = neighborlist(positions, atomic_subsystem_indices)["cutoff1"]
+    r = neighborlist(positions, atomic_subsystem_indices)
     neighbor_indices = r.pair_indices
 
     assert torch.equal(pair_indices, neighbor_indices)
 
+    # -------------------------------- #
     # make sure that they are the same also for non-redundant pairs
-    cutoff = 10.0 * unit.nanometer
+    cutoff = unit.Quantity(10.0, unit.nanometer).to(unit.nanometer).m
     only_unique_pairs = True
-    neighborlist = Neighborlist(
-        {"cutoff1": cutoff}, only_unique_pairs=only_unique_pairs
-    )
+    neighborlist = Neighborlist(cutoff, only_unique_pairs=only_unique_pairs)
     pairlist = Pairlist(only_unique_pairs=only_unique_pairs)
     r = pairlist(positions, atomic_subsystem_indices)
     pair_indices = r.pair_indices
-    r = neighborlist(positions, atomic_subsystem_indices)["cutoff1"]
+    r = neighborlist(positions, atomic_subsystem_indices)
     neighbor_indices = r.pair_indices
 
     assert torch.equal(pair_indices, neighbor_indices)
 
+    # -------------------------------- #
     # this should fail
-    cutoff = 2.0 * unit.nanometer
+    cutoff = unit.Quantity(2.0, unit.nanometer).to(unit.nanometer).m
     only_unique_pairs = True
-    neighborlist = Neighborlist(
-        {"cutoff1": cutoff}, only_unique_pairs=only_unique_pairs
-    )
+    neighborlist = Neighborlist(cutoff, only_unique_pairs=only_unique_pairs)
     pairlist = Pairlist(only_unique_pairs=only_unique_pairs)
     r = pairlist(positions, atomic_subsystem_indices)
     pair_indices = r.pair_indices
-    r = neighborlist(positions, atomic_subsystem_indices)["cutoff1"]
+    r = neighborlist(positions, atomic_subsystem_indices)
     neighbor_indices = r.pair_indices
 
     assert not pair_indices.shape == neighbor_indices.shape
-
-
-def test_multiple_neighborlists():
-    import torch
-    from openff.units import unit
-
-    from modelforge.potential.models import Neighborlist, Pairlist
-
-    atomic_subsystem_indices = torch.tensor([0, 0, 0, 0, 0])
-
-    positions = torch.tensor(
-        [
-            [0.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0],
-            [2.0, 0.0, 0.0],
-            [3.0, 0.0, 0.0],
-            [4.0, 0.0, 0.0],
-        ]
-    )
-
-    cutoff_short = 1.5 * unit.nanometer
-    cutoff_medium = 2.5 * unit.nanometer
-    cutoff_long = 3.5 * unit.nanometer
-    pairlist = Neighborlist(
-        {"short": cutoff_short, "medium": cutoff_medium, "long": cutoff_long},
-        only_unique_pairs=True,
-    )
-    r = pairlist(positions, atomic_subsystem_indices)
-
-    assert torch.equal(
-        r["short"].pair_indices, torch.tensor([[0, 1, 2, 3], [1, 2, 3, 4]])
-    )
-
-    assert torch.equal(
-        r["medium"].pair_indices,
-        torch.tensor([[0, 0, 1, 1, 2, 2, 3], [1, 2, 2, 3, 3, 4, 4]]),
-    )
-
-    assert torch.equal(
-        r["long"].pair_indices,
-        torch.tensor([[0, 0, 0, 1, 1, 1, 2, 2, 3], [1, 2, 3, 2, 3, 4, 3, 4, 4]]),
-    )
 
 
 def test_pairlist_precomputation():
@@ -1187,12 +1145,12 @@ def test_pairlist_calculate_r_ij_and_d_ij():
     atomic_subsystem_indices = torch.tensor([0, 0, 1, 1])
     from openff.units import unit
 
-    cutoff = 3.0 * unit.nanometer
+    cutoff = unit.Quantity(3.0, unit.nanometer).to(unit.nanometer).m
 
     # Create Pairlist instance
     # --------------------------- #
     # Only unique pairs
-    pairlist = Neighborlist({"cutoff_1": cutoff}, only_unique_pairs=True)
+    pairlist = Neighborlist(cutoff, only_unique_pairs=True)
     pair_indices = pairlist.enumerate_all_pairs(atomic_subsystem_indices)
 
     # Calculate r_ij and d_ij
@@ -1214,7 +1172,7 @@ def test_pairlist_calculate_r_ij_and_d_ij():
 
     # --------------------------- #
     # ALL pairs
-    pairlist = Neighborlist({"cutoff_1": cutoff}, only_unique_pairs=False)
+    pairlist = Neighborlist(cutoff, only_unique_pairs=False)
     pair_indices = pairlist.enumerate_all_pairs(atomic_subsystem_indices)
 
     # Calculate r_ij and d_ij

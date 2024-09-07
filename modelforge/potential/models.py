@@ -314,7 +314,7 @@ class Neighborlist(Pairlist):
     This class extends Pairlist to consider a cutoff distance for neighbor calculations.
     """
 
-    def __init__(self, cutoffs: Dict[str, float], only_unique_pairs: bool = False):
+    def __init__(self, cutoff: float, only_unique_pairs: bool = False):
         """
         Initialize the Neighborlist with a specific cutoff distance.
 
@@ -327,9 +327,7 @@ class Neighborlist(Pairlist):
         """
         super().__init__(only_unique_pairs=only_unique_pairs)
 
-        # self.register_buffer("cutoff", torch.tensor(cutoff.to(unit.nanometer).m))
-        self.register_buffer("cutoffs", torch.tensor([c for c in cutoffs.values()]))
-        self.labels = list(cutoffs.keys())
+        self.register_buffer("cutoff", torch.tensor(cutoff))
 
     def forward(
         self,
@@ -365,16 +363,14 @@ class Neighborlist(Pairlist):
         r_ij = self.calculate_r_ij(pair_indices, positions)
         d_ij = self.calculate_d_ij(r_ij)
 
-        for cutoff, label in zip(self.cutoffs, self.labels):
-            # Find pairs within the cutoff
-            in_cutoff = (d_ij <= cutoff).squeeze()
-            # Get the atom indices within the cutoff
-            pair_indices_within_cutoff = pair_indices[:, in_cutoff]
+        in_cutoff = (d_ij <= self.cutoff).squeeze()
+        # Get the atom indices within the cutoff
+        pair_indices_within_cutoff = pair_indices[:, in_cutoff]
 
         return PairlistData(
-            pair_indices=pair_indices,
-            d_ij=d_ij,
-            r_ij=r_ij,
+            pair_indices=pair_indices_within_cutoff,
+            d_ij=d_ij[in_cutoff],
+            r_ij=r_ij[in_cutoff],
         )
 
 
@@ -556,7 +552,7 @@ from modelforge.train.parameters import RuntimeParameters, TrainingParameters
 
 class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
 
-    def __init__(self, cutoffs: Dict[str, float]):
+    def __init__(self, cutoff: float):
         """
         Initialize the ComputeInteractingAtomPairs module.
 
@@ -571,14 +567,8 @@ class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
         """
 
         super().__init__()
-        keys_list: List[str] = []
-        cutoffs_list: List[float] = []
-        for key, value in cutoffs.items():
-            keys_list.append(str(key))
-            cutoffs_list.append(float(value))
 
-        self.cutoff_keys = keys_list
-        self.register_buffer("cutoff", torch.tensor(cutoffs_list))
+        self.register_buffer("cutoff", torch.tensor(cutoff))
 
     def forward(self, data: NNPInputTuple):
         """
@@ -621,98 +611,12 @@ class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
         d_ij = torch.norm(r_ij, dim=1, keepdim=True, p=2)
         pair_indices = torch.stack((i_final_pairs, j_final_pairs))
 
-        # Initialize interaction mask in a TorchScript-friendly way
-        interaction_mask: Dict[str, torch.Tensor] = {}
-        for key in self.cutoff_keys:
-            # cutoff_value = self.get_buffer(key)
-            bool_mask = d_ij <= 0.4
-            interaction_mask[key] = bool_mask
+        in_cutoff = (d_ij <= self.cutoff).squeeze()
 
         return PairlistData(
-            pair_indices=pair_indices,
-            d_ij=d_ij,
-            r_ij=r_ij,
-        )
-
-
-class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
-
-    def __init__(self, cutoffs: Dict[str, float]):
-        """
-        Initialize the ComputeInteractingAtomPairs module.
-
-        Parameters
-        ----------
-        cutoffs : Dict[str, unit.Quantity]
-            The cutoff distance(s) for neighbor list calculations.
-        only_unique_pairs : bool, optional
-            Whether to only use unique pairs in the pair list calculation, by
-            default True. This should be set to True for all message passing
-            networks.
-        """
-
-        super().__init__()
-        keys_list: List[str] = []
-        cutoffs_list: List[float] = []
-        for key, value in cutoffs.items():
-            keys_list.append(str(key))
-            cutoffs_list.append(float(value))
-
-        self.cutoff_keys = keys_list
-        self.register_buffer("cutoff", torch.tensor(cutoffs_list))
-
-    def forward(self, data: NNPInputTuple):
-        """
-        Prepares the input tensors for passing to the model.
-
-        This method handles general input manipulation, such as calculating
-        distances and generating the pair list. It also calls the model-specific
-        input preparation.
-
-        Parameters
-        ----------
-        data : NNPInputTuple
-            The input data provided by the dataset, containing atomic numbers,
-            positions, and other necessary information.
-
-        Returns
-        -------
-        PairListOutputs
-            A Dict for each cutoff type, where each entry is a namedtuple containing the pair indices, Euclidean distances
-            (d_ij), and displacement vectors (r_ij).
-        """
-        # ---------------------------
-        # general input manipulation
-        positions = data.positions
-        atomic_subsystem_indices = data.atomic_subsystem_indices
-
-        n = atomic_subsystem_indices.size(0)
-        # Generate a range of indices from 0 to n-1
-        indices = torch.arange(n, device=atomic_subsystem_indices.device)
-
-        # Create a meshgrid of indices
-        i_final_pairs, j_final_pairs = torch.meshgrid(indices, indices, indexing="ij")
-
-        # Filter out the diagonal elements (where i == j)
-        mask = i_final_pairs != j_final_pairs
-        i_final_pairs = i_final_pairs[mask]
-        j_final_pairs = j_final_pairs[mask]
-        # calculate r_ij and d_ij
-        r_ij = positions[i_final_pairs] - positions[j_final_pairs]
-        d_ij = torch.norm(r_ij, dim=1, keepdim=True, p=2)
-        pair_indices = torch.stack((i_final_pairs, j_final_pairs))
-
-        # Initialize interaction mask in a TorchScript-friendly way
-        interaction_mask: Dict[str, torch.Tensor] = {}
-        for key in self.cutoff_keys:
-            # cutoff_value = self.get_buffer(key)
-            bool_mask = d_ij <= 0.4
-            interaction_mask[key] = bool_mask
-
-        return PairlistData(
-            pair_indices=pair_indices,
-            d_ij=d_ij,
-            r_ij=r_ij,
+            pair_indices=pair_indices[:, in_cutoff],
+            d_ij=d_ij[in_cutoff],
+            r_ij=r_ij[in_cutoff],
         )
 
 

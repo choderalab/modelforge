@@ -224,7 +224,7 @@ def test_representation():
     cutoff_lower = 0.0
     cutoff_upper = 5.1
     trainable_rbf = False
-    highest_atomic_number = 128
+    maximum_atomic_number = 128
 
     # Set up a dataset
     # prepare reference value
@@ -266,7 +266,7 @@ def test_representation():
         cutoff_upper * unit.angstrom,
         cutoff_lower * unit.angstrom,
         trainable_rbf,
-        highest_atomic_number,
+        maximum_atomic_number,
     )
     nnp_input = tensornet.core_module._model_specific_input_preparation(
         mf_input, pairlist_output
@@ -286,7 +286,7 @@ def test_representation():
             cutoff_lower,
             cutoff_upper,
             trainable_rbf,
-            highest_atomic_number,
+            maximum_atomic_number,
             seed,
         )
     ################ torchmd-net TensorNet ################

@@ -199,7 +199,7 @@ class TensorNetParameters(ParametersBase):
         number_of_radial_basis_functions: int
         maximum_interaction_radius: Union[str, unit.Quantity]
         minimum_interaction_radius: Union[str, unit.Quantity]
-        highest_atomic_number: int
+        maximum_atomic_number: int
         equivariance_invariance_group: str
         activation_function_parameter: ActivationFunctionConfig
 

@@ -913,6 +913,7 @@ def setup_potential(
     use_training_mode_neighborlist: bool = False,
     potential_seed: Optional[int] = None,
     jit: bool = True,
+    only_unique_pairs: bool = False,
 ) -> Potential:
     from modelforge.potential import _Implemented_NNPs
     from modelforge.potential.utils import remove_units_from_dataset_statistics
@@ -934,7 +935,7 @@ def setup_potential(
     if use_training_mode_neighborlist:
         neighborlist = ComputeInteractingAtomPairs(
             cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
-            only_unique_pairs=False,
+            only_unique_pairs=only_unique_pairs,
         )
     else:
         neighborlist = NeighborlistForInferenceNonUniquePairs(
@@ -983,6 +984,7 @@ class NeuralNetworkPotentialFactory:
         use_default_dataset_statistic: bool = False,
         use_training_mode_neighborlist: bool = False,
         simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
+        only_unique_pairs: bool = False,
         jit: bool = True,
     ) -> Union[Potential, JAXModel, pl.LightningModule]:
         """
@@ -1047,6 +1049,7 @@ class NeuralNetworkPotentialFactory:
                 use_training_mode_neighborlist=use_training_mode_neighborlist,
                 potential_seed=potential_seed,
                 jit=jit,
+                only_unique_pairs=only_unique_pairs,
             )
             if simulation_environment == "JAX":
                 return PyTorch2JAXConverter().convert_to_jax_model(model)

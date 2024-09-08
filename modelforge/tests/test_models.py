@@ -6,44 +6,9 @@ from openff.units import unit
 
 from modelforge.dataset import _ImplementedDatasets
 from modelforge.potential import NeuralNetworkPotentialFactory, _Implemented_NNPs
+from modelforge.tests.helper_functions import setup_potential
 from modelforge.utils.misc import load_configs_into_pydantic_models
 
-
-def setup_potential(
-    potential_name: str,
-    use: str,
-    use_default_dataset_statistic: bool = True,
-    use_training_mode_neighborlist: bool = True,
-    jit: bool = False,
-    potential_seed: Optional[int] = None,
-    simulation_environmen="PyTorch",
-):
-    from modelforge.potential import NeuralNetworkPotentialFactory
-    from modelforge.tests.test_models import load_configs_into_pydantic_models
-
-    if simulation_environmen == "JAX":
-        assert use == "inference", "JAX only supports inference mode"
-
-    # read default parameters
-    config = load_configs_into_pydantic_models(potential_name, "qm9")
-    # override defaults to match reference implementation in spk
-
-    model = NeuralNetworkPotentialFactory.generate_potential(
-        use=use,
-        potential_parameter=config["potential"],
-        training_parameter=config["training"],
-        dataset_parameter=config["dataset"],
-        runtime_parameter=config["runtime"],
-        potential_seed=potential_seed,
-        simulation_environment=simulation_environmen,
-        use_training_mode_neighborlist=use_training_mode_neighborlist,
-        use_default_dataset_statistic=use_default_dataset_statistic,
-        jit=jit,
-    )
-
-    if use == "training":
-        model = model.model.potential
-    return model
 
 
 @pytest.mark.parametrize(
@@ -209,8 +174,8 @@ def test_dataset_statistic(potential_name):
     # runtime_defaults model and then via the state_dict to the inference model
 
     import numpy as np
-    from openff.units import unit
     import torch
+    from openff.units import unit
 
     from modelforge.dataset.dataset import DataModule
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
@@ -331,11 +296,11 @@ def test_forward_pass_with_all_datasets(
     """Test forward pass with all datasets."""
     import toml
     import torch
+
     from modelforge.potential.models import NeuralNetworkPotentialFactory
 
     # -------------------------------#
     # setup dataset
-
     # use a subset of the SPICE2 dataset for ANI2x
     if dataset_name.lower().startswith("spice"):
         print("using subset")
@@ -682,10 +647,7 @@ def test_pairlist_logic():
 def test_pairlist():
     import torch
 
-    from modelforge.potential.models import (
-        Neighborlist,
-        Pairlist,
-    )
+    from modelforge.potential.models import Neighborlist, Pairlist
 
     atomic_subsystem_indices = torch.tensor([0, 0, 0, 1, 1, 1])
     positions = torch.tensor(

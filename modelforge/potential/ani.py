@@ -115,8 +115,8 @@ class ANIRepresentation(nn.Module):
         torch.cumsum(input_[:-1], dim=0, out=cumsum[1:])
         return cumsum
 
+    @staticmethod
     def triple_by_molecule(
-        self,
         atom_pairs: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Input: indices for pairs of atoms that are close to each other.
@@ -130,12 +130,13 @@ class ANIRepresentation(nn.Module):
         # convert representation from pair to central-others
         ai1 = atom_pairs.view(-1)
 
-        # Note, torch.sort doesn't guarantee stable sort by default.
-        # This means that the order of rev_indices is not guaranteed when there are "ties"
-        # (i.e., identical values in the input tensor).
-        # Stable sort is more expensive and ultimately unnecessary, so we will not use it here,
-        # but it does mean that vector-wise comparison of the outputs of this function may be
-        # inconsistent for the same input, and thus tests must be designed accordingly.
+        # Note, torch.sort doesn't guarantee stable sort by default. This means
+        # that the order of rev_indices is not guaranteed when there are "ties"
+        # (i.e., identical values in the input tensor). Stable sort is more
+        # expensive and ultimately unnecessary, so we will not use it here, but
+        # it does mean that vector-wise comparison of the outputs of this
+        # function may be inconsistent for the same input, and thus tests must
+        # be designed accordingly.
 
         sorted_ai1, rev_indices = ai1.sort()
 
@@ -162,9 +163,9 @@ class ANIRepresentation(nn.Module):
             < pair_sizes.unsqueeze(1)
         ).flatten()
         sorted_local_index12 = intra_pair_indices.flatten(1, 2)[:, mask]
-        sorted_local_index12 += self._cumsum_from_zero(counts).index_select(
-            0, pair_indices
-        )
+        sorted_local_index12 += ANIRepresentation._cumsum_from_zero(
+            counts
+        ).index_select(0, pair_indices)
 
         # unsort result from last part
         local_index12 = rev_indices[sorted_local_index12]
@@ -650,5 +651,3 @@ class ANI2xCore(torch.nn.Module):
         outputs["atomic_numbers"] = data.atomic_numbers
 
         return outputs
-
-

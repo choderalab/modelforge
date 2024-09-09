@@ -109,7 +109,9 @@ def test_compare_radial_symmetry_features():
     reference_data = resources.files(data) / "tensornet_radial_symmetry_features.pt"
 
     # generate a random list of distances, all < 5
-    d_ij = unit.Quantity(torch.rand(5, 1) * 5, unit.angstrom)
+    d_ij = unit.Quantity(
+        torch.tensor([[2.4813], [3.8411], [0.4424], [0.6602], [1.5371]]), unit.angstrom
+    )
 
     # TensorNet constants
     maximum_interaction_radius = unit.Quantity(5.1, unit.angstrom)

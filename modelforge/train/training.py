@@ -993,6 +993,7 @@ class ModelTrainer:
             read_dataset_statistics,
             convert_str_to_unit_in_dataset_statistics,
         )
+
         # read toml file
         dataset_statistic = read_dataset_statistics(
             self.datamodule.dataset_statistic_filename

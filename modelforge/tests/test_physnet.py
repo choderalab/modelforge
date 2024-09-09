@@ -46,7 +46,7 @@ def test_compare_representation():
 
     # set up test parameters
     number_of_radial_basis_functions = K = 20
-    _max_distance_in_nanometer = 0.5
+    _max_distance = unit.Quantity(5, unit.angstrom)
     #############################
     # RBF comparision
     #############################
@@ -55,9 +55,7 @@ def test_compare_representation():
 
     rbf = PhysNetRadialBasisFunction(
         number_of_radial_basis_functions,
-        max_distance=unit.Quantity(_max_distance_in_nanometer, unit.nanometer)
-        .to(unit.nanometer)
-        .m,
+        max_distance=_max_distance.to(unit.nanometer).m,
     )
 
     # compare the rbf output
@@ -66,7 +64,7 @@ def test_compare_representation():
     from .precalculated_values import provide_reference_for_test_physnet_test_rbf
 
     reference_rbf = provide_reference_for_test_physnet_test_rbf()
-    D = np.array([[1.0394776], [3.375541]], dtype=np.float32)
+    D = np.array([[1.0394776], [3.375541]], dtype=np.float32) / 10
 
-    calculated_rbf = rbf(torch.tensor(D / 10))
+    calculated_rbf = rbf(torch.tensor(D))
     assert np.allclose(np.flip(reference_rbf.squeeze(), axis=1), calculated_rbf.numpy())

@@ -1,32 +1,24 @@
 import os
+from sys import platform
 
-import jax.random
 import jax.numpy as jnp
-import pytest
-import torch
+import jax.random
 import numpy as onp
+import pytest
+import sake as reference_sake
+import torch
 
 from modelforge.potential.sake import SAKE, SAKEInteraction
-import sake as reference_sake
-from sys import platform
+from modelforge.tests.helper_functinos import setup_simple_model
 
 ON_MAC = platform == "darwin"
 
 
 def test_init():
     """Test initialization of the SAKE neural network potential."""
-    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
-    # read default parameters
-    config = load_configs_into_pydantic_models(f"sake", "qm9")
+    sake = setup_simple_model("sake")
 
-    # initialize model
-    sake = SAKE(
-        **config["potential"].model_dump()["core_parameter"],
-        postprocessing_parameter=config["potential"].model_dump()[
-            "postprocessing_parameter"
-        ],
-    )
     assert sake is not None, "SAKE model should be initialized."
 
 
@@ -38,7 +30,7 @@ def test_forward(single_batch_with_batchsize):
     Test the forward pass of the SAKE model.
     """
     # get methane input
-    batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
+    batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
     methane = batch.nnp_input
 
     from modelforge.tests.test_models import load_configs_into_pydantic_models
@@ -93,9 +85,11 @@ def test_interaction_forward():
 @pytest.mark.parametrize("eq_atol", [3e-1])
 @pytest.mark.parametrize("h_atol", [8e-2])
 def test_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize):
-    import torch
-    from modelforge.potential.sake import SAKE
     from dataclasses import replace
+
+    import torch
+
+    from modelforge.potential.sake import SAKE
 
     # Model parameters
     nr_atom_basis = 11
@@ -232,10 +226,9 @@ def make_equivalent_pairlist_mask(key, nr_atoms, nr_pairs, include_self_pairs):
 
 
 def test_radial_symmetry_function_against_reference():
-    from modelforge.potential.utils import (
-        PhysNetRadialBasisFunction,
-    )
     from sake.utils import ExpNormalSmearing as RefExpNormalSmearing
+
+    from modelforge.potential.utils import PhysNetRadialBasisFunction
 
     nr_atoms = 1
     number_of_radial_basis_functions = 10

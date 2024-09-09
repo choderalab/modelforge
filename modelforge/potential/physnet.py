@@ -531,4 +531,3 @@ class PhysNetCore(torch.nn.Module):
         outputs["atomic_numbers"] = data.atomic_numbers
 
         return outputs
-

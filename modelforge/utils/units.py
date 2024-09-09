@@ -105,4 +105,3 @@ def print_modelforge_unit_system():
     log.info("Distance are in nanometer.")
     log.info("Energies are in kJ/mol")
     log.info("Forces are in kJ/mol/nm**2")
-

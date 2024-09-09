@@ -1,5 +1,5 @@
 import pytest
-from modelforge.tests.helper_functions import setup_potential
+from modelforge.tests.helper_functions import setup_potential_for_test
 
 
 def setup_methane():
@@ -82,7 +82,7 @@ def setup_two_methanes():
 
 
 def test_init():
-    model = setup_potential(
+    model = setup_potential_for_test(
         use="inference",
         potential_seed=42,
         potential_name="ani2x",
@@ -113,7 +113,7 @@ def test_forward_and_backward():
     import torch
 
     # setup potential
-    model = setup_potential(
+    model = setup_potential_for_test(
         use="inference",
         potential_seed=42,
         potential_name="ani2x",
@@ -313,7 +313,7 @@ def test_compare_aev():
     _, _, _, mf_input = setup_methane()
 
     # generate modelforge ani representation
-    model = setup_potential(
+    model = setup_potential_for_test(
         use="inference",
         potential_seed=42,
         potential_name="ani2x",

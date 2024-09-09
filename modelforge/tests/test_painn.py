@@ -29,7 +29,7 @@ def setup_painn_model(potential_seed: int):
 
 def test_forward(single_batch_with_batchsize):
     """Test initialization of the PaiNN neural network potential."""
-    trainer_painn = setup_painn_model()
+    trainer_painn = setup_painn_model(42)
     assert trainer_painn is not None, "PaiNN model should be initialized."
     batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
 

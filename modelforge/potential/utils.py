@@ -244,14 +244,18 @@ class FeaturizeInput(nn.Module):
         """
         Initialize the FeaturizeInput class.
 
-        For per-atom non-categorical properties and per-molecule properties (both categorical and non-categorical), we append the embedded nuclear charges and mix them using a linear layer.
+        For per-atom non-categorical properties and per-molecule properties
+        (both categorical and non-categorical), we append the embedded nuclear
+        charges and mix them using a linear layer.
 
-        For per-atom categorical properties, we define an additional embedding and add the embedding to the nuclear charge embedding.
+        For per-atom categorical properties, we define an additional embedding
+        and add the embedding to the nuclear charge embedding.
 
         Parameters
         ----------
         featurization_config : dict
-            A dictionary containing the featurization configuration. It should have the following keys:
+            A dictionary containing the featurization configuration. It should
+            have the following keys: 
             - "properties_to_featurize" : list
                 A list of properties to featurize.
             - "maximum_atomic_number" : int
@@ -274,7 +278,8 @@ class FeaturizeInput(nn.Module):
 
         self.increase_dim_of_embedded_tensor: int = 0
 
-        # iterate through the supported featurization types and check if one of these is requested
+        # iterate through the supported featurization types and check if one of
+        # these is requested
         for featurization in self._SUPPORTED_FEATURIZATION_TYPES:
 
             # embed nuclear charges
@@ -297,7 +302,10 @@ class FeaturizeInput(nn.Module):
                 featurization == "per_molecule_total_charge"
                 and featurization in featurization_config
             ):
-                # transform output o f embedding with shape (nr_atoms, nr_features) to (nr_atoms, nr_features + 1). The added features is the total charge (which will be transformed to a per-atom property)
+                # transform output o f embedding with shape (nr_atoms,
+                # nr_features) to (nr_atoms, nr_features + 1). The added
+                # features is the total charge (which will be transformed to a
+                # per-atom property)
                 self.append_to_embedding_tensor.append(
                     AddPerMoleculeValue("total_charge")
                 )
@@ -758,10 +766,12 @@ class RadialBasisFunction(nn.Module, ABC):
 
     def forward(self, distances: torch.Tensor) -> torch.Tensor:
         """
-        The input distances have implicit units of nanometers by the convention of modelforge. This function applies
-        nondimensionalization transformations on the distances and passes the dimensionless result to
-        RadialBasisFunctionCore. There can be several nondimsionalization transformations, corresponding to each element
-        along the number_of_radial_basis_functions axis in the output.
+        The input distances have implicit units of nanometers by the convention
+        of modelforge. This function applies nondimensionalization
+        transformations on the distances and passes the dimensionless result to
+        RadialBasisFunctionCore. There can be several nondimsionalization
+        transformations, corresponding to each element along the
+        number_of_radial_basis_functions axis in the output.
 
         Parameters
         ---------
@@ -1027,7 +1037,7 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
         number_of_radial_basis_functions: int,
         max_distance: float,
         min_distance: float = 0.0,
-        alpha: float = 1.0,
+        alpha: float = 0.1,
         dtype: torch.dtype = torch.float32,
         trainable_centers_and_scale_factors: bool = False,
     ):
@@ -1088,9 +1098,10 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
         alpha,
         dtype,
     ):
-        # initialize centers according to the default values in PhysNet
-        # (see mu_k in Figure 2 caption of https://pubs.acs.org/doi/10.1021/acs.jctc.9b00181)
-        # NOTE: Unlike GaussianRadialBasisFunctionWithScaling, the centers are unitless.
+        # initialize centers according to the default values in PhysNet (see
+        # mu_k in Figure 2 caption of
+        # https://pubs.acs.org/doi/10.1021/acs.jctc.9b00181) NOTE: Unlike
+        # GaussianRadialBasisFunctionWithScaling, the centers are unitless.
 
         start_value = torch.exp(
             torch.scalar_tensor(
@@ -1111,12 +1122,14 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
         alpha,
         dtype,
     ):
-        # initialize according to the default values in PhysNet (see beta_k in Figure 2 caption)
-        # NOTES:
-        # - Unlike GaussianRadialBasisFunctionWithScaling, the scale factors are unitless.
-        # - Each element of radial_square_factor here is the reciprocal of the square root of beta_k in the
-        # Eq. 7 of the PhysNet paper. This way, it is consistent with the sqrt(2) * standard deviation interpretation
-        # of radial_scale_factor in GaussianRadialBasisFunctionWithScaling
+        # initialize according to the default values in PhysNet (see beta_k in
+        # Figure 2 caption) NOTES:
+        # - Unlike GaussianRadialBasisFunctionWithScaling, the scale factors are
+        #   unitless.
+        # - Each element of radial_square_factor here is the reciprocal of the
+        # square root of beta_k in the Eq. 7 of the PhysNet paper. This way, it
+        # is consistent with the sqrt(2) * standard deviation interpretation of
+        # radial_scale_factor in GaussianRadialBasisFunctionWithScaling
         return torch.full(
             (number_of_radial_basis_functions,),
             (2 * (1 - math.exp(((-max_distance + min_distance) / alpha))))
@@ -1185,9 +1198,9 @@ class TensorNetRadialBasisFunction(PhysNetRadialBasisFunction):
         return radial_scale_factor
 
     def nondimensionalize_distances(self, distances: torch.Tensor) -> torch.Tensor:
-        # Transformation within the outer exp of PhysNet Eq. 7
-        # NOTE: the PhysNet paper implicitly multiplies by 1/Angstrom within the inner exp but distances are in
-        # nanometers, so we multiply by 10/nanometer
+        # Transformation within the outer exp of PhysNet Eq. 7 NOTE: the PhysNet
+        # paper implicitly multiplies by 1/Angstrom within the inner exp but
+        # distances are in nanometers, so we multiply by 10/nanometer
 
         return (
             torch.exp(

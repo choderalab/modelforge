@@ -1,122 +1,80 @@
+from modelforge.tests.helper_functions import setup_potential_for_test
+import pytest
+
+
 def test_init():
     """Test initialization of the TensorNet model."""
-    from modelforge.potential.tensornet import TensorNet
-    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
     # load default parameters
-    config = load_configs_into_pydantic_models(f"tensornet", "qm9")
-    # initialize model
-    tensornet = TensorNet(
-        **config["potential"].model_dump()["core_parameter"],
-        postprocessing_parameter=config["potential"].model_dump()[
-            "postprocessing_parameter"
-        ],
+    # read default parameters
+    model = setup_potential_for_test(
+        use="inference",
+        potential_seed=42,
+        potential_name="tensornet",
+        simulation_environmen="JAX",
     )
-    assert tensornet is not None, "TensorNet model should be initialized."
+    assert model is not None, "TensorNet model should be initialized."
 
 
-def test_forward():  # TODO
-    import torch
+@pytest.mark.parametrize("simulation_environment", ["PyTorch", "JAX"])
+def test_forward_with_inference_model(
+    simulation_environment, single_batch_with_batchsize
+):
 
-    from modelforge.dataset.dataset import DataModule
-    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
-    from modelforge.potential.tensornet import TensorNet
-    from modelforge.tests.test_models import load_configs_into_pydantic_models
-
-    seed = 0
-    torch.manual_seed(seed)
-
-    # Set up a dataset
-    # prepare reference value
-    dataset = DataModule(
-        name="QM9",
-        batch_size=64,
-        version_select="nc_1000_v0",
-        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        remove_self_energies=True,
-        regression_ase=False,
-    )
-    dataset.prepare_data()
-    dataset.setup()
-    # -------------------------------#
-    # -------------------------------#
-    # Test that we can add the reference energy correctly
-    # get methane input
-    batch = next(iter(dataset.train_dataloader())).nnp_input
+    batch = single_batch_with_batchsize(batch_size=32, dataset_name="QM9")
 
     # load default parameters
-    config = load_configs_into_pydantic_models(f"tensornet", "qm9")
-    # initialize model
-    tensornet = TensorNet(
-        **config["potential"].model_dump()["core_parameter"],
-        postprocessing_parameter=config["potential"].model_dump()[
-            "postprocessing_parameter"
-        ],
+    model = setup_potential_for_test(
+        use="inference",
+        potential_seed=42,
+        potential_name="tensornet",
+        simulation_environmen=simulation_environment,
+        use_training_mode_neighborlist=True,
     )
-    tensornet(batch)
+    if simulation_environment == "PyTorch":
+        model = model.to("cuda")
+
+    model(batch.nnp_input_tuple)
 
 
 def test_input():
     import torch
-    from openff.units import unit
-
-    from modelforge.dataset.dataset import DataModule
-    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
-    from modelforge.potential.tensornet import TensorNet
+    from loguru import logger as log
     from modelforge.tests.precalculated_values import (
         prepare_values_for_test_tensornet_input,
     )
-    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
-    seed = 0
-    torch.manual_seed(seed)
+    # setup model
+    model = setup_potential_for_test(
+        use="inference",
+        potential_seed=42,
+        potential_name="tensornet",
+        simulation_environmen="PyTorch",
+        use_training_mode_neighborlist=True,
+    )
+
     from importlib import resources
     from modelforge.tests import data
 
+    # load reference data
     reference_data = resources.files(data) / "tensornet_input.pt"
+    reference_batch = resources.files(data) / "mf_input.pkl"
+    import pickle
 
-    # reference_data = "modelforge/tests/data/tensornet_input.pt"
-    # reference_data = None
+    mf_input = pickle.load(open(reference_batch, "rb"))
 
-    # Set up a dataset
-    # prepare reference value
-    dataset = DataModule(
-        name="QM9",
-        batch_size=1,
-        version_select="nc_1000_v0",
-        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        remove_self_energies=True,
-        regression_ase=False,
-    )
-    dataset.prepare_data()
-    dataset.setup()
-    # -------------------------------#
-    # -------------------------------#
-    # Test that we can add the reference energy correctly
-    # get methane input
-    mf_input = next(iter(dataset.train_dataloader())).nnp_input
-    # modelforge TensorNet
-    # load default parameters
-    config = load_configs_into_pydantic_models(f"tensornet", "qm9")
-    # initialize model
-    tensornet = TensorNet(
-        **config["potential"].model_dump()["core_parameter"],
-        postprocessing_parameter=config["potential"].model_dump()[
-            "postprocessing_parameter"
-        ],
-    )
-    tensornet.compute_interacting_pairs._input_checks(mf_input)
-    pairlist_output = tensornet.compute_interacting_pairs.forward(mf_input)[
-        "maximum_interaction_radius"
-    ]
+    # calculate pairlist
+    pairlist_output = model.neighborlist.forward(mf_input)
 
-    # torchmd-net TensorNet
+    # compare to torchmd-net pairlist
     if reference_data:
+        log.warning('Using reference data for "test_input"')
         edge_index, edge_weight, edge_vec = torch.load(reference_data)
     else:
+        log.warning('Calculating reference data from  "test_input"')
         edge_index, edge_weight, edge_vec = prepare_values_for_test_tensornet_input(
             mf_input,
-            seed=seed,
+            seed=0,
         )
 
     # reshape and compare
@@ -131,9 +89,9 @@ def test_input():
 
 
 def test_compare_radial_symmetry_features():
-    # Compare the TensorNet radial symmetry function
-    # to the output of the modelforge radial symmetry function
-    # TODO: only 'expnorm' from TensorNet implemented
+    # Compare the TensorNet radial symmetry function to the output of the
+    # modelforge radial symmetry function TODO: only 'expnorm' from TensorNet
+    # implemented
     import torch
     from openff.units import unit
 
@@ -149,36 +107,36 @@ def test_compare_radial_symmetry_features():
     from modelforge.tests import data
 
     reference_data = resources.files(data) / "tensornet_radial_symmetry_features.pt"
-    # reference_data = "modelforge/tests/data/tensornet_radial_symmetry_features.pt"
-    # reference_data = None
 
     # generate a random list of distances, all < 5
-    d_ij = torch.rand(5, 1) * 5  # NOTE: angstrom
+    d_ij = unit.Quantity(torch.rand(5, 1) * 5, unit.angstrom)
 
     # TensorNet constants
-    maximum_interaction_radius = 5.1
-    minimum_interaction_radius = (
-        0.0  # cutoff_lower also affect cutoff function in torchmd-net
-    )
+    maximum_interaction_radius = unit.Quantity(5.1, unit.angstrom)
+    minimum_interaction_radius = unit.Quantity(0.0, unit.angstrom)
     number_of_per_atom_features = 8
 
     rsf = TensorNetRadialBasisFunction(
         number_of_radial_basis_functions=number_of_per_atom_features,
-        max_distance=maximum_interaction_radius * unit.angstrom,
-        min_distance=minimum_interaction_radius * unit.angstrom,
+        max_distance=maximum_interaction_radius.to(unit.nanometer).m,
+        min_distance=minimum_interaction_radius.to(unit.nanometer).m,
         alpha=(
             (maximum_interaction_radius - minimum_interaction_radius)
-            / 5.0
-            * unit.angstrom
-        ),
+            / unit.Quantity(5.0, unit.angstrom)
+        ).m,
     )
-    mf_r = rsf(d_ij / 10)  # torch.Size([5, 8]) # NOTE: nanometer
+    mf_r = rsf(d_ij.to(unit.nanometer).m)  # torch.Size([5, 8])
     cutoff_module = CosineAttenuationFunction(
-        maximum_interaction_radius * unit.angstrom
+        maximum_interaction_radius.to(unit.nanometer).m
     )
 
-    rcut_ij = cutoff_module(d_ij / 10)  # torch.Size([5, 1]) # NOTE: nanometer
+    rcut_ij = cutoff_module(d_ij.to(unit.nanometer).m)  # torch.Size([5, 1])
     mf_r = (mf_r * rcut_ij).unsqueeze(1)
+
+    from importlib import resources
+    from modelforge.tests import data
+
+    reference_data = resources.files(data) / "tensornet_radial_symmetry_features.pt"
 
     if reference_data:
         tn_r = torch.load(reference_data)

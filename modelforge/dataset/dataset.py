@@ -111,6 +111,7 @@ NNPInputTuple = NamedTuple(
     ],
 )
 
+
 @dataclass
 class NNPInput:
     """
@@ -233,8 +234,6 @@ class NNPInput:
         )
 
 
-
-
 @dataclass
 class BatchData:
     nnp_input: NNPInput
@@ -258,6 +257,13 @@ class BatchData:
         Property to return the nnp_input as an NNPInputTuple.
         """
         return self.nnp_input.as_namedtuple()
+
+    @property
+    def jax_nnp_input_tuple(self):
+        """
+        Property to return the nnp_input as an NNPInputTuple.
+        """
+        return self.nnp_input.as_jax_namedtuple()
 
 
 class TorchDataset(torch.utils.data.Dataset[BatchData]):

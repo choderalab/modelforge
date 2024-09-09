@@ -1,7 +1,7 @@
 from typing import Optional
 
 
-def setup_potential(
+def setup_potential_for_test(
     potential_name: str,
     use: str,
     use_default_dataset_statistic: bool = True,
@@ -32,7 +32,7 @@ def setup_potential(
         use_training_mode_neighborlist=use_training_mode_neighborlist,
         use_default_dataset_statistic=use_default_dataset_statistic,
         jit=jit,
-        only_unique_pairs=only_unique_pairs
+        only_unique_pairs=only_unique_pairs,
     )
 
     if use == "training":

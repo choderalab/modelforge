@@ -6,9 +6,8 @@ from openff.units import unit
 
 from modelforge.dataset import _ImplementedDatasets
 from modelforge.potential import NeuralNetworkPotentialFactory, _Implemented_NNPs
-from modelforge.tests.helper_functions import setup_potential
+from modelforge.tests.helper_functions import setup_potential_for_test
 from modelforge.utils.misc import load_configs_into_pydantic_models
-
 
 
 @pytest.mark.parametrize(
@@ -20,7 +19,7 @@ def test_JAX_wrapping(potential_name, single_batch_with_batchsize):
     batch = single_batch_with_batchsize(batch_size=1, dataset_name="QM9")
 
     # read default parameters
-    model = setup_potential(
+    model = setup_potential_for_test(
         use="inference",
         potential_seed=42,
         potential_name=potential_name,
@@ -46,7 +45,7 @@ def test_model_factory(potential_name):
     from modelforge.train.training import ModelTrainer
 
     # inference model
-    model = setup_potential(
+    model = setup_potential_for_test(
         use="inference",
         potential_seed=42,
         potential_name=potential_name,
@@ -56,7 +55,7 @@ def test_model_factory(potential_name):
         potential_name.upper() in str(type(model.core_network)).upper()
         or "JAX" in str(type(model)).upper()
     )
-    model = setup_potential(
+    model = setup_potential_for_test(
         use="inference",
         potential_seed=42,
         potential_name=potential_name,
@@ -66,7 +65,7 @@ def test_model_factory(potential_name):
     )
 
     # trainers model
-    model = setup_potential(
+    model = setup_potential_for_test(
         use="training",
         potential_seed=42,
         potential_name=potential_name,
@@ -265,7 +264,7 @@ def test_energy_between_simulation_environments(
     # test the forward pass through each of the models
     # cast input and model to torch.float64
     # read default parameters
-    model = setup_potential(
+    model = setup_potential_for_test(
         use="inference",
         potential_seed=42,
         potential_name=potential_name,
@@ -273,7 +272,7 @@ def test_energy_between_simulation_environments(
     )
     output_torch = model(nnp_input)["per_molecule_energy"]
 
-    model = setup_potential(
+    model = setup_potential_for_test(
         use="inference",
         potential_seed=42,
         potential_name=potential_name,
@@ -460,7 +459,7 @@ def test_calculate_energies_and_forces(potential_name, single_batch_with_batchsi
     nnp_input = batch.nnp_input_tuple
 
     # read default parameters
-    model = setup_potential(potential_name, "training", potential_seed=42)
+    model = setup_potential_for_test(potential_name, "training", potential_seed=42)
     # get energy and force
     E_training = model(nnp_input)["per_molecule_energy"]
     F_training = -torch.autograd.grad(
@@ -468,7 +467,7 @@ def test_calculate_energies_and_forces(potential_name, single_batch_with_batchsi
     )[0]
 
     # compare to inference model
-    model = setup_potential(
+    model = setup_potential_for_test(
         potential_name,
         "inference",
         potential_seed=42,
@@ -506,7 +505,7 @@ def test_calculate_energies_and_forces(potential_name, single_batch_with_batchsi
 
     # get the inference model with inference neighborlist and compilre
     # everything
-    model = setup_potential(
+    model = setup_potential_for_test(
         potential_name,
         "inference",
         potential_seed=42,
@@ -553,7 +552,7 @@ def test_calculate_energies_and_forces_with_jax(
     nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
     nnp_input = nnp_input.as_jax_namedtuple()
 
-    model = setup_potential(
+    model = setup_potential_for_test(
         potential_name,
         "inference",
         potential_seed=42,
@@ -998,7 +997,7 @@ def test_equivariant_energies_and_forces(
 
     import torch
 
-    model = setup_potential(
+    model = setup_potential_for_test(
         use="inference",
         potential_seed=42,
         potential_name=potential_name,

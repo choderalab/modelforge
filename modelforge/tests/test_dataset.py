@@ -465,9 +465,9 @@ def test_dataset_neighborlist(potential_name, single_batch_with_batchsize):
     nnp_input = batch.nnp_input
 
     # test that the neighborlist is correctly generated
-    from modelforge.tests.helper_functions import setup_potential
+    from modelforge.tests.helper_functions import setup_potential_for_test
 
-    model = setup_potential(
+    model = setup_potential_for_test(
         use="inference",
         potential_seed=42,
         potential_name="ani2x",

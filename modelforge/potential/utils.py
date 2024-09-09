@@ -739,7 +739,7 @@ class RadialBasisFunction(nn.Module, ABC):
         self,
         radial_basis_function: RadialBasisFunctionCore,
         dtype: torch.dtype,
-        prefactor: float = 1.0,
+        prefactor: float = 1,
         trainable_prefactor: bool = False,
     ):
         super().__init__()

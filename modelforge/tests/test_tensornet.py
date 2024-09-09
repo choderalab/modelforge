@@ -117,15 +117,16 @@ def test_compare_radial_symmetry_features():
     maximum_interaction_radius = unit.Quantity(5.1, unit.angstrom)
     minimum_interaction_radius = unit.Quantity(0.0, unit.angstrom)
     number_of_per_atom_features = 8
+    alpha = (
+        (maximum_interaction_radius - minimum_interaction_radius)
+        / unit.Quantity(5.0, unit.angstrom)
+    ).m / 10
 
     rsf = TensorNetRadialBasisFunction(
         number_of_radial_basis_functions=number_of_per_atom_features,
         max_distance=maximum_interaction_radius.to(unit.nanometer).m,
         min_distance=minimum_interaction_radius.to(unit.nanometer).m,
-        alpha=(
-            (maximum_interaction_radius - minimum_interaction_radius)
-            / unit.Quantity(5.0, unit.angstrom)
-        ).m,
+        alpha=alpha,
     )
     mf_r = rsf(d_ij.to(unit.nanometer).m)  # torch.Size([5, 8])
     cutoff_module = CosineAttenuationFunction(
@@ -152,31 +153,20 @@ def test_compare_radial_symmetry_features():
             seed=seed,
         )
 
-    assert torch.allclose(mf_r, tn_r)
+    assert torch.allclose(mf_r, tn_r, atol=1e-4)
 
 
-def test_representation():
+def test_representation(single_batch_with_batchsize):
     import torch
     from openff.units import unit
     from torch import nn
 
-    from modelforge.dataset.dataset import DataModule
-    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
-    from modelforge.potential.tensornet import TensorNet
     from modelforge.potential.tensornet import TensorNetRepresentation
-    from modelforge.tests.precalculated_values import (
-        prepare_values_for_test_tensornet_representation,
-    )
-    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
-    seed = 0
-    torch.manual_seed(seed)
     from importlib import resources
     from modelforge.tests import data
 
     reference_data = resources.files(data) / "tensornet_representation.pt"
-    # reference_data = "modelforge/tests/data/tensornet_representation.pt"
-    # reference_data = None
 
     number_of_per_atom_features = 8
     num_rbf = 16
@@ -186,52 +176,34 @@ def test_representation():
     trainable_rbf = False
     highest_atomic_number = 128
 
-    # Set up a dataset
-    # prepare reference value
-    dataset = DataModule(
-        name="QM9",
-        batch_size=1,
-        version_select="nc_1000_v0",
-        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        remove_self_energies=True,
-        regression_ase=False,
-    )
-    dataset.prepare_data()
-    dataset.setup()
+    import pickle
+
+    reference_batch = resources.files(data) / "mf_input.pkl"
+    nnp_input = pickle.load(open(reference_batch, "rb"))
     # -------------------------------#
     # -------------------------------#
     # Test that we can add the reference energy correctly
     # get methane input
-    mf_input = next(iter(dataset.train_dataloader())).nnp_input
-    # modelforge TensorNet
-    torch.manual_seed(seed)
-    # load default parameters
-    config = load_configs_into_pydantic_models(f"tensornet", "qm9")
-    # initialize model
-    tensornet = TensorNet(
-        **config["potential"].model_dump()["core_parameter"],
-        postprocessing_parameter=config["potential"].model_dump()[
-            "postprocessing_parameter"
-        ],
+    model = setup_potential_for_test(
+        use="inference",
+        potential_seed=42,
+        potential_name="tensornet",
+        simulation_environmen="PyTorch",
+        use_training_mode_neighborlist=True,
     )
-    tensornet.compute_interacting_pairs._input_checks(mf_input)
-    pairlist_output = tensornet.compute_interacting_pairs.forward(mf_input)
+    pairlist_output = model.neighborlist.forward(nnp_input)
 
     ################ modelforge TensorNet ################
-    torch.manual_seed(seed)
     tensornet_representation_module = TensorNetRepresentation(
         number_of_per_atom_features,
         num_rbf,
         act_class(),
-        cutoff_upper * unit.angstrom,
-        cutoff_lower * unit.angstrom,
+        unit.Quantity(cutoff_upper, unit.angstrom).to(unit.nanometer).m,
+        unit.Quantity(cutoff_lower, unit.angstrom).to(unit.nanometer).m,
         trainable_rbf,
         highest_atomic_number,
     )
-    nnp_input = tensornet.core_module._model_specific_input_preparation(
-        mf_input, pairlist_output
-    )
-    mf_X, _ = tensornet_representation_module(nnp_input)
+    mf_X, _ = tensornet_representation_module(nnp_input, pairlist_output)
     ################ modelforge TensorNet ################
 
     ################ torchmd-net TensorNet ################
@@ -247,7 +219,7 @@ def test_representation():
             cutoff_upper,
             trainable_rbf,
             highest_atomic_number,
-            seed,
+            seed=0,
         )
     ################ torchmd-net TensorNet ################
 

@@ -1165,7 +1165,7 @@ class TensorNetRadialBasisFunction(PhysNetRadialBasisFunction):
         alpha,
         dtype,
     ):
-        alpha = 1
+        alpha = .1
         start_value = torch.exp(
             torch.scalar_tensor(
                 ((-max_distance + min_distance) / alpha),
@@ -1185,7 +1185,7 @@ class TensorNetRadialBasisFunction(PhysNetRadialBasisFunction):
         alpha,
         dtype,
     ):
-        alpha = 1
+        alpha = .1
         start_value = torch.exp(
             torch.scalar_tensor(((-max_distance + min_distance) / alpha))
         )

@@ -174,7 +174,7 @@ def test_representation(single_batch_with_batchsize):
     cutoff_lower = 0.0
     cutoff_upper = 5.1
     trainable_rbf = False
-    highest_atomic_number = 128
+    maximum_atomic_number = 128
 
     import pickle
 
@@ -201,7 +201,7 @@ def test_representation(single_batch_with_batchsize):
         unit.Quantity(cutoff_upper, unit.angstrom).to(unit.nanometer).m,
         unit.Quantity(cutoff_lower, unit.angstrom).to(unit.nanometer).m,
         trainable_rbf,
-        highest_atomic_number,
+        maximum_atomic_number,
     )
     mf_X, _ = tensornet_representation_module(nnp_input, pairlist_output)
     ################ modelforge TensorNet ################

@@ -558,7 +558,7 @@ class Displacement(torch.nn.Module):
             [box_vectors[0][0], box_vectors[1][1], box_vectors[2][2]]
         ).to(box_vectors.device)
 
-        self.register_buffer("cutoff", torch.tensor(periodic))
+        self.periodic = periodic
 
     def forward(self, coordinate_i: torch.Tensor, coordinate_j: torch.Tensor):
         r_ij = coordinate_i - coordinate_j

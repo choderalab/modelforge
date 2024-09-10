@@ -170,7 +170,7 @@ class TensorNetCore(torch.nn.Module):
         number_of_radial_basis_functions: int,
         maximum_interaction_radius: float,
         minimum_interaction_radius: float,
-        highest_atomic_number: int,
+        maximum_atomic_number: int,
         equivariance_invariance_group: str,
         activation_function_parameter: Dict,
         potential_seed: int = -1,

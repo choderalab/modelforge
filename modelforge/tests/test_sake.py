@@ -91,20 +91,15 @@ def test_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize):
     # get methane input
     batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
 
-    methane = batch.nnp_input
-    perturbed_methane_input = replace(methane)
-    perturbed_methane_input.positions = torch.matmul(methane.positions, rotation_matrix)
+    nnp_input = batch.nnp_input
+    perturbed_nnp_input = replace(nnp_input)
+    perturbed_nnp_input.positions = torch.matmul(nnp_input.positions, rotation_matrix)
 
     # prepare reference and perturbed inputs
-    pairlist_output = sake.compute_interacting_pairs.forward(methane)
-    reference_prepared_input = sake.core_network.methane, pairlist_output
-    )
+    reference_prepared_input = sake.neighborlist(nnp_input)
     reference_v_torch = torch.randn_like(reference_prepared_input.positions)
 
-    pairlist_output = sake.compute_interacting_pairs.forward(perturbed_methane_input)
-    perturbed_prepared_input = sake.core_module._model_specific_input_preparation(
-        perturbed_methane_input, pairlist_output
-    )
+    perturbed_prepared_input = sake.neighborlist(perturbed_nnp_input)
     perturbed_v_torch = torch.matmul(reference_v_torch, rotation_matrix)
 
     (

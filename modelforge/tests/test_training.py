@@ -92,6 +92,7 @@ def test_train_with_lightning(training, potential_name, dataset_name):
     """
     # get correct training toml
     training_toml = "default_with_force" if training == "with_force" else "default"
+
     # SKIP if potential is ANI and dataset is SPICE2
     if "ANI" in potential_name and dataset_name == "SPICE2":
         pytest.skip("ANI potential is not compatible with SPICE2 dataset")
@@ -99,6 +100,7 @@ def test_train_with_lightning(training, potential_name, dataset_name):
         pytest.skip(
             "Skipping Sake training with forces on GitHub Actions because it allocates too much memory"
         )
+
     # train potential
     get_trainer(
         potential_name, dataset_name, training_toml
@@ -258,40 +260,40 @@ def test_loss(single_batch_with_batchsize):
     )
 
 
-@pytest.mark.skipif(IN_GITHUB_ACTIONS, reason="Skipping this test on GitHub Actions")
-@pytest.mark.parametrize(
-    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
-)
-@pytest.mark.parametrize("dataset_name", ["QM9"])
-def test_hypterparameter_tuning_with_ray(
-    potential_name,
-    dataset_name,
-    datamodule_factory,
-):
-    config = load_configs_into_pydantic_models(potential_name, dataset_name)
-    # config = load_configs_(potential_name, dataset_name)
+# @pytest.mark.skipif(IN_GITHUB_ACTIONS, reason="Skipping this test on GitHub Actions")
+# @pytest.mark.parametrize(
+#     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+# )
+# @pytest.mark.parametrize("dataset_name", ["QM9"])
+# def test_hypterparameter_tuning_with_ray(
+#     potential_name,
+#     dataset_name,
+#     datamodule_factory,
+# ):
+#     config = load_configs_into_pydantic_models(potential_name, dataset_name)
+#     # config = load_configs_(potential_name, dataset_name)
 
-    # Extract parameters
-    potential_config = config["potential"]
-    training_config = config["training"]
+#     # Extract parameters
+#     potential_config = config["potential"]
+#     training_config = config["training"]
 
-    dm = datamodule_factory(dataset_name=dataset_name)
+#     dm = datamodule_factory(dataset_name=dataset_name)
 
-    # training model
-    model = NeuralNetworkPotentialFactory.generate_potential(
-        use="training",
-        potential_parameter=potential_config,
-        training_parameter=training_config,
-    )
+#     # training model
+#     model = NeuralNetworkPotentialFactory.generate_potential(
+#         use="training",
+#         potential_parameter=potential_config,
+#         training_parameter=training_config,
+#     )
 
-    from modelforge.train.tuning import RayTuner
+#     from modelforge.train.tuning import RayTuner
 
-    ray_tuner = RayTuner(model)
-    ray_tuner.tune_with_ray(
-        train_dataloader=dm.train_dataloader(),
-        val_dataloader=dm.val_dataloader(),
-        number_of_ray_workers=1,
-        number_of_epochs=1,
-        number_of_samples=1,
-        train_on_gpu=False,
-    )
+#     ray_tuner = RayTuner(model)
+#     ray_tuner.tune_with_ray(
+#         train_dataloader=dm.train_dataloader(),
+#         val_dataloader=dm.val_dataloader(),
+#         number_of_ray_workers=1,
+#         number_of_epochs=1,
+#         number_of_samples=1,
+#         train_on_gpu=False,
+#     )

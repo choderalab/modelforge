@@ -33,17 +33,7 @@ def test_forward(single_batch_with_batchsize):
     batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
     methane = batch.nnp_input
 
-    from modelforge.tests.test_models import load_configs_into_pydantic_models
-
-    # read default parameters
-    config = load_configs_into_pydantic_models(f"sake", "qm9")
-
-    sake = SAKE(
-        **config["potential"].model_dump()["core_parameter"],
-        postprocessing_parameter=config["potential"].model_dump()[
-            "postprocessing_parameter"
-        ],
-    )
+    sake = setup_potential_for_test("sake", "training")
     energy = sake(methane)["per_molecule_energy"]
     nr_of_mols = methane.atomic_subsystem_indices.unique().shape[0]
 
@@ -67,10 +57,10 @@ def test_interaction_forward():
         nr_coefficients=23,
         nr_heads=29,
         activation=torch.nn.ReLU(),
-        maximum_interaction_radius=(5.0 * unit.angstrom),
+        maximum_interaction_radius=(5.0 * unit.angstrom).to(unit.nanometer).m,
         number_of_radial_basis_functions=53,
         epsilon=1e-5,
-        scale_factor=(1.0 * unit.nanometer),
+        scale_factor=(1.0 * unit.nanometer).m,
     )
     h = torch.randn(nr_atoms, nr_atom_basis)
     x = torch.randn(nr_atoms, geometry_basis)
@@ -89,31 +79,17 @@ def test_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize):
 
     import torch
 
-    from modelforge.potential.sake import SAKE
-
     # Model parameters
-    nr_atom_basis = 11
     torch.manual_seed(1884)
 
-    # define a rotation matrix in 3D that rotates by 90 degrees around the z-axis
-    # (clockwise when looking along the z-axis towards the origin)
+    # define a rotation matrix in 3D that rotates by 90 degrees around the
+    # z-axis (clockwise when looking along the z-axis towards the origin)
     rotation_matrix = torch.tensor([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
 
-    from modelforge.tests.test_models import load_configs_into_pydantic_models
-
-    config = load_configs_into_pydantic_models(f"sake", "qm9")
-    # Extract parameters
-    core_parameter = config["potential"].model_dump()["core_parameter"]
-    core_parameter["featurization"]["number_of_per_atom_features"] = nr_atom_basis
-    sake = SAKE(
-        **core_parameter,
-        postprocessing_parameter=config["potential"].model_dump()[
-            "postprocessing_parameter"
-        ],
-    )
+    sake = setup_potential_for_test("sake", "training")
 
     # get methane input
-    batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
+    batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
 
     methane = batch.nnp_input
     perturbed_methane_input = replace(methane)
@@ -121,8 +97,7 @@ def test_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize):
 
     # prepare reference and perturbed inputs
     pairlist_output = sake.compute_interacting_pairs.forward(methane)
-    reference_prepared_input = sake.core_module._model_specific_input_preparation(
-        methane, pairlist_output
+    reference_prepared_input = sake.core_network.methane, pairlist_output
     )
     reference_v_torch = torch.randn_like(reference_prepared_input.positions)
 

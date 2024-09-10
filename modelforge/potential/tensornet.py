@@ -587,7 +587,7 @@ class TensorNetInteraction(torch.nn.Module):
         number_of_per_atom_features: int,
         number_of_radial_basis_functions: int,
         activation_function: Type[nn.Module],
-        maximum_interaction_radius: unit.Quantity,
+        maximum_interaction_radius: float,
         equivariance_invariance_group: str,
     ):
         super().__init__()

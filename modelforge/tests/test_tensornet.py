@@ -1,5 +1,6 @@
-from modelforge.tests.helper_functions import setup_potential_for_test
 import pytest
+
+from modelforge.tests.helper_functions import setup_potential_for_test
 
 
 def test_init():
@@ -41,6 +42,7 @@ def test_forward_with_inference_model(
 def test_input():
     import torch
     from loguru import logger as log
+
     from modelforge.tests.precalculated_values import (
         prepare_values_for_test_tensornet_input,
     )
@@ -55,6 +57,7 @@ def test_input():
     )
 
     from importlib import resources
+
     from modelforge.tests import data
 
     # load reference data
@@ -96,8 +99,10 @@ def test_compare_radial_symmetry_features():
     import torch
     from openff.units import unit
 
-    from modelforge.potential.utils import CosineAttenuationFunction
-    from modelforge.potential.utils import TensorNetRadialBasisFunction
+    from modelforge.potential.utils import (
+        CosineAttenuationFunction,
+        TensorNetRadialBasisFunction,
+    )
     from modelforge.tests.precalculated_values import (
         prepare_values_for_test_tensornet_compare_radial_symmetry_features,
     )
@@ -105,6 +110,7 @@ def test_compare_radial_symmetry_features():
     seed = 0
     torch.manual_seed(seed)
     from importlib import resources
+
     from modelforge.tests import data
 
     reference_data = resources.files(data) / "tensornet_radial_symmetry_features.pt"
@@ -138,6 +144,7 @@ def test_compare_radial_symmetry_features():
     mf_r = (mf_r * rcut_ij).unsqueeze(1)
 
     from importlib import resources
+
     from modelforge.tests import data
 
     reference_data = resources.files(data) / "tensornet_radial_symmetry_features.pt"
@@ -158,13 +165,13 @@ def test_compare_radial_symmetry_features():
 
 
 def test_representation():
+    from importlib import resources
+
     import torch
     from openff.units import unit
     from torch import nn
 
     from modelforge.potential.tensornet import TensorNetRepresentation
-
-    from importlib import resources
     from modelforge.tests import data
 
     reference_data = resources.files(data) / "tensornet_representation.pt"
@@ -230,29 +237,25 @@ def test_representation():
 
 
 def test_interaction():
+    import pickle
+    from importlib import resources
+
     import torch
     from openff.units import unit
     from torch import nn
 
-    from modelforge.dataset.dataset import DataModule
-    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
-    from modelforge.potential.tensornet import TensorNet
     from modelforge.potential.tensornet import TensorNetInteraction
+    from modelforge.tests import data
     from modelforge.tests.precalculated_values import (
         prepare_values_for_test_tensornet_interaction,
     )
-    from modelforge.tests.test_models import load_configs_into_pydantic_models
 
     seed = 0
-    torch.manual_seed(seed)
-    from importlib import resources
-
-    from modelforge.tests import data
 
     reference_data = resources.files(data) / "tensornet_interaction.pt"
 
-    # reference_data = "modelforge/tests/data/tensornet_interaction.pt"
-    # reference_data = None
+    reference_batch = resources.files(data) / "mf_input.pkl"
+    nnp_input = pickle.load(open(reference_batch, "rb"))
 
     number_of_per_atom_features = 8
     num_rbf = 16
@@ -260,48 +263,26 @@ def test_interaction():
     cutoff_lower = 0.0
     cutoff_upper = 5.1
 
-    # Set up a dataset
-    # prepare reference value
-    dataset = DataModule(
-        name="QM9",
-        batch_size=1,
-        version_select="nc_1000_v0",
-        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        remove_self_energies=True,
-        regression_ase=False,
-    )
-    dataset.prepare_data()
-    dataset.setup()
     # -------------------------------#
     # -------------------------------#
-    # Test that we can add the reference energy correctly
-    # get methane input
-    mf_input = next(iter(dataset.train_dataloader())).nnp_input
-    # modelforge TensorNet
-    torch.manual_seed(seed)
-    # load default parameters
-    config = load_configs_into_pydantic_models(f"tensornet", "qm9")
     # initialize model
-    tensornet = TensorNet(
-        **config["potential"].model_dump()["core_parameter"],
-        postprocessing_parameter=config["potential"].model_dump()[
-            "postprocessing_parameter"
-        ],
+    model = setup_potential_for_test(
+        use="inference",
+        potential_seed=seed,
+        potential_name="tensornet",
+        simulation_environmen="PyTorch",
+        use_training_mode_neighborlist=True,
     )
-    tensornet.compute_interacting_pairs._input_checks(mf_input)
-    pairlist_output = tensornet.compute_interacting_pairs.forward(mf_input)
 
     ################ modelforge TensorNet ################
-    tensornet_representation_module = tensornet.core_module.representation_module
-    nnp_input = tensornet.core_module._model_specific_input_preparation(
-        mf_input, pairlist_output
-    )
-    X, _ = tensornet_representation_module(nnp_input)
+    tensornet_representation_module = model.core_network.representation_module
+    pairlist_output = model.neighborlist.forward(nnp_input)
+    X, _ = tensornet_representation_module(nnp_input, pairlist_output)
 
     radial_feature_vector = tensornet_representation_module.radial_symmetry_function(
-        nnp_input.d_ij
+        pairlist_output.d_ij
     )
-    rcut_ij = tensornet_representation_module.cutoff_module(nnp_input.d_ij)
+    rcut_ij = tensornet_representation_module.cutoff_module(pairlist_output.d_ij)
     radial_feature_vector = (radial_feature_vector * rcut_ij).unsqueeze(1)
 
     atomic_charges = torch.zeros_like(nnp_input.atomic_numbers)
@@ -312,13 +293,13 @@ def test_interaction():
         number_of_per_atom_features,
         num_rbf,
         act_class(),
-        cutoff_upper * unit.angstrom,
+        unit.Quantity(cutoff_upper, unit.angstrom).to(unit.nanometer).m,
         "O(3)",
     )
     mf_X = interaction_module(
         X,
-        nnp_input.pair_indices,
-        nnp_input.d_ij.squeeze(-1),
+        pairlist_output.pair_indices,
+        pairlist_output.d_ij.squeeze(-1),
         radial_feature_vector.squeeze(1),
         atomic_charges,
     )
@@ -345,18 +326,3 @@ def test_interaction():
     assert mf_X.shape == tn_X.shape
     assert torch.allclose(mf_X, tn_X)
 
-
-if __name__ == "__main__":
-    import torch
-
-    torch.manual_seed(0)
-
-    # test_forward()
-
-    # test_input()
-
-    # test_compare_radial_symmetry_features()
-
-    # test_representation()
-
-    test_interaction()

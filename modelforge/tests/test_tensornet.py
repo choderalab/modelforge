@@ -32,7 +32,10 @@ def test_forward_with_inference_model(
         use_training_mode_neighborlist=True,
     )
 
-    model(batch.nnp_input_tuple)
+    if simulation_environment == "JAX":
+        model(batch.jax_nnp_input_tuple)
+    else:
+        model(batch.nnp_input_tuple)
 
 
 def test_input():
@@ -172,7 +175,7 @@ def test_representation(single_batch_with_batchsize):
     cutoff_lower = 0.0
     cutoff_upper = 5.1
     trainable_rbf = False
-    maximum_atomic_number = 128
+    highest_atomic_number = 128
 
     import pickle
 
@@ -199,7 +202,7 @@ def test_representation(single_batch_with_batchsize):
         unit.Quantity(cutoff_upper, unit.angstrom).to(unit.nanometer).m,
         unit.Quantity(cutoff_lower, unit.angstrom).to(unit.nanometer).m,
         trainable_rbf,
-        maximum_atomic_number,
+        highest_atomic_number,
     )
     mf_X, _ = tensornet_representation_module(nnp_input, pairlist_output)
     ################ modelforge TensorNet ################

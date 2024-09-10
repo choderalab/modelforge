@@ -157,7 +157,7 @@ def test_compare_radial_symmetry_features():
     assert torch.allclose(mf_r, tn_r, atol=1e-4)
 
 
-def test_representation(single_batch_with_batchsize):
+def test_representation():
     import torch
     from openff.units import unit
     from torch import nn
@@ -187,7 +187,7 @@ def test_representation(single_batch_with_batchsize):
     # get methane input
     model = setup_potential_for_test(
         use="inference",
-        potential_seed=42,
+        potential_seed=0,
         potential_name="tensornet",
         simulation_environmen="PyTorch",
         use_training_mode_neighborlist=True,
@@ -195,6 +195,7 @@ def test_representation(single_batch_with_batchsize):
     pairlist_output = model.neighborlist.forward(nnp_input)
 
     ################ modelforge TensorNet ################
+    torch.manual_seed(0)
     tensornet_representation_module = TensorNetRepresentation(
         number_of_per_atom_features,
         num_rbf,

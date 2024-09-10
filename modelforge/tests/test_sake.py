@@ -9,7 +9,7 @@ import sake as reference_sake
 import torch
 
 from modelforge.potential.sake import SAKE, SAKEInteraction
-from modelforge.tests.helper_functinos import setup_simple_model
+from modelforge.tests.helper_functions import setup_potential_for_test
 
 ON_MAC = platform == "darwin"
 
@@ -17,7 +17,7 @@ ON_MAC = platform == "darwin"
 def test_init():
     """Test initialization of the SAKE neural network potential."""
 
-    sake = setup_simple_model("sake")
+    sake = setup_potential_for_test("sake", "training")
 
     assert sake is not None, "SAKE model should be initialized."
 

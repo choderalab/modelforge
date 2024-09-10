@@ -170,7 +170,7 @@ class TensorNetCore(torch.nn.Module):
         number_of_radial_basis_functions: int,
         maximum_interaction_radius: float,
         minimum_interaction_radius: float,
-        highest_atomic_number: int,
+        maximum_atomic_number: int,
         equivariance_invariance_group: str,
         activation_function_parameter: Dict,
         potential_seed: int = -1,
@@ -189,7 +189,7 @@ class TensorNetCore(torch.nn.Module):
             maximum_interaction_radius=maximum_interaction_radius,
             minimum_interaction_radius=minimum_interaction_radius,
             trainable_centers_and_scale_factors=trainable_centers_and_scale_factors,
-            highest_atomic_number=highest_atomic_number,
+            maximum_atomic_number=maximum_atomic_number,
         )
         self.interaction_modules = nn.ModuleList(
             [
@@ -309,8 +309,8 @@ class TensorNetRepresentation(torch.nn.Module):
         Minimum interaction radius.
     trainable_centers_and_scale_factors : bool
         If True, centers and scale factors are trainable.
-    highest_atomic_number : int
-        Highest atomic number in the dataset.
+    maximum_atomic_number : int
+        Maximum atomic number in the dataset.
     """
 
     def __init__(
@@ -321,7 +321,7 @@ class TensorNetRepresentation(torch.nn.Module):
         maximum_interaction_radius: float,
         minimum_interaction_radius: float,
         trainable_centers_and_scale_factors: bool,
-        highest_atomic_number: int,
+        maximum_atomic_number: int,
     ):
         super().__init__()
         from modelforge.potential.utils import Dense
@@ -353,7 +353,7 @@ class TensorNetRepresentation(torch.nn.Module):
             }
         )
         self.atomic_number_i_embedding_layer = nn.Embedding(
-            highest_atomic_number,
+            maximum_atomic_number,
             number_of_per_atom_features,
         )
         self.atomic_number_ij_embedding_layer = nn.Linear(

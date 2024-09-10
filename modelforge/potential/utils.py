@@ -17,7 +17,9 @@ from modelforge.dataset.dataset import NNPInputTuple, NNPInput
 @dataclass
 class NeuralNetworkData:
     """
-    A dataclass to structure the inputs specifically for SchNet-based neural network potentials, including the necessary geometric and chemical information, along with the radial symmetry function expansion (`f_ij`) and the cosine cutoff (`f_cutoff`) to accurately represent atomistic systems for energy predictions.
+    A dataclass to structure the inputs specifically for SchNet-based neural network potentials,
+    including the necessary geometric and chemical information, along with the radial symmetry function expansion
+    (`f_ij`) and the cosine cutoff (`f_cutoff`) to accurately represent atomistic systems for energy predictions.
 
     Attributes
     ----------
@@ -255,7 +257,7 @@ class FeaturizeInput(nn.Module):
         ----------
         featurization_config : dict
             A dictionary containing the featurization configuration. It should
-            have the following keys: 
+            have the following keys:
             - "properties_to_featurize" : list
                 A list of properties to featurize.
             - "maximum_atomic_number" : int
@@ -316,7 +318,8 @@ class FeaturizeInput(nn.Module):
             if (
                 featurization == "per_atom_partial_charge"
                 and featurization in featurization_config
-            ):  # transform output o f embedding with shape (nr_atoms, nr_features) to (nr_atoms, nr_features + 1). The added features is the total charge (which will be transformed to a per-atom property)
+            ):  # transform output o f embedding with shape (nr_atoms, nr_features) to (nr_atoms, nr_features + 1).
+                # #The added features is the total charge (which will be transformed to a per-atom property)
                 self.append_to_embedding_tensor.append(
                     AddPerAtomValue("partial_charge")
                 )
@@ -397,7 +400,8 @@ class Dense(nn.Linear):
         bias : bool, optional
             If set to False, the layer will not learn an additive bias. Default is True.
         activation_function : Type[torch.nn.Module] , optional
-            Activation function to be applied. Default is nn.Identity(), which applies the identity function and makes this a linear transformation.
+            Activation function to be applied. Default is nn.Identity(), which applies the identity function
+            and makes this a linear transformation.
         """
 
         super().__init__(in_features, out_features, bias)
@@ -464,7 +468,8 @@ class DenseWithCustomDist(nn.Linear):
         bias : bool, optional
             If set to False, the layer will not learn an additive bias. Default is True.
         activation_function : nn.Module , optional
-            Activation function to be applied. Default is nn.Identity(), which applies the identity function and makes this a linear ransformation.
+            Activation function to be applied. Default is nn.Identity(), which applies the identity function
+            and makes this a linear ransformation.
         weight_init : Callable, optional
             Callable to initialize the weights. Default is xavier_uniform_.
         bias_init : Callable, optional
@@ -1165,7 +1170,7 @@ class TensorNetRadialBasisFunction(PhysNetRadialBasisFunction):
         alpha,
         dtype,
     ):
-        alpha = .1
+        alpha = 0.1
         start_value = torch.exp(
             torch.scalar_tensor(
                 ((-max_distance + min_distance) / alpha),
@@ -1185,7 +1190,7 @@ class TensorNetRadialBasisFunction(PhysNetRadialBasisFunction):
         alpha,
         dtype,
     ):
-        alpha = .1
+        alpha = 0.1
         start_value = torch.exp(
             torch.scalar_tensor(((-max_distance + min_distance) / alpha))
         )
@@ -1317,7 +1322,8 @@ def scatter_softmax(
     dim_size: int,
 ) -> torch.Tensor:
     """
-    Computes the softmax operation over values in the `src` tensor that share indices specified in the `index` tensor along a given axis `dim`.
+    Computes the softmax operation over values in the `src` tensor that share indices specified in the `index` tensor
+    along a given axis `dim`.
 
     For one-dimensional tensors, the operation computes:
 
@@ -1332,7 +1338,8 @@ def scatter_softmax(
     src : Tensor
         The source tensor containing the values to which the softmax operation will be applied.
     index : LongTensor
-        The indices of elements to scatter, determining which elements in `src` are grouped together for the softmax calculation.
+        The indices of elements to scatter, determining which elements in `src` are grouped together for the
+        softmax calculation.
     dim : int
         The axis along which to index. Default is `-1`.
     dim_size : int

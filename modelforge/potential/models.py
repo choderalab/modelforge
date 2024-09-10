@@ -550,9 +550,32 @@ from modelforge.potential.parameters import (
 from modelforge.train.parameters import RuntimeParameters, TrainingParameters
 
 
+class Displacement(torch.nn.Module):
+    def __init__(self, box_vectors: torch.Tensor, periodic: bool):
+        super().__init__()
+        self.box_vectors = box_vectors
+        self.box_lengths = torch.tensor(
+            [box_vectors[0][0], box_vectors[1][1], box_vectors[2][2]]
+        ).to(box_vectors.device)
+
+        self.periodic = periodic
+
+    def forward(self, coordinate_i: torch.Tensor, coordinate_j: torch.Tensor):
+        r_ij = coordinate_i - coordinate_j
+
+        if self.periodic:
+            r_ij = (
+                torch.remainder(r_ij + self.box_lengths / 2, self.box_lengths)
+                - self.box_lengths / 2
+            )
+
+        d_ij = torch.norm(r_ij, dim=1, keepdim=True, p=2)
+        return r_ij, d_ij
+
+
 class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
 
-    def __init__(self, cutoff: float):
+    def __init__(self, cutoff: float, displacement_function: Displacement):
         """
         Initialize the ComputeInteractingAtomPairs module.
 
@@ -564,11 +587,15 @@ class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
             Whether to only use unique pairs in the pair list calculation, by
             default True. This should be set to True for all message passing
             networks.
+        displacement_function: Displacement
+            The displacement function to use for calculating the displacement vectors and distances between atom pairs.
+
         """
 
         super().__init__()
 
         self.register_buffer("cutoff", torch.tensor(cutoff))
+        self.displacement_function = displacement_function
 
     def forward(self, data: NNPInputTuple):
         """
@@ -607,8 +634,13 @@ class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
         i_final_pairs = i_final_pairs[mask]
         j_final_pairs = j_final_pairs[mask]
         # calculate r_ij and d_ij
-        r_ij = positions[i_final_pairs] - positions[j_final_pairs]
-        d_ij = torch.norm(r_ij, dim=1, keepdim=True, p=2)
+
+        r_ij, d_ij = self.displacement_function(
+            positions[i_final_pairs], positions[j_final_pairs]
+        )
+
+        # r_ij = positions[i_final_pairs] - positions[j_final_pairs]
+        # d_ij = torch.norm(r_ij, dim=1, keepdim=True, p=2)
         pair_indices = torch.stack((i_final_pairs, j_final_pairs))
 
         in_cutoff = (d_ij <= self.cutoff).squeeze()
@@ -914,10 +946,15 @@ def setup_potential(
     potential_seed: Optional[int] = None,
     jit: bool = True,
     only_unique_pairs: bool = False,
+    box_vectors: Optional[torch.Tensor] = None,
+    periodic: bool = False,
 ) -> Potential:
     from modelforge.potential import _Implemented_NNPs
     from modelforge.potential.utils import remove_units_from_dataset_statistics
     from modelforge.utils.misc import seed_random_number
+
+    if box_vectors is None:
+        box_vectors = torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
 
     if potential_seed is not None:
         log.info(f"Setting random seed to: {potential_seed}")
@@ -938,8 +975,11 @@ def setup_potential(
             only_unique_pairs=only_unique_pairs,
         )
     else:
+        displacement_function = Displacement(box_vectors, periodic)
+
         neighborlist = NeighborlistForInferenceNonUniquePairs(
             cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
+            displacement_function=displacement_function,
         )
     model = Potential(
         core_network,

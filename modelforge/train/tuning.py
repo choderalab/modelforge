@@ -196,7 +196,8 @@ class RayTuner:
         Returns
         -------
         ExperimentAnalysis
-            The result of the hyperparameter tuning session, containing performance metrics and the best hyperparameters found.
+            The result of the hyperparameter tuning session, containing performance metrics
+            and the best hyperparameters found.
         """
 
         from ray import tune

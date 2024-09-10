@@ -31,8 +31,6 @@ def test_forward_with_inference_model(
         simulation_environmen=simulation_environment,
         use_training_mode_neighborlist=True,
     )
-    if simulation_environment == "PyTorch":
-        model = model.to("cuda")
 
     model(batch.nnp_input_tuple)
 

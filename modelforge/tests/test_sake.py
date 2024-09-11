@@ -97,7 +97,7 @@ def test_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize):
 
     # prepare reference and perturbed inputs
     reference_prepared_input = sake.neighborlist(nnp_input)
-    reference_v_torch = torch.randn_like(reference_prepared_input.positions)
+    reference_v_torch = torch.randn_like(nnp_input.positions)
 
     perturbed_prepared_input = sake.neighborlist(perturbed_nnp_input)
     perturbed_v_torch = torch.matmul(reference_v_torch, rotation_matrix)
@@ -106,7 +106,7 @@ def test_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize):
         reference_h_out_torch,
         reference_x_out_torch,
         reference_v_out_torch,
-    ) = sake.core_module.interaction_modules[0](
+    ) = sake.core_network.interaction_modules[0](
         reference_prepared_input.atomic_embedding,
         reference_prepared_input.positions,
         reference_v_torch,
@@ -116,7 +116,7 @@ def test_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize):
         perturbed_h_out_torch,
         perturbed_x_out_torch,
         perturbed_v_out_torch,
-    ) = sake.core_module.interaction_modules[0](
+    ) = sake.core_network.interaction_modules[0](
         perturbed_prepared_input.atomic_embedding,
         perturbed_prepared_input.positions,
         perturbed_v_torch,

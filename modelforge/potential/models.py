@@ -124,10 +124,12 @@ class Pairlist(Module):
             # and/or larger batch sizes; while not likely a problem on higher end GPUs with large amounts of memory
             # cheaper commodity and mobile GPUs may have issues
 
-            # atomic_subsystem_indices are always numbered from 0 to n_molecules - 1
-            # e.g., a single molecule will be [0, 0, 0, 0 ... ]
-            # and a batch of molecules will always start at 0 and increment [ 0, 0, 0, 1, 1, 1, ...]
-            # As such, we can use bincount, as there are no gaps in the numbering
+            # atomic_subsystem_indices are always numbered from 0 to n_molecules
+            # - 1 e.g., a single molecule will be [0, 0, 0, 0 ... ] and a batch
+            # of molecules will always start at 0 and increment [ 0, 0, 0, 1, 1,
+            # 1, ...] As such, we can use bincount, as there are no gaps in the
+            # numbering
+
             # Note if the indices are not numbered from 0 to n_molecules - 1, this will not work
             # E.g., bincount on [3,3,3, 4,4,4, 5,5,5] will return [0,0,0,3,3,3,3,3,3]
             # as we have no values for 0, 1, 2
@@ -216,7 +218,7 @@ class Pairlist(Module):
                     ),
                     repeats=r,
                 )
-                for r in repeatsplease continue
+                for r in repeats
             ]
         )
         j_indices = np.concatenate(
@@ -228,7 +230,7 @@ class Pairlist(Module):
 
         # filter out identical pairs where i==j
         unique_pairs_mask = i_indices != j_indices
-        i_final_pairs = i_indices[unique_pairs_mask]please continue
+        i_final_pairs = i_indices[unique_pairs_mask]
         j_final_pairs = j_indices[unique_pairs_mask]
 
         # concatenate to form final (2, n_pairs) vector
@@ -433,14 +435,17 @@ class PyTorch2JAXConverter:
     """
 
     def convert_to_jax_model(
-        self, nnp_instance: Union["ANI2x", "SchNet", "PaiNN", "PhysNet", "TensorNet", "PhysNet"]
+        self,
+        nnp_instance: Union[
+            "ANI2x", "SchNet", "PaiNN", "PhysNet", "TensorNet", "PhysNet"
+        ],
     ) -> JAXModel:
         """
         Convert a PyTorch neural network instance to a JAX model.
 
         Parameters
         ----------
-        nnp_instance : 
+        nnp_instance :
             The PyTorch neural network instance to be converted.
 
         Returns
@@ -527,7 +532,6 @@ class PyTorch2JAXConverter:
 
         # Return the apply function and the converted model parameters
         return apply, model_params, model_buffer
-
 
 
 class Displacement(torch.nn.Module):
@@ -656,7 +660,7 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
         self.only_unique_pairs = only_unique_pairs
         self.calculate_distances_and_pairlist = Neighborlist(cutoff, only_unique_pairs)
 
-    def forward(self, data: Union[NNPInput, NamedTuple])-> PairlistData:
+    def forward(self, data: Union[NNPInput, NamedTuple]) -> PairlistData:
         """
         Compute the pair list, distances, and displacement vectors for the given
         input data.
@@ -750,7 +754,7 @@ class PostProcessing(torch.nn.Module):
             )
             self._registered_properties.append("per_atom_energy")
 
-    def forward(self, data: Dict[str, torch.Tensor])-> Dict[str, torch.Tensor]:
+    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
         Perform post-processing operations for all registered properties.
 
@@ -805,17 +809,16 @@ class Potential(torch.nn.Module):
             If True, JIT compile the neighborlist (default is True).
         """
 
-
         super().__init__()
         self.core_network = torch.jit.script(core_network) if jit else core_network
         self.neighborlist = (
             torch.jit.script(neighborlist) if jit_neighborlist else neighborlist
         )
-        self.postprocessing = torch.jit.script(postprocessing) if jit else postprocessing
+        self.postprocessing = (
+            torch.jit.script(postprocessing) if jit else postprocessing
+        )
 
-
-
-    def forward(self, input_data: NNPInputTuple)-> Dict[str, torch.Tensor]:
+    def forward(self, input_data: NNPInputTuple) -> Dict[str, torch.Tensor]:
         """
         Forward pass for the potential model, computing energy and forces.
 
@@ -840,7 +843,9 @@ class Potential(torch.nn.Module):
 
         return processed_output
 
-    def compute_core_network_output(self, input_data: NNPInputTuple)-> Dict[str, torch.Tensor]:
+    def compute_core_network_output(
+        self, input_data: NNPInputTuple
+    ) -> Dict[str, torch.Tensor]:
         """
         Compute the core network output, including energy predictions.
 

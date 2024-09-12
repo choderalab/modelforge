@@ -93,7 +93,10 @@ class Pairlist(Module):
 
         # if there is only one molecule, we do not need to use additional looping and offsets
         if torch.sum(atomic_subsystem_indices) == 0:
-            n = len(atomic_subsystem_indices)please continue
+            n = len(atomic_subsystem_indices)
+            if self.only_unique_pairs:
+                i_final_pairs, j_final_pairs = torch.triu_indices(
+                    n, n, 1, device=device
                 )
             else:
                 # Repeat each number n-1 times for i_indices

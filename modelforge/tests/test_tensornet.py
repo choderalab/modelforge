@@ -325,4 +325,3 @@ def test_interaction():
 
     assert mf_X.shape == tn_X.shape
     assert torch.allclose(mf_X, tn_X)
-

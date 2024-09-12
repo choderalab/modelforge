@@ -140,7 +140,7 @@ def test_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize):
 
 
 def make_reference_equivalent_sake_interaction(out_features, hidden_features, nr_heads):
-    radial_max_distance = 5.0 * unit.angstrom
+    radial_max_distance = unit.Quantity(5.0, unit.angstrom)
     # Define the modelforge layer
     mf_sake_block = SAKEInteraction(
         nr_atom_basis=out_features,
@@ -153,10 +153,10 @@ def make_reference_equivalent_sake_interaction(out_features, hidden_features, nr
         nr_coefficients=(nr_heads * hidden_features),
         nr_heads=nr_heads,
         activation=torch.nn.SiLU(),
-        maximum_interaction_radius=radial_max_distance,
+        maximum_interaction_radius=radial_max_distance.to(unit.nanometer).m,
         number_of_radial_basis_functions=50,
         epsilon=1e-5,
-        scale_factor=(1.0 * unit.nanometer),
+        scale_factor=unit.Quantity(1.0, unit.nanometer).to(unit.nanometer).m,
     )
 
     # Define the reference layer

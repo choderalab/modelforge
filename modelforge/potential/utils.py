@@ -1388,8 +1388,6 @@ def scatter_softmax(
     return recentered_scores_exp.div(normalizing_constants)
 
 
-from enum import Enum
-
 ACTIVATION_FUNCTIONS = {
     "ReLU": nn.ReLU,
     "CeLU": nn.CELU,

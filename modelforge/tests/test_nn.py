@@ -8,7 +8,7 @@ def test_embedding(single_batch_with_batchsize):
 
     import torch  # noqa: F401
 
-    batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
+    batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
 
     nnp_input = batch.nnp_input
     model_name = "SchNet"
@@ -21,7 +21,8 @@ def test_embedding(single_batch_with_batchsize):
 
     featurize_input_module = FeaturizeInput(featurization_config)
 
-    # mixing module should be the identidy operation since only nuclear charge is used
+    # mixing module should be the identidy operation since only nuclear charge
+    # is used
     mixing_module = featurize_input_module.mixing
     assert mixing_module.__module__ == "torch.nn.modules.linear"
     mixing_module_name = str(mixing_module)

@@ -42,7 +42,6 @@ def test_forward(single_batch_with_batchsize):
     )  # Assuming energy is calculated per sample in the batch
 
 
-
 import torch
 from modelforge.tests.test_schnet import setup_single_methane_input
 

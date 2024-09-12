@@ -96,31 +96,33 @@ def test_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize):
     perturbed_nnp_input.positions = torch.matmul(nnp_input.positions, rotation_matrix)
 
     # prepare reference and perturbed inputs
-    reference_prepared_input = sake.neighborlist(nnp_input)
+    neighborlist = sake.neighborlist(nnp_input)
     reference_v_torch = torch.randn_like(nnp_input.positions)
 
-    perturbed_prepared_input = sake.neighborlist(perturbed_nnp_input)
     perturbed_v_torch = torch.matmul(reference_v_torch, rotation_matrix)
+
+    emedding = torch.nn.Embedding(101, 11)
+    atomic_embedding = emedding(nnp_input.atomic_numbers)
 
     (
         reference_h_out_torch,
         reference_x_out_torch,
         reference_v_out_torch,
     ) = sake.core_network.interaction_modules[0](
-        reference_prepared_input.atomic_embedding,
-        reference_prepared_input.positions,
+        atomic_embedding,
+        nnp_input.positions,
         reference_v_torch,
-        reference_prepared_input.pair_indices,
+        neighborlist.pair_indices,
     )
     (
         perturbed_h_out_torch,
         perturbed_x_out_torch,
         perturbed_v_out_torch,
     ) = sake.core_network.interaction_modules[0](
-        perturbed_prepared_input.atomic_embedding,
-        perturbed_prepared_input.positions,
+        atomic_embedding,
+        perturbed_nnp_input.positions,
         perturbed_v_torch,
-        perturbed_prepared_input.pair_indices,
+        neighborlist.pair_indices,
     )
 
     # x and v are equivariant, h is invariant
@@ -202,19 +204,19 @@ def test_radial_symmetry_function_against_reference():
 
     nr_atoms = 1
     number_of_radial_basis_functions = 10
-    cutoff_upper = 6.0 * unit.nanometer
-    cutoff_lower = 2.0 * unit.nanometer
+    cutoff_upper = unit.Quantity(6.0, unit.nanometer)
+    cutoff_lower = unit.Quantity(2.0, unit.nanometer)
 
     radial_symmetry_function_module = PhysNetRadialBasisFunction(
         number_of_radial_basis_functions=number_of_radial_basis_functions,
-        max_distance=cutoff_upper,
-        min_distance=cutoff_lower,
+        max_distance=cutoff_upper.to(unit.nanometer).m,
+        min_distance=cutoff_lower.to(unit.nanometer).m,
         dtype=torch.float32,
     )
     ref_radial_basis_module = RefExpNormalSmearing(
         num_rbf=number_of_radial_basis_functions,
-        cutoff_upper=cutoff_upper.m,
-        cutoff_lower=cutoff_lower.m,
+        cutoff_upper=cutoff_upper.to(unit.nanometer).m,
+        cutoff_lower=cutoff_lower.to(unit.nanometer).m,
     )
     key = jax.random.PRNGKey(1884)
 
@@ -386,204 +388,10 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none):
 import pytest
 
 
-# FIXME: this test is currently failing
-@pytest.mark.xfail
-def test_model_against_reference(single_batch_with_batchsize):
-    nr_heads = 5
-    key = jax.random.PRNGKey(1884)
-    torch.manual_seed(1884)
-    nr_interaction_blocks = 3
-    cutoff = 5.0 * unit.angstrom
-    nr_atom_basis = 11
-    maximum_atomic_number = 13
-
-    mf_sake = SAKE(
-        featurization={
-            "properties_to_featurize": ["atomic_number"],
-            "maximum_atomic_number": maximum_atomic_number,
-            "number_of_per_atom_features": nr_atom_basis,
-        },
-        number_of_interaction_modules=nr_interaction_blocks,
-        number_of_spatial_attention_heads=nr_heads,
-        radial_max_distance=cutoff,
-        number_of_radial_basis_functions=50,
-        epsilon=1e-8,
-        postprocessing_parameter={
-            "per_atom_energy": {
-                "normalize": True,
-                "from_atom_to_molecule_reduction": True,
-                "keep_per_atom_property": True,
-            }
-        },
-    )
-
-    ref_sake = reference_sake.models.DenseSAKEModel(
-        hidden_features=nr_atom_basis,
-        out_features=1,
-        depth=nr_interaction_blocks,
-        n_heads=nr_heads,
-        radial_max_distance=None,
-    )
-
-    # get methane input
-    batch = single_batch_with_batchsize(batch_size=1)
-    methane = batch.nnp_input
-    pairlist_output = mf_sake.compute_interacting_pairs.compute(methane)
-    prepared_methane = mf_sake.core_module._model_specific_input_preparation(
-        methane, pairlist_outputforward
-    )
-
-    mask = jnp.zeros(
-        (prepared_methane.number_of_atoms, prepared_methane.number_of_atoms)
-    )
-    for i in range(prepared_methane.pair_indices.shape[1]):
-        mask = mask.at[
-            prepared_methane.pair_indices[0, i].item(),
-            prepared_methane.pair_indices[1, i].item(),
-        ].set(1)
-
-    h = jax.nn.one_hot(
-        prepared_methane.atomic_numbers.detach().numpy(), maximum_atomic_number
-    )
-    x = prepared_methane.positions.detach().numpy()
-    variables = ref_sake.init(key, h, x, mask=mask)
-    print(mf_sake.core_module.featurize_input.nuclear_charge_embedding)
-    print(dir(mf_sake.core_module.featurize_input.nuclear_charge_embedding))
-
-    variables["params"]["embedding_in"]["kernel"] = (
-        mf_sake.core_module.featurize_input.nuclear_charge_embedding.weights.detach()
-        .numpy()
-        .T
-    )
-
-    # embedding doesn't have any bias
-    # TODO FIXME
-    # variables["params"]["embedding_in"]["bias"] = (
-    #     mf_sake.core_module.featurize_input.nuclear_charge_embedding.bias.detach()
-    #     .numpy()
-    #     .T
-    # )
-    variables["params"]["embedding_out"]["layers_0"]["kernel"] = (
-        mf_sake.core_module.energy_layer[0].weight.detach().numpy().T
-    )
-    variables["params"]["embedding_out"]["layers_0"]["bias"] = (
-        mf_sake.core_module.energy_layer[0].bias.detach().numpy().T
-    )
-    variables["params"]["embedding_out"]["layers_2"]["kernel"] = (
-        mf_sake.core_module.energy_layer[2].weight.detach().numpy().T
-    )
-    variables["params"]["embedding_out"]["layers_2"]["bias"] = (
-        mf_sake.core_module.energy_layer[2].bias.detach().numpy().T
-    )
-    layers = (
-        (layer_name, variables["params"][layer_name])
-        for layer_name in variables["params"].keys()
-        if layer_name.startswith("d")
-    )
-    for (layer_name, layer), mf_sake_block in zip(
-        layers, mf_sake.core_module.interaction_modules.children()
-    ):
-        layer["edge_model"]["kernel"]["betas"] = (
-            mf_sake_block.radial_symmetry_function_module.radial_scale_factor.detach()
-            .numpy()
-            .T
-        )
-        layer["edge_model"]["kernel"]["means"] = (
-            mf_sake_block.radial_symmetry_function_module.radial_basis_centers.detach()
-            .numpy()
-            .T
-        )
-        layer["edge_model"]["mlp_in"]["bias"] = (
-            mf_sake_block.edge_mlp_in.bias.detach().numpy().T
-        )
-        layer["edge_model"]["mlp_in"]["kernel"] = (
-            mf_sake_block.edge_mlp_in.weight.detach().numpy().T
-        )
-        layer["edge_model"]["mlp_out"]["layers_0"]["bias"] = (
-            mf_sake_block.edge_mlp_out[0].bias.detach().numpy().T
-        )
-        layer["edge_model"]["mlp_out"]["layers_0"]["kernel"] = (
-            mf_sake_block.edge_mlp_out[0].weight.detach().numpy().T
-        )
-        layer["edge_model"]["mlp_out"]["layers_2"]["bias"] = (
-            mf_sake_block.edge_mlp_out[1].bias.detach().numpy().T
-        )
-        layer["edge_model"]["mlp_out"]["layers_2"]["kernel"] = (
-            mf_sake_block.edge_mlp_out[1].weight.detach().numpy().T
-        )
-        layer["node_mlp"]["layers_0"]["bias"] = (
-            mf_sake_block.node_mlp[0].bias.detach().numpy().T
-        )
-        layer["node_mlp"]["layers_0"]["kernel"] = (
-            mf_sake_block.node_mlp[0].weight.detach().numpy().T
-        )
-        layer["node_mlp"]["layers_2"]["bias"] = (
-            mf_sake_block.node_mlp[1].bias.detach().numpy().T
-        )
-        layer["node_mlp"]["layers_2"]["kernel"] = (
-            mf_sake_block.node_mlp[1].weight.detach().numpy().T
-        )
-        layer["post_norm_mlp"]["layers_0"]["bias"] = (
-            mf_sake_block.post_norm_mlp[0].bias.detach().numpy().T
-        )
-        layer["post_norm_mlp"]["layers_0"]["kernel"] = (
-            mf_sake_block.post_norm_mlp[0].weight.detach().numpy().T
-        )
-        layer["post_norm_mlp"]["layers_2"]["bias"] = (
-            mf_sake_block.post_norm_mlp[1].bias.detach().numpy().T
-        )
-        layer["post_norm_mlp"]["layers_2"]["kernel"] = (
-            mf_sake_block.post_norm_mlp[1].weight.detach().numpy().T
-        )
-        layer["semantic_attention_mlp"]["layers_0"]["bias"] = (
-            mf_sake_block.semantic_attention_mlp.bias.detach().numpy().T
-        )
-        layer["semantic_attention_mlp"]["layers_0"]["kernel"] = (
-            mf_sake_block.semantic_attention_mlp.weight.detach().numpy().T
-        )
-
-        if layer_name != "d0":
-            layer["velocity_mlp"]["layers_0"]["kernel"] = (
-                mf_sake_block.velocity_mlp[0].weight.detach().numpy().T
-            )
-            layer["velocity_mlp"]["layers_0"]["bias"] = (
-                mf_sake_block.velocity_mlp[0].bias.detach().numpy().T
-            )
-            layer["velocity_mlp"]["layers_2"]["kernel"] = (
-                mf_sake_block.velocity_mlp[1].weight.detach().numpy().T
-            )
-        layer["v_mixing"]["kernel"] = (
-            mf_sake_block.v_mixing_mlp.weight.detach().numpy().T
-        )
-        layer["x_mixing"]["layers_0"]["kernel"] = (
-            mf_sake_block.x_mixing_mlp.weight.detach().numpy().T
-        )
-
-    # jax.tree_util.tree_map_with_path(lambda path, leaf: print(path, leaf.shape), variables)
-
-    mf_out = mf_sake(methane)
-    ref_out = ref_sake.apply(variables, h, x, mask=mask)[0].sum(-2)
-    # ref_out is nan, so we can't compare it to the modelforge output
-
-    print(f"{mf_out['per_molecule_energy']=}")
-    print(f"{ref_out=}")
-    # assert torch.allclose(mf_out.E, torch.from_numpy(onp.array(ref_out[0])))
-
-
 def test_model_invariance(single_batch_with_batchsize):
     from dataclasses import replace
 
-    from modelforge.tests.test_models import load_configs_into_pydantic_models
-
-    config = load_configs_into_pydantic_models(f"sake", "qm9")
-
-    # initialize model
-    model = SAKE(
-        **config["potential"].model_dump()["core_parameter"],
-        postprocessing_parameter=config["potential"].model_dump()[
-            "postprocessing_parameter"
-        ],
-    )
+    sake = setup_potential_for_test("sake", "training")
     # get methane input
     batch = single_batch_with_batchsize(batch_size=1, dataset_name="QM9")
     methane = batch.nnp_input
@@ -592,8 +400,8 @@ def test_model_invariance(single_batch_with_batchsize):
     perturbed_methane_input = replace(methane)
     perturbed_methane_input.positions = torch.matmul(methane.positions, rotation_matrix)
 
-    reference_out = model(methane)
-    perturbed_out = model(perturbed_methane_input)
+    reference_out = sake(methane)
+    perturbed_out = sake(perturbed_methane_input)
 
     assert torch.allclose(
         reference_out["per_molecule_energy"], perturbed_out["per_molecule_energy"]

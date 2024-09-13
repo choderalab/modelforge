@@ -136,6 +136,12 @@ class PerAtomEnergy(ParametersBase):
     keep_per_atom_property: bool = False
 
 
+class PerAtomCharge(ParametersBase):
+    conserve: bool = False
+    strategy: str = "default"
+    keep_per_atom_property: bool = False
+
+
 class ANI2xParameters(ParametersBase):
     class CoreParameter(ParametersBase):
         angle_sections: int
@@ -157,6 +163,7 @@ class ANI2xParameters(ParametersBase):
 
     class PostProcessingParameter(ParametersBase):
         per_atom_energy: PerAtomEnergy = PerAtomEnergy()
+        per_atom_charge: PerAtomCharge = PerAtomCharge()
         general_postprocessing_operation: GeneralPostProcessingOperation = (
             GeneralPostProcessingOperation()
         )
@@ -189,6 +196,7 @@ class SchNetParameters(ParametersBase):
 
     class PostProcessingParameter(ParametersBase):
         per_atom_energy: PerAtomEnergy = PerAtomEnergy()
+        per_atom_charge: PerAtomCharge = PerAtomCharge()
         general_postprocessing_operation: GeneralPostProcessingOperation = (
             GeneralPostProcessingOperation()
         )
@@ -201,11 +209,6 @@ class SchNetParameters(ParametersBase):
 
 class TensorNetParameters(ParametersBase):
     class CoreParameter(ParametersBase):
-        # class Featurization(ParametersBase):
-        #     properties_to_featurize: List[str]
-        #     max_Z: int
-        #     number_of_per_atom_features: int
-
         number_of_per_atom_features: int
         number_of_interaction_layers: int
         number_of_radial_basis_functions: int
@@ -222,6 +225,7 @@ class TensorNetParameters(ParametersBase):
 
     class PostProcessingParameter(ParametersBase):
         per_atom_energy: PerAtomEnergy = PerAtomEnergy()
+        per_atom_charge: PerAtomCharge = PerAtomCharge()
         general_postprocessing_operation: GeneralPostProcessingOperation = (
             GeneralPostProcessingOperation()
         )
@@ -254,6 +258,7 @@ class PaiNNParameters(ParametersBase):
 
     class PostProcessingParameter(ParametersBase):
         per_atom_energy: PerAtomEnergy = PerAtomEnergy()
+        per_atom_charge: PerAtomCharge = PerAtomCharge()
         general_postprocessing_operation: GeneralPostProcessingOperation = (
             GeneralPostProcessingOperation()
         )
@@ -285,6 +290,7 @@ class PhysNetParameters(ParametersBase):
 
     class PostProcessingParameter(ParametersBase):
         per_atom_energy: PerAtomEnergy = PerAtomEnergy()
+        per_atom_charge: PerAtomCharge = PerAtomCharge()
         general_postprocessing_operation: GeneralPostProcessingOperation = (
             GeneralPostProcessingOperation()
         )
@@ -316,6 +322,7 @@ class SAKEParameters(ParametersBase):
 
     class PostProcessingParameter(ParametersBase):
         per_atom_energy: PerAtomEnergy = PerAtomEnergy()
+        per_atom_charge: PerAtomCharge = PerAtomCharge()
         general_postprocessing_operation: GeneralPostProcessingOperation = (
             GeneralPostProcessingOperation()
         )

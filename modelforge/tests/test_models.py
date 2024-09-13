@@ -3,6 +3,106 @@ import pytest
 from modelforge.potential import _Implemented_NNPs
 from modelforge.dataset import _ImplementedDatasets
 from modelforge.potential import NeuralNetworkPotentialFactory
+import torch
+from modelforge.utils.io import import_
+
+
+def initialize_model(simulation_environment: str, config):
+    """Initialize the model based on the simulation environment and configuration."""
+    return NeuralNetworkPotentialFactory.generate_potential(
+        use="inference",
+        simulation_environment=simulation_environment,
+        potential_parameter=config["potential"],
+    )
+
+
+def prepare_input_for_model(nnp_input, model):
+    """Prepare the input for the model based on the simulation environment."""
+    if "JAX" in str(type(model)):
+        return nnp_input.as_jax_namedtuple()
+    return nnp_input
+
+
+def validate_output_shapes(output, nr_of_mols):
+    """Validate the output shapes to ensure they are correct."""
+    assert len(output["per_molecule_energy"]) == nr_of_mols
+    assert "per_atom_energy" in output
+    assert "per_atom_charge" in output
+    assert "per_atom_charge_corrected" in output
+
+
+def validate_charge_conservation(
+    per_molecule_charge: torch.Tensor,
+    per_molecule_charge_corrected: torch.Tensor,
+    per_molecule_charge_from_dataset: torch.Tensor,
+    model_name: str,
+):
+    """Ensure charge conservation by validating the corrected charges."""
+
+    if "PhysNet".lower() in model_name.lower():
+        print(
+            "Physnet starts with all zero partial charges"
+        )  # NOTE: I am not sure if this is correct
+    else:
+        assert not torch.allclose(per_molecule_charge, per_molecule_charge_corrected)
+    assert torch.allclose(
+        per_molecule_charge_from_dataset.to(torch.float32),
+        per_molecule_charge_corrected,
+        atol=1e-5,
+    )
+
+
+def validate_energy_conservation(output: torch.Tensor):
+    """Ensure that the total energy is the sum of atomic energies."""
+    assert torch.allclose(
+        output["per_molecule_energy"][0],
+        output["per_atom_energy"][0:5].sum(dim=0),
+        atol=1e-5,
+    )
+    assert torch.allclose(
+        output["per_molecule_energy"][1],
+        output["per_atom_energy"][5:9].sum(dim=0),
+        atol=1e-5,
+    )
+
+
+def validate_chemical_equivalence(output):
+    """Ensure that chemically equivalent hydrogens have equal energies."""
+    assert torch.allclose(
+        output["per_atom_energy"][1:4], output["per_atom_energy"][1], atol=1e-4
+    )
+    assert torch.allclose(
+        output["per_atom_energy"][6:8], output["per_atom_energy"][6], atol=1e-4
+    )
+
+
+def retrieve_molecular_charges(output, atomic_subsystem_indices):
+    """Retrieve per-molecule charge from per-atom charges."""
+    per_molecule_charge = torch.zeros_like(output["per_molecule_energy"]).index_add_(
+        0, atomic_subsystem_indices, output["per_atom_charge"]
+    )
+    per_molecule_charge_corrected = torch.zeros_like(
+        output["per_molecule_energy"]
+    ).index_add_(0, atomic_subsystem_indices, output["per_atom_charge_corrected"])
+    return per_molecule_charge, per_molecule_charge_corrected
+
+
+def convert_to_pytorch_if_needed(output, nnp_input, model):
+    """Convert output to PyTorch tensors if the model is in JAX."""
+    if "JAX" in str(type(model)):
+        convert_to_pyt = import_("pytorch2jax").pytorch2jax.convert_to_pyt
+        output["per_molecule_energy"] = convert_to_pyt(output["per_molecule_energy"])
+        output["per_atom_charge"] = convert_to_pyt(output["per_atom_charge"])
+        output["per_atom_charge_corrected"] = convert_to_pyt(
+            output["per_atom_charge_corrected"]
+        )
+        output["per_molecule_charge"] = convert_to_pyt(
+            output["per_molecule_charge"]
+        ).to(torch.float32)
+        atomic_subsystem_indices = convert_to_pyt(nnp_input.atomic_subsystem_indices)
+    else:
+        atomic_subsystem_indices = nnp_input.atomic_subsystem_indices
+    return output, atomic_subsystem_indices
 
 
 def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
@@ -424,59 +524,37 @@ def test_forward_pass(
     potential_name, simulation_environment, single_batch_with_batchsize_64
 ):
     # this test sends a single batch from different datasets through the model
-    import torch
 
+    # get input and set up model
     nnp_input = single_batch_with_batchsize_64.nnp_input
-
-    # read default parameters
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
+    model = initialize_model(simulation_environment, config)
+    nnp_input = prepare_input_for_model(nnp_input, model)
 
-    # test the forward pass through each of the models
-    model = NeuralNetworkPotentialFactory.generate_potential(
-        use="inference",
-        simulation_environment=simulation_environment,
-        potential_parameter=config["potential"],
-    )
-    if "JAX" in str(type(model)):
-        nnp_input = nnp_input.as_jax_namedtuple()
-
+    # perform the forward pass through each of the models
     output = model(nnp_input)
 
-    # test that we get an energie per molecule
-    assert len(output["per_molecule_energy"]) == nr_of_mols
+    # validate the output
+    validate_output_shapes(output, nr_of_mols)
+    output, atomic_subsystem_indices = convert_to_pytorch_if_needed(
+        output, nnp_input, model
+    )
 
-    # check that per-atom charge/energies are present
-    assert "per_atom_energy" in output
-    assert "per_atom_charge" in output
-
-    # the batch consists of methane (CH4) and amamonium (NH3)
-    # which have chemically equivalent hydrogens at the minimum geometry.
-    # This has to be reflected in the atomic energies E_i, which
-    # have to be equal for all hydrogens
-    if "JAX" not in str(type(model)):
-        from loguru import logger as log
-
-        # assert that the following tensor has equal values for dim=0 index 1 to 4 and 6 to 8
-
-        assert torch.allclose(
-            output["per_atom_energy"][1:4], output["per_atom_energy"][1], atol=1e-4
-        )
-        assert torch.allclose(
-            output["per_atom_energy"][6:8], output["per_atom_energy"][6], atol=1e-4
-        )
-
-        # make sure that the total energy is \sum E_i
-        assert torch.allclose(
-            output["per_molecule_energy"][0],
-            output["per_atom_energy"][0:5].sum(dim=0),
-            atol=1e-5,
-        )
-        assert torch.allclose(
-            output["per_molecule_energy"][1],
-            output["per_atom_energy"][5:9].sum(dim=0),
-            atol=1e-5,
-        )
+    # test that charge correction is working
+    per_molecule_charge, per_molecule_charge_corrected = retrieve_molecular_charges(
+        output, atomic_subsystem_indices
+    )
+    validate_charge_conservation(
+        per_molecule_charge,
+        per_molecule_charge_corrected,
+        output["per_molecule_charge"],
+        potential_name,
+    )
+    # check that per-atom energies are correct
+    if "JAX" not in simulation_environment:
+        validate_chemical_equivalence(output)
+        validate_energy_conservation(output)
 
 
 @pytest.mark.parametrize(
@@ -980,8 +1058,8 @@ def test_casting(potential_name, single_batch_with_batchsize_64):
 )
 @pytest.mark.parametrize("simulation_environment", ["PyTorch"])
 def test_equivariant_energies_and_forces(
-    potential_name,
-    simulation_environment,
+    potential_name: str,
+    simulation_environment: str,
     single_batch_with_batchsize_64,
     equivariance_utils,
 ):

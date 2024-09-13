@@ -26,3 +26,8 @@ number_of_per_atom_features = 32
 normalize = true
 from_atom_to_molecule_reduction = true
 keep_per_atom_property = true
+
+[potential.postprocessing_parameter.per_atom_charge]
+conserve = true
+strategy = "physnet"
+keep_per_atom_property = true

@@ -138,7 +138,7 @@ class AimNet2Core(torch.nn.Module):
         # Atomic embedding "a" Eqn. (3)
         atomic_embedding = representation["atomic_embedding"]
         partial_point_charges = torch.zeros(
-            atomic_embedding.shape[0], device=atomic_embedding.device
+            (atomic_embedding.shape[0], 1), device=atomic_embedding.device
         )
 
         # Generate message passing output
@@ -157,11 +157,11 @@ class AimNet2Core(torch.nn.Module):
             atomic_embedding = atomic_embedding + delta_a
             partial_point_charges = partial_point_charges + delta_q
 
-            _perform_charge_normalization(
-                partial_point_charges,
-                data.total_charge,
+            partial_point_charges = _perform_charge_normalization(
+                partial_point_charges.squeeze(-1),
+                data.total_charge.to(dtype=torch.float32),
                 data.atomic_subsystem_indices.to(dtype=torch.int64),
-            )
+            ).unsqueeze(-1)
 
         E_i = self.energy_layer(atomic_embedding).squeeze(1)
 

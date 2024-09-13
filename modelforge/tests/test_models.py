@@ -107,7 +107,9 @@ def test_energy_scaling_and_offset(potential_name, single_batch_with_batchsize):
     # -------------------------------#
 
     model = NeuralNetworkPotentialFactory.generate_potential(
-        use="inference", potential_parameter=config["potential"], potential_seed=42
+        use="inference",
+        potential_parameter=config["potential"],
+        potential_seed=42,
     )
     output_no_postprocessing = model(methane)
     # -------------------------------#
@@ -459,7 +461,11 @@ def test_calculate_energies_and_forces(potential_name, single_batch_with_batchsi
     nnp_input = batch.nnp_input_tuple
 
     # read default parameters
-    model = setup_potential_for_test(potential_name, "training", potential_seed=42)
+    model = setup_potential_for_test(
+        potential_name,
+        "training",
+        potential_seed=42,
+    )
     # get energy and force
     E_training = model(nnp_input)["per_molecule_energy"]
     F_training = -torch.autograd.grad(

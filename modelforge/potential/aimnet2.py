@@ -126,7 +126,7 @@ class AimNet2Core(torch.nn.Module):
         f_ij_cutoff = torch.mul(representation["f_ij"], representation["f_cutoff"])
         # Atomic embedding "a" Eqn. (3)
         atomic_embedding = representation["atomic_embedding"]
-        partial_point_charges = torch.zeros(
+        partial_charges = torch.zeros(
             (atomic_embedding.shape[0], 1), device=atomic_embedding.device
         )
 
@@ -135,18 +135,18 @@ class AimNet2Core(torch.nn.Module):
 
             delta_a, delta_q = interaction(
                 atomic_embedding,
-                partial_point_charges,
                 pairlist.pair_indices,
                 f_ij_cutoff,
                 pairlist.r_ij,
+                partial_charges,
             )
 
             # Update atomic embeddings and partial charges
             atomic_embedding = atomic_embedding + delta_a
-            partial_point_charges = partial_point_charges + delta_q
+            partial_charges = partial_charges + delta_q
 
-            partial_point_charges = _perform_charge_normalization(
-                partial_point_charges.squeeze(-1),
+            partial_charges = _perform_charge_normalization(
+                partial_charges.squeeze(-1),
                 data.total_charge.to(dtype=torch.float32),
                 data.atomic_subsystem_indices.to(dtype=torch.int64),
             ).unsqueeze(-1)

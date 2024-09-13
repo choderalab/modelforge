@@ -281,9 +281,9 @@ class FeaturizeInput(nn.Module):
         self.registered_embedding_operations: List[str] = []
 
         self.increase_dim_of_embedded_tensor: int = 0
-        base_embedding_dim = int(featurization_config["atomic_number"][
-            "number_of_per_atom_features"
-        ])
+        base_embedding_dim = int(
+            featurization_config["atomic_number"]["number_of_per_atom_features"]
+        )
         properties_to_featurize = featurization_config["properties_to_featurize"]
         # iterate through the supported featurization types and check if one of
         # these is requested
@@ -343,8 +343,7 @@ class FeaturizeInput(nn.Module):
             self.mixing = nn.Identity()
         else:
             self.mixing = DenseWithCustomDist(
-                base_embedding_dim
-                + self.increase_dim_of_embedded_tensor,
+                base_embedding_dim + self.increase_dim_of_embedded_tensor,
                 base_embedding_dim,
             )
 

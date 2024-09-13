@@ -1,41 +1,39 @@
 [potential]
-potential_name = "SchNet"
+potential_name = "ANI2x"
 
 [potential.core_parameter]
-number_of_radial_basis_functions = 20
-maximum_interaction_radius = "5.0 angstrom"
-number_of_interaction_modules = 3
-number_of_filters = 32
-shared_interactions = false
+angle_sections = 4
+maximum_interaction_radius = "5.1 angstrom"
+minimum_interaction_radius = "0.8 angstrom"
+number_of_radial_basis_functions = 16
+maximum_interaction_radius_for_angular_features = "3.5 angstrom"
+minimum_interaction_radius_for_angular_features = "0.8 angstrom"
+angular_dist_divisions = 8
 
 [potential.core_parameter.activation_function_parameter]
-activation_function_name = "ShiftedSoftplus"
+activation_function_name = "CeLU"   # for the original ANI behavior please stick with CeLu since the alpha parameter is currently hard coded and might lead to different behavior when another activation function is used.
 
-[potential.core_parameter.featurization]
-properties_to_featurize = ['atomic_number']
-maximum_atomic_number = 101
-number_of_per_atom_features = 32
+[potential.core_parameter.activation_function_parameter.activation_function_arguments]
+alpha = 0.1
 
 [potential.postprocessing_parameter]
 [potential.postprocessing_parameter.per_atom_energy]
 normalize = true
 from_atom_to_molecule_reduction = true
 keep_per_atom_property = true
-[potential.postprocessing_parameter.general_postprocessing_operation]
-calculate_molecular_self_energy = true
 
 [dataset]
-dataset_name = "QM9"
+dataset_name = "PHALKETHOH"
 version_select = "nc_1000_v0"
 num_workers = 4
 pin_memory = true
 
 [training]
-number_of_epochs = 4
+number_of_epochs = 1000
 remove_self_energies = true
-batch_size = 128
-lr = 1e-3
-monitor = "val/per_molecule_energy/rmse"
+batch_size = 16
+lr = 0.5e-3
+monitor_for_checkpoint = "val/per_molecule_energy/rmse"
 
 [training.experiment_logger]
 logger_name = "tensorboard"
@@ -62,7 +60,6 @@ loss_property = ['per_molecule_energy', 'per_atom_force'] # use
 per_molecule_energy = 0.999 #NOTE: reciprocal units
 per_atom_force = 0.001
 
-
 [training.early_stopping]
 verbose = true
 monitor = "val/per_molecule_energy/rmse"
@@ -75,12 +72,12 @@ data_split = [0.8, 0.1, 0.1]
 seed = 42
 
 [runtime]
-save_dir = "lightning_logs"
+save_dir = "test_setup"
 experiment_name = "{potential_name}_{dataset_name}"
 local_cache_dir = "./cache"
 accelerator = "cpu"
 number_of_nodes = 1
-devices = 1                        #[0,1,2,3]
+devices = 1                                         #[0,1,2,3]
 checkpoint_path = "None"
 simulation_environment = "PyTorch"
 log_every_n_steps = 1

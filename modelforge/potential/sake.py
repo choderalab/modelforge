@@ -153,7 +153,7 @@ class SAKECore(CoreNetwork):
             )
 
     def _model_specific_input_preparation(
-        self, data: "NNPInput", pairlist_output: "PairListOutputs"
+        self, data: NNPInput, pairlist_output: Dict[str, PairListOutputs]
     ) -> SAKENeuralNetworkInput:
         """
         Prepare the model-specific input.
@@ -162,8 +162,8 @@ class SAKECore(CoreNetwork):
         ----------
         data : NNPInput
             Input data.
-        pairlist_output : PairListOutputs
-            Pairlist output.
+        pairlist_output : Dict[str,PairListOutputs]
+            Pairlist output(s)
 
         Returns
         -------
@@ -173,6 +173,11 @@ class SAKECore(CoreNetwork):
         # Perform atomic embedding
 
         number_of_atoms = data.atomic_numbers.shape[0]
+
+        # Note, pairlist_output is a Dict where the key corresponds to the name of the cutoff parameter
+        # e.g. "maximum_interaction_radius"
+
+        pairlist_output = pairlist_output["maximum_interaction_radius"]
 
         nnp_input = SAKENeuralNetworkInput(
             pair_indices=pairlist_output.pair_indices,

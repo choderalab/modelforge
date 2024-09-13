@@ -15,7 +15,7 @@ def test_init():
     )
 
 
-def test_forward(single_batch_with_batchsize_64):
+def test_forward(single_batch_with_batchsize):
     import torch
     from modelforge.potential.physnet import PhysNet
 
@@ -37,7 +37,9 @@ def test_forward(single_batch_with_batchsize_64):
     )
     model = model.to(torch.float32)
     print(model)
-    yhat = model(single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float32))
+    batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
+
+    yhat = model(batch.nnp_input.to(dtype=torch.float32))
 
 
 def test_compare_representation():

@@ -1,14 +1,16 @@
 from .test_models import load_configs_into_pydantic_models
 
 
-def test_embedding(single_batch_with_batchsize_64):
+def test_embedding(single_batch_with_batchsize):
     # test the input featurization, including:
     # - nuclear charge embedding
     # - total charge mixing
 
-    import torch
+    import torch  # noqa: F401
 
-    nnp_input = single_batch_with_batchsize_64.nnp_input
+    batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
+
+    nnp_input = batch.nnp_input
     model_name = "SchNet"
     # read default parameters and extract featurization
     config = load_configs_into_pydantic_models(f"{model_name.lower()}", "qm9")

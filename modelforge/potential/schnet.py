@@ -94,7 +94,7 @@ class SchNetCore(CoreNetwork):
             number_of_radial_basis_functions,
             featurization_config=featurization_config,
         )
-        # Intialize interaction blocks
+        # Initialize interaction blocks
         if shared_interactions:
             self.interaction_modules = nn.ModuleList(
                 [
@@ -143,7 +143,7 @@ class SchNetCore(CoreNetwork):
             )
 
     def _model_specific_input_preparation(
-        self, data: "NNPInput", pairlist_output: PairListOutputs
+        self, data: "NNPInput", pairlist_output: Dict[str, PairListOutputs]
     ) -> SchnetNeuralNetworkData:
         """
         Prepare the input data for the SchNet model.
@@ -152,8 +152,8 @@ class SchNetCore(CoreNetwork):
         ----------
         data : NNPInput
             The input data for the model.
-        pairlist_output : PairListOutputs
-            The pairlist output.
+        pairlist_output : Dict[str, PairListOutputs]
+            The pairlist output(s).
 
         Returns
         -------
@@ -161,6 +161,11 @@ class SchNetCore(CoreNetwork):
             The prepared input data for the SchNet model.
         """
         number_of_atoms = data.atomic_numbers.shape[0]
+
+        # Note, pairlist_output is a Dict where the key corresponds to the name of the cutoff parameter
+        # e.g. "maximum_interaction_radius"
+
+        pairlist_output = pairlist_output["maximum_interaction_radius"]
 
         nnp_input = SchnetNeuralNetworkData(
             pair_indices=pairlist_output.pair_indices,

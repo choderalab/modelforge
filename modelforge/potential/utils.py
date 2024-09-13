@@ -215,7 +215,7 @@ class FeaturizeInput(nn.Module):
     ----------
     _SUPPORTED_FEATURIZATION_TYPES : List[str]
         The list of supported featurization types.
-    nuclear_charge_embedding : Embedding
+    atomic_number_embedding : Embedding
         The embedding layer for nuclear charges.
     append_to_embedding_tensor : nn.ModuleList
         The list of modules to append to the embedding tensor.
@@ -242,7 +242,9 @@ class FeaturizeInput(nn.Module):
         "spin_state",
     ]
 
-    def __init__(self, featurization_config: Dict[str, Dict[str, int]]) -> None:
+    def __init__(
+        self, featurization_config: Dict[str, Union[List[str], Dict[str, int]]]
+    ) -> None:
         """
         Initialize the FeaturizeInput class.
 
@@ -279,17 +281,20 @@ class FeaturizeInput(nn.Module):
         self.registered_embedding_operations: List[str] = []
 
         self.increase_dim_of_embedded_tensor: int = 0
-
+        base_embedding_dim = int(featurization_config["atomic_number"][
+            "number_of_per_atom_features"
+        ])
+        properties_to_featurize = featurization_config["properties_to_featurize"]
         # iterate through the supported featurization types and check if one of
         # these is requested
-        for featurization in self._SUPPORTED_FEATURIZATION_TYPES:
+        for featurization in properties_to_featurize:
 
-            # embed nuclear charges
+            # embed atomic number
             if (
                 featurization == "atomic_number"
-                and featurization in featurization_config
+                and featurization in self._SUPPORTED_FEATURIZATION_TYPES
             ):
-                self.nuclear_charge_embedding = torch.nn.Embedding(
+                self.atomic_number_embedding = torch.nn.Embedding(
                     int(featurization_config[featurization]["maximum_atomic_number"]),
                     int(
                         featurization_config[featurization][
@@ -297,12 +302,12 @@ class FeaturizeInput(nn.Module):
                         ]
                     ),
                 )
-                self.registered_embedding_operations.append("nuclear_charge_embedding")
+                self.registered_embedding_operations.append("atomic_number")
 
             # add total charge to embedding vector
-            if (
+            elif (
                 featurization == "per_molecule_total_charge"
-                and featurization in featurization_config
+                and featurization in self._SUPPORTED_FEATURIZATION_TYPES
             ):
                 # transform output o f embedding with shape (nr_atoms,
                 # nr_features) to (nr_atoms, nr_features + 1). The added
@@ -315,16 +320,22 @@ class FeaturizeInput(nn.Module):
                 self.registered_appended_properties.append("total_charge")
 
             # add partial charge to embedding vector
-            if (
+            elif (
                 featurization == "per_atom_partial_charge"
-                and featurization in featurization_config
-            ):  # transform output o f embedding with shape (nr_atoms, nr_features) to (nr_atoms, nr_features + 1).
-                # #The added features is the total charge (which will be transformed to a per-atom property)
+                and featurization in self._SUPPORTED_FEATURIZATION_TYPES
+            ):  # transform output of embedding with shape (nr_atoms, nr_features) to (nr_atoms, nr_features + 1).
+                # #The added features is the total charge (which will be
+                # transformed to a per-atom property)
                 self.append_to_embedding_tensor.append(
                     AddPerAtomValue("partial_charge")
                 )
                 self.increase_dim_of_embedded_tensor += 1
                 self.append_to_embedding_tensor("partial_charge")
+
+            else:
+                raise RuntimeError(
+                    f"Unsupported featurization type {featurization}. Supported types are {self._SUPPORTED_FEATURIZATION_TYPES}"
+                )
 
         # if only nuclear charges are embedded no mixing is performed
         self.mixing: Union[nn.Identity, DenseWithCustomDist]
@@ -332,9 +343,9 @@ class FeaturizeInput(nn.Module):
             self.mixing = nn.Identity()
         else:
             self.mixing = DenseWithCustomDist(
-                int(featurization_config["number_of_per_atom_features"])
+                base_embedding_dim
                 + self.increase_dim_of_embedded_tensor,
-                int(featurization_config["number_of_per_atom_features"]),
+                base_embedding_dim,
             )
 
     def forward(self, data: NNPInputTuple) -> torch.Tensor:
@@ -353,19 +364,15 @@ class FeaturizeInput(nn.Module):
         """
 
         atomic_numbers = data.atomic_numbers
-        embedded_nuclear_charges = self.nuclear_charge_embedding(atomic_numbers)
+        categorial_embedding = self.atomic_number_embedding(atomic_numbers)
 
         for additional_embedding in self.embeddings:
-            embedded_nuclear_charges = additional_embedding(
-                embedded_nuclear_charges, data
-            )
+            categorial_embedding = additional_embedding(categorial_embedding, data)
 
         for append_embedding_vector in self.append_to_embedding_tensor:
-            embedded_nuclear_charges = append_embedding_vector(
-                embedded_nuclear_charges, data
-            )
+            categorial_embedding = append_embedding_vector(categorial_embedding, data)
 
-        return self.mixing(embedded_nuclear_charges)
+        return self.mixing(categorial_embedding)
 
 
 import torch.nn.functional as F

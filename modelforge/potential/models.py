@@ -962,6 +962,8 @@ def setup_potential(
         **potential_parameter.core_parameter.model_dump()
     )
 
+    # pop property properties_to_featurize from potential_parameter.postprocessing_parameter dictionary
+
     postprocessing = PostProcessing(
         postprocessing_parameter=potential_parameter.postprocessing_parameter.model_dump(),
         dataset_statistic=remove_units_from_dataset_statistics(dataset_statistic),

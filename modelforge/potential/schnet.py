@@ -2,7 +2,7 @@
 SchNet neural network potential for modeling quantum interactions.
 """
 
-from typing import Dict, Type
+from typing import Dict, Type, List
 
 import torch
 import torch.nn as nn
@@ -14,6 +14,7 @@ from .models import PairlistData, NNPInputTuple
 class SchNetCore(torch.nn.Module):
     def __init__(
         self,
+        properties_to_featurize: List[str],
         featurization: Dict[str, Dict[str, int]],
         number_of_radial_basis_functions: int,
         number_of_interaction_modules: int,

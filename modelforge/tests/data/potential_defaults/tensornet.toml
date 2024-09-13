@@ -14,6 +14,7 @@ equivariance_invariance_group = "O(3)"
 activation_function_name = "SiLU"
 
 [potential.postprocessing_parameter]
+properties_to_featurize = ['atomic_number']
 [potential.postprocessing_parameter.per_atom_energy]
 normalize = true
 from_atom_to_molecule_reduction = true

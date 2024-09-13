@@ -12,9 +12,8 @@ from pydantic import (
     computed_field,
     Field,
 )
-from openff.units import unit
-from typing import Union, List, Optional, Type
-from modelforge.utils.units import _convert_str_to_unit, _convert_str_to_unit_length
+from typing import Union, Optional, Type, List
+from modelforge.utils.units import _convert_str_to_unit_length
 from enum import Enum
 
 import torch
@@ -44,13 +43,24 @@ class ParametersBase(BaseModel):
     )
 
 
-# for the activation functions we have defined alpha and negative slope are the two parameters that are possible
+# for the activation functions we have defined alpha and negative slope are the
+# two parameters that are possible
 class ActivationFunctionParamsAlpha(BaseModel):
     alpha: Optional[float] = None
 
 
 class ActivationFunctionParamsNegativeSlope(BaseModel):
     negative_slope: Optional[float] = None
+
+
+class AtomicNumber(BaseModel):
+    maximum_atomic_number: int = 101
+    number_of_per_atom_features: int = 32
+
+
+class Featurization(BaseModel):
+    properties_to_featurize: List[str]
+    atomic_number: AtomicNumber = Field(default_factory=AtomicNumber)
 
 
 class ActivationFunctionName(CaseInsensitiveEnum):
@@ -160,20 +170,13 @@ class ANI2xParameters(ParametersBase):
 
 class SchNetParameters(ParametersBase):
     class CoreParameter(ParametersBase):
-        class Featurization(BaseModel):
-            class AtomicNumber(BaseModel):
-                maximum_atomic_number: int = 101
-                number_of_per_atom_features: int = 32
-
-            atomic_number: AtomicNumber = Field(default_factory=AtomicNumber)
-
         number_of_radial_basis_functions: int
         maximum_interaction_radius: float
         number_of_interaction_modules: int
         number_of_filters: int
         shared_interactions: bool
         activation_function_parameter: ActivationFunctionConfig
-        featurization: Featurization = Field(default_factory=Featurization)
+        featurization: Featurization
 
         converted_units = field_validator("maximum_interaction_radius", mode="before")(
             _convert_str_to_unit_length
@@ -221,12 +224,6 @@ class TensorNetParameters(ParametersBase):
 
 class PaiNNParameters(ParametersBase):
     class CoreParameter(ParametersBase):
-        class Featurization(BaseModel):
-            class AtomicNumber(BaseModel):
-                maximum_atomic_number: int = 101
-                number_of_per_atom_features: int = 32
-
-            atomic_number: AtomicNumber = Field(default_factory=AtomicNumber)
 
         number_of_radial_basis_functions: int
         maximum_interaction_radius: float
@@ -254,12 +251,6 @@ class PaiNNParameters(ParametersBase):
 
 class PhysNetParameters(ParametersBase):
     class CoreParameter(ParametersBase):
-        class Featurization(BaseModel):
-            class AtomicNumber(BaseModel):
-                maximum_atomic_number: int = 101
-                number_of_per_atom_features: int = 32
-
-            atomic_number: AtomicNumber = Field(default_factory=AtomicNumber)
 
         number_of_radial_basis_functions: int
         maximum_interaction_radius: float
@@ -286,12 +277,6 @@ class PhysNetParameters(ParametersBase):
 
 class SAKEParameters(ParametersBase):
     class CoreParameter(ParametersBase):
-        class Featurization(BaseModel):
-            class AtomicNumber(BaseModel):
-                maximum_atomic_number: int = 101
-                number_of_per_atom_features: int = 32
-
-            atomic_number: AtomicNumber = Field(default_factory=AtomicNumber)
 
         number_of_radial_basis_functions: int
         maximum_interaction_radius: float

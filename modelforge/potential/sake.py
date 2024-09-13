@@ -224,7 +224,6 @@ class SAKECore(CoreNetwork):
         return results
 
 
-
 class SAKEInteraction(nn.Module):
     """
     Spatial Attention Kinetic Networks Layer.

@@ -2,7 +2,7 @@
 potential_name = "AimNet2"
 
 [potential.core_parameter]
-number_of_radial_basis_functions = 16
+number_of_radial_basis_functions = 32
 maximum_interaction_radius = "5.0 angstrom"
 number_of_interaction_modules = 3
 

@@ -8,9 +8,14 @@ from modelforge.potential.utils import Dense
 from .models import PairlistData, NNPInputTuple
 
 
-def _perform_charge_normalization(partial_point_charges, total_charge):
+def _perform_charge_normalization(
+    partial_point_charges: torch.Tensor,
+    total_charge: torch.Tensor,
+    atomic_subsystem_indices: torch.Tensor,
+) -> torch.Tensor:
     """
-    Normalize the partial charges to ensure that the total charge of the system is preserved.
+    Normalize the partial charges to ensure that the total charge of the system is preserved. See eqn 14 of
+    \tilde{q_i} = q_i - \frac{1}{N} \sum_{j=1}^{N} q_j - Q
 
     Parameters
     ----------
@@ -20,12 +25,25 @@ def _perform_charge_normalization(partial_point_charges, total_charge):
         The total charge of the system.
     """
 
-    total_charge = total_charge.unsqueeze(1)
-    total_charge = total_charge.expand_as(partial_point_charges)
-    partial_point_charges = partial_point_charges - torch.mean(partial_point_charges)
-    partial_point_charges = (
-        partial_point_charges * total_charge / torch.sum(partial_point_charges)
+    # \sum_{j=1}^{N} q_j
+    sum_of_partial_charges = torch.zeros_like(total_charge)
+    sum_of_partial_charges.scatter_add_(
+        0, atomic_subsystem_indices, partial_point_charges
     )
+
+    # \sum_{j=1}^{N} q_j - Q
+    partial_charge_diff = sum_of_partial_charges - total_charge
+
+    #  \frac{1}{N} \sum_{j=1}^{N} q_j - Q
+    average_partial_charge_diff = (
+        partial_charge_diff / atomic_subsystem_indices.bincount()
+    )
+
+    # \tilde{q_i} = q_i - \frac{1}{N} \sum_{j=1}^{N} q_j - Q
+    partial_point_charges = (
+        partial_point_charges - average_partial_charge_diff[atomic_subsystem_indices]
+    )
+
     return partial_point_charges
 
 
@@ -120,7 +138,7 @@ class AimNet2Core(torch.nn.Module):
         # Atomic embedding "a" Eqn. (3)
         atomic_embedding = representation["atomic_embedding"]
         partial_point_charges = torch.zeros(
-            (atomic_embedding.shape[0], 1), device=atomic_embedding.device
+            atomic_embedding.shape[0], device=atomic_embedding.device
         )
 
         # Generate message passing output
@@ -139,7 +157,11 @@ class AimNet2Core(torch.nn.Module):
             atomic_embedding = atomic_embedding + delta_a
             partial_point_charges = partial_point_charges + delta_q
 
-            _perform_charge_normalization(partial_point_charges, data.total_charge)
+            _perform_charge_normalization(
+                partial_point_charges,
+                data.total_charge,
+                data.atomic_subsystem_indices.to(dtype=torch.int64),
+            )
 
         E_i = self.energy_layer(atomic_embedding).squeeze(1)
 

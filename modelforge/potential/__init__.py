@@ -5,6 +5,7 @@ This module contains the implemented neural network potentials and their paramet
 from enum import Enum
 
 from .ani import ANI2xCore
+from .aimnet2 import AimNet2Core
 from .models import NeuralNetworkPotentialFactory
 from .painn import PaiNNCore
 from .parameters import (
@@ -14,6 +15,7 @@ from .parameters import (
     SAKEParameters,
     SchNetParameters,
     TensorNetParameters,
+    AimNet2Parameters,
 )
 from .physnet import PhysNetCore
 from .processing import FromAtomToMoleculeReduction
@@ -35,6 +37,7 @@ class _Implemented_NNP_Parameters(Enum):
     PAINN_PARAMETERS = PaiNNParameters
     PHYSNET_PARAMETERS = PhysNetParameters
     SAKE_PARAMETERS = SAKEParameters
+    AIMNET2_PARAMETERS = AimNet2Parameters
 
     @classmethod
     def get_neural_network_parameter_class(cls, neural_network_name: str):
@@ -56,6 +59,7 @@ class _Implemented_NNPs(Enum):
     TENSORNET = TensorNetCore
     PAINN = PaiNNCore
     SAKE = SAKECore
+    AIMNET2 = AimNet2Core
 
     @classmethod
     def get_neural_network_class(cls, neural_network_name: str):

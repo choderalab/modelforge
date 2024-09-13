@@ -91,9 +91,10 @@ class SchNetCore(torch.nn.Module):
 
         Parameters
         ----------
-        data : SchnetNeuralNetworkData
+        data : NNPInput
             The input data for the model.
-
+        pairlist_output: PairlistData
+            The output from the pairlist module.
         Returns
         -------
         Dict[str, torch.Tensor]
@@ -173,7 +174,7 @@ class SchNETInteractionModule(nn.Module):
         number_of_per_atom_features: int,
         number_of_filters: int,
         number_of_radial_basis_functions: int,
-        activation_function: Type[torch.nn.Module],
+        activation_function: torch.nn.Module,
     ) -> None:
 
         super().__init__()
@@ -220,7 +221,7 @@ class SchNETInteractionModule(nn.Module):
 
     def forward(
         self,
-        x: torch.Tensor,
+        atomic_embedding: torch.Tensor,
         pairlist: PairlistData,  # shape [n_pairs, 2]
         f_ij: torch.Tensor,  # shape [n_pairs, number_of_radial_basis_functions]
         f_ij_cutoff: torch.Tensor,  # shape [n_pairs, 1]
@@ -247,20 +248,20 @@ class SchNETInteractionModule(nn.Module):
         idx_i, idx_j = pairlist.pair_indices[0], pairlist.pair_indices[1]
 
         # Map input features to the filter space
-        x = self.intput_to_feature(x)
+        atomic_embedding = self.intput_to_feature(atomic_embedding)
 
         # Generate interaction filters based on radial basis functions
         W_ij = self.filter_network(f_ij.squeeze(1))
         W_ij = W_ij * f_ij_cutoff
 
         # Perform continuous-filter convolution
-        x_j = x[idx_j]
+        x_j = atomic_embedding[idx_j]
         x_ij = x_j * W_ij  # (nr_of_atom_pairs, nr_atom_basis)
         # masked_x_ij = (
         #    x_ij * pairlist.mask["maximum_interaction_radius"]
         # )  # Element-wise multiplication to apply the mask
 
-        out = torch.zeros_like(x)
+        out = torch.zeros_like(atomic_embedding)
         out.scatter_add_(
             0, idx_i.unsqueeze(-1).expand_as(x_ij), x_ij
         )  # from per_atom_pair to _per_atom
@@ -269,18 +270,6 @@ class SchNETInteractionModule(nn.Module):
 
 
 class SchNETRepresentation(nn.Module):
-    """
-    SchNet representation module to generate the radial symmetry representation of pairwise distances.
-
-    Parameters
-    ----------
-    radial_cutoff : unit.Quantity
-        The cutoff distance for interactions.
-    number_of_radial_basis_functions : int
-        Number of radial basis functions.
-    featurization_config : Dict[str, Union[List[str], int]]
-        Configuration for atom featurization.
-    """
 
     def __init__(
         self,
@@ -288,6 +277,18 @@ class SchNETRepresentation(nn.Module):
         number_of_radial_basis_functions: int,
         featurization_config: Dict[str, Dict[str, int]],
     ):
+        """
+        SchNet representation module to generate the radial symmetry representation of pairwise distances.
+
+        Parameters
+        ----------
+        radial_cutoff : unit.Quantity
+            The cutoff distance for interactions.
+        number_of_radial_basis_functions : int
+            Number of radial basis functions.
+        featurization_config : Dict[str, Union[List[str], int]]
+            Configuration for atom featurization.
+        """
         super().__init__()
 
         self.radial_symmetry_function_module = self._setup_radial_symmetry_functions(

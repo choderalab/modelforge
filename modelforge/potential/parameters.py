@@ -137,6 +137,30 @@ class PerAtomEnergy(ParametersBase):
     keep_per_atom_property: bool = False
 
 
+class AimNet2Parameters(ParametersBase):
+    class CoreParameter(ParametersBase):
+        number_of_radial_basis_functions: int
+        maximum_interaction_radius: float
+        number_of_interaction_modules: int
+        activation_function_parameter: ActivationFunctionConfig
+        featurization: Featurization
+
+        converted_units = field_validator("maximum_interaction_radius", mode="before")(
+            _convert_str_to_unit_length
+        )
+
+    class PostProcessingParameter(ParametersBase):
+        per_atom_energy: PerAtomEnergy = PerAtomEnergy()
+        general_postprocessing_operation: GeneralPostProcessingOperation = (
+            GeneralPostProcessingOperation()
+        )
+
+    potential_name: str = "AimNet2"
+    core_parameter: CoreParameter
+    postprocessing_parameter: PostProcessingParameter
+    potential_seed: Optional[int] = None
+
+
 class ANI2xParameters(ParametersBase):
     class CoreParameter(ParametersBase):
         angle_sections: int

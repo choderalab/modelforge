@@ -11,6 +11,9 @@ from openff.units import unit
 from torch import nn
 
 from modelforge.potential.utils import NeuralNetworkData, shared_config_prior
+from modelforge.utils.units import _convert_str_to_unit
+
+from .models import BaseNetwork, CoreNetwork, NNPInput, PairListOutputs
 from modelforge.utils.io import import_
 from modelforge.utils.units import _convert_str_to_unit
 
@@ -68,6 +71,8 @@ class PhysNetRepresentation(nn.Module):
 
         # Initialize cutoff module
         from modelforge.potential import CosineAttenuationFunction
+        from modelforge.potential.utils import FeaturizeInput
+        from .utils import PhysNetRadialBasisFunction
 
         self.cutoff_module = CosineAttenuationFunction(maximum_interaction_radius)
 
@@ -376,6 +381,8 @@ class PhysNetModule(nn.Module):
         number_of_per_atom_features: int,
         number_of_radial_basis_functions: int,
         number_of_interaction_residual: int,
+        number_of_residuals_in_output: int,
+        number_of_atomic_properties: int,
         activation_function: Type[torch.nn.Module],
     ):
 
@@ -391,8 +398,8 @@ class PhysNetModule(nn.Module):
         # Initialize output module
         self.output = PhysNetOutput(
             number_of_per_atom_features=number_of_per_atom_features,
-            number_of_atomic_properties=2,
-            number_of_residuals_in_output=2,
+            number_of_atomic_properties=number_of_atomic_properties,
+            number_of_residuals_in_output=number_of_residuals_in_output,
             activation_function=activation_function,
         )
 
@@ -412,13 +419,13 @@ class PhysNetModule(nn.Module):
         """
 
         # calculate the interaction
-        v = self.interaction(data)
+        updated_embedding = self.interaction(data)
 
         # calculate the module output
-        prediction = self.output(v)
+        prediction = self.output(updated_embedding)
         return {
             "prediction": prediction,
-            "updated_embedding": v,  # input for next module
+            "updated_embedding": updated_embedding,  # input for next module
         }
 
 
@@ -450,6 +457,7 @@ class PhysNetCore(CoreNetwork):
         number_of_interaction_residual: int,
         number_of_modules: int,
         activation_function: Type[torch.nn.Module],
+        predicted_properties: List[Dict[str, str]],
     ) -> None:
 
         log.debug("Initializing the PhysNet architecture.")
@@ -475,6 +483,8 @@ class PhysNetCore(CoreNetwork):
                     number_of_per_atom_features,
                     number_of_radial_basis_functions,
                     number_of_interaction_residual,
+                    number_of_residuals_in_output=2,
+                    number_of_atomic_properties=len(predicted_properties),
                     activation_function=self.activation_function,
                 )
                 for _ in range(number_of_modules)
@@ -482,8 +492,20 @@ class PhysNetCore(CoreNetwork):
         )
 
         # learnable shift and bias that is applied per-element to ech atomic energy
-        self.atomic_scale = nn.Parameter(torch.ones(maximum_atomic_number, 2))
-        self.atomic_shift = nn.Parameter(torch.zeros(maximum_atomic_number, 2))
+        self.atomic_scale = nn.Parameter(
+            torch.ones(
+                maximum_atomic_number,
+                len(predicted_properties),
+            )
+        )
+        self.atomic_shift = nn.Parameter(
+            torch.zeros(
+                maximum_atomic_number,
+                len(predicted_properties),
+            )
+        )
+
+        self.predicted_properties = predicted_properties
 
     def _model_specific_input_preparation(
         self, data: NNPInput, pairlist_output: Dict[str, PairListOutputs]
@@ -523,6 +545,31 @@ class PhysNetCore(CoreNetwork):
         )
 
         return nnp_input
+
+    def aggregate_results(
+        self,
+        per_atom_property_prediction: torch.Tensor,
+        data: Type[PhysNetNeuralNetworkData],
+    ) -> Dict[str, torch.Tensor]:
+
+        # all predictions are shifted and scaled by atomic number
+        prediction_i_shifted_scaled = (
+            self.atomic_shift[data.atomic_numbers]
+            + per_atom_property_prediction * self.atomic_scale[data.atomic_numbers]
+        )  # NOTE: is this appropriate for patrial charges?
+
+        # initialize the results dictionary
+        results = {
+            "per_atom_scalar_representation": per_atom_property_prediction,
+            "atomic_subsystem_indices": data.atomic_subsystem_indices,
+        }
+
+        # add user requested properties
+        for index, property in enumerate(self.predicted_properties):
+            results[property["name"]] = prediction_i_shifted_scaled[
+                :, index
+            ].contiguous()
+        return results
 
     def compute_properties(
         self, data: PhysNetNeuralNetworkData
@@ -578,8 +625,9 @@ class PhysNetCore(CoreNetwork):
         #                 | <-- |   module 2    │ <--│
         #                       └────────────---┘
 
-        # the atomic energies are accumulated in per_atom_energies
-        prediction_i = torch.zeros(
+        # the per atom predictions are accumulated in
+        # per_atom_property_prediction
+        per_atom_property_prediction = torch.zeros(
             (nr_of_atoms_in_batch, 2),
             device=data.d_ij.device,
         )
@@ -587,25 +635,13 @@ class PhysNetCore(CoreNetwork):
         for module in self.physnet_module:
             output_of_module = module(data)
             # accumulate output for atomic properties
-            prediction_i += output_of_module["prediction"]
+            per_atom_property_prediction = (
+                per_atom_property_prediction + output_of_module["prediction"]
+            )
             # update embedding for next module
             data.atomic_embedding = output_of_module["updated_embedding"]
 
-        prediction_i_shifted_scaled = (
-            self.atomic_shift[data.atomic_numbers]
-            + prediction_i * self.atomic_scale[data.atomic_numbers]
-        )
-
-        # sum over atom features
-        E_i = prediction_i_shifted_scaled[:, 0]  # shape(nr_of_atoms, 1)
-        q_i = prediction_i_shifted_scaled[:, 1]  # shape(nr_of_atoms, 1)
-
-        return {
-            "per_atom_energy": E_i.contiguous(),  # reshape memory mapping for JAX/dlpack
-            "per_atom_charge": q_i.contiguous(),
-            "atomic_subsystem_indices": data.atomic_subsystem_indices,
-            "atomic_numbers": data.atomic_numbers,
-        }
+        return self.aggregate_results(per_atom_property_prediction, data)
 
 
 class PhysNet(BaseNetwork):
@@ -644,6 +680,7 @@ class PhysNet(BaseNetwork):
         number_of_modules: int,
         activation_function_parameter: Dict,
         postprocessing_parameter: Dict[str, Dict[str, bool]],
+        predicted_properties: List[Dict[str, str]],
         dataset_statistic: Optional[Dict[str, float]] = None,
         potential_seed: Optional[int] = None,
     ) -> None:
@@ -664,6 +701,7 @@ class PhysNet(BaseNetwork):
             number_of_interaction_residual=number_of_interaction_residual,
             number_of_modules=number_of_modules,
             activation_function=activation_function,
+            predicted_properties=predicted_properties,
         )
 
     def _config_prior(self):

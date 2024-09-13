@@ -788,8 +788,16 @@ class PostProcessing(torch.nn.Module):
     to compute per-molecule properties from per-atom properties.
     """
 
-    _SUPPORTED_PROPERTIES = ["per_atom_energy", "general_postprocessing_operation"]
-    _SUPPORTED_OPERATIONS = ["normalize", "from_atom_to_molecule_reduction"]
+    _SUPPORTED_PROPERTIES = [
+        "per_atom_energy",
+        "per_atom_charge",
+        "general_postprocessing_operation",
+    ]
+    _SUPPORTED_OPERATIONS = [
+        "normalize",
+        "from_atom_to_molecule_reduction",
+        "conserve_integer_charge",
+    ]
 
     def __init__(
         self,
@@ -873,6 +881,7 @@ class PostProcessing(torch.nn.Module):
             FromAtomToMoleculeReduction,
             ScaleValues,
             CalculateAtomicSelfEnergy,
+            ChargeConservation,
         )
 
         for property, operations in postprocessing_parameter.items():
@@ -889,7 +898,13 @@ class PostProcessing(torch.nn.Module):
             prostprocessing_sequence_names = []
 
             # for each property parse the requested operations
-            if property == "per_atom_energy":
+            if property == "per_atom_charge":
+                if operations.get("conserve", False):
+                    postprocessing_sequence.append(
+                        ChargeConservation(operations["strategy"])
+                    )
+                    prostprocessing_sequence_names.append("conserve_charge")
+            elif property == "per_atom_energy":
                 if operations.get("normalize", False):
                     (
                         mean,
@@ -1147,6 +1162,27 @@ class BaseNetwork(Module):
         self.compute_interacting_pairs._input_checks(data)
         return self.compute_interacting_pairs.prepare_inputs(data)
 
+    def _add_addiontal_properties(
+        self, data, output: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Add additional properties to the output dictionary.
+
+        Parameters
+        ----------
+        data : Union[NNPInput, NamedTuple]
+            The input data.
+        output: Dict[str, torch.Tensor]
+            The output dictionary to add properties to.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+        """
+
+        output["per_molecule_charge"] = data.total_charge
+        return output
+
     def compute(self, data, core_input):
         """
         Compute the core model's output.
@@ -1165,7 +1201,7 @@ class BaseNetwork(Module):
         """
         return self.core_module(data, core_input)
 
-    def forward(self, input_data: NNPInput):
+    def forward(self, input_data: NNPInput) -> Dict[str, torch.Tensor]:
         """
         Executes the forward pass of the model.
 
@@ -1187,8 +1223,11 @@ class BaseNetwork(Module):
         # compute all interacting pairs with distances
         pairwise_properties = self.prepare_pairwise_properties(input_data)
         # prepare the input for the forward pass
-        output = self.compute(input_data, pairwise_properties)
+        output = self.compute(
+            input_data, pairwise_properties
+        )  # FIXME: putput and processed_output are currently a dictionary, we really want to change this to a dataclass
         # perform postprocessing operations
+        output = self._add_addiontal_properties(input_data, output)
         processed_output = self.postprocessing(output)
         return processed_output
 

@@ -64,6 +64,16 @@ class ActivationFunctionName(CaseInsensitiveEnum):
     ELU = "ELU"
 
 
+class OutputTypeEnum(CaseInsensitiveEnum):
+    scalar = "scalar"
+    vector = "vector"
+
+
+class PredictedPropertiesParameter(ParametersBase):
+    name: str
+    type: OutputTypeEnum
+
+
 # this enum will tell us if we need to pass additional parameters to the activation function
 class ActivationFunctionParamsEnum(CaseInsensitiveEnum):
     ReLU = "None"
@@ -126,6 +136,12 @@ class PerAtomEnergy(ParametersBase):
     keep_per_atom_property: bool = False
 
 
+class PerAtomCharge(ParametersBase):
+    conserve: bool = False
+    strategy: str = "default"
+    keep_per_atom_property: bool = False
+
+
 class ANI2xParameters(ParametersBase):
     class CoreParameter(ParametersBase):
         angle_sections: int
@@ -136,6 +152,7 @@ class ANI2xParameters(ParametersBase):
         minimum_interaction_radius_for_angular_features: Union[str, unit.Quantity]
         angular_dist_divisions: int
         activation_function_parameter: ActivationFunctionConfig
+        predicted_properties: List[PredictedPropertiesParameter]
 
         converted_units = field_validator(
             "maximum_interaction_radius",
@@ -146,6 +163,7 @@ class ANI2xParameters(ParametersBase):
 
     class PostProcessingParameter(ParametersBase):
         per_atom_energy: PerAtomEnergy = PerAtomEnergy()
+        per_atom_charge: PerAtomCharge = PerAtomCharge()
         general_postprocessing_operation: GeneralPostProcessingOperation = (
             GeneralPostProcessingOperation()
         )
@@ -170,6 +188,7 @@ class SchNetParameters(ParametersBase):
         shared_interactions: bool
         activation_function_parameter: ActivationFunctionConfig
         featurization: Featurization
+        predicted_properties: List[PredictedPropertiesParameter]
 
         converted_units = field_validator("maximum_interaction_radius")(
             _convert_str_to_unit
@@ -177,6 +196,7 @@ class SchNetParameters(ParametersBase):
 
     class PostProcessingParameter(ParametersBase):
         per_atom_energy: PerAtomEnergy = PerAtomEnergy()
+        per_atom_charge: PerAtomCharge = PerAtomCharge()
         general_postprocessing_operation: GeneralPostProcessingOperation = (
             GeneralPostProcessingOperation()
         )
@@ -189,11 +209,6 @@ class SchNetParameters(ParametersBase):
 
 class TensorNetParameters(ParametersBase):
     class CoreParameter(ParametersBase):
-        # class Featurization(ParametersBase):
-        #     properties_to_featurize: List[str]
-        #     max_Z: int
-        #     number_of_per_atom_features: int
-
         number_of_per_atom_features: int
         number_of_interaction_layers: int
         number_of_radial_basis_functions: int
@@ -202,6 +217,7 @@ class TensorNetParameters(ParametersBase):
         maximum_atomic_number: int
         equivariance_invariance_group: str
         activation_function_parameter: ActivationFunctionConfig
+        predicted_properties: List[PredictedPropertiesParameter]
 
         converted_units = field_validator(
             "maximum_interaction_radius", "minimum_interaction_radius"
@@ -209,6 +225,7 @@ class TensorNetParameters(ParametersBase):
 
     class PostProcessingParameter(ParametersBase):
         per_atom_energy: PerAtomEnergy = PerAtomEnergy()
+        per_atom_charge: PerAtomCharge = PerAtomCharge()
         general_postprocessing_operation: GeneralPostProcessingOperation = (
             GeneralPostProcessingOperation()
         )
@@ -233,6 +250,7 @@ class PaiNNParameters(ParametersBase):
         shared_filters: bool
         featurization: Featurization
         activation_function_parameter: ActivationFunctionConfig
+        predicted_properties: List[PredictedPropertiesParameter]
 
         converted_units = field_validator(
             "maximum_interaction_radius",
@@ -240,6 +258,7 @@ class PaiNNParameters(ParametersBase):
 
     class PostProcessingParameter(ParametersBase):
         per_atom_energy: PerAtomEnergy = PerAtomEnergy()
+        per_atom_charge: PerAtomCharge = PerAtomCharge()
         general_postprocessing_operation: GeneralPostProcessingOperation = (
             GeneralPostProcessingOperation()
         )
@@ -263,6 +282,7 @@ class PhysNetParameters(ParametersBase):
         number_of_modules: int
         featurization: Featurization
         activation_function_parameter: ActivationFunctionConfig
+        predicted_properties: List[PredictedPropertiesParameter]
 
         converted_units = field_validator("maximum_interaction_radius")(
             _convert_str_to_unit
@@ -270,6 +290,7 @@ class PhysNetParameters(ParametersBase):
 
     class PostProcessingParameter(ParametersBase):
         per_atom_energy: PerAtomEnergy = PerAtomEnergy()
+        per_atom_charge: PerAtomCharge = PerAtomCharge()
         general_postprocessing_operation: GeneralPostProcessingOperation = (
             GeneralPostProcessingOperation()
         )
@@ -293,6 +314,7 @@ class SAKEParameters(ParametersBase):
         number_of_spatial_attention_heads: int
         featurization: Featurization
         activation_function_parameter: ActivationFunctionConfig
+        predicted_properties: List[PredictedPropertiesParameter]
 
         converted_units = field_validator("maximum_interaction_radius")(
             _convert_str_to_unit
@@ -300,6 +322,7 @@ class SAKEParameters(ParametersBase):
 
     class PostProcessingParameter(ParametersBase):
         per_atom_energy: PerAtomEnergy = PerAtomEnergy()
+        per_atom_charge: PerAtomCharge = PerAtomCharge()
         general_postprocessing_operation: GeneralPostProcessingOperation = (
             GeneralPostProcessingOperation()
         )

@@ -495,9 +495,8 @@ class LongRangeElectrostaticEnergy(torch.nn.Module):
         coulomb_interactions = (
             (per_atom_charge[idx_i] * per_atom_charge[idx_j])
             * chi_r
-            / pairwise_distances
         )
-
+        # 138.96 in kj/mol nm 
         # Zero out diagonal terms (self-interaction)
         mask = torch.eye(
             coulomb_interactions.size(0), device=coulomb_interactions.device
@@ -506,7 +505,6 @@ class LongRangeElectrostaticEnergy(torch.nn.Module):
 
         # Sum over all interactions for each atom
         coulomb_interactions_per_atom = coulomb_interactions.sum(dim=1)
-
         data["per_atom_electrostatic_energy"] = coulomb_interactions_per_atom
 
         return data

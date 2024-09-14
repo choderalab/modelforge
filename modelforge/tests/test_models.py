@@ -561,7 +561,7 @@ def test_forward_pass_with_all_datasets(
 )
 @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
 def test_forward_pass(
-  dataset_name.
+    dataset_name,
     energy_expression,
     potential_name,
     simulation_environment,
@@ -570,7 +570,7 @@ def test_forward_pass(
     # this test sends a single batch from different datasets through the model
 
     # get input and set up model
-    nnp_input = single_batch_with_batchsize_64.nnp_input
+    nnp_input = single_batch_with_batchsize(64, dataset_name).nnp_input
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
     set_postprocessing_based_on_energy_expression(config, energy_expression)
 

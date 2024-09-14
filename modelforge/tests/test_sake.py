@@ -33,12 +33,13 @@ def test_init():
 from openff.units import unit
 
 
-def test_forward(single_batch_with_batchsize_64):
+def test_forward(single_batch_with_batchsize):
     """
     Test the forward pass of the SAKE model.
     """
     # get methane input
-    methane = single_batch_with_batchsize_64.nnp_input
+    batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
+    methane = batch.nnp_input
 
     from modelforge.tests.test_models import load_configs_into_pydantic_models
 
@@ -91,7 +92,7 @@ def test_interaction_forward():
 
 @pytest.mark.parametrize("eq_atol", [3e-1])
 @pytest.mark.parametrize("h_atol", [8e-2])
-def test_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize_64):
+def test_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize):
     import torch
     from modelforge.potential.sake import SAKE
     from dataclasses import replace
@@ -118,7 +119,9 @@ def test_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize_64):
     )
 
     # get methane input
-    methane = single_batch_with_batchsize_64.nnp_input
+    batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
+
+    methane = batch.nnp_input
     perturbed_methane_input = replace(methane)
     perturbed_methane_input.positions = torch.matmul(methane.positions, rotation_matrix)
 
@@ -424,7 +427,7 @@ import pytest
 
 # FIXME: this test is currently failing
 @pytest.mark.xfail
-def test_model_against_reference(single_batch_with_batchsize_1):
+def test_model_against_reference(single_batch_with_batchsize):
     nr_heads = 5
     key = jax.random.PRNGKey(1884)
     torch.manual_seed(1884)
@@ -462,7 +465,8 @@ def test_model_against_reference(single_batch_with_batchsize_1):
     )
 
     # get methane input
-    methane = single_batch_with_batchsize_1.nnp_input
+    batch = single_batch_with_batchsize(batch_size=1)
+    methane = batch.nnp_input
     pairlist_output = mf_sake.compute_interacting_pairs.prepare_inputs(methane)
     prepared_methane = mf_sake.core_module._model_specific_input_preparation(
         methane, pairlist_output
@@ -605,7 +609,7 @@ def test_model_against_reference(single_batch_with_batchsize_1):
     # assert torch.allclose(mf_out.E, torch.from_numpy(onp.array(ref_out[0])))
 
 
-def test_model_invariance(single_batch_with_batchsize_1):
+def test_model_invariance(single_batch_with_batchsize):
     from dataclasses import replace
 
     from modelforge.tests.test_models import load_configs_into_pydantic_models
@@ -620,7 +624,8 @@ def test_model_invariance(single_batch_with_batchsize_1):
         ],
     )
     # get methane input
-    methane = single_batch_with_batchsize_1.nnp_input
+    batch = single_batch_with_batchsize(batch_size=1, dataset_name="QM9")
+    methane = batch.nnp_input
 
     rotation_matrix = torch.tensor([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
     perturbed_methane_input = replace(methane)

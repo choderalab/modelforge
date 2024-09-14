@@ -389,7 +389,7 @@ class CalculateAtomicSelfEnergy(torch.nn.Module):
             }
         self.atomic_self_energies = AtomicSelfEnergies(atomic_self_energies)
 
-    def forward(self, data: Dict[str, torch.Tensor]) -> torch.Tensor:
+    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
         Calculates the molecular self energy.
 

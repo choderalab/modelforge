@@ -183,10 +183,12 @@ def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
-def test_JAX_wrapping(potential_name, single_batch_with_batchsize_64):
+def test_JAX_wrapping(potential_name, single_batch_with_batchsize):
     from modelforge.potential.models import (
         NeuralNetworkPotentialFactory,
     )
+
+    batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
 
     # read default parameters
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
@@ -199,7 +201,7 @@ def test_JAX_wrapping(potential_name, single_batch_with_batchsize_64):
     )
 
     assert "JAX" in str(type(model))
-    nnp_input = single_batch_with_batchsize_64.nnp_input.as_jax_namedtuple()
+    nnp_input = batch.nnp_input.as_jax_namedtuple()
     out = model(nnp_input)["per_molecule_energy"]
     import jax
 
@@ -458,13 +460,14 @@ def test_dataset_statistic(potential_name):
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
 def test_energy_between_simulation_environments(
-    potential_name, single_batch_with_batchsize_64
+    potential_name, single_batch_with_batchsize
 ):
     # compare that the energy is the same for the JAX and PyTorch Model
     import numpy as np
     import torch
 
-    nnp_input = single_batch_with_batchsize_64.nnp_input
+    batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
+    nnp_input = batch.nnp_input
     # test the forward pass through each of the models
     # cast input and model to torch.float64
     # read default parameters
@@ -545,6 +548,7 @@ def test_forward_pass_with_all_datasets(
     assert torch.all(pair_list[0, 1:] >= pair_list[0, :-1])
 
 
+@pytest.mark.parametrize("dataset_name", ["QM9", "SPICE2"])
 @pytest.mark.parametrize(
     "energy_expression",
     [
@@ -557,10 +561,11 @@ def test_forward_pass_with_all_datasets(
 )
 @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
 def test_forward_pass(
+  dataset_name.
     energy_expression,
     potential_name,
     simulation_environment,
-    single_batch_with_batchsize_64,
+    single_batch_with_batchsize,
 ):
     # this test sends a single batch from different datasets through the model
 
@@ -581,7 +586,6 @@ def test_forward_pass(
     output, atomic_subsystem_indices = convert_to_pytorch_if_needed(
         output, nnp_input, model
     )
-
     # test that charge correction is working
     if energy_expression == "short_range_and_long_range_electrostatic":
         per_molecule_charge, per_molecule_charge_corrected = retrieve_molecular_charges(
@@ -603,17 +607,18 @@ def test_forward_pass(
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
-def test_calculate_energies_and_forces(potential_name, single_batch_with_batchsize_64):
+def test_calculate_energies_and_forces(potential_name, single_batch_with_batchsize):
     """
     Test the calculation of energies and forces for a molecule.
     """
     import torch
 
+    batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
     # read default parameters
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
 
     # get batch
-    nnp_input = single_batch_with_batchsize_64.nnp_input
+    nnp_input = batch.nnp_input
 
     # test the pass through each of the models
     model_training = NeuralNetworkPotentialFactory.generate_potential(
@@ -661,7 +666,7 @@ def test_calculate_energies_and_forces(potential_name, single_batch_with_batchsi
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
 def test_calculate_energies_and_forces_with_jax(
-    potential_name, single_batch_with_batchsize_64
+    potential_name, single_batch_with_batchsize
 ):
     """
     Test the calculation of energies and forces for a molecule.
@@ -670,8 +675,8 @@ def test_calculate_energies_and_forces_with_jax(
 
     # read default parameters
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
-
-    nnp_input = single_batch_with_batchsize_64.nnp_input
+    batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
+    nnp_input = batch.nnp_input
     # test the backward pass through each of the models
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
     nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
@@ -785,8 +790,8 @@ def test_pairlist():
     from openff.units import unit
 
     cutoff = 5.0 * unit.nanometer  # no relevant cutoff
-    pairlist = Neighborlist(cutoff, only_unique_pairs=True)
-    r = pairlist(positions, atomic_subsystem_indices)
+    pairlist = Neighborlist({"cutoff1": cutoff}, only_unique_pairs=True)
+    r = pairlist(positions, atomic_subsystem_indices)["cutoff1"]
     pair_indices = r.pair_indices
 
     # pairlist describes the pairs of interacting atoms within a batch
@@ -815,8 +820,8 @@ def test_pairlist():
 
     # test with cutoff
     cutoff = 2.0 * unit.nanometer
-    pairlist = Neighborlist(cutoff, only_unique_pairs=True)
-    r = pairlist(positions, atomic_subsystem_indices)
+    pairlist = Neighborlist({"cutoff1": cutoff}, only_unique_pairs=True)
+    r = pairlist(positions, atomic_subsystem_indices)["cutoff1"]
     pair_indices = r.pair_indices
 
     assert torch.equal(pair_indices, torch.tensor([[0, 1, 3, 4], [1, 2, 4, 5]]))
@@ -839,8 +844,8 @@ def test_pairlist():
 
     # test with complete pairlist
     cutoff = 2.0 * unit.nanometer
-    pairlist = Neighborlist(cutoff, only_unique_pairs=False)
-    r = pairlist(positions, atomic_subsystem_indices)
+    pairlist = Neighborlist({"cutoff1": cutoff}, only_unique_pairs=False)
+    r = pairlist(positions, atomic_subsystem_indices)["cutoff1"]
     pair_indices = r.pair_indices
 
     print(pair_indices, flush=True)
@@ -851,11 +856,13 @@ def test_pairlist():
     # make sure that Pairlist and Neighborlist behave the same for large cutoffs
     cutoff = 10.0 * unit.nanometer
     only_unique_pairs = False
-    neighborlist = Neighborlist(cutoff, only_unique_pairs=only_unique_pairs)
+    neighborlist = Neighborlist(
+        {"cutoff1": cutoff}, only_unique_pairs=only_unique_pairs
+    )
     pairlist = Pairlist(only_unique_pairs=only_unique_pairs)
     r = pairlist(positions, atomic_subsystem_indices)
     pair_indices = r.pair_indices
-    r = neighborlist(positions, atomic_subsystem_indices)
+    r = neighborlist(positions, atomic_subsystem_indices)["cutoff1"]
     neighbor_indices = r.pair_indices
 
     assert torch.equal(pair_indices, neighbor_indices)
@@ -863,11 +870,13 @@ def test_pairlist():
     # make sure that they are the same also for non-redundant pairs
     cutoff = 10.0 * unit.nanometer
     only_unique_pairs = True
-    neighborlist = Neighborlist(cutoff, only_unique_pairs=only_unique_pairs)
+    neighborlist = Neighborlist(
+        {"cutoff1": cutoff}, only_unique_pairs=only_unique_pairs
+    )
     pairlist = Pairlist(only_unique_pairs=only_unique_pairs)
     r = pairlist(positions, atomic_subsystem_indices)
     pair_indices = r.pair_indices
-    r = neighborlist(positions, atomic_subsystem_indices)
+    r = neighborlist(positions, atomic_subsystem_indices)["cutoff1"]
     neighbor_indices = r.pair_indices
 
     assert torch.equal(pair_indices, neighbor_indices)
@@ -875,14 +884,57 @@ def test_pairlist():
     # this should fail
     cutoff = 2.0 * unit.nanometer
     only_unique_pairs = True
-    neighborlist = Neighborlist(cutoff, only_unique_pairs=only_unique_pairs)
+    neighborlist = Neighborlist(
+        {"cutoff1": cutoff}, only_unique_pairs=only_unique_pairs
+    )
     pairlist = Pairlist(only_unique_pairs=only_unique_pairs)
     r = pairlist(positions, atomic_subsystem_indices)
     pair_indices = r.pair_indices
-    r = neighborlist(positions, atomic_subsystem_indices)
+    r = neighborlist(positions, atomic_subsystem_indices)["cutoff1"]
     neighbor_indices = r.pair_indices
 
     assert not pair_indices.shape == neighbor_indices.shape
+
+
+def test_multiple_neighborlists():
+    from modelforge.potential.models import Pairlist, Neighborlist
+    import torch
+    from openff.units import unit
+
+    atomic_subsystem_indices = torch.tensor([0, 0, 0, 0, 0])
+
+    positions = torch.tensor(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [2.0, 0.0, 0.0],
+            [3.0, 0.0, 0.0],
+            [4.0, 0.0, 0.0],
+        ]
+    )
+
+    cutoff_short = 1.5 * unit.nanometer
+    cutoff_medium = 2.5 * unit.nanometer
+    cutoff_long = 3.5 * unit.nanometer
+    pairlist = Neighborlist(
+        {"short": cutoff_short, "medium": cutoff_medium, "long": cutoff_long},
+        only_unique_pairs=True,
+    )
+    r = pairlist(positions, atomic_subsystem_indices)
+
+    assert torch.equal(
+        r["short"].pair_indices, torch.tensor([[0, 1, 2, 3], [1, 2, 3, 4]])
+    )
+
+    assert torch.equal(
+        r["medium"].pair_indices,
+        torch.tensor([[0, 0, 1, 1, 2, 2, 3], [1, 2, 2, 3, 3, 4, 4]]),
+    )
+
+    assert torch.equal(
+        r["long"].pair_indices,
+        torch.tensor([[0, 0, 0, 1, 1, 1, 2, 2, 3], [1, 2, 3, 2, 3, 4, 3, 4, 4]]),
+    )
 
 
 def test_pairlist_precomputation():
@@ -1054,11 +1106,11 @@ def test_pairlist_on_dataset():
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
-def test_casting(potential_name, single_batch_with_batchsize_64):
+def test_casting(potential_name, single_batch_with_batchsize):
     # test dtype casting
     import torch
 
-    batch = single_batch_with_batchsize_64
+    batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
     batch_ = batch.to(dtype=torch.float64)
     assert batch_.nnp_input.positions.dtype == torch.float64
     batch_ = batch_.to(dtype=torch.float32)
@@ -1101,9 +1153,9 @@ def test_casting(potential_name, single_batch_with_batchsize_64):
 )
 @pytest.mark.parametrize("simulation_environment", ["PyTorch"])
 def test_equivariant_energies_and_forces(
-    potential_name: str,
-    simulation_environment: str,
-    single_batch_with_batchsize_64,
+    potential_name,
+    simulation_environment,
+    single_batch_with_batchsize,
     equivariance_utils,
 ):
     """
@@ -1126,7 +1178,8 @@ def test_equivariant_energies_and_forces(
     translation, rotation, reflection = equivariance_utils
     # define the tolerance
     atol = 1e-3
-    nnp_input = single_batch_with_batchsize_64.nnp_input
+    batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
+    nnp_input = batch.nnp_input
 
     # initialize the models
     model = model.to(dtype=torch.float64)
@@ -1134,7 +1187,9 @@ def test_equivariant_energies_and_forces(
     # ------------------- #
     # start the test
     # reference values
-    nnp_input = single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float64)
+    batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
+
+    nnp_input = batch.nnp_input.to(dtype=torch.float64)
     reference_result = model(nnp_input)["per_molecule_energy"].to(dtype=torch.float64)
     reference_forces = -torch.autograd.grad(
         reference_result.sum(),
@@ -1238,7 +1293,7 @@ def test_pairlist_calculate_r_ij_and_d_ij():
     # Create Pairlist instance
     # --------------------------- #
     # Only unique pairs
-    pairlist = Neighborlist(cutoff, only_unique_pairs=True)
+    pairlist = Neighborlist({"cutoff_1": cutoff}, only_unique_pairs=True)
     pair_indices = pairlist.enumerate_all_pairs(atomic_subsystem_indices)
 
     # Calculate r_ij and d_ij
@@ -1260,7 +1315,7 @@ def test_pairlist_calculate_r_ij_and_d_ij():
 
     # --------------------------- #
     # ALL pairs
-    pairlist = Neighborlist(cutoff, only_unique_pairs=False)
+    pairlist = Neighborlist({"cutoff_1": cutoff}, only_unique_pairs=False)
     pair_indices = pairlist.enumerate_all_pairs(atomic_subsystem_indices)
 
     # Calculate r_ij and d_ij

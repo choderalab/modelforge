@@ -1,5 +1,5 @@
 [dataset]
 dataset_name = "PHALKETHOH"
-version_select = "nc_1000_v0"
+version_select = "nc_1000_v1"
 num_workers = 4
 pin_memory = true

@@ -190,3 +190,7 @@ lightning_logs/
 *.hdf5
 */tb_logs/*
 .vscode/settings.json
+logs/*
+cache/*
+*/logs/*
+*/cache/*

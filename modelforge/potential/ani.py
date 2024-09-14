@@ -2,6 +2,9 @@
 This module contains the classes for the ANI2x neural network potential.
 """
 
+from __future__ import annotations
+
+
 from dataclasses import dataclass
 from typing import Dict, Tuple, Type, List
 
@@ -103,7 +106,6 @@ class ANIRepresentation(nn.Module):
         angle_sections: int,
         nr_of_supported_elements: int = 7,
     ):
-
         super().__init__()
         from modelforge.potential.utils import CosineAttenuationFunction
 
@@ -601,7 +603,7 @@ class ANI2xCore(CoreNetwork):
         self.register_buffer("lookup_tensor", lookup_tensor)
 
     def _model_specific_input_preparation(
-        self, data: "NNPInput", pairlist_output: "PairListOutputs"
+        self, data: NNPInput, pairlist_output: Dict[str, PairListOutputs]
     ) -> AniNeuralNetworkData:
         """
         Prepare the model-specific input data for the ANI2x model.
@@ -610,8 +612,8 @@ class ANI2xCore(CoreNetwork):
         ----------
         data : NNPInput
             The input data for the model.
-        pairlist_output : PairListOutputs
-            The pairlist output.
+        pairlist_output : Dict[str,PairListOutputs]
+            The output from the pairlist.
 
         Returns
         -------
@@ -619,6 +621,11 @@ class ANI2xCore(CoreNetwork):
             The prepared input data for the ANI2x model.
         """
         number_of_atoms = data.atomic_numbers.shape[0]
+
+        # Note, pairlist_output is a Dict where the key corresponds to the name of the cutoff parameter
+        # e.g. "maximum_interaction_radius"
+
+        pairlist_output = pairlist_output["maximum_interaction_radius"]
 
         nnp_data = AniNeuralNetworkData(
             pair_indices=pairlist_output.pair_indices,
@@ -714,7 +721,6 @@ class ANI2x(BaseNetwork):
         dataset_statistic: Optional[Dict[str, float]] = None,
         potential_seed: Optional[int] = None,
     ) -> None:
-
         from modelforge.utils.units import _convert_str_to_unit
 
         self.only_unique_pairs = True  # NOTE: need to be set before super().__init__

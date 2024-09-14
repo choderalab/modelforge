@@ -4,7 +4,7 @@ This module contains classes and functions for managing datasets.
 
 import os
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, List, Literal, Optional, Union, NamedTuple
+from typing import TYPE_CHECKING, Dict, List, Literal, NamedTuple, Optional, Union
 
 import numpy as np
 import pytorch_lightning as pl
@@ -15,14 +15,14 @@ from torch.utils.data import DataLoader
 
 from modelforge.dataset.utils import RandomRecordSplittingStrategy, SplittingStrategy
 from modelforge.utils.prop import PropertyNames
+from modelforge.utils.misc import lock_with_attribute
 
 if TYPE_CHECKING:
     from modelforge.potential.processing import AtomicSelfEnergies
 
-
-from pydantic import BaseModel, field_validator, ConfigDict, Field
-
 from enum import Enum
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CaseInsensitiveEnum(str, Enum):
@@ -64,6 +64,7 @@ class DatasetParameters(BaseModel):
     version_select: str
     num_workers: int = Field(gt=0)
     pin_memory: bool
+    regenerate_processed_cache: bool = False
 
 
 @dataclass(frozen=False)
@@ -208,8 +209,9 @@ class NNPInput:
         """Export the dataclass fields and values as a named tuple.
         Convert pytorch tensors to jax arrays."""
 
-        from dataclasses import fields
         import collections
+        from dataclasses import dataclass, fields
+
         from modelforge.utils.io import import_
 
         convert_to_jax = import_("pytorch2jax").pytorch2jax.convert_to_jax
@@ -235,6 +237,9 @@ class BatchData:
         self.nnp_input = self.nnp_input.to(device=device, dtype=dtype)
         self.metadata = self.metadata.to(device=device, dtype=dtype)
         return self
+
+    def batch_size(self):
+        return self.metadata.E.size(dim=0)
 
 
 class TorchDataset(torch.utils.data.Dataset[BatchData]):
@@ -487,6 +492,8 @@ class HDF5Dataset:
             Directory to store the files.
         force_download : bool, optional
             If set to True, the data will be downloaded even if it already exists. Default is False.
+        regenerate_cache : bool, optional
+            If set to True, the cache file will be regenerated even if it already exists. Default is False.
         """
         self.url = url
         self.gz_data_file = gz_data_file
@@ -1038,7 +1045,6 @@ class DatasetFactory:
         return TorchDataset(data.numpy_data, data._property_names)
 
 
-from torch import nn
 from openff.units import unit
 
 
@@ -1064,6 +1070,7 @@ class DataModule(pl.LightningDataModule):
         local_cache_dir: str = "./",
         regenerate_cache: bool = False,
         regenerate_dataset_statistic: bool = False,
+        regenerate_processed_cache: bool = True,
     ):
         """
         Initializes adData module for PyTorch Lightning handling data preparation and loading object with the specified configuration.
@@ -1097,6 +1104,9 @@ class DataModule(pl.LightningDataModule):
             regenerate_cache : bool, defaults to False
                 Whether to regenerate the cache.
         """
+        from modelforge.potential.models import Pairlist
+        import os
+
         super().__init__()
 
         self.name = name
@@ -1113,28 +1123,55 @@ class DataModule(pl.LightningDataModule):
         self.train_dataset = None
         self.test_dataset = None
         self.val_dataset = None
-        import os
 
         # make sure we can handle a path with a ~ in it
         self.local_cache_dir = os.path.expanduser(local_cache_dir)
+        # create the local cache directory if it does not exist
+        os.makedirs(self.local_cache_dir, exist_ok=True)
         self.regenerate_cache = regenerate_cache
-        from modelforge.potential.models import Pairlist
+        # Use a logical OR to ensure regenerate_processed_cache is True when
+        # regenerate_cache is True
+        self.regenerate_processed_cache = (
+            regenerate_processed_cache or self.regenerate_cache
+        )
 
         self.pairlist = Pairlist()
         self.dataset_statistic_filename = (
             f"{self.local_cache_dir}/{self.name}_dataset_statistic.toml"
         )
+        self.cache_processed_dataset_filename = (
+            f"{self.local_cache_dir}/{self.name}_{self.version_select}_processed.pt"
+        )
+        self.lock_file = f"{self.cache_processed_dataset_filename}.lockfile"
 
+    @lock_with_attribute("lock_file")
     def prepare_data(
         self,
     ) -> None:
         """
-        Prepares the dataset for use. This method is responsible for the initial processing of the data such as calculating self energies, atomic energy statistics, and splitting. It is executed only once per node.
+        Prepares the dataset for use. This method is responsible for the initial
+        processing of the data such as calculating self energies, atomic energy
+        statistics, and splitting. It is executed only once per node.
         """
-        from modelforge.dataset import _ImplementedDatasets
-        import toml
+        # check if there is a filelock present, if so, wait until it is removed
 
-        dataset_class = _ImplementedDatasets.get_dataset_class(self.name)
+        # if the dataset has already been processed, skip this step
+        if (
+            os.path.exists(self.cache_processed_dataset_filename)
+            and not self.regenerate_processed_cache
+        ):
+            if not os.path.exists(self.dataset_statistic_filename):
+                raise FileNotFoundError(
+                    f"Dataset statistics file {self.dataset_statistic_filename} not found. Please regenerate the cache."
+                )
+            log.info('Processed dataset already exists. Skipping "prepare_data" step.')
+            return None
+
+        # if the dataset is not already processed, process it
+
+        from modelforge.dataset import _ImplementedDatasets
+
+        dataset_class = _ImplementedDatasets.get_dataset_class(str(self.name))
         dataset = dataset_class(
             force_download=self.force_download,
             version_select=self.version_select,
@@ -1142,7 +1179,6 @@ class DataModule(pl.LightningDataModule):
             regenerate_cache=self.regenerate_cache,
         )
         torch_dataset = self._create_torch_dataset(dataset)
-
         # if dataset statistics is present load it from disk
         if (
             os.path.exists(self.dataset_statistic_filename)
@@ -1280,16 +1316,16 @@ class DataModule(pl.LightningDataModule):
 
     def _cache_dataset(self, torch_dataset):
         """Cache the dataset and its statistics using PyTorch's serialization."""
-        torch.save(torch_dataset, "torch_dataset.pt")
-        # sleep for 1 second to make sure that the dataset was written to disk
+        torch.save(torch_dataset, self.cache_processed_dataset_filename)
+        # sleep for 5 second to make sure that the dataset was written to disk
         import time
 
-        time.sleep(1)
+        time.sleep(5)
 
     def setup(self, stage: Optional[str] = None) -> None:
         """Sets up datasets for the train, validation, and test stages based on the stage argument."""
 
-        self.torch_dataset = torch.load("torch_dataset.pt")
+        self.torch_dataset = torch.load(self.cache_processed_dataset_filename)
         (
             self.train_dataset,
             self.val_dataset,
@@ -1339,7 +1375,7 @@ class DataModule(pl.LightningDataModule):
         from tqdm import tqdm
 
         # remove the self energies if requested
-        log.info("Precalculating pairlist for dataset")
+        log.info("Performing per datapoint operations in the dataset dataset")
         if self.remove_self_energies:
             log.info("Removing self energies from the dataset")
 
@@ -1515,3 +1551,71 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
         number_of_atoms=atomic_numbers.numel(),
     )
     return BatchData(nnp_input, metadata)
+
+
+from modelforge.dataset.dataset import DatasetFactory
+from modelforge.dataset.utils import (
+    FirstComeFirstServeSplittingStrategy,
+    SplittingStrategy,
+)
+
+
+def initialize_datamodule(
+    dataset_name: str,
+    version_select: str = "nc_1000_v0",
+    batch_size: int = 64,
+    splitting_strategy: SplittingStrategy = FirstComeFirstServeSplittingStrategy(),
+    remove_self_energies: bool = True,
+    regression_ase: bool = False,
+    regenerate_dataset_statistic: bool = False,
+) -> DataModule:
+    """
+    Initialize a dataset for a given mode.
+    """
+
+    data_module = DataModule(
+        dataset_name,
+        splitting_strategy=splitting_strategy,
+        batch_size=batch_size,
+        version_select=version_select,
+        remove_self_energies=remove_self_energies,
+        regression_ase=regression_ase,
+        regenerate_dataset_statistic=regenerate_dataset_statistic,
+    )
+    data_module.prepare_data()
+    data_module.setup()
+    return data_module
+
+
+def single_batch(batch_size: int = 64, dataset_name="QM9"):
+    """
+    Utility function to create a single batch of data for testing.
+    """
+    data_module = initialize_datamodule(
+        dataset_name=dataset_name,
+        batch_size=batch_size,
+        version_select="nc_1000_v0",
+    )
+    return next(iter(data_module.train_dataloader(shuffle=False)))
+
+
+def initialize_dataset(
+    dataset_name: str,
+    local_cache_dir: str,
+    versions_select: str = "nc_1000_v0",
+    force_download: bool = False,
+) -> DataModule:
+    """
+    Initialize a dataset for a given mode.
+    """
+    from modelforge.dataset import _ImplementedDatasets
+
+    factory = DatasetFactory()
+    data = _ImplementedDatasets.get_dataset_class(dataset_name)(
+        local_cache_dir=local_cache_dir,
+        version_select=versions_select,
+        force_download=force_download,
+    )
+    dataset = factory.create_dataset(data)
+
+    return dataset

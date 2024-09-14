@@ -262,7 +262,7 @@ class TrainingParameters(ParametersBase):
     remove_self_energies: bool
     batch_size: int
     lr: float
-    monitor: str
+    monitor_for_checkpoint: str
     lr_scheduler: Optional[SchedulerConfig] = None
     loss_parameter: LossParameter
     early_stopping: Optional[EarlyStopping] = None
@@ -270,7 +270,8 @@ class TrainingParameters(ParametersBase):
     stochastic_weight_averaging: Optional[StochasticWeightAveraging] = None
     experiment_logger: ExperimentLogger
     verbose: bool = False
-    optimizer: Type[torch.optim.Optimizer] = torch.optim.Adam
+    optimizer: Type[torch.optim.Optimizer] = torch.optim.AdamW
+    min_number_of_epochs: Union[int, None] = None
 
 
 ### Runtime Parameters
@@ -309,7 +310,6 @@ class RuntimeParameters(ParametersBase):
     A class to hold the runtime parameters that inherits from the pydantic BaseModel
 
     args:
-        save_dir (str): The save directory
         experiment_name (str): The experiment name
         accelerator (Accelerator): The accelerator, options are: "cpu", "gpu", "tpu"
         number_of_nodes (int): The number of nodes
@@ -322,7 +322,6 @@ class RuntimeParameters(ParametersBase):
 
     """
 
-    save_dir: str
     experiment_name: str
     accelerator: Accelerator
     number_of_nodes: int

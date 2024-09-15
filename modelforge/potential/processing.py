@@ -479,8 +479,8 @@ class LongRangeElectrostaticEnergy(torch.nn.Module):
         per_atom_charge = data["per_atom_charge"]
         mol_indices = data["atomic_subsystem_indices"]
         pairwise_properties = data["pairwise_properties"]
-        idx_i, idx_j = pairwise_properties.pair_indices
-        pairwise_distances = pairwise_properties.d_ij
+        idx_i, idx_j = pairwise_properties["maximum_interaction_radius"].pair_indices
+        pairwise_distances = pairwise_properties["maximum_interaction_radius"].d_ij
 
         # Initialize the long-range electrostatic energy
         long_range_energy = torch.zeros_like(per_atom_charge)
@@ -492,11 +492,8 @@ class LongRangeElectrostaticEnergy(torch.nn.Module):
         ) * (1 / pairwise_distances)
 
         # Compute the Coulomb interaction term
-        coulomb_interactions = (
-            (per_atom_charge[idx_i] * per_atom_charge[idx_j])
-            * chi_r
-        )
-        # 138.96 in kj/mol nm 
+        coulomb_interactions = (per_atom_charge[idx_i] * per_atom_charge[idx_j]) * chi_r
+        # 138.96 in kj/mol nm
         # Zero out diagonal terms (self-interaction)
         mask = torch.eye(
             coulomb_interactions.size(0), device=coulomb_interactions.device

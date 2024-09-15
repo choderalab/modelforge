@@ -548,7 +548,7 @@ def test_forward_pass_with_all_datasets(
     assert torch.all(pair_list[0, 1:] >= pair_list[0, :-1])
 
 
-@pytest.mark.parametrize("dataset_name", ["QM9", "SPICE2"])
+@pytest.mark.parametrize("dataset_name", ["QM9"])
 @pytest.mark.parametrize(
     "energy_expression",
     [

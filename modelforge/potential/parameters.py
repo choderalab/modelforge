@@ -135,8 +135,7 @@ class CoulomPotential(ParametersBase):
     maximum_interaction_radius: Union[str, unit.Quantity]
     from_atom_to_molecule_reduction: bool = False
     keep_per_atom_property: bool = False
-    
-    
+
     converted_units = field_validator(
         "maximum_interaction_radius",
     )(_convert_str_to_unit)

@@ -256,10 +256,12 @@ class SchNETInteractionModule(nn.Module):
 
         # Perform continuous-filter convolution
         x_j = atomic_embedding[idx_j]
-        x_ij = x_j * W_ij  # (nr_of_atom_pairs, nr_atom_basis)
-        # masked_x_ij = (
-        #    x_ij * pairlist.mask["maximum_interaction_radius"]
-        # )  # Element-wise multiplication to apply the mask
+        x_ij = x_j * W_ij
+        x_ij_einsum = torch.einsum("ijF,jF->ijF", W_ij, x_j)
+
+        assert torch.allclose(
+            x_ij, x_ij_einsum
+        ), "Einstein summation and element-wise multiplication are not equal."
 
         out = torch.zeros_like(atomic_embedding)
         out.scatter_add_(

@@ -580,6 +580,9 @@ class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
 
         self.register_buffer("cutoff", torch.tensor(cutoff))
         self.displacement_function = displacement_function
+        self.indices = torch.tensor([])
+        self.i_final_pairs = torch.tensor([])
+        self.j_final_pairs = torch.tensor([])
 
     def forward(self, data: NNPInputTuple):
         """
@@ -607,25 +610,30 @@ class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
         atomic_subsystem_indices = data.atomic_subsystem_indices
 
         n = atomic_subsystem_indices.size(0)
-        # Generate a range of indices from 0 to n-1
-        indices = torch.arange(n, device=atomic_subsystem_indices.device)
 
-        # Create a meshgrid of indices
-        i_final_pairs, j_final_pairs = torch.meshgrid(indices, indices, indexing="ij")
+        # avoid reinitializing indices if they are already set and haven't changed
+        if self.indices.shape[0] != n:
+            # Generate a range of indices from 0 to n-1
+            self.indices = torch.arange(n, device=atomic_subsystem_indices.device)
 
-        # Filter out the diagonal elements (where i == j)
-        mask = i_final_pairs != j_final_pairs
-        i_final_pairs = i_final_pairs[mask]
-        j_final_pairs = j_final_pairs[mask]
+            # Create a meshgrid of indices
+            self.i_final_pairs, self.j_final_pairs = torch.meshgrid(
+                self.indices, self.indices, indexing="ij"
+            )
+
+            # Filter out the diagonal elements (where i == j)
+            mask = self.i_final_pairs != self.j_final_pairs
+            self.i_final_pairs = self.i_final_pairs[mask]
+            self.j_final_pairs = self.j_final_pairs[mask]
         # calculate r_ij and d_ij
 
         r_ij, d_ij = self.displacement_function(
-            positions[i_final_pairs], positions[j_final_pairs]
+            positions[self.i_final_pairs], positions[self.j_final_pairs]
         )
 
         # r_ij = positions[i_final_pairs] - positions[j_final_pairs]
         # d_ij = torch.norm(r_ij, dim=1, keepdim=True, p=2)
-        pair_indices = torch.stack((i_final_pairs, j_final_pairs))
+        pair_indices = torch.stack((self.i_final_pairs, self.j_final_pairs))
 
         in_cutoff = (d_ij <= self.cutoff).squeeze()
 

@@ -248,16 +248,13 @@ class MessageModule(torch.nn.Module):
         """
 
         idx_j = pair_indices[1]
-
+        s_j = per_atom_feature_tensor[idx_j]
         # Calculate the unit vector u_ij
         r_ij_norm = torch.norm(r_ij, dim=1, keepdim=True)  # Shape: (num_atom_pairs, 1)
         u_ij = r_ij / r_ij_norm  # Shape: (num_atom_pairs, 3)
 
         # Step 1: Radial Contributions Calculation (Equation 4)
-        proto_v_r_a = (
-            f_ij_cutoff * per_atom_feature_tensor[idx_j]
-        )  # Shape: (num_atom_pairs, nr_of_features)
-
+        proto_m_ij = torch.einsum("pF,pF -> pF", f_ij_cutoff, s_j)
         # Initialize tensor to accumulate radial contributions for each atom
         radial_contributions = torch.zeros(
             (per_atom_feature_tensor.shape[0], self.number_of_per_atom_features),
@@ -266,7 +263,7 @@ class MessageModule(torch.nn.Module):
         )  # Shape: (num_of_atoms, nr_of_features)
 
         # Accumulate the radial contributions using index_add_
-        radial_contributions.index_add_(0, idx_j, proto_v_r_a)
+        radial_contributions.index_add_(0, idx_j, proto_m_ij)
 
         # Step 2: Vector Contributions Calculation (Equation 5)
         # First, calculate the directional component by multiplying g_ij with u_ij

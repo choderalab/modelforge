@@ -270,6 +270,56 @@ class ScaleValues(torch.nn.Module):
         data[self.output_name] = data[self.property] * self.stddev + self.mean
         return data
 
+def default_charge_conservation(
+    per_atom_charge: torch.Tensor,
+    total_charges: torch.Tensor,
+    mol_indices: torch.Tensor,
+) -> torch.Tensor:
+    """
+    PhysNet charge conservation method based on equation 14 from the PhysNet
+    paper.
+
+    Correct the partial charges such that their sum matches the desired
+    total charge for each molecule.
+
+    Parameters
+    ----------
+    partial_charges : torch.Tensor
+        Flat tensor of partial charges for all atoms in all molecules.
+    total_charges : torch.Tensor
+        Tensor of desired total charges for each molecule.
+    mol_indices : torch.Tensor
+        Tensor of integers indicating which molecule each atom belongs to.
+
+    Returns
+    -------
+    torch.Tensor
+        Tensor of corrected partial charges.
+    """
+    # the general approach here is outline in equation 14 in the PhysNet
+    # paper: the difference between the sum of the predicted partial charges
+    # and the total charge is calculated and then distributed evenly among
+    # the predicted partial charges
+
+    # Calculate the sum of partial charges for each molecule
+
+    # for each atom i, calculate the sum of partial charges for all other
+    predicted_per_molecule_charge = torch.zeros(
+        total_charges.shape,
+        dtype=per_atom_charge.dtype,
+        device=total_charges.device,
+    ).scatter_add_(0, mol_indices.long(), per_atom_charge)
+
+    # Calculate the correction factor for each molecule
+    correction_factors = (
+        total_charges - predicted_per_molecule_charge
+    ) / mol_indices.bincount()
+
+    # Apply the correction to each atom's charge
+    per_atom_charge_corrected = per_atom_charge + correction_factors[mol_indices]
+
+    return per_atom_charge_corrected
+
 
 class ChargeConservation(torch.nn.Module):
     def __init__(self, method="default"):
@@ -277,7 +327,7 @@ class ChargeConservation(torch.nn.Module):
         super().__init__()
         self.method = method
         if self.method == "default":
-            self.correct_partial_charges = self.default_charge_conservation
+            self.correct_partial_charges = default_charge_conservation
         else:
             raise ValueError(f"Unknown charge conservation method: {self.method}")
 
@@ -309,56 +359,6 @@ class ChargeConservation(torch.nn.Module):
         )
         return data
 
-    def default_charge_conservation(
-        self,
-        per_atom_charge: torch.Tensor,
-        mol_indices: torch.Tensor,
-        total_charges: torch.Tensor,
-    ) -> torch.Tensor:
-        """
-        PhysNet charge conservation method based on equation 14 from the PhysNet
-        paper.
-
-        Correct the partial charges such that their sum matches the desired
-        total charge for each molecule.
-
-        Parameters
-        ----------
-        partial_charges : torch.Tensor
-            Flat tensor of partial charges for all atoms in all molecules.
-        mol_indices : torch.Tensor
-            Tensor of integers indicating which molecule each atom belongs to.
-        total_charges : torch.Tensor
-            Tensor of desired total charges for each molecule.
-
-        Returns
-        -------
-        torch.Tensor
-            Tensor of corrected partial charges.
-        """
-        # the general approach here is outline in equation 14 in the PhysNet
-        # paper: the difference between the sum of the predicted partial charges
-        # and the total charge is calculated and then distributed evenly among
-        # the predicted partial charges
-
-        # Calculate the sum of partial charges for each molecule
-
-        # for each atom i, calculate the sum of partial charges for all other
-        predicted_per_molecule_charge = torch.zeros(
-            total_charges.shape,
-            dtype=per_atom_charge.dtype,
-            device=total_charges.device,
-        ).scatter_add_(0, mol_indices.long(), per_atom_charge)
-
-        # Calculate the correction factor for each molecule
-        correction_factors = (
-            total_charges - predicted_per_molecule_charge
-        ) / mol_indices.bincount()
-
-        # Apply the correction to each atom's charge
-        per_atom_charge_corrected = per_atom_charge + correction_factors[mol_indices]
-
-        return per_atom_charge_corrected
 
 
 class CalculateAtomicSelfEnergy(torch.nn.Module):

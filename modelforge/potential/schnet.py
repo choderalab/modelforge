@@ -255,20 +255,15 @@ class SchNETInteractionModule(nn.Module):
         W_ij = W_ij * f_ij_cutoff
 
         # Perform continuous-filter convolution
-        x_j = atomic_embedding[idx_j]
-        x_ij = x_j * W_ij
-        x_ij_einsum = torch.einsum("ijF,jF->ijF", W_ij, x_j)
+        s_j = atomic_embedding[idx_j]
+        m_ij = torch.einsum("pF,pF -> pF", W_ij, s_j)
 
-        assert torch.allclose(
-            x_ij, x_ij_einsum
-        ), "Einstein summation and element-wise multiplication are not equal."
-
-        out = torch.zeros_like(atomic_embedding)
-        out.scatter_add_(
-            0, idx_i.unsqueeze(-1).expand_as(x_ij), x_ij
+        m_i = torch.zeros_like(atomic_embedding)
+        m_i.scatter_add_(
+            0, idx_i.unsqueeze(-1).expand_as(m_ij), m_ij
         )  # from per_atom_pair to _per_atom
 
-        return self.feature_to_output(out)  # shape: (nr_of_atoms, 1)
+        return self.feature_to_output(m_i)  # shape: (nr_of_atoms, 1)
 
 
 class SchNETRepresentation(nn.Module):

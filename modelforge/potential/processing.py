@@ -10,8 +10,6 @@ from openff.units import unit
 
 from modelforge.dataset.utils import _ATOMIC_NUMBER_TO_ELEMENT
 
-from .models import PairListOutputs
-
 
 def load_atomic_self_energies(path: str) -> Dict[str, unit.Quantity]:
     """
@@ -270,6 +268,7 @@ class ScaleValues(torch.nn.Module):
         data[self.output_name] = data[self.property] * self.stddev + self.mean
         return data
 
+
 def default_charge_conservation(
     per_atom_charge: torch.Tensor,
     total_charges: torch.Tensor,
@@ -354,11 +353,10 @@ class ChargeConservation(torch.nn.Module):
         """
         data["per_atom_charge_corrected"] = self.correct_partial_charges(
             data["per_atom_charge"],
-            data["atomic_subsystem_indices"],
             data["per_molecule_charge"],
+            data["atomic_subsystem_indices"],
         )
         return data
-
 
 
 class CalculateAtomicSelfEnergy(torch.nn.Module):
@@ -423,8 +421,11 @@ class CalculateAtomicSelfEnergy(torch.nn.Module):
         return data
 
 
+from typing import Literal
+
+
 class LongRangeElectrostaticEnergy(torch.nn.Module):
-    def __init__(self, strategy: str, cutoff: unit.Quantity):
+    def __init__(self, strategy: Literal["default"], cutoff: unit.Quantity):
         """
         Computes the long-range electrostatic energy for a molecular system
         based on predicted partial charges and pairwise distances between atoms.
@@ -449,10 +450,10 @@ class LongRangeElectrostaticEnergy(torch.nn.Module):
             The cutoff function applied to the pairwise distances.
         """
         super().__init__()
-        from .utils import CosineAttenuationFunction
+        from .utils import PhysNetAttenuationFunction
 
         self.strategy = strategy
-        self.cutoff_function = CosineAttenuationFunction(cutoff)
+        self.cutoff_function = PhysNetAttenuationFunction(cutoff)
 
     def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
@@ -477,7 +478,7 @@ class LongRangeElectrostaticEnergy(torch.nn.Module):
             containing the computed long-range electrostatic energy.
         """
         per_atom_charge = data["per_atom_charge"]
-        mol_indices = data["atomic_subsystem_indices"]
+        # mol_indices = data["atomic_subsystem_indices"]
         pairwise_properties = data["pairwise_properties"]
         idx_i, idx_j = pairwise_properties["maximum_interaction_radius"].pair_indices
         pairwise_distances = pairwise_properties["maximum_interaction_radius"].d_ij

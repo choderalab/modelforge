@@ -188,6 +188,24 @@ def test_cosine_cutoff_module():
 
     assert torch.allclose(output, expected_output, rtol=1e-3)
 
+def test_PhysNetAttenuationFunction():
+    from modelforge.potential.utils import PhysNetAttenuationFunction
+    from openff.units import unit
+    import torch
+
+    # test the cutoff on this distance vector (NOTE: it is in angstrom)
+    d_ij_angstrom = torch.tensor([1.0, 2.0, 3.0]).unsqueeze(1)
+    # the expected outcome is that entry 1 and 2 become zero
+    # and entry 0 becomes 0.5 (since the cutoff is 2.0 angstrom)
+    # input in angstrom
+    cutoff = 2.0 * unit.angstrom
+
+    expected_output = torch.tensor([0.5, 0.0, 0.0]).unsqueeze(1)
+    physnet_cutoff_module = PhysNetAttenuationFunction(cutoff)
+
+    output = physnet_cutoff_module(d_ij_angstrom / 10)  # input is in nanometer
+
+    assert torch.allclose(output, expected_output, rtol=1e-3)
 
 def test_radial_symmetry_function_implementation():
     """

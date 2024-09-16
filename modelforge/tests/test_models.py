@@ -180,6 +180,26 @@ def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
     }
 
 
+def test_electrostatics():
+    from modelforge.potential.processing import LongRangeElectrostaticEnergy
+    from modelforge.potential.models import PairListOutputs
+
+    e_elec = LongRangeElectrostaticEnergy("default", 1.0 * unit.nanometer)
+    per_atom_charge = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0])
+
+
+"""     
+pairlist =     PairListOutputs(
+pair_indices=torch.tensor([[0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4],
+                            [1,2,3,4,0,2,3,4,0,1,3,4,0,1,2,4,0,1,2,3]]),
+d_ij = torch.tensor([
+    )
+
+    pairwise_properties = {}
+    pairwise_properties["maximum_interaction_radius"] = 
+ """
+
+
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )

@@ -638,14 +638,15 @@ class PhysNetAttenuationFunction(nn.Module):
 
     def forward(self, d_ij: torch.Tensor):
 
-        return torch.clamp((
-            1
-            - 6 * torch.pow((d_ij / self.cutoff), 5)
-            + 15 * torch.pow((d_ij / self.cutoff), 4)
-            - 10 * torch.pow((d_ij / self.cutoff), 3)
-        ), min=0)
-        
-        
+        return torch.clamp(
+            (
+                1
+                - 6 * torch.pow((d_ij / self.cutoff), 5)
+                + 15 * torch.pow((d_ij / self.cutoff), 4)
+                - 10 * torch.pow((d_ij / self.cutoff), 3)
+            ),
+            min=0,
+        )
 
 
 class CosineAttenuationFunction(nn.Module):

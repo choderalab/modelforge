@@ -574,7 +574,7 @@ def test_forward_pass_with_all_datasets(
     "energy_expression",
     [
         "short_range_and_long_range_electrostatic",
-    ], 
+    ],
 )
 @pytest.mark.parametrize("potential_name", ["SchNet"])
 @pytest.mark.parametrize("simulation_environment", ["PyTorch"])
@@ -602,6 +602,7 @@ def test_long_range_e(
     # validate the output
     a = 7
     a = 6
+
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
 @pytest.mark.parametrize(

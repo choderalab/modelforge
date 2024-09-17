@@ -14,8 +14,6 @@ def prep_temp_dir(tmp_path_factory):
     return fn
 
 
-
-
 def test_charge_equilibration():
     from modelforge.potential.processing import default_charge_conservation
 
@@ -188,6 +186,7 @@ def test_cosine_cutoff_module():
 
     assert torch.allclose(output, expected_output, rtol=1e-3)
 
+
 def test_PhysNetAttenuationFunction():
     from modelforge.potential.utils import PhysNetAttenuationFunction
     from openff.units import unit
@@ -206,6 +205,7 @@ def test_PhysNetAttenuationFunction():
     output = physnet_cutoff_module(d_ij_angstrom / 10)  # input is in nanometer
 
     assert torch.allclose(output, expected_output, rtol=1e-3)
+
 
 def test_radial_symmetry_function_implementation():
     """

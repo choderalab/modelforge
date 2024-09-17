@@ -622,6 +622,33 @@ class DenseWithCustomDist(nn.Linear):
 from openff.units import unit
 
 
+class PhysNetAttenuationFunction(nn.Module):
+    def __init__(self, cutoff: unit.Quantity):
+        """
+        Initialize the PhysNet attenuation function.
+
+        Parameters
+        ----------
+        cutoff : unit.Quantity
+            The cutoff distance.
+        """
+        super().__init__()
+        cutoff = cutoff.to(unit.nanometer).m
+        self.register_buffer("cutoff", torch.tensor([cutoff]))
+
+    def forward(self, d_ij: torch.Tensor):
+
+        return torch.clamp(
+            (
+                1
+                - 6 * torch.pow((d_ij / self.cutoff), 5)
+                + 15 * torch.pow((d_ij / self.cutoff), 4)
+                - 10 * torch.pow((d_ij / self.cutoff), 3)
+            ),
+            min=0,
+        )
+
+
 class CosineAttenuationFunction(nn.Module):
     def __init__(self, cutoff: unit.Quantity):
         """

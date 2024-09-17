@@ -14,6 +14,63 @@ def prep_temp_dir(tmp_path_factory):
     return fn
 
 
+def test_charge_equilibration():
+    from modelforge.potential.processing import default_charge_conservation
+
+    # test charge equilibration
+    # ------------------------- #
+    # test case 1
+    partial_point_charges = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    atomic_subsystem_indices = torch.tensor([0, 0, 1, 1, 1, 1], dtype=torch.int64)
+    total_charge = torch.tensor([0.0, 1.0])
+    charges = default_charge_conservation(
+        partial_point_charges,
+        total_charge,
+        atomic_subsystem_indices,
+    )
+
+    assert torch.allclose(
+        torch.zeros_like(total_charge).scatter_add_(
+            0, atomic_subsystem_indices, charges
+        ),
+        total_charge,
+    )
+
+    # ------------------------- #
+    # test case 2
+    partial_point_charges = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    total_charge = torch.tensor([-1.0, 2.0])
+    charges = default_charge_conservation(
+        partial_point_charges,
+        total_charge,
+        atomic_subsystem_indices,
+    )
+    assert torch.allclose(
+        torch.zeros_like(total_charge).scatter_add_(
+            0, atomic_subsystem_indices, charges
+        ),
+        total_charge,
+    )
+
+    # ------------------------- #
+    # test case 3
+    partial_point_charges = torch.rand_like(
+        atomic_subsystem_indices, dtype=torch.float32
+    )
+    total_charge = torch.tensor([-1.0, 2.0])
+    charges = default_charge_conservation(
+        partial_point_charges,
+        total_charge,
+        atomic_subsystem_indices,
+    )
+    assert torch.allclose(
+        torch.zeros_like(total_charge).scatter_add_(
+            0, atomic_subsystem_indices, charges
+        ),
+        total_charge,
+    )
+
+
 def test_dense_layer():
     from modelforge.potential.utils import DenseWithCustomDist
     import torch
@@ -126,6 +183,26 @@ def test_cosine_cutoff_module():
     cosine_cutoff_module = CosineAttenuationFunction(cutoff)
 
     output = cosine_cutoff_module(d_ij_angstrom / 10)  # input is in nanometer
+
+    assert torch.allclose(output, expected_output, rtol=1e-3)
+
+
+def test_PhysNetAttenuationFunction():
+    from modelforge.potential.utils import PhysNetAttenuationFunction
+    from openff.units import unit
+    import torch
+
+    # test the cutoff on this distance vector (NOTE: it is in angstrom)
+    d_ij_angstrom = torch.tensor([1.0, 2.0, 3.0]).unsqueeze(1)
+    # the expected outcome is that entry 1 and 2 become zero
+    # and entry 0 becomes 0.5 (since the cutoff is 2.0 angstrom)
+    # input in angstrom
+    cutoff = 2.0 * unit.angstrom
+
+    expected_output = torch.tensor([0.5, 0.0, 0.0]).unsqueeze(1)
+    physnet_cutoff_module = PhysNetAttenuationFunction(cutoff)
+
+    output = physnet_cutoff_module(d_ij_angstrom / 10)  # input is in nanometer
 
     assert torch.allclose(output, expected_output, rtol=1e-3)
 

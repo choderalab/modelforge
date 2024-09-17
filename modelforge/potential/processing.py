@@ -477,14 +477,23 @@ class LongRangeElectrostaticEnergy(torch.nn.Module):
             The input data dictionary with an additional key 'long_range_electrostatic_energy'
             containing the computed long-range electrostatic energy.
         """
-        per_atom_charge = data["per_atom_charge"]
-        # mol_indices = data["atomic_subsystem_indices"]
+        mol_indices = data["atomic_subsystem_indices"]
         pairwise_properties = data["pairwise_properties"]
         idx_i, idx_j = pairwise_properties["maximum_interaction_radius"].pair_indices
-        pairwise_distances = pairwise_properties["maximum_interaction_radius"].d_ij
+
+        # only unique paris
+        unique_pairs_mask = idx_i < idx_j
+        idx_i = idx_i[unique_pairs_mask]
+        idx_j = idx_j[unique_pairs_mask]
+
+        # mask pairwise properties
+        pairwise_distances = pairwise_properties["maximum_interaction_radius"].d_ij[
+            unique_pairs_mask
+        ]
+        per_atom_charge = data["per_atom_charge"]
 
         # Initialize the long-range electrostatic energy
-        long_range_energy = torch.zeros_like(per_atom_charge)
+        electrostatic_energy = torch.zeros_like(data["per_molecule_energy"])
 
         # Apply the cutoff function to pairwise distances
         phi_2r = self.cutoff_function(2 * pairwise_distances)
@@ -493,16 +502,16 @@ class LongRangeElectrostaticEnergy(torch.nn.Module):
         ) * (1 / pairwise_distances)
 
         # Compute the Coulomb interaction term
-        coulomb_interactions = (per_atom_charge[idx_i] * per_atom_charge[idx_j]) * chi_r
-        # 138.96 in kj/mol nm
-        # Zero out diagonal terms (self-interaction)
-        mask = torch.eye(
-            coulomb_interactions.size(0), device=coulomb_interactions.device
-        ).bool()
-        coulomb_interactions.masked_fill_(mask, 0)
+        coulomb_interactions = (
+            per_atom_charge[idx_i] * per_atom_charge[idx_j]
+        ) * chi_r.squeeze(-1)
 
-        # Sum over all interactions for each atom
-        coulomb_interactions_per_atom = coulomb_interactions.sum(dim=1)
-        data["per_atom_electrostatic_energy"] = coulomb_interactions_per_atom
+        # Sum over all interactions for each molecule
+        data["electrostatic_energy"] = (
+            electrostatic_energy.scatter_add_(
+                0, mol_indices.long(), coulomb_interactions
+            )
+            * 138.96
+        )  # in kj/mol nm
 
         return data

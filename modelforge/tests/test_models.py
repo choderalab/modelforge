@@ -24,6 +24,7 @@ def set_postprocessing_based_on_energy_expression(config, energy_expression):
         conf_section.coulomb_potential = CoulomPotential(
             electrostatic_strategy="coulomb",
             maximum_interaction_radius=10.0 * unit.angstrom,
+            keep_per_atom_property=True,
         )
 
         return config
@@ -567,6 +568,40 @@ def test_forward_pass_with_all_datasets(
     # pairlist is in ascending order in row 0
     assert torch.all(pair_list[0, 1:] >= pair_list[0, :-1])
 
+
+@pytest.mark.parametrize("dataset_name", ["SPICE2"])
+@pytest.mark.parametrize(
+    "energy_expression",
+    [
+        "short_range_and_long_range_electrostatic",
+    ], 
+)
+@pytest.mark.parametrize("potential_name", ["SchNet"])
+@pytest.mark.parametrize("simulation_environment", ["PyTorch"])
+def test_long_range_e(
+    dataset_name,
+    energy_expression,
+    potential_name,
+    simulation_environment,
+    single_batch_with_batchsize,
+):
+    # this test sends a single batch from different datasets through the model
+
+    # get input and set up model
+    nnp_input = single_batch_with_batchsize(32, dataset_name).nnp_input
+    config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
+    set_postprocessing_based_on_energy_expression(config, energy_expression)
+
+    nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
+    model = initialize_model(simulation_environment, config)
+    nnp_input = prepare_input_for_model(nnp_input, model)
+
+    # perform the forward pass through each of the models
+    output = model(nnp_input)
+
+    # validate the output
+    a = 7
+    a = 6
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
 @pytest.mark.parametrize(

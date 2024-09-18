@@ -2,8 +2,6 @@
 This module contains pydantic models for storing the parameters of the potentials.
 """
 
-from __future__ import annotations
-
 from enum import Enum
 from typing import List, Optional, Type, Union
 
@@ -12,16 +10,13 @@ from openff.units import unit
 from pydantic import (
     BaseModel,
     ConfigDict,
-    computed_field,
     Field,
-from typing import Union, Optional, Type, List
+    computed_field,
+    field_validator,
+    model_validator,
+)
+
 from modelforge.utils.units import _convert_str_to_unit_length
-from enum import Enum
-
-import torch
-
-
-from modelforge.utils.units import _convert_str_to_unit
 
 
 class CaseInsensitiveEnum(str, Enum):
@@ -104,7 +99,7 @@ class ActivationFunctionConfig(ParametersBase):
     ] = None
 
     @model_validator(mode="after")
-    def validate_activation_function_arguments(self) -> "ActivationFunctionLoader":
+    def validate_activation_function_arguments(self) -> "ActivationFunctionConfig":
         if ActivationFunctionParamsEnum[self.activation_function_name].value != "None":
             if self.activation_function_arguments is None:
                 raise ValueError(
@@ -132,8 +127,8 @@ class ActivationFunctionConfig(ParametersBase):
         return self.return_activation_function()
 
 
-# these will all be set by default to false
-# such that we do not need to define unused post processing operations in the datafile
+# these will all be set by default to false such that we do not need to define
+# unused post processing operations in the datafile
 class GeneralPostProcessingOperation(ParametersBase):
     calculate_molecular_self_energy: bool = False
     calculate_atomic_self_energy: bool = False
@@ -143,6 +138,25 @@ class PerAtomEnergy(ParametersBase):
     normalize: bool = False
     from_atom_to_molecule_reduction: bool = False
     keep_per_atom_property: bool = False
+
+
+class CoulombPotential(ParametersBase):
+    electrostatic_strategy: str = "default"
+    maximum_interaction_radius: float
+
+    converted_units = field_validator(
+        "maximum_interaction_radius",
+        mode="before",
+    )(_convert_str_to_unit_length)
+
+
+class PostProcessingParameter(ParametersBase):
+    properties_to_process: List[str]
+    per_atom_energy: PerAtomEnergy = PerAtomEnergy()
+    coulomb_potential: Optional[CoulombPotential] = None
+    general_postprocessing_operation: GeneralPostProcessingOperation = (
+        GeneralPostProcessingOperation()
+    )
 
 
 class AimNet2Parameters(ParametersBase):
@@ -157,33 +171,10 @@ class AimNet2Parameters(ParametersBase):
             _convert_str_to_unit_length
         )
 
-    class PostProcessingParameter(ParametersBase):
-        per_atom_energy: PerAtomEnergy = PerAtomEnergy()
-        general_postprocessing_operation: GeneralPostProcessingOperation = (
-            GeneralPostProcessingOperation()
-        )
-
     potential_name: str = "AimNet2"
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
     potential_seed: Optional[int] = None
-
-  class CoulomPotential(ParametersBase):
-    electrostatic_strategy: str = "coulomb"
-    maximum_interaction_radius: Union[str, unit.Quantity]
-    from_atom_to_molecule_reduction: bool = False
-    keep_per_atom_property: bool = False
-
-    converted_units = field_validator(
-        "maximum_interaction_radius",
-    )(_convert_str_to_unit)
-
-
-class PerAtomCharge(ParametersBase):
-    conserve: bool = False
-    conserve_strategy: str = "default"
-    keep_per_atom_property: bool = False
-    coulomb_potential: Optional[CoulomPotential] = None
 
 
 class ANI2xParameters(ParametersBase):
@@ -206,13 +197,6 @@ class ANI2xParameters(ParametersBase):
             mode="before",
         )(_convert_str_to_unit_length)
 
-    class PostProcessingParameter(ParametersBase):
-        per_atom_energy: PerAtomEnergy = PerAtomEnergy()
-        per_atom_charge: PerAtomCharge = PerAtomCharge()
-        general_postprocessing_operation: GeneralPostProcessingOperation = (
-            GeneralPostProcessingOperation()
-        )
-
     potential_name: str = "ANI2x"
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
@@ -232,13 +216,6 @@ class SchNetParameters(ParametersBase):
 
         converted_units = field_validator("maximum_interaction_radius", mode="before")(
             _convert_str_to_unit_length
-        )
-
-    class PostProcessingParameter(ParametersBase):
-        per_atom_energy: PerAtomEnergy = PerAtomEnergy()
-        per_atom_charge: PerAtomCharge = PerAtomCharge()
-        general_postprocessing_operation: GeneralPostProcessingOperation = (
-            GeneralPostProcessingOperation()
         )
 
     potential_name: str = "SchNet"
@@ -263,13 +240,6 @@ class TensorNetParameters(ParametersBase):
             "maximum_interaction_radius", "minimum_interaction_radius", mode="before"
         )(_convert_str_to_unit_length)
 
-    class PostProcessingParameter(ParametersBase):
-        per_atom_energy: PerAtomEnergy = PerAtomEnergy()
-        per_atom_charge: PerAtomCharge = PerAtomCharge()
-        general_postprocessing_operation: GeneralPostProcessingOperation = (
-            GeneralPostProcessingOperation()
-        )
-
     potential_name: str = "TensorNet"
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
@@ -290,13 +260,6 @@ class PaiNNParameters(ParametersBase):
 
         converted_units = field_validator("maximum_interaction_radius", mode="before")(
             _convert_str_to_unit_length
-        )
-
-    class PostProcessingParameter(ParametersBase):
-        per_atom_energy: PerAtomEnergy = PerAtomEnergy()
-        per_atom_charge: PerAtomCharge = PerAtomCharge()
-        general_postprocessing_operation: GeneralPostProcessingOperation = (
-            GeneralPostProcessingOperation()
         )
 
     potential_name: str = "PaiNN"
@@ -320,13 +283,6 @@ class PhysNetParameters(ParametersBase):
             _convert_str_to_unit_length
         )
 
-    class PostProcessingParameter(ParametersBase):
-        per_atom_energy: PerAtomEnergy = PerAtomEnergy()
-        per_atom_charge: PerAtomCharge = PerAtomCharge()
-        general_postprocessing_operation: GeneralPostProcessingOperation = (
-            GeneralPostProcessingOperation()
-        )
-
     potential_name: str = "PhysNet"
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
@@ -346,13 +302,6 @@ class SAKEParameters(ParametersBase):
 
         converted_units = field_validator("maximum_interaction_radius", mode="before")(
             _convert_str_to_unit_length
-        )
-
-    class PostProcessingParameter(ParametersBase):
-        per_atom_energy: PerAtomEnergy = PerAtomEnergy()
-        per_atom_charge: PerAtomCharge = PerAtomCharge()
-        general_postprocessing_operation: GeneralPostProcessingOperation = (
-            GeneralPostProcessingOperation()
         )
 
     potential_name: str = "SAKE"

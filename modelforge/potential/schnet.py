@@ -21,7 +21,6 @@ class SchNetCore(torch.nn.Module):
         number_of_filters: int,
         activation_function_parameter: Dict[str, str],
         shared_interactions: bool,
-        maximum_interaction_radius: unit.Quantity,
         predicted_properties: List[Dict[str, str]],
     ) -> None:
 
@@ -355,4 +354,3 @@ class SchNETRepresentation(nn.Module):
                 data
             ),  # add per-atom properties and embedding
         }
->>>>>> main

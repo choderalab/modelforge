@@ -721,7 +721,7 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
 
 from torch.nn import ModuleDict
 
-from modelforge.potential.processing import PerAtomEnergy
+from modelforge.potential.processing import PerAtomEnergy, CoulombPotential
 
 
 class PostProcessing(torch.nn.Module):
@@ -770,15 +770,12 @@ class PostProcessing(torch.nn.Module):
                 dataset_statistic["training_dataset_statistics"],
             )
             self._registered_properties.append("per_atom_energy")
-        
-        else:
-            "per_atom_charge" in postprocessing_parameter:
-            self.registered_chained_operations["per_atom_energy"] = PerAtomCharge(
-                postprocessing_parameter["per_atom_charge"],
-                dataset_statistic["training_dataset_statistics"],
+
+        if "coulomb_potential" in postprocessing_parameter:
+            self.registered_chained_operations["coulomb_potential"] = CoulombPotential(
+                postprocessing_parameter["electrostatic_strategy"],
+                dataset_statistic["maximum_interaction_radius"],
             )
-
-
 
     def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
@@ -811,8 +808,8 @@ class PostProcessing(torch.nn.Module):
             ].forward(data["per_atom_charge"], data["atomic_subsystem_indices"])
 
             processed_data["per_molecule_eleenergy"] = per_molecule_energy
-            processed_data["per_atom_energy"] = data["per_atom_energy"].detach()        
-            
+            processed_data["per_atom_energy"] = data["per_atom_energy"].detach()
+
         return processed_data
 
 

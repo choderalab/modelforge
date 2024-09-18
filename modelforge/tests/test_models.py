@@ -188,10 +188,10 @@ def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
 
 
 def test_electrostatics():
-    from modelforge.potential.processing import LongRangeElectrostaticEnergy
+    from modelforge.potential.processing import CoulombPotential
     from modelforge.potential.models import PairListOutputs
 
-    e_elec = LongRangeElectrostaticEnergy("default", 1.0 * unit.nanometer)
+    e_elec = CoulombPotential("default", 1.0 * unit.nanometer)
     per_atom_charge = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0])
 
 
@@ -577,7 +577,6 @@ def test_long_range_e(
     single_batch_with_batchsize,
 ):
     # this test sends a single batch from different datasets through the model
-
 
     # get input and set up model
     nnp_input = single_batch_with_batchsize(32, dataset_name).nnp_input

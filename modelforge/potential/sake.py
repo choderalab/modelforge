@@ -26,6 +26,9 @@ class MultiplySigmoid(nn.Module):
         return self.factor * torch.sigmoid(x)
 
 
+from typing import List, Tuple
+
+
 class SAKECore(torch.nn.Module):
 
     def __init__(
@@ -36,7 +39,7 @@ class SAKECore(torch.nn.Module):
         number_of_radial_basis_functions: int,
         maximum_interaction_radius: float,
         activation_function_parameter: Dict[str, str],
-        predicted_properties: List[Dict[str, str]],
+        predicted_properties: List[Tuple[str, str]],
         epsilon: float = 1e-8,
         potential_seed: int = -1,
     ):
@@ -541,6 +544,3 @@ class SAKEInteraction(nn.Module):
         x_updated = x + v_updated
 
         return h_updated, x_updated, v_updated
-
-
-

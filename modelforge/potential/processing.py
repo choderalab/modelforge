@@ -124,7 +124,6 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         )
 
 
-
 @dataclass
 class AtomicSelfEnergies:
     """
@@ -376,6 +375,34 @@ class PerAtomEnergy(torch.nn.Module):
         return reduced_values
 
 
+class PerAtomEnergy(torch.nn.Module):
+
+    def __init__(
+        self, per_atom_energy: Dict[str, bool], dataset_statistics: Dict[str, float]
+    ):
+        super().__init__()
+
+        if per_atom_energy.get("normalize"):
+            scale = ScaleValues(
+                dataset_statistics["per_atom_energy_mean"],
+                dataset_statistics["per_atom_energy_stddev"],
+            )
+        else:
+            scale = ScaleValues(0.0, 1.0)
+
+        self.scale = scale
+
+        if per_atom_energy.get("from_atom_to_molecule_reduction"):
+            reduction = FromAtomToMoleculeReduction()
+
+        self.reduction = reduction
+
+    def forward(self, per_atom_property: torch.Tensor, indices: torch.Tensor):
+        scaled_values = self.scale(per_atom_property)
+        reduced_values = self.reduction(indices, scaled_values)
+        return reduced_values
+
+
 class CalculateAtomicSelfEnergy(torch.nn.Module):
     """
     Calculates the atomic self energy for each molecule.
@@ -441,8 +468,8 @@ class CalculateAtomicSelfEnergy(torch.nn.Module):
 from typing import Literal
 
 
-class LongRangeElectrostaticEnergy(torch.nn.Module):
-    def __init__(self, strategy: Literal["default"], cutoff: unit.Quantity):
+class CoulombPotential(torch.nn.Module):
+    def __init__(self, strategy: Literal["default"], cutoff: float):
         """
         Computes the long-range electrostatic energy for a molecular system
         based on predicted partial charges and pairwise distances between atoms.
@@ -455,9 +482,9 @@ class LongRangeElectrostaticEnergy(torch.nn.Module):
         strategy : str
             The strategy to be used for computing the long-range electrostatic
             energy.
-        cutoff : unit.Quantity
+        cutoff : float
             The cutoff distance beyond which the interactions are not
-            considered.
+            considered in nanometer.
 
         Attributes
         ----------

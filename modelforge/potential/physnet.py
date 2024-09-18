@@ -396,6 +396,9 @@ class PhysNetModule(nn.Module):
         }
 
 
+from typing import Tuple, List
+
+
 class PhysNetCore(torch.nn.Module):
 
     def __init__(
@@ -406,8 +409,8 @@ class PhysNetCore(torch.nn.Module):
         number_of_interaction_residual: int,
         number_of_modules: int,
         activation_function_parameter: Dict[str, str],
+        predicted_properties: List[Tuple[str, str]],
         potential_seed: int = -1,
-        predicted_properties: List[Dict[str, str]],
     ) -> None:
 
         super().__init__()
@@ -460,7 +463,6 @@ class PhysNetCore(torch.nn.Module):
         )
 
         self.predicted_properties = predicted_properties
-
 
     def compute_properties(
         self, data: NNPInputTuple, pairlist_output: PairlistData

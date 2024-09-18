@@ -522,7 +522,7 @@ from openff.units import unit
 
 
 class PhysNetAttenuationFunction(nn.Module):
-    def __init__(self, cutoff: unit.Quantity):
+    def __init__(self, cutoff: float):
         """
         Initialize the PhysNet attenuation function.
 
@@ -532,7 +532,6 @@ class PhysNetAttenuationFunction(nn.Module):
             The cutoff distance.
         """
         super().__init__()
-        cutoff = cutoff.to(unit.nanometer).m
         self.register_buffer("cutoff", torch.tensor([cutoff]))
 
     def forward(self, d_ij: torch.Tensor):

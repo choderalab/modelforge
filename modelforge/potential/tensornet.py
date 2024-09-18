@@ -2,10 +2,9 @@
 TensorNet network for molecular potential learning.
 """
 
-from typing import Dict, Optional, Tuple, Type
+from typing import Dict, List, Tuple, Type
 
 import torch
-from openff.units import unit
 from torch import nn
 
 from modelforge.potential.utils import (
@@ -172,10 +171,10 @@ class TensorNetCore(torch.nn.Module):
         minimum_interaction_radius: float,
         maximum_atomic_number: int,
         equivariance_invariance_group: str,
-        activation_function_parameter: Dict,
+        activation_function_parameter: Dict[str, str],
+        predicted_properties: List[Tuple[str, str]],
         potential_seed: int = -1,
         trainable_centers_and_scale_factors: bool = False,
-        predicted_properties: List[Dict[str, str]],
     ) -> None:
         super().__init__()
         activation_function = activation_function_parameter["activation_function"]
@@ -314,7 +313,6 @@ class TensorNetCore(torch.nn.Module):
             )
 
         return results
-
 
 
 class TensorNetRepresentation(torch.nn.Module):

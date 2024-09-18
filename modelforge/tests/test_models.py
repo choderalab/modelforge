@@ -1,17 +1,13 @@
-from typing import Optional
 
 import pytest
 import torch
 from openff.units import unit
 
 from modelforge.dataset import _ImplementedDatasets
-
+from modelforge.potential import NeuralNetworkPotentialFactory, _Implemented_NNPs
 from modelforge.tests.helper_functions import setup_potential_for_test
-from modelforge.utils.misc import load_configs_into_pydantic_models
-from modelforge.potential import NeuralNetworkPotentialFactory
-import torch
 from modelforge.utils.io import import_
-from openff.units import unit
+from modelforge.utils.misc import load_configs_into_pydantic_models
 
 
 def set_postprocessing_based_on_energy_expression(config, energy_expression):
@@ -142,14 +138,16 @@ def convert_to_pytorch_if_needed(output, nnp_input, model):
 
 
 def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
-    from modelforge.tests.data import (
-        potential_defaults,
-        training_defaults,
-        dataset_defaults,
-        runtime_defaults,
-    )
     from importlib import resources
+
     import toml
+
+    from modelforge.tests.data import (
+        dataset_defaults,
+        potential_defaults,
+        runtime_defaults,
+        training_defaults,
+    )
 
     potential_path = (
         resources.files(potential_defaults) / f"{potential_name.lower()}.toml"
@@ -173,7 +171,7 @@ def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
     potential_parameters = PotentialParameters(**potential_config_dict["potential"])
 
     from modelforge.dataset.dataset import DatasetParameters
-    from modelforge.train.parameters import TrainingParameters, RuntimeParameters
+    from modelforge.train.parameters import RuntimeParameters, TrainingParameters
 
     dataset_parameters = DatasetParameters(**dataset_config_dict["dataset"])
     training_parameters = TrainingParameters(**training_config_dict["training"])
@@ -188,8 +186,8 @@ def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
 
 
 def test_electrostatics():
-    from modelforge.potential.processing import CoulombPotential
     from modelforge.potential.models import PairListOutputs
+    from modelforge.potential.processing import CoulombPotential
 
     e_elec = CoulombPotential("default", 1.0 * unit.nanometer)
     per_atom_charge = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0])
@@ -211,7 +209,6 @@ d_ij = torch.tensor([
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
 def test_JAX_wrapping(potential_name, single_batch_with_batchsize):
-    from modelforge.potential.models import NeuralNetworkPotentialFactory
 
     batch = single_batch_with_batchsize(batch_size=1, dataset_name="QM9")
 

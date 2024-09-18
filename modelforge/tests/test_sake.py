@@ -8,7 +8,7 @@ import pytest
 import sake as reference_sake
 import torch
 
-from modelforge.potential.sake import SAKE, SAKEInteraction
+from modelforge.potential.sake import SAKEInteraction
 from modelforge.tests.helper_functions import setup_potential_for_test
 
 ON_MAC = platform == "darwin"

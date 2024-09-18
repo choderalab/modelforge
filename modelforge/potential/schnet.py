@@ -21,6 +21,8 @@ class SchNetCore(torch.nn.Module):
         number_of_filters: int,
         activation_function_parameter: Dict[str, str],
         shared_interactions: bool,
+        maximum_interaction_radius: unit.Quantity,
+        predicted_properties: List[Dict[str, str]],
     ) -> None:
 
         super().__init__()
@@ -70,18 +72,26 @@ class SchNetCore(torch.nn.Module):
                 ]
             )
 
-        # output layer to obtain per-atom energies
-        self.energy_layer = nn.Sequential(
-            DenseWithCustomDist(
-                number_of_per_atom_features,
-                number_of_per_atom_features,
-                activation_function=self.activation_function,
-            ),
-            DenseWithCustomDist(
-                number_of_per_atom_features,
-                1,
-            ),
-        )
+        # Initialize output layers based on configuration
+        self.output_layers = nn.ModuleDict()
+        for property in predicted_properties:
+            output_name = property["name"]
+            output_type = property["type"]
+            output_dimension = (
+                1 if output_type == "scalar" else 3
+            )  # vector means 3D output
+
+            self.output_layers[output_name] = nn.Sequential(
+                DenseWithCustomDist(
+                    number_of_per_atom_features,
+                    number_of_per_atom_features,
+                    activation_function=self.activation_function,
+                ),
+                DenseWithCustomDist(
+                    number_of_per_atom_features,
+                    output_dimension,
+                ),
+            )
 
     def compute_properties(
         self, data: NNPInputTuple, pairlist_output: PairlistData
@@ -115,10 +125,7 @@ class SchNetCore(torch.nn.Module):
                 atomic_embedding + v
             )  # Update per atom features given the environment
 
-        E_i = self.energy_layer(atomic_embedding).squeeze(1)
-
-        return {
-            "per_atom_energy": E_i,
+        results = {
             "per_atom_scalar_representation": atomic_embedding,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
@@ -151,6 +158,12 @@ class SchNetCore(torch.nn.Module):
         outputs["atomic_numbers"] = data.atomic_numbers
 
         return outputs
+        # FIXME
+        # Compute all specified outputs
+        for output_name, output_layer in self.output_layers.items():
+            results[output_name] = output_layer(atomic_embedding).squeeze(-1)
+
+        return results
 
 
 class SchNETInteractionModule(nn.Module):
@@ -342,3 +355,4 @@ class SchNETRepresentation(nn.Module):
                 data
             ),  # add per-atom properties and embedding
         }
+>>>>>> main

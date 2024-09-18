@@ -36,6 +36,7 @@ class SAKECore(torch.nn.Module):
         number_of_radial_basis_functions: int,
         maximum_interaction_radius: float,
         activation_function_parameter: Dict[str, str],
+        predicted_properties: List[Dict[str, str]],
         epsilon: float = 1e-8,
         potential_seed: int = -1,
     ):
@@ -108,11 +109,8 @@ class SAKECore(torch.nn.Module):
         for interaction_mod in self.interaction_modules:
             h, x, v = interaction_mod(h, x, v, pairlist_output.pair_indices)
 
-        # Use squeeze to remove dimensions of size 1
-        E_i = self.energy_layer(h).squeeze(1)
-
-        return {
-            "per_atom_energy": E_i,
+        results = {
+            "per_atom_scalar_representation": h,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
 
@@ -142,8 +140,12 @@ class SAKECore(torch.nn.Module):
         outputs = self.compute_properties(data, pairlist_output)
         # add atomic numbers to the output
         outputs["atomic_numbers"] = data.atomic_numbers
+        # FIXME:
+        # Compute all specified outputs
+        for output_name, output_layer in self.output_layers.items():
+            results[output_name] = output_layer(h).squeeze(-1)
 
-        return outputs
+        return results
 
 
 class SAKEInteraction(nn.Module):
@@ -541,6 +543,4 @@ class SAKEInteraction(nn.Module):
         return h_updated, x_updated, v_updated
 
 
-class SAKE:
-    def __init__(self):
-        pass
+

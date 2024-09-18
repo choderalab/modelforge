@@ -24,6 +24,7 @@ class PaiNNCore(torch.nn.Module):
         shared_interactions: bool,
         shared_filters: bool,
         activation_function_parameter: Dict[str, str],
+        predicted_properties: List[Dict[str, str]],
         epsilon: float = 1e-8,
         potential_seed: int = -1,
     ):
@@ -82,17 +83,26 @@ class PaiNNCore(torch.nn.Module):
         )
 
         # reduce per-atom features to per atom scalar
-        self.energy_layer = nn.Sequential(
-            DenseWithCustomDist(
-                number_of_per_atom_features,
-                number_of_per_atom_features,
-                activation_function=self.activation_function,
-            ),
-            DenseWithCustomDist(
-                number_of_per_atom_features,
-                1,
-            ),
-        )
+        # Initialize output layers based on configuration
+        self.output_layers = nn.ModuleDict()
+        for property in predicted_properties:
+            output_name = property["name"]
+            output_type = property["type"]
+            output_dimension = (
+                1 if output_type == "scalar" else 3
+            )  # vector means 3D output
+
+            self.output_layers[output_name] = nn.Sequential(
+                DenseWithCustomDist(
+                    number_of_per_atom_features,
+                    number_of_per_atom_features,
+                    activation_function=self.activation_function,
+                ),
+                DenseWithCustomDist(
+                    number_of_per_atom_features,
+                    output_dimension,
+                ),
+            )
 
     def compute_properties(
         self, data: NNPInputTuple, pairlist_output: PairlistData
@@ -132,14 +142,9 @@ class PaiNNCore(torch.nn.Module):
                 per_atom_scalar_feature, per_atom_vector_feature
             )
 
-        # Use squeeze to remove dimensions of size 1
-        per_atom_scalar_feature = per_atom_scalar_feature.squeeze(dim=1)
-        E_i = self.energy_layer(per_atom_scalar_feature).squeeze(1)
-
-        return {
-            "per_atom_energy": E_i,
+        results = {
+            "per_atom_scalar_representation": per_atom_scalar_feature.squeeze(1),
             "per_atom_vector_representation": per_atom_vector_feature,
-            "per_atom_scalar_representation": per_atom_scalar_feature,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
 
@@ -170,7 +175,14 @@ class PaiNNCore(torch.nn.Module):
         # add atomic numbers to the output
         outputs["atomic_numbers"] = data.atomic_numbers
 
-        return outputs
+        # Use squeeze to remove dimensions of size 1
+        # per_atom_scalar_feature = per_atom_scalar_feature.squeeze(dim=1)
+        # NOTE: #FIXME
+        # Compute all specified outputs
+        for output_name, output_layer in self.output_layers.items():
+            o = output_layer(per_atom_scalar_feature.squeeze()).squeeze()
+            results[output_name] = o
+        return results
 
 
 class PaiNNRepresentation(nn.Module):

@@ -730,7 +730,16 @@ class PostProcessing(torch.nn.Module):
     and reduction operations.
     """
 
-    _SUPPORTED_PROPERTIES = ["per_atom_energy", "general_postprocessing_operation"]
+    _SUPPORTED_PROPERTIES = [
+        "per_atom_energy",
+        "per_atom_charge",
+        "general_postprocessing_operation",
+    ]
+    _SUPPORTED_OPERATIONS = [
+        "normalize",
+        "from_atom_to_molecule_reduction",
+        "long_range_electrostatics" "conserve_integer_charge",
+    ]
 
     def __init__(
         self,
@@ -761,6 +770,15 @@ class PostProcessing(torch.nn.Module):
                 dataset_statistic["training_dataset_statistics"],
             )
             self._registered_properties.append("per_atom_energy")
+        
+        else:
+            "per_atom_charge" in postprocessing_parameter:
+            self.registered_chained_operations["per_atom_energy"] = PerAtomCharge(
+                postprocessing_parameter["per_atom_charge"],
+                dataset_statistic["training_dataset_statistics"],
+            )
+
+
 
     def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
@@ -786,6 +804,15 @@ class PostProcessing(torch.nn.Module):
             processed_data["per_molecule_energy"] = per_molecule_energy
             processed_data["per_atom_energy"] = data["per_atom_energy"].detach()
 
+        if "per_atom_charge" in self._registered_properties:
+
+            per_molecule_energy = self.registered_chained_operations[
+                "per_atom_charge"
+            ].forward(data["per_atom_charge"], data["atomic_subsystem_indices"])
+
+            processed_data["per_molecule_eleenergy"] = per_molecule_energy
+            processed_data["per_atom_energy"] = data["per_atom_energy"].detach()        
+            
         return processed_data
 
 

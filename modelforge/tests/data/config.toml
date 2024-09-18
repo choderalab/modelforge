@@ -7,6 +7,10 @@ maximum_interaction_radius = "5.0 angstrom"
 number_of_interaction_modules = 3
 number_of_filters = 32
 shared_interactions = false
+predicted_properties = [
+    { name = "per_atom_energy", type = "scalar" },
+    { name = "per_atom_charge", type = "scalar" },
+]
 
 [potential.core_parameter.activation_function_parameter]
 activation_function_name = "ShiftedSoftplus"

@@ -175,6 +175,7 @@ class TensorNetCore(torch.nn.Module):
         activation_function_parameter: Dict,
         potential_seed: int = -1,
         trainable_centers_and_scale_factors: bool = False,
+        predicted_properties: List[Dict[str, str]],
     ) -> None:
         super().__init__()
         activation_function = activation_function_parameter["activation_function"]
@@ -212,6 +213,22 @@ class TensorNetCore(torch.nn.Module):
             activation_function=activation_function,
         )
         self.out_norm = nn.LayerNorm(3 * number_of_per_atom_features)
+        # Initialize output layers based on configuration
+        self.output_layers = nn.ModuleDict()
+        for property in predicted_properties:
+            output_name = property["name"]
+            output_type = property["type"]
+            output_dimension = (
+                1 if output_type == "scalar" else 3
+            )  # vector means 3D output
+
+            self.output_layers[output_name] = DenseAndSum(
+                3 * number_of_per_atom_features,
+                number_of_per_atom_features,
+                output_dimension,
+            )
+
+        self.perform_layer_normalization = nn.LayerNorm(3 * number_of_per_atom_features)
 
     def compute_properties(
         self, data: NNPInputTuple, pairlist_output: PairlistData
@@ -248,15 +265,17 @@ class TensorNetCore(torch.nn.Module):
             )
 
         I, A, S = decompose_tensor(X)
+
         per_atom_scalar_representation = torch.cat(
             (tensor_norm(I), tensor_norm(A), tensor_norm(S)),
             dim=-1,
         )
-        per_atom_scalar_representation = self.out_norm(per_atom_scalar_representation)
-        per_atom_scalar_representation = self.readout(per_atom_scalar_representation)
 
-        return {
-            "per_atom_energy": per_atom_scalar_representation.sum(dim=1),
+        per_atom_scalar_representation = self.perform_layer_normalization(
+            per_atom_scalar_representation
+        )
+
+        results = {
             "per_atom_scalar_representation": per_atom_scalar_representation,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
@@ -287,8 +306,15 @@ class TensorNetCore(torch.nn.Module):
         outputs = self.compute_properties(data, pairlist_output)
         # add atomic numbers to the output
         outputs["atomic_numbers"] = data.atomic_numbers
+        # Compute all specified outputs
+        # FIXME
+        for output_name, output_layer in self.output_layers.items():
+            results[output_name] = output_layer(per_atom_scalar_representation).squeeze(
+                -1
+            )
 
-        return outputs
+        return results
+
 
 
 class TensorNetRepresentation(torch.nn.Module):
@@ -669,10 +695,10 @@ class TensorNetInteraction(torch.nn.Module):
             Radial feature vector calculated through
             TensorNetRadialBasisFunction.
         atomic_charges: torch.Tensor
-            Total charge q is a molecule-wise property.
-            We transform it into an atom-wise property,
-            with all atoms belonging to the same molecule being assigned
-            the same charge q (https://github.com/torchmd/torchmd-net/blob/6dea4b61e24de3e18921397866b7d9c5fd6b8bf1/torchmdnet/models/tensornet.py#L237)
+            Total charge q is a molecule-wise property. We transform it into an
+            atom-wise property, with all atoms belonging to the same molecule
+            being asqsigned the same charge q
+            (https://github.com/torchmd/torchmd-net/blob/6dea4b61e24de3e18921397866b7d9c5fd6b8bf1/torchmdnet/models/tensornet.py#L237)
 
         Returns
         -------

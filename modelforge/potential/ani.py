@@ -417,6 +417,27 @@ class ANIRepresentation(nn.Module):
         }
 
 
+class MultiOutputHeadNetwork(nn.Module):
+
+    def __init__(self, shared_layers: nn.Sequential, output_dims: int):
+        super().__init__()
+        self.shared_layers = shared_layers
+        input_dim = shared_layers[
+            -2
+        ].out_features  # Get the output dim from the last shared layer
+
+        # Create a list of output heads
+        self.output_heads = nn.ModuleList(
+            [nn.Linear(input_dim, 1) for _ in range(output_dims)]
+        )
+
+    def forward(self, x):
+        x = self.shared_layers(x)
+        outputs = [head(x) for head in self.output_heads]
+        # Concatenate the outputs into a single tensor along the last dimension
+        return torch.cat(outputs, dim=1)
+
+
 class ANIInteraction(nn.Module):
     """
     Atomic neural network interaction module for ANI.
@@ -429,8 +450,16 @@ class ANIInteraction(nn.Module):
         The activation function to use.
     """
 
-    def __init__(self, *, aev_dim: int, activation_function: Type[torch.nn.Module]):
+    def __init__(
+        self,
+        *,
+        aev_dim: int,
+        activation_function: Type[torch.nn.Module],
+        predicted_properties: List[Dict[str, str]],
+    ):
+
         super().__init__()
+        self.predicted_properties = predicted_properties
         # define atomic neural network
         atomic_neural_networks = self.intialize_atomic_neural_network(
             aev_dim, activation_function
@@ -475,14 +504,19 @@ class ANIInteraction(nn.Module):
             nn.Sequential
                 The created neural network.
             """
-            network_layers = []
+            shared_network_layers = []
             input_dim = aev_dim
             for units in layers:
-                network_layers.append(nn.Linear(input_dim, units))
-                network_layers.append(activation_function)
+                shared_network_layers.append(nn.Linear(input_dim, units))
+                shared_network_layers.append(activation_function)
                 input_dim = units
-            network_layers.append(nn.Linear(input_dim, 1))
-            return nn.Sequential(*network_layers)
+
+            # Create a MultiOutputHeadNetwork with the specified output
+            # dimensions
+            shared_layers = nn.Sequential(*shared_network_layers)
+            return MultiOutputHeadNetwork(
+                shared_layers, output_dims=len(self.predicted_properties)
+            )
 
         return {
             element: create_network(layers)
@@ -497,7 +531,7 @@ class ANIInteraction(nn.Module):
             }.items()
         }
 
-    def forward(self, input: Tuple[torch.Tensor, torch.Tensor]):
+    def forward(self, input: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
         """
         Forward pass to compute atomic energies from AEVs.
 
@@ -512,16 +546,23 @@ class ANIInteraction(nn.Module):
             The computed atomic energies.
         """
         species, aev = input
-        output = aev.new_zeros(species.shape)
+        per_atom_property = torch.zeros(
+            (species.shape[0], len(self.predicted_properties)),
+            dtype=aev.dtype,
+            device=aev.device,
+        )
 
         for i, model in enumerate(self.atomic_networks):
+            # maks all entries that don't contain atomindex=i
             mask = torch.eq(species, i)
-            midx = mask.nonzero().flatten()
-            if midx.shape[0] > 0:
-                input_ = aev.index_select(0, midx)
-                output[midx] = model(input_).flatten()
+            per_element_index = mask.nonzero().flatten()
+            # if element present, pass it through the network
+            if per_element_index.shape[0] > 0:
+                input_ = aev.index_select(0, per_element_index)
+                per_element_predction = model(input_)
+                per_atom_property[per_element_index, :] = per_element_predction
 
-        return output.view_as(species)
+        return per_atom_property
 
 
 class ANI2xCore(torch.nn.Module):
@@ -548,6 +589,7 @@ class ANI2xCore(torch.nn.Module):
         self.activation_function = activation_function_parameter["activation_function"]
 
         log.debug("Initializing the ANI2x architecture.")
+        self.predicted_properties = predicted_properties
 
         # Initialize representation block
         self.ani_representation_module = ANIRepresentation(
@@ -575,6 +617,7 @@ class ANI2xCore(torch.nn.Module):
         self.interaction_modules = ANIInteraction(
             aev_dim=self.aev_length,
             activation_function=self.activation_function,
+            predicted_properties=predicted_properties,
         )
 
         # ----- ATOMIC NUMBER LOOKUP --------
@@ -614,13 +657,19 @@ class ANI2xCore(torch.nn.Module):
         representation = self.ani_representation_module(
             data, pairlist_output, atom_index
         )
-        # compute the atomic energies
-        E_i = self.interaction_modules(representation)
+        # compute the atomic properties
+        predictions = self.interaction_modules(representation)
 
-        return {
-            "per_atom_energy": E_i,
+        # generate the output results
+        results = {
+            "per_atom_scalar_representation": torch.tensor([0]),
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
+        # extract predictions per property
+        for dim, property in enumerate(self.predicted_properties):
+            results[property["name"]] = predictions[:, dim].contiguous()
+
+        return results
 
     def forward(
         self, data: NNPInputTuple, pairlist_output: PairlistData
@@ -637,6 +686,7 @@ class ANI2xCore(torch.nn.Module):
         pairlist_output : PairListOutputs
             Contains the indices for the selected pairs and their associated
             distances and displacement vectors.
+
 
         Returns
         -------

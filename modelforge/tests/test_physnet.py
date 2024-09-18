@@ -1,34 +1,19 @@
 from typing import Optional
 
 
-def setup_physnet(potential_seed: Optional[int] = None):
-    from modelforge.tests.test_models import load_configs_into_pydantic_models
-    from modelforge.potential import NeuralNetworkPotentialFactory
-
-    # read default parameters
-    config = load_configs_into_pydantic_models("physnet", "qm9")
-
-    model = NeuralNetworkPotentialFactory.generate_potential(
-        use="training",
-        potential_parameter=config["potential"],
-        training_parameter=config["training"],
-        dataset_parameter=config["dataset"],
-        runtime_parameter=config["runtime"],
-        potential_seed=potential_seed,
-    ).model.potential
-    return model
+from modelforge.tests.helper_functions import setup_potential_for_test
 
 
 def test_init():
 
-    model = setup_physnet()
+    model = setup_potential_for_test("physnet", "training")
     assert model is not None, "PhysNet model should be initialized."
 
 
 def test_forward(single_batch_with_batchsize):
     import torch
 
-    model = setup_physnet()
+    model = setup_potential_for_test("physnet", "training")
     print(model)
     batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
 

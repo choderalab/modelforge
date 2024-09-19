@@ -39,11 +39,16 @@ class SAKECore(torch.nn.Module):
         number_of_radial_basis_functions: int,
         maximum_interaction_radius: float,
         activation_function_parameter: Dict[str, str],
-        predicted_properties: List[Tuple[str, str]],
+        predicted_properties: List[str],
+        predicted_dim: List[int],
         epsilon: float = 1e-8,
         potential_seed: int = -1,
     ):
 
+        from modelforge.utils.misc import seed_random_number
+
+        if potential_seed != -1:
+            seed_random_number(potential_seed)
         log.debug("Initializing the SAKE architecture.")
         super().__init__()
 
@@ -87,6 +92,21 @@ class SAKECore(torch.nn.Module):
             )
             for _ in range(self.nr_interaction_blocks)
         )
+        # reduce per-atom features to per atom scalar
+        # Initialize output layers based on configuration
+        self.output_layers = nn.ModuleDict()
+        for property, dim in zip(predicted_properties, predicted_dim):
+            self.output_layers[property] = nn.Sequential(
+                DenseWithCustomDist(
+                    number_of_per_atom_features,
+                    number_of_per_atom_features,
+                    activation_function=self.activation_function,
+                ),
+                DenseWithCustomDist(
+                    number_of_per_atom_features,
+                    int(dim),
+                ),
+            )
 
     def compute_properties(
         self, data: NNPInputTuple, pairlist_output: PairlistData
@@ -112,9 +132,10 @@ class SAKECore(torch.nn.Module):
         for interaction_mod in self.interaction_modules:
             h, x, v = interaction_mod(h, x, v, pairlist_output.pair_indices)
 
-        results = {
+        return {
             "per_atom_scalar_representation": h,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
+            "atomic_numbers": data.atomic_numbers,
         }
 
     def forward(
@@ -140,13 +161,11 @@ class SAKECore(torch.nn.Module):
             forward pass.
         """
         # perform the forward pass implemented in the subclass
-        outputs = self.compute_properties(data, pairlist_output)
-        # add atomic numbers to the output
-        outputs["atomic_numbers"] = data.atomic_numbers
-        # FIXME:
+        results = self.compute_properties(data, pairlist_output)
         # Compute all specified outputs
+        atomic_embedding = results["per_atom_scalar_representation"]
         for output_name, output_layer in self.output_layers.items():
-            results[output_name] = output_layer(h).squeeze(-1)
+            results[output_name] = output_layer(atomic_embedding).squeeze(-1)
 
         return results
 

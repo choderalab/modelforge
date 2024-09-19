@@ -174,7 +174,7 @@ class PostProcessingParameter(ParametersBase):
 
 
 class AimNet2Parameters(ParametersBase):
-    class CoreParameter(ParametersBase):
+    class CoreParameter(ParametersBase, PredictedPropertiesMixin):
         number_of_radial_basis_functions: int
         maximum_interaction_radius: float
         number_of_interaction_modules: int
@@ -257,7 +257,7 @@ class TensorNetParameters(ParametersBase):
 
 
 class PaiNNParameters(ParametersBase):
-    class CoreParameter(ParametersBase):
+    class CoreParameter(ParametersBase, PredictedPropertiesMixin):
 
         number_of_radial_basis_functions: int
         maximum_interaction_radius: float
@@ -298,7 +298,7 @@ class PhysNetParameters(ParametersBase):
 
 
 class SAKEParameters(ParametersBase):
-    class CoreParameter(ParametersBase):
+    class CoreParameter(ParametersBase, PredictedPropertiesMixin):
 
         number_of_radial_basis_functions: int
         maximum_interaction_radius: float

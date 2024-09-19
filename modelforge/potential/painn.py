@@ -2,14 +2,14 @@
 PaiNN - polarizable interaction neural network
 """
 
-from typing import Dict, Tuple, Union, List, Type
+from typing import Dict, List, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
 from loguru import logger as log
 from openff.units import unit
-from .models import NNPInputTuple, PairlistData
 
+from .models import NNPInputTuple, PairlistData
 from .utils import DenseWithCustomDist
 
 
@@ -24,10 +24,17 @@ class PaiNNCore(torch.nn.Module):
         shared_interactions: bool,
         shared_filters: bool,
         activation_function_parameter: Dict[str, str],
-        predicted_properties: List[Dict[str, str]],
+        predicted_properties: List[str],
+        predicted_dim: List[int],
         epsilon: float = 1e-8,
         potential_seed: int = -1,
     ):
+
+        from modelforge.utils.misc import seed_random_number
+
+        if potential_seed != -1:
+            seed_random_number(potential_seed)
+
         super().__init__()
         log.debug("Initializing the PaiNN architecture.")
         self.activation_function = activation_function_parameter["activation_function"]
@@ -85,14 +92,8 @@ class PaiNNCore(torch.nn.Module):
         # reduce per-atom features to per atom scalar
         # Initialize output layers based on configuration
         self.output_layers = nn.ModuleDict()
-        for property in predicted_properties:
-            output_name = property["name"]
-            output_type = property["type"]
-            output_dimension = (
-                1 if output_type == "scalar" else 3
-            )  # vector means 3D output
-
-            self.output_layers[output_name] = nn.Sequential(
+        for property, dim in zip(predicted_properties, predicted_dim):
+            self.output_layers[property] = nn.Sequential(
                 DenseWithCustomDist(
                     number_of_per_atom_features,
                     number_of_per_atom_features,
@@ -100,7 +101,7 @@ class PaiNNCore(torch.nn.Module):
                 ),
                 DenseWithCustomDist(
                     number_of_per_atom_features,
-                    output_dimension,
+                    int(dim),
                 ),
             )
 
@@ -142,10 +143,11 @@ class PaiNNCore(torch.nn.Module):
                 per_atom_scalar_feature, per_atom_vector_feature
             )
 
-        results = {
+        return {
             "per_atom_scalar_representation": per_atom_scalar_feature.squeeze(1),
             "per_atom_vector_representation": per_atom_vector_feature,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
+            "atomic_numbers": data.atomic_numbers,
         }
 
     def forward(
@@ -171,17 +173,12 @@ class PaiNNCore(torch.nn.Module):
             forward pass.
         """
         # perform the forward pass implemented in the subclass
-        outputs = self.compute_properties(data, pairlist_output)
-        # add atomic numbers to the output
-        outputs["atomic_numbers"] = data.atomic_numbers
-
-        # Use squeeze to remove dimensions of size 1
-        # per_atom_scalar_feature = per_atom_scalar_feature.squeeze(dim=1)
-        # NOTE: #FIXME
+        results = self.compute_properties(data, pairlist_output)
         # Compute all specified outputs
+        atomic_embedding = results["per_atom_scalar_representation"]
         for output_name, output_layer in self.output_layers.items():
-            o = output_layer(per_atom_scalar_feature.squeeze()).squeeze()
-            results[output_name] = o
+            results[output_name] = output_layer(atomic_embedding).squeeze(-1)
+
         return results
 
 
@@ -213,8 +210,9 @@ class PaiNNRepresentation(nn.Module):
         shared_filters : bool
             Whether to share filters across blocks.
         """
-        from .utils import SchnetRadialBasisFunction
         from modelforge.potential import CosineAttenuationFunction, FeaturizeInput
+
+        from .utils import SchnetRadialBasisFunction
 
         super().__init__()
 

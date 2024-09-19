@@ -1,4 +1,3 @@
-
 import pytest
 import torch
 from openff.units import unit
@@ -14,7 +13,7 @@ def set_postprocessing_based_on_energy_expression(config, energy_expression):
     if energy_expression == "short_range":
         return config
     elif energy_expression == "short_range_and_long_range_electrostatic":
-        from modelforge.potential.parameters import CoulomPotential
+        from modelforge.potential.parameters import CoulombPotential
 
         conf_section = config["potential"].postprocessing_parameter.per_atom_charge
 
@@ -23,7 +22,7 @@ def set_postprocessing_based_on_energy_expression(config, energy_expression):
         conf_section.conserve_strategy = "default"
         conf_section.keep_per_atom_property = True
 
-        conf_section.coulomb_potential = CoulomPotential(
+        conf_section.coulomb_potential = CoulombPotential(
             electrostatic_strategy="coulomb",
             maximum_interaction_radius=10.0 * unit.angstrom,
             keep_per_atom_property=True,
@@ -585,10 +584,6 @@ def test_long_range_e(
 
     # perform the forward pass through each of the models
     output = model(nnp_input)
-
-    # validate the output
-    a = 7
-    a = 6
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])

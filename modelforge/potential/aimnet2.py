@@ -1,50 +1,12 @@
-from typing import Dict, List, Optional, Tuple, Type, Union
+from typing import Dict, Tuple, List
 
 import torch
 import torch.nn as nn
 from loguru import logger as log
 
 from modelforge.potential.utils import Dense
-from .models import PairlistData, NNPInputTuple
 
-
-def _perform_charge_normalization(
-    partial_point_charges: torch.Tensor,
-    total_charge: torch.Tensor,
-    atomic_subsystem_indices: torch.Tensor,
-) -> torch.Tensor:
-    """
-    Normalize the partial charges to ensure that the total charge of the system is preserved. See eqn 14 of
-    \tilde{q_i} = q_i - \frac{1}{N} \sum_{j=1}^{N} q_j - Q
-
-    Parameters
-    ----------
-    partial_point_charges : torch.Tensor
-        The partial charges for each atom.
-    total_charge : torch.Tensor
-        The total charge of the system.
-    """
-
-    # \sum_{j=1}^{N} q_j
-    sum_of_partial_charges = torch.zeros_like(total_charge)
-    sum_of_partial_charges.scatter_add_(
-        0, atomic_subsystem_indices, partial_point_charges
-    )
-
-    # \sum_{j=1}^{N} q_j - Q
-    partial_charge_diff = sum_of_partial_charges - total_charge
-
-    #  \frac{1}{N} \sum_{j=1}^{N} q_j - Q
-    average_partial_charge_diff = (
-        partial_charge_diff / atomic_subsystem_indices.bincount()
-    )
-
-    # \tilde{q_i} = q_i - \frac{1}{N} \sum_{j=1}^{N} q_j - Q
-    partial_point_charges = (
-        partial_point_charges - average_partial_charge_diff[atomic_subsystem_indices]
-    )
-
-    return partial_point_charges
+from .models import NNPInputTuple, PairlistData
 
 
 class AimNet2Core(torch.nn.Module):
@@ -54,6 +16,8 @@ class AimNet2Core(torch.nn.Module):
         number_of_radial_basis_functions: int,
         number_of_interaction_modules: int,
         activation_function_parameter: Dict[str, str],
+        predicted_properties: List[str],
+        predicted_dim: List[int],
         maximum_interaction_radius: float,
     ) -> None:
 
@@ -91,17 +55,22 @@ class AimNet2Core(torch.nn.Module):
             ]
         )
         # output layer to obtain per-atom energies
-        self.energy_layer = nn.Sequential(
-            Dense(
-                number_of_per_atom_features,
-                number_of_per_atom_features,
-                activation_function=self.activation_function,
-            ),
-            Dense(
-                number_of_per_atom_features,
-                1,
-            ),
-        )
+        self.output_layers = nn.ModuleDict()
+        for property, dim in zip(predicted_properties, predicted_dim):
+            self.output_layers[property] = nn.Sequential(
+                Dense(
+                    number_of_per_atom_features,
+                    number_of_per_atom_features,
+                    activation_function=self.activation_function,
+                ),
+                Dense(
+                    number_of_per_atom_features,
+                    int(dim),
+                ),
+            )
+        from modelforge.potential.processing import ChargeConservation
+
+        self.charge_conservation = ChargeConservation()
 
     def compute_properties(
         self, data: NNPInputTuple, pairlist: PairlistData
@@ -145,18 +114,20 @@ class AimNet2Core(torch.nn.Module):
             atomic_embedding = atomic_embedding + delta_a
             partial_charges = partial_charges + delta_q
 
-            partial_charges = _perform_charge_normalization(
-                partial_charges.squeeze(-1),
-                data.total_charge.to(dtype=torch.float32),
-                data.atomic_subsystem_indices.to(dtype=torch.int64),
-            ).unsqueeze(-1)
-
-        E_i = self.energy_layer(atomic_embedding).squeeze(1)
+            partial_charges = self.charge_conservation(
+                {
+                    "per_atom_charge": partial_charges.squeeze(-1),
+                    "per_molecule_charge": data.total_charge.to(dtype=torch.float32),
+                    "atomic_subsystem_indices": data.atomic_subsystem_indices.to(
+                        dtype=torch.int64
+                    ),
+                }
+            )["per_atom_charge_corrected"].unsqueeze(-1)
 
         return {
-            "per_atom_energy": E_i,
             "per_atom_scalar_representation": atomic_embedding,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
+            "atomic_numbers": data.atomic_numbers,
         }
 
     def forward(
@@ -182,11 +153,13 @@ class AimNet2Core(torch.nn.Module):
             forward pass.
         """
         # perform the forward pass implemented in the subclass
-        outputs = self.compute_properties(data, pairlist_output)
-        # add atomic numbers to the output
-        outputs["atomic_numbers"] = data.atomic_numbers
-
-        return outputs
+        results = self.compute_properties(data, pairlist_output)
+        # extract the atomic embedding
+        atomic_embedding = results["per_atom_scalar_representation"]
+        # Compute all specified outputs
+        for output_name, output_layer in self.output_layers.items():
+            results[output_name] = output_layer(atomic_embedding).squeeze(-1)
+        return results
 
 
 class MessageModule(torch.nn.Module):

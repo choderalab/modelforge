@@ -16,6 +16,22 @@ from modelforge.potential.utils import (
 from .models import PairlistData
 
 
+class DenseAndSum(nn.Module):
+    def __init__(
+        self,
+        input_dim: int,
+        output_dim: int,
+        sum_dim: int,
+    ):
+        super().__init__()
+        self.dense = nn.Linear(input_dim, output_dim)
+        self.sum_dim = sum_dim
+
+    def forward(self, x):
+        x = self.dense(x)
+        return x.sum(dim=self.sum_dim)
+
+
 def vector_to_skewtensor(r_ij_norm: torch.Tensor) -> torch.Tensor:
     """
     Creates a skew-symmetric tensor (A) from a vector
@@ -172,15 +188,18 @@ class TensorNetCore(torch.nn.Module):
         maximum_atomic_number: int,
         equivariance_invariance_group: str,
         activation_function_parameter: Dict[str, str],
-        predicted_properties: List[Tuple[str, str]],
+        predicted_properties: List[str],
+        predicted_dim: List[int],
         potential_seed: int = -1,
         trainable_centers_and_scale_factors: bool = False,
     ) -> None:
         super().__init__()
         activation_function = activation_function_parameter["activation_function"]
 
+        from modelforge.utils.misc import seed_random_number
+
         if potential_seed != -1:
-            torch.manual_seed(potential_seed)
+            seed_random_number(potential_seed)
 
         self.representation_module = TensorNetRepresentation(
             number_of_per_atom_features=number_of_per_atom_features,
@@ -214,17 +233,11 @@ class TensorNetCore(torch.nn.Module):
         self.out_norm = nn.LayerNorm(3 * number_of_per_atom_features)
         # Initialize output layers based on configuration
         self.output_layers = nn.ModuleDict()
-        for property in predicted_properties:
-            output_name = property["name"]
-            output_type = property["type"]
-            output_dimension = (
-                1 if output_type == "scalar" else 3
-            )  # vector means 3D output
-
-            self.output_layers[output_name] = DenseAndSum(
+        for property, dim in zip(predicted_properties, predicted_dim):
+            self.output_layers[property] = DenseAndSum(
                 3 * number_of_per_atom_features,
                 number_of_per_atom_features,
-                output_dimension,
+                dim,
             )
 
         self.perform_layer_normalization = nn.LayerNorm(3 * number_of_per_atom_features)
@@ -274,9 +287,10 @@ class TensorNetCore(torch.nn.Module):
             per_atom_scalar_representation
         )
 
-        results = {
+        return {
             "per_atom_scalar_representation": per_atom_scalar_representation,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
+            "atomic_numbers": data.atomic_numbers,
         }
 
     def forward(
@@ -302,15 +316,13 @@ class TensorNetCore(torch.nn.Module):
             forward pass.
         """
         # perform the forward pass implemented in the subclass
-        outputs = self.compute_properties(data, pairlist_output)
-        # add atomic numbers to the output
-        outputs["atomic_numbers"] = data.atomic_numbers
+        results = self.compute_properties(data, pairlist_output)
+        # extract the atomic embedding
+        atomic_embedding = results["per_atom_scalar_representation"]
         # Compute all specified outputs
         # FIXME
         for output_name, output_layer in self.output_layers.items():
-            results[output_name] = output_layer(per_atom_scalar_representation).squeeze(
-                -1
-            )
+            results[output_name] = output_layer(atomic_embedding).squeeze(-1)
 
         return results
 

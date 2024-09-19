@@ -397,10 +397,18 @@ class PerAtomEnergy(torch.nn.Module):
 
         self.reduction = reduction
 
-    def forward(self, per_atom_property: torch.Tensor, indices: torch.Tensor):
+    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        per_atom_property, indices = (
+            data["per_atom_energy"],
+            data["atomic_subsystem_indices"],
+        )
         scaled_values = self.scale(per_atom_property)
-        reduced_values = self.reduction(indices, scaled_values)
-        return reduced_values
+        per_molecule_energy = self.reduction(indices, scaled_values)
+
+        data["per_molecule_energy"] = per_molecule_energy
+        data["per_atom_energy"] = data["per_atom_energy"].detach()
+
+        return data
 
 
 class CalculateAtomicSelfEnergy(torch.nn.Module):

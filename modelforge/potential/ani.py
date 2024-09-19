@@ -454,15 +454,17 @@ class ANIInteraction(nn.Module):
         self,
         *,
         aev_dim: int,
-        activation_function: Type[torch.nn.Module],
-        predicted_properties: List[Dict[str, str]],
+        activation_function: torch.nn.Module,
+        predicted_properties: List[str],
+        predicted_dim: List[int],
     ):
 
         super().__init__()
+        output_dim = int(sum(predicted_dim))
         self.predicted_properties = predicted_properties
         # define atomic neural network
         atomic_neural_networks = self.intialize_atomic_neural_network(
-            aev_dim, activation_function
+            aev_dim, activation_function, output_dim
         )
         self.atomic_networks = nn.ModuleList(
             [
@@ -472,7 +474,7 @@ class ANIInteraction(nn.Module):
         )
 
     def intialize_atomic_neural_network(
-        self, aev_dim: int, activation_function: Type[torch.nn.Module]
+        self, aev_dim: int, activation_function: torch.nn.Module, output_dim: int
     ) -> Dict[str, nn.Module]:
         """
         Initialize the atomic neural networks for each element.
@@ -490,7 +492,7 @@ class ANIInteraction(nn.Module):
             A dictionary mapping element symbols to their corresponding neural networks.
         """
 
-        def create_network(layers):
+        def create_network(layers: List[int]) -> nn.Module:
             """
             Create a neural network with the specified layers.
 
@@ -514,9 +516,7 @@ class ANIInteraction(nn.Module):
             # Create a MultiOutputHeadNetwork with the specified output
             # dimensions
             shared_layers = nn.Sequential(*shared_network_layers)
-            return MultiOutputHeadNetwork(
-                shared_layers, output_dims=len(self.predicted_properties)
-            )
+            return MultiOutputHeadNetwork(shared_layers, output_dims=output_dim)
 
         return {
             element: create_network(layers)
@@ -565,6 +565,9 @@ class ANIInteraction(nn.Module):
         return per_atom_property
 
 
+from typing import List
+
+
 class ANI2xCore(torch.nn.Module):
 
     def __init__(
@@ -577,14 +580,22 @@ class ANI2xCore(torch.nn.Module):
         minimum_interaction_radius_for_angular_features: float,
         activation_function_parameter: Dict[str, str],
         angular_dist_divisions: int,
+        predicted_properties: List[str],
+        predicted_dim: List[int],
         angle_sections: int,
         potential_seed: int = -1,
     ) -> None:
+
+        from modelforge.utils.misc import seed_random_number
+
+        if potential_seed != -1:
+            seed_random_number(potential_seed)
 
         super().__init__()
 
         # number of elements in ANI2x
         self.num_species = 7
+        self.predicted_dim = predicted_dim
 
         self.activation_function = activation_function_parameter["activation_function"]
 
@@ -602,22 +613,23 @@ class ANI2xCore(torch.nn.Module):
             angle_sections,
         )
         # The length of radial aev
-        self.radial_length = self.num_species * number_of_radial_basis_functions
+        radial_length = self.num_species * number_of_radial_basis_functions
         # The length of angular aev
-        self.angular_length = (
+        angular_length = (
             (self.num_species * (self.num_species + 1))
             // 2
             * self.ani_representation_module.angular_symmetry_functions.angular_sublength
         )
 
         # The length of full aev
-        self.aev_length = self.radial_length + self.angular_length
+        aev_length = radial_length + angular_length
 
         # Intialize interaction blocks
         self.interaction_modules = ANIInteraction(
-            aev_dim=self.aev_length,
+            aev_dim=aev_length,
             activation_function=self.activation_function,
             predicted_properties=predicted_properties,
+            predicted_dim=predicted_dim,
         )
 
         # ----- ATOMIC NUMBER LOOKUP --------
@@ -661,15 +673,24 @@ class ANI2xCore(torch.nn.Module):
         predictions = self.interaction_modules(representation)
 
         # generate the output results
-        results = {
-            "per_atom_scalar_representation": torch.tensor([0]),
+        return {
+            "per_atom_prediction": predictions,
+            "per_atom_scalar_representation": representation.aevs,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
         }
-        # extract predictions per property
-        for dim, property in enumerate(self.predicted_properties):
-            results[property["name"]] = predictions[:, dim].contiguous()
 
-        return results
+    def _aggregate_results(
+        self, outputs: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        per_atom_prediction = outputs.pop("per_atom_prediction")
+        split_tensors = torch.split(per_atom_prediction, self.predicted_dim, dim=1)
+        outputs.update(
+            {
+                label: tensor.squeeze(1)
+                for label, tensor in zip(self.predicted_properties, split_tensors)
+            }
+        )
+        return outputs
 
     def forward(
         self, data: NNPInputTuple, pairlist_output: PairlistData
@@ -699,5 +720,5 @@ class ANI2xCore(torch.nn.Module):
         outputs = self.compute_properties(data, pairlist_output, atom_index)
         # add atomic numbers to the output
         outputs["atomic_numbers"] = data.atomic_numbers
-
-        return outputs
+        # extract predictions per property
+        return self._aggregate_results(outputs)

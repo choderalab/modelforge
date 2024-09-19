@@ -28,6 +28,18 @@ from modelforge.potential.parameters import (
     TensorNetParameters,
 )
 from modelforge.train.parameters import RuntimeParameters, TrainingParameters
+from typing import TypeVar, Union
+
+# Define a TypeVar that can be one of the parameter models
+T_NNP_Parameters = TypeVar(
+    "T_NNP_Parameters",
+    ANI2xParameters,
+    SAKEParameters,
+    SchNetParameters,
+    PhysNetParameters,
+    PaiNNParameters,
+    TensorNetParameters,
+)
 
 
 class PairlistData(NamedTuple):
@@ -763,18 +775,20 @@ class PostProcessing(torch.nn.Module):
         self._registered_properties: List[str] = []
         self.registered_chained_operations = ModuleDict()
         self.dataset_statistic = dataset_statistic
-
-        if "per_atom_energy" in postprocessing_parameter:
+        properties_to_process = postprocessing_parameter["properties_to_process"]
+        if "per_atom_energy" in properties_to_process:
             self.registered_chained_operations["per_atom_energy"] = PerAtomEnergy(
                 postprocessing_parameter["per_atom_energy"],
                 dataset_statistic["training_dataset_statistics"],
             )
             self._registered_properties.append("per_atom_energy")
 
-        if "coulomb_potential" in postprocessing_parameter:
+        if "coulomb_potential" in properties_to_process:
             self.registered_chained_operations["coulomb_potential"] = CoulombPotential(
-                postprocessing_parameter["electrostatic_strategy"],
-                dataset_statistic["maximum_interaction_radius"],
+                postprocessing_parameter["coulomb_potential"]["electrostatic_strategy"],
+                postprocessing_parameter["coulomb_potential"][
+                    "maximum_interaction_radius"
+                ],
             )
 
     def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
@@ -792,23 +806,11 @@ class PostProcessing(torch.nn.Module):
             The post-processed data.
         """
         processed_data: Dict[str, torch.Tensor] = {}
-        if "per_atom_energy" in self._registered_properties:
+        # Iterate over items in ModuleDict
+        for name, module in self.registered_chained_operations.items():
 
-            per_molecule_energy = self.registered_chained_operations[
-                "per_atom_energy"
-            ].forward(data["per_atom_energy"], data["atomic_subsystem_indices"])
-
-            processed_data["per_molecule_energy"] = per_molecule_energy
-            processed_data["per_atom_energy"] = data["per_atom_energy"].detach()
-
-        if "per_atom_charge" in self._registered_properties:
-
-            per_molecule_energy = self.registered_chained_operations[
-                "per_atom_charge"
-            ].forward(data["per_atom_charge"], data["atomic_subsystem_indices"])
-
-            processed_data["per_molecule_eleenergy"] = per_molecule_energy
-            processed_data["per_atom_energy"] = data["per_atom_energy"].detach()
+            module_output = module.forward(data)
+            processed_data.update(module_output)
 
         return processed_data
 
@@ -957,14 +959,7 @@ class Potential(torch.nn.Module):
 
 
 def setup_potential(
-    potential_parameter: Union[
-        ANI2xParameters,
-        SAKEParameters,
-        SchNetParameters,
-        PhysNetParameters,
-        PaiNNParameters,
-        TensorNetParameters,
-    ],
+    potential_parameter: T_NNP_Parameters,
     dataset_statistic: Dict[str, Dict[str, unit.Quantity]] = {
         "training_dataset_statistics": {
             "per_atom_energy_mean": unit.Quantity(0.0, unit.kilojoule_per_mole),
@@ -993,8 +988,6 @@ def setup_potential(
     core_network = _Implemented_NNPs.get_neural_network_class(model_type)(
         **potential_parameter.core_parameter.model_dump()
     )
-
-    # pop property properties_to_featurize from potential_parameter.postprocessing_parameter dictionary
 
     postprocessing = PostProcessing(
         postprocessing_parameter=potential_parameter.postprocessing_parameter.model_dump(),

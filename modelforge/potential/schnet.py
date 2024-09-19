@@ -21,8 +21,15 @@ class SchNetCore(torch.nn.Module):
         number_of_filters: int,
         activation_function_parameter: Dict[str, str],
         shared_interactions: bool,
-        predicted_properties: List[Dict[str, str]],
+        predicted_properties: List[str],
+        predicted_dim: List[int],
+        potential_seed: int = -1,
     ) -> None:
+
+        from modelforge.utils.misc import seed_random_number
+
+        if potential_seed != -1:
+            seed_random_number(potential_seed)
 
         super().__init__()
         self.activation_function = activation_function_parameter["activation_function"]
@@ -73,14 +80,8 @@ class SchNetCore(torch.nn.Module):
 
         # Initialize output layers based on configuration
         self.output_layers = nn.ModuleDict()
-        for property in predicted_properties:
-            output_name = property["name"]
-            output_type = property["type"]
-            output_dimension = (
-                1 if output_type == "scalar" else 3
-            )  # vector means 3D output
-
-            self.output_layers[output_name] = nn.Sequential(
+        for property, dim in zip(predicted_properties, predicted_dim):
+            self.output_layers[property] = nn.Sequential(
                 DenseWithCustomDist(
                     number_of_per_atom_features,
                     number_of_per_atom_features,
@@ -88,7 +89,7 @@ class SchNetCore(torch.nn.Module):
                 ),
                 DenseWithCustomDist(
                     number_of_per_atom_features,
-                    output_dimension,
+                    int(dim),
                 ),
             )
 
@@ -124,9 +125,10 @@ class SchNetCore(torch.nn.Module):
                 atomic_embedding + v
             )  # Update per atom features given the environment
 
-        results = {
+        return {
             "per_atom_scalar_representation": atomic_embedding,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
+            "atomic_numbers" : data.atomic_numbers,
         }
 
     def forward(
@@ -152,12 +154,9 @@ class SchNetCore(torch.nn.Module):
             forward pass.
         """
         # perform the forward pass implemented in the subclass
-        outputs = self.compute_properties(data, pairlist_output)
-        # add atomic numbers to the output
-        outputs["atomic_numbers"] = data.atomic_numbers
-
-        return outputs
-        # FIXME
+        results = self.compute_properties(data, pairlist_output)
+        # extract the atomic embedding
+        atomic_embedding = results["per_atom_scalar_representation"]
         # Compute all specified outputs
         for output_name, output_layer in self.output_layers.items():
             results[output_name] = output_layer(atomic_embedding).squeeze(-1)

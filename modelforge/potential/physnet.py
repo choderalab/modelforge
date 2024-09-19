@@ -72,13 +72,14 @@ class PhysNetRepresentation(nn.Module):
             The radial basis function expansion applied to the input distances,
             shape (n_pairs, n_gaussians), after applying the cutoff function.
         """
+        # calculate radial symmetry function
         f_ij = self.radial_symmetry_function_module(pairlist_output.d_ij).squeeze()
+        # apply cutoff function
+        f_ij = torch.mul(f_ij, self.cutoff_module(pairlist_output.d_ij))
+
         return {
             "f_ij": f_ij,
-            "f_ij_cutoff": self.cutoff_module(pairlist_output.d_ij),
-            "atomic_embedding": self.featurize_input(
-                data
-            ),  # add per-atom properties and embedding
+            "atomic_embedding": self.featurize_input(data),
         }
 
 
@@ -308,7 +309,7 @@ class PhysNetOutput(nn.Module):
         self.output = DenseWithCustomDist(
             number_of_per_atom_features,
             number_of_atomic_properties,
-            weight_init=torch.nn.init.zeros_,
+            weight_init=torch.nn.init.zeros_,  # NOTE: the result of this initialization is that before the first parameter update the output is zero
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -409,9 +410,15 @@ class PhysNetCore(torch.nn.Module):
         number_of_interaction_residual: int,
         number_of_modules: int,
         activation_function_parameter: Dict[str, str],
-        predicted_properties: List[Tuple[str, str]],
+        predicted_properties: List[str],
+        predicted_dim: List[int],
         potential_seed: int = -1,
     ) -> None:
+
+        from modelforge.utils.misc import seed_random_number
+
+        if potential_seed != -1:
+            seed_random_number(potential_seed)
 
         super().__init__()
         self.activation_function = activation_function_parameter["activation_function"]
@@ -434,6 +441,7 @@ class PhysNetCore(torch.nn.Module):
         # initialize the PhysNetModule building blocks
         from torch.nn import ModuleList
 
+        self.output_dim = int(sum(predicted_dim))
         self.physnet_module = ModuleList(
             [
                 PhysNetModule(
@@ -441,7 +449,7 @@ class PhysNetCore(torch.nn.Module):
                     number_of_radial_basis_functions,
                     number_of_interaction_residual,
                     number_of_residuals_in_output=2,
-                    number_of_atomic_properties=len(predicted_properties),
+                    number_of_atomic_properties=self.output_dim,
                     activation_function=self.activation_function,
                 )
                 for _ in range(number_of_modules)
@@ -463,6 +471,38 @@ class PhysNetCore(torch.nn.Module):
         )
 
         self.predicted_properties = predicted_properties
+        self.predicted_dim = predicted_dim
+
+    def aggregate_results(
+        self,
+        per_atom_property_prediction: torch.Tensor,
+        data: NNPInputTuple,
+    ) -> Dict[str, torch.Tensor]:
+
+        # predictions are shifted and scaled as a function of atomic number
+        atomic_numbers = data.atomic_numbers
+        linear_transformation_of_results = (
+            self.atomic_shift[atomic_numbers]
+            + per_atom_property_prediction * self.atomic_scale[atomic_numbers]
+        )  # NOTE: Questions: is this appropriate for partial charges?
+
+        # initialize the results dictionary
+        results = {
+            "per_atom_scalar_representation": per_atom_property_prediction,
+            "atomic_subsystem_indices": data.atomic_subsystem_indices,
+        }
+        split_tensors = torch.split(
+            linear_transformation_of_results, self.predicted_dim, dim=1
+        )
+        results.update(
+            {
+                label: tensor
+                for label, tensor in zip(self.predicted_properties, split_tensors)
+            }
+        )
+
+        # add user requested properties
+        return results
 
     def compute_properties(
         self, data: NNPInputTuple, pairlist_output: PairlistData
@@ -483,22 +523,19 @@ class PhysNetCore(torch.nn.Module):
 
         # Computed representation
         representation = self.physnet_representation_module(data, pairlist_output)
-        nr_of_atoms_in_batch = data.atomic_numbers.shape[0]
-
-        atomic_embedding = representation["atomic_embedding"]
-        f_ij = torch.mul(representation["f_ij"], representation["f_ij_cutoff"])
 
         # the per atom predictions are accumulated in
         # per_atom_property_prediction
+        nr_of_atoms_in_batch = data.atomic_numbers.shape[0]
         per_atom_property_prediction = torch.zeros(
-            (nr_of_atoms_in_batch, 2),
-            device=pairlist_output.d_ij.device,
+            (nr_of_atoms_in_batch, self.output_dim),
+            device=data.atomic_numbers.device,
         )
 
         information_to_pass: Dict[str, torch.Tensor] = {
             "pair_indices": pairlist_output.pair_indices,
-            "f_ij": f_ij,
-            "atomic_embedding": atomic_embedding,
+            "f_ij": representation["f_ij"],
+            "atomic_embedding": representation["atomic_embedding"],
         }
 
         for module in self.physnet_module:
@@ -512,7 +549,25 @@ class PhysNetCore(torch.nn.Module):
                 "updated_embedding"
             ]
 
-        return self.aggregate_results(per_atom_property_prediction, data)
+        return {
+            "per_atom_scalar_representation": output_of_module["updated_embedding"],
+            "per_atom_prediction": per_atom_property_prediction,
+            "atomic_subsystem_indices": data.atomic_subsystem_indices,
+            "atomic_numbers": data.atomic_numbers,
+        }
+
+    def _aggregate_results(
+        self, outputs: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        per_atom_prediction = outputs.pop("per_atom_prediction")
+        split_tensors = torch.split(per_atom_prediction, self.predicted_dim, dim=1)
+        outputs.update(
+            {
+                label: tensor.squeeze(1)
+                for label, tensor in zip(self.predicted_properties, split_tensors)
+            }
+        )
+        return outputs
 
     def forward(
         self, data: NNPInputTuple, pairlist_output: PairlistData
@@ -538,7 +593,5 @@ class PhysNetCore(torch.nn.Module):
         """
         # perform the forward pass implemented in the subclass
         outputs = self.compute_properties(data, pairlist_output)
-        # add atomic numbers to the output
-        outputs["atomic_numbers"] = data.atomic_numbers
-
-        return outputs
+        # extract predictions per property
+        return self._aggregate_results(outputs)

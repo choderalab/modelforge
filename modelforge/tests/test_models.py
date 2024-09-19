@@ -186,10 +186,9 @@ def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
 
 
 def test_electrostatics():
-    from modelforge.potential.models import PairListOutputs
     from modelforge.potential.processing import CoulombPotential
 
-    e_elec = CoulombPotential("default", 1.0 * unit.nanometer)
+    e_elec = CoulombPotential("default", 1.0)
     per_atom_charge = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0])
 
 

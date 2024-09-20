@@ -81,13 +81,21 @@ def setup_two_methanes():
     return ani_species, coordinates, device, nnp_input
 
 
-def test_init():
-    model = setup_potential_for_test(
-        use="inference",
-        potential_seed=42,
-        potential_name="ani2x",
-        simulation_environmen="JAX",
-    )
+@pytest.mark.parametrize("mode", ["inference", "training"])
+@pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
+@pytest.mark.parametrize("jit", [False, True])
+def test_init(mode, simulation_environment, jit):
+
+    if simulation_environment == "JAX" and mode == "training":
+        pass
+    else:
+        model = setup_potential_for_test(
+            use=mode,
+            potential_seed=42,
+            potential_name="ani2x",
+            simulation_environment=simulation_environment,
+            jit=jit,
+        )
 
 
 @pytest.mark.xfail
@@ -106,19 +114,21 @@ def test_forward_and_backward_using_torchani():
     per_atom_force = -derivative
 
 
-def test_forward_and_backward():
+@pytest.mark.parametrize("mode", ["inference", "training"])
+@pytest.mark.parametrize("jit", [False, True])
+def test_forward_and_backward(mode, simulation_environment, jit):
     # Test modelforge ANI implementation
     # Test forward pass and backpropagation through network
 
     import torch
 
-    # setup potential
     model = setup_potential_for_test(
-        use="inference",
+        use=mode,
         potential_seed=42,
         potential_name="ani2x",
-        simulation_environmen="PyTorch",
+        simulation_environment="PyTorch",
         use_training_mode_neighborlist=True,
+        jit=jit,
     )
 
     _, _, _, mf_input = setup_two_methanes()
@@ -317,7 +327,7 @@ def test_compare_aev():
         use="inference",
         potential_seed=42,
         potential_name="ani2x",
-        simulation_environmen="PyTorch",
+        simulation_environment="PyTorch",
         use_training_mode_neighborlist=True,
         only_unique_pairs=True,
     )

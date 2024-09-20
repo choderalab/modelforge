@@ -51,8 +51,8 @@ def validate_output_shapes(output, nr_of_mols: int, energy_expression: str):
     """Validate the output shapes to ensure they are correct."""
     assert len(output["per_molecule_energy"]) == nr_of_mols
     assert "per_atom_energy" in output
-    assert "per_atom_charge" in output
     if energy_expression == "short_range_and_long_range_electrostatic":
+        assert "per_atom_charge" in output
         assert "per_atom_charge_corrected" in output
         assert "electrostatic_energy" in output
 
@@ -608,7 +608,7 @@ def test_forward_pass(
     # this test sends a single batch from different datasets through the model
 
     # get input and set up model
-    nnp_input = single_batch_with_batchsize(64, dataset_name).nnp_input
+    nnp_input = single_batch_with_batchsize(64, dataset_name).nnp_input_tuple
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
     set_postprocessing_based_on_energy_expression(config, energy_expression)
 

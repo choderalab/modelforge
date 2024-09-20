@@ -224,7 +224,7 @@ def test_JAX_wrapping(potential_name, single_batch_with_batchsize):
         use="inference",
         potential_seed=42,
         potential_name=potential_name,
-        simulation_environmen="JAX",
+        simulation_environment="JAX",
     )
 
     nnp_input = batch.nnp_input.as_jax_namedtuple()
@@ -250,7 +250,7 @@ def test_model_factory(potential_name):
         use="inference",
         potential_seed=42,
         potential_name=potential_name,
-        simulation_environmen="PyTorch",
+        simulation_environment="PyTorch",
     )
     assert (
         potential_name.upper() in str(type(model.core_network)).upper()
@@ -260,7 +260,7 @@ def test_model_factory(potential_name):
         use="inference",
         potential_seed=42,
         potential_name=potential_name,
-        simulation_environmen="PyTorch",
+        simulation_environment="PyTorch",
         jit=True,
         use_default_dataset_statistic=False,
     )
@@ -270,7 +270,7 @@ def test_model_factory(potential_name):
         use="training",
         potential_seed=42,
         potential_name=potential_name,
-        simulation_environmen="PyTorch",
+        simulation_environment="PyTorch",
     )
     assert (
         potential_name.upper() in str(type(model.core_network)).upper()
@@ -471,7 +471,7 @@ def test_energy_between_simulation_environments(
         use="inference",
         potential_seed=42,
         potential_name=potential_name,
-        simulation_environmen="PyTorch",
+        simulation_environment="PyTorch",
     )
     output_torch = model(nnp_input)["per_molecule_energy"]
 
@@ -479,7 +479,7 @@ def test_energy_between_simulation_environments(
         use="inference",
         potential_seed=42,
         potential_name=potential_name,
-        simulation_environmen="JAX",
+        simulation_environment="JAX",
     )
     nnp_input = batch.nnp_input.as_jax_namedtuple()
     output_jax = model(nnp_input)["per_molecule_energy"]
@@ -853,7 +853,7 @@ def test_calculate_energies_and_forces_with_jax(
         potential_seed=42,
         use_training_mode_neighborlist=False,
         jit=False,
-        simulation_environmen="JAX",
+        simulation_environment="JAX",
     )
 
     result = model(nnp_input)["per_molecule_energy"]
@@ -1296,7 +1296,7 @@ def test_equivariant_energies_and_forces(
         use="inference",
         potential_seed=42,
         potential_name=potential_name,
-        simulation_environmen=simulation_environment,
+        simulation_environment=simulation_environment,
     )
 
     # define the symmetry operations

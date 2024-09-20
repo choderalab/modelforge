@@ -471,7 +471,7 @@ def test_dataset_neighborlist(potential_name, single_batch_with_batchsize):
         use="inference",
         potential_seed=42,
         potential_name="ani2x",
-        simulation_environmen="PyTorch",
+        simulation_environment="PyTorch",
         use_training_mode_neighborlist=True,
     )
     model(nnp_input)

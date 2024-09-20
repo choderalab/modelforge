@@ -12,7 +12,7 @@ def test_init():
         use="inference",
         potential_seed=42,
         potential_name="tensornet",
-        simulation_environmen="JAX",
+        simulation_environment="JAX",
     )
     assert model is not None, "TensorNet model should be initialized."
 
@@ -29,7 +29,7 @@ def test_forward_with_inference_model(
         use="inference",
         potential_seed=42,
         potential_name="tensornet",
-        simulation_environmen=simulation_environment,
+        simulation_environment=simulation_environment,
         use_training_mode_neighborlist=True,
     )
 
@@ -52,7 +52,7 @@ def test_input():
         use="inference",
         potential_seed=42,
         potential_name="tensornet",
-        simulation_environmen="PyTorch",
+        simulation_environment="PyTorch",
         use_training_mode_neighborlist=True,
     )
 
@@ -196,7 +196,7 @@ def test_representation():
         use="inference",
         potential_seed=0,
         potential_name="tensornet",
-        simulation_environmen="PyTorch",
+        simulation_environment="PyTorch",
         use_training_mode_neighborlist=True,
     )
     pairlist_output = model.neighborlist.forward(nnp_input)
@@ -270,7 +270,7 @@ def test_interaction():
         use="inference",
         potential_seed=seed,
         potential_name="tensornet",
-        simulation_environmen="PyTorch",
+        simulation_environment="PyTorch",
         use_training_mode_neighborlist=True,
     )
 

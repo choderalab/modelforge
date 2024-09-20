@@ -194,7 +194,7 @@ def test_PhysNetAttenuationFunction():
     cutoff = 2.0 * unit.angstrom
 
     expected_output = torch.tensor([0.5, 0.0, 0.0]).unsqueeze(1)
-    physnet_cutoff_module = PhysNetAttenuationFunction(cutoff)
+    physnet_cutoff_module = PhysNetAttenuationFunction(cutoff.to(unit.nanometer).m)
 
     output = physnet_cutoff_module(d_ij_angstrom / 10)  # input is in nanometer
 

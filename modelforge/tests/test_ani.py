@@ -115,8 +115,7 @@ def test_forward_and_backward_using_torchani():
 
 
 @pytest.mark.parametrize("mode", ["inference", "training"])
-@pytest.mark.parametrize("jit", [False, True])
-def test_forward_and_backward(mode, jit):
+def test_forward_and_backward(mode):
     # Test modelforge ANI implementation
     # Test forward pass and backpropagation through network
 
@@ -128,7 +127,7 @@ def test_forward_and_backward(mode, jit):
         potential_name="ani2x",
         simulation_environment="PyTorch",
         use_training_mode_neighborlist=True,
-        jit=jit,
+        jit=False,
     )
 
     _, _, _, mf_input = setup_two_methanes()

@@ -266,7 +266,10 @@ class MessageModule(torch.nn.Module):
 
         # Initialize tensor to accumulate vector contributions for each atom
         vector_contributions = torch.zeros(
-            per_atom_feature_tensor.shape[0], 3
+            per_atom_feature_tensor.shape[0],
+            3,
+            device=per_atom_feature_tensor.device,
+            dtype=vector_prot_step2.dtype,
         )  # Shape: (num_of_atoms, 3)
 
         # Accumulate the vector contributions using index_add_

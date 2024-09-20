@@ -8,13 +8,13 @@ def setup_potential_for_test(
     use_training_mode_neighborlist: bool = True,
     jit: bool = False,
     potential_seed: Optional[int] = None,
-    simulation_environmen="PyTorch",
+    simulation_environment="PyTorch",
     only_unique_pairs: bool = False,
 ):
     from modelforge.potential import NeuralNetworkPotentialFactory
     from modelforge.tests.test_models import load_configs_into_pydantic_models
 
-    if simulation_environmen == "JAX":
+    if simulation_environment == "JAX":
         assert use == "inference", "JAX only supports inference mode"
 
     # read default parameters
@@ -28,7 +28,7 @@ def setup_potential_for_test(
         dataset_parameter=config["dataset"],
         runtime_parameter=config["runtime"],
         potential_seed=potential_seed,
-        simulation_environment=simulation_environmen,
+        simulation_environment=simulation_environment,
         use_training_mode_neighborlist=use_training_mode_neighborlist,
         use_default_dataset_statistic=use_default_dataset_statistic,
         jit=jit,

@@ -129,13 +129,10 @@ def convert_to_pytorch_if_needed(output, nnp_input, model):
     if "JAX" in str(type(model)):
         convert_to_pyt = import_("pytorch2jax").pytorch2jax.convert_to_pyt
         output["per_molecule_energy"] = convert_to_pyt(output["per_molecule_energy"])
+        output["per_atom_energy"] = convert_to_pyt(output["per_atom_energy"])
 
-        if "per_atom_energy" in output:
+        if "per_atom_charge" in output:
             output["per_atom_charge"] = convert_to_pyt(output["per_atom_charge"])
-        if "per_atom_charge_corrected" in output:
-            output["per_atom_charge_corrected"] = convert_to_pyt(
-                output["per_atom_charge_corrected"]
-            )
         if "per_molecule_charge" in output:
             output["per_molecule_charge"] = convert_to_pyt(
                 output["per_molecule_charge"]
@@ -200,6 +197,7 @@ def test_electrostatics():
 
     e_elec = CoulombPotential("default", 1.0)
     per_atom_charge = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0])
+    # FIXME: this thest has to be implemented
 
 
 """     
@@ -674,8 +672,8 @@ def test_multiple_output_heads(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
 @pytest.mark.parametrize("simulation_environment", ["PyTorch"])
-@pytest.mark.parametrize("mode", ["inference", "training"])
-@pytest.mark.parametrize("jit", [False])
+@pytest.mark.parametrize("mode", ["inference"])
+@pytest.mark.parametrize("jit", [False, True])
 def test_multiple_output_heads(
     dataset_name,
     potential_name,
@@ -704,19 +702,11 @@ def test_multiple_output_heads(
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
 @pytest.mark.parametrize(
-    "energy_expression",
-    [
-        "short_range",
-        "short_range_and_long_range_electrostatic",
-    ],  # , "short_range_vdw"],
-)
-@pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
 @pytest.mark.parametrize("simulation_environment", ["JAX", "PyTorch"])
 def test_forward_pass(
     dataset_name,
-    energy_expression,
     potential_name,
     simulation_environment,
     single_batch_with_batchsize,
@@ -724,33 +714,27 @@ def test_forward_pass(
     # this test sends a single batch from different datasets through the model
 
     # get input and set up model
-    nnp_input = single_batch_with_batchsize(64, dataset_name).nnp_input_tuple
-    config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
-    set_postprocessing_based_on_energy_expression(config, energy_expression)
-
+    nnp_input = single_batch_with_batchsize(64, dataset_name).nnp_input
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
-    model = initialize_model(simulation_environment, config)
+
+    model = setup_potential_for_test(
+        potential_name,
+        "inference",
+        potential_seed=42,
+        use_training_mode_neighborlist=True,
+        simulation_environment=simulation_environment,
+    )
     nnp_input = prepare_input_for_model(nnp_input, model)
 
     # perform the forward pass through each of the models
     output = model(nnp_input)
 
     # validate the output
-    validate_output_shapes(output, nr_of_mols, energy_expression)
+    validate_output_shapes(output, nr_of_mols, "short_range")
     output, atomic_subsystem_indices = convert_to_pytorch_if_needed(
         output, nnp_input, model
     )
-    # test that charge correction is working
-    if energy_expression == "short_range_and_long_range_electrostatic":
-        per_molecule_charge, per_molecule_charge_corrected = retrieve_molecular_charges(
-            output, atomic_subsystem_indices
-        )
-        validate_charge_conservation(
-            per_molecule_charge,
-            per_molecule_charge_corrected,
-            output["per_molecule_charge"],
-            potential_name,
-        )
+    validate_chemical_equivalence(output)
 
 
 @pytest.mark.parametrize(

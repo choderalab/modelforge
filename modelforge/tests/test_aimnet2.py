@@ -7,7 +7,6 @@ from modelforge.potential.utils import SchnetRadialBasisFunction
 from modelforge.tests.helper_functions import setup_potential_for_test
 
 
-
 def test_initialize_model():
     """Test initialization of the Schnet model."""
 

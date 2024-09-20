@@ -128,7 +128,7 @@ class SchNetCore(torch.nn.Module):
         return {
             "per_atom_scalar_representation": atomic_embedding,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
-            "atomic_numbers" : data.atomic_numbers,
+            "atomic_numbers": data.atomic_numbers,
         }
 
     def forward(

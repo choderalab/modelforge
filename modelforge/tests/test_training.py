@@ -177,6 +177,23 @@ def test_error_calculation(single_batch_with_batchsize):
     )
     assert torch.allclose(torch.mean(F_error), reference_F_error)
 
+def test_loss_with_partial_charge(single_batch_with_batchsize):
+
+    batch = single_batch_with_batchsize(batch_size=16, dataset_name="SPICE2")
+
+    # get trainer
+    trainer = get_trainer("schnet", "QM9", "default_with_force")
+    prediction = trainer.model.calculate_predictions(
+        batch, trainer.model.potential, train_mode=True
+    )  # train_mode=True is required for gradients in force prediction
+
+    assert prediction["per_molecule_energy_predict"].size(
+        dim=0
+    ) == batch.metadata.E.size(dim=0)
+    assert prediction["per_atom_force_predict"].size(dim=0) == batch.metadata.F.size(
+        dim=0
+    )
+
 
 def test_loss_with_dipole_moment(single_batch_with_batchsize):
 

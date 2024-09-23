@@ -9,7 +9,6 @@ number_of_radial_basis_functions = 16
 maximum_interaction_radius_for_angular_features = "3.5 angstrom"
 minimum_interaction_radius_for_angular_features = "0.8 angstrom"
 angular_dist_divisions = 8
-[potential.core_parameter.prediction]
 predicted_properties = ["per_atom_energy"]
 predicted_dim = [1]
 

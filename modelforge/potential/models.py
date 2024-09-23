@@ -569,9 +569,14 @@ class Displacement(torch.nn.Module):
         return r_ij, d_ij
 
 
-class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
+class NeighborlistForInference(torch.nn.Module):
 
-    def __init__(self, cutoff: float, displacement_function: Displacement):
+    def __init__(
+        self,
+        cutoff: float,
+        displacement_function: Displacement,
+        only_unique_pairs: bool = False,
+    ):
         """
         Initialize the ComputeInteractingAtomPairs module.
 
@@ -579,13 +584,13 @@ class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
         ----------
         cutoffs : Dict[str, unit.Quantity]
             The cutoff distance(s) for neighbor list calculations.
+
+        displacement_function: Displacement
+            The displacement function to use for calculating the displacement vectors and distances between atom pairs.
         only_unique_pairs : bool, optional
             Whether to only use unique pairs in the pair list calculation, by
             default True. This should be set to True for all message passing
             networks.
-        displacement_function: Displacement
-            The displacement function to use for calculating the displacement vectors and distances between atom pairs.
-
         """
 
         super().__init__()
@@ -595,6 +600,7 @@ class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
         self.indices = torch.tensor([])
         self.i_final_pairs = torch.tensor([])
         self.j_final_pairs = torch.tensor([])
+        self.only_unique_pairs = only_unique_pairs
 
     def forward(self, data: NNPInputTuple):
         """
@@ -632,9 +638,12 @@ class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
             self.i_final_pairs, self.j_final_pairs = torch.meshgrid(
                 self.indices, self.indices, indexing="ij"
             )
+            if self.only_unique_pairs:
+                mask = self.i_final_pairs < self.j_final_pairs
 
-            # Filter out the diagonal elements (where i == j)
-            mask = self.i_final_pairs != self.j_final_pairs
+            else:
+                # Filter out the diagonal elements (where i == j)
+                mask = self.i_final_pairs != self.j_final_pairs
             self.i_final_pairs = self.i_final_pairs[mask]
             self.j_final_pairs = self.j_final_pairs[mask]
         # calculate r_ij and d_ij
@@ -1001,9 +1010,10 @@ def setup_potential(
     else:
         displacement_function = Displacement(box_vectors, periodic)
 
-        neighborlist = NeighborlistForInferenceNonUniquePairs(
+        neighborlist = NeighborlistForInference(
             cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
             displacement_function=displacement_function,
+            only_unique_pairs=only_unique_pairs,
         )
     model = Potential(
         core_network,

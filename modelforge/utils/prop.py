@@ -15,6 +15,7 @@ class PropertyNames:
     E: str
     F: Optional[str] = None
     total_charge: Optional[str] = None
+    dipole_moment: Optional[str] = None
 
 
 class SpeciesEnergies(NamedTuple):

@@ -101,6 +101,7 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
             "atomic_numbers",
             "internal_energy_at_0K",
             "charges",
+            "dipole_moment",
         ]
         # spot check the processing of the yaml file
         assert data.gz_data_file["length"] == 1697917
@@ -129,6 +130,7 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
             "atomic_numbers",
             "wb97x_dz.energy",
             "wb97x_dz.forces",
+            "dipole_moment",
         ]
 
         data.properties_of_interest = [
@@ -152,6 +154,7 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
             "dft_total_energy",
             "dft_total_force",
             "mbis_charges",
+            "scf_dipole",
         ]
 
         data.properties_of_interest = [
@@ -173,6 +176,7 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
             "dft_total_energy",
             "dft_total_force",
             "total_charge",
+            "dipole_moment",
         ]
 
         data.properties_of_interest = [

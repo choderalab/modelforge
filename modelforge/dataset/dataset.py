@@ -81,6 +81,7 @@ class Metadata:
     atomic_subsystem_indices_referencing_dataset: torch.Tensor
     number_of_atoms: int
     F: torch.Tensor = torch.tensor([], dtype=torch.float32)
+    dipole_moment: torch.Tensor = torch.tensor([], dtype=torch.float32)
 
     def to(
         self, device: Optional[torch.device] = None, dtype: Optional[torch.dtype] = None
@@ -107,7 +108,6 @@ NNPInputTuple = NamedTuple(
         ("atomic_subsystem_indices", torch.Tensor),
         ("total_charge", torch.Tensor),
         ("pair_list", torch.Tensor),
-        ("partial_charge", torch.Tensor),
     ],
 )
 
@@ -138,7 +138,6 @@ class NNPInput:
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
     pair_list: Optional[torch.Tensor] = None
-    partial_charge: Optional[torch.Tensor] = None
 
     def to(
         self,
@@ -171,9 +170,6 @@ class NNPInput:
         # Set dtype and convert units if necessary
         self.atomic_numbers = self.atomic_numbers.to(torch.int32)
 
-        self.partial_charge = (
-            self.atomic_numbers.to(torch.int32) if self.partial_charge else None
-        )
         self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(torch.int32)
         self.total_charge = self.total_charge.to(torch.int32)
 

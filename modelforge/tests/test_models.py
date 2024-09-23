@@ -1509,13 +1509,6 @@ def test_equivariant_energies_and_forces(
     )
 
 
-def test_neighborlist_for_inference():
-    from modelforge.potential.models import NeighborlistForInference, Displacement
-
-    # look at the inference neighborlist:
-    pairlist = NeighborlistForInference(cutoff, only_unique_pairs=True)
-
-
 def test_pairlist_calculate_r_ij_and_d_ij():
     # Define inputs
     import torch

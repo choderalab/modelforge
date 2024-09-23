@@ -556,10 +556,16 @@ class Displacement(torch.nn.Module):
 
         self.periodic = periodic
 
-    def forward(self, coordinate_i: torch.Tensor, coordinate_j: torch.Tensor):
+    def forward(
+        self,
+        coordinate_i: torch.Tensor,
+        coordinate_j: torch.Tensor,
+    ):
         r_ij = coordinate_i - coordinate_j
 
         if self.periodic:
+            # Note, since box length may change, we need to modify the code to pass box_vectors every time
+
             r_ij = (
                 torch.remainder(r_ij + self.box_lengths / 2, self.box_lengths)
                 - self.box_lengths / 2

@@ -7,7 +7,6 @@ number_of_radial_basis_functions = 16
 maximum_interaction_radius = "5.0 angstrom"
 number_of_interaction_residual = 3
 number_of_modules = 5
-[potential.core_parameter.prediction]
 predicted_properties = ["per_atom_energy"]
 predicted_dim = [1]
 

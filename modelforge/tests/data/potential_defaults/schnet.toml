@@ -12,6 +12,7 @@ shared_interactions = false
 predicted_properties = ["per_atom_energy", 'per_atom_charge']
 predicted_dim = [1, 1]
 
+
 [potential.core_parameter.activation_function_parameter]
 activation_function_name = "ShiftedSoftplus"
 

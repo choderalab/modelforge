@@ -9,7 +9,6 @@ maximum_interaction_radius = "5.1 angstrom"
 minimum_interaction_radius = "0.0 angstrom"
 maximum_atomic_number = 128
 equivariance_invariance_group = "O(3)"
-[potential.core_parameter.prediction]
 predicted_properties = ["per_atom_energy"]
 predicted_dim = [1]
 

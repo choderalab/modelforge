@@ -334,8 +334,8 @@ class Neighborlist(Pairlist):
 
         Parameters
         ----------
-        cutoffs : Dict[str, unit.Quantity]
-            Cutoff distances for neighbor calculations.
+        cutoff : float
+            Cutoff distance for neighbor calculations.
         only_unique_pairs : bool, optional
             If True, only unique pairs are returned (default is False).
         """
@@ -588,11 +588,8 @@ class NeighborlistForInference(torch.nn.Module):
 
         Parameters
         ----------
-        cutoffs : Dict[str, unit.Quantity]
-            The cutoff distance(s) for neighbor list calculations.
-
-        displacement_function: Displacement
-            The displacement function to use for calculating the displacement vectors and distances between atom pairs.
+        cutoff : float
+            The cutoff distance for neighbor list calculations.
         only_unique_pairs : bool, optional
             Whether to only use unique pairs in the pair list calculation, by
             default True. This should be set to True for all message passing

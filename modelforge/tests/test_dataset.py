@@ -89,6 +89,13 @@ def test_dataset_basic_operations():
 
 
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+def test_get_properties(dataset_name, single_batch_with_batchsize):
+
+    batch = single_batch_with_batchsize(batch_size=16, dataset_name=dataset_name)
+    a = 7
+
+
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_different_properties_of_interest(dataset_name, dataset_factory, prep_temp_dir):
     local_cache_dir = str(prep_temp_dir) + "/data_test"
 

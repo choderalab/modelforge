@@ -1227,9 +1227,6 @@ def test_pairlist_on_dataset():
     )  # +1 because of 0-based indexing
 
 
-@pytest.mark.parametrize(
-    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
-)
 def test_inference_neighborlist():
     from modelforge.potential.models import NeighborlistForInference, Displacement
     import torch
@@ -1334,6 +1331,9 @@ def test_inference_neighborlist():
     assert torch.all(d_ij < 3.5)
 
 
+@pytest.mark.parametrize(
+    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+)
 def test_casting(potential_name, single_batch_with_batchsize):
     # test dtype casting
     import torch

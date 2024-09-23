@@ -55,6 +55,7 @@ class SPICE1Dataset(HDF5Dataset):
         E="dft_total_energy",
         F="dft_total_force",
         total_charge="mbis_charges",
+        dipole_moment="scf_dipole",
     )
 
     _available_properties = [
@@ -110,6 +111,7 @@ class SPICE1Dataset(HDF5Dataset):
             "dft_total_energy",
             "dft_total_force",
             "mbis_charges",
+            "scf_dipole",
         ]  # NOTE: Default values
 
         self._properties_of_interest = _default_properties_of_interest

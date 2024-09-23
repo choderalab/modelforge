@@ -1164,7 +1164,10 @@ class ModelTrainer:
         from lightning import Trainer
 
         # if devices is a list
-        if isinstance(self.runtime_parameter.devices, list):
+        if isinstance(self.runtime_parameter.devices, list) or (
+            isinstance(self.runtime_parameter.devices, int)
+            and self.runtime_parameter.devices > 1
+        ):
             from lightning.pytorch.strategies import DDPStrategy
 
             strategy = DDPStrategy(find_unused_parameters=False)

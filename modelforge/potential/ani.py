@@ -79,7 +79,7 @@ class ANIRepresentation(nn.Module):
     def __init__(
         self,
         radial_max_distance: unit.Quantity,
-        radial_min_distanc: unit.Quantity,
+        radial_min_distance: unit.Quantity,
         number_of_radial_basis_functions: int,
         maximum_interaction_radius_for_angular_features: unit.Quantity,
         minimum_interaction_radius_for_angular_features: unit.Quantity,
@@ -98,7 +98,7 @@ class ANIRepresentation(nn.Module):
         self.cutoff_module = CosineAttenuationFunction(radial_max_distance)
 
         self.radial_symmetry_functions = self._setup_radial_symmetry_functions(
-            radial_max_distance, radial_min_distanc, number_of_radial_basis_functions
+            radial_max_distance, radial_min_distance, number_of_radial_basis_functions
         )
         self.angular_symmetry_functions = self._setup_angular_symmetry_functions(
             maximum_interaction_radius_for_angular_features,

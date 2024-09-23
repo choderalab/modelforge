@@ -1165,9 +1165,14 @@ class ModelTrainer:
 
         # if devices is a list
         if isinstance(self.runtime_parameter.devices, list):
-            strategy = "ddp"
+            from lightning.pytorch.strategies import DDPStrategy
+
+            strategy = DDPStrategy(find_unused_parameters=False)
+        else:
+            strategy = "auto"
 
         trainer = Trainer(
+            strategy=strategy,
             max_epochs=self.training_parameter.number_of_epochs,
             min_epochs=self.training_parameter.min_number_of_epochs,
             num_nodes=self.runtime_parameter.number_of_nodes,
@@ -1178,6 +1183,7 @@ class ModelTrainer:
             inference_mode=False,
             num_sanity_val_steps=2,
             log_every_n_steps=self.runtime_parameter.log_every_n_steps,
+            enable_model_summary=True,
         )
         return trainer
 

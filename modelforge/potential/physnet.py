@@ -215,46 +215,45 @@ class PhysNetInteractionModule(nn.Module):
 
         idx_i, idx_j = data["pair_indices"].unbind()
 
-        # # Apply activation to atomic embeddings
-        per_atom_embedding = self.activation_function(
-            data["atomic_embedding"]
-        )  # (nr_of_atoms_in_batch, number_of_per_atom_features)
-
-        # calculate attention weights and transform to
-        # input shape: (number_of_pairs, number_of_radial_basis_functions)
-        # output shape: (number_of_pairs, number_of_per_atom_features)
-        g = self.attention_mask(data["f_ij"])
-
-        # Calculate contribution of central atom i
-        per_atom_updated_embedding = self.interaction_i(per_atom_embedding)
-
-        # Calculate contribution of neighbor atom
-        per_interaction_embededding_for_atom_j = (
-            self.interaction_j(per_atom_embedding[idx_j]) * g
+        # Apply activation to atomic embeddings
+        # first term in equation 6 in the PhysNet paper
+        embedding_atom_i = self.activation_function(
+            self.interaction_i(data["atomic_embedding"])
         )
 
-        per_atom_updated_embedding.scatter_add_(
+        # second term in equation 6 in the PhysNet paper
+        # apply attention mask G to radial basis functions f_ij
+        g = self.attention_mask(data["f_ij"])
+        # calculate the updated embedding for atom j
+        embedding_atom_j = self.activation_function(
+            self.interaction_j(data["atomic_embedding"][idx_j])
+        )
+        updated_embedding_atom_j = torch.mul(
+            g, embedding_atom_j
+        )  # element-wise multiplication
+
+        # Sum over contributions from atom j as function of embedding of atom i
+        # and attention mask G(f_ij)
+        embedding_atom_i.scatter_add_(
             0,
-            idx_i.unsqueeze(-1).expand(
-                -1, per_interaction_embededding_for_atom_j.shape[-1]
-            ),
-            per_interaction_embededding_for_atom_j,
+            idx_i.unsqueeze(-1).expand(-1, updated_embedding_atom_j.shape[-1]),
+            updated_embedding_atom_j,
         )
 
         # apply residual blocks
         for residual in self.residuals:
-            per_atom_updated_embedding = residual(
-                per_atom_updated_embedding
+            embedding_atom_i = residual(
+                embedding_atom_i
             )  # shape (nr_of_atoms_in_batch, number_of_radial_basis_functions)
 
-        per_atom_updated_embedding = self.activation_function(
-            per_atom_updated_embedding
-        )
+        # Apply dropout to the embedding after the residuals
+        embedding_atom_i = self.dropout(embedding_atom_i)
 
-        per_atom_embedding = self.gate * per_atom_embedding + self.process_v(
-            per_atom_updated_embedding
+        # eqn 5 in the PhysNet paper
+        embedding_atom_i = self.gate * data["atomic_embedding"] + self.process_v(
+            self.activation_function(embedding_atom_i)
         )
-        return per_atom_embedding
+        return embedding_atom_i
 
 
 class PhysNetOutput(nn.Module):

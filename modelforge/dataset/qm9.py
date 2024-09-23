@@ -102,6 +102,7 @@ class QM9Dataset(HDF5Dataset):
             "atomic_numbers",
             "internal_energy_at_0K",
             "charges",
+            "dipole_moment",
         ]  # NOTE: Default values
 
         self._properties_of_interest = _default_properties_of_interest

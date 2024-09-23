@@ -1168,7 +1168,7 @@ class ModelTrainer:
             from pytorch_lightning.plugins import DDPPlugin
 
             strategy = "ddp"
-            plugins = DDPPlugin(find_unused_parameters=False)
+            plugins = DDPPlugin(find_unused_parameters=True)
         else:
             strategy = "auto"
             plugins = None

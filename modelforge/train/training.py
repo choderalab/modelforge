@@ -1165,9 +1165,17 @@ class ModelTrainer:
 
         # if devices is a list
         if isinstance(self.runtime_parameter.devices, list):
+            from pytorch_lightning.plugins import DDPPlugin
+
             strategy = "ddp"
+            plugins = DDPPlugin(find_unused_parameters=False)
+        else:
+            strategy = "auto"
+            plugins = None
 
         trainer = Trainer(
+            strategy=strategy,
+            plugins=plugins,
             max_epochs=self.training_parameter.number_of_epochs,
             min_epochs=self.training_parameter.min_number_of_epochs,
             num_nodes=self.runtime_parameter.number_of_nodes,

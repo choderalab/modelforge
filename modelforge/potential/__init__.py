@@ -2,29 +2,34 @@
 This module contains the implemented neural network potentials and their parameters.
 """
 
-from .schnet import SchNet
-from .physnet import PhysNet
-from .painn import PaiNN
-from .ani import ANI2x
-from .sake import SAKE
-from .tensornet import TensorNet
+from enum import Enum
+
+from .models import NeuralNetworkPotentialFactory
+from .painn import PaiNNCore
 from .parameters import (
+    AimNet2Parameters,
     ANI2xParameters,
-    SchNetParameters,
-    PhysNetParameters,
     PaiNNParameters,
+    PhysNetParameters,
     SAKEParameters,
+    SchNetParameters,
     TensorNetParameters,
 )
-from .utils import (
-    CosineAttenuationFunction,
-    RadialBasisFunction,
-    AngularSymmetryFunction,
-    FeaturizeInput,
-)
 from .processing import FromAtomToMoleculeReduction
-from .models import NeuralNetworkPotentialFactory
-from enum import Enum
+
+from .physnet import PhysNetCore
+from .sake import SAKECore
+from .schnet import SchNetCore
+from .tensornet import TensorNetCore
+from .aimnet2 import AimNet2Core
+from .ani import ANI2xCore
+
+from .utils import (
+    AngularSymmetryFunction,
+    CosineAttenuationFunction,
+    FeaturizeInput,
+    RadialBasisFunction,
+)
 
 
 class _Implemented_NNP_Parameters(Enum):
@@ -34,6 +39,7 @@ class _Implemented_NNP_Parameters(Enum):
     PAINN_PARAMETERS = PaiNNParameters
     PHYSNET_PARAMETERS = PhysNetParameters
     SAKE_PARAMETERS = SAKEParameters
+    AIMNET2_PARAMETERS = AimNet2Parameters
 
     @classmethod
     def get_neural_network_parameter_class(cls, neural_network_name: str):
@@ -49,12 +55,13 @@ class _Implemented_NNP_Parameters(Enum):
 
 
 class _Implemented_NNPs(Enum):
-    ANI2X = ANI2x
-    SCHNET = SchNet
-    PAINN = PaiNN
-    PHYSNET = PhysNet
-    SAKE = SAKE
-    TENSORNET = TensorNet
+    SCHNET = SchNetCore
+    ANI2X = ANI2xCore
+    PHYSNET = PhysNetCore
+    TENSORNET = TensorNetCore
+    PAINN = PaiNNCore
+    SAKE = SAKECore
+    AIMNET2 = AimNet2Core
 
     @classmethod
     def get_neural_network_class(cls, neural_network_name: str):

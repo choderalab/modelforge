@@ -3,27 +3,25 @@ potential_name = "SAKE"
 
 [potential.core_parameter]
 
-number_of_radial_basis_functions = 16
+number_of_radial_basis_functions = 11
 maximum_interaction_radius = "5.0 angstrom"
 number_of_interaction_modules = 6
 number_of_spatial_attention_heads = 4
-predicted_properties = [
-    { name = "per_atom_energy", type = "scalar" },
-    { name = "per_atom_charge", type = "scalar" },
-    # we could also define per_atom_force to be consistent?
-]
+predicted_properties = ["per_atom_energy"]
+predicted_dim = [1]
 
 [potential.core_parameter.activation_function_parameter]
 activation_function_name = "SiLU"
 
 [potential.core_parameter.featurization]
-number_of_per_atom_features = 64
 properties_to_featurize = ['atomic_number']
+[potential.core_parameter.featurization.atomic_number]
 maximum_atomic_number = 101
+number_of_per_atom_features = 11
 
 [potential.postprocessing_parameter]
+properties_to_process = ['per_atom_energy']
 [potential.postprocessing_parameter.per_atom_energy]
 normalize = true
 from_atom_to_molecule_reduction = true
 keep_per_atom_property = true
-

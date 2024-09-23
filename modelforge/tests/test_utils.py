@@ -146,25 +146,19 @@ def test_cosine_cutoff():
     y = torch.Tensor([4, 5, 6])
     from openff.units import unit
 
-    cutoff = 6
-
     # Calculate expected output
+    cutoff = 6
     d_ij = torch.linalg.norm(x - y)
     expected_output = 0.5 * (torch.cos(d_ij * np.pi / cutoff) + 1.0)
-    cutoff = 0.6 * unit.nanometer
 
     # Calculate actual output
+    cutoff = 0.6
     cutoff_module = CosineAttenuationFunction(cutoff)
     actual_output = cutoff_module(d_ij / 10)
 
-    # Check if the results are equal
-    # NOTE: Cutoff function doesn't care about the units as long as they are the same
+    # Check if the results are equal NOTE: Cutoff function doesn't care about
+    # the units as long as they are the same
     assert np.isclose(actual_output, expected_output)
-
-    # input in angstrom
-    cutoff = 2.0 * unit.angstrom
-    expected_output = torch.tensor([0.5, 0.0, 0.0])
-    cosine_cutoff_module = CosineAttenuationFunction(cutoff)
 
 
 def test_cosine_cutoff_module():
@@ -172,15 +166,15 @@ def test_cosine_cutoff_module():
     from modelforge.potential.utils import CosineAttenuationFunction
     from openff.units import unit
 
-    # test the cutoff on this distance vector (NOTE: it is in angstrom)
+    # test the cutoff on this distance vector
     d_ij_angstrom = torch.tensor([1.0, 2.0, 3.0]).unsqueeze(1)
     # the expected outcome is that entry 1 and 2 become zero
     # and entry 0 becomes 0.5 (since the cutoff is 2.0 angstrom)
     # input in angstrom
-    cutoff = 2.0 * unit.angstrom
+    cutoff = 2.0
 
     expected_output = torch.tensor([0.5, 0.0, 0.0]).unsqueeze(1)
-    cosine_cutoff_module = CosineAttenuationFunction(cutoff)
+    cosine_cutoff_module = CosineAttenuationFunction(cutoff / 10)
 
     output = cosine_cutoff_module(d_ij_angstrom / 10)  # input is in nanometer
 
@@ -200,7 +194,7 @@ def test_PhysNetAttenuationFunction():
     cutoff = 2.0 * unit.angstrom
 
     expected_output = torch.tensor([0.5, 0.0, 0.0]).unsqueeze(1)
-    physnet_cutoff_module = PhysNetAttenuationFunction(cutoff)
+    physnet_cutoff_module = PhysNetAttenuationFunction(cutoff.to(unit.nanometer).m)
 
     output = physnet_cutoff_module(d_ij_angstrom / 10)  # input is in nanometer
 
@@ -219,7 +213,9 @@ def test_radial_symmetry_function_implementation():
         GaussianRadialBasisFunctionWithScaling,
     )
 
-    cutoff_module = CosineAttenuationFunction(cutoff=unit.Quantity(5.0, unit.angstrom))
+    cutoff_module = CosineAttenuationFunction(
+        cutoff=unit.Quantity(5.0, unit.angstrom).to(unit.nanometer).m
+    )
 
     class RadialSymmetryFunctionTest(GaussianRadialBasisFunctionWithScaling):
         @staticmethod
@@ -254,7 +250,7 @@ def test_radial_symmetry_function_implementation():
 
     RSF = RadialSymmetryFunctionTest(
         number_of_radial_basis_functions=18,
-        max_distance=unit.Quantity(5.0, unit.angstrom),
+        max_distance=unit.Quantity(5.0, unit.angstrom).to(unit.nanometer).m,
     )
     # test a single distance
     d_ij = torch.tensor([[0.2]])
@@ -530,34 +526,13 @@ def test_scatter_softmax():
     assert torch.allclose(util_out, correct_out)
 
 
-def test_embedding():
-    """
-    Test the Embedding module.
-    """
-    from modelforge.potential.utils import Embedding
-
-    maximum_atomic_number = 100
-    embedding_dim = 7
-
-    # Create Embedding instance
-    embedding = Embedding(maximum_atomic_number, embedding_dim)
-
-    # Test embedding_dim property
-    assert embedding.embedding_dim == embedding_dim
-
-    # Test forward pass
-    input_tensor = torch.randint(0, 99, (5,))
-
-    output = embedding(input_tensor)
-    assert output.shape == (5, embedding_dim)
-
-
 def test_energy_readout():
     from modelforge.potential.processing import FromAtomToMoleculeReduction
     import torch
 
-    # the EnergyReadout module performs a linear pass to reduce the nr_of_atom_basis to 1
-    # and then performs a scatter add operation to return a tensor with size [nr_of_molecules,]
+    # the EnergyReadout module performs a linear pass to reduce the
+    # nr_of_atom_basis to 1 and then performs a scatter add operation to return
+    # a tensor with size [nr_of_molecules,]
 
     # the input for the EnergyReadout module is vector (E_i) that will be scatter_added, and
     # a second tensor supplying the indixes for the summation
@@ -566,12 +541,8 @@ def test_energy_readout():
         "per_atom_energy": torch.tensor([3, 3, 1, 1, 1, 1, 1, 1], dtype=torch.float32),
         "atomic_subsystem_index": torch.tensor([0, 0, 1, 1, 1, 1, 1, 1]),
     }
-    energy_readout = FromAtomToMoleculeReduction(
-        per_atom_property_name="per_atom_energy",
-        index_name="atomic_subsystem_index",
-        output_name="per_molecule_energy",
-    )
-    E = energy_readout(r)["per_molecule_energy"]
+    energy_readout = FromAtomToMoleculeReduction()
+    E = energy_readout(r["atomic_subsystem_index"], r["per_atom_energy"])
 
     # check that output has length of total number of molecules in batch
     assert E.size() == torch.Size(

@@ -1,12 +1,10 @@
 [potential]
-potential_name = "PhysNet"
+potential_name = "AimNet2"
 
 [potential.core_parameter]
-
-number_of_radial_basis_functions = 16
+number_of_radial_basis_functions = 32
 maximum_interaction_radius = "5.0 angstrom"
-number_of_interaction_residual = 3
-number_of_modules = 5
+number_of_interaction_modules = 3
 predicted_properties = ["per_atom_energy"]
 predicted_dim = [1]
 
@@ -25,4 +23,5 @@ properties_to_process = ['per_atom_energy']
 normalize = true
 from_atom_to_molecule_reduction = true
 keep_per_atom_property = true
-
+[potential.postprocessing_parameter.general_postprocessing_operation]
+calculate_molecular_self_energy = true

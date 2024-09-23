@@ -4,59 +4,36 @@ from modelforge.tests.precalculated_values import (
     load_precalculated_schnet_results,
     setup_single_methane_input,
 )
+from typing import Optional
 
 
-def initialize_model(
-    cutoff: float,
-    number_of_atom_features: int,
-    number_of_radial_basis_functions: int,
-    nr_of_interactions: int,
-):
-    # ------------------------------------ #
-    # set up the modelforge Painn representation model
-    # which means that we only want to call the
-    # _transform_input() method
-    from modelforge.potential.schnet import SchNet
+def setup_schnet_model(potential_seed: Optional[int] = None):
+    from modelforge.tests.test_models import load_configs_into_pydantic_models
+    from modelforge.potential import NeuralNetworkPotentialFactory
 
-    return SchNet(
-        featurization={
-            "properties_to_featurize": ["atomic_number"],
-            "maximum_atomic_number": 101,
-            "number_of_per_atom_features": 32,
-        },
-        number_of_interaction_modules=nr_of_interactions,
-        number_of_radial_basis_functions=number_of_radial_basis_functions,
-        radial_max_distance=cutoff,
-        number_of_filters=number_of_atom_features,
-        shared_interactions=False,
-        processing_operation=[],
-        readout_operation=[
-            {
-                "step": "from_atom_to_molecule",
-                "mode": "sum",
-                "in": "per_atom_energy",
-                "index_key": "atomic_subsystem_indices",
-                "out": "E",
-            }
-        ],
-    )
+    # read default parameters
+    config = load_configs_into_pydantic_models("schnet", "qm9")
+    # override defaults to match reference implementation in spk
+    config[
+        "potential"
+    ].core_parameter.featurization.atomic_number.number_of_per_atom_features = 12
+    config["potential"].core_parameter.number_of_radial_basis_functions = 5
+    config["potential"].core_parameter.number_of_filters = 12
+
+    model = NeuralNetworkPotentialFactory.generate_potential(
+        use="training",
+        potential_parameter=config["potential"],
+        training_parameter=config["training"],
+        dataset_parameter=config["dataset"],
+        runtime_parameter=config["runtime"],
+        potential_seed=potential_seed,
+    ).model.potential
+    return model
 
 
 def test_init():
     """Test initialization of the Schnet model."""
-    from modelforge.potential.schnet import SchNet
-
-    from modelforge.tests.test_models import load_configs_into_pydantic_models
-
-    # load default parameters
-    config = load_configs_into_pydantic_models(f"schnet", "qm9")
-    # initialize model
-    schnet = SchNet(
-        **config["potential"].model_dump()["core_parameter"],
-        postprocessing_parameter=config["potential"].model_dump()[
-            "postprocessing_parameter"
-        ],
-    )
+    schnet = setup_schnet_model()
     assert schnet is not None, "Schnet model should be initialized."
 
 
@@ -67,8 +44,8 @@ def test_compare_rbf():
 
     # Initialize the RBFs
     number_of_gaussians = 10
-    cutoff = unit.Quantity(5.2, unit.angstrom)
-    start = unit.Quantity(0.8, unit.angstrom)
+    cutoff = unit.Quantity(5.2, unit.angstrom).to(unit.nanometer).m
+    start = unit.Quantity(0.8, unit.angstrom).to(unit.nanometer).m
 
     rbf_module = SchnetRadialBasisFunction(
         number_of_radial_basis_functions=number_of_gaussians,
@@ -162,31 +139,12 @@ def test_compare_rbf():
     )  # NOTE: there is a shape mismatch between the two outputs
 
 
-def test_compare_forward():
+def test_compare_implementation_against_reference_implementation():
     # ---------------------------------------- #
     # test the implementation of the representation part of the PaiNN model
     # ---------------------------------------- #
-    from modelforge.potential.schnet import SchNet
-
-    from modelforge.tests.test_models import load_configs_into_pydantic_models
-
-    # load default parameters
-    config = load_configs_into_pydantic_models(f"schnet", "qm9")
-
-    # override default parameters
-    config["potential"].core_parameter.featurization.number_of_per_atom_features = 12
-    config["potential"].core_parameter.number_of_radial_basis_functions = 5
-    config["potential"].core_parameter.number_of_filters = 12
-
-    torch.manual_seed(1234)
-
-    # initialize model
-    schnet = SchNet(
-        **config["potential"].model_dump()["core_parameter"],
-        postprocessing_parameter=config["potential"].model_dump()[
-            "postprocessing_parameter"
-        ],
-    ).double()
+    model = setup_schnet_model(1234).double()
+    # ---------------------------------------- #
 
     # ------------------------------------ #
     # reference values
@@ -196,92 +154,7 @@ def test_compare_forward():
     # set up the input for the spk Schnet model
     input = setup_single_methane_input()
     spk_input = input["spk_methane_input"]
-    model_input = input["modelforge_methane_input"]
-
-    schnet.compute_interacting_pairs._input_checks(model_input)
-
-    pairlist_output = schnet.compute_interacting_pairs.prepare_inputs(model_input)
-    prepared_input = schnet.core_module._model_specific_input_preparation(
-        model_input, pairlist_output
-    )
-
-    # ---------------------------------------- #
-    # test neighborlist and distance
-    # ---------------------------------------- #
-    assert torch.allclose(spk_input["_Rij"] / 10, prepared_input.r_ij, atol=1e-4)
-    assert torch.allclose(spk_input["_idx_i"], prepared_input.pair_indices[0])
-    assert torch.allclose(spk_input["_idx_j"], prepared_input.pair_indices[1])
-
-    # ---------------------------------------- #
-    # test radial symmetry function
-    # ---------------------------------------- #
-    r_ij = spk_input["_Rij"]
-    d_ij = torch.norm(r_ij, dim=1, keepdim=True)
-
-    reference_phi_ij = torch.tensor(
-        [
-            [0.6828, 0.9920, 0.5302, 0.1043, 0.0075],
-            [0.6828, 0.9920, 0.5302, 0.1043, 0.0075],
-            [0.6828, 0.9920, 0.5302, 0.1043, 0.0075],
-            [0.6828, 0.9920, 0.5302, 0.1043, 0.0075],
-            [0.6828, 0.9920, 0.5302, 0.1043, 0.0075],
-            [0.3615, 0.9131, 0.8484, 0.2900, 0.0365],
-            [0.3615, 0.9130, 0.8484, 0.2900, 0.0365],
-            [0.3615, 0.9130, 0.8484, 0.2900, 0.0365],
-            [0.6828, 0.9920, 0.5302, 0.1043, 0.0075],
-            [0.3615, 0.9131, 0.8484, 0.2900, 0.0365],
-            [0.3615, 0.9131, 0.8484, 0.2900, 0.0365],
-            [0.3615, 0.9131, 0.8484, 0.2900, 0.0365],
-            [0.6828, 0.9920, 0.5302, 0.1043, 0.0075],
-            [0.3615, 0.9130, 0.8484, 0.2900, 0.0365],
-            [0.3615, 0.9131, 0.8484, 0.2900, 0.0365],
-            [0.3615, 0.9131, 0.8484, 0.2900, 0.0365],
-            [0.6828, 0.9920, 0.5302, 0.1043, 0.0075],
-            [0.3615, 0.9130, 0.8484, 0.2900, 0.0365],
-            [0.3615, 0.9131, 0.8484, 0.2900, 0.0365],
-            [0.3615, 0.9131, 0.8484, 0.2900, 0.0365],
-        ],
-        dtype=torch.float64,
-    )
-    calculated_phi_ij = (
-        schnet.core_module.schnet_representation_module.radial_symmetry_function_module(
-            d_ij / 10
-        )
-    )  # NOTE: converting to nm
-
-    assert torch.allclose(reference_phi_ij.squeeze(1), calculated_phi_ij, atol=1e-3)
-    # ---------------------------------------- #
-    # test cutoff
-    # ---------------------------------------- #
-    reference_fcut = torch.tensor(
-        [
-            [0.8869],
-            [0.8869],
-            [0.8869],
-            [0.8869],
-            [0.8869],
-            [0.7177],
-            [0.7177],
-            [0.7177],
-            [0.8869],
-            [0.7177],
-            [0.7177],
-            [0.7177],
-            [0.8869],
-            [0.7177],
-            [0.7177],
-            [0.7177],
-            [0.8869],
-            [0.7177],
-            [0.7177],
-            [0.7177],
-        ],
-        dtype=torch.float64,
-    )
-    calculated_fcut = schnet.core_module.schnet_representation_module.cutoff_module(
-        d_ij / 10
-    )  # NOTE: converting to nm
-    assert torch.allclose(reference_fcut, calculated_fcut, atol=1e-4)
+    model_input = input["modelforge_methane_input"].as_namedtuple()
 
     # ---------------------------------------- #
     # test forward pass
@@ -289,16 +162,16 @@ def test_compare_forward():
     # reset
     torch.manual_seed(1234)
     for i in range(3):
-        schnet.core_module.interaction_modules[i].intput_to_feature.reset_parameters()
+        model.core_network.interaction_modules[i].intput_to_feature.reset_parameters()
         for j in range(2):
-            schnet.core_module.interaction_modules[i].feature_to_output[
+            model.core_network.interaction_modules[i].feature_to_output[
                 j
             ].reset_parameters()
-            schnet.core_module.interaction_modules[i].filter_network[
+            model.core_network.interaction_modules[i].filter_network[
                 j
             ].reset_parameters()
 
-    calculated_results = schnet.core_module.forward(model_input, pairlist_output)
+    calculated_results = model.compute_core_network_output(model_input)
     reference_results = load_precalculated_schnet_results()
     assert (
         reference_results["scalar_representation"].shape

@@ -8,7 +8,7 @@ def test_embedding(single_batch_with_batchsize):
 
     import torch  # noqa: F401
 
-    batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
+    batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
 
     nnp_input = batch.nnp_input
     model_name = "SchNet"
@@ -16,21 +16,19 @@ def test_embedding(single_batch_with_batchsize):
     config = load_configs_into_pydantic_models(f"{model_name.lower()}", "qm9")
     featurization_config = config["potential"].core_parameter.featurization.model_dump()
 
-    # featurize the atomic input (default is only nuclear charge embedding)
+    # featurize the atomic input (default is only atomic number embedding)
     from modelforge.potential.utils import FeaturizeInput
 
     featurize_input_module = FeaturizeInput(featurization_config)
 
-    # mixing module should be the identidy operation since only nuclear charge is used
+    # mixing module should be the identity operation since only atomic number
+    # embedding is used
     mixing_module = featurize_input_module.mixing
     assert mixing_module.__module__ == "torch.nn.modules.linear"
     mixing_module_name = str(mixing_module)
 
-    # only nucreal charges embedded
-    assert (
-        "nuclear_charge_embedding"
-        in featurize_input_module.registered_embedding_operations
-    )
+    # only atomic number embedded
+    assert "atomic_number" in featurize_input_module.registered_embedding_operations
     assert len(featurize_input_module.registered_embedding_operations) == 1
     # no mixing
     assert "Identity()" in mixing_module_name
@@ -39,11 +37,8 @@ def test_embedding(single_batch_with_batchsize):
     featurization_config["properties_to_featurize"].append("per_molecule_total_charge")
     featurize_input_module = FeaturizeInput(featurization_config)
 
-    # only nuclear charges embedded
-    assert (
-        "nuclear_charge_embedding"
-        in featurize_input_module.registered_embedding_operations
-    )
+    # only atomic number embedded
+    assert "atomic_number" in featurize_input_module.registered_embedding_operations
     assert len(featurize_input_module.registered_embedding_operations) == 1
     # total charge is added to feature vector
     assert "total_charge" in featurize_input_module.registered_appended_properties

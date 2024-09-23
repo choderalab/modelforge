@@ -99,6 +99,19 @@ class Metadata:
         return self
 
 
+NNPInputTuple = NamedTuple(
+    "NNPInputTuple",
+    [
+        ("atomic_numbers", torch.Tensor),
+        ("positions", torch.Tensor),
+        ("atomic_subsystem_indices", torch.Tensor),
+        ("total_charge", torch.Tensor),
+        ("pair_list", torch.Tensor),
+        ("partial_charge", torch.Tensor),
+    ],
+)
+
+
 @dataclass
 class NNPInput:
     """
@@ -197,12 +210,8 @@ class NNPInput:
     def as_namedtuple(self) -> NamedTuple:
         """Export the dataclass fields and values as a named tuple."""
 
-        import collections
-        from dataclasses import dataclass, fields
+        from dataclasses import fields
 
-        NNPInputTuple = collections.namedtuple(
-            "NNPInputTuple", [field.name for field in fields(self)]
-        )
         return NNPInputTuple(*[getattr(self, field.name) for field in fields(self)])
 
     def as_jax_namedtuple(self) -> NamedTuple:
@@ -240,6 +249,20 @@ class BatchData:
 
     def batch_size(self):
         return self.metadata.E.size(dim=0)
+
+    @property
+    def nnp_input_tuple(self):
+        """
+        Property to return the nnp_input as an NNPInputTuple.
+        """
+        return self.nnp_input.as_namedtuple()
+
+    @property
+    def jax_nnp_input_tuple(self):
+        """
+        Property to return the nnp_input as an NNPInputTuple.
+        """
+        return self.nnp_input.as_jax_namedtuple()
 
 
 class TorchDataset(torch.utils.data.Dataset[BatchData]):

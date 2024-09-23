@@ -4,20 +4,22 @@ Utility functions for neural network potentials.
 
 import math
 from dataclasses import dataclass
-from typing import Callable, Optional, Tuple, Type
+from typing import Callable, Optional, Tuple, Type, Union
 
 import numpy as np
 import torch
 import torch.nn as nn
 from openff.units import unit
-from typing import Union
-from modelforge.dataset.dataset import NNPInput
+
+from modelforge.dataset.dataset import NNPInputTuple, NNPInput
 
 
 @dataclass
 class NeuralNetworkData:
     """
-    A dataclass to structure the inputs specifically for SchNet-based neural network potentials, including the necessary geometric and chemical information, along with the radial symmetry function expansion (`f_ij`) and the cosine cutoff (`f_cutoff`) to accurately represent atomistic systems for energy predictions.
+    A dataclass to structure the inputs specifically for SchNet-based neural network potentials,
+    including the necessary geometric and chemical information, along with the radial symmetry function expansion
+    (`f_ij`) and the cosine cutoff (`f_cutoff`) to accurately represent atomistic systems for energy predictions.
 
     Attributes
     ----------
@@ -112,126 +114,7 @@ def shared_config_prior():
     }
 
 
-def triple_by_molecule(
-    atom_pairs: torch.Tensor,
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Input: indices for pairs of atoms that are close to each other.
-    each pair only appear once, i.e. only one of the pairs (1, 2) and
-    (2, 1) exists.
-
-    NOTE: this function is taken from https://github.com/aiqm/torchani/blob/17204c6dccf6210753bc8c0ca4c92278b60719c9/torchani/aev.py
-            with little modifications.
-    """
-
-    def cumsum_from_zero(input_: torch.Tensor) -> torch.Tensor:
-        cumsum = torch.zeros_like(input_)
-        torch.cumsum(input_[:-1], dim=0, out=cumsum[1:])
-        return cumsum
-
-    # convert representation from pair to central-others
-    ai1 = atom_pairs.view(-1)
-
-    # Note, torch.sort doesn't guarantee stable sort by default.
-    # This means that the order of rev_indices is not guaranteed when there are "ties"
-    # (i.e., identical values in the input tensor).
-    # Stable sort is more expensive and ultimately unnecessary, so we will not use it here,
-    # but it does mean that vector-wise comparison of the outputs of this function may be
-    # inconsistent for the same input, and thus tests must be designed accordingly.
-
-    sorted_ai1, rev_indices = ai1.sort()
-
-    # sort and compute unique key
-    uniqued_central_atom_index, counts = torch.unique_consecutive(
-        sorted_ai1, return_inverse=False, return_counts=True
-    )
-
-    # compute central_atom_index
-    pair_sizes = torch.div(counts * (counts - 1), 2, rounding_mode="trunc")
-    pair_indices = torch.repeat_interleave(pair_sizes)
-    central_atom_index = uniqued_central_atom_index.index_select(0, pair_indices)
-
-    # do local combinations within unique key, assuming sorted
-    m = counts.max().item() if counts.numel() > 0 else 0
-    n = pair_sizes.shape[0]
-    intra_pair_indices = (
-        torch.tril_indices(m, m, -1, device=ai1.device).unsqueeze(1).expand(-1, n, -1)
-    )
-    mask = (
-        torch.arange(intra_pair_indices.shape[2], device=ai1.device)
-        < pair_sizes.unsqueeze(1)
-    ).flatten()
-    sorted_local_index12 = intra_pair_indices.flatten(1, 2)[:, mask]
-    sorted_local_index12 += cumsum_from_zero(counts).index_select(0, pair_indices)
-
-    # unsort result from last part
-    local_index12 = rev_indices[sorted_local_index12]
-
-    # compute mapping between representation of central-other to pair
-    n = atom_pairs.shape[1]
-    sign12 = ((local_index12 < n).to(torch.int8) * 2) - 1
-    return central_atom_index, local_index12 % n, sign12
-
-
-from typing import List
-
-
-class Embedding(nn.Module):
-    def __init__(self, num_embeddings: int, embedding_dim: int):
-        """
-        Initialize the embedding module.
-
-        Parameters
-        ----------
-        num_embeddings: int
-        embedding_dim : int
-            Dimensionality of the embedding.
-        """
-        super().__init__()
-        self.embedding = nn.Embedding(num_embeddings, embedding_dim)
-
-    @property
-    def weights(self):
-        return self.embedding.weight
-
-    @property
-    def data(self):
-        return self.embedding.weight.data
-
-    @data.setter
-    def data(self, data):
-        self.embedding.weight.data = data
-
-    @property
-    def embedding_dim(self):
-        """
-        Get the dimensionality of the embedding.
-
-        Returns
-        -------
-        int
-            The dimensionality of the embedding.
-        """
-        return self.embedding.embedding_dim
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Embeddes the pr3ovided 1D tensor using the embedding layer.
-
-        Parameters
-        ----------
-        x : torch.Tensor
-            1D tensor to be embedded.
-
-        Returns
-        -------
-        torch.Tensor
-            with shape (num_embeddings, embedding_dim)
-        """
-
-        return self.embedding(x)
-
-
-from typing import Dict
+from typing import Dict, List
 
 
 class AddPerMoleculeValue(nn.Module):
@@ -255,7 +138,7 @@ class AddPerMoleculeValue(nn.Module):
         self.key = key
 
     def forward(
-        self, per_atom_property_tensor: torch.Tensor, data: NNPInput
+        self, per_atom_property_tensor: torch.Tensor, data: NNPInputTuple
     ) -> torch.Tensor:
         """
         Forward pass of the module.
@@ -298,7 +181,7 @@ class AddPerAtomValue(nn.Module):
         self.key = key
 
     def forward(
-        self, per_atom_property_tensor: torch.Tensor, data: NNPInput
+        self, per_atom_property_tensor: torch.Tensor, data: NNPInputTuple
     ) -> torch.Tensor:
         """
         Forward pass of the module.
@@ -332,7 +215,7 @@ class FeaturizeInput(nn.Module):
     ----------
     _SUPPORTED_FEATURIZATION_TYPES : List[str]
         The list of supported featurization types.
-    nuclear_charge_embedding : Embedding
+    atomic_number_embedding : Embedding
         The embedding layer for nuclear charges.
     append_to_embedding_tensor : nn.ModuleList
         The list of modules to append to the embedding tensor.
@@ -359,18 +242,24 @@ class FeaturizeInput(nn.Module):
         "spin_state",
     ]
 
-    def __init__(self, featurization_config: Dict[str, Union[List[str], int]]) -> None:
+    def __init__(
+        self, featurization_config: Dict[str, Union[List[str], Dict[str, int]]]
+    ) -> None:
         """
         Initialize the FeaturizeInput class.
 
-        For per-atom non-categorical properties and per-molecule properties (both categorical and non-categorical), we append the embedded nuclear charges and mix them using a linear layer.
+        For per-atom non-categorical properties and per-molecule properties
+        (both categorical and non-categorical), we append the embedded nuclear
+        charges and mix them using a linear layer.
 
-        For per-atom categorical properties, we define an additional embedding and add the embedding to the nuclear charge embedding.
+        For per-atom categorical properties, we define an additional embedding
+        and add the embedding to the nuclear charge embedding.
 
         Parameters
         ----------
         featurization_config : dict
-            A dictionary containing the featurization configuration. It should have the following keys:
+            A dictionary containing the featurization configuration. It should
+            have the following keys:
             - "properties_to_featurize" : list
                 A list of properties to featurize.
             - "maximum_atomic_number" : int
@@ -392,27 +281,38 @@ class FeaturizeInput(nn.Module):
         self.registered_embedding_operations: List[str] = []
 
         self.increase_dim_of_embedded_tensor: int = 0
+        base_embedding_dim = int(
+            featurization_config["atomic_number"]["number_of_per_atom_features"]
+        )
+        properties_to_featurize = featurization_config["properties_to_featurize"]
+        # iterate through the supported featurization types and check if one of
+        # these is requested
+        for featurization in properties_to_featurize:
 
-        # iterate through the supported featurization types and check if one of these is requested
-        for featurization in self._SUPPORTED_FEATURIZATION_TYPES:
-
-            # embed nuclear charges
-            if featurization == "atomic_number" and featurization in list(
-                featurization_config["properties_to_featurize"]
+            # embed atomic number
+            if (
+                featurization == "atomic_number"
+                and featurization in self._SUPPORTED_FEATURIZATION_TYPES
             ):
-
-                self.nuclear_charge_embedding = Embedding(
-                    int(featurization_config["maximum_atomic_number"]),
-                    int(featurization_config["number_of_per_atom_features"]),
+                self.atomic_number_embedding = torch.nn.Embedding(
+                    int(featurization_config[featurization]["maximum_atomic_number"]),
+                    int(
+                        featurization_config[featurization][
+                            "number_of_per_atom_features"
+                        ]
+                    ),
                 )
-                self.registered_embedding_operations.append("nuclear_charge_embedding")
+                self.registered_embedding_operations.append("atomic_number")
 
             # add total charge to embedding vector
-            if featurization == "per_molecule_total_charge" and featurization in list(
-                featurization_config["properties_to_featurize"]
+            elif (
+                featurization == "per_molecule_total_charge"
+                and featurization in self._SUPPORTED_FEATURIZATION_TYPES
             ):
-
-                # transform output o f embedding with shape (nr_atoms, nr_features) to (nr_atoms, nr_features + 1). The added features is the total charge (which will be transformed to a per-atom property)
+                # transform output o f embedding with shape (nr_atoms,
+                # nr_features) to (nr_atoms, nr_features + 1). The added
+                # features is the total charge (which will be transformed to a
+                # per-atom property)
                 self.append_to_embedding_tensor.append(
                     AddPerMoleculeValue("total_charge")
                 )
@@ -420,16 +320,22 @@ class FeaturizeInput(nn.Module):
                 self.registered_appended_properties.append("total_charge")
 
             # add partial charge to embedding vector
-            if featurization == "per_atom_partial_charge" and featurization in list(
-                featurization_config["properties_to_featurize"]
-            ):
-
-                # transform output o f embedding with shape (nr_atoms, nr_features) to (nr_atoms, nr_features + 1). The added features is the total charge (which will be transformed to a per-atom property)
+            elif (
+                featurization == "per_atom_partial_charge"
+                and featurization in self._SUPPORTED_FEATURIZATION_TYPES
+            ):  # transform output of embedding with shape (nr_atoms, nr_features) to (nr_atoms, nr_features + 1).
+                # #The added features is the total charge (which will be
+                # transformed to a per-atom property)
                 self.append_to_embedding_tensor.append(
                     AddPerAtomValue("partial_charge")
                 )
                 self.increase_dim_of_embedded_tensor += 1
                 self.append_to_embedding_tensor("partial_charge")
+
+            else:
+                raise RuntimeError(
+                    f"Unsupported featurization type {featurization}. Supported types are {self._SUPPORTED_FEATURIZATION_TYPES}"
+                )
 
         # if only nuclear charges are embedded no mixing is performed
         self.mixing: Union[nn.Identity, DenseWithCustomDist]
@@ -437,12 +343,11 @@ class FeaturizeInput(nn.Module):
             self.mixing = nn.Identity()
         else:
             self.mixing = DenseWithCustomDist(
-                int(featurization_config["number_of_per_atom_features"])
-                + self.increase_dim_of_embedded_tensor,
-                int(featurization_config["number_of_per_atom_features"]),
+                base_embedding_dim + self.increase_dim_of_embedded_tensor,
+                base_embedding_dim,
             )
 
-    def forward(self, data: NNPInput) -> torch.Tensor:
+    def forward(self, data: NNPInputTuple) -> torch.Tensor:
         """
         Featurize the input data.
 
@@ -458,19 +363,15 @@ class FeaturizeInput(nn.Module):
         """
 
         atomic_numbers = data.atomic_numbers
-        embedded_nuclear_charges = self.nuclear_charge_embedding(atomic_numbers)
+        categorial_embedding = self.atomic_number_embedding(atomic_numbers)
 
         for additional_embedding in self.embeddings:
-            embedded_nuclear_charges = additional_embedding(
-                embedded_nuclear_charges, data
-            )
+            categorial_embedding = additional_embedding(categorial_embedding, data)
 
         for append_embedding_vector in self.append_to_embedding_tensor:
-            embedded_nuclear_charges = append_embedding_vector(
-                embedded_nuclear_charges, data
-            )
+            categorial_embedding = append_embedding_vector(categorial_embedding, data)
 
-        return self.mixing(embedded_nuclear_charges)
+        return self.mixing(categorial_embedding)
 
 
 import torch.nn.functional as F
@@ -491,7 +392,7 @@ class Dense(nn.Linear):
         in_features: int,
         out_features: int,
         bias: bool = True,
-        activation_function: Optional[Type[torch.nn.Module]] = None,
+        activation_function: nn.Module = nn.Identity(),
     ):
         """
         A linear or non-linear transformation
@@ -505,14 +406,13 @@ class Dense(nn.Linear):
         bias : bool, optional
             If set to False, the layer will not learn an additive bias. Default is True.
         activation_function : Type[torch.nn.Module] , optional
-            Activation function to be applied. Default is nn.Identity(), which applies the identity function and makes this a linear transformation.
+            Activation function to be applied. Default is nn.Identity(), which applies the identity function
+            and makes this a linear transformation.
         """
 
         super().__init__(in_features, out_features, bias)
 
-        self.activation_function = (
-            activation_function if activation_function is not None else nn.Identity()
-        )
+        self.activation_function = activation_function
 
     def forward(self, input: torch.Tensor):
         """
@@ -558,9 +458,9 @@ class DenseWithCustomDist(nn.Linear):
         in_features: int,
         out_features: int,
         bias: bool = True,
-        activation_function: Optional[nn.Module] = None,
-        weight_init: Optional[Callable] = xavier_uniform_,
-        bias_init: Optional[Callable] = zeros_,
+        activation_function: nn.Module = nn.Identity(),
+        weight_init: Callable = xavier_uniform_,
+        bias_init: Callable = zeros_,
     ):
         """
         A linear or non-linear transformation
@@ -574,7 +474,8 @@ class DenseWithCustomDist(nn.Linear):
         bias : bool, optional
             If set to False, the layer will not learn an additive bias. Default is True.
         activation_function : nn.Module , optional
-            Activation function to be applied. Default is nn.Identity(), which applies the identity function and makes this a linear ransformation.
+            Activation function to be applied. Default is nn.Identity(), which applies the identity function
+            and makes this a linear ransformation.
         weight_init : Callable, optional
             Callable to initialize the weights. Default is xavier_uniform_.
         bias_init : Callable, optional
@@ -586,11 +487,9 @@ class DenseWithCustomDist(nn.Linear):
 
         super().__init__(
             in_features, out_features, bias
-        )  # NOTE: the `reseet_paramters` method is called in the super class
+        )  # NOTE: the `reset_paramters` method is called in the super class
 
-        self.activation_function = (
-            activation_function if activation_function is not None else nn.Identity()
-        )
+        self.activation_function = activation_function
 
     def reset_parameters(self):
         """
@@ -623,7 +522,7 @@ from openff.units import unit
 
 
 class PhysNetAttenuationFunction(nn.Module):
-    def __init__(self, cutoff: unit.Quantity):
+    def __init__(self, cutoff: float):
         """
         Initialize the PhysNet attenuation function.
 
@@ -633,7 +532,6 @@ class PhysNetAttenuationFunction(nn.Module):
             The cutoff distance.
         """
         super().__init__()
-        cutoff = cutoff.to(unit.nanometer).m
         self.register_buffer("cutoff", torch.tensor([cutoff]))
 
     def forward(self, d_ij: torch.Tensor):
@@ -650,7 +548,7 @@ class PhysNetAttenuationFunction(nn.Module):
 
 
 class CosineAttenuationFunction(nn.Module):
-    def __init__(self, cutoff: unit.Quantity):
+    def __init__(self, cutoff: float):
         """
         Behler-style cosine cutoff module. This anneals the signal smoothly to zero at the cutoff distance.
 
@@ -663,7 +561,6 @@ class CosineAttenuationFunction(nn.Module):
 
         """
         super().__init__()
-        cutoff = cutoff.to(unit.nanometer).m
         self.register_buffer("cutoff", torch.tensor([cutoff]))
 
     def forward(self, d_ij: torch.Tensor):
@@ -728,8 +625,8 @@ class AngularSymmetryFunction(nn.Module):
 
     def __init__(
         self,
-        maximum_interaction_radius: unit.Quantity,
-        min_distance: unit.Quantity,
+        maximum_interaction_radius: float,
+        min_distance: float,
         number_of_gaussians_for_asf: int = 8,
         angle_sections: int = 4,
         trainable: bool = False,
@@ -750,9 +647,9 @@ class AngularSymmetryFunction(nn.Module):
         self.number_of_gaussians_asf = number_of_gaussians_for_asf
         self.angular_cutoff = maximum_interaction_radius
         self.cosine_cutoff = CosineAttenuationFunction(self.angular_cutoff)
-        _unitless_angular_cutoff = maximum_interaction_radius.to(unit.nanometer).m
+        _unitless_angular_cutoff = maximum_interaction_radius
         self.angular_start = min_distance
-        _unitless_angular_start = min_distance.to(unit.nanometer).m
+        _unitless_angular_start = min_distance
 
         # save constants
         EtaA = angular_eta = 12.5 * 100  # FIXME hardcoded eta
@@ -834,8 +731,9 @@ class AngularSymmetryFunction(nn.Module):
         return ret.flatten(start_dim=-4)
 
 
-from abc import ABC, abstractmethod
 import math
+from abc import ABC, abstractmethod
+
 from torch.nn import functional
 
 
@@ -878,7 +776,7 @@ class RadialBasisFunction(nn.Module, ABC):
         self,
         radial_basis_function: RadialBasisFunctionCore,
         dtype: torch.dtype,
-        prefactor: float = 1.0,
+        prefactor: float = 1,
         trainable_prefactor: bool = False,
     ):
         super().__init__()
@@ -905,10 +803,12 @@ class RadialBasisFunction(nn.Module, ABC):
 
     def forward(self, distances: torch.Tensor) -> torch.Tensor:
         """
-        The input distances have implicit units of nanometers by the convention of modelforge. This function applies
-        nondimensionalization transformations on the distances and passes the dimensionless result to
-        RadialBasisFunctionCore. There can be several nondimsionalization transformations, corresponding to each element
-        along the number_of_radial_basis_functions axis in the output.
+        The input distances have implicit units of nanometers by the convention
+        of modelforge. This function applies nondimensionalization
+        transformations on the distances and passes the dimensionless result to
+        RadialBasisFunctionCore. There can be several nondimsionalization
+        transformations, corresponding to each element along the
+        number_of_radial_basis_functions axis in the output.
 
         Parameters
         ---------
@@ -932,9 +832,9 @@ class GaussianRadialBasisFunctionWithScaling(RadialBasisFunction):
     def __init__(
         self,
         number_of_radial_basis_functions: int,
-        max_distance: unit.Quantity,
-        min_distance: unit.Quantity = 0.0 * unit.nanometer,
-        dtype: Optional[torch.dtype] = None,
+        max_distance: float,
+        min_distance: float = 0.0,
+        dtype: torch.dtype = torch.float32,
         prefactor: float = 1.0,
         trainable_prefactor: bool = False,
         trainable_centers_and_scale_factors: bool = False,
@@ -968,8 +868,8 @@ class GaussianRadialBasisFunctionWithScaling(RadialBasisFunction):
         self.dtype = dtype
         self.trainable_centers_and_scale_factors = trainable_centers_and_scale_factors
         # convert to nanometer
-        _max_distance_in_nanometer = max_distance.to(unit.nanometer).m
-        _min_distance_in_nanometer = min_distance.to(unit.nanometer).m
+        _max_distance_in_nanometer = max_distance
+        _min_distance_in_nanometer = min_distance
 
         # calculate radial basis centers
         radial_basis_centers = self.calculate_radial_basis_centers(
@@ -1034,9 +934,9 @@ class SchnetRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
     def __init__(
         self,
         number_of_radial_basis_functions: int,
-        max_distance: unit.Quantity,
-        min_distance: unit.Quantity = 0.0 * unit.nanometer,
-        dtype: Optional[torch.dtype] = None,
+        max_distance: float,
+        min_distance: float = 0.0,
+        dtype: torch.dtype = torch.float32,
         trainable_centers_and_scale_factors: bool = False,
     ):
         """
@@ -1172,9 +1072,9 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
     def __init__(
         self,
         number_of_radial_basis_functions: int,
-        max_distance: unit.Quantity,
-        min_distance: unit.Quantity = 0.0 * unit.nanometer,
-        alpha: unit.Quantity = 1.0 * unit.angstrom,
+        max_distance: float,
+        min_distance: float = 0.0,
+        alpha: float = 0.1,
         dtype: torch.dtype = torch.float32,
         trainable_centers_and_scale_factors: bool = False,
     ):
@@ -1202,8 +1102,8 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
             trainable_prefactor=False,
             dtype=dtype,
         )
-        self._min_distance_in_nanometer = min_distance.to(unit.nanometer).m
-        self._alpha_in_nanometer = alpha.to(unit.nanometer).m
+        self._min_distance_in_nanometer = min_distance
+        self._alpha_in_nanometer = alpha
         radial_basis_centers = self.calculate_radial_basis_centers(
             number_of_radial_basis_functions,
             max_distance,
@@ -1235,13 +1135,14 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
         alpha,
         dtype,
     ):
-        # initialize centers according to the default values in PhysNet
-        # (see mu_k in Figure 2 caption of https://pubs.acs.org/doi/10.1021/acs.jctc.9b00181)
-        # NOTE: Unlike GaussianRadialBasisFunctionWithScaling, the centers are unitless.
+        # initialize centers according to the default values in PhysNet (see
+        # mu_k in Figure 2 caption of
+        # https://pubs.acs.org/doi/10.1021/acs.jctc.9b00181) NOTE: Unlike
+        # GaussianRadialBasisFunctionWithScaling, the centers are unitless.
 
         start_value = torch.exp(
             torch.scalar_tensor(
-                ((-max_distance + min_distance) / alpha).to("").m,
+                ((-max_distance + min_distance) / alpha),
                 dtype=dtype,
             )
         )
@@ -1258,15 +1159,17 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
         alpha,
         dtype,
     ):
-        # initialize according to the default values in PhysNet (see beta_k in Figure 2 caption)
-        # NOTES:
-        # - Unlike GaussianRadialBasisFunctionWithScaling, the scale factors are unitless.
-        # - Each element of radial_square_factor here is the reciprocal of the square root of beta_k in the
-        # Eq. 7 of the PhysNet paper. This way, it is consistent with the sqrt(2) * standard deviation interpretation
-        # of radial_scale_factor in GaussianRadialBasisFunctionWithScaling
+        # initialize according to the default values in PhysNet (see beta_k in
+        # Figure 2 caption) NOTES:
+        # - Unlike GaussianRadialBasisFunctionWithScaling, the scale factors are
+        #   unitless.
+        # - Each element of radial_square_factor here is the reciprocal of the
+        # square root of beta_k in the Eq. 7 of the PhysNet paper. This way, it
+        # is consistent with the sqrt(2) * standard deviation interpretation of
+        # radial_scale_factor in GaussianRadialBasisFunctionWithScaling
         return torch.full(
             (number_of_radial_basis_functions,),
-            (2 * (1 - math.exp(((-max_distance + min_distance) / alpha).to("").m)))
+            (2 * (1 - math.exp(((-max_distance + min_distance) / alpha))))
             / number_of_radial_basis_functions,
             dtype=dtype,
         )
@@ -1299,10 +1202,10 @@ class TensorNetRadialBasisFunction(PhysNetRadialBasisFunction):
         alpha,
         dtype,
     ):
-        alpha = 1 * unit.angstrom
+        alpha = 0.1
         start_value = torch.exp(
             torch.scalar_tensor(
-                ((-max_distance + min_distance) / alpha).to("").m,
+                ((-max_distance + min_distance) / alpha),
                 dtype=dtype,
             )
         )
@@ -1319,9 +1222,9 @@ class TensorNetRadialBasisFunction(PhysNetRadialBasisFunction):
         alpha,
         dtype,
     ):
-        alpha = 1 * unit.angstrom
+        alpha = 0.1
         start_value = torch.exp(
-            torch.scalar_tensor(((-max_distance + min_distance) / alpha).to("").m)
+            torch.scalar_tensor(((-max_distance + min_distance) / alpha))
         )
         radial_scale_factor = torch.full(
             (number_of_radial_basis_functions,),
@@ -1332,9 +1235,9 @@ class TensorNetRadialBasisFunction(PhysNetRadialBasisFunction):
         return radial_scale_factor
 
     def nondimensionalize_distances(self, distances: torch.Tensor) -> torch.Tensor:
-        # Transformation within the outer exp of PhysNet Eq. 7
-        # NOTE: the PhysNet paper implicitly multiplies by 1/Angstrom within the inner exp but distances are in
-        # nanometers, so we multiply by 10/nanometer
+        # Transformation within the outer exp of PhysNet Eq. 7 NOTE: the PhysNet
+        # paper implicitly multiplies by 1/Angstrom within the inner exp but
+        # distances are in nanometers, so we multiply by 10/nanometer
 
         return (
             torch.exp(
@@ -1401,36 +1304,88 @@ def pair_list(
     return pair_indices.to(device)
 
 
+from openff.units import unit
+
+
+def convert_str_to_unit_in_dataset_statistics(
+    dataset_statistic: Dict[str, Dict[str, str]]
+) -> Dict[str, Dict[str, unit.Quantity]]:
+    for key, value in dataset_statistic.items():
+        for sub_key, sub_value in value.items():
+            dataset_statistic[key][sub_key] = unit.Quantity(sub_value)
+    return dataset_statistic
+
+
+def remove_units_from_dataset_statistics(
+    dataset_statistic: Dict[str, Dict[str, unit.Quantity]]
+) -> Dict[str, Dict[str, float]]:
+    from openff.units import unit
+    from modelforge.utils.units import chem_context
+
+    dataset_statistic_without_units = {}
+    for key, value in dataset_statistic.items():
+        dataset_statistic_without_units[key] = {}
+        for sub_key, sub_value in value.items():
+            dataset_statistic_without_units[key][sub_key] = (
+                unit.Quantity(sub_value).to(unit.kilojoule_per_mole, "chem").m
+            )
+    return dataset_statistic_without_units
+
+
+def read_dataset_statistics(
+    dataset_statistic_filename: str, remove_units: bool = False
+):
+    import toml
+
+    # read file
+    dataset_statistic = toml.load(dataset_statistic_filename)
+    # convert to float (to kJ/mol and then strip the units)
+    # dataset statistic is a Dict[str, Dict[str, unit.Quantity]], we need to strip the units
+    if remove_units:
+        return remove_units_from_dataset_statistics(dataset_statistic=dataset_statistic)
+    else:
+        return dataset_statistic
+
+
 def scatter_softmax(
     src: torch.Tensor,
     index: torch.Tensor,
     dim: int,
-    dim_size: Optional[int] = None,
-    device: Optional[torch.device] = None,
+    dim_size: int,
 ) -> torch.Tensor:
     """
-    Softmax operation over all values in :attr:`src` tensor that share indices
-    specified in the :attr:`index` tensor along a given axis :attr:`dim`.
+    Computes the softmax operation over values in the `src` tensor that share indices specified in the `index` tensor
+    along a given axis `dim`.
 
-    For one-dimensional tensors, the operation computes
+    For one-dimensional tensors, the operation computes:
 
     .. math::
-        \mathrm{out}_i = {\textrm{softmax}(\mathrm{src})}_i =
-        \frac{\exp(\mathrm{src}_i)}{\sum_j \exp(\mathrm{src}_j)}
+        \text{out}_i = \text{softmax}(\text{src})_i =
+        \frac{\exp(\text{src}_i)}{\sum_j \exp(\text{src}_j)}
 
-    where :math:`\sum_j` is over :math:`j` such that
-    :math:`\mathrm{index}_j = i`.
+    where the summation :math:`\sum_j` is over all :math:`j` such that :math:`\text{index}_j = i`.
 
-    Args:
-        src (Tensor): The source tensor.
-        index (LongTensor): The indices of elements to scatter.
-        dim (int, optional): The axis along which to index.
-            (default: :obj:`-1`)
-        dim_size: The number of classes, i.e. the number of unique indices in `index`.
+    Parameters
+    ----------
+    src : Tensor
+        The source tensor containing the values to which the softmax operation will be applied.
+    index : LongTensor
+        The indices of elements to scatter, determining which elements in `src` are grouped together for the
+        softmax calculation.
+    dim : int
+        The axis along which to index. Default is `-1`.
+    dim_size : int
+        The number of classes, i.e., the number of unique indices in `index`.
 
-    :rtype: :class:`Tensor`
+    Returns
+    -------
+    Tensor
+        A tensor where the softmax operation has been applied along the specified dimension.
 
-    Adapted from: https://github.com/rusty1s/pytorch_scatter/blob/c31915e1c4ceb27b2e7248d21576f685dc45dd01/torch_scatter/composite/softmax.py
+    Notes
+    -----
+    This implementation is adapted from the following source:
+    `pytorch_scatter <https://github.com/rusty1s/pytorch_scatter/blob/c31915e1c4ceb27b2e7248d21576f685dc45dd01/torch_scatter/composite/softmax.py>`_.
     """
     if not torch.is_floating_point(src):
         raise ValueError(
@@ -1448,7 +1403,7 @@ def scatter_softmax(
         for (other_dim, other_dim_size) in enumerate(src.shape)
     ]
     index = index.to(torch.int64)
-    zeros = torch.zeros(out_shape, dtype=src.dtype, device=device)
+    zeros = torch.zeros(out_shape, dtype=src.dtype, device=src.device)
     max_value_per_index = zeros.scatter_reduce(
         dim, index, src, "amax", include_self=False
     )
@@ -1457,15 +1412,12 @@ def scatter_softmax(
     recentered_scores = src - max_per_src_element
     recentered_scores_exp = recentered_scores.exp()
 
-    sum_per_index = torch.zeros(out_shape, dtype=src.dtype, device=device).scatter_add(
-        dim, index, recentered_scores_exp
-    )
+    sum_per_index = torch.zeros(
+        out_shape, dtype=src.dtype, device=src.device
+    ).scatter_add(dim, index, recentered_scores_exp)
     normalizing_constants = sum_per_index.gather(dim, index)
 
     return recentered_scores_exp.div(normalizing_constants)
-
-
-from enum import Enum
 
 
 ACTIVATION_FUNCTIONS = {

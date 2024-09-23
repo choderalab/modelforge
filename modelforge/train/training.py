@@ -10,6 +10,7 @@ import torch
 import torchmetrics
 from lightning import Trainer
 from loguru import logger as log
+from openff.units import unit
 from torch import nn
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
@@ -366,8 +367,8 @@ def create_error_metrics(loss_properties: List[str], loss: bool = False) -> Modu
         A dictionary where keys are loss properties and values are MetricCollections.
     """
     from torchmetrics import MetricCollection
-    from torchmetrics.regression import MeanAbsoluteError, MeanSquaredError
     from torchmetrics.aggregation import MeanMetric
+    from torchmetrics.regression import MeanAbsoluteError, MeanSquaredError
 
     if loss:
         metric_dict = ModuleDict(
@@ -527,7 +528,7 @@ class TrainingAdapter(pL.LightningModule):
             PaiNNParameters,
             TensorNetParameters,
         ],
-        dataset_statistic: Dict[str, float],
+        dataset_statistic: Dict[str, Dict[str, unit.Quantity]],
         training_parameter: TrainingParameters,
         potential_seed: Optional[int] = None,
     ):
@@ -545,21 +546,18 @@ class TrainingAdapter(pL.LightningModule):
         potential_seed : Optional[int], optional
             The seed to use for initializing the model, by default None.
         """
-        from modelforge.potential import _Implemented_NNPs
+        from modelforge.potential.models import setup_potential
 
         super().__init__()
         self.save_hyperparameters()
         self.training_parameter = training_parameter
 
-        # Get requested model class
-        nnp_class = _Implemented_NNPs.get_neural_network_class(
-            potential_parameter.potential_name
-        )
-        self.potential = nnp_class(
-            **potential_parameter.core_parameter.model_dump(),
+        self.potential = setup_potential(
+            potential_parameter=potential_parameter,
             dataset_statistic=dataset_statistic,
-            postprocessing_parameter=potential_parameter.postprocessing_parameter.model_dump(),
             potential_seed=potential_seed,
+            jit=False,
+            use_training_mode_neighborlist=True,
         )
 
         def check_strides(module, grad_input, grad_output):
@@ -880,6 +878,9 @@ class TrainingAdapter(pL.LightningModule):
         return {"optimizer": optimizer, "lr_scheduler": lr_scheduler}
 
 
+from openff.units import unit
+
+
 class ModelTrainer:
     """
     Class for training neural network potentials using PyTorch Lightning.
@@ -899,6 +900,8 @@ class ModelTrainer:
         ],
         training_parameter: TrainingParameters,
         runtime_parameter: RuntimeParameters,
+        dataset_statistic: Dict[str, Dict[str, unit.Quantity]],
+        use_default_dataset_statistic: bool,
         optimizer: Type[Optimizer] = torch.optim.AdamW,
         potential_seed: Optional[int] = None,
         verbose: bool = False,
@@ -938,7 +941,11 @@ class ModelTrainer:
         self.runtime_parameter = runtime_parameter
 
         self.datamodule = self.setup_datamodule()
-        self.dataset_statistic = self.read_dataset_statistics()
+        self.dataset_statistic = (
+            self.read_dataset_statistics()
+            if not use_default_dataset_statistic
+            else dataset_statistic
+        )
         self.experiment_logger = self.setup_logger()
         self.model = self.setup_potential(potential_seed)
         self.callbacks = self.setup_callbacks()
@@ -971,7 +978,9 @@ class ModelTrainer:
             self.training_parameter.loss_parameter.loss_property
         )
 
-    def read_dataset_statistics(self) -> Dict[str, float]:
+    def read_dataset_statistics(
+        self,
+    ) -> Dict[str, float]:
         """
         Read and log dataset statistics.
 
@@ -980,9 +989,17 @@ class ModelTrainer:
         Dict[str, float]
             The dataset statistics.
         """
-        import toml
+        from modelforge.potential.utils import (
+            read_dataset_statistics,
+            convert_str_to_unit_in_dataset_statistics,
+        )
 
-        dataset_statistic = toml.load(self.datamodule.dataset_statistic_filename)
+        # read toml file
+        dataset_statistic = read_dataset_statistics(
+            self.datamodule.dataset_statistic_filename
+        )
+        # convert dictionary of str:str to str:units
+        dataset_statistic = convert_str_to_unit_in_dataset_statistics(dataset_statistic)
         log.info(
             f"Setting per_atom_energy_mean and per_atom_energy_stddev for {self.potential_parameter.potential_name}"
         )
@@ -1040,6 +1057,7 @@ class ModelTrainer:
         nn.Module
             Configured model instance, wrapped in a TrainingAdapter.
         """
+
         # Initialize model
         return TrainingAdapter(
             potential_parameter=self.potential_parameter,
@@ -1146,10 +1164,18 @@ class ModelTrainer:
         from lightning import Trainer
 
         # if devices is a list
-        if isinstance(self.runtime_parameter.devices, list):
-            strategy = "ddp"
+        if isinstance(self.runtime_parameter.devices, list) or (
+            isinstance(self.runtime_parameter.devices, int)
+            and self.runtime_parameter.devices > 1
+        ):
+            from lightning.pytorch.strategies import DDPStrategy
+
+            strategy = DDPStrategy(find_unused_parameters=False)
+        else:
+            strategy = "auto"
 
         trainer = Trainer(
+            strategy=strategy,
             max_epochs=self.training_parameter.number_of_epochs,
             min_epochs=self.training_parameter.min_number_of_epochs,
             num_nodes=self.runtime_parameter.number_of_nodes,
@@ -1160,6 +1186,7 @@ class ModelTrainer:
             inference_mode=False,
             num_sanity_val_steps=2,
             log_every_n_steps=self.runtime_parameter.log_every_n_steps,
+            enable_model_summary=True,
         )
         return trainer
 

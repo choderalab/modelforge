@@ -72,11 +72,7 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
 
     def __init__(
         self,
-        per_atom_property_name: str,
-        index_name: str,
-        output_name: str,
         reduction_mode: str = "sum",
-        keep_per_atom_property: bool = False,
     ):
         """
         Initializes the per-atom property readout_operation module.
@@ -96,12 +92,10 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         """
         super().__init__()
         self.reduction_mode = reduction_mode
-        self.per_atom_property_name = per_atom_property_name
-        self.output_name = output_name
-        self.index_name = index_name
-        self.keep_per_atom_property = keep_per_atom_property
 
-    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def forward(
+        self, indices: torch.Tensor, per_atom_property: torch.Tensor
+    ) -> torch.Tensor:
         """
         Forward pass of the module.
 
@@ -115,24 +109,19 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         Dict[str, torch.Tensor]
             The output data dictionary containing the per-molecule property.
         """
-        indices = data[self.index_name].to(torch.int64)
-        per_atom_property = data[self.per_atom_property_name]
+
         # Perform scatter add operation for atoms belonging to the same molecule
+        nr_of_molecules = torch.unique(indices)
+        nr_of_molecules = nr_of_molecules.size(0)
         property_per_molecule_zeros = torch.zeros(
-            len(indices.unique()),
+            nr_of_molecules,
             dtype=per_atom_property.dtype,
             device=per_atom_property.device,
         )
 
-        property_per_molecule = property_per_molecule_zeros.scatter_reduce(
-            0, indices, per_atom_property, reduce=self.reduction_mode
+        return property_per_molecule_zeros.scatter_reduce(
+            0, indices.long(), per_atom_property, reduce=self.reduction_mode
         )
-
-        data[self.output_name] = property_per_molecule
-        if self.keep_per_atom_property is False:
-            del data[self.per_atom_property_name]
-
-        return data
 
 
 @dataclass
@@ -228,7 +217,9 @@ class ScaleValues(torch.nn.Module):
     """
 
     def __init__(
-        self, mean: float, stddev: float, property: str, output_name: str
+        self,
+        mean: float,
+        stddev: float,
     ) -> None:
         """
         Rescales values using the provided mean and standard deviation.
@@ -248,10 +239,8 @@ class ScaleValues(torch.nn.Module):
         super().__init__()
         self.register_buffer("mean", torch.tensor([mean]))
         self.register_buffer("stddev", torch.tensor([stddev]))
-        self.property = property
-        self.output_name = output_name
 
-    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def forward(self, data: torch.Tensor) -> torch.Tensor:
         """
         Rescales values using the provided mean and standard deviation.
 
@@ -265,8 +254,7 @@ class ScaleValues(torch.nn.Module):
         Dict[str, torch.Tensor]
             The output data dictionary containing the rescaled values.
         """
-        data[self.output_name] = data[self.property] * self.stddev + self.mean
-        return data
+        return data * self.stddev + self.mean
 
 
 def default_charge_conservation(
@@ -359,6 +347,70 @@ class ChargeConservation(torch.nn.Module):
         return data
 
 
+class PerAtomEnergy(torch.nn.Module):
+
+    def __init__(
+        self, per_atom_energy: Dict[str, bool], dataset_statistics: Dict[str, float]
+    ):
+        super().__init__()
+
+        if per_atom_energy.get("normalize"):
+            scale = ScaleValues(
+                dataset_statistics["per_atom_energy_mean"],
+                dataset_statistics["per_atom_energy_stddev"],
+            )
+        else:
+            scale = ScaleValues(0.0, 1.0)
+
+        self.scale = scale
+
+        if per_atom_energy.get("from_atom_to_molecule_reduction"):
+            reduction = FromAtomToMoleculeReduction()
+
+        self.reduction = reduction
+
+    def forward(self, per_atom_property: torch.Tensor, indices: torch.Tensor):
+        scaled_values = self.scale(per_atom_property)
+        reduced_values = self.reduction(indices, scaled_values)
+        return reduced_values
+
+
+class PerAtomEnergy(torch.nn.Module):
+
+    def __init__(
+        self, per_atom_energy: Dict[str, bool], dataset_statistics: Dict[str, float]
+    ):
+        super().__init__()
+
+        if per_atom_energy.get("normalize"):
+            scale = ScaleValues(
+                dataset_statistics["per_atom_energy_mean"],
+                dataset_statistics["per_atom_energy_stddev"],
+            )
+        else:
+            scale = ScaleValues(0.0, 1.0)
+
+        self.scale = scale
+
+        if per_atom_energy.get("from_atom_to_molecule_reduction"):
+            reduction = FromAtomToMoleculeReduction()
+
+        self.reduction = reduction
+
+    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        per_atom_property, indices = (
+            data["per_atom_energy"],
+            data["atomic_subsystem_indices"],
+        )
+        scaled_values = self.scale(per_atom_property)
+        per_molecule_energy = self.reduction(indices, scaled_values)
+
+        data["per_molecule_energy"] = per_molecule_energy
+        data["per_atom_energy"] = data["per_atom_energy"].detach()
+
+        return data
+
+
 class CalculateAtomicSelfEnergy(torch.nn.Module):
     """
     Calculates the atomic self energy for each molecule.
@@ -424,8 +476,8 @@ class CalculateAtomicSelfEnergy(torch.nn.Module):
 from typing import Literal
 
 
-class LongRangeElectrostaticEnergy(torch.nn.Module):
-    def __init__(self, strategy: Literal["default"], cutoff: unit.Quantity):
+class CoulombPotential(torch.nn.Module):
+    def __init__(self, strategy: Literal["default"], cutoff: float):
         """
         Computes the long-range electrostatic energy for a molecular system
         based on predicted partial charges and pairwise distances between atoms.
@@ -438,9 +490,9 @@ class LongRangeElectrostaticEnergy(torch.nn.Module):
         strategy : str
             The strategy to be used for computing the long-range electrostatic
             energy.
-        cutoff : unit.Quantity
+        cutoff : float
             The cutoff distance beyond which the interactions are not
-            considered.
+            considered in nanometer.
 
         Attributes
         ----------

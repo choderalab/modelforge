@@ -2,23 +2,59 @@
 TensorNet network for molecular potential learning.
 """
 
-from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple, Type
+from typing import Dict, List, Tuple, Type
 
 import torch
-from openff.units import unit
 from torch import nn
 
-from modelforge.potential.models import BaseNetwork, CoreNetwork
 from modelforge.potential.utils import (
     CosineAttenuationFunction,
-    NeuralNetworkData,
-    NNPInput,
+    NNPInputTuple,
     TensorNetRadialBasisFunction,
 )
 
-from ..utils.units import _convert_str_to_unit
-from .models import PairListOutputs
+from .models import PairlistData
+
+
+class DenseAndSum(nn.Module):
+    def __init__(
+        self,
+        input_dim: int,
+        output_dim: int,
+        sum_dim: int,
+    ):
+        """
+        A dense (fully connected) layer followed by a summation over a specified dimension.
+
+        Parameters
+        ----------
+        input_dim : int
+            Input dimensionality of the dense layer.
+        output_dim : int
+            Output dimensionality of the dense layer.
+        sum_dim : int
+            Dimension over which to sum the result after applying the dense layer.
+        """
+        super().__init__()
+        self.dense = nn.Linear(input_dim, output_dim)
+        self.sum_dim = sum_dim
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of the DenseAndSum layer.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Output tensor after applying the dense layer and summing over the specified dimension.
+        """
+        x = self.dense(x)
+        return x.sum(dim=self.sum_dim)
 
 
 def vector_to_skewtensor(r_ij_norm: torch.Tensor) -> torch.Tensor:
@@ -84,19 +120,17 @@ def decompose_tensor(
     tensor: torch.Tensor,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
-    Full tensor decomposition into irreducible components
-    (X=I+A+S, equation 2 and 3 in TensorNet paper).
+    Decomposes a tensor into its irreducible components (I, A, S) (Equation 2 and 3 in TensorNet paper).
 
     Parameters
     ----------
     tensor : torch.Tensor
-        X tensor that specifies pair-wise features of the atomic system,
-        initialized with I+A+S, and is updated along interaction layers.
+        Input tensor representing pair-wise features of the atomic system, shape (n_atoms, 3, 3).
 
     Returns
     -------
     Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-        Decomposed tensors, I, A, and S from tensor feature X.
+        Decomposed components: Identity tensor I, skew-symmetric tensor A, and symmetric traceless tensor S.
     """
 
     diag_mean = tensor.diagonal(offset=0, dim1=-1, dim2=-2).mean(-1)
@@ -117,13 +151,12 @@ def tensor_norm(tensor: torch.Tensor) -> torch.Tensor:
     Parameters
     ----------
     tensor : torch.Tensor
-        X tensor that specifies pair-wise features of the atomic system,
-        initialized with I+A+S, and is updated along interaction layers.
+        Input tensor, shape (n_atoms, 3, 3).
 
     Returns
     -------
     torch.Tensor
-        Normalized tensor X.
+        Frobenius norm of the input tensor.
     """
     # Note: the Frobenius norm is actually the square root of the sum of squares, so assert torch.allclose(torch.norm(tensor, p="fro", dim=(-2, -1))**2, (tensor**2).sum((-2, -1)) == True
     return (tensor**2).sum((-2, -1))
@@ -133,7 +166,7 @@ def tensor_message_passing(
     pair_indices: torch.Tensor,
     radial_feature_vector: torch.Tensor,
     tensor: torch.Tensor,
-    number_of_atoms: int,
+    tensor_shape: Tuple[int, int, int, int],
 ) -> torch.Tensor:
     """
     Helper function to calculate message passing tensor M
@@ -160,157 +193,71 @@ def tensor_message_passing(
     # Compute the message for each pair
     msg = radial_feature_vector * tensor.index_select(0, pair_indices[1])
     # Pre-allocate tensor for the aggregated messages
-    tensor_m = torch.zeros(
-        number_of_atoms, *tensor.shape[1:], device=tensor.device, dtype=tensor.dtype
-    )
-    # Aggregate the messages, using in-place addition to avoid unnecessary copies
+    tensor_m = torch.zeros(tensor_shape, device=tensor.device, dtype=tensor.dtype)
+    # Aggregate the messages, using in-place addition to avoid unnecessary
+    # copies
     tensor_m.index_add_(0, pair_indices[0], msg)
     return tensor_m
 
 
-@dataclass
-class TensorNetNeuralNetworkData(NeuralNetworkData):
-    pass
-
-
-class TensorNet(BaseNetwork):
-    """
-    TensorNet network for molecular potential learning.
-
-    Ref: Guillem Simeon, Gianni De Fabritiis:
-    TensorNet: Cartesian Tensor Representations for Efficient Learning of
-    Molecular Potentials.
-
-    Parameters
-    ----------
-    number_of_per_atom_features : int
-        Number of features per atom.
-    number_of_interaction_layers : int
-        Number of interaction layers.
-    number_of_radial_basis_functions : int
-        Number of radial basis functions.
-    maximum_interaction_radius : unit.Quantity
-        Maximum interaction radius.
-    minimum_interaction_radius : unit.Quantity
-        Minimum interaction radius.
-    maximum_atomic_number : int
-        Maximum atomic number in the dataset.
-    equivariance_invariance_group : str
-        Equivariance invariance group, either "O(3)" or "SO(3)".
-    activation_function_parameter : Dict
-        Dict that contains keys: activation_function_name [str], activation_function_arguments [Dict],
-        and callable activation_function [Type[torch.nn.Module]].
-    postprocessing_parameter : Dict[str, Dict[str, bool]]
-        Postprocessing parameters.
-    dataset_statistic : Optional[Dict[str, float]]
-        Dataset statistics.
-    potential_seed : Optional[int], optional
-        Seed for the random number generator, default None.
-    """
-
+class TensorNetCore(torch.nn.Module):
     def __init__(
         self,
         number_of_per_atom_features: int,
         number_of_interaction_layers: int,
         number_of_radial_basis_functions: int,
-        maximum_interaction_radius: unit.Quantity,
-        minimum_interaction_radius: unit.Quantity,
+        maximum_interaction_radius: float,
+        minimum_interaction_radius: float,
         maximum_atomic_number: int,
         equivariance_invariance_group: str,
-        activation_function_parameter: Dict,
-        postprocessing_parameter: Dict[str, Dict[str, bool]],
-        predicted_properties: List[Dict[str, str]],
-        dataset_statistic: Optional[Dict[str, float]] = None,
-        potential_seed: Optional[int] = None,
+        activation_function_parameter: Dict[str, str],
+        predicted_properties: List[str],
+        predicted_dim: List[int],
+        potential_seed: int = -1,
+        trainable_centers_and_scale_factors: bool = False,
     ) -> None:
+        """
+        Core TensorNet model for molecular potential learning.
 
+        Parameters
+        ----------
+        number_of_per_atom_features : int
+            Number of features per atom.
+        number_of_interaction_layers : int
+            Number of interaction layers in the network.
+        number_of_radial_basis_functions : int
+            Number of radial basis functions.
+        maximum_interaction_radius : float
+            Maximum interaction radius for atomic interactions.
+        minimum_interaction_radius : float
+            Minimum interaction radius for atomic interactions.
+        maximum_atomic_number : int
+            Maximum atomic number allowed for the model.
+        equivariance_invariance_group : str
+            Specifies the equivariance invariance group ("O(3)" or "SO(3)").
+        activation_function_parameter : Dict[str, str]
+            Activation function configuration.
+        predicted_properties : List[str]
+            List of properties to predict.
+        predicted_dim : List[int]
+            List of output dimensions for each predicted property.
+        potential_seed : int, optional
+            Random seed for reproducibility. Default is -1.
+        trainable_centers_and_scale_factors : bool, optional
+            Whether the centers and scale factors for the radial basis functions are trainable. Default is False.
+        """
+        super().__init__()
         activation_function = activation_function_parameter["activation_function"]
 
-        self.only_unique_pairs = False
-        super().__init__(
-            dataset_statistic=dataset_statistic,
-            postprocessing_parameter=postprocessing_parameter,
-            maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
-            potential_seed=potential_seed,
-        )
+        from modelforge.utils.misc import seed_random_number
 
-        self.core_module = TensorNetCore(
-            number_of_per_atom_features=number_of_per_atom_features,
-            number_of_interaction_layers=number_of_interaction_layers,
-            number_of_radial_basis_functions=number_of_radial_basis_functions,
-            maximum_interaction_radius=_convert_str_to_unit(maximum_interaction_radius),
-            minimum_interaction_radius=_convert_str_to_unit(minimum_interaction_radius),
-            trainable_centers_and_scale_factors=False,
-            maximum_atomic_number=maximum_atomic_number,
-            equivariance_invariance_group=equivariance_invariance_group,
-            activation_function=activation_function,
-            predicted_properties=predicted_properties,
-        )
+        if potential_seed != -1:
+            seed_random_number(potential_seed)
 
-
-class DenseAndSum(nn.Module):
-    def __init__(
-        self,
-        input_dim: int,
-        output_dim: int,
-        sum_dim: int,
-    ):
-        super(DenseAndSum, self).__init__()
-        self.dense = nn.Linear(input_dim, output_dim)
-        self.sum_dim = sum_dim
-
-    def forward(self, x):
-        x = self.dense(x)
-        return x.sum(dim=self.sum_dim)
-
-
-class TensorNetCore(CoreNetwork):
-    """
-    Core implementation of the TensorNet network.
-
-    Parameters
-    ----------
-    number_of_per_atom_features : int
-        Number of features per atom.
-    number_of_interaction_layers : int
-        Number of interaction layers.
-    number_of_radial_basis_functions : int
-        Number of radial basis functions.
-    maximum_interaction_radius : unit.Quantity
-        Maximum interaction radius.
-    minimum_interaction_radius : unit.Quantity
-        Minimum interaction radius.
-    trainable_centers_and_scale_factors : bool
-        If True, centers and scale factors are trainable.
-    maximum_atomic_number : int
-        Maximum atomic number in the dataset.
-    equivariance_invariance_group : str
-        Equivariance invariance group, either "O(3)" or "SO(3)".
-    activation_function : Type[torch.nn.Module]
-        Activation function to use.
-    """
-
-    def __init__(
-        self,
-        number_of_per_atom_features: int,
-        number_of_interaction_layers: int,
-        number_of_radial_basis_functions: int,
-        maximum_interaction_radius: unit.Quantity,
-        minimum_interaction_radius: unit.Quantity,
-        trainable_centers_and_scale_factors: bool,
-        maximum_atomic_number: int,
-        equivariance_invariance_group: str,
-        activation_function: Type[torch.nn.Module],
-        predicted_properties: List[Dict[str, str]],
-        seed: int = 0,
-    ) -> None:
-        super().__init__(activation_function)
-
-        torch.manual_seed(seed)
         self.representation_module = TensorNetRepresentation(
             number_of_per_atom_features=number_of_per_atom_features,
             number_of_radial_basis_functions=number_of_radial_basis_functions,
-            activation_function=self.activation_function,
+            activation_function=activation_function,
             maximum_interaction_radius=maximum_interaction_radius,
             minimum_interaction_radius=minimum_interaction_radius,
             trainable_centers_and_scale_factors=trainable_centers_and_scale_factors,
@@ -321,7 +268,7 @@ class TensorNetCore(CoreNetwork):
                 TensorNetInteraction(
                     number_of_per_atom_features=number_of_per_atom_features,
                     number_of_radial_basis_functions=number_of_radial_basis_functions,
-                    activation_function=self.activation_function,
+                    activation_function=activation_function,
                     maximum_interaction_radius=maximum_interaction_radius,
                     equivariance_invariance_group=equivariance_invariance_group,
                 )
@@ -329,44 +276,41 @@ class TensorNetCore(CoreNetwork):
             ]
         )
 
-        from modelforge.potential.utils import Dense
-
         # Initialize output layers based on configuration
         self.output_layers = nn.ModuleDict()
-        for property in predicted_properties:
-            output_name = property["name"]
-            output_type = property["type"]
-            output_dimension = (
-                1 if output_type == "scalar" else 3
-            )  # vector means 3D output
-
-            self.output_layers[output_name] = DenseAndSum(
+        for property, dim in zip(predicted_properties, predicted_dim):
+            self.output_layers[property] = DenseAndSum(
                 3 * number_of_per_atom_features,
                 number_of_per_atom_features,
-                output_dimension,
+                dim,
             )
 
         self.perform_layer_normalization = nn.LayerNorm(3 * number_of_per_atom_features)
 
     def compute_properties(
-        self, data: TensorNetNeuralNetworkData
+        self,
+        data: NNPInputTuple,
+        pairlist_output: PairlistData,
     ) -> Dict[str, torch.Tensor]:
         """
         Compute properties for the TensorNet model.
 
         Parameters
         ----------
-        data : TensorNetNeuralNetworkData
+        data : NNPInputTuple
             The input data for the model.
+        pairlist_output : PairlistData
+            The pair list data including distances and indices of atom pairs.
 
         Returns
         -------
         Dict[str, torch.Tensor]
-            The calculated properties including per atom energy, per atom features, and atomic subsystem indices.
+            The calculated properties, including atomic subsystem indices and
+            atomic numbers.
         """
 
         # generate initial embedding
-        X, radial_feature_vector = self.representation_module(data)
+        X, radial_feature_vector = self.representation_module(data, pairlist_output)
 
         # using interlevae and bincount to generate a total charge per molecule
         expanded_total_charge = torch.repeat_interleave(
@@ -376,8 +320,8 @@ class TensorNetCore(CoreNetwork):
         for layer in self.interaction_modules:
             X = layer(
                 X,
-                data.pair_indices,
-                data.d_ij.squeeze(-1),
+                pairlist_output.pair_indices,
+                pairlist_output.d_ij.squeeze(-1),
                 radial_feature_vector.squeeze(1),
                 expanded_total_charge,
             )
@@ -393,90 +337,75 @@ class TensorNetCore(CoreNetwork):
             per_atom_scalar_representation
         )
 
-        results = {
+        return {
             "per_atom_scalar_representation": per_atom_scalar_representation,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
+            "atomic_numbers": data.atomic_numbers,
         }
 
-        # Compute all specified outputs
-        for output_name, output_layer in self.output_layers.items():
-            results[output_name] = output_layer(per_atom_scalar_representation).squeeze(
-                -1
-            )
-
-        return results
-
-    def _model_specific_input_preparation(
-        self, data: NNPInput, pairlist_output: Dict[str, PairListOutputs]
-    ) -> TensorNetNeuralNetworkData:
+    def forward(
+        self,
+        data: NNPInputTuple,
+        pairlist_output: PairlistData,
+    ) -> Dict[str, torch.Tensor]:
         """
-        Prepare the input data for the TensorNet model.
+        Forward pass through the TensorNet model.
 
         Parameters
         ----------
-        data : NNPInput
-            The input data for the model.
-        pairlist_output : Dict[str, PairListOutputs]
-            The pairlist output(s)
+        data : NNPInputTuple
+            Input data including atomic numbers and positions.
+        pairlist_output : PairlistData
+            Pair list output with distances and displacement vectors.
 
         Returns
         -------
-        TensorNetNeuralNetworkData
-            The prepared input data for the TensorNet model.
+        Dict[str, torch.Tensor]
+            Calculated per-atom properties from the forward pass.
         """
-        number_of_atoms = data.atomic_numbers.shape[0]
+        # perform the forward pass implemented in the subclass
+        results = self.compute_properties(data, pairlist_output)
+        # extract the atomic embedding
+        atomic_embedding = results["per_atom_scalar_representation"]
+        # Compute all specified outputs
+        for output_name, output_layer in self.output_layers.items():
+            results[output_name] = output_layer(atomic_embedding).squeeze(-1)
 
-        # Note, pairlist_output is a Dict where the key corresponds to the name of the cutoff parameter
-        # e.g. "maximum_interaction_radius"
-
-        pairlist_output = pairlist_output["maximum_interaction_radius"]
-
-        nnpdata = TensorNetNeuralNetworkData(
-            pair_indices=pairlist_output.pair_indices,
-            d_ij=pairlist_output.d_ij,
-            r_ij=pairlist_output.r_ij,
-            number_of_atoms=number_of_atoms,
-            positions=data.positions,
-            atomic_numbers=data.atomic_numbers,
-            atomic_subsystem_indices=data.atomic_subsystem_indices,
-            total_charge=data.total_charge,
-        )
-
-        return nnpdata
+        return results
 
 
 class TensorNetRepresentation(torch.nn.Module):
-    """
-    TensorNet representation module for molecular systems.
-
-    Parameters
-    ----------
-    number_of_per_atom_features : int
-        Number of features per atom.
-    number_of_radial_basis_functions : int
-        Number of radial basis functions.
-    activation_function : Type[nn.Module]
-        Activation function class.
-    maximum_interaction_radius : unit.Quantity
-        Maximum interaction radius.
-    minimum_interaction_radius : unit.Quantity
-        Minimum interaction radius.
-    trainable_centers_and_scale_factors : bool
-        If True, centers and scale factors are trainable.
-    maximum_atomic_number : int
-        Maximum atomic number in the dataset.
-    """
 
     def __init__(
         self,
         number_of_per_atom_features: int,
         number_of_radial_basis_functions: int,
-        activation_function: Type[nn.Module],
-        maximum_interaction_radius: unit.Quantity,
-        minimum_interaction_radius: unit.Quantity,
+        activation_function: nn.Module,
+        maximum_interaction_radius: float,
+        minimum_interaction_radius: float,
         trainable_centers_and_scale_factors: bool,
         maximum_atomic_number: int,
     ):
+        """
+        TensorNet representation module for molecular systems.
+
+        Parameters
+        ----------
+        number_of_per_atom_features : int
+            Number of features per atom.
+        number_of_radial_basis_functions : int
+            Number of radial basis functions.
+        activation_function : nn.Module
+            Activation function class.
+        maximum_interaction_radius : float
+            Maximum interaction radius in nanometer.
+        minimum_interaction_radius : float
+            Minimum interaction radius in nanometer.
+        trainable_centers_and_scale_factors : bool
+            If True, centers and scale factors are trainable.
+        maximum_atomic_number : int
+            Maximum atomic number in the dataset.
+        """
         super().__init__()
         from modelforge.potential.utils import Dense
 
@@ -559,10 +488,13 @@ class TensorNetRepresentation(torch.nn.Module):
         self.batch_layer_normalization.reset_parameters()
 
     def _get_atomic_number_message(
-        self, atomic_number: torch.Tensor, pair_indices: torch.Tensor
+        self,
+        atomic_number: torch.Tensor,
+        pair_indices: torch.Tensor,
     ) -> torch.Tensor:
         """
-        Embedding layers for atom types of atom pairs
+        Get the atomic number embedding for each atom pair.
+
         (mentioned in equation 8 in TensorNet paper, not explicitly defined).
         This embedding consists of two steps:
         1. embed atom type of each atom into a vector
@@ -599,7 +531,7 @@ class TensorNetRepresentation(torch.nn.Module):
         radial_feature_vector: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
-        Initialize pair-wise tensor representations of atoms
+        Generate I, A, and S tensor messages for atom pairs.
         (equation 8 in TensorNet paper).
 
         Parameters
@@ -642,15 +574,21 @@ class TensorNetRepresentation(torch.nn.Module):
         )
         return Iij, Aij, Sij
 
-    def forward(self, data: TensorNetNeuralNetworkData):
+    def forward(
+        self,
+        data: NNPInputTuple,
+        pairlist_output: PairlistData,
+    ):
         """
-        Compute the output of the representation layer
+        Forward pass for the representation module.
         (equation 10 in TensorNet paper).
 
         Parameters
         ----------
-        data : TensorNetNeuralNetworkData
-            The input data about the system to build the model.
+        data : NNPInputTuple
+            Input data for the system, including atomic numbers and positions.
+        pairlist_output : PairlistData
+            Output from the pair list module, including pair indices and distances.
 
         Returns
         -------
@@ -661,17 +599,21 @@ class TensorNetRepresentation(torch.nn.Module):
         """
         atomic_number_embedding = self._get_atomic_number_message(
             data.atomic_numbers,
-            data.pair_indices,
+            pairlist_output.pair_indices,
         )
-        r_ij_norm = data.r_ij / data.d_ij
+        r_ij_norm = pairlist_output.r_ij / pairlist_output.d_ij
 
-        radial_feature_vector = self.radial_symmetry_function(data.d_ij)  # in nanometer
-        rcut_ij = self.cutoff_module(data.d_ij)  # cutoff function applied twice
+        radial_feature_vector = self.radial_symmetry_function(
+            pairlist_output.d_ij
+        )  # in nanometer
+        rcut_ij = self.cutoff_module(
+            pairlist_output.d_ij
+        )  # cutoff function applied twice
         radial_feature_vector = torch.mul(radial_feature_vector, rcut_ij).unsqueeze(1)
 
         Iij, Aij, Sij = self._get_tensor_messages(
             atomic_number_embedding,
-            data.d_ij,
+            pairlist_output.d_ij,
             r_ij_norm,
             radial_feature_vector,
         )
@@ -683,9 +625,9 @@ class TensorNetRepresentation(torch.nn.Module):
             device=data.atomic_numbers.device,
             dtype=Iij.dtype,
         )
-        I = source.index_add(dim=0, index=data.pair_indices[0], source=Iij)
-        A = source.index_add(dim=0, index=data.pair_indices[0], source=Aij)
-        S = source.index_add(dim=0, index=data.pair_indices[0], source=Sij)
+        I = source.index_add(dim=0, index=pairlist_output.pair_indices[0], source=Iij)
+        A = source.index_add(dim=0, index=pairlist_output.pair_indices[0], source=Aij)
+        S = source.index_add(dim=0, index=pairlist_output.pair_indices[0], source=Sij)
 
         # equation 9 in TensorNet paper
         # batch normalization
@@ -715,31 +657,31 @@ class TensorNetRepresentation(torch.nn.Module):
 
 
 class TensorNetInteraction(torch.nn.Module):
-    """
-    TensorNet interaction module for message passing and updating atomic features.
-
-    Parameters
-    ----------
-    number_of_per_atom_features : int
-        Number of features per atom.
-    number_of_radial_basis_functions : int
-        Number of radial basis functions.
-    activation_function : Type[nn.Module]
-        Activation function class.
-    maximum_interaction_radius : unit.Quantity
-        Maximum interaction radius.
-    equivariance_invariance_group : str
-        Equivariance invariance group, either "O(3)" or "SO(3)".
-    """
-
     def __init__(
         self,
         number_of_per_atom_features: int,
         number_of_radial_basis_functions: int,
-        activation_function: Type[nn.Module],
-        maximum_interaction_radius: unit.Quantity,
+        activation_function: nn.Module,
+        maximum_interaction_radius: float,
         equivariance_invariance_group: str,
     ):
+        """
+        TensorNet interaction module for message passing and updating atomic features.
+
+        Parameters
+        ----------
+        number_of_per_atom_features : int
+            Number of features per atom.
+        number_of_radial_basis_functions : int
+            Number of radial basis functions.
+        activation_function : nn.Module
+            Activation function class.
+        maximum_interaction_radius : float
+            Maximum interaction radius in nanometer.
+        equivariance_invariance_group : str
+            Equivariance invariance group, either "O(3)" or "SO(3)".
+        """
+
         super().__init__()
         from modelforge.potential.utils import Dense
 
@@ -803,9 +745,10 @@ class TensorNetInteraction(torch.nn.Module):
         atomic_charges: torch.Tensor,
     ) -> torch.Tensor:
         """
-        Compute the output of the interaction layer and update X tensor.
-        ("Interaction and node update" from section 3.2 in TensorNet paper).
-        X^(i) <- X^(i) + Delta X^(i)
+        Compute the output of the interaction layer and update tensor X. Updates
+        the tensor through message passing, scalar transformation, and tensor
+        decomposition ("Interaction and node update" in  from section 3.2 in
+        TensorNet paper). X^(i) <- X^(i) + Delta X^(i)
 
         Parameters
         ----------
@@ -839,9 +782,10 @@ class TensorNetInteraction(torch.nn.Module):
         radial_feature_vector = radial_feature_vector.view(
             radial_feature_vector.shape[0], self.number_of_per_atom_features, 3
         )
+        X_shape = X.shape
+        feature_shape = (X_shape[0], X_shape[1], X_shape[2], X_shape[3])
 
         X = X / (tensor_norm(X) + 1)[..., None, None]
-
         I, A, S = decompose_tensor(X)
         I = self.linear_layer[0](I.transpose(1, 3)).transpose(1, 3)
         A = self.linear_layer[1](A.transpose(1, 3)).transpose(1, 3)
@@ -850,21 +794,23 @@ class TensorNetInteraction(torch.nn.Module):
         Y = I + A + S
 
         Im = tensor_message_passing(
-            pair_indices, radial_feature_vector[..., 0, None, None], I, X.shape[0]
+            pair_indices, radial_feature_vector[..., 0, None, None], I, feature_shape
         )
         Am = tensor_message_passing(
-            pair_indices, radial_feature_vector[..., 1, None, None], A, X.shape[0]
+            pair_indices, radial_feature_vector[..., 1, None, None], A, feature_shape
         )
         Sm = tensor_message_passing(
-            pair_indices, radial_feature_vector[..., 2, None, None], S, X.shape[0]
+            pair_indices, radial_feature_vector[..., 2, None, None], S, feature_shape
         )
         msg = Im + Am + Sm
+
         if self.equivariance_invariance_group == "O(3)":
             A = torch.matmul(msg, Y)
             B = torch.matmul(Y, msg)
             I, A, S = decompose_tensor(
                 (1 + 0.1 * atomic_charges[..., None, None, None]) * (A + B)
             )
+
         if self.equivariance_invariance_group == "SO(3)":
             B = torch.matmul(Y, msg)
             I, A, S = decompose_tensor(2 * B)

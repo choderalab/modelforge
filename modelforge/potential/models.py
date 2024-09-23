@@ -12,12 +12,6 @@ from torch.nn import Module
 
 from modelforge.dataset.dataset import NNPInput, NNPInputTuple
 
-if TYPE_CHECKING:
-    from modelforge.potential.ani import ANI2x
-    from modelforge.potential.painn import PaiNN
-    from modelforge.potential.physnet import PhysNet
-    from modelforge.potential.sake import SAKE
-    from modelforge.potential.schnet import SchNet
 from modelforge.dataset.dataset import DatasetParameters
 from modelforge.potential.parameters import (
     ANI2xParameters,
@@ -26,6 +20,7 @@ from modelforge.potential.parameters import (
     SAKEParameters,
     SchNetParameters,
     TensorNetParameters,
+    AimNet2Parameters,
 )
 from modelforge.train.parameters import RuntimeParameters, TrainingParameters
 from typing import TypeVar, Union
@@ -39,6 +34,7 @@ T_NNP_Parameters = TypeVar(
     PhysNetParameters,
     PaiNNParameters,
     TensorNetParameters,
+    AimNet2Parameters,
 )
 
 
@@ -62,18 +58,11 @@ class PairlistData(NamedTuple):
 
 
 class Pairlist(Module):
-    """
-    Handle pair list calculations for systems, returning indices, distances and distance vectors for atom pairs within a certain cutoff.
-
-    Attributes
-    ----------
-    only_unique_pairs : bool
-        If True, only unique pairs are returned (default is False).
-    """
 
     def __init__(self, only_unique_pairs: bool = False):
         """
-        Initialize the Pairlist object.
+         Handle pair list calculations for systems, returning indices, distances
+         and distance vectors for atom pairs within a certain cutoff.
 
         Parameters
         ----------
@@ -274,7 +263,8 @@ class Pairlist(Module):
         return selected_positions[1] - selected_positions[0]
 
     def calculate_d_ij(self, r_ij: torch.Tensor) -> torch.Tensor:
-        """Compute Euclidean distances between atoms in each pair.
+        """
+        ompute Euclidean distances between atoms in each pair.
 
         Parameters
         ----------
@@ -322,20 +312,16 @@ class Pairlist(Module):
 
 
 class Neighborlist(Pairlist):
-    """
-    Manage neighbor list calculations with a specified cutoff distance(s).
-
-    This class extends Pairlist to consider a cutoff distance for neighbor calculations.
-    """
-
     def __init__(self, cutoff: float, only_unique_pairs: bool = False):
         """
-        Initialize the Neighborlist with a specific cutoff distance.
+        Manage neighbor list calculations with a specified cutoff distance.
+
+        Extends the Pairlist class to compute neighbor lists based on a distance cutoff.
 
         Parameters
         ----------
-        cutoffs : Dict[str, unit.Quantity]
-            Cutoff distances for neighbor calculations.
+        cutoff : float
+            Cutoff distance for neighbor calculations.
         only_unique_pairs : bool, optional
             If True, only unique pairs are returned (default is False).
         """
@@ -350,9 +336,7 @@ class Neighborlist(Pairlist):
         pair_indices: Optional[torch.Tensor] = None,
     ) -> PairlistData:
         """
-        Forward pass to compute neighbor list considering a cutoff distance.
-
-        Overrides the `forward` method from Pairlist to include cutoff distance in calculations.
+        Compute the neighbor list considering a cutoff distance.
 
         Parameters
         ----------
@@ -395,7 +379,7 @@ import numpy as np
 
 class JAXModel:
     """
-    A model wrapper that facilitates calling a JAX function with predefined parameters and buffers.
+    A wrapper for calling a JAX function with predefined parameters and buffers.
 
     Attributes
     ----------
@@ -437,117 +421,18 @@ class JAXModel:
         return f"{self.__class__.__name__} wrapping {self.name}"
 
 
-class PyTorch2JAXConverter:
-    """
-    Wraps a PyTorch neural network potential instance in a Flax module using the
-    `pytorch2jax` library (https://github.com/subho406/Pytorch2Jax).
-    The converted model uses dlpack to convert between Pytorch and Jax tensors
-    in-memory and executes Pytorch backend inside Jax wrapped functions.
-    The wrapped modules are compatible with Jax backward-mode autodiff.
-    """
-
-    def convert_to_jax_model(
-        self,
-        nnp_instance: Union[
-            "ANI2x", "SchNet", "PaiNN", "PhysNet", "TensorNet", "PhysNet"
-        ],
-    ) -> JAXModel:
-        """
-        Convert a PyTorch neural network instance to a JAX model.
-
-        Parameters
-        ----------
-        nnp_instance :
-            The PyTorch neural network instance to be converted.
-
-        Returns
-        -------
-        JAXModel
-            A JAX model containing the converted neural network function, parameters, and buffers.
-        """
-
-        jax_fn, params, buffers = self._convert_pytnn_to_jax(nnp_instance)
-        return JAXModel(jax_fn, params, buffers, nnp_instance.__class__.__name__)
-
-    @staticmethod
-    def _convert_pytnn_to_jax(
-        nnp_instance: Union["ANI2x", "SchNet", "PaiNN", "PhysNet"]
-    ) -> Tuple[Callable, np.ndarray, np.ndarray]:
-        """Internal method to convert PyTorch neural network parameters and buffers to JAX format.
-
-        Parameters
-        ----------
-        nnp_instance : Any
-            The PyTorch neural network instance.
-
-        Returns
-        -------
-        Tuple[Callable, Any, Any]
-            A tuple containing the JAX function, parameters, and buffers.
-        """
-
-        # make sure
-        from modelforge.utils.io import import_
-
-        jax = import_("jax")
-        # use the wrapper to check if pytorch2jax is in the environment
-
-        custom_vjp = import_("jax").custom_vjp
-
-        # from jax import custom_vjp
-        convert_to_jax = import_("pytorch2jax").pytorch2jax.convert_to_jax
-        convert_to_pyt = import_("pytorch2jax").pytorch2jax.convert_to_pyt
-        # from pytorch2jax.pytorch2jax import convert_to_jax, convert_to_pyt
-
-        import functorch
-        from functorch import make_functional_with_buffers
-
-        # Convert the PyTorch model to a functional representation and extract the model function and parameters
-        model_fn, model_params, model_buffer = make_functional_with_buffers(
-            nnp_instance
-        )
-
-        # Convert the model parameters from PyTorch to JAX representations
-        model_params = jax.tree_map(convert_to_jax, model_params)
-        # Convert the model buffer from PyTorch to JAX representations
-        model_buffer = jax.tree_map(convert_to_jax, model_buffer)
-
-        # Define the apply function using a custom VJP
-        @custom_vjp
-        def apply(params, *args, **kwargs):
-            # Convert the input data from JAX to PyTorch
-            params, args, kwargs = map(
-                lambda x: jax.tree_map(convert_to_pyt, x), (params, args, kwargs)
-            )
-            # Apply the model function to the input data
-            out = model_fn(params, *args, **kwargs)
-            # Convert the output data from PyTorch to JAX
-            out = jax.tree_map(convert_to_jax, out)
-            return out
-
-        # Define the forward and backward passes for the VJP
-        def apply_fwd(params, *args, **kwargs):
-            return apply(params, *args, **kwargs), (params, args, kwargs)
-
-        def apply_bwd(res, grads):
-            params, args, kwargs = res
-            params, args, kwargs = map(
-                lambda x: jax.tree_map(convert_to_pyt, x), (params, args, kwargs)
-            )
-            grads = jax.tree_map(convert_to_pyt, grads)
-            # Compute the gradients using the model function and convert them
-            # from JAX to PyTorch representations
-            grads = functorch.vjp(model_fn, params, *args, **kwargs)[1](grads)
-            return jax.tree_map(convert_to_jax, grads)
-
-        apply.defvjp(apply_fwd, apply_bwd)
-
-        # Return the apply function and the converted model parameters
-        return apply, model_params, model_buffer
-
-
 class Displacement(torch.nn.Module):
     def __init__(self, box_vectors: torch.Tensor, periodic: bool):
+        """
+        Compute displacement vectors between pairs of atoms, considering periodic boundary conditions.
+
+        Attributes
+        ----------
+        box_vectors : torch.Tensor
+            Box vectors defining the periodic boundaries. Shape: [3, 3].
+        periodic : bool
+            Whether to apply periodic boundary conditions.
+        """
         super().__init__()
         self.box_vectors = box_vectors
         self.box_lengths = torch.tensor(
@@ -556,10 +441,31 @@ class Displacement(torch.nn.Module):
 
         self.periodic = periodic
 
-    def forward(self, coordinate_i: torch.Tensor, coordinate_j: torch.Tensor):
+    def forward(
+        self,
+        coordinate_i: torch.Tensor,
+        coordinate_j: torch.Tensor,
+    ):
+        """
+        Compute displacement vectors and Euclidean distances between atom pairs.
+
+        Parameters
+        ----------
+        coordinate_i : torch.Tensor
+            Coordinates of the first atom in each pair. Shape: [n_pairs, 3].
+        coordinate_j : torch.Tensor
+            Coordinates of the second atom in each pair. Shape: [n_pairs, 3].
+
+        Returns
+        -------
+        Tuple[torch.Tensor, torch.Tensor]
+            Displacement vectors (r_ij) of shape [n_pairs, 3] and distances (d_ij) of shape [n_pairs, 1].
+        """
         r_ij = coordinate_i - coordinate_j
 
         if self.periodic:
+            # Note, since box length may change, we need to modify the code to pass box_vectors every time
+
             r_ij = (
                 torch.remainder(r_ij + self.box_lengths / 2, self.box_lengths)
                 - self.box_lengths / 2
@@ -569,23 +475,25 @@ class Displacement(torch.nn.Module):
         return r_ij, d_ij
 
 
-class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
+class NeighborlistForInference(torch.nn.Module):
 
-    def __init__(self, cutoff: float, displacement_function: Displacement):
+    def __init__(
+        self,
+        cutoff: float,
+        displacement_function: Displacement,
+        only_unique_pairs: bool = False,
+    ):
         """
-        Initialize the ComputeInteractingAtomPairs module.
+        Compute neighbor lists for inference, filtering pairs based on a cutoff distance.
 
         Parameters
         ----------
-        cutoffs : Dict[str, unit.Quantity]
-            The cutoff distance(s) for neighbor list calculations.
+        cutoff : float
+            The cutoff distance for neighbor list calculations.
         only_unique_pairs : bool, optional
             Whether to only use unique pairs in the pair list calculation, by
             default True. This should be set to True for all message passing
             networks.
-        displacement_function: Displacement
-            The displacement function to use for calculating the displacement vectors and distances between atom pairs.
-
         """
 
         super().__init__()
@@ -595,6 +503,7 @@ class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
         self.indices = torch.tensor([])
         self.i_final_pairs = torch.tensor([])
         self.j_final_pairs = torch.tensor([])
+        self.only_unique_pairs = only_unique_pairs
 
     def forward(self, data: NNPInputTuple):
         """
@@ -613,8 +522,7 @@ class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
         Returns
         -------
         PairListOutputs
-            A Dict for each cutoff type, where each entry is a namedtuple containing the pair indices, Euclidean distances
-            (d_ij), and displacement vectors (r_ij).
+            Contains pair indices, distances (d_ij), and displacement vectors (r_ij) for atom pairs within the cutoff.
         """
         # ---------------------------
         # general input manipulation
@@ -632,9 +540,12 @@ class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
             self.i_final_pairs, self.j_final_pairs = torch.meshgrid(
                 self.indices, self.indices, indexing="ij"
             )
+            if self.only_unique_pairs:
+                mask = self.i_final_pairs < self.j_final_pairs
 
-            # Filter out the diagonal elements (where i == j)
-            mask = self.i_final_pairs != self.j_final_pairs
+            else:
+                # Filter out the diagonal elements (where i == j)
+                mask = self.i_final_pairs != self.j_final_pairs
             self.i_final_pairs = self.i_final_pairs[mask]
             self.j_final_pairs = self.j_final_pairs[mask]
         # calculate r_ij and d_ij
@@ -657,10 +568,6 @@ class NeighborlistForInferenceNonUniquePairs(torch.nn.Module):
 
 
 class ComputeInteractingAtomPairs(torch.nn.Module):
-    """
-    A module for preparing input data, including the calculation of pair lists,
-    distances (d_ij), and displacement vectors (r_ij) for molecular simulations.
-    """
 
     def __init__(self, cutoff: float, only_unique_pairs: bool = False):
         """
@@ -668,7 +575,7 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
 
         Parameters
         ----------
-        cutoffs : float
+        cutoff : float
             The cutoff distance for neighbor list calculations.
         only_unique_pairs : bool, optional
             If True, only unique pairs are returned (default is False).
@@ -693,7 +600,7 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
 
         Returns
         -------
-        PairListOutputs
+        PairlistData
             A namedtuple containing the pair indices, distances, and
             displacement vectors.
         """
@@ -727,7 +634,6 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
                 pair_indices=pair_list.to(torch.int64),
             )
 
-        # this will return a Dict of the PairListOutputs for each cutoff we specify
         return pairlist_output
 
 
@@ -737,10 +643,6 @@ from modelforge.potential.processing import PerAtomEnergy, CoulombPotential
 
 
 class PostProcessing(torch.nn.Module):
-    """
-    Handle post-processing operations on model outputs, such as normalization
-    and reduction operations.
-    """
 
     _SUPPORTED_PROPERTIES = [
         "per_atom_energy",
@@ -759,7 +661,8 @@ class PostProcessing(torch.nn.Module):
         dataset_statistic: Dict[str, Dict[str, float]],
     ):
         """
-        Initialize the PostProcessing module.
+        Handle post-processing operations on model outputs, such as
+        normalization and reduction.
 
         Parameters
         ----------
@@ -776,6 +679,7 @@ class PostProcessing(torch.nn.Module):
         self.registered_chained_operations = ModuleDict()
         self.dataset_statistic = dataset_statistic
         properties_to_process = postprocessing_parameter["properties_to_process"]
+
         if "per_atom_energy" in properties_to_process:
             self.registered_chained_operations["per_atom_energy"] = PerAtomEnergy(
                 postprocessing_parameter["per_atom_energy"],
@@ -793,7 +697,7 @@ class PostProcessing(torch.nn.Module):
 
     def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
-        Perform post-processing operations for all registered properties.
+        Perform post-processing for all registered properties.
 
         Parameters
         ----------
@@ -837,10 +741,10 @@ class Potential(torch.nn.Module):
         postprocessing : torch.nn.Module
             Module for handling post-processing operations.
         jit : bool, optional
-            If True, JIT compile the core network and post-processing (default
-            is False).
+            Whether to JIT compile the core network and post-processing
+            (default: False).
         jit_neighborlist : bool, optional
-            If True, JIT compile the neighborlist (default is True).
+            Whether to JIT compile the neighborlist (default: True).
         """
 
         super().__init__()
@@ -1001,9 +905,10 @@ def setup_potential(
     else:
         displacement_function = Displacement(box_vectors, periodic)
 
-        neighborlist = NeighborlistForInferenceNonUniquePairs(
+        neighborlist = NeighborlistForInference(
             cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
             displacement_function=displacement_function,
+            only_unique_pairs=only_unique_pairs,
         )
     model = Potential(
         core_network,
@@ -1024,14 +929,7 @@ class NeuralNetworkPotentialFactory:
     def generate_potential(
         *,
         use: Literal["training", "inference"],
-        potential_parameter: Union[
-            ANI2xParameters,
-            SAKEParameters,
-            SchNetParameters,
-            PhysNetParameters,
-            PaiNNParameters,
-            TensorNetParameters,
-        ],
+        potential_parameter: T_NNP_Parameters,
         runtime_parameter: Optional[RuntimeParameters] = None,
         training_parameter: Optional[TrainingParameters] = None,
         dataset_parameter: Optional[DatasetParameters] = None,
@@ -1056,9 +954,7 @@ class NeuralNetworkPotentialFactory:
         ----------
         use : Literal["training", "inference"]
             Whether the potential is for training or inference.
-        potential_parameter : Union[ANI2xParameters, SAKEParameters,
-        SchNetParameters, PhysNetParameters, PaiNNParameters,
-        TensorNetParameters]
+        potential_parameter : T_NNP_Parameters]
             Parameters specific to the neural network potential.
         runtime_parameter : Optional[RuntimeParameters], optional
             Parameters for configuring the runtime environment (default is
@@ -1123,3 +1019,110 @@ class NeuralNetworkPotentialFactory:
                 return model
         else:
             raise NotImplementedError(f"Unsupported 'use' value: {use}")
+
+
+class PyTorch2JAXConverter:
+    """
+    Wraps a PyTorch neural network potential instance in a Flax module using the
+    `pytorch2jax` library (https://github.com/subho406/Pytorch2Jax).
+    The converted model uses dlpack to convert between Pytorch and Jax tensors
+    in-memory and executes Pytorch backend inside Jax wrapped functions.
+    The wrapped modules are compatible with Jax backward-mode autodiff.
+    """
+
+    def convert_to_jax_model(
+        self,
+        nnp_instance: Potential,
+    ) -> JAXModel:
+        """
+        Convert a PyTorch neural network instance to a JAX model.
+
+        Parameters
+        ----------
+        nnp_instance :
+            The PyTorch neural network instance to be converted.
+
+        Returns
+        -------
+        JAXModel
+            A JAX model containing the converted neural network function, parameters, and buffers.
+        """
+
+        jax_fn, params, buffers = self._convert_pytnn_to_jax(nnp_instance)
+        return JAXModel(jax_fn, params, buffers, nnp_instance.__class__.__name__)
+
+    @staticmethod
+    def _convert_pytnn_to_jax(
+        nnp_instance: Potential,
+    ) -> Tuple[Callable, np.ndarray, np.ndarray]:
+        """Internal method to convert PyTorch neural network parameters and buffers to JAX format.
+
+        Parameters
+        ----------
+        nnp_instance : Any
+            The PyTorch neural network instance.
+
+        Returns
+        -------
+        Tuple[Callable, Any, Any]
+            A tuple containing the JAX function, parameters, and buffers.
+        """
+
+        # make sure
+        from modelforge.utils.io import import_
+
+        jax = import_("jax")
+        # use the wrapper to check if pytorch2jax is in the environment
+
+        custom_vjp = import_("jax").custom_vjp
+
+        # from jax import custom_vjp
+        convert_to_jax = import_("pytorch2jax").pytorch2jax.convert_to_jax
+        convert_to_pyt = import_("pytorch2jax").pytorch2jax.convert_to_pyt
+        # from pytorch2jax.pytorch2jax import convert_to_jax, convert_to_pyt
+
+        import functorch
+        from functorch import make_functional_with_buffers
+
+        # Convert the PyTorch model to a functional representation and extract the model function and parameters
+        model_fn, model_params, model_buffer = make_functional_with_buffers(
+            nnp_instance
+        )
+
+        # Convert the model parameters from PyTorch to JAX representations
+        model_params = jax.tree_map(convert_to_jax, model_params)
+        # Convert the model buffer from PyTorch to JAX representations
+        model_buffer = jax.tree_map(convert_to_jax, model_buffer)
+
+        # Define the apply function using a custom VJP
+        @custom_vjp
+        def apply(params, *args, **kwargs):
+            # Convert the input data from JAX to PyTorch
+            params, args, kwargs = map(
+                lambda x: jax.tree_map(convert_to_pyt, x), (params, args, kwargs)
+            )
+            # Apply the model function to the input data
+            out = model_fn(params, *args, **kwargs)
+            # Convert the output data from PyTorch to JAX
+            out = jax.tree_map(convert_to_jax, out)
+            return out
+
+        # Define the forward and backward passes for the VJP
+        def apply_fwd(params, *args, **kwargs):
+            return apply(params, *args, **kwargs), (params, args, kwargs)
+
+        def apply_bwd(res, grads):
+            params, args, kwargs = res
+            params, args, kwargs = map(
+                lambda x: jax.tree_map(convert_to_pyt, x), (params, args, kwargs)
+            )
+            grads = jax.tree_map(convert_to_pyt, grads)
+            # Compute the gradients using the model function and convert them
+            # from JAX to PyTorch representations
+            grads = functorch.vjp(model_fn, params, *args, **kwargs)[1](grads)
+            return jax.tree_map(convert_to_jax, grads)
+
+        apply.defvjp(apply_fwd, apply_bwd)
+
+        # Return the apply function and the converted model parameters
+        return apply, model_params, model_buffer

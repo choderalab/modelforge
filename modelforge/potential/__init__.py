@@ -4,24 +4,26 @@ This module contains the implemented neural network potentials and their paramet
 
 from enum import Enum
 
-from .ani import ANI2xCore
-from .aimnet2 import AimNet2Core
 from .models import NeuralNetworkPotentialFactory
 from .painn import PaiNNCore
 from .parameters import (
+    AimNet2Parameters,
     ANI2xParameters,
     PaiNNParameters,
     PhysNetParameters,
     SAKEParameters,
     SchNetParameters,
     TensorNetParameters,
-    AimNet2Parameters,
 )
-from .physnet import PhysNetCore
 from .processing import FromAtomToMoleculeReduction
+
+from .physnet import PhysNetCore
 from .sake import SAKECore
 from .schnet import SchNetCore
 from .tensornet import TensorNetCore
+from .aimnet2 import AimNet2Core
+from .ani import ANI2xCore
+
 from .utils import (
     AngularSymmetryFunction,
     CosineAttenuationFunction,

@@ -1227,6 +1227,110 @@ def test_pairlist_on_dataset():
     )  # +1 because of 0-based indexing
 
 
+def test_inference_neighborlist():
+    from modelforge.potential.models import NeighborlistForInference, Displacement
+    import torch
+
+    coords1 = torch.tensor(
+        [[0, 0, 0], [0, 0, 0], [0.0, 0, 0], [0, 0, 0]], dtype=torch.float32
+    )
+    coords2 = torch.tensor(
+        [[2.0, 0, 0], [-2, 0, 0], [8.0, 0, 0], [-8.0, 0, 0]], dtype=torch.float32
+    )
+
+    coords3 = torch.tensor(
+        [[0.0, 2.0, 0], [0, -2, 0], [0.0, 8.0, 0], [0.0, -8, 0]], dtype=torch.float32
+    )
+
+    coords4 = torch.tensor(
+        [[0.0, 0, 2.0], [0, 0, -2], [0.0, 0, 8.0], [0.0, 0, -8]], dtype=torch.float32
+    )
+
+    box_vectors = torch.tensor(
+        [[10, 0, 0], [0, 10, 0], [0, 0, 10]], dtype=torch.float32
+    )
+
+    displacement_function = Displacement(box_vectors, periodic=True)
+
+    r_ij, d_ij = displacement_function(coords1, coords2)
+
+    assert torch.allclose(
+        r_ij,
+        torch.tensor(
+            [[-2.0, 0, 0], [2.0, 0, 0], [2.0, 0, 0], [-2.0, 0, 0]], dtype=r_ij.dtype
+        ),
+    )
+
+    assert torch.allclose(
+        d_ij, torch.tensor([[2.0], [2.0], [2.0], [2.0]], dtype=d_ij.dtype)
+    )
+
+    r_ij, d_ij = displacement_function(coords1, coords3)
+
+    assert torch.allclose(
+        r_ij,
+        torch.tensor(
+            [[0, -2.0, 0], [0, 2.0, 0], [0, 2.0, 0], [0, -2.0, 0]], dtype=r_ij.dtype
+        ),
+    )
+
+    assert torch.allclose(
+        d_ij, torch.tensor([[2.0], [2.0], [2.0], [2.0]], dtype=d_ij.dtype)
+    )
+
+    r_ij, d_ij = displacement_function(coords1, coords4)
+
+    assert torch.allclose(
+        r_ij,
+        torch.tensor(
+            [[0, 0, -2.0], [0, 0, 2.0], [0, 0, 2.0], [0, 0, -2.0]], dtype=r_ij.dtype
+        ),
+    )
+
+    assert torch.allclose(
+        d_ij, torch.tensor([[2.0], [2.0], [2.0], [2.0]], dtype=d_ij.dtype)
+    )
+
+    coord5 = torch.tensor(
+        [[0.0, 0, 0], [1, 0, 0], [3.0, 0, 0], [8, 0, 0]], dtype=torch.float32
+    )
+
+    nlist = NeighborlistForInference(
+        cutoff=5.0, displacement_function=displacement_function, only_unique_pairs=False
+    )
+
+    from modelforge.dataset.dataset import NNPInput
+
+    data = NNPInput(
+        atomic_numbers=torch.tensor([1, 1, 1, 1], dtype=torch.int64),
+        positions=coord5,
+        atomic_subsystem_indices=torch.tensor([0, 0, 0, 0], dtype=torch.int64),
+        total_charge=torch.tensor([0.0], dtype=torch.float32),
+    )
+
+    pairs, d_ij, r_ij = nlist(data)
+
+    assert pairs.shape[1] == 12
+
+    nlist = NeighborlistForInference(
+        cutoff=5.0, displacement_function=displacement_function, only_unique_pairs=True
+    )
+
+    pairs, d_ij, r_ij = nlist(data)
+
+    assert pairs.shape[1] == 6
+
+    nlist = NeighborlistForInference(
+        cutoff=3.5, displacement_function=displacement_function, only_unique_pairs=False
+    )
+
+    pairs, d_ij, r_ij = nlist(data)
+
+    assert pairs.shape[1] == 10
+
+    assert torch.all(d_ij < 3.5)
+
+
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )

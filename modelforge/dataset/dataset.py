@@ -308,9 +308,11 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
         ).to(torch.float64)
 
         if property_name.total_charge is not None:
-            self.properties_of_interest["total_charge"] = torch.from_numpy(
-                dataset[property_name.total_charge]
-            ).to(torch.int32)
+            self.properties_of_interest["total_charge"] = (
+                torch.from_numpy(dataset[property_name.total_charge])
+                .to(torch.int32)
+                .unsqueeze(-1)
+            )
         else:
             # this is a per atom property, so it will match the first dimension of the geometry
             self.properties_of_interest["total_charge"] = torch.zeros(
@@ -323,8 +325,18 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
             )
         else:
             # a per atom property in each direction, so it will match geometry
-            self.properties_of_interest["F"] = torch.zeros(
-                dataset[property_name.positions].shape
+            self.properties_of_interest["F"] = torch.zeros_like(
+                dataset[property_name.positions]
+            )
+
+        if property_name.dipole_moment is not None:
+            self.properties_of_interest["dipole_moment"] = torch.from_numpy(
+                dataset[property_name.dipole_moment]
+            )
+        else:
+            # a per atom property in each direction, so it will match geometry
+            self.properties_of_interest["dipole_moment"] = torch.zeros(
+                (dataset[property_name.E].shape[0], 3)
             )
 
         self.number_of_records = len(dataset["atomic_subsystem_counts"])
@@ -431,6 +443,8 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
         atomic_numbers = self.properties_of_interest["atomic_numbers"][
             single_atom_start_idx:single_atom_end_idx
         ]
+
+        # get properties (Note that default properties are set in l279)
         positions = self.properties_of_interest["positions"][
             series_atom_start_idx:series_atom_end_idx
         ]
@@ -438,6 +452,9 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
         F = self.properties_of_interest["F"][series_atom_start_idx:series_atom_end_idx]
         total_charge = self.properties_of_interest["total_charge"][idx]
         number_of_atoms = len(atomic_numbers)
+        dipole_moment = self.properties_of_interest["dipole_moment"][idx]
+
+        # pairlist is set here (instead of l279) because it is not a default property
         if self.properties_of_interest["pair_list"] is None:
             pair_list = None
         else:
@@ -467,6 +484,7 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
                 torch.tensor([idx], dtype=torch.int32), number_of_atoms
             ),
             number_of_atoms=number_of_atoms,
+            dipole_moment=dipole_moment,
         )
 
         return BatchData(nnp_input, metadata)
@@ -790,7 +808,7 @@ class HDF5Dataset:
 
                             configs_nan = np.logical_or.reduce(
                                 list(configs_nan_by_prop.values())
-                            )  # boolean array of size (n_configs, )
+                            )  # boolean array of size (n_configsself.properties_of_interest, )
                             n_confs_rec = sum(~configs_nan)
 
                             atomic_subsystem_counts_rec = hf[record][
@@ -845,7 +863,10 @@ class HDF5Dataset:
                             for value in single_rec_data.keys():
                                 record_array = hf[record][value][()]
                                 single_rec_data[value].append(record_array)
-
+                        else:
+                            raise RuntimeError(
+                                f"Skipping record {record} as not all properties of interest are present."
+                            )
                 # convert lists of arrays to single arrays
 
                 data = OrderedDict()

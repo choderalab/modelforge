@@ -488,6 +488,8 @@ def test_energy_between_simulation_environments(
     assert np.isclose(output_torch.sum().detach().numpy(), output_jax.sum())
 
 
+
+
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )

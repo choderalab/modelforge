@@ -1167,7 +1167,7 @@ class ModelTrainer:
         if isinstance(self.runtime_parameter.devices, list):
             from lightning.pytorch.strategies import DDPStrategy
 
-            strategy = DDPStrategy(find_unused_parameters=True)
+            strategy = DDPStrategy(find_unused_parameters=False)
         else:
             strategy = "auto"
 
@@ -1183,6 +1183,7 @@ class ModelTrainer:
             inference_mode=False,
             num_sanity_val_steps=2,
             log_every_n_steps=self.runtime_parameter.log_every_n_steps,
+            enable_model_summary=True,
         )
         return trainer
 

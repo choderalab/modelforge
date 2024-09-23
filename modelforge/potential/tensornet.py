@@ -276,9 +276,6 @@ class TensorNetCore(torch.nn.Module):
             ]
         )
 
-        from modelforge.potential.utils import Dense
-
-        self.out_norm = nn.LayerNorm(3 * number_of_per_atom_features)
         # Initialize output layers based on configuration
         self.output_layers = nn.ModuleDict()
         for property, dim in zip(predicted_properties, predicted_dim):

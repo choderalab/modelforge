@@ -1,4 +1,4 @@
-from typing import Dict, Tuple, List
+from typing import Dict, List, Tuple
 
 import torch
 import torch.nn as nn
@@ -20,6 +20,31 @@ class AimNet2Core(torch.nn.Module):
         predicted_dim: List[int],
         maximum_interaction_radius: float,
     ) -> None:
+        """
+        Core architecture of the AimNet2 model for molecular property
+        prediction.
+
+        Parameters
+        ----------
+        featurization : Dict[str, Dict[str, int]]
+            Configuration dictionary specifying feature details for atomic
+            embeddings.
+        number_of_radial_basis_functions : int
+            Number of radial basis functions used in the radial symmetry
+            function.
+        number_of_interaction_modules : int
+            Number of interaction modules in the model, determining the depth of
+            message passing.
+        activation_function_parameter : Dict[str, str]
+            Configuration of activation functions used across the model.
+        predicted_properties : List[str]
+            List of properties that the model is predicting (e.g., energy,
+            forces).
+        predicted_dim : List[int]
+            The dimensionality of each predicted property.
+        maximum_interaction_radius : float
+            The cutoff radius for atomic interactions in the model.
+        """
 
         super().__init__()
 
@@ -37,6 +62,7 @@ class AimNet2Core(torch.nn.Module):
             featurization["atomic_number"]["number_of_per_atom_features"]
         )
 
+        # Define interaction modules for message passing
         self.interaction_modules = torch.nn.ModuleList(
             [
                 AIMNet2Interaction(
@@ -54,7 +80,7 @@ class AimNet2Core(torch.nn.Module):
                 for i in range(number_of_interaction_modules)
             ]
         )
-        # output layer to obtain per-atom energies
+        # Define output layers to calculate per-atom predictions
         self.output_layers = nn.ModuleDict()
         for property, dim in zip(predicted_properties, predicted_dim):
             self.output_layers[property] = nn.Sequential(
@@ -73,7 +99,9 @@ class AimNet2Core(torch.nn.Module):
         self.charge_conservation = ChargeConservation()
 
     def compute_properties(
-        self, data: NNPInputTuple, pairlist: PairlistData
+        self,
+        data: NNPInputTuple,
+        pairlist: PairlistData,
     ) -> Dict[str, torch.Tensor]:
         """
         Calculate the requested properties for a given input batch.
@@ -87,7 +115,8 @@ class AimNet2Core(torch.nn.Module):
         Returns
         -------
         Dict[str, torch.Tensor]
-            The calculated energies and forces.
+            The calculated per-atom scalar representations and atomic subsystem
+            indices.
         """
 
         representation = self.representation_module(data, pairlist)
@@ -99,7 +128,7 @@ class AimNet2Core(torch.nn.Module):
             (atomic_embedding.shape[0], 1), device=atomic_embedding.device
         )
 
-        # Generate message passing output
+        # Perform message passing using interaction modules
         for interaction in self.interaction_modules:
 
             delta_a, delta_q = interaction(
@@ -131,7 +160,9 @@ class AimNet2Core(torch.nn.Module):
         }
 
     def forward(
-        self, data: NNPInputTuple, pairlist_output: PairlistData
+        self,
+        data: NNPInputTuple,
+        pairlist_output: PairlistData,
     ) -> Dict[str, torch.Tensor]:
         """
         Implements the forward pass through the network.
@@ -154,8 +185,8 @@ class AimNet2Core(torch.nn.Module):
         """
         # perform the forward pass implemented in the subclass
         results = self.compute_properties(data, pairlist_output)
-        # extract the atomic embedding
         atomic_embedding = results["per_atom_scalar_representation"]
+
         # Compute all specified outputs
         for output_name, output_layer in self.output_layers.items():
             results[output_name] = output_layer(atomic_embedding).squeeze(-1)
@@ -175,7 +206,7 @@ class MessageModule(torch.nn.Module):
         ----------
         number_of_per_atom_features : int
             The number of features per atom.
-        is_first_module : bool
+        is_first_module : bool, optional
             Whether this is the first message module or a subsequent one.
         """
         super().__init__()
@@ -204,15 +235,16 @@ class MessageModule(torch.nn.Module):
         Parameters
         ----------
         per_atom_feature_tensor : torch.Tensor
-            The feature tensor (either atomic embeddings or repeated partial charges).
+            Feature tensor (either atomic embeddings or repeated partial charges).
         pair_indices : torch.Tensor
-            The list of atom pairs.
+            List of atom pairs.
         f_ij_cutoff : torch.Tensor
-            The cutoff function applied to the radial symmetry functions.
+            Cutoff function applied to the radial symmetry functions.
         r_ij : torch.Tensor
-            The displacement vectors between atom pairs.
-        linear_transform : nn.Module
-            The linear transformation to apply to the features.
+            Displacement vectors between atom pairs.
+        use_charge_layer : bool, optional
+            Whether to apply the linear charge transformation.
+
 
         Returns
         -------
@@ -254,8 +286,7 @@ class MessageModule(torch.nn.Module):
             1
         )  # Shape: (num_atom_pairs, 3, nr_of_features)
 
-        # Apply linear transformation to the vector contributions
-        # Apply linear transformation depending on whether it's for embeddings or charges
+        # Optionally apply charge layer transformation
         if use_charge_layer:
             proto_v_r_a = self.linear_transform_charges(proto_v_r_a)
         else:
@@ -372,7 +403,7 @@ class AIMNet2Interaction(nn.Module):
             The number of input features for the interaction.
         number_of_per_atom_features : int
             The number of features per atom.
-        activation_function : Type[torch.nn.Module]
+        activation_function : nn.Module
             The activation function to be used in the interaction module.
         """
         super().__init__()
@@ -421,7 +452,7 @@ class AIMNet2Interaction(nn.Module):
         f_ij_cutoff: torch.Tensor,
         r_ij: torch.Tensor,
         partial_charges: torch.Tensor,
-    ):
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass of the AIMNet2Interaction module.
 
@@ -440,7 +471,7 @@ class AIMNet2Interaction(nn.Module):
 
         Returns
         -------
-        torch.Tensor, torch.Tensor
+        Tuple[torch.Tensor, torch.Tensor]
             Updated atomic embeddings and partial charges.
         """
         combined_message = self.message_module(
@@ -469,8 +500,8 @@ class AIMNet2Representation(nn.Module):
 
         Parameters
         ----------
-        radial_cutoff : openff.units.unit.Quantity
-            The cutoff distance for the radial symmetry function.
+        radial_cutoff : float
+            The cutoff distance for the radial symmetry function in nanometer.
         number_of_radial_basis_functions : int
             Number of radial basis functions to use.
         featurization_config : Dict[str, Union[List[str], int]]
@@ -500,23 +531,29 @@ class AIMNet2Representation(nn.Module):
         return radial_symmetry_function
 
     def forward(
-        self, data: NNPInputTuple, pairlist_output: PairlistData
+        self,
+        data: NNPInputTuple,
+        pairlist_output: PairlistData,
     ) -> Dict[str, torch.Tensor]:
         """
         Generate the radial symmetry representation of the pairwise distances.
 
         Parameters
         ----------
-        d_ij : Pairwise distances between atoms; shape [n_pairs, 1]
+        data : NNPInputTuple
+            The input data including atomic positions and numbers.
+        pairlist_output : PairlistData
+            Pairwise distances between atoms and pair indices.
 
         Returns
         -------
-        Radial basis functions for pairs of atoms; shape [n_pairs, 1, number_of_radial_basis_functions]
+        Dict[str, torch.Tensor]
+            The radial basis functions and atomic embeddings.
         """
 
         # Convert distances to radial basis functions
         f_ij = self.radial_symmetry_function_module(pairlist_output.d_ij)
-
+        # Apply cutoff function to radial basis
         f_cutoff = self.cutoff_module(pairlist_output.d_ij)
 
         return {

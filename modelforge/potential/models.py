@@ -12,12 +12,6 @@ from torch.nn import Module
 
 from modelforge.dataset.dataset import NNPInput, NNPInputTuple
 
-if TYPE_CHECKING:
-    from modelforge.potential.ani import ANI2x
-    from modelforge.potential.painn import PaiNN
-    from modelforge.potential.physnet import PhysNet
-    from modelforge.potential.sake import SAKE
-    from modelforge.potential.schnet import SchNet
 from modelforge.dataset.dataset import DatasetParameters
 from modelforge.potential.parameters import (
     ANI2xParameters,
@@ -26,6 +20,7 @@ from modelforge.potential.parameters import (
     SAKEParameters,
     SchNetParameters,
     TensorNetParameters,
+    AimNet2Parameters,
 )
 from modelforge.train.parameters import RuntimeParameters, TrainingParameters
 from typing import TypeVar, Union
@@ -39,6 +34,7 @@ T_NNP_Parameters = TypeVar(
     PhysNetParameters,
     PaiNNParameters,
     TensorNetParameters,
+    AimNet2Parameters,
 )
 
 
@@ -62,18 +58,11 @@ class PairlistData(NamedTuple):
 
 
 class Pairlist(Module):
-    """
-    Handle pair list calculations for systems, returning indices, distances and distance vectors for atom pairs within a certain cutoff.
-
-    Attributes
-    ----------
-    only_unique_pairs : bool
-        If True, only unique pairs are returned (default is False).
-    """
 
     def __init__(self, only_unique_pairs: bool = False):
         """
-        Initialize the Pairlist object.
+         Handle pair list calculations for systems, returning indices, distances
+         and distance vectors for atom pairs within a certain cutoff.
 
         Parameters
         ----------
@@ -274,7 +263,8 @@ class Pairlist(Module):
         return selected_positions[1] - selected_positions[0]
 
     def calculate_d_ij(self, r_ij: torch.Tensor) -> torch.Tensor:
-        """Compute Euclidean distances between atoms in each pair.
+        """
+        ompute Euclidean distances between atoms in each pair.
 
         Parameters
         ----------
@@ -322,15 +312,11 @@ class Pairlist(Module):
 
 
 class Neighborlist(Pairlist):
-    """
-    Manage neighbor list calculations with a specified cutoff distance(s).
-
-    This class extends Pairlist to consider a cutoff distance for neighbor calculations.
-    """
-
     def __init__(self, cutoff: float, only_unique_pairs: bool = False):
         """
-        Initialize the Neighborlist with a specific cutoff distance.
+        Manage neighbor list calculations with a specified cutoff distance.
+
+        Extends the Pairlist class to compute neighbor lists based on a distance cutoff.
 
         Parameters
         ----------
@@ -350,9 +336,7 @@ class Neighborlist(Pairlist):
         pair_indices: Optional[torch.Tensor] = None,
     ) -> PairlistData:
         """
-        Forward pass to compute neighbor list considering a cutoff distance.
-
-        Overrides the `forward` method from Pairlist to include cutoff distance in calculations.
+        Compute the neighbor list considering a cutoff distance.
 
         Parameters
         ----------
@@ -395,7 +379,7 @@ import numpy as np
 
 class JAXModel:
     """
-    A model wrapper that facilitates calling a JAX function with predefined parameters and buffers.
+    A wrapper for calling a JAX function with predefined parameters and buffers.
 
     Attributes
     ----------
@@ -448,9 +432,7 @@ class PyTorch2JAXConverter:
 
     def convert_to_jax_model(
         self,
-        nnp_instance: Union[
-            "ANI2x", "SchNet", "PaiNN", "PhysNet", "TensorNet", "PhysNet"
-        ],
+        nnp_instance: Potential,
     ) -> JAXModel:
         """
         Convert a PyTorch neural network instance to a JAX model.
@@ -471,7 +453,7 @@ class PyTorch2JAXConverter:
 
     @staticmethod
     def _convert_pytnn_to_jax(
-        nnp_instance: Union["ANI2x", "SchNet", "PaiNN", "PhysNet"]
+        nnp_instance: Potential,
     ) -> Tuple[Callable, np.ndarray, np.ndarray]:
         """Internal method to convert PyTorch neural network parameters and buffers to JAX format.
 
@@ -548,6 +530,16 @@ class PyTorch2JAXConverter:
 
 class Displacement(torch.nn.Module):
     def __init__(self, box_vectors: torch.Tensor, periodic: bool):
+        """
+        Compute displacement vectors between pairs of atoms, considering periodic boundary conditions.
+
+        Attributes
+        ----------
+        box_vectors : torch.Tensor
+            Box vectors defining the periodic boundaries. Shape: [3, 3].
+        periodic : bool
+            Whether to apply periodic boundary conditions.
+        """
         super().__init__()
         self.box_vectors = box_vectors
         self.box_lengths = torch.tensor(
@@ -561,6 +553,21 @@ class Displacement(torch.nn.Module):
         coordinate_i: torch.Tensor,
         coordinate_j: torch.Tensor,
     ):
+        """
+        Compute displacement vectors and Euclidean distances between atom pairs.
+
+        Parameters
+        ----------
+        coordinate_i : torch.Tensor
+            Coordinates of the first atom in each pair. Shape: [n_pairs, 3].
+        coordinate_j : torch.Tensor
+            Coordinates of the second atom in each pair. Shape: [n_pairs, 3].
+
+        Returns
+        -------
+        Tuple[torch.Tensor, torch.Tensor]
+            Displacement vectors (r_ij) of shape [n_pairs, 3] and distances (d_ij) of shape [n_pairs, 1].
+        """
         r_ij = coordinate_i - coordinate_j
 
         if self.periodic:
@@ -584,7 +591,7 @@ class NeighborlistForInference(torch.nn.Module):
         only_unique_pairs: bool = False,
     ):
         """
-        Initialize the ComputeInteractingAtomPairs module.
+        Compute neighbor lists for inference, filtering pairs based on a cutoff distance.
 
         Parameters
         ----------
@@ -622,8 +629,7 @@ class NeighborlistForInference(torch.nn.Module):
         Returns
         -------
         PairListOutputs
-            A Dict for each cutoff type, where each entry is a namedtuple containing the pair indices, Euclidean distances
-            (d_ij), and displacement vectors (r_ij).
+            Contains pair indices, distances (d_ij), and displacement vectors (r_ij) for atom pairs within the cutoff.
         """
         # ---------------------------
         # general input manipulation
@@ -669,10 +675,6 @@ class NeighborlistForInference(torch.nn.Module):
 
 
 class ComputeInteractingAtomPairs(torch.nn.Module):
-    """
-    A module for preparing input data, including the calculation of pair lists,
-    distances (d_ij), and displacement vectors (r_ij) for molecular simulations.
-    """
 
     def __init__(self, cutoff: float, only_unique_pairs: bool = False):
         """
@@ -680,7 +682,7 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
 
         Parameters
         ----------
-        cutoffs : float
+        cutoff : float
             The cutoff distance for neighbor list calculations.
         only_unique_pairs : bool, optional
             If True, only unique pairs are returned (default is False).
@@ -705,7 +707,7 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
 
         Returns
         -------
-        PairListOutputs
+        PairlistData
             A namedtuple containing the pair indices, distances, and
             displacement vectors.
         """
@@ -739,7 +741,6 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
                 pair_indices=pair_list.to(torch.int64),
             )
 
-        # this will return a Dict of the PairListOutputs for each cutoff we specify
         return pairlist_output
 
 
@@ -749,10 +750,6 @@ from modelforge.potential.processing import PerAtomEnergy, CoulombPotential
 
 
 class PostProcessing(torch.nn.Module):
-    """
-    Handle post-processing operations on model outputs, such as normalization
-    and reduction operations.
-    """
 
     _SUPPORTED_PROPERTIES = [
         "per_atom_energy",
@@ -771,7 +768,8 @@ class PostProcessing(torch.nn.Module):
         dataset_statistic: Dict[str, Dict[str, float]],
     ):
         """
-        Initialize the PostProcessing module.
+        Handle post-processing operations on model outputs, such as
+        normalization and reduction.
 
         Parameters
         ----------
@@ -788,6 +786,7 @@ class PostProcessing(torch.nn.Module):
         self.registered_chained_operations = ModuleDict()
         self.dataset_statistic = dataset_statistic
         properties_to_process = postprocessing_parameter["properties_to_process"]
+
         if "per_atom_energy" in properties_to_process:
             self.registered_chained_operations["per_atom_energy"] = PerAtomEnergy(
                 postprocessing_parameter["per_atom_energy"],
@@ -805,7 +804,7 @@ class PostProcessing(torch.nn.Module):
 
     def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
-        Perform post-processing operations for all registered properties.
+        Perform post-processing for all registered properties.
 
         Parameters
         ----------
@@ -849,10 +848,10 @@ class Potential(torch.nn.Module):
         postprocessing : torch.nn.Module
             Module for handling post-processing operations.
         jit : bool, optional
-            If True, JIT compile the core network and post-processing (default
-            is False).
+            Whether to JIT compile the core network and post-processing
+            (default: False).
         jit_neighborlist : bool, optional
-            If True, JIT compile the neighborlist (default is True).
+            Whether to JIT compile the neighborlist (default: True).
         """
 
         super().__init__()
@@ -1037,14 +1036,7 @@ class NeuralNetworkPotentialFactory:
     def generate_potential(
         *,
         use: Literal["training", "inference"],
-        potential_parameter: Union[
-            ANI2xParameters,
-            SAKEParameters,
-            SchNetParameters,
-            PhysNetParameters,
-            PaiNNParameters,
-            TensorNetParameters,
-        ],
+        potential_parameter: T_NNP_Parameters,
         runtime_parameter: Optional[RuntimeParameters] = None,
         training_parameter: Optional[TrainingParameters] = None,
         dataset_parameter: Optional[DatasetParameters] = None,
@@ -1069,9 +1061,7 @@ class NeuralNetworkPotentialFactory:
         ----------
         use : Literal["training", "inference"]
             Whether the potential is for training or inference.
-        potential_parameter : Union[ANI2xParameters, SAKEParameters,
-        SchNetParameters, PhysNetParameters, PaiNNParameters,
-        TensorNetParameters]
+        potential_parameter : T_NNP_Parameters]
             Parameters specific to the neural network potential.
         runtime_parameter : Optional[RuntimeParameters], optional
             Parameters for configuring the runtime environment (default is

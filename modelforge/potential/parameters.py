@@ -16,7 +16,7 @@ from pydantic import (
     model_validator,
 )
 
-from modelforge.utils.units import _convert_str_to_unit_length
+from modelforge.utils.units import _convert_str_or_unit_to_unit_length
 
 
 class CaseInsensitiveEnum(str, Enum):
@@ -166,7 +166,7 @@ class CoulombPotential(ParametersBase):
     converted_units = field_validator(
         "maximum_interaction_radius",
         mode="before",
-    )(_convert_str_to_unit_length)
+    )(_convert_str_or_unit_to_unit_length)
 
 
 class PostProcessingParameter(ParametersBase):
@@ -188,7 +188,7 @@ class AimNet2Parameters(ParametersBase):
         featurization: Featurization
 
         converted_units = field_validator("maximum_interaction_radius", mode="before")(
-            _convert_str_to_unit_length
+            _convert_str_or_unit_to_unit_length
         )
 
     potential_name: str = "AimNet2"
@@ -213,7 +213,7 @@ class ANI2xParameters(ParametersBase):
             "maximum_interaction_radius_for_angular_features",
             "minimum_interaction_radius_for_angular_features",
             mode="before",
-        )(_convert_str_to_unit_length)
+        )(_convert_str_or_unit_to_unit_length)
 
     potential_name: str = "ANI2x"
     core_parameter: CoreParameter
@@ -232,7 +232,7 @@ class SchNetParameters(ParametersBase):
         featurization: Featurization
 
         converted_units = field_validator("maximum_interaction_radius", mode="before")(
-            _convert_str_to_unit_length
+            _convert_str_or_unit_to_unit_length
         )
 
     potential_name: str = "SchNet"
@@ -254,7 +254,7 @@ class TensorNetParameters(ParametersBase):
 
         converted_units = field_validator(
             "maximum_interaction_radius", "minimum_interaction_radius", mode="before"
-        )(_convert_str_to_unit_length)
+        )(_convert_str_or_unit_to_unit_length)
 
     potential_name: str = "TensorNet"
     core_parameter: CoreParameter
@@ -274,7 +274,7 @@ class PaiNNParameters(ParametersBase):
         activation_function_parameter: ActivationFunctionConfig
 
         converted_units = field_validator("maximum_interaction_radius", mode="before")(
-            _convert_str_to_unit_length
+            _convert_str_or_unit_to_unit_length
         )
 
     potential_name: str = "PaiNN"
@@ -294,7 +294,7 @@ class PhysNetParameters(ParametersBase):
         activation_function_parameter: ActivationFunctionConfig
 
         converted_units = field_validator("maximum_interaction_radius", mode="before")(
-            _convert_str_to_unit_length
+            _convert_str_or_unit_to_unit_length
         )
 
     potential_name: str = "PhysNet"
@@ -314,7 +314,7 @@ class SAKEParameters(ParametersBase):
         activation_function_parameter: ActivationFunctionConfig
 
         converted_units = field_validator("maximum_interaction_radius", mode="before")(
-            _convert_str_to_unit_length
+            _convert_str_or_unit_to_unit_length
         )
 
     potential_name: str = "SAKE"

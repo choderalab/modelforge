@@ -27,7 +27,22 @@ from modelforge.potential.parameters import (
     SAKEParameters,
     SchNetParameters,
     TensorNetParameters,
+    AimNet2Parameters,
 )
+from typing import TypeVar, Union
+
+# Define a TypeVar that can be one of the parameter models
+T_NNP_Parameters = TypeVar(
+    "T_NNP_Parameters",
+    ANI2xParameters,
+    SAKEParameters,
+    SchNetParameters,
+    PhysNetParameters,
+    PaiNNParameters,
+    TensorNetParameters,
+    AimNet2Parameters,
+)
+
 from modelforge.train.parameters import RuntimeParameters, TrainingParameters
 
 __all__ = [
@@ -44,21 +59,23 @@ __all__ = [
 
 class Error(nn.Module, ABC):
     """
-    Class representing the error calculation for predicted and true values.
+    Abstract base class for error calculation between predicted and true values.
     """
 
     def __init__(self, scale_by_number_of_atoms: bool = True):
 
         super().__init__()
-        if not scale_by_number_of_atoms:
-            # If scaling is not desired, override the method to just return the input error unchanged
-            self.scale_by_number_of_atoms = (
-                lambda error, atomic_subsystem_counts, prefactor=1: error
-            )
+        self.scale_by_number_of_atoms = (
+            self._scale_by_number_of_atoms
+            if scale_by_number_of_atoms
+            else lambda error, atomic_subsystem_counts, prefactor=1: error
+        )
 
     @abstractmethod
     def calculate_error(
-        self, predicted: torch.Tensor, true: torch.Tensor
+        self,
+        predicted: torch.Tensor,
+        true: torch.Tensor,
     ) -> torch.Tensor:
         """
         Calculates the error between the predicted and true values
@@ -71,26 +88,14 @@ class Error(nn.Module, ABC):
     ) -> torch.Tensor:
         """
         Calculates the squared error between the predicted and true values.
-
-        Parameters
-        ----------
-        predicted_tensor : torch.Tensor
-            The predicted values.
-        reference_tensor : torch.Tensor
-            The reference values provided by the dataset.
-
-        Returns
-        -------
-        torch.Tensor
-            The calculated error.
         """
         squared_diff = (predicted_tensor - reference_tensor).pow(2)
         error = squared_diff.sum(dim=1, keepdim=True)
         return error
 
     @staticmethod
-    def scale_by_number_of_atoms(
-        error, atomic_subsystem_counts, prefactor: int = 1
+    def _scale_by_number_of_atoms(
+        error, atomic_counts, prefactor: int = 1
     ) -> torch.Tensor:
         """
         Scales the error by the number of atoms in the atomic subsystems.
@@ -99,10 +104,11 @@ class Error(nn.Module, ABC):
         ----------
         error : torch.Tensor
             The error to be scaled.
-        atomic_subsystem_counts : torch.Tensor
+        atomic_counts : torch.Tensor
             The number of atoms in the atomic subsystems.
         prefactor : int
-           To consider the shape of the property, e.g., if the reference property has shape (N,3) it is necessary to further devide the result by 3
+            Prefactor to adjust for the shape of the property (e.g., vector
+            properties).
         Returns
         -------
         torch.Tensor
@@ -110,37 +116,34 @@ class Error(nn.Module, ABC):
         """
         # divide by number of atoms
         scaled_by_number_of_atoms = error / (
-            prefactor * atomic_subsystem_counts.unsqueeze(1)
+            prefactor * atomic_counts.unsqueeze(1)
         )  # FIXME: ensure that all per-atom properties have dimension (N, 1)
         return scaled_by_number_of_atoms
 
 
 class FromPerAtomToPerMoleculeSquaredError(Error):
     """
-    Calculates the per-atom error and aggregates it to per-molecule mean squared error.
+    Calculates the per-atom error and aggregates it to per-molecule mean squared
+    error.
     """
-
-    def __init__(self, scale_by_number_of_atoms: bool = True):
-        super().__init__(scale_by_number_of_atoms)
 
     def calculate_error(
         self,
         per_atom_prediction: torch.Tensor,
         per_atom_reference: torch.Tensor,
     ) -> torch.Tensor:
-        """
-        Computes the per-atom error.
-        """
+        """Computes the per-atom squared error."""
         return self.calculate_squared_error(per_atom_prediction, per_atom_reference)
 
     def forward(
         self,
         per_atom_prediction: torch.Tensor,
         per_atom_reference: torch.Tensor,
-        batch: "NNPInput",
+        batch: NNPInput,
     ) -> torch.Tensor:
         """
-        Computes the per-atom error and aggregates it to per-molecule mean squared error.
+        Computes the per-atom error and aggregates it to per-molecule mean
+        squared error.
 
         Parameters
         ----------
@@ -157,29 +160,31 @@ class FromPerAtomToPerMoleculeSquaredError(Error):
             The aggregated per-molecule error.
         """
 
-        # squared error
+        # Compute per-atom squared error
         per_atom_squared_error = self.calculate_error(
             per_atom_prediction, per_atom_reference
         )
 
+        # Initialize per-molecule squared error tensor
         per_molecule_squared_error = torch.zeros_like(
             batch.metadata.E, dtype=per_atom_squared_error.dtype
         )
-        # Aggregate error per molecule
 
+        # Aggregate error per molecule
         per_molecule_squared_error.scatter_add_(
             0,
             batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
             per_atom_squared_error,
-        ).contiguous()
-        # divide by number of atoms
+        )
+
+        # Scale error by number of atoms
         per_molecule_square_error_scaled = self.scale_by_number_of_atoms(
             per_molecule_squared_error,
             batch.metadata.atomic_subsystem_counts,
             prefactor=per_atom_prediction.shape[-1],
-        ).contiguous()
+        )
 
-        return per_molecule_square_error_scaled
+        return per_molecule_square_error_scaled.contiguous()
 
 
 class PerMoleculeSquaredError(Error):
@@ -187,8 +192,13 @@ class PerMoleculeSquaredError(Error):
     Calculates the per-molecule mean squared error.
     """
 
-    def __init__(self, scale_by_number_of_atoms: bool = True):
-        super().__init__(scale_by_number_of_atoms)
+    def calculate_error(
+        self,
+        per_atom_prediction: torch.Tensor,
+        per_atom_reference: torch.Tensor,
+    ) -> torch.Tensor:
+        """Computes the per-molecule squared error."""
+        return self.calculate_squared_error(per_atom_prediction, per_atom_reference)
 
     def forward(
         self,
@@ -214,9 +224,11 @@ class PerMoleculeSquaredError(Error):
             The mean per-molecule error.
         """
 
+        # Compute per-molecule squared error
         per_molecule_squared_error = self.calculate_error(
             per_molecule_prediction, per_molecule_reference
         )
+        # Scale error by number of atoms
         per_molecule_square_error_scaled = self.scale_by_number_of_atoms(
             per_molecule_squared_error,
             batch.metadata.atomic_subsystem_counts,
@@ -224,22 +236,16 @@ class PerMoleculeSquaredError(Error):
 
         return per_molecule_square_error_scaled
 
-    def calculate_error(
-        self,
-        per_atom_prediction: torch.Tensor,
-        per_atom_reference: torch.Tensor,
-    ) -> torch.Tensor:
-        """
-        Computes the per-atom error.
-        """
-        return self.calculate_squared_error(per_atom_prediction, per_atom_reference)
-
 
 class Loss(nn.Module):
 
-    _SUPPORTED_PROPERTIES = ["per_atom_energy", "per_molecule_energy", "per_atom_force"]
+    _SUPPORTED_PROPERTIES = [
+        "per_atom_energy",
+        "per_molecule_energy",
+        "per_atom_force",
+    ]
 
-    def __init__(self, loss_porperty: List[str], weight: Dict[str, float]):
+    def __init__(self, loss_porperty: List[str], weights: Dict[str, float]):
         """
         Calculates the combined loss for energy and force predictions.
 
@@ -247,7 +253,7 @@ class Loss(nn.Module):
         ----------
         loss_property : List[str]
             List of properties to include in the loss calculation.
-        weight : Dict[str, float]
+        weights : Dict[str, float]
             Dictionary containing the weights for each property in the loss calculation.
 
         Raises
@@ -259,30 +265,29 @@ class Loss(nn.Module):
         from torch.nn import ModuleDict
 
         self.loss_property = loss_porperty
-        self.weight = weight
+        self.weights = weights
+        self.loss_functions = ModuleDict()
 
-        self.loss = ModuleDict()
-
-        for prop, w in weight.items():
-            if prop in self._SUPPORTED_PROPERTIES:
-                if prop == "per_atom_force":
-                    self.loss[prop] = FromPerAtomToPerMoleculeSquaredError(
-                        scale_by_number_of_atoms=True
-                    )
-                elif prop == "per_atom_energy":
-                    self.loss[prop] = PerMoleculeSquaredError(
-                        scale_by_number_of_atoms=True
-                    )  # FIXME: this is currently not working
-                elif prop == "per_molecule_energy":
-                    self.loss[prop] = PerMoleculeSquaredError(
-                        scale_by_number_of_atoms=True
-                    )
-                self.register_buffer(prop, torch.tensor(w))
-            else:
+        for prop in loss_porperty:
+            if prop not in self._SUPPORTED_PROPERTIES:
                 raise NotImplementedError(f"Loss type {prop} not implemented.")
 
+            if prop == "per_atom_force":
+                self.loss_functions[prop] = FromPerAtomToPerMoleculeSquaredError(
+                    scale_by_number_of_atoms=True
+                )
+
+            if prop == "per_atom_energy":
+                self.loss_functions[prop] = PerMoleculeSquaredError(scale_by_number_of_atoms=True)
+            if prop == "per_molecule_energy":
+                self.loss_functions[prop] = PerMoleculeSquaredError(scale_by_number_of_atoms=True)
+
+            self.register_buffer(prop, torch.tensor(self.weights[prop]))
+
     def forward(
-        self, predict_target: Dict[str, torch.Tensor], batch
+        self,
+        predict_target: Dict[str, torch.Tensor],
+        batch: NNPInput,
     ) -> Dict[str, torch.Tensor]:
         """
         Calculates the combined loss for the specified properties.
@@ -290,45 +295,47 @@ class Loss(nn.Module):
         Parameters
         ----------
         predict_target : Dict[str, torch.Tensor]
-            Dictionary containing predicted and true values for energy and per_atom_force.
-        batch : Any
+            Dictionary containing predicted and true values for energy and
+            per_atom_force.
+        batch : NNPInput
             The batch data containing metadata and input information.
 
         Returns
         -------
         Dict{str, torch.Tensor]
-            Individual loss terms and the combined, total loss.
+            Individual per-sample loss terms and the combined total loss.
         """
         # save the loss as a dictionary
         loss_dict = {}
         # accumulate loss
-        loss = torch.tensor(
-            [0.0], dtype=batch.metadata.E.dtype, device=batch.metadata.E.device
-        )
+        total_loss = torch.zeros_like(batch.metadata.E)
+
         # iterate over loss properties
         for prop in self.loss_property:
-            # calculate loss per property
-            loss_ = self.loss[prop](
-                predict_target[f"{prop}_predict"], predict_target[f"{prop}_true"], batch
+            loss_fn = self.loss_functions[prop]
+            prop_loss = loss_fn(
+                predict_target[f"{prop}_predict"],
+                predict_target[f"{prop}_true"],
+                batch,
             )
-            # add total loss
-            loss = loss + (self.weight[prop] * loss_)
-            # save loss
-            loss_dict[f"{prop}"] = loss_
+            # Accumulate weighted per-sample losses
+            weighted_loss = self.weights[prop] * prop_loss
+            total_loss += weighted_loss  # Note: total_loss is still per-sample
+            loss_dict[prop] = prop_loss  # Store per-sample loss
 
         # add total loss to results dict and return
-        loss_dict["total_loss"] = loss
+        loss_dict["total_loss"] = total_loss
 
         return loss_dict
 
 
-class LossFactory(object):
+class LossFactory:
     """
     Factory class to create different types of loss functions.
     """
 
     @staticmethod
-    def create_loss(loss_property: List[str], weight: Dict[str, float]) -> Type[Loss]:
+    def create_loss(loss_property: List[str], weight: Dict[str, float]) -> Loss:
         """
         Creates an instance of the specified loss type.
 
@@ -351,7 +358,10 @@ from torch.nn import ModuleDict
 from torch.optim import Optimizer
 
 
-def create_error_metrics(loss_properties: List[str], loss: bool = False) -> ModuleDict:
+def create_error_metrics(
+    loss_properties: List[str],
+    is_loss: bool = False,
+) -> ModuleDict:
     """
     Creates a ModuleDict of MetricCollections for the given loss properties.
 
@@ -359,7 +369,7 @@ def create_error_metrics(loss_properties: List[str], loss: bool = False) -> Modu
     ----------
     loss_properties : List[str]
         List of loss properties for which to create the metrics.
-    loss : bool, optional
+    is_loss : bool, optional
         If True, only the loss metric is created, by default False.
     Returns
     -------
@@ -370,12 +380,11 @@ def create_error_metrics(loss_properties: List[str], loss: bool = False) -> Modu
     from torchmetrics.aggregation import MeanMetric
     from torchmetrics.regression import MeanAbsoluteError, MeanSquaredError
 
-    if loss:
+    if is_loss:
         metric_dict = ModuleDict(
             {prop: MetricCollection([MeanMetric()]) for prop in loss_properties}
         )
         metric_dict["total_loss"] = MetricCollection([MeanMetric()])
-        return metric_dict
     else:
         metric_dict = ModuleDict(
             {
@@ -385,7 +394,7 @@ def create_error_metrics(loss_properties: List[str], loss: bool = False) -> Modu
                 for prop in loss_properties
             }
         )
-        return metric_dict
+    return metric_dict
 
 
 class CalculateProperties(torch.nn.Module):
@@ -399,12 +408,13 @@ class CalculateProperties(torch.nn.Module):
         """
         super().__init__()
         self.requested_properties = requested_properties
-        self.include_force = False
-        if "per_atom_force" in self.requested_properties:
-            self.include_force = True
+        self.include_force = "per_atom_force" in self.requested_properties
 
     def _get_forces(
-        self, batch: "BatchData", energies: Dict[str, torch.Tensor], train_mode: bool
+        self,
+        batch: BatchData,
+        energies: Dict[str, torch.Tensor],
+        train_mode: bool,
     ) -> Dict[str, torch.Tensor]:
         """
         Computes the forces from a given batch using the model.
@@ -429,11 +439,9 @@ class CalculateProperties(torch.nn.Module):
 
         per_molecule_energy_predict = energies["per_molecule_energy_predict"]
 
-        # Ensure E_predict and nnp_input.positions require gradients and are on the same device
-        if not per_molecule_energy_predict.requires_grad:
-            per_molecule_energy_predict.requires_grad = True
-        if not nnp_input.positions.requires_grad:
-            nnp_input.positions.requires_grad = True
+        # Ensure gradients are enabled
+        per_molecule_energy_predict.requires_grad_(True)
+        nnp_input.positions.requires_grad_(True)
 
         # Compute the gradient (forces) from the predicted energies
         grad = torch.autograd.grad(
@@ -448,7 +456,7 @@ class CalculateProperties(torch.nn.Module):
         if grad is None:
             raise RuntimeWarning("Force calculation did not return a gradient")
 
-        per_atom_force_predict = -1 * grad  # Forces are the negative gradient of energy
+        per_atom_force_predict = -grad  # Forces are the negative gradient of energy
 
         return {
             "per_atom_force_true": per_atom_force_true,
@@ -456,7 +464,9 @@ class CalculateProperties(torch.nn.Module):
         }
 
     def _get_energies(
-        self, batch: "BatchData", model: Type[torch.nn.Module]
+        self,
+        batch: BatchData,
+        model: torch.nn.Module,
     ) -> Dict[str, torch.Tensor]:
         """
         Computes the energies from a given batch using the model.
@@ -465,7 +475,7 @@ class CalculateProperties(torch.nn.Module):
         ----------
         batch : BatchData
             A single batch of data, including input features and target energies.
-        model : Type[torch.nn.Module]
+        model : torch.nn.Module
             The neural network model used to compute the energies.
 
         Returns
@@ -477,9 +487,8 @@ class CalculateProperties(torch.nn.Module):
         per_molecule_energy_true = batch.metadata.E.to(torch.float32)
         per_molecule_energy_predict = model.forward(nnp_input)[
             "per_molecule_energy"
-        ].unsqueeze(
-            1
-        )  # FIXME: ensure that all per-molecule properties have dimension (N, 1)
+        ].unsqueeze(1)
+
         assert per_molecule_energy_true.shape == per_molecule_energy_predict.shape, (
             f"Shapes of true and predicted energies do not match: "
             f"{per_molecule_energy_true.shape} != {per_molecule_energy_predict.shape}"
@@ -490,7 +499,10 @@ class CalculateProperties(torch.nn.Module):
         }
 
     def forward(
-        self, batch: "BatchData", model: Type[torch.nn.Module], train_mode: bool = False
+        self,
+        batch: BatchData,
+        model: torch.nn.Module,
+        train_mode: bool = False,
     ) -> Dict[str, torch.Tensor]:
         """
         Computes the energies and forces from a given batch using the model.
@@ -508,10 +520,9 @@ class CalculateProperties(torch.nn.Module):
             The true and predicted energies and forces from the dataset and the model.
         """
         energies = self._get_energies(batch, model)
-        if self.include_force:
-            forces = self._get_forces(batch, energies, train_mode)
-        else:
-            forces = {}
+        forces = (
+            self._get_forces(batch, energies, train_mode) if self.include_force else {}
+        )
         return {**energies, **forces}
 
 
@@ -520,14 +531,7 @@ class TrainingAdapter(pL.LightningModule):
     def __init__(
         self,
         *,
-        potential_parameter: Union[
-            ANI2xParameters,
-            SAKEParameters,
-            SchNetParameters,
-            PhysNetParameters,
-            PaiNNParameters,
-            TensorNetParameters,
-        ],
+        potential_parameter: T_NNP_Parameters,
         dataset_statistic: Dict[str, Dict[str, unit.Quantity]],
         training_parameter: TrainingParameters,
         potential_seed: Optional[int] = None,
@@ -560,38 +564,9 @@ class TrainingAdapter(pL.LightningModule):
             use_training_mode_neighborlist=True,
         )
 
-        def check_strides(module, grad_input, grad_output):
-            print(f"Layer: {module.__class__.__name__}")
-            for i, grad in enumerate(grad_input):
-                if grad is not None:
-                    print(
-                        f"Grad input {i}: size {grad.size()}, strides {grad.stride()}"
-                    )
-            # Handle grad_output
-            if isinstance(grad_output, tuple) and isinstance(grad_output[0], dict):
-                # If the output is a dict wrapped in a tuple, extract the dict
-                grad_output = grad_output[0]
-            if isinstance(grad_output, dict):
-                for key, grad in grad_output.items():
-                    if grad is not None:
-                        print(
-                            f"Grad output [{key}]: size {grad.size()}, strides {grad.stride()}"
-                        )
-            else:
-                for i, grad in enumerate(grad_output):
-                    if grad is not None:
-                        print(
-                            f"Grad output {i}: size {grad.size()}, strides {grad.stride()}"
-                        )
-
-        # Register the full backward hook
-        if training_parameter.verbose is True:
-            for module in self.potential.modules():
-                module.register_full_backward_hook(check_strides)
-
-        self.include_force = False
-        if "per_atom_force" in training_parameter.loss_parameter.loss_property:
-            self.include_force = True
+        self.include_force = (
+            "per_atom_force" in training_parameter.loss_parameter.loss_property
+        )
 
         self.calculate_predictions = CalculateProperties(
             training_parameter.loss_parameter.loss_property
@@ -613,23 +588,22 @@ class TrainingAdapter(pL.LightningModule):
             **training_parameter.loss_parameter.model_dump()
         )
 
-        # Assign the created error metrics to the respective attributes
-        self.test_error = create_error_metrics(
+        # Initialize metrics
+        self.test_metrics = create_error_metrics(
             training_parameter.loss_parameter.loss_property
         )
-        self.val_error = create_error_metrics(
+        self.val_metrics = create_error_metrics(
             training_parameter.loss_parameter.loss_property
         )
-        self.train_error = create_error_metrics(
+        self.train_metrics = create_error_metrics(
             training_parameter.loss_parameter.loss_property
         )
 
-        # Initialize loss  metric
         self.loss_metric = create_error_metrics(
-            training_parameter.loss_parameter.loss_property, loss=True
+            training_parameter.loss_parameter.loss_property, is_loss=True
         )
 
-    def forward(self, batch: "BatchData") -> Dict[str, torch.Tensor]:
+    def forward(self, batch: BatchData) -> Dict[str, torch.Tensor]:
         """
         Computes the energies and forces from a given batch using the model.
 
@@ -657,7 +631,7 @@ class TrainingAdapter(pL.LightningModule):
 
     def _update_metrics(
         self,
-        error_dict: Dict[str, torchmetrics.MetricCollection],
+        metrics: ModuleDict,
         predict_target: Dict[str, torch.Tensor],
     ):
         """
@@ -665,20 +639,22 @@ class TrainingAdapter(pL.LightningModule):
 
         Parameters
         ----------
-        error_dict : Dict[str, torchmetrics.MetricCollection]
+        error_dict : ModuleDict[str, torchmetrics.MetricCollection]
             Dictionary containing metric collections for energy and force.
         predict_target : Dict[str, torch.Tensor]
             Dictionary containing predicted and true values for energy and force.
         """
 
-        for property, metrics in error_dict.items():
-            for _, error_log in metrics.items():
-                error_log(
-                    predict_target[f"{property}_predict"].detach(),
-                    predict_target[f"{property}_true"].detach(),
-                )
+        for prop, metric_collection in metrics.items():
+            preds = predict_target[f"{prop}_predict"].detach()
+            targets = predict_target[f"{prop}_true"].detach()
+            metric_collection.update(preds, targets)
 
-    def training_step(self, batch: "BatchData", batch_idx: int) -> torch.Tensor:
+    def training_step(
+        self,
+        batch: BatchData,
+        batch_idx: int,
+    ) -> torch.Tensor:
         """
         Training step to compute the MSE loss for a given batch.
 
@@ -695,22 +671,26 @@ class TrainingAdapter(pL.LightningModule):
             The loss tensor computed for the current training step.
         """
 
-        # calculate energy and forces, Note that `predict_target` is a
-        # dictionary containing the predicted and true values for energy and
-        # force`
         predict_target = self.calculate_predictions(
             batch, self.potential, self.training
         )
 
-        # Calculate the loss
-        loss_dict = self.loss(predict_target, batch)
+        loss_dict = self.loss(predict_target, batch)  # Contains per-sample losses
 
-        # Update the loss metric with the different loss components
+        # Compute the mean loss for optimization
+        mean_total_loss = loss_dict["total_loss"].mean()
+
+        # Update loss metrics with per-sample losses
         for key, metric in loss_dict.items():
-            self.loss_metric[key].update(metric.clone().detach(), batch.batch_size())
+            self.loss_metric[key].update(metric.detach(), batch_size=batch.batch_size())
 
-        loss = torch.mean(loss_dict["total_loss"])
-        return loss.contiguous()
+        # Update total loss metric # FIXME: check if the following is necessary
+        # self.loss_metrics["total_loss"].update(
+        #     loss_dict["total_loss"].detach(), batch_size=loss_dict["total_loss"].size(0)
+        # )
+
+        # Return the mean total loss for optimization
+        return mean_total_loss
 
     def validation_step(self, batch: "BatchData", batch_idx: int) -> None:
         """
@@ -730,16 +710,16 @@ class TrainingAdapter(pL.LightningModule):
 
         # Ensure positions require gradients for force calculation
         batch.nnp_input.positions.requires_grad_(True)
-        with torch.inference_mode(False):
+        with torch.set_grad_enabled(True):
 
             # calculate energy and forces
             predict_target = self.calculate_predictions(
                 batch, self.potential, self.training
             )
 
-        self._update_metrics(self.val_error, predict_target)
+        self._update_metrics(self.val_metrics, predict_target)
 
-    def test_step(self, batch: "BatchData", batch_idx: int) -> None:
+    def test_step(self, batch: BatchData, batch_idx: int) -> None:
         """
         Test step to compute the RMSE loss for a given batch.
 
@@ -761,12 +741,12 @@ class TrainingAdapter(pL.LightningModule):
         # Ensure positions require gradients for force calculation
         batch.nnp_input.positions.requires_grad_(True)
         # calculate energy and forces
-        with torch.inference_mode(False):
+        with torch.set_grad_enabled(True):
             predict_target = self.calculate_predictions(
                 batch, self.potential, self.training
             )
         # Update and log metrics
-        self._update_metrics(self.test_error, predict_target)
+        self._update_metrics(self.test_metrics, predict_target)
 
     def on_test_epoch_end(self):
         """
@@ -824,13 +804,13 @@ class TrainingAdapter(pL.LightningModule):
         # Log all accumulated metrics for train and val phases
         if log_mode == "train":
             errors = [
-                ("train", self.train_error),
-                ("val", self.val_error),
+                ("train", self.train_metrics),
+                ("val", self.val_metrics),
                 ("loss", self.loss_metric),
             ]
         elif log_mode == "test":
             errors = [
-                ("test", self.test_error),
+                ("test", self.test_metrics),
             ]
         else:
             raise RuntimeError(f"Unrecognized mode: {log_mode}")
@@ -890,14 +870,7 @@ class ModelTrainer:
         self,
         *,
         dataset_parameter: DatasetParameters,
-        potential_parameter: Union[
-            ANI2xParameters,
-            SAKEParameters,
-            SchNetParameters,
-            PhysNetParameters,
-            PaiNNParameters,
-            TensorNetParameters,
-        ],
+        potential_parameter: T_NNP_Parameters,
         training_parameter: TrainingParameters,
         runtime_parameter: RuntimeParameters,
         dataset_statistic: Dict[str, Dict[str, unit.Quantity]],
@@ -968,13 +941,13 @@ class ModelTrainer:
         )
 
         # Assign the created error metrics to the respective attributes
-        self.test_error = create_error_metrics(
+        self.test_metrics = create_error_metrics(
             self.training_parameter.loss_parameter.loss_property
         )
-        self.val_error = create_error_metrics(
+        self.val_metrics = create_error_metrics(
             self.training_parameter.loss_parameter.loss_property
         )
-        self.train_error = create_error_metrics(
+        self.train_metrics = create_error_metrics(
             self.training_parameter.loss_parameter.loss_property
         )
 

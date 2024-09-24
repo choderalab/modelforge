@@ -14,8 +14,8 @@ from openff.units import Quantity
 from torch.utils.data import DataLoader
 
 from modelforge.dataset.utils import RandomRecordSplittingStrategy, SplittingStrategy
-from modelforge.utils.prop import PropertyNames
 from modelforge.utils.misc import lock_with_attribute
+from modelforge.utils.prop import PropertyNames
 
 if TYPE_CHECKING:
     from modelforge.potential.processing import AtomicSelfEnergies
@@ -26,6 +26,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class CaseInsensitiveEnum(str, Enum):
+    """
+    Enum class that allows case-insensitive comparison of its members.
+    """
+
     @classmethod
     def _missing_(cls, value):
         for member in cls:
@@ -48,12 +52,18 @@ class DatasetParameters(BaseModel):
     """
     Class to hold the dataset parameters.
 
-    Args:
-        dataset_name (str): The name of the dataset.
-        version_select (str): The version of the dataset to use
-        num_workers (int): The number of workers to use for the DataLoader
-        pin_memory (bool): Whether to pin memory for the DataLoader
-
+    Attributes
+    ----------
+    dataset_name : DataSetName
+        The name of the dataset.
+    version_select : str
+        The version of the dataset to use.
+    num_workers : int
+        The number of workers to use for the DataLoader.
+    pin_memory : bool
+        Whether to pin memory for the DataLoader.
+    regenerate_processed_cache : bool
+        Whether to regenerate the processed cache.
     """
 
     model_config = ConfigDict(
@@ -67,21 +77,41 @@ class DatasetParameters(BaseModel):
     regenerate_processed_cache: bool = False
 
 
+from dataclasses import dataclass, field
+
+
 @dataclass(frozen=False)
 class Metadata:
     """
-    A NamedTuple to structure the inputs for neural network potentials.
+    A dataclass to structure metadata for neural network potentials.
 
     Parameters
     ----------
+    E : torch.Tensor
+        Energies for each molecule.
+    atomic_subsystem_counts : torch.Tensor
+        The number of atoms in each subsystem.
+    atomic_subsystem_indices_referencing_dataset : torch.Tensor
+        Indices referencing the dataset.
+    number_of_atoms : int
+        Total number of atoms.
+    F : torch.Tensor, optional
+        Forces for each atom.
+    dipole_moment : torch.Tensor, optional
+        Dipole moments for each molecule.
+
     """
 
     E: torch.Tensor
     atomic_subsystem_counts: torch.Tensor
     atomic_subsystem_indices_referencing_dataset: torch.Tensor
     number_of_atoms: int
-    F: torch.Tensor = torch.tensor([], dtype=torch.float32)
-    dipole_moment: torch.Tensor = torch.tensor([], dtype=torch.float32)
+    F: torch.Tensor = field(
+        default_factory=lambda: torch.tensor([], dtype=torch.float32)
+    )
+    dipole_moment: torch.Tensor = field(
+        default_factory=lambda: torch.tensor([], dtype=torch.float32)
+    )
 
     def to(
         self, device: Optional[torch.device] = None, dtype: Optional[torch.dtype] = None
@@ -94,9 +124,12 @@ class Metadata:
             self.atomic_subsystem_indices_referencing_dataset = (
                 self.atomic_subsystem_indices_referencing_dataset.to(device)
             )
+            self.dipole_moment = self.dipole_moment.to(device)
+
         if dtype:
             self.E = self.E.to(dtype)
             self.F = self.F.to(dtype)
+            self.dipole_moment = self.dipole_moment.to(dtype)
         return self
 
 
@@ -121,23 +154,26 @@ class NNPInput:
     ----------
     atomic_numbers : torch.Tensor
         A 1D tensor containing atomic numbers for each atom in the system(s).
-        Shape: [num_atoms], where `num_atoms` is the total number of atoms across all systems.
+        Shape: [num_atoms], where `num_atoms` is the total number of atoms
+        across all systems.
     positions : torch.Tensor
-        A 2D tensor of shape [num_atoms, 3], representing the XYZ coordinates of each atom.
+        A 2D tensor of shape [num_atoms, 3], representing the XYZ coordinates of
+        each atom.
     atomic_subsystem_indices : torch.Tensor
         A 1D tensor mapping each atom to its respective subsystem or molecule.
-        This allows for calculations involving multiple molecules or subsystems within the same batch.
-        Shape: [num_atoms].
+        This allows for calculations involving multiple molecules or subsystems
+        within the same batch. Shape: [num_atoms].
     total_charge : torch.Tensor
-        A tensor with the total charge of molecule.
-        Shape: [num_systems], where `num_systems` is the number of molecules.
+        A tensor with the total charge of molecule. Shape: [num_systems], where
+        `num_systems` is the number of molecules.
+    pair_list : Optional[torch.Tensor]
+        Pair list for neighbor interactions.
     """
 
     atomic_numbers: torch.Tensor
     positions: Union[torch.Tensor, Quantity]
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
-    dipole_moment: torch.Tensor
     pair_list: Optional[torch.Tensor] = None
 
     def to(
@@ -153,33 +189,25 @@ class NNPInput:
             self.positions = self.positions.to(device)
             self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(device)
             self.total_charge = self.total_charge.to(device)
-            self.pair_list = (
-                self.pair_list.to(device)
-                if self.pair_list is not None
-                else self.pair_list
-            )
-            self.dipole_moment = (
-                self.dipole_moment.to(device)
-                if self.dipole_moment is not None
-                else self.dipole_moment
-            )
+            if self.pair_list is not None:
+                self.pair_list = self.pair_list.to(device)
         if dtype:
             self.positions = self.positions.to(dtype)
         return self
 
     def __post_init__(self):
-        # Set dtype and convert units if necessary
+        # Convert positions if necessary
+        if isinstance(self.positions, Quantity):
+            self.positions = torch.tensor(
+                self.positions.to(unit.nanometer).m,
+                dtype=torch.float32,
+            )
+        else:
+            self.positions = self.positions.to(dtype=torch.float32)
+        # Convert types
         self.atomic_numbers = self.atomic_numbers.to(torch.int32)
-
         self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(torch.int32)
         self.total_charge = self.total_charge.to(torch.int32)
-
-        # Unit conversion for positions
-        if isinstance(self.positions, Quantity):
-            positions = self.positions.to(unit.nanometer).m
-            self.positions = torch.tensor(
-                positions, dtype=torch.float32, requires_grad=True
-            )
 
         # Validate inputs
         self._validate_inputs()
@@ -240,18 +268,18 @@ class BatchData:
         device: Optional[torch.device] = None,
         dtype: Optional[torch.dtype] = None,
     ):
+        """Move all data in this batch to the specified device and dtype."""
         self.nnp_input = self.nnp_input.to(device=device, dtype=dtype)
         self.metadata = self.metadata.to(device=device, dtype=dtype)
         return self
 
-    def batch_size(self):
+    def batch_size(self) -> int:
+        """Return the batch size."""
         return self.metadata.E.size(dim=0)
 
     @property
     def nnp_input_tuple(self):
-        """
-        Property to return the nnp_input as an NNPInputTuple.
-        """
+        """Return the NNP input as a named tuple."""
         return self.nnp_input.as_namedtuple()
 
     @property
@@ -263,20 +291,6 @@ class BatchData:
 
 
 class TorchDataset(torch.utils.data.Dataset[BatchData]):
-    """
-    Wraps a numpy dataset to make it compatible with PyTorch DataLoader.
-
-    Parameters
-    ----------
-    dataset : np.lib.npyio.NpzFile
-        The underlying numpy dataset.
-    property_name : PropertyNames
-        Names of the properties to extract from the dataset.
-    preloaded : bool, optional
-        If True, converts properties to PyTorch tensors ahead of time. Default is False.
-
-    """
-
     def __init__(
         self,
         dataset: np.lib.npyio.NpzFile,
@@ -284,80 +298,37 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
         preloaded: bool = False,
     ):
         """
-        Initializes the TorchDataset with a numpy dataset and property names.
+        Wraps a numpy dataset to make it compatible with PyTorch DataLoader.
 
         Parameters
         ----------
         dataset : np.lib.npyio.NpzFile
-            The numpy dataset to wrap.
+            The underlying numpy dataset.
         property_name : PropertyNames
-            The property names to extract from the dataset for use in PyTorch.
+            Names of the properties to extract from the dataset.
         preloaded : bool, optional
-            If set to True, properties are preloaded as PyTorch tensors. Default is False.
+            If True, converts properties to PyTorch tensors ahead of time. Default
+            is False.
         """
-
-        self.properties_of_interest = {}
-
-        self.properties_of_interest["atomic_numbers"] = torch.from_numpy(
-            dataset[property_name.atomic_numbers].flatten()
-        ).to(torch.int32)
-        self.properties_of_interest["positions"] = torch.from_numpy(
-            dataset[property_name.positions]
-        ).to(torch.float32)
-        self.properties_of_interest["E"] = torch.from_numpy(
-            dataset[property_name.E]
-        ).to(torch.float64)
-
-        if (
-            property_name.total_charge is not None and False
-        ):  # FIXME: for now we skip this
-            self.properties_of_interest["total_charge"] = (
-                torch.from_numpy(dataset[property_name.total_charge])
-                .to(torch.int32)
-                .unsqueeze(-1)
-            )
-        else:
-            self.properties_of_interest["total_charge"] = torch.zeros(
-                (dataset[property_name.E].shape[0], 1)
-            ).to(torch.int32)
-
-        if property_name.F is not None:
-            self.properties_of_interest["F"] = torch.from_numpy(
-                dataset[property_name.F]
-            )
-        else:
-            # a per atom property in each direction, so it will match geometry
-            self.properties_of_interest["F"] = torch.zeros(
-                dataset[property_name.positions].shape
-            )
-        if property_name.dipole_moment is not None:
-            self.properties_of_interest["dipole_moment"] = torch.from_numpy(
-                dataset[property_name.dipole_moment]
-            )
-        else:
-            # a per atom property in each direction, so it will match geometry
-            self.properties_of_interest["dipole_moment"] = torch.zeros(
-                (dataset[property_name.E].shape[0], 3)
-            )
+        super().__init__()
+        self.preloaded = preloaded
+        self.properties_of_interest = self._load_properties(dataset, property_name)
 
         self.number_of_records = len(dataset["atomic_subsystem_counts"])
-        self.properties_of_interest["pair_list"] = None
         self.number_of_atoms = len(dataset["atomic_numbers"])
+        self.length = len(self.properties_of_interest["E"])
 
+        # Prepare indices for atom and conformer data
+        self._prepare_indices(dataset)
+
+    def _prepare_indices(self, dataset: np.lib.npyio.NpzFile):
+        """Prepare indices for atom and conformer data."""
         single_atom_start_idxs_by_rec = np.concatenate(
             [np.array([0]), np.cumsum(dataset["atomic_subsystem_counts"])]
         )
-        # length: n_records + 1
-
         self.series_mol_start_idxs_by_rec = np.concatenate(
             [np.array([0]), np.cumsum(dataset["n_confs"])]
         )
-        # length: n_records + 1
-
-        if len(single_atom_start_idxs_by_rec) != len(self.series_mol_start_idxs_by_rec):
-            raise ValueError(
-                "Number of records in `atomic_subsystem_counts` and `n_confs` do not match."
-            )
 
         self.single_atom_start_idxs_by_conf = np.repeat(
             single_atom_start_idxs_by_rec[: self.number_of_records], dataset["n_confs"]
@@ -366,7 +337,6 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
             single_atom_start_idxs_by_rec[1 : self.number_of_records + 1],
             dataset["n_confs"],
         )
-        # length: n_conformers
 
         self.series_atom_start_idxs_by_conf = np.concatenate(
             [
@@ -376,10 +346,47 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
                 ),
             ]
         )
-        # length: n_conformers + 1
 
-        self.length = len(self.properties_of_interest["E"])
-        self.preloaded = preloaded
+    def _load_properties(
+        self, dataset: np.lib.npyio.NpzFile, property_name: PropertyNames
+    ) -> Dict[str, torch.Tensor]:
+        """Load properties from the dataset."""
+        properties = {
+            "atomic_numbers": torch.from_numpy(
+                dataset[property_name.atomic_numbers].flatten()
+            ).to(torch.int32),
+            "positions": torch.from_numpy(dataset[property_name.positions]).to(
+                torch.float32
+            ),
+            "E": torch.from_numpy(dataset[property_name.E]).to(torch.float64),
+        }
+
+        properties["total_charge"] = (
+            torch.from_numpy(dataset[property_name.total_charge])
+            .to(torch.int32)
+            .unsqueeze(-1)
+            if property_name.total_charge is not None
+            and False  # FIXME: as soon as I figured out how to make this to a per data point property
+            else torch.zeros((dataset[property_name.E].shape[0], 1), dtype=torch.int32)
+        )
+
+        properties["F"] = (
+            torch.from_numpy(dataset[property_name.F])
+            if property_name.F is not None
+            else torch.zeros_like(properties["positions"])
+        )
+
+        properties["dipole_moment"] = (
+            torch.from_numpy(dataset[property_name.dipole_moment])
+            if property_name.dipole_moment is not None
+            else torch.zeros(
+                (dataset[property_name.E].shape[0], 3), dtype=torch.float32
+            )
+        )
+
+        properties["pair_list"] = None  # Placeholder for pair list
+
+        return properties
 
     def __len__(self) -> int:
         """
@@ -424,23 +431,29 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
         for key, val in value.items():
             self.properties_of_interest[key][idx] = val
 
+    def _set_pairlist(self, idx: int):
+        # pairlist is set here (instead of l279) because it is not a default property
+        if self.properties_of_interest["pair_list"] is None:
+            pair_list = None
+        else:
+            pair_list_indices_start = self.properties_of_interest["number_of_pairs"][
+                idx
+            ]
+            pair_list_indices_end = self.properties_of_interest["number_of_pairs"][
+                idx + 1
+            ]
+            pair_list = self.properties_of_interest["pair_list"][
+                :, pair_list_indices_start:pair_list_indices_end
+            ]
+        return pair_list
+
     def __getitem__(self, idx: int) -> BatchData:
-        """
-        Fetch a dictionary of the values for the properties of interest for a given conformer index.
-
-        Parameters
-        ----------
-        idx : int
-            Index of the molecule to fetch data for.
-
-        Returns
-        -------
-        BatchData instance representing the data for one conformer.
-        """
+        """Fetch data for a given conformer index."""
         series_atom_start_idx = self.series_atom_start_idxs_by_conf[idx]
         series_atom_end_idx = self.series_atom_start_idxs_by_conf[idx + 1]
         single_atom_start_idx = self.single_atom_start_idxs_by_conf[idx]
         single_atom_end_idx = self.single_atom_end_idxs_by_conf[idx]
+
         atomic_numbers = self.properties_of_interest["atomic_numbers"][
             single_atom_start_idx:single_atom_end_idx
         ]
@@ -455,26 +468,11 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
         number_of_atoms = len(atomic_numbers)
         dipole_moment = self.properties_of_interest["dipole_moment"][idx]
 
-        # pairlist is set here (instead of l279) because it is not a default property
-        if self.properties_of_interest["pair_list"] is None:
-            pair_list = None
-        else:
-            pair_list_indices_start = self.properties_of_interest["number_of_pairs"][
-                idx
-            ]
-            pair_list_indices_end = self.properties_of_interest["number_of_pairs"][
-                idx + 1
-            ]
-            pair_list = self.properties_of_interest["pair_list"][
-                :, pair_list_indices_start:pair_list_indices_end
-            ]
-
         nnp_input = NNPInput(
             atomic_numbers=atomic_numbers,
             positions=positions,
-            pair_list=pair_list,
+            pair_list=self._set_pairlist(idx),
             total_charge=total_charge,
-            dipole_moment=dipole_moment,
             atomic_subsystem_indices=torch.zeros(number_of_atoms, dtype=torch.int32),
         )
 
@@ -996,18 +994,7 @@ class DatasetFactory:
     Factory for creating TorchDataset instances from HDF5 data.
 
     Methods are provided to load or process data as needed, handling caching to improve efficiency.
-
-    Examples
-    --------
-    >>> factory = DatasetFactory()
-    >>> qm9_data = QM9Data()
-    >>> torch_dataset = factory.create_dataset(qm9_data)
     """
-
-    def __init__(
-        self,
-    ) -> None:
-        pass
 
     @staticmethod
     def _load_or_process_data(
@@ -1082,7 +1069,7 @@ class DatasetFactory:
             The resulting PyTorch-compatible dataset.
         """
 
-        log.info(f"Creating {data.dataset_name} dataset")
+        log.info(f"Creating dataset from {data.url}")
         DatasetFactory._load_or_process_data(data)
         return TorchDataset(data.numpy_data, data._property_names)
 
@@ -1093,15 +1080,7 @@ from openff.units import unit
 class DataModule(pl.LightningDataModule):
     def __init__(
         self,
-        name: Literal[
-            "QM9",
-            "ANI1X",
-            "ANI2X",
-            "SPICE1",
-            "SPICE2",
-            "SPICE1_OPENFF",
-            "PhAlkEthOH",
-        ],
+        name: DataSetName,
         splitting_strategy: SplittingStrategy = RandomRecordSplittingStrategy(),
         batch_size: int = 64,
         remove_self_energies: bool = True,
@@ -1146,8 +1125,9 @@ class DataModule(pl.LightningDataModule):
             regenerate_cache : bool, defaults to False
                 Whether to regenerate the cache.
         """
-        from modelforge.potential.models import Pairlist
         import os
+
+        from modelforge.potential.models import Pairlist
 
         super().__init__()
 
@@ -1162,9 +1142,9 @@ class DataModule(pl.LightningDataModule):
         self.force_download = force_download
         self.version_select = version_select
         self.regenerate_dataset_statistic = regenerate_dataset_statistic
-        self.train_dataset = None
-        self.test_dataset = None
-        self.val_dataset = None
+        self.train_dataset: Optional[TorchDataset] = None
+        self.val_dataset: Optional[TorchDataset] = None
+        self.test_dataset: Optional[TorchDataset] = None
 
         # make sure we can handle a path with a ~ in it
         self.local_cache_dir = os.path.expanduser(local_cache_dir)
@@ -1210,7 +1190,6 @@ class DataModule(pl.LightningDataModule):
             return None
 
         # if the dataset is not already processed, process it
-
         from modelforge.dataset import _ImplementedDatasets
 
         dataset_class = _ImplementedDatasets.get_dataset_class(str(self.name))
@@ -1520,11 +1499,20 @@ class DataModule(pl.LightningDataModule):
         )
 
 
-from typing import Tuple
-
-
 def collate_conformers(conf_list: List[BatchData]) -> BatchData:
-    """Collate a list of BatchData instances with one conformer each into a single BatchData instance."""
+    """
+    Collate a list of BatchData instances into a single BatchData instance.
+
+    Parameters
+    ----------
+    conf_list : List[BatchData]
+        List of BatchData instances.
+
+    Returns
+    -------
+    BatchData
+        Collated batch data.
+    """
     atomic_numbers_list = []
     positions_list = []
     total_charge_list = []
@@ -1543,7 +1531,7 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
         else False
     )
 
-    for idx, conf in enumerate(conf_list):
+    for conf in conf_list:
         if pair_list_present:
             ## pairlist
             # generate pairlist without padded values
@@ -1555,7 +1543,7 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
         atomic_numbers_list.append(conf.nnp_input.atomic_numbers)
         positions_list.append(conf.nnp_input.positions)
         total_charge_list.append(conf.nnp_input.total_charge)
-        dipole_moment_list.append(conf.nnp_input.dipole_moment)
+        dipole_moment_list.append(conf.metadata.dipole_moment)
         E_list.append(conf.metadata.E)
         F_list.append(conf.metadata.F)
         atomic_subsystem_counts_list.append(conf.metadata.atomic_subsystem_counts)
@@ -1585,7 +1573,6 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
         atomic_numbers=atomic_numbers,
         positions=positions,
         total_charge=total_charge,
-        dipole_moment=dipole_moment,
         atomic_subsystem_indices=atomic_subsystem_indices,
         pair_list=IJ_cat,
     )
@@ -1595,6 +1582,7 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
         atomic_subsystem_counts=atomic_subsystem_counts,
         atomic_subsystem_indices_referencing_dataset=atomic_subsystem_indices_referencing_dataset,
         number_of_atoms=atomic_numbers.numel(),
+        dipole_moment=dipole_moment,
     )
     return BatchData(nnp_input, metadata)
 

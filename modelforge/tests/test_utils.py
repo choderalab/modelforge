@@ -14,6 +14,80 @@ def prep_temp_dir(tmp_path_factory):
     return fn
 
 
+def test_method_locking(tmp_path):
+    """
+    Test the lock_with_attribute decorator to ensure that it correctly serializes access
+    to a critical section across multiple processes.
+    """
+    import multiprocessing
+    from modelforge.utils.misc import lock_with_attribute
+    import time
+
+    # Define a class with a method decorated by lock_with_attribute
+    class TestClass:
+        def __init__(self, lock_file):
+            self.method_lock = lock_file
+
+        @lock_with_attribute("method_lock")
+        def critical_section(self, shared_list):
+            process_name = multiprocessing.current_process().name
+            # Record entry into the critical section
+            shared_list.append(f"{process_name} entered")
+            # Simulate work
+            time.sleep(1)
+            # Record exit from the critical section
+            shared_list.append(f"{process_name} exited")
+
+    # Worker function to be executed by each process
+    def worker(lock_file, shared_list):
+        test_obj = TestClass(lock_file)
+        test_obj.critical_section(shared_list)
+
+    # Create a Manager to handle shared state across processes
+    manager = multiprocessing.Manager()
+    shared_list = manager.list()
+
+    # Path to the lock file within the pytest-provided temporary directory
+    lock_file_path = tmp_path / "test.lock"
+
+    # List to hold process objects
+    processes = []
+
+    # Create and start multiple processes
+    processes = []
+    for i in range(4):
+        p = multiprocessing.Process(
+            target=worker,
+            args=(str(lock_file_path), shared_list),
+            name=f"Process-{i+1}",
+        )
+        p.start()
+        processes.append(p)
+
+    # Wait for all processes to complete
+    for p in processes:
+        p.join()
+
+    # Verify that only one process was in the critical section at any given time
+    entered = set()
+    for entry in shared_list:
+        if "entered" in entry:
+            process = entry.split()[0]
+            # Ensure no other process is in the critical section
+            assert (
+                len(entered) == 0
+            ), f"{process} entered while {entered} was in the critical section"
+            entered.add(process)
+        elif "exited" in entry:
+            process = entry.split()[0]
+            # Ensure the process that exits was the one that entered
+            assert process in entered, f"{process} exited without entering"
+            entered.remove(process)
+
+    # Ensure all processes have exited the critical section
+    assert len(entered) == 0, f"Processes left in critical section: {entered}"
+
+
 def test_charge_equilibration():
     from modelforge.potential.processing import default_charge_conservation
 

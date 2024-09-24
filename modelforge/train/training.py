@@ -187,6 +187,94 @@ class FromPerAtomToPerMoleculeSquaredError(Error):
         return per_molecule_square_error_scaled.contiguous()
 
 
+class TotalChargeError(Error):
+    """
+    Calculates the error for total charge.
+    """
+
+    def calculate_error(
+        self,
+        total_charge_predict: torch.Tensor,
+        total_charge_true: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Computes the absolute difference between predicted and true total charges.
+        """
+        error = torch.abs(total_charge_predict - total_charge_true)
+        return error  # Shape: [batch_size, 1]
+
+    def forward(
+        self,
+        total_charge_predict: torch.Tensor,
+        total_charge_true: torch.Tensor,
+        batch: NNPInput,
+    ) -> torch.Tensor:
+        """
+        Computes the error for total charge.
+
+        Parameters
+        ----------
+        total_charge_predict : torch.Tensor
+            The predicted total charges.
+        total_charge_true : torch.Tensor
+            The true total charges.
+        batch : NNPInput
+            The batch data.
+
+        Returns
+        -------
+        torch.Tensor
+            The error for total charges.
+        """
+        error = self.calculate_error(total_charge_predict, total_charge_true)
+        return error  # No scaling needed
+
+
+class DipoleMomentError(Error):
+    """
+    Calculates the error for dipole moment.
+    """
+
+    def calculate_error(
+        self,
+        dipole_predict: torch.Tensor,
+        dipole_true: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Computes the squared difference between predicted and true dipole moments.
+        """
+        error = (
+            (dipole_predict - dipole_true).pow(2).sum(dim=1, keepdim=True)
+        )  # Shape: [batch_size, 1]
+        return error
+
+    def forward(
+        self,
+        dipole_predict: torch.Tensor,
+        dipole_true: torch.Tensor,
+        batch: NNPInput,
+    ) -> torch.Tensor:
+        """
+        Computes the error for dipole moment.
+
+        Parameters
+        ----------
+        dipole_predict : torch.Tensor
+            The predicted dipole moments.
+        dipole_true : torch.Tensor
+            The true dipole moments.
+        batch : NNPInput
+            The batch data.
+
+        Returns
+        -------
+        torch.Tensor
+            The error for dipole moments.
+        """
+        error = self.calculate_error(dipole_predict, dipole_true)
+        return error  # No scaling needed
+
+
 class PerMoleculeSquaredError(Error):
     """
     Calculates the per-molecule mean squared error.
@@ -278,22 +366,20 @@ class Loss(nn.Module):
                 self.loss_functions[prop] = FromPerAtomToPerMoleculeSquaredError(
                     scale_by_number_of_atoms=True
                 )
-            if prop == "per_atom_energy":
+            elif prop == "per_atom_energy":
                 self.loss_functions[prop] = PerMoleculeSquaredError(
                     scale_by_number_of_atoms=True
                 )
-            if prop == "per_molecule_energy":
+            elif prop == "per_molecule_energy":
                 self.loss_functions[prop] = PerMoleculeSquaredError(
                     scale_by_number_of_atoms=False
                 )
-            if prop == "total_charge":
-                self.loss_functions[prop] = PerMoleculeSquaredError(
-                    scale_by_number_of_atoms=False
-                )
-            if prop == "dipole_moment":
-                self.loss_functions[prop] = PerMoleculeSquaredError(
-                    scale_by_number_of_atoms=False
-                )
+            elif prop == "total_charge":
+                self.loss_functions[prop] = TotalChargeError()
+            elif prop == "dipole_moment":
+                self.loss_functions[prop] = DipoleMomentError()
+            else:
+                raise NotImplementedError(f"Loss type {prop} not implemented.")
 
             self.register_buffer(prop, torch.tensor(self.weights[prop]))
 

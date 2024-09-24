@@ -177,6 +177,7 @@ def test_error_calculation(single_batch_with_batchsize):
     )
     assert torch.allclose(torch.mean(F_error), reference_F_error)
 
+
 def test_loss_with_partial_charge(single_batch_with_batchsize):
 
     batch = single_batch_with_batchsize(batch_size=16, dataset_name="SPICE2")

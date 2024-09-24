@@ -350,18 +350,9 @@ def lock_with_attribute(attribute_name):
             instance = args[0]
             # Get the lock file path from the specified attribute
             lock_file_path = getattr(instance, attribute_name)
-            # Ensure the lock file exists
-            open(lock_file_path, "a").close()
-            with open(lock_file_path, "w+") as f:
-                try:
-                    # Lock the file; this will block until the lock is available
-                    lock_file(f)
-                    # Execute the wrapped function
-                    result = func(*args, **kwargs)
-                finally:
-                    # Unlock the file
-                    unlock_file(f)
-                return result
+
+            with OpenWithLock(lock_file_path, "w+") as lock_file_handle:
+                return func(*args, **kwargs)
 
         return wrapper
 

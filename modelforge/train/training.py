@@ -243,6 +243,8 @@ class Loss(nn.Module):
         "per_atom_energy",
         "per_molecule_energy",
         "per_atom_force",
+        "total_charge",
+        "dipole_moment",
     ]
 
     def __init__(self, loss_property: List[str], weights: Dict[str, float]):
@@ -271,19 +273,26 @@ class Loss(nn.Module):
         for prop in loss_property:
             if prop not in self._SUPPORTED_PROPERTIES:
                 raise NotImplementedError(f"Loss type {prop} not implemented.")
-
+            log.info(f"Using loss function for {prop}")
             if prop == "per_atom_force":
                 self.loss_functions[prop] = FromPerAtomToPerMoleculeSquaredError(
                     scale_by_number_of_atoms=True
                 )
-
             if prop == "per_atom_energy":
                 self.loss_functions[prop] = PerMoleculeSquaredError(
                     scale_by_number_of_atoms=True
                 )
             if prop == "per_molecule_energy":
                 self.loss_functions[prop] = PerMoleculeSquaredError(
-                    scale_by_number_of_atoms=True
+                    scale_by_number_of_atoms=False
+                )
+            if prop == "total_charge":
+                self.loss_functions[prop] = PerMoleculeSquaredError(
+                    scale_by_number_of_atoms=False
+                )
+            if prop == "dipole_moment":
+                self.loss_functions[prop] = PerMoleculeSquaredError(
+                    scale_by_number_of_atoms=False
                 )
 
             self.register_buffer(prop, torch.tensor(self.weights[prop]))
@@ -413,11 +422,12 @@ class CalculateProperties(torch.nn.Module):
         super().__init__()
         self.requested_properties = requested_properties
         self.include_force = "per_atom_force" in self.requested_properties
+        self.include_charges = "total_charge" in self.requested_properties
 
     def _get_forces(
         self,
         batch: BatchData,
-        energies: Dict[str, torch.Tensor],
+        model_prediction: Dict[str, torch.Tensor],
         train_mode: bool,
     ) -> Dict[str, torch.Tensor]:
         """
@@ -427,7 +437,7 @@ class CalculateProperties(torch.nn.Module):
         ----------
         batch : BatchData
             A single batch of data, including input features and target energies.
-        energies : Dict[str, torch.Tensor]
+        model_prediction : Dict[str, torch.Tensor]
             A dictionary containing the predicted energies from the model.
 
         Returns
@@ -441,7 +451,7 @@ class CalculateProperties(torch.nn.Module):
         if per_atom_force_true.numel() < 1:
             raise RuntimeError("No force can be calculated.")
 
-        per_molecule_energy_predict = energies["per_molecule_energy_predict"]
+        per_molecule_energy_predict = model_prediction["per_molecule_energy"]
 
         # Ensure gradients are enabled
         per_molecule_energy_predict.requires_grad_(True)
@@ -470,7 +480,7 @@ class CalculateProperties(torch.nn.Module):
     def _get_energies(
         self,
         batch: BatchData,
-        model: torch.nn.Module,
+        model_prediction: Dict[str, torch.Tensor],
     ) -> Dict[str, torch.Tensor]:
         """
         Computes the energies from a given batch using the model.
@@ -479,7 +489,7 @@ class CalculateProperties(torch.nn.Module):
         ----------
         batch : BatchData
             A single batch of data, including input features and target energies.
-        model : torch.nn.Module
+        model_prediction : Dict[str, torch.Tensor]
             The neural network model used to compute the energies.
 
         Returns
@@ -489,9 +499,9 @@ class CalculateProperties(torch.nn.Module):
         """
         nnp_input = batch.nnp_input
         per_molecule_energy_true = batch.metadata.E.to(torch.float32)
-        per_molecule_energy_predict = model.forward(nnp_input)[
-            "per_molecule_energy"
-        ].unsqueeze(1)
+        per_molecule_energy_predict = model_prediction["per_molecule_energy"].unsqueeze(
+            1
+        )
 
         assert per_molecule_energy_true.shape == per_molecule_energy_predict.shape, (
             f"Shapes of true and predicted energies do not match: "
@@ -502,6 +512,52 @@ class CalculateProperties(torch.nn.Module):
             "per_molecule_energy_predict": per_molecule_energy_predict,
         }
 
+    def _get_charges(
+        self,
+        batch: BatchData,
+        model_prediction: Dict[str, torch.Tensor],
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Computes the total charge of a molecule from the predicted charges from
+        the model.
+        """
+        nnp_input = batch.nnp_input
+        per_atom_charges_predict = model_prediction[
+            "per_atom_charge"
+        ]  # Shape: [num_atoms]
+
+        # Compute predicted total charge
+        total_charge_predict = torch.zeros_like(
+            model_prediction["per_molecule_energy"]
+        ).scatter_add_(
+            dim=0,
+            index=nnp_input.atomic_subsystem_indices.long(),
+            src=per_atom_charges_predict,
+        )
+
+        dipole_predict = self._predict_dipole_moment(model_prediction, batch)
+
+        return {
+            "per_molecule_total_charge_predict": total_charge_predict,
+            "per_molecule_total_charge_true": batch.nnp_input.total_charge,
+            "per_molecule_dipole_predict": dipole_predict,
+        }
+
+    def _predict_dipole_moment(
+        self, model_predictions: Dict[str, torch.Tensor], batch: BatchData
+    ) -> torch.Tensor:
+
+        per_atom_charge = model_predictions["per_atom_charge"]
+        # Compute predicted dipole moment
+        dipole_predict = torch.zeros(
+            (model_predictions["per_molecule_energy"].shape[0], 3),
+        ).scatter_add_(
+            dim=0,
+            index=batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(-1),
+            src=per_atom_charge.unsqueeze(-1) * batch.nnp_input.positions,
+        )  # Shape: [nr_of_molecules, 3]
+        return dipole_predict
+
     def forward(
         self,
         batch: BatchData,
@@ -509,25 +565,42 @@ class CalculateProperties(torch.nn.Module):
         train_mode: bool = False,
     ) -> Dict[str, torch.Tensor]:
         """
-        Computes the energies and forces from a given batch using the model.
+        Computes energies, forces, and charges from a given batch using the
+        model.
 
         Parameters
         ----------
         batch : BatchData
-            A single batch of data, including input features and target energies.
+            A single batch of data, including input features and target
+            energies.
         model : Type[torch.nn.Module]
             The neural network model used to compute the properties.
 
         Returns
         -------
         Dict[str, torch.Tensor]
-            The true and predicted energies and forces from the dataset and the model.
+            The true and predicted energies and forces from the dataset and the
+            model.
         """
-        energies = self._get_energies(batch, model)
-        forces = (
-            self._get_forces(batch, energies, train_mode) if self.include_force else {}
-        )
-        return {**energies, **forces}
+        predict_target = {}
+        nnp_input = batch.nnp_input
+        model_prediction = model.forward(nnp_input)
+
+        # Get energies
+        energies = self._get_energies(batch, model_prediction)
+        predict_target.update(energies)
+
+        # Get forces if needed
+        if self.include_force:
+            forces = self._get_forces(batch, model_prediction, train_mode)
+            predict_target.update(forces)
+
+        # Get charges if needed
+        if self.include_charges:
+            charges = self._get_charges(batch, model_prediction)
+            predict_target.update(charges)
+
+        return predict_target
 
 
 class TrainingAdapter(pL.LightningModule):

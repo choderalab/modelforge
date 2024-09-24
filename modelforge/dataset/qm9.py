@@ -246,7 +246,3 @@ class QM9Dataset(HDF5Dataset):
             length=self.gz_data_file["length"],
             force_download=self.force_download,
         )
-        # from modelforge.dataset.utils import _download_from_url
-        #
-        # url = self.test_url if self.for_unit_testing else self.full_url
-        # _download_from_url(url, self.raw_data_file)

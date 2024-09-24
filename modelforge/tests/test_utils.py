@@ -14,6 +14,10 @@ def prep_temp_dir(tmp_path_factory):
     return fn
 
 
+@pytest.mark.skipif(
+    ON_MACOS,
+    reason="Skipt Test on MacOS CI runners as it relies on spawning multiple threads. ",
+)
 def test_method_locking(tmp_path):
     """
     Test the lock_with_attribute decorator to ensure that it correctly serializes access

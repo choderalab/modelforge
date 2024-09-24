@@ -145,6 +145,7 @@ class NNPInput:
     positions: Union[torch.Tensor, Quantity]
     atomic_subsystem_indices: torch.Tensor
     total_charge: torch.Tensor
+    dipole_moment: torch.Tensor
     pair_list: Optional[torch.Tensor] = None
     partial_charge: Optional[torch.Tensor] = None
     box_vectors: Optional[torch.Tensor] = torch.zeros(3, 3)
@@ -168,10 +169,10 @@ class NNPInput:
                 if self.pair_list is not None
                 else self.pair_list
             )
-            self.partial_charge = (
-                self.partial_charge.to(device)
-                if self.partial_charge is not None
-                else self.partial_charge
+            self.dipole_moment = (
+                self.dipole_moment.to(device)
+                if self.dipole_moment is not None
+                else self.dipole_moment
             )
             self.box_vectors = self.box_vectors.to(device)
             self.is_periodic = self.is_periodic.to(device)
@@ -326,16 +327,17 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
             dataset[property_name.E]
         ).to(torch.float64)
 
-        if property_name.total_charge is not None:
+        if (
+            property_name.total_charge is not None and False
+        ):  # FIXME: for now we skip this
             self.properties_of_interest["total_charge"] = (
                 torch.from_numpy(dataset[property_name.total_charge])
                 .to(torch.int32)
                 .unsqueeze(-1)
             )
         else:
-            # this is a per atom property, so it will match the first dimension of the geometry
             self.properties_of_interest["total_charge"] = torch.zeros(
-                (dataset[property_name.positions].shape[0], 1)
+                (dataset[property_name.E].shape[0], 1)
             ).to(torch.int32)
 
         if property_name.F is not None:
@@ -491,6 +493,7 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
             positions=positions,
             pair_list=pair_list,
             total_charge=total_charge,
+            dipole_moment=dipole_moment,
             atomic_subsystem_indices=torch.zeros(number_of_atoms, dtype=torch.int32),
         )
 
@@ -1547,6 +1550,7 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
     E_list = []  # total energy
     F_list = []  # forces
     ij_list = []
+    dipole_moment_list = []
     atomic_subsystem_counts_list = []
     atomic_subsystem_indices_referencing_dataset_list = []
 
@@ -1570,6 +1574,7 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
         atomic_numbers_list.append(conf.nnp_input.atomic_numbers)
         positions_list.append(conf.nnp_input.positions)
         total_charge_list.append(conf.nnp_input.total_charge)
+        dipole_moment_list.append(conf.nnp_input.dipole_moment)
         E_list.append(conf.metadata.E)
         F_list.append(conf.metadata.F)
         atomic_subsystem_counts_list.append(conf.metadata.atomic_subsystem_counts)
@@ -1588,6 +1593,7 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
     total_charge = torch.cat(total_charge_list)
     positions = torch.cat(positions_list).requires_grad_(True)
     F = torch.cat(F_list).to(torch.float64)
+    dipole_moment = torch.cat(dipole_moment_list).to(torch.float64)
     E = torch.stack(E_list)
     if pair_list_present:
         IJ_cat = torch.cat(ij_list, dim=1).to(torch.int64)
@@ -1598,6 +1604,7 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
         atomic_numbers=atomic_numbers,
         positions=positions,
         total_charge=total_charge,
+        dipole_moment=dipole_moment,
         atomic_subsystem_indices=atomic_subsystem_indices,
         pair_list=IJ_cat,
     )

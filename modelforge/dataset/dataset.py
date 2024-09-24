@@ -325,10 +325,9 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
             )
         else:
             # a per atom property in each direction, so it will match geometry
-            self.properties_of_interest["F"] = torch.zeros_like(
-                dataset[property_name.positions]
+            self.properties_of_interest["F"] = torch.zeros(
+                dataset[property_name.positions].shape
             )
-
         if property_name.dipole_moment is not None:
             self.properties_of_interest["dipole_moment"] = torch.from_numpy(
                 dataset[property_name.dipole_moment]

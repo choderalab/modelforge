@@ -300,21 +300,18 @@ class OpenWithLock:
                 f"{self._file_path} in locked by another process; waiting until lock is released."
             )
 
-        # try to lock the file; if the file is already locked, this will wait until the file is released
-        # I added helper function definitions that call fcntl, as we might not always want to use a context manager
-        # and to test the function in isolation
+        # try to lock the file; if the file is already locked, this will wait
+        # until the file is released. I added helper function definitions that
+        # call fcntl, as we might not always want to use a context manager and
+        # to test the function in isolation
 
         lock_file(self._file_handle)
-        # import fcntl
-        # fcntl.flock(self._file_handle.fileno(), fcntl.LOCK_EX)
 
         # return the opened file stream
         return self._file_handle
 
     def __exit__(self, *args):
         # unlock the file and close the file stream
-        # import fcntl
-        # fcntl.flock(self._file_handle.fileno(), fcntl.LOCK_UN)
         unlock_file(self._file_handle)
         self._file_handle.close()
 
@@ -353,24 +350,19 @@ def lock_with_attribute(attribute_name):
             instance = args[0]
             # Get the lock file path from the specified attribute
             lock_file_path = getattr(instance, attribute_name)
+            # Ensure the lock file exists
+            open(lock_file_path, 'a').close()
             with open(lock_file_path, "w+") as f:
-                # Lock the file
-                lock_file(f)
-
                 try:
+                    # Lock the file; this will block until the lock is available
+                    lock_file(f)
                     # Execute the wrapped function
                     result = func(*args, **kwargs)
                 finally:
                     # Unlock the file
                     unlock_file(f)
-
-                    # Optionally, remove the lock file
-                    os.remove(lock_file_path)
-
                 return result
-
         return wrapper
-
     return decorator
 
 

@@ -263,16 +263,15 @@ def default_charge_conservation(
     mol_indices: torch.Tensor,
 ) -> torch.Tensor:
     """
-    PhysNet charge conservation method based on equation 14 from the PhysNet
-    paper.
+    Adjusts partial atomic charges so that the sum of charges in each molecule
+    matches the desired total charge.
 
-    Correct the partial charges such that their sum matches the desired
-    total charge for each molecule.
+    This method is based on equation 14 from the PhysNet paper.
 
     Parameters
     ----------
     partial_charges : torch.Tensor
-        Flat tensor of partial charges for all atoms in all molecules.
+        Tensor of partial charges for all atoms in all molecules.
     total_charges : torch.Tensor
         Tensor of desired total charges for each molecule.
     mol_indices : torch.Tensor
@@ -283,24 +282,20 @@ def default_charge_conservation(
     torch.Tensor
         Tensor of corrected partial charges.
     """
-    # the general approach here is outline in equation 14 in the PhysNet
-    # paper: the difference between the sum of the predicted partial charges
-    # and the total charge is calculated and then distributed evenly among
-    # the predicted partial charges
-
     # Calculate the sum of partial charges for each molecule
-
-    # for each atom i, calculate the sum of partial charges for all other
     predicted_per_molecule_charge = torch.zeros(
         total_charges.shape,
         dtype=per_atom_charge.dtype,
-        device=total_charges.device,
+        device=per_atom_charge.device,
     ).scatter_add_(0, mol_indices.long(), per_atom_charge)
+
+    # Calculate the number of atoms in each molecule
+    num_atoms_per_molecule = mol_indices.bincount(minlength=total_charges.size(0))
 
     # Calculate the correction factor for each molecule
     correction_factors = (
         total_charges - predicted_per_molecule_charge
-    ) / mol_indices.bincount()
+    ) / num_atoms_per_molecule
 
     # Apply the correction to each atom's charge
     per_atom_charge_corrected = per_atom_charge + correction_factors[mol_indices]
@@ -310,6 +305,21 @@ def default_charge_conservation(
 
 class ChargeConservation(torch.nn.Module):
     def __init__(self, method="default"):
+        """
+        Module to enforce charge conservation on partial atomic charges.
+
+        Parameters
+        ----------
+        method : str, optional, default='default'
+            The method to use for charge conservation. Currently, only 'default'
+            is supported.
+
+        Methods
+        -------
+        forward(data)
+            Applies charge conservation to the partial charges in the provided
+            data dictionary.
+        """
 
         super().__init__()
         self.method = method
@@ -323,21 +333,25 @@ class ChargeConservation(torch.nn.Module):
         data: Dict[str, torch.Tensor],
     ):
         """
-        Apply charge conservation to partial charges.
+        Apply charge conservation to partial charges in the data dictionary.
 
         Parameters
         ----------
-        per_atom_partial_charge : torch.Tensor
-            Flat tensor of partial charges for all atoms in the batch.
-        atomic_subsystem_indices : torch.Tensor
-            Tensor of integers indicating which molecule each atom belongs to.
-        total_charges : torch.Tensor
-            Tensor of desired total charges for each molecule.
+        data : Dict[str, torch.Tensor]
+            Dictionary containing the following keys:
+            - "per_atom_charge":
+                Tensor of partial charges for all atoms in the batch.
+            -  "per_molecule_charge":
+                Tensor of desired total charges for each
+            molecule.
+            - "atomic_subsystem_indices":
+                Tensor indicating which molecule each atom belongs to.
 
         Returns
         -------
-        torch.Tensor
-            Tensor of corrected partial charges.
+        Dict[str, torch.Tensor]
+            Updated data dictionary with the key "per_atom_charge_corrected"
+            added, containing the corrected per-atom charges.
         """
         data["per_atom_charge_corrected"] = self.correct_partial_charges(
             data["per_atom_charge"],

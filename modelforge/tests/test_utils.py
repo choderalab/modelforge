@@ -14,61 +14,51 @@ def prep_temp_dir(tmp_path_factory):
     return fn
 
 
-def test_charge_equilibration():
+@pytest.mark.parametrize(
+    "partial_point_charges, atomic_subsystem_indices, total_charge",
+    [
+        (
+            torch.zeros(6),
+            torch.tensor([0, 0, 1, 1, 1, 1], dtype=torch.int64),
+            torch.tensor([0.0, 1.0]),
+        ),
+        (
+            torch.zeros(6),
+            torch.tensor([0, 0, 1, 1, 1, 1], dtype=torch.int64),
+            torch.tensor([-1.0, 2.0]),
+        ),
+        (
+            torch.rand(6),
+            torch.tensor([0, 0, 1, 1, 1, 1], dtype=torch.int64),
+            torch.tensor([-1.0, 2.0]),
+        ),
+    ],
+)
+def test_default_charge_conservation(
+    partial_point_charges: torch.Tensor,
+    atomic_subsystem_indices: torch.Tensor,
+    total_charge: torch.Tensor,
+):
+    """
+    Test the default_charge_conservation function with various test cases.
+    """
     from modelforge.potential.processing import default_charge_conservation
 
     # test charge equilibration
     # ------------------------- #
-    # test case 1
-    partial_point_charges = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-    atomic_subsystem_indices = torch.tensor([0, 0, 1, 1, 1, 1], dtype=torch.int64)
-    total_charge = torch.tensor([0.0, 1.0])
     charges = default_charge_conservation(
         partial_point_charges,
         total_charge,
         atomic_subsystem_indices,
     )
 
-    assert torch.allclose(
-        torch.zeros_like(total_charge).scatter_add_(
-            0, atomic_subsystem_indices, charges
-        ),
-        total_charge,
+    # Calculate the total charge per molecule after correction
+    predicted_total_charge = torch.zeros_like(total_charge).scatter_add_(
+        0, atomic_subsystem_indices, charges
     )
 
-    # ------------------------- #
-    # test case 2
-    partial_point_charges = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-    total_charge = torch.tensor([-1.0, 2.0])
-    charges = default_charge_conservation(
-        partial_point_charges,
-        total_charge,
-        atomic_subsystem_indices,
-    )
-    assert torch.allclose(
-        torch.zeros_like(total_charge).scatter_add_(
-            0, atomic_subsystem_indices, charges
-        ),
-        total_charge,
-    )
-
-    # ------------------------- #
-    # test case 3
-    partial_point_charges = torch.rand_like(
-        atomic_subsystem_indices, dtype=torch.float32
-    )
-    total_charge = torch.tensor([-1.0, 2.0])
-    charges = default_charge_conservation(
-        partial_point_charges,
-        total_charge,
-        atomic_subsystem_indices,
-    )
-    assert torch.allclose(
-        torch.zeros_like(total_charge).scatter_add_(
-            0, atomic_subsystem_indices, charges
-        ),
-        total_charge,
-    )
+    # Assert that the predicted total charges match the desired total charges
+    assert torch.allclose(predicted_total_charge, total_charge, atol=1e-6)
 
 
 def test_dense_layer():

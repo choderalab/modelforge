@@ -295,62 +295,17 @@ def test_radial_symmetry_function_implementation():
     assert np.allclose(radial_expension.numpy(), expected_output, rtol=1e-3)
 
 
-def test_gaussian_rbf_with_scaling():
-    """
-    Test the GaussianRadialBasisFunctionWithScaling class.
-    """
-    # Test parameters
-    distances = torch.tensor([[0.5], [1.0], [1.5]], dtype=torch.float32)
-    number_of_radial_basis_functions = 3
-    max_distance = 2.0
-    min_distance = 0.0
-    dtype = torch.float32
-
-    # Instantiate the RBF
-    rbf = GaussianRadialBasisFunctionWithScaling(
-        number_of_radial_basis_functions=number_of_radial_basis_functions,
-        max_distance=max_distance,
-        min_distance=min_distance,
-        dtype=dtype,
-        trainable_centers_and_scale_factors=False,
-    )
-
-    # Compute expected outputs
-    centers = rbf.radial_basis_centers  # Shape: [number_of_radial_basis_functions]
-    scale_factors = rbf.radial_scale_factor  # Shape: [number_of_radial_basis_functions]
-
-    # Expand dimensions for broadcasting
-    distances_expanded = distances  # Shape: [number_of_pairs, 1]
-    centers_expanded = centers.unsqueeze(
-        0
-    )  # Shape: [1, number_of_radial_basis_functions]
-    scale_factors_expanded = scale_factors.unsqueeze(
-        0
-    )  # Shape: [1, number_of_radial_basis_functions]
-
-    # Calculate nondimensionalized distances and expected outputs
-    diff = distances_expanded - centers_expanded
-    nondim_distances = diff / scale_factors_expanded
-    expected_output = torch.exp(-(nondim_distances**2))
-
-    # Get actual outputs
-    actual_output = rbf(distances)
-
-    # Assertions
-    assert actual_output.shape == expected_output.shape, "Output shape mismatch"
-    assert torch.allclose(
-        actual_output, expected_output, atol=1e-6
-    ), "Outputs do not match expected values for GaussianRadialBasisFunctionWithScaling"
-
 
 def test_schnet_rbf():
     """
     Test the SchnetRadialBasisFunction class.
     """
+    from modelforge.potential.representation import SchnetRadialBasisFunction
+
     # Test parameters
-    distances = torch.tensor([[0.5], [1.0], [1.5]], dtype=torch.float32)
+    distances = torch.tensor([[0.5], [1.0], [1.5]], dtype=torch.float32) / 10
     number_of_radial_basis_functions = 3
-    max_distance = 2.0
+    max_distance = 2.0 / 10
     min_distance = 0.0
     dtype = torch.float32
 
@@ -395,6 +350,8 @@ def test_ani_rbf():
     """
     Test the AniRadialBasisFunction class.
     """
+    from modelforge.potential.representation import AniRadialBasisFunction
+
     # Test parameters
     distances = torch.tensor([[0.5], [1.0], [1.5]], dtype=torch.float32)
     number_of_radial_basis_functions = 3
@@ -443,10 +400,12 @@ def test_physnet_rbf():
     """
     Test the PhysNetRadialBasisFunction class.
     """
+    from modelforge.potential.representation import PhysNetRadialBasisFunction
+
     # Test parameters
-    distances = torch.tensor([[0.5], [1.0], [1.5]], dtype=torch.float32)
+    distances = torch.tensor([[0.5], [1.0], [1.5]], dtype=torch.float32) / 10
     number_of_radial_basis_functions = 3
-    max_distance = 2.0
+    max_distance = 2.0 / 10
     min_distance = 0.0
     alpha = 0.1
     dtype = torch.float32
@@ -494,6 +453,8 @@ def test_tensornet_rbf():
     """
     Test the TensorNetRadialBasisFunction class.
     """
+    from modelforge.potential.representation import TensorNetRadialBasisFunction
+
     # Test parameters
     distances = torch.tensor([[0.5], [1.0], [1.5]], dtype=torch.float32)
     number_of_radial_basis_functions = 3

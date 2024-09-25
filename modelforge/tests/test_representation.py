@@ -295,7 +295,6 @@ def test_radial_symmetry_function_implementation():
     assert np.allclose(radial_expension.numpy(), expected_output, rtol=1e-3)
 
 
-
 def test_schnet_rbf():
     """
     Test the SchnetRadialBasisFunction class.

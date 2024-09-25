@@ -870,8 +870,6 @@ def test_calculate_energies_and_forces_with_jax(
     assert forces.shape == (nr_of_atoms_per_batch, 3)  #  only one molecule
 
 
-
-
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
@@ -1048,5 +1046,3 @@ def test_equivariant_energies_and_forces(
         reflection(reference_forces),
         atol=atol,
     )
-
-

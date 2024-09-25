@@ -9,7 +9,8 @@ import torch.nn as nn
 from loguru import logger as log
 
 from .models import NNPInputTuple, PairlistData
-from .utils import DenseWithCustomDist, PhysNetRadialBasisFunction, scatter_softmax
+from .utils import DenseWithCustomDist, scatter_softmax
+from .representation import PhysNetRadialBasisFunction
 
 
 class MultiplySigmoid(nn.Module):
@@ -46,6 +47,8 @@ class SAKECore(torch.nn.Module):
     ):
 
         from modelforge.utils.misc import seed_random_number
+        from modelforge.potential.utils import DenseWithCustomDist
+        from modelforge.potential import FeaturizeInput
 
         if potential_seed != -1:
             seed_random_number(potential_seed)
@@ -61,7 +64,6 @@ class SAKECore(torch.nn.Module):
         self.nr_heads = number_of_spatial_attention_heads
         self.number_of_per_atom_features = number_of_per_atom_features
         # featurize the atomic input
-        from modelforge.potential.utils import DenseWithCustomDist, FeaturizeInput
 
         self.featurize_input = FeaturizeInput(featurization)
         self.energy_layer = nn.Sequential(

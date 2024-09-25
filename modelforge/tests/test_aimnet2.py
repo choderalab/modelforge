@@ -1,9 +1,7 @@
 import pytest
-
-from openff.units import unit
 import torch
+from openff.units import unit
 
-from modelforge.potential.utils import SchnetRadialBasisFunction
 from modelforge.tests.helper_functions import setup_potential_for_test
 
 
@@ -17,6 +15,7 @@ def test_initialize_model():
 
 
 def test_radial_symmetry_function_regression():
+    from modelforge.potential import SchnetRadialBasisFunction
 
     # define radial symmetry function bounds and subdivisions
     num_bins = 10

@@ -36,10 +36,10 @@ class PhysNetRepresentation(nn.Module):
         super().__init__()
 
         # Initialize the cutoff function and radial basis function modules
-        from modelforge.potential import CosineAttenuationFunction
-        from modelforge.potential.utils import (
-            FeaturizeInput,
+        from modelforge.potential import (
+            CosineAttenuationFunction,
             PhysNetRadialBasisFunction,
+            FeaturizeInput,
         )
 
         self.cutoff_module = CosineAttenuationFunction(maximum_interaction_radius)

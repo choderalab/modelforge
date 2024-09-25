@@ -513,7 +513,8 @@ class AIMNet2Representation(nn.Module):
             radial_cutoff, number_of_radial_basis_functions
         )
         # Initialize cutoff module
-        from modelforge.potential import CosineAttenuationFunction, FeaturizeInput
+        from modelforge.potential import CosineAttenuationFunction
+        from modelforge.potential.featurization import FeaturizeInput
 
         self.featurize_input = FeaturizeInput(featurization_config)
         self.cutoff_module = CosineAttenuationFunction(radial_cutoff)
@@ -521,7 +522,7 @@ class AIMNet2Representation(nn.Module):
     def _setup_radial_symmetry_functions(
         self, radial_cutoff: float, number_of_radial_basis_functions: int
     ):
-        from .utils import SchnetRadialBasisFunction
+        from modelforge.potential import SchnetRadialBasisFunction
 
         radial_symmetry_function = SchnetRadialBasisFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,

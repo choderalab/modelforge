@@ -143,7 +143,7 @@ def test_representation():
     # Compare the reference radial symmetry function output against the the
     # implemented radial symmetry function
     import torch
-    from modelforge.potential.utils import (
+    from modelforge.potential import (
         AniRadialBasisFunction,
         CosineAttenuationFunction,
     )
@@ -184,7 +184,7 @@ def test_representation_with_diagonal_batching():
     # Compare the reference radial symmetry function output against the the
     # implemented radial symmetry function for multiple molecules
     import torch
-    from modelforge.potential.utils import (
+    from modelforge.potential import (
         AniRadialBasisFunction,
         CosineAttenuationFunction,
     )

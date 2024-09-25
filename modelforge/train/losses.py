@@ -327,20 +327,28 @@ class Loss(nn.Module):
                 raise NotImplementedError(f"Loss type {prop} not implemented.")
             log.info(f"Using loss function for {prop}")
             if prop == "per_atom_force":
+                log.info(f"Creating per atom force loss with weight: {weights[prop]}")
                 self.loss_functions[prop] = FromPerAtomToPerMoleculeSquaredError(
                     scale_by_number_of_atoms=True
                 )
             elif prop == "per_atom_energy":
+                log.info("Creating per atom energy loss with weight: {weights[prop]}")
+
                 self.loss_functions[prop] = PerMoleculeSquaredError(
                     scale_by_number_of_atoms=True
                 )
             elif prop == "per_molecule_energy":
+                log.info(
+                    f"Creating per molecule energy loss with weight: {weights[prop]}"
+                )
                 self.loss_functions[prop] = PerMoleculeSquaredError(
                     scale_by_number_of_atoms=False
                 )
             elif prop == "total_charge":
+                log.info(f"Creating total charge loss with weight: {weights[prop]}")
                 self.loss_functions[prop] = TotalChargeError()
             elif prop == "dipole_moment":
+                log.info(f"Creating dipole moment loss with weight: {weights[prop]}")
                 self.loss_functions[prop] = DipoleMomentError()
             else:
                 raise NotImplementedError(f"Loss type {prop} not implemented.")

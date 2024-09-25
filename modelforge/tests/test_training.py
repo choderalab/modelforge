@@ -125,7 +125,7 @@ def test_train_from_single_toml_file():
 
 def test_error_calculation(single_batch_with_batchsize):
     # test the different Loss classes
-    from modelforge.train.training import (
+    from modelforge.train.losses import (
         FromPerAtomToPerMoleculeSquaredError,
         PerMoleculeSquaredError,
     )
@@ -251,12 +251,16 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize):
 
 
 def test_loss(single_batch_with_batchsize):
-    from modelforge.train.training import Loss
+    from modelforge.train.losses import Loss
 
     batch = single_batch_with_batchsize(batch_size=16, dataset_name="PHALKETHOH")
 
-    loss_porperty = ["per_molecule_energy", "per_atom_force"]
-    loss_weights = {"per_molecule_energy": 0.5, "per_atom_force": 0.5}
+    loss_porperty = ["per_molecule_energy", "per_atom_force", "per_atom_energy"]
+    loss_weights = {
+        "per_molecule_energy": 0.5,
+        "per_atom_force": 0.5,
+        "per_atom_energy": 0.1,
+    }
     loss = Loss(loss_porperty, loss_weights)
     assert loss is not None
 
@@ -289,11 +293,22 @@ def test_loss(single_batch_with_batchsize):
                 prediction["per_molecule_energy_predict"]
                 - prediction["per_molecule_energy_true"]
             ).pow(2)
-            / batch.metadata.atomic_subsystem_counts.unsqueeze(1)
         )
     )
     # compare to referenc evalue obtained from Loos class
     ref = torch.mean(loss_output["per_molecule_energy"])
+    assert torch.allclose(ref, E_loss)
+    E_loss = torch.mean(
+        (
+            (
+                prediction["per_molecule_energy_predict"]
+                - prediction["per_molecule_energy_true"]
+            ).pow(2)
+            / batch.metadata.atomic_subsystem_counts.unsqueeze(1)
+        )
+    )
+    # compare to referenc evalue obtained from Loos class
+    ref = torch.mean(loss_output["per_atom_energy"])
     assert torch.allclose(ref, E_loss)
 
     # --------------------------------------------- #
@@ -327,7 +342,8 @@ def test_loss(single_batch_with_batchsize):
 
     assert torch.allclose(
         loss_weights["per_molecule_energy"] * loss_output["per_molecule_energy"]
-        + loss_weights["per_atom_force"] * loss_output["per_atom_force"],
+        + loss_weights["per_atom_force"] * loss_output["per_atom_force"]
+        + +loss_weights["per_atom_energy"] * loss_output["per_atom_energy"],
         loss_output["total_loss"].to(torch.float32),
     )
 

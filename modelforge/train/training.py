@@ -575,30 +575,6 @@ class ModelTrainer:
         self.learning_rate = self.training_parameter.lr
         self.lr_scheduler = self.training_parameter.lr_scheduler
 
-        # Verbose output
-        if verbose:
-            self.log_histograms = True
-            self.log_on_training_step = True
-        else:
-            self.log_histograms = False
-            self.log_on_training_step = False
-
-        # Initialize loss
-        self.loss = LossFactory.create_loss(
-            **self.training_parameter.loss_parameter.model_dump()
-        )
-
-        # Assign the created error metrics to the respective attributes
-        self.test_metrics = create_error_metrics(
-            self.training_parameter.loss_parameter.loss_property
-        )
-        self.val_metrics = create_error_metrics(
-            self.training_parameter.loss_parameter.loss_property
-        )
-        self.train_metrics = create_error_metrics(
-            self.training_parameter.loss_parameter.loss_property
-        )
-
     def read_dataset_statistics(
         self,
     ) -> Dict[str, float]:

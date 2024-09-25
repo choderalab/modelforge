@@ -388,32 +388,18 @@ class TrainingAdapter(pL.LightningModule):
 
         loss_dict = self.loss(predict_target, batch)  # Contains per-sample losses
 
+        # Update loss metrics with per-sample losses
+        batch_size = batch.batch_size()
+        for key, metric in loss_dict.items():
+            self.loss_metrics[key].update(metric.detach(), batch_size=batch_size)
+
         # Compute the mean loss for optimization
         mean_total_loss = loss_dict["total_loss"].mean()
-
-        # Update loss metrics with per-sample losses
-        for key, metric in loss_dict.items():
-            self.loss_metrics[key].update(
-                metric.detach(), batch_size=batch.batch_size()
-            )
-
-        # Return the mean total loss for optimization
         return mean_total_loss
 
-    def validation_step(self, batch: "BatchData", batch_idx: int) -> None:
+    def validation_step(self, batch: BatchData, batch_idx: int) -> None:
         """
         Validation step to compute the RMSE/MAE across epochs.
-
-        Parameters
-        ----------
-        batch : BatchData
-            The batch of data provided for validation.
-        batch_idx : int
-            The index of the current batch.
-
-        Returns
-        -------
-        None
         """
 
         # Ensure positions require gradients for force calculation
@@ -430,21 +416,6 @@ class TrainingAdapter(pL.LightningModule):
     def test_step(self, batch: BatchData, batch_idx: int) -> None:
         """
         Test step to compute the RMSE loss for a given batch.
-
-        This method is called automatically during the test loop of the training process. It computes
-        the loss on a batch of test data and logs the results for analysis.
-
-        Parameters
-        ----------
-        batch : BatchData
-            The batch of data to test the model on.
-        batch_idx : int
-            The index of the batch within the test dataset.
-
-        Returns
-        -------
-        None
-            The results are logged and not directly returned.
         """
         # Ensure positions require gradients for force calculation
         batch.nnp_input.positions.requires_grad_(True)
@@ -466,7 +437,6 @@ class TrainingAdapter(pL.LightningModule):
 
     def on_train_epoch_end(self):
         """Logs metrics at the end of the training epoch."""
-        self._log_metrics(self.train_metrics, "train")
         self._log_metrics(self.loss_metrics, "loss")
         self._log_learning_rate()
         self._log_histograms()

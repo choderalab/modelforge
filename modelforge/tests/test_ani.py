@@ -237,7 +237,7 @@ def test_compare_angular_symmetry_features():
     # against the reference angular symmetry functino output
 
     import torch
-    from modelforge.potential import AngularSymmetryFunction
+    from modelforge.potential.representation import AngularSymmetryFunction
     from modelforge.potential.ani import ANIRepresentation
     from openff.units import unit
     from modelforge.potential.models import Pairlist

@@ -438,7 +438,7 @@ class TrainingAdapter(pL.LightningModule):
     def on_train_epoch_end(self):
         """Logs metrics at the end of the training epoch."""
         self._log_metrics(self.loss_metrics, "loss")
-        self._log_metrics(self.loss_metrics, "val")
+        self._log_metrics(self.val_metrics, "val")
         self._log_learning_rate()
         self._log_histograms()
 

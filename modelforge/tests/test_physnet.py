@@ -36,7 +36,7 @@ def test_compare_representation():
     # RBF comparision
     #############################
     # Initialize the rbf class
-    from modelforge.potential.utils import PhysNetRadialBasisFunction
+    from modelforge.potential import PhysNetRadialBasisFunction
 
     rbf = PhysNetRadialBasisFunction(
         number_of_radial_basis_functions,

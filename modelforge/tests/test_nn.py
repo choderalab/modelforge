@@ -17,7 +17,7 @@ def test_embedding(single_batch_with_batchsize):
     featurization_config = config["potential"].core_parameter.featurization.model_dump()
 
     # featurize the atomic input (default is only atomic number embedding)
-    from modelforge.potential.utils import FeaturizeInput
+    from modelforge.potential import FeaturizeInput
 
     featurize_input_module = FeaturizeInput(featurization_config)
 

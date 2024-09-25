@@ -16,6 +16,14 @@ from .parameters import (
     TensorNetParameters,
 )
 from .processing import FromAtomToMoleculeReduction
+from .representation import (
+    CosineAttenuationFunction,
+    PhysNetRadialBasisFunction,
+    TensorNetRadialBasisFunction,
+    AniRadialBasisFunction,
+    SchnetRadialBasisFunction,
+)
+from .featurization import FeaturizeInput
 
 from .physnet import PhysNetCore
 from .sake import SAKECore
@@ -23,13 +31,6 @@ from .schnet import SchNetCore
 from .tensornet import TensorNetCore
 from .aimnet2 import AimNet2Core
 from .ani import ANI2xCore
-
-from .utils import (
-    AngularSymmetryFunction,
-    CosineAttenuationFunction,
-    FeaturizeInput,
-    RadialBasisFunction,
-)
 
 
 class _Implemented_NNP_Parameters(Enum):

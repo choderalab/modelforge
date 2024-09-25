@@ -516,7 +516,7 @@ class CoulombPotential(torch.nn.Module):
             The cutoff function applied to the pairwise distances.
         """
         super().__init__()
-        from .utils import PhysNetAttenuationFunction
+        from .representation import PhysNetAttenuationFunction
 
         self.strategy = strategy
         self.cutoff_function = PhysNetAttenuationFunction(cutoff)

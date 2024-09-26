@@ -101,7 +101,7 @@ class NeighborlistBruteNsq(torch.nn.Module):
         self.indices = torch.tensor([])
         self.i_final_pairs = torch.tensor([])
         self.j_final_pairs = torch.tensor([])
-        log.debug("Initializing Brute Force N^2 Neighborlist")
+        log.info("Initializing Brute Force N^2 Neighborlist")
 
     def forward(self, data: NNPInputTuple):
         """
@@ -259,7 +259,7 @@ class NeighborlistVerletNsq(torch.nn.Module):
         self.nlist_pairs = torch.tensor([])
         self.builds = 0
 
-        log.debug("Initializing Verlet Neighborlist with N^2 building routine.")
+        log.info("Initializing Verlet Neighborlist with N^2 building routine.")
 
     def _check_nlist(self, positions: torch.Tensor, box_vectors: torch.Tensor):
         r_ij, d_ij = self.displacement_function(

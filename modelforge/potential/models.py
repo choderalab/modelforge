@@ -874,15 +874,13 @@ def setup_potential(
     potential_seed: Optional[int] = None,
     jit: bool = True,
     only_unique_pairs: bool = False,
-    box_vectors: Optional[torch.Tensor] = None,
     periodic: bool = False,
+    neighborlist_strategy: Optional[str] = None,
+    skin: Optional[float] = 1.0,
 ) -> Potential:
     from modelforge.potential import _Implemented_NNPs
     from modelforge.potential.utils import remove_units_from_dataset_statistics
     from modelforge.utils.misc import seed_random_number
-
-    if box_vectors is None:
-        box_vectors = torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
 
     if potential_seed is not None:
         log.info(f"Setting random seed to: {potential_seed}")
@@ -903,13 +901,39 @@ def setup_potential(
             only_unique_pairs=only_unique_pairs,
         )
     else:
-        displacement_function = Displacement(box_vectors, periodic)
+        from modelforge.potential.neighbors import OrthogonalDisplacementFunction
 
-        neighborlist = NeighborlistForInference(
-            cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
-            displacement_function=displacement_function,
-            only_unique_pairs=only_unique_pairs,
-        )
+        displacement_function = OrthogonalDisplacementFunction(periodic)
+
+        if neighborlist_strategy is None:
+            from modelforge.potential.neighbors import NeighborlistVerletNsq
+
+            neighborlist = NeighborlistVerletNsq(
+                cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
+                displacement_function=displacement_function,
+                only_unique_pairs=only_unique_pairs,
+                skin=skin,
+            )
+        elif neighborlist_strategy == "verlet":
+            neighborlist = NeighborlistVerletNsq(
+                cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
+                displacement_function=displacement_function,
+                only_unique_pairs=only_unique_pairs,
+                skin=skin,
+            )
+        elif neighborlist_strategy == "brute":
+            from modelforge.potential.neighbors import NeighborlistBruteForce
+
+            neighborlist = NeighborlistBruteForce(
+                cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
+                displacement_function=displacement_function,
+                only_unique_pairs=only_unique_pairs,
+            )
+        else:
+            raise ValueError(
+                f"Unsupported neighborlist strategy: {neighborlist_strategy}"
+            )
+
     model = Potential(
         core_network,
         neighborlist,

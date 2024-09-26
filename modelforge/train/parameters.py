@@ -331,6 +331,7 @@ class RuntimeParameters(ParametersBase):
     checkpoint_path: Union[str, None]
     simulation_environment: SimulationEnvironment
     log_every_n_steps: int
+    verbose: bool
 
     @field_validator("number_of_nodes")
     @classmethod

@@ -1,6 +1,6 @@
 import torch
 from loguru import logger as log
-
+from modelforge.potential.models import PairlistData
 from modelforge.dataset.dataset import NNPInputTuple
 
 
@@ -252,8 +252,8 @@ class NeighborlistVerletNsq(torch.nn.Module):
 
         self.displacement_function = displacement_function
         self.indices = torch.tensor([])
-        self.i_final_pairs = torch.tensor([])
-        self.j_final_pairs = torch.tensor([])
+        self.i_pairs = torch.tensor([])
+        self.j_pairs = torch.tensor([])
 
         self.positions_old = torch.tensor([])
         self.nlist_pairs = torch.tensor([])
@@ -272,11 +272,11 @@ class NeighborlistVerletNsq(torch.nn.Module):
             return False
 
     def _init_pairs(self, n_particles: int, device: torch.device):
-        self.particle_ids = torch.arange(n_particles, device=device)
+        particle_ids = torch.arange(n_particles, device=device)
 
         self.i_pairs, self.j_pairs = torch.meshgrid(
-            self.particle_ids,
-            self.particle_ids,
+            particle_ids,
+            particle_ids,
             indexing="ij",
         )
 
@@ -326,7 +326,7 @@ class NeighborlistVerletNsq(torch.nn.Module):
         # avoid reinitializing indices if they are already set and haven't changed
         if self.indices.shape[0] != n:
             self.positions_old = positions
-            self.init_pairs(n, positions.device)
+            self._init_pairs(n, positions.device)
             r_ij, d_ij = self._build_nlist(positions, data.box_vectors)
         elif self._check_nlist(positions, data.box_vectors):
             self.positions_old = positions
@@ -364,13 +364,13 @@ class NeighborlistVerletNsq(torch.nn.Module):
             r_ij_full[0:total_pairs] = temp
             r_ij_full[total_pairs : 2 * total_pairs] = -temp
 
-            del r_ij, temp
+            del r_ij
 
             temp = d_ij[in_cutoff]
             d_ij_full[0:total_pairs] = temp
             d_ij_full[total_pairs : 2 * total_pairs] = temp
 
-            del d_ij, temp
+            del d_ij
 
             temp1 = self.nlist_pairs[0][in_cutoff]
             temp2 = self.nlist_pairs[1][in_cutoff]
@@ -383,8 +383,6 @@ class NeighborlistVerletNsq(torch.nn.Module):
             pairs[1][0:total_pairs] = temp2
             pairs[0][total_pairs : 2 * total_pairs] = temp2
             pairs[1][total_pairs : 2 * total_pairs] = temp1
-
-            del temp1, temp2
 
             return PairlistData(
                 pair_indices=pairs,

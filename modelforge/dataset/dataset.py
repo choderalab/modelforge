@@ -108,6 +108,7 @@ NNPInputTuple = NamedTuple(
         ("total_charge", torch.Tensor),
         ("pair_list", torch.Tensor),
         ("partial_charge", torch.Tensor),
+        ("box_vectors", torch.Tensor),
     ],
 )
 

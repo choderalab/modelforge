@@ -131,6 +131,10 @@ class NNPInput:
     total_charge : torch.Tensor
         A tensor with the total charge of molecule.
         Shape: [num_systems], where `num_systems` is the number of molecules.
+    box_vectors : Optional[torch.Tensor]
+        A 2D tensor of shape [3, 3], representing the box vectors in a system.
+        Currently, only supports a single box vector for all systems, as this is primarily meant for
+        inference on a single system, not training.
     """
 
     atomic_numbers: torch.Tensor
@@ -139,6 +143,7 @@ class NNPInput:
     total_charge: torch.Tensor
     pair_list: Optional[torch.Tensor] = None
     partial_charge: Optional[torch.Tensor] = None
+    box_vectors: Optional[torch.Tensor] = None
 
     def to(
         self,
@@ -163,8 +168,11 @@ class NNPInput:
                 if self.partial_charge is not None
                 else self.partial_charge
             )
+            self.box_vectors = self.box_vectors.to(device) if self.box_vectors else None
+
         if dtype:
             self.positions = self.positions.to(dtype)
+            self.box_vectors = self.box_vectors.to(dtype) if self.box_vectors else None
         return self
 
     def __post_init__(self):

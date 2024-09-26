@@ -16,7 +16,7 @@ class OrthogonalDisplacementFunction(torch.nn.Module):
         """
         super().__init__()
 
-        self.register_buffer("periodic", torch.tensor(periodic))
+        self.periodic = periodic
 
     def forward(
         self,
@@ -246,9 +246,9 @@ class NeighborlistVerletNsq(torch.nn.Module):
         super().__init__()
 
         self.register_buffer("cutoff", torch.tensor(cutoff))
-        self.register_buffer("skin", torch.tensor(skin))
-        self.register_buffer("cutoff_plus_skin", torch.tensor(cutoff + skin))
-        self.register_buffer("only_unique_pairs", torch.tensor(only_unique_pairs))
+        self.skin = skin
+        self.cutoff_plus_skin = cutoff + skin
+        self.only_unique_pairs = only_unique_pairs
 
         self.displacement_function = displacement_function
         self.indices = torch.tensor([])

@@ -876,7 +876,7 @@ def setup_potential(
     only_unique_pairs: bool = False,
     periodic: bool = False,
     neighborlist_strategy: Optional[str] = None,
-    skin: Optional[float] = 1.0,
+    skin: Optional[float] = 0.08,
 ) -> Potential:
     from modelforge.potential import _Implemented_NNPs
     from modelforge.potential.utils import remove_units_from_dataset_statistics

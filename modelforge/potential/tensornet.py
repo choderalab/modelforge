@@ -2,16 +2,13 @@
 TensorNet network for molecular potential learning.
 """
 
-from typing import Dict, List, Tuple, Type
+from typing import Dict, List, Tuple
 
 import torch
 from torch import nn
 
-from modelforge.potential.utils import (
-    CosineAttenuationFunction,
-    NNPInputTuple,
-    TensorNetRadialBasisFunction,
-)
+from modelforge.dataset import NNPInputTuple
+from modelforge.potential import CosineAttenuationFunction, TensorNetRadialBasisFunction
 
 from .models import PairlistData
 

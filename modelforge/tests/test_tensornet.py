@@ -99,7 +99,7 @@ def test_compare_radial_symmetry_features():
     import torch
     from openff.units import unit
 
-    from modelforge.potential.utils import (
+    from modelforge.potential import (
         CosineAttenuationFunction,
         TensorNetRadialBasisFunction,
     )

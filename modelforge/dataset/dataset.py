@@ -169,11 +169,11 @@ class NNPInput:
                 if self.partial_charge is not None
                 else self.partial_charge
             )
-            self.box_vectors = self.box_vectors.to(device) if self.box_vectors
+            self.box_vectors = self.box_vectors.to(device)
 
         if dtype:
             self.positions = self.positions.to(dtype)
-            self.box_vectors = self.box_vectors.to(dtype) if self.box_vectors
+            self.box_vectors = self.box_vectors.to(dtype)
         return self
 
     def __post_init__(self):

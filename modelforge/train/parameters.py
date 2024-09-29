@@ -2,10 +2,11 @@
 This defines pydantic models for the training parameters and runtime parameters.
 """
 
-from pydantic import BaseModel, model_validator, field_validator, ConfigDict
 from enum import Enum
-from typing import List, Union, Dict, Optional, Callable, Type
+from typing import Callable, Dict, List, Optional, Type, Union
+
 import torch
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 
 # So we  do not need to set Config parameters in each model

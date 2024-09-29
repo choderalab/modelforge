@@ -239,7 +239,7 @@ class PaiNNRepresentation(nn.Module):
         """
         from modelforge.potential import CosineAttenuationFunction, FeaturizeInput
 
-        from .utils import SchnetRadialBasisFunction
+        from .representation import SchnetRadialBasisFunction
 
         super().__init__()
 

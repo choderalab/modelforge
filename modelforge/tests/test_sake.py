@@ -200,7 +200,7 @@ def make_equivalent_pairlist_mask(key, nr_atoms, nr_pairs, include_self_pairs):
 def test_radial_symmetry_function_against_reference():
     from sake.utils import ExpNormalSmearing as RefExpNormalSmearing
 
-    from modelforge.potential.utils import PhysNetRadialBasisFunction
+    from modelforge.potential import PhysNetRadialBasisFunction
 
     nr_atoms = 1
     number_of_radial_basis_functions = 10

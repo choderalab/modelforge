@@ -3,7 +3,7 @@ This module contains utility functions and classes for processing the output of 
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, Iterator,  Union
+from typing import Dict, Iterator, Union
 
 import torch
 from openff.units import unit

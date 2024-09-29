@@ -445,7 +445,9 @@ class TrainingAdapter(pL.LightningModule):
         """Logs the current learning rate."""
         sch = self.lr_schedulers()
         try:
-            self.log("lr", sch.get_last_lr()[0], on_epoch=True, prog_bar=True)
+            self.log(
+                "lr", sch.get_last_lr()[0], on_epoch=True, prog_bar=True, sync_dist=True
+            )
         except AttributeError:
             pass
 
@@ -466,6 +468,7 @@ class TrainingAdapter(pL.LightningModule):
                     f"{phase}/{prop}/{abbreviate[metric_name]}",
                     metric_value,
                     prog_bar=True,
+                    sync_dist=True,
                 )
 
     def _log_histograms(self):

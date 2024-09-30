@@ -5,24 +5,19 @@ from modelforge.dataset.dataset import NNPInputTuple
 
 
 class OrthogonalDisplacementFunction(torch.nn.Module):
-    def __init__(self, is_periodic: bool):
+    def __init__(self):
         """
-        Compute displacement vectors between pairs of atoms, considering periodic boundary conditions.
+        Compute displacement vectors between pairs of atoms, considering periodic boundary conditions if used.
 
-        Attributes
-        ----------
-        is_periodic : bool
-            Whether to apply periodic boundary conditions.
         """
         super().__init__()
-
-        self.is_periodic = is_periodic
 
     def forward(
         self,
         coordinate_i: torch.Tensor,
         coordinate_j: torch.Tensor,
         box_vectors: torch.Tensor,
+        is_periodic: bool,
     ):
         """
         Compute displacement vectors and Euclidean distances between atom pairs.
@@ -35,7 +30,8 @@ class OrthogonalDisplacementFunction(torch.nn.Module):
             Coordinates of the second atom in each pair. Shape: [n_pairs, 3].
         box_vectors : torch.Tensor
             Box vectors defining the periodic boundary conditions. Shape: [3, 3].
-
+        is_periodic : bool
+            Whether to apply periodic boundary conditions.
         Returns
         -------
         Tuple[torch.Tensor, torch.Tensor]
@@ -43,7 +39,7 @@ class OrthogonalDisplacementFunction(torch.nn.Module):
         """
         r_ij = coordinate_i - coordinate_j
 
-        if self.is_periodic == True:
+        if is_periodic == True:
             # Note, since box length may change, we need to update each time if periodic
             # reinitializing this vector each time does not have a significant performance impact
 
@@ -150,6 +146,7 @@ class NeighborlistBruteNsq(torch.nn.Module):
             positions[self.i_final_pairs],
             positions[self.j_final_pairs],
             data.box_vectors,
+            data.is_periodic,
         )
         in_cutoff = (d_ij <= self.cutoff).squeeze()
         total_pairs = in_cutoff.sum()
@@ -266,13 +263,15 @@ class NeighborlistVerletNsq(torch.nn.Module):
         self.positions_old = torch.tensor([])
         self.nlist_pairs = torch.tensor([])
         self.builds = 0
-        self.box_vectors = torch.zeros([])
+        self.box_vectors = torch.zeros([3, 3])
 
         log.info("Initializing Verlet Neighborlist with N^2 building routine.")
 
-    def _check_nlist(self, positions: torch.Tensor, box_vectors: torch.Tensor):
+    def _check_nlist(
+        self, positions: torch.Tensor, box_vectors: torch.Tensor, is_periodic
+    ):
         r_ij, d_ij = self.displacement_function(
-            self.positions_old, positions, box_vectors
+            self.positions_old, positions, box_vectors, is_periodic
         )
 
         if torch.any(d_ij > self.half_skin):
@@ -293,9 +292,11 @@ class NeighborlistVerletNsq(torch.nn.Module):
         self.i_pairs = self.i_pairs[mask]
         self.j_pairs = self.j_pairs[mask]
 
-    def _build_nlist(self, positions: torch.Tensor, box_vectors: torch.Tensor):
+    def _build_nlist(
+        self, positions: torch.Tensor, box_vectors: torch.Tensor, is_periodic
+    ):
         r_ij, d_ij = self.displacement_function(
-            positions[self.i_pairs], positions[self.j_pairs], box_vectors
+            positions[self.i_pairs], positions[self.j_pairs], box_vectors, is_periodic
         )
 
         in_cutoff = (d_ij < self.cutoff_plus_skin).squeeze()
@@ -331,6 +332,8 @@ class NeighborlistVerletNsq(torch.nn.Module):
 
         n = atomic_subsystem_indices.size(0)
         # if the initial build we haven't yet set box vectors so set them
+        # this is necessary because we need to store them to know if we need to force a rebuild
+        # because the box vectors have changed
         if self.builds == 0:
             self.box_vectors = data.box_vectors
 
@@ -341,21 +344,28 @@ class NeighborlistVerletNsq(torch.nn.Module):
             self.box_vectors = data.box_vectors
             self.positions_old = positions
             self._init_pairs(n, positions.device)
-            r_ij, d_ij = self._build_nlist(positions, data.box_vectors)
+            r_ij, d_ij = self._build_nlist(
+                positions, data.box_vectors, data.is_periodic
+            )
         elif box_changed:
             # if the box vectors have changed, we need to rebuild the nlist
             # but do not need to regenerate the pairs
             self.box_vectors = data.box_vectors
             self.positions_old = positions
-            r_ij, d_ij = self._build_nlist(positions, data.box_vectors)
-        elif self._check_nlist(positions, data.box_vectors):
+            r_ij, d_ij = self._build_nlist(
+                positions, data.box_vectors, data.is_periodic
+            )
+        elif self._check_nlist(positions, data.box_vectors, data.is_periodic):
             self.positions_old = positions
-            r_ij, d_ij = self._build_nlist(positions, data.box_vectors)
+            r_ij, d_ij = self._build_nlist(
+                positions, data.box_vectors, data.is_periodic
+            )
         else:
             r_ij, d_ij = self.displacement_function(
                 positions[self.nlist_pairs[0]],
                 positions[self.nlist_pairs[1]],
                 data.box_vectors,
+                data.is_periodic,
             )
 
         in_cutoff = (d_ij <= self.cutoff).squeeze()

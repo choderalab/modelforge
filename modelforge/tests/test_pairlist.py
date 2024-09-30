@@ -361,7 +361,7 @@ def test_displacement_function():
 
     from modelforge.potential.neighbors import OrthogonalDisplacementFunction
 
-    displacement_function = OrthogonalDisplacementFunction(is_periodic=True)
+    displacement_function = OrthogonalDisplacementFunction()
 
     box_vectors = torch.tensor(
         [[10, 0, 0], [0, 10, 0], [0, 0, 10]], dtype=torch.float32
@@ -392,12 +392,12 @@ def test_displacement_function():
         ],
         dtype=torch.float32,
     )
-    r_ij, d_ij = displacement_function(coords1, coords1, box_vectors)
+    r_ij, d_ij = displacement_function(coords1, coords1, box_vectors, is_periodic=True)
 
     assert torch.allclose(r_ij, torch.zeros_like(r_ij))
     assert torch.allclose(d_ij, torch.zeros_like(d_ij))
 
-    r_ij, d_ij = displacement_function(coords1, coords2, box_vectors)
+    r_ij, d_ij = displacement_function(coords1, coords2, box_vectors, is_periodic=True)
 
     assert torch.allclose(
         r_ij,
@@ -424,13 +424,13 @@ def test_displacement_function():
         atol=1e-4,
     )
     # make sure the function works if the box is not periodic
-    displacement_function = OrthogonalDisplacementFunction(is_periodic=False)
-    r_ij, d_ij = displacement_function(coords1, coords1, box_vectors)
+    displacement_function = OrthogonalDisplacementFunction()
+    r_ij, d_ij = displacement_function(coords1, coords1, box_vectors, is_periodic=False)
 
     assert torch.allclose(r_ij, torch.zeros_like(r_ij))
     assert torch.allclose(d_ij, torch.zeros_like(d_ij))
 
-    r_ij, d_ij = displacement_function(coords1, coords2, box_vectors)
+    r_ij, d_ij = displacement_function(coords1, coords2, box_vectors, is_periodic=False)
 
     # since the
     assert torch.allclose(r_ij, coords1 - coords2)
@@ -448,7 +448,7 @@ def test_inference_neighborlist_building():
 
     from modelforge.dataset.dataset import NNPInput
 
-    displacement_function = OrthogonalDisplacementFunction(is_periodic=True)
+    displacement_function = OrthogonalDisplacementFunction()
 
     positions = torch.tensor(
         [[0.0, 0, 0], [1, 0, 0], [3.0, 0, 0], [8, 0, 0]], dtype=torch.float32
@@ -462,6 +462,7 @@ def test_inference_neighborlist_building():
         box_vectors=torch.tensor(
             [[10, 0, 0], [0, 10, 0], [0, 0, 10]], dtype=torch.float32
         ),
+        is_periodic=True,
     )
     # test to
     nlist = NeighborlistBruteNsq(
@@ -560,11 +561,13 @@ def test_inference_neighborlist_building():
     assert torch.allclose(d_ij_v, d_ij)
     assert torch.allclose(r_ij_v, r_ij)
 
-    displacement_function = OrthogonalDisplacementFunction(is_periodic=False)
+    displacement_function = OrthogonalDisplacementFunction()
 
     nlist = NeighborlistBruteNsq(
         cutoff=5.0, displacement_function=displacement_function, only_unique_pairs=False
     )
+
+    data.is_periodic = False
 
     pairs, d_ij, r_ij = nlist(data)
 
@@ -590,21 +593,6 @@ def test_inference_neighborlist_building():
         [[0.0, 0, 0], [1, 0, 0], [3.0, 0, 0], [8, 0, 0]], dtype=torch.float32
     )
 
-    data = NNPInput(
-        atomic_numbers=torch.tensor([1, 1, 1, 1], dtype=torch.int64),
-        positions=positions,
-        atomic_subsystem_indices=torch.tensor([0, 0, 0, 0], dtype=torch.int64),
-        total_charge=torch.tensor([0.0], dtype=torch.float32),
-        box_vectors=torch.tensor(
-            [[10, 0, 0], [0, 10, 0], [0, 0, 10]], dtype=torch.float32
-        ),
-    )
-
-    displacement_function = OrthogonalDisplacementFunction(is_periodic=True)
-    nlist = NeighborlistBruteNsq(
-        cutoff=3.0, displacement_function=displacement_function, only_unique_pairs=True
-    )
-
 
 def test_verlet_inference():
     """Test to ensure that the verlet neighborlist properly updates by comparing to brute force neighborlist"""
@@ -617,7 +605,7 @@ def test_verlet_inference():
 
     from modelforge.dataset.dataset import NNPInput
 
-    def return_data(positions, box_length=10):
+    def return_data(positions, box_length=10, is_periodic=True):
         return NNPInput(
             atomic_numbers=torch.ones(positions.shape[0], dtype=torch.int64),
             positions=positions,
@@ -627,6 +615,7 @@ def test_verlet_inference():
                 [[box_length, 0, 0], [0, box_length, 0], [0, 0, box_length]],
                 dtype=torch.float32,
             ),
+            is_periodic=is_periodic,
         )
 
     positions = torch.tensor(
@@ -634,7 +623,7 @@ def test_verlet_inference():
     )
     data = return_data(positions)
 
-    displacement_function = OrthogonalDisplacementFunction(is_periodic=True)
+    displacement_function = OrthogonalDisplacementFunction()
     nlist_verlet = NeighborlistVerletNsq(
         cutoff=1.5,
         displacement_function=displacement_function,

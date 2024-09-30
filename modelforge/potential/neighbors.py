@@ -5,18 +5,18 @@ from modelforge.dataset.dataset import NNPInputTuple
 
 
 class OrthogonalDisplacementFunction(torch.nn.Module):
-    def __init__(self, periodic: bool):
+    def __init__(self, is_periodic: bool):
         """
         Compute displacement vectors between pairs of atoms, considering periodic boundary conditions.
 
         Attributes
         ----------
-        periodic : bool
+        is_periodic : bool
             Whether to apply periodic boundary conditions.
         """
         super().__init__()
 
-        self.periodic = periodic
+        self.is_periodic = is_periodic
 
     def forward(
         self,
@@ -43,7 +43,7 @@ class OrthogonalDisplacementFunction(torch.nn.Module):
         """
         r_ij = coordinate_i - coordinate_j
 
-        if self.periodic == True:
+        if self.is_periodic == True:
             # Note, since box length may change, we need to update each time if periodic
             # reinitializing this vector each time does not have a significant performance impact
 

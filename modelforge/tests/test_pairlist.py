@@ -361,7 +361,7 @@ def test_displacement_function():
 
     from modelforge.potential.neighbors import OrthogonalDisplacementFunction
 
-    displacement_function = OrthogonalDisplacementFunction(periodic=True)
+    displacement_function = OrthogonalDisplacementFunction(is_periodic=True)
 
     box_vectors = torch.tensor(
         [[10, 0, 0], [0, 10, 0], [0, 0, 10]], dtype=torch.float32
@@ -424,7 +424,7 @@ def test_displacement_function():
         atol=1e-4,
     )
     # make sure the function works if the box is not periodic
-    displacement_function = OrthogonalDisplacementFunction(periodic=False)
+    displacement_function = OrthogonalDisplacementFunction(is_periodic=False)
     r_ij, d_ij = displacement_function(coords1, coords1, box_vectors)
 
     assert torch.allclose(r_ij, torch.zeros_like(r_ij))
@@ -448,7 +448,7 @@ def test_inference_neighborlist_building():
 
     from modelforge.dataset.dataset import NNPInput
 
-    displacement_function = OrthogonalDisplacementFunction(periodic=True)
+    displacement_function = OrthogonalDisplacementFunction(is_periodic=True)
 
     positions = torch.tensor(
         [[0.0, 0, 0], [1, 0, 0], [3.0, 0, 0], [8, 0, 0]], dtype=torch.float32
@@ -560,7 +560,7 @@ def test_inference_neighborlist_building():
     assert torch.allclose(d_ij_v, d_ij)
     assert torch.allclose(r_ij_v, r_ij)
 
-    displacement_function = OrthogonalDisplacementFunction(periodic=False)
+    displacement_function = OrthogonalDisplacementFunction(is_periodic=False)
 
     nlist = NeighborlistBruteNsq(
         cutoff=5.0, displacement_function=displacement_function, only_unique_pairs=False
@@ -600,7 +600,7 @@ def test_inference_neighborlist_building():
         ),
     )
 
-    displacement_function = OrthogonalDisplacementFunction(periodic=True)
+    displacement_function = OrthogonalDisplacementFunction(is_periodic=True)
     nlist = NeighborlistBruteNsq(
         cutoff=3.0, displacement_function=displacement_function, only_unique_pairs=True
     )
@@ -634,7 +634,7 @@ def test_verlet_inference():
     )
     data = return_data(positions)
 
-    displacement_function = OrthogonalDisplacementFunction(periodic=True)
+    displacement_function = OrthogonalDisplacementFunction(is_periodic=True)
     nlist_verlet = NeighborlistVerletNsq(
         cutoff=1.5,
         displacement_function=displacement_function,

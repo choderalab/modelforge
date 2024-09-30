@@ -1,6 +1,63 @@
 dataset: spice1
-latest: full_dataset_v0
-latest_test: nc_1000_v0
+latest: full_dataset_v1
+latest_test: nc_1000_v1
+
+full_dataset_v1:
+  version: 1
+  doi:
+  gz_data_file:
+    length: 11193528261
+    md5:
+    name: SPICE114_dataset_v1.hdf5.gz
+  hdf5_data_file:
+    md5:
+    name: SPICE114_dataset_v1.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE114_dataset_v1_processed.npz
+  url: h
+nc_1000_v1:
+  version: 1
+  doi:
+  gz_data_file:
+    length: 15166233
+    md5: 8ff0d9f721c2b473691bc15614cc98ec
+    name: SPICE114_dataset_v1_nc_1000.hdf5.gz
+  hdf5_data_file:
+    md5: 33d2d04bb14d59fc54ad538e1083ea9e
+    name: SPICE114_dataset_v1_nc_1000.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE114_dataset_v1_nc_1000_processed.npz
+  url:
+full_dataset_v1_HCNOFClS:
+  version: 1
+  doi:
+  gz_data_file:
+    length: 10046809694
+    md5:
+    name: SPICE114_dataset_v1_HCNOFClS.hdf5.gz
+  hdf5_data_file:
+    md5:
+    name: SPICE114_dataset_v1_HCNOFClS.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE114_dataset_v1_HCNOFClS_processed.npz
+  url:
+nc_1000_v1_HCNOFClS:
+  version: 1
+  doi:
+  gz_data_file:
+    length: 14778658
+    md5:
+    name: SPICE114_dataset_v1_nc_1000_HCNOFClS.hdf5.gz
+  hdf5_data_file:
+    md5:
+    name: SPICE114_dataset_v1_nc_1000_HCNOFClS.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE114_dataset_v1_nc_1000_HCNOFClS_processed.npz
+  url:
 full_dataset_v0:
   version: 0
   doi: 10.5281/zenodo.11583341
@@ -27,7 +84,7 @@ nc_1000_v0:
     name: SPICE114_dataset_v0_nc_1000.hdf5
   processed_data_file:
     md5: null
-    name: SPICE114_dataset_nc_1000_processed.npz
+    name: SPICE114_dataset_v0_nc_1000_processed.npz
   url: https://zenodo.org/records/11607708/files/spice_114_dataset_v0_ntc_1000.hdf5.gz
 full_dataset_v0_HCNOFClS:
   version: 0

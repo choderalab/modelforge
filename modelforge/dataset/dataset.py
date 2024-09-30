@@ -738,6 +738,8 @@ class HDF5Dataset:
                 # value shapes: (*)
                 single_atom_data: Dict[str, List[np.ndarray]] = OrderedDict()
                 # value shapes: (n_atoms, *)
+                single_mol_data: Dict[str, List[np.ndarray]] = OrderedDict()
+                # value_shapes: (*)
                 series_mol_data: Dict[str, List[np.ndarray]] = OrderedDict()
                 # value shapes: (n_confs, *)
                 series_atom_data: Dict[str, List[np.ndarray]] = OrderedDict()
@@ -758,7 +760,6 @@ class HDF5Dataset:
                         raise ValueError(
                             f"Unknown format type {value_format} for property {value}"
                         )
-
                 self.atomic_subsystem_counts = []  # number of atoms in each record
                 self.n_confs = []  # number of conformers in each record
 
@@ -776,7 +777,6 @@ class HDF5Dataset:
                             value in hf[record].keys()
                             for value in self.properties_of_interest
                         ]
-
                         if all(property_found):
                             # we want to exclude conformers with NaN values for any property of interest
                             configs_nan_by_prop: Dict[str, np.ndarray] = (
@@ -802,8 +802,12 @@ class HDF5Dataset:
                                 )
                                 != 1
                             ):
+                                val_temp = [
+                                    value.shape
+                                    for value in configs_nan_by_prop.values()
+                                ]
                                 raise ValueError(
-                                    f"Number of conformers is inconsistent across properties for record {record}"
+                                    f"Number of conformers is inconsistent across properties for record {record}: values {val_temp}"
                                 )
 
                             configs_nan = np.logical_or.reduce(
@@ -863,6 +867,7 @@ class HDF5Dataset:
                             for value in single_rec_data.keys():
                                 record_array = hf[record][value][()]
                                 single_rec_data[value].append(record_array)
+
                         else:
                             raise RuntimeError(
                                 f"Skipping record {record} as not all properties of interest are present."
@@ -872,6 +877,8 @@ class HDF5Dataset:
                 data = OrderedDict()
                 for value in single_atom_data.keys():
                     data[value] = np.concatenate(single_atom_data[value], axis=0)
+                for value in single_mol_data.keys():
+                    data[value] = np.concatenate(single_mol_data[value], axis=0)
                 for value in series_mol_data.keys():
                     data[value] = np.concatenate(series_mol_data[value], axis=0)
                 for value in series_atom_data.keys():

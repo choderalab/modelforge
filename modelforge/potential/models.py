@@ -822,6 +822,7 @@ class NeuralNetworkPotentialFactory:
         simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
         only_unique_pairs: bool = False,
         jit: bool = True,
+        inference_neighborlist_strategy: Optional[str] = "verlet",
     ) -> Union[Potential, JAXModel, pl.LightningModule]:
         """
         Create an instance of a neural network potential for training or
@@ -855,6 +856,8 @@ class NeuralNetworkPotentialFactory:
             Whether to use only unique pairs of atoms (default is False).
         jit : bool, optional
             Whether to use JIT compilation (default is True).
+        inference_neighborlist_strategy : Optional[str], optional
+            Neighborlist strategy for inference (default is "verlet"). other option is "brute".
 
         Returns
         -------
@@ -889,6 +892,7 @@ class NeuralNetworkPotentialFactory:
                 potential_seed=potential_seed,
                 jit=jit,
                 only_unique_pairs=only_unique_pairs,
+                neighborlist_strategy=inference_neighborlist_strategy,
             )
             if simulation_environment == "JAX":
                 return PyTorch2JAXConverter().convert_to_jax_model(model)

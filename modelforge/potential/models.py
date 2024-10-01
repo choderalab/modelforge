@@ -758,16 +758,9 @@ def setup_potential(
 
         displacement_function = OrthogonalDisplacementFunction()
 
-        if neighborlist_strategy is None:
+        if neighborlist_strategy == "verlet":
             from modelforge.potential.neighbors import NeighborlistVerletNsq
 
-            neighborlist = NeighborlistVerletNsq(
-                cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
-                displacement_function=displacement_function,
-                only_unique_pairs=only_unique_pairs,
-                skin=skin,
-            )
-        elif neighborlist_strategy == "verlet":
             neighborlist = NeighborlistVerletNsq(
                 cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
                 displacement_function=displacement_function,

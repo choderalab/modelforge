@@ -17,7 +17,7 @@ class OrthogonalDisplacementFunction(torch.nn.Module):
         coordinate_i: torch.Tensor,
         coordinate_j: torch.Tensor,
         box_vectors: torch.Tensor,
-        is_periodic: bool,
+        is_periodic: torch.Tensor,
     ):
         """
         Compute displacement vectors and Euclidean distances between atom pairs.

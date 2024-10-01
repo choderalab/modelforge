@@ -109,7 +109,7 @@ NNPInputTuple = NamedTuple(
         ("pair_list", torch.Tensor),
         ("partial_charge", torch.Tensor),
         ("box_vectors", torch.Tensor),
-        ("is_periodic", bool),
+        ("is_periodic", torch.Tensor),
     ],
 )
 
@@ -148,7 +148,7 @@ class NNPInput:
     pair_list: Optional[torch.Tensor] = None
     partial_charge: Optional[torch.Tensor] = None
     box_vectors: Optional[torch.Tensor] = torch.zeros(3, 3)
-    is_periodic: Optional[bool] = False
+    is_periodic: Optional[torch.Tensor] = torch.Tensor([False])
 
     def to(
         self,
@@ -174,6 +174,7 @@ class NNPInput:
                 else self.partial_charge
             )
             self.box_vectors = self.box_vectors.to(device)
+            self.is_periodic = self.is_periodic.to(device)
 
         if dtype:
             self.positions = self.positions.to(dtype)

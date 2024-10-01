@@ -86,9 +86,9 @@ class PaiNNCore(torch.nn.Module):
 
         # initialize the interaction and mixing networks
         if shared_interactions:
-            self.interaction_modules = nn.ModuleList(
+            self.message_function = nn.ModuleList(
                 [
-                    PaiNNInteraction(
+                    Message(
                         number_of_per_atom_features,
                         activation_function=self.activation_function,
                     )
@@ -96,9 +96,9 @@ class PaiNNCore(torch.nn.Module):
                 * number_of_interaction_modules
             )
         else:
-            self.interaction_modules = nn.ModuleList(
+            self.message_function = nn.ModuleList(
                 [
-                    PaiNNInteraction(
+                    Message(
                         number_of_per_atom_features,
                         activation_function=self.activation_function,
                     )
@@ -106,9 +106,9 @@ class PaiNNCore(torch.nn.Module):
                 ]
             )
 
-        self.mixing_modules = nn.ModuleList(
+        self.update_function = nn.ModuleList(
             [
-                PaiNNMixing(
+                Update(
                     number_of_per_atom_features,
                     activation_function=self.activation_function,
                     epsilon=epsilon,
@@ -160,7 +160,7 @@ class PaiNNCore(torch.nn.Module):
 
         # Apply interaction and mixing modules
         for i, (interaction_mod, mixing_mod) in enumerate(
-            zip(self.interaction_modules, self.mixing_modules)
+            zip(self.message_function, self.update_function)
         ):
             per_atom_scalar_feature, per_atom_vector_feature = interaction_mod(
                 per_atom_scalar_feature,
@@ -332,7 +332,7 @@ class PaiNNRepresentation(nn.Module):
         }
 
 
-class PaiNNInteraction(nn.Module):
+class Message(nn.Module):
 
     def __init__(
         self,
@@ -340,7 +340,7 @@ class PaiNNInteraction(nn.Module):
         activation_function: torch.nn.Module,
     ):
         """
-        PaiNN interaction block for modeling scalar and vector interactions between atoms.
+        PaiNN message block for modeling scalar and vector interactions between atoms.
 
         Parameters
         ----------
@@ -362,20 +362,20 @@ class PaiNNInteraction(nn.Module):
 
     def forward(
         self,
-        q: torch.Tensor,
-        mu: torch.Tensor,
+        per_atom_scalar_representation: torch.Tensor,
+        per_atom_vector_representation: torch.Tensor,
         W_ij: torch.Tensor,
         dir_ij: torch.Tensor,
         pairlist: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Forward pass of the PaiNN interaction block.
+        Forward pass of the message  block.
 
         Parameters
         ----------
-        q : torch.Tensor
+        per_atom_scalar_representation : torch.Tensor
             Scalar input values (Shape: [nr_atoms, 1, nr_atom_basis]).
-        mu : torch.Tensor
+        per_atom_vector_representation : torch.Tensor
             Vector input values (Shape: [nr_atoms, 3, nr_atom_basis]).
         W_ij : torch.Tensor
             Interaction filters (Shape: [nr_pairs, 1, nr_interactions]).
@@ -392,45 +392,46 @@ class PaiNNInteraction(nn.Module):
         idx_i, idx_j = pairlist[0], pairlist[1]
 
         # Compute scalar interactions (q)
-        x_per_atom = self.interatomic_net(q)  # per atom
-        x_j = x_per_atom[idx_j]  # per pair
-        x_per_pair = W_ij.unsqueeze(1) * x_j  # per_pair
+        transformed_per_atom_scalar_representation = self.interatomic_net(
+            per_atom_scalar_representation
+        )  # per atom
+        s_j = transformed_per_atom_scalar_representation[idx_j]  # per pair
+        weighted_s_j = W_ij.unsqueeze(1) * s_j  # per_pair
 
-        # split the output into dq, dmuR, dmumu to exchange information between the scalar and vector outputs
-        dq_per_pair, dmuR, dmumu = torch.split(x_per_pair, self.nr_atom_basis, dim=-1)
+        # split the output into 3x per_pair_ds to exchange information between the scalar and vector outputs
+        per_pair_ds1, per_pair_ds2, per_pair_ds3 = torch.split(
+            weighted_s_j, self.nr_atom_basis, dim=-1
+        )
 
-        # Update scalar feature q
-        dq_per_atom = torch.zeros_like(q)  # Shape: (nr_of_pairs, 1, nr_atom_basis)
+        # Update scalar feature
+        ds_i = torch.zeros_like(per_atom_scalar_representation)
         # Expand idx_i to match the shape of dq for scatter_add operation
-        expanded_idx_i = idx_i.unsqueeze(-1).expand(-1, dq_per_pair.size(2))
-        dq_per_atom.scatter_add_(0, expanded_idx_i.unsqueeze(1), dq_per_pair)
-        q = q + dq_per_atom
+        expanded_idx_i = idx_i.unsqueeze(-1).expand(-1, per_pair_ds1.size(2))
+        ds_i.scatter_add_(0, expanded_idx_i.unsqueeze(1), per_pair_ds1)
+        per_atom_scalar_representation = per_atom_scalar_representation + ds_i
 
         # ----------------- vector output -----------------
-        # Compute vector interactions (mu)
+        # Compute vector interactions (dv_i)
 
-        muj = mu[idx_j]  # shape (nr_of_pairs, 1, nr_atom_basis)
-        dmu_per_pair = (
-            dmuR * dir_ij.unsqueeze(-1) + dmumu * muj
-        )  # shape (nr_of_pairs, 3, nr_atom_basis)
-
+        v_j = per_atom_vector_representation[idx_j]
+        dmu_per_pair = per_pair_ds2 * dir_ij.unsqueeze(-1) + per_pair_ds3 * v_j
         # Create a tensor to store the result, matching the size of `mu`
-        dmu_per_atom = torch.zeros_like(mu)  # Shape: (nr_of_atoms, 3, nr_atom_basis)
+        dv_i = torch.zeros_like(
+            per_atom_vector_representation
+        )  # Shape: (nr_of_atoms, 3, nr_atom_basis)
         # Expand idx_i to match the shape of dmu for scatter_add operation
         expanded_idx_i = (
-            idx_i.unsqueeze(-1)
-            .unsqueeze(-1)
-            .expand(-1, dmu_per_atom.size(1), dmu_per_atom.size(2))
+            idx_i.unsqueeze(-1).unsqueeze(-1).expand(-1, dv_i.size(1), dv_i.size(2))
         )
         # Perform scatter_add_ operation
-        dmu_per_atom.scatter_add_(0, expanded_idx_i, dmu_per_pair)
+        dv_i.scatter_add_(0, expanded_idx_i, dmu_per_pair)
 
-        mu = mu + dmu_per_atom
+        per_atom_vector_representation = per_atom_vector_representation + dv_i
 
-        return q, mu
+        return per_atom_scalar_representation, per_atom_vector_representation
 
 
-class PaiNNMixing(nn.Module):
+class Update(nn.Module):
 
     def __init__(
         self,
@@ -439,7 +440,7 @@ class PaiNNMixing(nn.Module):
         epsilon: float = 1e-8,
     ):
         """
-        PaiNN mixing block for intra-atomic interactions.
+        PaiNN update block.
 
         Parameters
         ----------
@@ -463,41 +464,45 @@ class PaiNNMixing(nn.Module):
             DenseWithCustomDist(nr_atom_basis, 3 * nr_atom_basis),
         )
         # Initialize the channel mixing network for mu
-        self.mu_channel_mix = DenseWithCustomDist(
+        self.linear_transformation = DenseWithCustomDist(
             nr_atom_basis, 2 * nr_atom_basis, bias=False
         )
         self.epsilon = epsilon
 
     def forward(
-        self, q: torch.Tensor, mu: torch.Tensor
+        self, scalar_message: torch.Tensor, vector_message: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Forward pass for intra-atomic mixing.
+        Forward pass through node update.
 
         Parameters
         ----------
-        q : torch.Tensor
+        scalar_message : torch.Tensor
             Scalar input values.
-        mu : torch.Tensor
+        vector_message : torch.Tensor
             Vector input values.
 
         Returns
         -------
         Tuple[torch.Tensor, torch.Tensor]
-            Updated scalar and vector representations (q, mu).
+            Updated scalar and vector representations .
         """
-        mu_mix = self.mu_channel_mix(mu)
-        mu_V, mu_W = torch.split(mu_mix, self.nr_atom_basis, dim=-1)
-        mu_Vn = torch.sqrt(torch.sum(mu_V**2, dim=-2, keepdim=True) + self.epsilon)
+        vector_meassge_transformed = self.linear_transformation(vector_message)
 
-        ctx = torch.cat([q, mu_Vn], dim=-1)
-        x = self.intra_atomic_net(ctx)
+        v_V, v_U = torch.split(vector_meassge_transformed, self.nr_atom_basis, dim=-1)
 
-        dq_intra, dmu_intra, dqmu_intra = torch.split(x, self.nr_atom_basis, dim=-1)
-        dmu_intra = dmu_intra * mu_W
+        L2_norm_v_V = torch.sqrt(torch.sum(v_V**2, dim=-2, keepdim=True) + self.epsilon)
 
-        dqmu_intra = dqmu_intra * torch.sum(mu_V * mu_W, dim=1, keepdim=True)
+        ctx = torch.cat([scalar_message, L2_norm_v_V], dim=-1)
+        transformed_scalar_message = self.intra_atomic_net(ctx)
 
-        q = q + dq_intra + dqmu_intra
-        mu = mu + dmu_intra
-        return q, mu
+        a_ss, a_vv, a_sv = torch.split(
+            transformed_scalar_message, self.nr_atom_basis, dim=-1
+        )
+
+        a_vv = a_vv * v_U
+        a_sv = a_sv * torch.sum(v_V * v_U, dim=1, keepdim=True)
+
+        scalar_message = scalar_message + a_ss + a_sv
+        vector_message = vector_message + a_vv
+        return scalar_message, vector_message

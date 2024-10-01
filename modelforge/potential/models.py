@@ -728,7 +728,6 @@ def setup_potential(
     potential_seed: Optional[int] = None,
     jit: bool = True,
     only_unique_pairs: bool = False,
-    is_periodic: bool = False,
     neighborlist_strategy: Optional[str] = None,
     skin: Optional[float] = 0.08,
 ) -> Potential:
@@ -757,7 +756,7 @@ def setup_potential(
     else:
         from modelforge.potential.neighbors import OrthogonalDisplacementFunction
 
-        displacement_function = OrthogonalDisplacementFunction(is_periodic)
+        displacement_function = OrthogonalDisplacementFunction()
 
         if neighborlist_strategy is None:
             from modelforge.potential.neighbors import NeighborlistVerletNsq

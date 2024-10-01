@@ -99,6 +99,39 @@ class NeighborlistBruteNsq(torch.nn.Module):
         self.j_final_pairs = torch.tensor([])
         log.info("Initializing Brute Force N^2 Neighborlist")
 
+    def _copy_to_nonunique(
+        self,
+        i_pairs: torch.Tensor,
+        j_pairs: torch.Tensor,
+        d_ij: torch.Tensor,
+        r_ij: torch.Tensor,
+        total_unique_pairs: int,
+    ):
+
+        r_ij_full = torch.zeros(
+            total_unique_pairs * 2, 3, dtype=r_ij.dtype, device=r_ij.device
+        )
+        d_ij_full = torch.zeros(
+            total_unique_pairs * 2, 1, dtype=d_ij.dtype, device=d_ij.device
+        )
+
+        r_ij_full[0:total_unique_pairs] = r_ij
+        r_ij_full[total_unique_pairs : 2 * total_unique_pairs] = -r_ij
+
+        d_ij_full[0:total_unique_pairs] = d_ij
+        d_ij_full[total_unique_pairs : 2 * total_unique_pairs] = d_ij
+
+        pairs_full = torch.zeros(
+            2, total_unique_pairs * 2, dtype=torch.int64, device=i_pairs.device
+        )
+
+        pairs_full[0][0:total_unique_pairs] = i_pairs
+        pairs_full[1][0:total_unique_pairs] = j_pairs
+        pairs_full[0][total_unique_pairs : 2 * total_unique_pairs] = j_pairs
+        pairs_full[1][total_unique_pairs : 2 * total_unique_pairs] = i_pairs
+
+        return pairs_full, d_ij_full, r_ij_full
+
     def forward(self, data: NNPInputTuple):
         """
         Prepares the input tensors for passing to the model.
@@ -171,43 +204,15 @@ class NeighborlistBruteNsq(torch.nn.Module):
 
         else:
 
-            r_ij_full = torch.zeros(
-                total_pairs * 2, 3, dtype=positions.dtype, device=positions.device
+            pairs_full, d_ij_full, r_ij_full = self._copy_to_nonunique(
+                self.i_final_pairs[in_cutoff],
+                self.j_final_pairs[in_cutoff],
+                d_ij[in_cutoff],
+                r_ij[in_cutoff],
+                total_pairs,
             )
-            d_ij_full = torch.zeros(
-                total_pairs * 2, 1, dtype=positions.dtype, device=positions.device
-            )
-
-            temp = r_ij[in_cutoff]
-            # i, j pairs
-            r_ij_full[0:total_pairs] = temp
-            # j, i pairs, require we swap the sign
-            r_ij_full[total_pairs : 2 * total_pairs] = -temp
-
-            del r_ij, temp
-
-            temp = d_ij[in_cutoff]
-            d_ij_full[0:total_pairs] = temp
-            d_ij_full[total_pairs : 2 * total_pairs] = temp
-
-            del d_ij, temp
-
-            temp1 = self.i_final_pairs[in_cutoff]
-            temp2 = self.j_final_pairs[in_cutoff]
-
-            pairs = torch.zeros(
-                2, total_pairs * 2, dtype=torch.int64, device=positions.device
-            )
-
-            pairs[0][0:total_pairs] = temp1
-            pairs[1][0:total_pairs] = temp2
-            pairs[0][total_pairs : 2 * total_pairs] = temp2
-            pairs[1][total_pairs : 2 * total_pairs] = temp1
-
-            del temp1, temp2
-
             return PairlistData(
-                pair_indices=pairs,
+                pair_indices=pairs_full,
                 d_ij=d_ij_full,
                 r_ij=r_ij_full,
             )
@@ -282,15 +287,15 @@ class NeighborlistVerletNsq(torch.nn.Module):
     def _init_pairs(self, n_particles: int, device: torch.device):
         self.indices = torch.arange(n_particles, device=device)
 
-        self.i_pairs, self.j_pairs = torch.meshgrid(
+        i_pairs, j_pairs = torch.meshgrid(
             self.indices,
             self.indices,
             indexing="ij",
         )
 
-        mask = self.i_pairs < self.j_pairs
-        self.i_pairs = self.i_pairs[mask]
-        self.j_pairs = self.j_pairs[mask]
+        mask = i_pairs < j_pairs
+        self.i_pairs = i_pairs[mask]
+        self.j_pairs = j_pairs[mask]
 
     def _build_nlist(
         self, positions: torch.Tensor, box_vectors: torch.Tensor, is_periodic
@@ -305,6 +310,40 @@ class NeighborlistVerletNsq(torch.nn.Module):
         )
         self.builds += 1
         return r_ij[in_cutoff], d_ij[in_cutoff]
+
+    def _copy_to_nonunique(
+        self,
+        pairs: torch.Tensor,
+        d_ij: torch.Tensor,
+        r_ij: torch.Tensor,
+        total_unique_pairs: int,
+    ):
+        # this will allow us to copy the data for unique pairs to create the non-unique pairs data
+        r_ij_full = torch.zeros(
+            total_unique_pairs * 2, 3, dtype=r_ij.dtype, device=r_ij.device
+        )
+        d_ij_full = torch.zeros(
+            total_unique_pairs * 2, 1, dtype=d_ij.dtype, device=d_ij.device
+        )
+
+        r_ij_full[0:total_unique_pairs] = r_ij
+
+        # since we are swapping the order of the pairs, the sign changes
+        r_ij_full[total_unique_pairs : 2 * total_unique_pairs] = -r_ij
+
+        d_ij_full[0:total_unique_pairs] = d_ij
+        d_ij_full[total_unique_pairs : 2 * total_unique_pairs] = d_ij
+
+        pairs_full = torch.zeros(
+            2, total_unique_pairs * 2, dtype=torch.int64, device=pairs.device
+        )
+
+        pairs_full[0][0:total_unique_pairs] = pairs[0]
+        pairs_full[1][0:total_unique_pairs] = pairs[1]
+        pairs_full[0][total_unique_pairs : 2 * total_unique_pairs] = pairs[1]
+        pairs_full[1][total_unique_pairs : 2 * total_unique_pairs] = pairs[0]
+
+        return pairs_full, d_ij_full, r_ij_full
 
     def forward(self, data: NNPInputTuple):
         """
@@ -390,39 +429,14 @@ class NeighborlistVerletNsq(torch.nn.Module):
 
         else:
 
-            r_ij_full = torch.zeros(
-                total_pairs * 2, 3, dtype=positions.dtype, device=positions.device
+            pairs_full, d_ij_full, r_ij_full = self._copy_to_nonunique(
+                self.nlist_pairs[:, in_cutoff],
+                d_ij[in_cutoff],
+                r_ij[in_cutoff],
+                total_pairs,
             )
-            d_ij_full = torch.zeros(
-                total_pairs * 2, 1, dtype=positions.dtype, device=positions.device
-            )
-
-            temp = r_ij[in_cutoff]
-            r_ij_full[0:total_pairs] = temp
-            r_ij_full[total_pairs : 2 * total_pairs] = -temp
-
-            del r_ij
-
-            temp = d_ij[in_cutoff]
-            d_ij_full[0:total_pairs] = temp
-            d_ij_full[total_pairs : 2 * total_pairs] = temp
-
-            del d_ij
-
-            temp1 = self.nlist_pairs[0][in_cutoff]
-            temp2 = self.nlist_pairs[1][in_cutoff]
-
-            pairs = torch.zeros(
-                2, total_pairs * 2, dtype=torch.int64, device=positions.device
-            )
-
-            pairs[0][0:total_pairs] = temp1
-            pairs[1][0:total_pairs] = temp2
-            pairs[0][total_pairs : 2 * total_pairs] = temp2
-            pairs[1][total_pairs : 2 * total_pairs] = temp1
-
             return PairlistData(
-                pair_indices=pairs,
+                pair_indices=pairs_full,
                 d_ij=d_ij_full,
                 r_ij=r_ij_full,
             )

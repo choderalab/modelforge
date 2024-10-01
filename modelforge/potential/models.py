@@ -729,7 +729,7 @@ def setup_potential(
     jit: bool = True,
     only_unique_pairs: bool = False,
     neighborlist_strategy: Optional[str] = None,
-    skin: Optional[float] = 0.08,
+    verlet_neighborlist_skin: Optional[float] = 0.08,
 ) -> Potential:
     from modelforge.potential import _Implemented_NNPs
     from modelforge.potential.utils import remove_units_from_dataset_statistics
@@ -765,7 +765,7 @@ def setup_potential(
                 cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
                 displacement_function=displacement_function,
                 only_unique_pairs=only_unique_pairs,
-                skin=skin,
+                skin=verlet_neighborlist_skin,
             )
         elif neighborlist_strategy == "brute":
             from modelforge.potential.neighbors import NeighborlistBruteForce
@@ -816,6 +816,7 @@ class NeuralNetworkPotentialFactory:
         only_unique_pairs: bool = False,
         jit: bool = True,
         inference_neighborlist_strategy: str = "verlet",
+        verlet_neighborlist_skin: Optional[float] = 0.1,
     ) -> Union[Potential, JAXModel, pl.LightningModule]:
         """
         Create an instance of a neural network potential for training or
@@ -851,7 +852,8 @@ class NeuralNetworkPotentialFactory:
             Whether to use JIT compilation (default is True).
         inference_neighborlist_strategy : Optional[str], optional
             Neighborlist strategy for inference (default is "verlet"). other option is "brute".
-
+        verlet_neighborlist_skin : Optional[float], optional
+            Skin for the Verlet neighborlist (default is 0.1, units nanometers).
         Returns
         -------
         Union[Potential, JAXModel, pl.LightningModule]
@@ -886,6 +888,7 @@ class NeuralNetworkPotentialFactory:
                 jit=jit,
                 only_unique_pairs=only_unique_pairs,
                 neighborlist_strategy=inference_neighborlist_strategy,
+                verlet_neighborlist_skin=verlet_neighborlist_skin,
             )
             if simulation_environment == "JAX":
                 return PyTorch2JAXConverter().convert_to_jax_model(model)

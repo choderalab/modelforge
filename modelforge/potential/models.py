@@ -822,7 +822,7 @@ class NeuralNetworkPotentialFactory:
         simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
         only_unique_pairs: bool = False,
         jit: bool = True,
-        inference_neighborlist_strategy: Optional[str] = "verlet",
+        inference_neighborlist_strategy: str = "verlet",
     ) -> Union[Potential, JAXModel, pl.LightningModule]:
         """
         Create an instance of a neural network potential for training or

@@ -579,7 +579,7 @@ class ModelTrainer:
             else dataset_statistic
         )
         self.experiment_logger = self.setup_logger()
-        self.model = self.setup_potential(potential_seed, restore_from_wandb)
+        self.model = self.setup_potential(potential_seed)
         self.callbacks = self.setup_callbacks()
         self.trainer = self.setup_trainer()
         self.optimizer_class = optimizer_class

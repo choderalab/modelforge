@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Mapping, NamedTuple, Optional
 
 import lightning as pl
 import torch
+import wandb
 from loguru import logger as log
 from openff.units import unit
 from torch.nn import Module
@@ -868,7 +869,7 @@ class NeuralNetworkPotentialFactory:
 
         # obtain model for training
         if use == "training":
-            model = ModelTrainer(
+            model_trainer = ModelTrainer(
                 potential_parameter=potential_parameter,
                 training_parameter=training_parameter,
                 dataset_parameter=dataset_parameter,
@@ -877,7 +878,25 @@ class NeuralNetworkPotentialFactory:
                 dataset_statistic=dataset_statistic,
                 use_default_dataset_statistic=use_default_dataset_statistic,
             )
-            return model
+            
+            return model_trainer
+        
+        if use == "test_loading":
+            model_trainer = ModelTrainer(
+                potential_parameter=potential_parameter,
+                training_parameter=training_parameter,
+                dataset_parameter=dataset_parameter,
+                runtime_parameter=runtime_parameter,
+                potential_seed=potential_seed,
+                dataset_statistic=dataset_statistic,
+                use_default_dataset_statistic=use_default_dataset_statistic,
+                restore_from_wandb={
+                    "model_name": "model.pt",
+                    "run_path": "modelforge_nnps/test_checkpoint/z9e9id8w",
+                },
+            )
+            return model_trainer
+        
         # obtain model for inference
         elif use == "inference":
             model = setup_potential(
@@ -896,6 +915,18 @@ class NeuralNetworkPotentialFactory:
                 return model
         else:
             raise NotImplementedError(f"Unsupported 'use' value: {use}")
+    
+    @staticmethod
+    def load_potential(
+        restore_from_wandb: Dict[str, str],
+    ):
+        restored_model = wandb.restore(
+            restore_from_wandb["model_name"],
+            run_path=restore_from_wandb["run_path"],
+        )
+        model = torch.load(restored_model.name)
+        
+        return model
 
 
 class PyTorch2JAXConverter:

@@ -88,9 +88,28 @@ These components work together to enable the accurate prediction of molecular pr
 Contributing to the modelforge package
 ---------------------------------------
 
-The `modelforge` package is an open-source project, and we welcome contributions from the community.
-In general, modelforge uses the `Fork & Pull <https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/getting-started/about-collaborative-development-models#>`_ approach for contributions; any github users can fork the project and submit a pull request with their changes.
+The `modelforge` package is an open-source project and we welcome contributions from the community.
+In general, modelforge uses the `Fork & Pull <https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/getting-started/about-collaborative-development-models#>`_ approach for contributions.
+Any github user can fork the project and submit a pull request with their changes.
 The modelforge team will review the pull request and merge it if it meets the project's standards.
-*modelforge* follows the `PEP8 <https://pep8.org/>`_ style guide for Python code and uses `black <https://black.readthedocs.io/en/stable/>`_ for code formatting, with a default maximum line length of 88 characters.
-Python type hints are also used to improve code readability and maintainability.
-Docstrings are included and formatted using the `numpydoc <https://numpydoc.readthedocs.io/en/latest/>`_ style.
+
+Before contributing changes or additions to *modelforge*, first open an issue on github to discuss the proposed changes.
+This will help ensure that the changes are in line with the project's goals and that they are implemented in a way that
+is consistent with the rest of the codebase.
+This will also ensure that such proposed changes are not already being worked on by another contributor.
+
+When contributing to *modelforge*, please follow the guidelines below:
+
+- Open an issue on github to discuss the proposed changes before starting work.
+- Fork the project and create a new branch for your changes.
+- Use the `PEP8 <https://pep8.org/>`_ style guide for Python code.
+- Use `black <https://black.readthedocs.io/en/stable/>`_ for code formatting.
+- Use Python type hints to improve code readability and maintainability.
+- Include docstrings formatted using the `numpydoc <https://numpydoc.readthedocs.io/en/latest/>`_ style.
+- Include unit tests for new code, including both positive and negative tests when applicable, and test edge cases.
+- Include/update documentation in the form of .rst files (in the docs folder).
+- Ensure that the code is well-commented.
+- If applicable, include examples of how to use the new code.
+- For more complex additions (e.g., new NNPs) create a new wiki page to explain the underlying algorithms.
+
+For more information on contributing to open-source projects, see the `Open Source Guides <https://opensource.guide/>`_.

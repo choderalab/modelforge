@@ -1,12 +1,15 @@
 ## Pull Request Summary
 Provide a brief description of the PR's purpose here.
 
-### Todos
+### Key changes
 Notable points that this PR has either accomplished or will accomplish.
- - [ ] TODO 1
+ - [ ] Change 1
 
 ### Questions
  - [ ] Question 1
+
+### Associated Issue(s)
+ - [ ] Issue 1
 
 ## Pull Request Checklist
  - [ ] Issue(s) raised/addressed and linked

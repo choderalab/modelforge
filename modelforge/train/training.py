@@ -38,6 +38,7 @@ T_NNP_Parameters = TypeVar(
 
 from modelforge.train.losses import LossFactory, create_error_metrics
 from modelforge.train.parameters import RuntimeParameters, TrainingParameters
+from modelforge.potential.models import NeuralNetworkPotentialFactory
 
 __all__ = [
     "ModelTrainer",
@@ -246,6 +247,7 @@ class TrainingAdapter(pL.LightningModule):
         dataset_statistic: Dict[str, Dict[str, unit.Quantity]],
         training_parameter: TrainingParameters,
         potential_seed: Optional[int] = None,
+        restore_from_wandb: Union[bool, Dict[str, str]] = False,
     ):
         """
         Initializes the TrainingAdapter with the specified model and training configuration.
@@ -267,13 +269,18 @@ class TrainingAdapter(pL.LightningModule):
         self.save_hyperparameters()
         self.training_parameter = training_parameter
 
-        self.potential = setup_potential(
-            potential_parameter=potential_parameter,
-            dataset_statistic=dataset_statistic,
-            potential_seed=potential_seed,
-            jit=False,
-            use_training_mode_neighborlist=True,
-        )
+        if not restore_from_wandb:
+            self.potential = setup_potential(
+                potential_parameter=potential_parameter,
+                dataset_statistic=dataset_statistic,
+                potential_seed=potential_seed,
+                jit=False,
+                use_training_mode_neighborlist=True,
+            )
+        else:
+            self.potential = NeuralNetworkPotentialFactory.load_potential(
+                restore_from_wandb=restore_from_wandb,
+            )
 
         self.include_force = (
             "per_atom_force" in training_parameter.loss_parameter.loss_property
@@ -529,6 +536,7 @@ class ModelTrainer:
         optimizer_class: Type[Optimizer] = torch.optim.AdamW,
         potential_seed: Optional[int] = None,
         verbose: bool = False,
+        restore_from_wandb: Union[bool, Dict[str, str]] = False,
     ):
         """
         Initializes the TrainingAdapter with the specified model and training configuration.
@@ -571,7 +579,7 @@ class ModelTrainer:
             else dataset_statistic
         )
         self.experiment_logger = self.setup_logger()
-        self.model = self.setup_potential(potential_seed)
+        self.model = self.setup_potential(potential_seed, restore_from_wandb)
         self.callbacks = self.setup_callbacks()
         self.trainer = self.setup_trainer()
         self.optimizer_class = optimizer_class
@@ -642,7 +650,9 @@ class ModelTrainer:
         return dm
 
     def setup_potential(
-        self, potential_seed: Optional[int] = None
+        self,
+        potential_seed: Optional[int] = None,
+        restore_from_wandb: Union[bool, Dict[str, str]] = False,
     ) -> pL.LightningModule:
         """
         Set up the model for training.
@@ -664,6 +674,7 @@ class ModelTrainer:
             dataset_statistic=self.dataset_statistic,
             training_parameter=self.training_parameter,
             potential_seed=potential_seed,
+            restore_from_wandb=restore_from_wandb,
         )
 
     def setup_logger(self) -> pL.loggers.Logger:
@@ -1066,7 +1077,7 @@ def read_config_and_train(
     from modelforge.potential.models import NeuralNetworkPotentialFactory
 
     model = NeuralNetworkPotentialFactory.generate_potential(
-        use="training",
+        use="test_loading",
         potential_parameter=potential_parameter,
         training_parameter=training_parameter,
         dataset_parameter=dataset_parameter,

@@ -1,22 +1,26 @@
 [potential]
-potential_name = "ANI2x"
+potential_name = "SchNet"
 
 [potential.core_parameter]
-angle_sections = 4
-maximum_interaction_radius = "5.1 angstrom"
-minimum_interaction_radius = "0.8 angstrom"
 number_of_radial_basis_functions = 16
-maximum_interaction_radius_for_angular_features = "3.5 angstrom"
-minimum_interaction_radius_for_angular_features = "0.8 angstrom"
-angular_dist_divisions = 8
+maximum_interaction_radius = "5.0 angstrom"
+number_of_interaction_modules = 3
+number_of_filters = 32
+shared_interactions = false
+predicted_properties = ["per_atom_energy"]
+predicted_dim = [1]
 
 [potential.core_parameter.activation_function_parameter]
-activation_function_name = "CeLU"   # for the original ANI behavior please stick with CeLu since the alpha parameter is currently hard coded and might lead to different behavior when another activation function is used.
+activation_function_name = "ShiftedSoftplus"
 
-[potential.core_parameter.activation_function_parameter.activation_function_arguments]
-alpha = 0.1
+[potential.core_parameter.featurization]
+properties_to_featurize = ['atomic_number']
+[potential.core_parameter.featurization.atomic_number]
+maximum_atomic_number = 101
+number_of_per_atom_features = 32
 
 [potential.postprocessing_parameter]
+properties_to_process = ['per_atom_energy']
 [potential.postprocessing_parameter.per_atom_energy]
 normalize = true
 from_atom_to_molecule_reduction = true
@@ -29,17 +33,28 @@ num_workers = 4
 pin_memory = true
 
 [training]
-number_of_epochs = 1000
+number_of_epochs = 2
 remove_self_energies = true
-batch_size = 16
-lr = 0.5e-3
+batch_size = 128
+lr = 1e-3
 monitor_for_checkpoint = "val/per_molecule_energy/rmse"
 
-[training.experiment_logger]
-logger_name = "tensorboard"
 
+[training.experiment_logger]
+logger_name = "wandb" # this will set which logger to use
+
+# configuration for both loggers can be defined simultaneously, the logger_name variable defines which logger to use
 [training.experiment_logger.tensorboard_configuration]
 save_dir = "logs"
+
+[training.experiment_logger.wandb_configuration]
+save_dir = "logs"
+project = "test_checkpoint"
+group = "exp00"
+log_model = true
+job_type = "testing"
+tags = ["v_0.1.0"]
+notes = "testing saving and loading checkpoints"
 
 [training.lr_scheduler]
 frequency = 1
@@ -54,11 +69,11 @@ monitor = "val/per_molecule_energy/rmse"
 interval = "epoch"
 
 [training.loss_parameter]
-loss_property = ['per_molecule_energy', 'per_atom_force'] # use
+loss_property = ['per_molecule_energy'] #, 'per_atom_force'] # use
 
 [training.loss_parameter.weight]
-per_molecule_energy = 0.999 #NOTE: reciprocal units
-per_atom_force = 0.001
+per_molecule_energy = 1.0 #NOTE: reciprocal units
+#per_atom_force = 0.001
 
 [training.early_stopping]
 verbose = true
@@ -72,12 +87,12 @@ data_split = [0.8, 0.1, 0.1]
 seed = 42
 
 [runtime]
-save_dir = "test_setup"
 experiment_name = "{potential_name}_{dataset_name}"
 local_cache_dir = "./cache"
 accelerator = "cpu"
 number_of_nodes = 1
-devices = 1                                         #[0,1,2,3]
+devices = 1                  #[0,1,2,3]
 checkpoint_path = "None"
 simulation_environment = "PyTorch"
 log_every_n_steps = 1
+verbose=1

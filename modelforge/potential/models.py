@@ -421,152 +421,6 @@ class JAXModel:
         return f"{self.__class__.__name__} wrapping {self.name}"
 
 
-class Displacement(torch.nn.Module):
-    def __init__(self, box_vectors: torch.Tensor, periodic: bool):
-        """
-        Compute displacement vectors between pairs of atoms, considering periodic boundary conditions.
-
-        Attributes
-        ----------
-        box_vectors : torch.Tensor
-            Box vectors defining the periodic boundaries. Shape: [3, 3].
-        periodic : bool
-            Whether to apply periodic boundary conditions.
-        """
-        super().__init__()
-        self.box_vectors = box_vectors
-        self.box_lengths = torch.tensor(
-            [box_vectors[0][0], box_vectors[1][1], box_vectors[2][2]]
-        ).to(box_vectors.device)
-
-        self.periodic = periodic
-
-    def forward(
-        self,
-        coordinate_i: torch.Tensor,
-        coordinate_j: torch.Tensor,
-    ):
-        """
-        Compute displacement vectors and Euclidean distances between atom pairs.
-
-        Parameters
-        ----------
-        coordinate_i : torch.Tensor
-            Coordinates of the first atom in each pair. Shape: [n_pairs, 3].
-        coordinate_j : torch.Tensor
-            Coordinates of the second atom in each pair. Shape: [n_pairs, 3].
-
-        Returns
-        -------
-        Tuple[torch.Tensor, torch.Tensor]
-            Displacement vectors (r_ij) of shape [n_pairs, 3] and distances (d_ij) of shape [n_pairs, 1].
-        """
-        r_ij = coordinate_i - coordinate_j
-
-        if self.periodic:
-            # Note, since box length may change, we need to modify the code to pass box_vectors every time
-
-            r_ij = (
-                torch.remainder(r_ij + self.box_lengths / 2, self.box_lengths)
-                - self.box_lengths / 2
-            )
-
-        d_ij = torch.norm(r_ij, dim=1, keepdim=True, p=2)
-        return r_ij, d_ij
-
-
-class NeighborlistForInference(torch.nn.Module):
-
-    def __init__(
-        self,
-        cutoff: float,
-        displacement_function: Displacement,
-        only_unique_pairs: bool = False,
-    ):
-        """
-        Compute neighbor lists for inference, filtering pairs based on a cutoff distance.
-
-        Parameters
-        ----------
-        cutoff : float
-            The cutoff distance for neighbor list calculations.
-        only_unique_pairs : bool, optional
-            Whether to only use unique pairs in the pair list calculation, by
-            default True. This should be set to True for all message passing
-            networks.
-        """
-
-        super().__init__()
-
-        self.register_buffer("cutoff", torch.tensor(cutoff))
-        self.displacement_function = displacement_function
-        self.indices = torch.tensor([])
-        self.i_final_pairs = torch.tensor([])
-        self.j_final_pairs = torch.tensor([])
-        self.only_unique_pairs = only_unique_pairs
-
-    def forward(self, data: NNPInputTuple):
-        """
-        Prepares the input tensors for passing to the model.
-
-        This method handles general input manipulation, such as calculating
-        distances and generating the pair list. It also calls the model-specific
-        input preparation.
-
-        Parameters
-        ----------
-        data : NNPInputTuple
-            The input data provided by the dataset, containing atomic numbers,
-            positions, and other necessary information.
-
-        Returns
-        -------
-        PairListOutputs
-            Contains pair indices, distances (d_ij), and displacement vectors (r_ij) for atom pairs within the cutoff.
-        """
-        # ---------------------------
-        # general input manipulation
-        positions = data.positions
-        atomic_subsystem_indices = data.atomic_subsystem_indices
-
-        n = atomic_subsystem_indices.size(0)
-
-        # avoid reinitializing indices if they are already set and haven't changed
-        if self.indices.shape[0] != n:
-            # Generate a range of indices from 0 to n-1
-            self.indices = torch.arange(n, device=atomic_subsystem_indices.device)
-
-            # Create a meshgrid of indices
-            self.i_final_pairs, self.j_final_pairs = torch.meshgrid(
-                self.indices, self.indices, indexing="ij"
-            )
-            if self.only_unique_pairs:
-                mask = self.i_final_pairs < self.j_final_pairs
-
-            else:
-                # Filter out the diagonal elements (where i == j)
-                mask = self.i_final_pairs != self.j_final_pairs
-            self.i_final_pairs = self.i_final_pairs[mask]
-            self.j_final_pairs = self.j_final_pairs[mask]
-        # calculate r_ij and d_ij
-
-        r_ij, d_ij = self.displacement_function(
-            positions[self.i_final_pairs], positions[self.j_final_pairs]
-        )
-
-        # r_ij = positions[i_final_pairs] - positions[j_final_pairs]
-        # d_ij = torch.norm(r_ij, dim=1, keepdim=True, p=2)
-        pair_indices = torch.stack((self.i_final_pairs, self.j_final_pairs))
-
-        in_cutoff = (d_ij <= self.cutoff).squeeze()
-
-        return PairlistData(
-            pair_indices=pair_indices[:, in_cutoff],
-            d_ij=d_ij[in_cutoff],
-            r_ij=r_ij[in_cutoff],
-        )
-
-
 class ComputeInteractingAtomPairs(torch.nn.Module):
 
     def __init__(self, cutoff: float, only_unique_pairs: bool = False):
@@ -874,15 +728,12 @@ def setup_potential(
     potential_seed: Optional[int] = None,
     jit: bool = True,
     only_unique_pairs: bool = False,
-    box_vectors: Optional[torch.Tensor] = None,
-    periodic: bool = False,
+    neighborlist_strategy: Optional[str] = None,
+    verlet_neighborlist_skin: Optional[float] = 0.08,
 ) -> Potential:
     from modelforge.potential import _Implemented_NNPs
     from modelforge.potential.utils import remove_units_from_dataset_statistics
     from modelforge.utils.misc import seed_random_number
-
-    if box_vectors is None:
-        box_vectors = torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
 
     if potential_seed is not None:
         log.info(f"Setting random seed to: {potential_seed}")
@@ -903,13 +754,32 @@ def setup_potential(
             only_unique_pairs=only_unique_pairs,
         )
     else:
-        displacement_function = Displacement(box_vectors, periodic)
+        from modelforge.potential.neighbors import OrthogonalDisplacementFunction
 
-        neighborlist = NeighborlistForInference(
-            cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
-            displacement_function=displacement_function,
-            only_unique_pairs=only_unique_pairs,
-        )
+        displacement_function = OrthogonalDisplacementFunction()
+
+        if neighborlist_strategy == "verlet":
+            from modelforge.potential.neighbors import NeighborlistVerletNsq
+
+            neighborlist = NeighborlistVerletNsq(
+                cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
+                displacement_function=displacement_function,
+                only_unique_pairs=only_unique_pairs,
+                skin=verlet_neighborlist_skin,
+            )
+        elif neighborlist_strategy == "brute":
+            from modelforge.potential.neighbors import NeighborlistBruteForce
+
+            neighborlist = NeighborlistBruteForce(
+                cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
+                displacement_function=displacement_function,
+                only_unique_pairs=only_unique_pairs,
+            )
+        else:
+            raise ValueError(
+                f"Unsupported neighborlist strategy: {neighborlist_strategy}"
+            )
+
     model = Potential(
         core_network,
         neighborlist,
@@ -945,6 +815,8 @@ class NeuralNetworkPotentialFactory:
         simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
         only_unique_pairs: bool = False,
         jit: bool = True,
+        inference_neighborlist_strategy: str = "verlet",
+        verlet_neighborlist_skin: Optional[float] = 0.1,
     ) -> Union[Potential, JAXModel, pl.LightningModule]:
         """
         Create an instance of a neural network potential for training or
@@ -978,7 +850,10 @@ class NeuralNetworkPotentialFactory:
             Whether to use only unique pairs of atoms (default is False).
         jit : bool, optional
             Whether to use JIT compilation (default is True).
-
+        inference_neighborlist_strategy : Optional[str], optional
+            Neighborlist strategy for inference (default is "verlet"). other option is "brute".
+        verlet_neighborlist_skin : Optional[float], optional
+            Skin for the Verlet neighborlist (default is 0.1, units nanometers).
         Returns
         -------
         Union[Potential, JAXModel, pl.LightningModule]
@@ -1012,6 +887,8 @@ class NeuralNetworkPotentialFactory:
                 potential_seed=potential_seed,
                 jit=jit,
                 only_unique_pairs=only_unique_pairs,
+                neighborlist_strategy=inference_neighborlist_strategy,
+                verlet_neighborlist_skin=verlet_neighborlist_skin,
             )
             if simulation_environment == "JAX":
                 return PyTorch2JAXConverter().convert_to_jax_model(model)

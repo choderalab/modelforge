@@ -355,92 +355,137 @@ def test_pairlist_on_dataset():
     )  # +1 because of 0-based indexing
 
 
-def test_inference_neighborlist():
-    from modelforge.potential.models import NeighborlistForInference, Displacement
+def test_displacement_function():
+    """Test that OrthogonalDisplacementFunction behaves as expected, including toggling periodicity"""
     import torch
 
-    coords1 = torch.tensor(
-        [[0, 0, 0], [0, 0, 0], [0.0, 0, 0], [0, 0, 0]], dtype=torch.float32
-    )
-    coords2 = torch.tensor(
-        [[2.0, 0, 0], [-2, 0, 0], [8.0, 0, 0], [-8.0, 0, 0]], dtype=torch.float32
-    )
+    from modelforge.potential.neighbors import OrthogonalDisplacementFunction
 
-    coords3 = torch.tensor(
-        [[0.0, 2.0, 0], [0, -2, 0], [0.0, 8.0, 0], [0.0, -8, 0]], dtype=torch.float32
-    )
-
-    coords4 = torch.tensor(
-        [[0.0, 0, 2.0], [0, 0, -2], [0.0, 0, 8.0], [0.0, 0, -8]], dtype=torch.float32
-    )
+    displacement_function = OrthogonalDisplacementFunction()
 
     box_vectors = torch.tensor(
         [[10, 0, 0], [0, 10, 0], [0, 0, 10]], dtype=torch.float32
     )
 
-    displacement_function = Displacement(box_vectors, periodic=True)
+    coords1 = torch.tensor(
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [0, 0, 0],
+            [1.0, 1.0, 1.0],
+            [3.0, 3.0, 3.0],
+            [8.5, 8.5, 8.5],
+        ],
+        dtype=torch.float32,
+    )
 
-    r_ij, d_ij = displacement_function(coords1, coords2)
+    coords2 = torch.tensor(
+        [
+            [0, 0, 0],
+            [0, 0, 0],
+            [0, 0, 0],
+            [1.0, 1.0, 1.0],
+            [0, 0, 0],
+            [8.5, 8.5, 8.5],
+            [3.0, 3.0, 3.0],
+        ],
+        dtype=torch.float32,
+    )
+    r_ij, d_ij = displacement_function(coords1, coords1, box_vectors, is_periodic=True)
+
+    assert torch.allclose(r_ij, torch.zeros_like(r_ij))
+    assert torch.allclose(d_ij, torch.zeros_like(d_ij))
+
+    r_ij, d_ij = displacement_function(coords1, coords2, box_vectors, is_periodic=True)
 
     assert torch.allclose(
         r_ij,
         torch.tensor(
-            [[-2.0, 0, 0], [2.0, 0, 0], [2.0, 0, 0], [-2.0, 0, 0]], dtype=r_ij.dtype
+            [
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [0.0, 0.0, 1.0],
+                [-1.0, -1.0, -1.0],
+                [1.0, 1.0, 1.0],
+                [4.5, 4.5, 4.5],
+                [-4.5, -4.5, -4.5],
+            ],
+            dtype=r_ij.dtype,
         ),
     )
 
     assert torch.allclose(
-        d_ij, torch.tensor([[2.0], [2.0], [2.0], [2.0]], dtype=d_ij.dtype)
-    )
-
-    r_ij, d_ij = displacement_function(coords1, coords3)
-
-    assert torch.allclose(
-        r_ij,
+        d_ij,
         torch.tensor(
-            [[0, -2.0, 0], [0, 2.0, 0], [0, 2.0, 0], [0, -2.0, 0]], dtype=r_ij.dtype
+            [[1.0], [1.0], [1.0], [1.7321], [1.7321], [7.7942], [7.7942]],
+            dtype=d_ij.dtype,
         ),
+        atol=1e-4,
     )
+    # make sure the function works if the box is not periodic
+    displacement_function = OrthogonalDisplacementFunction()
+    r_ij, d_ij = displacement_function(coords1, coords1, box_vectors, is_periodic=False)
 
-    assert torch.allclose(
-        d_ij, torch.tensor([[2.0], [2.0], [2.0], [2.0]], dtype=d_ij.dtype)
+    assert torch.allclose(r_ij, torch.zeros_like(r_ij))
+    assert torch.allclose(d_ij, torch.zeros_like(d_ij))
+
+    r_ij, d_ij = displacement_function(coords1, coords2, box_vectors, is_periodic=False)
+
+    # since the
+    assert torch.allclose(r_ij, coords1 - coords2)
+    assert torch.allclose(d_ij, torch.norm(r_ij, dim=1, keepdim=True, p=2))
+
+
+def test_inference_neighborlist_building():
+    """Test that NeighborlistBruteNsq and NeighborlistVerletNsq behave identically when building the neighborlist"""
+    from modelforge.potential.neighbors import (
+        NeighborlistBruteNsq,
+        NeighborlistVerletNsq,
+        OrthogonalDisplacementFunction,
     )
-
-    r_ij, d_ij = displacement_function(coords1, coords4)
-
-    assert torch.allclose(
-        r_ij,
-        torch.tensor(
-            [[0, 0, -2.0], [0, 0, 2.0], [0, 0, 2.0], [0, 0, -2.0]], dtype=r_ij.dtype
-        ),
-    )
-
-    assert torch.allclose(
-        d_ij, torch.tensor([[2.0], [2.0], [2.0], [2.0]], dtype=d_ij.dtype)
-    )
-
-    coord5 = torch.tensor(
-        [[0.0, 0, 0], [1, 0, 0], [3.0, 0, 0], [8, 0, 0]], dtype=torch.float32
-    )
-
-    nlist = NeighborlistForInference(
-        cutoff=5.0, displacement_function=displacement_function, only_unique_pairs=False
-    )
+    import torch
 
     from modelforge.dataset.dataset import NNPInput
 
-    data = NNPInput(
-        atomic_numbers=torch.tensor([1, 1, 1, 1], dtype=torch.int64),
-        positions=coord5,
-        atomic_subsystem_indices=torch.tensor([0, 0, 0, 0], dtype=torch.int64),
-        total_charge=torch.tensor([0.0], dtype=torch.float32),
+    displacement_function = OrthogonalDisplacementFunction()
+
+    positions = torch.tensor(
+        [[0.0, 0, 0], [1, 0, 0], [3.0, 0, 0], [8, 0, 0]], dtype=torch.float32
     )
 
+    data = NNPInput(
+        atomic_numbers=torch.tensor([1, 1, 1, 1], dtype=torch.int64),
+        positions=positions,
+        atomic_subsystem_indices=torch.tensor([0, 0, 0, 0], dtype=torch.int64),
+        total_charge=torch.tensor([0.0], dtype=torch.float32),
+        box_vectors=torch.tensor(
+            [[10, 0, 0], [0, 10, 0], [0, 0, 10]], dtype=torch.float32
+        ),
+        is_periodic=True,
+    )
+    # test to
+    nlist = NeighborlistBruteNsq(
+        cutoff=5.0, displacement_function=displacement_function, only_unique_pairs=False
+    )
     pairs, d_ij, r_ij = nlist(data)
 
     assert pairs.shape[1] == 12
 
-    nlist = NeighborlistForInference(
+    nlist_verlet = NeighborlistVerletNsq(
+        cutoff=5.0,
+        displacement_function=displacement_function,
+        skin=0.5,
+        only_unique_pairs=False,
+    )
+
+    pairs_v, d_ij_v, r_ij_v = nlist_verlet(data)
+    assert pairs_v.shape[1] == pairs.shape[1]
+    assert torch.all(pairs_v == pairs)
+    assert torch.allclose(d_ij_v, d_ij)
+    assert torch.allclose(r_ij_v, r_ij)
+
+    nlist = NeighborlistBruteNsq(
         cutoff=5.0, displacement_function=displacement_function, only_unique_pairs=True
     )
 
@@ -448,7 +493,20 @@ def test_inference_neighborlist():
 
     assert pairs.shape[1] == 6
 
-    nlist = NeighborlistForInference(
+    nlist_verlet = NeighborlistVerletNsq(
+        cutoff=5.0,
+        displacement_function=displacement_function,
+        skin=0.5,
+        only_unique_pairs=True,
+    )
+
+    pairs_v, d_ij_v, r_ij_v = nlist_verlet(data)
+    assert pairs_v.shape[1] == pairs.shape[1]
+    assert torch.all(pairs_v == pairs)
+    assert torch.allclose(d_ij_v, d_ij)
+    assert torch.allclose(r_ij_v, r_ij)
+
+    nlist = NeighborlistBruteNsq(
         cutoff=3.5, displacement_function=displacement_function, only_unique_pairs=False
     )
 
@@ -456,60 +514,229 @@ def test_inference_neighborlist():
 
     assert pairs.shape[1] == 10
 
-    assert torch.all(d_ij < 3.5)
+    assert torch.all(d_ij <= 3.5)
 
+    assert torch.all(
+        pairs
+        == torch.tensor(
+            [[0, 0, 0, 1, 1, 1, 2, 3, 2, 3], [1, 2, 3, 2, 3, 0, 0, 0, 1, 1]]
+        )
+    )
 
-def test_pairlist_calculate_r_ij_and_d_ij():
-    # Define inputs
-    import torch
+    assert torch.allclose(
+        r_ij,
+        torch.tensor(
+            [
+                [-1.0, 0.0, 0.0],
+                [-3.0, 0.0, 0.0],
+                [2.0, 0.0, 0.0],
+                [-2.0, 0.0, 0.0],
+                [3.0, 0.0, 0.0],
+                [1.0, -0.0, -0.0],
+                [3.0, -0.0, -0.0],
+                [-2.0, -0.0, -0.0],
+                [2.0, -0.0, -0.0],
+                [-3.0, -0.0, -0.0],
+            ]
+        ),
+    )
 
-    from modelforge.potential.models import Neighborlist
+    assert torch.allclose(
+        d_ij,
+        torch.tensor(
+            [[1.0], [3.0], [2.0], [2.0], [3.0], [1.0], [3.0], [2.0], [2.0], [3.0]]
+        ),
+    )
+
+    nlist_verlet = NeighborlistVerletNsq(
+        cutoff=3.5,
+        displacement_function=displacement_function,
+        skin=0.5,
+        only_unique_pairs=False,
+    )
+
+    pairs_v, d_ij_v, r_ij_v = nlist_verlet(data)
+    assert pairs_v.shape[1] == pairs.shape[1]
+    assert torch.all(pairs_v == pairs)
+    assert torch.allclose(d_ij_v, d_ij)
+    assert torch.allclose(r_ij_v, r_ij)
+
+    displacement_function = OrthogonalDisplacementFunction()
+
+    nlist = NeighborlistBruteNsq(
+        cutoff=5.0, displacement_function=displacement_function, only_unique_pairs=False
+    )
+
+    data.is_periodic = False
+
+    pairs, d_ij, r_ij = nlist(data)
+
+    assert pairs.shape[1] == 8
+    assert torch.all(d_ij <= 5.0)
+
+    nlist_verlet = NeighborlistVerletNsq(
+        cutoff=5.0,
+        displacement_function=displacement_function,
+        skin=0.5,
+        only_unique_pairs=False,
+    )
+
+    pairs_v, d_ij_v, r_ij_v = nlist_verlet(data)
+    assert pairs_v.shape[1] == pairs.shape[1]
+    assert torch.all(pairs_v == pairs)
+    assert torch.allclose(d_ij_v, d_ij)
+    assert torch.allclose(r_ij_v, r_ij)
+
+    # test updates to verlet list
 
     positions = torch.tensor(
-        [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 4.0, 1.0]]
+        [[0.0, 0, 0], [1, 0, 0], [3.0, 0, 0], [8, 0, 0]], dtype=torch.float32
     )
-    atomic_subsystem_indices = torch.tensor([0, 0, 1, 1])
-    from openff.units import unit
 
-    cutoff = unit.Quantity(3.0, unit.nanometer).to(unit.nanometer).m
 
-    # Create Pairlist instance
-    # --------------------------- #
-    # Only unique pairs
-    pairlist = Neighborlist(cutoff, only_unique_pairs=True)
-    pair_indices = pairlist.enumerate_all_pairs(atomic_subsystem_indices)
-
-    # Calculate r_ij and d_ij
-    r_ij = pairlist.calculate_r_ij(pair_indices, positions)
-    d_ij = pairlist.calculate_d_ij(r_ij)
-
-    # Check if the calculated r_ij and d_ij are correct
-    expected_r_ij = torch.tensor([[2.0, 0.0, 0.0], [0.0, 2.0, 1.0]])
-    expected_d_ij = torch.tensor([[2.0000], [2.2361]])
-
-    assert torch.allclose(r_ij, expected_r_ij, atol=1e-3)
-    assert torch.allclose(d_ij, expected_d_ij, atol=1e-3)
-
-    normalized_r_ij = r_ij / d_ij
-    expected_normalized_r_ij = torch.tensor(
-        [[1.0000, 0.0000, 0.0000], [0.0000, 0.8944, 0.4472]]
+def test_verlet_inference():
+    """Test to ensure that the verlet neighborlist properly updates by comparing to brute force neighborlist"""
+    from modelforge.potential.neighbors import (
+        NeighborlistBruteNsq,
+        NeighborlistVerletNsq,
+        OrthogonalDisplacementFunction,
     )
-    assert torch.allclose(expected_normalized_r_ij, normalized_r_ij, atol=1e-3)
+    import torch
 
-    # --------------------------- #
-    # ALL pairs
-    pairlist = Neighborlist(cutoff, only_unique_pairs=False)
-    pair_indices = pairlist.enumerate_all_pairs(atomic_subsystem_indices)
+    from modelforge.dataset.dataset import NNPInput
 
-    # Calculate r_ij and d_ij
-    r_ij = pairlist.calculate_r_ij(pair_indices, positions)
-    d_ij = pairlist.calculate_d_ij(r_ij)
+    def return_data(positions, box_length=10, is_periodic=True):
+        return NNPInput(
+            atomic_numbers=torch.ones(positions.shape[0], dtype=torch.int64),
+            positions=positions,
+            atomic_subsystem_indices=torch.zeros(positions.shape[0], dtype=torch.int64),
+            total_charge=torch.tensor([0.0], dtype=torch.float32),
+            box_vectors=torch.tensor(
+                [[box_length, 0, 0], [0, box_length, 0], [0, 0, box_length]],
+                dtype=torch.float32,
+            ),
+            is_periodic=is_periodic,
+        )
 
-    # Check if the calculated r_ij and d_ij are correct
-    expected_r_ij = torch.tensor(
-        [[2.0, 0.0, 0.0], [-2.0, 0.0, 0.0], [0.0, 2.0, 1.0], [0.0, -2.0, -1.0]]
+    positions = torch.tensor(
+        [[2.0, 0, 0], [1.0, 0, 0], [0.0, 0.0, 0]], dtype=torch.float32
     )
-    expected_d_ij = torch.tensor([[2.0000], [2.0000], [2.2361], [2.2361]])
+    data = return_data(positions)
 
-    assert torch.allclose(r_ij, expected_r_ij, atol=1e-3)
-    assert torch.allclose(d_ij, expected_d_ij, atol=1e-3)
+    displacement_function = OrthogonalDisplacementFunction()
+    nlist_verlet = NeighborlistVerletNsq(
+        cutoff=1.5,
+        displacement_function=displacement_function,
+        skin=0.5,
+        only_unique_pairs=True,
+    )
+
+    nlist_brute = NeighborlistBruteNsq(
+        cutoff=1.5,
+        displacement_function=displacement_function,
+        only_unique_pairs=True,
+    )
+
+    print("first check")
+    pairs, d_ij, r_ij = nlist_brute(data)
+
+    pairs_v, d_ij_v, r_ij_v = nlist_verlet(data)
+
+    assert nlist_verlet.builds == 1
+    assert pairs.shape[1] == 2
+    assert torch.all(pairs_v == pairs)
+    assert torch.allclose(d_ij_v, d_ij)
+    assert torch.allclose(r_ij_v, r_ij)
+
+    # move one particle father away, but still interacting
+    positions = torch.tensor(
+        [[2.2, 0, 0], [1.0, 0, 0], [0.0, 0.0, 0]], dtype=torch.float32
+    )
+    data = return_data(positions)
+
+    pairs, d_ij, r_ij = nlist_brute(data)
+    pairs_v, d_ij_v, r_ij_v = nlist_verlet(data)
+
+    # since we didn't move far enough to trigger a rebuild of the verlet list, the results should be the same
+    assert nlist_verlet.builds == 1
+    assert pairs.shape[1] == 2
+    assert torch.all(pairs_v == pairs)
+    assert torch.allclose(d_ij_v, d_ij)
+    assert torch.allclose(r_ij_v, r_ij)
+
+    # move one particle father away, but still interacting, but enough to trigger a rebuild,
+    # since rebuild 0.5*skin = 0.25
+    positions = torch.tensor(
+        [[2.3, 0, 0], [1.0, 0, 0], [0.0, 0.0, 0]], dtype=torch.float32
+    )
+    data = return_data(positions)
+
+    pairs, d_ij, r_ij = nlist_brute(data)
+    pairs_v, d_ij_v, r_ij_v = nlist_verlet(data)
+
+    assert nlist_verlet.builds == 2
+    assert pairs.shape[1] == 2
+    assert torch.all(pairs_v == pairs)
+    assert torch.allclose(d_ij_v, d_ij)
+    assert torch.allclose(r_ij_v, r_ij)
+
+    # move one particle farther away so it no longer interacts; but less than 0.5*skin = 0.25 since last rebuild,
+    # so no rebuilding will occur
+    positions = torch.tensor(
+        [[2.51, 0, 0], [1.0, 0, 0], [0.0, 0.0, 0]], dtype=torch.float32
+    )
+    data = return_data(positions)
+
+    pairs, d_ij, r_ij = nlist_brute(data)
+    pairs_v, d_ij_v, r_ij_v = nlist_verlet(data)
+
+    assert nlist_verlet.builds == 2
+    assert pairs.shape[1] == 1
+    assert torch.all(pairs_v == pairs)
+    assert torch.allclose(d_ij_v, d_ij)
+    assert torch.allclose(r_ij_v, r_ij)
+
+    # move the particle back such that it is interacting, but less than half the skin, so no rebuild
+    positions = torch.tensor(
+        [[2.45, 0, 0], [1.0, 0, 0], [0.0, 0.0, 0]], dtype=torch.float32
+    )
+    data = return_data(positions)
+
+    pairs, d_ij, r_ij = nlist_brute(data)
+    pairs_v, d_ij_v, r_ij_v = nlist_verlet(data)
+
+    assert nlist_verlet.builds == 2
+    assert pairs.shape[1] == 2
+    assert torch.all(pairs_v == pairs)
+    assert torch.allclose(d_ij_v, d_ij)
+    assert torch.allclose(r_ij_v, r_ij)
+
+    # force a rebuild by changing box_vectors
+    positions = torch.tensor(
+        [[2.45, 0, 0], [1.0, 0, 0], [0.0, 0.0, 0]], dtype=torch.float32
+    )
+    data = return_data(positions, 9)
+
+    pairs, d_ij, r_ij = nlist_brute(data)
+    pairs_v, d_ij_v, r_ij_v = nlist_verlet(data)
+
+    assert nlist_verlet.builds == 3
+    assert pairs.shape[1] == 2
+    assert torch.all(pairs_v == pairs)
+    assert torch.allclose(d_ij_v, d_ij)
+    assert torch.allclose(r_ij_v, r_ij)
+
+    # force rebuild by changing number of particles; but let's add a particle that doesn't interact
+    positions = torch.tensor(
+        [[2.45, 0, 0], [1.0, 0, 0], [0.0, 0.0, 0], [4, 0, 0]], dtype=torch.float32
+    )
+    data = return_data(positions, 9)
+
+    pairs, d_ij, r_ij = nlist_brute(data)
+    pairs_v, d_ij_v, r_ij_v = nlist_verlet(data)
+
+    assert nlist_verlet.builds == 4
+    assert pairs.shape[1] == 2
+    assert torch.all(pairs_v == pairs)
+    assert torch.allclose(d_ij_v, d_ij)
+    assert torch.allclose(r_ij_v, r_ij)

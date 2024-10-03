@@ -1,6 +1,36 @@
 from typing import Optional
 
 
+def _add_per_atom_charge_to_predicted_properties(config):
+    config["potential"].core_parameter.predicted_properties.append("per_atom_charge")
+    config["potential"].core_parameter.predicted_dim.append(1)
+    return config
+
+
+def _add_per_atom_charge_to_properties_to_process(config):
+    config["potential"].postprocessing_parameter.properties_to_process.append(
+        "per_atom_charge"
+    )
+    return config
+
+
+def _add_electrostatic_to_predicted_properties(config):
+    from modelforge.potential.parameters import CoulombPotential
+
+    config["potential"].postprocessing_parameter.properties_to_process.append(
+        "E_electrostatic"
+    )
+    config["potential"].postprocessing_parameter.coulomb_potential = CoulombPotential(
+        electrostatic_strategy="coulomb",
+        maximum_interaction_radius=10.0 * unit.angstrom,
+        keep_per_atom_property=True,
+    )
+
+    return config
+
+
+
+
 def setup_potential_for_test(
     potential_name: str,
     use: str,

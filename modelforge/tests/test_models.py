@@ -4,37 +4,14 @@ from openff.units import unit
 
 from modelforge.dataset import _ImplementedDatasets
 from modelforge.potential import NeuralNetworkPotentialFactory, _Implemented_NNPs
-from modelforge.tests.helper_functions import setup_potential_for_test
+from modelforge.tests.helper_functions import (
+    setup_potential_for_test,
+    _add_electrostatic_to_predicted_properties,
+    _add_per_atom_charge_to_predicted_properties,
+    _add_per_atom_charge_to_properties_to_process,
+)
 from modelforge.utils.io import import_
 from modelforge.utils.misc import load_configs_into_pydantic_models
-
-
-def set_postprocessing_based_on_energy_expression(config, energy_expression):
-    if energy_expression == "short_range":
-        return config
-    elif energy_expression == "short_range_and_long_range_electrostatic":
-        from modelforge.potential.parameters import CoulombPotential
-
-        # add output head
-        config["potential"].core_parameter.predicted_properties.append(
-            "per_atom_charge"
-        )
-        config["potential"].core_parameter.predicted_dim.append(1)
-
-        # add postprocessing for charge correction
-        conf_section = config["potential"].postprocessing_parameter
-
-        # set parameters
-        conf_section.properties_to_process.append("per_atom_charge")
-        conf_section.properties_to_process.append("E_electrostatic")
-
-        conf_section.coulomb_potential = CoulombPotential(
-            electrostatic_strategy="coulomb",
-            maximum_interaction_radius=10.0 * unit.angstrom,
-            keep_per_atom_property=True,
-        )
-
-        return config
 
 
 def initialize_model(simulation_environment: str, config, mode: str, jit: bool):
@@ -142,54 +119,6 @@ def convert_to_pytorch_if_needed(output, nnp_input, model):
     else:
         atomic_subsystem_indices = nnp_input.atomic_subsystem_indices
     return output, atomic_subsystem_indices
-
-
-def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
-    from importlib import resources
-
-    import toml
-
-    from modelforge.tests.data import (
-        dataset_defaults,
-        potential_defaults,
-        runtime_defaults,
-        training_defaults,
-    )
-
-    potential_path = (
-        resources.files(potential_defaults) / f"{potential_name.lower()}.toml"
-    )
-    dataset_path = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
-    training_path = resources.files(training_defaults) / "default.toml"
-    runtime_path = resources.files(runtime_defaults) / "runtime.toml"
-
-    training_config_dict = toml.load(training_path)
-    dataset_config_dict = toml.load(dataset_path)
-    potential_config_dict = toml.load(potential_path)
-    runtime_config_dict = toml.load(runtime_path)
-    print(potential_config_dict)
-    potential_name = potential_config_dict["potential"]["potential_name"]
-
-    from modelforge.potential import _Implemented_NNP_Parameters
-
-    PotentialParameters = (
-        _Implemented_NNP_Parameters.get_neural_network_parameter_class(potential_name)
-    )
-    potential_parameters = PotentialParameters(**potential_config_dict["potential"])
-
-    from modelforge.dataset.dataset import DatasetParameters
-    from modelforge.train.parameters import RuntimeParameters, TrainingParameters
-
-    dataset_parameters = DatasetParameters(**dataset_config_dict["dataset"])
-    training_parameters = TrainingParameters(**training_config_dict["training"])
-    runtime_parameters = RuntimeParameters(**runtime_config_dict["runtime"])
-
-    return {
-        "potential": potential_parameters,
-        "dataset": dataset_parameters,
-        "training": training_parameters,
-        "runtime": runtime_parameters,
-    }
 
 
 def test_electrostatics():
@@ -641,23 +570,31 @@ def test_multiple_output_heads(
     single_batch_with_batchsize,
     jit,
 ):
-    # get input and set up model
+    """Test models with multiple output heads."""
+    # Get input and set up model
     nnp_input = single_batch_with_batchsize(32, dataset_name).nnp_input_tuple
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
-    set_postprocessing_based_on_energy_expression(config, energy_expression)
+    # Modify the config based on the energy expression
+    config = _add_per_atom_charge_to_predicted_properties(config)
+    if energy_expression == "short_range_and_long_range_electrostatic":
+        config = _add_electrostatic_to_predicted_properties(config)
+        config = _add_per_atom_charge_to_properties_to_process(config)
 
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
     model = initialize_model(simulation_environment, config, mode, jit)
 
-    # perform the forward pass through each of the models
+    # Perform the forward pass through the model
     output = model(nnp_input)
+
+    # Validate outputs
     validate_output_shapes(output, nr_of_mols, energy_expression)
     validate_chemical_equivalence(output)
-    validate_per_atom_and_per_molecule_propterties(output)
-    # test that charge correction is working
+    validate_per_atom_and_per_molecule_properties(output)
+
+    # Test charge correction
     if energy_expression == "short_range_and_long_range_electrostatic":
         per_molecule_charge, per_molecule_charge_corrected = retrieve_molecular_charges(
-            output, atomic_subsystem_indices
+            output, nnp_input.atomic_subsystem_indices
         )
         validate_charge_conservation(
             per_molecule_charge,
@@ -665,39 +602,6 @@ def test_multiple_output_heads(
             output["per_molecule_charge"],
             potential_name,
         )
-
-
-@pytest.mark.parametrize("dataset_name", ["QM9"])
-@pytest.mark.parametrize(
-    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
-)
-@pytest.mark.parametrize("simulation_environment", ["PyTorch"])
-@pytest.mark.parametrize("mode", ["inference"])
-@pytest.mark.parametrize("jit", [False, True])
-def test_multiple_output_heads(
-    dataset_name,
-    potential_name,
-    simulation_environment,
-    mode,
-    jit,
-    single_batch_with_batchsize,
-):
-    # get input and set up model
-    nnp_input = single_batch_with_batchsize(32, dataset_name).nnp_input_tuple
-    config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
-
-    # add output head
-    config["potential"].core_parameter.predicted_properties.append("per_atom_charge")
-    config["potential"].core_parameter.predicted_dim.append(1)
-
-    nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
-    model = initialize_model(simulation_environment, config, mode, jit)
-
-    # perform the forward pass through each of the models
-    output = model(nnp_input)
-
-    validate_chemical_equivalence(output)
-    validate_per_atom_and_per_molecule_propterties(output)
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])

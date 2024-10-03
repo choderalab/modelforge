@@ -77,6 +77,8 @@ jobs:
 
       - name: CodeCov
         uses: codecov/codecov-action@v3
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         if: ${{ github.event != 'schedule' }}  # Don't upload results on scheduled runs
         with:
           file: ./coverage.xml

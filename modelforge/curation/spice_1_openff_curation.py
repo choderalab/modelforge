@@ -6,6 +6,7 @@ from modelforge.utils.io import import_
 retry = import_("retry").retry
 from tqdm import tqdm
 from openff.units import unit
+import numpy as np
 
 
 class SPICE1OpenFFCuration(DatasetCuration):
@@ -150,7 +151,7 @@ class SPICE1OpenFFCuration(DatasetCuration):
             "name": "single_rec",
             "dataset_name": "single_rec",
             "source": "single_rec",
-            "total_charge": "single_rec",
+            "total_charge": "series_mol",
             "atomic_numbers": "single_atom",
             "n_configs": "single_rec",
             "reference_energy": "single_rec",
@@ -348,7 +349,7 @@ class SPICE1OpenFFCuration(DatasetCuration):
 
         return (
             sum(atom_energy[s][c] for s, c in zip(symbol, charge)) * unit.hartree,
-            int(total_charge) * unit.elementary_charge,
+            np.array([int(total_charge)]) * unit.elementary_charge,
         )
 
     def _sort_keys(self, non_error_keys: List[str]) -> Tuple[List[str], Dict[str, str]]:
@@ -653,6 +654,12 @@ class SPICE1OpenFFCuration(DatasetCuration):
                                 np.array(val["properties"][quantity]).reshape(1, -1, 3),
                             )
                         )
+        for datapoint in self.data:
+            n_configs = datapoint["n_configs"]
+            total_charge = datapoint["total_charge"]
+            datapoint["total_charge"] = (
+                np.repeat(total_charge.m, n_configs) * total_charge.u
+            )
         # assign units
         for datapoint in self.data:
             for key in datapoint.keys():
@@ -732,6 +739,8 @@ class SPICE1OpenFFCuration(DatasetCuration):
                 ]
                 datapoint["mbis_charges"] = datapoint["mbis_charges"][0:n_conformers]
                 datapoint["scf_dipole"] = datapoint["scf_dipole"][0:n_conformers]
+
+                datapoint["total_charge"] = datapoint["total_charge"][0:n_conformers]
 
                 temp_data.append(datapoint)
                 conformers_count += n_conformers

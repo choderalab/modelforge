@@ -4,24 +4,24 @@ latest_test: nc_1000_v1
 
 full_dataset_v1:
   version: 1
-  doi:
+  doi: 10.5281/zenodo.13883667
   gz_data_file:
-    length: 11193528261
-    md5:
+    length: 11218036423
+    md5: eb94c7d8d8bf06cd3c6f9bf13be4c364
     name: SPICE114_dataset_v1.hdf5.gz
   hdf5_data_file:
-    md5:
+    md5: 4bb4e8f638b86096ee2dd83685d8d494
     name: SPICE114_dataset_v1.hdf5
   processed_data_file:
     md5: null
     name: SPICE114_dataset_v1_processed.npz
-  url: h
+  url: https://zenodo.org/records/13883667/files/spice_114_dataset_v1.hdf5.gz
 nc_1000_v1:
   version: 1
-  doi:
+  doi: 10.5281/zenodo.13883550
   gz_data_file:
-    length: 15166233
-    md5: 8ff0d9f721c2b473691bc15614cc98ec
+    length: 15165095
+    md5: dabdff24358c303f82f04c6599ac53d0
     name: SPICE114_dataset_v1_nc_1000.hdf5.gz
   hdf5_data_file:
     md5: 33d2d04bb14d59fc54ad538e1083ea9e
@@ -29,35 +29,35 @@ nc_1000_v1:
   processed_data_file:
     md5: null
     name: SPICE114_dataset_v1_nc_1000_processed.npz
-  url:
+  url: https://zenodo.org/records/13883550/files/spice_114_dataset_v1_ntc_1000.hdf5.gz
 full_dataset_v1_HCNOFClS:
   version: 1
-  doi:
+  doi: 10.5281/zenodo.13883617
   gz_data_file:
-    length: 10046809694
-    md5:
+    length: 10046842576
+    md5: d17383d4c2cf51aec790036c9fe98c04
     name: SPICE114_dataset_v1_HCNOFClS.hdf5.gz
   hdf5_data_file:
-    md5:
+    md5: aae832f44a748a4bc9932bbed6ee4c7e
     name: SPICE114_dataset_v1_HCNOFClS.hdf5
   processed_data_file:
     md5: null
     name: SPICE114_dataset_v1_HCNOFClS_processed.npz
-  url:
+  url: https://zenodo.org/records/13883617/files/spice_114_dataset_v1_HCNOFClS.hdf5.gz
 nc_1000_v1_HCNOFClS:
   version: 1
-  doi:
+  doi: 10.5281/zenodo.13883112
   gz_data_file:
-    length: 14778658
-    md5:
+    length: 14782035
+    md5: a9c327a5e86dae548c93918cd4f5a821
     name: SPICE114_dataset_v1_nc_1000_HCNOFClS.hdf5.gz
   hdf5_data_file:
-    md5:
+    md5: dc143bd509287f5f015c46058430a8fd
     name: SPICE114_dataset_v1_nc_1000_HCNOFClS.hdf5
   processed_data_file:
     md5: null
     name: SPICE114_dataset_v1_nc_1000_HCNOFClS_processed.npz
-  url:
+  url: https://zenodo.org/records/13883112/files/spice_114_dataset_v1_ntc_1000_HCNOFClS.hdf5.gz
 full_dataset_v0:
   version: 0
   doi: 10.5281/zenodo.11583341

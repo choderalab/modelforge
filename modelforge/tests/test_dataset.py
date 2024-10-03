@@ -350,10 +350,13 @@ def test_metadata_validation(prep_temp_dir):
     }
 
     import json
-
+    # create local_cache_dir if not already present
+    import os
+    os.makedirs(local_cache_dir, exist_ok=True)
+    
     with open(
         f"{local_cache_dir}/qm9_test.json",
-        "w",
+        "w+",
     ) as f:
         json.dump(metadata, f)
 

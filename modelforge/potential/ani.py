@@ -9,7 +9,7 @@ using a neural network model.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict, Tuple, Type
+from typing import TYPE_CHECKING, Dict, Tuple
 
 import torch
 from loguru import logger as log
@@ -96,7 +96,7 @@ class ANIRepresentation(nn.Module):
         nr_of_supported_elements: int = 7,
     ):
         super().__init__()
-        from modelforge.potential.utils import CosineAttenuationFunction
+        from modelforge.potential import CosineAttenuationFunction
 
         self.maximum_interaction_radius_for_angular_features = (
             maximum_interaction_radius_for_angular_features
@@ -214,7 +214,7 @@ class ANIRepresentation(nn.Module):
         min_distance: float
         number_of_radial_basis_functions : int
         """
-        from .utils import AniRadialBasisFunction
+        from .representation import AniRadialBasisFunction
 
         radial_symmetry_function = AniRadialBasisFunction(
             number_of_radial_basis_functions,
@@ -231,7 +231,7 @@ class ANIRepresentation(nn.Module):
         angular_dist_divisions: int,
         angle_sections: int,
     ):
-        from .utils import AngularSymmetryFunction
+        from .representation import AngularSymmetryFunction
 
         # set up modelforge angular features
         return AngularSymmetryFunction(

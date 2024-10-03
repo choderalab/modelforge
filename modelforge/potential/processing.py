@@ -3,7 +3,7 @@ This module contains utility functions and classes for processing the output of 
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, Iterator, List, Type, Union
+from typing import Dict, Iterator, Union
 
 import torch
 from openff.units import unit
@@ -516,7 +516,7 @@ class CoulombPotential(torch.nn.Module):
             The cutoff function applied to the pairwise distances.
         """
         super().__init__()
-        from .utils import PhysNetAttenuationFunction
+        from .representation import PhysNetAttenuationFunction
 
         self.strategy = strategy
         self.cutoff_function = PhysNetAttenuationFunction(cutoff)

@@ -39,7 +39,7 @@ def test_init():
 
 def test_compare_rbf():
     # compare schnetpack RadialSymmetryFunction with modelforge RadialSymmetryFunction
-    from modelforge.potential.utils import SchnetRadialBasisFunction
+    from modelforge.potential import SchnetRadialBasisFunction
     from openff.units import unit
 
     # Initialize the RBFs

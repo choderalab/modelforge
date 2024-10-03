@@ -22,10 +22,5 @@ normalize = true
 from_atom_to_molecule_reduction = true
 keep_per_atom_property = true
 
-[potential.postprocessing_parameter.per_atom_charge]
-conserve = true
-strategy = "physnet"
-keep_per_atom_property = true
-
 [potential.postprocessing_parameter.general_postprocessing_operation]
 calculate_molecular_self_energy = true

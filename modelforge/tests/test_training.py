@@ -125,7 +125,7 @@ def test_train_from_single_toml_file():
 
 def test_error_calculation(single_batch_with_batchsize):
     # test the different Loss classes
-    from modelforge.train.training import (
+    from modelforge.train.losses import (
         FromPerAtomToPerMoleculeSquaredError,
         PerMoleculeSquaredError,
     )
@@ -180,29 +180,87 @@ def test_error_calculation(single_batch_with_batchsize):
 
 def test_loss_with_dipole_moment(single_batch_with_batchsize):
 
+    # Generate a batch with the specified batch size and dataset
     batch = single_batch_with_batchsize(batch_size=16, dataset_name="SPICE2")
 
-    # get trainer
-    trainer = get_trainer("schnet", "QM9", "train_with_dipole_moment")
-    prediction = trainer.model.calculate_predictions(
-        batch, trainer.model.potential, train_mode=True
-    )  # train_mode=True is required for gradients in force prediction
-
-    assert prediction["per_molecule_energy_predict"].size(
-        dim=0
-    ) == batch.metadata.E.size(dim=0)
-    assert prediction["per_atom_force_predict"].size(dim=0) == batch.metadata.F.size(
-        dim=0
+    # Get the trainer object with the specified model and dataset
+    trainer = get_trainer(
+        potential_name="schnet",
+        dataset_name="SPICE2",
+        training_toml="train_with_dipole_moment",
     )
+    # Calculate predictions using the trainer's model
+    prediction = trainer.model.calculate_predictions(
+        batch,
+        trainer.model.potential,
+        train_mode=True,  # train_mode=True is required for gradients in force prediction
+    )
+
+    # Assertions for energy predictions
+    assert prediction["per_molecule_energy_predict"].size(0) == batch.metadata.E.size(
+        0
+    ), "Mismatch in batch size for energy predictions."
+
+    # Assertions for force predictions
+    assert prediction["per_atom_force_predict"].size(0) == batch.metadata.F.size(
+        0
+    ), "Mismatch in number of atoms for force predictions."
+
+    # Assertions for dipole moment predictions
+    assert (
+        "per_molecule_dipole_predict" in prediction
+    ), "Dipole moment prediction missing."
+    assert (
+        prediction["per_molecule_dipole_predict"].size()
+        == batch.metadata.dipole_moment.size()
+    ), "Mismatch in shape for dipole moment predictions."
+
+    # Assertions for total charge predictions
+    assert (
+        "per_molecule_total_charge_predict" in prediction
+    ), "Total charge prediction missing."
+    assert (
+        prediction["per_molecule_total_charge_predict"].size()
+        == batch.nnp_input.total_charge.squeeze().size()
+    ), "Mismatch in shape for total charge predictions."
+
+    # Now compute the loss
+    loss_dict = trainer.model.loss(predict_target=prediction, batch=batch)
+
+    # Ensure that the loss contains the total_charge and dipole_moment terms
+    assert "total_charge" in loss_dict, "Total charge loss not computed."
+    assert "dipole_moment" in loss_dict, "Dipole moment loss not computed."
+
+    # Check that the losses are finite numbers
+    assert torch.isfinite(
+        loss_dict["total_charge"]
+    ).all(), "Total charge loss contains non-finite values."
+    assert torch.isfinite(
+        loss_dict["dipole_moment"]
+    ).all(), "Dipole moment loss contains non-finite values."
+
+    # Optionally, print or log the losses for debugging
+    print("Total Charge Loss:", loss_dict["total_charge"].mean().item())
+    print("Dipole Moment Loss:", loss_dict["dipole_moment"].mean().item())
+
+    # Check that the total loss includes the new loss terms
+    assert "total_loss" in loss_dict, "Total loss not computed."
+    assert torch.isfinite(
+        loss_dict["total_loss"]
+    ).all(), "Total loss contains non-finite values."
 
 
 def test_loss(single_batch_with_batchsize):
-    from modelforge.train.training import Loss
+    from modelforge.train.losses import Loss
 
     batch = single_batch_with_batchsize(batch_size=16, dataset_name="PHALKETHOH")
 
-    loss_porperty = ["per_molecule_energy", "per_atom_force"]
-    loss_weights = {"per_molecule_energy": 0.5, "per_atom_force": 0.5}
+    loss_porperty = ["per_molecule_energy", "per_atom_force", "per_atom_energy"]
+    loss_weights = {
+        "per_molecule_energy": 0.5,
+        "per_atom_force": 0.5,
+        "per_atom_energy": 0.1,
+    }
     loss = Loss(loss_porperty, loss_weights)
     assert loss is not None
 
@@ -235,11 +293,22 @@ def test_loss(single_batch_with_batchsize):
                 prediction["per_molecule_energy_predict"]
                 - prediction["per_molecule_energy_true"]
             ).pow(2)
-            / batch.metadata.atomic_subsystem_counts.unsqueeze(1)
         )
     )
     # compare to referenc evalue obtained from Loos class
     ref = torch.mean(loss_output["per_molecule_energy"])
+    assert torch.allclose(ref, E_loss)
+    E_loss = torch.mean(
+        (
+            (
+                prediction["per_molecule_energy_predict"]
+                - prediction["per_molecule_energy_true"]
+            ).pow(2)
+            / batch.metadata.atomic_subsystem_counts.unsqueeze(1)
+        )
+    )
+    # compare to referenc evalue obtained from Loos class
+    ref = torch.mean(loss_output["per_atom_energy"])
     assert torch.allclose(ref, E_loss)
 
     # --------------------------------------------- #
@@ -273,7 +342,8 @@ def test_loss(single_batch_with_batchsize):
 
     assert torch.allclose(
         loss_weights["per_molecule_energy"] * loss_output["per_molecule_energy"]
-        + loss_weights["per_atom_force"] * loss_output["per_atom_force"],
+        + loss_weights["per_atom_force"] * loss_output["per_atom_force"]
+        + +loss_weights["per_atom_energy"] * loss_output["per_atom_energy"],
         loss_output["total_loss"].to(torch.float32),
     )
 

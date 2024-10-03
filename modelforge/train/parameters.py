@@ -2,10 +2,11 @@
 This defines pydantic models for the training parameters and runtime parameters.
 """
 
-from pydantic import BaseModel, model_validator, field_validator, ConfigDict
 from enum import Enum
-from typing import List, Union, Dict, Optional, Callable, Type
+from typing import Callable, Dict, List, Optional, Type, Union
+
 import torch
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 
 # So we  do not need to set Config parameters in each model
@@ -330,6 +331,7 @@ class RuntimeParameters(ParametersBase):
     checkpoint_path: Union[str, None]
     simulation_environment: SimulationEnvironment
     log_every_n_steps: int
+    verbose: bool
 
     @field_validator("number_of_nodes")
     @classmethod

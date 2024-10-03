@@ -79,6 +79,7 @@ data_split = [0.8, 0.1, 0.1]
 seed = 42
 
 [runtime]
+verbose = true
 save_dir = "lightning_logs"
 experiment_name = "{potential_name}_{dataset_name}"
 local_cache_dir = "./cache"

@@ -341,7 +341,7 @@ class SchNETRepresentation(nn.Module):
     def _setup_radial_symmetry_functions(
         self, radial_cutoff: float, number_of_radial_basis_functions: int
     ):
-        from .utils import SchnetRadialBasisFunction
+        from modelforge.potential import SchnetRadialBasisFunction
 
         radial_symmetry_function = SchnetRadialBasisFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,

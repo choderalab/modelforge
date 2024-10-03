@@ -6,7 +6,6 @@ from enum import Enum
 from typing import List, Optional, Type, Union
 
 import torch
-from openff.units import unit
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -32,7 +31,10 @@ class CaseInsensitiveEnum(str, Enum):
 # we will just create a parent class for all the parameters classes.
 class ParametersBase(BaseModel):
     model_config = ConfigDict(
-        use_enum_values=True, arbitrary_types_allowed=True, validate_assignment=True
+        use_enum_values=True,
+        arbitrary_types_allowed=True,
+        validate_assignment=True,
+        extra="forbid",
     )
 
 

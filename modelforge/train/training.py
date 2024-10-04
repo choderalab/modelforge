@@ -172,7 +172,6 @@ class CalculateProperties(torch.nn.Module):
         )  # Shape: [nr_of_molecules, 1]
 
         dipole_predict = self._predict_dipole_moment(model_prediction, batch)
-        print("total_charge shape ", total_charge_predict.shape)
         return {
             "per_molecule_total_charge_predict": total_charge_predict,
             "per_molecule_total_charge_true": batch.nnp_input.total_charge,

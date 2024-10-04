@@ -16,6 +16,7 @@ def _add_per_atom_charge_to_properties_to_process(config):
 
 def _add_electrostatic_to_predicted_properties(config):
     from modelforge.potential.parameters import CoulombPotential
+    from openff.units import unit
 
     config["potential"].postprocessing_parameter.properties_to_process.append(
         "E_electrostatic"
@@ -23,12 +24,10 @@ def _add_electrostatic_to_predicted_properties(config):
     config["potential"].postprocessing_parameter.coulomb_potential = CoulombPotential(
         electrostatic_strategy="coulomb",
         maximum_interaction_radius=10.0 * unit.angstrom,
-        keep_per_atom_property=True,
+        # keep_per_atom_property=True,
     )
 
     return config
-
-
 
 
 def setup_potential_for_test(

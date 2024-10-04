@@ -1084,20 +1084,12 @@ class DatasetFactory:
 
 
 from openff.units import unit
-
+from modelforge.custom_types import DatasetType
 
 class DataModule(pl.LightningDataModule):
     def __init__(
         self,
-        name: Literal[
-            "QM9",
-            "ANI1X",
-            "ANI2X",
-            "SPICE1",
-            "SPICE2",
-            "SPICE1_OPENFF",
-            "PhAlkEthOH",
-        ],
+        name: DatasetType,
         splitting_strategy: SplittingStrategy = RandomRecordSplittingStrategy(),
         batch_size: int = 64,
         remove_self_energies: bool = True,

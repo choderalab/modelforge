@@ -502,7 +502,6 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
             total_charge=total_charge,
             atomic_subsystem_indices=torch.zeros(number_of_atoms, dtype=torch.int32),
         )
-
         metadata = Metadata(
             E=E,
             F=F,
@@ -1596,7 +1595,7 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
     total_charge = torch.cat(total_charge_list)
     positions = torch.cat(positions_list).requires_grad_(True)
     F = torch.cat(F_list).to(torch.float64)
-    dipole_moment = torch.cat(dipole_moment_list).to(torch.float64)
+    dipole_moment = torch.stack(dipole_moment_list).to(torch.float64)
     E = torch.stack(E_list)
     if pair_list_present:
         IJ_cat = torch.cat(ij_list, dim=1).to(torch.int64)

@@ -76,9 +76,9 @@ jobs:
           pytest -v --cov=modelforge --cov-report=xml --color=yes --durations=50 modelforge/tests/
 
       - name: CodeCov
+        uses: codecov/codecov-action@v4
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-        uses: codecov/codecov-action@v3
         if: ${{ github.event != 'schedule' }}  # Don't upload results on scheduled runs
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

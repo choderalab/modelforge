@@ -151,7 +151,7 @@ class AimNet2Core(torch.nn.Module):
                         dtype=torch.int64
                     ),
                 }
-            )["per_atom_charge_corrected"].unsqueeze(-1)
+            )["per_atom_charge"].unsqueeze(-1)
 
         return {
             "per_atom_scalar_representation": atomic_embedding,

@@ -353,40 +353,13 @@ class ChargeConservation(torch.nn.Module):
             Updated data dictionary with the key "per_atom_charge_corrected"
             added, containing the corrected per-atom charges.
         """
-        data["per_atom_charge_corrected"] = self.correct_partial_charges(
+        data["per_atom_charge_uncorrected"] = data["per_atom_charge"]
+        data["per_atom_charge"] = self.correct_partial_charges(
             data["per_atom_charge"],
             data["per_molecule_charge"],
             data["atomic_subsystem_indices"],
         )
         return data
-
-
-class PerAtomEnergy(torch.nn.Module):
-
-    def __init__(
-        self, per_atom_energy: Dict[str, bool], dataset_statistics: Dict[str, float]
-    ):
-        super().__init__()
-
-        if per_atom_energy.get("normalize"):
-            scale = ScaleValues(
-                dataset_statistics["per_atom_energy_mean"],
-                dataset_statistics["per_atom_energy_stddev"],
-            )
-        else:
-            scale = ScaleValues(0.0, 1.0)
-
-        self.scale = scale
-
-        if per_atom_energy.get("from_atom_to_molecule_reduction"):
-            reduction = FromAtomToMoleculeReduction()
-
-        self.reduction = reduction
-
-    def forward(self, per_atom_property: torch.Tensor, indices: torch.Tensor):
-        scaled_values = self.scale(per_atom_property)
-        reduced_values = self.reduction(indices, scaled_values)
-        return reduced_values
 
 
 class PerAtomEnergy(torch.nn.Module):
@@ -423,6 +396,21 @@ class PerAtomEnergy(torch.nn.Module):
         data["per_atom_energy"] = data["per_atom_energy"].detach()
 
         return data
+
+
+class PerAtomCharge(torch.nn.Module):
+
+    def __init__(self, per_atom_charge: Dict[str, bool]):
+        super().__init__()
+        from torch import nn
+
+        if per_atom_charge["conserve"] == True:
+            self.conserve = ChargeConservation(per_atom_charge["conserve_strategy"])
+        else:
+            self.conserve = nn.Identity()
+
+    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        return self.conserve(data)
 
 
 class CalculateAtomicSelfEnergy(torch.nn.Module):
@@ -487,11 +475,8 @@ class CalculateAtomicSelfEnergy(torch.nn.Module):
         return data
 
 
-from typing import Literal
-
-
 class CoulombPotential(torch.nn.Module):
-    def __init__(self, strategy: Literal["default"], cutoff: float):
+    def __init__(self, cutoff: float):
         """
         Computes the long-range electrostatic energy for a molecular system
         based on predicted partial charges and pairwise distances between atoms.
@@ -501,9 +486,6 @@ class CoulombPotential(torch.nn.Module):
 
         Parameters
         ----------
-        strategy : str
-            The strategy to be used for computing the long-range electrostatic
-            energy.
         cutoff : float
             The cutoff distance beyond which the interactions are not
             considered in nanometer.
@@ -518,7 +500,6 @@ class CoulombPotential(torch.nn.Module):
         super().__init__()
         from .representation import PhysNetAttenuationFunction
 
-        self.strategy = strategy
         self.cutoff_function = PhysNetAttenuationFunction(cutoff)
 
     def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
@@ -544,8 +525,7 @@ class CoulombPotential(torch.nn.Module):
             containing the computed long-range electrostatic energy.
         """
         mol_indices = data["atomic_subsystem_indices"]
-        pairwise_properties = data["pairwise_properties"]
-        idx_i, idx_j = pairwise_properties["maximum_interaction_radius"].pair_indices
+        idx_i, idx_j = data["pair_indices"]
 
         # only unique paris
         unique_pairs_mask = idx_i < idx_j
@@ -553,9 +533,7 @@ class CoulombPotential(torch.nn.Module):
         idx_j = idx_j[unique_pairs_mask]
 
         # mask pairwise properties
-        pairwise_distances = pairwise_properties["maximum_interaction_radius"].d_ij[
-            unique_pairs_mask
-        ]
+        pairwise_distances = data["d_ij"][unique_pairs_mask]
         per_atom_charge = data["per_atom_charge"]
 
         # Initialize the long-range electrostatic energy

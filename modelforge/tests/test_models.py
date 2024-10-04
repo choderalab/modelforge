@@ -38,13 +38,13 @@ def validate_output_shapes(output, nr_of_mols: int, energy_expression: str):
     assert "per_atom_energy" in output
     if energy_expression == "short_range_and_long_range_electrostatic":
         assert "per_atom_charge" in output
-        assert "per_atom_charge_corrected" in output
+        assert "per_atom_charge_uncorrected" in output
         assert "electrostatic_energy" in output
 
 
 def validate_charge_conservation(
     per_molecule_charge: torch.Tensor,
-    per_molecule_charge_corrected: torch.Tensor,
+    per_molecule_charge_uncorrected: torch.Tensor,
     per_molecule_charge_from_dataset: torch.Tensor,
     model_name: str,
 ):
@@ -55,10 +55,10 @@ def validate_charge_conservation(
             "Physnet starts with all zero partial charges"
         )  # NOTE: I am not sure if this is correct
     else:
-        assert not torch.allclose(per_molecule_charge, per_molecule_charge_corrected)
+        assert not torch.allclose(per_molecule_charge, per_molecule_charge_uncorrected)
     assert torch.allclose(
         per_molecule_charge_from_dataset.to(torch.float32),
-        per_molecule_charge_corrected,
+        per_molecule_charge,
         atol=1e-5,
     )
 
@@ -95,10 +95,10 @@ def retrieve_molecular_charges(output, atomic_subsystem_indices):
     per_molecule_charge = torch.zeros_like(output["per_molecule_energy"]).index_add_(
         0, atomic_subsystem_indices, output["per_atom_charge"]
     )
-    per_molecule_charge_corrected = torch.zeros_like(
+    per_molecule_charge_uncorrected = torch.zeros_like(
         output["per_molecule_energy"]
-    ).index_add_(0, atomic_subsystem_indices, output["per_atom_charge_corrected"])
-    return per_molecule_charge, per_molecule_charge_corrected
+    ).index_add_(0, atomic_subsystem_indices, output["per_atom_charge_uncorrected"])
+    return per_molecule_charge, per_molecule_charge_uncorrected
 
 
 def convert_to_pytorch_if_needed(output, nnp_input, model):
@@ -124,7 +124,7 @@ def convert_to_pytorch_if_needed(output, nnp_input, model):
 def test_electrostatics():
     from modelforge.potential.processing import CoulombPotential
 
-    e_elec = CoulombPotential("default", 1.0)
+    e_elec = CoulombPotential(1.0)
     per_atom_charge = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0])
     # FIXME: this thest has to be implemented
 
@@ -577,8 +577,8 @@ def test_multiple_output_heads(
     # Modify the config based on the energy expression
     config = _add_per_atom_charge_to_predicted_properties(config)
     if energy_expression == "short_range_and_long_range_electrostatic":
-        config = _add_electrostatic_to_predicted_properties(config)
         config = _add_per_atom_charge_to_properties_to_process(config)
+        config = _add_electrostatic_to_predicted_properties(config)
 
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
     model = initialize_model(simulation_environment, config, mode, jit)
@@ -593,12 +593,12 @@ def test_multiple_output_heads(
 
     # Test charge correction
     if energy_expression == "short_range_and_long_range_electrostatic":
-        per_molecule_charge, per_molecule_charge_corrected = retrieve_molecular_charges(
-            output, nnp_input.atomic_subsystem_indices
+        per_molecule_charge, per_molecule_charge_uncorrected = (
+            retrieve_molecular_charges(output, nnp_input.atomic_subsystem_indices)
         )
         validate_charge_conservation(
             per_molecule_charge,
-            per_molecule_charge_corrected,
+            per_molecule_charge_uncorrected,
             output["per_molecule_charge"],
             potential_name,
         )

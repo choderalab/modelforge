@@ -663,7 +663,9 @@ class Potential(torch.nn.Module):
         core_output["per_molecule_charge"] = input_data.total_charge
         return core_output
 
-    def _add_pairlist(self, core_output: Dict[str, torch.Tensor], pairlist_output):
+    def _add_pairlist(
+        self, core_output: Dict[str, torch.Tensor], pairlist_output: PairlistData
+    ):
         """
         Add the pairlist to the core output.
 

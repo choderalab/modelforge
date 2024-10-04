@@ -836,50 +836,46 @@ def test_equivariant_energies_and_forces(
     NOTE: test will be adapted once we have a trained model.
     """
     from dataclasses import replace
-
     import torch
 
+    precision = torch.float64
+
+    # initialize the models
     model = setup_potential_for_test(
         use="inference",
         potential_seed=42,
         potential_name=potential_name,
         simulation_environment=simulation_environment,
-    )
+    ).to(dtype=precision)
 
     # define the symmetry operations
     translation, rotation, reflection = equivariance_utils
     # define the tolerance
-    # some of PAINN tests fail with a tolerance of 1e-3
-    # not sure if this is due to precision since model is float32
-    atol = 1e-2
-
-    # initialize the models
-    model = model.to(dtype=torch.float64)
+    atol = 1e-3
 
     # ------------------- #
     # start the test
     # reference values
-    nnp_input = (
-        single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
-        .to(dtype=torch.float64)
-        .nnp_input
-    )
+    nnp_input = single_batch_with_batchsize(
+        batch_size=64, dataset_name="QM9"
+    ).nnp_input.to(dtype=precision)
 
-    reference_result = model(nnp_input.as_namedtuple())["per_molecule_energy"].to(
-        dtype=torch.float64
-    )
+    reference_result = model(nnp_input.as_namedtuple())["per_molecule_energy"]
     reference_forces = -torch.autograd.grad(
         reference_result.sum(),
         nnp_input.positions,
     )[0]
 
+    # --------------------------------------- #
     # translation test
-    translation_nnp_input = replace(nnp_input)
+    # set up input
+    translation_nnp_input = replace(nnp_input).to(dtype=precision)
     translation_nnp_input.positions = translation(translation_nnp_input.positions)
+
     translation_result = model(translation_nnp_input)["per_molecule_energy"]
     assert torch.allclose(
         translation_result,
-        reference_result.to(dtype=translation_result.dtype),
+        reference_result,
         atol=atol,
     )
 
@@ -889,17 +885,19 @@ def test_equivariant_energies_and_forces(
     )[0]
 
     for t, r in zip(translation_forces, reference_forces):
-        if not torch.allclose(t, r.to(dtype=t.dtype), atol=atol):
+        if not torch.allclose(t, r, atol=atol):
             print(t, r)
 
     assert torch.allclose(
         translation_forces,
-        reference_forces.to(dtype=translation_forces.dtype),
+        reference_forces,
         atol=atol,
     )
 
+    # --------------------------------------- #
     # rotation test
-    rotation_input_data = replace(nnp_input)
+    # set up input
+    rotation_input_data = replace(nnp_input).to(dtype=precision)
     rotation_input_data.positions = rotation(rotation_input_data.positions)
     rotation_result = model(rotation_input_data)["per_molecule_energy"]
 
@@ -909,7 +907,7 @@ def test_equivariant_energies_and_forces(
 
     assert torch.allclose(
         rotation_result,
-        reference_result.to(dtype=rotation_result.dtype),
+        reference_result,
         atol=atol,
     )
 
@@ -923,12 +921,14 @@ def test_equivariant_energies_and_forces(
     rotate_reference = rotation(reference_forces)
     assert torch.allclose(
         rotation_forces,
-        rotate_reference.to(dtype=rotation_forces.dtype),
+        rotate_reference,
         atol=atol,
     )
 
+    # --------------------------------------- #
     # reflection test
-    reflection_input_data = replace(nnp_input)
+    # set up input
+    reflection_input_data = replace(nnp_input).to(dtype=precision)
     reflection_input_data.positions = reflection(reflection_input_data.positions)
     reflection_result = model(reflection_input_data)["per_molecule_energy"]
     reflection_forces = -torch.autograd.grad(
@@ -943,12 +943,12 @@ def test_equivariant_energies_and_forces(
 
     assert torch.allclose(
         reflection_result,
-        reference_result.to(dtype=reflection_result.dtype),
+        reference_result,
         atol=atol,
     )
 
     assert torch.allclose(
         reflection_forces,
-        reflection(reference_forces).to(dtype=reflection_forces.dtype),
+        reflection(reference_forces),
         atol=atol,
     )

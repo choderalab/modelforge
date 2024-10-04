@@ -221,7 +221,7 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize):
     ), "Total charge prediction missing."
     assert (
         prediction["per_molecule_total_charge_predict"].size()
-        == batch.nnp_input.total_charge.squeeze().size()
+        == batch.nnp_input.total_charge.size()
     ), "Mismatch in shape for total charge predictions."
 
     # Now compute the loss

@@ -161,20 +161,23 @@ class CalculateProperties(torch.nn.Module):
         ]  # Shape: [num_atoms]
 
         # Compute predicted total charge
-        total_charge_predict = torch.zeros_like(
-            model_prediction["per_molecule_energy"]
-        ).scatter_add_(
-            dim=0,
-            index=nnp_input.atomic_subsystem_indices.long(),
-            src=per_atom_charges_predict,
-        )
+        total_charge_predict = (
+            torch.zeros_like(model_prediction["per_molecule_energy"])
+            .scatter_add_(
+                dim=0,
+                index=nnp_input.atomic_subsystem_indices.long(),
+                src=per_atom_charges_predict,
+            )
+            .unsqueeze(-1)
+        )  # Shape: [nr_of_molecules, 1]
 
         dipole_predict = self._predict_dipole_moment(model_prediction, batch)
-
+        print("total_charge shape ", total_charge_predict.shape)
         return {
             "per_molecule_total_charge_predict": total_charge_predict,
             "per_molecule_total_charge_true": batch.nnp_input.total_charge,
             "per_molecule_dipole_predict": dipole_predict,
+            "per_molecule_dipole_true": batch.metadata.dipole_moment,
         }
 
     def _predict_dipole_moment(

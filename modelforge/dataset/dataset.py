@@ -246,8 +246,8 @@ class NNPInput:
             raise ValueError("positions must be a 2D tensor with shape [num_atoms, 3]")
         if self.atomic_subsystem_indices.dim() != 1:
             raise ValueError("atomic_subsystem_indices must be a 1D tensor")
-        if self.total_charge.dim() != 1:
-            raise ValueError("total_charge must be a 1D tensor")
+        if self.total_charge.dim() != 2:
+            raise ValueError("total_charge must be a 2D tensor of shape [-1,1]")
 
         # Optionally, check that the lengths match if required
         if len(self.positions) != len(self.atomic_numbers):
@@ -1592,7 +1592,7 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
         atomic_subsystem_indices_referencing_dataset_list
     )
     atomic_numbers = torch.cat(atomic_numbers_list)
-    total_charge = torch.cat(total_charge_list)
+    total_charge = torch.stack(total_charge_list)
     positions = torch.cat(positions_list).requires_grad_(True)
     F = torch.cat(F_list).to(torch.float64)
     dipole_moment = torch.stack(dipole_moment_list).to(torch.float64)

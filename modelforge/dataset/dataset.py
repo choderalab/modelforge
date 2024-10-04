@@ -167,7 +167,7 @@ class NNPInput:
         This allows for calculations involving multiple molecules or subsystems
         within the same batch. Shape: [num_atoms].
     total_charge : torch.Tensor
-        A tensor with the total charge of molecule. Shape: [num_systems], where
+        A tensor with the total charge of molecule. Shape: [num_systems,1], where
         `num_systems` is the number of molecules.
     pair_list : Optional[torch.Tensor]
         Pair list for neighbor interactions.
@@ -246,8 +246,6 @@ class NNPInput:
             raise ValueError("positions must be a 2D tensor with shape [num_atoms, 3]")
         if self.atomic_subsystem_indices.dim() != 1:
             raise ValueError("atomic_subsystem_indices must be a 1D tensor")
-        if self.total_charge.dim() != 2:
-            raise ValueError("total_charge must be a 2D tensor of shape [-1,1]")
 
         # Optionally, check that the lengths match if required
         if len(self.positions) != len(self.atomic_numbers):

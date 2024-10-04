@@ -138,7 +138,7 @@ def test_method_locking(tmp_path):
     # Ensure all processes have exited the critical section
     assert len(entered) == 0, f"Processes left in critical section: {entered}"
 
-    
+
 def test_dense_layer():
     from modelforge.potential.utils import DenseWithCustomDist
     import torch
@@ -389,7 +389,8 @@ def test_filelocking(prep_temp_dir):
     # the first thread should lock the file and set "did_I_lock_it" to True
     thread1 = thread("lock_file_here", "Thread-1", filepath)
     # the second thread should check if locked, and set "did_I_lock_it" to False
-    # the second thread should also set "status" to True, because it waits for the first thread to unlock the file
+    # the second thread should also set "status" to True, because it waits
+    # for the first thread to unlock the file
     thread2 = thread("encounter_locked_file", "Thread-2", filepath)
 
     thread1.start()

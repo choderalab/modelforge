@@ -37,11 +37,14 @@ def test_dataset_basic_operations():
         ),
         "atomic_subsystem_counts": atomic_subsystem_counts,
         "n_confs": n_confs,
-        "charges": torch.randint(-1, 2, torch.Size([total_confs])).numpy(),
+        "charges": torch.randint(-1, 2, torch.Size([total_confs, 1])).numpy(),
     }
 
     property_names = PropertyNames(
-        "atomic_numbers", "geometry", "internal_energy_at_0K", "charges"
+        atomic_numbers="atomic_numbers",
+        positions="geometry",
+        E="internal_energy_at_0K",
+        total_charge="charges",
     )
     dataset = TorchDataset(input_data, property_names)
     assert len(dataset) == total_confs

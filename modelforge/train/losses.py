@@ -382,7 +382,6 @@ class Loss(nn.Module):
 
         # Iterate over loss properties
         for prop in self.loss_property:
-            print(prop)
             loss_fn = self.loss_functions[prop]
             if prop == "per_atom_energy":
                 prop_ = "per_molecule_energy"
@@ -399,7 +398,6 @@ class Loss(nn.Module):
             )
             # Accumulate weighted per-sample losses
             weighted_loss = self.weights[prop] * prop_loss
-            print(prop, "weighted_loss shape ", weighted_loss.shape)
 
             total_loss += weighted_loss  # Note: total_loss is still per-sample
             loss_dict[prop] = prop_loss  # Store per-sample loss

@@ -702,9 +702,9 @@ class Potential(torch.nn.Module):
             The postprocessed output with the pairlist removed.
         """
         # Remove the pairlist from the core output
-        processed_output.pop("pair_indices", None)
-        processed_output.pop("d_ij", None)
-        processed_output.pop("r_ij", None)
+        del processed_output["pair_indices"]
+        del processed_output["d_ij"]
+        del processed_output["r_ij"]
         return processed_output
 
     def forward(self, input_data: NNPInputTuple) -> Dict[str, torch.Tensor]:

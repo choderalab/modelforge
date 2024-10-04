@@ -514,7 +514,7 @@ def test_chemical_equivalency(
 
     output = model(nnp_input)
     validate_chemical_equivalence(output)
-    validate_per_atom_and_per_molecule_propterties(output)
+    validate_per_atom_and_per_molecule_properties(output)
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])

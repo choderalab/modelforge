@@ -284,7 +284,7 @@ def default_charge_conservation(
     """
     # Calculate the sum of partial charges for each molecule
     predicted_per_molecule_charge = torch.zeros(
-        total_charges.shape,
+        total_charges.shape[0],
         dtype=per_atom_charge.dtype,
         device=per_atom_charge.device,
     ).scatter_add_(0, mol_indices.long(), per_atom_charge)
@@ -294,7 +294,7 @@ def default_charge_conservation(
 
     # Calculate the correction factor for each molecule
     correction_factors = (
-        total_charges - predicted_per_molecule_charge
+        total_charges.squeeze() - predicted_per_molecule_charge
     ) / num_atoms_per_molecule
 
     # Apply the correction to each atom's charge

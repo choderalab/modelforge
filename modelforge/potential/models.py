@@ -658,7 +658,11 @@ class Potential(torch.nn.Module):
         return self.core_network.forward(input_data, pairlist_output)
 
     def load_state_dict(
-        self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False
+        self,
+        state_dict: Mapping[str, Any],
+        strict: bool = True,
+        assign: bool = False,
+        use: Literal["training", "inference"] = "inference"
     ):
         """
         Load the state dictionary into the model, with optional prefix removal
@@ -705,11 +709,18 @@ class Potential(torch.nn.Module):
         # remove key neighborlist.calculate_distances_and_pairlist.cutoff
         # if present in the state_dict and replace it with 'neighborlist.cutoff'
         if (
+            # only modify state_dict key in inference mode
             "neighborlist.calculate_distances_and_pairlist.cutoff"
-            in filtered_state_dict
+            in filtered_state_dict and use == "inference"
         ):
             filtered_state_dict["neighborlist.cutoff"] = filtered_state_dict.pop(
                 "neighborlist.calculate_distances_and_pairlist.cutoff"
+            )
+        elif use == "training":
+            pass
+        else:
+            raise KeyError(
+                "load_stat_dict() is only available for training and inference."
             )
 
         super().load_state_dict(filtered_state_dict, strict=strict, assign=assign)

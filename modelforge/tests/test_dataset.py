@@ -76,7 +76,9 @@ def test_dataset_basic_operations():
 
     for conf_idx in range(len(dataset)):
         conf_data = dataset[conf_idx]
-        assert np.array_equal(conf_data.nnp_input.positions, geom_true[conf_idx])
+        pos1 = geom_true[conf_idx]
+        pos2 = conf_data.nnp_input.positions
+        assert np.array_equal(pos2, pos1)
         assert np.array_equal(
             conf_data.nnp_input.atomic_numbers, atomic_numbers_true[conf_idx]
         )
@@ -205,10 +207,10 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
     assert isinstance(raw_data_item, BatchData)
     assert len(raw_data_item.__dataclass_fields__) == 2
     assert (
-        len(raw_data_item.nnp_input.__dataclass_fields__) == 8
+        len(raw_data_item.nnp_input.__dataclass_fields__) == 5
     )  # 6 properties are returned
     assert (
-        len(raw_data_item.metadata.__dataclass_fields__) == 5
+        len(raw_data_item.metadata.__dataclass_fields__) == 6
     )  # 5 properties are returned
 
 
@@ -315,8 +317,9 @@ def test_caching(prep_temp_dir):
 
 
 def test_metadata_validation(prep_temp_dir):
-    """When we generate an .npz file, we also write out metadata in a .json file which is used
-    to validate if we can use .npz file, or we need to regenerate it."""
+    """When we generate an .npz file, we also write out metadata in a .json file
+    which is used to validate if we can use .npz file, or we need to
+    regenerate it."""
 
     local_cache_dir = str(prep_temp_dir) + "/data_test"
 

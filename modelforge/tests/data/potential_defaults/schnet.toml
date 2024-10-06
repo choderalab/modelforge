@@ -1,36 +1,36 @@
+# ------------------------------------------------------------ #
 [potential]
 potential_name = "SchNet"
-
+# ------------------------------------------------------------ #
 [potential.core_parameter]
 number_of_radial_basis_functions = 16
 maximum_interaction_radius = "5.0 angstrom"
 number_of_interaction_modules = 3
 number_of_filters = 32
 shared_interactions = false
-predicted_properties = ["per_atom_energy"]
-predicted_dim = [1]
-
+predicted_properties = ["per_atom_energy", 'per_atom_charge']
+predicted_dim = [1, 1]
+# ------------------------------------------------------------ #
 [potential.core_parameter.activation_function_parameter]
 activation_function_name = "ShiftedSoftplus"
-
+# ------------------------------------------------------------ #
 [potential.core_parameter.featurization]
 properties_to_featurize = ['atomic_number']
 [potential.core_parameter.featurization.atomic_number]
 maximum_atomic_number = 101
 number_of_per_atom_features = 32
-
+# ------------------------------------------------------------ #
 [potential.postprocessing_parameter]
 properties_to_process = ['per_atom_energy']
 [potential.postprocessing_parameter.per_atom_energy]
 normalize = true
 from_atom_to_molecule_reduction = true
 keep_per_atom_property = true
-
-# [potential.postprocessing_parameter.per_atom_charge]
-# conserve = true
-# conserve_strategy = "default"
-# keep_per_atom_property = true
-
+[potential.postprocessing_parameter.per_atom_charge]
+conserve = true
+conserve_strategy = "default"
+keep_per_atom_property = true
+# ------------------------------------------------------------ #
 # [potential.postprocessing_parameter.per_atom_charge.coulomb_potential]
 # electrostatic_strategy = "coulomb"
 # maximum_interaction_radius = "10.0 angstrom"

@@ -782,9 +782,9 @@ def setup_potential(
                 skin=verlet_neighborlist_skin,
             )
         elif neighborlist_strategy == "brute":
-            from modelforge.potential.neighbors import NeighborlistBruteForce
+            from modelforge.potential.neighbors import NeighborlistBruteNsq
 
-            neighborlist = NeighborlistBruteForce(
+            neighborlist = NeighborlistBruteNsq(
                 cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
                 displacement_function=displacement_function,
                 only_unique_pairs=only_unique_pairs,

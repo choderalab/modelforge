@@ -1,7 +1,7 @@
 import torch
 from loguru import logger as log
 import socket
-from datetime import datetime, timedelta
+from datetime import datetime
 
 TIME_FORMAT_STR: str = "%b_%d_%H_%M_%S"
 MAX_NUM_OF_MEM_EVENTS_PER_SNAPSHOT: int = 100000
@@ -39,7 +39,7 @@ def setup_waterbox_testsystem(
         torch_atomic_numbers, dtype=torch.long, device=device
     )
     torch_total_charge = torch.zeros(num_waters, dtype=torch.float32, device=device)
-
+    log.info(f"Waterbox system setup with {num_waters} waters")
     return NNPInput(
         atomic_numbers=torch_atomic_numbers,
         positions=torch_positions,

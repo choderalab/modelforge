@@ -602,6 +602,8 @@ class Potential(torch.nn.Module):
         """
 
         super().__init__()
+
+        self.eval()
         self.core_network = torch.jit.script(core_network) if jit else core_network
         self.neighborlist = (
             torch.jit.script(neighborlist) if jit_neighborlist else neighborlist
@@ -662,7 +664,6 @@ class Potential(torch.nn.Module):
         state_dict: Mapping[str, Any],
         strict: bool = True,
         assign: bool = False,
-        use: Literal["training", "inference"] = "inference"
     ):
         """
         Load the state dictionary into the model, with optional prefix removal
@@ -711,19 +712,21 @@ class Potential(torch.nn.Module):
         if (
             # only modify state_dict key in inference mode
             "neighborlist.calculate_distances_and_pairlist.cutoff"
-            in filtered_state_dict and use == "inference"
+            in filtered_state_dict
         ):
             filtered_state_dict["neighborlist.cutoff"] = filtered_state_dict.pop(
                 "neighborlist.calculate_distances_and_pairlist.cutoff"
             )
-        elif use == "training":
-            pass
         else:
             raise KeyError(
                 "load_stat_dict() is only available for training and inference."
             )
 
-        super().load_state_dict(filtered_state_dict, strict=strict, assign=assign)
+        super().load_state_dict(
+            filtered_state_dict,
+            strict=strict,
+            assign=assign,
+        )
         self.eval()  # Set the model to evaluation mode
 
 

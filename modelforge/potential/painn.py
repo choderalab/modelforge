@@ -297,9 +297,9 @@ class PaiNNRepresentation(nn.Module):
 
         # featurize pairwise distances using radial basis functions (RBF)
         f_ij = self.radial_symmetry_function_module(d_ij)
-        f_ij_cut = self.cutoff_module(d_ij)
+
         # Apply the filter network and cutoff function
-        filters = torch.mul(self.filter_net(f_ij), f_ij_cut)
+        filters = torch.mul(self.filter_net(f_ij), self.cutoff_module(d_ij))
 
         # depending on whether we share filters or not filters have different
         # shape at dim=1 (dim=0 is always the number of atom pairs) if we share

@@ -890,6 +890,12 @@ class NeuralNetworkPotentialFactory:
                 neighborlist_strategy=inference_neighborlist_strategy,
                 verlet_neighborlist_skin=verlet_neighborlist_skin,
             )
+            # Disable gradients for model parameters
+            for param in model.parameters():
+                param.requires_grad = False
+            # Set model to eval
+            model.eval()
+            
             if simulation_environment == "JAX":
                 return PyTorch2JAXConverter().convert_to_jax_model(model)
             else:

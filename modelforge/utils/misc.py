@@ -6,8 +6,6 @@ import torch
 from loguru import logger
 
 
-
-
 class Welford:
     def __init__(self):
         """

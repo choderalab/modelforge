@@ -1115,6 +1115,7 @@ class DataModule(pl.LightningDataModule):
         splitting_strategy: SplittingStrategy = RandomRecordSplittingStrategy(),
         batch_size: int = 64,
         remove_self_energies: bool = True,
+        shift_center_of_mass_to_origin: bool = False,
         atomic_self_energies: Optional[Dict[str, float]] = None,
         regression_ase: bool = False,
         force_download: bool = False,
@@ -1141,6 +1142,9 @@ class DataModule(pl.LightningDataModule):
                 The batch size to use for the dataset.
             remove_self_energies : bool, defaults to True
                 Whether to remove the self energies from the dataset.
+            shift_center_of_mass_to_origin: bool, defaults to False
+                Whether to shift the center of mass of the molecule to the origin. This is necessary if using the
+                dipole moment in the loss function.
             atomic_self_energies : Optional[Dict[str, float]]
                 A dictionary mapping element names to their self energies. If not provided, the self energies will be calculated.
             regression_ase: bool, defaults to False
@@ -1166,6 +1170,7 @@ class DataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.splitting_strategy = splitting_strategy
         self.remove_self_energies = remove_self_energies
+        self.shift_center_of_mass_to_origin = shift_center_of_mass_to_origin
         self.dict_atomic_self_energies = (
             atomic_self_energies  # element name (e.g., 'H') maps to self energies
         )
@@ -1444,6 +1449,34 @@ class DataModule(pl.LightningDataModule):
 
                 dataset[i] = {"E": dataset.properties_of_interest["E"][i] - energy}
 
+        if self.shift_center_of_mass_to_origin:
+            log.info("Shifting the center of mass of each molecule to the origin.")
+            from openff.units.elements import MASSES
+
+            for i in tqdm(range(len(dataset)), desc="Process dataset"):
+                start_idx = dataset.single_atom_start_idxs_by_conf[i]
+                end_idx = dataset.single_atom_end_idxs_by_conf[i]
+
+                atomic_masses = torch.Tensor(
+                    [
+                        MASSES[atomic_number].m
+                        for atomic_number in dataset.properties_of_interest[
+                            "atomic_numbers"
+                        ][start_idx:end_idx].tolist()
+                    ]
+                )
+                molecule_mass = torch.sum(atomic_masses)
+
+                positions = dataset.properties_of_interest["positions"][
+                    start_idx:end_idx
+                ]
+                center_of_mass = (
+                    torch.einsum("i, ij->j", atomic_masses, positions) / molecule_mass
+                )
+                dataset.properties_of_interest["positions"][
+                    start_idx:end_idx
+                ] -= center_of_mass
+
         from torch.utils.data import DataLoader
 
         all_pairs = []
@@ -1631,6 +1664,7 @@ def initialize_datamodule(
     batch_size: int = 64,
     splitting_strategy: SplittingStrategy = FirstComeFirstServeSplittingStrategy(),
     remove_self_energies: bool = True,
+    shift_center_of_mass_to_origin: bool = False,
     regression_ase: bool = False,
     regenerate_dataset_statistic: bool = False,
 ) -> DataModule:
@@ -1644,6 +1678,7 @@ def initialize_datamodule(
         batch_size=batch_size,
         version_select=version_select,
         remove_self_energies=remove_self_energies,
+        shift_center_of_mass_to_origin=shift_center_of_mass_to_origin,
         regression_ase=regression_ase,
         regenerate_dataset_statistic=regenerate_dataset_statistic,
     )

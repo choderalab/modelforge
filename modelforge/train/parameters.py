@@ -120,6 +120,7 @@ class TrainingParameters(ParametersBase):
     args:
         nr_of_epochs (int): The number of epochs
         remove_self_energies (bool): Whether to remove self energies
+        shift_center_of_mass_to_origin (bool): Whether to shift the center of mass to the origin
         batch_size (int): The batch size,
         lr (float): The learning rate
         lr_scheduler (SchedulerConfig): The learning rate scheduler configuration.
@@ -261,6 +262,7 @@ class TrainingParameters(ParametersBase):
 
     number_of_epochs: int
     remove_self_energies: bool
+    shift_center_of_mass_to_origin: bool
     batch_size: int
     lr: float
     monitor_for_checkpoint: str

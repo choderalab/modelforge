@@ -629,6 +629,7 @@ class ModelTrainer:
             name=self.dataset_parameter.dataset_name,
             batch_size=self.training_parameter.batch_size,
             remove_self_energies=self.training_parameter.remove_self_energies,
+            shift_center_of_mass_to_origin=self.training_parameter.shift_center_of_mass_to_origin,
             version_select=self.dataset_parameter.version_select,
             local_cache_dir=self.runtime_parameter.local_cache_dir,
             splitting_strategy=REGISTERED_SPLITTING_STRATEGIES[

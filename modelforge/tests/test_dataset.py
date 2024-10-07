@@ -963,3 +963,87 @@ def test_function_of_self_energy(dataset_name, datamodule_factory):
         )
         # compare this to the energy without postprocessing
         assert np.isclose(methane_energy_reference, methane_energy_offset + methane_ase)
+
+
+def test_shifting_center_of_mass_to_origin():
+    from modelforge.dataset.dataset import initialize_datamodule
+    from openff.units.elements import MASSES
+
+    import torch
+
+    # first check a molecule not centered at the origin
+    dm = initialize_datamodule(
+        "QM9", version_select="latest_test", shift_center_of_mass_to_origin=False
+    )
+    start_idx = dm.torch_dataset.single_atom_start_idxs_by_conf[0]
+    end_idx = dm.torch_dataset.single_atom_end_idxs_by_conf[0]
+
+    from openff.units.elements import MASSES
+
+    pos = dm.torch_dataset.properties_of_interest["positions"][start_idx:end_idx]
+
+    atomic_masses = torch.Tensor(
+        [
+            MASSES[atomic_number].m
+            for atomic_number in dm.torch_dataset.properties_of_interest[
+                "atomic_numbers"
+            ][start_idx:end_idx].tolist()
+        ]
+    )
+    molecule_mass = torch.sum(atomic_masses)
+
+    # I'm using einsum, so let us check it manually
+
+    x = 0
+    y = 0
+    z = 0
+    for i in range(0, pos.shape[0]):
+        x += atomic_masses[i] * pos[i][0]
+        y += atomic_masses[i] * pos[i][1]
+        z += atomic_masses[i] * pos[i][2]
+
+    x = x / molecule_mass
+    y = y / molecule_mass
+    z = z / molecule_mass
+
+    com = torch.Tensor([x, y, z])
+
+    assert torch.allclose(com, torch.Tensor([-0.0013, 0.1086, 0.0008]), atol=1e-4)
+
+    # make sure that we do shift to the origin; we can do the whole dataset
+
+    dm = initialize_datamodule(
+        "QM9", version_select="latest_test", shift_center_of_mass_to_origin=True
+    )
+
+    for conf_id in range(0, len(dm.torch_dataset)):
+        start_idx = dm.torch_dataset.single_atom_start_idxs_by_conf[conf_id]
+        end_idx = dm.torch_dataset.single_atom_end_idxs_by_conf[conf_id]
+
+        # grab the positions that should be shifted
+        pos = dm.torch_dataset.properties_of_interest["positions"][start_idx:end_idx]
+
+        atomic_masses = torch.Tensor(
+            [
+                MASSES[atomic_number].m
+                for atomic_number in dm.torch_dataset.properties_of_interest[
+                    "atomic_numbers"
+                ][start_idx:end_idx].tolist()
+            ]
+        )
+        molecule_mass = torch.sum(atomic_masses)
+
+        x = 0
+        y = 0
+        z = 0
+        for i in range(0, pos.shape[0]):
+            x += atomic_masses[i] * pos[i][0]
+            y += atomic_masses[i] * pos[i][1]
+            z += atomic_masses[i] * pos[i][2]
+
+        x = x / molecule_mass
+        y = y / molecule_mass
+        z = z / molecule_mass
+
+        com = torch.Tensor([x, y, z])
+        assert torch.allclose(com, torch.Tensor([0.0, 0.0, 0.0]), atol=1e-4)

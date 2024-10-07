@@ -1,6 +1,7 @@
 [training]
 number_of_epochs = 2
 remove_self_energies = true
+shift_center_of_mass_to_origin = false
 batch_size = 128
 lr = 5e-4
 monitor_for_checkpoint = "val/per_molecule_energy/rmse"

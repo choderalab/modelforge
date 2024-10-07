@@ -151,37 +151,71 @@ class AngularSymmetryFunction(nn.Module):
         return sub_aev
 
     def compute_angular_sub_aev(self, vectors12: torch.Tensor) -> torch.Tensor:
-        """Compute the angular subAEV terms of the center atom given neighbor pairs.
+        """
+        Compute the angular subAEV terms of the center atom given neighbor
+        pairs.
 
         This correspond to equation (4) in the ANI paper. This function just
         compute the terms. The sum in the equation is not computed.
-        The input tensor have shape (conformations, atoms, N), where N
-        is the number of neighbor atom pairs within the cutoff radius and
-        output tensor should have shape
-        (conformations, atoms, ``self.angular_sublength()``)
+
+        Parameters
+        ----------
+        vectors12: torch.Tensor
+            Pairwise distance vectors. Shape: [2, n_pairs, 3]
+
+        Returns
+        -------
+        torch.Tensor
+            Angular subAEV terms. Shape: [n_pairs, ShfZ_size * ShfA_size]
 
         """
-        vectors12 = vectors12.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
-        distances12 = vectors12.norm(2, dim=-5)
+        # vectors12: (2, n_pairs, 3)
+        distances12 = vectors12.norm(p=2, dim=-1)  # Shape: (2, n_pairs)
+        distances_sum = distances12.sum(dim=0) / 2  # Shape: (n_pairs,)
+        fcj12 = self.cosine_cutoff(distances12)  # Shape: (2, n_pairs)
+        fcj12_prod = fcj12.prod(dim=0)  # Shape: (n_pairs,)
 
-        # 0.95 is multiplied to the cos values to prevent acos from
-        # returning NaN.
+        # cos_angles: (n_pairs,)
         cos_angles = 0.95 * torch.nn.functional.cosine_similarity(
-            vectors12[0], vectors12[1], dim=-5
+            vectors12[0], vectors12[1], dim=-1
         )
-        angles = torch.acos(cos_angles)
-        fcj12 = self.cosine_cutoff(distances12)
-        factor1 = ((1 + torch.cos(angles - self.ShfZ)) / 2) ** self.Zeta
+        angles = torch.acos(cos_angles)  # Shape: (n_pairs,)
+
+        # Prepare shifts for broadcasting
+        angles = angles.unsqueeze(-1)  # Shape: (n_pairs, 1)
+        distances_sum = distances_sum.unsqueeze(-1)  # Shape: (n_pairs, 1)
+
+        # Compute factor1
+        delta_angles = angles - self.ShfZ.view(1, -1)  # Shape: (n_pairs, ShfZ_size)
+        factor1 = (
+            (1 + torch.cos(delta_angles)) / 2
+        ) ** self.Zeta  # Shape: (n_pairs, ShfZ_size)
+
+        # Compute factor2
+        delta_distances = distances_sum - self.ShfA.view(
+            1, -1
+        )  # Shape: (n_pairs, ShfA_size)
         factor2 = torch.exp(
-            -self.EtaA * (distances12.sum(0) / 2 - self.ShfA) ** 2
-        ).unsqueeze(-1)
-        factor2 = factor2.squeeze(4).squeeze(3)
-        ret = 2 * factor1 * factor2 * fcj12.prod(0)
-        # At this point, ret now have shape
-        # (conformations, atoms, N, ?, ?, ?, ?) where ? depend on constants.
-        # We then should flat the last 4 dimensions to view the subAEV as one
-        # dimension vector
-        return ret.flatten(start_dim=-4)
+            -self.EtaA * delta_distances**2
+        )  # Shape: (n_pairs, ShfA_size)
+
+        # Compute the outer product of factor1 and factor2 efficiently
+        # fcj12_prod: (n_pairs, 1, 1)
+        fcj12_prod = fcj12_prod.unsqueeze(-1).unsqueeze(-1)  # Shape: (n_pairs, 1, 1)
+
+        # factor1: (n_pairs, ShfZ_size, 1)
+        factor1 = factor1.unsqueeze(-1)
+        # factor2: (n_pairs, 1, ShfA_size)
+        factor2 = factor2.unsqueeze(-2)
+
+        # Compute ret: (n_pairs, ShfZ_size, ShfA_size)
+        ret = 2 * fcj12_prod * factor1 * factor2
+
+        # Flatten the last two dimensions to get the final subAEV
+        # ret: (n_pairs, ShfZ_size * ShfA_size)
+        ret = ret.reshape(distances12.size(dim=1), -1)
+
+        return ret
 
 
 import math

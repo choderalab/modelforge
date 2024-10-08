@@ -40,3 +40,4 @@ dependencies:
       - pytorch2jax
       #- "ray[data,train,tune,serve]"
       - git+https://github.com/ArnNag/sake.git@nanometer
+      - torchviz2

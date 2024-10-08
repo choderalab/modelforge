@@ -660,6 +660,8 @@ def test_forward_pass(
     validate_chemical_equivalence(output)
 
 
+import os
+
 IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 
 

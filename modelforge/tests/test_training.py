@@ -96,21 +96,21 @@ def add_dipole_moment_to_loss_parameter(config):
     loss_property = [
         "per_molecule_energy",
         "per_atom_force",
-        "dipole_moment",
-        "total_charge",
+        "per_molecule_dipole_moment",
+        "per_molecule_total_charge",
     ]
     [training.loss_parameter.weight]
     per_molecule_energy = 1 #NOTE: reciprocal units
     per_atom_force = 0.1
-    dipole_moment = 0.01
-    total_charge = 0.01
+    per_molecule_dipole_moment = 0.01
+    per_molecule_total_charge = 0.01
 
     """
     t_config = config["training"]
-    t_config.loss_parameter.loss_property.append("dipole_moment")
-    t_config.loss_parameter.loss_property.append("total_charge")
-    t_config.loss_parameter.weight["dipole_moment"] = 0.01
-    t_config.loss_parameter.weight["total_charge"] = 0.01
+    t_config.loss_parameter.loss_property.append("per_molecule_dipole_moment")
+    t_config.loss_parameter.loss_property.append("per_molecule_total_charge")
+    t_config.loss_parameter.weight["per_molecule_dipole_moment"] = 0.01
+    t_config.loss_parameter.weight["per_molecule_total_charge"] = 0.01
 
     # also add per_atom_charge to predicted properties
 

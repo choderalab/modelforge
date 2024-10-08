@@ -348,8 +348,9 @@ def test_state_dict_saving_and_loading(potential_name):
     # read default parameters
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
 
-    # Extract parameters
-
+    # ------------------------------------------------------------- #
+    # Use case 1:
+    # train a model, save the state_dict and load it again
     trainer = NeuralNetworkPotentialFactory.generate_potential(
         use="training",
         simulation_environment="PyTorch",
@@ -359,13 +360,31 @@ def test_state_dict_saving_and_loading(potential_name):
         dataset_parameter=config["dataset"],
     )
     torch.save(trainer.model.state_dict(), "model.pth")
+    trainer.model.load_state_dict(torch.load("model.pth"))
 
+    # ------------------------------------------------------------- #
+    # Use case 2:
+    # load the model in inference mode
     model2 = NeuralNetworkPotentialFactory.generate_potential(
         use="inference",
         simulation_environment="PyTorch",
         potential_parameter=config["potential"],
     )
     model2.load_state_dict(torch.load("model.pth"))
+
+    # ------------------------------------------------------------- #
+    # Use case 3
+    # generate a new trainer and load it
+    model3 = NeuralNetworkPotentialFactory.generate_potential(
+        use="training",
+        simulation_environment="PyTorch",
+        potential_parameter=config["potential"],
+        training_parameter=config["training"],
+        runtime_parameter=config["runtime"],
+        dataset_parameter=config["dataset"],
+    )
+
+    model3.model.load_state_dict(torch.load("model.pth"))
 
 
 @pytest.mark.parametrize(

@@ -276,6 +276,14 @@ class TrainingParameters(ParametersBase):
     optimizer: Type[torch.optim.Optimizer] = torch.optim.AdamW
     min_number_of_epochs: Union[int, None] = None
 
+    @model_validator(mode="after")
+    def validate_dipole_and_shift_com(cls, values):
+        if "dipole_moment" in values.loss_parameter.loss_property:
+            if not values.shift_center_of_mass_to_origin:
+                raise ValueError(
+                    "Use of dipole_moment in the loss requires shift_center_of_mass_to_origin to be True"
+                )
+
 
 ### Runtime Parameters
 

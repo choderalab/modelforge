@@ -965,7 +965,9 @@ def test_function_of_self_energy(dataset_name, datamodule_factory):
         assert np.isclose(methane_energy_reference, methane_energy_offset + methane_ase)
 
 
-def test_shifting_center_of_mass_to_origin():
+def test_shifting_center_of_mass_to_origin(prep_temp_dir):
+    local_cache_dir = str(prep_temp_dir) + "/data_test"
+
     from modelforge.dataset.dataset import initialize_datamodule
     from openff.units.elements import MASSES
 
@@ -973,7 +975,10 @@ def test_shifting_center_of_mass_to_origin():
 
     # first check a molecule not centered at the origin
     dm = initialize_datamodule(
-        "QM9", version_select="latest_test", shift_center_of_mass_to_origin=False
+        "QM9",
+        version_select="latest_test",
+        shift_center_of_mass_to_origin=False,
+        local_cache_dir=local_cache_dir,
     )
     start_idx = dm.torch_dataset.single_atom_start_idxs_by_conf[0]
     end_idx = dm.torch_dataset.single_atom_end_idxs_by_conf[0]
@@ -1013,7 +1018,10 @@ def test_shifting_center_of_mass_to_origin():
     # make sure that we do shift to the origin; we can do the whole dataset
 
     dm = initialize_datamodule(
-        "QM9", version_select="latest_test", shift_center_of_mass_to_origin=True
+        "QM9",
+        version_select="latest_test",
+        shift_center_of_mass_to_origin=True,
+        local_cache_dir=local_cache_dir,
     )
 
     for conf_id in range(0, len(dm.torch_dataset)):

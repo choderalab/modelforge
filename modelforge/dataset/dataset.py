@@ -893,7 +893,7 @@ class HDF5Dataset:
                                 single_rec_data[value].append(record_array)
 
                         else:
-                            raise RuntimeError(
+                            log.warning(
                                 f"Skipping record {record} as not all properties of interest are present."
                             )
                 # convert lists of arrays to single arrays
@@ -1667,6 +1667,7 @@ def initialize_datamodule(
     shift_center_of_mass_to_origin: bool = False,
     regression_ase: bool = False,
     regenerate_dataset_statistic: bool = False,
+    local_cache_dir="./",
 ) -> DataModule:
     """
     Initialize a dataset for a given mode.
@@ -1681,6 +1682,7 @@ def initialize_datamodule(
         shift_center_of_mass_to_origin=shift_center_of_mass_to_origin,
         regression_ase=regression_ase,
         regenerate_dataset_statistic=regenerate_dataset_statistic,
+        local_cache_dir=local_cache_dir,
     )
     data_module.prepare_data()
     data_module.setup()

@@ -674,7 +674,7 @@ class Potential(torch.nn.Module):
         the `load_state_dict()` function in the Potential class. This function
         can load a state dictionary into the model, and removes keys that are
         specific to the training mode.
-        
+
         Parameters
         ----------
         state_dict : Mapping[str, Any]

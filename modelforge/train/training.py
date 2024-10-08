@@ -56,7 +56,7 @@ class CalculateProperties(torch.nn.Module):
         super().__init__()
         self.requested_properties = requested_properties
         self.include_force = "per_atom_force" in self.requested_properties
-        self.include_charges = "total_charge" in self.requested_properties
+        self.include_charges = "per_molecule_total_charge" in self.requested_properties
 
     def _get_forces(
         self,
@@ -183,17 +183,27 @@ class CalculateProperties(torch.nn.Module):
         self, model_predictions: Dict[str, torch.Tensor], batch: BatchData
     ) -> torch.Tensor:
 
-        per_atom_charge = model_predictions["per_atom_charge"]
+        per_atom_charge = model_predictions["per_atom_charge"]  # Shape: [num_atoms]
+        positions = batch.nnp_input.positions  # Shape: [num_atoms, 3]
+        per_atom_charge = per_atom_charge.unsqueeze(-1)  # Shape: [num_atoms, 1]
+        per_atom_dipole_contrib = per_atom_charge * positions  # Shape: [num_atoms, 3]
+
+        indices = batch.nnp_input.atomic_subsystem_indices.long()  # Shape: [num_atoms]
+        indices = indices.unsqueeze(-1).expand(-1, 3)  # Shape: [num_atoms, 3]
+
         # Compute predicted dipole moment
         dipole_predict = torch.zeros(
             (model_predictions["per_molecule_energy"].shape[0], 3),
+            device=positions.device,
+            dtype=positions.dtype,
         ).scatter_add_(
             dim=0,
-            index=batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(-1),
-            src=per_atom_charge.unsqueeze(-1) * batch.nnp_input.positions,
+            index=indices,
+            src=per_atom_dipole_contrib,
         )  # Shape: [nr_of_molecules, 3]
-        return dipole_predict
 
+        return dipole_predict
+    
     def forward(
         self,
         batch: BatchData,

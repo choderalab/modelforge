@@ -295,8 +295,8 @@ class Loss(nn.Module):
         "per_atom_energy",
         "per_molecule_energy",
         "per_atom_force",
-        "total_charge",
-        "dipole_moment",
+        "per_molecule_total_charge",
+        "per_molecule_dipole_moment",
     ]
 
     def __init__(self, loss_property: List[str], weights: Dict[str, float]):
@@ -344,10 +344,10 @@ class Loss(nn.Module):
                 self.loss_functions[prop] = EnergySquaredError(
                     scale_by_number_of_atoms=False
                 )
-            elif prop == "total_charge":
+            elif prop == "per_molecule_total_charge":
                 log.info(f"Creating total charge loss with weight: {weights[prop]}")
                 self.loss_functions[prop] = TotalChargeError()
-            elif prop == "dipole_moment":
+            elif prop == "per_molecule_dipole_moment":
                 log.info(f"Creating dipole moment loss with weight: {weights[prop]}")
                 self.loss_functions[prop] = DipoleMomentError()
             else:

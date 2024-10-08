@@ -112,6 +112,12 @@ def add_dipole_moment_to_loss_parameter(config):
     t_config.loss_parameter.weight["dipole_moment"] = 0.01
     t_config.loss_parameter.weight["total_charge"] = 0.01
 
+    # also add per_atom_charge to predicted properties
+
+    p_config = config["potential"]
+    p_config.core_parameter.predicted_properties.append("per_atom_charge")
+    p_config.core_parameter.predicted_dim.append(1)
+
 
 def replace_per_molecule_with_per_atom_loss(config):
     t_config = config["training"]

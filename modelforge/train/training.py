@@ -794,6 +794,7 @@ class ModelTrainer:
             callbacks=self.callbacks,
             inference_mode=False,
             num_sanity_val_steps=2,
+            gradient_clip_val=1.0,  # FIXME: hardcoded for now
             log_every_n_steps=self.runtime_parameter.log_every_n_steps,
             enable_model_summary=True,
             enable_progress_bar=self.runtime_parameter.verbose,  # if true will show progress bar

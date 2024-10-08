@@ -375,6 +375,9 @@ class Loss(nn.Module):
         Dict[str, torch.Tensor]
             Individual per-sample loss terms and the combined total loss.
         """
+        from modelforge.train.training import (
+            _exchange_per_atom_energy_to_per_molecule_energy,
+        )
         # Save the loss as a dictionary
         loss_dict = {}
         # Accumulate loss
@@ -383,14 +386,8 @@ class Loss(nn.Module):
         # Iterate over loss properties
         for prop in self.loss_property:
             loss_fn = self.loss_functions[prop]
-            if prop == "per_atom_energy":
-                prop_ = "per_molecule_energy"
-            elif prop == "dipole_moment":
-                prop_ = "per_molecule_dipole_moment"
-            elif prop == "total_charge":
-                prop_ = "per_molecule_total_charge"
-            else:
-                prop_ = prop
+
+            prop_ = _exchange_per_atom_energy_to_per_molecule_energy(prop)
             prop_loss = loss_fn(
                 predict_target[f"{prop_}_predict"],
                 predict_target[f"{prop_}_true"],

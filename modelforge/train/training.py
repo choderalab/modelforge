@@ -44,6 +44,14 @@ __all__ = [
 ]
 
 
+def _exchange_per_atom_energy_to_per_molecule_energy(prop: str):
+    if prop == "per_atom_energy":
+        prop_ = "per_molecule_energy"
+    else:
+        prop_ = prop
+    return prop_
+
+
 class CalculateProperties(torch.nn.Module):
 
     def __init__(self, requested_properties: List[str]):
@@ -203,7 +211,7 @@ class CalculateProperties(torch.nn.Module):
         )  # Shape: [nr_of_molecules, 3]
 
         return dipole_predict
-    
+
     def forward(
         self,
         batch: BatchData,
@@ -369,6 +377,7 @@ class TrainingAdapter(pL.LightningModule):
         """
 
         for prop, metric_collection in metrics.items():
+            prop = _exchange_per_atom_energy_to_per_molecule_energy(prop)
             preds = predict_target[f"{prop}_predict"].detach()
             targets = predict_target[f"{prop}_true"].detach()
             metric_collection.update(preds, targets)

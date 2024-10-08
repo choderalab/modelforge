@@ -386,7 +386,7 @@ class Loss(nn.Module):
             if prop == "per_atom_energy":
                 prop_ = "per_molecule_energy"
             elif prop == "dipole_moment":
-                prop_ = "per_molecule_dipole"
+                prop_ = "per_molecule_dipole_moment"
             elif prop == "total_charge":
                 prop_ = "per_molecule_total_charge"
             else:

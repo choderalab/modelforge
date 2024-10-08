@@ -644,6 +644,17 @@ def test_forward_pass(
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
+def test_vis(potential_name, single_batch_with_batchsize):
+    batch = single_batch_with_batchsize(batch_size=32, dataset_name="SPICE2")
+    nnp_input = batch.nnp_input_tuple
+    from modelforge.utils.vis import visualize_model
+
+    visualize_model(nnp_input, potential_name)
+
+
+@pytest.mark.parametrize(
+    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+)
 def test_calculate_energies_and_forces(potential_name, single_batch_with_batchsize):
     """
     Test the calculation of energies and forces for a molecule.

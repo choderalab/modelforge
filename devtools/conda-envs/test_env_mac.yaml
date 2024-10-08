@@ -38,5 +38,3 @@ dependencies:
       - git+https://github.com/ArnNag/sake.git@nanometer
       - jax
       - flax
-      - torchviz2
-

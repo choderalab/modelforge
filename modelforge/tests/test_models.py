@@ -348,7 +348,6 @@ def test_state_dict_saving_and_loading(potential_name):
     # read default parameters
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
 
-
     # ------------------------------------------------------------- #
     # Use case 1:
     # train a model, save the state_dict and load it again

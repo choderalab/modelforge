@@ -666,9 +666,15 @@ class Potential(torch.nn.Module):
         assign: bool = False,
     ):
         """
-        Load the state dictionary into the model, with optional prefix removal
-        and key exclusions.
-
+        Load the state dictionary into the infenerence or training model. Note
+        that the Trainer class encapsulates the Training adapter (the PyTorch
+        Lightning module), which contains the model. When saving a state dict
+        from the Trainer class, you need to use `trainer.model.state_dict()` to
+        save the model state dict. To load this in inference mode, you can use
+        the `load_state_dict()` function in the Potential class. This function
+        can load a state dictionary into the model, and removes keys that are
+        specific to the training mode.
+        
         Parameters
         ----------
         state_dict : Mapping[str, Any]
@@ -701,7 +707,8 @@ class Potential(torch.nn.Module):
             }
             log.debug(f"Removed prefix: {prefix}")
         else:
-            # Create a filtered dictionary without excluded keys if no prefix exists
+            # Create a filtered dictionary without excluded keys if no prefix
+            # exists
             filtered_state_dict = {
                 k: v for k, v in state_dict.items() if k not in excluded_keys
             }
@@ -710,7 +717,6 @@ class Potential(torch.nn.Module):
         # remove key neighborlist.calculate_distances_and_pairlist.cutoff
         # if present in the state_dict and replace it with 'neighborlist.cutoff'
         if (
-            # only modify state_dict key in inference mode
             "neighborlist.calculate_distances_and_pairlist.cutoff"
             in filtered_state_dict
         ):

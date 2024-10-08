@@ -256,10 +256,10 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize):
 
     # Assertions for dipole moment predictions
     assert (
-        "per_molecule_dipole_predict" in prediction
+        "per_molecule_dipole_moment_predict" in prediction
     ), "Dipole moment prediction missing."
     assert (
-        prediction["per_molecule_dipole_predict"].size()
+        prediction["per_molecule_dipole_moment_predict"].size()
         == batch.metadata.dipole_moment.size()
     ), "Mismatch in shape for dipole moment predictions."
 

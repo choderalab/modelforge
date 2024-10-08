@@ -15,8 +15,8 @@ from modelforge.dataset.dataset import NNPInput
 
 __all__ = [
     "Error",
-    "FromPerAtomToPerMoleculeSquaredError",
-    "PerMoleculeSquaredError",
+    "ForceSquaredError",
+    "EnergySquaredError",
     "TotalChargeError",
     "DipoleMomentError",
     "Loss",
@@ -85,7 +85,7 @@ class Error(nn.Module, ABC):
         return scaled_by_number_of_atoms
 
 
-class FromPerAtomToPerMoleculeSquaredError(Error):
+class ForceSquaredError(Error):
     """
     Calculates the per-atom error and aggregates it to per-molecule mean squared error.
     """
@@ -149,7 +149,7 @@ class FromPerAtomToPerMoleculeSquaredError(Error):
         return per_molecule_square_error_scaled.contiguous()
 
 
-class PerMoleculeSquaredError(Error):
+class EnergySquaredError(Error):
     """
     Calculates the per-molecule mean squared error.
     """
@@ -328,20 +328,20 @@ class Loss(nn.Module):
             log.info(f"Using loss function for {prop}")
             if prop == "per_atom_force":
                 log.info(f"Creating per atom force loss with weight: {weights[prop]}")
-                self.loss_functions[prop] = FromPerAtomToPerMoleculeSquaredError(
+                self.loss_functions[prop] = ForceSquaredError(
                     scale_by_number_of_atoms=True
                 )
             elif prop == "per_atom_energy":
                 log.info("Creating per atom energy loss with weight: {weights[prop]}")
 
-                self.loss_functions[prop] = PerMoleculeSquaredError(
+                self.loss_functions[prop] = EnergySquaredError(
                     scale_by_number_of_atoms=True
                 )
             elif prop == "per_molecule_energy":
                 log.info(
                     f"Creating per molecule energy loss with weight: {weights[prop]}"
                 )
-                self.loss_functions[prop] = PerMoleculeSquaredError(
+                self.loss_functions[prop] = EnergySquaredError(
                     scale_by_number_of_atoms=False
                 )
             elif prop == "total_charge":

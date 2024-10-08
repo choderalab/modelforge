@@ -104,7 +104,7 @@ class CalculateProperties(torch.nn.Module):
         if grad is None:
             raise RuntimeWarning("Force calculation did not return a gradient")
 
-        per_atom_force_predict = -grad  # Forces are the negative gradient of energy
+        per_atom_force_predict = -1 * grad  # Forces are the negative gradient of energy
 
         return {
             "per_atom_force_true": per_atom_force_true,

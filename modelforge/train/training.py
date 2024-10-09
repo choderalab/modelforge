@@ -774,10 +774,8 @@ class ModelTrainer:
                 EarlyStopping(**self.training_parameter.early_stopping.model_dump())
             )
 
-        checkpoint_filename = (
-            f"best_{self.potential_parameter.potential_name}-{self.dataset_parameter.dataset_name}"
-            + "-{epoch:02d}-{self.training_parameter.monitor_for_checkpoint:.2f}"
-        )
+        checkpoint_filename = f"best_{self.potential_parameter.potential_name}-{self.dataset_parameter.dataset_name}-{epoch:02d}-{self.training_parameter.monitor_for_checkpoint:.2f}"
+
         callbacks.append(
             ModelCheckpoint(
                 save_top_k=2,
@@ -818,6 +816,7 @@ class ModelTrainer:
             accelerator=self.runtime_parameter.accelerator,
             logger=self.experiment_logger,
             callbacks=self.callbacks,
+            benchmark=True,
             inference_mode=False,
             num_sanity_val_steps=2,
             gradient_clip_val=10.0,  # FIXME: hardcoded for now

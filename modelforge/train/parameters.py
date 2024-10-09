@@ -108,7 +108,7 @@ class WandbConfig(BaseModel):
     save_dir: str
     project: str
     group: str
-    log_model: bool
+    log_model: str
     job_type: Optional[str]
     tags: Optional[List[str]]
     notes: Optional[str]
@@ -285,7 +285,6 @@ class TrainingParameters(ParametersBase):
                     "Use of dipole_moment in the loss requires shift_center_of_mass_to_origin to be True"
                 )
         return self
-
 
 
 class Accelerator(CaseInsensitiveEnum):

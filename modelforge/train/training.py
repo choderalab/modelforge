@@ -99,11 +99,26 @@ class CalculateProperties(torch.nn.Module):
         # Sum the energies before computing the gradient
         total_energy = model_prediction["per_molecule_energy"].sum()
         # Compute the gradient (forces) from the predicted energies
-        total_energy.backward(
-            create_graph=True,
-            retain_graph=True,
-        )
-        grad = nnp_input.positions.grad
+        grad = torch.autograd.grad(
+            total_energy,
+            nnp_input.positions,
+            # grad_outputs=torch.ones_like(model_prediction["per_molecule_energy"]),
+            create_graph=train_mode,
+            retain_graph=train_mode,
+            allow_unused=False,
+        )[0]
+
+        # total_energy = model_prediction["per_molecule_energy"]
+        # # Compute the gradient (forces) from the predicted energies
+        # train_mode = False
+        # grad1 = torch.autograd.grad(
+        #     total_energy,
+        #     nnp_input.positions,
+        #     grad_outputs=torch.ones_like(model_prediction["per_molecule_energy"]),
+        #     create_graph=True,
+        #     retain_graph=True,
+        #     allow_unused=True,
+        # )[0]
 
         if grad is None:
             raise RuntimeWarning("Force calculation did not return a gradient")

@@ -165,7 +165,6 @@ def test_train_with_lightning(loss, potential_name, dataset_name):
 
     # train potential
     get_trainer(config).train_potential().save_checkpoint("test.chp")  # save checkpoint
-
     # continue training from checkpoint
     get_trainer(config).train_potential()
 

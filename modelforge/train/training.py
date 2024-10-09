@@ -102,23 +102,10 @@ class CalculateProperties(torch.nn.Module):
         grad = torch.autograd.grad(
             total_energy,
             nnp_input.positions,
-            # grad_outputs=torch.ones_like(model_prediction["per_molecule_energy"]),
             create_graph=train_mode,
             retain_graph=train_mode,
             allow_unused=False,
         )[0]
-
-        # total_energy = model_prediction["per_molecule_energy"]
-        # # Compute the gradient (forces) from the predicted energies
-        # train_mode = False
-        # grad1 = torch.autograd.grad(
-        #     total_energy,
-        #     nnp_input.positions,
-        #     grad_outputs=torch.ones_like(model_prediction["per_molecule_energy"]),
-        #     create_graph=True,
-        #     retain_graph=True,
-        #     allow_unused=True,
-        # )[0]
 
         if grad is None:
             raise RuntimeWarning("Force calculation did not return a gradient")
@@ -428,6 +415,14 @@ class TrainingAdapter(pL.LightningModule):
         # Compute the mean loss for optimization
         mean_total_loss = loss_dict["total_loss"].mean()
         return mean_total_loss
+
+    def on_after_backward(self):
+        # After backward pass
+        for name, param in self.potential.named_parameters():
+            if param.grad is not None:
+                log.debug(
+                    f"Parameter: {name}, Gradient Norm: {param.grad.norm().item()}"
+                )
 
     def validation_step(self, batch: BatchData, batch_idx: int) -> None:
         """
@@ -824,7 +819,7 @@ class ModelTrainer:
             callbacks=self.callbacks,
             inference_mode=False,
             num_sanity_val_steps=2,
-            gradient_clip_val=1.0,  # FIXME: hardcoded for now
+            gradient_clip_val=10.0,  # FIXME: hardcoded for now
             log_every_n_steps=self.runtime_parameter.log_every_n_steps,
             enable_model_summary=True,
             enable_progress_bar=self.runtime_parameter.verbose,  # if true will show progress bar

@@ -311,65 +311,65 @@ class Pairlist(Module):
         )
 
 
-class Neighborlist(Pairlist):
-    def __init__(self, cutoff: float, only_unique_pairs: bool = False):
-        """
-        Manage neighbor list calculations with a specified cutoff distance.
-
-        Extends the Pairlist class to compute neighbor lists based on a distance cutoff.
-
-        Parameters
-        ----------
-        cutoff : float
-            Cutoff distance for neighbor calculations.
-        only_unique_pairs : bool, optional
-            If True, only unique pairs are returned (default is False).
-        """
-        super().__init__(only_unique_pairs=only_unique_pairs)
-
-        self.register_buffer("cutoff", torch.tensor(cutoff))
-
-    def forward(
-        self,
-        positions: torch.Tensor,
-        atomic_subsystem_indices: torch.Tensor,
-        pair_indices: Optional[torch.Tensor] = None,
-    ) -> PairlistData:
-        """
-        Compute the neighbor list considering a cutoff distance.
-
-        Parameters
-        ----------
-        positions : torch.Tensor
-            Atom positions. Shape: [nr_systems, nr_atoms, 3].
-        atomic_subsystem_indices : torch.Tensor
-            Indices identifying atoms in subsystems. Shape: [nr_atoms].
-        pair_indices : Optional[torch.Tensor]
-            Precomputed pair indices. If None, will compute pair indices.
-
-        Returns
-        -------
-        PairListOutputs
-            A dataclass containing 'pair_indices', 'd_ij' (distances), and 'r_ij' (displacement vectors).
-        """
-
-        if pair_indices is None:
-            pair_indices = self.enumerate_all_pairs(
-                atomic_subsystem_indices,
-            )
-
-        r_ij = self.calculate_r_ij(pair_indices, positions)
-        d_ij = self.calculate_d_ij(r_ij)
-
-        in_cutoff = (d_ij <= self.cutoff).squeeze()
-        # Get the atom indices within the cutoff
-        pair_indices_within_cutoff = pair_indices[:, in_cutoff]
-
-        return PairlistData(
-            pair_indices=pair_indices_within_cutoff,
-            d_ij=d_ij[in_cutoff],
-            r_ij=r_ij[in_cutoff],
-        )
+# class Neighborlist(Pairlist):
+#     def __init__(self, cutoff: float, only_unique_pairs: bool = False):
+#         """
+#         Manage neighbor list calculations with a specified cutoff distance.
+#
+#         Extends the Pairlist class to compute neighbor lists based on a distance cutoff.
+#
+#         Parameters
+#         ----------
+#         cutoff : float
+#             Cutoff distance for neighbor calculations.
+#         only_unique_pairs : bool, optional
+#             If True, only unique pairs are returned (default is False).
+#         """
+#         super().__init__(only_unique_pairs=only_unique_pairs)
+#
+#         self.register_buffer("cutoff", torch.tensor(cutoff))
+#
+#     def forward(
+#         self,
+#         positions: torch.Tensor,
+#         atomic_subsystem_indices: torch.Tensor,
+#         pair_indices: Optional[torch.Tensor] = None,
+#     ) -> PairlistData:
+#         """
+#         Compute the neighbor list considering a cutoff distance.
+#
+#         Parameters
+#         ----------
+#         positions : torch.Tensor
+#             Atom positions. Shape: [nr_systems, nr_atoms, 3].
+#         atomic_subsystem_indices : torch.Tensor
+#             Indices identifying atoms in subsystems. Shape: [nr_atoms].
+#         pair_indices : Optional[torch.Tensor]
+#             Precomputed pair indices. If None, will compute pair indices.
+#
+#         Returns
+#         -------
+#         PairListOutputs
+#             A dataclass containing 'pair_indices', 'd_ij' (distances), and 'r_ij' (displacement vectors).
+#         """
+#
+#         if pair_indices is None:
+#             pair_indices = self.enumerate_all_pairs(
+#                 atomic_subsystem_indices,
+#             )
+#
+#         r_ij = self.calculate_r_ij(pair_indices, positions)
+#         d_ij = self.calculate_d_ij(r_ij)
+#
+#         in_cutoff = (d_ij <= self.cutoff).squeeze()
+#         # Get the atom indices within the cutoff
+#         pair_indices_within_cutoff = pair_indices[:, in_cutoff]
+#
+#         return PairlistData(
+#             pair_indices=pair_indices_within_cutoff,
+#             d_ij=d_ij[in_cutoff],
+#             r_ij=r_ij[in_cutoff],
+#         )
 
 
 from typing import Callable, Literal, Optional, Union
@@ -421,74 +421,74 @@ class JAXModel:
         return f"{self.__class__.__name__} wrapping {self.name}"
 
 
-class ComputeInteractingAtomPairs(torch.nn.Module):
-
-    def __init__(self, cutoff: float, only_unique_pairs: bool = False):
-        """
-        Initialize the ComputeInteractingAtomPairs module.
-
-        Parameters
-        ----------
-        cutoff : float
-            The cutoff distance for neighbor list calculations.
-        only_unique_pairs : bool, optional
-            If True, only unique pairs are returned (default is False).
-        """
-
-        super().__init__()
-        from .models import Neighborlist
-
-        self.only_unique_pairs = only_unique_pairs
-        self.calculate_distances_and_pairlist = Neighborlist(cutoff, only_unique_pairs)
-
-    def forward(self, data: Union[NNPInput, NamedTuple]) -> PairlistData:
-        """
-        Compute the pair list, distances, and displacement vectors for the given
-        input data.
-
-        Parameters
-        ----------
-        data : Union[NNPInput, NamedTuple]
-            Input data containing atomic numbers, positions, and subsystem
-            indices.
-
-        Returns
-        -------
-        PairlistData
-            A namedtuple containing the pair indices, distances, and
-            displacement vectors.
-        """
-        # ---------------------------
-        # general input manipulation
-        positions = data.positions
-        atomic_subsystem_indices = data.atomic_subsystem_indices
-        # calculate pairlist if none is provided
-        if data.pair_list is None:
-            pairlist_output = self.calculate_distances_and_pairlist(
-                positions=positions,
-                atomic_subsystem_indices=atomic_subsystem_indices,
-                pair_indices=None,
-            )
-            pair_list = data.pair_list
-        else:
-            # pairlist is provided, remove redundant pairs if requested
-            if self.only_unique_pairs:
-                i_indices = data.pair_list[0]
-                j_indices = data.pair_list[1]
-                unique_pairs_mask = i_indices < j_indices
-                i_final_pairs = i_indices[unique_pairs_mask]
-                j_final_pairs = j_indices[unique_pairs_mask]
-                pair_list = torch.stack((i_final_pairs, j_final_pairs))
-            else:
-                pair_list = data.pair_list
-            # only calculate d_ij and r_ij
-            pairlist_output = self.calculate_distances_and_pairlist(
-                positions=positions,
-                atomic_subsystem_indices=atomic_subsystem_indices,
-                pair_indices=pair_list.to(torch.int64),
-            )
-
-        return pairlist_output
+# class ComputeInteractingAtomPairs(torch.nn.Module):
+#
+#     def __init__(self, cutoff: float, only_unique_pairs: bool = False):
+#         """
+#         Initialize the ComputeInteractingAtomPairs module.
+#
+#         Parameters
+#         ----------
+#         cutoff : float
+#             The cutoff distance for neighbor list calculations.
+#         only_unique_pairs : bool, optional
+#             If True, only unique pairs are returned (default is False).
+#         """
+#
+#         super().__init__()
+#         from .models import Neighborlist
+#
+#         self.only_unique_pairs = only_unique_pairs
+#         self.calculate_distances_and_pairlist = Neighborlist(cutoff, only_unique_pairs)
+#
+#     def forward(self, data: Union[NNPInput, NamedTuple]) -> PairlistData:
+#         """
+#         Compute the pair list, distances, and displacement vectors for the given
+#         input data.
+#
+#         Parameters
+#         ----------
+#         data : Union[NNPInput, NamedTuple]
+#             Input data containing atomic numbers, positions, and subsystem
+#             indices.
+#
+#         Returns
+#         -------
+#         PairlistData
+#             A namedtuple containing the pair indices, distances, and
+#             displacement vectors.
+#         """
+#         # ---------------------------
+#         # general input manipulation
+#         positions = data.positions
+#         atomic_subsystem_indices = data.atomic_subsystem_indices
+#         # calculate pairlist if none is provided
+#         if data.pair_list is None:
+#             pairlist_output = self.calculate_distances_and_pairlist(
+#                 positions=positions,
+#                 atomic_subsystem_indices=atomic_subsystem_indices,
+#                 pair_indices=None,
+#             )
+#             pair_list = data.pair_list
+#         else:
+#             # pairlist is provided, remove redundant pairs if requested
+#             if self.only_unique_pairs:
+#                 i_indices = data.pair_list[0]
+#                 j_indices = data.pair_list[1]
+#                 unique_pairs_mask = i_indices < j_indices
+#                 i_final_pairs = i_indices[unique_pairs_mask]
+#                 j_final_pairs = j_indices[unique_pairs_mask]
+#                 pair_list = torch.stack((i_final_pairs, j_final_pairs))
+#             else:
+#                 pair_list = data.pair_list
+#             # only calculate d_ij and r_ij
+#             pairlist_output = self.calculate_distances_and_pairlist(
+#                 positions=positions,
+#                 atomic_subsystem_indices=atomic_subsystem_indices,
+#                 pair_indices=pair_list.to(torch.int64),
+#             )
+#
+#         return pairlist_output
 
 
 from torch.nn import ModuleDict

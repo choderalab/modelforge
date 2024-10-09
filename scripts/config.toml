@@ -34,6 +34,7 @@ remove_self_energies = true
 batch_size = 16
 lr = 0.5e-3
 monitor_for_checkpoint = "val/per_molecule_energy/rmse"
+shift_center_of_mass_to_origin = false
 
 [training.experiment_logger]
 logger_name = "tensorboard"

@@ -6,7 +6,8 @@ from loguru import logger as log
 
 from modelforge.potential.utils import Dense
 
-from .models import NNPInputTuple, PairlistData
+from modelforge.dataset.dataset import NNPInput, NNPInputTuple
+from modelforge.potential.neighbors import PairlistData
 
 
 class AimNet2Core(torch.nn.Module):

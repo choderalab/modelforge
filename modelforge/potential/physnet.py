@@ -8,7 +8,8 @@ import torch
 from loguru import logger as log
 from torch import nn
 
-from .models import NNPInputTuple, PairlistData
+from modelforge.dataset.dataset import NNPInputTuple
+from modelforge.potential.neighbors import PairlistData
 from .utils import Dense
 
 

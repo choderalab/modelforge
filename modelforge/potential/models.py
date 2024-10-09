@@ -38,277 +38,277 @@ T_NNP_Parameters = TypeVar(
 )
 
 
-class PairlistData(NamedTuple):
-    """
-    A namedtuple to store the outputs of the Pairlist and Neighborlist forward methods.
+# class PairlistData(NamedTuple):
+#     """
+#     A namedtuple to store the outputs of the Pairlist and Neighborlist forward methods.
+#
+#     Attributes
+#     ----------
+#     pair_indices : torch.Tensor
+#         A tensor of shape (2, n_pairs) containing the indices of the interacting atom pairs.
+#     d_ij : torch.Tensor
+#         A tensor of shape (n_pairs, 1) containing the Euclidean distances between the atoms in each pair.
+#     r_ij : torch.Tensor
+#         A tensor of shape (n_pairs, 3) containing the displacement vectors between the atoms in each pair.
+#     """
+#
+#     pair_indices: torch.Tensor
+#     d_ij: torch.Tensor
+#     r_ij: torch.Tensor
 
-    Attributes
-    ----------
-    pair_indices : torch.Tensor
-        A tensor of shape (2, n_pairs) containing the indices of the interacting atom pairs.
-    d_ij : torch.Tensor
-        A tensor of shape (n_pairs, 1) containing the Euclidean distances between the atoms in each pair.
-    r_ij : torch.Tensor
-        A tensor of shape (n_pairs, 3) containing the displacement vectors between the atoms in each pair.
-    """
 
-    pair_indices: torch.Tensor
-    d_ij: torch.Tensor
-    r_ij: torch.Tensor
-
-
-class Pairlist(Module):
-
-    def __init__(self, only_unique_pairs: bool = False):
-        """
-         Handle pair list calculations for systems, returning indices, distances
-         and distance vectors for atom pairs within a certain cutoff.
-
-        Parameters
-        ----------
-        only_unique_pairs : bool, optional
-            If True, only unique pairs are returned (default is False).
-        """
-        super().__init__()
-        self.only_unique_pairs = only_unique_pairs
-
-    def enumerate_all_pairs(self, atomic_subsystem_indices: torch.Tensor):
-        """
-        Compute all pairs of atoms and their distances.
-
-        Parameters
-        ----------
-        atomic_subsystem_indices : torch.Tensor
-            Atom indices to indicate which atoms belong to which molecule.
-            Note in all cases, the values in this tensor must be numbered from 0 to n_molecules - 1 sequentially, with no gaps in the numbering. E.g., [0,0,0,1,1,2,2,2 ...].
-            This is the case for all internal data structures, and thus no validation is performed in this routine. If the data is not structured in this way, the results will be incorrect.
-
-        Returns
-        -------
-        torch.Tensor
-            Pair indices for all atom pairs.
-        """
-
-        # get device that passed tensors lives on, initialize on the same device
-        device = atomic_subsystem_indices.device
-
-        # if there is only one molecule, we do not need to use additional looping and offsets
-        if torch.sum(atomic_subsystem_indices) == 0:
-            n = len(atomic_subsystem_indices)
-            if self.only_unique_pairs:
-                i_final_pairs, j_final_pairs = torch.triu_indices(
-                    n, n, 1, device=device
-                )
-            else:
-                # Repeat each number n-1 times for i_indices
-                i_final_pairs = torch.repeat_interleave(
-                    torch.arange(n, device=device),
-                    repeats=n - 1,
-                )
-
-                # Correctly construct j_indices
-                j_final_pairs = torch.cat(
-                    [
-                        torch.cat(
-                            (
-                                torch.arange(i, device=device),
-                                torch.arange(i + 1, n, device=device),
-                            )
-                        )
-                        for i in range(n)
-                    ]
-                )
-
-        else:
-            # if we have more than one molecule, we will take into account molecule size and offsets when
-            # calculating pairs, as using the approach above is not memory efficient for datasets with large molecules
-            # and/or larger batch sizes; while not likely a problem on higher end GPUs with large amounts of memory
-            # cheaper commodity and mobile GPUs may have issues
-
-            # atomic_subsystem_indices are always numbered from 0 to n_molecules
-            # - 1 e.g., a single molecule will be [0, 0, 0, 0 ... ] and a batch
-            # of molecules will always start at 0 and increment [ 0, 0, 0, 1, 1,
-            # 1, ...] As such, we can use bincount, as there are no gaps in the
-            # numbering
-
-            # Note if the indices are not numbered from 0 to n_molecules - 1, this will not work
-            # E.g., bincount on [3,3,3, 4,4,4, 5,5,5] will return [0,0,0,3,3,3,3,3,3]
-            # as we have no values for 0, 1, 2
-            # using a combination of unique and argsort would make this work for any numbering ordering
-            # but that is not how the data ends up being structured internally, and thus is not needed
-            repeats = torch.bincount(atomic_subsystem_indices)
-            offsets = torch.cat(
-                (torch.tensor([0], device=device), torch.cumsum(repeats, dim=0)[:-1])
-            )
-
-            i_indices = torch.cat(
-                [
-                    torch.repeat_interleave(
-                        torch.arange(o, o + r, device=device), repeats=r
-                    )
-                    for r, o in zip(repeats, offsets)
-                ]
-            )
-            j_indices = torch.cat(
-                [
-                    torch.cat([torch.arange(o, o + r, device=device) for _ in range(r)])
-                    for r, o in zip(repeats, offsets)
-                ]
-            )
-
-            if self.only_unique_pairs:
-                # filter out pairs that are not unique
-                unique_pairs_mask = i_indices < j_indices
-                i_final_pairs = i_indices[unique_pairs_mask]
-                j_final_pairs = j_indices[unique_pairs_mask]
-            else:
-                # filter out identical values
-                unique_pairs_mask = i_indices != j_indices
-                i_final_pairs = i_indices[unique_pairs_mask]
-                j_final_pairs = j_indices[unique_pairs_mask]
-
-        # concatenate to form final (2, n_pairs) tensor
-        pair_indices = torch.stack((i_final_pairs, j_final_pairs))
-
-        return pair_indices.to(device)
-
-    def construct_initial_pairlist_using_numpy(
-        self, atomic_subsystem_indices: torch.Tensor
-    ):
-        """Compute all pairs of atoms and also return counts of the number of pairs for each molecule in batch.
-
-        Parameters
-        ----------
-        atomic_subsystem_indices : torch.Tensor
-            Atom indices to indicate which atoms belong to which molecule.
-
-        Returns
-        -------
-        pair_indices : np.ndarray, shape (2, n_pairs)
-            Pairs of atom indices, 0-indexed for each molecule
-        number_of_pairs : np.ndarray, shape (n_molecules)
-            The number to index into pair_indices for each molecule
-
-        """
-
-        # atomic_subsystem_indices are always numbered from 0 to n_molecules - 1
-        # e.g., a single molecule will be [0, 0, 0, 0 ... ]
-        # and a batch of molecules will always start at 0 and increment [ 0, 0, 0, 1, 1, 1, ...]
-        # As such, we can use bincount, as there are no gaps in the numbering
-        # Note if the indices are not numbered from 0 to n_molecules - 1, this will not work
-        # E.g., bincount on [3,3,3, 4,4,4, 5,5,5] will return [0,0,0,3,3,3,3,3,3]
-        # as we have no values for 0, 1, 2
-        # using a combination of unique and argsort would make this work for any numbering ordering
-        # but that is not how the data ends up being structured internally, and thus is not needed
-
-        import numpy as np
-
-        # get the number of atoms in each molecule
-        repeats = np.bincount(atomic_subsystem_indices)
-
-        # calculate the number of pairs for each molecule, using simple permutation
-        npairs_by_molecule = np.array([r * (r - 1) for r in repeats], dtype=np.int16)
-
-        i_indices = np.concatenate(
-            [
-                np.repeat(
-                    np.arange(
-                        0,
-                        r,
-                        dtype=np.int16,
-                    ),
-                    repeats=r,
-                )
-                for r in repeats
-            ]
-        )
-        j_indices = np.concatenate(
-            [
-                np.concatenate([np.arange(0, 0 + r, dtype=np.int16) for _ in range(r)])
-                for r in repeats
-            ]
-        )
-
-        # filter out identical pairs where i==j
-        unique_pairs_mask = i_indices != j_indices
-        i_final_pairs = i_indices[unique_pairs_mask]
-        j_final_pairs = j_indices[unique_pairs_mask]
-
-        # concatenate to form final (2, n_pairs) vector
-        pair_indices = np.stack((i_final_pairs, j_final_pairs))
-
-        return pair_indices, npairs_by_molecule
-
-    def calculate_r_ij(
-        self, pair_indices: torch.Tensor, positions: torch.Tensor
-    ) -> torch.Tensor:
-        """Compute displacement vectors between atom pairs.
-
-        Parameters
-        ----------
-        pair_indices : torch.Tensor
-            Atom indices for pairs of atoms. Shape: [2, n_pairs].
-        positions : torch.Tensor
-            Atom positions. Shape: [atoms, 3].
-
-        Returns
-        -------
-        torch.Tensor
-            Displacement vectors between atom pairs. Shape: [n_pairs, 3].
-        """
-        # Select the pairs of atom coordinates from the positions
-        selected_positions = positions.index_select(0, pair_indices.view(-1)).view(
-            2, -1, 3
-        )
-        return selected_positions[1] - selected_positions[0]
-
-    def calculate_d_ij(self, r_ij: torch.Tensor) -> torch.Tensor:
-        """
-        ompute Euclidean distances between atoms in each pair.
-
-        Parameters
-        ----------
-        r_ij : torch.Tensor
-            Displacement vectors between atoms in a pair. Shape: [n_pairs, 3].
-
-        Returns
-        -------
-        torch.Tensor
-            Euclidean distances. Shape: [n_pairs, 1].
-        """
-        return r_ij.norm(dim=1).unsqueeze(1)
-
-    def forward(
-        self,
-        positions: torch.Tensor,
-        atomic_subsystem_indices: torch.Tensor,
-    ) -> PairlistData:
-        """
-        Performs the forward pass of the Pairlist module.
-
-        Parameters
-        ----------
-        positions : torch.Tensor
-            Atom positions. Shape: [nr_atoms, 3].
-        atomic_subsystem_indices (torch.Tensor, shape (nr_atoms_per_systems)):
-            Atom indices to indicate which atoms belong to which molecule.
-
-        Returns
-        -------
-        PairListOutputs: A dataclass containing the following attributes:
-            pair_indices (torch.Tensor): A tensor of shape (2, n_pairs) containing the indices of the interacting atom pairs.
-            d_ij (torch.Tensor): A tensor of shape (n_pairs, 1) containing the Euclidean distances between the atoms in each pair.
-            r_ij (torch.Tensor): A tensor of shape (n_pairs, 3) containing the displacement vectors between the atoms in each pair.
-        """
-        pair_indices = self.enumerate_all_pairs(
-            atomic_subsystem_indices,
-        )
-        r_ij = self.calculate_r_ij(pair_indices, positions)
-        return PairlistData(
-            pair_indices=pair_indices,
-            d_ij=self.calculate_d_ij(r_ij),
-            r_ij=r_ij,
-        )
+# class Pairlist(Module):
+#
+#     def __init__(self, only_unique_pairs: bool = False):
+#         """
+#          Handle pair list calculations for systems, returning indices, distances
+#          and distance vectors for atom pairs within a certain cutoff.
+#
+#         Parameters
+#         ----------
+#         only_unique_pairs : bool, optional
+#             If True, only unique pairs are returned (default is False).
+#         """
+#         super().__init__()
+#         self.only_unique_pairs = only_unique_pairs
+#
+#     def enumerate_all_pairs(self, atomic_subsystem_indices: torch.Tensor):
+#         """
+#         Compute all pairs of atoms and their distances.
+#
+#         Parameters
+#         ----------
+#         atomic_subsystem_indices : torch.Tensor
+#             Atom indices to indicate which atoms belong to which molecule.
+#             Note in all cases, the values in this tensor must be numbered from 0 to n_molecules - 1 sequentially, with no gaps in the numbering. E.g., [0,0,0,1,1,2,2,2 ...].
+#             This is the case for all internal data structures, and thus no validation is performed in this routine. If the data is not structured in this way, the results will be incorrect.
+#
+#         Returns
+#         -------
+#         torch.Tensor
+#             Pair indices for all atom pairs.
+#         """
+#
+#         # get device that passed tensors lives on, initialize on the same device
+#         device = atomic_subsystem_indices.device
+#
+#         # if there is only one molecule, we do not need to use additional looping and offsets
+#         if torch.sum(atomic_subsystem_indices) == 0:
+#             n = len(atomic_subsystem_indices)
+#             if self.only_unique_pairs:
+#                 i_final_pairs, j_final_pairs = torch.triu_indices(
+#                     n, n, 1, device=device
+#                 )
+#             else:
+#                 # Repeat each number n-1 times for i_indices
+#                 i_final_pairs = torch.repeat_interleave(
+#                     torch.arange(n, device=device),
+#                     repeats=n - 1,
+#                 )
+#
+#                 # Correctly construct j_indices
+#                 j_final_pairs = torch.cat(
+#                     [
+#                         torch.cat(
+#                             (
+#                                 torch.arange(i, device=device),
+#                                 torch.arange(i + 1, n, device=device),
+#                             )
+#                         )
+#                         for i in range(n)
+#                     ]
+#                 )
+#
+#         else:
+#             # if we have more than one molecule, we will take into account molecule size and offsets when
+#             # calculating pairs, as using the approach above is not memory efficient for datasets with large molecules
+#             # and/or larger batch sizes; while not likely a problem on higher end GPUs with large amounts of memory
+#             # cheaper commodity and mobile GPUs may have issues
+#
+#             # atomic_subsystem_indices are always numbered from 0 to n_molecules
+#             # - 1 e.g., a single molecule will be [0, 0, 0, 0 ... ] and a batch
+#             # of molecules will always start at 0 and increment [ 0, 0, 0, 1, 1,
+#             # 1, ...] As such, we can use bincount, as there are no gaps in the
+#             # numbering
+#
+#             # Note if the indices are not numbered from 0 to n_molecules - 1, this will not work
+#             # E.g., bincount on [3,3,3, 4,4,4, 5,5,5] will return [0,0,0,3,3,3,3,3,3]
+#             # as we have no values for 0, 1, 2
+#             # using a combination of unique and argsort would make this work for any numbering ordering
+#             # but that is not how the data ends up being structured internally, and thus is not needed
+#             repeats = torch.bincount(atomic_subsystem_indices)
+#             offsets = torch.cat(
+#                 (torch.tensor([0], device=device), torch.cumsum(repeats, dim=0)[:-1])
+#             )
+#
+#             i_indices = torch.cat(
+#                 [
+#                     torch.repeat_interleave(
+#                         torch.arange(o, o + r, device=device), repeats=r
+#                     )
+#                     for r, o in zip(repeats, offsets)
+#                 ]
+#             )
+#             j_indices = torch.cat(
+#                 [
+#                     torch.cat([torch.arange(o, o + r, device=device) for _ in range(r)])
+#                     for r, o in zip(repeats, offsets)
+#                 ]
+#             )
+#
+#             if self.only_unique_pairs:
+#                 # filter out pairs that are not unique
+#                 unique_pairs_mask = i_indices < j_indices
+#                 i_final_pairs = i_indices[unique_pairs_mask]
+#                 j_final_pairs = j_indices[unique_pairs_mask]
+#             else:
+#                 # filter out identical values
+#                 unique_pairs_mask = i_indices != j_indices
+#                 i_final_pairs = i_indices[unique_pairs_mask]
+#                 j_final_pairs = j_indices[unique_pairs_mask]
+#
+#         # concatenate to form final (2, n_pairs) tensor
+#         pair_indices = torch.stack((i_final_pairs, j_final_pairs))
+#
+#         return pair_indices.to(device)
+#
+#     def construct_initial_pairlist_using_numpy(
+#         self, atomic_subsystem_indices: torch.Tensor
+#     ):
+#         """Compute all pairs of atoms and also return counts of the number of pairs for each molecule in batch.
+#
+#         Parameters
+#         ----------
+#         atomic_subsystem_indices : torch.Tensor
+#             Atom indices to indicate which atoms belong to which molecule.
+#
+#         Returns
+#         -------
+#         pair_indices : np.ndarray, shape (2, n_pairs)
+#             Pairs of atom indices, 0-indexed for each molecule
+#         number_of_pairs : np.ndarray, shape (n_molecules)
+#             The number to index into pair_indices for each molecule
+#
+#         """
+#
+#         # atomic_subsystem_indices are always numbered from 0 to n_molecules - 1
+#         # e.g., a single molecule will be [0, 0, 0, 0 ... ]
+#         # and a batch of molecules will always start at 0 and increment [ 0, 0, 0, 1, 1, 1, ...]
+#         # As such, we can use bincount, as there are no gaps in the numbering
+#         # Note if the indices are not numbered from 0 to n_molecules - 1, this will not work
+#         # E.g., bincount on [3,3,3, 4,4,4, 5,5,5] will return [0,0,0,3,3,3,3,3,3]
+#         # as we have no values for 0, 1, 2
+#         # using a combination of unique and argsort would make this work for any numbering ordering
+#         # but that is not how the data ends up being structured internally, and thus is not needed
+#
+#         import numpy as np
+#
+#         # get the number of atoms in each molecule
+#         repeats = np.bincount(atomic_subsystem_indices)
+#
+#         # calculate the number of pairs for each molecule, using simple permutation
+#         npairs_by_molecule = np.array([r * (r - 1) for r in repeats], dtype=np.int16)
+#
+#         i_indices = np.concatenate(
+#             [
+#                 np.repeat(
+#                     np.arange(
+#                         0,
+#                         r,
+#                         dtype=np.int16,
+#                     ),
+#                     repeats=r,
+#                 )
+#                 for r in repeats
+#             ]
+#         )
+#         j_indices = np.concatenate(
+#             [
+#                 np.concatenate([np.arange(0, 0 + r, dtype=np.int16) for _ in range(r)])
+#                 for r in repeats
+#             ]
+#         )
+#
+#         # filter out identical pairs where i==j
+#         unique_pairs_mask = i_indices != j_indices
+#         i_final_pairs = i_indices[unique_pairs_mask]
+#         j_final_pairs = j_indices[unique_pairs_mask]
+#
+#         # concatenate to form final (2, n_pairs) vector
+#         pair_indices = np.stack((i_final_pairs, j_final_pairs))
+#
+#         return pair_indices, npairs_by_molecule
+#
+#     def calculate_r_ij(
+#         self, pair_indices: torch.Tensor, positions: torch.Tensor
+#     ) -> torch.Tensor:
+#         """Compute displacement vectors between atom pairs.
+#
+#         Parameters
+#         ----------
+#         pair_indices : torch.Tensor
+#             Atom indices for pairs of atoms. Shape: [2, n_pairs].
+#         positions : torch.Tensor
+#             Atom positions. Shape: [atoms, 3].
+#
+#         Returns
+#         -------
+#         torch.Tensor
+#             Displacement vectors between atom pairs. Shape: [n_pairs, 3].
+#         """
+#         # Select the pairs of atom coordinates from the positions
+#         selected_positions = positions.index_select(0, pair_indices.view(-1)).view(
+#             2, -1, 3
+#         )
+#         return selected_positions[1] - selected_positions[0]
+#
+#     def calculate_d_ij(self, r_ij: torch.Tensor) -> torch.Tensor:
+#         """
+#         ompute Euclidean distances between atoms in each pair.
+#
+#         Parameters
+#         ----------
+#         r_ij : torch.Tensor
+#             Displacement vectors between atoms in a pair. Shape: [n_pairs, 3].
+#
+#         Returns
+#         -------
+#         torch.Tensor
+#             Euclidean distances. Shape: [n_pairs, 1].
+#         """
+#         return r_ij.norm(dim=1).unsqueeze(1)
+#
+#     def forward(
+#         self,
+#         positions: torch.Tensor,
+#         atomic_subsystem_indices: torch.Tensor,
+#     ) -> PairlistData:
+#         """
+#         Performs the forward pass of the Pairlist module.
+#
+#         Parameters
+#         ----------
+#         positions : torch.Tensor
+#             Atom positions. Shape: [nr_atoms, 3].
+#         atomic_subsystem_indices (torch.Tensor, shape (nr_atoms_per_systems)):
+#             Atom indices to indicate which atoms belong to which molecule.
+#
+#         Returns
+#         -------
+#         PairListOutputs: A dataclass containing the following attributes:
+#             pair_indices (torch.Tensor): A tensor of shape (2, n_pairs) containing the indices of the interacting atom pairs.
+#             d_ij (torch.Tensor): A tensor of shape (n_pairs, 1) containing the Euclidean distances between the atoms in each pair.
+#             r_ij (torch.Tensor): A tensor of shape (n_pairs, 3) containing the displacement vectors between the atoms in each pair.
+#         """
+#         pair_indices = self.enumerate_all_pairs(
+#             atomic_subsystem_indices,
+#         )
+#         r_ij = self.calculate_r_ij(pair_indices, positions)
+#         return PairlistData(
+#             pair_indices=pair_indices,
+#             d_ij=self.calculate_d_ij(r_ij),
+#             r_ij=r_ij,
+#         )
 
 
 # class Neighborlist(Pairlist):
@@ -769,7 +769,9 @@ def setup_potential(
         dataset_statistic=remove_units_from_dataset_statistics(dataset_statistic),
     )
     if use_training_mode_neighborlist:
-        neighborlist = ComputeInteractingAtomPairs(
+        from modelforge.potential.neighbors import NeighborListForTraining
+
+        neighborlist = NeighborListForTraining(
             cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
             only_unique_pairs=only_unique_pairs,
         )

@@ -1135,7 +1135,7 @@ class DataModule(pl.LightningDataModule):
             regenerate_cache : bool, defaults to False
                 Whether to regenerate the cache.
         """
-        from modelforge.potential.models import Pairlist
+        from modelforge.potential.neighbors import Pairlist
         import os
 
         super().__init__()

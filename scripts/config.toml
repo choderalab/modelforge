@@ -11,7 +11,7 @@ minimum_interaction_radius_for_angular_features = "0.8 angstrom"
 angular_dist_divisions = 8
 
 [potential.core_parameter.activation_function_parameter]
-activation_function_name = "CeLU"   # for the original ANI behavior please stick with CeLu since the alpha parameter is currently hard coded and might lead to different behavior when another activation function is used.
+activation_function_name = "CeLU" # for the original ANI behavior please stick with CeLu since the alpha parameter is currently hard coded and might lead to different behavior when another activation function is used.
 
 [potential.core_parameter.activation_function_parameter.activation_function_arguments]
 alpha = 0.1
@@ -82,3 +82,4 @@ devices = 1                                         #[0,1,2,3]
 checkpoint_path = "None"
 simulation_environment = "PyTorch"
 log_every_n_steps = 1
+verbose = true

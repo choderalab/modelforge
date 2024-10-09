@@ -779,7 +779,7 @@ class ModelTrainer:
         callbacks.append(
             ModelCheckpoint(
                 save_top_k=2,
-                monitor=self.training_parameter.monitor_for_checkpoint,
+                monitor=self.training_parameter.monitor,
                 filename=checkpoint_filename,
             )
         )

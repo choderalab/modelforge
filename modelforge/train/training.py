@@ -88,26 +88,22 @@ class CalculateProperties(torch.nn.Module):
             The true forces from the dataset and the predicted forces by the model.
         """
         nnp_input = batch.nnp_input
+        # Ensure gradients are enabled
+        nnp_input.positions.requires_grad_(True)
+        # cast to float32
         per_atom_force_true = batch.metadata.F.to(torch.float32)
 
         if per_atom_force_true.numel() < 1:
             raise RuntimeError("No force can be calculated.")
 
-        per_molecule_energy_predict = model_prediction["per_molecule_energy"]
-
-        # Ensure gradients are enabled
-        per_molecule_energy_predict.requires_grad_(True)
-        nnp_input.positions.requires_grad_(True)
-
+        # Sum the energies before computing the gradient
+        total_energy = model_prediction["per_molecule_energy"].sum()
         # Compute the gradient (forces) from the predicted energies
-        grad = torch.autograd.grad(
-            per_molecule_energy_predict,
-            nnp_input.positions,
-            grad_outputs=torch.ones_like(per_molecule_energy_predict),
-            create_graph=train_mode,
-            retain_graph=train_mode,
-            allow_unused=True,
-        )[0]
+        total_energy.backward(
+            create_graph=True,
+            retain_graph=True,
+        )
+        grad = nnp_input.positions.grad
 
         if grad is None:
             raise RuntimeWarning("Force calculation did not return a gradient")
@@ -429,7 +425,7 @@ class TrainingAdapter(pL.LightningModule):
 
             # calculate energy and forces
             predict_target = self.calculate_predictions(
-                batch, self.potential, self.training
+                batch, self.potential, self.potential.training
             )
 
         self._update_metrics(self.val_metrics, predict_target)

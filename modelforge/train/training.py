@@ -419,7 +419,7 @@ class TrainingAdapter(pL.LightningModule):
     def on_after_backward(self):
         # After backward pass
         for name, param in self.potential.named_parameters():
-            if param.grad is not None:
+            if param.grad is not None and False:
                 log.debug(
                     f"Parameter: {name}, Gradient Norm: {param.grad.norm().item()}"
                 )
@@ -590,6 +590,7 @@ class ModelTrainer:
         self.potential_parameter = potential_parameter
         self.training_parameter = training_parameter
         self.runtime_parameter = runtime_parameter
+        self.verbose = verbose
 
         self.datamodule = self.setup_datamodule()
         self.dataset_statistic = (

@@ -24,6 +24,7 @@ dependencies:
   - sqlitedict
   - pydantic>=2
   - ray-all
+  - graphviz
 
   # Testing
   - pytest>=2.1

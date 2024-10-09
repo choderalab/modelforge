@@ -24,7 +24,8 @@ dependencies:
   - jax
   - flax
   - pydantic>=2.0
-  -
+  - graphviz
+
   # Testing
   - pytest>=2.1
   - pytest-cov

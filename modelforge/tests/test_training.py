@@ -127,9 +127,11 @@ def replace_per_molecule_with_per_atom_loss(config):
     t_config.loss_parameter.weight.pop("per_molecule_energy")
     t_config.loss_parameter.weight["per_atom_energy"] = 0.999
 
-    t_config.early_stopping.monitor = "val/per_atom_energy/rmse"
-    t_config.monitor_for_checkpoint = "val/per_atom_energy/rmse"
-    t_config.lr_scheduler.monitor = "val/per_atom_energy/rmse"
+    # NOTE: the loss is calculate per_atom, but the validation set error is
+    # per_molecule. This is because otherwise it's difficult to compare.
+    t_config.early_stopping.monitor = "val/per_molecule_energy/rmse"
+    t_config.monitor_for_checkpoint = "val/per_molecule_energy/rmse"
+    t_config.lr_scheduler.monitor = "val/per_molecule_energy/rmse"
 
 
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")

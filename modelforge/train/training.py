@@ -730,9 +730,7 @@ class ModelTrainer:
                 save_dir=str(
                     self.training_parameter.experiment_logger.wandb_configuration.save_dir
                 ),
-                log_model=str(
-                    self.training_parameter.experiment_logger.wandb_configuration.log_model
-                ),
+                log_model=self.training_parameter.experiment_logger.wandb_configuration.log_model,
                 project=self.training_parameter.experiment_logger.wandb_configuration.project,
                 group=self.training_parameter.experiment_logger.wandb_configuration.group,
                 job_type=self.training_parameter.experiment_logger.wandb_configuration.job_type,

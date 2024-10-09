@@ -108,7 +108,7 @@ class WandbConfig(BaseModel):
     save_dir: str
     project: str
     group: str
-    log_model: str
+    log_model: Union[str, bool]
     job_type: Optional[str]
     tags: Optional[List[str]]
     notes: Optional[str]

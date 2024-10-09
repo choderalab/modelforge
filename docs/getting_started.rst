@@ -159,7 +159,7 @@ Here is an example of a training routine definition:
     save_dir = "logs"  # Directory to save logs
     project = "training_test"  # WandB project name
     group = "modelforge_nnps"  # WandB group name
-    log_model = true  # Whether to log the model in WandB
+    log_model = True  # Whether to log the model in WandB
     job_type = "training"  # Job type for WandB logging
     tags = ["modelforge", "v_0.1.0"]  # Tags for WandB logging
     notes = "testing training"  # Notes for WandB logging

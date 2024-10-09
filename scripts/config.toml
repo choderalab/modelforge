@@ -21,7 +21,7 @@ alpha = 0.1
 [potential.postprocessing_parameter]
 properties_to_process = ['per_atom_energy']
 [potential.postprocessing_parameter.per_atom_energy]
-normalize = true
+normalize = false
 from_atom_to_molecule_reduction = true
 keep_per_atom_property = true
 

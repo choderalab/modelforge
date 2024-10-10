@@ -127,9 +127,11 @@ def replace_per_molecule_with_per_atom_loss(config):
     t_config.loss_parameter.weight.pop("per_molecule_energy")
     t_config.loss_parameter.weight["per_atom_energy"] = 0.999
 
-    t_config.early_stopping.monitor = "val/per_atom_energy/rmse"
-    t_config.monitor_for_checkpoint = "val/per_atom_energy/rmse"
-    t_config.lr_scheduler.monitor = "val/per_atom_energy/rmse"
+    # NOTE: the loss is calculate per_atom, but the validation set error is
+    # per_molecule. This is because otherwise it's difficult to compare.
+    t_config.early_stopping.monitor = "val/per_molecule_energy/rmse"
+    t_config.monitor_for_checkpoint = "val/per_molecule_energy/rmse"
+    t_config.lr_scheduler.monitor = "val/per_molecule_energy/rmse"
 
 
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
@@ -241,11 +243,16 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize):
     batch = single_batch_with_batchsize(batch_size=16, dataset_name="SPICE2")
 
     # Get the trainer object with the specified model and dataset
-    trainer = get_trainer(
-        potential_name="schnet",
-        dataset_name="SPICE2",
-        training_toml="train_with_dipole_moment",
+    config = load_configs_into_pydantic_models(
+        potential_name="schnet", dataset_name="SPICE2"
     )
+    add_dipole_moment_to_loss_parameter(config)
+    add_force_to_loss_parameter(config)
+
+    trainer = get_trainer(
+        config,
+    )
+
     # Calculate predictions using the trainer's model
     prediction = trainer.model.calculate_predictions(
         batch,
@@ -285,20 +292,20 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize):
     loss_dict = trainer.model.loss(predict_target=prediction, batch=batch)
 
     # Ensure that the loss contains the total_charge and dipole_moment terms
-    assert "total_charge" in loss_dict, "Total charge loss not computed."
-    assert "dipole_moment" in loss_dict, "Dipole moment loss not computed."
+    assert "per_molecule_total_charge" in loss_dict, "Total charge loss not computed."
+    assert "per_molecule_dipole_moment" in loss_dict, "Dipole moment loss not computed."
 
     # Check that the losses are finite numbers
     assert torch.isfinite(
-        loss_dict["total_charge"]
+        loss_dict["per_molecule_total_charge"]
     ).all(), "Total charge loss contains non-finite values."
     assert torch.isfinite(
-        loss_dict["dipole_moment"]
+        loss_dict["per_molecule_dipole_moment"]
     ).all(), "Dipole moment loss contains non-finite values."
 
     # Optionally, print or log the losses for debugging
-    print("Total Charge Loss:", loss_dict["total_charge"].mean().item())
-    print("Dipole Moment Loss:", loss_dict["dipole_moment"].mean().item())
+    print("Total Charge Loss:", loss_dict["per_molecule_total_charge"].mean().item())
+    print("Dipole Moment Loss:", loss_dict["per_molecule_dipole_moment"].mean().item())
 
     # Check that the total loss includes the new loss terms
     assert "total_loss" in loss_dict, "Total loss not computed."
@@ -321,8 +328,15 @@ def test_loss(single_batch_with_batchsize):
     loss = Loss(loss_porperty, loss_weights)
     assert loss is not None
 
-    # get trainer
-    trainer = get_trainer("schnet", "QM9", "default_with_force")
+    # Get the trainer object with the specified model and dataset
+    config = load_configs_into_pydantic_models(
+        potential_name="schnet", dataset_name="QM9"
+    )
+    add_force_to_loss_parameter(config)
+
+    trainer = get_trainer(
+        config,
+    )
     prediction = trainer.model.calculate_predictions(
         batch, trainer.model.potential, train_mode=True
     )  # train_mode=True is required for gradients in force prediction

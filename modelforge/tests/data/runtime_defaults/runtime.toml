@@ -7,3 +7,4 @@ devices = 1                  #[0,1,2,3]
 checkpoint_path = "None"
 simulation_environment = "PyTorch"
 log_every_n_steps = 1
+verbose = true

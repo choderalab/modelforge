@@ -40,4 +40,4 @@ dependencies:
       - git+https://github.com/ArnNag/sake.git@nanometer
       - flax
       - torch
-      - torchviz2
+

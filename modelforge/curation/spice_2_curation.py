@@ -2,6 +2,7 @@ from modelforge.curation.curation_baseclass import DatasetCuration
 from typing import Optional
 from loguru import logger
 from openff.units import unit
+import numpy as np
 
 
 class SPICE2Curation(DatasetCuration):
@@ -158,7 +159,7 @@ class SPICE2Curation(DatasetCuration):
             "n_configs": "single_rec",
             "smiles": "single_rec",
             "subset": "single_rec",
-            "total_charge": "single_rec",
+            "total_charge": "series_mol",
             "geometry": "series_atom",
             "dft_total_energy": "series_mol",
             "dft_total_gradient": "series_atom",
@@ -194,7 +195,7 @@ class SPICE2Curation(DatasetCuration):
 
         rdmol = Chem.MolFromSmiles(smiles, sanitize=False)
         total_charge = sum(atom.GetFormalCharge() for atom in rdmol.GetAtoms())
-        return int(total_charge) * unit.elementary_charge
+        return np.array([int(total_charge)]) * unit.elementary_charge
 
     def _process_downloaded(
         self,
@@ -252,74 +253,82 @@ class SPICE2Curation(DatasetCuration):
                 # Extract the total number of conformations for a given molecule
                 conformers_per_record = hf[name]["conformations"].shape[0]
 
-                keys_list = list(hf[name].keys())
+                if conformers_per_record != 0:
+                    keys_list = list(hf[name].keys())
 
-                # temp dictionary for ANI-1x and ANI-1ccx data
-                ds_temp = {}
+                    # temp dictionary for ANI-1x and ANI-1ccx data
+                    ds_temp = {}
 
-                ds_temp["name"] = f"{name}"
-                ds_temp["smiles"] = hf[name]["smiles"][()][0].decode("utf-8")
-                ds_temp["atomic_numbers"] = hf[name]["atomic_numbers"][()].reshape(
-                    -1, 1
-                )
-                if max_conformers_per_record is not None:
-                    conformers_per_record = min(
-                        conformers_per_record,
-                        max_conformers_per_record,
+                    ds_temp["name"] = f"{name}"
+                    ds_temp["smiles"] = hf[name]["smiles"][()][0].decode("utf-8")
+                    ds_temp["atomic_numbers"] = hf[name]["atomic_numbers"][()].reshape(
+                        -1, 1
                     )
-                if total_conformers is not None:
-                    conformers_per_record = min(
-                        conformers_per_record, total_conformers - conformers_counter
-                    )
+                    if max_conformers_per_record is not None:
+                        conformers_per_record = min(
+                            conformers_per_record,
+                            max_conformers_per_record,
+                        )
+                    if total_conformers is not None:
+                        conformers_per_record = min(
+                            conformers_per_record, total_conformers - conformers_counter
+                        )
 
-                ds_temp["n_configs"] = conformers_per_record
+                    ds_temp["n_configs"] = conformers_per_record
 
-                # param_in is the name of the entry, param_data contains input (u_in) and output (u_out) units
-                for param_in, param_data in self.qm_parameters.items():
-                    # for consistency between datasets, we will all the particle positions "geometry"
-                    param_out = param_in
-                    if param_in == "geometry":
-                        param_in = "conformations"
+                    # param_in is the name of the entry, param_data contains input (u_in) and output (u_out) units
+                    for param_in, param_data in self.qm_parameters.items():
+                        # for consistency between datasets, we will all the particle positions "geometry"
+                        param_out = param_in
+                        if param_in == "geometry":
+                            param_in = "conformations"
 
-                    if param_in in keys_list:
-                        temp = hf[name][param_in][()]
-                        if param_in in need_to_reshape:
-                            temp = temp.reshape(-1, 1)
+                        if param_in in keys_list:
+                            temp = hf[name][param_in][()]
+                            if param_in in need_to_reshape:
+                                temp = temp.reshape(-1, 1)
 
-                        temp = temp[0:conformers_per_record]
-                        param_unit = param_data["u_in"]
-                        if param_unit is not None:
-                            # check that units in the hdf5 file match those we have defined in self.qm_parameters
-                            try:
-                                assert (
-                                    hf[name][param_in].attrs["units"]
-                                    == param_data["u_in"]
-                                )
-                            except:
-                                msg1 = f'unit mismatch: units in hdf5 file: {hf[name][param_in].attrs["units"]},'
-                                msg2 = f'units defined in curation class: {param_data["u_in"]}.'
+                            temp = temp[0:conformers_per_record]
+                            param_unit = param_data["u_in"]
+                            if param_unit is not None:
+                                # check that units in the hdf5 file match those we have defined in self.qm_parameters
+                                try:
+                                    assert (
+                                        hf[name][param_in].attrs["units"]
+                                        == param_data["u_in"]
+                                    )
+                                except:
+                                    msg1 = f'unit mismatch: units in hdf5 file: {hf[name][param_in].attrs["units"]},'
+                                    msg2 = f'units defined in curation class: {param_data["u_in"]}.'
 
-                                raise AssertionError(f"{msg1} {msg2}")
+                                    raise AssertionError(f"{msg1} {msg2}")
 
-                            ds_temp[param_out] = temp * param_unit
-                        else:
-                            ds_temp[param_out] = temp
-                ds_temp["total_charge"] = self._calculate_reference_charge(
-                    ds_temp["smiles"]
-                )
-                ds_temp["dft_total_force"] = -ds_temp["dft_total_gradient"]
+                                ds_temp[param_out] = temp * param_unit
+                            else:
+                                ds_temp[param_out] = temp
+                    total_charge = self._calculate_reference_charge(ds_temp["smiles"])
 
-                # check if the record contains only the elements we are interested in
-                # if this has been defined
-                add_to_record = True
-                if atomic_numbers_to_limit is not None:
-                    add_to_record = set(ds_temp["atomic_numbers"].flatten()).issubset(
-                        atomic_numbers_to_limit
+                    total_charge_reshaped = (
+                        np.repeat(total_charge.m, conformers_per_record).reshape(
+                            conformers_per_record, -1
+                        )
+                        * total_charge.u
                     )
 
-                if add_to_record:
-                    self.data.append(ds_temp)
-                    conformers_counter += conformers_per_record
+                    ds_temp["total_charge"] = total_charge_reshaped
+                    ds_temp["dft_total_force"] = -ds_temp["dft_total_gradient"]
+
+                    # check if the record contains only the elements we are interested in
+                    # if this has been defined
+                    add_to_record = True
+                    if atomic_numbers_to_limit is not None:
+                        add_to_record = set(
+                            ds_temp["atomic_numbers"].flatten()
+                        ).issubset(atomic_numbers_to_limit)
+
+                    if add_to_record:
+                        self.data.append(ds_temp)
+                        conformers_counter += conformers_per_record
 
         if self.convert_units:
             self._convert_units()

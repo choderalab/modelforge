@@ -2,7 +2,7 @@
 This module contains the base classes for the neural network potentials.
 """
 
-from typing import TYPE_CHECKING, Any, Dict, List, Mapping, NamedTuple, Optional, Tuple
+from typing import Any, Dict, List, Mapping, NamedTuple, Optional, Tuple, TypeVar, Union
 
 import lightning as pl
 import torch
@@ -10,20 +10,17 @@ from loguru import logger as log
 from openff.units import unit
 from torch.nn import Module
 
-from modelforge.dataset.dataset import NNPInput, NNPInputTuple
-
-from modelforge.dataset.dataset import DatasetParameters
+from modelforge.dataset.dataset import DatasetParameters, NNPInput, NNPInputTuple
 from modelforge.potential.parameters import (
+    AimNet2Parameters,
     ANI2xParameters,
     PaiNNParameters,
     PhysNetParameters,
     SAKEParameters,
     SchNetParameters,
     TensorNetParameters,
-    AimNet2Parameters,
 )
 from modelforge.train.parameters import RuntimeParameters, TrainingParameters
-from typing import TypeVar, Union
 
 # Define a TypeVar that can be one of the parameter models
 T_NNP_Parameters = TypeVar(
@@ -493,7 +490,11 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
 
 from torch.nn import ModuleDict
 
-from modelforge.potential.processing import PerAtomEnergy, CoulombPotential
+from modelforge.potential.processing import (
+    CoulombPotential,
+    PerAtomCharge,
+    PerAtomEnergy,
+)
 
 
 class PostProcessing(torch.nn.Module):
@@ -501,12 +502,8 @@ class PostProcessing(torch.nn.Module):
     _SUPPORTED_PROPERTIES = [
         "per_atom_energy",
         "per_atom_charge",
+        "electrostatic_potential",
         "general_postprocessing_operation",
-    ]
-    _SUPPORTED_OPERATIONS = [
-        "normalize",
-        "from_atom_to_molecule_reduction",
-        "long_range_electrostatics" "conserve_integer_charge",
     ]
 
     def __init__(
@@ -540,14 +537,45 @@ class PostProcessing(torch.nn.Module):
                 dataset_statistic["training_dataset_statistics"],
             )
             self._registered_properties.append("per_atom_energy")
-
-        if "coulomb_potential" in properties_to_process:
-            self.registered_chained_operations["coulomb_potential"] = CoulombPotential(
-                postprocessing_parameter["coulomb_potential"]["electrostatic_strategy"],
-                postprocessing_parameter["coulomb_potential"][
-                    "maximum_interaction_radius"
-                ],
+            assert all(
+                prop in PostProcessing._SUPPORTED_PROPERTIES
+                for prop in self._registered_properties
             )
+
+        if "per_atom_charge" in properties_to_process:
+            self.registered_chained_operations["per_atom_charge"] = PerAtomCharge(
+                postprocessing_parameter["per_atom_charge"]
+            )
+            self._registered_properties.append("per_atom_charge")
+            assert all(
+                prop in PostProcessing._SUPPORTED_PROPERTIES
+                for prop in self._registered_properties
+            )
+
+        if "electrostatic_potential" in properties_to_process:
+            if (
+                postprocessing_parameter["electrostatic_potential"][
+                    "electrostatic_strategy"
+                ]
+                == "coulomb"
+            ):
+
+                self.registered_chained_operations["electrostatic_potential"] = (
+                    CoulombPotential(
+                        postprocessing_parameter["electrostatic_potential"][
+                            "maximum_interaction_radius"
+                        ],
+                    )
+                )
+                self._registered_properties.append("electrostatic_potential")
+                assert all(
+                    prop in PostProcessing._SUPPORTED_PROPERTIES
+                    for prop in self._registered_properties
+                )
+            else:
+                raise NotImplementedError(
+                    "Only Coulomb potential is supported for electrostatics."
+                )
 
     def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
@@ -612,6 +640,72 @@ class Potential(torch.nn.Module):
             torch.jit.script(postprocessing) if jit else postprocessing
         )
 
+    def _add_total_charge(
+        self, core_output: Dict[str, torch.Tensor], input_data: NNPInputTuple
+    ):
+        """
+        Add the total charge to the core output.
+
+        Parameters
+        ----------
+        core_output : Dict[str, torch.Tensor]
+            The core network output.
+        input_data : NNPInputTuple
+            The input data containing the atomic numbers and charges.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The core network output with the total charge added.
+        """
+        # Add the total charge to the core output
+        core_output["per_molecule_charge"] = input_data.total_charge
+        return core_output
+
+    def _add_pairlist(
+        self, core_output: Dict[str, torch.Tensor], pairlist_output: PairlistData
+    ):
+        """
+        Add the pairlist to the core output.
+
+        Parameters
+        ----------
+        core_output : Dict[str, torch.Tensor]
+            The core network output.
+        pairlist_output : PairlistData
+            The pairlist output from the neighborlist.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The core network output with the pairlist added.
+        """
+        # Add the pairlist to the core output
+        core_output["pair_indices"] = pairlist_output.pair_indices
+        core_output["d_ij"] = pairlist_output.d_ij
+        core_output["r_ij"] = pairlist_output.r_ij
+        return core_output
+
+    def _remove_pairlist(self, processed_output: Dict[str, torch.Tensor]):
+        """
+        Remove the pairlist from the core output.
+
+        Parameters
+        ----------
+        processed_output : Dict[str, torch.Tensor]
+            The postprocessed output.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The postprocessed output with the pairlist removed.
+        """
+        # Remove the pairlist from the core output
+        del processed_output["pair_indices"]
+        del processed_output["d_ij"]
+        del processed_output["r_ij"]
+        return processed_output
+
     def forward(self, input_data: NNPInputTuple) -> Dict[str, torch.Tensor]:
         """
         Forward pass for the potential model, computing energy and forces.
@@ -633,8 +727,11 @@ class Potential(torch.nn.Module):
         core_output = self.core_network.forward(input_data, pairlist_output)
 
         # Step 3: Apply postprocessing using PostProcessing
-        processed_output = self.postprocessing.forward(core_output)
+        core_output = self._add_total_charge(core_output, input_data)
+        core_output = self._add_pairlist(core_output, pairlist_output)
 
+        processed_output = self.postprocessing.forward(core_output)
+        processed_output = self._remove_pairlist(processed_output)
         return processed_output
 
     def compute_core_network_output(
@@ -807,6 +904,7 @@ def setup_potential(
         jit=jit,
         jit_neighborlist=False if use_training_mode_neighborlist else True,
     )
+    model.eval()
     return model
 
 

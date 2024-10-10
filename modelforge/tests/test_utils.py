@@ -14,6 +14,53 @@ def prep_temp_dir(tmp_path_factory):
     return fn
 
 
+@pytest.mark.parametrize(
+    "partial_point_charges, atomic_subsystem_indices, total_charge",
+    [
+        (
+            torch.zeros(6),
+            torch.tensor([0, 0, 1, 1, 1, 1], dtype=torch.int64),
+            torch.tensor([0.0, 1.0]),
+        ),
+        (
+            torch.zeros(6),
+            torch.tensor([0, 0, 1, 1, 1, 1], dtype=torch.int64),
+            torch.tensor([-1.0, 2.0]),
+        ),
+        (
+            torch.rand(6),
+            torch.tensor([0, 0, 1, 1, 1, 1], dtype=torch.int64),
+            torch.tensor([-1.0, 2.0]),
+        ),
+    ],
+)
+def test_default_charge_conservation(
+    partial_point_charges: torch.Tensor,
+    atomic_subsystem_indices: torch.Tensor,
+    total_charge: torch.Tensor,
+):
+    """
+    Test the default_charge_conservation function with various test cases.
+    """
+    from modelforge.potential.processing import default_charge_conservation
+
+    # test charge equilibration
+    # ------------------------- #
+    charges = default_charge_conservation(
+        partial_point_charges,
+        total_charge,
+        atomic_subsystem_indices,
+    )
+
+    # Calculate the total charge per molecule after correction
+    predicted_total_charge = torch.zeros_like(total_charge).scatter_add_(
+        0, atomic_subsystem_indices, charges
+    )
+
+    # Assert that the predicted total charges match the desired total charges
+    assert torch.allclose(predicted_total_charge, total_charge, atol=1e-6)
+
+
 @pytest.mark.skipif(
     ON_MACOS,
     reason="Skipt Test on MacOS CI runners as it relies on spawning multiple threads. ",
@@ -90,63 +137,6 @@ def test_method_locking(tmp_path):
 
     # Ensure all processes have exited the critical section
     assert len(entered) == 0, f"Processes left in critical section: {entered}"
-
-
-def test_charge_equilibration():
-    from modelforge.potential.processing import default_charge_conservation
-
-    # test charge equilibration
-    # ------------------------- #
-    # test case 1
-    partial_point_charges = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-    atomic_subsystem_indices = torch.tensor([0, 0, 1, 1, 1, 1], dtype=torch.int64)
-    total_charge = torch.tensor([0.0, 1.0])
-    charges = default_charge_conservation(
-        partial_point_charges,
-        total_charge,
-        atomic_subsystem_indices,
-    )
-
-    assert torch.allclose(
-        torch.zeros_like(total_charge).scatter_add_(
-            0, atomic_subsystem_indices, charges
-        ),
-        total_charge,
-    )
-
-    # ------------------------- #
-    # test case 2
-    partial_point_charges = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-    total_charge = torch.tensor([-1.0, 2.0])
-    charges = default_charge_conservation(
-        partial_point_charges,
-        total_charge,
-        atomic_subsystem_indices,
-    )
-    assert torch.allclose(
-        torch.zeros_like(total_charge).scatter_add_(
-            0, atomic_subsystem_indices, charges
-        ),
-        total_charge,
-    )
-
-    # ------------------------- #
-    # test case 3
-    partial_point_charges = torch.rand_like(
-        atomic_subsystem_indices, dtype=torch.float32
-    )
-    total_charge = torch.tensor([-1.0, 2.0])
-    charges = default_charge_conservation(
-        partial_point_charges,
-        total_charge,
-        atomic_subsystem_indices,
-    )
-    assert torch.allclose(
-        torch.zeros_like(total_charge).scatter_add_(
-            0, atomic_subsystem_indices, charges
-        ),
-        total_charge,
-    )
 
 
 def test_dense_layer():
@@ -399,7 +389,8 @@ def test_filelocking(prep_temp_dir):
     # the first thread should lock the file and set "did_I_lock_it" to True
     thread1 = thread("lock_file_here", "Thread-1", filepath)
     # the second thread should check if locked, and set "did_I_lock_it" to False
-    # the second thread should also set "status" to True, because it waits for the first thread to unlock the file
+    # the second thread should also set "status" to True, because it waits
+    # for the first thread to unlock the file
     thread2 = thread("encounter_locked_file", "Thread-2", filepath)
 
     thread1.start()

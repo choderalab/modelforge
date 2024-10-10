@@ -2,6 +2,7 @@ from modelforge.curation.curation_baseclass import DatasetCuration
 from typing import Optional
 from loguru import logger
 from openff.units import unit
+import numpy as np
 
 
 class SPICE1Curation(DatasetCuration):
@@ -163,7 +164,7 @@ class SPICE1Curation(DatasetCuration):
             "n_configs": "single_rec",
             "smiles": "single_rec",
             "subset": "single_rec",
-            "total_charge": "single_rec",
+            "total_charge": "series_mol",
             "geometry": "series_atom",
             "dft_total_energy": "series_mol",
             "dft_total_gradient": "series_atom",
@@ -199,7 +200,7 @@ class SPICE1Curation(DatasetCuration):
 
         rdmol = Chem.MolFromSmiles(smiles, sanitize=False)
         total_charge = sum(atom.GetFormalCharge() for atom in rdmol.GetAtoms())
-        return int(total_charge) * unit.elementary_charge
+        return np.array([int(total_charge)]) * unit.elementary_charge
 
     def _process_downloaded(
         self,
@@ -307,9 +308,17 @@ class SPICE1Curation(DatasetCuration):
                             ds_temp[param_out] = temp * param_unit
                         else:
                             ds_temp[param_out] = temp
-                ds_temp["total_charge"] = self._calculate_reference_charge(
-                    ds_temp["smiles"]
+                total_charge = self._calculate_reference_charge(ds_temp["smiles"])
+
+                total_charge_reshaped = (
+                    np.repeat(total_charge.m, conformers_per_record).reshape(
+                        conformers_per_record, -1
+                    )
+                    * total_charge.u
                 )
+
+                ds_temp["total_charge"] = total_charge_reshaped
+
                 ds_temp["dft_total_force"] = -ds_temp["dft_total_gradient"]
 
                 # check if the record contains only the elements we are interested in

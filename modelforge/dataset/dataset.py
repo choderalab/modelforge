@@ -659,7 +659,10 @@ class HDF5Dataset:
                         self._npz_metadata["data_keys"], self.properties_of_interest
                     ):
                         log.warning(
-                            f"Data keys used to generate {file_path}/{file_name} ({self._npz_metadata['data_keys']}) do not match data loader ({self.properties_of_interest}) ."
+                            f"Data keys used to generate {file_path}/{file_name} ({self._npz_metadata['data_keys']})"
+                        )
+                        log.warning(
+                            f"do not match data loader ({self.properties_of_interest})."
                         )
                         return False
 
@@ -1163,7 +1166,6 @@ class DataModule(pl.LightningDataModule):
         """
         from modelforge.potential.neighbors import Pairlist
         import os
-
 
         super().__init__()
 

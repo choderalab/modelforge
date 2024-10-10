@@ -9,6 +9,7 @@ import torch
 from loguru import logger as log
 from openff.units import unit
 from torch.nn import Module
+from modelforge.potential.neighbors import PairlistData
 
 from modelforge.dataset.dataset import DatasetParameters, NNPInput, NNPInputTuple
 from modelforge.potential.parameters import (

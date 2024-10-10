@@ -1013,7 +1013,7 @@ class NeuralNetworkPotentialFactory:
                 param.requires_grad = False
             # Set model to eval
             model.eval()
-            
+
             if simulation_environment == "JAX":
                 return PyTorch2JAXConverter().convert_to_jax_model(model)
             else:

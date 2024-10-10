@@ -438,7 +438,9 @@ class TrainingAdapter(pL.LightningModule):
         """
 
         for prop, metric_collection in metrics.items():
-            prop = _exchange_per_atom_energy_for_per_molecule_energy(prop)
+            prop = _exchange_per_atom_energy_for_per_molecule_energy(
+                prop
+            )  # only exchange per_atom_energy for per_molecule_energy
             preds = predict_target[f"{prop}_predict"].detach()
             targets = predict_target[f"{prop}_true"].detach()
             metric_collection.update(preds, targets)

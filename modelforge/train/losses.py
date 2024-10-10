@@ -482,7 +482,7 @@ def create_error_metrics(
                     prop
                 ): MetricCollection(
                     [MeanAbsoluteError(), MeanSquaredError(squared=False)]
-                )
+                )  # only exchange per_atom_energy for per_molecule_energy
                 for prop in loss_properties
             }
         )

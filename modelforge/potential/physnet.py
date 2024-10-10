@@ -226,7 +226,7 @@ class PhysNetInteractionModule(nn.Module):
         g = self.attention_mask(data["f_ij"])
         # calculate the updated embedding for atom j
         embedding_atom_j = self.activation_function(
-            self.interaction_j(data["atomic_embedding"][idx_j])
+            self.interaction_j(data["atomic_embedding"])[idx_j]
         )
         updated_embedding_atom_j = torch.mul(
             g, embedding_atom_j

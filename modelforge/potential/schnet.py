@@ -145,7 +145,7 @@ class SchNetCore(torch.nn.Module):
 
         # Apply interaction modules to update the atomic embedding
         for interaction in self.interaction_modules:
-            atomic_embedding.add_ + interaction(
+            atomic_embedding = atomic_embedding + interaction(
                 atomic_embedding,
                 pairlist_output,
                 representation["f_ij"],

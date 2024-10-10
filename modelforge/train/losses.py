@@ -376,7 +376,7 @@ class Loss(nn.Module):
             Individual per-sample loss terms and the combined total loss.
         """
         from modelforge.train.training import (
-            _exchange_per_atom_energy_to_per_molecule_energy,
+            _exchange_per_atom_energy_for_per_molecule_energy,
         )
 
         # Save the loss as a dictionary
@@ -388,7 +388,7 @@ class Loss(nn.Module):
         for prop in self.loss_property:
             loss_fn = self.loss_functions[prop]
 
-            prop_ = _exchange_per_atom_energy_to_per_molecule_energy(prop)
+            prop_ = _exchange_per_atom_energy_for_per_molecule_energy(prop)
             # NOTE: we always predict per_molecule_energies, and the dataset
             # also include per_molecule_energies. If we are normalizing these
             # (indicated by the `per_atom_energy` keyword), we still operate on
@@ -469,16 +469,16 @@ def create_error_metrics(
         metric_dict["total_loss"] = MetricCollection([MeanMetric()])
     else:
         from modelforge.train.training import (
-            _exchange_per_atom_energy_to_per_molecule_energy,
+            _exchange_per_atom_energy_for_per_molecule_energy,
         )
 
         # NOTE: we are using the
-        # _exchange_per_atom_energy_to_per_molecule_energy function because, if
+        # _exchange_per_atom_energy_for_per_molecule_energy function because, if
         # the `per_atom_energy` loss (i.e., the normalize per_molecule_energy
         # loss) is used, the validation error is still per_molecule_energy
         metric_dict = ModuleDict(
             {
-                _exchange_per_atom_energy_to_per_molecule_energy(
+                _exchange_per_atom_energy_for_per_molecule_energy(
                     prop
                 ): MetricCollection(
                     [MeanAbsoluteError(), MeanSquaredError(squared=False)]

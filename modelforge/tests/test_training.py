@@ -252,7 +252,7 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize):
     trainer = get_trainer(
         config,
     )
-    
+
     # Calculate predictions using the trainer's model
     prediction = trainer.model.calculate_predictions(
         batch,

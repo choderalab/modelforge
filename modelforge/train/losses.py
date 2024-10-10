@@ -295,8 +295,8 @@ class Loss(nn.Module):
         "per_atom_energy",
         "per_molecule_energy",
         "per_atom_force",
-        "total_charge",
-        "dipole_moment",
+        "per_molecule_total_charge",
+        "per_molecule_dipole_moment",
     ]
 
     def __init__(self, loss_property: List[str], weights: Dict[str, float]):
@@ -344,10 +344,10 @@ class Loss(nn.Module):
                 self.loss_functions[prop] = EnergySquaredError(
                     scale_by_number_of_atoms=False
                 )
-            elif prop == "total_charge":
+            elif prop == "per_molecule_total_charge":
                 log.info(f"Creating total charge loss with weight: {weights[prop]}")
                 self.loss_functions[prop] = TotalChargeError()
-            elif prop == "dipole_moment":
+            elif prop == "per_molecule_dipole_moment":
                 log.info(f"Creating dipole moment loss with weight: {weights[prop]}")
                 self.loss_functions[prop] = DipoleMomentError()
             else:
@@ -375,6 +375,10 @@ class Loss(nn.Module):
         Dict[str, torch.Tensor]
             Individual per-sample loss terms and the combined total loss.
         """
+        from modelforge.train.training import (
+            _exchange_per_atom_energy_for_per_molecule_energy,
+        )
+
         # Save the loss as a dictionary
         loss_dict = {}
         # Accumulate loss
@@ -383,14 +387,13 @@ class Loss(nn.Module):
         # Iterate over loss properties
         for prop in self.loss_property:
             loss_fn = self.loss_functions[prop]
-            if prop == "per_atom_energy":
-                prop_ = "per_molecule_energy"
-            elif prop == "dipole_moment":
-                prop_ = "per_molecule_dipole_moment"
-            elif prop == "total_charge":
-                prop_ = "per_molecule_total_charge"
-            else:
-                prop_ = prop
+
+            prop_ = _exchange_per_atom_energy_for_per_molecule_energy(prop)
+            # NOTE: we always predict per_molecule_energies, and the dataset
+            # also include per_molecule_energies. If we are normalizing these
+            # (indicated by the `per_atom_energy` keyword), we still operate on
+            # the per_molecule_energies but the loss function will divide the
+            # error by the number of atoms in the atomic subsystems.
             prop_loss = loss_fn(
                 predict_target[f"{prop_}_predict"],
                 predict_target[f"{prop_}_true"],
@@ -465,11 +468,21 @@ def create_error_metrics(
         )
         metric_dict["total_loss"] = MetricCollection([MeanMetric()])
     else:
+        from modelforge.train.training import (
+            _exchange_per_atom_energy_for_per_molecule_energy,
+        )
+
+        # NOTE: we are using the
+        # _exchange_per_atom_energy_for_per_molecule_energy function because, if
+        # the `per_atom_energy` loss (i.e., the normalize per_molecule_energy
+        # loss) is used, the validation error is still per_molecule_energy
         metric_dict = ModuleDict(
             {
-                prop: MetricCollection(
+                _exchange_per_atom_energy_for_per_molecule_energy(
+                    prop
+                ): MetricCollection(
                     [MeanAbsoluteError(), MeanSquaredError(squared=False)]
-                )
+                )  # only exchange per_atom_energy for per_molecule_energy
                 for prop in loss_properties
             }
         )

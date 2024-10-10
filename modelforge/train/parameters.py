@@ -7,6 +7,7 @@ from typing import Callable, Dict, List, Optional, Type, Union
 
 import torch
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from loguru import logger as log
 
 
 # So we  do not need to set Config parameters in each model
@@ -107,7 +108,7 @@ class WandbConfig(BaseModel):
     save_dir: str
     project: str
     group: str
-    log_model: bool
+    log_model: Union[str, bool]
     job_type: Optional[str]
     tags: Optional[List[str]]
     notes: Optional[str]
@@ -277,15 +278,13 @@ class TrainingParameters(ParametersBase):
     min_number_of_epochs: Union[int, None] = None
 
     @model_validator(mode="after")
-    def validate_dipole_and_shift_com(cls, values):
-        if "dipole_moment" in values.loss_parameter.loss_property:
-            if not values.shift_center_of_mass_to_origin:
+    def validate_dipole_and_shift_com(self):
+        if "dipole_moment" in self.loss_parameter.loss_property:
+            if not self.shift_center_of_mass_to_origin:
                 raise ValueError(
                     "Use of dipole_moment in the loss requires shift_center_of_mass_to_origin to be True"
                 )
-
-
-### Runtime Parameters
+        return self
 
 
 class Accelerator(CaseInsensitiveEnum):

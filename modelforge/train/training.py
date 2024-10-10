@@ -14,7 +14,7 @@ from torch.optim import Optimizer
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from modelforge.dataset.dataset import BatchData, DataModule, DatasetParameters
-from modelforge.potential.parameters import (
+from modelforge.custom_types import (
     AimNet2Parameters,
     ANI2xParameters,
     PaiNNParameters,
@@ -44,19 +44,48 @@ __all__ = [
 ]
 
 
+def _exchange_per_atom_energy_for_per_molecule_energy(prop: str) -> str:
+    """
+    Utility function to rename per-atom energy to per-molecule energy if applicable.
+
+    Parameters
+    ----------
+    prop : str
+        The property name (e.g., "per_atom_energy").
+
+    Returns
+    -------
+    str
+        The updated property name (e.g., "per_molecule_energy").
+    """
+    return "per_molecule_energy" if prop == "per_atom_energy" else prop
+
+
 class CalculateProperties(torch.nn.Module):
+
+    _SUPPORTED_PROPERTIES = [
+        "per_atom_energy",
+        "per_atom_force",
+        "per_molecule_total_charge",
+        "per_molecule_dipole_moment",
+    ]
 
     def __init__(self, requested_properties: List[str]):
         """
         A utility class for calculating properties such as energies and forces from batches using a neural network model.
 
         Parameters
-
+        requested_properties : List[str]
+            A list of properties to calculate (e.g., per_atom_energy, per_atom_force, per_molecule_dipole_moment).
         """
         super().__init__()
         self.requested_properties = requested_properties
         self.include_force = "per_atom_force" in self.requested_properties
-        self.include_charges = "total_charge" in self.requested_properties
+        self.include_charges = "per_molecule_total_charge" in self.requested_properties
+
+        assert all(
+            prop in self._SUPPORTED_PROPERTIES for prop in self.requested_properties
+        ), f"Unsupported property requested: {self.requested_properties}"
 
     def _get_forces(
         self,
@@ -73,32 +102,32 @@ class CalculateProperties(torch.nn.Module):
             A single batch of data, including input features and target energies.
         model_prediction : Dict[str, torch.Tensor]
             A dictionary containing the predicted energies from the model.
+        train_mode : bool
+            Whether to retain the graph for gradient computation (True for training).
 
         Returns
         -------
         Dict[str, torch.Tensor]
-            The true forces from the dataset and the predicted forces by the model.
+            A dictionary containing the true and predicted forces.
         """
         nnp_input = batch.nnp_input
+        # Ensure gradients are enabled
+        nnp_input.positions.requires_grad_(True)
+        # Cast to float32 and extract true forces
         per_atom_force_true = batch.metadata.F.to(torch.float32)
 
         if per_atom_force_true.numel() < 1:
             raise RuntimeError("No force can be calculated.")
 
-        per_molecule_energy_predict = model_prediction["per_molecule_energy"]
-
-        # Ensure gradients are enabled
-        per_molecule_energy_predict.requires_grad_(True)
-        nnp_input.positions.requires_grad_(True)
-
-        # Compute the gradient (forces) from the predicted energies
+        # Sum the energies before computing the gradient
+        total_energy = model_prediction["per_molecule_energy"].sum()
+        # Calculate forces as the negative gradient of energy w.r.t. positions
         grad = torch.autograd.grad(
-            per_molecule_energy_predict,
+            total_energy,
             nnp_input.positions,
-            grad_outputs=torch.ones_like(per_molecule_energy_predict),
             create_graph=train_mode,
             retain_graph=train_mode,
-            allow_unused=True,
+            allow_unused=False,
         )[0]
 
         if grad is None:
@@ -129,9 +158,8 @@ class CalculateProperties(torch.nn.Module):
         Returns
         -------
         Dict[str, torch.Tensor]
-            The true energies from the dataset and the predicted energies by the model.
+            A dictionary containing the true and predicted energies.
         """
-        nnp_input = batch.nnp_input
         per_molecule_energy_true = batch.metadata.E.to(torch.float32)
         per_molecule_energy_predict = model_prediction["per_molecule_energy"].unsqueeze(
             1
@@ -152,15 +180,26 @@ class CalculateProperties(torch.nn.Module):
         model_prediction: Dict[str, torch.Tensor],
     ) -> Dict[str, torch.Tensor]:
         """
-        Computes the total charge of a molecule from the predicted charges from
-        the model.
+        Compute total molecular charges and dipole moments from the predicted atomic charges.
+
+        Parameters
+        ----------
+        batch : BatchData
+            A batch of data containing input features and target charges.
+        model_prediction : Dict[str, torch.Tensor]
+            A dictionary containing the predicted charges from the model.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            A dictionary containing the true and predicted charges and dipole moments.
         """
         nnp_input = batch.nnp_input
         per_atom_charges_predict = model_prediction[
             "per_atom_charge"
         ]  # Shape: [num_atoms]
 
-        # Compute predicted total charge
+        # Calculate predicted total charge by summing per-atom charges for each molecule
         total_charge_predict = (
             torch.zeros_like(model_prediction["per_molecule_energy"])
             .scatter_add_(
@@ -171,7 +210,9 @@ class CalculateProperties(torch.nn.Module):
             .unsqueeze(-1)
         )  # Shape: [nr_of_molecules, 1]
 
+        # Predict the dipole moment
         dipole_predict = self._predict_dipole_moment(model_prediction, batch)
+
         return {
             "per_molecule_total_charge_predict": total_charge_predict,
             "per_molecule_total_charge_true": batch.nnp_input.total_charge,
@@ -182,16 +223,47 @@ class CalculateProperties(torch.nn.Module):
     def _predict_dipole_moment(
         self, model_predictions: Dict[str, torch.Tensor], batch: BatchData
     ) -> torch.Tensor:
+        """
+        Compute the predicted dipole moment for each molecule based on the
+        predicted partial atomic charges and positions, i.e., the dipole moment
+        is calculated as the weighted sum of the partial charges (which requires
+        that the coordinates are centered).
 
-        per_atom_charge = model_predictions["per_atom_charge"]
-        # Compute predicted dipole moment
+        The dipole moment ensures that the predicted charges not only sum up to
+        the correct total charge but also reproduce the reference dipole moment.
+
+        Parameters
+        ----------
+        model_predictions : Dict[str, torch.Tensor]
+            A dictionary containing the predicted atomic charges from the model.
+        batch : BatchData
+            A batch of data containing the atomic positions and indices.
+
+        Returns
+        -------
+        torch.Tensor
+            The predicted dipole moment for each molecule.
+        """
+        per_atom_charge = model_predictions["per_atom_charge"]  # Shape: [num_atoms]
+        positions = batch.nnp_input.positions  # Shape: [num_atoms, 3]
+        per_atom_charge = per_atom_charge.unsqueeze(-1)  # Shape: [num_atoms, 1]
+        per_atom_dipole_contrib = per_atom_charge * positions  # Shape: [num_atoms, 3]
+
+        indices = batch.nnp_input.atomic_subsystem_indices.long()  # Shape: [num_atoms]
+        indices = indices.unsqueeze(-1).expand(-1, 3)  # Shape: [num_atoms, 3]
+
+        # Calculate dipole moment as the sum of dipole contributions for each
+        # molecule
         dipole_predict = torch.zeros(
             (model_predictions["per_molecule_energy"].shape[0], 3),
+            device=positions.device,
+            dtype=positions.dtype,
         ).scatter_add_(
             dim=0,
-            index=batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(-1),
-            src=per_atom_charge.unsqueeze(-1) * batch.nnp_input.positions,
+            index=indices,
+            src=per_atom_dipole_contrib,
         )  # Shape: [nr_of_molecules, 3]
+
         return dipole_predict
 
     def forward(
@@ -211,6 +283,8 @@ class CalculateProperties(torch.nn.Module):
             energies.
         model : Type[torch.nn.Module]
             The neural network model used to compute the properties.
+        train_mode : bool, optional
+            Whether to calculate gradients for forces (default is False).
 
         Returns
         -------
@@ -222,16 +296,16 @@ class CalculateProperties(torch.nn.Module):
         nnp_input = batch.nnp_input
         model_prediction = model.forward(nnp_input)
 
-        # Get energies
+        # Get predicted energies
         energies = self._get_energies(batch, model_prediction)
         predict_target.update(energies)
 
-        # Get forces if needed
+        # Get forces if they are included in the requested properties
         if self.include_force:
             forces = self._get_forces(batch, model_prediction, train_mode)
             predict_target.update(forces)
 
-        # Get charges if needed
+        # Get charges if they are included in the requested properties
         if self.include_charges:
             charges = self._get_charges(batch, model_prediction)
             predict_target.update(charges)
@@ -240,6 +314,9 @@ class CalculateProperties(torch.nn.Module):
 
 
 class TrainingAdapter(pL.LightningModule):
+    """
+    A Lightning module that encapsulates the training process for neural network potentials.
+    """
 
     def __init__(
         self,
@@ -250,18 +327,18 @@ class TrainingAdapter(pL.LightningModule):
         potential_seed: Optional[int] = None,
     ):
         """
-        Initializes the TrainingAdapter with the specified model and training configuration.
+        Initialize the TrainingAdapter with model and training configuration.
 
         Parameters
         ----------
         potential_parameter : T_NNP_Parameters
             Parameters for the potential model.
-        dataset_statistic : Dict[str, float]
-            The statistics of the dataset, such as mean and standard deviation.
+        dataset_statistic : Dict[str, Dict[str, unit.Quantity]]
+            Dataset statistics such as mean and standard deviation.
         training_parameter : TrainingParameters
-            Parameters for the training process.
+            Training configuration, including optimizer, learning rate, and loss functions.
         potential_seed : Optional[int], optional
-            The seed to use for initializing the model, by default None.
+            Seed for initializing the model (default is None).
         """
         from modelforge.potential.models import setup_potential
 
@@ -296,12 +373,12 @@ class TrainingAdapter(pL.LightningModule):
             self.log_histograms = False
             self.log_on_training_step = False
 
-        # initialize loss
+        # Initialize the loss function
         self.loss = LossFactory.create_loss(
             **training_parameter.loss_parameter.model_dump()
         )
 
-        # Initialize metrics
+        # Initialize performance metrics
         self.test_metrics = create_error_metrics(
             training_parameter.loss_parameter.loss_property
         )
@@ -318,17 +395,18 @@ class TrainingAdapter(pL.LightningModule):
 
     def forward(self, batch: BatchData) -> Dict[str, torch.Tensor]:
         """
-        Computes the energies and forces from a given batch using the model.
+        Forward pass to compute energies, forces, and other properties from a
+        batch.
 
         Parameters
         ----------
         batch : BatchData
-            A single batch of data, including input features and target energies.
+            A batch of data including input features and target properties.
 
         Returns
         -------
         Dict[str, torch.Tensor]
-            The true and predicted energies and forces from the dataset and the model.
+            Dictionary of predicted properties (energies, forces, etc.).
         """
         return self.potential(batch)
 
@@ -348,17 +426,21 @@ class TrainingAdapter(pL.LightningModule):
         predict_target: Dict[str, torch.Tensor],
     ):
         """
-        Updates the provided metric collections with the predicted and true targets.
+        Updates the provided metric collections with the predicted and true
+        targets.
 
         Parameters
         ----------
-        error_dict : ModuleDict[str, torchmetrics.MetricCollection]
-            Dictionary containing metric collections for energy and force.
+        metrics : ModuleDict
+            Metric collections for energy and force evaluation.
         predict_target : Dict[str, torch.Tensor]
-            Dictionary containing predicted and true values for energy and force.
+            Dictionary containing predicted and true values for properties.
         """
 
         for prop, metric_collection in metrics.items():
+            prop = _exchange_per_atom_energy_for_per_molecule_energy(
+                prop
+            )  # only exchange per_atom_energy for per_molecule_energy
             preds = predict_target[f"{prop}_predict"].detach()
             targets = predict_target[f"{prop}_true"].detach()
             metric_collection.update(preds, targets)
@@ -399,9 +481,17 @@ class TrainingAdapter(pL.LightningModule):
         mean_total_loss = loss_dict["total_loss"].mean()
         return mean_total_loss
 
+    def on_after_backward(self):
+        # After backward pass
+        for name, param in self.potential.named_parameters():
+            if param.grad is not None and False:
+                log.debug(
+                    f"Parameter: {name}, Gradient Norm: {param.grad.norm().item()}"
+                )
+
     def validation_step(self, batch: BatchData, batch_idx: int) -> None:
         """
-        Validation step to compute the RMSE/MAE across epochs.
+        Validation step to compute validation loss and metrics.
         """
 
         # Ensure positions require gradients for force calculation
@@ -410,14 +500,14 @@ class TrainingAdapter(pL.LightningModule):
 
             # calculate energy and forces
             predict_target = self.calculate_predictions(
-                batch, self.potential, self.training
+                batch, self.potential, self.potential.training
             )
 
         self._update_metrics(self.val_metrics, predict_target)
 
     def test_step(self, batch: BatchData, batch_idx: int) -> None:
         """
-        Test step to compute the RMSE loss for a given batch.
+        Test step to compute the test loss and metrics.
         """
         # Ensure positions require gradients for force calculation
         batch.nnp_input.positions.requires_grad_(True)
@@ -565,6 +655,7 @@ class ModelTrainer:
         self.potential_parameter = potential_parameter
         self.training_parameter = training_parameter
         self.runtime_parameter = runtime_parameter
+        self.verbose = verbose
 
         self.datamodule = self.setup_datamodule()
         self.dataset_statistic = (
@@ -704,9 +795,7 @@ class ModelTrainer:
                 save_dir=str(
                     self.training_parameter.experiment_logger.wandb_configuration.save_dir
                 ),
-                log_model=str(
-                    self.training_parameter.experiment_logger.wandb_configuration.log_model
-                ),
+                log_model=self.training_parameter.experiment_logger.wandb_configuration.log_model,
                 project=self.training_parameter.experiment_logger.wandb_configuration.project,
                 group=self.training_parameter.experiment_logger.wandb_configuration.group,
                 job_type=self.training_parameter.experiment_logger.wandb_configuration.job_type,
@@ -792,8 +881,10 @@ class ModelTrainer:
             accelerator=self.runtime_parameter.accelerator,
             logger=self.experiment_logger,
             callbacks=self.callbacks,
+            benchmark=True,
             inference_mode=False,
             num_sanity_val_steps=2,
+            gradient_clip_val=10.0,  # FIXME: hardcoded for now
             log_every_n_steps=self.runtime_parameter.log_every_n_steps,
             enable_model_summary=True,
             enable_progress_bar=self.runtime_parameter.verbose,  # if true will show progress bar

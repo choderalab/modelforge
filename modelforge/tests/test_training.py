@@ -10,9 +10,7 @@ IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 from modelforge.potential import NeuralNetworkPotentialFactory, _Implemented_NNPs
 
 
-def load_configs_into_pydantic_models(
-    potential_name: str, dataset_name: str, training_toml: str
-):
+def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
     from importlib import resources
 
     import toml
@@ -28,7 +26,7 @@ def load_configs_into_pydantic_models(
         resources.files(potential_defaults) / f"{potential_name.lower()}.toml"
     )
     dataset_path = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
-    training_path = resources.files(training_defaults) / f"{training_toml}.toml"
+    training_path = resources.files(training_defaults) / f"default.toml"
     runtime_path = resources.files(runtime_defaults) / "runtime.toml"
 
     training_config_dict = toml.load(training_path)
@@ -60,10 +58,7 @@ def load_configs_into_pydantic_models(
     }
 
 
-def get_trainer(potential_name: str, dataset_name: str, training_toml: str):
-    config = load_configs_into_pydantic_models(
-        potential_name, dataset_name, training_toml
-    )
+def get_trainer(config):
 
     # Extract parameters
     potential_parameter = config["potential"]
@@ -80,36 +75,100 @@ def get_trainer(potential_name: str, dataset_name: str, training_toml: str):
     )
 
 
+def add_force_to_loss_parameter(config):
+    """
+    [training.loss_parameter]
+    loss_property = ['per_molecule_energy', 'per_atom_force']
+    # ------------------------------------------------------------ #
+    [training.loss_parameter.weight]
+    per_molecule_energy = 0.999 #NOTE: reciprocal units
+    per_atom_force = 0.001
+
+    """
+    t_config = config["training"]
+    t_config.loss_parameter.loss_property.append("per_atom_force")
+    t_config.loss_parameter.weight["per_atom_force"] = 0.001
+
+
+def add_dipole_moment_to_loss_parameter(config):
+    """
+    [training.loss_parameter]
+    loss_property = [
+        "per_molecule_energy",
+        "per_atom_force",
+        "per_molecule_dipole_moment",
+        "per_molecule_total_charge",
+    ]
+    [training.loss_parameter.weight]
+    per_molecule_energy = 1 #NOTE: reciprocal units
+    per_atom_force = 0.1
+    per_molecule_dipole_moment = 0.01
+    per_molecule_total_charge = 0.01
+
+    """
+    t_config = config["training"]
+    t_config.loss_parameter.loss_property.append("per_molecule_dipole_moment")
+    t_config.loss_parameter.loss_property.append("per_molecule_total_charge")
+    t_config.loss_parameter.weight["per_molecule_dipole_moment"] = 0.01
+    t_config.loss_parameter.weight["per_molecule_total_charge"] = 0.01
+
+    # also add per_atom_charge to predicted properties
+
+    p_config = config["potential"]
+    p_config.core_parameter.predicted_properties.append("per_atom_charge")
+    p_config.core_parameter.predicted_dim.append(1)
+
+
+def replace_per_molecule_with_per_atom_loss(config):
+    t_config = config["training"]
+    t_config.loss_parameter.loss_property.remove("per_molecule_energy")
+    t_config.loss_parameter.loss_property.append("per_atom_energy")
+
+    t_config.loss_parameter.weight.pop("per_molecule_energy")
+    t_config.loss_parameter.weight["per_atom_energy"] = 0.999
+
+    # NOTE: the loss is calculate per_atom, but the validation set error is
+    # per_molecule. This is because otherwise it's difficult to compare.
+    t_config.early_stopping.monitor = "val/per_molecule_energy/rmse"
+    t_config.monitor_for_checkpoint = "val/per_molecule_energy/rmse"
+    t_config.lr_scheduler.monitor = "val/per_molecule_energy/rmse"
+
+
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
 @pytest.mark.parametrize("dataset_name", ["PHALKETHOH"])
-@pytest.mark.parametrize("training", ["with_force", "without_force"])
-def test_train_with_lightning(training, potential_name, dataset_name):
+@pytest.mark.parametrize(
+    "loss",
+    ["energy", "energy_force", "normalized_energy_force", "energy_force_dipole_moment"],
+)
+def test_train_with_lightning(loss, potential_name, dataset_name):
     """
     Test that we can train, save and load checkpoints.
     """
-    # get correct training toml
-    training_toml = "default_with_force" if training == "with_force" else "default"
 
     # SKIP if potential is ANI and dataset is SPICE2
     if "ANI" in potential_name and dataset_name == "SPICE2":
         pytest.skip("ANI potential is not compatible with SPICE2 dataset")
-    if IN_GITHUB_ACTIONS and potential_name == "SAKE" and training == "with_force":
+    if IN_GITHUB_ACTIONS and potential_name == "SAKE" and "force" in loss:
         pytest.skip(
             "Skipping Sake training with forces on GitHub Actions because it allocates too much memory"
         )
 
-    # train potential
-    get_trainer(
-        potential_name, dataset_name, training_toml
-    ).train_potential().save_checkpoint(
-        "test.chp"
-    )  # save checkpoint
+    config = load_configs_into_pydantic_models(potential_name, dataset_name)
 
+    if "force" in loss:
+        add_force_to_loss_parameter(config)
+    if "normalized" in loss:
+        replace_per_molecule_with_per_atom_loss(config)
+    if "dipole_moment" in loss:
+        add_dipole_moment_to_loss_parameter(config)
+
+    # train potential
+    get_trainer(config).train_potential().save_checkpoint("test.chp")  # save checkpoint
     # continue training from checkpoint
-    get_trainer(potential_name, dataset_name, training_toml).train_potential()
+    get_trainer(config).train_potential()
 
 
 def test_train_from_single_toml_file():

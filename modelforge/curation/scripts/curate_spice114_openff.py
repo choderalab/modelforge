@@ -69,9 +69,9 @@ def spice_114_openff_wrapper(
 
 
     """
-    from modelforge.curation.spice_1_openff_curation import SPICEOpenFFCuration
+    from modelforge.curation.spice_1_openff_curation import SPICE1OpenFFCuration
 
-    spice_dataset = SPICEOpenFFCuration(
+    spice_dataset = SPICE1OpenFFCuration(
         hdf5_file_name=hdf5_file_name,
         output_file_dir=output_file_dir,
         local_cache_dir=local_cache_dir,
@@ -99,9 +99,9 @@ def main():
 
     # We'll want to provide some simple means of versioning
     # if we make updates to either the underlying dataset, curation modules, or parameters given to the code
-    version = "0"
+    version = "1"
     # version of the dataset to curate
-    version_select = f"v_{version}"
+    version_select = f"v_0"
 
     ani2x_elements = ["H", "C", "N", "O", "F", "Cl", "S"]
 

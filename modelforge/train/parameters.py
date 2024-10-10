@@ -7,6 +7,7 @@ from typing import Callable, Dict, List, Optional, Type, Union
 
 import torch
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from loguru import logger as log
 
 
 # So we  do not need to set Config parameters in each model
@@ -107,7 +108,7 @@ class WandbConfig(BaseModel):
     save_dir: str
     project: str
     group: str
-    log_model: bool
+    log_model: Union[str, bool]
     job_type: Optional[str]
     tags: Optional[List[str]]
     notes: Optional[str]
@@ -120,6 +121,7 @@ class TrainingParameters(ParametersBase):
     args:
         nr_of_epochs (int): The number of epochs
         remove_self_energies (bool): Whether to remove self energies
+        shift_center_of_mass_to_origin (bool): Whether to shift the center of mass to the origin
         batch_size (int): The batch size,
         lr (float): The learning rate
         lr_scheduler (SchedulerConfig): The learning rate scheduler configuration.
@@ -261,6 +263,7 @@ class TrainingParameters(ParametersBase):
 
     number_of_epochs: int
     remove_self_energies: bool
+    shift_center_of_mass_to_origin: bool
     batch_size: int
     lr: float
     monitor_for_checkpoint: str
@@ -274,8 +277,14 @@ class TrainingParameters(ParametersBase):
     optimizer: Type[torch.optim.Optimizer] = torch.optim.AdamW
     min_number_of_epochs: Union[int, None] = None
 
-
-### Runtime Parameters
+    @model_validator(mode="after")
+    def validate_dipole_and_shift_com(self):
+        if "dipole_moment" in self.loss_parameter.loss_property:
+            if not self.shift_center_of_mass_to_origin:
+                raise ValueError(
+                    "Use of dipole_moment in the loss requires shift_center_of_mass_to_origin to be True"
+                )
+        return self
 
 
 class Accelerator(CaseInsensitiveEnum):
@@ -331,6 +340,7 @@ class RuntimeParameters(ParametersBase):
     checkpoint_path: Union[str, None]
     simulation_environment: SimulationEnvironment
     log_every_n_steps: int
+    verbose: bool
 
     @field_validator("number_of_nodes")
     @classmethod

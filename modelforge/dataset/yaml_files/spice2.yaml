@@ -1,6 +1,62 @@
 dataset: spice2
-latest: full_dataset_v0
-latest_test: nc_1000_v0
+latest: full_dataset_v1
+latest_test: nc_1000_v1
+full_dataset_v1:
+  version: 1
+  doi: 10.5281/zenodo.13883915
+  gz_data_file:
+    length: 26313365249
+    md5: 46ab1dcbea52dcb92fc7e65702459946
+    name: SPICE2_dataset_v1.hdf5.gz
+  hdf5_data_file:
+    md5: f8cfee945d3546af76cbea45d8dabab4
+    name: SPICE2_dataset_v1.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE2_dataset_v1_processed.npz
+  url: https://zenodo.org/records/13883915/files/spice_2_dataset_v1.hdf5.gz
+nc_1000_v1:
+  version: 1
+  doi: 10.5281/zenodo.13883816
+  gz_data_file:
+    length: 26757127
+    md5: 92959e49db0023a47dedcbaa7f316e75
+    name: SPICE2_dataset_v1_nc_1000.hdf5.gz
+  hdf5_data_file:
+    md5: a35cbffbf7fea6242081ace2131630b3
+    name: SPICE2_dataset_v1_nc_1000.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE2_dataset_v1_nc_1000_processed.npz
+  url: https://zenodo.org/records/13883816/files/spice_2_dataset_v1_ntc_1000.hdf5.gz
+full_dataset_v1_HCNOFClS:
+  version: 1
+  doi: 10.5281/zenodo.13883829
+  gz_data_file:
+    length: 26313365249
+    md5: 0dea7f31bb2fbb1f7e190b49530d0c51
+    name: SPICE2_dataset_v1_HCNOFClS.hdf5.gz
+  hdf5_data_file:
+    md5: 78a41b098eb0999013c10b65e9a57875
+    name: SPICE2_dataset_v1_HCNOFClS.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE2_dataset_v1_HCNOFClS_processed.npz
+  url: https://zenodo.org/records/13883829/files/spice_2_dataset_v1_HCNOFClS.hdf5.gz
+nc_1000_v1_HCNOFClS:
+  version: 1
+  doi: 10.5281/zenodo.13883771
+  gz_data_file:
+    length: 26816135
+    md5: 79309a230e8481373a0843b8cbac5f70
+    name: SPICE2_dataset_v1_nc_1000_HCNOFClS.hdf5.gz
+  hdf5_data_file:
+    md5: 3246dc275f098459d963af633c1666a6
+    name: SPICE2_dataset_v1_nc_1000_HCNOFClS.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE2_dataset_v1_nc_1000_HCNOFClS_processed.npz
+  url: https://zenodo.org/records/13883771/files/spice_2_dataset_v1_ntc_1000_HCNOFClS.hdf5.gz
 full_dataset_v0:
   version: 0
   doi: 10.5281/zenodo.11632270

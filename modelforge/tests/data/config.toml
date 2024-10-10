@@ -40,6 +40,7 @@ remove_self_energies = true
 batch_size = 128
 lr = 1e-3
 monitor_for_checkpoint = "val/per_molecule_energy/rmse"
+shift_center_of_mass_to_origin = false
 
 [training.experiment_logger]
 logger_name = "tensorboard"
@@ -79,6 +80,7 @@ data_split = [0.8, 0.1, 0.1]
 seed = 42
 
 [runtime]
+verbose = true
 save_dir = "lightning_logs"
 experiment_name = "{potential_name}_{dataset_name}"
 local_cache_dir = "./cache"

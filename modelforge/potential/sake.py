@@ -391,7 +391,7 @@ class SAKEInteraction(nn.Module):
         torch.Tensor
             Updated velocity features. Shape [nr_of_atoms_in_systems, geometry_basis].
         """
-        v_ij = self.v_mixing_mlp(combinations.transpose(-1, -2)).squeeze(-1)
+        v_ij = self.v_mixing_mlp(combinations.transpose(-1, -2)).squeeze(-1).to(v.dtype)
         expanded_idx_i = idx_i.view(-1, 1).expand_as(v_ij)
         dv = torch.zeros_like(v).scatter_reduce(
             0, expanded_idx_i, v_ij, "mean", include_self=False

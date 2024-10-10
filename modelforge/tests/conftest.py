@@ -356,11 +356,12 @@ def apply_rotation_matrix(coordinates, rotation_matrix, use_center_of_mass=True)
     if use_center_of_mass:
         coordinates_com = torch.mean(coordinates, 0)
     else:
-        coordinates_com = torch.zeros(3)
+        coordinates_com = torch.zeros(3).to(coordinates.device, coordinates.dtype)
 
     coordinates_proposed = (
         torch.matmul(
-            rotation_matrix, (coordinates - coordinates_com).transpose(0, -1)
+            rotation_matrix.to(coordinates.device, coordinates.dtype),
+            (coordinates - coordinates_com).transpose(0, -1),
         ).transpose(0, -1)
     ) + coordinates_com
 
@@ -392,13 +393,13 @@ def equivariance_test_utils():
     x_translation = torch.randn(
         size=(1, 3),
     )
-    translation = lambda x: x + x_translation
+    translation = lambda x: x + x_translation.to(x.device, x.dtype)
 
     # generate random quaternion and rotation matrix
     q = generate_uniform_quaternion()
     rotation_matrix = rotation_matrix_from_quaternion(q)
 
-    rotation = lambda x: apply_rotation_matrix(x, rotation_matrix)
+    rotation = lambda x: apply_rotation_matrix(x, rotation_matrix.to(x.device, x.dtype))
 
     # Define reflection function
     alpha = torch.distributions.Uniform(-math.pi, math.pi).sample()
@@ -409,6 +410,6 @@ def equivariance_test_utils():
 
     p = torch.eye(3) - 2 * v.T @ v
 
-    reflection = lambda x: x @ p
+    reflection = lambda x: x @ p.to(x.device, x.dtype)
 
     return translation, rotation, reflection

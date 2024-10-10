@@ -172,8 +172,8 @@ class PerAtomCharge(ParametersBase):
     conserve_strategy: str = "default"
 
 
-class CoulombPotential(ParametersBase):
-    electrostatic_strategy: str = "default"
+class ElectrostaticPotential(ParametersBase):
+    electrostatic_strategy: str = "coulomb"
     maximum_interaction_radius: float = 0.5
 
     converted_units = field_validator(
@@ -186,7 +186,7 @@ class PostProcessingParameter(ParametersBase):
     properties_to_process: List[str]
     per_atom_energy: PerAtomEnergy = PerAtomEnergy()
     per_atom_charge: PerAtomCharge = PerAtomCharge()
-    coulomb_potential: CoulombPotential = CoulombPotential()
+    electrostatic_potential: ElectrostaticPotential = ElectrostaticPotential()
     general_postprocessing_operation: GeneralPostProcessingOperation = (
         GeneralPostProcessingOperation()
     )

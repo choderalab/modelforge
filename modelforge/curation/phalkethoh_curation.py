@@ -111,7 +111,7 @@ class PhAlkEthOHCuration(DatasetCuration):
             "name": "single_rec",
             "dataset_name": "single_rec",
             "source": "single_rec",
-            "total_charge": "single_rec",
+            "total_charge": "single_atom",
             "atomic_numbers": "single_atom",
             "n_configs": "single_rec",
             "molecular_formula": "single_rec",

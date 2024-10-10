@@ -39,7 +39,7 @@ number_of_epochs = 2
 remove_self_energies = true
 batch_size = 128
 lr = 1e-3
-monitor_for_checkpoint = "val/per_molecule_energy/rmse"
+monitor = "val/per_molecule_energy/rmse"
 shift_center_of_mass_to_origin = false
 
 [training.experiment_logger]
@@ -57,7 +57,6 @@ cooldown = 5
 min_lr = 1e-8
 threshold = 0.1
 threshold_mode = "abs"
-monitor = "val/per_molecule_energy/rmse"
 interval = "epoch"
 
 [training.loss_parameter]
@@ -70,7 +69,6 @@ per_atom_force = 0.001
 
 [training.early_stopping]
 verbose = true
-monitor = "val/per_molecule_energy/rmse"
 min_delta = 0.001
 patience = 50
 

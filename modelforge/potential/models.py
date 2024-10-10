@@ -716,17 +716,17 @@ class Potential(torch.nn.Module):
 
         # remove key neighborlist.calculate_distances_and_pairlist.cutoff
         # if present in the state_dict and replace it with 'neighborlist.cutoff'
-        if (
-            "neighborlist.calculate_distances_and_pairlist.cutoff"
-            in filtered_state_dict
-        ):
-            filtered_state_dict["neighborlist.cutoff"] = filtered_state_dict.pop(
-                "neighborlist.calculate_distances_and_pairlist.cutoff"
-            )
-        else:
-            raise KeyError(
-                "load_stat_dict() is only available for training and inference."
-            )
+        # if (
+        #     "neighborlist.calculate_distances_and_pairlist.cutoff"
+        #     in filtered_state_dict
+        # ):
+        #     filtered_state_dict["neighborlist.cutoff"] = filtered_state_dict.pop(
+        #         "neighborlist.calculate_distances_and_pairlist.cutoff"
+        #     )
+        # else:
+        #     raise KeyError(
+        #         "load_stat_dict() is only available for training and inference."
+        #     )
 
         super().load_state_dict(
             filtered_state_dict,

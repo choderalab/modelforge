@@ -29,7 +29,6 @@ class PairlistData(NamedTuple):
 
 
 class Pairlist(torch.nn.Module):
-
     def __init__(self, only_unique_pairs: bool = False):
         """
          Handle pair list calculations for systems, returning indices, distances
@@ -385,7 +384,6 @@ class NeighborlistBruteNsq(torch.nn.Module):
         r_ij: torch.Tensor,
         total_unique_pairs: int,
     ):
-
         r_ij_full = torch.zeros(
             total_unique_pairs * 2, 3, dtype=r_ij.dtype, device=r_ij.device
         )
@@ -481,7 +479,6 @@ class NeighborlistBruteNsq(torch.nn.Module):
             )
 
         else:
-
             pairs_full, d_ij_full, r_ij_full = self._copy_to_nonunique(
                 self.i_final_pairs[in_cutoff],
                 self.j_final_pairs[in_cutoff],
@@ -706,7 +703,6 @@ class NeighborlistVerletNsq(torch.nn.Module):
             )
 
         else:
-
             pairs_full, d_ij_full, r_ij_full = self._copy_to_nonunique(
                 self.nlist_pairs[:, in_cutoff],
                 d_ij[in_cutoff],
@@ -721,10 +717,10 @@ class NeighborlistVerletNsq(torch.nn.Module):
 
 
 class NeighborListForTraining(torch.nn.Module):
-
     def __init__(self, cutoff: float, only_unique_pairs: bool = False):
         """
-        Initialize the ComputeInteractingAtomPairs module.
+        Calculating the interacting pairs.  This is primarily intended for use during training,
+        as this will utilize the pre-computed pair list from the dataset
 
         Parameters
         ----------

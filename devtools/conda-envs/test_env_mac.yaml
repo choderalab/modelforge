@@ -24,7 +24,9 @@ dependencies:
   - jax
   - flax
   - pydantic>=2.0
+  - graphviz
   -
+
   # Testing
   - pytest>=2.1
   - pytest-cov
@@ -38,5 +40,3 @@ dependencies:
       - git+https://github.com/ArnNag/sake.git@nanometer
       - jax
       - flax
-      - torchviz2
-

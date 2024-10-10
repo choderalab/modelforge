@@ -9,16 +9,19 @@ number_of_radial_basis_functions = 16
 maximum_interaction_radius_for_angular_features = "3.5 angstrom"
 minimum_interaction_radius_for_angular_features = "0.8 angstrom"
 angular_dist_divisions = 8
+predicted_properties = ["per_atom_energy"]
+predicted_dim = [1]
 
 [potential.core_parameter.activation_function_parameter]
-activation_function_name = "CeLU"   # for the original ANI behavior please stick with CeLu since the alpha parameter is currently hard coded and might lead to different behavior when another activation function is used.
+activation_function_name = "CeLU" # for the original ANI behavior please stick with CeLu since the alpha parameter is currently hard coded and might lead to different behavior when another activation function is used.
 
 [potential.core_parameter.activation_function_parameter.activation_function_arguments]
 alpha = 0.1
 
 [potential.postprocessing_parameter]
+properties_to_process = ['per_atom_energy']
 [potential.postprocessing_parameter.per_atom_energy]
-normalize = true
+normalize = false
 from_atom_to_molecule_reduction = true
 keep_per_atom_property = true
 
@@ -34,6 +37,7 @@ remove_self_energies = true
 batch_size = 16
 lr = 0.5e-3
 monitor_for_checkpoint = "val/per_molecule_energy/rmse"
+shift_center_of_mass_to_origin = false
 
 [training.experiment_logger]
 logger_name = "tensorboard"
@@ -81,3 +85,4 @@ devices = 1                                         #[0,1,2,3]
 checkpoint_path = "None"
 simulation_environment = "PyTorch"
 log_every_n_steps = 1
+verbose = true

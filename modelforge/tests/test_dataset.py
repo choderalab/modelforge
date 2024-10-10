@@ -37,11 +37,14 @@ def test_dataset_basic_operations():
         ),
         "atomic_subsystem_counts": atomic_subsystem_counts,
         "n_confs": n_confs,
-        "charges": torch.randint(-1, 2, torch.Size([total_confs])).numpy(),
+        "charges": torch.randint(-1, 2, torch.Size([total_confs, 1])).numpy(),
     }
 
     property_names = PropertyNames(
-        "atomic_numbers", "geometry", "internal_energy_at_0K", "charges"
+        atomic_numbers="atomic_numbers",
+        positions="geometry",
+        E="internal_energy_at_0K",
+        total_charge="charges",
     )
     dataset = TorchDataset(input_data, property_names)
     assert len(dataset) == total_confs
@@ -76,7 +79,9 @@ def test_dataset_basic_operations():
 
     for conf_idx in range(len(dataset)):
         conf_data = dataset[conf_idx]
-        assert np.array_equal(conf_data.nnp_input.positions, geom_true[conf_idx])
+        pos1 = geom_true[conf_idx]
+        pos2 = conf_data.nnp_input.positions
+        assert np.array_equal(pos2, pos1)
         assert np.array_equal(
             conf_data.nnp_input.atomic_numbers, atomic_numbers_true[conf_idx]
         )
@@ -86,6 +91,13 @@ def test_dataset_basic_operations():
         assert np.array_equal(
             dataset.get_series_mol_idxs(rec_idx), series_mol_idxs[rec_idx]
         )
+
+
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+def test_get_properties(dataset_name, single_batch_with_batchsize):
+
+    batch = single_batch_with_batchsize(batch_size=16, dataset_name=dataset_name)
+    a = 7
 
 
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
@@ -101,6 +113,7 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
             "atomic_numbers",
             "internal_energy_at_0K",
             "charges",
+            "dipole_moment",
         ]
         # spot check the processing of the yaml file
         assert data.gz_data_file["length"] == 1697917
@@ -129,6 +142,7 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
             "atomic_numbers",
             "wb97x_dz.energy",
             "wb97x_dz.forces",
+            "dipole_moment",
         ]
 
         data.properties_of_interest = [
@@ -152,6 +166,7 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
             "dft_total_energy",
             "dft_total_force",
             "mbis_charges",
+            "scf_dipole",
         ]
 
         data.properties_of_interest = [
@@ -173,6 +188,7 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
             "dft_total_energy",
             "dft_total_force",
             "total_charge",
+            "dipole_moment",
         ]
 
         data.properties_of_interest = [
@@ -195,10 +211,10 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
     assert len(raw_data_item.__dataclass_fields__) == 2
     assert (
         len(raw_data_item.nnp_input.__dataclass_fields__) == 8
-    )  # 6 properties are returned
+    )  # 8 properties are returned
     assert (
-        len(raw_data_item.metadata.__dataclass_fields__) == 5
-    )  # 5 properties are returned
+        len(raw_data_item.metadata.__dataclass_fields__) == 6
+    )  # 6 properties are returned
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
@@ -304,8 +320,9 @@ def test_caching(prep_temp_dir):
 
 
 def test_metadata_validation(prep_temp_dir):
-    """When we generate an .npz file, we also write out metadata in a .json file which is used
-    to validate if we can use .npz file, or we need to regenerate it."""
+    """When we generate an .npz file, we also write out metadata in a .json file
+    which is used to validate if we can use .npz file, or we need to
+    regenerate it."""
 
     local_cache_dir = str(prep_temp_dir) + "/data_test"
 
@@ -329,7 +346,13 @@ def test_metadata_validation(prep_temp_dir):
     assert data._metadata_validation("qm9_test.json", local_cache_dir) == False
 
     metadata = {
-        "data_keys": ["atomic_numbers", "internal_energy_at_0K", "geometry", "charges"],
+        "data_keys": [
+            "atomic_numbers",
+            "internal_energy_at_0K",
+            "geometry",
+            "charges",
+            "dipole_moment",
+        ],
         "hdf5_checksum": "305a0602860f181fafa75f7c7e3e6de4",
         "hdf5_gz_checkusm": "dc8ada0d808d02c699daf2000aff1fe9",
         "date_generated": "2024-04-11 14:05:14.297305",
@@ -337,9 +360,14 @@ def test_metadata_validation(prep_temp_dir):
 
     import json
 
+    # create local_cache_dir if not already present
+    import os
+
+    os.makedirs(local_cache_dir, exist_ok=True)
+
     with open(
         f"{local_cache_dir}/qm9_test.json",
-        "w",
+        "w+",
     ) as f:
         json.dump(metadata, f)
 
@@ -935,3 +963,95 @@ def test_function_of_self_energy(dataset_name, datamodule_factory):
         )
         # compare this to the energy without postprocessing
         assert np.isclose(methane_energy_reference, methane_energy_offset + methane_ase)
+
+
+def test_shifting_center_of_mass_to_origin(prep_temp_dir):
+    local_cache_dir = str(prep_temp_dir) + "/data_test"
+
+    from modelforge.dataset.dataset import initialize_datamodule
+    from openff.units.elements import MASSES
+
+    import torch
+
+    # first check a molecule not centered at the origin
+    dm = initialize_datamodule(
+        "QM9",
+        version_select="latest_test",
+        shift_center_of_mass_to_origin=False,
+        local_cache_dir=local_cache_dir,
+    )
+    start_idx = dm.torch_dataset.single_atom_start_idxs_by_conf[0]
+    end_idx = dm.torch_dataset.single_atom_end_idxs_by_conf[0]
+
+    from openff.units.elements import MASSES
+
+    pos = dm.torch_dataset.properties_of_interest["positions"][start_idx:end_idx]
+
+    atomic_masses = torch.Tensor(
+        [
+            MASSES[atomic_number].m
+            for atomic_number in dm.torch_dataset.properties_of_interest[
+                "atomic_numbers"
+            ][start_idx:end_idx].tolist()
+        ]
+    )
+    molecule_mass = torch.sum(atomic_masses)
+
+    # I'm using einsum, so let us check it manually
+
+    x = 0
+    y = 0
+    z = 0
+    for i in range(0, pos.shape[0]):
+        x += atomic_masses[i] * pos[i][0]
+        y += atomic_masses[i] * pos[i][1]
+        z += atomic_masses[i] * pos[i][2]
+
+    x = x / molecule_mass
+    y = y / molecule_mass
+    z = z / molecule_mass
+
+    com = torch.Tensor([x, y, z])
+
+    assert torch.allclose(com, torch.Tensor([-0.0013, 0.1086, 0.0008]), atol=1e-4)
+
+    # make sure that we do shift to the origin; we can do the whole dataset
+
+    dm = initialize_datamodule(
+        "QM9",
+        version_select="latest_test",
+        shift_center_of_mass_to_origin=True,
+        local_cache_dir=local_cache_dir,
+    )
+
+    for conf_id in range(0, len(dm.torch_dataset)):
+        start_idx = dm.torch_dataset.single_atom_start_idxs_by_conf[conf_id]
+        end_idx = dm.torch_dataset.single_atom_end_idxs_by_conf[conf_id]
+
+        # grab the positions that should be shifted
+        pos = dm.torch_dataset.properties_of_interest["positions"][start_idx:end_idx]
+
+        atomic_masses = torch.Tensor(
+            [
+                MASSES[atomic_number].m
+                for atomic_number in dm.torch_dataset.properties_of_interest[
+                    "atomic_numbers"
+                ][start_idx:end_idx].tolist()
+            ]
+        )
+        molecule_mass = torch.sum(atomic_masses)
+
+        x = 0
+        y = 0
+        z = 0
+        for i in range(0, pos.shape[0]):
+            x += atomic_masses[i] * pos[i][0]
+            y += atomic_masses[i] * pos[i][1]
+            z += atomic_masses[i] * pos[i][2]
+
+        x = x / molecule_mass
+        y = y / molecule_mass
+        z = z / molecule_mass
+
+        com = torch.Tensor([x, y, z])
+        assert torch.allclose(com, torch.Tensor([0.0, 0.0, 0.0]), atol=1e-4)

@@ -24,6 +24,7 @@ dependencies:
   - sqlitedict
   - pydantic>=2
   - ray-all
+  - graphviz
 
   # Testing
   - pytest>=2.1
@@ -39,4 +40,4 @@ dependencies:
       - git+https://github.com/ArnNag/sake.git@nanometer
       - flax
       - torch
-      - torchviz2
+

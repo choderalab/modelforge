@@ -7,10 +7,10 @@ from typing import Dict, List, Tuple
 import torch
 from torch import nn
 
-from modelforge.dataset import NNPInputTuple
 from modelforge.potential import CosineAttenuationFunction, TensorNetRadialBasisFunction
 
-from .models import PairlistData
+from modelforge.dataset.dataset import NNPInputTuple
+from modelforge.potential.neighbors import PairlistData
 
 
 class DenseAndSum(nn.Module):

@@ -17,7 +17,8 @@ from torch import nn
 
 from modelforge.utils.prop import SpeciesAEV
 
-from .models import NNPInputTuple, PairlistData
+from modelforge.dataset.dataset import NNPInputTuple
+from modelforge.potential.neighbors import PairlistData
 
 
 def triu_index(num_species: int) -> torch.Tensor:

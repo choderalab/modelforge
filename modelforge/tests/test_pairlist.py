@@ -68,8 +68,12 @@ def test_pairlist_logic():
 
 def test_pairlist():
     import torch
+    from collections import namedtuple
+    from modelforge.potential.neighbors import NeighborListForTraining, Pairlist
 
-    from modelforge.potential.models import Neighborlist, Pairlist
+    TestInput = namedtuple(
+        "TestInput", ["positions", "atomic_subsystem_indices", "pair_list"]
+    )
 
     atomic_subsystem_indices = torch.tensor([0, 0, 0, 1, 1, 1])
     positions = torch.tensor(
@@ -85,8 +89,9 @@ def test_pairlist():
     from openff.units import unit
 
     cutoff = unit.Quantity(5.0, unit.nanometer).to(unit.nanometer).m
-    pairlist = Neighborlist(cutoff, only_unique_pairs=True)
-    r = pairlist(positions, atomic_subsystem_indices)
+    nlist = NeighborListForTraining(cutoff, only_unique_pairs=True)
+
+    r = nlist(TestInput(positions, atomic_subsystem_indices, None))
     pair_indices = r.pair_indices
 
     # pairlist describes the pairs of interacting atoms within a batch
@@ -115,8 +120,8 @@ def test_pairlist():
 
     # test with cutoff
     cutoff = unit.Quantity(2.0, unit.nanometer).to(unit.nanometer).m
-    pairlist = Neighborlist(cutoff, only_unique_pairs=True)
-    r = pairlist(positions, atomic_subsystem_indices)
+    nlist = NeighborListForTraining(cutoff, only_unique_pairs=True)
+    r = nlist(TestInput(positions, atomic_subsystem_indices, None))
     pair_indices = r.pair_indices
 
     assert torch.equal(pair_indices, torch.tensor([[0, 1, 3, 4], [1, 2, 4, 5]]))
@@ -140,8 +145,8 @@ def test_pairlist():
     # -------------------------------- #
     # test with complete pairlist
     cutoff = unit.Quantity(2.0, unit.nanometer).to(unit.nanometer).m
-    neigborlist = Neighborlist(cutoff, only_unique_pairs=False)
-    r = neigborlist(positions, atomic_subsystem_indices)
+    neigborlist = NeighborListForTraining(cutoff, only_unique_pairs=False)
+    r = neigborlist(TestInput(positions, atomic_subsystem_indices, None))
     pair_indices = r.pair_indices
 
     assert torch.equal(
@@ -152,11 +157,11 @@ def test_pairlist():
     # make sure that Pairlist and Neighborlist behave the same for large cutoffs
     cutoff = unit.Quantity(10.0, unit.nanometer).to(unit.nanometer).m
     only_unique_pairs = False
-    neighborlist = Neighborlist(cutoff, only_unique_pairs=only_unique_pairs)
+    neighborlist = NeighborListForTraining(cutoff, only_unique_pairs=only_unique_pairs)
     pairlist = Pairlist(only_unique_pairs=only_unique_pairs)
     r = pairlist(positions, atomic_subsystem_indices)
     pair_indices = r.pair_indices
-    r = neighborlist(positions, atomic_subsystem_indices)
+    r = neighborlist(TestInput(positions, atomic_subsystem_indices, None))
     neighbor_indices = r.pair_indices
 
     assert torch.equal(pair_indices, neighbor_indices)
@@ -165,11 +170,11 @@ def test_pairlist():
     # make sure that they are the same also for non-redundant pairs
     cutoff = unit.Quantity(10.0, unit.nanometer).to(unit.nanometer).m
     only_unique_pairs = True
-    neighborlist = Neighborlist(cutoff, only_unique_pairs=only_unique_pairs)
+    neighborlist = NeighborListForTraining(cutoff, only_unique_pairs=only_unique_pairs)
     pairlist = Pairlist(only_unique_pairs=only_unique_pairs)
     r = pairlist(positions, atomic_subsystem_indices)
     pair_indices = r.pair_indices
-    r = neighborlist(positions, atomic_subsystem_indices)
+    r = neighborlist(TestInput(positions, atomic_subsystem_indices, None))
     neighbor_indices = r.pair_indices
 
     assert torch.equal(pair_indices, neighbor_indices)
@@ -178,11 +183,11 @@ def test_pairlist():
     # this should fail
     cutoff = unit.Quantity(2.0, unit.nanometer).to(unit.nanometer).m
     only_unique_pairs = True
-    neighborlist = Neighborlist(cutoff, only_unique_pairs=only_unique_pairs)
+    neighborlist = NeighborListForTraining(cutoff, only_unique_pairs=only_unique_pairs)
     pairlist = Pairlist(only_unique_pairs=only_unique_pairs)
     r = pairlist(positions, atomic_subsystem_indices)
     pair_indices = r.pair_indices
-    r = neighborlist(positions, atomic_subsystem_indices)
+    r = neighborlist(TestInput(positions, atomic_subsystem_indices, None))
     neighbor_indices = r.pair_indices
 
     assert not pair_indices.shape == neighbor_indices.shape
@@ -192,7 +197,7 @@ def test_pairlist_precomputation():
     import numpy as np
     import torch
 
-    from modelforge.potential.models import Pairlist
+    from modelforge.potential.neighbors import Pairlist
 
     atomic_subsystem_indices = torch.tensor([0, 0, 0])
 

@@ -189,7 +189,7 @@ def test_representation_with_diagonal_batching():
         CosineAttenuationFunction,
     )
     from openff.units import unit
-    from modelforge.potential.models import Pairlist
+    from modelforge.potential.neighbors import Pairlist
     from .precalculated_values import (
         provide_reference_values_for_test_ani_test_compute_rsf_with_diagonal_batching,
     )
@@ -240,7 +240,7 @@ def test_compare_angular_symmetry_features():
     from modelforge.potential.representation import AngularSymmetryFunction
     from modelforge.potential.ani import ANIRepresentation
     from openff.units import unit
-    from modelforge.potential.models import Pairlist
+    from modelforge.potential.neighbors import Pairlist
 
     # set up relevant system properties
     species, _, _, nnp_input = setup_methane()

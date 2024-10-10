@@ -8,7 +8,8 @@ import torch
 import torch.nn as nn
 from loguru import logger as log
 
-from .models import NNPInputTuple, PairlistData
+from modelforge.dataset.dataset import NNPInputTuple
+from modelforge.potential.neighbors import PairlistData
 
 
 class SchNetCore(torch.nn.Module):

@@ -2,7 +2,7 @@
 This module contains classes and functions for training neural network potentials using PyTorch Lightning.
 """
 
-from typing import Any, Dict, List, Optional, Type, TypeVar, Union
+from typing import Any, Dict, List, Optional, Type, Union, TypeVar
 
 import lightning.pytorch as pL
 import torch
@@ -14,7 +14,7 @@ from torch.optim import Optimizer
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from modelforge.dataset.dataset import BatchData, DataModule, DatasetParameters
-from modelforge.custom_types import (
+from modelforge.potential.parameters import (
     AimNet2Parameters,
     ANI2xParameters,
     PaiNNParameters,
@@ -66,6 +66,7 @@ class CalculateProperties(torch.nn.Module):
     _SUPPORTED_PROPERTIES = [
         "per_atom_energy",
         "per_atom_force",
+        "per_molecule_energy",
         "per_molecule_total_charge",
         "per_molecule_dipole_moment",
     ]

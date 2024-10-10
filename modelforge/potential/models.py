@@ -2,7 +2,7 @@
 This module contains the base classes for the neural network potentials.
 """
 
-from typing import TYPE_CHECKING, Any, Dict, List, Mapping, NamedTuple, Optional, Tuple
+from typing import Any, Dict, List, Mapping, NamedTuple, Optional, Tuple, TypeVar, Union
 
 import lightning as pl
 import torch
@@ -10,20 +10,17 @@ from loguru import logger as log
 from openff.units import unit
 from torch.nn import Module
 
-from modelforge.dataset.dataset import NNPInput, NNPInputTuple
-
-from modelforge.dataset.dataset import DatasetParameters
+from modelforge.dataset.dataset import DatasetParameters, NNPInput, NNPInputTuple
 from modelforge.potential.parameters import (
+    AimNet2Parameters,
     ANI2xParameters,
     PaiNNParameters,
     PhysNetParameters,
     SAKEParameters,
     SchNetParameters,
     TensorNetParameters,
-    AimNet2Parameters,
 )
 from modelforge.train.parameters import RuntimeParameters, TrainingParameters
-from typing import TypeVar, Union
 
 # Define a TypeVar that can be one of the parameter models
 T_NNP_Parameters = TypeVar(
@@ -494,9 +491,9 @@ class ComputeInteractingAtomPairs(torch.nn.Module):
 from torch.nn import ModuleDict
 
 from modelforge.potential.processing import (
-    PerAtomEnergy,
     CoulombPotential,
     PerAtomCharge,
+    PerAtomEnergy,
 )
 
 

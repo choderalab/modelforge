@@ -70,14 +70,14 @@ def single_batch_with_batchsize():
     return _create_single_batch
 
 
-@pytest.fixture(scope="session")
-def prep_temp_dir(tmp_path_factory):
-    import uuid
-
-    filename = str(uuid.uuid4())
-
-    tmp_path_factory.mktemp(f"dataset_test/")
-    return f"dataset_test"
+# @pytest.fixture(scope="session")
+# def prep_temp_dir(tmp_path_factory):
+#     import uuid
+#
+#     filename = str(uuid.uuid4())
+#
+#     tmp_path_factory.mktemp(f"dataset_test/")
+#     return f"dataset_test"
 
 
 @dataclass

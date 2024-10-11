@@ -38,7 +38,8 @@ def setup_waterbox_testsystem(
     torch_atomic_subsystem_indices = torch.zeros_like(
         torch_atomic_numbers, dtype=torch.long, device=device
     )
-    torch_total_charge = torch.zeros(num_waters, dtype=torch.float32, device=device)
+    torch_total_charge = torch.zeros(1, dtype=torch.float32, device=device)
+    
     log.info(f"Waterbox system setup with {num_waters} waters")
     return NNPInput(
         atomic_numbers=torch_atomic_numbers,

@@ -1,7 +1,13 @@
 from typing import Optional
-
+import pytest
 
 from modelforge.tests.helper_functions import setup_potential_for_test
+
+
+@pytest.fixture(scope="session")
+def prep_temp_dir(tmp_path_factory):
+    fn = tmp_path_factory.mktemp("test_physnet_temp")
+    return fn
 
 
 def test_init():
@@ -10,12 +16,14 @@ def test_init():
     assert model is not None, "PhysNet model should be initialized."
 
 
-def test_forward(single_batch_with_batchsize):
+def test_forward(single_batch_with_batchsize, prep_temp_dir):
     import torch
 
     model = setup_potential_for_test("physnet", "training")
     print(model)
-    batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
+    batch = single_batch_with_batchsize(
+        batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+    )
 
     yhat = model(batch.nnp_input.to(dtype=torch.float32))
 

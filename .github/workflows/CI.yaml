@@ -35,6 +35,11 @@ jobs:
       matrix:
         os: [macOS-latest, ubuntu-latest]
         python-version: ["3.10", "3.11"]
+        include:
+          - os: ubuntu-latest
+            n_procs: 4
+          - os: macOS-latest
+            n_procs: 0
 
     steps:
       - uses: actions/checkout@v3
@@ -73,7 +78,7 @@ jobs:
       - name: Run tests
         # conda setup requires this special shell
         run: |
-          pytest -n 8 --dist loadgroup -v --cov=modelforge --cov-report=xml --color=yes --durations=50 modelforge/tests/
+          pytest -n {matrix.nprocs} --dist loadgroup -v --cov=modelforge --cov-report=xml --color=yes --durations=50 modelforge/tests/
 
       - name: CodeCov
         uses: codecov/codecov-action@v4

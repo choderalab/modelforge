@@ -1,3 +1,8 @@
+import torch
+import pytest
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
 def test_profiling_function():
     from modelforge.tests.helper_functions import setup_potential_for_test
     import torch

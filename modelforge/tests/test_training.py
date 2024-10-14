@@ -139,7 +139,7 @@ def replace_per_molecule_with_per_atom_loss(config):
     # NOTE: the loss is calculate per_atom, but the validation set error is
     # per_molecule. This is because otherwise it's difficult to compare.
     t_config.early_stopping.monitor = "val/per_molecule_energy/rmse"
-    t_config.monitor_for_checkpoint = "val/per_molecule_energy/rmse"
+    t_config.monitor = "val/per_molecule_energy/rmse"
     t_config.lr_scheduler.monitor = "val/per_molecule_energy/rmse"
 
 

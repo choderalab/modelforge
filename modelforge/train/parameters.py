@@ -156,7 +156,7 @@ class TrainingParameters(ParametersBase):
         min_lr: float
         threshold: float
         threshold_mode: ThresholdMode
-        monitor: str  # note this might be better as an enum
+        monitor: Optional[str] = None
         interval: str
 
     class LossParameter(ParametersBase):
@@ -196,7 +196,7 @@ class TrainingParameters(ParametersBase):
         """
 
         verbose: bool
-        monitor: str
+        monitor: Optional[str] = None
         min_delta: float
         patience: int
 
@@ -261,12 +261,12 @@ class TrainingParameters(ParametersBase):
                 raise ValueError("wandb_configuration must be provided")
             return self
 
+    monitor: str
     number_of_epochs: int
     remove_self_energies: bool
     shift_center_of_mass_to_origin: bool
     batch_size: int
     lr: float
-    monitor_for_checkpoint: str
     lr_scheduler: Optional[SchedulerConfig] = None
     loss_parameter: LossParameter
     early_stopping: Optional[EarlyStopping] = None
@@ -284,6 +284,15 @@ class TrainingParameters(ParametersBase):
                 raise ValueError(
                     "Use of dipole_moment in the loss requires shift_center_of_mass_to_origin to be True"
                 )
+        return self
+
+    # Validator to set default monitors
+    @model_validator(mode="after")
+    def set_default_monitors(self) -> "TrainingParameters":
+        if self.lr_scheduler and self.lr_scheduler.monitor is None:
+            self.lr_scheduler.monitor = self.monitor
+        if self.early_stopping and self.early_stopping.monitor is None:
+            self.early_stopping.monitor = self.monitor
         return self
 
 

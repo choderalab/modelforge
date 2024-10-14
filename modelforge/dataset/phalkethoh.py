@@ -92,6 +92,7 @@ class PhAlkEthOHDataset(HDF5Dataset):
             "dft_total_energy",
             "dft_total_force",
             "total_charge",
+            "scf_dipole",
         ]  # NOTE: Default values
 
         self._properties_of_interest = _default_properties_of_interest

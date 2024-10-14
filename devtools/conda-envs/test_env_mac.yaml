@@ -40,3 +40,4 @@ dependencies:
       - git+https://github.com/ArnNag/sake.git@nanometer
       - jax
       - flax
+      - pytest-xdist

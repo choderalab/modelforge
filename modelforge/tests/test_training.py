@@ -10,7 +10,15 @@ IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 from modelforge.potential import NeuralNetworkPotentialFactory, _Implemented_NNPs
 
 
-def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
+@pytest.fixture(scope="session")
+def prep_temp_dir(tmp_path_factory):
+    fn = tmp_path_factory.mktemp("test_training_temp")
+    return fn
+
+
+def load_configs_into_pydantic_models(
+    potential_name: str, dataset_name: str, local_cache_dir: str
+):
     from importlib import resources
 
     import toml
@@ -50,6 +58,7 @@ def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
     training_parameters = TrainingParameters(**training_config_dict["training"])
     runtime_parameters = RuntimeParameters(**runtime_config_dict["runtime"])
 
+    runtime_parameters.local_cache_dir = local_cache_dir
     return {
         "potential": potential_parameters,
         "dataset": dataset_parameters,
@@ -130,10 +139,11 @@ def replace_per_molecule_with_per_atom_loss(config):
     # NOTE: the loss is calculate per_atom, but the validation set error is
     # per_molecule. This is because otherwise it's difficult to compare.
     t_config.early_stopping.monitor = "val/per_molecule_energy/rmse"
-    t_config.monitor_for_checkpoint = "val/per_molecule_energy/rmse"
+    t_config.monitor = "val/per_molecule_energy/rmse"
     t_config.lr_scheduler.monitor = "val/per_molecule_energy/rmse"
 
 
+@pytest.mark.xdist_group(name="test_training_with_lightning")
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
@@ -143,7 +153,7 @@ def replace_per_molecule_with_per_atom_loss(config):
     "loss",
     ["energy", "energy_force", "normalized_energy_force", "energy_force_dipole_moment"],
 )
-def test_train_with_lightning(loss, potential_name, dataset_name):
+def test_train_with_lightning(loss, potential_name, dataset_name, prep_temp_dir):
     """
     Test that we can train, save and load checkpoints.
     """
@@ -156,7 +166,9 @@ def test_train_with_lightning(loss, potential_name, dataset_name):
             "Skipping Sake training with forces on GitHub Actions because it allocates too much memory"
         )
 
-    config = load_configs_into_pydantic_models(potential_name, dataset_name)
+    config = load_configs_into_pydantic_models(
+        potential_name, dataset_name, str(prep_temp_dir)
+    )
 
     if "force" in loss:
         add_force_to_loss_parameter(config)
@@ -171,7 +183,7 @@ def test_train_with_lightning(loss, potential_name, dataset_name):
     get_trainer(config).train_potential()
 
 
-def test_train_from_single_toml_file():
+def test_train_from_single_toml_file(prep_temp_dir):
     from importlib import resources
 
     from modelforge.tests import data
@@ -179,10 +191,10 @@ def test_train_from_single_toml_file():
 
     config_path = resources.files(data) / f"config.toml"
 
-    read_config_and_train(config_path)
+    read_config_and_train(config_path, local_cache_dir=str(prep_temp_dir))
 
 
-def test_error_calculation(single_batch_with_batchsize):
+def test_error_calculation(single_batch_with_batchsize, prep_temp_dir):
     # test the different Loss classes
     from modelforge.train.losses import (
         ForceSquaredError,
@@ -190,7 +202,9 @@ def test_error_calculation(single_batch_with_batchsize):
     )
 
     # generate data
-    batch = single_batch_with_batchsize(batch_size=16, dataset_name="PHALKETHOH")
+    batch = single_batch_with_batchsize(
+        batch_size=16, dataset_name="PHALKETHOH", local_cache_dir=str(prep_temp_dir)
+    )
 
     data = batch
     true_E = data.metadata.E
@@ -237,14 +251,18 @@ def test_error_calculation(single_batch_with_batchsize):
     assert torch.allclose(torch.mean(F_error), reference_F_error)
 
 
-def test_loss_with_dipole_moment(single_batch_with_batchsize):
+def test_loss_with_dipole_moment(single_batch_with_batchsize, prep_temp_dir):
 
     # Generate a batch with the specified batch size and dataset
-    batch = single_batch_with_batchsize(batch_size=16, dataset_name="SPICE2")
+    batch = single_batch_with_batchsize(
+        batch_size=16, dataset_name="SPICE2", local_cache_dir=str(prep_temp_dir)
+    )
 
     # Get the trainer object with the specified model and dataset
     config = load_configs_into_pydantic_models(
-        potential_name="schnet", dataset_name="SPICE2"
+        potential_name="schnet",
+        dataset_name="SPICE2",
+        local_cache_dir=str(prep_temp_dir),
     )
     add_dipole_moment_to_loss_parameter(config)
     add_force_to_loss_parameter(config)
@@ -314,10 +332,12 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize):
     ).all(), "Total loss contains non-finite values."
 
 
-def test_loss(single_batch_with_batchsize):
+def test_loss(single_batch_with_batchsize, prep_temp_dir):
     from modelforge.train.losses import Loss
 
-    batch = single_batch_with_batchsize(batch_size=16, dataset_name="PHALKETHOH")
+    batch = single_batch_with_batchsize(
+        batch_size=16, dataset_name="PHALKETHOH", local_cache_dir=str(prep_temp_dir)
+    )
 
     loss_porperty = ["per_molecule_energy", "per_atom_force", "per_atom_energy"]
     loss_weights = {
@@ -330,7 +350,7 @@ def test_loss(single_batch_with_batchsize):
 
     # Get the trainer object with the specified model and dataset
     config = load_configs_into_pydantic_models(
-        potential_name="schnet", dataset_name="QM9"
+        potential_name="schnet", dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
     )
     add_force_to_loss_parameter(config)
 

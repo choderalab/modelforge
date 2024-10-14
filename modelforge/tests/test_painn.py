@@ -1,5 +1,12 @@
 import torch
 from modelforge.potential import NeuralNetworkPotentialFactory
+import pytest
+
+
+@pytest.fixture(scope="session")
+def prep_temp_dir(tmp_path_factory):
+    fn = tmp_path_factory.mktemp("test_painn_temp")
+    return fn
 
 
 def setup_painn_model(potential_seed: int):
@@ -27,11 +34,13 @@ def setup_painn_model(potential_seed: int):
     return trainer_painn
 
 
-def test_forward(single_batch_with_batchsize):
+def test_forward(single_batch_with_batchsize, prep_temp_dir):
     """Test initialization of the PaiNN neural network potential."""
     trainer_painn = setup_painn_model(42)
     assert trainer_painn is not None, "PaiNN model should be initialized."
-    batch = batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
+    batch = single_batch_with_batchsize(
+        batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+    )
 
     nnp_input = batch.to(dtype=torch.float32).nnp_input_tuple
     energy = trainer_painn(nnp_input)["per_molecule_energy"]

@@ -8,7 +8,7 @@ from modelforge.utils.remote import *
 
 @pytest.fixture(scope="session")
 def prep_temp_dir(tmp_path_factory):
-    fn = tmp_path_factory.mktemp("remote_test")
+    fn = tmp_path_factory.mktemp("test_remote_temp")
     return fn
 
 

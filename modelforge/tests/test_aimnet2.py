@@ -5,6 +5,12 @@ from openff.units import unit
 from modelforge.tests.helper_functions import setup_potential_for_test
 
 
+@pytest.fixture(scope="session")
+def prep_temp_dir(tmp_path_factory):
+    fn = tmp_path_factory.mktemp("test_aimnet2_temp")
+    return fn
+
+
 def test_initialize_model():
     """Test initialization of the Schnet model."""
 
@@ -130,13 +136,13 @@ def test_radial_symmetry_function_regression():
     assert torch.allclose(modelforge_aimnet2_outputs, regression_outputs, atol=1e-4)
 
 
-def test_forward(single_batch_with_batchsize):
+def test_forward(single_batch_with_batchsize, prep_temp_dir):
     """Test initialization of the AIMNet2 model."""
     # read default parameters
     aimnet = setup_potential_for_test("aimnet2", "training")
 
     assert aimnet is not None, "Aimnet model should be initialized."
-    batch = single_batch_with_batchsize(64, "QM9")
+    batch = single_batch_with_batchsize(64, "QM9", str(prep_temp_dir))
 
     y_hat = aimnet(batch.nnp_input_tuple)
 

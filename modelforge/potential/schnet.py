@@ -143,14 +143,15 @@ class SchNetCore(torch.nn.Module):
         # Compute the atomic representation
         representation = self.schnet_representation_module(data, pairlist_output)
         atomic_embedding = representation["atomic_embedding"]
-
+        f_ij = representation["f_ij"]
+        f_cutoff = representation["f_cutoff"]
         # Apply interaction modules to update the atomic embedding
         for interaction in self.interaction_modules:
             atomic_embedding = atomic_embedding + interaction(
                 atomic_embedding,
                 pairlist_output,
-                representation["f_ij"],
-                representation["f_cutoff"],
+                f_ij,
+                f_cutoff,
             )
 
         return {

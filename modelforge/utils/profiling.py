@@ -12,11 +12,15 @@ def setup_waterbox_testsystem(
     device: torch.device,
     precision: torch.dtype,
 ) -> None:
-    from openmmtools.testsystems import WaterBox
+    from modelforge.utils.io import import_
+
+    openmmtools = import_("openmmtools")
     from simtk import unit
     from modelforge.dataset.dataset import NNPInput
 
-    test_system = WaterBox(box_edge=edge_size_in_nm * unit.nanometer)
+    test_system = openmmtools.testsystems.WaterBox(
+        box_edge=edge_size_in_nm * unit.nanometer
+    )
     positions = test_system.positions  # Positions in nanometers
     topology = test_system.topology
 
@@ -39,7 +43,7 @@ def setup_waterbox_testsystem(
         torch_atomic_numbers, dtype=torch.long, device=device
     )
     torch_total_charge = torch.zeros(1, dtype=torch.float32, device=device)
-    
+
     log.info(f"Waterbox system setup with {num_waters} waters")
     return NNPInput(
         atomic_numbers=torch_atomic_numbers,

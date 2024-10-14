@@ -25,6 +25,7 @@ dependencies:
   - pydantic>=2
   - ray-all
   - graphviz
+  - openmmtools
 
   # Testing
   - pytest>=2.1
@@ -39,5 +40,4 @@ dependencies:
       - pytorch2jax
       - git+https://github.com/ArnNag/sake.git@nanometer
       - flax
-      - torch
 

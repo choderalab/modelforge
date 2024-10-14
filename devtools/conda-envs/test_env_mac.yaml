@@ -25,8 +25,8 @@ dependencies:
   - flax
   - pydantic>=2.0
   - graphviz
-  -
-
+  - openmmtools
+  
   # Testing
   - pytest>=2.1
   - pytest-cov

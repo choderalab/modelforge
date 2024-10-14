@@ -1,14 +1,23 @@
 from .test_models import load_configs_into_pydantic_models
+import pytest
 
 
-def test_embedding(single_batch_with_batchsize):
+@pytest.fixture(scope="session")
+def prep_temp_dir(tmp_path_factory):
+    fn = tmp_path_factory.mktemp("test_nn_temp")
+    return fn
+
+
+def test_embedding(single_batch_with_batchsize, prep_temp_dir):
     # test the input featurization, including:
     # - nuclear charge embedding
     # - total charge mixing
 
     import torch  # noqa: F401
 
-    batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
+    batch = single_batch_with_batchsize(
+        batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+    )
 
     nnp_input = batch.nnp_input
     model_name = "SchNet"

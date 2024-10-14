@@ -11,6 +11,16 @@ from modelforge.dataset import _ImplementedDatasets
 from modelforge.utils.prop import PropertyNames
 
 
+@pytest.fixture(scope="session")
+def prep_temp_dir(tmp_path_factory):
+    import uuid
+
+    filename = str(uuid.uuid4())
+
+    fn = tmp_path_factory.mktemp(f"test_dataset_temp")
+    return fn
+
+
 def test_dataset_imported():
     """Sample test, will always pass so long as import statement worked."""
 
@@ -94,9 +104,11 @@ def test_dataset_basic_operations():
 
 
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
-def test_get_properties(dataset_name, single_batch_with_batchsize):
+def test_get_properties(dataset_name, single_batch_with_batchsize, prep_temp_dir):
 
-    batch = single_batch_with_batchsize(batch_size=16, dataset_name=dataset_name)
+    batch = single_batch_with_batchsize(
+        batch_size=16, dataset_name=dataset_name, local_cache_dir=str(prep_temp_dir)
+    )
     a = 7
 
 
@@ -466,6 +478,7 @@ def test_data_item_format_of_datamodule(
     dm = datamodule_factory(
         dataset_name=dataset_name,
         batch_size=512,
+        local_cache_dir=local_cache_dir,
     )
 
     raw_data_item = dm.torch_dataset[0]
@@ -486,10 +499,12 @@ from modelforge.potential import _Implemented_NNPs
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
-def test_dataset_neighborlist(potential_name, single_batch_with_batchsize):
+def test_dataset_neighborlist(
+    potential_name, single_batch_with_batchsize, prep_temp_dir
+):
     """Test the neighborlist."""
 
-    batch = single_batch_with_batchsize(64, "QM9")
+    batch = single_batch_with_batchsize(64, "QM9", str(prep_temp_dir))
     nnp_input = batch.nnp_input
 
     # test that the neighborlist is correctly generated
@@ -589,10 +604,12 @@ def test_dataset_neighborlist(potential_name, single_batch_with_batchsize):
 
 
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
-def test_dataset_generation(dataset_name, datamodule_factory):
+def test_dataset_generation(dataset_name, datamodule_factory, prep_temp_dir):
     """Test the splitting of the dataset."""
 
-    dataset = datamodule_factory(dataset_name=dataset_name)
+    dataset = datamodule_factory(
+        dataset_name=dataset_name, local_cache_dir=str(prep_temp_dir)
+    )
     train_dataloader = dataset.train_dataloader()
     val_dataloader = dataset.val_dataloader()
     test_dataloader = dataset.test_dataloader()
@@ -639,7 +656,11 @@ from modelforge.dataset.utils import (
 )
 @pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_dataset_splitting(
-    splitting_strategy, dataset_name, datamodule_factory, get_dataset_container_fix
+    splitting_strategy,
+    dataset_name,
+    datamodule_factory,
+    get_dataset_container_fix,
+    prep_temp_dir,
 ):
     """Test random_split on the the dataset."""
     from modelforge.dataset import DataModule
@@ -650,6 +671,7 @@ def test_dataset_splitting(
         splitting_strategy=splitting_strategy(),
         version_select="nc_1000_v0",
         remove_self_energies=False,
+        local_cache_dir=str(prep_temp_dir),
     )
 
     train_dataset, val_dataset, test_dataset = (
@@ -671,6 +693,7 @@ def test_dataset_splitting(
         splitting_strategy=splitting_strategy(split=[0.6, 0.3, 0.1]),
         version_select="nc_1000_v0",
         remove_self_energies=False,
+        local_cache_dir=str(prep_temp_dir),
     )
 
     train_dataset2, val_dataset2, test_dataset2 = (
@@ -736,7 +759,7 @@ def test_numpy_dataset_assignment(dataset_name):
     assert isinstance(data.numpy_data, np.lib.npyio.NpzFile)
 
 
-def test_energy_postprocessing():
+def test_energy_postprocessing(prep_temp_dir):
     # test that the mean and stddev of the dataset
     # are correct
     from modelforge.dataset.dataset import DataModule
@@ -753,6 +776,7 @@ def test_energy_postprocessing():
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         remove_self_energies=True,
         regenerate_dataset_statistic=True,
+        local_cache_dir=str(prep_temp_dir),
     )
     dm.prepare_data()
     dm.setup()
@@ -818,7 +842,7 @@ def test_energy_postprocessing():
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
-def test_function_of_self_energy(dataset_name, datamodule_factory):
+def test_function_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir):
     # test the self energy calculation on the QM9 dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
@@ -830,6 +854,7 @@ def test_function_of_self_energy(dataset_name, datamodule_factory):
         version_select="nc_1000_v0",
         remove_self_energies=False,
         regenerate_dataset_statistic=True,
+        local_cache_dir=str(prep_temp_dir),
     )
 
     methane_energy_reference = float(dm.train_dataset[0].metadata.E)
@@ -841,6 +866,7 @@ def test_function_of_self_energy(dataset_name, datamodule_factory):
         batch_size=512,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         regenerate_dataset_statistic=True,
+        local_cache_dir=str(prep_temp_dir),
     )
     # it is saved in the dataset statistics
 
@@ -872,6 +898,7 @@ def test_function_of_self_energy(dataset_name, datamodule_factory):
         remove_self_energies=True,
         version_select="nc_1000_v0",
         regenerate_dataset_statistic=True,
+        local_cache_dir=str(prep_temp_dir),
     )
 
     # it is saved in the dataset statistics
@@ -916,6 +943,7 @@ def test_function_of_self_energy(dataset_name, datamodule_factory):
         remove_self_energies=True,
         version_select="nc_1000_v0",
         regenerate_dataset_statistic=True,
+        local_cache_dir=str(prep_temp_dir),
     )
     # it is saved in the dataset statistics
     import toml
@@ -934,6 +962,7 @@ def test_function_of_self_energy(dataset_name, datamodule_factory):
             remove_self_energies=True,
             version_select="nc_1000_v0",
             regenerate_dataset_statistic=True,
+            local_cache_dir=str(prep_temp_dir),
         )
         # Extract the first molecule (methane)
         # double check that it is methane

@@ -14,6 +14,12 @@ from modelforge.tests.helper_functions import setup_potential_for_test
 ON_MAC = platform == "darwin"
 
 
+@pytest.fixture(scope="session")
+def prep_temp_dir(tmp_path_factory):
+    fn = tmp_path_factory.mktemp("test_sake_temp")
+    return fn
+
+
 def test_init():
     """Test initialization of the SAKE neural network potential."""
 
@@ -25,12 +31,14 @@ def test_init():
 from openff.units import unit
 
 
-def test_forward(single_batch_with_batchsize):
+def test_forward(single_batch_with_batchsize, prep_temp_dir):
     """
     Test the forward pass of the SAKE model.
     """
     # get methane input
-    batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
+    batch = single_batch_with_batchsize(
+        batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+    )
     methane = batch.nnp_input
 
     sake = setup_potential_for_test("sake", "training")
@@ -74,7 +82,9 @@ def test_interaction_forward():
 
 @pytest.mark.parametrize("eq_atol", [3e-1])
 @pytest.mark.parametrize("h_atol", [8e-2])
-def test_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize):
+def test_layer_equivariance(
+    h_atol, eq_atol, single_batch_with_batchsize, prep_temp_dir
+):
     from dataclasses import replace
 
     import torch
@@ -89,7 +99,9 @@ def test_layer_equivariance(h_atol, eq_atol, single_batch_with_batchsize):
     sake = setup_potential_for_test("sake", "training")
 
     # get methane input
-    batch = single_batch_with_batchsize(batch_size=64, dataset_name="QM9")
+    batch = single_batch_with_batchsize(
+        batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+    )
 
     nnp_input = batch.nnp_input
     perturbed_nnp_input = replace(nnp_input)
@@ -388,12 +400,14 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none):
 import pytest
 
 
-def test_model_invariance(single_batch_with_batchsize):
+def test_model_invariance(single_batch_with_batchsize, prep_temp_dir):
     from dataclasses import replace
 
     sake = setup_potential_for_test("sake", "training")
     # get methane input
-    batch = single_batch_with_batchsize(batch_size=1, dataset_name="QM9")
+    batch = single_batch_with_batchsize(
+        batch_size=1, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+    )
     methane = batch.nnp_input
 
     rotation_matrix = torch.tensor([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])

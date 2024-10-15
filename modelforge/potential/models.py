@@ -482,19 +482,20 @@ def setup_potential(
                 f"Unsupported neighborlist strategy: {neighborlist_strategy}"
             )
 
-    model = Potential(
+    potential = Potential(
         core_network,
         neighborlist,
         postprocessing,
         jit=jit,
         jit_neighborlist=False if use_training_mode_neighborlist else True,
     )
-    model.eval()
-    return model
+    potential.eval()
+    return potential
 
 
 from openff.units import unit
 
+from modelforge.train.training import ModelTrainer
 
 class NeuralNetworkPotentialFactory:
 
@@ -520,7 +521,7 @@ class NeuralNetworkPotentialFactory:
         jit: bool = True,
         inference_neighborlist_strategy: str = "verlet",
         verlet_neighborlist_skin: Optional[float] = 0.1,
-    ) -> Union[Potential, JAXModel, pl.LightningModule]:
+    ) -> Union[Potential, JAXModel, pl.LightningModule, ModelTrainer]:
         """
         Create an instance of a neural network potential for training or
         inference.
@@ -563,7 +564,6 @@ class NeuralNetworkPotentialFactory:
             An instantiated neural network potential for training or inference.
         """
 
-        from modelforge.train.training import ModelTrainer
 
         log.debug(f"{training_parameter=}")
         log.debug(f"{potential_parameter=}")
@@ -571,7 +571,7 @@ class NeuralNetworkPotentialFactory:
 
         # obtain model for training
         if use == "training":
-            model = ModelTrainer(
+            model_trainer = ModelTrainer(
                 potential_parameter=potential_parameter,
                 training_parameter=training_parameter,
                 dataset_parameter=dataset_parameter,
@@ -580,10 +580,10 @@ class NeuralNetworkPotentialFactory:
                 dataset_statistic=dataset_statistic,
                 use_default_dataset_statistic=use_default_dataset_statistic,
             )
-            return model
+            return model_trainer
         # obtain model for inference
         elif use == "inference":
-            model = setup_potential(
+            potential = setup_potential(
                 potential_parameter=potential_parameter,
                 dataset_statistic=dataset_statistic,
                 use_training_mode_neighborlist=use_training_mode_neighborlist,
@@ -594,9 +594,9 @@ class NeuralNetworkPotentialFactory:
                 verlet_neighborlist_skin=verlet_neighborlist_skin,
             )
             if simulation_environment == "JAX":
-                return PyTorch2JAXConverter().convert_to_jax_model(model)
+                return PyTorch2JAXConverter().convert_to_jax_model(potential)
             else:
-                return model
+                return potential
         else:
             raise NotImplementedError(f"Unsupported 'use' value: {use}")
 

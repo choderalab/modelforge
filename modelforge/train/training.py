@@ -840,7 +840,7 @@ class ModelTrainer:
 
         checkpoint_filename = (
             f"best_{self.potential_parameter.potential_name}-{self.dataset_parameter.dataset_name}"
-            + "-{epoch:02d}-{val_loss:.2f}"
+            + "-{epoch:02d}-{self.training_parameter.monitor:.2f}"
         )
         callbacks.append(
             ModelCheckpoint(

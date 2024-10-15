@@ -127,7 +127,7 @@ class CalculateProperties(torch.nn.Module):
             total_energy,
             nnp_input.positions,
             create_graph=train_mode,
-            retain_graph=False,
+            retain_graph=train_mode,
             allow_unused=False,
         )[0]
 

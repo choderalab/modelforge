@@ -11,7 +11,7 @@ from openff.units import unit
 from torch.nn import Module
 from modelforge.potential.neighbors import PairlistData
 
-from modelforge.dataset.dataset import DatasetParameters, NNPInput, NNPInputTuple
+from modelforge.dataset.dataset import DatasetParameters, NNPInputTuple
 from modelforge.potential.parameters import (
     AimNet2Parameters,
     ANI2xParameters,

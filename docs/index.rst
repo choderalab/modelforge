@@ -21,6 +21,7 @@ The best way to get started is to read the :doc:`getting_started` guide, which o
    inference
    for_developer
    tuning
+   profiling
    api
 
 

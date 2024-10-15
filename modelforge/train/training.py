@@ -814,7 +814,7 @@ class ModelTrainer:
         """
         Set up the callbacks for the trainer.
         The callbacks include early stopping (optional), model checkpointing, and stochastic weight averaging (optional).
-        
+
 
         Returns
         -------

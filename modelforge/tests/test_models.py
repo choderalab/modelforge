@@ -302,8 +302,8 @@ def test_state_dict_saving_and_loading(potential_name, prep_temp_dir):
         runtime_parameter=config["runtime"],
         dataset_parameter=config["dataset"],
     )
-    torch.save(model_trainer.model.state_dict(), file_path)
-    model_trainer.model.load_state_dict(torch.load(file_path))
+    torch.save(model_trainer.potential_training_adapter.state_dict(), file_path)
+    model_trainer.potential_training_adapter.load_state_dict(torch.load(file_path))
 
     # ------------------------------------------------------------- #
     # Use case 2:
@@ -327,7 +327,7 @@ def test_state_dict_saving_and_loading(potential_name, prep_temp_dir):
         dataset_parameter=config["dataset"],
     )
 
-    model_trainer.potential.load_state_dict(torch.load(file_path))
+    model_trainer.potential_training_adapter.load_state_dict(torch.load(file_path))
 
 
 @pytest.mark.parametrize(
@@ -394,7 +394,7 @@ def test_dataset_statistic(potential_name, prep_temp_dir):
     # give this a unique filename based on potential and the test we are in so we can run test in parallel
     file_path = f"{str(prep_temp_dir)}/{potential_name.lower()}_tsd_potential.pth"
 
-    torch.save(model_trainer.potential.state_dict(), file_path)
+    torch.save(model_trainer.potential_training_adapter.state_dict(), file_path)
 
     # NOTE: we are passing dataset statistics explicit to the constructor
     # this is not saved with the state_dict
@@ -768,7 +768,7 @@ def test_calculate_energies_and_forces(
     # since the neighborlist is not batched
 
     # reduce batchsize
-    batch = batch = single_batch_with_batchsize(
+    batch = single_batch_with_batchsize(
         batch_size=1, dataset_name="SPICE2", local_cache_dir=str(prep_temp_dir)
     )
     nnp_input = batch.nnp_input_tuple

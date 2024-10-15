@@ -665,7 +665,7 @@ class ModelTrainer:
             else dataset_statistic
         )
         self.experiment_logger = self.setup_logger()
-        self.potential = self.setup_potential(potential_seed)
+        self.potential_training_adapter = self.setup_potential_training_adapter(potential_seed)
         self.callbacks = self.setup_callbacks()
         self.trainer = self.setup_trainer()
         self.optimizer_class = optimizer_class
@@ -736,7 +736,7 @@ class ModelTrainer:
         dm.setup()
         return dm
 
-    def setup_potential(
+    def setup_potential_training_adapter(
         self, potential_seed: Optional[int] = None
     ) -> pL.LightningModule:
         """
@@ -902,7 +902,7 @@ class ModelTrainer:
             The configured trainer instance after running the training process.
         """
         self.trainer.fit(
-            self.model,
+            self.potential_training_adapter,
             train_dataloaders=self.datamodule.train_dataloader(
                 num_workers=self.dataset_parameter.num_workers,
                 pin_memory=self.dataset_parameter.pin_memory,
@@ -916,14 +916,14 @@ class ModelTrainer:
         )
 
         self.trainer.validate(
-            model=self.model,
+            model=self.potential_training_adapter,
             dataloaders=self.datamodule.val_dataloader(),
             ckpt_path="best",
             verbose=True,
         )
 
         self.trainer.test(
-            model=self.model,
+            model=self.potential_training_adapter,
             dataloaders=self.datamodule.test_dataloader(),
             ckpt_path="best",
             verbose=True,
@@ -934,8 +934,8 @@ class ModelTrainer:
         """
         Configures model-specific priors if the model implements them.
         """
-        if hasattr(self.model, "_config_prior"):
-            return self.model._config_prior()
+        if hasattr(self.potential_training_adapter, "_config_prior"):
+            return self.potential_training_adapter._config_prior()
 
         log.warning("Model does not implement _config_prior().")
         raise NotImplementedError()

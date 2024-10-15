@@ -72,7 +72,7 @@ def setup_potential_for_test(
     )
 
     if use == "training":
-        potential = model.model.potential
+        potential = model.potential_training_adapter.potential
     else:
         potential = model
-    return model
+    return potential

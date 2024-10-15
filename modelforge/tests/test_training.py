@@ -272,9 +272,9 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize, prep_temp_dir):
     )
 
     # Calculate predictions using the trainer's model
-    prediction = trainer.model.calculate_predictions(
+    prediction = trainer.potential_training_adapter.calculate_predictions(
         batch,
-        trainer.model.potential,
+        trainer.potential_training_adapter.potential,
         train_mode=True,  # train_mode=True is required for gradients in force prediction
     )
 
@@ -307,7 +307,7 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize, prep_temp_dir):
     ), "Mismatch in shape for total charge predictions."
 
     # Now compute the loss
-    loss_dict = trainer.model.loss(predict_target=prediction, batch=batch)
+    loss_dict = trainer.potential_training_adapter.loss(predict_target=prediction, batch=batch)
 
     # Ensure that the loss contains the total_charge and dipole_moment terms
     assert "per_molecule_total_charge" in loss_dict, "Total charge loss not computed."
@@ -357,8 +357,8 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
     trainer = get_trainer(
         config,
     )
-    prediction = trainer.model.calculate_predictions(
-        batch, trainer.model.potential, train_mode=True
+    prediction = trainer.potential_training_adapter.calculate_predictions(
+        batch, trainer.potential_training_adapter.potential, train_mode=True
     )  # train_mode=True is required for gradients in force prediction
 
     assert prediction["per_molecule_energy_predict"].size(

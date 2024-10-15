@@ -203,15 +203,15 @@ def test_model_factory(potential_name):
     )
 
     # trainers model
-    model_trainer = setup_potential_for_test(
+    trainer = setup_potential_for_test(
         use="training",
         potential_seed=42,
         potential_name=potential_name,
         simulation_environment="PyTorch",
     )
     assert (
-        potential_name.upper() in str(type(model_trainer.core_network)).upper()
-        or "JAX" in str(type(model_trainer)).upper()
+        potential_name.upper() in str(type(trainer.core_network)).upper()
+        or "JAX" in str(type(trainer)).upper()
     )
 
 
@@ -227,7 +227,7 @@ def test_energy_scaling_and_offset(
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
 
     # inference model
-    model_trainer = NeuralNetworkPotentialFactory.generate_potential(
+    trainer = NeuralNetworkPotentialFactory.generate_potential(
         use="training",
         potential_parameter=config["potential"],
         training_parameter=config["training"],
@@ -243,7 +243,7 @@ def test_energy_scaling_and_offset(
     # load dataset statistic
     import toml
 
-    dataset_statistic = toml.load(model_trainer.datamodule.dataset_statistic_filename)
+    dataset_statistic = toml.load(trainer.datamodule.dataset_statistic_filename)
     # -------------------------------#
     # initialize model without any postprocessing
     # -------------------------------#
@@ -259,7 +259,7 @@ def test_energy_scaling_and_offset(
     potential = NeuralNetworkPotentialFactory.generate_potential(
         use="inference",
         potential_parameter=config["potential"],
-        dataset_statistic=model_trainer.dataset_statistic,
+        dataset_statistic=trainer.dataset_statistic,
         potential_seed=42,
     )
     scaled_output = potential(methane)
@@ -294,7 +294,7 @@ def test_state_dict_saving_and_loading(potential_name, prep_temp_dir):
     # ------------------------------------------------------------- #
     # Use case 1:
     # train a model, save the state_dict and load it again
-    model_trainer = NeuralNetworkPotentialFactory.generate_potential(
+    trainer = NeuralNetworkPotentialFactory.generate_potential(
         use="training",
         simulation_environment="PyTorch",
         potential_parameter=config["potential"],
@@ -302,8 +302,8 @@ def test_state_dict_saving_and_loading(potential_name, prep_temp_dir):
         runtime_parameter=config["runtime"],
         dataset_parameter=config["dataset"],
     )
-    torch.save(model_trainer.potential_training_adapter.state_dict(), file_path)
-    model_trainer.potential_training_adapter.load_state_dict(torch.load(file_path))
+    torch.save(trainer.potential_training_adapter.state_dict(), file_path)
+    trainer.potential_training_adapter.load_state_dict(torch.load(file_path))
 
     # ------------------------------------------------------------- #
     # Use case 2:
@@ -318,7 +318,7 @@ def test_state_dict_saving_and_loading(potential_name, prep_temp_dir):
     # ------------------------------------------------------------- #
     # Use case 3
     # generate a new trainer and load it
-    model_trainer = NeuralNetworkPotentialFactory.generate_potential(
+    trainer = NeuralNetworkPotentialFactory.generate_potential(
         use="training",
         simulation_environment="PyTorch",
         potential_parameter=config["potential"],
@@ -327,7 +327,7 @@ def test_state_dict_saving_and_loading(potential_name, prep_temp_dir):
         dataset_parameter=config["dataset"],
     )
 
-    model_trainer.potential_training_adapter.load_state_dict(torch.load(file_path))
+    trainer.potential_training_adapter.load_state_dict(torch.load(file_path))
 
 
 @pytest.mark.parametrize(
@@ -375,7 +375,7 @@ def test_dataset_statistic(potential_name, prep_temp_dir):
         dataset_statistic["training_dataset_statistics"]["per_atom_energy_mean"]
     ).m
 
-    model_trainer = NeuralNetworkPotentialFactory.generate_potential(
+    trainer = NeuralNetworkPotentialFactory.generate_potential(
         use="training",
         potential_parameter=potential_parameter,
         training_parameter=training_parameter,
@@ -386,7 +386,7 @@ def test_dataset_statistic(potential_name, prep_temp_dir):
     assert np.isclose(
         toml_E_i_mean,
         unit.Quantity(
-            model_trainer.dataset_statistic["training_dataset_statistics"][
+            trainer.dataset_statistic["training_dataset_statistics"][
                 "per_atom_energy_mean"
             ]
         ).m,
@@ -394,7 +394,7 @@ def test_dataset_statistic(potential_name, prep_temp_dir):
     # give this a unique filename based on potential and the test we are in so we can run test in parallel
     file_path = f"{str(prep_temp_dir)}/{potential_name.lower()}_tsd_potential.pth"
 
-    torch.save(model_trainer.potential_training_adapter.state_dict(), file_path)
+    torch.save(trainer.potential_training_adapter.state_dict(), file_path)
 
     # NOTE: we are passing dataset statistics explicit to the constructor
     # this is not saved with the state_dict
@@ -723,13 +723,13 @@ def test_calculate_energies_and_forces(
     nnp_input = batch.nnp_input_tuple
 
     # read default parameters
-    model_trainer = setup_potential_for_test(
+    trainer = setup_potential_for_test(
         potential_name,
         "training",
         potential_seed=42,
     )
     # get energy and force
-    E_training = model_trainer(nnp_input)["per_molecule_energy"]
+    E_training = trainer(nnp_input)["per_molecule_energy"]
     F_training = -torch.autograd.grad(
         E_training.sum(), nnp_input.positions, create_graph=True, retain_graph=True
     )[0]

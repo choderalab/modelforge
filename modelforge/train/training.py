@@ -1160,7 +1160,7 @@ def read_config_and_train(
     )
     from modelforge.potential.models import NeuralNetworkPotentialFactory
 
-    model_trainer = NeuralNetworkPotentialFactory.generate_potential(
+    trainer = NeuralNetworkPotentialFactory.generate_potential(
         use="training",
         potential_parameter=potential_parameter,
         training_parameter=training_parameter,
@@ -1168,4 +1168,4 @@ def read_config_and_train(
         runtime_parameter=runtime_parameter,
     )
 
-    return model_trainer.train_potential()
+    return trainer.train_potential()

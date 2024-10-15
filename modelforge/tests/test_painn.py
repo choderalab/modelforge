@@ -30,7 +30,7 @@ def setup_painn_model(potential_seed: int):
         dataset_parameter=config["dataset"],
         runtime_parameter=config["runtime"],
         potential_seed=potential_seed,
-    ).model.potential
+    ).potential_training_adapter.potential
     return trainer_painn
 
 

@@ -571,7 +571,7 @@ class NeuralNetworkPotentialFactory:
 
         # obtain model for training
         if use == "training":
-            model_trainer = ModelTrainer(
+            trainer = ModelTrainer(
                 potential_parameter=potential_parameter,
                 training_parameter=training_parameter,
                 dataset_parameter=dataset_parameter,
@@ -580,7 +580,7 @@ class NeuralNetworkPotentialFactory:
                 dataset_statistic=dataset_statistic,
                 use_default_dataset_statistic=use_default_dataset_statistic,
             )
-            return model_trainer
+            return trainer
         # obtain model for inference
         elif use == "inference":
             potential = setup_potential(

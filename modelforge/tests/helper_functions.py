@@ -46,9 +46,10 @@ def setup_potential_for_test(
     potential_seed: Optional[int] = None,
     simulation_environment="PyTorch",
     only_unique_pairs: bool = False,
+    local_cache_dir: Optional[str] = None,
 ):
     from modelforge.potential import NeuralNetworkPotentialFactory
-    from modelforge.tests.test_models import load_configs_into_pydantic_models
+    from modelforge.tests.test_potentials import load_configs_into_pydantic_models
 
     if simulation_environment == "JAX":
         assert use == "inference", "JAX only supports inference mode"
@@ -56,6 +57,9 @@ def setup_potential_for_test(
     # read default parameters
     config = load_configs_into_pydantic_models(potential_name, "qm9")
     # override defaults to match reference implementation in spk
+
+    if local_cache_dir is not None:
+        config["runtime"].local_cache_dir = local_cache_dir
 
     model = NeuralNetworkPotentialFactory.generate_potential(
         use=use,

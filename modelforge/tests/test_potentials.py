@@ -162,6 +162,7 @@ def test_JAX_wrapping(potential_name, single_batch_with_batchsize, prep_temp_dir
         potential_seed=42,
         potential_name=potential_name,
         simulation_environment="JAX",
+        local_cache_dir=str(prep_temp_dir),
     )
 
     nnp_input = batch.nnp_input.as_jax_namedtuple()
@@ -179,7 +180,7 @@ def test_JAX_wrapping(potential_name, single_batch_with_batchsize, prep_temp_dir
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
-def test_model_factory(potential_name):
+def test_model_factory(potential_name, prep_temp_dir):
     from modelforge.train.training import ModelTrainer
 
     # inference model
@@ -188,6 +189,7 @@ def test_model_factory(potential_name):
         potential_seed=42,
         potential_name=potential_name,
         simulation_environment="PyTorch",
+        local_cache_dir=str(prep_temp_dir),
     )
     assert (
         potential_name.upper() in str(type(potential.core_network)).upper()
@@ -200,6 +202,7 @@ def test_model_factory(potential_name):
         simulation_environment="PyTorch",
         jit=True,
         use_default_dataset_statistic=False,
+        local_cache_dir=str(prep_temp_dir),
     )
 
     # trainers model
@@ -208,6 +211,7 @@ def test_model_factory(potential_name):
         potential_seed=42,
         potential_name=potential_name,
         simulation_environment="PyTorch",
+        local_cache_dir=str(prep_temp_dir),
     )
     assert (
         potential_name.upper() in str(type(trainer.core_network)).upper()
@@ -221,7 +225,7 @@ def test_model_factory(potential_name):
 def test_energy_scaling_and_offset(
     potential_name, single_batch_with_batchsize, prep_temp_dir
 ):
-    from modelforge.potential.models import NeuralNetworkPotentialFactory
+    from modelforge.potential.potential import NeuralNetworkPotentialFactory
 
     # read default parameters
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
@@ -438,6 +442,7 @@ def test_energy_between_simulation_environments(
         potential_seed=42,
         potential_name=potential_name,
         simulation_environment="PyTorch",
+        local_cache_dir=str(prep_temp_dir),
     )
     output_torch = potential(nnp_input)["per_molecule_energy"]
 
@@ -446,6 +451,7 @@ def test_energy_between_simulation_environments(
         potential_seed=42,
         potential_name=potential_name,
         simulation_environment="JAX",
+        local_cache_dir=str(prep_temp_dir),
     )
     nnp_input = batch.nnp_input.as_jax_namedtuple()
     output_jax = potential(nnp_input)["per_molecule_energy"]
@@ -465,7 +471,7 @@ def test_forward_pass_with_all_datasets(
     import toml
     import torch
 
-    from modelforge.potential.models import NeuralNetworkPotentialFactory
+    from modelforge.potential.potential import NeuralNetworkPotentialFactory
 
     # -------------------------------#
     # setup dataset
@@ -548,6 +554,7 @@ def test_chemical_equivalency(
         potential_name,
         mode,
         potential_seed=42,
+        local_cache_dir=str(prep_temp_dir),
     )
 
     output = potential(nnp_input)
@@ -571,6 +578,7 @@ def test_different_neighborlists_for_inference(
         "inference",
         potential_seed=42,
         use_training_mode_neighborlist=True,
+        local_cache_dir=str(prep_temp_dir),
     )
 
     output_1 = potential(nnp_input)
@@ -580,6 +588,7 @@ def test_different_neighborlists_for_inference(
         "inference",
         potential_seed=42,
         use_training_mode_neighborlist=False,
+        local_cache_dir=str(prep_temp_dir),
     )
 
     output_2 = potential(nnp_input)
@@ -673,6 +682,7 @@ def test_forward_pass(
         potential_seed=42,
         use_training_mode_neighborlist=True,
         simulation_environment=simulation_environment,
+        local_cache_dir=str(prep_temp_dir),
     )
     nnp_input = prepare_input_for_model(nnp_input, potential)
 
@@ -727,6 +737,7 @@ def test_calculate_energies_and_forces(
         potential_name,
         "training",
         potential_seed=42,
+        local_cache_dir=str(prep_temp_dir),
     )
     # get energy and force
     E_training = trainer(nnp_input)["per_molecule_energy"]
@@ -741,6 +752,7 @@ def test_calculate_energies_and_forces(
         potential_seed=42,
         use_training_mode_neighborlist=True,
         jit=False,
+        local_cache_dir=str(prep_temp_dir),
     )
 
     # get energy and force
@@ -781,6 +793,7 @@ def test_calculate_energies_and_forces(
         potential_seed=42,
         use_training_mode_neighborlist=False,
         jit=True,
+        local_cache_dir=str(prep_temp_dir),
     )
 
     # get energy and force
@@ -831,6 +844,7 @@ def test_calculate_energies_and_forces_with_jax(
         use_training_mode_neighborlist=False,
         jit=False,
         simulation_environment="JAX",
+        local_cache_dir=str(prep_temp_dir),
     )
 
     result = potential(nnp_input)["per_molecule_energy"]
@@ -922,6 +936,7 @@ def test_equivariant_energies_and_forces(
         potential_seed=42,
         potential_name=potential_name,
         simulation_environment=simulation_environment,
+        local_cache_dir=str(prep_temp_dir),
     ).to(dtype=precision)
 
     # define the symmetry operations

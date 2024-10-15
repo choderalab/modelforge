@@ -56,7 +56,7 @@ class JAXModel:
     """
 
     def __init__(
-            self, jax_fn: Callable, parameter: np.ndarray, buffer: np.ndarray, name: str
+        self, jax_fn: Callable, parameter: np.ndarray, buffer: np.ndarray, name: str
     ):
         self.jax_fn = jax_fn
         self.parameter = parameter
@@ -101,9 +101,9 @@ class PostProcessing(torch.nn.Module):
     ]
 
     def __init__(
-            self,
-            postprocessing_parameter: Dict[str, Dict[str, bool]],
-            dataset_statistic: Dict[str, Dict[str, float]],
+        self,
+        postprocessing_parameter: Dict[str, Dict[str, bool]],
+        dataset_statistic: Dict[str, Dict[str, float]],
     ):
         """
         Handle post-processing operations on model outputs, such as
@@ -148,10 +148,10 @@ class PostProcessing(torch.nn.Module):
 
         if "electrostatic_potential" in properties_to_process:
             if (
-                    postprocessing_parameter["electrostatic_potential"][
-                        "electrostatic_strategy"
-                    ]
-                    == "coulomb"
+                postprocessing_parameter["electrostatic_potential"][
+                    "electrostatic_strategy"
+                ]
+                == "coulomb"
             ):
 
                 self.registered_chained_operations["electrostatic_potential"] = (
@@ -196,12 +196,12 @@ class PostProcessing(torch.nn.Module):
 
 class Potential(torch.nn.Module):
     def __init__(
-            self,
-            core_network,
-            neighborlist,
-            postprocessing,
-            jit: bool = False,
-            jit_neighborlist: bool = True,
+        self,
+        core_network,
+        neighborlist,
+        postprocessing,
+        jit: bool = False,
+        jit_neighborlist: bool = True,
     ):
         """
         Neural network potential model composed of a core network, neighborlist,
@@ -234,7 +234,7 @@ class Potential(torch.nn.Module):
         )
 
     def _add_total_charge(
-            self, core_output: Dict[str, torch.Tensor], input_data: NNPInputTuple
+        self, core_output: Dict[str, torch.Tensor], input_data: NNPInputTuple
     ):
         """
         Add the total charge to the core output.
@@ -256,7 +256,7 @@ class Potential(torch.nn.Module):
         return core_output
 
     def _add_pairlist(
-            self, core_output: Dict[str, torch.Tensor], pairlist_output: PairlistData
+        self, core_output: Dict[str, torch.Tensor], pairlist_output: PairlistData
     ):
         """
         Add the pairlist to the core output.
@@ -328,7 +328,7 @@ class Potential(torch.nn.Module):
         return processed_output
 
     def compute_core_network_output(
-            self, input_data: NNPInputTuple
+        self, input_data: NNPInputTuple
     ) -> Dict[str, torch.Tensor]:
         """
         Compute the core network output, including energy predictions.
@@ -350,10 +350,10 @@ class Potential(torch.nn.Module):
         return self.core_network.forward(input_data, pairlist_output)
 
     def load_state_dict(
-            self,
-            state_dict: Mapping[str, Any],
-            strict: bool = True,
-            assign: bool = False,
+        self,
+        state_dict: Mapping[str, Any],
+        strict: bool = True,
+        assign: bool = False,
     ):
         """
         Load the state dictionary into the infenerence or training model. Note
@@ -391,7 +391,7 @@ class Potential(torch.nn.Module):
         # Create a new dictionary without the prefix in the keys if prefix exists
         if any(key.startswith(prefix) for key in state_dict.keys()):
             filtered_state_dict = {
-                key[len(prefix):] if key.startswith(prefix) else key: value
+                key[len(prefix) :] if key.startswith(prefix) else key: value
                 for key, value in state_dict.items()
                 if key not in excluded_keys
             }
@@ -413,26 +413,31 @@ class Potential(torch.nn.Module):
 
 
 def setup_potential(
-        potential_parameter: T_NNP_Parameters,
-        dataset_statistic: Dict[str, Dict[str, unit.Quantity]] = None,
-        use_training_mode_neighborlist: bool = False,
-        potential_seed: Optional[int] = None,
-        jit: bool = True,
-        only_unique_pairs: bool = False,
-        neighborlist_strategy: Optional[str] = None,
-        verlet_neighborlist_skin: Optional[float] = 0.08,
+    potential_parameter: T_NNP_Parameters,
+    dataset_statistic: Dict[str, Dict[str, unit.Quantity]] = None,
+    use_training_mode_neighborlist: bool = False,
+    potential_seed: Optional[int] = None,
+    jit: bool = True,
+    only_unique_pairs: bool = False,
+    neighborlist_strategy: Optional[str] = None,
+    verlet_neighborlist_skin: Optional[float] = 0.08,
 ) -> Potential:
     from modelforge.potential import _Implemented_NNPs
     from modelforge.potential.utils import remove_units_from_dataset_statistics
     from modelforge.utils.misc import seed_random_number
 
-    if not dataset_statistic:   # set default value when value not passed
-        dataset_statistic = {
+    if not dataset_statistic:  # set default value when value not passed
+        dataset_statistic = dict(
+            {
                 "training_dataset_statistics": {
                     "per_atom_energy_mean": unit.Quantity(0.0, unit.kilojoule_per_mole),
-                    "per_atom_energy_stddev": unit.Quantity(1.0, unit.kilojoule_per_mole),
-            }
-        },
+                    "per_atom_energy_stddev": unit.Quantity(
+                        1.0, unit.kilojoule_per_mole
+                    ),
+                }
+            },
+        )
+
     if potential_seed is not None:
         log.info(f"Setting random seed to: {potential_seed}")
         seed_random_number(potential_seed)
@@ -500,21 +505,21 @@ class NeuralNetworkPotentialFactory:
 
     @staticmethod
     def generate_potential(
-            *,
-            use: Literal["training", "inference"],
-            potential_parameter: T_NNP_Parameters,
-            runtime_parameter: Optional[RuntimeParameters] = None,
-            training_parameter: Optional[TrainingParameters] = None,
-            dataset_parameter: Optional[DatasetParameters] = None,
-            dataset_statistic: Dict[str, Dict[str, float]] = None,
-            potential_seed: Optional[int] = None,
-            use_default_dataset_statistic: bool = False,
-            use_training_mode_neighborlist: bool = False,
-            simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
-            only_unique_pairs: bool = False,
-            jit: bool = True,
-            inference_neighborlist_strategy: str = "verlet",
-            verlet_neighborlist_skin: Optional[float] = 0.1,
+        *,
+        use: Literal["training", "inference"],
+        potential_parameter: T_NNP_Parameters,
+        runtime_parameter: Optional[RuntimeParameters] = None,
+        training_parameter: Optional[TrainingParameters] = None,
+        dataset_parameter: Optional[DatasetParameters] = None,
+        dataset_statistic: Dict[str, Dict[str, float]] = None,
+        potential_seed: Optional[int] = None,
+        use_default_dataset_statistic: bool = False,
+        use_training_mode_neighborlist: bool = False,
+        simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
+        only_unique_pairs: bool = False,
+        jit: bool = True,
+        inference_neighborlist_strategy: str = "verlet",
+        verlet_neighborlist_skin: Optional[float] = 0.1,
     ) -> Union[Potential, JAXModel, pl.LightningModule, ModelTrainer]:
         """
         Create an instance of a neural network potential for training or
@@ -560,7 +565,7 @@ class NeuralNetworkPotentialFactory:
 
         log.debug(f"{training_parameter=}")
         log.debug(f"{potential_parameter=}")
-        log.debug(f"{dataset_parameter=}")l
+        log.debug(f"{dataset_parameter=}")
 
         # obtain model for training
         if use == "training":
@@ -604,8 +609,8 @@ class PyTorch2JAXConverter:
     """
 
     def convert_to_jax_model(
-            self,
-            nnp_instance: Potential,
+        self,
+        nnp_instance: Potential,
     ) -> JAXModel:
         """
         Convert a PyTorch neural network instance to a JAX model.
@@ -626,7 +631,7 @@ class PyTorch2JAXConverter:
 
     @staticmethod
     def _convert_pytnn_to_jax(
-            nnp_instance: Potential,
+        nnp_instance: Potential,
     ) -> Tuple[Callable, np.ndarray, np.ndarray]:
         """Internal method to convert PyTorch neural network parameters and buffers to JAX format.
 

@@ -88,10 +88,10 @@ class CalculateProperties(torch.nn.Module):
         ), f"Unsupported property requested: {self.requested_properties}"
 
     def _get_forces(
-            self,
-            batch: BatchData,
-            model_prediction: Dict[str, torch.Tensor],
-            train_mode: bool,
+        self,
+        batch: BatchData,
+        model_prediction: Dict[str, torch.Tensor],
+        train_mode: bool,
     ) -> Dict[str, torch.Tensor]:
         """
         Computes the forces from a given batch using the model.
@@ -141,9 +141,9 @@ class CalculateProperties(torch.nn.Module):
         }
 
     def _get_energies(
-            self,
-            batch: BatchData,
-            model_prediction: Dict[str, torch.Tensor],
+        self,
+        batch: BatchData,
+        model_prediction: Dict[str, torch.Tensor],
     ) -> Dict[str, torch.Tensor]:
         """
         Computes the energies from a given batch using the model.
@@ -175,9 +175,9 @@ class CalculateProperties(torch.nn.Module):
         }
 
     def _get_charges(
-            self,
-            batch: BatchData,
-            model_prediction: Dict[str, torch.Tensor],
+        self,
+        batch: BatchData,
+        model_prediction: Dict[str, torch.Tensor],
     ) -> Dict[str, torch.Tensor]:
         """
         Compute total molecular charges and dipole moments from the predicted atomic charges.
@@ -221,7 +221,7 @@ class CalculateProperties(torch.nn.Module):
         }
 
     def _predict_dipole_moment(
-            self, model_predictions: Dict[str, torch.Tensor], batch: BatchData
+        self, model_predictions: Dict[str, torch.Tensor], batch: BatchData
     ) -> torch.Tensor:
         """
         Compute the predicted dipole moment for each molecule based on the
@@ -267,10 +267,10 @@ class CalculateProperties(torch.nn.Module):
         return dipole_predict
 
     def forward(
-            self,
-            batch: BatchData,
-            model: torch.nn.Module,
-            train_mode: bool = False,
+        self,
+        batch: BatchData,
+        model: torch.nn.Module,
+        train_mode: bool = False,
     ) -> Dict[str, torch.Tensor]:
         """
         Computes energies, forces, and charges from a given batch using the
@@ -319,12 +319,12 @@ class TrainingAdapter(pL.LightningModule):
     """
 
     def __init__(
-            self,
-            *,
-            potential_parameter: T_NNP_Parameters,
-            dataset_statistic: Dict[str, Dict[str, unit.Quantity]],
-            training_parameter: TrainingParameters,
-            potential_seed: Optional[int] = None,
+        self,
+        *,
+        potential_parameter: T_NNP_Parameters,
+        dataset_statistic: Dict[str, Dict[str, unit.Quantity]],
+        training_parameter: TrainingParameters,
+        potential_seed: Optional[int] = None,
     ):
         """
         Initialize the TrainingAdapter with model and training configuration.
@@ -340,7 +340,7 @@ class TrainingAdapter(pL.LightningModule):
         potential_seed : Optional[int], optional
             Seed for initializing the model (default is None).
         """
-        from modelforge.potential.models import setup_potential
+        from modelforge.potential.potential import setup_potential
 
         super().__init__()
         self.save_hyperparameters()
@@ -355,7 +355,7 @@ class TrainingAdapter(pL.LightningModule):
         )
 
         self.include_force = (
-                "per_atom_force" in training_parameter.loss_parameter.loss_property
+            "per_atom_force" in training_parameter.loss_parameter.loss_property
         )
 
         self.calculate_predictions = CalculateProperties(
@@ -421,9 +421,9 @@ class TrainingAdapter(pL.LightningModule):
         raise NotImplementedError()
 
     def _update_metrics(
-            self,
-            metrics: ModuleDict,
-            predict_target: Dict[str, torch.Tensor],
+        self,
+        metrics: ModuleDict,
+        predict_target: Dict[str, torch.Tensor],
     ):
         """
         Updates the provided metric collections with the predicted and true
@@ -446,9 +446,9 @@ class TrainingAdapter(pL.LightningModule):
             metric_collection.update(preds, targets)
 
     def training_step(
-            self,
-            batch: BatchData,
-            batch_idx: int,
+        self,
+        batch: BatchData,
+        batch_idx: int,
     ) -> torch.Tensor:
         """
         Training step to compute the MSE loss for a given batch.
@@ -609,17 +609,17 @@ class ModelTrainer:
     """
 
     def __init__(
-            self,
-            *,
-            dataset_parameter: DatasetParameters,
-            potential_parameter: T_NNP_Parameters,
-            training_parameter: TrainingParameters,
-            runtime_parameter: RuntimeParameters,
-            dataset_statistic: Dict[str, Dict[str, unit.Quantity]],
-            use_default_dataset_statistic: bool,
-            optimizer_class: Type[Optimizer] = torch.optim.AdamW,
-            potential_seed: Optional[int] = None,
-            verbose: bool = False,
+        self,
+        *,
+        dataset_parameter: DatasetParameters,
+        potential_parameter: T_NNP_Parameters,
+        training_parameter: TrainingParameters,
+        runtime_parameter: RuntimeParameters,
+        dataset_statistic: Dict[str, Dict[str, unit.Quantity]],
+        use_default_dataset_statistic: bool,
+        optimizer_class: Type[Optimizer] = torch.optim.AdamW,
+        potential_seed: Optional[int] = None,
+        verbose: bool = False,
     ):
         """
         Initializes the TrainingAdapter with the specified model and training configuration.
@@ -663,7 +663,9 @@ class ModelTrainer:
             else dataset_statistic
         )
         self.experiment_logger = self.setup_logger()
-        self.potential_training_adapter = self.setup_potential_training_adapter(potential_seed)
+        self.potential_training_adapter = self.setup_potential_training_adapter(
+            potential_seed
+        )
         self.callbacks = self.setup_callbacks()
         self.trainer = self.setup_trainer()
         self.optimizer_class = optimizer_class
@@ -671,7 +673,7 @@ class ModelTrainer:
         self.lr_scheduler = self.training_parameter.lr_scheduler
 
     def read_dataset_statistics(
-            self,
+        self,
     ) -> Dict[str, float]:
         """
         Read and log dataset statistics.
@@ -735,7 +737,7 @@ class ModelTrainer:
         return dm
 
     def setup_potential_training_adapter(
-            self, potential_seed: Optional[int] = None
+        self, potential_seed: Optional[int] = None
     ) -> pL.LightningModule:
         """
         Set up the model for training.
@@ -837,8 +839,8 @@ class ModelTrainer:
             )
 
         checkpoint_filename = (
-                f"best_{self.potential_parameter.potential_name}-{self.dataset_parameter.dataset_name}"
-                + "-{epoch:02d}-{val_loss:.2f}"
+            f"best_{self.potential_parameter.potential_name}-{self.dataset_parameter.dataset_name}"
+            + "-{epoch:02d}-{val_loss:.2f}"
         )
         callbacks.append(
             ModelCheckpoint(
@@ -862,8 +864,8 @@ class ModelTrainer:
 
         # if devices is a list
         if isinstance(self.runtime_parameter.devices, list) or (
-                isinstance(self.runtime_parameter.devices, int)
-                and self.runtime_parameter.devices > 1
+            isinstance(self.runtime_parameter.devices, int)
+            and self.runtime_parameter.devices > 1
         ):
             from lightning.pytorch.strategies import DDPStrategy
 
@@ -980,20 +982,20 @@ from typing import List, Optional, Union
 
 
 def read_config(
-        condensed_config_path: Optional[str] = None,
-        training_parameter_path: Optional[str] = None,
-        dataset_parameter_path: Optional[str] = None,
-        potential_parameter_path: Optional[str] = None,
-        runtime_parameter_path: Optional[str] = None,
-        accelerator: Optional[str] = None,
-        devices: Optional[Union[int, List[int]]] = None,
-        number_of_nodes: Optional[int] = None,
-        experiment_name: Optional[str] = None,
-        save_dir: Optional[str] = None,
-        local_cache_dir: Optional[str] = None,
-        checkpoint_path: Optional[str] = None,
-        log_every_n_steps: Optional[int] = None,
-        simulation_environment: Optional[str] = None,
+    condensed_config_path: Optional[str] = None,
+    training_parameter_path: Optional[str] = None,
+    dataset_parameter_path: Optional[str] = None,
+    potential_parameter_path: Optional[str] = None,
+    runtime_parameter_path: Optional[str] = None,
+    accelerator: Optional[str] = None,
+    devices: Optional[Union[int, List[int]]] = None,
+    number_of_nodes: Optional[int] = None,
+    experiment_name: Optional[str] = None,
+    save_dir: Optional[str] = None,
+    local_cache_dir: Optional[str] = None,
+    checkpoint_path: Optional[str] = None,
+    log_every_n_steps: Optional[int] = None,
+    simulation_environment: Optional[str] = None,
 ):
     """
     Reads one or more TOML configuration files and loads them into the pydantic models.
@@ -1079,20 +1081,20 @@ def read_config(
 
 
 def read_config_and_train(
-        condensed_config_path: Optional[str] = None,
-        training_parameter_path: Optional[str] = None,
-        dataset_parameter_path: Optional[str] = None,
-        potential_parameter_path: Optional[str] = None,
-        runtime_parameter_path: Optional[str] = None,
-        accelerator: Optional[str] = None,
-        devices: Optional[Union[int, List[int]]] = None,
-        number_of_nodes: Optional[int] = None,
-        experiment_name: Optional[str] = None,
-        save_dir: Optional[str] = None,
-        local_cache_dir: Optional[str] = None,
-        checkpoint_path: Optional[str] = None,
-        log_every_n_steps: Optional[int] = None,
-        simulation_environment: Optional[str] = "PyTorch",
+    condensed_config_path: Optional[str] = None,
+    training_parameter_path: Optional[str] = None,
+    dataset_parameter_path: Optional[str] = None,
+    potential_parameter_path: Optional[str] = None,
+    runtime_parameter_path: Optional[str] = None,
+    accelerator: Optional[str] = None,
+    devices: Optional[Union[int, List[int]]] = None,
+    number_of_nodes: Optional[int] = None,
+    experiment_name: Optional[str] = None,
+    save_dir: Optional[str] = None,
+    local_cache_dir: Optional[str] = None,
+    checkpoint_path: Optional[str] = None,
+    log_every_n_steps: Optional[int] = None,
+    simulation_environment: Optional[str] = "PyTorch",
 ):
     """
     Reads one or more TOML configuration files and performs training based on the parameters.
@@ -1156,7 +1158,7 @@ def read_config_and_train(
         log_every_n_steps=log_every_n_steps,
         simulation_environment=simulation_environment,
     )
-    from modelforge.potential.models import NeuralNetworkPotentialFactory
+    from modelforge.potential.potential import NeuralNetworkPotentialFactory
 
     trainer = NeuralNetworkPotentialFactory.generate_potential(
         use="training",

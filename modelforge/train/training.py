@@ -476,10 +476,14 @@ class TrainingAdapter(pL.LightningModule):
         # Update loss metrics with per-sample losses
         batch_size = batch.batch_size()
         for key, metric in loss_dict.items():
+            if key == "normalized_total_loss":
+                continue
             self.loss_metrics[key].update(metric.detach(), batch_size=batch_size)
 
         # Compute the mean loss for optimization
         mean_total_loss = loss_dict["total_loss"].mean()
+        if "normalized_total_loss" in loss_dict:
+            return loss_dict["normalized_total_loss"]
         return mean_total_loss
 
     def on_after_backward(self):

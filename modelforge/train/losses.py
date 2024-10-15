@@ -325,14 +325,16 @@ class Loss(nn.Module):
         for prop in loss_property:
             if prop not in self._SUPPORTED_PROPERTIES:
                 raise NotImplementedError(f"Loss type {prop} not implemented.")
+
             log.info(f"Using loss function for {prop}")
+
             if prop == "per_atom_force":
                 log.info(f"Creating per atom force loss with weight: {weights[prop]}")
                 self.loss_functions[prop] = ForceSquaredError(
                     scale_by_number_of_atoms=True
                 )
             elif prop == "per_atom_energy":
-                log.info("Creating per atom energy loss with weight: {weights[prop]}")
+                log.info(f"Creating per atom energy loss with weight: {weights[prop]}")
 
                 self.loss_functions[prop] = EnergySquaredError(
                     scale_by_number_of_atoms=True
@@ -384,6 +386,8 @@ class Loss(nn.Module):
         # Accumulate loss
         total_loss = torch.zeros_like(batch.metadata.E)
 
+        normalized_loss = torch.tensor(0.0, device=batch.metadata.E.device)
+
         # Iterate over loss properties
         for prop in self.loss_property:
             loss_fn = self.loss_functions[prop]
@@ -403,10 +407,14 @@ class Loss(nn.Module):
             weighted_loss = self.weights[prop] * prop_loss
 
             total_loss += weighted_loss  # Note: total_loss is still per-sample
+            normalized_loss += self.weights[prop] * (
+                prop_loss.mean() / prop_loss.detach().mean()
+            )
             loss_dict[prop] = prop_loss  # Store per-sample loss
 
         # Add total loss to results dict and return
         loss_dict["total_loss"] = total_loss
+        loss_dict["normalized_total_loss"] = normalized_loss
 
         return loss_dict
 

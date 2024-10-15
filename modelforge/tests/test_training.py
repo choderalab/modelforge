@@ -87,7 +87,7 @@ def get_trainer(config):
 def add_force_to_loss_parameter(config):
     """
     [training.loss_parameter]
-    loss_property = ['per_molecule_energy', 'per_atom_force']
+    loss_components = ['per_molecule_energy', 'per_atom_force']
     # ------------------------------------------------------------ #
     [training.loss_parameter.weight]
     per_molecule_energy = 0.999 #NOTE: reciprocal units
@@ -95,14 +95,14 @@ def add_force_to_loss_parameter(config):
 
     """
     t_config = config["training"]
-    t_config.loss_parameter.loss_property.append("per_atom_force")
+    t_config.loss_parameter.loss_components.append("per_atom_force")
     t_config.loss_parameter.weight["per_atom_force"] = 0.001
 
 
 def add_dipole_moment_to_loss_parameter(config):
     """
     [training.loss_parameter]
-    loss_property = [
+    loss_components = [
         "per_molecule_energy",
         "per_atom_force",
         "per_molecule_dipole_moment",
@@ -116,8 +116,8 @@ def add_dipole_moment_to_loss_parameter(config):
 
     """
     t_config = config["training"]
-    t_config.loss_parameter.loss_property.append("per_molecule_dipole_moment")
-    t_config.loss_parameter.loss_property.append("per_molecule_total_charge")
+    t_config.loss_parameter.loss_components.append("per_molecule_dipole_moment")
+    t_config.loss_parameter.loss_components.append("per_molecule_total_charge")
     t_config.loss_parameter.weight["per_molecule_dipole_moment"] = 0.01
     t_config.loss_parameter.weight["per_molecule_total_charge"] = 0.01
 
@@ -130,8 +130,8 @@ def add_dipole_moment_to_loss_parameter(config):
 
 def replace_per_molecule_with_per_atom_loss(config):
     t_config = config["training"]
-    t_config.loss_parameter.loss_property.remove("per_molecule_energy")
-    t_config.loss_parameter.loss_property.append("per_atom_energy")
+    t_config.loss_parameter.loss_components.remove("per_molecule_energy")
+    t_config.loss_parameter.loss_components.append("per_atom_energy")
 
     t_config.loss_parameter.weight.pop("per_molecule_energy")
     t_config.loss_parameter.weight["per_atom_energy"] = 0.999

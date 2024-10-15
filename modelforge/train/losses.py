@@ -299,16 +299,23 @@ class Loss(nn.Module):
         "per_molecule_dipole_moment",
     ]
 
-    def __init__(self, loss_property: List[str], weights: Dict[str, float]):
+    def __init__(
+        self,
+        loss_components: List[str],
+        weights: Dict[str, float],
+        normalize: bool = False,
+    ):
         """
         Calculates the combined loss for energy and force predictions.
 
         Parameters
         ----------
-        loss_property : List[str]
+        loss_components : List[str]
             List of properties to include in the loss calculation.
         weights : Dict[str, float]
             Dictionary containing the weights for each property in the loss calculation.
+        normalize : bool, optional
+            if True, normalize each loss component to 1, by default False.
 
         Raises
         ------
@@ -318,11 +325,12 @@ class Loss(nn.Module):
         super().__init__()
         from torch.nn import ModuleDict
 
-        self.loss_property = loss_property
+        self.loss_components = loss_components
         self.weights = weights
+        self.normalize = normalize
         self.loss_functions = ModuleDict()
 
-        for prop in loss_property:
+        for prop in loss_components:
             if prop not in self._SUPPORTED_PROPERTIES:
                 raise NotImplementedError(f"Loss type {prop} not implemented.")
 
@@ -386,10 +394,11 @@ class Loss(nn.Module):
         # Accumulate loss
         total_loss = torch.zeros_like(batch.metadata.E)
 
-        normalized_loss = torch.tensor(0.0, device=batch.metadata.E.device)
+        if self.normalize:
+            normalized_loss = torch.tensor(0.0, device=batch.metadata.E.device)
 
         # Iterate over loss properties
-        for prop in self.loss_property:
+        for prop in self.loss_components:
             loss_fn = self.loss_functions[prop]
 
             prop_ = _exchange_per_atom_energy_for_per_molecule_energy(prop)
@@ -407,14 +416,16 @@ class Loss(nn.Module):
             weighted_loss = self.weights[prop] * prop_loss
 
             total_loss += weighted_loss  # Note: total_loss is still per-sample
-            normalized_loss += self.weights[prop] * (
-                prop_loss.mean() / prop_loss.detach().mean()
-            )
-            loss_dict[prop] = prop_loss  # Store per-sample loss
+            if self.normalize:
+                normalized_loss += self.weights[prop] * (
+                    prop_loss.mean() / prop_loss.detach().mean()
+                )
+                loss_dict[prop] = prop_loss  # Store per-sample loss
 
         # Add total loss to results dict and return
         loss_dict["total_loss"] = total_loss
-        loss_dict["normalized_total_loss"] = normalized_loss
+        if self.normalize:
+            loss_dict["normalized_total_loss"] = normalized_loss
 
         return loss_dict
 
@@ -425,23 +436,33 @@ class LossFactory:
     """
 
     @staticmethod
-    def create_loss(loss_property: List[str], weight: Dict[str, float]) -> Loss:
+    def create_loss(
+        loss_components: List[str],
+        weight: Dict[str, float],
+        normalize: bool,
+    ) -> Loss:
         """
         Creates an instance of the specified loss type.
 
         Parameters
         ----------
-        loss_property : List[str]
+        loss_components : List[str]
             List of properties to include in the loss calculation.
         weight : Dict[str, float]
             Dictionary containing the weights for each property in the loss calculation.
+        normalize: bool
+            If True, normalize each loss component to 1.
 
         Returns
         -------
         Loss
             An instance of the specified loss function.
         """
-        return Loss(loss_property, weight)
+        return Loss(
+            loss_components,
+            weight,
+            normalize,
+        )
 
 
 from torch.nn import ModuleDict

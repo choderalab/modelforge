@@ -713,7 +713,7 @@ def test_vis(potential_name, single_batch_with_batchsize, prep_temp_dir):
     nnp_input = batch.nnp_input_tuple
     from modelforge.utils.vis import visualize_model
 
-    visualize_model(nnp_input, potential_name)
+    visualize_model(nnp_input, potential_name, str(prep_temp_dir))
 
 
 @pytest.mark.parametrize(

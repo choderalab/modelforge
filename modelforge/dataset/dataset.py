@@ -3,8 +3,7 @@ This module contains classes and functions for managing datasets.
 """
 
 import os
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, List, Literal, NamedTuple, Optional, Union
+from typing import TYPE_CHECKING, Dict, List, NamedTuple, Optional, Union
 
 import numpy as np
 import pytorch_lightning as pl
@@ -114,7 +113,7 @@ class Metadata:
     )
 
     def to(
-        self, device: Optional[torch.device] = None, dtype: Optional[torch.dtype] = None
+            self, device: Optional[torch.device] = None, dtype: Optional[torch.dtype] = None
     ):
         """Move all tensors in this instance to the specified device."""
         if device:
@@ -189,10 +188,10 @@ class NNPInput:
     is_periodic: Optional[torch.Tensor] = torch.Tensor([False])
 
     def to(
-        self,
-        *,
-        device: Optional[torch.device] = None,
-        dtype: Optional[torch.dtype] = None,
+            self,
+            *,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
     ):
         """Move all tensors in this instance to the specified device/dtype."""
 
@@ -269,7 +268,7 @@ class NNPInput:
         Convert pytorch tensors to jax arrays."""
 
         import collections
-        from dataclasses import dataclass, fields
+        from dataclasses import fields
 
         from modelforge.utils.io import import_
 
@@ -289,9 +288,9 @@ class BatchData:
     metadata: Metadata
 
     def to(
-        self,
-        device: Optional[torch.device] = None,
-        dtype: Optional[torch.dtype] = None,
+            self,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
     ):
         """Move all data in this batch to the specified device and dtype."""
         self.nnp_input = self.nnp_input.to(device=device, dtype=dtype)
@@ -317,10 +316,10 @@ class BatchData:
 
 class TorchDataset(torch.utils.data.Dataset[BatchData]):
     def __init__(
-        self,
-        dataset: np.lib.npyio.NpzFile,
-        property_name: PropertyNames,
-        preloaded: bool = False,
+            self,
+            dataset: np.lib.npyio.NpzFile,
+            property_name: PropertyNames,
+            preloaded: bool = False,
     ):
         """
         Wraps a numpy dataset to make it compatible with PyTorch DataLoader.
@@ -359,7 +358,7 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
             single_atom_start_idxs_by_rec[: self.number_of_records], dataset["n_confs"]
         )
         self.single_atom_end_idxs_by_conf = np.repeat(
-            single_atom_start_idxs_by_rec[1 : self.number_of_records + 1],
+            single_atom_start_idxs_by_rec[1: self.number_of_records + 1],
             dataset["n_confs"],
         )
 
@@ -373,7 +372,7 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
         )
 
     def _load_properties(
-        self, dataset: np.lib.npyio.NpzFile, property_name: PropertyNames
+            self, dataset: np.lib.npyio.NpzFile, property_name: PropertyNames
     ) -> Dict[str, torch.Tensor]:
         """Load properties from the dataset."""
         properties = {
@@ -391,7 +390,7 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
             .to(torch.int32)
             .unsqueeze(-1)
             if property_name.total_charge is not None
-            and False  # FIXME: as soon as I figured out how to make this to a per data point property
+               and False  # FIXME: as soon as I figured out how to make this to a per data point property
             else torch.zeros((dataset[property_name.E].shape[0], 1), dtype=torch.int32)
         )
 
@@ -466,10 +465,10 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
             ]
             pair_list_indices_end = self.properties_of_interest["number_of_pairs"][
                 idx + 1
-            ]
+                ]
             pair_list = self.properties_of_interest["pair_list"][
-                :, pair_list_indices_start:pair_list_indices_end
-            ]
+                        :, pair_list_indices_start:pair_list_indices_end
+                        ]
         return pair_list
 
     def __getitem__(self, idx: int) -> BatchData:
@@ -480,13 +479,13 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
         single_atom_end_idx = self.single_atom_end_idxs_by_conf[idx]
 
         atomic_numbers = self.properties_of_interest["atomic_numbers"][
-            single_atom_start_idx:single_atom_end_idx
-        ]
+                         single_atom_start_idx:single_atom_end_idx
+                         ]
 
         # get properties (Note that default properties are set in l279)
         positions = self.properties_of_interest["positions"][
-            series_atom_start_idx:series_atom_end_idx
-        ]
+                    series_atom_start_idx:series_atom_end_idx
+                    ]
         E = self.properties_of_interest["E"][idx]
         F = self.properties_of_interest["F"][series_atom_start_idx:series_atom_end_idx]
         total_charge = self.properties_of_interest["total_charge"][idx]
@@ -527,14 +526,14 @@ class HDF5Dataset:
     """
 
     def __init__(
-        self,
-        url: str,
-        gz_data_file: Dict[str, str],
-        hdf5_data_file: Dict[str, str],
-        processed_data_file: Dict[str, str],
-        local_cache_dir: str,
-        force_download: bool = False,
-        regenerate_cache: bool = False,
+            self,
+            url: str,
+            gz_data_file: Dict[str, str],
+            hdf5_data_file: Dict[str, str],
+            processed_data_file: Dict[str, str],
+            local_cache_dir: str,
+            force_download: bool = False,
+            regenerate_cache: bool = False,
     ):
         """
         Initializes the HDF5Dataset with paths to raw and processed data files.
@@ -581,7 +580,7 @@ class HDF5Dataset:
         import shutil
 
         with gzip.open(
-            f"{self.local_cache_dir}/{self.gz_data_file['name']}", "rb"
+                f"{self.local_cache_dir}/{self.gz_data_file['name']}", "rb"
         ) as gz_file:
             from modelforge.utils.misc import OpenWithLock
 
@@ -590,10 +589,10 @@ class HDF5Dataset:
             # The use of a lockfile is necessary because h5py will exit immediately if it tries to open a file that is
             # locked by another process.
             with OpenWithLock(
-                f"{self.local_cache_dir}/{self.hdf5_data_file['name']}.lockfile", "w"
+                    f"{self.local_cache_dir}/{self.hdf5_data_file['name']}.lockfile", "w"
             ) as lock_file:
                 with open(
-                    f"{self.local_cache_dir}/{self.hdf5_data_file['name']}", "wb"
+                        f"{self.local_cache_dir}/{self.hdf5_data_file['name']}", "wb"
                 ) as out_file:
                     shutil.copyfileobj(gz_file, out_file)
 
@@ -656,7 +655,7 @@ class HDF5Dataset:
                     self._npz_metadata = json.load(f)
 
                     if not self._check_lists(
-                        self._npz_metadata["data_keys"], self.properties_of_interest
+                            self._npz_metadata["data_keys"], self.properties_of_interest
                     ):
                         log.warning(
                             f"Data keys used to generate {file_path}/{file_name} ({self._npz_metadata['data_keys']})"
@@ -667,8 +666,8 @@ class HDF5Dataset:
                         return False
 
                     if (
-                        self._npz_metadata["hdf5_checksum"]
-                        != self.hdf5_data_file["md5"]
+                            self._npz_metadata["hdf5_checksum"]
+                            != self.hdf5_data_file["md5"]
                     ):
                         log.warning(
                             f"Checksum for hdf5 file used to generate npz file does not match current file in dataloader."
@@ -678,7 +677,7 @@ class HDF5Dataset:
         return True
 
     def _file_validation(
-        self, file_name: str, file_path: str, checksum: str = None
+            self, file_name: str, file_path: str, checksum: str = None
     ) -> bool:
         """
         Validates if the file exists, and if the calculated checksum matches the expected checksum.
@@ -737,9 +736,9 @@ class HDF5Dataset:
         temp_hdf5_file = f"{self.local_cache_dir}/{self.hdf5_data_file['name']}"
 
         if self._file_validation(
-            self.hdf5_data_file["name"],
-            self.local_cache_dir,
-            self.hdf5_data_file["md5"],
+                self.hdf5_data_file["name"],
+                self.local_cache_dir,
+                self.hdf5_data_file["md5"],
         ):
             log.debug(f"Loading unzipped hdf5 file from {temp_hdf5_file}")
         else:
@@ -757,7 +756,7 @@ class HDF5Dataset:
         # let us create a simple lockfile to prevent this, as OpenWithLock will just wait until the lockfile is unlocked
         # before proceeding
         with OpenWithLock(
-            f"{self.local_cache_dir}/{self.hdf5_data_file['name']}.lockfile", "w"
+                f"{self.local_cache_dir}/{self.hdf5_data_file['name']}.lockfile", "w"
         ) as lock_file:
             with h5py.File(temp_hdf5_file, "r") as hf:
                 # create dicts to store data for each format type
@@ -810,7 +809,7 @@ class HDF5Dataset:
                                 OrderedDict()
                             )  # ndarray.size (n_configs, )
                             for value in list(series_mol_data.keys()) + list(
-                                series_atom_data.keys()
+                                    series_atom_data.keys()
                             ):
                                 record_array = hf[record][value][()]
                                 configs_nan_by_prop[value] = np.isnan(record_array).any(
@@ -819,15 +818,15 @@ class HDF5Dataset:
                             # check that all values have the same number of conformers
 
                             if (
-                                len(
-                                    set(
-                                        [
-                                            value.shape
-                                            for value in configs_nan_by_prop.values()
-                                        ]
+                                    len(
+                                        set(
+                                            [
+                                                value.shape
+                                                for value in configs_nan_by_prop.values()
+                                            ]
+                                        )
                                     )
-                                )
-                                != 1
+                                    != 1
                             ):
                                 val_temp = [
                                     value.shape
@@ -865,8 +864,8 @@ class HDF5Dataset:
                                 record_array = hf[record][value][()][~configs_nan]
                                 try:
                                     if (
-                                        record_array.shape[1]
-                                        != atomic_subsystem_counts_rec
+                                            record_array.shape[1]
+                                            != atomic_subsystem_counts_rec
                                     ):
                                         raise ValueError(
                                             f"Number of atoms for property {value} is inconsistent with other properties for record {record}"
@@ -929,11 +928,11 @@ class HDF5Dataset:
         # skip validating the checksum, as the npz file checksum of otherwise identical data differs between python 3.11 and 3.9/10
         # we have a metadatafile we validate separately instead
         if self._file_validation(
-            self.processed_data_file["name"], self.local_cache_dir, checksum=None
+                self.processed_data_file["name"], self.local_cache_dir, checksum=None
         ):
             if self._metadata_validation(
-                self.processed_data_file["name"].replace(".npz", ".json"),
-                self.local_cache_dir,
+                    self.processed_data_file["name"].replace(".npz", ".json"),
+                    self.local_cache_dir,
             ):
                 log.debug(
                     f"Loading processed data from {self.local_cache_dir}/{self.processed_data_file['name']} generated on {self._npz_metadata['date_generated']}"
@@ -948,8 +947,8 @@ class HDF5Dataset:
                 # we will just open it as write, since we do not need to read it in; this ensure that we don't have an issue
                 # where we have deleted the lock file from a separate, prior process
                 with OpenWithLock(
-                    f"{self.local_cache_dir}/{self.processed_data_file['name']}.lockfile",
-                    "w",
+                        f"{self.local_cache_dir}/{self.processed_data_file['name']}.lockfile",
+                        "w",
                 ) as f:
                     self.numpy_data = np.load(
                         f"{self.local_cache_dir}/{self.processed_data_file['name']}"
@@ -966,7 +965,7 @@ class HDF5Dataset:
             )
 
     def _to_file_cache(
-        self,
+            self,
     ) -> None:
         """
                 Save processed data to a numpy (.npz) file.
@@ -987,7 +986,7 @@ class HDF5Dataset:
         # reading the npz file from a separate process while still writing
 
         with OpenWithLock(
-            f"{self.local_cache_dir}/{self.processed_data_file['name']}.lockfile", "w"
+                f"{self.local_cache_dir}/{self.processed_data_file['name']}.lockfile", "w"
         ) as f:
             np.savez(
                 f"{self.local_cache_dir}/{self.processed_data_file['name']}",
@@ -1015,8 +1014,8 @@ class HDF5Dataset:
         json_file_path = f"{self.local_cache_dir}/{self.processed_data_file['name'].replace('.npz', '.json')}"
         with OpenWithLock(f"{json_file_path}.lockfile", "w") as fl:
             with open(
-                json_file_path,
-                "w",
+                    json_file_path,
+                    "w",
             ) as f:
                 json.dump(metadata, f)
 
@@ -1032,7 +1031,7 @@ class DatasetFactory:
 
     @staticmethod
     def _load_or_process_data(
-        data: HDF5Dataset,
+            data: HDF5Dataset,
     ) -> None:
         """
         Loads the dataset from cache if available, otherwise processes and caches the data.
@@ -1052,25 +1051,25 @@ class DatasetFactory:
         # It is important to check the keys used to generate the npz file, as these are allowed to be changed by the user.
 
         if data._file_validation(
-            data.processed_data_file["name"],
-            data.local_cache_dir,
-        ) and (
-            data._metadata_validation(
-                data.processed_data_file["name"].replace(".npz", ".json"),
+                data.processed_data_file["name"],
                 data.local_cache_dir,
-            )
-            and not data.force_download
-            and not data.regenerate_cache
+        ) and (
+                data._metadata_validation(
+                    data.processed_data_file["name"].replace(".npz", ".json"),
+                    data.local_cache_dir,
+                )
+                and not data.force_download
+                and not data.regenerate_cache
         ):
             data._from_file_cache()
         # check to see if the hdf5 file exists and the checksum matches
         elif (
-            data._file_validation(
-                data.hdf5_data_file["name"],
-                data.local_cache_dir,
-                data.hdf5_data_file["md5"],
-            )
-            and not data.force_download
+                data._file_validation(
+                    data.hdf5_data_file["name"],
+                    data.local_cache_dir,
+                    data.hdf5_data_file["md5"],
+                )
+                and not data.force_download
         ):
             data._from_hdf5()
             data._to_file_cache()
@@ -1087,7 +1086,7 @@ class DatasetFactory:
 
     @staticmethod
     def create_dataset(
-        data: HDF5Dataset,
+            data: HDF5Dataset,
     ) -> TorchDataset:
         """
         Creates a TorchDataset from an HDF5Dataset, applying optional transformations.
@@ -1114,7 +1113,7 @@ from modelforge.custom_types import DatasetType
 
 class DataModule(pl.LightningDataModule):
     def __init__(
-        self,
+            self,
             name: DatasetType,
             splitting_strategy: SplittingStrategy = RandomRecordSplittingStrategy(),
             batch_size: int = 64,
@@ -1193,7 +1192,7 @@ class DataModule(pl.LightningDataModule):
         # Use a logical OR to ensure regenerate_processed_cache is True when
         # regenerate_cache is True
         self.regenerate_processed_cache = (
-            regenerate_processed_cache or self.regenerate_cache
+                regenerate_processed_cache or self.regenerate_cache
         )
 
         self.pairlist = Pairlist()
@@ -1207,7 +1206,7 @@ class DataModule(pl.LightningDataModule):
 
     @lock_with_attribute("lock_file")
     def prepare_data(
-        self,
+            self,
     ) -> None:
         """
         Prepares the dataset for use. This method is responsible for the initial
@@ -1218,8 +1217,8 @@ class DataModule(pl.LightningDataModule):
 
         # if the dataset has already been processed, skip this step
         if (
-            os.path.exists(self.cache_processed_dataset_filename)
-            and not self.regenerate_processed_cache
+                os.path.exists(self.cache_processed_dataset_filename)
+                and not self.regenerate_processed_cache
         ):
             if not os.path.exists(self.dataset_statistic_filename):
                 raise FileNotFoundError(
@@ -1241,8 +1240,8 @@ class DataModule(pl.LightningDataModule):
         torch_dataset = self._create_torch_dataset(dataset)
         # if dataset statistics is present load it from disk
         if (
-            os.path.exists(self.dataset_statistic_filename)
-            and self.regenerate_dataset_statistic is False
+                os.path.exists(self.dataset_statistic_filename)
+                and self.regenerate_dataset_statistic is False
         ):
             log.info(
                 f"Loading dataset statistics from disk: {self.dataset_statistic_filename}"
@@ -1343,7 +1342,7 @@ class DataModule(pl.LightningDataModule):
         return DatasetFactory().create_dataset(dataset)
 
     def _process_dataset(
-        self, torch_dataset: TorchDataset, atomic_self_energies: "AtomicSelfEnergies"
+            self, torch_dataset: TorchDataset, atomic_self_energies: "AtomicSelfEnergies"
     ) -> None:
         """Calculate and subtract self energies from the dataset."""
         from modelforge.potential.processing import AtomicSelfEnergies
@@ -1355,7 +1354,7 @@ class DataModule(pl.LightningDataModule):
         self._per_datapoint_operations(torch_dataset, atomic_self_energies)
 
     def _calculate_atomic_self_energies(
-        self, torch_dataset, dataset_ase
+            self, torch_dataset, dataset_ase
     ) -> Dict[str, float]:
         # Use provided ase dictionary
         if self.dict_atomic_self_energies:
@@ -1393,7 +1392,7 @@ class DataModule(pl.LightningDataModule):
         ) = self.splitting_strategy.split(self.torch_dataset)
 
     def calculate_self_energies(
-        self, torch_dataset: TorchDataset, collate: bool = True
+            self, torch_dataset: TorchDataset, collate: bool = True
     ) -> Dict[str, float]:
         """
         Calculates the self energies for each atomic number in the dataset by performing a least squares regression.
@@ -1420,7 +1419,7 @@ class DataModule(pl.LightningDataModule):
         )
 
     def _per_datapoint_operations(
-        self, dataset, self_energies: "AtomicSelfEnergies"
+            self, dataset, self_energies: "AtomicSelfEnergies"
     ) -> None:
         """
         Removes the self energies from the total energies for each molecule in the dataset .
@@ -1445,7 +1444,7 @@ class DataModule(pl.LightningDataModule):
                 energy = torch.sum(
                     self_energies.ase_tensor_for_indexing[
                         dataset.properties_of_interest["atomic_numbers"][
-                            start_idx:end_idx
+                        start_idx:end_idx
                         ]
                     ]
                 )
@@ -1464,20 +1463,20 @@ class DataModule(pl.LightningDataModule):
                     [
                         MASSES[atomic_number].m
                         for atomic_number in dataset.properties_of_interest[
-                            "atomic_numbers"
-                        ][start_idx:end_idx].tolist()
+                                                 "atomic_numbers"
+                                             ][start_idx:end_idx].tolist()
                     ]
                 )
                 molecule_mass = torch.sum(atomic_masses)
 
                 positions = dataset.properties_of_interest["positions"][
-                    start_idx:end_idx
-                ]
+                            start_idx:end_idx
+                            ]
                 center_of_mass = (
-                    torch.einsum("i, ij->j", atomic_masses, positions) / molecule_mass
+                        torch.einsum("i, ij->j", atomic_masses, positions) / molecule_mass
                 )
                 dataset.properties_of_interest["positions"][
-                    start_idx:end_idx
+                start_idx:end_idx
                 ] -= center_of_mass
 
         from torch.utils.data import DataLoader
@@ -1486,16 +1485,16 @@ class DataModule(pl.LightningDataModule):
         n_pairs_per_molecule_list = [torch.tensor([0], dtype=torch.int16)]
 
         for batch in tqdm(
-            DataLoader(
-                dataset,
-                batch_size=500,
-                collate_fn=collate_conformers,
-                num_workers=4,
-                shuffle=False,
-                pin_memory=False,
-                persistent_workers=False,
-            ),
-            desc="Calculating pairlist for dataset",
+                DataLoader(
+                    dataset,
+                    batch_size=500,
+                    collate_fn=collate_conformers,
+                    num_workers=4,
+                    shuffle=False,
+                    pin_memory=False,
+                    persistent_workers=False,
+                ),
+                desc="Calculating pairlist for dataset",
         ):
             (
                 pairs_batch,
@@ -1514,7 +1513,7 @@ class DataModule(pl.LightningDataModule):
         dataset.properties_of_interest["number_of_pairs"] = nr_of_pairs_in_dataset
 
     def train_dataloader(
-        self, num_workers: int = 4, shuffle: bool = True, pin_memory: bool = False
+            self, num_workers: int = 4, shuffle: bool = True, pin_memory: bool = False
     ) -> DataLoader:
         """
         Create a DataLoader for the training dataset.
@@ -1594,7 +1593,7 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
     pair_list_present = (
         True
         if hasattr(conf_list[0].nnp_input, "pair_list")
-        and isinstance(conf_list[0].nnp_input.pair_list, torch.Tensor)
+           and isinstance(conf_list[0].nnp_input.pair_list, torch.Tensor)
         else False
     )
 
@@ -1662,15 +1661,15 @@ from modelforge.dataset.utils import (
 
 
 def initialize_datamodule(
-    dataset_name: str,
-    version_select: str = "nc_1000_v0",
-    batch_size: int = 64,
-    splitting_strategy: SplittingStrategy = FirstComeFirstServeSplittingStrategy(),
-    remove_self_energies: bool = True,
-    shift_center_of_mass_to_origin: bool = False,
-    regression_ase: bool = False,
-    regenerate_dataset_statistic: bool = False,
-    local_cache_dir="./",
+        dataset_name: str,
+        version_select: str = "nc_1000_v0",
+        batch_size: int = 64,
+        splitting_strategy: SplittingStrategy = FirstComeFirstServeSplittingStrategy(),
+        remove_self_energies: bool = True,
+        shift_center_of_mass_to_origin: bool = False,
+        regression_ase: bool = False,
+        regenerate_dataset_statistic: bool = False,
+        local_cache_dir="./",
 ) -> DataModule:
     """
     Initialize a dataset for a given mode.
@@ -1706,10 +1705,10 @@ def single_batch(batch_size: int = 64, dataset_name="QM9", local_cache_dir="./")
 
 
 def initialize_dataset(
-    dataset_name: str,
-    local_cache_dir: str,
-    versions_select: str = "nc_1000_v0",
-    force_download: bool = False,
+        dataset_name: str,
+        local_cache_dir: str,
+        versions_select: str = "nc_1000_v0",
+        force_download: bool = False,
 ) -> DataModule:
     """
     Initialize a dataset for a given mode.

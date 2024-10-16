@@ -1,6 +1,6 @@
-import torch
-from modelforge.potential import NeuralNetworkPotentialFactory
 import pytest
+
+from modelforge.potential import NeuralNetworkPotentialFactory
 
 
 @pytest.fixture(scope="session")

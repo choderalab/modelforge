@@ -23,9 +23,7 @@ def prep_temp_dir(tmp_path_factory):
 
 
 def initialize_model(
-    simulation_environment: Literal["PyTorch", "JAX"],
-    config,
-    jit: bool
+    simulation_environment: Literal["PyTorch", "JAX"], config, jit: bool
 ):
     """Initialize the model based on the simulation environment and configuration."""
     return NeuralNetworkPotentialFactory.generate_potential(
@@ -186,8 +184,6 @@ def test_JAX_wrapping(potential_name, single_batch_with_batchsize, prep_temp_dir
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
 def test_model_factory(potential_name, prep_temp_dir):
-    from modelforge.train.training import PotentialTrainer
-
     # inference model
     potential = setup_potential_for_test(
         use="inference",
@@ -433,7 +429,6 @@ def test_energy_between_simulation_environments(
 ):
     # compare that the energy is the same for the JAX and PyTorch Model
     import numpy as np
-    import torch
 
     batch = single_batch_with_batchsize(
         batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
@@ -623,7 +618,6 @@ def test_multiple_output_heads(
     energy_expression,
     potential_name,
     simulation_environment,
-    mode,
     single_batch_with_batchsize,
     jit,
     prep_temp_dir,

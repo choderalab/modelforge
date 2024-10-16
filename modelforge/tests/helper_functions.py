@@ -84,6 +84,6 @@ def setup_potential_for_test(
             use_default_dataset_statistic=use_default_dataset_statistic,
             jit=jit,
             only_unique_pairs=only_unique_pairs,
-    )
+        )
 
     return potential

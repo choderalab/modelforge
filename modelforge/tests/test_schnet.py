@@ -1,10 +1,11 @@
-import pytest
+from typing import Optional
+
 import torch
+
 from modelforge.tests.precalculated_values import (
     load_precalculated_schnet_results,
     setup_single_methane_input,
 )
-from typing import Optional
 
 
 def setup_schnet_model(potential_seed: Optional[int] = None):

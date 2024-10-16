@@ -511,7 +511,7 @@ class NeuralNetworkPotentialFactory:
     def generate_potential(
         *,
         potential_parameter: T_NNP_Parameters,
-        use = "inference",
+        use="inference",
         runtime_parameter: Optional[RuntimeParameters] = None,
         training_parameter: Optional[TrainingParameters] = None,
         dataset_parameter: Optional[DatasetParameters] = None,
@@ -604,14 +604,14 @@ class NeuralNetworkPotentialFactory:
 
     @staticmethod
     def generate_trainer(
-            *,
-            potential_parameter: T_NNP_Parameters,
-            runtime_parameter: Optional[RuntimeParameters] = None,
-            training_parameter: Optional[TrainingParameters] = None,
-            dataset_parameter: Optional[DatasetParameters] = None,
-            dataset_statistic: Dict[str, Dict[str, float]] = None,
-            potential_seed: Optional[int] = None,
-            use_default_dataset_statistic: bool = False,
+        *,
+        potential_parameter: T_NNP_Parameters,
+        runtime_parameter: Optional[RuntimeParameters] = None,
+        training_parameter: Optional[TrainingParameters] = None,
+        dataset_parameter: Optional[DatasetParameters] = None,
+        dataset_statistic: Dict[str, Dict[str, float]] = None,
+        potential_seed: Optional[int] = None,
+        use_default_dataset_statistic: bool = False,
     ) -> PotentialTrainer:
         log.debug(f"{training_parameter=}")
         log.debug(f"{dataset_parameter=}")
@@ -626,6 +626,7 @@ class NeuralNetworkPotentialFactory:
             use_default_dataset_statistic=use_default_dataset_statistic,
         )
         return trainer
+
 
 class PyTorch2JAXConverter:
     """

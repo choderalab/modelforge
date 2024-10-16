@@ -817,6 +817,8 @@ class ModelTrainer:
     def setup_callbacks(self) -> List[Any]:
         """
         Set up the callbacks for the trainer.
+        The callbacks include early stopping (optional), model checkpointing, and stochastic weight averaging (optional).
+
 
         Returns
         -------
@@ -842,9 +844,11 @@ class ModelTrainer:
                 EarlyStopping(**self.training_parameter.early_stopping.model_dump())
             )
 
+        # Save the best model based on the validation loss
+        # NOTE: The filename is formatted as "best_{potential_name}-{dataset_name}-{epoch:02d}"
         checkpoint_filename = (
             f"best_{self.potential_parameter.potential_name}-{self.dataset_parameter.dataset_name}"
-            + "-{epoch:02d}-{val_loss:.2f}"
+            + "-{epoch:02d}"
         )
         callbacks.append(
             ModelCheckpoint(

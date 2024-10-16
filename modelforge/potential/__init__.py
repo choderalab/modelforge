@@ -4,7 +4,7 @@ This module contains the implemented neural network potentials and their paramet
 
 from enum import Enum
 
-from .models import NeuralNetworkPotentialFactory
+from .potential import NeuralNetworkPotentialFactory
 from .painn import PaiNNCore
 from .parameters import (
     AimNet2Parameters,

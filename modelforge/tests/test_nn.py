@@ -1,4 +1,4 @@
-from .test_models import load_configs_into_pydantic_models
+from .test_potentials import load_configs_into_pydantic_models
 import pytest
 
 

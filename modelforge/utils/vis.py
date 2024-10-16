@@ -2,7 +2,9 @@ from modelforge.custom_types import ModelType
 from modelforge.dataset.dataset import NNPInputTuple
 
 
-def visualize_model(nnp_input: NNPInputTuple, potential_name: ModelType):
+def visualize_model(
+    nnp_input: NNPInputTuple, potential_name: ModelType, output_dir: str
+):
     # visualize the compute graph
     from modelforge.utils.io import import_
     from modelforge.tests.helper_functions import setup_potential_for_test
@@ -20,4 +22,4 @@ def visualize_model(nnp_input: NNPInputTuple, potential_name: ModelType):
         params=dict(list(inference_model.named_parameters())),
         show_attrs=True,
         show_saved=True,
-    ).render(f"compute_graph_{potential_name}1", format="png")
+    ).render(f"{output_dir}/compute_graph_{potential_name}1", format="png")

@@ -1,14 +1,15 @@
-import pytest
+from typing import Optional
+
 import torch
+
 from modelforge.tests.precalculated_values import (
     load_precalculated_schnet_results,
     setup_single_methane_input,
 )
-from typing import Optional
 
 
 def setup_schnet_model(potential_seed: Optional[int] = None):
-    from modelforge.tests.test_models import load_configs_into_pydantic_models
+    from modelforge.tests.test_potentials import load_configs_into_pydantic_models
     from modelforge.potential import NeuralNetworkPotentialFactory
 
     # read default parameters
@@ -20,15 +21,14 @@ def setup_schnet_model(potential_seed: Optional[int] = None):
     config["potential"].core_parameter.number_of_radial_basis_functions = 5
     config["potential"].core_parameter.number_of_filters = 12
 
-    model = NeuralNetworkPotentialFactory.generate_potential(
-        use="training",
+    potential = NeuralNetworkPotentialFactory.generate_trainer(
         potential_parameter=config["potential"],
         training_parameter=config["training"],
         dataset_parameter=config["dataset"],
         runtime_parameter=config["runtime"],
         potential_seed=potential_seed,
-    ).model.potential
-    return model
+    ).potential_training_adapter.potential
+    return potential
 
 
 def test_init():

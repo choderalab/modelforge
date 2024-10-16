@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional
 
 
 def _add_per_atom_charge_to_predicted_properties(config):
@@ -39,16 +39,17 @@ def _add_electrostatic_to_predicted_properties(config):
 
 def setup_potential_for_test(
     potential_name: str,
-    use: str,
+    use: Literal["training", "inference"],
     use_default_dataset_statistic: bool = True,
     use_training_mode_neighborlist: bool = True,
     jit: bool = False,
     potential_seed: Optional[int] = None,
     simulation_environment="PyTorch",
     only_unique_pairs: bool = False,
+    local_cache_dir: Optional[str] = None,
 ):
     from modelforge.potential import NeuralNetworkPotentialFactory
-    from modelforge.tests.test_models import load_configs_into_pydantic_models
+    from modelforge.tests.test_potentials import load_configs_into_pydantic_models
 
     if simulation_environment == "JAX":
         assert use == "inference", "JAX only supports inference mode"
@@ -57,20 +58,32 @@ def setup_potential_for_test(
     config = load_configs_into_pydantic_models(potential_name, "qm9")
     # override defaults to match reference implementation in spk
 
-    model = NeuralNetworkPotentialFactory.generate_potential(
-        use=use,
-        potential_parameter=config["potential"],
-        training_parameter=config["training"],
-        dataset_parameter=config["dataset"],
-        runtime_parameter=config["runtime"],
-        potential_seed=potential_seed,
-        simulation_environment=simulation_environment,
-        use_training_mode_neighborlist=use_training_mode_neighborlist,
-        use_default_dataset_statistic=use_default_dataset_statistic,
-        jit=jit,
-        only_unique_pairs=only_unique_pairs,
-    )
+    if local_cache_dir is not None:
+        config["runtime"].local_cache_dir = local_cache_dir
 
     if use == "training":
-        model = model.model.potential
-    return model
+        trainer = NeuralNetworkPotentialFactory.generate_trainer(
+            potential_parameter=config["potential"],
+            training_parameter=config["training"],
+            dataset_parameter=config["dataset"],
+            runtime_parameter=config["runtime"],
+            potential_seed=potential_seed,
+            use_default_dataset_statistic=use_default_dataset_statistic,
+        )
+        potential = trainer.potential_training_adapter.potential
+    else:
+        potential = NeuralNetworkPotentialFactory.generate_potential(
+            use=use,
+            potential_parameter=config["potential"],
+            training_parameter=config["training"],
+            dataset_parameter=config["dataset"],
+            runtime_parameter=config["runtime"],
+            potential_seed=potential_seed,
+            simulation_environment=simulation_environment,
+            use_training_mode_neighborlist=use_training_mode_neighborlist,
+            use_default_dataset_statistic=use_default_dataset_statistic,
+            jit=jit,
+            only_unique_pairs=only_unique_pairs,
+        )
+
+    return potential

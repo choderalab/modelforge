@@ -1,6 +1,6 @@
-import torch
-from modelforge.potential import NeuralNetworkPotentialFactory
 import pytest
+
+from modelforge.potential import NeuralNetworkPotentialFactory
 
 
 @pytest.fixture(scope="session")
@@ -10,7 +10,7 @@ def prep_temp_dir(tmp_path_factory):
 
 
 def setup_painn_model(potential_seed: int):
-    from modelforge.tests.test_models import load_configs_into_pydantic_models
+    from modelforge.tests.test_potentials import load_configs_into_pydantic_models
 
     # read default parameters
     config = load_configs_into_pydantic_models("painn", "qm9")
@@ -23,14 +23,13 @@ def setup_painn_model(potential_seed: int):
     ].core_parameter.featurization.atomic_number.number_of_per_atom_features = 8
     config["potential"].core_parameter.number_of_radial_basis_functions = 5
 
-    trainer_painn = NeuralNetworkPotentialFactory.generate_potential(
-        use="training",
+    trainer_painn = NeuralNetworkPotentialFactory.generate_trainer(
         potential_parameter=config["potential"],
         training_parameter=config["training"],
         dataset_parameter=config["dataset"],
         runtime_parameter=config["runtime"],
         potential_seed=potential_seed,
-    ).model.potential
+    ).potential_training_adapter.potential
     return trainer_painn
 
 

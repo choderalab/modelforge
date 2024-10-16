@@ -181,7 +181,7 @@ def test_JAX_wrapping(potential_name, single_batch_with_batchsize, prep_temp_dir
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
 def test_model_factory(potential_name, prep_temp_dir):
-    from modelforge.train.training import ModelTrainer
+    from modelforge.train.training import PotentialTrainer
 
     # inference model
     potential = setup_potential_for_test(

@@ -40,7 +40,7 @@ from modelforge.train.losses import LossFactory, create_error_metrics
 from modelforge.train.parameters import RuntimeParameters, TrainingParameters
 
 __all__ = [
-    "ModelTrainer",
+    "PotentialTrainer",
 ]
 
 
@@ -603,7 +603,7 @@ class TrainingAdapter(pL.LightningModule):
 from openff.units import unit
 
 
-class ModelTrainer:
+class PotentialTrainer:
     """
     Class for training neural network potentials using PyTorch Lightning.
     """

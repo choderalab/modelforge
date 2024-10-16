@@ -498,7 +498,7 @@ def setup_potential(
 
 from openff.units import unit
 
-from modelforge.train.training import ModelTrainer
+from modelforge.train.training import PotentialTrainer
 
 
 class NeuralNetworkPotentialFactory:
@@ -520,7 +520,7 @@ class NeuralNetworkPotentialFactory:
         jit: bool = True,
         inference_neighborlist_strategy: str = "verlet",
         verlet_neighborlist_skin: Optional[float] = 0.1,
-    ) -> Union[Potential, JAXModel, pl.LightningModule, ModelTrainer]:
+    ) -> Union[Potential, JAXModel, pl.LightningModule, PotentialTrainer]:
         """
         Create an instance of a neural network potential for training or
         inference.
@@ -569,7 +569,7 @@ class NeuralNetworkPotentialFactory:
 
         # obtain model for training
         if use == "training":
-            trainer = ModelTrainer(
+            trainer = PotentialTrainer(
                 potential_parameter=potential_parameter,
                 training_parameter=training_parameter,
                 dataset_parameter=dataset_parameter,

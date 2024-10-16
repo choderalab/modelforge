@@ -87,8 +87,8 @@ class CalculateProperties(torch.nn.Module):
             prop in self._SUPPORTED_PROPERTIES for prop in self.requested_properties
         ), f"Unsupported property requested: {self.requested_properties}"
 
+    @staticmethod
     def _get_forces(
-        self,
         batch: BatchData,
         model_prediction: Dict[str, torch.Tensor],
         train_mode: bool,
@@ -140,8 +140,8 @@ class CalculateProperties(torch.nn.Module):
             "per_atom_force_predict": per_atom_force_predict.contiguous(),
         }
 
+    @staticmethod
     def _get_energies(
-        self,
         batch: BatchData,
         model_prediction: Dict[str, torch.Tensor],
     ) -> Dict[str, torch.Tensor]:
@@ -220,8 +220,9 @@ class CalculateProperties(torch.nn.Module):
             "per_molecule_dipole_moment_true": batch.metadata.dipole_moment,
         }
 
+    @staticmethod
     def _predict_dipole_moment(
-        self, model_predictions: Dict[str, torch.Tensor], batch: BatchData
+        model_predictions: Dict[str, torch.Tensor], batch: BatchData
     ) -> torch.Tensor:
         """
         Compute the predicted dipole moment for each molecule based on the
@@ -324,6 +325,7 @@ class TrainingAdapter(pL.LightningModule):
         potential_parameter: T_NNP_Parameters,
         dataset_statistic: Dict[str, Dict[str, unit.Quantity]],
         training_parameter: TrainingParameters,
+        optimizer_class: Type[Optimizer],
         potential_seed: Optional[int] = None,
     ):
         """
@@ -361,7 +363,7 @@ class TrainingAdapter(pL.LightningModule):
         self.calculate_predictions = CalculateProperties(
             training_parameter.loss_parameter.loss_property
         )
-        self.optimizer_class = training_parameter.optimizer
+        self.optimizer_class = optimizer_class
         self.learning_rate = training_parameter.lr
         self.lr_scheduler = training_parameter.lr_scheduler
 
@@ -420,8 +422,8 @@ class TrainingAdapter(pL.LightningModule):
         log.warning("Model does not implement _config_prior().")
         raise NotImplementedError()
 
+    @staticmethod
     def _update_metrics(
-        self,
         metrics: ModuleDict,
         predict_target: Dict[str, torch.Tensor],
     ):
@@ -626,24 +628,22 @@ class PotentialTrainer:
 
         Parameters
         ----------
-        dataset_config : DatasetParameters
+        dataset_parameter : DatasetParameters
             Parameters for the dataset.
         potential_parameter : Union[ANI2xParameters, SAKEParameters, SchNetParameters, PhysNetParameters, PaiNNParameters, TensorNetParameters]
             Parameters for the potential model.
-        training_config : TrainingParameters
+        training_parameter : TrainingParameters
             Parameters for the training process.
-        runtime_config : RuntimeParameters
+        runtime_parameter : RuntimeParameters
             Parameters for runtime configuration.
-        lr_scheduler : Dict[str, Union[str, int, float]]
-            The configuration for the learning rate scheduler.
-        lr : float
-            The learning rate for the optimizer.
-        loss_parameter : Dict[str, Any]
-            Configuration for the loss function.
-        datamodule : DataModule
-            The DataModule for loading datasets.
-        optimizer : Type[Optimizer], optional
+        dataset_statistic : Dict[str, Dict[str, unit.Quantity]]
+            Dataset statistics such as mean and standard deviation.
+        use_default_dataset_statistic: bool
+            Whether to use default dataset statistic
+        optimizer_class : Type[Optimizer], optional
             The optimizer class to use for training, by default torch.optim.AdamW.
+        potential_seed: Optional[int], optional
+            Seed to initialize the potential training adapter, default is None.
         verbose : bool, optional
             If True, enables verbose logging, by default False.
         """
@@ -663,18 +663,18 @@ class PotentialTrainer:
             else dataset_statistic
         )
         self.experiment_logger = self.setup_logger()
-        self.potential_training_adapter = self.setup_potential_training_adapter(
-            potential_seed
-        )
         self.callbacks = self.setup_callbacks()
         self.trainer = self.setup_trainer()
         self.optimizer_class = optimizer_class
+        self.potential_training_adapter = self.setup_potential_training_adapter(
+            potential_seed
+        )
         self.learning_rate = self.training_parameter.lr
         self.lr_scheduler = self.training_parameter.lr_scheduler
 
     def read_dataset_statistics(
         self,
-    ) -> Dict[str, float]:
+    ) -> dict[str, dict[str, Any]]:
         """
         Read and log dataset statistics.
 
@@ -758,6 +758,7 @@ class PotentialTrainer:
             potential_parameter=self.potential_parameter,
             dataset_statistic=self.dataset_statistic,
             training_parameter=self.training_parameter,
+            optimizer_class=self.optimizer_class,
             potential_seed=potential_seed,
         )
 

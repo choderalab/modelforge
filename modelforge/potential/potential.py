@@ -233,8 +233,9 @@ class Potential(torch.nn.Module):
             torch.jit.script(postprocessing) if jit else postprocessing
         )
 
+    @staticmethod
     def _add_total_charge(
-        self, core_output: Dict[str, torch.Tensor], input_data: NNPInputTuple
+        core_output: Dict[str, torch.Tensor], input_data: NNPInputTuple
     ):
         """
         Add the total charge to the core output.
@@ -255,8 +256,9 @@ class Potential(torch.nn.Module):
         core_output["per_molecule_charge"] = input_data.total_charge
         return core_output
 
+    @staticmethod
     def _add_pairlist(
-        self, core_output: Dict[str, torch.Tensor], pairlist_output: PairlistData
+        core_output: Dict[str, torch.Tensor], pairlist_output: PairlistData
     ):
         """
         Add the pairlist to the core output.
@@ -279,7 +281,8 @@ class Potential(torch.nn.Module):
         core_output["r_ij"] = pairlist_output.r_ij
         return core_output
 
-    def _remove_pairlist(self, processed_output: Dict[str, torch.Tensor]):
+    @staticmethod
+    def _remove_pairlist(processed_output: Dict[str, torch.Tensor]):
         """
         Remove the pairlist from the core output.
 

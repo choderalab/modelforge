@@ -27,6 +27,19 @@ Larger values of skin result in longer time periods between rebuilds, but also t
 Note: Since this utilizes an N^2 computation within Torch, the memory footprint may be problematic as system size grows. A cell list based approach will be implemented in the future.
 
 
+Load inference potential from training checkpoint
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+To use the trained model for inference, the checkpoint file generated during training must be loaded. The checkpoint file contains the model's weights, optimizer state, and other training-related information. The `load_inference_model_from_checkpoint` function provides a convenient way to load the checkpoint file and generate an inference model. 
+
+.. code-block:: python
+
+    from modelforge.potential.models import load_inference_model_from_checkpoint
+
+    inference_model = load_inference_model_from_checkpoint(checkpoint_file)
+
+
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:

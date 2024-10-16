@@ -1028,3 +1028,17 @@ def test_equivariant_energies_and_forces(
         reflection(reference_forces),
         atol=atol,
     )
+
+
+def test_loading_from_checkpoint_file():
+    from importlib import resources
+
+    from modelforge.tests import data
+
+    # checkpoint file is saved in tests/data
+    chkp_file = resources.files(data) / "best_SchNet-PhAlkEthOH-epoch=00.ckpt"
+
+    from modelforge.potential.models import load_inference_model_from_checkpoint
+
+    model = load_inference_model_from_checkpoint(chkp_file)
+    assert model is not None

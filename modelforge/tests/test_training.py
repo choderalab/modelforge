@@ -17,7 +17,7 @@ def prep_temp_dir(tmp_path_factory):
 
 
 def load_configs_into_pydantic_models(
-        potential_name: str, dataset_name: str, local_cache_dir: str
+    potential_name: str, dataset_name: str, local_cache_dir: str
 ):
     from importlib import resources
 
@@ -31,7 +31,7 @@ def load_configs_into_pydantic_models(
     )
 
     potential_path = (
-            resources.files(potential_defaults) / f"{potential_name.lower()}.toml"
+        resources.files(potential_defaults) / f"{potential_name.lower()}.toml"
     )
     dataset_path = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
     training_path = resources.files(training_defaults) / f"default.toml"
@@ -219,8 +219,8 @@ def test_error_calculation(single_batch_with_batchsize, prep_temp_dir):
 
     # compare output (mean squared error scaled by number of atoms in the molecule)
     scale_squared_error = (
-                                  (predicted_E - true_E) ** 2
-                          ) / data.metadata.atomic_subsystem_counts.unsqueeze(
+        (predicted_E - true_E) ** 2
+    ) / data.metadata.atomic_subsystem_counts.unsqueeze(
         1
     )  # FIXME : fi
     reference_E_error = torch.mean(scale_squared_error)
@@ -232,7 +232,7 @@ def test_error_calculation(single_batch_with_batchsize, prep_temp_dir):
 
     # compare error (mean squared error scaled by number of atoms in the molecule)
     scaled_error = (
-            torch.linalg.vector_norm(predicted_F - true_F, dim=1, keepdim=True) ** 2
+        torch.linalg.vector_norm(predicted_F - true_F, dim=1, keepdim=True) ** 2
     )
 
     per_mol_error = torch.zeros_like(data.metadata.E)
@@ -288,24 +288,26 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize, prep_temp_dir):
 
     # Assertions for dipole moment predictions
     assert (
-            "per_molecule_dipole_moment_predict" in prediction
+        "per_molecule_dipole_moment_predict" in prediction
     ), "Dipole moment prediction missing."
     assert (
-            prediction["per_molecule_dipole_moment_predict"].size()
-            == batch.metadata.dipole_moment.size()
+        prediction["per_molecule_dipole_moment_predict"].size()
+        == batch.metadata.dipole_moment.size()
     ), "Mismatch in shape for dipole moment predictions."
 
     # Assertions for total charge predictions
     assert (
-            "per_molecule_total_charge_predict" in prediction
+        "per_molecule_total_charge_predict" in prediction
     ), "Total charge prediction missing."
     assert (
-            prediction["per_molecule_total_charge_predict"].size()
-            == batch.nnp_input.total_charge.size()
+        prediction["per_molecule_total_charge_predict"].size()
+        == batch.nnp_input.total_charge.size()
     ), "Mismatch in shape for total charge predictions."
 
     # Now compute the loss
-    loss_dict = trainer.potential_training_adapter.loss(predict_target=prediction, batch=batch)
+    loss_dict = trainer.potential_training_adapter.loss(
+        predict_target=prediction, batch=batch
+    )
 
     # Ensure that the loss contains the total_charge and dipole_moment terms
     assert "per_molecule_total_charge" in loss_dict, "Total charge loss not computed."
@@ -379,8 +381,8 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
     E_loss = torch.mean(
         (
             (
-                    prediction["per_molecule_energy_predict"]
-                    - prediction["per_molecule_energy_true"]
+                prediction["per_molecule_energy_predict"]
+                - prediction["per_molecule_energy_true"]
             ).pow(2)
         )
     )
@@ -389,11 +391,11 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
     assert torch.allclose(ref, E_loss)
     E_loss = torch.mean(
         (
-                (
-                        prediction["per_molecule_energy_predict"]
-                        - prediction["per_molecule_energy_true"]
-                ).pow(2)
-                / batch.metadata.atomic_subsystem_counts.unsqueeze(1)
+            (
+                prediction["per_molecule_energy_predict"]
+                - prediction["per_molecule_energy_true"]
+            ).pow(2)
+            / batch.metadata.atomic_subsystem_counts.unsqueeze(1)
         )
     )
     # compare to referenc evalue obtained from Loos class
@@ -419,7 +421,7 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
     )
     # divide by number of atoms
     per_molecule_squared_error = per_molecule_squared_error / (
-            3 * batch.metadata.atomic_subsystem_counts
+        3 * batch.metadata.atomic_subsystem_counts
     )
 
     per_atom_force_mse = torch.mean(per_molecule_squared_error)
@@ -435,6 +437,7 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
         + +loss_weights["per_atom_energy"] * loss_output["per_atom_energy"],
         loss_output["total_loss"].to(torch.float32),
     )
+
 
 # @pytest.mark.skipif(IN_GITHUB_ACTIONS, reason="Skipping this test on GitHub Actions")
 # @pytest.mark.parametrize(

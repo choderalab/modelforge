@@ -412,19 +412,26 @@ class Loss(nn.Module):
                 predict_target[f"{prop_}_true"],
                 batch,
             )
+
+
             # Accumulate weighted per-sample losses
             weighted_loss = self.weights[prop] * prop_loss
-
             total_loss += weighted_loss  # Note: total_loss is still per-sample
+
             if self.normalize:
+                # Normalize the loss by the mean of the loss
                 normalized_loss += self.weights[prop] * (
                     prop_loss.mean() / prop_loss.detach().mean()
                 )
-                loss_dict[prop] = prop_loss  # Store per-sample loss
+
+            # save the loss for the property
+            loss_dict[prop] = prop_loss.detach()  # Store per-sample loss
+
 
         # Add total loss to results dict and return
         loss_dict["total_loss"] = total_loss
         if self.normalize:
+            # add normalized total loss to results dict
             loss_dict["normalized_total_loss"] = normalized_loss
 
         return loss_dict

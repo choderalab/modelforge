@@ -321,6 +321,11 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize, prep_temp_dir):
         loss_dict["per_molecule_dipole_moment"]
     ).all(), "Dipole moment loss contains non-finite values."
 
+    # check that only the total loss has gradient information
+    assert loss_dict["total_loss"].requires_grad
+    assert not loss_dict["per_molecule_total_charge"].requires_grad
+    assert not loss_dict["per_molecule_dipole_moment"].requires_grad
+
     # Optionally, print or log the losses for debugging
     print("Total Charge Loss:", loss_dict["per_molecule_total_charge"].mean().item())
     print("Dipole Moment Loss:", loss_dict["per_molecule_dipole_moment"].mean().item())

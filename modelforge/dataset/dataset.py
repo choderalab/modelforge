@@ -1115,20 +1115,20 @@ from modelforge.custom_types import DatasetType
 class DataModule(pl.LightningDataModule):
     def __init__(
         self,
-        name: DatasetType,
-        splitting_strategy: SplittingStrategy = RandomRecordSplittingStrategy(),
-        batch_size: int = 64,
-        remove_self_energies: bool = True,
-        shift_center_of_mass_to_origin: bool = False,
-        atomic_self_energies: Optional[Dict[str, float]] = None,
-        regression_ase: bool = False,
-        force_download: bool = False,
-        version_select: str = "latest",
-        local_cache_dir: str = "./",
-        regenerate_cache: bool = False,
-        regenerate_dataset_statistic: bool = False,
-        regenerate_processed_cache: bool = True,
-    ):
+            name: DatasetType,
+            splitting_strategy: SplittingStrategy = RandomRecordSplittingStrategy(),
+            batch_size: int = 64,
+            remove_self_energies: bool = True,
+            shift_center_of_mass_to_origin: bool = False,
+            atomic_self_energies: Optional[Dict[str, float]] = None,
+            regression_ase: bool = False,
+            force_download: bool = False,
+            version_select: str = "latest",
+            local_cache_dir: str = "./",
+            regenerate_cache: bool = False,
+            regenerate_dataset_statistic: bool = False,
+            regenerate_processed_cache: bool = True,
+    ) -> object:
         """
         Initializes adData module for PyTorch Lightning handling data preparation and loading object with the specified configuration.
         If `remove_self_energies` is `True` and:
@@ -1138,7 +1138,7 @@ class DataModule(pl.LightningDataModule):
 
         Parameters
         ---------
-            name: Literal["QM9", "ANI1X", "ANI2X", "SPICE1", "SPICE2", "SPICE1_OPENFF"]
+            name: DataSetName
                 The name of the dataset to use.
             splitting_strategy : SplittingStrategy, defaults to RandomRecordSplittingStrategy
                 The strategy to use for splitting the dataset into train, test, and validation sets. .

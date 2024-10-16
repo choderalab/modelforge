@@ -563,7 +563,7 @@ class TrainingAdapter(pL.LightningModule):
                 )
 
     def _log_histograms(self):
-        if self.log_histograms == True:
+        if self.log_histograms:
             for name, params in self.named_parameters():
                 if params is not None:
                     self.logger.experiment.add_histogram(

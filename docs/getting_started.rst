@@ -177,7 +177,7 @@ Here is an example of a training routine definition:
     interval = "epoch"  # Interval for learning rate updates (per epoch)
 
     [training.loss_parameter]
-    loss_property = ['per_molecule_energy', 'per_atom_force']  # Properties to include in the loss function
+    loss_components = ['per_molecule_energy', 'per_atom_force']  # Properties to include in the loss function
 
     [training.loss_parameter.weight]
     per_molecule_energy = 0.999  # Weight for per molecule energy in the loss calculation

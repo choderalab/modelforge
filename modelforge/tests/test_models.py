@@ -857,16 +857,16 @@ def test_casting(potential_name, single_batch_with_batchsize, prep_temp_dir):
     batch = batch = single_batch_with_batchsize(
         batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
     )
-    batch_ = batch.to(dtype=torch.float64)
+    batch_ = batch.to_dtype(dtype=torch.float64)
     assert batch_.nnp_input.positions.dtype == torch.float64
-    batch_ = batch_.to(dtype=torch.float32)
+    batch_ = batch_.to_dtype(dtype=torch.float32)
     assert batch_.nnp_input.positions.dtype == torch.float32
 
-    nnp_input = batch.nnp_input.to(dtype=torch.float64)
+    nnp_input = batch.nnp_input.to_dtype(dtype=torch.float64)
     assert nnp_input.positions.dtype == torch.float64
-    nnp_input = batch.nnp_input.to(dtype=torch.float32)
+    nnp_input = batch.nnp_input.to_dtype(dtype=torch.float32)
     assert nnp_input.positions.dtype == torch.float32
-    nnp_input = batch.metadata.to(dtype=torch.float64)
+    nnp_input = batch.metadata.to_dtype(dtype=torch.float64)
 
     # cast input and model to torch.float64
     # read default parameters
@@ -879,7 +879,7 @@ def test_casting(potential_name, single_batch_with_batchsize, prep_temp_dir):
         use_training_mode_neighborlist=True,  # can handel batched data
     )
     model = model.to(dtype=torch.float64)
-    nnp_input = batch.to(dtype=torch.float64).nnp_input
+    nnp_input = batch.to_dtype(dtype=torch.float64).nnp_input
 
     model(nnp_input)
 
@@ -891,7 +891,7 @@ def test_casting(potential_name, single_batch_with_batchsize, prep_temp_dir):
         use_training_mode_neighborlist=True,  # can handel batched data
     )
     model = model.to(dtype=torch.float32)
-    nnp_input = batch.to(dtype=torch.float32).nnp_input
+    nnp_input = batch.to_dtype(dtype=torch.float32).nnp_input
 
     model(nnp_input)
 

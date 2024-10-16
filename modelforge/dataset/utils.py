@@ -121,7 +121,7 @@ def calculate_mean_and_variance(
     log.info("Calculating mean and variance of atomic energies")
     for batch_data in tqdm.tqdm(dataloader):
         E_scaled = (
-            batch_data.metadata.E
+            batch_data.metadata.per_system_energy
             / batch_data.metadata.atomic_subsystem_counts.view(-1, 1)
         )
         online_estimator.update(E_scaled)

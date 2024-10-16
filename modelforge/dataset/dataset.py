@@ -80,10 +80,9 @@ class DatasetParameters(BaseModel):
 from dataclasses import dataclass, field
 
 
-@dataclass(frozen=False)
 class Metadata:
     """
-    A dataclass to structure metadata for neural network potentials.
+    A class to structure metadata for neural network potentials.
 
     Parameters
     ----------
@@ -102,34 +101,48 @@ class Metadata:
 
     """
 
-    E: torch.Tensor
-    atomic_subsystem_counts: torch.Tensor
-    atomic_subsystem_indices_referencing_dataset: torch.Tensor
-    number_of_atoms: int
-    F: torch.Tensor = field(
-        default_factory=lambda: torch.tensor([], dtype=torch.float32)
-    )
-    dipole_moment: torch.Tensor = field(
-        default_factory=lambda: torch.tensor([], dtype=torch.float32)
+    __slots__ = (
+        "per_system_energy",
+        "atomic_subsystem_counts",
+        "atomic_subsystem_indices_referencing_dataset",
+        "number_of_atoms",
+        "per_atom_force",
+        "per_system_dipole_moment",
     )
 
-    def to(
-        self, device: Optional[torch.device] = None, dtype: Optional[torch.dtype] = None
+    def __init__(
+        self,
+        per_system_energy: torch.Tensor,
+        atomic_subsystem_counts: torch.Tensor,
+        atomic_subsystem_indices_referencing_dataset: torch.Tensor,
+        number_of_atoms: int,
+        per_atom_force: torch.Tensor = None,
+        per_system_dipole_moment: torch.Tensor = None,
     ):
-        """Move all tensors in this instance to the specified device."""
-        if device:
-            self.E = self.E.to(device)
-            self.F = self.F.to(device)
-            self.atomic_subsystem_counts = self.atomic_subsystem_counts.to(device)
-            self.atomic_subsystem_indices_referencing_dataset = (
-                self.atomic_subsystem_indices_referencing_dataset.to(device)
-            )
-            self.dipole_moment = self.dipole_moment.to(device)
+        self.per_system_energy = per_system_energy
+        self.atomic_subsystem_counts = atomic_subsystem_counts
+        self.atomic_subsystem_indices_referencing_dataset = (
+            atomic_subsystem_indices_referencing_dataset
+        )
+        self.number_of_atoms = number_of_atoms
+        self.per_atom_force = per_atom_force
+        self.per_system_dipole_moment = per_system_dipole_moment
 
-        if dtype:
-            self.E = self.E.to(dtype)
-            self.F = self.F.to(dtype)
-            self.dipole_moment = self.dipole_moment.to(dtype)
+    def to_device(self, device: torch.device):
+        """Move all tensors in this instance to the specified device."""
+        self.per_system_energy = self.per_system_energy.to(device)
+        self.per_atom_force = self.per_atom_force.to(device)
+        self.atomic_subsystem_counts = self.atomic_subsystem_counts.to(device)
+        self.atomic_subsystem_indices_referencing_dataset = (
+            self.atomic_subsystem_indices_referencing_dataset.to(device)
+        )
+        self.per_system_dipole_moment = self.per_system_dipole_moment.to(device)
+        return self
+
+    def to_dtype(self, dtype: torch.dtype):
+        self.per_system_energy = self.per_system_energy.to(dtype)
+        self.per_atom_force = self.per_atom_force.to(dtype)
+        self.per_system_dipole_moment = self.per_system_dipole_moment.to(dtype)
         return self
 
 
@@ -251,19 +264,27 @@ class BatchData:
     nnp_input: NNPInput
     metadata: Metadata
 
-    def to(
+    def to_device(
         self,
-        device: Optional[torch.device] = None,
-        dtype: Optional[torch.dtype] = None,
+        device: torch.device,
     ):
         """Move all data in this batch to the specified device and dtype."""
-        self.nnp_input = self.nnp_input.to(device=device, dtype=dtype)
-        self.metadata = self.metadata.to(device=device, dtype=dtype)
+        self.nnp_input = self.nnp_input.to_device(device=device)
+        self.metadata = self.metadata.to_device(device=device)
+        return self
+
+    def to_dtype(
+        self,
+        dtype: torch.dtype,
+    ):
+        """Move all data in this batch to the specified device and dtype."""
+        self.nnp_input = self.nnp_input.to_dtype(dtype=dtype)
+        self.metadata = self.metadata.to_dtype(dtype=dtype)
         return self
 
     def batch_size(self) -> int:
         """Return the batch size."""
-        return self.metadata.E.size(dim=0)
+        return self.metadata.per_molecule_energy.size(dim=0)
 
 
 class TorchDataset(torch.utils.data.Dataset[BatchData]):
@@ -452,14 +473,14 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
             atomic_subsystem_indices=torch.zeros(number_of_atoms, dtype=torch.int32),
         )
         metadata = Metadata(
-            E=E,
-            F=F,
+            per_system_energy=E,
+            per_atom_force=F,
             atomic_subsystem_counts=torch.tensor([number_of_atoms], dtype=torch.int32),
             atomic_subsystem_indices_referencing_dataset=torch.repeat_interleave(
                 torch.tensor([idx], dtype=torch.int32), number_of_atoms
             ),
             number_of_atoms=number_of_atoms,
-            dipole_moment=dipole_moment,
+            per_system_dipole_moment=dipole_moment,
         )
 
         return BatchData(nnp_input, metadata)
@@ -1561,9 +1582,9 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
         atomic_numbers_list.append(conf.nnp_input.atomic_numbers)
         positions_list.append(conf.nnp_input.positions)
         total_charge_list.append(conf.nnp_input.total_charge)
-        dipole_moment_list.append(conf.metadata.dipole_moment)
-        E_list.append(conf.metadata.E)
-        F_list.append(conf.metadata.F)
+        dipole_moment_list.append(conf.metadata.per_system_dipole_moment)
+        E_list.append(conf.metadata.per_system_energy)
+        F_list.append(conf.metadata.per_atom_force)
         atomic_subsystem_counts_list.append(conf.metadata.atomic_subsystem_counts)
         atomic_subsystem_indices_referencing_dataset_list.append(
             conf.metadata.atomic_subsystem_indices_referencing_dataset
@@ -1595,12 +1616,12 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
         pair_list=IJ_cat,
     )
     metadata = Metadata(
-        E=E,
-        F=F,
+        per_system_energy=E,
+        per_atom_force=F,
         atomic_subsystem_counts=atomic_subsystem_counts,
         atomic_subsystem_indices_referencing_dataset=atomic_subsystem_indices_referencing_dataset,
         number_of_atoms=atomic_numbers.numel(),
-        dipole_moment=dipole_moment,
+        per_system_dipole_moment=dipole_moment,
     )
     return BatchData(nnp_input, metadata)
 

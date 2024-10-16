@@ -42,9 +42,9 @@ def test_forward_with_inference_model(
     )
 
     if simulation_environment == "JAX":
-        model(batch.jax_nnp_input_tuple)
+        model(batch.jax_nnp_input)
     else:
-        model(batch.nnp_input_tuple)
+        model(batch.nnp_input)
 
 
 def test_input():

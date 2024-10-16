@@ -238,7 +238,7 @@ def test_energy_scaling_and_offset(
     batch = single_batch_with_batchsize(
         batch_size=1, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
     )
-    methane = batch.nnp_input_tuple
+    methane = batch.nnp_input
 
     # load dataset statistic
     import toml
@@ -429,7 +429,7 @@ def test_energy_between_simulation_environments(
     batch = single_batch_with_batchsize(
         batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
     )
-    nnp_input = batch.nnp_input_tuple
+    nnp_input = batch.nnp_input
     # test the forward pass through each of the models
     # cast input and model to torch.float64
     # read default parameters
@@ -495,7 +495,7 @@ def test_forward_pass_with_all_datasets(
     )
     # -------------------------------#
     # test the forward pass through each of the models
-    output = model(batch.nnp_input_tuple)
+    output = model(batch.nnp_input)
 
     # test that the output has the following keys and following dim
     assert "per_molecule_energy" in output
@@ -517,7 +517,7 @@ def test_jit(potential_name, single_batch_with_batchsize, prep_temp_dir):
     batch = single_batch_with_batchsize(
         batch_size=1, dataset_name="qm9", local_cache_dir=str(prep_temp_dir)
     )
-    nnp_input = batch.nnp_input_tuple
+    nnp_input = batch.nnp_input
 
     # -------------------------------#
     # setup model
@@ -564,7 +564,7 @@ def test_different_neighborlists_for_inference(
     # NOTE: the training pairlist only works for a batchsize of 1
     nnp_input = single_batch_with_batchsize(
         1, dataset_name, str(prep_temp_dir)
-    ).nnp_input_tuple
+    ).nnp_input
 
     model = setup_potential_for_test(
         potential_name,
@@ -615,7 +615,7 @@ def test_multiple_output_heads(
     # Get input and set up model
     nnp_input = single_batch_with_batchsize(
         32, dataset_name, str(prep_temp_dir)
-    ).nnp_input_tuple
+    ).nnp_input
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
     # Modify the config based on the energy expression
     config = _add_per_atom_charge_to_predicted_properties(config)
@@ -700,7 +700,7 @@ def test_vis(potential_name, single_batch_with_batchsize, prep_temp_dir):
     batch = single_batch_with_batchsize(
         batch_size=32, dataset_name="SPICE2", local_cache_dir=str(prep_temp_dir)
     )
-    nnp_input = batch.nnp_input_tuple
+    nnp_input = batch.nnp_input
     from modelforge.utils.vis import visualize_model
 
     visualize_model(nnp_input, potential_name)
@@ -720,7 +720,7 @@ def test_calculate_energies_and_forces(
     batch = single_batch_with_batchsize(
         batch_size=32, dataset_name="SPICE2", local_cache_dir=str(prep_temp_dir)
     )
-    nnp_input = batch.nnp_input_tuple
+    nnp_input = batch.nnp_input
 
     # read default parameters
     model = setup_potential_for_test(
@@ -771,7 +771,7 @@ def test_calculate_energies_and_forces(
     batch = batch = single_batch_with_batchsize(
         batch_size=1, dataset_name="SPICE2", local_cache_dir=str(prep_temp_dir)
     )
-    nnp_input = batch.nnp_input_tuple
+    nnp_input = batch.nnp_input
 
     # get the inference model with inference neighborlist and compilre
     # everything
@@ -879,7 +879,7 @@ def test_casting(potential_name, single_batch_with_batchsize, prep_temp_dir):
         use_training_mode_neighborlist=True,  # can handel batched data
     )
     model = model.to(dtype=torch.float64)
-    nnp_input = batch.to(dtype=torch.float64).nnp_input_tuple
+    nnp_input = batch.to(dtype=torch.float64).nnp_input
 
     model(nnp_input)
 
@@ -891,7 +891,7 @@ def test_casting(potential_name, single_batch_with_batchsize, prep_temp_dir):
         use_training_mode_neighborlist=True,  # can handel batched data
     )
     model = model.to(dtype=torch.float32)
-    nnp_input = batch.to(dtype=torch.float32).nnp_input_tuple
+    nnp_input = batch.to(dtype=torch.float32).nnp_input
 
     model(nnp_input)
 

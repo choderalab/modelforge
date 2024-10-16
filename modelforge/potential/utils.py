@@ -4,14 +4,14 @@ Utility functions for neural network potentials.
 
 import math
 from dataclasses import dataclass
-from typing import Callable, Optional, Tuple, Type, Union
+from typing import Callable, Optional
 
 import numpy as np
 import torch
 import torch.nn as nn
 from openff.units import unit
 
-from modelforge.dataset.dataset import NNPInputTuple, NNPInput
+from modelforge.dataset.dataset import NNPInput, NNPInput
 
 
 @dataclass

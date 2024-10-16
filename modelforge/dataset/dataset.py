@@ -133,108 +133,40 @@ class Metadata:
         return self
 
 
-NNPInputTuple = NamedTuple(
-    "NNPInputTuple",
-    [
-        ("atomic_numbers", torch.Tensor),
-        ("positions", torch.Tensor),
-        ("atomic_subsystem_indices", torch.Tensor),
-        ("total_charge", torch.Tensor),
-        ("pair_list", torch.Tensor),
-        ("partial_charge", torch.Tensor),
-        ("box_vectors", torch.Tensor),
-        ("is_periodic", torch.Tensor),
-    ],
-)
-
-
-@dataclass
+# Define the input class
 class NNPInput:
-    """
-    A dataclass to structure the inputs for neural network potentials.
+    __slots__ = (
+        "atomic_numbers",
+        "positions",
+        "atomic_subsystem_indices",
+        "total_charge",
+        "pair_list",
+        "partial_charge",
+        "box_vectors",
+        "is_periodic",
+    )
 
-    Attributes
-    ----------
-    atomic_numbers : torch.Tensor
-        A 1D tensor containing atomic numbers for each atom in the system(s).
-        Shape: [num_atoms], where `num_atoms` is the total number of atoms
-        across all systems.
-    positions : torch.Tensor
-        A 2D tensor of shape [num_atoms, 3], representing the XYZ coordinates of
-        each atom.
-    atomic_subsystem_indices : torch.Tensor
-        A 1D tensor mapping each atom to its respective subsystem or molecule.
-        This allows for calculations involving multiple molecules or subsystems
-        within the same batch. Shape: [num_atoms].
-    total_charge : torch.Tensor
-        A tensor with the total charge of molecule. Shape: [num_systems,1], where
-        `num_systems` is the number of molecules.
-    pair_list : Optional[torch.Tensor]
-        Pair list for neighbor interactions.
-    box_vectors : Optional[torch.Tensor]
-        A 2D tensor of shape [3, 3], representing the box vectors in a system.
-        Currently, only supports a single box vector for all systems, as this is primarily meant for
-        inference on a single system, not training.
-    is_periodic : Optional[bool]
-        A boolean indicating whether the system is periodic or not.
-    """
-
-    atomic_numbers: torch.Tensor
-    positions: Union[torch.Tensor, Quantity]
-    atomic_subsystem_indices: torch.Tensor
-    total_charge: torch.Tensor
-    pair_list: Optional[torch.Tensor] = None
-    partial_charge: Optional[torch.Tensor] = None
-    box_vectors: Optional[torch.Tensor] = torch.zeros(3, 3)
-    is_periodic: Optional[torch.Tensor] = torch.Tensor([False])
-
-    def to(
+    def __init__(
         self,
-        *,
-        device: Optional[torch.device] = None,
-        dtype: Optional[torch.dtype] = None,
+        atomic_numbers: torch.Tensor,
+        positions: torch.Tensor,
+        atomic_subsystem_indices: torch.Tensor,
+        total_charge: torch.Tensor,
+        box_vectors: torch.Tensor = torch.zeros(3, 3),
+        is_periodic: torch.Tensor = torch.tensor([False]),
+        pair_list: torch.Tensor = None,
+        partial_charge: torch.Tensor = None,
     ):
-        """Move all tensors in this instance to the specified device/dtype."""
+        self.atomic_numbers = atomic_numbers
+        self.positions = positions
+        self.atomic_subsystem_indices = atomic_subsystem_indices
+        self.total_charge = total_charge
+        self.pair_list = pair_list
+        self.partial_charge = partial_charge
+        self.box_vectors = box_vectors
+        self.is_periodic = is_periodic
 
-        if device:
-            self.atomic_numbers = self.atomic_numbers.to(device)
-            self.positions = self.positions.to(device)
-            self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(device)
-            self.total_charge = self.total_charge.to(device)
-            if self.pair_list is not None:
-                self.pair_list = self.pair_list.to(device)
-            self.pair_list = (
-                self.pair_list.to(device)
-                if self.pair_list is not None
-                else self.pair_list
-            )
-            self.partial_charge = (
-                self.partial_charge.to(device)
-                if self.partial_charge is not None
-                else self.partial_charge
-            )
-            self.box_vectors = self.box_vectors.to(device)
-            self.is_periodic = self.is_periodic.to(device)
-
-        if dtype:
-            self.positions = self.positions.to(dtype)
-            self.box_vectors = self.box_vectors.to(dtype)
-            assert self.box_vectors.shape == (3, 3)
-        return self
-
-    def __post_init__(self):
-        # Convert positions if necessary
-        if isinstance(self.positions, Quantity):
-            self.positions = torch.tensor(
-                self.positions.to(unit.nanometer).m,
-                dtype=torch.float32,
-            )
-        else:
-            self.positions = self.positions.to(dtype=torch.float32)
-        # Convert types
-        self.atomic_numbers = self.atomic_numbers.to(torch.int32)
-        self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(torch.int32)
-        self.total_charge = self.total_charge.to(torch.int32)
+        self.__post_init__()
 
         # Validate inputs
         self._validate_inputs()
@@ -246,8 +178,6 @@ class NNPInput:
             raise ValueError("positions must be a 2D tensor with shape [num_atoms, 3]")
         if self.atomic_subsystem_indices.dim() != 1:
             raise ValueError("atomic_subsystem_indices must be a 1D tensor")
-
-        # Optionally, check that the lengths match if required
         if len(self.positions) != len(self.atomic_numbers):
             raise ValueError(
                 "The size of atomic_numbers and the first dimension of positions must match"
@@ -257,30 +187,63 @@ class NNPInput:
                 "The size of atomic_subsystem_indices and the first dimension of positions must match"
             )
 
-    def as_namedtuple(self) -> NamedTuple:
-        """Export the dataclass fields and values as a named tuple."""
+    def __post_init__(self):
 
-        from dataclasses import fields
+        # Set all integer tensors to int32
+        self.atomic_numbers = self.atomic_numbers.to(torch.int32)
+        self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(torch.int32)
+        self.total_charge = self.total_charge.to(torch.int32)
 
-        return NNPInputTuple(*[getattr(self, field.name) for field in fields(self)])
+    def to_device(self, device: torch.device):
+        """Move all tensors in this instance to the specified device."""
 
-    def as_jax_namedtuple(self) -> NamedTuple:
-        """Export the dataclass fields and values as a named tuple.
-        Convert pytorch tensors to jax arrays."""
+        self.atomic_numbers = self.atomic_numbers.to(device)
+        self.positions = self.positions.to(device)
+        self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(device)
+        self.total_charge = self.total_charge.to(device)
+        self.box_vectors = self.box_vectors.to(device)
+        self.is_periodic = self.is_periodic.to(device)
 
-        import collections
-        from dataclasses import dataclass, fields
+        if self.pair_list is not None:
+            self.pair_list = self.pair_list.to(device)
 
-        from modelforge.utils.io import import_
+        if self.partial_charge is not None:
+            self.partial_charge = self.partial_charge.to(device)
 
-        convert_to_jax = import_("pytorch2jax").pytorch2jax.convert_to_jax
+        return self
 
-        NNPInputTuple = collections.namedtuple(
-            "NNPInputTuple", [field.name for field in fields(self)]
-        )
-        return NNPInputTuple(
-            *[convert_to_jax(getattr(self, field.name)) for field in fields(self)]
-        )
+    def to_dtype(self, dtype: torch.dtype):
+        """Move all **relevant** tensors to dtype."""
+        self.positions = self.positions.to(dtype)
+        self.box_vectors = self.box_vectors.to(dtype)
+        assert self.box_vectors.shape == (3, 3)
+        return self
+
+
+def convert_NNPInput_to_jax(self, nnp_input: NNPInput):
+    """
+    Convert the NNPInput to a JAX-compatible format.
+    """
+    from modelforge.utils.io import import_
+
+    convert_to_jax = import_("pytorch2jax").pytorch2jax.convert_to_jax
+
+    nnp_input.atomic_numbers = convert_to_jax(nnp_input.atomic_numbers)
+    nnp_input.positions = convert_to_jax(nnp_input.positions)
+    nnp_input.atomic_subsystem_indices = convert_to_jax(
+        nnp_input.atomic_subsystem_indices
+    )
+    nnp_input.total_charge = convert_to_jax(nnp_input.total_charge)
+    nnp_input.box_vectors = convert_to_jax(nnp_input.box_vectors)
+    nnp_input.is_periodic = convert_to_jax(nnp_input.is_periodic)
+
+    if nnp_input.pair_list is not None:
+        nnp_input.pair_list = convert_to_jax(nnp_input.pair_list)
+
+    if nnp_input.partial_charge is not None:
+        nnp_input.partial_charge = convert_to_jax(nnp_input.partial_charge)
+
+    return nnp_input
 
 
 @dataclass
@@ -301,18 +264,6 @@ class BatchData:
     def batch_size(self) -> int:
         """Return the batch size."""
         return self.metadata.E.size(dim=0)
-
-    @property
-    def nnp_input_tuple(self):
-        """Return the NNP input as a named tuple."""
-        return self.nnp_input.as_namedtuple()
-
-    @property
-    def jax_nnp_input_tuple(self):
-        """
-        Property to return the nnp_input as an NNPInputTuple.
-        """
-        return self.nnp_input.as_jax_namedtuple()
 
 
 class TorchDataset(torch.utils.data.Dataset[BatchData]):

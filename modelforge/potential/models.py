@@ -723,3 +723,40 @@ class PyTorch2JAXConverter:
 
         # Return the apply function and the converted model parameters
         return apply, model_params, model_buffer
+
+
+def load_inference_model_from_checkpoint(checkpoint_path: str) -> Potential:
+    """
+    Creates an inference model from a checkpoint file.
+    It loads the checkpoint file, extracts the hyperparameters, and creates the model in inference mode.
+
+    Parameters
+    ----------
+    checkpoint_path : str
+        The path to the checkpoint file.
+    """
+    import torch
+    from modelforge.potential import NeuralNetworkPotentialFactory
+
+    # Load the checkpoint
+    checkpoint = torch.load(checkpoint_path, map_location=torch.device("cpu"))
+
+    # Extract hyperparameters
+    hyperparams = checkpoint["hyper_parameters"]
+    potential_parameter = hyperparams["potential_parameter"]
+    dataset_statistic = hyperparams.get("dataset_statistic", None)
+    potential_seed = hyperparams.get("potential_seed", None)
+
+    # Create the model in inference mode
+    model = NeuralNetworkPotentialFactory.generate_potential(
+        use="inference",
+        potential_parameter=potential_parameter,
+        dataset_statistic=dataset_statistic,
+        potential_seed=potential_seed,
+    )
+
+    # Load the state dict into the model
+    model.load_state_dict(checkpoint["state_dict"])
+
+    # Return the model
+    return model

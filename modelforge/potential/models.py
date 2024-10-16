@@ -11,7 +11,7 @@ from openff.units import unit
 from torch.nn import Module
 from modelforge.potential.neighbors import PairlistData
 
-from modelforge.dataset.dataset import DatasetParameters, NNPInput, NNPInputTuple
+from modelforge.dataset.dataset import DatasetParameters, NNPInputTuple
 from modelforge.potential.parameters import (
     AimNet2Parameters,
     ANI2xParameters,
@@ -593,6 +593,12 @@ class NeuralNetworkPotentialFactory:
                 neighborlist_strategy=inference_neighborlist_strategy,
                 verlet_neighborlist_skin=verlet_neighborlist_skin,
             )
+            # Disable gradients for model parameters
+            for param in model.parameters():
+                param.requires_grad = False
+            # Set model to eval
+            model.eval()
+
             if simulation_environment == "JAX":
                 return PyTorch2JAXConverter().convert_to_jax_model(model)
             else:

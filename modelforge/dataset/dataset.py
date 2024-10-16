@@ -670,7 +670,8 @@ class HDF5Dataset:
                             != self.hdf5_data_file["md5"]
                     ):
                         log.warning(
-                            f"Checksum for hdf5 file used to generate npz file does not match current file in dataloader."
+                            f"Checksum for hdf5 file used to generate npz file \
+                                does not match current file in dataloader."
                         )
                         return False
             os.remove(f"{file_path}/{file_name}.lockfile")
@@ -707,7 +708,8 @@ class HDF5Dataset:
             calculated_checksum = calculate_md5_checksum(file_name, file_path)
             if calculated_checksum != checksum:
                 log.warning(
-                    f"Checksum mismatch for file {file_path}/{file_name}. Expected {calculated_checksum}, found {checksum}."
+                    f"Checksum mismatch for file {file_path}/{file_name}. \
+                        Expected {calculated_checksum}, found {checksum}."
                 )
                 return False
             return True
@@ -748,7 +750,8 @@ class HDF5Dataset:
                 self.hdf5_data_file["name"], self.local_cache_dir
             )
             raise ValueError(
-                f"Checksum mismatch for unzipped data file {temp_hdf5_file}. Found {checksum}, Expected {self.hdf5_data_file['md5']}"
+                f"Checksum mismatch for unzipped data file {temp_hdf5_file}. \
+                    Found {checksum}, Expected {self.hdf5_data_file['md5']}"
             )
         from modelforge.utils.misc import OpenWithLock
 
@@ -833,7 +836,8 @@ class HDF5Dataset:
                                     for value in configs_nan_by_prop.values()
                                 ]
                                 raise ValueError(
-                                    f"Number of conformers is inconsistent across properties for record {record}: values {val_temp}"
+                                    f"Number of conformers is inconsistent across properties \
+                                        for record {record}: values {val_temp}"
                                 )
 
                             configs_nan = np.logical_or.reduce(
@@ -844,7 +848,8 @@ class HDF5Dataset:
                             atomic_subsystem_counts_rec = hf[record][
                                 next(iter(single_atom_data.keys()))
                             ].shape[0]
-                            # all single and series atom properties should have the same number of atoms as the first property
+                            # all single and series atom properties should have the same number of atoms \
+                            # as the first property
 
                             self.n_confs.append(n_confs_rec)
                             self.atomic_subsystem_counts.append(
@@ -855,7 +860,8 @@ class HDF5Dataset:
                                 record_array = hf[record][value][()]
                                 if record_array.shape[0] != atomic_subsystem_counts_rec:
                                     raise ValueError(
-                                        f"Number of atoms for property {value} is inconsistent with other properties for record {record}"
+                                        f"Number of atoms for property {value} is inconsistent \
+                                            with other properties for record {record}"
                                     )
                                 else:
                                     single_atom_data[value].append(record_array)
@@ -868,7 +874,8 @@ class HDF5Dataset:
                                             != atomic_subsystem_counts_rec
                                     ):
                                         raise ValueError(
-                                            f"Number of atoms for property {value} is inconsistent with other properties for record {record}"
+                                            f"Number of atoms for property {value} is inconsistent \
+                                                with other properties for record {record}"
                                         )
                                     else:
                                         series_atom_data[value].append(
@@ -925,7 +932,8 @@ class HDF5Dataset:
         Examples
         --------
         """
-        # skip validating the checksum, as the npz file checksum of otherwise identical data differs between python 3.11 and 3.9/10
+        # skip validating the checksum, as the npz file checksum of otherwise identical data \
+        # differs between python 3.11 and 3.9/10
         # we have a metadatafile we validate separately instead
         if self._file_validation(
                 self.processed_data_file["name"], self.local_cache_dir, checksum=None
@@ -935,7 +943,8 @@ class HDF5Dataset:
                     self.local_cache_dir,
             ):
                 log.debug(
-                    f"Loading processed data from {self.local_cache_dir}/{self.processed_data_file['name']} generated on {self._npz_metadata['date_generated']}"
+                    f"Loading processed data from {self.local_cache_dir}/{self.processed_data_file['name']} \
+                        generated on {self._npz_metadata['date_generated']}"
                 )
                 log.debug(
                     f"Properties of Interest in .npz file: {self._npz_metadata['data_keys']}"
@@ -944,7 +953,8 @@ class HDF5Dataset:
                 from modelforge.utils.misc import OpenWithLock
 
                 # this will check check for the existence of the lock file and wait until it is unlocked
-                # we will just open it as write, since we do not need to read it in; this ensure that we don't have an issue
+                # we will just open it as write, since we do not need to read it in; \
+                # this ensure that we don't have an issue
                 # where we have deleted the lock file from a separate, prior process
                 with OpenWithLock(
                         f"{self.local_cache_dir}/{self.processed_data_file['name']}.lockfile",
@@ -1002,7 +1012,8 @@ class HDF5Dataset:
 
         # we will generate a simple metadata file to list which data keys were used to generate the npz file
         # and the checksum of the hdf5 file used to create the npz
-        # we can also add in the date of generation so we can report on when the datafile was generated when we load the npz
+        # we can also add in the date of generation so we can report on when the datafile was generated \
+        # when we load the npz
         metadata = {
             "data_keys": list(self.hdf5data.keys()),
             "hdf5_checksum": self.hdf5_data_file["md5"],
@@ -1048,7 +1059,8 @@ class DatasetFactory:
         # The metadata file will contain the keys used to generate the npz file, the checksum of the hdf5 and gz
         # file used to generate the npz file.  We will look at the metadata file and compare this to the
         # variables saved in the HDF5Dataset class to determine if the npz file is valid.
-        # It is important to check the keys used to generate the npz file, as these are allowed to be changed by the user.
+        # It is important to check the keys used to generate the npz file, \
+        # as these are allowed to be changed by the user.
 
         if data._file_validation(
                 data.processed_data_file["name"],
@@ -1129,7 +1141,8 @@ class DataModule(pl.LightningDataModule):
             regenerate_processed_cache: bool = True,
     ) -> object:
         """
-        Initializes adData module for PyTorch Lightning handling data preparation and loading object with the specified configuration.
+        Initializes adData module for PyTorch Lightning handling data preparation and loading object \
+            with the specified configuration.
         If `remove_self_energies` is `True` and:
         - `self_energies` are passed as a dictionary, these will be used
         - `self_energies` are `None`, `self._ase` will be used
@@ -1149,14 +1162,16 @@ class DataModule(pl.LightningDataModule):
                 Whether to shift the center of mass of the molecule to the origin. This is necessary if using the
                 dipole moment in the loss function.
             atomic_self_energies : Optional[Dict[str, float]]
-                A dictionary mapping element names to their self energies. If not provided, the self energies will be calculated.
+                A dictionary mapping element names to their self energies. If not provided, the self energies
+                will be calculated.
             regression_ase: bool, defaults to False
                 Whether to use the calculated self energies for regression.
             force_download : bool,  defaults to False
                 Whether to force the dataset to be downloaded, even if it is already cached.
             version_select : str, defaults to "latest"
                 Select the version of the dataset to use. If "latest", the latest version will be used.
-                "latest_test" will use the latest test version. Specific versions can be selected by passing the version name
+                "latest_test" will use the latest test version. Specific versions can be selected by passing
+                the version name
                 as defined in the yaml files associated with each dataset.
             local_cache_dir : str, defaults to "./"
                 Directory to store the files.

@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional
 
 
 def _add_per_atom_charge_to_predicted_properties(config):
@@ -39,7 +39,7 @@ def _add_electrostatic_to_predicted_properties(config):
 
 def setup_potential_for_test(
     potential_name: str,
-    use: str,
+    use: Literal["training", "inference"],
     use_default_dataset_statistic: bool = True,
     use_training_mode_neighborlist: bool = True,
     jit: bool = False,
@@ -61,22 +61,29 @@ def setup_potential_for_test(
     if local_cache_dir is not None:
         config["runtime"].local_cache_dir = local_cache_dir
 
-    model = NeuralNetworkPotentialFactory.generate_potential(
-        use=use,
-        potential_parameter=config["potential"],
-        training_parameter=config["training"],
-        dataset_parameter=config["dataset"],
-        runtime_parameter=config["runtime"],
-        potential_seed=potential_seed,
-        simulation_environment=simulation_environment,
-        use_training_mode_neighborlist=use_training_mode_neighborlist,
-        use_default_dataset_statistic=use_default_dataset_statistic,
-        jit=jit,
-        only_unique_pairs=only_unique_pairs,
+    if use == "training":
+        trainer = NeuralNetworkPotentialFactory.generate_trainer(
+            potential_parameter=config["potential"],
+            training_parameter=config["training"],
+            dataset_parameter=config["dataset"],
+            runtime_parameter=config["runtime"],
+            potential_seed=potential_seed,
+            use_default_dataset_statistic=use_default_dataset_statistic,
+        )
+        potential = trainer.potential_training_adapter.potential
+    else:
+        potential = NeuralNetworkPotentialFactory.generate_potential(
+            use=use,
+            potential_parameter=config["potential"],
+            training_parameter=config["training"],
+            dataset_parameter=config["dataset"],
+            runtime_parameter=config["runtime"],
+            potential_seed=potential_seed,
+            simulation_environment=simulation_environment,
+            use_training_mode_neighborlist=use_training_mode_neighborlist,
+            use_default_dataset_statistic=use_default_dataset_statistic,
+            jit=jit,
+            only_unique_pairs=only_unique_pairs,
     )
 
-    if use == "training":
-        potential = model.potential_training_adapter.potential
-    else:
-        potential = model
     return potential

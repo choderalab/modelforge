@@ -1,3 +1,5 @@
+from typing import Literal
+
 import pytest
 import torch
 from openff.units import unit
@@ -20,10 +22,13 @@ def prep_temp_dir(tmp_path_factory):
     return fn
 
 
-def initialize_model(simulation_environment: str, config, mode: str, jit: bool):
+def initialize_model(
+    simulation_environment: Literal["PyTorch", "JAX"],
+    config,
+    jit: bool
+):
     """Initialize the model based on the simulation environment and configuration."""
     return NeuralNetworkPotentialFactory.generate_potential(
-        use=mode,
         simulation_environment=simulation_environment,
         potential_parameter=config["potential"],
         jit=jit,
@@ -233,8 +238,7 @@ def test_energy_scaling_and_offset(
     config["runtime"].local_cache_dir = str(prep_temp_dir)
 
     # inference model
-    trainer = NeuralNetworkPotentialFactory.generate_potential(
-        use="training",
+    trainer = NeuralNetworkPotentialFactory.generate_trainer(
         potential_parameter=config["potential"],
         training_parameter=config["training"],
         dataset_parameter=config["dataset"],
@@ -301,9 +305,7 @@ def test_state_dict_saving_and_loading(potential_name, prep_temp_dir):
     # ------------------------------------------------------------- #
     # Use case 1:
     # train a model, save the state_dict and load it again
-    trainer = NeuralNetworkPotentialFactory.generate_potential(
-        use="training",
-        simulation_environment="PyTorch",
+    trainer = NeuralNetworkPotentialFactory.generate_trainer(
         potential_parameter=config["potential"],
         training_parameter=config["training"],
         runtime_parameter=config["runtime"],
@@ -325,9 +327,7 @@ def test_state_dict_saving_and_loading(potential_name, prep_temp_dir):
     # ------------------------------------------------------------- #
     # Use case 3
     # generate a new trainer and load it
-    trainer = NeuralNetworkPotentialFactory.generate_potential(
-        use="training",
-        simulation_environment="PyTorch",
+    trainer = NeuralNetworkPotentialFactory.generate_trainer(
         potential_parameter=config["potential"],
         training_parameter=config["training"],
         runtime_parameter=config["runtime"],
@@ -385,14 +385,13 @@ def test_dataset_statistic(potential_name, prep_temp_dir):
         dataset_statistic["training_dataset_statistics"]["per_atom_energy_mean"]
     ).m
 
-    trainer = NeuralNetworkPotentialFactory.generate_potential(
-        use="training",
+    trainer = NeuralNetworkPotentialFactory.generate_trainer(
         potential_parameter=potential_parameter,
         training_parameter=training_parameter,
         dataset_parameter=dataset_parameter,
         runtime_parameter=runtime_parameter,
     )
-    # check that the per_atom_energy_mean is the same than in the dataset statistics
+    # check that the per_atom_energy_mean is the same as in the dataset statistics
     assert np.isclose(
         toml_E_i_mean,
         unit.Quantity(
@@ -618,7 +617,6 @@ def test_different_neighborlists_for_inference(
 )
 @pytest.mark.parametrize("potential_name", ["SchNet"])
 @pytest.mark.parametrize("simulation_environment", ["PyTorch"])
-@pytest.mark.parametrize("mode", ["inference"])
 @pytest.mark.parametrize("jit", [False])
 def test_multiple_output_heads(
     dataset_name,
@@ -644,7 +642,7 @@ def test_multiple_output_heads(
         config = _add_electrostatic_to_predicted_properties(config)
 
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
-    model = initialize_model(simulation_environment, config, mode, jit)
+    model = initialize_model(simulation_environment, config, jit)
 
     # Perform the forward pass through the model
     output = model(nnp_input)

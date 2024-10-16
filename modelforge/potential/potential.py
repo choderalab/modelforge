@@ -8,6 +8,7 @@ import lightning as pl
 import torch
 from loguru import logger as log
 from openff.units import unit
+from torch.utils.hipify.hipify_python import InputError
 
 from modelforge.dataset.dataset import DatasetParameters, NNPInputTuple
 from modelforge.potential.neighbors import PairlistData
@@ -509,8 +510,8 @@ class NeuralNetworkPotentialFactory:
     @staticmethod
     def generate_potential(
         *,
-        use: Literal["training", "inference"],
         potential_parameter: T_NNP_Parameters,
+        use = "inference",
         runtime_parameter: Optional[RuntimeParameters] = None,
         training_parameter: Optional[TrainingParameters] = None,
         dataset_parameter: Optional[DatasetParameters] = None,
@@ -581,7 +582,7 @@ class NeuralNetworkPotentialFactory:
                 dataset_statistic=dataset_statistic,
                 use_default_dataset_statistic=use_default_dataset_statistic,
             )
-            return trainer
+            raise InputError("Use generate_trainer()!!")
         # obtain model for inference
         elif use == "inference":
             potential = setup_potential(
@@ -601,6 +602,30 @@ class NeuralNetworkPotentialFactory:
         else:
             raise NotImplementedError(f"Unsupported 'use' value: {use}")
 
+    @staticmethod
+    def generate_trainer(
+            *,
+            potential_parameter: T_NNP_Parameters,
+            runtime_parameter: Optional[RuntimeParameters] = None,
+            training_parameter: Optional[TrainingParameters] = None,
+            dataset_parameter: Optional[DatasetParameters] = None,
+            dataset_statistic: Dict[str, Dict[str, float]] = None,
+            potential_seed: Optional[int] = None,
+            use_default_dataset_statistic: bool = False,
+    ) -> PotentialTrainer:
+        log.debug(f"{training_parameter=}")
+        log.debug(f"{dataset_parameter=}")
+
+        trainer = PotentialTrainer(
+            potential_parameter=potential_parameter,
+            training_parameter=training_parameter,
+            dataset_parameter=dataset_parameter,
+            runtime_parameter=runtime_parameter,
+            potential_seed=potential_seed,
+            dataset_statistic=dataset_statistic,
+            use_default_dataset_statistic=use_default_dataset_statistic,
+        )
+        return trainer
 
 class PyTorch2JAXConverter:
     """

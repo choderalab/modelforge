@@ -20,15 +20,14 @@ def setup_schnet_model(potential_seed: Optional[int] = None):
     config["potential"].core_parameter.number_of_radial_basis_functions = 5
     config["potential"].core_parameter.number_of_filters = 12
 
-    model = NeuralNetworkPotentialFactory.generate_potential(
-        use="training",
+    potential = NeuralNetworkPotentialFactory.generate_trainer(
         potential_parameter=config["potential"],
         training_parameter=config["training"],
         dataset_parameter=config["dataset"],
         runtime_parameter=config["runtime"],
         potential_seed=potential_seed,
     ).potential_training_adapter.potential
-    return model
+    return potential
 
 
 def test_init():

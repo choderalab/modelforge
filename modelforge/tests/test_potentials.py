@@ -230,6 +230,8 @@ def test_energy_scaling_and_offset(
     # read default parameters
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
 
+    config["runtime"].local_cache_dir = str(prep_temp_dir)
+
     # inference model
     trainer = NeuralNetworkPotentialFactory.generate_potential(
         use="training",
@@ -295,6 +297,7 @@ def test_state_dict_saving_and_loading(potential_name, prep_temp_dir):
     # read default parameters
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
 
+    config["runtime"].local_cache_dir = str(prep_temp_dir)
     # ------------------------------------------------------------- #
     # Use case 1:
     # train a model, save the state_dict and load it again
@@ -357,6 +360,8 @@ def test_dataset_statistic(potential_name, prep_temp_dir):
     dataset_parameter = config["dataset"]
     runtime_parameter = config["runtime"]
 
+    runtime_parameter.local_cache_dir = str(prep_temp_dir)
+
     # test the self energy calculation on the QM9 dataset
     dataset = DataModule(
         name="QM9",
@@ -366,6 +371,7 @@ def test_dataset_statistic(potential_name, prep_temp_dir):
         remove_self_energies=True,
         regression_ase=False,
         regenerate_dataset_statistic=True,
+        local_cache_dir=str(prep_temp_dir),
     )
     dataset.prepare_data()
     dataset.setup()
@@ -465,7 +471,7 @@ def test_energy_between_simulation_environments(
 )
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_forward_pass_with_all_datasets(
-    potential_name, dataset_name, datamodule_factory
+    potential_name, dataset_name, datamodule_factory, prep_temp_dir
 ):
     """Test forward pass with all datasets."""
     import toml
@@ -479,10 +485,14 @@ def test_forward_pass_with_all_datasets(
     if dataset_name.lower().startswith("spice"):
         print("using subset")
         dataset = datamodule_factory(
-            dataset_name=dataset_name, version_select="nc_1000_v0_HCNOFClS"
+            dataset_name=dataset_name,
+            version_select="nc_1000_v0_HCNOFClS",
+            local_cache_dir=str(prep_temp_dir),
         )
     else:
-        dataset = datamodule_factory(dataset_name=dataset_name)
+        dataset = datamodule_factory(
+            dataset_name=dataset_name, local_cache_dir=str(prep_temp_dir)
+        )
 
     dataset_statistic = toml.load(dataset.dataset_statistic_filename)
     train_dataloader = dataset.train_dataloader()
@@ -626,6 +636,7 @@ def test_multiple_output_heads(
         32, dataset_name, str(prep_temp_dir)
     ).nnp_input_tuple
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
+    config["runtime"].local_cache_dir = str(prep_temp_dir)
     # Modify the config based on the energy expression
     config = _add_per_atom_charge_to_predicted_properties(config)
     if energy_expression == "short_range_and_long_range_electrostatic":

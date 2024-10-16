@@ -201,6 +201,7 @@ class PostProcessing(torch.nn.Module):
 class Potential(torch.nn.Module):
     def __init__(
         self,
+        name: str,
         core_network,
         neighborlist,
         postprocessing,
@@ -213,6 +214,9 @@ class Potential(torch.nn.Module):
 
         Parameters
         ----------
+        name: str
+            The name of the potential model. This is used to identify the model
+            e.g. from a checkpoint file.
         core_network : torch.nn.Module
             The core neural network used for potential energy calculation.
         neighborlist : torch.nn.Module
@@ -388,25 +392,37 @@ class Potential(torch.nn.Module):
         model.
         """
 
-        # Prefix to remove
+        # Prefix to remove from the keys
         prefix = "potential."
-        excluded_keys = ["loss.per_molecule_energy", "loss.per_atom_force"]
+        # Prefixes of keys to exclude entirely
+        excluded_prefixes = ["loss."]
 
-        # Create a new dictionary without the prefix in the keys if prefix exists
-        if any(key.startswith(prefix) for key in state_dict.keys()):
-            filtered_state_dict = {
-                key[len(prefix) :] if key.startswith(prefix) else key: value
-                for key, value in state_dict.items()
-                if key not in excluded_keys
-            }
-            log.debug(f"Removed prefix: {prefix}")
+        filtered_state_dict = {}
+        prefixes_removed = set()
+
+        for key, value in state_dict.items():
+            # Exclude keys starting with any of the excluded prefixes
+            if any(key.startswith(ex_prefix) for ex_prefix in excluded_prefixes):
+                continue  # Skip this key entirely
+
+            original_key = key  # Keep track of the original key
+
+            # Remove the specified prefix from the key if it exists
+            if key.startswith(prefix):
+                key = key[len(prefix) :]
+                prefixes_removed.add(prefix)
+
+            # change legacy key names
+            # neighborlist.calculate_distances_and_pairlist.cutoff -> neighborlist.cutoffs
+            if key == "neighborlist.calculate_distances_and_pairlist.cutoff":
+                key = "neighborlist.cutoff"
+
+            filtered_state_dict[key] = value
+
+        if prefixes_removed:
+            log.debug(f"Removed prefixes: {prefixes_removed}")
         else:
-            # Create a filtered dictionary without excluded keys if no prefix
-            # exists
-            filtered_state_dict = {
-                k: v for k, v in state_dict.items() if k not in excluded_keys
-            }
-            log.debug("No prefix found. No modifications to keys in state loading.")
+            log.debug("No prefixes found. No modifications to keys in state loading.")
 
         super().load_state_dict(
             filtered_state_dict,
@@ -483,6 +499,7 @@ def setup_potential(
             )
 
     model = Potential(
+        str(potential_parameter.potential_name),
         core_network,
         neighborlist,
         postprocessing,

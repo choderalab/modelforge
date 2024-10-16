@@ -413,7 +413,6 @@ class Loss(nn.Module):
                 batch,
             )
 
-
             # Accumulate weighted per-sample losses
             weighted_loss = self.weights[prop] * prop_loss
             total_loss += weighted_loss  # Note: total_loss is still per-sample
@@ -426,7 +425,6 @@ class Loss(nn.Module):
 
             # save the loss for the property
             loss_dict[prop] = prop_loss.detach()  # Store per-sample loss
-
 
         # Add total loss to results dict and return
         loss_dict["total_loss"] = total_loss

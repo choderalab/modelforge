@@ -3,11 +3,11 @@ import platform
 
 import pytest
 import torch
+from modelforge.potential import NeuralNetworkPotentialFactory, _Implemented_NNPs
 
 ON_MACOS = platform.system() == "Darwin"
 
 IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
-from modelforge.potential import NeuralNetworkPotentialFactory, _Implemented_NNPs
 
 
 @pytest.fixture(scope="session")
@@ -162,7 +162,7 @@ def test_train_with_lightning(loss, potential_name, dataset_name, prep_temp_dir)
         pytest.skip("ANI potential is not compatible with SPICE2 dataset")
     if IN_GITHUB_ACTIONS and potential_name == "SAKE" and "force" in loss:
         pytest.skip(
-            "Skipping Sake training with forces on GitHub Actions because it allocates too much memory"
+            "Skipping Sake training with forces because it allocates too much memory"
         )
 
     config = load_configs_into_pydantic_models(

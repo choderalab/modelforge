@@ -1,16 +1,16 @@
-Models
+Potentials
 ===============
 
-Models: Overview
+Potentials: Overview
 ----------------
 
-A model in *modelforge* encapsulates all the operations required to map a
+A potential in *modelforge* encapsulates all the operations required to map a
 description of a molecular system (which includes the Cartesian coordinates,
 atomic numbers, and total charge of a system (optionally also the spin state))
-to, at a minimum, its energy. Specifically, a model takes as input a
+to, at a minimum, its energy. Specifically, a potential takes as input a
 :py:class:`~modelforge.dataset.dataset.NNPInput` dataclass and outputs a
 dictionary of PyTorch tensors representing per-atom and/or per-molecule
-properties, including per-molecule energies. The model comprises three main
+properties, including per-molecule energies. A potential comprises three main
 components:
 
 1. **Input Preparation Module**
@@ -37,7 +37,7 @@ network architecture.
 Implemented Models
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-*Modelforge* currently supports the following models:
+*Modelforge* currently supports the following potentials:
 
 - Invariant architectures:
    * SchNet
@@ -54,20 +54,20 @@ Additionally, the following models are currently under development and can be ex
 - DimeNet
 - AimNet2
 
-Each model currently implements the total energy prediction with per-atom
+Each potential currently implements the total energy prediction with per-atom
 forces within a given cutoff radius. The models can be trained on energies and
 forces. PaiNN and PhysNet can also predict partial charges and
 calculate long-range interactions using reaction fields or Coulomb potential.
 PaiNN can additionally use multipole expansions.
 
-Using TOML files to configure models
+Using TOML files to configure potentials
 ------------------------------------
 
-To initialize a model, a model factory is used:
+To initialize a potential, a potential factory is used:
 :class:`~modelforge.potential.models.NeuralNetworkPotentialFactory`. 
-This takes care of initialization of the model and the input preparation and postprocessing modules.
+This takes care of initialization of the potential and the input preparation and postprocessing modules.
 
-A neural network model is defined by a configuration file in the TOML format.
+A neural network potential is defined by a configuration file in the TOML format.
 This configuration file includes parameters for the neural network, as well as
 for the input preparation and postprocessing modules. Below is an example
 configuration file for the PhysNet model:
@@ -82,7 +82,7 @@ for the neural network, while the `postprocessing_parameter` section contains
 the parameters for the postprocessing operations. Explanation of fields in
 `physnet.toml`:
 
-* `potential_name`: Specifies the type of model to use, in this case, PhysNet.
+* `potential_name`: Specifies the type of potential to use, in this case, PhysNet.
 * `number_of_radial_basis_functions`: Number of radial basis functions.
 * `maximum_interaction_radius`: Cutoff radius for considering neighboring atoms.
 * `number_of_interaction_residual`: PhysNet hyperparamter defining the depth of the network.
@@ -96,14 +96,14 @@ the parameters for the postprocessing operations. Explanation of fields in
 * `keep_per_atom_property`: If this is set to true the per-atom energies are returned as well.
 
 
-Default parameter files for each model are available in `modelforge/tests/data/potential_defaults`. These files can be used as starting points for creating new model configuration files.
+Default parameter files for each potential are available in `modelforge/tests/data/potential_defaults`. These files can be used as starting points for creating new potential configuration files.
 
 .. note:: All parameters in the configuration files have units attached where applicable. Units within modelforge a represented using the `openff.units` package (https://docs.openforcefield.org/projects/units/en/stable/index.html), which is a wrapper around the `pint` package. Definition of units within the TOML files must unit names available in the `openff.units` package (https://github.com/openforcefield/openff-units/blob/main/openff/units/data/defaults.txt).
 
 Example
 ------------------------------------
 
-Below is an example of how to create a SchNet model using the model factory, although we note these operations do not typically need to be performed directly by a user and are handled by routines available in the training module:
+Below is an example of how to create a SchNet model using the potential factory, although we note these operations do not typically need to be performed directly by a user and are handled by routines available in the training module:
 
 .. code-block:: python
    :linenos:
@@ -121,7 +121,7 @@ Below is an example of how to create a SchNet model using the model factory, alt
    potential_parameters = toml.load(filename)
 
    # initialize the models with the given parameter set
-   model = NeuralNetworkPotentialFactory.create_nnp(
+   model = NeuralNetworkPotentialFactory.generate_potential(
       use="inference",
       model_type=model_name,
       model_parameter=potential_parameters,

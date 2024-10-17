@@ -34,7 +34,9 @@ def initialize_model(simulation_environment: str, config, mode: str, jit: bool):
 def prepare_input_for_model(nnp_input, model):
     """Prepare the input for the model based on the simulation environment."""
     if "JAX" in str(type(model)):
-        return nnp_input.as_jax_namedtuple()
+        from modelforge.dataset.dataset import convert_NNPInput_to_jax
+
+        return convert_NNPInput_to_jax(nnp_input)
     return nnp_input
 
 
@@ -163,8 +165,9 @@ def test_JAX_wrapping(potential_name, single_batch_with_batchsize, prep_temp_dir
         potential_name=potential_name,
         simulation_environment="JAX",
     )
+    from modelforge.dataset.dataset import convert_NNPInput_to_jax
 
-    nnp_input = batch.nnp_input.as_jax_namedtuple()
+    nnp_input = convert_NNPInput_to_jax(batch.nnp_input)
     out = model(nnp_input)["per_molecule_energy"]
     import jax
 
@@ -815,6 +818,7 @@ def test_calculate_energies_and_forces_with_jax(
     Test the calculation of energies and forces for a molecule.
     """
     import torch
+    from modelforge.jax import convert_NNPInput_to_jax
 
     nnp_input = single_batch_with_batchsize(
         batch_size=1, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
@@ -822,7 +826,7 @@ def test_calculate_energies_and_forces_with_jax(
     # test the backward pass through each of the models
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
     nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
-    nnp_input = nnp_input.as_jax_namedtuple()
+    nnp_input = convert_NNPInput_to_jax(nnp_input)
 
     model = setup_potential_for_test(
         potential_name,
@@ -911,8 +915,8 @@ def test_equivariant_energies_and_forces(
     Test the calculation of energies and forces for a molecule.
     NOTE: test will be adapted once we have a trained model.
     """
-    from dataclasses import replace
     import torch
+    from copy import deepcopy
 
     precision = torch.float64
 
@@ -934,9 +938,12 @@ def test_equivariant_energies_and_forces(
     # reference values
     nnp_input = single_batch_with_batchsize(
         batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
-    ).nnp_input.to(dtype=precision)
+    ).nnp_input.to_dtype(dtype=precision)
+    ref_nnp_input = single_batch_with_batchsize(
+        batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+    ).nnp_input.to_dtype(dtype=precision)
 
-    reference_result = model(nnp_input.as_namedtuple())["per_molecule_energy"]
+    reference_result = model(nnp_input)["per_molecule_energy"]
     reference_forces = -torch.autograd.grad(
         reference_result.sum(),
         nnp_input.positions,
@@ -945,7 +952,7 @@ def test_equivariant_energies_and_forces(
     # --------------------------------------- #
     # translation test
     # set up input
-    translation_nnp_input = replace(nnp_input).to(dtype=precision)
+    translation_nnp_input = ref_nnp_input.to_dtype(dtype=precision)
     translation_nnp_input.positions = translation(translation_nnp_input.positions)
 
     translation_result = model(translation_nnp_input)["per_molecule_energy"]
@@ -973,7 +980,7 @@ def test_equivariant_energies_and_forces(
     # --------------------------------------- #
     # rotation test
     # set up input
-    rotation_input_data = replace(nnp_input).to(dtype=precision)
+    rotation_input_data = ref_nnp_input.to_dtype(dtype=precision)
     rotation_input_data.positions = rotation(rotation_input_data.positions)
     rotation_result = model(rotation_input_data)["per_molecule_energy"]
 
@@ -1004,7 +1011,7 @@ def test_equivariant_energies_and_forces(
     # --------------------------------------- #
     # reflection test
     # set up input
-    reflection_input_data = replace(nnp_input).to(dtype=precision)
+    reflection_input_data = ref_nnp_input.to_dtype(dtype=precision)
     reflection_input_data.positions = reflection(reflection_input_data.positions)
     reflection_result = model(reflection_input_data)["per_molecule_energy"]
     reflection_forces = -torch.autograd.grad(

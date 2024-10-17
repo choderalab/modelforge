@@ -4,9 +4,11 @@ This module contains classes and functions for managing datasets.
 
 import os
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, List, Literal, NamedTuple, Optional, Union
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 import numpy as np
+import jax
+import jax.numpy as jnp
 import pytorch_lightning as pl
 import torch
 from loguru import logger as log
@@ -185,27 +187,49 @@ class NNPInput:
         self._validate_inputs()
 
     def _validate_inputs(self):
-        if self.atomic_numbers.dim() != 1:
-            raise ValueError("atomic_numbers must be a 1D tensor")
-        if self.positions.dim() != 2 or self.positions.size(1) != 3:
-            raise ValueError("positions must be a 2D tensor with shape [num_atoms, 3]")
-        if self.atomic_subsystem_indices.dim() != 1:
-            raise ValueError("atomic_subsystem_indices must be a 1D tensor")
-        if len(self.positions) != len(self.atomic_numbers):
+        # Get shapes of the arrays
+        atomic_numbers_shape = self.atomic_numbers.shape
+        positions_shape = self.positions.shape
+        atomic_subsystem_indices_shape = self.atomic_subsystem_indices.shape
+
+        # Validate dimensions
+        if len(atomic_numbers_shape) != 1:
+            raise ValueError("atomic_numbers must be a 1D tensor or array")
+        if len(positions_shape) != 2 or positions_shape[1] != 3:
+            raise ValueError(
+                "positions must be a 2D tensor or array with shape [num_atoms, 3]"
+            )
+        if len(atomic_subsystem_indices_shape) != 1:
+            raise ValueError("atomic_subsystem_indices must be a 1D tensor or array")
+
+        # Validate lengths
+        num_atoms = positions_shape[0]
+        if atomic_numbers_shape[0] != num_atoms:
             raise ValueError(
                 "The size of atomic_numbers and the first dimension of positions must match"
             )
-        if len(self.positions) != len(self.atomic_subsystem_indices):
+        if atomic_subsystem_indices_shape[0] != num_atoms:
             raise ValueError(
                 "The size of atomic_subsystem_indices and the first dimension of positions must match"
             )
 
     def __post_init__(self):
 
-        # Set all integer tensors to int32
-        self.atomic_numbers = self.atomic_numbers.to(torch.int32)
-        self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(torch.int32)
-        self.total_charge = self.total_charge.to(torch.int32)
+        # Set all integer tensors to int32 or JAX int32
+        if isinstance(self.atomic_numbers, torch.Tensor):
+            self.atomic_numbers = self.atomic_numbers.to(torch.int32)
+            self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(
+                torch.int32
+            )
+            self.total_charge = self.total_charge.to(torch.int32)
+        elif isinstance(self.atomic_numbers, jax.numpy.ndarray):
+            self.atomic_numbers = self.atomic_numbers.astype(jnp.int32)
+            self.atomic_subsystem_indices = self.atomic_subsystem_indices.astype(
+                jnp.int32
+            )
+            self.total_charge = self.total_charge.astype(jnp.int32)
+        else:
+            raise TypeError("Unsupported array type in NNPInput")
 
     def to_device(self, device: torch.device):
         """Move all tensors in this instance to the specified device."""
@@ -231,32 +255,6 @@ class NNPInput:
         self.box_vectors = self.box_vectors.to(dtype)
         assert self.box_vectors.shape == (3, 3)
         return self
-
-
-def convert_NNPInput_to_jax(self, nnp_input: NNPInput):
-    """
-    Convert the NNPInput to a JAX-compatible format.
-    """
-    from modelforge.utils.io import import_
-
-    convert_to_jax = import_("pytorch2jax").pytorch2jax.convert_to_jax
-
-    nnp_input.atomic_numbers = convert_to_jax(nnp_input.atomic_numbers)
-    nnp_input.positions = convert_to_jax(nnp_input.positions)
-    nnp_input.atomic_subsystem_indices = convert_to_jax(
-        nnp_input.atomic_subsystem_indices
-    )
-    nnp_input.total_charge = convert_to_jax(nnp_input.total_charge)
-    nnp_input.box_vectors = convert_to_jax(nnp_input.box_vectors)
-    nnp_input.is_periodic = convert_to_jax(nnp_input.is_periodic)
-
-    if nnp_input.pair_list is not None:
-        nnp_input.pair_list = convert_to_jax(nnp_input.pair_list)
-
-    if nnp_input.partial_charge is not None:
-        nnp_input.partial_charge = convert_to_jax(nnp_input.partial_charge)
-
-    return nnp_input
 
 
 @dataclass

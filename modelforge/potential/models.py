@@ -10,7 +10,7 @@ from loguru import logger as log
 from openff.units import unit
 from modelforge.potential.neighbors import PairlistData
 
-from modelforge.dataset.dataset import DatasetParameters,  NNPInput
+from modelforge.dataset.dataset import DatasetParameters, NNPInput
 from modelforge.potential.parameters import (
     AimNet2Parameters,
     ANI2xParameters,
@@ -610,6 +610,19 @@ class NeuralNetworkPotentialFactory:
                 verlet_neighborlist_skin=verlet_neighborlist_skin,
             )
             if simulation_environment == "JAX":
+                # register nnp_input as pytree
+                from modelforge.utils.io import import_
+
+                jax = import_("jax")
+                from modelforge.jax import nnpinput_flatten, nnpinput_unflatten
+                from modelforge.dataset import NNPInput
+
+                jax.tree_util.register_pytree_node(
+                    NNPInput,
+                    nnpinput_flatten,
+                    nnpinput_unflatten,
+                )
+
                 return PyTorch2JAXConverter().convert_to_jax_model(model)
             else:
                 return model

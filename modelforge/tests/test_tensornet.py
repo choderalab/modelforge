@@ -28,9 +28,9 @@ def test_forward_with_inference_model(
     simulation_environment, single_batch_with_batchsize, prep_temp_dir
 ):
 
-    batch = single_batch_with_batchsize(
+    nnp_input = single_batch_with_batchsize(
         batch_size=32, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
-    )
+    ).nnp_input
 
     # load default parameters
     model = setup_potential_for_test(
@@ -44,9 +44,9 @@ def test_forward_with_inference_model(
     if simulation_environment == "JAX":
         from modelforge.jax import convert_NNPInput_to_jax
 
-        model(convert_NNPInput_to_jax(batch))
+        model(convert_NNPInput_to_jax(nnp_input))
     else:
-        model(batch.nnp_input)
+        model(nnp_input)
 
 
 def test_input():

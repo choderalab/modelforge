@@ -108,7 +108,7 @@ def test_input():
         assert torch.allclose(
             pairlist_output.r_ij[_],
             -1 * edge_vec[idx],
-            rtol=1e-2,
+            rtol=1e-3,
         )
 
 

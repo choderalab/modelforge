@@ -896,7 +896,7 @@ class ModelTrainer:
             """
 
             def on_before_optimizer_step(self, trainer, pl_module, optimizer):
-                pl_module.log("model/grad_norm", gradient_norm(pl_module))
+                pl_module.log("grad_norm/model", gradient_norm(pl_module))
 
         callbacks.append(GradNormCallback())
 

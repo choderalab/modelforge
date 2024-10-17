@@ -50,21 +50,26 @@ def gradient_norm(model):
         if p.grad is not None:
             param_norm = p.grad.detach().data.norm(2)
             total_norm += param_norm.item() ** 2
-    total_norm = total_norm ** (1.0 / 2)
+    total_norm = total_norm**0.5
     return total_norm
+
 
 def compute_grad_norm(loss, model):
     parameters = [p for p in model.parameters() if p.requires_grad]
-    grads = torch.autograd.grad(loss.sum(), parameters, retain_graph=True, create_graph=False, allow_unused=True,)
+    grads = torch.autograd.grad(
+        loss.sum(),
+        parameters,
+        retain_graph=True,
+        create_graph=False,
+        allow_unused=True,
+    )
     total_norm = 0.0
     for grad in grads:
         if grad is not None:
             param_norm = grad.detach().data.norm(2)
             total_norm += param_norm.item() ** 2
-    total_norm = total_norm ** 0.5
+    total_norm = total_norm**0.5
     return total_norm
-
-
 
 
 def _exchange_per_atom_energy_for_per_molecule_energy(prop: str) -> str:
@@ -501,7 +506,7 @@ class TrainingAdapter(pL.LightningModule):
         for key, metric in loss_dict.items():
             self.loss_metrics[key].update(metric.detach(), batch_size=batch_size)
             # Compute and log gradient norms for each loss component
-            if key == 'total_loss':
+            if key == "total_loss":
                 continue
             grad_norm = compute_grad_norm(metric.mean(), self)
             self.log(f"grad_norm/{key}", grad_norm)

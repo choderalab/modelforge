@@ -207,8 +207,8 @@ def test_error_calculation(single_batch_with_batchsize, prep_temp_dir):
     )
 
     data = batch
-    true_E = data.metadata.E
-    true_F = data.metadata.F
+    true_E = data.metadata.per_system_energy
+    true_F = data.metadata.per_atom_force
 
     # make predictions
     predicted_E = true_E + torch.rand_like(true_E) * 10
@@ -236,7 +236,7 @@ def test_error_calculation(single_batch_with_batchsize, prep_temp_dir):
         torch.linalg.vector_norm(predicted_F - true_F, dim=1, keepdim=True) ** 2
     )
 
-    per_mol_error = torch.zeros_like(data.metadata.E)
+    per_mol_error = torch.zeros_like(data.metadata.per_system_energy)
     per_mol_error.scatter_add_(
         0,
         data.nnp_input.atomic_subsystem_indices.unsqueeze(-1)
@@ -279,12 +279,16 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize, prep_temp_dir):
     )
 
     # Assertions for energy predictions
-    assert prediction["per_molecule_energy_predict"].size(0) == batch.metadata.E.size(
+    assert prediction["per_molecule_energy_predict"].size(
+        0
+    ) == batch.metadata.per_system_energy.size(
         0
     ), "Mismatch in batch size for energy predictions."
 
     # Assertions for force predictions
-    assert prediction["per_atom_force_predict"].size(0) == batch.metadata.F.size(
+    assert prediction["per_atom_force_predict"].size(
+        0
+    ) == batch.metadata.per_atom_force.size(
         0
     ), "Mismatch in number of atoms for force predictions."
 
@@ -363,8 +367,8 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
 
     assert prediction["per_molecule_energy_predict"].size(
         dim=0
-    ) == batch.metadata.E.size(dim=0)
-    assert prediction["per_atom_force_predict"].size(dim=0) == batch.metadata.F.size(
+    ) == batch.metadata.per_system_energy.size(dim=0)
+    assert prediction["per_atom_force_predict"].size(dim=0) == batch.metadata.per_atom_force.size(
         dim=0
     )
 
@@ -412,7 +416,7 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
 
     # # Aggregate error per molecule
     per_molecule_squared_error = torch.zeros_like(
-        batch.metadata.E.squeeze(-1), dtype=per_atom_force_squared_error.dtype
+        batch.metadata.per_system_energy.squeeze(-1), dtype=per_atom_force_squared_error.dtype
     )
     per_molecule_squared_error.scatter_add_(
         0,

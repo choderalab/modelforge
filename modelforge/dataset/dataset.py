@@ -282,7 +282,7 @@ class BatchData:
 
     def batch_size(self) -> int:
         """Return the batch size."""
-        return self.metadata.per_molecule_energy.size(dim=0)
+        return self.metadata.per_system_energy.size(dim=0)
 
 
 class TorchDataset(torch.utils.data.Dataset[BatchData]):

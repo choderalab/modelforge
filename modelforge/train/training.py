@@ -161,7 +161,7 @@ class CalculateProperties(torch.nn.Module):
         Dict[str, torch.Tensor]
             A dictionary containing the true and predicted energies.
         """
-        per_molecule_energy_true = batch.metadata.E.to(torch.float32)
+        per_molecule_energy_true = batch.metadata.per_system_energy.to(torch.float32)
         per_molecule_energy_predict = model_prediction["per_molecule_energy"].unsqueeze(
             1
         )

@@ -95,7 +95,9 @@ def test_dataset_basic_operations():
         assert np.array_equal(
             conf_data.nnp_input.atomic_numbers, atomic_numbers_true[conf_idx]
         )
-        assert np.array_equal(conf_data.metadata.E, energy_true[conf_idx])
+        assert np.array_equal(
+            conf_data.metadata.per_system_energy, energy_true[conf_idx]
+        )
 
     for rec_idx in range(dataset.record_len()):
         assert np.array_equal(
@@ -485,7 +487,7 @@ def test_data_item_format_of_datamodule(
     assert isinstance(raw_data_item, BatchData)
     assert isinstance(raw_data_item.nnp_input.atomic_numbers, torch.Tensor)
     assert isinstance(raw_data_item.nnp_input.positions, torch.Tensor)
-    assert isinstance(raw_data_item.metadata.E, torch.Tensor)
+    assert isinstance(raw_data_item.metadata.per_system_energy, torch.Tensor)
 
     assert (
         raw_data_item.nnp_input.atomic_numbers.shape[0]
@@ -680,7 +682,7 @@ def test_dataset_splitting(
         dm.test_dataset,
     )
 
-    energy = train_dataset[0].metadata.E.item()
+    energy = train_dataset[0].metadata.per_system_energyE.item()
     dataset_to_test = get_dataset_container_fix(dataset_name)
     if splitting_strategy == RandomSplittingStrategy:
         assert np.isclose(energy, dataset_to_test.expected_E_random_split)
@@ -782,12 +784,12 @@ def test_energy_postprocessing(prep_temp_dir):
     dm.setup()
 
     batch = next(iter(dm.val_dataloader()))
-    unnormalized_E = batch.metadata.E.numpy().flatten()
+    unnormalized_E = batch.metadata.per_system_energy.numpy().flatten()
     import numpy as np
 
     # check that normalized energies are correct
     assert torch.allclose(
-        batch.metadata.E.squeeze(1),
+        batch.metadata.per_system_energy.squeeze(1),
         torch.tensor(
             [
                 [
@@ -857,7 +859,7 @@ def test_function_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir
         local_cache_dir=str(prep_temp_dir),
     )
 
-    methane_energy_reference = float(dm.train_dataset[0].metadata.E)
+    methane_energy_reference = float(dm.train_dataset[0].metadata.per_system_energy)
     assert np.isclose(methane_energy_reference, -106277.4161)
 
     # Scenario 1: dataset contains self energies
@@ -968,7 +970,7 @@ def test_function_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir
         # double check that it is methane
         methane_atomic_indices = dm.train_dataset[0].nnp_input.atomic_numbers
         # extract energy
-        methane_energy_offset = dm.train_dataset[0].metadata.E
+        methane_energy_offset = dm.train_dataset[0].metadata.per_system_energy
         if regression is False:
             # checking that the offset energy is actually correct for methane
             assert torch.isclose(

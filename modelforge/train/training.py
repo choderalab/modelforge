@@ -115,7 +115,7 @@ class CalculateProperties(torch.nn.Module):
         # Ensure gradients are enabled
         nnp_input.positions.requires_grad_(True)
         # Cast to float32 and extract true forces
-        per_atom_force_true = batch.metadata.F.to(torch.float32)
+        per_atom_force_true = batch.metadata.per_atom_force.to(torch.float32)
 
         if per_atom_force_true.numel() < 1:
             raise RuntimeError("No force can be calculated.")
@@ -161,7 +161,7 @@ class CalculateProperties(torch.nn.Module):
         Dict[str, torch.Tensor]
             A dictionary containing the true and predicted energies.
         """
-        per_molecule_energy_true = batch.metadata.E.to(torch.float32)
+        per_molecule_energy_true = batch.metadata.per_system_energy.to(torch.float32)
         per_molecule_energy_predict = model_prediction["per_molecule_energy"].unsqueeze(
             1
         )
@@ -218,7 +218,7 @@ class CalculateProperties(torch.nn.Module):
             "per_molecule_total_charge_predict": total_charge_predict,
             "per_molecule_total_charge_true": batch.nnp_input.total_charge,
             "per_molecule_dipole_moment_predict": dipole_predict,
-            "per_molecule_dipole_moment_true": batch.metadata.dipole_moment,
+            "per_molecule_dipole_moment_true": batch.metadata.per_system_dipole_moment,
         }
 
     def _predict_dipole_moment(

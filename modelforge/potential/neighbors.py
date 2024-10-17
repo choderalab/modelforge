@@ -4,7 +4,7 @@ This file contains classes for computing pairs and neighbors.
 
 import torch
 from loguru import logger as log
-from modelforge.dataset.dataset import NNPInputTuple, NNPInput
+from modelforge.dataset.dataset import NNPInput
 
 from typing import Union, NamedTuple
 
@@ -408,7 +408,7 @@ class NeighborlistBruteNsq(torch.nn.Module):
 
         return pairs_full, d_ij_full, r_ij_full
 
-    def forward(self, data: NNPInputTuple):
+    def forward(self, data: NNPInput):
         """
         Prepares the input tensors for passing to the model.
 
@@ -418,7 +418,7 @@ class NeighborlistBruteNsq(torch.nn.Module):
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             The input data provided by the dataset, containing atomic numbers,
             positions, and other necessary information.
 
@@ -620,7 +620,7 @@ class NeighborlistVerletNsq(torch.nn.Module):
 
         return pairs_full, d_ij_full, r_ij_full
 
-    def forward(self, data: NNPInputTuple):
+    def forward(self, data: NNPInput):
         """
         Prepares the input tensors for passing to the model.
 
@@ -630,7 +630,7 @@ class NeighborlistVerletNsq(torch.nn.Module):
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             The input data provided by the dataset, containing atomic numbers,
             positions, and other necessary information.
 

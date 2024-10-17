@@ -34,7 +34,9 @@ def initialize_model(simulation_environment: str, config, mode: str, jit: bool):
 def prepare_input_for_model(nnp_input, model):
     """Prepare the input for the model based on the simulation environment."""
     if "JAX" in str(type(model)):
-        return nnp_input.as_jax_namedtuple()
+        from modelforge.jax import convert_NNPInput_to_jax
+
+        return convert_NNPInput_to_jax(nnp_input)
     return nnp_input
 
 
@@ -163,8 +165,9 @@ def test_JAX_wrapping(potential_name, single_batch_with_batchsize, prep_temp_dir
         potential_name=potential_name,
         simulation_environment="JAX",
     )
+    from modelforge.jax import convert_NNPInput_to_jax
 
-    nnp_input = batch.nnp_input.as_jax_namedtuple()
+    nnp_input = convert_NNPInput_to_jax(batch.nnp_input)
     out = model(nnp_input)["per_molecule_energy"]
     import jax
 
@@ -238,7 +241,7 @@ def test_energy_scaling_and_offset(
     batch = single_batch_with_batchsize(
         batch_size=1, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
     )
-    methane = batch.nnp_input_tuple
+    methane = batch.nnp_input
 
     # load dataset statistic
     import toml
@@ -424,12 +427,11 @@ def test_energy_between_simulation_environments(
 ):
     # compare that the energy is the same for the JAX and PyTorch Model
     import numpy as np
-    import torch
 
     batch = single_batch_with_batchsize(
         batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
     )
-    nnp_input = batch.nnp_input_tuple
+    nnp_input = batch.nnp_input
     # test the forward pass through each of the models
     # cast input and model to torch.float64
     # read default parameters
@@ -447,7 +449,9 @@ def test_energy_between_simulation_environments(
         potential_name=potential_name,
         simulation_environment="JAX",
     )
-    nnp_input = batch.nnp_input.as_jax_namedtuple()
+    from modelforge.jax import convert_NNPInput_to_jax
+
+    nnp_input = convert_NNPInput_to_jax(batch.nnp_input)
     output_jax = model(nnp_input)["per_molecule_energy"]
 
     # test tat we get an energie per molecule
@@ -495,7 +499,7 @@ def test_forward_pass_with_all_datasets(
     )
     # -------------------------------#
     # test the forward pass through each of the models
-    output = model(batch.nnp_input_tuple)
+    output = model(batch.nnp_input)
 
     # test that the output has the following keys and following dim
     assert "per_molecule_energy" in output
@@ -517,7 +521,7 @@ def test_jit(potential_name, single_batch_with_batchsize, prep_temp_dir):
     batch = single_batch_with_batchsize(
         batch_size=1, dataset_name="qm9", local_cache_dir=str(prep_temp_dir)
     )
-    nnp_input = batch.nnp_input_tuple
+    nnp_input = batch.nnp_input
 
     # -------------------------------#
     # setup model
@@ -564,7 +568,7 @@ def test_different_neighborlists_for_inference(
     # NOTE: the training pairlist only works for a batchsize of 1
     nnp_input = single_batch_with_batchsize(
         1, dataset_name, str(prep_temp_dir)
-    ).nnp_input_tuple
+    ).nnp_input
 
     model = setup_potential_for_test(
         potential_name,
@@ -615,7 +619,7 @@ def test_multiple_output_heads(
     # Get input and set up model
     nnp_input = single_batch_with_batchsize(
         32, dataset_name, str(prep_temp_dir)
-    ).nnp_input_tuple
+    ).nnp_input
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
     # Modify the config based on the energy expression
     config = _add_per_atom_charge_to_predicted_properties(config)
@@ -700,7 +704,7 @@ def test_vis(potential_name, single_batch_with_batchsize, prep_temp_dir):
     batch = single_batch_with_batchsize(
         batch_size=32, dataset_name="SPICE2", local_cache_dir=str(prep_temp_dir)
     )
-    nnp_input = batch.nnp_input_tuple
+    nnp_input = batch.nnp_input
     from modelforge.utils.vis import visualize_model
 
     visualize_model(nnp_input, potential_name)
@@ -720,7 +724,7 @@ def test_calculate_energies_and_forces(
     batch = single_batch_with_batchsize(
         batch_size=32, dataset_name="SPICE2", local_cache_dir=str(prep_temp_dir)
     )
-    nnp_input = batch.nnp_input_tuple
+    nnp_input = batch.nnp_input
 
     # read default parameters
     model = setup_potential_for_test(
@@ -771,7 +775,7 @@ def test_calculate_energies_and_forces(
     batch = batch = single_batch_with_batchsize(
         batch_size=1, dataset_name="SPICE2", local_cache_dir=str(prep_temp_dir)
     )
-    nnp_input = batch.nnp_input_tuple
+    nnp_input = batch.nnp_input
 
     # get the inference model with inference neighborlist and compilre
     # everything
@@ -805,6 +809,27 @@ def test_calculate_energies_and_forces(
     assert torch.allclose(F_inference, F_training, atol=1e-4)
 
 
+def get_nr_of_mols(nnp_input):
+    import torch
+    import jax
+    import jax.numpy as jnp
+
+    atomic_subsystem_indices = nnp_input.atomic_subsystem_indices
+
+    if isinstance(atomic_subsystem_indices, torch.Tensor):
+        unique_indices = torch.unique(atomic_subsystem_indices)
+        nr_of_mols = unique_indices.shape[0]
+
+    elif isinstance(atomic_subsystem_indices, jax.Array):
+        unique_indices = jnp.unique(atomic_subsystem_indices)
+        nr_of_mols = unique_indices.shape[0]
+
+    else:
+        raise TypeError("Unsupported type. Expected a PyTorch tensor or a JAX array.")
+
+    return nr_of_mols
+
+
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
@@ -815,14 +840,15 @@ def test_calculate_energies_and_forces_with_jax(
     Test the calculation of energies and forces for a molecule.
     """
     import torch
+    from modelforge.jax import convert_NNPInput_to_jax
 
+    # get input and set up model
     nnp_input = single_batch_with_batchsize(
         batch_size=1, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
     ).nnp_input
-    # test the backward pass through each of the models
-    nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
-    nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
-    nnp_input = nnp_input.as_jax_namedtuple()
+
+    # conver tinput to jax
+    nnp_input = convert_NNPInput_to_jax(nnp_input)
 
     model = setup_potential_for_test(
         potential_name,
@@ -833,6 +859,7 @@ def test_calculate_energies_and_forces_with_jax(
         simulation_environment="JAX",
     )
 
+    # forward pass
     result = model(nnp_input)["per_molecule_energy"]
 
     from modelforge.utils.io import import_
@@ -843,6 +870,10 @@ def test_calculate_energies_and_forces_with_jax(
     forces = -grad_fn(
         nnp_input.positions
     )  # Evaluate gradient function and apply negative sign
+
+    # test output shapes
+    nr_of_mols = get_nr_of_mols(nnp_input)
+    nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
     assert result.shape == torch.Size([nr_of_mols])  #  only one molecule
     assert forces.shape == (nr_of_atoms_per_batch, 3)  #  only one molecule
 
@@ -857,16 +888,16 @@ def test_casting(potential_name, single_batch_with_batchsize, prep_temp_dir):
     batch = batch = single_batch_with_batchsize(
         batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
     )
-    batch_ = batch.to(dtype=torch.float64)
+    batch_ = batch.to_dtype(dtype=torch.float64)
     assert batch_.nnp_input.positions.dtype == torch.float64
-    batch_ = batch_.to(dtype=torch.float32)
+    batch_ = batch_.to_dtype(dtype=torch.float32)
     assert batch_.nnp_input.positions.dtype == torch.float32
 
-    nnp_input = batch.nnp_input.to(dtype=torch.float64)
+    nnp_input = batch.nnp_input.to_dtype(dtype=torch.float64)
     assert nnp_input.positions.dtype == torch.float64
-    nnp_input = batch.nnp_input.to(dtype=torch.float32)
+    nnp_input = batch.nnp_input.to_dtype(dtype=torch.float32)
     assert nnp_input.positions.dtype == torch.float32
-    nnp_input = batch.metadata.to(dtype=torch.float64)
+    nnp_input = batch.metadata.to_dtype(dtype=torch.float64)
 
     # cast input and model to torch.float64
     # read default parameters
@@ -879,7 +910,7 @@ def test_casting(potential_name, single_batch_with_batchsize, prep_temp_dir):
         use_training_mode_neighborlist=True,  # can handel batched data
     )
     model = model.to(dtype=torch.float64)
-    nnp_input = batch.to(dtype=torch.float64).nnp_input_tuple
+    nnp_input = batch.to_dtype(dtype=torch.float64).nnp_input
 
     model(nnp_input)
 
@@ -891,7 +922,7 @@ def test_casting(potential_name, single_batch_with_batchsize, prep_temp_dir):
         use_training_mode_neighborlist=True,  # can handel batched data
     )
     model = model.to(dtype=torch.float32)
-    nnp_input = batch.to(dtype=torch.float32).nnp_input_tuple
+    nnp_input = batch.to_dtype(dtype=torch.float32).nnp_input
 
     model(nnp_input)
 
@@ -911,7 +942,6 @@ def test_equivariant_energies_and_forces(
     Test the calculation of energies and forces for a molecule.
     NOTE: test will be adapted once we have a trained model.
     """
-    from dataclasses import replace
     import torch
 
     precision = torch.float64
@@ -934,9 +964,9 @@ def test_equivariant_energies_and_forces(
     # reference values
     nnp_input = single_batch_with_batchsize(
         batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
-    ).nnp_input.to(dtype=precision)
+    ).nnp_input.to_dtype(dtype=precision)
 
-    reference_result = model(nnp_input.as_namedtuple())["per_molecule_energy"]
+    reference_result = model(nnp_input)["per_molecule_energy"]
     reference_forces = -torch.autograd.grad(
         reference_result.sum(),
         nnp_input.positions,
@@ -945,7 +975,10 @@ def test_equivariant_energies_and_forces(
     # --------------------------------------- #
     # translation test
     # set up input
-    translation_nnp_input = replace(nnp_input).to(dtype=precision)
+    nnp_input = single_batch_with_batchsize(
+        batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+    ).nnp_input.to_dtype(dtype=precision)
+    translation_nnp_input = nnp_input.to_dtype(dtype=precision)
     translation_nnp_input.positions = translation(translation_nnp_input.positions)
 
     translation_result = model(translation_nnp_input)["per_molecule_energy"]
@@ -973,7 +1006,10 @@ def test_equivariant_energies_and_forces(
     # --------------------------------------- #
     # rotation test
     # set up input
-    rotation_input_data = replace(nnp_input).to(dtype=precision)
+    nnp_input = single_batch_with_batchsize(
+        batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+    ).nnp_input.to_dtype(dtype=precision)
+    rotation_input_data = nnp_input.to_dtype(dtype=precision)
     rotation_input_data.positions = rotation(rotation_input_data.positions)
     rotation_result = model(rotation_input_data)["per_molecule_energy"]
 
@@ -1004,7 +1040,10 @@ def test_equivariant_energies_and_forces(
     # --------------------------------------- #
     # reflection test
     # set up input
-    reflection_input_data = replace(nnp_input).to(dtype=precision)
+    nnp_input = single_batch_with_batchsize(
+        batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+    ).nnp_input.to_dtype(dtype=precision)
+    reflection_input_data = nnp_input.to_dtype(dtype=precision)
     reflection_input_data.positions = reflection(reflection_input_data.positions)
     reflection_result = model(reflection_input_data)["per_molecule_energy"]
     reflection_forces = -torch.autograd.grad(

@@ -17,7 +17,7 @@ from torch import nn
 
 from modelforge.utils.prop import SpeciesAEV
 
-from modelforge.dataset.dataset import NNPInputTuple
+from modelforge.dataset.dataset import NNPInput
 from modelforge.potential.neighbors import PairlistData
 
 
@@ -245,7 +245,7 @@ class ANIRepresentation(nn.Module):
 
     def forward(
         self,
-        data: NNPInputTuple,
+        data: NNPInput,
         pairlist_output: PairlistData,
         atom_index: torch.Tensor,
     ) -> SpeciesAEV:
@@ -254,7 +254,7 @@ class ANIRepresentation(nn.Module):
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             The input data for the ANI model.
         pairlist_output : PairlistData
             Pairwise distances and displacement vectors.
@@ -308,7 +308,7 @@ class ANIRepresentation(nn.Module):
 
     def _postprocess_angular_aev(
         self,
-        data: NNPInputTuple,
+        data: NNPInput,
         angular_data: Dict[str, torch.Tensor],
     ):
         """
@@ -316,7 +316,7 @@ class ANIRepresentation(nn.Module):
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             The input data.
         angular_data : Dict[str, torch.Tensor]
             The angular data including species and displacement vectors.
@@ -360,7 +360,7 @@ class ANIRepresentation(nn.Module):
     def _postprocess_radial_aev(
         self,
         radial_feature_vector: torch.Tensor,
-        data: NNPInputTuple,
+        data: NNPInput,
         atom_index: torch.Tensor,
         pairlist_output: PairlistData,
     ) -> Dict[str, torch.Tensor]:
@@ -772,7 +772,7 @@ class ANI2xCore(torch.nn.Module):
 
     def compute_properties(
         self,
-        data: NNPInputTuple,
+        data: NNPInput,
         pairlist_output: PairlistData,
         atom_index: torch.Tensor,
     ) -> Dict[str, torch.Tensor]:
@@ -784,7 +784,7 @@ class ANI2xCore(torch.nn.Module):
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             The input data for the ANI model, including atomic numbers and positions.
         pairlist_output : PairlistData
             The pairwise distances and displacement vectors between atoms.
@@ -843,7 +843,7 @@ class ANI2xCore(torch.nn.Module):
         return outputs
 
     def forward(
-        self, data: NNPInputTuple, pairlist_output: PairlistData
+        self, data: NNPInput, pairlist_output: PairlistData
     ) -> Dict[str, torch.Tensor]:
         """
         Forward pass through the ANI2x model to compute atomic properties.
@@ -853,7 +853,7 @@ class ANI2xCore(torch.nn.Module):
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             The input data for the model, including atomic numbers and
             positions.
         pairlist_output : PairlistData

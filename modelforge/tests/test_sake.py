@@ -99,13 +99,14 @@ def test_layer_equivariance(
     sake = setup_potential_for_test("sake", "training")
 
     # get methane input
-    batch = single_batch_with_batchsize(
+    nnp_input = single_batch_with_batchsize(
         batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
-    )
+    ).nnp_input
+    ref_nnp_input = single_batch_with_batchsize(
+        batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+    ).nnp_input
 
-    nnp_input = batch.nnp_input
-    perturbed_nnp_input = replace(nnp_input)
-    perturbed_nnp_input.positions = torch.matmul(nnp_input.positions, rotation_matrix)
+    nnp_input.positions = torch.matmul(nnp_input.positions, rotation_matrix)
 
     # prepare reference and perturbed inputs
     neighborlist = sake.neighborlist(nnp_input)
@@ -122,7 +123,7 @@ def test_layer_equivariance(
         reference_v_out_torch,
     ) = sake.core_network.interaction_modules[0](
         atomic_embedding,
-        nnp_input.positions,
+        ref_nnp_input.positions,
         reference_v_torch,
         neighborlist.pair_indices,
     )
@@ -132,7 +133,7 @@ def test_layer_equivariance(
         perturbed_v_out_torch,
     ) = sake.core_network.interaction_modules[0](
         atomic_embedding,
-        perturbed_nnp_input.positions,
+        nnp_input.positions,
         perturbed_v_torch,
         neighborlist.pair_indices,
     )
@@ -405,17 +406,18 @@ def test_model_invariance(single_batch_with_batchsize, prep_temp_dir):
 
     sake = setup_potential_for_test("sake", "training")
     # get methane input
-    batch = single_batch_with_batchsize(
+    methane = single_batch_with_batchsize(
         batch_size=1, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
-    )
-    methane = batch.nnp_input
+    ).nnp_input
+    reference_methane = single_batch_with_batchsize(
+        batch_size=1, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+    ).nnp_input
 
     rotation_matrix = torch.tensor([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
-    perturbed_methane_input = replace(methane)
-    perturbed_methane_input.positions = torch.matmul(methane.positions, rotation_matrix)
+    methane.positions = torch.matmul(methane.positions, rotation_matrix)
 
-    reference_out = sake(methane)
-    perturbed_out = sake(perturbed_methane_input)
+    reference_out = sake(reference_methane)
+    perturbed_out = sake(methane)
 
     assert torch.allclose(
         reference_out["per_molecule_energy"], perturbed_out["per_molecule_energy"]

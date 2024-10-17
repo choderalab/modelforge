@@ -1,8 +1,8 @@
 from modelforge.custom_types import ModelType
-from modelforge.dataset.dataset import NNPInputTuple
+from modelforge.dataset.dataset import NNPInput
 
 
-def visualize_model(nnp_input: NNPInputTuple, potential_name: ModelType):
+def visualize_model(nnp_input: NNPInput, potential_name: ModelType):
     # visualize the compute graph
     from modelforge.utils.io import import_
     from modelforge.tests.helper_functions import setup_potential_for_test

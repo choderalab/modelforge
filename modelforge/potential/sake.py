@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 from loguru import logger as log
 
-from modelforge.dataset.dataset import NNPInputTuple
+from modelforge.dataset.dataset import NNPInput
 from modelforge.potential.neighbors import PairlistData
 
 from .utils import DenseWithCustomDist, scatter_softmax
@@ -113,7 +113,7 @@ class SAKECore(torch.nn.Module):
             )
 
     def compute_properties(
-        self, data: NNPInputTuple, pairlist_output: PairlistData
+        self, data: NNPInput, pairlist_output: PairlistData
     ) -> Dict[str, torch.Tensor]:
         """
         Compute atomic properties.
@@ -143,7 +143,7 @@ class SAKECore(torch.nn.Module):
         }
 
     def forward(
-        self, data: NNPInputTuple, pairlist_output: PairlistData
+        self, data: NNPInput, pairlist_output: PairlistData
     ) -> Dict[str, torch.Tensor]:
         """
         Implements the forward pass through the network.

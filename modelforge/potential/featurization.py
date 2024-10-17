@@ -3,7 +3,7 @@ import torch.nn as nn
 from typing import Dict, List, Union
 
 from modelforge.potential.utils import DenseWithCustomDist
-from modelforge.dataset import NNPInputTuple
+from modelforge.dataset import NNPInput
 
 
 class AddPerMoleculeValue(nn.Module):
@@ -27,7 +27,7 @@ class AddPerMoleculeValue(nn.Module):
         self.key = key
 
     def forward(
-        self, per_atom_property_tensor: torch.Tensor, data: NNPInputTuple
+        self, per_atom_property_tensor: torch.Tensor, data: NNPInput
     ) -> torch.Tensor:
         """
         Forward pass of the module.
@@ -70,7 +70,7 @@ class AddPerAtomValue(nn.Module):
         self.key = key
 
     def forward(
-        self, per_atom_property_tensor: torch.Tensor, data: NNPInputTuple
+        self, per_atom_property_tensor: torch.Tensor, data: NNPInput
     ) -> torch.Tensor:
         """
         Forward pass of the module.
@@ -202,7 +202,7 @@ class FeaturizeInput(nn.Module):
                 base_embedding_dim,
             )
 
-    def forward(self, data: NNPInputTuple) -> torch.Tensor:
+    def forward(self, data: NNPInput) -> torch.Tensor:
         """
         Featurize the input data.
 

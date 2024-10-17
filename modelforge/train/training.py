@@ -44,6 +44,16 @@ __all__ = [
 ]
 
 
+def gradient_norm(model):
+    total_norm = 0.0
+    for p in model.parameters():
+        if p.grad is not None:
+            param_norm = p.grad.detach().data.norm(2)
+            total_norm += param_norm.item() ** 2
+    total_norm = total_norm ** (1.0 / 2)
+    return total_norm
+
+
 def _exchange_per_atom_energy_for_per_molecule_energy(prop: str) -> str:
     """
     Utility function to rename per-atom energy to per-molecule energy if applicable.
@@ -480,6 +490,7 @@ class TrainingAdapter(pL.LightningModule):
 
         # Compute the mean loss for optimization
         mean_total_loss = loss_dict["total_loss"].mean()
+
         return mean_total_loss
 
     def on_after_backward(self):
@@ -825,6 +836,7 @@ class ModelTrainer:
             EarlyStopping,
             ModelCheckpoint,
             StochasticWeightAveraging,
+            Callback,
         )
 
         callbacks = []
@@ -853,6 +865,18 @@ class ModelTrainer:
                 filename=checkpoint_filename,
             )
         )
+
+        # compute gradient norm
+        class GradNormCallback(Callback):
+            """
+            Logs the gradient norm.
+            """
+
+            def on_before_optimizer_step(self, trainer, model):
+                model.log("my_model/grad_norm", gradient_norm(model))
+
+        callbacks.append(GradNormCallback())
+
         return callbacks
 
     def setup_trainer(self) -> Trainer:

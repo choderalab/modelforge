@@ -617,12 +617,17 @@ class NeuralNetworkPotentialFactory:
                 from modelforge.jax import nnpinput_flatten, nnpinput_unflatten
                 from modelforge.dataset import NNPInput
 
-                jax.tree_util.register_pytree_node(
-                    NNPInput,
-                    nnpinput_flatten,
-                    nnpinput_unflatten,
-                )
-
+                # registering NNPInput multiple times will result in a
+                # ValueError
+                try:
+                    jax.tree_util.register_pytree_node(
+                        NNPInput,
+                        nnpinput_flatten,
+                        nnpinput_unflatten,
+                    )
+                except ValueError:
+                    log.debug("NNPInput already registered as pytree")
+                    pass
                 return PyTorch2JAXConverter().convert_to_jax_model(model)
             else:
                 return model

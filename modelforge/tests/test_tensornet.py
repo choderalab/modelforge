@@ -42,7 +42,9 @@ def test_forward_with_inference_model(
     )
 
     if simulation_environment == "JAX":
-        model(batch.jax_nnp_input)
+        from modelforge.jax import convert_NNPInput_to_jax
+
+        model(convert_NNPInput_to_jax(batch))
     else:
         model(batch.nnp_input)
 

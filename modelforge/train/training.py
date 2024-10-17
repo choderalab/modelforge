@@ -218,7 +218,7 @@ class CalculateProperties(torch.nn.Module):
             "per_molecule_total_charge_predict": total_charge_predict,
             "per_molecule_total_charge_true": batch.nnp_input.total_charge,
             "per_molecule_dipole_moment_predict": dipole_predict,
-            "per_molecule_dipole_moment_true": batch.metadata.dipole_moment,
+            "per_molecule_dipole_moment_true": batch.metadata.per_system_dipole_moment,
         }
 
     def _predict_dipole_moment(

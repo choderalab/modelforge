@@ -42,7 +42,7 @@ def test_forward(single_batch_with_batchsize, prep_temp_dir):
         batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
     )
 
-    nnp_input = batch.to(dtype=torch.float32).nnp_input
+    nnp_input = batch.to_dtype(dtype=torch.float32).nnp_input
     energy = trainer_painn(nnp_input)["per_molecule_energy"]
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
@@ -66,7 +66,7 @@ def test_compare_implementation_against_reference_implementation():
     # ------------------------------------ #
     # set up the input for the Painn model
     input = setup_single_methane_input()
-    nnp_input = input["modelforge_methane_input"].as_namedtuple()
+    nnp_input = input["modelforge_methane_input"]
 
     # ---------------------------------------- #
     # test forward pass

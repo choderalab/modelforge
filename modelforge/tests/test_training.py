@@ -298,7 +298,7 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize, prep_temp_dir):
     ), "Dipole moment prediction missing."
     assert (
         prediction["per_molecule_dipole_moment_predict"].size()
-        == batch.metadata.dipole_moment.size()
+        == batch.metadata.per_system_dipole_moment.size()
     ), "Mismatch in shape for dipole moment predictions."
 
     # Assertions for total charge predictions

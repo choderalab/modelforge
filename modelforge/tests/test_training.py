@@ -368,9 +368,9 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
     assert prediction["per_molecule_energy_predict"].size(
         dim=0
     ) == batch.metadata.per_system_energy.size(dim=0)
-    assert prediction["per_atom_force_predict"].size(dim=0) == batch.metadata.per_atom_force.size(
+    assert prediction["per_atom_force_predict"].size(
         dim=0
-    )
+    ) == batch.metadata.per_atom_force.size(dim=0)
 
     # pass prediction through loss module
     loss_output = loss(prediction, batch)
@@ -416,7 +416,8 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
 
     # # Aggregate error per molecule
     per_molecule_squared_error = torch.zeros_like(
-        batch.metadata.per_system_energy.squeeze(-1), dtype=per_atom_force_squared_error.dtype
+        batch.metadata.per_system_energy.squeeze(-1),
+        dtype=per_atom_force_squared_error.dtype,
     )
     per_molecule_squared_error.scatter_add_(
         0,

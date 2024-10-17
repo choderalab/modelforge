@@ -809,6 +809,27 @@ def test_calculate_energies_and_forces(
     assert torch.allclose(F_inference, F_training, atol=1e-4)
 
 
+def get_nr_of_mols(nnp_input):
+    import torch
+    import jax
+    import jax.numpy as jnp
+
+    atomic_subsystem_indices = nnp_input.atomic_subsystem_indices
+
+    if isinstance(atomic_subsystem_indices, torch.Tensor):
+        unique_indices = torch.unique(atomic_subsystem_indices)
+        nr_of_mols = unique_indices.shape[0]
+
+    elif isinstance(atomic_subsystem_indices, jax.Array):
+        unique_indices = jnp.unique(atomic_subsystem_indices)
+        nr_of_mols = unique_indices.shape[0]
+
+    else:
+        raise TypeError("Unsupported type. Expected a PyTorch tensor or a JAX array.")
+
+    return nr_of_mols
+
+
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
@@ -851,7 +872,7 @@ def test_calculate_energies_and_forces_with_jax(
     )  # Evaluate gradient function and apply negative sign
 
     # test output shapes
-    nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
+    nr_of_mols = get_nr_of_mols(nnp_input)
     nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
     assert result.shape == torch.Size([nr_of_mols])  #  only one molecule
     assert forces.shape == (nr_of_atoms_per_batch, 3)  #  only one molecule

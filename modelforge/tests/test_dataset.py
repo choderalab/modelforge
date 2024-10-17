@@ -223,12 +223,8 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
     raw_data_item = dataset[0]
     assert isinstance(raw_data_item, BatchData)
     assert len(raw_data_item.__dataclass_fields__) == 2
-    assert (
-        len(raw_data_item.nnp_input.__dataclass_fields__) == 8
-    )  # 8 properties are returned
-    assert (
-        len(raw_data_item.metadata.__dataclass_fields__) == 6
-    )  # 6 properties are returned
+    assert len(raw_data_item.nnp_input.__slots__) == 8  # 8 properties are returned
+    assert len(raw_data_item.metadata.__slots__) == 6  # 6 properties are returned
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
@@ -665,8 +661,6 @@ def test_dataset_splitting(
     prep_temp_dir,
 ):
     """Test random_split on the the dataset."""
-    from modelforge.dataset import DataModule
-
     dm = datamodule_factory(
         dataset_name=dataset_name,
         batch_size=512,
@@ -682,7 +676,7 @@ def test_dataset_splitting(
         dm.test_dataset,
     )
 
-    energy = train_dataset[0].metadata.per_system_energyE.item()
+    energy = train_dataset[0].metadata.per_system_energy.item()
     dataset_to_test = get_dataset_container_fix(dataset_name)
     if splitting_strategy == RandomSplittingStrategy:
         assert np.isclose(energy, dataset_to_test.expected_E_random_split)

@@ -115,7 +115,7 @@ class CalculateProperties(torch.nn.Module):
         # Ensure gradients are enabled
         nnp_input.positions.requires_grad_(True)
         # Cast to float32 and extract true forces
-        per_atom_force_true = batch.metadata.F.to(torch.float32)
+        per_atom_force_true = batch.metadata.per_atom_force.to(torch.float32)
 
         if per_atom_force_true.numel() < 1:
             raise RuntimeError("No force can be calculated.")

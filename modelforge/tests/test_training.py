@@ -3,11 +3,11 @@ import platform
 
 import pytest
 import torch
+from modelforge.potential import NeuralNetworkPotentialFactory, _Implemented_NNPs
 
 ON_MACOS = platform.system() == "Darwin"
 
 IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
-from modelforge.potential import NeuralNetworkPotentialFactory, _Implemented_NNPs
 
 
 @pytest.fixture(scope="session")
@@ -68,7 +68,6 @@ def load_configs_into_pydantic_models(
 
 
 def get_trainer(config):
-
     # Extract parameters
     potential_parameter = config["potential"]
     training_parameter = config["training"]
@@ -163,7 +162,7 @@ def test_train_with_lightning(loss, potential_name, dataset_name, prep_temp_dir)
         pytest.skip("ANI potential is not compatible with SPICE2 dataset")
     if IN_GITHUB_ACTIONS and potential_name == "SAKE" and "force" in loss:
         pytest.skip(
-            "Skipping Sake training with forces on GitHub Actions because it allocates too much memory"
+            "Skipping Sake training with forces because it allocates too much memory"
         )
 
     config = load_configs_into_pydantic_models(
@@ -252,7 +251,6 @@ def test_error_calculation(single_batch_with_batchsize, prep_temp_dir):
 
 
 def test_loss_with_dipole_moment(single_batch_with_batchsize, prep_temp_dir):
-
     # Generate a batch with the specified batch size and dataset
     batch = single_batch_with_batchsize(
         batch_size=16, dataset_name="SPICE2", local_cache_dir=str(prep_temp_dir)
@@ -272,9 +270,9 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize, prep_temp_dir):
     )
 
     # Calculate predictions using the trainer's model
-    prediction = trainer.model.calculate_predictions(
+    prediction = trainer.potential_training_adapter.calculate_predictions(
         batch,
-        trainer.model.potential,
+        trainer.potential_training_adapter.potential,
         train_mode=True,  # train_mode=True is required for gradients in force prediction
     )
 
@@ -307,7 +305,9 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize, prep_temp_dir):
     ), "Mismatch in shape for total charge predictions."
 
     # Now compute the loss
-    loss_dict = trainer.model.loss(predict_target=prediction, batch=batch)
+    loss_dict = trainer.potential_training_adapter.loss(
+        predict_target=prediction, batch=batch
+    )
 
     # Ensure that the loss contains the total_charge and dipole_moment terms
     assert "per_molecule_total_charge" in loss_dict, "Total charge loss not computed."
@@ -357,8 +357,8 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
     trainer = get_trainer(
         config,
     )
-    prediction = trainer.model.calculate_predictions(
-        batch, trainer.model.potential, train_mode=True
+    prediction = trainer.potential_training_adapter.calculate_predictions(
+        batch, trainer.potential_training_adapter.potential, train_mode=True
     )  # train_mode=True is required for gradients in force prediction
 
     assert prediction["per_molecule_energy_predict"].size(

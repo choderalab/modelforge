@@ -2,16 +2,15 @@
 This module contains the base classes for the neural network potentials.
 """
 
-from typing import Any, Dict, List, Mapping, NamedTuple, Optional, Tuple, TypeVar, Union
+from typing import Any, Dict, List, Mapping, NamedTuple, Tuple, TypeVar
 
 import lightning as pl
 import torch
 from loguru import logger as log
 from openff.units import unit
-from torch.nn import Module
-from modelforge.potential.neighbors import PairlistData
 
-from modelforge.dataset.dataset import DatasetParameters, NNPInput, NNPInputTuple
+from modelforge.dataset.dataset import DatasetParameters, NNPInputTuple
+from modelforge.potential.neighbors import PairlistData
 from modelforge.potential.parameters import (
     AimNet2Parameters,
     ANI2xParameters,
@@ -34,7 +33,6 @@ T_NNP_Parameters = TypeVar(
     TensorNetParameters,
     AimNet2Parameters,
 )
-
 
 from typing import Callable, Literal, Optional, Union
 
@@ -95,7 +93,6 @@ from modelforge.potential.processing import (
 
 
 class PostProcessing(torch.nn.Module):
-
     _SUPPORTED_PROPERTIES = [
         "per_atom_energy",
         "per_atom_charge",
@@ -191,7 +188,6 @@ class PostProcessing(torch.nn.Module):
         processed_data: Dict[str, torch.Tensor] = {}
         # Iterate over items in ModuleDict
         for name, module in self.registered_chained_operations.items():
-
             module_output = module.forward(data)
             processed_data.update(module_output)
 
@@ -237,8 +233,9 @@ class Potential(torch.nn.Module):
             torch.jit.script(postprocessing) if jit else postprocessing
         )
 
+    @staticmethod
     def _add_total_charge(
-        self, core_output: Dict[str, torch.Tensor], input_data: NNPInputTuple
+        core_output: Dict[str, torch.Tensor], input_data: NNPInputTuple
     ):
         """
         Add the total charge to the core output.
@@ -259,8 +256,9 @@ class Potential(torch.nn.Module):
         core_output["per_molecule_charge"] = input_data.total_charge
         return core_output
 
+    @staticmethod
     def _add_pairlist(
-        self, core_output: Dict[str, torch.Tensor], pairlist_output: PairlistData
+        core_output: Dict[str, torch.Tensor], pairlist_output: PairlistData
     ):
         """
         Add the pairlist to the core output.
@@ -283,7 +281,8 @@ class Potential(torch.nn.Module):
         core_output["r_ij"] = pairlist_output.r_ij
         return core_output
 
-    def _remove_pairlist(self, processed_output: Dict[str, torch.Tensor]):
+    @staticmethod
+    def _remove_pairlist(processed_output: Dict[str, torch.Tensor]):
         """
         Remove the pairlist from the core output.
 
@@ -418,12 +417,7 @@ class Potential(torch.nn.Module):
 
 def setup_potential(
     potential_parameter: T_NNP_Parameters,
-    dataset_statistic: Dict[str, Dict[str, unit.Quantity]] = {
-        "training_dataset_statistics": {
-            "per_atom_energy_mean": unit.Quantity(0.0, unit.kilojoule_per_mole),
-            "per_atom_energy_stddev": unit.Quantity(1.0, unit.kilojoule_per_mole),
-        }
-    },
+    dataset_statistic: Dict[str, Dict[str, unit.Quantity]] = None,
     use_training_mode_neighborlist: bool = False,
     potential_seed: Optional[int] = None,
     jit: bool = True,
@@ -434,6 +428,18 @@ def setup_potential(
     from modelforge.potential import _Implemented_NNPs
     from modelforge.potential.utils import remove_units_from_dataset_statistics
     from modelforge.utils.misc import seed_random_number
+
+    if not dataset_statistic:  # set default value when value not passed
+        dataset_statistic = dict(
+            {
+                "training_dataset_statistics": {
+                    "per_atom_energy_mean": unit.Quantity(0.0, unit.kilojoule_per_mole),
+                    "per_atom_energy_stddev": unit.Quantity(
+                        1.0, unit.kilojoule_per_mole
+                    ),
+                }
+            },
+        )
 
     if potential_seed is not None:
         log.info(f"Setting random seed to: {potential_seed}")
@@ -482,18 +488,20 @@ def setup_potential(
                 f"Unsupported neighborlist strategy: {neighborlist_strategy}"
             )
 
-    model = Potential(
+    potential = Potential(
         core_network,
         neighborlist,
         postprocessing,
         jit=jit,
         jit_neighborlist=False if use_training_mode_neighborlist else True,
     )
-    model.eval()
-    return model
+    potential.eval()
+    return potential
 
 
 from openff.units import unit
+
+from modelforge.train.training import PotentialTrainer
 
 
 class NeuralNetworkPotentialFactory:
@@ -506,12 +514,7 @@ class NeuralNetworkPotentialFactory:
         runtime_parameter: Optional[RuntimeParameters] = None,
         training_parameter: Optional[TrainingParameters] = None,
         dataset_parameter: Optional[DatasetParameters] = None,
-        dataset_statistic: Dict[str, Dict[str, float]] = {
-            "training_dataset_statistics": {
-                "per_atom_energy_mean": unit.Quantity(0.0, unit.kilojoule_per_mole),
-                "per_atom_energy_stddev": unit.Quantity(1.0, unit.kilojoule_per_mole),
-            }
-        },
+        dataset_statistic: Dict[str, Dict[str, float]] = None,
         potential_seed: Optional[int] = None,
         use_default_dataset_statistic: bool = False,
         use_training_mode_neighborlist: bool = False,
@@ -520,7 +523,7 @@ class NeuralNetworkPotentialFactory:
         jit: bool = True,
         inference_neighborlist_strategy: str = "verlet",
         verlet_neighborlist_skin: Optional[float] = 0.1,
-    ) -> Union[Potential, JAXModel, pl.LightningModule]:
+    ) -> Union[Potential, JAXModel, pl.LightningModule, PotentialTrainer]:
         """
         Create an instance of a neural network potential for training or
         inference.
@@ -563,15 +566,13 @@ class NeuralNetworkPotentialFactory:
             An instantiated neural network potential for training or inference.
         """
 
-        from modelforge.train.training import ModelTrainer
-
         log.debug(f"{training_parameter=}")
         log.debug(f"{potential_parameter=}")
         log.debug(f"{dataset_parameter=}")
 
         # obtain model for training
         if use == "training":
-            model = ModelTrainer(
+            trainer = PotentialTrainer(
                 potential_parameter=potential_parameter,
                 training_parameter=training_parameter,
                 dataset_parameter=dataset_parameter,
@@ -580,10 +581,10 @@ class NeuralNetworkPotentialFactory:
                 dataset_statistic=dataset_statistic,
                 use_default_dataset_statistic=use_default_dataset_statistic,
             )
-            return model
+            return trainer
         # obtain model for inference
         elif use == "inference":
-            model = setup_potential(
+            potential = setup_potential(
                 potential_parameter=potential_parameter,
                 dataset_statistic=dataset_statistic,
                 use_training_mode_neighborlist=use_training_mode_neighborlist,
@@ -594,9 +595,9 @@ class NeuralNetworkPotentialFactory:
                 verlet_neighborlist_skin=verlet_neighborlist_skin,
             )
             if simulation_environment == "JAX":
-                return PyTorch2JAXConverter().convert_to_jax_model(model)
+                return PyTorch2JAXConverter().convert_to_jax_model(potential)
             else:
-                return model
+                return potential
         else:
             raise NotImplementedError(f"Unsupported 'use' value: {use}")
 

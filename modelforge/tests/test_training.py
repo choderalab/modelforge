@@ -3,6 +3,7 @@ import platform
 
 import pytest
 import torch
+
 from modelforge.potential import NeuralNetworkPotentialFactory, _Implemented_NNPs
 
 ON_MACOS = platform.system() == "Darwin"

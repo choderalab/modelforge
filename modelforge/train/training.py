@@ -666,9 +666,7 @@ class PotentialTrainer:
         self.callbacks = self.setup_callbacks()
         self.trainer = self.setup_trainer()
         self.optimizer_class = optimizer_class
-        self.lightning_module = self.setup_lightning_module(
-            potential_seed
-        )
+        self.lightning_module = self.setup_lightning_module(potential_seed)
         self.learning_rate = self.training_parameter.lr
         self.lr_scheduler = self.training_parameter.lr_scheduler
 

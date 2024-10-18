@@ -417,7 +417,12 @@ class Potential(torch.nn.Module):
 
 def setup_potential(
     potential_parameter: T_NNP_Parameters,
-    dataset_statistic: Dict[str, Dict[str, unit.Quantity]] = None,
+    dataset_statistic: Dict[str, Dict[str, unit.Quantity]] = {
+        "training_dataset_statistics": {
+            "per_atom_energy_mean": unit.Quantity(0.0, unit.kilojoule_per_mole),
+            "per_atom_energy_stddev": unit.Quantity(1.0, unit.kilojoule_per_mole),
+        }
+    },
     use_training_mode_neighborlist: bool = False,
     potential_seed: Optional[int] = None,
     jit: bool = True,
@@ -428,18 +433,6 @@ def setup_potential(
     from modelforge.potential import _Implemented_NNPs
     from modelforge.potential.utils import remove_units_from_dataset_statistics
     from modelforge.utils.misc import seed_random_number
-
-    if not dataset_statistic:  # set default value when value not passed
-        dataset_statistic = dict(
-            {
-                "training_dataset_statistics": {
-                    "per_atom_energy_mean": unit.Quantity(0.0, unit.kilojoule_per_mole),
-                    "per_atom_energy_stddev": unit.Quantity(
-                        1.0, unit.kilojoule_per_mole
-                    ),
-                }
-            },
-        )
 
     if potential_seed is not None:
         log.info(f"Setting random seed to: {potential_seed}")
@@ -514,7 +507,12 @@ class NeuralNetworkPotentialFactory:
         runtime_parameter: Optional[RuntimeParameters] = None,
         training_parameter: Optional[TrainingParameters] = None,
         dataset_parameter: Optional[DatasetParameters] = None,
-        dataset_statistic: Dict[str, Dict[str, float]] = None,
+        dataset_statistic: Dict[str, Dict[str, float]] = {
+            "training_dataset_statistics": {
+                "per_atom_energy_mean": unit.Quantity(0.0, unit.kilojoule_per_mole),
+                "per_atom_energy_stddev": unit.Quantity(1.0, unit.kilojoule_per_mole),
+            }
+        },
         potential_seed: Optional[int] = None,
         use_default_dataset_statistic: bool = False,
         use_training_mode_neighborlist: bool = False,

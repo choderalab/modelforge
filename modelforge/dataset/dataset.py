@@ -88,18 +88,18 @@ class Metadata:
 
     Parameters
     ----------
-    E : torch.Tensor
-        Energies for each molecule.
+    per_system_energy : torch.Tensor
+        Energies for each system.
     atomic_subsystem_counts : torch.Tensor
         The number of atoms in each subsystem.
     atomic_subsystem_indices_referencing_dataset : torch.Tensor
         Indices referencing the dataset.
     number_of_atoms : int
         Total number of atoms.
-    F : torch.Tensor, optional
+    per_atom_force : torch.Tensor, optional
         Forces for each atom.
-    dipole_moment : torch.Tensor, optional
-        Dipole moments for each molecule.
+    per_system_dipole_moment : torch.Tensor, optional
+        Dipole moments for each system.
 
     """
 

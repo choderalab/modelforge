@@ -116,7 +116,7 @@ The potential architecture and relevant parameters are defined in a TOML configu
     [potential.postprocessing_parameter]
     [potential.postprocessing_parameter.per_atom_energy]
     normalize = true
-    from_atom_to_molecule_reduction = true
+    from_atom_to_system_reduction = true
     keep_per_atom_property = true
 
 Defining the Dataset

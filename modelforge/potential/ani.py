@@ -371,7 +371,7 @@ class ANIRepresentation(nn.Module):
         ----------
         radial_feature_vector : torch.Tensor
             The radial feature vectors.
-        data : AniNeuralNetworkData
+        data : NNPInput
             The input data for the ANI model.
 
         Returns

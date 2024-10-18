@@ -92,7 +92,7 @@ the parameters for the postprocessing operations. Explanation of fields in
 * `maximum_atomic_number```: Maximum atomic number in the dataset.
 * `number_of_per_atom_features`: Number of features for each atom used for the embedding. This is the number of features that are used to represent each atom in the neural network.
 * `normalize`: Whether to normalize energies for training. If this is set to true the mean and standard deviation of the energies are calculated and used to normalize the energies.
-* `from_atom_to_molecule_reduction`: Whether to reduce the per-atom properties to per-molecule properties.
+* `from_atom_to_system_reduction`: Whether to reduce the per-atom properties to per-molecule properties.
 * `keep_per_atom_property`: If this is set to true the per-atom energies are returned as well.
 
 

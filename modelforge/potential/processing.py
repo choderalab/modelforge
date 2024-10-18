@@ -259,7 +259,7 @@ class ScaleValues(torch.nn.Module):
 
 def default_charge_conservation(
     per_atom_charge: torch.Tensor,
-    total_charges: torch.Tensor,
+    per_system_total_charge: torch.Tensor,
     mol_indices: torch.Tensor,
 ) -> torch.Tensor:
     """
@@ -272,7 +272,7 @@ def default_charge_conservation(
     ----------
     partial_charges : torch.Tensor
         Tensor of partial charges for all atoms in all molecules.
-    total_charges : torch.Tensor
+    per_system_total_charge : torch.Tensor
         Tensor of desired total charges for each molecule.
     mol_indices : torch.Tensor
         Tensor of integers indicating which molecule each atom belongs to.
@@ -284,17 +284,17 @@ def default_charge_conservation(
     """
     # Calculate the sum of partial charges for each molecule
     predicted_per_system_charge = torch.zeros(
-        total_charges.shape[0],
+        per_system_total_charge.shape[0],
         dtype=per_atom_charge.dtype,
         device=per_atom_charge.device,
     ).scatter_add_(0, mol_indices.long(), per_atom_charge)
 
     # Calculate the number of atoms in each molecule
-    num_atoms_per_system = mol_indices.bincount(minlength=total_charges.size(0))
+    num_atoms_per_system = mol_indices.bincount(minlength=per_system_total_charge.size(0))
 
     # Calculate the correction factor for each molecule
     correction_factors = (
-        total_charges.squeeze() - predicted_per_system_charge
+        per_system_total_charge.squeeze() - predicted_per_system_charge
     ) / num_atoms_per_system
 
     # Apply the correction to each atom's charge
@@ -379,7 +379,7 @@ class PerAtomEnergy(torch.nn.Module):
 
         self.scale = scale
 
-        if per_atom_energy.get("from_atom_to_molecule_reduction"):
+        if per_atom_energy.get("from_atom_to_system_reduction"):
             reduction = FromAtomToMoleculeReduction()
 
         self.reduction = reduction

@@ -46,7 +46,7 @@ __all__ = [
 
 def _exchange_per_atom_energy_for_per_system_energy(prop: str) -> str:
     """
-    Utility function to rename per-atom energy to per-molecule energy if applicable.
+    Utility function to rename per-atom energy to per-system energy if applicable.
 
     Parameters
     ----------
@@ -198,7 +198,7 @@ class CalculateProperties(torch.nn.Module):
             "per_atom_charge"
         ]  # Shape: [num_atoms]
 
-        # Calculate predicted total charge by summing per-atom charges for each molecule
+        # Calculate predicted total charge by summing per-atom charges for each system
         total_charge_predict = (
             torch.zeros_like(model_prediction["per_system_energy"])
             .scatter_add_(
@@ -207,7 +207,7 @@ class CalculateProperties(torch.nn.Module):
                 src=per_atom_charges_predict,
             )
             .unsqueeze(-1)
-        )  # Shape: [nr_of_molecules, 1]
+        )  # Shape: [nr_of_systems, 1]
 
         # Predict the dipole moment
         dipole_predict = self._predict_dipole_moment(model_prediction, batch)
@@ -223,7 +223,7 @@ class CalculateProperties(torch.nn.Module):
         self, model_predictions: Dict[str, torch.Tensor], batch: BatchData
     ) -> torch.Tensor:
         """
-        Compute the predicted dipole moment for each molecule based on the
+        Compute the predicted dipole moment for each system based on the
         predicted partial atomic charges and positions, i.e., the dipole moment
         is calculated as the weighted sum of the partial charges (which requires
         that the coordinates are centered).
@@ -241,7 +241,7 @@ class CalculateProperties(torch.nn.Module):
         Returns
         -------
         torch.Tensor
-            The predicted dipole moment for each molecule.
+            The predicted dipole moment for each system.
         """
         per_atom_charge = model_predictions["per_atom_charge"]  # Shape: [num_atoms]
         positions = batch.nnp_input.positions  # Shape: [num_atoms, 3]
@@ -252,7 +252,7 @@ class CalculateProperties(torch.nn.Module):
         indices = indices.unsqueeze(-1).expand(-1, 3)  # Shape: [num_atoms, 3]
 
         # Calculate dipole moment as the sum of dipole contributions for each
-        # molecule
+        # system
         dipole_predict = torch.zeros(
             (model_predictions["per_system_energy"].shape[0], 3),
             device=positions.device,
@@ -261,7 +261,7 @@ class CalculateProperties(torch.nn.Module):
             dim=0,
             index=indices,
             src=per_atom_dipole_contrib,
-        )  # Shape: [nr_of_molecules, 3]
+        )  # Shape: [nr_of_systems, 3]
 
         return dipole_predict
 

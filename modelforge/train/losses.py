@@ -87,7 +87,7 @@ class Error(nn.Module, ABC):
 
 class ForceSquaredError(Error):
     """
-    Calculates the per-atom error and aggregates it to per-molecule mean squared error.
+    Calculates the per-atom error and aggregates it to per-system mean squared error.
     """
 
     def calculate_error(
@@ -105,7 +105,7 @@ class ForceSquaredError(Error):
         batch: NNPInput,
     ) -> torch.Tensor:
         """
-        Computes the per-atom error and aggregates it to per-molecule mean squared error.
+        Computes the per-atom error and aggregates it to per-system mean squared error.
 
         Parameters
         ----------
@@ -119,7 +119,7 @@ class ForceSquaredError(Error):
         Returns
         -------
         torch.Tensor
-            The aggregated per-molecule error.
+            The aggregated per-system error.
         """
 
         # Compute per-atom squared error
@@ -127,12 +127,12 @@ class ForceSquaredError(Error):
             per_atom_prediction, per_atom_reference
         )
 
-        # Initialize per-molecule squared error tensor
+        # Initialize per-system squared error tensor
         per_system_squared_error = torch.zeros_like(
             batch.metadata.per_system_energy, dtype=per_atom_squared_error.dtype
         )
 
-        # Aggregate error per molecule
+        # Aggregate error per system
         per_system_squared_error = per_system_squared_error.scatter_add(
             0,
             batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
@@ -151,7 +151,7 @@ class ForceSquaredError(Error):
 
 class EnergySquaredError(Error):
     """
-    Calculates the per-molecule mean squared error.
+    Calculates the per-system mean squared error.
     """
 
     def calculate_error(
@@ -159,7 +159,7 @@ class EnergySquaredError(Error):
         per_system_prediction: torch.Tensor,
         per_system_reference: torch.Tensor,
     ) -> torch.Tensor:
-        """Computes the per-molecule squared error."""
+        """Computes the per-system squared error."""
         return self.calculate_squared_error(per_system_prediction, per_system_reference)
 
     def forward(
@@ -169,7 +169,7 @@ class EnergySquaredError(Error):
         batch: NNPInput,
     ) -> torch.Tensor:
         """
-        Computes the per-molecule mean squared error.
+        Computes the per-system mean squared error.
 
         Parameters
         ----------
@@ -183,10 +183,10 @@ class EnergySquaredError(Error):
         Returns
         -------
         torch.Tensor
-            The mean per-molecule error.
+            The mean per-system error.
         """
 
-        # Compute per-molecule squared error
+        # Compute per-system squared error
         per_system_squared_error = self.calculate_error(
             per_system_prediction, per_system_reference
         )
@@ -337,7 +337,7 @@ class Loss(nn.Module):
                 )
             elif prop == "per_system_energy":
                 log.info(
-                    f"Creating per molecule energy loss with weight: {weights[prop]}"
+                    f"Creating per system energy loss with weight: {weights[prop]}"
                 )
                 self.loss_functions[prop] = EnergySquaredError(
                     scale_by_number_of_atoms=False

@@ -4,9 +4,11 @@ This module contains classes and functions for managing datasets.
 
 import os
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, List, Literal, NamedTuple, Optional, Union
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 import numpy as np
+import jax
+import jax.numpy as jnp
 import pytorch_lightning as pl
 import torch
 from loguru import logger as log
@@ -80,207 +82,179 @@ class DatasetParameters(BaseModel):
 from dataclasses import dataclass, field
 
 
-@dataclass(frozen=False)
 class Metadata:
     """
-    A dataclass to structure metadata for neural network potentials.
+    A class to structure metadata for neural network potentials.
 
     Parameters
     ----------
-    E : torch.Tensor
-        Energies for each molecule.
+    per_system_energy : torch.Tensor
+        Energies for each system.
     atomic_subsystem_counts : torch.Tensor
         The number of atoms in each subsystem.
     atomic_subsystem_indices_referencing_dataset : torch.Tensor
         Indices referencing the dataset.
     number_of_atoms : int
         Total number of atoms.
-    F : torch.Tensor, optional
+    per_atom_force : torch.Tensor, optional
         Forces for each atom.
-    dipole_moment : torch.Tensor, optional
-        Dipole moments for each molecule.
+    per_system_dipole_moment : torch.Tensor, optional
+        Dipole moments for each system.
 
     """
 
-    E: torch.Tensor
-    atomic_subsystem_counts: torch.Tensor
-    atomic_subsystem_indices_referencing_dataset: torch.Tensor
-    number_of_atoms: int
-    F: torch.Tensor = field(
-        default_factory=lambda: torch.tensor([], dtype=torch.float32)
-    )
-    dipole_moment: torch.Tensor = field(
-        default_factory=lambda: torch.tensor([], dtype=torch.float32)
+    __slots__ = (
+        "per_system_energy",
+        "atomic_subsystem_counts",
+        "atomic_subsystem_indices_referencing_dataset",
+        "number_of_atoms",
+        "per_atom_force",
+        "per_system_dipole_moment",
     )
 
-    def to(
-        self, device: Optional[torch.device] = None, dtype: Optional[torch.dtype] = None
-    ):
-        """Move all tensors in this instance to the specified device."""
-        if device:
-            self.E = self.E.to(device)
-            self.F = self.F.to(device)
-            self.atomic_subsystem_counts = self.atomic_subsystem_counts.to(device)
-            self.atomic_subsystem_indices_referencing_dataset = (
-                self.atomic_subsystem_indices_referencing_dataset.to(device)
-            )
-            self.dipole_moment = self.dipole_moment.to(device)
-
-        if dtype:
-            self.E = self.E.to(dtype)
-            self.F = self.F.to(dtype)
-            self.dipole_moment = self.dipole_moment.to(dtype)
-        return self
-
-
-NNPInputTuple = NamedTuple(
-    "NNPInputTuple",
-    [
-        ("atomic_numbers", torch.Tensor),
-        ("positions", torch.Tensor),
-        ("atomic_subsystem_indices", torch.Tensor),
-        ("total_charge", torch.Tensor),
-        ("pair_list", torch.Tensor),
-        ("partial_charge", torch.Tensor),
-        ("box_vectors", torch.Tensor),
-        ("is_periodic", torch.Tensor),
-    ],
-)
-
-
-@dataclass
-class NNPInput:
-    """
-    A dataclass to structure the inputs for neural network potentials.
-
-    Attributes
-    ----------
-    atomic_numbers : torch.Tensor
-        A 1D tensor containing atomic numbers for each atom in the system(s).
-        Shape: [num_atoms], where `num_atoms` is the total number of atoms
-        across all systems.
-    positions : torch.Tensor
-        A 2D tensor of shape [num_atoms, 3], representing the XYZ coordinates of
-        each atom.
-    atomic_subsystem_indices : torch.Tensor
-        A 1D tensor mapping each atom to its respective subsystem or molecule.
-        This allows for calculations involving multiple molecules or subsystems
-        within the same batch. Shape: [num_atoms].
-    total_charge : torch.Tensor
-        A tensor with the total charge of molecule. Shape: [num_systems,1], where
-        `num_systems` is the number of molecules.
-    pair_list : Optional[torch.Tensor]
-        Pair list for neighbor interactions.
-    box_vectors : Optional[torch.Tensor]
-        A 2D tensor of shape [3, 3], representing the box vectors in a system.
-        Currently, only supports a single box vector for all systems, as this is primarily meant for
-        inference on a single system, not training.
-    is_periodic : Optional[bool]
-        A boolean indicating whether the system is periodic or not.
-    """
-
-    atomic_numbers: torch.Tensor
-    positions: Union[torch.Tensor, Quantity]
-    atomic_subsystem_indices: torch.Tensor
-    total_charge: torch.Tensor
-    pair_list: Optional[torch.Tensor] = None
-    partial_charge: Optional[torch.Tensor] = None
-    box_vectors: Optional[torch.Tensor] = torch.zeros(3, 3)
-    is_periodic: Optional[torch.Tensor] = torch.Tensor([False])
-
-    def to(
+    def __init__(
         self,
-        *,
-        device: Optional[torch.device] = None,
-        dtype: Optional[torch.dtype] = None,
+        per_system_energy: torch.Tensor,
+        atomic_subsystem_counts: torch.Tensor,
+        atomic_subsystem_indices_referencing_dataset: torch.Tensor,
+        number_of_atoms: int,
+        per_atom_force: torch.Tensor = None,
+        per_system_dipole_moment: torch.Tensor = None,
     ):
-        """Move all tensors in this instance to the specified device/dtype."""
+        self.per_system_energy = per_system_energy
+        self.atomic_subsystem_counts = atomic_subsystem_counts
+        self.atomic_subsystem_indices_referencing_dataset = (
+            atomic_subsystem_indices_referencing_dataset
+        )
+        self.number_of_atoms = number_of_atoms
+        self.per_atom_force = per_atom_force
+        self.per_system_dipole_moment = per_system_dipole_moment
 
-        if device:
-            self.atomic_numbers = self.atomic_numbers.to(device)
-            self.positions = self.positions.to(device)
-            self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(device)
-            self.total_charge = self.total_charge.to(device)
-            if self.pair_list is not None:
-                self.pair_list = self.pair_list.to(device)
-            self.pair_list = (
-                self.pair_list.to(device)
-                if self.pair_list is not None
-                else self.pair_list
-            )
-            self.partial_charge = (
-                self.partial_charge.to(device)
-                if self.partial_charge is not None
-                else self.partial_charge
-            )
-            self.box_vectors = self.box_vectors.to(device)
-            self.is_periodic = self.is_periodic.to(device)
-
-        if dtype:
-            self.positions = self.positions.to(dtype)
-            self.box_vectors = self.box_vectors.to(dtype)
-            assert self.box_vectors.shape == (3, 3)
+    def to_device(self, device: torch.device):
+        """Move all tensors in this instance to the specified device."""
+        self.per_system_energy = self.per_system_energy.to(device)
+        self.per_atom_force = self.per_atom_force.to(device)
+        self.atomic_subsystem_counts = self.atomic_subsystem_counts.to(device)
+        self.atomic_subsystem_indices_referencing_dataset = (
+            self.atomic_subsystem_indices_referencing_dataset.to(device)
+        )
+        self.per_system_dipole_moment = self.per_system_dipole_moment.to(device)
         return self
 
-    def __post_init__(self):
-        # Convert positions if necessary
-        if isinstance(self.positions, Quantity):
-            self.positions = torch.tensor(
-                self.positions.to(unit.nanometer).m,
-                dtype=torch.float32,
-            )
-        else:
-            self.positions = self.positions.to(dtype=torch.float32)
-        # Convert types
-        self.atomic_numbers = self.atomic_numbers.to(torch.int32)
-        self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(torch.int32)
-        self.total_charge = self.total_charge.to(torch.int32)
+    def to_dtype(self, dtype: torch.dtype):
+        self.per_system_energy = self.per_system_energy.to(dtype)
+        self.per_atom_force = self.per_atom_force.to(dtype)
+        self.per_system_dipole_moment = self.per_system_dipole_moment.to(dtype)
+        return self
+
+
+# Define the input class
+class NNPInput:
+    __slots__ = (
+        "atomic_numbers",
+        "positions",
+        "atomic_subsystem_indices",
+        "total_charge",
+        "pair_list",
+        "partial_charge",
+        "box_vectors",
+        "is_periodic",
+    )
+
+    def __init__(
+        self,
+        atomic_numbers: torch.Tensor,
+        positions: torch.Tensor,
+        atomic_subsystem_indices: torch.Tensor,
+        total_charge: torch.Tensor,
+        box_vectors: torch.Tensor = torch.zeros(3, 3),
+        is_periodic: torch.Tensor = torch.tensor([False]),
+        pair_list: torch.Tensor = None,
+        partial_charge: torch.Tensor = None,
+    ):
+        self.atomic_numbers = atomic_numbers
+        self.positions = positions
+        self.atomic_subsystem_indices = atomic_subsystem_indices
+        self.total_charge = total_charge
+        self.pair_list = pair_list
+        self.partial_charge = partial_charge
+        self.box_vectors = box_vectors
+        self.is_periodic = is_periodic
+
+        self.__post_init__()
 
         # Validate inputs
         self._validate_inputs()
 
     def _validate_inputs(self):
-        if self.atomic_numbers.dim() != 1:
-            raise ValueError("atomic_numbers must be a 1D tensor")
-        if self.positions.dim() != 2 or self.positions.size(1) != 3:
-            raise ValueError("positions must be a 2D tensor with shape [num_atoms, 3]")
-        if self.atomic_subsystem_indices.dim() != 1:
-            raise ValueError("atomic_subsystem_indices must be a 1D tensor")
+        # Get shapes of the arrays
+        atomic_numbers_shape = self.atomic_numbers.shape
+        positions_shape = self.positions.shape
+        atomic_subsystem_indices_shape = self.atomic_subsystem_indices.shape
 
-        # Optionally, check that the lengths match if required
-        if len(self.positions) != len(self.atomic_numbers):
+        # Validate dimensions
+        if len(atomic_numbers_shape) != 1:
+            raise ValueError("atomic_numbers must be a 1D tensor or array")
+        if len(positions_shape) != 2 or positions_shape[1] != 3:
+            raise ValueError(
+                "positions must be a 2D tensor or array with shape [num_atoms, 3]"
+            )
+        if len(atomic_subsystem_indices_shape) != 1:
+            raise ValueError("atomic_subsystem_indices must be a 1D tensor or array")
+
+        # Validate lengths
+        num_atoms = positions_shape[0]
+        if atomic_numbers_shape[0] != num_atoms:
             raise ValueError(
                 "The size of atomic_numbers and the first dimension of positions must match"
             )
-        if len(self.positions) != len(self.atomic_subsystem_indices):
+        if atomic_subsystem_indices_shape[0] != num_atoms:
             raise ValueError(
                 "The size of atomic_subsystem_indices and the first dimension of positions must match"
             )
 
-    def as_namedtuple(self) -> NamedTuple:
-        """Export the dataclass fields and values as a named tuple."""
+    def __post_init__(self):
 
-        from dataclasses import fields
+        # Set all integer tensors to int32 or JAX int32
+        if isinstance(self.atomic_numbers, torch.Tensor):
+            self.atomic_numbers = self.atomic_numbers.to(torch.int32)
+            self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(
+                torch.int32
+            )
+            self.total_charge = self.total_charge.to(torch.int32)
+        elif isinstance(self.atomic_numbers, jax.numpy.ndarray):
+            self.atomic_numbers = self.atomic_numbers.astype(jnp.int32)
+            self.atomic_subsystem_indices = self.atomic_subsystem_indices.astype(
+                jnp.int32
+            )
+            self.total_charge = self.total_charge.astype(jnp.int32)
+        else:
+            raise TypeError("Unsupported array type in NNPInput")
 
-        return NNPInputTuple(*[getattr(self, field.name) for field in fields(self)])
+    def to_device(self, device: torch.device):
+        """Move all tensors in this instance to the specified device."""
 
-    def as_jax_namedtuple(self) -> NamedTuple:
-        """Export the dataclass fields and values as a named tuple.
-        Convert pytorch tensors to jax arrays."""
+        self.atomic_numbers = self.atomic_numbers.to(device)
+        self.positions = self.positions.to(device)
+        self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(device)
+        self.total_charge = self.total_charge.to(device)
+        self.box_vectors = self.box_vectors.to(device)
+        self.is_periodic = self.is_periodic.to(device)
 
-        import collections
-        from dataclasses import dataclass, fields
+        if self.pair_list is not None:
+            self.pair_list = self.pair_list.to(device)
 
-        from modelforge.utils.io import import_
+        if self.partial_charge is not None:
+            self.partial_charge = self.partial_charge.to(device)
 
-        convert_to_jax = import_("pytorch2jax").pytorch2jax.convert_to_jax
+        return self
 
-        NNPInputTuple = collections.namedtuple(
-            "NNPInputTuple", [field.name for field in fields(self)]
-        )
-        return NNPInputTuple(
-            *[convert_to_jax(getattr(self, field.name)) for field in fields(self)]
-        )
+    def to_dtype(self, dtype: torch.dtype):
+        """Move all **relevant** tensors to dtype."""
+        self.positions = self.positions.to(dtype)
+        self.box_vectors = self.box_vectors.to(dtype)
+        assert self.box_vectors.shape == (3, 3)
+        return self
 
 
 @dataclass
@@ -288,31 +262,27 @@ class BatchData:
     nnp_input: NNPInput
     metadata: Metadata
 
-    def to(
+    def to_device(
         self,
-        device: Optional[torch.device] = None,
-        dtype: Optional[torch.dtype] = None,
+        device: torch.device,
     ):
         """Move all data in this batch to the specified device and dtype."""
-        self.nnp_input = self.nnp_input.to(device=device, dtype=dtype)
-        self.metadata = self.metadata.to(device=device, dtype=dtype)
+        self.nnp_input = self.nnp_input.to_device(device=device)
+        self.metadata = self.metadata.to_device(device=device)
+        return self
+
+    def to_dtype(
+        self,
+        dtype: torch.dtype,
+    ):
+        """Move all data in this batch to the specified device and dtype."""
+        self.nnp_input = self.nnp_input.to_dtype(dtype=dtype)
+        self.metadata = self.metadata.to_dtype(dtype=dtype)
         return self
 
     def batch_size(self) -> int:
         """Return the batch size."""
-        return self.metadata.E.size(dim=0)
-
-    @property
-    def nnp_input_tuple(self):
-        """Return the NNP input as a named tuple."""
-        return self.nnp_input.as_namedtuple()
-
-    @property
-    def jax_nnp_input_tuple(self):
-        """
-        Property to return the nnp_input as an NNPInputTuple.
-        """
-        return self.nnp_input.as_jax_namedtuple()
+        return self.metadata.per_system_energy.size(dim=0)
 
 
 class TorchDataset(torch.utils.data.Dataset[BatchData]):
@@ -501,14 +471,14 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
             atomic_subsystem_indices=torch.zeros(number_of_atoms, dtype=torch.int32),
         )
         metadata = Metadata(
-            E=E,
-            F=F,
+            per_system_energy=E,
+            per_atom_force=F,
             atomic_subsystem_counts=torch.tensor([number_of_atoms], dtype=torch.int32),
             atomic_subsystem_indices_referencing_dataset=torch.repeat_interleave(
                 torch.tensor([idx], dtype=torch.int32), number_of_atoms
             ),
             number_of_atoms=number_of_atoms,
-            dipole_moment=dipole_moment,
+            per_system_dipole_moment=dipole_moment,
         )
 
         return BatchData(nnp_input, metadata)
@@ -1483,7 +1453,7 @@ class DataModule(pl.LightningDataModule):
         from torch.utils.data import DataLoader
 
         all_pairs = []
-        n_pairs_per_molecule_list = [torch.tensor([0], dtype=torch.int16)]
+        n_pairs_per_system_list = [torch.tensor([0], dtype=torch.int16)]
 
         for batch in tqdm(
             DataLoader(
@@ -1504,9 +1474,9 @@ class DataModule(pl.LightningDataModule):
                 batch.nnp_input.atomic_subsystem_indices.to("cpu")
             )
             all_pairs.append(torch.from_numpy(pairs_batch))
-            n_pairs_per_molecule_list.append(torch.from_numpy(n_pairs_batch))
+            n_pairs_per_system_list.append(torch.from_numpy(n_pairs_batch))
 
-        nr_of_pairs = torch.cat(n_pairs_per_molecule_list, dim=0)
+        nr_of_pairs = torch.cat(n_pairs_per_system_list, dim=0)
         nr_of_pairs_in_dataset = torch.cumsum(nr_of_pairs, dim=0, dtype=torch.int64)
 
         # Determine N (number of tensors) and K (maximum M)
@@ -1610,9 +1580,9 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
         atomic_numbers_list.append(conf.nnp_input.atomic_numbers)
         positions_list.append(conf.nnp_input.positions)
         total_charge_list.append(conf.nnp_input.total_charge)
-        dipole_moment_list.append(conf.metadata.dipole_moment)
-        E_list.append(conf.metadata.E)
-        F_list.append(conf.metadata.F)
+        dipole_moment_list.append(conf.metadata.per_system_dipole_moment)
+        E_list.append(conf.metadata.per_system_energy)
+        F_list.append(conf.metadata.per_atom_force)
         atomic_subsystem_counts_list.append(conf.metadata.atomic_subsystem_counts)
         atomic_subsystem_indices_referencing_dataset_list.append(
             conf.metadata.atomic_subsystem_indices_referencing_dataset
@@ -1644,12 +1614,12 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
         pair_list=IJ_cat,
     )
     metadata = Metadata(
-        E=E,
-        F=F,
+        per_system_energy=E,
+        per_atom_force=F,
         atomic_subsystem_counts=atomic_subsystem_counts,
         atomic_subsystem_indices_referencing_dataset=atomic_subsystem_indices_referencing_dataset,
         number_of_atoms=atomic_numbers.numel(),
-        dipole_moment=dipole_moment,
+        per_system_dipole_moment=dipole_moment,
     )
     return BatchData(nnp_input, metadata)
 

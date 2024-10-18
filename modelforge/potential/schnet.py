@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 from loguru import logger as log
 
-from modelforge.dataset.dataset import NNPInputTuple
+from modelforge.dataset.dataset import NNPInput
 from modelforge.potential.neighbors import PairlistData
 
 
@@ -122,14 +122,14 @@ class SchNetCore(torch.nn.Module):
             )
 
     def compute_properties(
-        self, data: NNPInputTuple, pairlist_output: PairlistData
+        self, data: NNPInput, pairlist_output: PairlistData
     ) -> Dict[str, torch.Tensor]:
         """
         Compute properties based on the input data and pair list.
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             Input data including atomic numbers, positions, etc.
         pairlist_output: PairlistData
             Output from the pairlist module, containing pair indices and
@@ -161,14 +161,14 @@ class SchNetCore(torch.nn.Module):
         }
 
     def forward(
-        self, data: NNPInputTuple, pairlist_output: PairlistData
+        self, data: NNPInput, pairlist_output: PairlistData
     ) -> Dict[str, torch.Tensor]:
         """
         Forward pass of the SchNet model.
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             Input data including atomic numbers, positions, and relevant fields.
         pairlist_output : PairlistData
             Pair indices and distances from the pairlist module.
@@ -352,7 +352,7 @@ class SchNETRepresentation(nn.Module):
         return radial_symmetry_function
 
     def forward(
-        self, data: NNPInputTuple, pairlist_output: PairlistData
+        self, data: NNPInput, pairlist_output: PairlistData
     ) -> Dict[str, torch.Tensor]:
         """
         Forward pass to generate the radial symmetry representation of pairwise
@@ -360,7 +360,7 @@ class SchNETRepresentation(nn.Module):
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             Input data containing atomic numbers and positions.
         pairlist_output : PairlistData
             Output from the pairlist module, containing pair indices and distances.

@@ -4,56 +4,13 @@ Utility functions for neural network potentials.
 
 import math
 from dataclasses import dataclass
-from typing import Callable, Optional, Tuple, Type, Union
+from typing import Callable, Optional
 
-import numpy as np
 import torch
 import torch.nn as nn
 from openff.units import unit
 
-from modelforge.dataset.dataset import NNPInputTuple, NNPInput
-
-
-@dataclass
-class NeuralNetworkData:
-    """
-    A dataclass to structure the inputs specifically for SchNet-based neural network potentials,
-    including the necessary geometric and chemical information, along with the radial symmetry function expansion
-    (`f_ij`) and the cosine cutoff (`f_cutoff`) to accurately represent atomistic systems for energy predictions.
-
-    Attributes
-    ----------
-    pair_indices : torch.Tensor
-        A 2D tensor of shape [2, num_pairs], indicating the indices of atom pairs within a molecule or system.
-    d_ij : torch.Tensor
-        A 1D tensor containing the distances between each pair of atoms identified in `pair_indices`. Shape: [num_pairs, 1].
-    r_ij : torch.Tensor
-        A 2D tensor of shape [num_pairs, 3], representing the displacement vectors between each pair of atoms.
-    number_of_atoms : int
-        A integer indicating the number of atoms in the batch.
-    positions : torch.Tensor
-        A 2D tensor of shape [num_atoms, 3], representing the XYZ coordinates of each atom within the system.
-    atomic_numbers : torch.Tensor
-        A 1D tensor containing atomic numbers for each atom, used to identify the type of each atom in the system(s).
-    atomic_subsystem_indices : torch.Tensor
-        A 1D tensor mapping each atom to its respective subsystem or molecule, useful for systems involving multiple
-        molecules or distinct subsystems.
-    total_charge : torch.Tensor
-        A tensor with the total charge of each system or molecule. Shape: [num_systems], where each entry corresponds
-        to a distinct system or molecule.
-    """
-
-    pair_indices: torch.Tensor
-    d_ij: torch.Tensor
-    r_ij: torch.Tensor
-    atomic_numbers: torch.Tensor
-    number_of_atoms: int
-    positions: torch.Tensor
-    atomic_subsystem_indices: torch.Tensor
-    total_charge: torch.Tensor
-
-
-import torch
+from modelforge.dataset.dataset import NNPInput
 
 
 @dataclass(frozen=False)
@@ -258,10 +215,9 @@ class DenseWithCustomDist(nn.Linear):
         return self.activation_function(y)
 
 
-from openff.units import unit
-
-
 from typing import Dict
+
+from openff.units import unit
 
 
 class ShiftedSoftplus(nn.Module):
@@ -363,6 +319,7 @@ def remove_units_from_dataset_statistics(
     dataset_statistic: Dict[str, Dict[str, unit.Quantity]]
 ) -> Dict[str, Dict[str, float]]:
     from openff.units import unit
+
     from modelforge.utils.units import chem_context
 
     dataset_statistic_without_units = {}

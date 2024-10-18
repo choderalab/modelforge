@@ -145,6 +145,6 @@ def test_training_parameter_model():
     # this will throw an error because the datafile has 1 entries for the loss_property dictionary
     with pytest.raises(ValidationError):
         training_parameters.loss_parameter.loss_property = [
-            "per_molecule_energy",
+            "per_system_energy",
             "per_atom_force",
         ]

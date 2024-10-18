@@ -134,7 +134,7 @@ def test_forward_and_backward(mode):
 
     energy = model(mf_input)
     derivative = torch.autograd.grad(
-        energy["per_molecule_energy"].sum(), mf_input.positions
+        energy["per_system_energy"].sum(), mf_input.positions
     )[0]
     per_atom_force = -derivative
 

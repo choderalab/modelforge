@@ -34,13 +34,15 @@ def initialize_model(simulation_environment: str, config, mode: str, jit: bool):
 def prepare_input_for_model(nnp_input, model):
     """Prepare the input for the model based on the simulation environment."""
     if "JAX" in str(type(model)):
-        return nnp_input.as_jax_namedtuple()
+        from modelforge.jax import convert_NNPInput_to_jax
+
+        return convert_NNPInput_to_jax(nnp_input)
     return nnp_input
 
 
 def validate_output_shapes(output, nr_of_mols: int, energy_expression: str):
     """Validate the output shapes to ensure they are correct."""
-    assert len(output["per_molecule_energy"]) == nr_of_mols
+    assert len(output["per_system_energy"]) == nr_of_mols
     assert "per_atom_energy" in output
     if energy_expression == "short_range_and_long_range_electrostatic":
         assert "per_atom_charge" in output
@@ -49,9 +51,9 @@ def validate_output_shapes(output, nr_of_mols: int, energy_expression: str):
 
 
 def validate_charge_conservation(
-    per_molecule_charge: torch.Tensor,
-    per_molecule_charge_uncorrected: torch.Tensor,
-    per_molecule_charge_from_dataset: torch.Tensor,
+    per_system_charge: torch.Tensor,
+    per_system_charge_uncorrected: torch.Tensor,
+    per_system_charge_from_dataset: torch.Tensor,
     model_name: str,
 ):
     """Ensure charge conservation by validating the corrected charges."""
@@ -61,10 +63,10 @@ def validate_charge_conservation(
             "Physnet starts with all zero partial charges"
         )  # NOTE: I am not sure if this is correct
     else:
-        assert not torch.allclose(per_molecule_charge, per_molecule_charge_uncorrected)
+        assert not torch.allclose(per_system_charge, per_system_charge_uncorrected)
     assert torch.allclose(
-        per_molecule_charge_from_dataset.to(torch.float32),
-        per_molecule_charge,
+        per_system_charge_from_dataset.to(torch.float32),
+        per_system_charge,
         atol=1e-5,
     )
 
@@ -72,15 +74,15 @@ def validate_charge_conservation(
 from typing import Dict
 
 
-def validate_per_atom_and_per_molecule_properties(output: Dict[str, torch.Tensor]):
+def validate_per_atom_and_per_system_properties(output: Dict[str, torch.Tensor]):
     """Ensure that the total energy is the sum of atomic energies."""
     assert torch.allclose(
-        output["per_molecule_energy"][0],
+        output["per_system_energy"][0],
         output["per_atom_energy"][0:5].sum(dim=0),
         atol=1e-5,
     )
     assert torch.allclose(
-        output["per_molecule_energy"][1],
+        output["per_system_energy"][1],
         output["per_atom_energy"][5:9].sum(dim=0),
         atol=1e-5,
     )
@@ -98,27 +100,27 @@ def validate_chemical_equivalence(output):
 
 def retrieve_molecular_charges(output, atomic_subsystem_indices):
     """Retrieve per-molecule charge from per-atom charges."""
-    per_molecule_charge = torch.zeros_like(output["per_molecule_energy"]).index_add_(
+    per_system_charge = torch.zeros_like(output["per_system_energy"]).index_add_(
         0, atomic_subsystem_indices, output["per_atom_charge"]
     )
-    per_molecule_charge_uncorrected = torch.zeros_like(
-        output["per_molecule_energy"]
+    per_system_charge_uncorrected = torch.zeros_like(
+        output["per_system_energy"]
     ).index_add_(0, atomic_subsystem_indices, output["per_atom_charge_uncorrected"])
-    return per_molecule_charge, per_molecule_charge_uncorrected
+    return per_system_charge, per_system_charge_uncorrected
 
 
 def convert_to_pytorch_if_needed(output, nnp_input, model):
     """Convert output to PyTorch tensors if the model is in JAX."""
     if "JAX" in str(type(model)):
         convert_to_pyt = import_("pytorch2jax").pytorch2jax.convert_to_pyt
-        output["per_molecule_energy"] = convert_to_pyt(output["per_molecule_energy"])
+        output["per_system_energy"] = convert_to_pyt(output["per_system_energy"])
         output["per_atom_energy"] = convert_to_pyt(output["per_atom_energy"])
 
         if "per_atom_charge" in output:
             output["per_atom_charge"] = convert_to_pyt(output["per_atom_charge"])
-        if "per_molecule_charge" in output:
-            output["per_molecule_charge"] = convert_to_pyt(
-                output["per_molecule_charge"]
+        if "per_system_charge" in output:
+            output["per_system_charge"] = convert_to_pyt(
+                output["per_system_charge"]
             ).to(torch.float32)
 
         atomic_subsystem_indices = convert_to_pyt(nnp_input.atomic_subsystem_indices)
@@ -163,9 +165,10 @@ def test_JAX_wrapping(potential_name, single_batch_with_batchsize, prep_temp_dir
         potential_name=potential_name,
         simulation_environment="JAX",
     )
+    from modelforge.jax import convert_NNPInput_to_jax
 
-    nnp_input = batch.nnp_input.as_jax_namedtuple()
-    out = model(nnp_input)["per_molecule_energy"]
+    nnp_input = convert_NNPInput_to_jax(batch.nnp_input)
+    out = model(nnp_input)["per_system_energy"]
     import jax
 
     assert "JAX" in str(type(model))
@@ -238,7 +241,7 @@ def test_energy_scaling_and_offset(
     batch = single_batch_with_batchsize(
         batch_size=1, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
     )
-    methane = batch.nnp_input_tuple
+    methane = batch.nnp_input
 
     # load dataset statistic
     import toml
@@ -273,9 +276,9 @@ def test_energy_scaling_and_offset(
         dataset_statistic["training_dataset_statistics"]["per_atom_energy_stddev"]
     ).m
 
-    # NOTE: only the per_molecule_energy is scaled
+    # NOTE: only the per_system_energy is scaled
     compare_to = output_no_postprocessing["per_atom_energy"] * stddev + mean
-    assert torch.allclose(scaled_output["per_molecule_energy"], compare_to.sum())
+    assert torch.allclose(scaled_output["per_system_energy"], compare_to.sum())
 
 
 @pytest.mark.parametrize(
@@ -424,12 +427,11 @@ def test_energy_between_simulation_environments(
 ):
     # compare that the energy is the same for the JAX and PyTorch Model
     import numpy as np
-    import torch
 
     batch = single_batch_with_batchsize(
         batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
     )
-    nnp_input = batch.nnp_input_tuple
+    nnp_input = batch.nnp_input
     # test the forward pass through each of the models
     # cast input and model to torch.float64
     # read default parameters
@@ -439,7 +441,7 @@ def test_energy_between_simulation_environments(
         potential_name=potential_name,
         simulation_environment="PyTorch",
     )
-    output_torch = model(nnp_input)["per_molecule_energy"]
+    output_torch = model(nnp_input)["per_system_energy"]
 
     model = setup_potential_for_test(
         use="inference",
@@ -447,8 +449,10 @@ def test_energy_between_simulation_environments(
         potential_name=potential_name,
         simulation_environment="JAX",
     )
-    nnp_input = batch.nnp_input.as_jax_namedtuple()
-    output_jax = model(nnp_input)["per_molecule_energy"]
+    from modelforge.jax import convert_NNPInput_to_jax
+
+    nnp_input = convert_NNPInput_to_jax(batch.nnp_input)
+    output_jax = model(nnp_input)["per_system_energy"]
 
     # test tat we get an energie per molecule
     assert np.isclose(output_torch.sum().detach().numpy(), output_jax.sum())
@@ -495,13 +499,13 @@ def test_forward_pass_with_all_datasets(
     )
     # -------------------------------#
     # test the forward pass through each of the models
-    output = model(batch.nnp_input_tuple)
+    output = model(batch.nnp_input)
 
     # test that the output has the following keys and following dim
-    assert "per_molecule_energy" in output
+    assert "per_system_energy" in output
     assert "per_atom_energy" in output
 
-    assert output["per_molecule_energy"].shape[0] == 64
+    assert output["per_system_energy"].shape[0] == 64
     assert output["per_atom_energy"].shape == batch.nnp_input.atomic_numbers.shape
 
     pair_list = batch.nnp_input.pair_list
@@ -517,7 +521,7 @@ def test_jit(potential_name, single_batch_with_batchsize, prep_temp_dir):
     batch = single_batch_with_batchsize(
         batch_size=1, dataset_name="qm9", local_cache_dir=str(prep_temp_dir)
     )
-    nnp_input = batch.nnp_input_tuple
+    nnp_input = batch.nnp_input
 
     # -------------------------------#
     # setup model
@@ -552,7 +556,7 @@ def test_chemical_equivalency(
 
     output = model(nnp_input)
     validate_chemical_equivalence(output)
-    validate_per_atom_and_per_molecule_properties(output)
+    validate_per_atom_and_per_system_properties(output)
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
@@ -564,7 +568,7 @@ def test_different_neighborlists_for_inference(
     # NOTE: the training pairlist only works for a batchsize of 1
     nnp_input = single_batch_with_batchsize(
         1, dataset_name, str(prep_temp_dir)
-    ).nnp_input_tuple
+    ).nnp_input
 
     model = setup_potential_for_test(
         potential_name,
@@ -584,9 +588,7 @@ def test_different_neighborlists_for_inference(
 
     output_2 = model(nnp_input)
 
-    assert torch.allclose(
-        output_1["per_molecule_energy"], output_2["per_molecule_energy"]
-    )
+    assert torch.allclose(output_1["per_system_energy"], output_2["per_system_energy"])
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
@@ -615,7 +617,7 @@ def test_multiple_output_heads(
     # Get input and set up model
     nnp_input = single_batch_with_batchsize(
         32, dataset_name, str(prep_temp_dir)
-    ).nnp_input_tuple
+    ).nnp_input
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
     # Modify the config based on the energy expression
     config = _add_per_atom_charge_to_predicted_properties(config)
@@ -632,17 +634,17 @@ def test_multiple_output_heads(
     # Validate outputs
     validate_output_shapes(output, nr_of_mols, energy_expression)
     validate_chemical_equivalence(output)
-    validate_per_atom_and_per_molecule_properties(output)
+    validate_per_atom_and_per_system_properties(output)
 
     # Test charge correction
     if energy_expression == "short_range_and_long_range_electrostatic":
-        per_molecule_charge, per_molecule_charge_uncorrected = (
-            retrieve_molecular_charges(output, nnp_input.atomic_subsystem_indices)
+        per_system_charge, per_system_charge_uncorrected = retrieve_molecular_charges(
+            output, nnp_input.atomic_subsystem_indices
         )
         validate_charge_conservation(
-            per_molecule_charge,
-            per_molecule_charge_uncorrected,
-            output["per_molecule_charge"],
+            per_system_charge,
+            per_system_charge_uncorrected,
+            output["per_system_charge"],
             potential_name,
         )
 
@@ -700,7 +702,7 @@ def test_vis(potential_name, single_batch_with_batchsize, prep_temp_dir):
     batch = single_batch_with_batchsize(
         batch_size=32, dataset_name="SPICE2", local_cache_dir=str(prep_temp_dir)
     )
-    nnp_input = batch.nnp_input_tuple
+    nnp_input = batch.nnp_input
     from modelforge.utils.vis import visualize_model
 
     visualize_model(nnp_input, potential_name)
@@ -720,7 +722,7 @@ def test_calculate_energies_and_forces(
     batch = single_batch_with_batchsize(
         batch_size=32, dataset_name="SPICE2", local_cache_dir=str(prep_temp_dir)
     )
-    nnp_input = batch.nnp_input_tuple
+    nnp_input = batch.nnp_input
 
     # read default parameters
     model = setup_potential_for_test(
@@ -729,7 +731,7 @@ def test_calculate_energies_and_forces(
         potential_seed=42,
     )
     # get energy and force
-    E_training = model(nnp_input)["per_molecule_energy"]
+    E_training = model(nnp_input)["per_system_energy"]
     F_training = -torch.autograd.grad(
         E_training.sum(), nnp_input.positions, create_graph=True, retain_graph=True
     )[0]
@@ -744,7 +746,7 @@ def test_calculate_energies_and_forces(
     )
 
     # get energy and force
-    E_inference = model(nnp_input)["per_molecule_energy"]
+    E_inference = model(nnp_input)["per_system_energy"]
     F_inference = -torch.autograd.grad(
         E_inference.sum(), nnp_input.positions, create_graph=True, retain_graph=True
     )[0]
@@ -771,7 +773,7 @@ def test_calculate_energies_and_forces(
     batch = batch = single_batch_with_batchsize(
         batch_size=1, dataset_name="SPICE2", local_cache_dir=str(prep_temp_dir)
     )
-    nnp_input = batch.nnp_input_tuple
+    nnp_input = batch.nnp_input
 
     # get the inference model with inference neighborlist and compilre
     # everything
@@ -784,12 +786,12 @@ def test_calculate_energies_and_forces(
     )
 
     # get energy and force
-    E_inference = model(nnp_input)["per_molecule_energy"]
+    E_inference = model(nnp_input)["per_system_energy"]
     F_inference = -torch.autograd.grad(
         E_inference.sum(), nnp_input.positions, create_graph=True, retain_graph=True
     )[0]
     # get energy and force
-    E_training = model(nnp_input)["per_molecule_energy"]
+    E_training = model(nnp_input)["per_system_energy"]
     F_training = -torch.autograd.grad(
         E_training.sum(), nnp_input.positions, create_graph=True, retain_graph=True
     )[0]
@@ -805,6 +807,27 @@ def test_calculate_energies_and_forces(
     assert torch.allclose(F_inference, F_training, atol=1e-4)
 
 
+def get_nr_of_mols(nnp_input):
+    import torch
+    import jax
+    import jax.numpy as jnp
+
+    atomic_subsystem_indices = nnp_input.atomic_subsystem_indices
+
+    if isinstance(atomic_subsystem_indices, torch.Tensor):
+        unique_indices = torch.unique(atomic_subsystem_indices)
+        nr_of_mols = unique_indices.shape[0]
+
+    elif isinstance(atomic_subsystem_indices, jax.Array):
+        unique_indices = jnp.unique(atomic_subsystem_indices)
+        nr_of_mols = unique_indices.shape[0]
+
+    else:
+        raise TypeError("Unsupported type. Expected a PyTorch tensor or a JAX array.")
+
+    return nr_of_mols
+
+
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
@@ -815,14 +838,15 @@ def test_calculate_energies_and_forces_with_jax(
     Test the calculation of energies and forces for a molecule.
     """
     import torch
+    from modelforge.jax import convert_NNPInput_to_jax
 
+    # get input and set up model
     nnp_input = single_batch_with_batchsize(
         batch_size=1, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
     ).nnp_input
-    # test the backward pass through each of the models
-    nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
-    nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
-    nnp_input = nnp_input.as_jax_namedtuple()
+
+    # conver tinput to jax
+    nnp_input = convert_NNPInput_to_jax(nnp_input)
 
     model = setup_potential_for_test(
         potential_name,
@@ -833,7 +857,8 @@ def test_calculate_energies_and_forces_with_jax(
         simulation_environment="JAX",
     )
 
-    result = model(nnp_input)["per_molecule_energy"]
+    # forward pass
+    result = model(nnp_input)["per_system_energy"]
 
     from modelforge.utils.io import import_
 
@@ -843,6 +868,10 @@ def test_calculate_energies_and_forces_with_jax(
     forces = -grad_fn(
         nnp_input.positions
     )  # Evaluate gradient function and apply negative sign
+
+    # test output shapes
+    nr_of_mols = get_nr_of_mols(nnp_input)
+    nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
     assert result.shape == torch.Size([nr_of_mols])  #  only one molecule
     assert forces.shape == (nr_of_atoms_per_batch, 3)  #  only one molecule
 
@@ -857,16 +886,16 @@ def test_casting(potential_name, single_batch_with_batchsize, prep_temp_dir):
     batch = batch = single_batch_with_batchsize(
         batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
     )
-    batch_ = batch.to(dtype=torch.float64)
+    batch_ = batch.to_dtype(dtype=torch.float64)
     assert batch_.nnp_input.positions.dtype == torch.float64
-    batch_ = batch_.to(dtype=torch.float32)
+    batch_ = batch_.to_dtype(dtype=torch.float32)
     assert batch_.nnp_input.positions.dtype == torch.float32
 
-    nnp_input = batch.nnp_input.to(dtype=torch.float64)
+    nnp_input = batch.nnp_input.to_dtype(dtype=torch.float64)
     assert nnp_input.positions.dtype == torch.float64
-    nnp_input = batch.nnp_input.to(dtype=torch.float32)
+    nnp_input = batch.nnp_input.to_dtype(dtype=torch.float32)
     assert nnp_input.positions.dtype == torch.float32
-    nnp_input = batch.metadata.to(dtype=torch.float64)
+    nnp_input = batch.metadata.to_dtype(dtype=torch.float64)
 
     # cast input and model to torch.float64
     # read default parameters
@@ -879,7 +908,7 @@ def test_casting(potential_name, single_batch_with_batchsize, prep_temp_dir):
         use_training_mode_neighborlist=True,  # can handel batched data
     )
     model = model.to(dtype=torch.float64)
-    nnp_input = batch.to(dtype=torch.float64).nnp_input_tuple
+    nnp_input = batch.to_dtype(dtype=torch.float64).nnp_input
 
     model(nnp_input)
 
@@ -891,7 +920,7 @@ def test_casting(potential_name, single_batch_with_batchsize, prep_temp_dir):
         use_training_mode_neighborlist=True,  # can handel batched data
     )
     model = model.to(dtype=torch.float32)
-    nnp_input = batch.to(dtype=torch.float32).nnp_input_tuple
+    nnp_input = batch.to_dtype(dtype=torch.float32).nnp_input
 
     model(nnp_input)
 
@@ -911,7 +940,6 @@ def test_equivariant_energies_and_forces(
     Test the calculation of energies and forces for a molecule.
     NOTE: test will be adapted once we have a trained model.
     """
-    from dataclasses import replace
     import torch
 
     precision = torch.float64
@@ -934,9 +962,9 @@ def test_equivariant_energies_and_forces(
     # reference values
     nnp_input = single_batch_with_batchsize(
         batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
-    ).nnp_input.to(dtype=precision)
+    ).nnp_input.to_dtype(dtype=precision)
 
-    reference_result = model(nnp_input.as_namedtuple())["per_molecule_energy"]
+    reference_result = model(nnp_input)["per_system_energy"]
     reference_forces = -torch.autograd.grad(
         reference_result.sum(),
         nnp_input.positions,
@@ -945,10 +973,13 @@ def test_equivariant_energies_and_forces(
     # --------------------------------------- #
     # translation test
     # set up input
-    translation_nnp_input = replace(nnp_input).to(dtype=precision)
+    nnp_input = single_batch_with_batchsize(
+        batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+    ).nnp_input.to_dtype(dtype=precision)
+    translation_nnp_input = nnp_input.to_dtype(dtype=precision)
     translation_nnp_input.positions = translation(translation_nnp_input.positions)
 
-    translation_result = model(translation_nnp_input)["per_molecule_energy"]
+    translation_result = model(translation_nnp_input)["per_system_energy"]
     assert torch.allclose(
         translation_result,
         reference_result,
@@ -973,9 +1004,12 @@ def test_equivariant_energies_and_forces(
     # --------------------------------------- #
     # rotation test
     # set up input
-    rotation_input_data = replace(nnp_input).to(dtype=precision)
+    nnp_input = single_batch_with_batchsize(
+        batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+    ).nnp_input.to_dtype(dtype=precision)
+    rotation_input_data = nnp_input.to_dtype(dtype=precision)
     rotation_input_data.positions = rotation(rotation_input_data.positions)
-    rotation_result = model(rotation_input_data)["per_molecule_energy"]
+    rotation_result = model(rotation_input_data)["per_system_energy"]
 
     for t, r in zip(rotation_result, reference_result):
         if not torch.allclose(t, r, atol=atol):
@@ -1004,9 +1038,12 @@ def test_equivariant_energies_and_forces(
     # --------------------------------------- #
     # reflection test
     # set up input
-    reflection_input_data = replace(nnp_input).to(dtype=precision)
+    nnp_input = single_batch_with_batchsize(
+        batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+    ).nnp_input.to_dtype(dtype=precision)
+    reflection_input_data = nnp_input.to_dtype(dtype=precision)
     reflection_input_data.positions = reflection(reflection_input_data.positions)
-    reflection_result = model(reflection_input_data)["per_molecule_energy"]
+    reflection_result = model(reflection_input_data)["per_system_energy"]
     reflection_forces = -torch.autograd.grad(
         reflection_result.sum(),
         reflection_input_data.positions,

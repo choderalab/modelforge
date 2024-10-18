@@ -163,7 +163,7 @@ class GeneralPostProcessingOperation(ParametersBase):
 
 class PerAtomEnergy(ParametersBase):
     normalize: bool = False
-    from_atom_to_molecule_reduction: bool = False
+    from_atom_to_system_reduction: bool = False
     keep_per_atom_property: bool = False
 
 

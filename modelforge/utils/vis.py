@@ -1,8 +1,8 @@
 from modelforge.custom_types import ModelType
-from modelforge.dataset.dataset import NNPInputTuple
+from modelforge.dataset.dataset import NNPInput
 
 
-def visualize_model(nnp_input: NNPInputTuple, potential_name: ModelType):
+def visualize_model(nnp_input: NNPInput, potential_name: ModelType):
     # visualize the compute graph
     from modelforge.utils.io import import_
     from modelforge.tests.helper_functions import setup_potential_for_test
@@ -14,7 +14,7 @@ def visualize_model(nnp_input: NNPInputTuple, potential_name: ModelType):
         "inference",
     )
 
-    yhat = inference_model(nnp_input)["per_molecule_energy"]
+    yhat = inference_model(nnp_input)["per_system_energy"]
     torchviz.make_dot(
         yhat,
         params=dict(list(inference_model.named_parameters())),

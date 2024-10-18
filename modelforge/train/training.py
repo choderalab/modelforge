@@ -44,9 +44,9 @@ __all__ = [
 ]
 
 
-def _exchange_per_atom_energy_for_per_molecule_energy(prop: str) -> str:
+def _exchange_per_atom_energy_for_per_system_energy(prop: str) -> str:
     """
-    Utility function to rename per-atom energy to per-molecule energy if applicable.
+    Utility function to rename per-atom energy to per-system energy if applicable.
 
     Parameters
     ----------
@@ -56,9 +56,9 @@ def _exchange_per_atom_energy_for_per_molecule_energy(prop: str) -> str:
     Returns
     -------
     str
-        The updated property name (e.g., "per_molecule_energy").
+        The updated property name (e.g., "per_system_energy").
     """
-    return "per_molecule_energy" if prop == "per_atom_energy" else prop
+    return "per_system_energy" if prop == "per_atom_energy" else prop
 
 
 class CalculateProperties(torch.nn.Module):
@@ -66,9 +66,9 @@ class CalculateProperties(torch.nn.Module):
     _SUPPORTED_PROPERTIES = [
         "per_atom_energy",
         "per_atom_force",
-        "per_molecule_energy",
-        "per_molecule_total_charge",
-        "per_molecule_dipole_moment",
+        "per_system_energy",
+        "per_system_total_charge",
+        "per_system_dipole_moment",
     ]
 
     def __init__(self, requested_properties: List[str]):
@@ -77,12 +77,12 @@ class CalculateProperties(torch.nn.Module):
 
         Parameters
         requested_properties : List[str]
-            A list of properties to calculate (e.g., per_atom_energy, per_atom_force, per_molecule_dipole_moment).
+            A list of properties to calculate (e.g., per_atom_energy, per_atom_force, per_system_dipole_moment).
         """
         super().__init__()
         self.requested_properties = requested_properties
         self.include_force = "per_atom_force" in self.requested_properties
-        self.include_charges = "per_molecule_total_charge" in self.requested_properties
+        self.include_charges = "per_system_total_charge" in self.requested_properties
 
         assert all(
             prop in self._SUPPORTED_PROPERTIES for prop in self.requested_properties
@@ -115,13 +115,13 @@ class CalculateProperties(torch.nn.Module):
         # Ensure gradients are enabled
         nnp_input.positions.requires_grad_(True)
         # Cast to float32 and extract true forces
-        per_atom_force_true = batch.metadata.F.to(torch.float32)
+        per_atom_force_true = batch.metadata.per_atom_force.to(torch.float32)
 
         if per_atom_force_true.numel() < 1:
             raise RuntimeError("No force can be calculated.")
 
         # Sum the energies before computing the gradient
-        total_energy = model_prediction["per_molecule_energy"].sum()
+        total_energy = model_prediction["per_system_energy"].sum()
         # Calculate forces as the negative gradient of energy w.r.t. positions
         grad = torch.autograd.grad(
             total_energy,
@@ -161,18 +161,16 @@ class CalculateProperties(torch.nn.Module):
         Dict[str, torch.Tensor]
             A dictionary containing the true and predicted energies.
         """
-        per_molecule_energy_true = batch.metadata.E.to(torch.float32)
-        per_molecule_energy_predict = model_prediction["per_molecule_energy"].unsqueeze(
-            1
-        )
+        per_system_energy_true = batch.metadata.per_system_energy.to(torch.float32)
+        per_system_energy_predict = model_prediction["per_system_energy"].unsqueeze(1)
 
-        assert per_molecule_energy_true.shape == per_molecule_energy_predict.shape, (
+        assert per_system_energy_true.shape == per_system_energy_predict.shape, (
             f"Shapes of true and predicted energies do not match: "
-            f"{per_molecule_energy_true.shape} != {per_molecule_energy_predict.shape}"
+            f"{per_system_energy_true.shape} != {per_system_energy_predict.shape}"
         )
         return {
-            "per_molecule_energy_true": per_molecule_energy_true,
-            "per_molecule_energy_predict": per_molecule_energy_predict,
+            "per_system_energy_true": per_system_energy_true,
+            "per_system_energy_predict": per_system_energy_predict,
         }
 
     def _get_charges(
@@ -200,32 +198,32 @@ class CalculateProperties(torch.nn.Module):
             "per_atom_charge"
         ]  # Shape: [num_atoms]
 
-        # Calculate predicted total charge by summing per-atom charges for each molecule
+        # Calculate predicted total charge by summing per-atom charges for each system
         total_charge_predict = (
-            torch.zeros_like(model_prediction["per_molecule_energy"])
+            torch.zeros_like(model_prediction["per_system_energy"])
             .scatter_add_(
                 dim=0,
                 index=nnp_input.atomic_subsystem_indices.long(),
                 src=per_atom_charges_predict,
             )
             .unsqueeze(-1)
-        )  # Shape: [nr_of_molecules, 1]
+        )  # Shape: [nr_of_systems, 1]
 
         # Predict the dipole moment
         dipole_predict = self._predict_dipole_moment(model_prediction, batch)
 
         return {
-            "per_molecule_total_charge_predict": total_charge_predict,
-            "per_molecule_total_charge_true": batch.nnp_input.total_charge,
-            "per_molecule_dipole_moment_predict": dipole_predict,
-            "per_molecule_dipole_moment_true": batch.metadata.dipole_moment,
+            "per_system_total_charge_predict": total_charge_predict,
+            "per_system_total_charge_true": batch.nnp_input.total_charge,
+            "per_system_dipole_moment_predict": dipole_predict,
+            "per_system_dipole_moment_true": batch.metadata.per_system_dipole_moment,
         }
 
     def _predict_dipole_moment(
         self, model_predictions: Dict[str, torch.Tensor], batch: BatchData
     ) -> torch.Tensor:
         """
-        Compute the predicted dipole moment for each molecule based on the
+        Compute the predicted dipole moment for each system based on the
         predicted partial atomic charges and positions, i.e., the dipole moment
         is calculated as the weighted sum of the partial charges (which requires
         that the coordinates are centered).
@@ -243,7 +241,7 @@ class CalculateProperties(torch.nn.Module):
         Returns
         -------
         torch.Tensor
-            The predicted dipole moment for each molecule.
+            The predicted dipole moment for each system.
         """
         per_atom_charge = model_predictions["per_atom_charge"]  # Shape: [num_atoms]
         positions = batch.nnp_input.positions  # Shape: [num_atoms, 3]
@@ -254,16 +252,16 @@ class CalculateProperties(torch.nn.Module):
         indices = indices.unsqueeze(-1).expand(-1, 3)  # Shape: [num_atoms, 3]
 
         # Calculate dipole moment as the sum of dipole contributions for each
-        # molecule
+        # system
         dipole_predict = torch.zeros(
-            (model_predictions["per_molecule_energy"].shape[0], 3),
+            (model_predictions["per_system_energy"].shape[0], 3),
             device=positions.device,
             dtype=positions.dtype,
         ).scatter_add_(
             dim=0,
             index=indices,
             src=per_atom_dipole_contrib,
-        )  # Shape: [nr_of_molecules, 3]
+        )  # Shape: [nr_of_systems, 3]
 
         return dipole_predict
 
@@ -439,9 +437,9 @@ class TrainingAdapter(pL.LightningModule):
         """
 
         for prop, metric_collection in metrics.items():
-            prop = _exchange_per_atom_energy_for_per_molecule_energy(
+            prop = _exchange_per_atom_energy_for_per_system_energy(
                 prop
-            )  # only exchange per_atom_energy for per_molecule_energy
+            )  # only exchange per_atom_energy for per_system_energy
             preds = predict_target[f"{prop}_predict"].detach()
             targets = predict_target[f"{prop}_true"].detach()
             metric_collection.update(preds, targets)

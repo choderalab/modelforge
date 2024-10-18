@@ -154,7 +154,7 @@ def test_compare_implementation_against_reference_implementation():
     # set up the input for the spk Schnet model
     input = setup_single_methane_input()
     spk_input = input["spk_methane_input"]
-    model_input = input["modelforge_methane_input"].as_namedtuple()
+    model_input = input["modelforge_methane_input"]
 
     # ---------------------------------------- #
     # test forward pass

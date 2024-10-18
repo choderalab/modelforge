@@ -2,7 +2,7 @@ Potentials
 ===============
 
 Potentials: Overview
-----------------
+------------------------
 
 A potential in *modelforge* encapsulates all the operations required to map a
 description of a molecular system (which includes the Cartesian coordinates,
@@ -58,13 +58,13 @@ Each potential currently implements the total energy prediction with per-atom
 forces within a given cutoff radius. The models can be trained on energies and
 forces. PaiNN and PhysNet can also predict partial charges and
 calculate long-range interactions using reaction fields or Coulomb potential.
-PaiNN can additionally use multipole expansions.
+PaiNN can additionally use ultipole expansions.
 
 Using TOML files to configure potentials
-------------------------------------
+--------------------------------------------
 
 To initialize a potential, a potential factory is used:
-:class:`~modelforge.potential.models.NeuralNetworkPotentialFactory`. 
+:class:`~modelforge.potential.potential.NeuralNetworkPotentialFactory`.
 This takes care of initialization of the potential and the input preparation and postprocessing modules.
 
 A neural network potential is defined by a configuration file in the TOML format.

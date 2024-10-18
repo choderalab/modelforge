@@ -43,7 +43,7 @@ def test_embedding(single_batch_with_batchsize, prep_temp_dir):
     assert "Identity()" in mixing_module_name
 
     # add total charge to the input
-    featurization_config["properties_to_featurize"].append("per_molecule_total_charge")
+    featurization_config["properties_to_featurize"].append("per_system_total_charge")
     featurize_input_module = FeaturizeInput(featurization_config)
 
     # only atomic number embedded

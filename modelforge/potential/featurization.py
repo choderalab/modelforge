@@ -95,7 +95,7 @@ class FeaturizeInput(nn.Module):
 
     _SUPPORTED_FEATURIZATION_TYPES = [
         "atomic_number",
-        "per_molecule_total_charge",
+        "per_system_total_charge",
         "spin_state",
     ]
 
@@ -161,7 +161,7 @@ class FeaturizeInput(nn.Module):
 
             # add total charge to embedding vector
             elif (
-                featurization == "per_molecule_total_charge"
+                featurization == "per_system_total_charge"
                 and featurization in self._SUPPORTED_FEATURIZATION_TYPES
             ):
                 # transform output o f embedding with shape (nr_atoms,

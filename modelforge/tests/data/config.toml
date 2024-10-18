@@ -39,7 +39,7 @@ number_of_epochs = 2
 remove_self_energies = true
 batch_size = 128
 lr = 1e-3
-monitor = "val/per_molecule_energy/rmse"
+monitor = "val/per_system_energy/rmse"
 shift_center_of_mass_to_origin = false
 
 [training.experiment_logger]
@@ -60,10 +60,10 @@ threshold_mode = "abs"
 interval = "epoch"
 
 [training.loss_parameter]
-loss_property = ['per_molecule_energy', 'per_atom_force'] # use
+loss_property = ['per_system_energy', 'per_atom_force'] # use
 
 [training.loss_parameter.weight]
-per_molecule_energy = 0.999 #NOTE: reciprocal units
+per_system_energy = 0.999 #NOTE: reciprocal units
 per_atom_force = 0.001
 
 

@@ -14,7 +14,7 @@ def visualize_model(nnp_input: NNPInput, potential_name: ModelType):
         "inference",
     )
 
-    yhat = inference_model(nnp_input)["per_molecule_energy"]
+    yhat = inference_model(nnp_input)["per_system_energy"]
     torchviz.make_dot(
         yhat,
         params=dict(list(inference_model.named_parameters())),

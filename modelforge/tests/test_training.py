@@ -87,10 +87,10 @@ def get_trainer(config):
 def add_force_to_loss_parameter(config):
     """
     [training.loss_parameter]
-    loss_property = ['per_molecule_energy', 'per_atom_force']
+    loss_property = ['per_system_energy', 'per_atom_force']
     # ------------------------------------------------------------ #
     [training.loss_parameter.weight]
-    per_molecule_energy = 0.999 #NOTE: reciprocal units
+    per_system_energy = 0.999 #NOTE: reciprocal units
     per_atom_force = 0.001
 
     """
@@ -103,23 +103,23 @@ def add_dipole_moment_to_loss_parameter(config):
     """
     [training.loss_parameter]
     loss_property = [
-        "per_molecule_energy",
+        "per_system_energy",
         "per_atom_force",
-        "per_molecule_dipole_moment",
-        "per_molecule_total_charge",
+        "per_system_dipole_moment",
+        "per_system_total_charge",
     ]
     [training.loss_parameter.weight]
-    per_molecule_energy = 1 #NOTE: reciprocal units
+    per_system_energy = 1 #NOTE: reciprocal units
     per_atom_force = 0.1
-    per_molecule_dipole_moment = 0.01
-    per_molecule_total_charge = 0.01
+    per_system_dipole_moment = 0.01
+    per_system_total_charge = 0.01
 
     """
     t_config = config["training"]
-    t_config.loss_parameter.loss_property.append("per_molecule_dipole_moment")
-    t_config.loss_parameter.loss_property.append("per_molecule_total_charge")
-    t_config.loss_parameter.weight["per_molecule_dipole_moment"] = 0.01
-    t_config.loss_parameter.weight["per_molecule_total_charge"] = 0.01
+    t_config.loss_parameter.loss_property.append("per_system_dipole_moment")
+    t_config.loss_parameter.loss_property.append("per_system_total_charge")
+    t_config.loss_parameter.weight["per_system_dipole_moment"] = 0.01
+    t_config.loss_parameter.weight["per_system_total_charge"] = 0.01
 
     # also add per_atom_charge to predicted properties
 
@@ -128,19 +128,19 @@ def add_dipole_moment_to_loss_parameter(config):
     p_config.core_parameter.predicted_dim.append(1)
 
 
-def replace_per_molecule_with_per_atom_loss(config):
+def replace_per_system_with_per_atom_loss(config):
     t_config = config["training"]
-    t_config.loss_parameter.loss_property.remove("per_molecule_energy")
+    t_config.loss_parameter.loss_property.remove("per_system_energy")
     t_config.loss_parameter.loss_property.append("per_atom_energy")
 
-    t_config.loss_parameter.weight.pop("per_molecule_energy")
+    t_config.loss_parameter.weight.pop("per_system_energy")
     t_config.loss_parameter.weight["per_atom_energy"] = 0.999
 
     # NOTE: the loss is calculate per_atom, but the validation set error is
-    # per_molecule. This is because otherwise it's difficult to compare.
-    t_config.early_stopping.monitor = "val/per_molecule_energy/rmse"
-    t_config.monitor = "val/per_molecule_energy/rmse"
-    t_config.lr_scheduler.monitor = "val/per_molecule_energy/rmse"
+    # per_system. This is because otherwise it's difficult to compare.
+    t_config.early_stopping.monitor = "val/per_system_energy/rmse"
+    t_config.monitor = "val/per_system_energy/rmse"
+    t_config.lr_scheduler.monitor = "val/per_system_energy/rmse"
 
 
 @pytest.mark.xdist_group(name="test_training_with_lightning")
@@ -173,7 +173,7 @@ def test_train_with_lightning(loss, potential_name, dataset_name, prep_temp_dir)
     if "force" in loss:
         add_force_to_loss_parameter(config)
     if "normalized" in loss:
-        replace_per_molecule_with_per_atom_loss(config)
+        replace_per_system_with_per_atom_loss(config)
     if "dipole_moment" in loss:
         add_dipole_moment_to_loss_parameter(config)
 
@@ -279,7 +279,7 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize, prep_temp_dir):
     )
 
     # Assertions for energy predictions
-    assert prediction["per_molecule_energy_predict"].size(
+    assert prediction["per_system_energy_predict"].size(
         0
     ) == batch.metadata.per_system_energy.size(
         0
@@ -294,19 +294,19 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize, prep_temp_dir):
 
     # Assertions for dipole moment predictions
     assert (
-        "per_molecule_dipole_moment_predict" in prediction
+        "per_system_dipole_moment_predict" in prediction
     ), "Dipole moment prediction missing."
     assert (
-        prediction["per_molecule_dipole_moment_predict"].size()
+        prediction["per_system_dipole_moment_predict"].size()
         == batch.metadata.per_system_dipole_moment.size()
     ), "Mismatch in shape for dipole moment predictions."
 
     # Assertions for total charge predictions
     assert (
-        "per_molecule_total_charge_predict" in prediction
+        "per_system_total_charge_predict" in prediction
     ), "Total charge prediction missing."
     assert (
-        prediction["per_molecule_total_charge_predict"].size()
+        prediction["per_system_total_charge_predict"].size()
         == batch.nnp_input.total_charge.size()
     ), "Mismatch in shape for total charge predictions."
 
@@ -314,20 +314,20 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize, prep_temp_dir):
     loss_dict = trainer.model.loss(predict_target=prediction, batch=batch)
 
     # Ensure that the loss contains the total_charge and dipole_moment terms
-    assert "per_molecule_total_charge" in loss_dict, "Total charge loss not computed."
-    assert "per_molecule_dipole_moment" in loss_dict, "Dipole moment loss not computed."
+    assert "per_system_total_charge" in loss_dict, "Total charge loss not computed."
+    assert "per_system_dipole_moment" in loss_dict, "Dipole moment loss not computed."
 
     # Check that the losses are finite numbers
     assert torch.isfinite(
-        loss_dict["per_molecule_total_charge"]
+        loss_dict["per_system_total_charge"]
     ).all(), "Total charge loss contains non-finite values."
     assert torch.isfinite(
-        loss_dict["per_molecule_dipole_moment"]
+        loss_dict["per_system_dipole_moment"]
     ).all(), "Dipole moment loss contains non-finite values."
 
     # Optionally, print or log the losses for debugging
-    print("Total Charge Loss:", loss_dict["per_molecule_total_charge"].mean().item())
-    print("Dipole Moment Loss:", loss_dict["per_molecule_dipole_moment"].mean().item())
+    print("Total Charge Loss:", loss_dict["per_system_total_charge"].mean().item())
+    print("Dipole Moment Loss:", loss_dict["per_system_dipole_moment"].mean().item())
 
     # Check that the total loss includes the new loss terms
     assert "total_loss" in loss_dict, "Total loss not computed."
@@ -343,9 +343,9 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
         batch_size=16, dataset_name="PHALKETHOH", local_cache_dir=str(prep_temp_dir)
     )
 
-    loss_porperty = ["per_molecule_energy", "per_atom_force", "per_atom_energy"]
+    loss_porperty = ["per_system_energy", "per_atom_force", "per_atom_energy"]
     loss_weights = {
-        "per_molecule_energy": 0.5,
+        "per_system_energy": 0.5,
         "per_atom_force": 0.5,
         "per_atom_energy": 0.1,
     }
@@ -365,7 +365,7 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
         batch, trainer.model.potential, train_mode=True
     )  # train_mode=True is required for gradients in force prediction
 
-    assert prediction["per_molecule_energy_predict"].size(
+    assert prediction["per_system_energy_predict"].size(
         dim=0
     ) == batch.metadata.per_system_energy.size(dim=0)
     assert prediction["per_atom_force_predict"].size(
@@ -377,7 +377,7 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
     # let's recalculate the loss (NOTE: we scale the loss by the number of atoms)
     # --------------------------------------------- #
     # make sure that both have gradients
-    assert prediction["per_molecule_energy_predict"].requires_grad
+    assert prediction["per_system_energy_predict"].requires_grad
     assert prediction["per_atom_force_predict"].requires_grad
 
     # --------------------------------------------- #
@@ -385,19 +385,19 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
     E_loss = torch.mean(
         (
             (
-                prediction["per_molecule_energy_predict"]
-                - prediction["per_molecule_energy_true"]
+                prediction["per_system_energy_predict"]
+                - prediction["per_system_energy_true"]
             ).pow(2)
         )
     )
     # compare to referenc evalue obtained from Loos class
-    ref = torch.mean(loss_output["per_molecule_energy"])
+    ref = torch.mean(loss_output["per_system_energy"])
     assert torch.allclose(ref, E_loss)
     E_loss = torch.mean(
         (
             (
-                prediction["per_molecule_energy_predict"]
-                - prediction["per_molecule_energy_true"]
+                prediction["per_system_energy_predict"]
+                - prediction["per_system_energy_true"]
             ).pow(2)
             / batch.metadata.atomic_subsystem_counts.unsqueeze(1)
         )
@@ -415,21 +415,21 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
     ).squeeze(-1)
 
     # # Aggregate error per molecule
-    per_molecule_squared_error = torch.zeros_like(
+    per_system_squared_error = torch.zeros_like(
         batch.metadata.per_system_energy.squeeze(-1),
         dtype=per_atom_force_squared_error.dtype,
     )
-    per_molecule_squared_error.scatter_add_(
+    per_system_squared_error.scatter_add_(
         0,
         batch.nnp_input.atomic_subsystem_indices.long(),
         per_atom_force_squared_error,
     )
     # divide by number of atoms
-    per_molecule_squared_error = per_molecule_squared_error / (
+    per_system_squared_error = per_system_squared_error / (
         3 * batch.metadata.atomic_subsystem_counts
     )
 
-    per_atom_force_mse = torch.mean(per_molecule_squared_error)
+    per_atom_force_mse = torch.mean(per_system_squared_error)
     assert torch.allclose(torch.mean(loss_output["per_atom_force"]), per_atom_force_mse)
 
     # --------------------------------------------- #
@@ -437,7 +437,7 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
     # calculate the total loss
 
     assert torch.allclose(
-        loss_weights["per_molecule_energy"] * loss_output["per_molecule_energy"]
+        loss_weights["per_system_energy"] * loss_output["per_system_energy"]
         + loss_weights["per_atom_force"] * loss_output["per_atom_force"]
         + +loss_weights["per_atom_energy"] * loss_output["per_atom_energy"],
         loss_output["total_loss"].to(torch.float32),

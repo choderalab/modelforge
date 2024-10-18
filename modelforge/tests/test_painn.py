@@ -43,7 +43,7 @@ def test_forward(single_batch_with_batchsize, prep_temp_dir):
     )
 
     nnp_input = batch.to_dtype(dtype=torch.float32).nnp_input
-    energy = trainer_painn(nnp_input)["per_molecule_energy"]
+    energy = trainer_painn(nnp_input)["per_system_energy"]
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
     assert (

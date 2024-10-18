@@ -42,7 +42,7 @@ def test_forward(single_batch_with_batchsize, prep_temp_dir):
     methane = batch.nnp_input
 
     sake = setup_potential_for_test("sake", "training")
-    energy = sake(methane)["per_molecule_energy"]
+    energy = sake(methane)["per_system_energy"]
     nr_of_mols = methane.atomic_subsystem_indices.unique().shape[0]
 
     assert (
@@ -420,5 +420,5 @@ def test_model_invariance(single_batch_with_batchsize, prep_temp_dir):
     perturbed_out = sake(methane)
 
     assert torch.allclose(
-        reference_out["per_molecule_energy"], perturbed_out["per_molecule_energy"]
+        reference_out["per_system_energy"], perturbed_out["per_system_energy"]
     )

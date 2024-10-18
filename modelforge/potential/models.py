@@ -259,7 +259,7 @@ class Potential(torch.nn.Module):
             The core network output with the total charge added.
         """
         # Add the total charge to the core output
-        core_output["per_molecule_charge"] = input_data.total_charge
+        core_output["per_system_charge"] = input_data.total_charge
         return core_output
 
     def _add_pairlist(

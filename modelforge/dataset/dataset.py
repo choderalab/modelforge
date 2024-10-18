@@ -1453,7 +1453,7 @@ class DataModule(pl.LightningDataModule):
         from torch.utils.data import DataLoader
 
         all_pairs = []
-        n_pairs_per_molecule_list = [torch.tensor([0], dtype=torch.int16)]
+        n_pairs_per_system_list = [torch.tensor([0], dtype=torch.int16)]
 
         for batch in tqdm(
             DataLoader(
@@ -1474,9 +1474,9 @@ class DataModule(pl.LightningDataModule):
                 batch.nnp_input.atomic_subsystem_indices.to("cpu")
             )
             all_pairs.append(torch.from_numpy(pairs_batch))
-            n_pairs_per_molecule_list.append(torch.from_numpy(n_pairs_batch))
+            n_pairs_per_system_list.append(torch.from_numpy(n_pairs_batch))
 
-        nr_of_pairs = torch.cat(n_pairs_per_molecule_list, dim=0)
+        nr_of_pairs = torch.cat(n_pairs_per_system_list, dim=0)
         nr_of_pairs_in_dataset = torch.cumsum(nr_of_pairs, dim=0, dtype=torch.int64)
 
         # Determine N (number of tensors) and K (maximum M)

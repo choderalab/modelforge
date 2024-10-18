@@ -306,9 +306,7 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize, prep_temp_dir):
     ), "Mismatch in shape for total charge predictions."
 
     # Now compute the loss
-    loss_dict = trainer.lightning_module.loss(
-        predict_target=prediction, batch=batch
-    )
+    loss_dict = trainer.lightning_module.loss(predict_target=prediction, batch=batch)
 
     # Ensure that the loss contains the total_charge and dipole_moment terms
     assert "per_molecule_total_charge" in loss_dict, "Total charge loss not computed."
@@ -387,7 +385,7 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
             ).pow(2)
         )
     )
-    # compare to referenc evalue obtained from Loos class
+    # compare to reference evalue obtained from Loos class
     ref = torch.mean(loss_output["per_molecule_energy"])
     assert torch.allclose(ref, E_loss)
     E_loss = torch.mean(
@@ -399,7 +397,7 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
             / batch.metadata.atomic_subsystem_counts.unsqueeze(1)
         )
     )
-    # compare to referenc evalue obtained from Loos class
+    # compare to reference evalue obtained from Loos class
     ref = torch.mean(loss_output["per_atom_energy"])
     assert torch.allclose(ref, E_loss)
 

@@ -516,6 +516,7 @@ def test_dataset_neighborlist(
         potential_name="ani2x",
         simulation_environment="PyTorch",
         use_training_mode_neighborlist=True,
+        local_cache_dir=str(prep_temp_dir),
     )
     model(nnp_input)
 

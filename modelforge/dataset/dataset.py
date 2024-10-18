@@ -3,8 +3,7 @@ This module contains classes and functions for managing datasets.
 """
 
 import os
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, List, Literal, NamedTuple, Optional, Union
+from typing import TYPE_CHECKING, Dict, List, NamedTuple, Optional, Union
 
 import numpy as np
 import pytorch_lightning as pl
@@ -269,7 +268,7 @@ class NNPInput:
         Convert pytorch tensors to jax arrays."""
 
         import collections
-        from dataclasses import dataclass, fields
+        from dataclasses import fields
 
         from modelforge.utils.io import import_
 

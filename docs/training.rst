@@ -4,9 +4,9 @@ Training
 Training: Overview
 ------------------------------------------
 
-During training the parameters of a model are fitted to reproduce the target properties provided by a dataset. These are typically energies and forces, but can also be other properties provided by a dataset (e.g., dipole moments).
+During training the parameters of a potential are fitted to reproduce the target properties provided by a dataset. These are typically energies and forces, but can also be other properties provided by a dataset (e.g., dipole moments).
 
-The properties a given model can be trained on are determined by the model itself and by the loss function used to train the model. Each of the models implemented in *modelforge* have flexible numbers of output heads, each of which can be fitted against a different scalar/tensor property.
+The properties a given potential can be trained on are determined by the potential itself and by the loss function used to train the potential. Each of the models implemented in *modelforge* have flexible numbers of output heads, each of which can be fitted against a different scalar/tensor property.
 
 *Modelforge* uses Pytorch Lightning to train models. The training process is controlled by a :class:`~modelforge.train.training.ModelTrainer` object, which is responsible for managing the training loop, the optimizer, the learning rate scheduler, and the early stopping criteria. The training process is controlled by a configuration file, `training.toml`, which specifies the number of epochs, the learning rate, the loss function, and the splitting strategy for the dataset. The training process can be started by 
 
@@ -24,7 +24,7 @@ The training process is controlled by a configuration file, typically written in
 The TOML files are split into four categories: `potential`, `training`,
 `runtime` and `dataset`. While it is possible to read in a single TOML file
 defining fields for all three categories, often it is useful to read them in
-separately (a common use case where this is useful is when a model is trained on
+separately (a common use case where this is useful is when a potential is trained on
 different datasets — instead of repeating the `training` and `potential`
 sections in each TOML file, only the `dataset.toml` file needs to be changed).
 
@@ -45,7 +45,7 @@ The design of the loss function is intrinsically linked to the structure of the 
 Predicting Short-Range Atomic Energies
 ************************************************************
 
-If the total atomic energy is calculated with a short cutoff radius, we can directly match the sum of the atomic energies `E_i` (as predicted by the model architecture) to the total energy of the molecule (provided by the dataset).
+If the total atomic energy is calculated with a short cutoff radius, we can directly match the sum of the atomic energies `E_i` (as predicted by the potential model architecture) to the total energy of the molecule (provided by the dataset).
 
 In that case the total energy is calculated as
 
@@ -85,7 +85,7 @@ where `w_Q` is the weight for the charge component, `w_p` the weight for the dip
 Splitting Strategies
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-The dataset splitting strategy is crucial for ensuring that the model generalizes well to unseen data. The recommended approach in *modelforge* is to randomly split the dataset into 80% training, 10% validation, and 10% test sets, based on molecules rather than individual conformations. This ensures that different conformations of the same molecule are consistently assigned to the same split, preventing data leakage and ensuring robust model evaluation.
+The dataset splitting strategy is crucial for ensuring that a potential generalizes well to unseen data. The recommended approach in *modelforge* is to randomly split the dataset into 80% training, 10% validation, and 10% test sets, based on molecules rather than individual conformations. This ensures that different conformations of the same molecule are consistently assigned to the same split, preventing data leakage and ensuring robust model evaluation.
 
 
 *Modelforge* also provides other splitting strategies, including:
@@ -107,7 +107,7 @@ The script, along with a default configuration TOML file, can be found in the `s
 
 The recommended method for training models is through the `perform_training.py`` script. This script automates the training process by reading the TOML configuration files, which define the potential (model), dataset, training routine, and runtime environment. The script then initializes a Trainer class from PyTorch Lightning, which handles the training loop, gradient updates, and evaluation metrics. During training, the model is optimized on the specified dataset according to the defined potential and training routine. After training completes, the script outputs performance metrics on the validation and test sets, providing insights into the model's accuracy and generalization.
 
-Additionally, the script saves the trained model and checkpoint files in the directory specified by the `[save_dir]`` field in the runtime section of the TOML file, enabling you to resume training or use the model for inference later.
+Additionally, the script saves the trained model with checkpoint files in the directory specified by the `[save_dir]`` field in the runtime section of the TOML file, enabling you to resume training or use the potential model for inference later.
 
 To initiate the training process, execute the following command in your terminal (inside the `scripts` directory):
 

@@ -613,7 +613,7 @@ def provide_reference_values_for_test_ani_test_compare_rsf():
 def provide_reference_values_for_test_ani_test_compute_rsf_with_diagonal_batching():
     def calculate_reference():
         from torchani.aev import neighbor_pairs_nopbc
-        from modelforge.potential.models import Pairlist
+        from modelforge.potential.potential import Pairlist
         from modelforge.tests.test_ani import setup_two_methanes
 
         # ------------ general setup -------------#
@@ -1070,7 +1070,7 @@ def provide_input_for_test_test_compare_angular_symmetry_features():
         ShfZ = (torch.linspace(0, math.pi, angle_sections + 1) + angle_start)[:-1]
         # set up relevant system properties
         from modelforge.tests.test_ani import setup_methane
-        from modelforge.potential.models import Pairlist
+        from modelforge.potential.potential import Pairlist
         from modelforge.potential.utils import triple_by_molecule
 
         device = torch.device("cpu")

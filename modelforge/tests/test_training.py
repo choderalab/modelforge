@@ -270,9 +270,9 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize, prep_temp_dir):
     )
 
     # Calculate predictions using the trainer's model
-    prediction = trainer.potential_training_adapter.calculate_predictions(
+    prediction = trainer.lightning_module.calculate_predictions(
         batch,
-        trainer.potential_training_adapter.potential,
+        trainer.lightning_module.potential,
         train_mode=True,  # train_mode=True is required for gradients in force prediction
     )
 
@@ -305,7 +305,7 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize, prep_temp_dir):
     ), "Mismatch in shape for total charge predictions."
 
     # Now compute the loss
-    loss_dict = trainer.potential_training_adapter.loss(
+    loss_dict = trainer.lightning_module.loss(
         predict_target=prediction, batch=batch
     )
 
@@ -357,8 +357,8 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
     trainer = get_trainer(
         config,
     )
-    prediction = trainer.potential_training_adapter.calculate_predictions(
-        batch, trainer.potential_training_adapter.potential, train_mode=True
+    prediction = trainer.lightning_module.calculate_predictions(
+        batch, trainer.lightning_module.potential, train_mode=True
     )  # train_mode=True is required for gradients in force prediction
 
     assert prediction["per_molecule_energy_predict"].size(

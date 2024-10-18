@@ -907,7 +907,7 @@ class PotentialTrainer:
             The configured trainer instance after running the training process.
         """
         self.trainer.fit(
-            self.potential_training_adapter,
+            self.lightning_module,
             train_dataloaders=self.datamodule.train_dataloader(
                 num_workers=self.dataset_parameter.num_workers,
                 pin_memory=self.dataset_parameter.pin_memory,
@@ -921,14 +921,14 @@ class PotentialTrainer:
         )
 
         self.trainer.validate(
-            model=self.potential_training_adapter,
+            model=self.lightning_module,
             dataloaders=self.datamodule.val_dataloader(),
             ckpt_path="best",
             verbose=True,
         )
 
         self.trainer.test(
-            model=self.potential_training_adapter,
+            model=self.lightning_module,
             dataloaders=self.datamodule.test_dataloader(),
             ckpt_path="best",
             verbose=True,
@@ -939,8 +939,8 @@ class PotentialTrainer:
         """
         Configures model-specific priors if the model implements them.
         """
-        if hasattr(self.potential_training_adapter, "_config_prior"):
-            return self.potential_training_adapter._config_prior()
+        if hasattr(self.lightning_module, "_config_prior"):
+            return self.lightning_module._config_prior()
 
         log.warning("Model does not implement _config_prior().")
         raise NotImplementedError()

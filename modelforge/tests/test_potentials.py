@@ -309,8 +309,8 @@ def test_state_dict_saving_and_loading(potential_name, prep_temp_dir):
         runtime_parameter=config["runtime"],
         dataset_parameter=config["dataset"],
     )
-    torch.save(trainer.potential_training_adapter.state_dict(), file_path)
-    trainer.potential_training_adapter.load_state_dict(torch.load(file_path))
+    torch.save(trainer.lightning_module.state_dict(), file_path)
+    trainer.lightning_module.load_state_dict(torch.load(file_path))
 
     # ------------------------------------------------------------- #
     # Use case 2:
@@ -334,7 +334,7 @@ def test_state_dict_saving_and_loading(potential_name, prep_temp_dir):
         dataset_parameter=config["dataset"],
     )
 
-    trainer.potential_training_adapter.load_state_dict(torch.load(file_path))
+    trainer.lightning_module.load_state_dict(torch.load(file_path))
 
 
 @pytest.mark.parametrize(
@@ -404,7 +404,7 @@ def test_dataset_statistic(potential_name, prep_temp_dir):
     # give this a unique filename based on potential and the test we are in so we can run test in parallel
     file_path = f"{str(prep_temp_dir)}/{potential_name.lower()}_tsd_potential.pth"
 
-    torch.save(trainer.potential_training_adapter.state_dict(), file_path)
+    torch.save(trainer.lightning_module.state_dict(), file_path)
 
     # NOTE: we are passing dataset statistics explicit to the constructor
     # this is not saved with the state_dict

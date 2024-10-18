@@ -76,7 +76,7 @@ def setup_potential_for_test(
     )
 
     if use == "training":
-        potential = model.potential_training_adapter.potential
+        potential = model.lightning_module.potential
     else:
         potential = model
     return potential

@@ -666,7 +666,7 @@ class PotentialTrainer:
         self.callbacks = self.setup_callbacks()
         self.trainer = self.setup_trainer()
         self.optimizer_class = optimizer_class
-        self.potential_training_adapter = self.setup_potential_training_adapter(
+        self.lightning_module = self.setup_lightning_module(
             potential_seed
         )
         self.learning_rate = self.training_parameter.lr
@@ -736,7 +736,7 @@ class PotentialTrainer:
         dm.setup()
         return dm
 
-    def setup_potential_training_adapter(
+    def setup_lightning_module(
         self, potential_seed: Optional[int] = None
     ) -> pL.LightningModule:
         """

@@ -45,6 +45,34 @@ __all__ = [
 ]
 
 
+def gradient_norm(model):
+    total_norm = 0.0
+    for p in model.parameters():
+        if p.grad is not None:
+            param_norm = p.grad.detach().data.norm(2)
+            total_norm += param_norm.item() ** 2
+    total_norm = total_norm**0.5
+    return total_norm
+
+
+def compute_grad_norm(loss, model):
+    parameters = [p for p in model.parameters() if p.requires_grad]
+    grads = torch.autograd.grad(
+        loss.sum(),
+        parameters,
+        retain_graph=True,
+        create_graph=False,
+        allow_unused=True,
+    )
+    total_norm = 0.0
+    for grad in grads:
+        if grad is not None:
+            param_norm = grad.detach().data.norm(2)
+            total_norm += param_norm.item() ** 2
+    total_norm = total_norm**0.5
+    return total_norm
+
+
 def _exchange_per_atom_energy_for_per_system_energy(prop: str) -> str:
     """
     Utility function to rename per-atom energy to per-system energy if applicable.
@@ -478,9 +506,18 @@ class TrainingAdapter(pL.LightningModule):
         for key, metric in loss_dict.items():
             self.loss_metrics[key].update(metric.detach(), batch_size=batch_size)
 
+            # Compute and log gradient norms for each loss component
+            if self.training_parameter.log_norm:
+                if key == "total_loss":
+                    continue
+
+                grad_norm = compute_grad_norm(metric.mean(), self)
+                self.log(f"grad_norm/{key}", grad_norm)
+
         # Compute the mean loss for optimization
-        mean_total_loss = loss_dict["total_loss"].mean()
-        return mean_total_loss
+        total_loss = loss_dict["total_loss"].mean()
+
+        return total_loss
 
     def on_after_backward(self):
         # After backward pass
@@ -621,6 +658,7 @@ class PotentialTrainer:
         optimizer_class: Type[Optimizer] = torch.optim.AdamW,
         potential_seed: Optional[int] = None,
         verbose: bool = False,
+        log_norm: bool = False,
     ):
         """
         Initializes the TrainingAdapter with the specified model and training configuration.
@@ -645,6 +683,8 @@ class PotentialTrainer:
             Seed to initialize the potential training adapter, default is None.
         verbose : bool, optional
             If True, enables verbose logging, by default False.
+        log_norm : bool, optional
+            If True, logs the norm of the gradients, by default False.
         """
 
         super().__init__()
@@ -654,6 +694,7 @@ class PotentialTrainer:
         self.training_parameter = training_parameter
         self.runtime_parameter = runtime_parameter
         self.verbose = verbose
+        self.log_norm = log_norm
 
         self.datamodule = self.setup_datamodule()
         self.dataset_statistic = (
@@ -823,6 +864,7 @@ class PotentialTrainer:
             EarlyStopping,
             ModelCheckpoint,
             StochasticWeightAveraging,
+            Callback,
         )
 
         callbacks = []
@@ -851,6 +893,19 @@ class PotentialTrainer:
                 filename=checkpoint_filename,
             )
         )
+
+        # compute gradient norm
+        class GradNormCallback(Callback):
+            """
+            Logs the gradient norm.
+            """
+
+            def on_before_optimizer_step(self, trainer, pl_module, optimizer):
+                pl_module.log("grad_norm/model", gradient_norm(pl_module))
+
+        if self.log_norm:
+            callbacks.append(GradNormCallback())
+
         return callbacks
 
     def setup_trainer(self) -> Trainer:

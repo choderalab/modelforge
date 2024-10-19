@@ -1064,7 +1064,7 @@ def test_loading_from_checkpoint_file():
     # checkpoint file is saved in tests/data
     chkp_file = resources.files(data) / "best_SchNet-PhAlkEthOH-epoch=00.ckpt"
 
-    from modelforge.potential.models import load_inference_model_from_checkpoint
+    from modelforge.potential.potential import load_inference_model_from_checkpoint
 
     model = load_inference_model_from_checkpoint(chkp_file)
     assert model is not None

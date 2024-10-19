@@ -311,7 +311,7 @@ class TensorNetCore(torch.nn.Module):
 
         # using interlevae and bincount to generate a total charge per molecule
         expanded_total_charge = torch.repeat_interleave(
-            data.per_system_charge, data.atomic_subsystem_indices.bincount()
+            data.per_system_total_charge, data.atomic_subsystem_indices.bincount()
         )
 
         for layer in self.interaction_modules:

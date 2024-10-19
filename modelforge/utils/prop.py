@@ -34,7 +34,7 @@ class NNPInput:
         "atomic_numbers",
         "positions",
         "atomic_subsystem_indices",
-        "per_system_charge",
+        "per_system_total_charge",
         "pair_list",
         "per_atom_partial_charge",
         "box_vectors",
@@ -46,7 +46,7 @@ class NNPInput:
         atomic_numbers: torch.Tensor,
         positions: torch.Tensor,
         atomic_subsystem_indices: torch.Tensor,
-        per_system_charge: torch.Tensor,
+        per_system_total_charge: torch.Tensor,
         box_vectors: torch.Tensor = torch.zeros(3, 3),
         is_periodic: torch.Tensor = torch.tensor([False]),
         pair_list: torch.Tensor = None,
@@ -55,7 +55,7 @@ class NNPInput:
         self.atomic_numbers = atomic_numbers
         self.positions = positions
         self.atomic_subsystem_indices = atomic_subsystem_indices
-        self.per_system_charge = per_system_charge
+        self.per_system_total_charge = per_system_total_charge
         self.pair_list = pair_list
         self.per_atom_partial_charge = per_atom_partial_charge
         self.box_vectors = box_vectors
@@ -105,13 +105,15 @@ class NNPInput:
             self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(
                 torch.int32
             )
-            self.per_system_charge = self.per_system_charge.to(torch.int32)
+            self.per_system_total_charge = self.per_system_total_charge.to(torch.int32)
         elif isinstance(self.atomic_numbers, jnp.ndarray):
             self.atomic_numbers = self.atomic_numbers.astype(jnp.int32)
             self.atomic_subsystem_indices = self.atomic_subsystem_indices.astype(
                 jnp.int32
             )
-            self.per_system_charge = self.per_system_charge.astype(jnp.int32)
+            self.per_system_total_charge = self.per_system_total_charge.astype(
+                jnp.int32
+            )
         else:
             raise TypeError("Unsupported array type in NNPInput")
 
@@ -121,7 +123,7 @@ class NNPInput:
         self.atomic_numbers = self.atomic_numbers.to(device)
         self.positions = self.positions.to(device)
         self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(device)
-        self.per_system_charge = self.per_system_charge.to(device)
+        self.per_system_total_charge = self.per_system_total_charge.to(device)
         self.box_vectors = self.box_vectors.to(device)
         self.is_periodic = self.is_periodic.to(device)
 

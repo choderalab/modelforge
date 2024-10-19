@@ -283,18 +283,20 @@ def default_charge_conservation(
         Tensor of corrected partial charges.
     """
     # Calculate the sum of partial charges for each molecule
-    predicted_per_system_charge = torch.zeros(
+    predicted_per_system_total_charge = torch.zeros(
         per_system_total_charge.shape[0],
         dtype=per_atom_charge.dtype,
         device=per_atom_charge.device,
     ).scatter_add_(0, mol_indices.long(), per_atom_charge)
 
     # Calculate the number of atoms in each molecule
-    num_atoms_per_system = mol_indices.bincount(minlength=per_system_total_charge.size(0))
+    num_atoms_per_system = mol_indices.bincount(
+        minlength=per_system_total_charge.size(0)
+    )
 
     # Calculate the correction factor for each molecule
     correction_factors = (
-        per_system_total_charge.squeeze() - predicted_per_system_charge
+        per_system_total_charge.squeeze() - predicted_per_system_total_charge
     ) / num_atoms_per_system
 
     # Apply the correction to each atom's charge
@@ -341,7 +343,7 @@ class ChargeConservation(torch.nn.Module):
             Dictionary containing the following keys:
             - "per_atom_charge":
                 Tensor of partial charges for all atoms in the batch.
-            -  "per_system_charge":
+            -  "per_system_total_charge":
                 Tensor of desired total charges for each
             molecule.
             - "atomic_subsystem_indices":
@@ -356,7 +358,7 @@ class ChargeConservation(torch.nn.Module):
         data["per_atom_charge_uncorrected"] = data["per_atom_charge"]
         data["per_atom_charge"] = self.correct_partial_charges(
             data["per_atom_charge"],
-            data["per_system_charge"],
+            data["per_system_total_charge"],
             data["atomic_subsystem_indices"],
         )
         return data

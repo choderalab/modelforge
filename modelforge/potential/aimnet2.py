@@ -147,7 +147,9 @@ class AimNet2Core(torch.nn.Module):
             partial_charges = self.charge_conservation(
                 {
                     "per_atom_charge": partial_charges.squeeze(-1),
-                    "per_system_charge": data.per_system_charge.to(dtype=torch.float32),
+                    "per_system_total_charge": data.per_system_total_charge.to(
+                        dtype=torch.float32
+                    ),
                     "atomic_subsystem_indices": data.atomic_subsystem_indices.to(
                         dtype=torch.int64
                     ),

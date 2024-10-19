@@ -7,7 +7,7 @@ def nnpinput_flatten(nnpinput: NNPInput):
         nnpinput.atomic_numbers,
         nnpinput.positions,
         nnpinput.atomic_subsystem_indices,
-        nnpinput.per_system_charge,
+        nnpinput.per_system_total_charge,
         nnpinput.box_vectors,
         nnpinput.is_periodic,
         nnpinput.pair_list,
@@ -36,7 +36,9 @@ def convert_NNPInput_to_jax(nnp_input: NNPInput):
     nnp_input.atomic_subsystem_indices = convert_to_jax(
         nnp_input.atomic_subsystem_indices
     )
-    nnp_input.per_system_charge = convert_to_jax(nnp_input.per_system_charge)
+    nnp_input.per_system_total_charge = convert_to_jax(
+        nnp_input.per_system_total_charge
+    )
     nnp_input.box_vectors = convert_to_jax(nnp_input.box_vectors)
     nnp_input.is_periodic = convert_to_jax(nnp_input.is_periodic)
 

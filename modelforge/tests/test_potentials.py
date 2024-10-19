@@ -51,9 +51,9 @@ def validate_output_shapes(output, nr_of_mols: int, energy_expression: str):
 
 
 def validate_charge_conservation(
-    per_system_charge: torch.Tensor,
-    per_system_charge_uncorrected: torch.Tensor,
-    per_system_charge_from_dataset: torch.Tensor,
+    per_system_total_charge: torch.Tensor,
+    per_system_total_charge_uncorrected: torch.Tensor,
+    per_system_total_charge_from_dataset: torch.Tensor,
     model_name: str,
 ):
     """Ensure charge conservation by validating the corrected charges."""
@@ -63,10 +63,12 @@ def validate_charge_conservation(
             "Physnet starts with all zero partial charges"
         )  # NOTE: I am not sure if this is correct
     else:
-        assert not torch.allclose(per_system_charge, per_system_charge_uncorrected)
+        assert not torch.allclose(
+            per_system_total_charge, per_system_total_charge_uncorrected
+        )
     assert torch.allclose(
-        per_system_charge_from_dataset.to(torch.float32),
-        per_system_charge,
+        per_system_total_charge_from_dataset.to(torch.float32),
+        per_system_total_charge,
         atol=1e-5,
     )
 
@@ -100,13 +102,13 @@ def validate_chemical_equivalence(output):
 
 def retrieve_molecular_charges(output, atomic_subsystem_indices):
     """Retrieve per-molecule charge from per-atom charges."""
-    per_system_charge = torch.zeros_like(output["per_system_energy"]).index_add_(
+    per_system_total_charge = torch.zeros_like(output["per_system_energy"]).index_add_(
         0, atomic_subsystem_indices, output["per_atom_charge"]
     )
-    per_system_charge_uncorrected = torch.zeros_like(
+    per_system_total_charge_uncorrected = torch.zeros_like(
         output["per_system_energy"]
     ).index_add_(0, atomic_subsystem_indices, output["per_atom_charge_uncorrected"])
-    return per_system_charge, per_system_charge_uncorrected
+    return per_system_total_charge, per_system_total_charge_uncorrected
 
 
 def convert_to_pytorch_if_needed(output, nnp_input, model):
@@ -118,9 +120,9 @@ def convert_to_pytorch_if_needed(output, nnp_input, model):
 
         if "per_atom_charge" in output:
             output["per_atom_charge"] = convert_to_pyt(output["per_atom_charge"])
-        if "per_system_charge" in output:
-            output["per_system_charge"] = convert_to_pyt(
-                output["per_system_charge"]
+        if "per_system_total_charge" in output:
+            output["per_system_total_charge"] = convert_to_pyt(
+                output["per_system_total_charge"]
             ).to(torch.float32)
 
         atomic_subsystem_indices = convert_to_pyt(nnp_input.atomic_subsystem_indices)
@@ -658,13 +660,13 @@ def test_multiple_output_heads(
 
     # Test charge correction
     if energy_expression == "short_range_and_long_range_electrostatic":
-        per_system_charge, per_system_charge_uncorrected = retrieve_molecular_charges(
-            output, nnp_input.atomic_subsystem_indices
+        per_system_total_charge, per_system_total_charge_uncorrected = (
+            retrieve_molecular_charges(output, nnp_input.atomic_subsystem_indices)
         )
         validate_charge_conservation(
-            per_system_charge,
-            per_system_charge_uncorrected,
-            output["per_system_charge"],
+            per_system_total_charge,
+            per_system_total_charge_uncorrected,
+            output["per_system_total_charge"],
             potential_name,
         )
 

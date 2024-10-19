@@ -262,7 +262,7 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
             atomic_numbers=atomic_numbers,
             positions=positions,
             pair_list=self._set_pairlist(idx),
-            per_system_charge=total_charge,
+            per_system_total_charge=total_charge,
             atomic_subsystem_indices=torch.zeros(number_of_atoms, dtype=torch.int32),
         )
         metadata = Metadata(
@@ -1374,7 +1374,7 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
 
         atomic_numbers_list.append(conf.nnp_input.atomic_numbers)
         positions_list.append(conf.nnp_input.positions)
-        total_charge_list.append(conf.nnp_input.per_system_charge)
+        total_charge_list.append(conf.nnp_input.per_system_total_charge)
         dipole_moment_list.append(conf.metadata.per_system_dipole_moment)
         E_list.append(conf.metadata.per_system_energy)
         F_list.append(conf.metadata.per_atom_force)
@@ -1404,7 +1404,7 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
     nnp_input = NNPInput(
         atomic_numbers=atomic_numbers,
         positions=positions,
-        per_system_charge=total_charge,
+        per_system_total_charge=total_charge,
         atomic_subsystem_indices=atomic_subsystem_indices,
         pair_list=IJ_cat,
     )

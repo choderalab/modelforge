@@ -50,7 +50,10 @@ def test_embedding(single_batch_with_batchsize, prep_temp_dir):
     assert "atomic_number" in featurize_input_module.registered_embedding_operations
     assert len(featurize_input_module.registered_embedding_operations) == 1
     # total charge is added to feature vector
-    assert "per_system_total_charge" in featurize_input_module.registered_appended_properties
+    assert (
+        "per_system_total_charge"
+        in featurize_input_module.registered_appended_properties
+    )
     assert len(featurize_input_module.registered_appended_properties) == 1
 
     mixing_module = featurize_input_module.mixing

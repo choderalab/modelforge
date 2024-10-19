@@ -497,7 +497,7 @@ def setup_potential(
                 f"Unsupported neighborlist strategy: {neighborlist_strategy}"
             )
 
-    model = Potential(
+    potential = Potential(
         str(potential_parameter.potential_name),
         core_network,
         neighborlist,

@@ -274,6 +274,7 @@ class TrainingParameters(ParametersBase):
     stochastic_weight_averaging: Optional[StochasticWeightAveraging] = None
     experiment_logger: ExperimentLogger
     verbose: bool = False
+    log_norm: bool = False
     optimizer: Type[torch.optim.Optimizer] = torch.optim.AdamW
     min_number_of_epochs: Union[int, None] = None
 

@@ -505,11 +505,14 @@ class TrainingAdapter(pL.LightningModule):
         batch_size = batch.batch_size()
         for key, metric in loss_dict.items():
             self.loss_metrics[key].update(metric.detach(), batch_size=batch_size)
+
             # Compute and log gradient norms for each loss component
-            if key == "total_loss":
-                continue
-            grad_norm = compute_grad_norm(metric.mean(), self)
-            self.log(f"grad_norm/{key}", grad_norm)
+            if self.training_parameter.log_norm:
+                if key == "total_loss":
+                    continue
+
+                grad_norm = compute_grad_norm(metric.mean(), self)
+                self.log(f"grad_norm/{key}", grad_norm)
 
         # Compute the mean loss for optimization
         total_loss = loss_dict["total_loss"].mean()
@@ -655,6 +658,7 @@ class PotentialTrainer:
         optimizer_class: Type[Optimizer] = torch.optim.AdamW,
         potential_seed: Optional[int] = None,
         verbose: bool = False,
+        log_norm: bool = False,
     ):
         """
         Initializes the TrainingAdapter with the specified model and training configuration.
@@ -679,6 +683,8 @@ class PotentialTrainer:
             Seed to initialize the potential training adapter, default is None.
         verbose : bool, optional
             If True, enables verbose logging, by default False.
+        log_norm : bool, optional
+            If True, logs the norm of the gradients, by default False.
         """
 
         super().__init__()
@@ -688,6 +694,7 @@ class PotentialTrainer:
         self.training_parameter = training_parameter
         self.runtime_parameter = runtime_parameter
         self.verbose = verbose
+        self.log_norm = log_norm
 
         self.datamodule = self.setup_datamodule()
         self.dataset_statistic = (
@@ -896,7 +903,8 @@ class PotentialTrainer:
             def on_before_optimizer_step(self, trainer, pl_module, optimizer):
                 pl_module.log("grad_norm/model", gradient_norm(pl_module))
 
-        callbacks.append(GradNormCallback())
+        if self.log_norm:
+            callbacks.append(GradNormCallback())
 
         return callbacks
 

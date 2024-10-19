@@ -463,7 +463,7 @@ def test_inference_neighborlist_building():
         atomic_numbers=torch.tensor([1, 1, 1, 1], dtype=torch.int64),
         positions=positions,
         atomic_subsystem_indices=torch.tensor([0, 0, 0, 0], dtype=torch.int64),
-        total_charge=torch.tensor([0.0], dtype=torch.float32),
+        per_system_charge=torch.tensor([0.0], dtype=torch.float32),
         box_vectors=torch.tensor(
             [[10, 0, 0], [0, 10, 0], [0, 0, 10]], dtype=torch.float32
         ),
@@ -615,7 +615,7 @@ def test_verlet_inference():
             atomic_numbers=torch.ones(positions.shape[0], dtype=torch.int64),
             positions=positions,
             atomic_subsystem_indices=torch.zeros(positions.shape[0], dtype=torch.int64),
-            total_charge=torch.tensor([0.0], dtype=torch.float32),
+            per_system_charge=torch.tensor([0.0], dtype=torch.float32),
             box_vectors=torch.tensor(
                 [[box_length, 0, 0], [0, box_length, 0], [0, 0, box_length]],
                 dtype=torch.float32,

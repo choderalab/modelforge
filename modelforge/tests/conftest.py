@@ -232,7 +232,7 @@ def methane() -> BatchData:
             atomic_numbers=atomic_numbers,
             positions=positions,
             atomic_subsystem_indices=atomic_subsystem_indices,
-            total_charge=torch.tensor([0.0]),
+            per_system_charge=torch.tensor([0.0]),
         ),
         Metadata(
             E=E,

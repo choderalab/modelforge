@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import jax.numpy as jnp
 import torch
 from typing import NamedTuple, Optional
+from loguru import logger as log
 
 
 @dataclass
@@ -33,9 +34,9 @@ class NNPInput:
         "atomic_numbers",
         "positions",
         "atomic_subsystem_indices",
-        "total_charge",
+        "per_system_charge",
         "pair_list",
-        "partial_charge",
+        "per_atom_partial_charge",
         "box_vectors",
         "is_periodic",
     )
@@ -45,18 +46,18 @@ class NNPInput:
         atomic_numbers: torch.Tensor,
         positions: torch.Tensor,
         atomic_subsystem_indices: torch.Tensor,
-        total_charge: torch.Tensor,
+        per_system_charge: torch.Tensor,
         box_vectors: torch.Tensor = torch.zeros(3, 3),
         is_periodic: torch.Tensor = torch.tensor([False]),
         pair_list: torch.Tensor = None,
-        partial_charge: torch.Tensor = None,
+        per_atom_partial_charge: torch.Tensor = None,
     ):
         self.atomic_numbers = atomic_numbers
         self.positions = positions
         self.atomic_subsystem_indices = atomic_subsystem_indices
-        self.total_charge = total_charge
+        self.per_system_charge = per_system_charge
         self.pair_list = pair_list
-        self.partial_charge = partial_charge
+        self.per_atom_partial_charge = per_atom_partial_charge
         self.box_vectors = box_vectors
         self.is_periodic = is_periodic
 
@@ -70,7 +71,6 @@ class NNPInput:
         atomic_numbers_shape = self.atomic_numbers.shape
         positions_shape = self.positions.shape
         atomic_subsystem_indices_shape = self.atomic_subsystem_indices.shape
-        assert self.box_vectors.shape == (3, 3)
 
         # Validate dimensions
         if len(atomic_numbers_shape) != 1:
@@ -79,6 +79,10 @@ class NNPInput:
             raise ValueError(
                 "positions must be a 2D tensor or array with shape [num_atoms, 3]"
             )
+        if self.box_vectors.shape[0] != 3 or self.box_vectors.shape[1] != 3:
+            print(f"{self.box_vectors.shape}")
+            raise ValueError("box_vectors must be a 3x3 tensor or array")
+
         if len(atomic_subsystem_indices_shape) != 1:
             raise ValueError("atomic_subsystem_indices must be a 1D tensor or array")
 
@@ -101,13 +105,13 @@ class NNPInput:
             self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(
                 torch.int32
             )
-            self.total_charge = self.total_charge.to(torch.int32)
+            self.per_system_charge = self.per_system_charge.to(torch.int32)
         elif isinstance(self.atomic_numbers, jnp.ndarray):
             self.atomic_numbers = self.atomic_numbers.astype(jnp.int32)
             self.atomic_subsystem_indices = self.atomic_subsystem_indices.astype(
                 jnp.int32
             )
-            self.total_charge = self.total_charge.astype(jnp.int32)
+            self.per_system_charge = self.per_system_charge.astype(jnp.int32)
         else:
             raise TypeError("Unsupported array type in NNPInput")
 
@@ -117,15 +121,15 @@ class NNPInput:
         self.atomic_numbers = self.atomic_numbers.to(device)
         self.positions = self.positions.to(device)
         self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(device)
-        self.total_charge = self.total_charge.to(device)
+        self.per_system_charge = self.per_system_charge.to(device)
         self.box_vectors = self.box_vectors.to(device)
         self.is_periodic = self.is_periodic.to(device)
 
         if self.pair_list is not None:
             self.pair_list = self.pair_list.to(device)
 
-        if self.partial_charge is not None:
-            self.partial_charge = self.partial_charge.to(device)
+        if self.per_atom_partial_charge is not None:
+            self.per_atom_partial_charge = self.per_atom_partial_charge.to(device)
 
         return self
 

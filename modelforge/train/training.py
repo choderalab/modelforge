@@ -200,7 +200,7 @@ class CalculateProperties(torch.nn.Module):
         ]  # Shape: [num_atoms]
 
         # Calculate predicted total charge by summing per-atom charges for each system
-        total_charge_predict = (
+        per_system_total_charge_predict = (
             torch.zeros_like(model_prediction["per_system_energy"])
             .scatter_add_(
                 dim=0,
@@ -211,12 +211,12 @@ class CalculateProperties(torch.nn.Module):
         )  # Shape: [nr_of_systems, 1]
 
         # Predict the dipole moment
-        dipole_predict = self._predict_dipole_moment(model_prediction, batch)
+        per_system_dipole_moment = self._predict_dipole_moment(model_prediction, batch)
 
         return {
-            "per_system_total_charge_predict": total_charge_predict,
-            "per_system_total_charge_true": batch.nnp_input.total_charge,
-            "per_system_dipole_moment_predict": dipole_predict,
+            "per_system_total_charge_predict": per_system_total_charge_predict,
+            "per_system_total_charge_true": batch.nnp_input.per_system_total_charge,
+            "per_system_dipole_moment_predict": per_system_dipole_moment,
             "per_system_dipole_moment_true": batch.metadata.per_system_dipole_moment,
         }
 

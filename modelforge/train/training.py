@@ -2,7 +2,7 @@
 This module contains classes and functions for training neural network potentials using PyTorch Lightning.
 """
 
-from typing import Any, Dict, List, Optional, Type, Union, TypeVar
+from typing import Any, Dict, List, Optional, Type, TypeVar
 
 import lightning.pytorch as pL
 import torch
@@ -40,7 +40,7 @@ from modelforge.train.losses import LossFactory, create_error_metrics
 from modelforge.train.parameters import RuntimeParameters, TrainingParameters
 
 __all__ = [
-    "ModelTrainer",
+    "PotentialTrainer",
 ]
 
 
@@ -90,7 +90,6 @@ def _exchange_per_atom_energy_for_per_molecule_energy(prop: str) -> str:
 
 
 class CalculateProperties(torch.nn.Module):
-
     _SUPPORTED_PROPERTIES = [
         "per_atom_energy",
         "per_atom_force",
@@ -116,8 +115,8 @@ class CalculateProperties(torch.nn.Module):
             prop in self._SUPPORTED_PROPERTIES for prop in self.requested_properties
         ), f"Unsupported property requested: {self.requested_properties}"
 
+    @staticmethod
     def _get_forces(
-        self,
         batch: BatchData,
         model_prediction: Dict[str, torch.Tensor],
         train_mode: bool,
@@ -169,8 +168,8 @@ class CalculateProperties(torch.nn.Module):
             "per_atom_force_predict": per_atom_force_predict.contiguous(),
         }
 
+    @staticmethod
     def _get_energies(
-        self,
         batch: BatchData,
         model_prediction: Dict[str, torch.Tensor],
     ) -> Dict[str, torch.Tensor]:
@@ -249,8 +248,9 @@ class CalculateProperties(torch.nn.Module):
             "per_molecule_dipole_moment_true": batch.metadata.dipole_moment,
         }
 
+    @staticmethod
     def _predict_dipole_moment(
-        self, model_predictions: Dict[str, torch.Tensor], batch: BatchData
+        model_predictions: Dict[str, torch.Tensor], batch: BatchData
     ) -> torch.Tensor:
         """
         Compute the predicted dipole moment for each molecule based on the
@@ -353,6 +353,7 @@ class TrainingAdapter(pL.LightningModule):
         potential_parameter: T_NNP_Parameters,
         dataset_statistic: Dict[str, Dict[str, unit.Quantity]],
         training_parameter: TrainingParameters,
+        optimizer_class: Type[Optimizer],
         potential_seed: Optional[int] = None,
     ):
         """
@@ -369,7 +370,7 @@ class TrainingAdapter(pL.LightningModule):
         potential_seed : Optional[int], optional
             Seed for initializing the model (default is None).
         """
-        from modelforge.potential.models import setup_potential
+        from modelforge.potential.potential import setup_potential
 
         super().__init__()
         self.save_hyperparameters()
@@ -390,7 +391,7 @@ class TrainingAdapter(pL.LightningModule):
         self.calculate_predictions = CalculateProperties(
             training_parameter.loss_parameter.loss_property
         )
-        self.optimizer_class = training_parameter.optimizer
+        self.optimizer_class = optimizer_class
         self.learning_rate = training_parameter.lr
         self.lr_scheduler = training_parameter.lr_scheduler
 
@@ -449,8 +450,8 @@ class TrainingAdapter(pL.LightningModule):
         log.warning("Model does not implement _config_prior().")
         raise NotImplementedError()
 
+    @staticmethod
     def _update_metrics(
-        self,
         metrics: ModuleDict,
         predict_target: Dict[str, torch.Tensor],
     ):
@@ -532,7 +533,6 @@ class TrainingAdapter(pL.LightningModule):
         # Ensure positions require gradients for force calculation
         batch.nnp_input.positions.requires_grad_(True)
         with torch.set_grad_enabled(True):
-
             # calculate energy and forces
             predict_target = self.calculate_predictions(
                 batch, self.potential, self.potential.training
@@ -599,7 +599,7 @@ class TrainingAdapter(pL.LightningModule):
                 )
 
     def _log_histograms(self):
-        if self.log_histograms == True:
+        if self.log_histograms:
             for name, params in self.named_parameters():
                 if params is not None:
                     self.logger.experiment.add_histogram(
@@ -639,7 +639,7 @@ class TrainingAdapter(pL.LightningModule):
 from openff.units import unit
 
 
-class ModelTrainer:
+class PotentialTrainer:
     """
     Class for training neural network potentials using PyTorch Lightning.
     """
@@ -662,24 +662,22 @@ class ModelTrainer:
 
         Parameters
         ----------
-        dataset_config : DatasetParameters
+        dataset_parameter : DatasetParameters
             Parameters for the dataset.
         potential_parameter : Union[ANI2xParameters, SAKEParameters, SchNetParameters, PhysNetParameters, PaiNNParameters, TensorNetParameters]
             Parameters for the potential model.
-        training_config : TrainingParameters
+        training_parameter : TrainingParameters
             Parameters for the training process.
-        runtime_config : RuntimeParameters
+        runtime_parameter : RuntimeParameters
             Parameters for runtime configuration.
-        lr_scheduler : Dict[str, Union[str, int, float]]
-            The configuration for the learning rate scheduler.
-        lr : float
-            The learning rate for the optimizer.
-        loss_parameter : Dict[str, Any]
-            Configuration for the loss function.
-        datamodule : DataModule
-            The DataModule for loading datasets.
-        optimizer : Type[Optimizer], optional
+        dataset_statistic : Dict[str, Dict[str, unit.Quantity]]
+            Dataset statistics such as mean and standard deviation.
+        use_default_dataset_statistic: bool
+            Whether to use default dataset statistic
+        optimizer_class : Type[Optimizer], optional
             The optimizer class to use for training, by default torch.optim.AdamW.
+        potential_seed: Optional[int], optional
+            Seed to initialize the potential training adapter, default is None.
         verbose : bool, optional
             If True, enables verbose logging, by default False.
         """
@@ -699,16 +697,16 @@ class ModelTrainer:
             else dataset_statistic
         )
         self.experiment_logger = self.setup_logger()
-        self.model = self.setup_potential(potential_seed)
         self.callbacks = self.setup_callbacks()
         self.trainer = self.setup_trainer()
         self.optimizer_class = optimizer_class
+        self.lightning_module = self.setup_lightning_module(potential_seed)
         self.learning_rate = self.training_parameter.lr
         self.lr_scheduler = self.training_parameter.lr_scheduler
 
     def read_dataset_statistics(
         self,
-    ) -> Dict[str, float]:
+    ) -> dict[str, dict[str, Any]]:
         """
         Read and log dataset statistics.
 
@@ -770,7 +768,7 @@ class ModelTrainer:
         dm.setup()
         return dm
 
-    def setup_potential(
+    def setup_lightning_module(
         self, potential_seed: Optional[int] = None
     ) -> pL.LightningModule:
         """
@@ -792,6 +790,7 @@ class ModelTrainer:
             potential_parameter=self.potential_parameter,
             dataset_statistic=self.dataset_statistic,
             training_parameter=self.training_parameter,
+            optimizer_class=self.optimizer_class,
             potential_seed=potential_seed,
         )
 
@@ -953,7 +952,7 @@ class ModelTrainer:
             The configured trainer instance after running the training process.
         """
         self.trainer.fit(
-            self.model,
+            self.lightning_module,
             train_dataloaders=self.datamodule.train_dataloader(
                 num_workers=self.dataset_parameter.num_workers,
                 pin_memory=self.dataset_parameter.pin_memory,
@@ -967,14 +966,14 @@ class ModelTrainer:
         )
 
         self.trainer.validate(
-            model=self.model,
+            model=self.lightning_module,
             dataloaders=self.datamodule.val_dataloader(),
             ckpt_path="best",
             verbose=True,
         )
 
         self.trainer.test(
-            model=self.model,
+            model=self.lightning_module,
             dataloaders=self.datamodule.test_dataloader(),
             ckpt_path="best",
             verbose=True,
@@ -985,8 +984,8 @@ class ModelTrainer:
         """
         Configures model-specific priors if the model implements them.
         """
-        if hasattr(self.model, "_config_prior"):
-            return self.model._config_prior()
+        if hasattr(self.lightning_module, "_config_prior"):
+            return self.lightning_module._config_prior()
 
         log.warning("Model does not implement _config_prior().")
         raise NotImplementedError()
@@ -1209,9 +1208,9 @@ def read_config_and_train(
         log_every_n_steps=log_every_n_steps,
         simulation_environment=simulation_environment,
     )
-    from modelforge.potential.models import NeuralNetworkPotentialFactory
+    from modelforge.potential.potential import NeuralNetworkPotentialFactory
 
-    model = NeuralNetworkPotentialFactory.generate_potential(
+    trainer = NeuralNetworkPotentialFactory.generate_potential(
         use="training",
         potential_parameter=potential_parameter,
         training_parameter=training_parameter,
@@ -1219,4 +1218,4 @@ def read_config_and_train(
         runtime_parameter=runtime_parameter,
     )
 
-    return model.train_potential()
+    return trainer.train_potential()

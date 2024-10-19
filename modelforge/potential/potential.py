@@ -2,16 +2,15 @@
 This module contains the base classes for the neural network potentials.
 """
 
-from typing import Any, Dict, List, Mapping, NamedTuple, Optional, Tuple, TypeVar, Union
+from typing import Any, Dict, List, Mapping, NamedTuple, Tuple, TypeVar
 
 import lightning as pl
 import torch
 from loguru import logger as log
 from openff.units import unit
-from torch.nn import Module
-from modelforge.potential.neighbors import PairlistData
 
-from modelforge.dataset.dataset import DatasetParameters, NNPInput, NNPInputTuple
+from modelforge.dataset.dataset import DatasetParameters, NNPInputTuple
+from modelforge.potential.neighbors import PairlistData
 from modelforge.potential.parameters import (
     AimNet2Parameters,
     ANI2xParameters,
@@ -34,7 +33,6 @@ T_NNP_Parameters = TypeVar(
     TensorNetParameters,
     AimNet2Parameters,
 )
-
 
 from typing import Callable, Literal, Optional, Union
 
@@ -95,7 +93,6 @@ from modelforge.potential.processing import (
 
 
 class PostProcessing(torch.nn.Module):
-
     _SUPPORTED_PROPERTIES = [
         "per_atom_energy",
         "per_atom_charge",
@@ -191,7 +188,6 @@ class PostProcessing(torch.nn.Module):
         processed_data: Dict[str, torch.Tensor] = {}
         # Iterate over items in ModuleDict
         for name, module in self.registered_chained_operations.items():
-
             module_output = module.forward(data)
             processed_data.update(module_output)
 
@@ -201,6 +197,7 @@ class PostProcessing(torch.nn.Module):
 class Potential(torch.nn.Module):
     def __init__(
         self,
+        name: str,
         core_network,
         neighborlist,
         postprocessing,
@@ -213,6 +210,9 @@ class Potential(torch.nn.Module):
 
         Parameters
         ----------
+        name: str
+            The name of the potential model. This is used to identify the model
+            e.g. from a checkpoint file.
         core_network : torch.nn.Module
             The core neural network used for potential energy calculation.
         neighborlist : torch.nn.Module
@@ -237,8 +237,9 @@ class Potential(torch.nn.Module):
             torch.jit.script(postprocessing) if jit else postprocessing
         )
 
+    @staticmethod
     def _add_total_charge(
-        self, core_output: Dict[str, torch.Tensor], input_data: NNPInputTuple
+        core_output: Dict[str, torch.Tensor], input_data: NNPInputTuple
     ):
         """
         Add the total charge to the core output.
@@ -259,8 +260,9 @@ class Potential(torch.nn.Module):
         core_output["per_molecule_charge"] = input_data.total_charge
         return core_output
 
+    @staticmethod
     def _add_pairlist(
-        self, core_output: Dict[str, torch.Tensor], pairlist_output: PairlistData
+        core_output: Dict[str, torch.Tensor], pairlist_output: PairlistData
     ):
         """
         Add the pairlist to the core output.
@@ -283,7 +285,8 @@ class Potential(torch.nn.Module):
         core_output["r_ij"] = pairlist_output.r_ij
         return core_output
 
-    def _remove_pairlist(self, processed_output: Dict[str, torch.Tensor]):
+    @staticmethod
+    def _remove_pairlist(processed_output: Dict[str, torch.Tensor]):
         """
         Remove the pairlist from the core output.
 
@@ -388,25 +391,37 @@ class Potential(torch.nn.Module):
         model.
         """
 
-        # Prefix to remove
+        # Prefix to remove from the keys
         prefix = "potential."
-        excluded_keys = ["loss.per_molecule_energy", "loss.per_atom_force"]
+        # Prefixes of keys to exclude entirely
+        excluded_prefixes = ["loss."]
 
-        # Create a new dictionary without the prefix in the keys if prefix exists
-        if any(key.startswith(prefix) for key in state_dict.keys()):
-            filtered_state_dict = {
-                key[len(prefix) :] if key.startswith(prefix) else key: value
-                for key, value in state_dict.items()
-                if key not in excluded_keys
-            }
-            log.debug(f"Removed prefix: {prefix}")
+        filtered_state_dict = {}
+        prefixes_removed = set()
+
+        for key, value in state_dict.items():
+            # Exclude keys starting with any of the excluded prefixes
+            if any(key.startswith(ex_prefix) for ex_prefix in excluded_prefixes):
+                continue  # Skip this key entirely
+
+            original_key = key  # Keep track of the original key
+
+            # Remove the specified prefix from the key if it exists
+            if key.startswith(prefix):
+                key = key[len(prefix) :]
+                prefixes_removed.add(prefix)
+
+            # change legacy key names
+            # neighborlist.calculate_distances_and_pairlist.cutoff -> neighborlist.cutoffs
+            if key == "neighborlist.calculate_distances_and_pairlist.cutoff":
+                key = "neighborlist.cutoff"
+
+            filtered_state_dict[key] = value
+
+        if prefixes_removed:
+            log.debug(f"Removed prefixes: {prefixes_removed}")
         else:
-            # Create a filtered dictionary without excluded keys if no prefix
-            # exists
-            filtered_state_dict = {
-                k: v for k, v in state_dict.items() if k not in excluded_keys
-            }
-            log.debug("No prefix found. No modifications to keys in state loading.")
+            log.debug("No prefixes found. No modifications to keys in state loading.")
 
         super().load_state_dict(
             filtered_state_dict,
@@ -482,18 +497,21 @@ def setup_potential(
                 f"Unsupported neighborlist strategy: {neighborlist_strategy}"
             )
 
-    model = Potential(
+    potential = Potential(
+        str(potential_parameter.potential_name),
         core_network,
         neighborlist,
         postprocessing,
         jit=jit,
         jit_neighborlist=False if use_training_mode_neighborlist else True,
     )
-    model.eval()
-    return model
+    potential.eval()
+    return potential
 
 
 from openff.units import unit
+
+from modelforge.train.training import PotentialTrainer
 
 
 class NeuralNetworkPotentialFactory:
@@ -520,7 +538,7 @@ class NeuralNetworkPotentialFactory:
         jit: bool = True,
         inference_neighborlist_strategy: str = "verlet",
         verlet_neighborlist_skin: Optional[float] = 0.1,
-    ) -> Union[Potential, JAXModel, pl.LightningModule]:
+    ) -> Union[Potential, JAXModel, pl.LightningModule, PotentialTrainer]:
         """
         Create an instance of a neural network potential for training or
         inference.
@@ -563,15 +581,13 @@ class NeuralNetworkPotentialFactory:
             An instantiated neural network potential for training or inference.
         """
 
-        from modelforge.train.training import ModelTrainer
-
         log.debug(f"{training_parameter=}")
         log.debug(f"{potential_parameter=}")
         log.debug(f"{dataset_parameter=}")
 
         # obtain model for training
         if use == "training":
-            model = ModelTrainer(
+            trainer = PotentialTrainer(
                 potential_parameter=potential_parameter,
                 training_parameter=training_parameter,
                 dataset_parameter=dataset_parameter,
@@ -580,10 +596,10 @@ class NeuralNetworkPotentialFactory:
                 dataset_statistic=dataset_statistic,
                 use_default_dataset_statistic=use_default_dataset_statistic,
             )
-            return model
+            return trainer
         # obtain model for inference
         elif use == "inference":
-            model = setup_potential(
+            potential = setup_potential(
                 potential_parameter=potential_parameter,
                 dataset_statistic=dataset_statistic,
                 use_training_mode_neighborlist=use_training_mode_neighborlist,
@@ -594,9 +610,9 @@ class NeuralNetworkPotentialFactory:
                 verlet_neighborlist_skin=verlet_neighborlist_skin,
             )
             if simulation_environment == "JAX":
-                return PyTorch2JAXConverter().convert_to_jax_model(model)
+                return PyTorch2JAXConverter().convert_to_jax_model(potential)
             else:
-                return model
+                return potential
         else:
             raise NotImplementedError(f"Unsupported 'use' value: {use}")
 
@@ -706,3 +722,40 @@ class PyTorch2JAXConverter:
 
         # Return the apply function and the converted model parameters
         return apply, model_params, model_buffer
+
+
+def load_inference_model_from_checkpoint(checkpoint_path: str) -> Potential:
+    """
+    Creates an inference model from a checkpoint file.
+    It loads the checkpoint file, extracts the hyperparameters, and creates the model in inference mode.
+
+    Parameters
+    ----------
+    checkpoint_path : str
+        The path to the checkpoint file.
+    """
+    import torch
+    from modelforge.potential import NeuralNetworkPotentialFactory
+
+    # Load the checkpoint
+    checkpoint = torch.load(checkpoint_path, map_location=torch.device("cpu"))
+
+    # Extract hyperparameters
+    hyperparams = checkpoint["hyper_parameters"]
+    potential_parameter = hyperparams["potential_parameter"]
+    dataset_statistic = hyperparams.get("dataset_statistic", None)
+    potential_seed = hyperparams.get("potential_seed", None)
+
+    # Create the model in inference mode
+    model = NeuralNetworkPotentialFactory.generate_potential(
+        use="inference",
+        potential_parameter=potential_parameter,
+        dataset_statistic=dataset_statistic,
+        potential_seed=potential_seed,
+    )
+
+    # Load the state dict into the model
+    model.load_state_dict(checkpoint["state_dict"])
+
+    # Return the model
+    return model

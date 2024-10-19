@@ -169,10 +169,10 @@ class FeaturizeInput(nn.Module):
                 # features is the total charge (which will be transformed to a
                 # per-atom property)
                 self.append_to_embedding_tensor.append(
-                    AddPerMoleculeValue("total_charge")
+                    AddPerMoleculeValue("per_system_total_charge")
                 )
                 self.increase_dim_of_embedded_tensor += 1
-                self.registered_appended_properties.append("total_charge")
+                self.registered_appended_properties.append("per_system_total_charge")
 
             # add partial charge to embedding vector
             elif (

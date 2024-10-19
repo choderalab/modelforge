@@ -24,7 +24,7 @@ number_of_per_atom_features = 32
 properties_to_process = ['per_atom_energy']
 [potential.postprocessing_parameter.per_atom_energy]
 normalize = true
-from_atom_to_molecule_reduction = true
+from_atom_to_system_reduction = true
 keep_per_atom_property = true
 [potential.postprocessing_parameter.per_atom_charge]
 conserve = true
@@ -33,7 +33,7 @@ conserve_strategy = "default"
 # [potential.postprocessing_parameter.per_atom_charge.coulomb_potential]
 # electrostatic_strategy = "coulomb"
 # maximum_interaction_radius = "10.0 angstrom"
-# from_atom_to_molecule_reduction = true
+# from_atom_to_system_reduction = true
 # keep_per_atom_property = true
 
 # [potential.postprocessing_parameter.general_postprocessing_operation]

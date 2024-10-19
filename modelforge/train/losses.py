@@ -87,7 +87,7 @@ class Error(nn.Module, ABC):
 
 class ForceSquaredError(Error):
     """
-    Calculates the per-atom error and aggregates it to per-molecule mean squared error.
+    Calculates the per-atom error and aggregates it to per-system mean squared error.
     """
 
     def calculate_error(
@@ -105,7 +105,7 @@ class ForceSquaredError(Error):
         batch: NNPInput,
     ) -> torch.Tensor:
         """
-        Computes the per-atom error and aggregates it to per-molecule mean squared error.
+        Computes the per-atom error and aggregates it to per-system mean squared error.
 
         Parameters
         ----------
@@ -119,7 +119,7 @@ class ForceSquaredError(Error):
         Returns
         -------
         torch.Tensor
-            The aggregated per-molecule error.
+            The aggregated per-system error.
         """
 
         # Compute per-atom squared error
@@ -127,57 +127,55 @@ class ForceSquaredError(Error):
             per_atom_prediction, per_atom_reference
         )
 
-        # Initialize per-molecule squared error tensor
-        per_molecule_squared_error = torch.zeros_like(
-            batch.metadata.E, dtype=per_atom_squared_error.dtype
+        # Initialize per-system squared error tensor
+        per_system_squared_error = torch.zeros_like(
+            batch.metadata.per_system_energy, dtype=per_atom_squared_error.dtype
         )
 
-        # Aggregate error per molecule
-        per_molecule_squared_error = per_molecule_squared_error.scatter_add(
+        # Aggregate error per system
+        per_system_squared_error = per_system_squared_error.scatter_add(
             0,
             batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
             per_atom_squared_error,
         )
 
         # Scale error by number of atoms
-        per_molecule_square_error_scaled = self.scale_by_number_of_atoms(
-            per_molecule_squared_error,
+        per_system_square_error_scaled = self.scale_by_number_of_atoms(
+            per_system_squared_error,
             batch.metadata.atomic_subsystem_counts,
             prefactor=per_atom_prediction.shape[-1],
         )
 
-        return per_molecule_square_error_scaled.contiguous()
+        return per_system_square_error_scaled.contiguous()
 
 
 class EnergySquaredError(Error):
     """
-    Calculates the per-molecule mean squared error.
+    Calculates the per-system mean squared error.
     """
 
     def calculate_error(
         self,
-        per_molecule_prediction: torch.Tensor,
-        per_molecule_reference: torch.Tensor,
+        per_system_prediction: torch.Tensor,
+        per_system_reference: torch.Tensor,
     ) -> torch.Tensor:
-        """Computes the per-molecule squared error."""
-        return self.calculate_squared_error(
-            per_molecule_prediction, per_molecule_reference
-        )
+        """Computes the per-system squared error."""
+        return self.calculate_squared_error(per_system_prediction, per_system_reference)
 
     def forward(
         self,
-        per_molecule_prediction: torch.Tensor,
-        per_molecule_reference: torch.Tensor,
+        per_system_prediction: torch.Tensor,
+        per_system_reference: torch.Tensor,
         batch: NNPInput,
     ) -> torch.Tensor:
         """
-        Computes the per-molecule mean squared error.
+        Computes the per-system mean squared error.
 
         Parameters
         ----------
-        per_molecule_prediction : torch.Tensor
+        per_system_prediction : torch.Tensor
             The predicted values.
-        per_molecule_reference : torch.Tensor
+        per_system_reference : torch.Tensor
             The true values.
         batch : NNPInput
             The batch data containing metadata and input information.
@@ -185,20 +183,20 @@ class EnergySquaredError(Error):
         Returns
         -------
         torch.Tensor
-            The mean per-molecule error.
+            The mean per-system error.
         """
 
-        # Compute per-molecule squared error
-        per_molecule_squared_error = self.calculate_error(
-            per_molecule_prediction, per_molecule_reference
+        # Compute per-system squared error
+        per_system_squared_error = self.calculate_error(
+            per_system_prediction, per_system_reference
         )
         # Scale error by number of atoms
-        per_molecule_square_error_scaled = self.scale_by_number_of_atoms(
-            per_molecule_squared_error,
+        per_system_square_error_scaled = self.scale_by_number_of_atoms(
+            per_system_squared_error,
             batch.metadata.atomic_subsystem_counts,
         )
 
-        return per_molecule_square_error_scaled
+        return per_system_square_error_scaled
 
 
 class TotalChargeError(Error):
@@ -293,10 +291,10 @@ class Loss(nn.Module):
 
     _SUPPORTED_PROPERTIES = [
         "per_atom_energy",
-        "per_molecule_energy",
+        "per_system_energy",
         "per_atom_force",
-        "per_molecule_total_charge",
-        "per_molecule_dipole_moment",
+        "per_system_total_charge",
+        "per_system_dipole_moment",
     ]
 
     def __init__(self, loss_property: List[str], weights: Dict[str, float]):
@@ -337,17 +335,17 @@ class Loss(nn.Module):
                 self.loss_functions[prop] = EnergySquaredError(
                     scale_by_number_of_atoms=True
                 )
-            elif prop == "per_molecule_energy":
+            elif prop == "per_system_energy":
                 log.info(
-                    f"Creating per molecule energy loss with weight: {weights[prop]}"
+                    f"Creating per system energy loss with weight: {weights[prop]}"
                 )
                 self.loss_functions[prop] = EnergySquaredError(
                     scale_by_number_of_atoms=False
                 )
-            elif prop == "per_molecule_total_charge":
+            elif prop == "per_system_total_charge":
                 log.info(f"Creating total charge loss with weight: {weights[prop]}")
                 self.loss_functions[prop] = TotalChargeError()
-            elif prop == "per_molecule_dipole_moment":
+            elif prop == "per_system_dipole_moment":
                 log.info(f"Creating dipole moment loss with weight: {weights[prop]}")
                 self.loss_functions[prop] = DipoleMomentError()
             else:
@@ -376,23 +374,23 @@ class Loss(nn.Module):
             Individual per-sample loss terms and the combined total loss.
         """
         from modelforge.train.training import (
-            _exchange_per_atom_energy_for_per_molecule_energy,
+            _exchange_per_atom_energy_for_per_system_energy,
         )
 
         # Save the loss as a dictionary
         loss_dict = {}
         # Accumulate loss
-        total_loss = torch.zeros_like(batch.metadata.E)
+        total_loss = torch.zeros_like(batch.metadata.per_system_energy)
 
         # Iterate over loss properties
         for prop in self.loss_property:
             loss_fn = self.loss_functions[prop]
 
-            prop_ = _exchange_per_atom_energy_for_per_molecule_energy(prop)
-            # NOTE: we always predict per_molecule_energies, and the dataset
-            # also include per_molecule_energies. If we are normalizing these
+            prop_ = _exchange_per_atom_energy_for_per_system_energy(prop)
+            # NOTE: we always predict per_system_energies, and the dataset
+            # also include per_system_energies. If we are normalizing these
             # (indicated by the `per_atom_energy` keyword), we still operate on
-            # the per_molecule_energies but the loss function will divide the
+            # the per_system_energies but the loss function will divide the
             # error by the number of atoms in the atomic subsystems.
             prop_loss = loss_fn(
                 predict_target[f"{prop_}_predict"],
@@ -469,20 +467,18 @@ def create_error_metrics(
         metric_dict["total_loss"] = MetricCollection([MeanMetric()])
     else:
         from modelforge.train.training import (
-            _exchange_per_atom_energy_for_per_molecule_energy,
+            _exchange_per_atom_energy_for_per_system_energy,
         )
 
         # NOTE: we are using the
-        # _exchange_per_atom_energy_for_per_molecule_energy function because, if
-        # the `per_atom_energy` loss (i.e., the normalize per_molecule_energy
-        # loss) is used, the validation error is still per_molecule_energy
+        # _exchange_per_atom_energy_for_per_system_energy function because, if
+        # the `per_atom_energy` loss (i.e., the normalize per_system_energy
+        # loss) is used, the validation error is still per_system_energy
         metric_dict = ModuleDict(
             {
-                _exchange_per_atom_energy_for_per_molecule_energy(
-                    prop
-                ): MetricCollection(
+                _exchange_per_atom_energy_for_per_system_energy(prop): MetricCollection(
                     [MeanAbsoluteError(), MeanSquaredError(squared=False)]
-                )  # only exchange per_atom_energy for per_molecule_energy
+                )  # only exchange per_atom_energy for per_system_energy
                 for prop in loss_properties
             }
         )

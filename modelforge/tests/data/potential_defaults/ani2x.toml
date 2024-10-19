@@ -13,7 +13,7 @@ predicted_properties = ["per_atom_energy"]
 predicted_dim = [1]
 
 [potential.core_parameter.activation_function_parameter]
-activation_function_name = "CeLU"  
+activation_function_name = "CeLU"
 
 [potential.core_parameter.activation_function_parameter.activation_function_arguments]
 alpha = 0.1
@@ -22,6 +22,5 @@ alpha = 0.1
 properties_to_process = ['per_atom_energy']
 [potential.postprocessing_parameter.per_atom_energy]
 normalize = true
-from_atom_to_molecule_reduction = true
+from_atom_to_system_reduction = true
 keep_per_atom_property = true
-

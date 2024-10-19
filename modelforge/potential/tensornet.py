@@ -9,7 +9,7 @@ from torch import nn
 
 from modelforge.potential import CosineAttenuationFunction, TensorNetRadialBasisFunction
 
-from modelforge.dataset.dataset import NNPInputTuple
+from modelforge.dataset.dataset import NNPInput
 from modelforge.potential.neighbors import PairlistData
 
 
@@ -286,7 +286,7 @@ class TensorNetCore(torch.nn.Module):
 
     def compute_properties(
         self,
-        data: NNPInputTuple,
+        data: NNPInput,
         pairlist_output: PairlistData,
     ) -> Dict[str, torch.Tensor]:
         """
@@ -294,7 +294,7 @@ class TensorNetCore(torch.nn.Module):
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             The input data for the model.
         pairlist_output : PairlistData
             The pair list data including distances and indices of atom pairs.
@@ -311,7 +311,7 @@ class TensorNetCore(torch.nn.Module):
 
         # using interlevae and bincount to generate a total charge per molecule
         expanded_total_charge = torch.repeat_interleave(
-            data.total_charge, data.atomic_subsystem_indices.bincount()
+            data.per_system_total_charge, data.atomic_subsystem_indices.bincount()
         )
 
         for layer in self.interaction_modules:
@@ -342,7 +342,7 @@ class TensorNetCore(torch.nn.Module):
 
     def forward(
         self,
-        data: NNPInputTuple,
+        data: NNPInput,
         pairlist_output: PairlistData,
     ) -> Dict[str, torch.Tensor]:
         """
@@ -350,7 +350,7 @@ class TensorNetCore(torch.nn.Module):
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             Input data including atomic numbers and positions.
         pairlist_output : PairlistData
             Pair list output with distances and displacement vectors.
@@ -573,7 +573,7 @@ class TensorNetRepresentation(torch.nn.Module):
 
     def forward(
         self,
-        data: NNPInputTuple,
+        data: NNPInput,
         pairlist_output: PairlistData,
     ):
         """
@@ -582,7 +582,7 @@ class TensorNetRepresentation(torch.nn.Module):
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             Input data for the system, including atomic numbers and positions.
         pairlist_output : PairlistData
             Output from the pair list module, including pair indices and distances.

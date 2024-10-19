@@ -6,7 +6,7 @@ from loguru import logger as log
 
 from modelforge.potential.utils import Dense
 
-from modelforge.dataset.dataset import NNPInput, NNPInputTuple
+from modelforge.dataset.dataset import NNPInput
 from modelforge.potential.neighbors import PairlistData
 
 
@@ -101,7 +101,7 @@ class AimNet2Core(torch.nn.Module):
 
     def compute_properties(
         self,
-        data: NNPInputTuple,
+        data: NNPInput,
         pairlist: PairlistData,
     ) -> Dict[str, torch.Tensor]:
         """
@@ -147,7 +147,9 @@ class AimNet2Core(torch.nn.Module):
             partial_charges = self.charge_conservation(
                 {
                     "per_atom_charge": partial_charges.squeeze(-1),
-                    "per_molecule_charge": data.total_charge.to(dtype=torch.float32),
+                    "per_system_total_charge": data.per_system_total_charge.to(
+                        dtype=torch.float32
+                    ),
                     "atomic_subsystem_indices": data.atomic_subsystem_indices.to(
                         dtype=torch.int64
                     ),
@@ -162,7 +164,7 @@ class AimNet2Core(torch.nn.Module):
 
     def forward(
         self,
-        data: NNPInputTuple,
+        data: NNPInput,
         pairlist_output: PairlistData,
     ) -> Dict[str, torch.Tensor]:
         """
@@ -534,7 +536,7 @@ class AIMNet2Representation(nn.Module):
 
     def forward(
         self,
-        data: NNPInputTuple,
+        data: NNPInput,
         pairlist_output: PairlistData,
     ) -> Dict[str, torch.Tensor]:
         """
@@ -542,7 +544,7 @@ class AIMNet2Representation(nn.Module):
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             The input data including atomic positions and numbers.
         pairlist_output : PairlistData
             Pairwise distances between atoms and pair indices.

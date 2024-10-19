@@ -390,7 +390,7 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
         )
     )
     # compare to reference evalue obtained from Loos class
-    ref = torch.mean(loss_output["per_molecule_energy"])
+    ref = torch.mean(loss_output["per_system_energy"])
     assert torch.allclose(ref, E_loss)
     E_loss = torch.mean(
         (
@@ -441,5 +441,3 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
         + +loss_weights["per_atom_energy"] * loss_output["per_atom_energy"],
         loss_output["total_loss"].to(torch.float32),
     )
-
-

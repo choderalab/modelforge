@@ -169,7 +169,7 @@ def test_JAX_wrapping(potential_name, single_batch_with_batchsize, prep_temp_dir
     from modelforge.jax import convert_NNPInput_to_jax
 
     nnp_input = convert_NNPInput_to_jax(batch.nnp_input)
-    out = model(nnp_input)["per_system_energy"]
+    out = potential(nnp_input)["per_system_energy"]
     import jax
 
     assert "JAX" in str(type(potential))
@@ -464,7 +464,7 @@ def test_energy_between_simulation_environments(
     from modelforge.jax import convert_NNPInput_to_jax
 
     nnp_input = convert_NNPInput_to_jax(batch.nnp_input)
-    output_jax = model(nnp_input)["per_molecule_energy"]
+    output_jax = potential(nnp_input)["per_system_energy"]
 
     # test tat we get an energie per molecule
     assert np.isclose(output_torch.sum().detach().numpy(), output_jax.sum())
@@ -990,7 +990,7 @@ def test_equivariant_energies_and_forces(
         batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
     ).nnp_input.to_dtype(dtype=precision)
 
-    reference_result = model(nnp_input)["per_system_energy"]
+    reference_result = potential(nnp_input)["per_system_energy"]
     reference_forces = -torch.autograd.grad(
         reference_result.sum(),
         nnp_input.positions,
@@ -1005,7 +1005,7 @@ def test_equivariant_energies_and_forces(
     translation_nnp_input = nnp_input.to_dtype(dtype=precision)
     translation_nnp_input.positions = translation(translation_nnp_input.positions)
 
-    translation_result = model(translation_nnp_input)["per_system_energy"]
+    translation_result = potential(translation_nnp_input)["per_system_energy"]
     assert torch.allclose(
         translation_result,
         reference_result,

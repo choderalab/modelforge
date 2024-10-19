@@ -379,7 +379,7 @@ class ANIRepresentation(nn.Module):
         Dict[str, torch.Tensor]
             A dictionary containing the radial AEVs and additional data.
         """
-        radial_feature_vector = radial_feature_vector.squeeze(1)
+        radial_feature_vector = radial_feature_vector.squeeze(1) # Shape [num_pairs, radial_sublength]
         number_of_atoms = data.atomic_numbers.shape[0]
         radial_sublength = (
             self.radial_symmetry_functions.number_of_radial_basis_functions
@@ -392,11 +392,17 @@ class ANIRepresentation(nn.Module):
                 number_of_atoms * self.nr_of_supported_elements,
                 radial_sublength,
             )
-        )
-        atom_index12 = pairlist_output.pair_indices
+        ) # Shape [num_atoms * nr_of_supported_elements, radial_sublength]
+        
+        atom_index12 = pairlist_output.pair_indices # Shape [2, num_pairs] # this is the pair list of the atoms (e.g. C=6)
         species = atom_index
-        species12 = species[atom_index12]
+        species12 = species[atom_index12] # Shape [2, num_pairs], this is the pair index but now with optimzied indexing
 
+        # What are we doing here? we generate an atomic environment vector with
+        # fixed dimensinos (nr_of_supported_elements, 16 (represents number of
+        # radial symmetry functions)) for each **element** per atom (in a pair)
+        
+        # this is a magic indexing function that works
         index12 = atom_index12 * self.nr_of_supported_elements + species12.flip(0)
         radial_aev.index_add_(0, index12[0], radial_feature_vector)
         radial_aev.index_add_(0, index12[1], radial_feature_vector)

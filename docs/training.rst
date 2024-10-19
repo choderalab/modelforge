@@ -8,7 +8,7 @@ During training the parameters of a potential are fitted to reproduce the target
 
 The properties a given potential can be trained on are determined by the potential itself and by the loss function used to train the potential. Each of the models implemented in *modelforge* have flexible numbers of output heads, each of which can be fitted against a different scalar/tensor property.
 
-*Modelforge* uses Pytorch Lightning to train models. The training process is controlled by a :class:`~modelforge.train.training.ModelTrainer` object, which is responsible for managing the training loop, the optimizer, the learning rate scheduler, and the early stopping criteria. The training process is controlled by a configuration file, `training.toml`, which specifies the number of epochs, the learning rate, the loss function, and the splitting strategy for the dataset. The training process can be started by 
+*Modelforge* uses Pytorch Lightning to train models. The training process is controlled by a :class:`~modelforge.train.training.PotentialTrainer` object, which is responsible for managing the training loop, the optimizer, the learning rate scheduler, and the early stopping criteria. The training process is controlled by a configuration file, `training.toml`, which specifies the number of epochs, the learning rate, the loss function, and the splitting strategy for the dataset. The training process can be started by 
 
 
 Training Configuration

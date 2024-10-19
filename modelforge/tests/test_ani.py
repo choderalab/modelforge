@@ -37,7 +37,7 @@ def setup_methane():
         atomic_numbers=torch.tensor([6, 1, 1, 1, 1], device=device),
         positions=coordinates.squeeze(0) / 10,
         atomic_subsystem_indices=atomic_subsystem_indices,
-        total_charge=torch.tensor([0.0]),
+        per_system_total_charge=torch.tensor([0.0]),
     )
 
     return species, coordinates, device, nnp_input
@@ -82,7 +82,7 @@ def setup_two_methanes():
         atomic_numbers=atomic_numbers,
         positions=torch.cat((coordinates[0], coordinates[1]), dim=0) / 10,
         atomic_subsystem_indices=atomic_subsystem_indices,
-        total_charge=torch.tensor([0.0, 0.0]),
+        per_system_total_charge=torch.tensor([0.0, 0.0]),
     )
     return ani_species, coordinates, device, nnp_input
 
@@ -142,7 +142,7 @@ def test_forward_and_backward(mode, prep_temp_dir):
 
     energy = model(mf_input)
     derivative = torch.autograd.grad(
-        energy["per_molecule_energy"].sum(), mf_input.positions
+        energy["per_system_energy"].sum(), mf_input.positions
     )[0]
     per_atom_force = -derivative
 

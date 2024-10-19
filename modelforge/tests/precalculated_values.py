@@ -112,7 +112,7 @@ def setup_single_methane_input():
         atomic_numbers=atomic_numbers,
         positions=positions,
         atomic_subsystem_indices=atomic_subsystem_indices,
-        total_charge=torch.tensor([0], dtype=torch.int32),
+        per_system_total_charge=torch.tensor([0], dtype=torch.int32),
     )
     # ------------------------------------ #
 

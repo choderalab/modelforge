@@ -95,7 +95,7 @@ def setup_modelforge_painn_representation(
         postprocessing_parameter={
             "per_atom_energy": {
                 "normalize": True,
-                "from_atom_to_molecule_reduction": True,
+                "from_atom_to_system_reduction": True,
                 "keep_per_atom_property": True,
             },
             "general_postprocessing_operation": {
@@ -499,7 +499,7 @@ def setup_mf_schnet_representation(
         postprocessing_parameter={
             "per_atom_energy": {
                 "normalize": True,
-                "from_atom_to_molecule_reduction": True,
+                "from_atom_to_system_reduction": True,
                 "keep_per_atom_property": True,
             },
             "general_postprocessing_operation": {

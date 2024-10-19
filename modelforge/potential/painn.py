@@ -9,7 +9,7 @@ import torch.nn as nn
 from loguru import logger as log
 from openff.units import unit
 
-from modelforge.dataset.dataset import NNPInputTuple
+from modelforge.dataset.dataset import NNPInput
 from modelforge.potential.neighbors import PairlistData
 from .utils import DenseWithCustomDist
 
@@ -134,14 +134,14 @@ class PaiNNCore(torch.nn.Module):
             )
 
     def compute_properties(
-        self, data: NNPInputTuple, pairlist_output: PairlistData
+        self, data: NNPInput, pairlist_output: PairlistData
     ) -> Dict[str, torch.Tensor]:
         """
         Compute atomic representations and embeddings using PaiNN.
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             The input data containing atomic numbers, positions, etc.
         pairlist_output : PairlistData
             The output from the pairlist module.
@@ -182,14 +182,14 @@ class PaiNNCore(torch.nn.Module):
         }
 
     def forward(
-        self, data: NNPInputTuple, pairlist_output: PairlistData
+        self, data: NNPInput, pairlist_output: PairlistData
     ) -> Dict[str, torch.Tensor]:
         """
         Forward pass of the PaiNN model.
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             Input data including atomic numbers, positions, etc.
         pairlist_output : PairlistData
             Pair indices and distances from the pairlist module.
@@ -275,14 +275,14 @@ class PaiNNRepresentation(nn.Module):
         self.nr_atom_basis = nr_atom_basis
 
     def forward(
-        self, data: NNPInputTuple, pairlist_output: PairlistData
+        self, data: NNPInput, pairlist_output: PairlistData
     ) -> Dict[str, torch.Tensor]:
         """
         Generate atomic embeddings and filters for PaiNN.
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             The input data containing atomic numbers, positions, etc.
         pairlist_output : PairlistData
             The output from the pairlist module, containing pair indices and distances.

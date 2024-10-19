@@ -146,7 +146,7 @@ def test_forward(single_batch_with_batchsize, prep_temp_dir):
     assert aimnet is not None, "Aimnet model should be initialized."
     batch = single_batch_with_batchsize(64, "QM9", str(prep_temp_dir))
 
-    y_hat = aimnet(batch.nnp_input_tuple)
+    y_hat = aimnet(batch.nnp_input)
 
 
 @pytest.mark.xfail(raises=NotImplementedError)

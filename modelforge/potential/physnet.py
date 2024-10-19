@@ -8,7 +8,7 @@ import torch
 from loguru import logger as log
 from torch import nn
 
-from modelforge.dataset.dataset import NNPInputTuple
+from modelforge.dataset.dataset import NNPInput
 from modelforge.potential.neighbors import PairlistData
 from .utils import Dense
 
@@ -54,7 +54,7 @@ class PhysNetRepresentation(nn.Module):
         )
 
     def forward(
-        self, data: NNPInputTuple, pairlist_output: PairlistData
+        self, data: NNPInput, pairlist_output: PairlistData
     ) -> Dict[str, torch.Tensor]:
         """
         Forward pass for the representation module, generating RBFs and
@@ -62,7 +62,7 @@ class PhysNetRepresentation(nn.Module):
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             Input data containing atomic positions, atomic numbers, etc.
         pairlist_output : PairlistData
             Output from the pairlist module containing distances and pair indices.
@@ -495,7 +495,7 @@ class PhysNetCore(torch.nn.Module):
 
     def compute_properties(
         self,
-        data: NNPInputTuple,
+        data: NNPInput,
         pairlist_output: PairlistData,
     ) -> Dict[str, torch.Tensor]:
         """
@@ -503,7 +503,7 @@ class PhysNetCore(torch.nn.Module):
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             Input data containing atomic features and pairwise information.
         pairlist_output : PairlistData
             Output from the pairlist module.
@@ -558,7 +558,7 @@ class PhysNetCore(torch.nn.Module):
         ----------
         per_atom_property_prediction : torch.Tensor
             Tensor of predicted per-atom properties.
-        data : NNPInputTuple
+        data : NNPInput
             Input data containing atomic numbers, etc.
 
         Returns
@@ -585,14 +585,14 @@ class PhysNetCore(torch.nn.Module):
         return outputs
 
     def forward(
-        self, data: NNPInputTuple, pairlist_output: PairlistData
+        self, data: NNPInput, pairlist_output: PairlistData
     ) -> Dict[str, torch.Tensor]:
         """
         Forward pass through the entire PhysNet architecture.
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             Input data containing atomic features and pairwise information.
         pairlist_output : PairlistData
             Pairwise information from the pairlist module.

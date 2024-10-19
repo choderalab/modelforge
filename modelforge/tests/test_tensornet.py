@@ -9,7 +9,7 @@ def prep_temp_dir(tmp_path_factory):
     return fn
 
 
-def test_init():
+def test_init(prep_temp_dir):
     """Test initialization of the TensorNet model."""
 
     # load default parameters
@@ -19,6 +19,7 @@ def test_init():
         potential_seed=42,
         potential_name="tensornet",
         simulation_environment="JAX",
+        local_cache_dir=str(prep_temp_dir),
     )
     assert model is not None, "TensorNet model should be initialized."
 
@@ -39,6 +40,7 @@ def test_forward_with_inference_model(
         potential_name="tensornet",
         simulation_environment=simulation_environment,
         use_training_mode_neighborlist=True,
+        local_cache_dir=str(prep_temp_dir),
     )
 
     if simulation_environment == "JAX":
@@ -49,7 +51,7 @@ def test_forward_with_inference_model(
         model(nnp_input)
 
 
-def test_input():
+def test_input(prep_temp_dir):
     import torch
     from loguru import logger as log
 
@@ -64,6 +66,7 @@ def test_input():
         potential_name="tensornet",
         simulation_environment="PyTorch",
         use_training_mode_neighborlist=True,
+        local_cache_dir=str(prep_temp_dir),
     )
 
     from importlib import resources
@@ -184,7 +187,7 @@ def test_compare_radial_symmetry_features():
     assert torch.allclose(mf_r, tn_r, atol=1e-4)
 
 
-def test_representation():
+def test_representation(prep_temp_dir):
     from importlib import resources
 
     import torch
@@ -218,6 +221,7 @@ def test_representation():
         potential_name="tensornet",
         simulation_environment="PyTorch",
         use_training_mode_neighborlist=True,
+        local_cache_dir=str(prep_temp_dir),
     )
     pairlist_output = model.neighborlist.forward(nnp_input)
 
@@ -256,7 +260,7 @@ def test_representation():
     assert torch.allclose(mf_X, tn_X)
 
 
-def test_interaction():
+def test_interaction(prep_temp_dir):
     import pickle
     from importlib import resources
 
@@ -292,6 +296,7 @@ def test_interaction():
         potential_name="tensornet",
         simulation_environment="PyTorch",
         use_training_mode_neighborlist=True,
+        local_cache_dir=str(prep_temp_dir),
     )
 
     ################ modelforge TensorNet ################

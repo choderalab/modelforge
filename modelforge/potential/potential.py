@@ -8,9 +8,10 @@ import lightning as pl
 import torch
 from loguru import logger as log
 from openff.units import unit
+from torch.nn import Module
 from modelforge.potential.neighbors import PairlistData
 
-from modelforge.dataset.dataset import DatasetParameters, NNPInput
+from modelforge.dataset.dataset import DatasetParameters, NNPInput, NNPInputTuple
 from modelforge.potential.parameters import (
     AimNet2Parameters,
     ANI2xParameters,
@@ -241,7 +242,7 @@ class Potential(torch.nn.Module):
         )
 
     def _add_total_charge(
-        self, core_output: Dict[str, torch.Tensor], input_data: NNPInput
+        self, core_output: Dict[str, torch.Tensor], input_data: NNPInputTuple
     ):
         """
         Add the total charge to the core output.
@@ -250,7 +251,7 @@ class Potential(torch.nn.Module):
         ----------
         core_output : Dict[str, torch.Tensor]
             The core network output.
-        input_data : NNPInput
+        input_data : NNPInputTuple
             The input data containing the atomic numbers and charges.
 
         Returns
@@ -259,7 +260,7 @@ class Potential(torch.nn.Module):
             The core network output with the total charge added.
         """
         # Add the total charge to the core output
-        core_output["per_system_charge"] = input_data.per_system_charge
+        core_output["per_molecule_charge"] = input_data.total_charge
         return core_output
 
     def _add_pairlist(
@@ -306,13 +307,13 @@ class Potential(torch.nn.Module):
         del processed_output["r_ij"]
         return processed_output
 
-    def forward(self, input_data: NNPInput) -> Dict[str, torch.Tensor]:
+    def forward(self, input_data: NNPInputTuple) -> Dict[str, torch.Tensor]:
         """
         Forward pass for the potential model, computing energy and forces.
 
         Parameters
         ----------
-        input_data : NNPInput
+        input_data : NNPInputTuple
             Input data containing atomic positions and other features.
 
         Returns
@@ -335,14 +336,14 @@ class Potential(torch.nn.Module):
         return processed_output
 
     def compute_core_network_output(
-        self, input_data: NNPInput
+        self, input_data: NNPInputTuple
     ) -> Dict[str, torch.Tensor]:
         """
         Compute the core network output, including energy predictions.
 
         Parameters
         ----------
-        input_data : NNPInput
+        input_data : NNPInputTuple
             Input data containing atomic positions and other features.
 
         Returns
@@ -610,24 +611,6 @@ class NeuralNetworkPotentialFactory:
                 verlet_neighborlist_skin=verlet_neighborlist_skin,
             )
             if simulation_environment == "JAX":
-                # register nnp_input as pytree
-                from modelforge.utils.io import import_
-
-                jax = import_("jax")
-                from modelforge.jax import nnpinput_flatten, nnpinput_unflatten
-                from modelforge.dataset import NNPInput
-
-                # registering NNPInput multiple times will result in a
-                # ValueError
-                try:
-                    jax.tree_util.register_pytree_node(
-                        NNPInput,
-                        nnpinput_flatten,
-                        nnpinput_unflatten,
-                    )
-                except ValueError:
-                    log.debug("NNPInput already registered as pytree")
-                    pass
                 return PyTorch2JAXConverter().convert_to_jax_model(model)
             else:
                 return model

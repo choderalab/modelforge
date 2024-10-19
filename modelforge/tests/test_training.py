@@ -4,10 +4,11 @@ import platform
 import pytest
 import torch
 
+from modelforge.potential import NeuralNetworkPotentialFactory, _Implemented_NNPs
+
 ON_MACOS = platform.system() == "Darwin"
 
 IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
-from modelforge.potential import NeuralNetworkPotentialFactory, _Implemented_NNPs
 
 
 @pytest.fixture(scope="session")
@@ -68,7 +69,6 @@ def load_configs_into_pydantic_models(
 
 
 def get_trainer(config):
-
     # Extract parameters
     potential_parameter = config["potential"]
     training_parameter = config["training"]
@@ -163,7 +163,7 @@ def test_train_with_lightning(loss, potential_name, dataset_name, prep_temp_dir)
         pytest.skip("ANI potential is not compatible with SPICE2 dataset")
     if IN_GITHUB_ACTIONS and potential_name == "SAKE" and "force" in loss:
         pytest.skip(
-            "Skipping Sake training with forces on GitHub Actions because it allocates too much memory"
+            "Skipping Sake training with forces because it allocates too much memory"
         )
 
     config = load_configs_into_pydantic_models(
@@ -252,7 +252,6 @@ def test_error_calculation(single_batch_with_batchsize, prep_temp_dir):
 
 
 def test_loss_with_dipole_moment(single_batch_with_batchsize, prep_temp_dir):
-
     # Generate a batch with the specified batch size and dataset
     batch = single_batch_with_batchsize(
         batch_size=16, dataset_name="SPICE2", local_cache_dir=str(prep_temp_dir)
@@ -272,9 +271,9 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize, prep_temp_dir):
     )
 
     # Calculate predictions using the trainer's model
-    prediction = trainer.model.calculate_predictions(
+    prediction = trainer.lightning_module.calculate_predictions(
         batch,
-        trainer.model.potential,
+        trainer.lightning_module.potential,
         train_mode=True,  # train_mode=True is required for gradients in force prediction
     )
 
@@ -311,7 +310,7 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize, prep_temp_dir):
     ), "Mismatch in shape for total charge predictions."
 
     # Now compute the loss
-    loss_dict = trainer.model.loss(predict_target=prediction, batch=batch)
+    loss_dict = trainer.lightning_module.loss(predict_target=prediction, batch=batch)
 
     # Ensure that the loss contains the total_charge and dipole_moment terms
     assert "per_system_total_charge" in loss_dict, "Total charge loss not computed."
@@ -361,8 +360,8 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
     trainer = get_trainer(
         config,
     )
-    prediction = trainer.model.calculate_predictions(
-        batch, trainer.model.potential, train_mode=True
+    prediction = trainer.lightning_module.calculate_predictions(
+        batch, trainer.lightning_module.potential, train_mode=True
     )  # train_mode=True is required for gradients in force prediction
 
     assert prediction["per_system_energy_predict"].size(
@@ -390,8 +389,8 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
             ).pow(2)
         )
     )
-    # compare to referenc evalue obtained from Loos class
-    ref = torch.mean(loss_output["per_system_energy"])
+    # compare to reference evalue obtained from Loos class
+    ref = torch.mean(loss_output["per_molecule_energy"])
     assert torch.allclose(ref, E_loss)
     E_loss = torch.mean(
         (
@@ -402,7 +401,7 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
             / batch.metadata.atomic_subsystem_counts.unsqueeze(1)
         )
     )
-    # compare to referenc evalue obtained from Loos class
+    # compare to reference evalue obtained from Loos class
     ref = torch.mean(loss_output["per_atom_energy"])
     assert torch.allclose(ref, E_loss)
 
@@ -444,40 +443,3 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
     )
 
 
-# @pytest.mark.skipif(IN_GITHUB_ACTIONS, reason="Skipping this test on GitHub Actions")
-# @pytest.mark.parametrize(
-#     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
-# )
-# @pytest.mark.parametrize("dataset_name", ["QM9"])
-# def test_hypterparameter_tuning_with_ray(
-#     potential_name,
-#     dataset_name,
-#     datamodule_factory,
-# ):
-#     config = load_configs_into_pydantic_models(potential_name, dataset_name)
-#     # config = load_configs_(potential_name, dataset_name)
-
-#     # Extract parameters
-#     potential_config = config["potential"]
-#     training_config = config["training"]
-
-#     dm = datamodule_factory(dataset_name=dataset_name)
-
-#     # training model
-#     model = NeuralNetworkPotentialFactory.generate_potential(
-#         use="training",
-#         potential_parameter=potential_config,
-#         training_parameter=training_config,
-#     )
-
-#     from modelforge.train.tuning import RayTuner
-
-#     ray_tuner = RayTuner(model)
-#     ray_tuner.tune_with_ray(
-#         train_dataloader=dm.train_dataloader(),
-#         val_dataloader=dm.val_dataloader(),
-#         number_of_ray_workers=1,
-#         number_of_epochs=1,
-#         number_of_samples=1,
-#         train_on_gpu=False,
-#     )

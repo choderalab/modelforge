@@ -10,7 +10,7 @@ def prep_temp_dir(tmp_path_factory):
 
 
 def setup_painn_model(potential_seed: int):
-    from modelforge.tests.test_models import load_configs_into_pydantic_models
+    from modelforge.tests.test_potentials import load_configs_into_pydantic_models
 
     # read default parameters
     config = load_configs_into_pydantic_models("painn", "qm9")
@@ -30,7 +30,7 @@ def setup_painn_model(potential_seed: int):
         dataset_parameter=config["dataset"],
         runtime_parameter=config["runtime"],
         potential_seed=potential_seed,
-    ).model.potential
+    ).lightning_module.potential
     return trainer_painn
 
 

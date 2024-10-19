@@ -11,11 +11,13 @@ def prep_temp_dir(tmp_path_factory):
     return fn
 
 
-def test_initialize_model():
+def test_initialize_model(prep_temp_dir):
     """Test initialization of the Schnet model."""
 
     # read default parameters
-    model = setup_potential_for_test("aimnet2", "training")
+    model = setup_potential_for_test(
+        "aimnet2", "training", local_cache_dir=str(prep_temp_dir)
+    )
 
     assert model is not None, "Aimnet2 model should be initialized."
 

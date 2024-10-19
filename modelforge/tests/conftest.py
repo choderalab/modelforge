@@ -197,7 +197,7 @@ def equivariance_utils():
 # helper functions
 # ----------------------------------------------------------- #
 
-from modelforge.dataset.dataset import BatchData
+from modelforge.utils.prop import BatchData, NNPInput
 
 
 @pytest.fixture
@@ -209,7 +209,7 @@ def methane() -> BatchData:
     -------
     BatchData
     """
-    from modelforge.potential.utils import BatchData, Metadata, NNPInput
+    from modelforge.potential.utils import BatchData, Metadata
 
     atomic_numbers = torch.tensor([6, 1, 1, 1, 1], dtype=torch.int64)
     positions = (

@@ -13,7 +13,7 @@ from torch.nn import ModuleDict
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-from modelforge.dataset.dataset import BatchData, DataModule, DatasetParameters
+from modelforge.dataset.dataset import DataModule, DatasetParameters
 from modelforge.potential.parameters import (
     AimNet2Parameters,
     ANI2xParameters,
@@ -23,6 +23,7 @@ from modelforge.potential.parameters import (
     SchNetParameters,
     TensorNetParameters,
 )
+from modelforge.utils.prop import BatchData
 
 # Define a TypeVar that can be one of the parameter models
 T_NNP_Parameters = TypeVar(

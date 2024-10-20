@@ -611,6 +611,12 @@ class NeuralNetworkPotentialFactory:
                 neighborlist_strategy=inference_neighborlist_strategy,
                 verlet_neighborlist_skin=verlet_neighborlist_skin,
             )
+            # Disable gradients for model parameters
+            for param in potential.parameters():
+                param.requires_grad = False
+            # Set model to eval
+            potential.eval()
+
             if simulation_environment == "JAX":
                 # register nnp_input as pytree
                 from modelforge.utils.io import import_

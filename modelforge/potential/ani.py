@@ -7,10 +7,7 @@ species and interaction types, and allows prediction of properties like energy
 using a neural network model.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Dict, Tuple
-
+from typing import Dict, Tuple, List
 import torch
 from loguru import logger as log
 from torch import nn

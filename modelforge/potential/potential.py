@@ -429,7 +429,6 @@ class Potential(torch.nn.Module):
             strict=strict,
             assign=assign,
         )
-        self.eval()  # Set the model to evaluation mode
 
 
 def setup_potential(
@@ -506,7 +505,6 @@ def setup_potential(
         jit=jit,
         jit_neighborlist=False if use_training_mode_neighborlist else True,
     )
-    model.eval()
     return model
 
 

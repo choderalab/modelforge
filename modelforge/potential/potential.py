@@ -233,7 +233,6 @@ class Potential(torch.nn.Module):
 
         super().__init__()
 
-        self.eval()
         self.core_network = torch.jit.script(core_network) if jit else core_network
         self.neighborlist = (
             torch.jit.script(neighborlist) if jit_neighborlist else neighborlist

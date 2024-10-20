@@ -330,7 +330,7 @@ class Loss(nn.Module):
                     scale_by_number_of_atoms=True
                 )
             elif prop == "per_atom_energy":
-                log.info("Creating per atom energy loss with weight: {weights[prop]}")
+                log.info(f"Creating per atom energy loss with weight: {weights[prop]}")
 
                 self.loss_functions[prop] = EnergySquaredError(
                     scale_by_number_of_atoms=True

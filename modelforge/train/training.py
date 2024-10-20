@@ -384,11 +384,11 @@ class TrainingAdapter(pL.LightningModule):
         )
 
         self.include_force = (
-            "per_atom_force" in training_parameter.loss_parameter.loss_property
+            "per_atom_force" in training_parameter.loss_parameter.loss_components
         )
 
         self.calculate_predictions = CalculateProperties(
-            training_parameter.loss_parameter.loss_property
+            training_parameter.loss_parameter.loss_components
         )
         self.optimizer_class = optimizer_class
         self.learning_rate = training_parameter.lr
@@ -409,17 +409,17 @@ class TrainingAdapter(pL.LightningModule):
 
         # Initialize performance metrics
         self.test_metrics = create_error_metrics(
-            training_parameter.loss_parameter.loss_property
+            training_parameter.loss_parameter.loss_components
         )
         self.val_metrics = create_error_metrics(
-            training_parameter.loss_parameter.loss_property
+            training_parameter.loss_parameter.loss_components
         )
         self.train_metrics = create_error_metrics(
-            training_parameter.loss_parameter.loss_property
+            training_parameter.loss_parameter.loss_components
         )
 
         self.loss_metrics = create_error_metrics(
-            training_parameter.loss_parameter.loss_property, is_loss=True
+            training_parameter.loss_parameter.loss_components, is_loss=True
         )
 
     def forward(self, batch: BatchData) -> Dict[str, torch.Tensor]:
@@ -942,7 +942,7 @@ class PotentialTrainer:
             benchmark=True,
             inference_mode=False,
             num_sanity_val_steps=2,
-            gradient_clip_val=10.0,  # FIXME: hardcoded for now
+            gradient_clip_val=1.0,  # FIXME: hardcoded for now
             log_every_n_steps=self.runtime_parameter.log_every_n_steps,
             enable_model_summary=True,
             enable_progress_bar=self.runtime_parameter.verbose,  # if true will show progress bar
@@ -1029,7 +1029,7 @@ class PotentialTrainer:
                 str(modelforge.__version__),
                 self.dataset_parameter.dataset_name,
                 self.potential_parameter.potential_name,
-                f"loss-{'-'.join(self.training_parameter.loss_parameter.loss_property)}",
+                f"loss-{'-'.join(self.training_parameter.loss_parameter.loss_components)}",
             ]
         )
         return tags

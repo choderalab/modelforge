@@ -970,6 +970,10 @@ class DataModule(pl.LightningDataModule):
         )
         self.lock_file = f"{self.cache_processed_dataset_filename}.lockfile"
 
+    def transfer_batch_to_device(self, batch, device, dataloader_idx):
+        # move all tensors  to the device
+        return batch.to_device(device)
+
     @lock_with_attribute("lock_file")
     def prepare_data(
         self,

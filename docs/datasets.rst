@@ -35,7 +35,7 @@ Postprocessing of dataset entries
 Two common postprocessing operations are performed for training machine learned potentials:
 
 - *Removing Self-Energies*: Self-energies are per-element offsets added to the
-  total energy of a molecule. These offsets are not useful for training
+  total energy of a system. These offsets are not useful for training
   machine-learned potentials and can be removed to provide cleaner training
   data.
 - *Normalization and Scaling*: Normalize the energies and other properties to
@@ -60,7 +60,7 @@ The following example demonstrates how to use the :class:`~modelforge.dataset.Da
     from modelforge.dataset.utils import RandomRecordSplittingStrategy
 
     dataset_name = "QM9"
-    splitting_strategy = RandomRecordSplittingStrategy() # split randomly on molecules
+    splitting_strategy = RandomRecordSplittingStrategy() # split randomly on system level
     batch_size = 64
     version_select = "latest" 
     remove_self_energies = True # remove the atomic self energies

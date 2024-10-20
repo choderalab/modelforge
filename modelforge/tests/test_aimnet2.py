@@ -11,11 +11,13 @@ def prep_temp_dir(tmp_path_factory):
     return fn
 
 
-def test_initialize_model():
+def test_initialize_model(prep_temp_dir):
     """Test initialization of the Schnet model."""
 
     # read default parameters
-    model = setup_potential_for_test("aimnet2", "training")
+    model = setup_potential_for_test(
+        "aimnet2", "training", local_cache_dir=str(prep_temp_dir)
+    )
 
     assert model is not None, "Aimnet2 model should be initialized."
 
@@ -144,7 +146,7 @@ def test_forward(single_batch_with_batchsize, prep_temp_dir):
     assert aimnet is not None, "Aimnet model should be initialized."
     batch = single_batch_with_batchsize(64, "QM9", str(prep_temp_dir))
 
-    y_hat = aimnet(batch.nnp_input_tuple)
+    y_hat = aimnet(batch.nnp_input)
 
 
 @pytest.mark.xfail(raises=NotImplementedError)

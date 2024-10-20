@@ -1,4 +1,4 @@
-from .test_models import load_configs_into_pydantic_models
+from .test_potentials import load_configs_into_pydantic_models
 import pytest
 
 
@@ -43,14 +43,17 @@ def test_embedding(single_batch_with_batchsize, prep_temp_dir):
     assert "Identity()" in mixing_module_name
 
     # add total charge to the input
-    featurization_config["properties_to_featurize"].append("per_molecule_total_charge")
+    featurization_config["properties_to_featurize"].append("per_system_total_charge")
     featurize_input_module = FeaturizeInput(featurization_config)
 
     # only atomic number embedded
     assert "atomic_number" in featurize_input_module.registered_embedding_operations
     assert len(featurize_input_module.registered_embedding_operations) == 1
     # total charge is added to feature vector
-    assert "total_charge" in featurize_input_module.registered_appended_properties
+    assert (
+        "per_system_total_charge"
+        in featurize_input_module.registered_appended_properties
+    )
     assert len(featurize_input_module.registered_appended_properties) == 1
 
     mixing_module = featurize_input_module.mixing

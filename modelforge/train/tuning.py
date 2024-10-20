@@ -168,7 +168,7 @@ class RayTuner:
         number_of_samples: int = 10,
         number_of_ray_workers: int = 2,
         train_on_gpu: bool = False,
-        metric: str = "val/per_molecule_energy/rmse",
+        metric: str = "val/per_system_energy/rmse",
     ):
         """
         Performs hyperparameter tuning using Ray Tune.
@@ -191,7 +191,7 @@ class RayTuner:
         train_on_gpu : bool, optional
             Whether to use GPUs for training, by default False.
         metric : str, optional
-            The metric to use for evaluation and early stopping, by default "val/per_molecule_energy/rmse
+            The metric to use for evaluation and early stopping, by default "val/per_system_energy/rmse
 
         Returns
         -------

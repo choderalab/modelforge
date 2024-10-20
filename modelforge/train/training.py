@@ -2,7 +2,7 @@
 This module contains classes and functions for training neural network potentials using PyTorch Lightning.
 """
 
-from typing import Any, Dict, List, Optional, Type, Union, TypeVar
+from typing import Any, Dict, List, Optional, Type, TypeVar
 
 import lightning.pytorch as pL
 import torch
@@ -13,7 +13,7 @@ from torch.nn import ModuleDict
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-from modelforge.dataset.dataset import BatchData, DataModule, DatasetParameters
+from modelforge.dataset.dataset import DataModule, DatasetParameters
 from modelforge.potential.parameters import (
     AimNet2Parameters,
     ANI2xParameters,
@@ -23,6 +23,7 @@ from modelforge.potential.parameters import (
     SchNetParameters,
     TensorNetParameters,
 )
+from modelforge.utils.prop import BatchData
 
 # Define a TypeVar that can be one of the parameter models
 T_NNP_Parameters = TypeVar(
@@ -40,13 +41,41 @@ from modelforge.train.losses import LossFactory, create_error_metrics
 from modelforge.train.parameters import RuntimeParameters, TrainingParameters
 
 __all__ = [
-    "ModelTrainer",
+    "PotentialTrainer",
 ]
 
 
-def _exchange_per_atom_energy_for_per_molecule_energy(prop: str) -> str:
+def gradient_norm(model):
+    total_norm = 0.0
+    for p in model.parameters():
+        if p.grad is not None:
+            param_norm = p.grad.detach().data.norm(2)
+            total_norm += param_norm.item() ** 2
+    total_norm = total_norm**0.5
+    return total_norm
+
+
+def compute_grad_norm(loss, model):
+    parameters = [p for p in model.parameters() if p.requires_grad]
+    grads = torch.autograd.grad(
+        loss.sum(),
+        parameters,
+        retain_graph=True,
+        create_graph=False,
+        allow_unused=True,
+    )
+    total_norm = 0.0
+    for grad in grads:
+        if grad is not None:
+            param_norm = grad.detach().data.norm(2)
+            total_norm += param_norm.item() ** 2
+    total_norm = total_norm**0.5
+    return total_norm
+
+
+def _exchange_per_atom_energy_for_per_system_energy(prop: str) -> str:
     """
-    Utility function to rename per-atom energy to per-molecule energy if applicable.
+    Utility function to rename per-atom energy to per-system energy if applicable.
 
     Parameters
     ----------
@@ -56,19 +85,18 @@ def _exchange_per_atom_energy_for_per_molecule_energy(prop: str) -> str:
     Returns
     -------
     str
-        The updated property name (e.g., "per_molecule_energy").
+        The updated property name (e.g., "per_system_energy").
     """
-    return "per_molecule_energy" if prop == "per_atom_energy" else prop
+    return "per_system_energy" if prop == "per_atom_energy" else prop
 
 
 class CalculateProperties(torch.nn.Module):
-
     _SUPPORTED_PROPERTIES = [
         "per_atom_energy",
         "per_atom_force",
-        "per_molecule_energy",
-        "per_molecule_total_charge",
-        "per_molecule_dipole_moment",
+        "per_system_energy",
+        "per_system_total_charge",
+        "per_system_dipole_moment",
     ]
 
     def __init__(self, requested_properties: List[str]):
@@ -77,19 +105,19 @@ class CalculateProperties(torch.nn.Module):
 
         Parameters
         requested_properties : List[str]
-            A list of properties to calculate (e.g., per_atom_energy, per_atom_force, per_molecule_dipole_moment).
+            A list of properties to calculate (e.g., per_atom_energy, per_atom_force, per_system_dipole_moment).
         """
         super().__init__()
         self.requested_properties = requested_properties
         self.include_force = "per_atom_force" in self.requested_properties
-        self.include_charges = "per_molecule_total_charge" in self.requested_properties
+        self.include_charges = "per_system_total_charge" in self.requested_properties
 
         assert all(
             prop in self._SUPPORTED_PROPERTIES for prop in self.requested_properties
         ), f"Unsupported property requested: {self.requested_properties}"
 
+    @staticmethod
     def _get_forces(
-        self,
         batch: BatchData,
         model_prediction: Dict[str, torch.Tensor],
         train_mode: bool,
@@ -115,13 +143,13 @@ class CalculateProperties(torch.nn.Module):
         # Ensure gradients are enabled
         nnp_input.positions.requires_grad_(True)
         # Cast to float32 and extract true forces
-        per_atom_force_true = batch.metadata.F.to(torch.float32)
+        per_atom_force_true = batch.metadata.per_atom_force.to(torch.float32)
 
         if per_atom_force_true.numel() < 1:
             raise RuntimeError("No force can be calculated.")
 
         # Sum the energies before computing the gradient
-        total_energy = model_prediction["per_molecule_energy"].sum()
+        total_energy = model_prediction["per_system_energy"].sum()
         # Calculate forces as the negative gradient of energy w.r.t. positions
         grad = torch.autograd.grad(
             total_energy,
@@ -141,8 +169,8 @@ class CalculateProperties(torch.nn.Module):
             "per_atom_force_predict": per_atom_force_predict.contiguous(),
         }
 
+    @staticmethod
     def _get_energies(
-        self,
         batch: BatchData,
         model_prediction: Dict[str, torch.Tensor],
     ) -> Dict[str, torch.Tensor]:
@@ -161,18 +189,16 @@ class CalculateProperties(torch.nn.Module):
         Dict[str, torch.Tensor]
             A dictionary containing the true and predicted energies.
         """
-        per_molecule_energy_true = batch.metadata.E.to(torch.float32)
-        per_molecule_energy_predict = model_prediction["per_molecule_energy"].unsqueeze(
-            1
-        )
+        per_system_energy_true = batch.metadata.per_system_energy.to(torch.float32)
+        per_system_energy_predict = model_prediction["per_system_energy"].unsqueeze(1)
 
-        assert per_molecule_energy_true.shape == per_molecule_energy_predict.shape, (
+        assert per_system_energy_true.shape == per_system_energy_predict.shape, (
             f"Shapes of true and predicted energies do not match: "
-            f"{per_molecule_energy_true.shape} != {per_molecule_energy_predict.shape}"
+            f"{per_system_energy_true.shape} != {per_system_energy_predict.shape}"
         )
         return {
-            "per_molecule_energy_true": per_molecule_energy_true,
-            "per_molecule_energy_predict": per_molecule_energy_predict,
+            "per_system_energy_true": per_system_energy_true,
+            "per_system_energy_predict": per_system_energy_predict,
         }
 
     def _get_charges(
@@ -200,32 +226,33 @@ class CalculateProperties(torch.nn.Module):
             "per_atom_charge"
         ]  # Shape: [num_atoms]
 
-        # Calculate predicted total charge by summing per-atom charges for each molecule
-        total_charge_predict = (
-            torch.zeros_like(model_prediction["per_molecule_energy"])
+        # Calculate predicted total charge by summing per-atom charges for each system
+        per_system_total_charge_predict = (
+            torch.zeros_like(model_prediction["per_system_energy"])
             .scatter_add_(
                 dim=0,
                 index=nnp_input.atomic_subsystem_indices.long(),
                 src=per_atom_charges_predict,
             )
             .unsqueeze(-1)
-        )  # Shape: [nr_of_molecules, 1]
+        )  # Shape: [nr_of_systems, 1]
 
         # Predict the dipole moment
-        dipole_predict = self._predict_dipole_moment(model_prediction, batch)
+        per_system_dipole_moment = self._predict_dipole_moment(model_prediction, batch)
 
         return {
-            "per_molecule_total_charge_predict": total_charge_predict,
-            "per_molecule_total_charge_true": batch.nnp_input.total_charge,
-            "per_molecule_dipole_moment_predict": dipole_predict,
-            "per_molecule_dipole_moment_true": batch.metadata.dipole_moment,
+            "per_system_total_charge_predict": per_system_total_charge_predict,
+            "per_system_total_charge_true": batch.nnp_input.per_system_total_charge,
+            "per_system_dipole_moment_predict": per_system_dipole_moment,
+            "per_system_dipole_moment_true": batch.metadata.per_system_dipole_moment,
         }
 
+    @staticmethod
     def _predict_dipole_moment(
-        self, model_predictions: Dict[str, torch.Tensor], batch: BatchData
+        model_predictions: Dict[str, torch.Tensor], batch: BatchData
     ) -> torch.Tensor:
         """
-        Compute the predicted dipole moment for each molecule based on the
+        Compute the predicted dipole moment for each system based on the
         predicted partial atomic charges and positions, i.e., the dipole moment
         is calculated as the weighted sum of the partial charges (which requires
         that the coordinates are centered).
@@ -243,7 +270,7 @@ class CalculateProperties(torch.nn.Module):
         Returns
         -------
         torch.Tensor
-            The predicted dipole moment for each molecule.
+            The predicted dipole moment for each system.
         """
         per_atom_charge = model_predictions["per_atom_charge"]  # Shape: [num_atoms]
         positions = batch.nnp_input.positions  # Shape: [num_atoms, 3]
@@ -254,16 +281,16 @@ class CalculateProperties(torch.nn.Module):
         indices = indices.unsqueeze(-1).expand(-1, 3)  # Shape: [num_atoms, 3]
 
         # Calculate dipole moment as the sum of dipole contributions for each
-        # molecule
+        # system
         dipole_predict = torch.zeros(
-            (model_predictions["per_molecule_energy"].shape[0], 3),
+            (model_predictions["per_system_energy"].shape[0], 3),
             device=positions.device,
             dtype=positions.dtype,
         ).scatter_add_(
             dim=0,
             index=indices,
             src=per_atom_dipole_contrib,
-        )  # Shape: [nr_of_molecules, 3]
+        )  # Shape: [nr_of_systems, 3]
 
         return dipole_predict
 
@@ -325,6 +352,7 @@ class TrainingAdapter(pL.LightningModule):
         potential_parameter: T_NNP_Parameters,
         dataset_statistic: Dict[str, Dict[str, unit.Quantity]],
         training_parameter: TrainingParameters,
+        optimizer_class: Type[Optimizer],
         potential_seed: Optional[int] = None,
     ):
         """
@@ -341,7 +369,7 @@ class TrainingAdapter(pL.LightningModule):
         potential_seed : Optional[int], optional
             Seed for initializing the model (default is None).
         """
-        from modelforge.potential.models import setup_potential
+        from modelforge.potential.potential import setup_potential
 
         super().__init__()
         self.save_hyperparameters()
@@ -362,7 +390,7 @@ class TrainingAdapter(pL.LightningModule):
         self.calculate_predictions = CalculateProperties(
             training_parameter.loss_parameter.loss_property
         )
-        self.optimizer_class = training_parameter.optimizer
+        self.optimizer_class = optimizer_class
         self.learning_rate = training_parameter.lr
         self.lr_scheduler = training_parameter.lr_scheduler
 
@@ -421,8 +449,8 @@ class TrainingAdapter(pL.LightningModule):
         log.warning("Model does not implement _config_prior().")
         raise NotImplementedError()
 
+    @staticmethod
     def _update_metrics(
-        self,
         metrics: ModuleDict,
         predict_target: Dict[str, torch.Tensor],
     ):
@@ -439,9 +467,9 @@ class TrainingAdapter(pL.LightningModule):
         """
 
         for prop, metric_collection in metrics.items():
-            prop = _exchange_per_atom_energy_for_per_molecule_energy(
+            prop = _exchange_per_atom_energy_for_per_system_energy(
                 prop
-            )  # only exchange per_atom_energy for per_molecule_energy
+            )  # only exchange per_atom_energy for per_system_energy
             preds = predict_target[f"{prop}_predict"].detach()
             targets = predict_target[f"{prop}_true"].detach()
             metric_collection.update(preds, targets)
@@ -478,9 +506,18 @@ class TrainingAdapter(pL.LightningModule):
         for key, metric in loss_dict.items():
             self.loss_metrics[key].update(metric.detach(), batch_size=batch_size)
 
+            # Compute and log gradient norms for each loss component
+            if self.training_parameter.log_norm:
+                if key == "total_loss":
+                    continue
+
+                grad_norm = compute_grad_norm(metric.mean(), self)
+                self.log(f"grad_norm/{key}", grad_norm)
+
         # Compute the mean loss for optimization
-        mean_total_loss = loss_dict["total_loss"].mean()
-        return mean_total_loss
+        total_loss = loss_dict["total_loss"].mean()
+
+        return total_loss
 
     def on_after_backward(self):
         # After backward pass
@@ -498,7 +535,6 @@ class TrainingAdapter(pL.LightningModule):
         # Ensure positions require gradients for force calculation
         batch.nnp_input.positions.requires_grad_(True)
         with torch.set_grad_enabled(True):
-
             # calculate energy and forces
             predict_target = self.calculate_predictions(
                 batch, self.potential, self.potential.training
@@ -565,7 +601,7 @@ class TrainingAdapter(pL.LightningModule):
                 )
 
     def _log_histograms(self):
-        if self.log_histograms == True:
+        if self.log_histograms:
             for name, params in self.named_parameters():
                 if params is not None:
                     self.logger.experiment.add_histogram(
@@ -605,7 +641,7 @@ class TrainingAdapter(pL.LightningModule):
 from openff.units import unit
 
 
-class ModelTrainer:
+class PotentialTrainer:
     """
     Class for training neural network potentials using PyTorch Lightning.
     """
@@ -622,32 +658,33 @@ class ModelTrainer:
         optimizer_class: Type[Optimizer] = torch.optim.AdamW,
         potential_seed: Optional[int] = None,
         verbose: bool = False,
+        log_norm: bool = False,
     ):
         """
         Initializes the TrainingAdapter with the specified model and training configuration.
 
         Parameters
         ----------
-        dataset_config : DatasetParameters
+        dataset_parameter : DatasetParameters
             Parameters for the dataset.
         potential_parameter : Union[ANI2xParameters, SAKEParameters, SchNetParameters, PhysNetParameters, PaiNNParameters, TensorNetParameters]
             Parameters for the potential model.
-        training_config : TrainingParameters
+        training_parameter : TrainingParameters
             Parameters for the training process.
-        runtime_config : RuntimeParameters
+        runtime_parameter : RuntimeParameters
             Parameters for runtime configuration.
-        lr_scheduler : Dict[str, Union[str, int, float]]
-            The configuration for the learning rate scheduler.
-        lr : float
-            The learning rate for the optimizer.
-        loss_parameter : Dict[str, Any]
-            Configuration for the loss function.
-        datamodule : DataModule
-            The DataModule for loading datasets.
-        optimizer : Type[Optimizer], optional
+        dataset_statistic : Dict[str, Dict[str, unit.Quantity]]
+            Dataset statistics such as mean and standard deviation.
+        use_default_dataset_statistic: bool
+            Whether to use default dataset statistic
+        optimizer_class : Type[Optimizer], optional
             The optimizer class to use for training, by default torch.optim.AdamW.
+        potential_seed: Optional[int], optional
+            Seed to initialize the potential training adapter, default is None.
         verbose : bool, optional
             If True, enables verbose logging, by default False.
+        log_norm : bool, optional
+            If True, logs the norm of the gradients, by default False.
         """
 
         super().__init__()
@@ -657,6 +694,7 @@ class ModelTrainer:
         self.training_parameter = training_parameter
         self.runtime_parameter = runtime_parameter
         self.verbose = verbose
+        self.log_norm = log_norm
 
         self.datamodule = self.setup_datamodule()
         self.dataset_statistic = (
@@ -665,16 +703,16 @@ class ModelTrainer:
             else dataset_statistic
         )
         self.experiment_logger = self.setup_logger()
-        self.model = self.setup_potential(potential_seed)
         self.callbacks = self.setup_callbacks()
         self.trainer = self.setup_trainer()
         self.optimizer_class = optimizer_class
+        self.lightning_module = self.setup_lightning_module(potential_seed)
         self.learning_rate = self.training_parameter.lr
         self.lr_scheduler = self.training_parameter.lr_scheduler
 
     def read_dataset_statistics(
         self,
-    ) -> Dict[str, float]:
+    ) -> dict[str, dict[str, Any]]:
         """
         Read and log dataset statistics.
 
@@ -736,7 +774,7 @@ class ModelTrainer:
         dm.setup()
         return dm
 
-    def setup_potential(
+    def setup_lightning_module(
         self, potential_seed: Optional[int] = None
     ) -> pL.LightningModule:
         """
@@ -758,6 +796,7 @@ class ModelTrainer:
             potential_parameter=self.potential_parameter,
             dataset_statistic=self.dataset_statistic,
             training_parameter=self.training_parameter,
+            optimizer_class=self.optimizer_class,
             potential_seed=potential_seed,
         )
 
@@ -825,6 +864,7 @@ class ModelTrainer:
             EarlyStopping,
             ModelCheckpoint,
             StochasticWeightAveraging,
+            Callback,
         )
 
         callbacks = []
@@ -853,6 +893,19 @@ class ModelTrainer:
                 filename=checkpoint_filename,
             )
         )
+
+        # compute gradient norm
+        class GradNormCallback(Callback):
+            """
+            Logs the gradient norm.
+            """
+
+            def on_before_optimizer_step(self, trainer, pl_module, optimizer):
+                pl_module.log("grad_norm/model", gradient_norm(pl_module))
+
+        if self.log_norm:
+            callbacks.append(GradNormCallback())
+
         return callbacks
 
     def setup_trainer(self) -> Trainer:
@@ -906,7 +959,7 @@ class ModelTrainer:
             The configured trainer instance after running the training process.
         """
         self.trainer.fit(
-            self.model,
+            self.lightning_module,
             train_dataloaders=self.datamodule.train_dataloader(
                 num_workers=self.dataset_parameter.num_workers,
                 pin_memory=self.dataset_parameter.pin_memory,
@@ -920,14 +973,14 @@ class ModelTrainer:
         )
 
         self.trainer.validate(
-            model=self.model,
+            model=self.lightning_module,
             dataloaders=self.datamodule.val_dataloader(),
             ckpt_path="best",
             verbose=True,
         )
 
         self.trainer.test(
-            model=self.model,
+            model=self.lightning_module,
             dataloaders=self.datamodule.test_dataloader(),
             ckpt_path="best",
             verbose=True,
@@ -938,8 +991,8 @@ class ModelTrainer:
         """
         Configures model-specific priors if the model implements them.
         """
-        if hasattr(self.model, "_config_prior"):
-            return self.model._config_prior()
+        if hasattr(self.lightning_module, "_config_prior"):
+            return self.lightning_module._config_prior()
 
         log.warning("Model does not implement _config_prior().")
         raise NotImplementedError()
@@ -1162,9 +1215,9 @@ def read_config_and_train(
         log_every_n_steps=log_every_n_steps,
         simulation_environment=simulation_environment,
     )
-    from modelforge.potential.models import NeuralNetworkPotentialFactory
+    from modelforge.potential.potential import NeuralNetworkPotentialFactory
 
-    model = NeuralNetworkPotentialFactory.generate_potential(
+    trainer = NeuralNetworkPotentialFactory.generate_potential(
         use="training",
         potential_parameter=potential_parameter,
         training_parameter=training_parameter,
@@ -1172,4 +1225,4 @@ def read_config_and_train(
         runtime_parameter=runtime_parameter,
     )
 
-    return model.train_potential()
+    return trainer.train_potential()

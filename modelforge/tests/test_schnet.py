@@ -8,7 +8,7 @@ from typing import Optional
 
 
 def setup_schnet_model(potential_seed: Optional[int] = None):
-    from modelforge.tests.test_models import load_configs_into_pydantic_models
+    from modelforge.tests.test_potentials import load_configs_into_pydantic_models
     from modelforge.potential import NeuralNetworkPotentialFactory
 
     # read default parameters
@@ -27,7 +27,7 @@ def setup_schnet_model(potential_seed: Optional[int] = None):
         dataset_parameter=config["dataset"],
         runtime_parameter=config["runtime"],
         potential_seed=potential_seed,
-    ).model.potential
+    ).lightning_module.potential
     return model
 
 
@@ -154,7 +154,7 @@ def test_compare_implementation_against_reference_implementation():
     # set up the input for the spk Schnet model
     input = setup_single_methane_input()
     spk_input = input["spk_methane_input"]
-    model_input = input["modelforge_methane_input"].as_namedtuple()
+    model_input = input["modelforge_methane_input"]
 
     # ---------------------------------------- #
     # test forward pass

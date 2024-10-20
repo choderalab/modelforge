@@ -3,7 +3,6 @@ Module of dataclass definitions of properties.
 """
 
 from dataclasses import dataclass
-import jax.numpy as jnp
 import torch
 from typing import NamedTuple, Optional
 from loguru import logger as log
@@ -61,7 +60,6 @@ class NNPInput:
         self.box_vectors = box_vectors
         self.is_periodic = is_periodic
 
-        self.__post_init__()
 
         # Validate inputs
         self._validate_inputs()
@@ -97,25 +95,6 @@ class NNPInput:
                 "The size of atomic_subsystem_indices and the first dimension of positions must match"
             )
 
-    def __post_init__(self):
-
-        # Set all integer tensors to int32 or JAX int32
-        if isinstance(self.atomic_numbers, torch.Tensor):
-            self.atomic_numbers = self.atomic_numbers.to(torch.int32)
-            self.atomic_subsystem_indices = self.atomic_subsystem_indices.to(
-                torch.int32
-            )
-            self.per_system_total_charge = self.per_system_total_charge.to(torch.int32)
-        elif isinstance(self.atomic_numbers, jnp.ndarray):
-            self.atomic_numbers = self.atomic_numbers.astype(jnp.int32)
-            self.atomic_subsystem_indices = self.atomic_subsystem_indices.astype(
-                jnp.int32
-            )
-            self.per_system_total_charge = self.per_system_total_charge.astype(
-                jnp.int32
-            )
-        else:
-            raise TypeError("Unsupported array type in NNPInput")
 
     def to_device(self, device: torch.device):
         """Move all tensors in this instance to the specified device."""

@@ -233,7 +233,6 @@ class Potential(torch.nn.Module):
 
         super().__init__()
 
-        self.eval()
         self.core_network = torch.jit.script(core_network) if jit else core_network
         self.neighborlist = (
             torch.jit.script(neighborlist) if jit_neighborlist else neighborlist
@@ -430,7 +429,6 @@ class Potential(torch.nn.Module):
             strict=strict,
             assign=assign,
         )
-        self.eval()  # Set the model to evaluation mode
 
 
 def setup_potential(
@@ -507,7 +505,6 @@ def setup_potential(
         jit=jit,
         jit_neighborlist=False if use_training_mode_neighborlist else True,
     )
-    model.eval()
     return model
 
 
@@ -611,6 +608,12 @@ class NeuralNetworkPotentialFactory:
                 neighborlist_strategy=inference_neighborlist_strategy,
                 verlet_neighborlist_skin=verlet_neighborlist_skin,
             )
+            # Disable gradients for model parameters
+            for param in potential.parameters():
+                param.requires_grad = False
+            # Set model to eval
+            potential.eval()
+
             if simulation_environment == "JAX":
                 # register nnp_input as pytree
                 from modelforge.utils.io import import_

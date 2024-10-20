@@ -297,13 +297,13 @@ class Loss(nn.Module):
         "per_system_dipole_moment",
     ]
 
-    def __init__(self, loss_property: List[str], weights: Dict[str, float]):
+    def __init__(self, loss_components: List[str], weights: Dict[str, float]):
         """
         Calculates the combined loss for energy and force predictions.
 
         Parameters
         ----------
-        loss_property : List[str]
+        loss_components : List[str]
             List of properties to include in the loss calculation.
         weights : Dict[str, float]
             Dictionary containing the weights for each property in the loss calculation.
@@ -316,11 +316,11 @@ class Loss(nn.Module):
         super().__init__()
         from torch.nn import ModuleDict
 
-        self.loss_property = loss_property
+        self.loss_components = loss_components
         self.weights = weights
         self.loss_functions = ModuleDict()
 
-        for prop in loss_property:
+        for prop in loss_components:
             if prop not in self._SUPPORTED_PROPERTIES:
                 raise NotImplementedError(f"Loss type {prop} not implemented.")
             log.info(f"Using loss function for {prop}")
@@ -330,7 +330,7 @@ class Loss(nn.Module):
                     scale_by_number_of_atoms=True
                 )
             elif prop == "per_atom_energy":
-                log.info("Creating per atom energy loss with weight: {weights[prop]}")
+                log.info(f"Creating per atom energy loss with weight: {weights[prop]}")
 
                 self.loss_functions[prop] = EnergySquaredError(
                     scale_by_number_of_atoms=True
@@ -383,7 +383,7 @@ class Loss(nn.Module):
         total_loss = torch.zeros_like(batch.metadata.per_system_energy)
 
         # Iterate over loss properties
-        for prop in self.loss_property:
+        for prop in self.loss_components:
             loss_fn = self.loss_functions[prop]
 
             prop_ = _exchange_per_atom_energy_for_per_system_energy(prop)
@@ -415,13 +415,13 @@ class LossFactory:
     """
 
     @staticmethod
-    def create_loss(loss_property: List[str], weight: Dict[str, float]) -> Loss:
+    def create_loss(loss_components: List[str], weight: Dict[str, float]) -> Loss:
         """
         Creates an instance of the specified loss type.
 
         Parameters
         ----------
-        loss_property : List[str]
+        loss_components : List[str]
             List of properties to include in the loss calculation.
         weight : Dict[str, float]
             Dictionary containing the weights for each property in the loss calculation.
@@ -431,7 +431,7 @@ class LossFactory:
         Loss
             An instance of the specified loss function.
         """
-        return Loss(loss_property, weight)
+        return Loss(loss_components, weight)
 
 
 from torch.nn import ModuleDict

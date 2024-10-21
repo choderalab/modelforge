@@ -658,7 +658,6 @@ class PotentialTrainer:
         optimizer_class: Type[Optimizer] = torch.optim.AdamW,
         potential_seed: Optional[int] = None,
         verbose: bool = False,
-        log_norm: bool = False,
     ):
         """
         Initializes the TrainingAdapter with the specified model and training configuration.
@@ -683,8 +682,6 @@ class PotentialTrainer:
             Seed to initialize the potential training adapter, default is None.
         verbose : bool, optional
             If True, enables verbose logging, by default False.
-        log_norm : bool, optional
-            If True, logs the norm of the gradients, by default False.
         """
 
         super().__init__()
@@ -694,7 +691,6 @@ class PotentialTrainer:
         self.training_parameter = training_parameter
         self.runtime_parameter = runtime_parameter
         self.verbose = verbose
-        self.log_norm = log_norm
 
         self.datamodule = self.setup_datamodule()
         self.dataset_statistic = (
@@ -903,7 +899,7 @@ class PotentialTrainer:
             def on_before_optimizer_step(self, trainer, pl_module, optimizer):
                 pl_module.log("grad_norm/model", gradient_norm(pl_module))
 
-        if self.log_norm:
+        if self.training_parameter.log_norm:
             callbacks.append(GradNormCallback())
 
         return callbacks

@@ -165,7 +165,7 @@ class BesselBasisLayer(nn.Module):
         d_scaled = d_ij * self.inv_cutoff  # Shape: (nr_pairs, 1)
 
         # Apply envelope
-        d_cutoff = self.envelope(d_scaled)  # Shape: (..., 1)
+        d_cutoff = self.envelope(d_scaled)  # Shape: (nr_pairs, 1)
 
         # Compute Bessel basis
         basis = d_cutoff * torch.sin(
@@ -297,6 +297,11 @@ class Representation(nn.Module):
         """
         super().__init__()
 
+        
+        # The representation part of DimeNet++ includes
+        # - radial bessel basis (invariant representation/featurization of distances)
+        # - angular bessel basis (equivariant representation/featurization of pairwise direction (distance vector)) 
+        # - embedding of pairwise distances
         self.radial_symmetry_function_module = self._setup_radial_bessel_basis(
             radial_cutoff,
             number_of_radial_bessel_functions,

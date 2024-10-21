@@ -9,7 +9,7 @@ def prep_temp_dir(tmp_path_factory):
 
 
 def setup_dimenet_model(potential_seed: Optional[int] = None):
-    from modelforge.tests.test_models import load_configs_into_pydantic_models
+    from modelforge.tests.test_potentials import load_configs_into_pydantic_models
     from modelforge.potential import NeuralNetworkPotentialFactory
 
     # read default parameters
@@ -75,14 +75,14 @@ def test_bessel_basis():
 
     # Create an instance of the BesselBasisLayer
     num_radial = 6
-    cutoff = 0.5
+    radial_cutoff = 0.5
     bessel_layer = BesselBasisLayer(
-        number_of_radial_bessel_functions=num_radial, cutoff=cutoff, envelope_exponent=5
+        number_of_radial_bessel_functions=num_radial, radial_cutoff=radial_cutoff, envelope_exponent=5
     )
 
     # Sample input tensor of distances
-    inputs = torch.linspace(0, cutoff, steps=100).unsqueeze(-1)  # Shape: (100,1)
+    d_ij = torch.linspace(0, radial_cutoff, steps=100).unsqueeze(-1)  # Shape: (100,1)
 
     # Forward pass
-    outputs = bessel_layer(inputs)  # Shape: (100, num_radial)
+    outputs = bessel_layer(d_ij)  # Shape: (100, num_radial)
     print(outputs.shape)  # Should print: torch.Size([100, 6])

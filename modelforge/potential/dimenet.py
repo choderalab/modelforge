@@ -22,7 +22,7 @@ class EmbeddingBlock(nn.Module):
     ----------
     embedding_size : int
         Embedding size.
-    activation : torch.nn.Module
+    activation_function : torch.nn.Module
 
     Notes
     -----
@@ -34,11 +34,13 @@ class EmbeddingBlock(nn.Module):
     def __init__(
         self,
         embedding_size: int,
-        activation: torch.nn.Module,
+        number_of_radial_bessel_functions: int,
+        activation_function: torch.nn.Module,
     ):
         super().__init__()
         self.embedding_size = embedding_size
         import math
+        from modelforge.potential.utils import Dense
 
         num_embeddings = 95  # Elements up to atomic number 94 (Pu)
 
@@ -48,39 +50,52 @@ class EmbeddingBlock(nn.Module):
         nn.init.uniform_(self.embeddings.weight, -emb_init_range, emb_init_range)
 
         # Dense layer for radial basis functions
-        self.dense_rbf = nn.Linear(num_radial, emb_size, bias=True)
+        self.dense_rbf = Dense(
+            number_of_radial_bessel_functions,
+            embedding_size,
+            bias=True,
+            activation_function=activation_function,
+        )
 
         # Final dense layer
-        self.dense = nn.Linear(3 * emb_size, emb_size, bias=True)
+        self.dense = Dense(
+            3 * embedding_size,
+            embedding_size,
+            bias=True,
+            activation_function=activation_function,
+        )
 
-    def forward(self, inputs: tuple) -> torch.Tensor:
+    def forward(
+        self,
+        inputs: NNPInput,
+        pairlist_output: PairlistData,
+        f_ij: torch.Tensor,
+    ) -> torch.Tensor:
         """
         Forward pass of the EmbeddingBlock.
 
         Parameters
         ----------
-        inputs : tuple
-            A tuple of (Z, rbf, idnb_i, idnb_j):
-            - Z: Tensor of shape (N,), atomic numbers of atoms.
-            - rbf: Tensor of shape (E, num_radial), radial basis functions.
-            - idnb_i: Tensor of shape (E,), indices of source atoms in neighbor pairs.
-            - idnb_j: Tensor of shape (E,), indices of target atoms in neighbor pairs.
-
+        inputs : NNPInput
+            Input data including atomic numbers, positions, etc.
+        pairlist_output : PairlistData
+            Output from the pairlist module, containing pair indices and
+            distances.
+        f_ij : torch.Tensor
         Returns
         -------
         x : torch.Tensor
-            Output tensor of shape (E, emb_size).
+            Output tensor of shape (nr_of_pairs, emb_size).
         """
-        Z, rbf, idnb_i, idnb_j = inputs  # Unpack inputs
 
         # Transform radial basis functions
-        # rbf: (E, num_radial) -> (E, emb_size)
-        rbf = self.activation(self.dense_rbf(rbf))
+        # rbf: (nr_of_pairs, num_radial) -> (nr_of_pairs, emb_size)
+        rbf = self.activation(self.dense_rbf(f_ij))
 
         # Gather atomic numbers for neighbor pairs
-        # Z_i and Z_j have shape (E,)
-        Z_i = Z[idnb_i]
-        Z_j = Z[idnb_j]
+        # Z_i and Z_j have shape (nr_of_pairs)
+        Z_i = inputs.atomic_numbers[pairlist_output.pair_indices[0]]
+        Z_j = inputs.atomic_numbers[pairlist_output.pair_indices[1]]
 
         # Get embeddings for atomic numbers
         # x_i and x_j have shape (E, emb_size)
@@ -93,7 +108,7 @@ class EmbeddingBlock(nn.Module):
 
         # Final transformation
         # x: (E, 3 * emb_size) -> (E, emb_size)
-        x = self.activation(self.dense(x))
+        x = self.dense(x)
 
         return x
 
@@ -200,7 +215,6 @@ class DimeNetCore(torch.nn.Module):
         self.activation_function = activation_function_parameter["activation_function"]
 
         log.debug("Initializing the DimeNet architecture.")
-        from modelforge.potential.utils import Dense
 
         self.representation_module = Representation(
             number_of_radial_bessel_functions=number_of_radial_bessel_functions,
@@ -232,25 +246,16 @@ class DimeNetCore(torch.nn.Module):
         """
 
         # Compute the atomic representation, which includes
-        # - radial bessel basis
-        # - spherical harmonics
+        # - radial/angular bessel function
+        # - embedding of pairwise distances
 
-        representation = self.representation_module(data, pairlist_output)
-
-        # embedding block
-        embedding = self.embedding_block(
-            data.atomic_numbers,
-            representation["radial_bessel_basis"],
-            pairlist_output.pair_indices,
-        )
+        representation = self.representation_module(
+            data, pairlist_output
+        )  # includes 'm_ij', 'radial_bessel', 'angular_bessel'
 
         # Apply interaction modules to update the atomic embedding
 
-        return {
-            "per_atom_scalar_representation": None,
-            "atomic_subsystem_indices": data.atomic_subsystem_indices,
-            "atomic_numbers": data.atomic_numbers,
-        }
+        return None
 
     def forward(
         self, data: NNPInput, pairlist_output: PairlistData
@@ -297,20 +302,27 @@ class Representation(nn.Module):
         """
         super().__init__()
 
-        
         # The representation part of DimeNet++ includes
-        # - radial bessel basis (invariant representation/featurization of distances)
-        # - angular bessel basis (equivariant representation/featurization of pairwise direction (distance vector)) 
+        # - radial bessel basis (invariant representation/featurization of
+        #   distances)
+        # - angular bessel basis (equivariant representation/featurization of
+        #   pairwise direction (distance vector))
         # - embedding of pairwise distances
-        self.radial_symmetry_function_module = self._setup_radial_bessel_basis(
+        self.radial_bessel_function = self._setup_radial_bessel_basis(
             radial_cutoff,
             number_of_radial_bessel_functions,
             envelope_exponent,
         )
 
+        self.angular_bessel_function = self._setup_angular_bessel_basis(
+            number_of_spherical_harmonics,
+            envelope_exponent,
+        )
+
         self.embedding = EmbeddingBlock(
             embedding_size=embedding_size,
-            activation=activation_function,
+            number_of_radial_bessel_functions=number_of_radial_bessel_functions,
+            activation_function=activation_function,
         )
 
     def _setup_radial_bessel_basis(
@@ -343,20 +355,22 @@ class Representation(nn.Module):
         Returns
         -------
         Dict[str, torch.Tensor]
-            A dictionary containing radial basis functions, cutoff values, and atomic embeddings.
+            A dictionary containing radial/angular bessel basis and first message.
         """
 
         # Convert distances to radial bessel functions
-        f_ij = self.radial_bessel_function(pairlist_output.d_ij)
-        # generate triple indices
-        triple_indices = self.calculate_triplets(
-            pairlist_output
-        )  # Shape: [number_of_triplets (number_of_triples<<number_of_atoms^3), 3]
+        radial_bessel = self.radial_bessel_function(pairlist_output.d_ij)
 
-        sbf = self.spherical_bessel_function()
+        # convert distances to angular bessel functions
+        angular_bessel = self.angular_bessel_function(
+            pairlist_output.d_ij, pairlist_output.d_ij
+        )
+
+        # generate first message
+        m_ij = self.embedding(data, pairlist_output, radial_bessel)
 
         return {
-            "f_ij": f_ij,
-            "f_cutoff": f_cutoff,
-            "atomic_embedding": self.featurize_input(data),
+            "m_ij": m_ij,
+            "radial_bessel": radial_bessel,
+            "angular_bessel": angular_bessel,
         }

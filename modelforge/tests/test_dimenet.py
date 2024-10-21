@@ -77,7 +77,9 @@ def test_bessel_basis():
     num_radial = 6
     radial_cutoff = 0.5
     bessel_layer = BesselBasisLayer(
-        number_of_radial_bessel_functions=num_radial, radial_cutoff=radial_cutoff, envelope_exponent=5
+        number_of_radial_bessel_functions=num_radial,
+        radial_cutoff=radial_cutoff,
+        envelope_exponent=5,
     )
 
     # Sample input tensor of distances
@@ -86,3 +88,28 @@ def test_bessel_basis():
     # Forward pass
     outputs = bessel_layer(d_ij)  # Shape: (100, num_radial)
     print(outputs.shape)  # Should print: torch.Size([100, 6])
+
+
+def test_representation():
+    from modelforge.potential.dimenet import Representation
+    from torch.nn import SiLU
+
+    # Create an instance of the RepresentationBlock
+    number_of_radial_bessel_functions = 5
+    radial_cutoff = 0.5
+    number_of_spherical_harmonics = 7
+    envelope_exponent = 5
+    activation_function = SiLU()
+    embedding_size = 32
+
+    rep = Representation(
+        number_of_radial_bessel_functions=number_of_radial_bessel_functions,
+        radial_cutoff=radial_cutoff,
+        number_of_spherical_harmonics=number_of_spherical_harmonics,
+        envelope_exponent=envelope_exponent,
+        activation_function=activation_function,
+        embedding_size=embedding_size,
+    )
+
+
+    

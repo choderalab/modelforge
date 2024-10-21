@@ -2,7 +2,7 @@
 SchNet neural network potential for modeling quantum interactions.
 """
 
-from typing import Dict, List, Type
+from typing import Dict, List
 
 import torch
 import torch.nn as nn

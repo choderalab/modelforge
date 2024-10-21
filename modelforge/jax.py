@@ -1,4 +1,4 @@
-from modelforge.dataset import NNPInput
+from modelforge.utils.prop import NNPInput
 
 
 def nnpinput_flatten(nnpinput: NNPInput):

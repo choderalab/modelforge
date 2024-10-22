@@ -940,7 +940,7 @@ def test_casting(potential_name, single_batch_with_batchsize, prep_temp_dir):
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
-@pytest.mark.parametrize("simulation_environment", Literal["PyTorch"])
+@pytest.mark.parametrize("simulation_environment", ["PyTorch"])
 def test_equivariant_energies_and_forces(
     potential_name,
     simulation_environment,

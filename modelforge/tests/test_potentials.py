@@ -955,6 +955,7 @@ def test_equivariant_energies_and_forces(
     import torch
 
     precision = torch.float64
+    simulation_environment: Literal["PyTorch", "JAX"]
 
     # initialize the models
     potential = setup_potential_for_test(

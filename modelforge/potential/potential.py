@@ -202,7 +202,6 @@ class PostProcessing(torch.nn.Module):
 class Potential(torch.nn.Module):
     def __init__(
         self,
-        name: str,
         core_network,
         neighborlist,
         postprocessing,
@@ -519,7 +518,6 @@ class NeuralNetworkPotentialFactory:
     def generate_potential(
         *,
         potential_parameter: T_NNP_Parameters,
-        runtime_parameter: Optional[RuntimeParameters] = None,
         training_parameter: Optional[TrainingParameters] = None,
         dataset_parameter: Optional[DatasetParameters] = None,
         dataset_statistic: Dict[str, Dict[str, float]] = {
@@ -529,7 +527,6 @@ class NeuralNetworkPotentialFactory:
             }
         },
         potential_seed: Optional[int] = None,
-        use_default_dataset_statistic: bool = False,
         use_training_mode_neighborlist: bool = False,
         simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
         only_unique_pairs: bool = False,
@@ -583,60 +580,45 @@ class NeuralNetworkPotentialFactory:
         log.debug(f"{potential_parameter=}")
         log.debug(f"{dataset_parameter=}")
 
-        # obtain model for training
-        if use == "training":
-            potential = PotentialTrainer(
-                potential_parameter=potential_parameter,
-                training_parameter=training_parameter,
-                dataset_parameter=dataset_parameter,
-                runtime_parameter=runtime_parameter,
-                potential_seed=potential_seed,
-                dataset_statistic=dataset_statistic,
-                use_default_dataset_statistic=use_default_dataset_statistic,
-            )
-            raise InputError("Use generate_trainer()!!")
         # obtain model for inference
-        elif use == "inference":
-            potential = setup_potential(
-                potential_parameter=potential_parameter,
-                dataset_statistic=dataset_statistic,
-                use_training_mode_neighborlist=use_training_mode_neighborlist,
-                potential_seed=potential_seed,
-                jit=jit,
-                only_unique_pairs=only_unique_pairs,
-                neighborlist_strategy=inference_neighborlist_strategy,
-                verlet_neighborlist_skin=verlet_neighborlist_skin,
-            )
-            # Disable gradients for model parameters
-            for param in potential.parameters():
-                param.requires_grad = False
-            # Set model to eval
-            potential.eval()
+        potential = setup_potential(
+            potential_parameter=potential_parameter,
+            dataset_statistic=dataset_statistic,
+            use_training_mode_neighborlist=use_training_mode_neighborlist,
+            potential_seed=potential_seed,
+            jit=jit,
+            only_unique_pairs=only_unique_pairs,
+            neighborlist_strategy=inference_neighborlist_strategy,
+            verlet_neighborlist_skin=verlet_neighborlist_skin,
+        )
+        # Disable gradients for model parameters
+        for param in potential.parameters():
+            param.requires_grad = False
+        # Set model to eval
+        potential.eval()
 
-            if simulation_environment == "JAX":
-                # register nnp_input as pytree
-                from modelforge.utils.io import import_
+        if simulation_environment == "JAX":
+            # register nnp_input as pytree
+            from modelforge.utils.io import import_
 
-                jax = import_("jax")
-                from modelforge.jax import nnpinput_flatten, nnpinput_unflatten
-                from modelforge.dataset import NNPInput
+            jax = import_("jax")
+            from modelforge.jax import nnpinput_flatten, nnpinput_unflatten
+            from modelforge.dataset import NNPInput
 
-                # registering NNPInput multiple times will result in a
-                # ValueError
-                try:
-                    jax.tree_util.register_pytree_node(
-                        NNPInput,
-                        nnpinput_flatten,
-                        nnpinput_unflatten,
-                    )
-                except ValueError:
-                    log.debug("NNPInput already registered as pytree")
-                    pass
-                return PyTorch2JAXConverter().convert_to_jax_model(potential)
-            else:
-                return potential
+            # registering NNPInput multiple times will result in a
+            # ValueError
+            try:
+                jax.tree_util.register_pytree_node(
+                    NNPInput,
+                    nnpinput_flatten,
+                    nnpinput_unflatten,
+                )
+            except ValueError:
+                log.debug("NNPInput already registered as pytree")
+                pass
+            return PyTorch2JAXConverter().convert_to_jax_model(potential)
         else:
-            raise NotImplementedError(f"Unsupported 'use' value: {use}")
+            return potential
 
     @staticmethod
     def generate_trainer(
@@ -645,7 +627,12 @@ class NeuralNetworkPotentialFactory:
         runtime_parameter: Optional[RuntimeParameters] = None,
         training_parameter: Optional[TrainingParameters] = None,
         dataset_parameter: Optional[DatasetParameters] = None,
-        dataset_statistic: Dict[str, Dict[str, float]] = None,
+        dataset_statistic: Dict[str, Dict[str, float]] = {
+            "training_dataset_statistics": {
+                "per_atom_energy_mean": unit.Quantity(0.0, unit.kilojoule_per_mole),
+                "per_atom_energy_stddev": unit.Quantity(1.0, unit.kilojoule_per_mole),
+            }
+        },
         potential_seed: Optional[int] = None,
         use_default_dataset_statistic: bool = False,
     ) -> PotentialTrainer:

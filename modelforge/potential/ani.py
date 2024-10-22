@@ -658,7 +658,7 @@ class ANIInteraction(nn.Module):
         for i, model in enumerate(self.atomic_networks):
             # create a mask to select the atoms of the current species (i)
             mask = species == i
-            per_element_index = mask.nonzero(as_tuple=False).flatten()
+            per_element_index = mask.nonzero().flatten()
             # if the species is present in the batch, run it through the network
             if per_element_index.shape[0] > 0:
                 input_ = aev.index_select(0, per_element_index)

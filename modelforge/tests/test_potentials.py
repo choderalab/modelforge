@@ -1107,3 +1107,37 @@ def test_loading_from_checkpoint_file():
 
     model = load_inference_model_from_checkpoint(chkp_file)
     assert model is not None
+
+
+@pytest.mark.parametrize(
+    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
+)
+def test_saving_torchscript(potential_name, single_batch_with_batchsize, prep_temp_dir):
+    batch = single_batch_with_batchsize(
+        batch_size=1, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+    )
+    from modelforge.potential.potential import NeuralNetworkPotentialFactory
+    from modelforge.utils.misc import load_configs_into_pydantic_models
+
+    config = load_configs_into_pydantic_models("ani2x", "qm9")
+
+    # read default parameters
+    potential = NeuralNetworkPotentialFactory.generate_potential(
+        use="inference",
+        potential_parameter=config["potential"],
+        potential_seed=42,
+    )
+    potential_jit = torch.jit.script(potential)
+    filename = f"{str(prep_temp_dir)}/{potential_name.lower()}_qm9_jit.pt"
+
+    potential_jit.save(filename)
+
+    output = potential(batch.nnp_input)
+    output_jit1 = potential_jit(batch.nnp_input)
+
+    # load the model
+    jit_model = torch.jit.load(filename)
+    output_jit2 = jit_model(batch.nnp_input)
+
+    assert torch.allclose(output["per_system_energy"], output_jit1["per_system_energy"])
+    assert torch.allclose(output["per_system_energy"], output_jit2["per_system_energy"])

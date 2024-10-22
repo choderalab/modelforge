@@ -252,7 +252,7 @@ def generate_uniform_quaternion(u=None):
     """
     Generates a uniform normalized quaternion.
 
-    Adapted from numpy implementation in modelforgeopenmm-tools
+    Adapted from numpy implementation in openmm-tools
     https://github.com/choderalab/openmmtools/blob/main/openmmtools/mcmc.py
 
     Parameters

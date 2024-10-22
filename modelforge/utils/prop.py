@@ -106,12 +106,6 @@ class NNPInput:
         self.pair_list = self.pair_list.to(device)
         self.per_atom_partial_charge = self.per_atom_partial_charge.to(device)
 
-        # if not self.pair_list is None:
-        #     self.pair_list = self.pair_list.to(device)
-        #
-        # if not self.per_atom_partial_charge is None:
-        #     self.per_atom_partial_charge = self.per_atom_partial_charge.to(device)
-
         return self
 
     def to_dtype(self, dtype: torch.dtype):

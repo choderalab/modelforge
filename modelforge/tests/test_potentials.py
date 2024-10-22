@@ -1119,7 +1119,7 @@ def test_saving_torchscript(potential_name, single_batch_with_batchsize, prep_te
     from modelforge.potential.potential import NeuralNetworkPotentialFactory
     from modelforge.utils.misc import load_configs_into_pydantic_models
 
-    config = load_configs_into_pydantic_models("ani2x", "qm9")
+    config = load_configs_into_pydantic_models(potential_name.lower(), "qm9")
 
     # read default parameters
     potential = NeuralNetworkPotentialFactory.generate_potential(

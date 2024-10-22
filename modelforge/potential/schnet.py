@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 from loguru import logger as log
 
-from modelforge.dataset.dataset import NNPInputTuple
+from modelforge.dataset.dataset import NNPInput
 from modelforge.potential.neighbors import PairlistData
 
 
@@ -122,14 +122,14 @@ class SchNetCore(torch.nn.Module):
             )
 
     def compute_properties(
-        self, data: NNPInputTuple, pairlist_output: PairlistData
+        self, data: NNPInput, pairlist_output: PairlistData
     ) -> Dict[str, torch.Tensor]:
         """
         Compute properties based on the input data and pair list.
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             Input data including atomic numbers, positions, etc.
         pairlist_output: PairlistData
             Output from the pairlist module, containing pair indices and
@@ -143,16 +143,17 @@ class SchNetCore(torch.nn.Module):
         # Compute the atomic representation
         representation = self.schnet_representation_module(data, pairlist_output)
         atomic_embedding = representation["atomic_embedding"]
+        f_ij = representation["f_ij"]
+        f_cutoff = representation["f_cutoff"]
 
         # Apply interaction modules to update the atomic embedding
         for interaction in self.interaction_modules:
-            v = interaction(
+            atomic_embedding = atomic_embedding + interaction(
                 atomic_embedding,
                 pairlist_output,
-                representation["f_ij"],
-                representation["f_cutoff"],
+                f_ij,
+                f_cutoff,
             )
-            atomic_embedding = atomic_embedding + v  # Update atomic features
 
         return {
             "per_atom_scalar_representation": atomic_embedding,
@@ -161,14 +162,14 @@ class SchNetCore(torch.nn.Module):
         }
 
     def forward(
-        self, data: NNPInputTuple, pairlist_output: PairlistData
+        self, data: NNPInput, pairlist_output: PairlistData
     ) -> Dict[str, torch.Tensor]:
         """
         Forward pass of the SchNet model.
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             Input data including atomic numbers, positions, and relevant fields.
         pairlist_output : PairlistData
             Pair indices and distances from the pairlist module.
@@ -293,14 +294,13 @@ class SchNETInteractionModule(nn.Module):
 
         # Generate interaction filters based on radial basis functions
         W_ij = self.filter_network(f_ij.squeeze(1))
-        W_ij = W_ij * f_ij_cutoff
+        W_ij = W_ij * f_ij_cutoff  # Shape: [n_pairs, number_of_filters]
 
         # Perform continuous-filter convolution
         x_j = atomic_embedding[idx_j]
         x_ij = x_j * W_ij  # Element-wise multiplication
 
-        out = torch.zeros_like(atomic_embedding)
-        out.scatter_add_(
+        out = torch.zeros_like(atomic_embedding).scatter_add_(
             0, idx_i.unsqueeze(-1).expand_as(x_ij), x_ij
         )  # Aggregate per-atom pair to per-atom
 
@@ -352,7 +352,7 @@ class SchNETRepresentation(nn.Module):
         return radial_symmetry_function
 
     def forward(
-        self, data: NNPInputTuple, pairlist_output: PairlistData
+        self, data: NNPInput, pairlist_output: PairlistData
     ) -> Dict[str, torch.Tensor]:
         """
         Forward pass to generate the radial symmetry representation of pairwise
@@ -360,7 +360,7 @@ class SchNETRepresentation(nn.Module):
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             Input data containing atomic numbers and positions.
         pairlist_output : PairlistData
             Output from the pairlist module, containing pair indices and distances.

@@ -8,7 +8,7 @@ import torch
 from loguru import logger as log
 from torch import nn
 
-from modelforge.dataset.dataset import NNPInputTuple
+from modelforge.dataset.dataset import NNPInput
 from modelforge.potential.neighbors import PairlistData
 from .utils import Dense
 
@@ -54,7 +54,7 @@ class PhysNetRepresentation(nn.Module):
         )
 
     def forward(
-        self, data: NNPInputTuple, pairlist_output: PairlistData
+        self, data: NNPInput, pairlist_output: PairlistData
     ) -> Dict[str, torch.Tensor]:
         """
         Forward pass for the representation module, generating RBFs and
@@ -62,7 +62,7 @@ class PhysNetRepresentation(nn.Module):
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             Input data containing atomic positions, atomic numbers, etc.
         pairlist_output : PairlistData
             Output from the pairlist module containing distances and pair indices.
@@ -220,14 +220,20 @@ class PhysNetInteractionModule(nn.Module):
         # first term in equation 6 in the PhysNet paper
         embedding_atom_i = self.activation_function(
             self.interaction_i(data["atomic_embedding"])
-        )
+        )  # shape (nr_of_atoms_in_batch, atomic_embedding_dim)
 
         # second term in equation 6 in the PhysNet paper
         # apply attention mask G to radial basis functions f_ij
-        g = self.attention_mask(data["f_ij"])
+        g = self.attention_mask(
+            data["f_ij"]
+        )  # shape (nr_of_atom_pairs_in_batch, atomic_embedding_dim)
         # calculate the updated embedding for atom j
+        # NOTE: this changes the 2nd dimension from number_of_radial_basis_functions to atomic_embedding_dim
         embedding_atom_j = self.activation_function(
-            self.interaction_j(data["atomic_embedding"][idx_j])
+            self.interaction_j(data["atomic_embedding"])[
+                idx_j
+            ]  # NOTE this is the same as the embedding_atom_i, but then we are selecting the embedding of atom j
+            # shape (nr_of_atom_pairs_in_batch, atomic_embedding_dim)
         )
         updated_embedding_atom_j = torch.mul(
             g, embedding_atom_j
@@ -495,7 +501,7 @@ class PhysNetCore(torch.nn.Module):
 
     def compute_properties(
         self,
-        data: NNPInputTuple,
+        data: NNPInput,
         pairlist_output: PairlistData,
     ) -> Dict[str, torch.Tensor]:
         """
@@ -503,7 +509,7 @@ class PhysNetCore(torch.nn.Module):
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             Input data containing atomic features and pairwise information.
         pairlist_output : PairlistData
             Output from the pairlist module.
@@ -558,7 +564,7 @@ class PhysNetCore(torch.nn.Module):
         ----------
         per_atom_property_prediction : torch.Tensor
             Tensor of predicted per-atom properties.
-        data : NNPInputTuple
+        data : NNPInput
             Input data containing atomic numbers, etc.
 
         Returns
@@ -585,14 +591,14 @@ class PhysNetCore(torch.nn.Module):
         return outputs
 
     def forward(
-        self, data: NNPInputTuple, pairlist_output: PairlistData
+        self, data: NNPInput, pairlist_output: PairlistData
     ) -> Dict[str, torch.Tensor]:
         """
         Forward pass through the entire PhysNet architecture.
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             Input data containing atomic features and pairwise information.
         pairlist_output : PairlistData
             Pairwise information from the pairlist module.

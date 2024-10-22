@@ -116,7 +116,7 @@ The potential architecture and relevant parameters are defined in a TOML configu
     [potential.postprocessing_parameter]
     [potential.postprocessing_parameter.per_atom_energy]
     normalize = true
-    from_atom_to_molecule_reduction = true
+    from_atom_to_system_reduction = true
     keep_per_atom_property = true
 
 Defining the Dataset
@@ -149,7 +149,7 @@ Here is an example of a training routine definition:
     remove_self_energies = true  # Whether to remove self-energies from the dataset
     batch_size = 128  # Number of samples per batch
     lr = 1e-3  # Learning rate for the optimizer
-    monitor = "val/per_molecule_energy/rmse"  # Metric to monitor for checkpointing
+    monitor = "val/per_system_energy/rmse"  # Metric to monitor for checkpointing
 
 
     [training.experiment_logger]
@@ -173,19 +173,19 @@ Here is an example of a training routine definition:
     min_lr = 1e-8  # Minimum learning rate
     threshold = 0.1  # Threshold for measuring the new optimum, to only focus on significant changes
     threshold_mode = "abs"  # Mode for the threshold (absolute or relative)
-    monitor = "val/per_molecule_energy/rmse"  # Metric to monitor for learning rate adjustments
+    monitor = "val/per_system_energy/rmse"  # Metric to monitor for learning rate adjustments
     interval = "epoch"  # Interval for learning rate updates (per epoch)
 
     [training.loss_parameter]
-    loss_property = ['per_molecule_energy', 'per_atom_force']  # Properties to include in the loss function
+    loss_components = ['per_system_energy', 'per_atom_force']  # Properties to include in the loss function
 
     [training.loss_parameter.weight]
-    per_molecule_energy = 0.999  # Weight for per molecule energy in the loss calculation
+    per_system_energy = 0.999  # Weight for per molecule energy in the loss calculation
     per_atom_force = 0.001  # Weight for per atom force in the loss calculation
 
     [training.early_stopping]
     verbose = true  # Whether to print early stopping messages
-    monitor = "val/per_molecule_energy/rmse"  # Metric to monitor for early stopping
+    monitor = "val/per_system_energy/rmse"  # Metric to monitor for early stopping
     min_delta = 0.001  # Minimum change to qualify as an improvement
     patience = 50  # Number of epochs with no improvement after which training will be stopped
 

@@ -164,23 +164,23 @@ class TrainingParameters(ParametersBase):
         class to hold the loss properties
 
         args:
-            loss_property (List[str]): The loss property.
+            loss_components (List[str]): The loss property.
                 The length of this list must match the length of loss_weight
             weight (Dict[str,float]): The loss weight.
-                The keys must correspond to entries in the loss_property list.
+                The keys must correspond to entries in the loss_components list.
 
         """
 
-        loss_property: List
+        loss_components: List
         weight: Dict[str, float]
 
         @model_validator(mode="after")
         def ensure_length_match(self) -> "LossParameter":
-            loss_property = self.loss_property
+            loss_components = self.loss_components
             loss_weight = self.weight
-            if len(loss_property) != len(loss_weight):
+            if len(loss_components) != len(loss_weight):
                 raise ValueError(
-                    f"The length of loss_property ({len(loss_property)}) and weight ({len(loss_weight)}) must match."
+                    f"The length of loss_components ({len(loss_components)}) and weight ({len(loss_weight)}) must match."
                 )
             return self
 
@@ -274,12 +274,13 @@ class TrainingParameters(ParametersBase):
     stochastic_weight_averaging: Optional[StochasticWeightAveraging] = None
     experiment_logger: ExperimentLogger
     verbose: bool = False
+    log_norm: bool = False
     optimizer: Type[torch.optim.Optimizer] = torch.optim.AdamW
     min_number_of_epochs: Union[int, None] = None
 
     @model_validator(mode="after")
     def validate_dipole_and_shift_com(self):
-        if "dipole_moment" in self.loss_parameter.loss_property:
+        if "dipole_moment" in self.loss_parameter.loss_components:
             if not self.shift_center_of_mass_to_origin:
                 raise ValueError(
                     "Use of dipole_moment in the loss requires shift_center_of_mass_to_origin to be True"

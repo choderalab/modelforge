@@ -121,7 +121,7 @@ def calculate_mean_and_variance(
     log.info("Calculating mean and variance of atomic energies")
     for batch_data in tqdm.tqdm(dataloader):
         E_scaled = (
-            batch_data.metadata.E
+            batch_data.metadata.per_system_energy
             / batch_data.metadata.atomic_subsystem_counts.view(-1, 1)
         )
         online_estimator.update(E_scaled)
@@ -162,9 +162,8 @@ def _calculate_self_energies(torch_dataset, collate_fn) -> Dict[str, unit.Quanti
     for batch in DataLoader(
         torch_dataset, batch_size=batch_size, collate_fn=collate_fn
     ):
-        a = 7
         energies, atomic_numbers, molecules_id = (
-            batch.metadata.E.squeeze(),
+            batch.metadata.per_system_energy.squeeze(),
             batch.nnp_input.atomic_numbers.squeeze(-1).to(torch.int64),
             batch.nnp_input.atomic_subsystem_indices.to(torch.int16),
         )

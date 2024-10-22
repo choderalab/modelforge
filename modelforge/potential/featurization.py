@@ -3,7 +3,7 @@ import torch.nn as nn
 from typing import Dict, List, Union
 
 from modelforge.potential.utils import DenseWithCustomDist
-from modelforge.dataset import NNPInputTuple
+from modelforge.dataset import NNPInput
 
 
 class AddPerMoleculeValue(nn.Module):
@@ -27,7 +27,7 @@ class AddPerMoleculeValue(nn.Module):
         self.key = key
 
     def forward(
-        self, per_atom_property_tensor: torch.Tensor, data: NNPInputTuple
+        self, per_atom_property_tensor: torch.Tensor, data: NNPInput
     ) -> torch.Tensor:
         """
         Forward pass of the module.
@@ -70,7 +70,7 @@ class AddPerAtomValue(nn.Module):
         self.key = key
 
     def forward(
-        self, per_atom_property_tensor: torch.Tensor, data: NNPInputTuple
+        self, per_atom_property_tensor: torch.Tensor, data: NNPInput
     ) -> torch.Tensor:
         """
         Forward pass of the module.
@@ -95,7 +95,7 @@ class FeaturizeInput(nn.Module):
 
     _SUPPORTED_FEATURIZATION_TYPES = [
         "atomic_number",
-        "per_molecule_total_charge",
+        "per_system_total_charge",
         "spin_state",
     ]
 
@@ -161,7 +161,7 @@ class FeaturizeInput(nn.Module):
 
             # add total charge to embedding vector
             elif (
-                featurization == "per_molecule_total_charge"
+                featurization == "per_system_total_charge"
                 and featurization in self._SUPPORTED_FEATURIZATION_TYPES
             ):
                 # transform output o f embedding with shape (nr_atoms,
@@ -169,10 +169,10 @@ class FeaturizeInput(nn.Module):
                 # features is the total charge (which will be transformed to a
                 # per-atom property)
                 self.append_to_embedding_tensor.append(
-                    AddPerMoleculeValue("total_charge")
+                    AddPerMoleculeValue("per_system_total_charge")
                 )
                 self.increase_dim_of_embedded_tensor += 1
-                self.registered_appended_properties.append("total_charge")
+                self.registered_appended_properties.append("per_system_total_charge")
 
             # add partial charge to embedding vector
             elif (
@@ -202,7 +202,7 @@ class FeaturizeInput(nn.Module):
                 base_embedding_dim,
             )
 
-    def forward(self, data: NNPInputTuple) -> torch.Tensor:
+    def forward(self, data: NNPInput) -> torch.Tensor:
         """
         Featurize the input data.
 

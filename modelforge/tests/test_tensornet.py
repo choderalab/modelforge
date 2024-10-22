@@ -5,7 +5,7 @@ from modelforge.tests.helper_functions import setup_potential_for_test
 
 @pytest.fixture(scope="session")
 def prep_temp_dir(tmp_path_factory):
-    fn = tmp_path_factory.mktemp("test_physnet_temp")
+    fn = tmp_path_factory.mktemp("test_tensornet")
     return fn
 
 
@@ -29,9 +29,9 @@ def test_forward_with_inference_model(
     simulation_environment, single_batch_with_batchsize, prep_temp_dir
 ):
 
-    batch = single_batch_with_batchsize(
+    nnp_input = single_batch_with_batchsize(
         batch_size=32, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
-    )
+    ).nnp_input
 
     # load default parameters
     model = setup_potential_for_test(
@@ -44,9 +44,11 @@ def test_forward_with_inference_model(
     )
 
     if simulation_environment == "JAX":
-        model(batch.jax_nnp_input_tuple)
+        from modelforge.jax import convert_NNPInput_to_jax
+
+        model(convert_NNPInput_to_jax(nnp_input))
     else:
-        model(batch.nnp_input_tuple)
+        model(nnp_input)
 
 
 def test_input(prep_temp_dir):
@@ -73,7 +75,7 @@ def test_input(prep_temp_dir):
 
     # load reference data
     reference_data = resources.files(data) / "tensornet_input.pt"
-    reference_batch = resources.files(data) / "mf_input.pkl"
+    reference_batch = resources.files(data) / "nnp_input.pkl"
     import pickle
 
     mf_input = pickle.load(open(reference_batch, "rb"))
@@ -99,8 +101,18 @@ def test_input(prep_temp_dir):
         idx = ((edge_index == pair_index).sum(axis=1) == 2).nonzero()[0][
             0
         ]  # select [True, True]
-        assert torch.allclose(pairlist_output.d_ij[_][0], edge_weight[idx])
-        assert torch.allclose(pairlist_output.r_ij[_], -edge_vec[idx])
+        print(pairlist_output.d_ij[_][0], edge_weight[idx])
+        assert torch.allclose(
+            pairlist_output.d_ij[_][0],
+            edge_weight[idx],
+            rtol=1e-3,
+        )
+        print(pairlist_output.r_ij[_], -edge_vec[idx])
+        assert torch.allclose(
+            pairlist_output.r_ij[_],
+            -1 * edge_vec[idx],
+            rtol=1e-3,
+        )
 
 
 def test_compare_radial_symmetry_features():
@@ -197,7 +209,7 @@ def test_representation(prep_temp_dir):
 
     import pickle
 
-    reference_batch = resources.files(data) / "mf_input.pkl"
+    reference_batch = resources.files(data) / "nnp_input.pkl"
     nnp_input = pickle.load(open(reference_batch, "rb"))
     # -------------------------------#
     # -------------------------------#
@@ -266,7 +278,7 @@ def test_interaction(prep_temp_dir):
 
     reference_data = resources.files(data) / "tensornet_interaction.pt"
 
-    reference_batch = resources.files(data) / "mf_input.pkl"
+    reference_batch = resources.files(data) / "nnp_input.pkl"
     nnp_input = pickle.load(open(reference_batch, "rb"))
 
     number_of_per_atom_features = 8

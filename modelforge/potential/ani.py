@@ -7,17 +7,14 @@ species and interaction types, and allows prediction of properties like energy
 using a neural network model.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Dict, Tuple
-
+from typing import Dict, Tuple, List
 import torch
 from loguru import logger as log
 from torch import nn
 
 from modelforge.utils.prop import SpeciesAEV
 
-from modelforge.dataset.dataset import NNPInputTuple
+from modelforge.dataset.dataset import NNPInput
 from modelforge.potential.neighbors import PairlistData
 
 
@@ -245,7 +242,7 @@ class ANIRepresentation(nn.Module):
 
     def forward(
         self,
-        data: NNPInputTuple,
+        data: NNPInput,
         pairlist_output: PairlistData,
         atom_index: torch.Tensor,
     ) -> SpeciesAEV:
@@ -254,7 +251,7 @@ class ANIRepresentation(nn.Module):
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             The input data for the ANI model.
         pairlist_output : PairlistData
             Pairwise distances and displacement vectors.
@@ -308,7 +305,7 @@ class ANIRepresentation(nn.Module):
 
     def _postprocess_angular_aev(
         self,
-        data: NNPInputTuple,
+        data: NNPInput,
         angular_data: Dict[str, torch.Tensor],
     ):
         """
@@ -316,7 +313,7 @@ class ANIRepresentation(nn.Module):
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             The input data.
         angular_data : Dict[str, torch.Tensor]
             The angular data including species and displacement vectors.
@@ -360,7 +357,7 @@ class ANIRepresentation(nn.Module):
     def _postprocess_radial_aev(
         self,
         radial_feature_vector: torch.Tensor,
-        data: NNPInputTuple,
+        data: NNPInput,
         atom_index: torch.Tensor,
         pairlist_output: PairlistData,
     ) -> Dict[str, torch.Tensor]:
@@ -371,7 +368,7 @@ class ANIRepresentation(nn.Module):
         ----------
         radial_feature_vector : torch.Tensor
             The radial feature vectors.
-        data : AniNeuralNetworkData
+        data : NNPInput
             The input data for the ANI model.
 
         Returns
@@ -379,7 +376,9 @@ class ANIRepresentation(nn.Module):
         Dict[str, torch.Tensor]
             A dictionary containing the radial AEVs and additional data.
         """
-        radial_feature_vector = radial_feature_vector.squeeze(1)
+        radial_feature_vector = radial_feature_vector.squeeze(
+            1
+        )  # Shape [num_pairs, radial_sublength]
         number_of_atoms = data.atomic_numbers.shape[0]
         radial_sublength = (
             self.radial_symmetry_functions.number_of_radial_basis_functions
@@ -392,11 +391,21 @@ class ANIRepresentation(nn.Module):
                 number_of_atoms * self.nr_of_supported_elements,
                 radial_sublength,
             )
-        )
-        atom_index12 = pairlist_output.pair_indices
-        species = atom_index
-        species12 = species[atom_index12]
+        )  # Shape [num_atoms * nr_of_supported_elements, radial_sublength]
 
+        atom_index12 = (
+            pairlist_output.pair_indices
+        )  # Shape [2, num_pairs] # this is the pair list of the atoms (e.g. C=6)
+        species = atom_index
+        species12 = species[
+            atom_index12
+        ]  # Shape [2, num_pairs], this is the pair index but now with optimzied indexing
+
+        # What are we doing here? we generate an atomic environment vector with
+        # fixed dimensinos (nr_of_supported_elements, 16 (represents number of
+        # radial symmetry functions)) for each **element** per atom (in a pair)
+
+        # this is a magic indexing function that works
         index12 = atom_index12 * self.nr_of_supported_elements + species12.flip(0)
         radial_aev.index_add_(0, index12[0], radial_feature_vector)
         radial_aev.index_add_(0, index12[1], radial_feature_vector)
@@ -772,7 +781,7 @@ class ANI2xCore(torch.nn.Module):
 
     def compute_properties(
         self,
-        data: NNPInputTuple,
+        data: NNPInput,
         pairlist_output: PairlistData,
         atom_index: torch.Tensor,
     ) -> Dict[str, torch.Tensor]:
@@ -784,7 +793,7 @@ class ANI2xCore(torch.nn.Module):
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             The input data for the ANI model, including atomic numbers and positions.
         pairlist_output : PairlistData
             The pairwise distances and displacement vectors between atoms.
@@ -843,7 +852,7 @@ class ANI2xCore(torch.nn.Module):
         return outputs
 
     def forward(
-        self, data: NNPInputTuple, pairlist_output: PairlistData
+        self, data: NNPInput, pairlist_output: PairlistData
     ) -> Dict[str, torch.Tensor]:
         """
         Forward pass through the ANI2x model to compute atomic properties.
@@ -853,7 +862,7 @@ class ANI2xCore(torch.nn.Module):
 
         Parameters
         ----------
-        data : NNPInputTuple
+        data : NNPInput
             The input data for the model, including atomic numbers and
             positions.
         pairlist_output : PairlistData

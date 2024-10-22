@@ -1,11 +1,10 @@
-from typing import Optional
-
+import pytest
 import torch
-
 from modelforge.tests.precalculated_values import (
     load_precalculated_schnet_results,
     setup_single_methane_input,
 )
+from typing import Optional
 
 
 def setup_schnet_model(potential_seed: Optional[int] = None):
@@ -21,14 +20,15 @@ def setup_schnet_model(potential_seed: Optional[int] = None):
     config["potential"].core_parameter.number_of_radial_basis_functions = 5
     config["potential"].core_parameter.number_of_filters = 12
 
-    potential = NeuralNetworkPotentialFactory.generate_trainer(
+    model = NeuralNetworkPotentialFactory.generate_potential(
+        use="training",
         potential_parameter=config["potential"],
         training_parameter=config["training"],
         dataset_parameter=config["dataset"],
         runtime_parameter=config["runtime"],
         potential_seed=potential_seed,
-    ).potential_training_adapter.potential
-    return potential
+    ).lightning_module.potential
+    return model
 
 
 def test_init():
@@ -154,7 +154,7 @@ def test_compare_implementation_against_reference_implementation():
     # set up the input for the spk Schnet model
     input = setup_single_methane_input()
     spk_input = input["spk_methane_input"]
-    model_input = input["modelforge_methane_input"].as_namedtuple()
+    model_input = input["modelforge_methane_input"]
 
     # ---------------------------------------- #
     # test forward pass

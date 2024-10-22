@@ -142,9 +142,9 @@ def test_training_parameter_model():
     with pytest.raises(ValidationError):
         training_parameters.splitting_strategy.dataset_split = [0.7, 0.1, 0.1, 0.1]
 
-    # this will throw an error because the datafile has 1 entries for the loss_property dictionary
+    # this will throw an error because the datafile has 1 entries for the loss_components dictionary
     with pytest.raises(ValidationError):
-        training_parameters.loss_parameter.loss_property = [
-            "per_molecule_energy",
+        training_parameters.loss_parameter.loss_components = [
+            "per_system_energy",
             "per_atom_force",
         ]

@@ -533,7 +533,7 @@ class NeuralNetworkPotentialFactory:
         jit: bool = True,
         inference_neighborlist_strategy: str = "verlet",
         verlet_neighborlist_skin: Optional[float] = 0.1,
-    ) -> Union[Potential, JAXModel, pl.LightningModule, PotentialTrainer]:
+    ) -> Union[Potential, JAXModel]:
         """
         Create an instance of a neural network potential for training or
         inference.
@@ -758,7 +758,7 @@ class PyTorch2JAXConverter:
         return apply, model_params, model_buffer
 
 
-def load_inference_model_from_checkpoint(checkpoint_path: str) -> Potential:
+def load_inference_model_from_checkpoint(checkpoint_path: str) -> Union[Potential, JAXModel]:
     """
     Creates an inference model from a checkpoint file.
     It loads the checkpoint file, extracts the hyperparameters, and creates the model in inference mode.
@@ -781,14 +781,14 @@ def load_inference_model_from_checkpoint(checkpoint_path: str) -> Potential:
     potential_seed = hyperparams.get("potential_seed", None)
 
     # Create the model in inference mode
-    model = NeuralNetworkPotentialFactory.generate_potential(
+    potential = NeuralNetworkPotentialFactory.generate_potential(
         potential_parameter=potential_parameter,
         dataset_statistic=dataset_statistic,
         potential_seed=potential_seed,
     )
 
     # Load the state dict into the model
-    model.load_state_dict(checkpoint["state_dict"])
+    potential.load_state_dict(checkpoint["state_dict"])
 
     # Return the model
-    return model
+    return potential

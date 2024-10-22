@@ -782,7 +782,6 @@ def load_inference_model_from_checkpoint(checkpoint_path: str) -> Potential:
 
     # Create the model in inference mode
     model = NeuralNetworkPotentialFactory.generate_potential(
-        use="inference",
         potential_parameter=potential_parameter,
         dataset_statistic=dataset_statistic,
         potential_seed=potential_seed,

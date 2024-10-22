@@ -60,7 +60,6 @@ class NNPInput:
         self.box_vectors = box_vectors
         self.is_periodic = is_periodic
 
-
         # Validate inputs
         self._validate_inputs()
 
@@ -94,7 +93,6 @@ class NNPInput:
             raise ValueError(
                 "The size of atomic_subsystem_indices and the first dimension of positions must match"
             )
-
 
     def to_device(self, device: torch.device):
         """Move all tensors in this instance to the specified device."""
@@ -191,11 +189,11 @@ class Metadata:
 class BatchData:
     nnp_input: NNPInput
     metadata: Metadata
-    
+
     def to(
         self,
         device: torch.device,
-    ): # NOTE: this is required to move the data to device
+    ):  # NOTE: this is required to move the data to device
         """Move all data in this batch to the specified device and dtype."""
         self.nnp_input = self.nnp_input.to_device(device=device)
         self.metadata = self.metadata.to_device(device=device)

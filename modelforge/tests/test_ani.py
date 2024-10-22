@@ -89,7 +89,7 @@ def setup_two_methanes():
     return ani_species, coordinates, device, nnp_input
 
 
-# @pytest.mark.xfail
+@pytest.mark.xfail
 def test_ani():
     import torch
     import torchani

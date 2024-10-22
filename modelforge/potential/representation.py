@@ -204,13 +204,13 @@ class AngularSymmetryFunction(nn.Module):
         # fcj12_prod: (n_pairs, 1, 1)
         fcj12_prod = fcj12_prod.unsqueeze(-1).unsqueeze(-1)  # Shape: (n_pairs, 1, 1)
 
-        # factor1: (n_pairs, ShfZ_size, 1)
-        factor1 = factor1.unsqueeze(-1)
-        # factor2: (n_pairs, 1, ShfA_size)
-        factor2 = factor2.unsqueeze(-2)
+        # factor1: (n_pairs, 1, ShfZ_size)
+        factor1 = factor1.unsqueeze(-2)
+        # factor2: (n_pairs, ShfA_size, 1)
+        factor2 = factor2.unsqueeze(-1)
 
         # Compute ret: (n_pairs, ShfZ_size, ShfA_size)
-        ret = 2 * fcj12_prod * factor1 * factor2
+        ret = 2 * factor1 * factor2 * fcj12_prod
 
         # Flatten the last two dimensions to get the final subAEV
         # ret: (n_pairs, ShfZ_size * ShfA_size)

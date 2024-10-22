@@ -260,7 +260,6 @@ def test_energy_scaling_and_offset(
     # -------------------------------#
 
     potential = NeuralNetworkPotentialFactory.generate_potential(
-        use="inference",
         potential_parameter=config["potential"],
         potential_seed=42,
     )
@@ -268,7 +267,6 @@ def test_energy_scaling_and_offset(
     # -------------------------------#
     # Scale output
     potential = NeuralNetworkPotentialFactory.generate_potential(
-        use="inference",
         potential_parameter=config["potential"],
         dataset_statistic=trainer.dataset_statistic,
         potential_seed=42,
@@ -319,7 +317,6 @@ def test_state_dict_saving_and_loading(potential_name, prep_temp_dir):
     # Use case 2:
     # load the model in inference mode
     potential = NeuralNetworkPotentialFactory.generate_potential(
-        use="inference",
         simulation_environment="PyTorch",
         potential_parameter=config["potential"],
     )
@@ -409,7 +406,6 @@ def test_dataset_statistic(potential_name, prep_temp_dir):
     # NOTE: we are passing dataset statistics explicit to the constructor
     # this is not saved with the state_dict
     potential = NeuralNetworkPotentialFactory.generate_potential(
-        use="inference",
         simulation_environment="PyTorch",
         potential_parameter=config["potential"],
         dataset_statistic=dataset_statistic,
@@ -504,7 +500,6 @@ def test_forward_pass_with_all_datasets(
         f"{potential_name.lower()}", dataset_name.lower()
     )
     potential = NeuralNetworkPotentialFactory.generate_potential(
-        use="inference",
         potential_parameter=config["potential"],
         dataset_statistic=dataset_statistic,
         use_training_mode_neighborlist=True,
@@ -541,7 +536,6 @@ def test_jit(potential_name, single_batch_with_batchsize, prep_temp_dir):
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
     # test the forward pass through each of the models
     potential = NeuralNetworkPotentialFactory.generate_potential(
-        use="inference",
         potential_parameter=config["potential"],
     )
     potential = torch.jit.script(potential)
@@ -922,7 +916,6 @@ def test_casting(potential_name, single_batch_with_batchsize, prep_temp_dir):
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
 
     potential = NeuralNetworkPotentialFactory.generate_potential(
-        use="inference",
         simulation_environment="PyTorch",
         potential_parameter=config["potential"],
         use_training_mode_neighborlist=True,  # can handel batched data
@@ -934,7 +927,6 @@ def test_casting(potential_name, single_batch_with_batchsize, prep_temp_dir):
 
     # cast input and model to torch.float64
     potential = NeuralNetworkPotentialFactory.generate_potential(
-        use="inference",
         simulation_environment="PyTorch",
         potential_parameter=config["potential"],
         use_training_mode_neighborlist=True,  # can handel batched data
@@ -948,7 +940,7 @@ def test_casting(potential_name, single_batch_with_batchsize, prep_temp_dir):
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
-@pytest.mark.parametrize("simulation_environment", ["PyTorch"])
+@pytest.mark.parametrize("simulation_environment", Literal["PyTorch"])
 def test_equivariant_energies_and_forces(
     potential_name,
     simulation_environment,

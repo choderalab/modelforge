@@ -48,8 +48,8 @@ class NNPInput:
         per_system_total_charge: torch.Tensor,
         box_vectors: torch.Tensor = torch.zeros(3, 3),
         is_periodic: torch.Tensor = torch.tensor([False]),
-        pair_list: torch.Tensor = None,
-        per_atom_partial_charge: torch.Tensor = None,
+        pair_list: torch.Tensor = torch.tensor([]),
+        per_atom_partial_charge: torch.Tensor = torch.tensor([]),
     ):
         self.atomic_numbers = atomic_numbers
         self.positions = positions
@@ -59,7 +59,6 @@ class NNPInput:
         self.per_atom_partial_charge = per_atom_partial_charge
         self.box_vectors = box_vectors
         self.is_periodic = is_periodic
-
 
         # Validate inputs
         self._validate_inputs()
@@ -95,7 +94,6 @@ class NNPInput:
                 "The size of atomic_subsystem_indices and the first dimension of positions must match"
             )
 
-
     def to_device(self, device: torch.device):
         """Move all tensors in this instance to the specified device."""
 
@@ -105,12 +103,8 @@ class NNPInput:
         self.per_system_total_charge = self.per_system_total_charge.to(device)
         self.box_vectors = self.box_vectors.to(device)
         self.is_periodic = self.is_periodic.to(device)
-
-        if self.pair_list is not None:
-            self.pair_list = self.pair_list.to(device)
-
-        if self.per_atom_partial_charge is not None:
-            self.per_atom_partial_charge = self.per_atom_partial_charge.to(device)
+        self.pair_list = self.pair_list.to(device)
+        self.per_atom_partial_charge = self.per_atom_partial_charge.to(device)
 
         return self
 
@@ -191,11 +185,11 @@ class Metadata:
 class BatchData:
     nnp_input: NNPInput
     metadata: Metadata
-    
+
     def to(
         self,
         device: torch.device,
-    ): # NOTE: this is required to move the data to device
+    ):  # NOTE: this is required to move the data to device
         """Move all data in this batch to the specified device and dtype."""
         self.nnp_input = self.nnp_input.to_device(device=device)
         self.metadata = self.metadata.to_device(device=device)

@@ -13,11 +13,7 @@ from modelforge.utils.prop import PropertyNames
 
 @pytest.fixture(scope="session")
 def prep_temp_dir(tmp_path_factory):
-    import uuid
-
-    filename = str(uuid.uuid4())
-
-    fn = tmp_path_factory.mktemp(f"test_dataset_temp")
+    fn = tmp_path_factory.mktemp("test_dataset_temp")
     return fn
 
 
@@ -258,7 +254,7 @@ def test_file_existence_after_initialization(
 def test_caching(prep_temp_dir):
     import contextlib
 
-    local_cache_dir = str(prep_temp_dir) + "/data_test"
+    local_cache_dir = str(prep_temp_dir)
     from modelforge.dataset.qm9 import QM9Dataset
 
     data = QM9Dataset(version_select="nc_1000_v0", local_cache_dir=local_cache_dir)
@@ -334,7 +330,7 @@ def test_metadata_validation(prep_temp_dir):
     which is used to validate if we can use .npz file, or we need to
     regenerate it."""
 
-    local_cache_dir = str(prep_temp_dir) + "/data_test"
+    local_cache_dir = str(prep_temp_dir)
 
     from modelforge.dataset.qm9 import QM9Dataset
 
@@ -471,7 +467,7 @@ def test_data_item_format_of_datamodule(
     """Test the format of individual data items in the dataset."""
     from typing import Dict
 
-    local_cache_dir = str(prep_temp_dir) + "/data_test"
+    local_cache_dir = str(prep_temp_dir)
 
     dm = datamodule_factory(
         dataset_name=dataset_name,
@@ -728,7 +724,7 @@ def test_dataset_downloader(dataset_name, dataset_factory, prep_temp_dir):
     """
     Test the DatasetDownloader functionality.
     """
-    local_cache_dir = str(prep_temp_dir) + "/data_test"
+    local_cache_dir = str(prep_temp_dir)
 
     dataset = dataset_factory(
         dataset_name=dataset_name, local_cache_dir=local_cache_dir
@@ -740,7 +736,7 @@ def test_dataset_downloader(dataset_name, dataset_factory, prep_temp_dir):
 
 
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
-def test_numpy_dataset_assignment(dataset_name):
+def test_numpy_dataset_assignment(dataset_name, prep_temp_dir):
     """
     Test if the numpy_dataset attribute is correctly assigned after processing or loading.
     """
@@ -748,7 +744,7 @@ def test_numpy_dataset_assignment(dataset_name):
 
     factory = DatasetFactory()
     data = _ImplementedDatasets.get_dataset_class(dataset_name)(
-        version_select="nc_1000_v0"
+        version_select="nc_1000_v0", local_cache_dir=str(prep_temp_dir)
     )
     factory._load_or_process_data(data)
 
@@ -992,7 +988,7 @@ def test_function_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir
 
 
 def test_shifting_center_of_mass_to_origin(prep_temp_dir):
-    local_cache_dir = str(prep_temp_dir) + "/data_test"
+    local_cache_dir = str(prep_temp_dir)
 
     from modelforge.dataset.dataset import initialize_datamodule
     from openff.units.elements import MASSES

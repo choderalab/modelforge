@@ -402,9 +402,16 @@ class TrainingAdapter(pL.LightningModule):
             self.log_histograms = False
             self.log_on_training_step = False
 
-        # Initialize the loss function
+        # Initialize the loss function generate the weights of the loss
+        # components based on the loss components and the loss weights , the
+        # target_weight, and the step size
+
+        weights_scheduling = self._setup_weights_scheduling(
+            training_parameter=training_parameter,
+        )
         self.loss = LossFactory.create_loss(
-            **training_parameter.loss_parameter.model_dump()
+            loss_components=training_parameter.loss_parameter.loss_components,
+            weights_scheduling=weights_scheduling,
         )
 
         # Initialize performance metrics
@@ -421,6 +428,36 @@ class TrainingAdapter(pL.LightningModule):
         self.loss_metrics = create_error_metrics(
             training_parameter.loss_parameter.loss_components, is_loss=True
         )
+
+    def _setup_weights_scheduling(self, training_parameter: TrainingParameters):
+
+        weights_scheduling: Dict[str, torch.Tensor] = {}
+        initial_weights = training_parameter.loss_parameter.weight
+        nr_of_epochs = training_parameter.number_of_epochs
+        for key, initial_weight in initial_weights.items():
+
+            target_weight = training_parameter.loss_parameter.target_weight[key]
+            mixing_steps = training_parameter.loss_parameter.mixing_steps[key]
+
+            mixing_scheme = torch.arange(
+                start=initial_weight,
+                end=target_weight,
+                step=mixing_steps,
+            )
+            assert (
+                len(mixing_scheme) < nr_of_epochs
+            ), "The number of epochs is less than the number of steps in the weight scheduling"
+            # Fill up the rest of the epochs with the target weight
+            a = nr_of_epochs - mixing_scheme.shape[0]
+            b = torch.ones(a) * target_weight
+            weights_scheduling[key] = torch.cat(
+                [
+                    mixing_scheme,
+                    torch.ones(nr_of_epochs - mixing_scheme.shape[0]) * target_weight,
+                ]
+            )
+            assert weights_scheduling[key].shape[0] == nr_of_epochs
+        return weights_scheduling
 
     def forward(self, batch: BatchData) -> Dict[str, torch.Tensor]:
         """
@@ -624,10 +661,20 @@ class TrainingAdapter(pL.LightningModule):
         frequency = lr_scheduler.pop("frequency")
         monitor = lr_scheduler.pop("monitor")
 
-        lr_scheduler = ReduceLROnPlateau(
-            optimizer,
-            **lr_scheduler,
-        )
+        lr_scheduler_class = lr_scheduler.pop("scheduler_class")
+        if lr_scheduler_class == "ReduceLROnPlateau":
+            lr_scheduler = ReduceLROnPlateau(
+                optimizer,
+                **lr_scheduler,
+            )
+        elif lr_scheduler_class == "CosineAnnealingLR":
+            pass
+        elif lr_scheduler_class == "CosineAnnealingWarmRestarts":
+            pass
+        else:
+            raise NotImplementedError(
+                f"Unsupported learning rate scheduler: {lr_scheduler_class}"
+            )
 
         scheduler = {
             "scheduler": lr_scheduler,
@@ -915,8 +962,11 @@ class PotentialTrainer:
         """
         from lightning import Trainer
 
-        # if devices is a list
-        if isinstance(self.runtime_parameter.devices, list) or (
+        # if devices is a list (but longer than 1)
+        if (
+            isinstance(self.runtime_parameter.devices, list)
+            and len(self.runtime_parameter.devices) > 1
+        ) or (
             isinstance(self.runtime_parameter.devices, int)
             and self.runtime_parameter.devices > 1
         ):

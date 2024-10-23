@@ -143,6 +143,69 @@ def replace_per_system_with_per_atom_loss(config):
     t_config.lr_scheduler.monitor = "val/per_system_energy/rmse"
 
 
+from typing import Literal
+
+
+def use_different_LRScheduler(
+    config,
+    which_one: Literal[
+        "CosineAnnealingLR",
+        "ReduceLROnPlateau",
+        "CosineAnnealingWarmRestarts",
+    ],
+):
+
+    if which_one == "ReduceLROnPlateau":
+        return config
+    elif which_one == "CosineAnnealingLR":
+        t_config = config["training"]["lr_scheduler"]
+        t_config["scheduler_name"] = which_one
+        t_config["frequency"] = 1
+        t_config["interval"] = "epoch"
+        t_config["T_max"] = 50
+        t_config["eta_min"] = 0.0
+        t_config["last_epoch"] = -1
+        return config
+    elif which_one == "CosineAnnealingWarmRestarts":
+        t_config = config["training"]["lr_scheduler"]
+        t_config["scheduler_name"] = which_one
+        t_config["frequency"] = 1
+        t_config["interval"] = "epoch"
+        t_config["T_0"] = 10
+        t_config["T_mult"] = 2
+        t_config["eta_min"] = 0.0
+        t_config["last_epoch"] = -1
+        return config
+
+
+@pytest.mark.parametrize("potential_name", ["ANI2x"])
+@pytest.mark.parametrize("dataset_name", ["PHALKETHOH"])
+@pytest.mark.parametrize(
+    "lr_scheduler",
+    [
+        "ReduceLROnPlateau",
+        "CosineAnnealingLR",
+        "CosineAnnealingWarmRestarts",
+    ],
+)
+def test_learning_rate_scheduler(
+    potential_name,
+    dataset_name,
+    lr_scheduler,
+    prep_temp_dir,
+):
+    """
+    Test that we can train, save and load checkpoints.
+    """
+
+    config = load_configs_into_pydantic_models(
+        potential_name, dataset_name, str(prep_temp_dir)
+    )
+    config = use_different_LRScheduler(config, lr_scheduler)
+    # train potential
+    get_trainer(config).train_potential().save_checkpoint("test.chp")  # save checkpoint
+
+
 @pytest.mark.xdist_group(name="test_training_with_lightning")
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
 @pytest.mark.parametrize(

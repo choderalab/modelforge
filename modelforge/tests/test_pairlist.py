@@ -56,7 +56,7 @@ def test_pairlist_logic():
     cutoff = 1.0
 
     # Find pairs within the cutoff
-    in_cutoff = (distances <= cutoff).nonzero(as_tuple=False).squeeze()
+    in_cutoff = (distances <= cutoff).nonzero().squeeze()
 
     # Get the atom indices within the cutoff
     atom_pairs_withing_cutoff = final_pair_indices[:, in_cutoff]

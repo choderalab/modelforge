@@ -494,6 +494,39 @@ def test_data_item_format_of_datamodule(
 from modelforge.potential import _Implemented_NNPs
 
 
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+def test_removal_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir):
+    # test the self energy calculation on the QM9 dataset
+    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
+
+    # prepare reference value
+    dm = datamodule_factory(
+        dataset_name=dataset_name,
+        batch_size=512,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        version_select="nc_1000_v0",
+        remove_self_energies=False,
+        regenerate_dataset_statistic=True,
+        local_cache_dir=str(prep_temp_dir),
+    )
+
+    first_entry_with_ase = dm.train_dataset[0].metadata.per_system_energy
+
+    # prepare reference value
+    dm = datamodule_factory(
+        dataset_name=dataset_name,
+        batch_size=512,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        version_select="nc_1000_v0",
+        remove_self_energies=True,
+        local_cache_dir=str(prep_temp_dir),
+    )
+
+    atomic_numbers = dm.train_dataset[0].nnp_input.atomic_numbers
+    first_entry_without_ase = dm.train_dataset[0].metadata.per_system_energy
+    assert not torch.allclose(first_entry_with_ase, first_entry_without_ase)
+
+
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )

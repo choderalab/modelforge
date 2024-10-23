@@ -95,10 +95,11 @@ def setup_two_methanes():
 def test_ani():
     import torch
     import torchani
-    # NOTE: in the following the input data is scaled to provide both 
+
+    # NOTE: in the following the input data is scaled to provide both
     # torchani and modelforge ani the same input but in different units
     # NOTE: output unit is Hartree
-    
+
     # load reference implementation
 
     # get input

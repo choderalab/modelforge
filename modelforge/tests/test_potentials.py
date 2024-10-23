@@ -331,7 +331,6 @@ def test_state_dict_saving_and_loading(potential_name, prep_temp_dir):
         runtime_parameter=config["runtime"],
         dataset_parameter=config["dataset"],
     )
-
     trainer.lightning_module.load_state_dict(torch.load(file_path))
 
 
@@ -897,7 +896,7 @@ def test_casting(potential_name, single_batch_with_batchsize, prep_temp_dir):
     # test dtype casting
     import torch
 
-    batch = batch = single_batch_with_batchsize(
+    batch = single_batch_with_batchsize(
         batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
     )
     batch_ = batch.to_dtype(dtype=torch.float64)
@@ -1083,7 +1082,6 @@ def test_equivariant_energies_and_forces(
 
 def test_loading_from_checkpoint_file():
     from importlib import resources
-
     from modelforge.tests import data
 
     # checkpoint file is saved in tests/data
@@ -1091,5 +1089,5 @@ def test_loading_from_checkpoint_file():
 
     from modelforge.potential.potential import load_inference_model_from_checkpoint
 
-    model = load_inference_model_from_checkpoint(chkp_file)
-    assert model is not None
+    potential = load_inference_model_from_checkpoint(chkp_file)
+    assert potential is not None

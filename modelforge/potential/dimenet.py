@@ -308,35 +308,20 @@ class Representation(nn.Module):
         # - angular bessel basis (equivariant representation/featurization of
         #   pairwise direction (distance vector))
         # - embedding of pairwise distances
-        self.radial_bessel_function = self._setup_radial_bessel_basis(
-            radial_cutoff,
-            number_of_radial_bessel_functions,
-            envelope_exponent,
+        self.radial_bessel_function = BesselBasisLayer(
+            number_of_radial_bessel_functions=number_of_radial_bessel_functions,
+            radial_cutoff=radial_cutoff,
+            envelope_exponent=envelope_exponent,
         )
+        from torch.nn import Identity
 
-        self.angular_bessel_function = self._setup_angular_bessel_basis(
-            number_of_spherical_harmonics,
-            envelope_exponent,
-        )
+        self.angular_bessel_function = Identity()
 
         self.embedding = EmbeddingBlock(
             embedding_size=embedding_size,
             number_of_radial_bessel_functions=number_of_radial_bessel_functions,
             activation_function=activation_function,
         )
-
-    def _setup_radial_bessel_basis(
-        self,
-        radial_cutoff: float,
-        number_of_radial_bessel_functions: int,
-        envelope_exponent: int,
-    ):
-        radial_symmetry_function = BesselBasisLayer(
-            number_of_radial_bessel_functions=number_of_radial_bessel_functions,
-            radial_cutoff=radial_cutoff,
-            envelope_exponent=envelope_exponent,
-        )
-        return radial_symmetry_function
 
     def forward(
         self, data: NNPInput, pairlist_output: PairlistData
@@ -362,9 +347,7 @@ class Representation(nn.Module):
         radial_bessel = self.radial_bessel_function(pairlist_output.d_ij)
 
         # convert distances to angular bessel functions
-        angular_bessel = self.angular_bessel_function(
-            pairlist_output.d_ij, pairlist_output.d_ij
-        )
+        angular_bessel = self.angular_bessel_function()
 
         # generate first message
         m_ij = self.embedding(data, pairlist_output, radial_bessel)

@@ -44,7 +44,7 @@ def test_forward(single_batch_with_batchsize, prep_temp_dir):
         batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
     )
 
-    yhat = potential(batch.nnp_input.to(dtype=torch.float32))
+    yhat = potential(batch.nnp_input.to_dtype(dtype=torch.float32))
 
 
 def test_envelope():
@@ -110,6 +110,3 @@ def test_representation():
         activation_function=activation_function,
         embedding_size=embedding_size,
     )
-
-
-    

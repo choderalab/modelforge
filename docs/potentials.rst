@@ -111,7 +111,7 @@ There are four main use cases of the :class:`~modelforge.potential.potential.Neu
 
 .. note:: Checkpoint files in modelforge are saved by :class:`~modelforge.train.training.PotentialTrainer`, thus will always be a trainer object. Therefore loading a inference mode potential from a checkpoint file requires load the trainer, then extract the potential from the trainer.
 
-The general idea to handle these use cases is that always call :function:`~modelforge.potential.potential.NeuralNetworkPotentialFactory.generate_trainer()` to create or load a trainer, and `~modelforge.potential.potential.NeuralNetworkPotentialFactory.generate_potential()` for inference.
+The general idea to handle these use cases is that always call `generate_trainer()` to create or load a trainer; use `generate_potential()` for loading inference potential.
 
 .. code-block:: python
     :linenos:

@@ -511,6 +511,20 @@ class TrainingAdapter(pL.LightningModule):
             targets = predict_target[f"{prop}_true"].detach()
             metric_collection.update(preds, targets)
 
+    def on_validation_epoch_start(self):
+        """Reset validation metrics at the start of the validation epoch."""
+        self._reset_metrics(self.val_metrics)
+
+    def on_test_epoch_start(self):
+        """Reset test metrics at the start of the test epoch."""
+        self._reset_metrics(self.test_metrics)
+
+    def _reset_metrics(self, metrics: ModuleDict):
+        """Utility function to reset all metrics in a ModuleDict."""
+        for metric_collection in metrics.values():
+            for metric in metric_collection.values():
+                metric.reset()
+
     def training_step(
         self,
         batch: BatchData,
@@ -653,7 +667,9 @@ class TrainingAdapter(pL.LightningModule):
         """Configures the optimizers and learning rate schedulers."""
 
         optimizer = self.optimizer_class(
-            self.potential.parameters(), lr=self.learning_rate
+            self.potential.parameters(),
+            lr=self.learning_rate,
+            weight_decay=1e-2,
         )
 
         lr_scheduler = self.lr_scheduler.model_dump()

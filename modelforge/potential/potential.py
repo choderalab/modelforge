@@ -546,18 +546,12 @@ class NeuralNetworkPotentialFactory:
         verlet_neighborlist_skin: Optional[float] = 0.1,
     ) -> Union[Potential, JAXModel, pl.LightningModule]:
         """
-        Create an instance of a neural network potential for training or
-        inference.
+        Create an instance of a neural network potential for inference.
 
         Parameters
         ----------
-        use : Literal["training", "inference"]
-            Whether the potential is for training or inference.
         potential_parameter : T_NNP_Parameters]
             Parameters specific to the neural network potential.
-        runtime_parameter : Optional[RuntimeParameters], optional
-            Parameters for configuring the runtime environment (default is
-            None).
         training_parameter : Optional[TrainingParameters], optional
             Parameters for configuring training (default is None).
         dataset_parameter : Optional[DatasetParameters], optional
@@ -566,8 +560,6 @@ class NeuralNetworkPotentialFactory:
             Dataset statistics for normalization (default is provided).
         potential_seed : Optional[int], optional
             Seed for random number generation (default is None).
-        use_default_dataset_statistic : bool, optional
-            Whether to use default dataset statistics (default is False).
         use_training_mode_neighborlist : bool, optional
             Whether to use neighborlist during training mode (default is False).
         simulation_environment : Literal["PyTorch", "JAX"], optional
@@ -583,7 +575,7 @@ class NeuralNetworkPotentialFactory:
             Skin for the Verlet neighborlist (default is 0.1, units nanometers).
         Returns
         -------
-        Union[Potential, JAXModel, pl.LightningModule]
+        Union[Potential, JAXModel]
             An instantiated neural network potential for training or inference.
         """
 
@@ -611,9 +603,8 @@ class NeuralNetworkPotentialFactory:
         if simulation_environment == "JAX":
             # register nnp_input as pytree
             from modelforge.utils.io import import_
-
-                jax = import_("jax")
-                from modelforge.jax import nnpinput_flatten, nnpinput_unflatten
+            jax = import_("jax")
+            from modelforge.jax import nnpinput_flatten, nnpinput_unflatten
 
             # registering NNPInput multiple times will result in a
             # ValueError
@@ -646,6 +637,10 @@ class NeuralNetworkPotentialFactory:
         potential_seed: Optional[int] = None,
         use_default_dataset_statistic: bool = False,
     ) -> PotentialTrainer:
+        """
+        Create a 
+
+        """
         log.debug(f"{training_parameter=}")
         log.debug(f"{dataset_parameter=}")
 

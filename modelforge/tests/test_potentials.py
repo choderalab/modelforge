@@ -1092,6 +1092,3 @@ def test_equivariant_energies_and_forces(
         reflection(reference_forces),
         atol=atol,
     )
-
-
-

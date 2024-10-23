@@ -603,6 +603,7 @@ class NeuralNetworkPotentialFactory:
         if simulation_environment == "JAX":
             # register nnp_input as pytree
             from modelforge.utils.io import import_
+
             jax = import_("jax")
             from modelforge.jax import nnpinput_flatten, nnpinput_unflatten
 
@@ -638,7 +639,7 @@ class NeuralNetworkPotentialFactory:
         use_default_dataset_statistic: bool = False,
     ) -> PotentialTrainer:
         """
-        Create a 
+        Create a
 
         """
         log.debug(f"{training_parameter=}")
@@ -763,7 +764,9 @@ class PyTorch2JAXConverter:
         return apply, model_params, model_buffer
 
 
-def load_inference_model_from_checkpoint(checkpoint_path: str) -> Union[Potential, JAXModel]:
+def load_inference_model_from_checkpoint(
+    checkpoint_path: str,
+) -> Union[Potential, JAXModel]:
     """
     Creates an inference model from a checkpoint file.
     It loads the checkpoint file, extracts the hyperparameters, and creates the model in inference mode.

@@ -106,7 +106,7 @@ def setup_single_methane_input():
     )
     E = torch.tensor([0.0], requires_grad=True)
     atomic_subsystem_indices = torch.tensor([0, 0, 0, 0, 0], dtype=torch.int32)
-    from modelforge.dataset.dataset import NNPInput
+    from modelforge.utils.prop import NNPInput
 
     modelforge_methane = NNPInput(
         atomic_numbers=atomic_numbers,

@@ -3,7 +3,7 @@ import torch.nn as nn
 from typing import Dict, List, Union
 
 from modelforge.potential.utils import DenseWithCustomDist
-from modelforge.dataset import NNPInput
+from modelforge.utils.prop import NNPInput
 
 
 class AddPerMoleculeValue(nn.Module):

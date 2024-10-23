@@ -12,9 +12,8 @@ import torch
 from loguru import logger as log
 from torch import nn
 
-from modelforge.utils.prop import SpeciesAEV
+from modelforge.utils.prop import SpeciesAEV, NNPInput
 
-from modelforge.dataset.dataset import NNPInput
 from modelforge.potential.neighbors import PairlistData
 
 

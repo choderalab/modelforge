@@ -9,7 +9,7 @@ import torch.nn as nn
 from loguru import logger as log
 from openff.units import unit
 
-from modelforge.dataset.dataset import NNPInput
+from modelforge.utils.prop import NNPInput
 from modelforge.potential.neighbors import PairlistData
 from .utils import DenseWithCustomDist
 

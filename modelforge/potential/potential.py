@@ -769,7 +769,6 @@ def load_inference_model_from_checkpoint(checkpoint_path: str) -> Union[Potentia
         The path to the checkpoint file.
     """
     import torch
-    from modelforge.potential import NeuralNetworkPotentialFactory
 
     # Load the checkpoint
     checkpoint = torch.load(checkpoint_path, map_location=torch.device("cpu"))

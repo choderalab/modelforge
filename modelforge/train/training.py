@@ -771,7 +771,9 @@ class PotentialTrainer:
         return dm
 
     def setup_lightning_module(
-        self, potential_seed: Optional[int] = None
+        self,
+        checkpoint_path: str,
+        potential_seed: Optional[int] = None
     ) -> pL.LightningModule:
         """
         Set up the model for training.

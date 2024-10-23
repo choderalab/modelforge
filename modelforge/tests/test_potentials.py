@@ -302,7 +302,7 @@ def test_state_dict_saving_and_loading(potential_name, prep_temp_dir):
 
     config["runtime"].local_cache_dir = str(prep_temp_dir)
     # ------------------------------------------------------------- #
-    # Use case 1:
+    # Use case 0:
     # train a model, save the state_dict and load it again
     trainer = NeuralNetworkPotentialFactory.generate_trainer(
         potential_parameter=config["potential"],
@@ -314,6 +314,17 @@ def test_state_dict_saving_and_loading(potential_name, prep_temp_dir):
     trainer.lightning_module.load_state_dict(torch.load(file_path))
 
     # ------------------------------------------------------------- #
+    # Use case 1
+    # generate a new trainer and load from a state_dict file
+    trainer2 = NeuralNetworkPotentialFactory.generate_trainer(
+        potential_parameter=config["potential"],
+        training_parameter=config["training"],
+        runtime_parameter=config["runtime"],
+        dataset_parameter=config["dataset"],
+    )
+    trainer2.lightning_module.load_state_dict(torch.load(file_path))
+
+    # ------------------------------------------------------------- #
     # Use case 2:
     # load the model in inference mode
     potential = NeuralNetworkPotentialFactory.generate_potential(
@@ -322,16 +333,19 @@ def test_state_dict_saving_and_loading(potential_name, prep_temp_dir):
     )
     potential.load_state_dict(torch.load(file_path))
 
-    # ------------------------------------------------------------- #
-    # Use case 3
-    # generate a new trainer and load it
-    trainer = NeuralNetworkPotentialFactory.generate_trainer(
-        potential_parameter=config["potential"],
-        training_parameter=config["training"],
-        runtime_parameter=config["runtime"],
-        dataset_parameter=config["dataset"],
-    )
-    trainer.lightning_module.load_state_dict(torch.load(file_path))
+
+def test_loading_from_checkpoint_file():
+    from importlib import resources
+    from modelforge.tests import data
+
+    # checkpoint file is saved in tests/data
+    ckpt_file = str(resources.files(data) / "best_SchNet-PhAlkEthOH-epoch=00.ckpt")
+    print(ckpt_file)
+
+    from modelforge.potential.potential import load_inference_model_from_checkpoint
+
+    potential = load_inference_model_from_checkpoint(ckpt_file)
+    assert potential is not None
 
 
 @pytest.mark.parametrize(
@@ -1080,14 +1094,4 @@ def test_equivariant_energies_and_forces(
     )
 
 
-def test_loading_from_checkpoint_file():
-    from importlib import resources
-    from modelforge.tests import data
 
-    # checkpoint file is saved in tests/data
-    chkp_file = resources.files(data) / "best_SchNet-PhAlkEthOH-epoch=00.ckpt"
-
-    from modelforge.potential.potential import load_inference_model_from_checkpoint
-
-    potential = load_inference_model_from_checkpoint(chkp_file)
-    assert potential is not None

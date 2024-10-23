@@ -103,15 +103,15 @@ Default parameter files for each potential are available in `modelforge/tests/da
 Use cases of the factory class
 --------------------------------------------
 
-There are four main use cases of the :class:`~modelforge.potential.potential.NeuralNetworkPotentialFactory`:
+There are three main use cases of the :class:`~modelforge.potential.potential.NeuralNetworkPotentialFactory`:
+
 1. Create and train a model, then save the state_dict of its potential. Load the state_dict to the potential of an existing trainer (with defined hyperparameters) to resume training.
+
 2. Load a potential for inference from a saved state_dict.
-3. Load a trainer from a checkpoint file
-4. Load an inference from a checkpoint file
 
-.. note:: Checkpoint files in modelforge are saved by :class:`~modelforge.train.training.PotentialTrainer`, thus will always be a trainer object. Therefore loading a inference mode potential from a checkpoint file requires load the trainer, then extract the potential from the trainer.
+3. Load an inference from a checkpoint file.
 
-The general idea to handle these use cases is that always call `generate_trainer()` to create or load a trainer; use `generate_potential()` for loading inference potential.
+.. note:: The general idea to handle these use cases is that always call `generate_trainer()` to create or load a trainer; use `generate_potential()` for loading inference potential (this is also how `load_inference_model_from_checkpoint()` is implemented).
 
 .. code-block:: python
     :linenos:
@@ -140,11 +140,8 @@ The general idea to handle these use cases is that always call `generate_trainer
     potential.load_state_dict(torch.load(file_path))
 
     # Use case 3
-
-    # Use case 4
     from modelforge.potential.potential import load_inference_model_from_checkpoint
-    potential = load_inference_model_from_checkpoint(chkp_file)
-    assert potential is not None
+    potential = load_inference_model_from_checkpoint(ckpt_file)
 
 Example
 ------------------------------------

@@ -458,6 +458,17 @@ def setup_potential(
         **potential_parameter.core_parameter.model_dump()
     )
 
+    # set unique_pairs based on potential name
+    only_unique_pairs = potential_parameter.only_unique_pairs
+
+    assert (
+        only_unique_pairs is False
+        if potential_parameter.potential_name.lower() != "ani2x"
+        else True
+    )
+
+    log.debug(f"Only unique pairs: {only_unique_pairs}")
+
     postprocessing = PostProcessing(
         postprocessing_parameter=potential_parameter.postprocessing_parameter.model_dump(),
         dataset_statistic=remove_units_from_dataset_statistics(dataset_statistic),
@@ -533,7 +544,7 @@ class NeuralNetworkPotentialFactory:
         jit: bool = True,
         inference_neighborlist_strategy: str = "verlet",
         verlet_neighborlist_skin: Optional[float] = 0.1,
-    ) -> Union[Potential, JAXModel]:
+    ) -> Union[Potential, JAXModel, pl.LightningModule]:
         """
         Create an instance of a neural network potential for training or
         inference.
@@ -601,9 +612,8 @@ class NeuralNetworkPotentialFactory:
             # register nnp_input as pytree
             from modelforge.utils.io import import_
 
-            jax = import_("jax")
-            from modelforge.jax import nnpinput_flatten, nnpinput_unflatten
-            from modelforge.dataset import NNPInput
+                jax = import_("jax")
+                from modelforge.jax import nnpinput_flatten, nnpinput_unflatten
 
             # registering NNPInput multiple times will result in a
             # ValueError

@@ -7,7 +7,7 @@ from .spice1 import SPICE1Dataset
 from .spice2 import SPICE2Dataset
 from .spice1openff import SPICE1OpenFFDataset
 from .phalkethoh import PhAlkEthOHDataset
-from .dataset import DatasetFactory, DataModule, NNPInput
+from .dataset import DatasetFactory, DataModule
 from enum import Enum
 
 

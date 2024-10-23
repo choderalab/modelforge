@@ -9,7 +9,7 @@ from torch import nn
 
 from modelforge.potential import CosineAttenuationFunction, TensorNetRadialBasisFunction
 
-from modelforge.dataset.dataset import NNPInput
+from modelforge.utils.prop import NNPInput
 from modelforge.potential.neighbors import PairlistData
 
 

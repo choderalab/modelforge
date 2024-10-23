@@ -1,4 +1,4 @@
-from typing import Optional, Literal
+from typing import Optional
 
 
 def _add_per_atom_charge_to_predicted_properties(config):

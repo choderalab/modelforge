@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 from openff.units import unit
 
-from modelforge.dataset.dataset import NNPInput
+from modelforge.utils.prop import NNPInput
 
 
 @dataclass(frozen=False)

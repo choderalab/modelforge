@@ -1,7 +1,9 @@
 import pytest
 from modelforge.tests.helper_functions import setup_potential_for_test
+from importlib import resources
+from modelforge.tests import data
 
-file_path = "modelforge/tests/data/torchani_parameters.state"
+file_path = resources.files(data) / f"torchani_parameters.state"
 
 
 @pytest.fixture(scope="session")
@@ -93,7 +95,10 @@ def setup_two_methanes():
 def test_ani():
     import torch
     import torchani
-
+    # NOTE: in the following the input data is scaled to provide both 
+    # torchani and modelforge ani the same input but in different units
+    # NOTE: output unit is Hartree
+    
     # load reference implementation
 
     # get input
@@ -120,6 +125,7 @@ def test_ani():
 
     # calculate reference ase (substract per atom energy without ase from per
     # atom energy with ase)
+    # NOTE: this is in Hartree
     reference_ase = torch.tensor(
         [
             [0.0052, 0.0181, 0.0080, -0.0055, -0.0048],

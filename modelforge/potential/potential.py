@@ -459,10 +459,14 @@ def setup_potential(
     )
 
     # set unique_pairs based on potential name
-    if potential_parameter.potential_name.lower() == "ani2x":
-        only_unique_pairs = True
-    else:
-        only_unique_pairs = False
+    only_unique_pairs = potential_parameter.only_unique_pairs
+
+    assert (
+        only_unique_pairs is False
+        if potential_parameter.potential_name.lower() != "ani2x"
+        else True
+    )
+
     log.debug(f"Only unique pairs: {only_unique_pairs}")
 
     postprocessing = PostProcessing(

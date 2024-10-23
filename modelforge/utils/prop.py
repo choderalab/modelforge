@@ -48,8 +48,8 @@ class NNPInput:
         per_system_total_charge: torch.Tensor,
         box_vectors: torch.Tensor = torch.zeros(3, 3),
         is_periodic: torch.Tensor = torch.tensor([False]),
-        pair_list: torch.Tensor = None,
-        per_atom_partial_charge: torch.Tensor = None,
+        pair_list: torch.Tensor = torch.tensor([]),
+        per_atom_partial_charge: torch.Tensor = torch.tensor([]),
     ):
         self.atomic_numbers = atomic_numbers
         self.positions = positions
@@ -103,12 +103,8 @@ class NNPInput:
         self.per_system_total_charge = self.per_system_total_charge.to(device)
         self.box_vectors = self.box_vectors.to(device)
         self.is_periodic = self.is_periodic.to(device)
-
-        if self.pair_list is not None:
-            self.pair_list = self.pair_list.to(device)
-
-        if self.per_atom_partial_charge is not None:
-            self.per_atom_partial_charge = self.per_atom_partial_charge.to(device)
+        self.pair_list = self.pair_list.to(device)
+        self.per_atom_partial_charge = self.per_atom_partial_charge.to(device)
 
         return self
 

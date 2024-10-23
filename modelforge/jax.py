@@ -1,4 +1,4 @@
-from modelforge.dataset import NNPInput
+from modelforge.utils.prop import NNPInput
 
 
 def nnpinput_flatten(nnpinput: NNPInput):
@@ -42,12 +42,9 @@ def convert_NNPInput_to_jax(nnp_input: NNPInput):
     nnp_input.box_vectors = convert_to_jax(nnp_input.box_vectors)
     nnp_input.is_periodic = convert_to_jax(nnp_input.is_periodic)
 
-    if nnp_input.pair_list is not None:
-        nnp_input.pair_list = convert_to_jax(nnp_input.pair_list)
-
-    if nnp_input.per_atom_partial_charge is not None:
-        nnp_input.per_atom_partial_charge = convert_to_jax(
-            nnp_input.per_atom_partial_charge
-        )
+    nnp_input.pair_list = convert_to_jax(nnp_input.pair_list)
+    nnp_input.per_atom_partial_charge = convert_to_jax(
+        nnp_input.per_atom_partial_charge
+    )
 
     return nnp_input

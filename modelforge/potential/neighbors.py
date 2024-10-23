@@ -790,19 +790,14 @@ class NeighborListForTraining(torch.nn.Module):
             Atom positions. Shape: [nr_systems, nr_atoms, 3].
         atomic_subsystem_indices : torch.Tensor
             Indices identifying atoms in subsystems. Shape: [nr_atoms].
-        pair_indices : Optional[torch.Tensor]
-            Precomputed pair indices. If None, will compute pair indices.
+        pair_indices : torch.Tensor
+            Precomputed pair indices.
 
         Returns
         -------
         PairListOutputs
             A dataclass containing 'pair_indices', 'd_ij' (distances), and 'r_ij' (displacement vectors).
         """
-
-        if pair_indices is None:
-            pair_indices = self.enumerate_all_pairs(
-                atomic_subsystem_indices,
-            )
 
         r_ij = self.calculate_r_ij(pair_indices, positions)
         d_ij = self.calculate_d_ij(r_ij)
@@ -838,8 +833,9 @@ class NeighborListForTraining(torch.nn.Module):
         # general input manipulation
         positions = data.positions
         atomic_subsystem_indices = data.atomic_subsystem_indices
-        # calculate pairlist if none is provided
-        if data.pair_list is None:
+        # calculate pairlist if it is not provided
+
+        if data.pair_list is None or data.pair_list.shape[0] == 0:
             # note, we set the flag for unique pairs when instantiated in the constructor
             # and thus this call will return unique pairs if requested.
             pair_list = self.pairlist.enumerate_all_pairs(atomic_subsystem_indices)

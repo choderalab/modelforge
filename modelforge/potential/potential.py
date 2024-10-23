@@ -626,7 +626,6 @@ class NeuralNetworkPotentialFactory:
 
                 jax = import_("jax")
                 from modelforge.jax import nnpinput_flatten, nnpinput_unflatten
-                from modelforge.dataset import NNPInput
 
                 # registering NNPInput multiple times will result in a
                 # ValueError

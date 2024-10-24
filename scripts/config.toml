@@ -32,7 +32,7 @@ num_workers = 4
 pin_memory = true
 
 [training]
-number_of_epochs = 1000
+number_of_epochs = 20
 remove_self_energies = true
 batch_size = 16
 lr = 0.5e-3
@@ -44,8 +44,8 @@ logger_name = "tensorboard"
 
 [training.experiment_logger.tensorboard_configuration]
 save_dir = "logs"
-
 [training.lr_scheduler]
+scheduler_name = "ReduceLROnPlateau"
 frequency = 1
 mode = "min"
 factor = 0.1
@@ -61,8 +61,15 @@ interval = "epoch"
 loss_components = ['per_system_energy', 'per_atom_force'] # use
 
 [training.loss_parameter.weight]
-per_system_energy = 0.999 #NOTE: reciprocal units
-per_atom_force = 0.001
+per_system_energy = 1
+per_atom_force = 0.8
+
+[training.loss_parameter.target_weight]
+per_atom_force = 0.2
+
+[training.loss_parameter.mixing_steps]
+per_atom_force = -0.1
+
 
 [training.early_stopping]
 verbose = true

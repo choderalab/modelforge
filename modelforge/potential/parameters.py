@@ -94,30 +94,6 @@ class CoreParameterBase(ParametersBase):
         return self
 
 
-# class PredictedPropertiesMixin:
-#     predicted_properties: List[str]
-#     predicted_dim: List[int]
-#
-#     # Custom validation for handling the predicted_properties dictionary
-#     @model_validator(mode="before")
-#     def handle_predicted_properties_dict(cls, values: dict) -> dict:
-#         prediction = values.get("prediction")
-#         if isinstance(prediction, dict):
-#             # Extract properties and sizes from the dictionary
-#             values["predicted_properties"] = prediction.get("predicted_properties", [])
-#             values["predicted_dim"] = prediction.get("predicted_dim", [])
-#         return values
-#
-#     # Ensure that both lists (properties and sizes) have the same length
-#     @model_validator(mode="after")
-#     def validate_predicted_properties(self):
-#         if len(self.predicted_properties) != len(self.predicted_dim):
-#             raise ValueError(
-#                 "The length of 'predicted_properties' and 'predicted_dim' must be the same."
-#             )
-#         return self
-
-
 class ActivationFunctionConfig(ParametersBase):
 
     activation_function_name: ActivationFunctionName

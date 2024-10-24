@@ -152,6 +152,8 @@ from modelforge.train.parameters import (
     ReduceLROnPlateauConfig,
     CosineAnnealingLRConfig,
     CosineAnnealingWarmRestartsConfig,
+    CyclicLRConfig,
+    OneCycleLRConfig,
 )
 
 from typing import Literal
@@ -213,7 +215,8 @@ def use_different_LRScheduler(
             interval="step",
             monitor=None,
             max_lr=training_config.lr,
-            # total_steps will be computed in configure_optimizers
+            epochs=training_config.number_of_epochs,  # Use epochs from training config
+            # steps_per_epoch will be calculated at runtime
             pct_start=0.3,
             anneal_strategy="cos",
             cycle_momentum=True,
@@ -224,7 +227,6 @@ def use_different_LRScheduler(
             three_phase=False,
             last_epoch=-1,
         )
-    elif which_one == "CyclicLR":
         lr_scheduler_config = CyclicLRConfig(
             scheduler_name="CyclicLR",
             frequency=1,
@@ -232,7 +234,8 @@ def use_different_LRScheduler(
             monitor=None,
             base_lr=training_config.lr / 10,
             max_lr=training_config.lr,
-            # step_size_up will be computed in configure_optimizers
+            epochs_up=1.0,  # For example, increasing phase lasts 1 epoch
+            epochs_down=1.0,  # Decreasing phase lasts 1 epoch
             mode="triangular",
             gamma=1.0,
             scale_mode="cycle",

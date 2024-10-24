@@ -194,9 +194,7 @@ class OneCycleLRConfig(SchedulerConfigBase):
 
     scheduler_name: Literal[SchedulerName.OneCycleLR] = SchedulerName.OneCycleLR
     max_lr: Union[float, List[float]]
-    total_steps: Optional[int] = None
-    epochs: Optional[int] = None  # Not required, will compute dynamically
-    steps_per_epoch: Optional[int] = None  # Not required, will compute dynamically
+    epochs: int  # required
     pct_start: float = 0.3
     anneal_strategy: AnnealingStrategy = AnnealingStrategy.cos
     cycle_momentum: bool = True
@@ -207,6 +205,12 @@ class OneCycleLRConfig(SchedulerConfigBase):
     three_phase: bool = False
     last_epoch: int = -1
 
+    @model_validator(mode="after")
+    def validate_epochs(self):
+        if self.epochs is None:
+            raise ValueError("OneCycleLR requires 'epochs' to be set.")
+        return self
+
 
 class CyclicLRConfig(SchedulerConfigBase):
     """
@@ -216,10 +220,10 @@ class CyclicLRConfig(SchedulerConfigBase):
     scheduler_name: Literal[SchedulerName.CyclicLR] = SchedulerName.CyclicLR
     base_lr: Union[float, List[float]]
     max_lr: Union[float, List[float]]
-    step_size_up: Optional[int] = (
-        None  # Not required, will compute dynamically if needed
+    epochs_up: float  # Duration of the increasing phase in epochs
+    epochs_down: Optional[float] = (
+        None  # Duration of the decreasing phase in epochs (optional)
     )
-    step_size_down: Optional[int] = None
     mode: CyclicLRMode = CyclicLRMode.triangular
     gamma: float = 1.0
     scale_mode: ScaleMode = ScaleMode.cycle
@@ -227,6 +231,12 @@ class CyclicLRConfig(SchedulerConfigBase):
     base_momentum: Union[float, List[float]] = 0.8
     max_momentum: Union[float, List[float]] = 0.9
     last_epoch: int = -1
+
+    @model_validator(mode="after")
+    def validate_epochs(self):
+        if self.epochs_up is None:
+            raise ValueError("CyclicLR requires 'epochs_up' to be set.")
+        return self
 
 
 SchedulerConfig = Annotated[

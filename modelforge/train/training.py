@@ -11,7 +11,13 @@ from loguru import logger as log
 from openff.units import unit
 from torch.nn import ModuleDict
 from torch.optim import Optimizer
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import (
+    ReduceLROnPlateau,
+    CosineAnnealingLR,
+    CosineAnnealingWarmRestarts,
+    OneCycleLR,
+    CyclicLR,
+)
 
 from modelforge.dataset.dataset import DataModule, DatasetParameters
 from modelforge.potential.parameters import (
@@ -353,6 +359,7 @@ class TrainingAdapter(pL.LightningModule):
         dataset_statistic: Dict[str, Dict[str, unit.Quantity]],
         training_parameter: TrainingParameters,
         optimizer_class: Type[Optimizer],
+        nr_of_training_batches: int = -1,
         potential_seed: Optional[int] = None,
     ):
         """
@@ -428,6 +435,8 @@ class TrainingAdapter(pL.LightningModule):
         self.loss_metrics = create_error_metrics(
             training_parameter.loss_parameter.loss_components, is_loss=True
         )
+
+        self.number_of_training_batches = nr_of_training_batches
 
     def _setup_weights_scheduling(self, training_parameter: TrainingParameters):
 
@@ -700,49 +709,67 @@ class TrainingAdapter(pL.LightningModule):
 
         # Determine the scheduler class and parameters
         if isinstance(lr_scheduler_config, ReduceLROnPlateauConfig):
-            scheduler_class = torch.optim.lr_scheduler.ReduceLROnPlateau
+            scheduler_class = ReduceLROnPlateau
+            scheduler_params = lr_scheduler_config.model_dump(
+                exclude={"scheduler_name", "frequency", "interval", "monitor"}
+            )
         elif isinstance(lr_scheduler_config, CosineAnnealingLRConfig):
-            scheduler_class = torch.optim.lr_scheduler.CosineAnnealingLR
+            scheduler_class = CosineAnnealingLR
+            scheduler_params = lr_scheduler_config.model_dump(
+                exclude={"scheduler_name", "frequency", "interval", "monitor"}
+            )
         elif isinstance(lr_scheduler_config, CosineAnnealingWarmRestartsConfig):
-            scheduler_class = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts
+            scheduler_class = CosineAnnealingWarmRestarts
+            scheduler_params = lr_scheduler_config.model_dump(
+                exclude={"scheduler_name", "frequency", "interval", "monitor"}
+            )
         elif isinstance(lr_scheduler_config, OneCycleLRConfig):
-            scheduler_class = torch.optim.lr_scheduler.OneCycleLR
+            scheduler_class = OneCycleLR
+            scheduler_params = lr_scheduler_config.model_dump(
+                exclude={
+                    "scheduler_name",
+                    "frequency",
+                    "interval",
+                    "monitor",
+                    "steps_per_epoch",
+                    "total_steps",
+                }
+            )
+
+            # Calculate steps_per_epoch
+            steps_per_epoch = self.number_of_training_batches
+            scheduler_params["steps_per_epoch"] = steps_per_epoch
+            scheduler_params["epochs"] = lr_scheduler_config.epochs
         elif isinstance(lr_scheduler_config, CyclicLRConfig):
-            scheduler_class = torch.optim.lr_scheduler.CyclicLR
+            scheduler_class = CyclicLR
+            scheduler_params = lr_scheduler_config.model_dump(
+                exclude={
+                    "scheduler_name",
+                    "frequency",
+                    "interval",
+                    "monitor",
+                    "epochs_up",
+                    "epochs_down",
+                }
+            )
+
+            # Calculate steps_per_epoch
+            steps_per_epoch = self.number_of_training_batches
+
+            # Calculate step_size_up and step_size_down
+            epochs_up = lr_scheduler_config.epochs_up
+            epochs_down = (
+                lr_scheduler_config.epochs_down or epochs_up
+            )  # Symmetric cycle if not specified
+            step_size_up = int(epochs_up * steps_per_epoch)
+            step_size_down = int(epochs_down * steps_per_epoch)
+
+            scheduler_params["step_size_up"] = step_size_up
+            scheduler_params["step_size_down"] = step_size_down
         else:
             raise NotImplementedError(
                 f"Unsupported learning rate scheduler: {lr_scheduler_config.scheduler_name}"
             )
-
-        # Exclude keys not needed by the scheduler constructor
-        scheduler_params = lr_scheduler_config.model_dump(
-            exclude={"scheduler_name", "frequency", "interval", "monitor"}
-        )
-
-        # Handle special cases
-        if isinstance(lr_scheduler_config, OneCycleLRConfig):
-            # Calculate total_steps if not provided
-            if scheduler_params.get("total_steps") is None:
-                if hasattr(self.trainer, "estimated_stepping_batches"):
-                    total_steps = self.trainer.estimated_stepping_batches
-                else:
-                    # Fallback or raise an error
-                    raise RuntimeError("Unable to determine total_steps for OneCycleLR")
-            # Remove 'epochs' and 'steps_per_epoch' if not used
-            scheduler_params.pop("epochs", None)
-            scheduler_params.pop("steps_per_epoch", None)
-
-        elif isinstance(lr_scheduler_config, CyclicLRConfig):
-            # Calculate step_size_up if not provided
-            if scheduler_params.get("step_size_up") is None:
-                if hasattr(self.trainer, "estimated_stepping_batches"):
-                    step_size_up = self.trainer.estimated_stepping_batches // 2
-                else:
-                    # Fallback or raise an error
-                    raise RuntimeError("Unable to determine step_size_up for CyclicLR")
-                scheduler_params["step_size_up"] = step_size_up
-            # step_size_down can be set similarly if needed
-
         lr_scheduler_instance = scheduler_class(optimizer, **scheduler_params)
 
         scheduler = {
@@ -820,8 +847,6 @@ class PotentialTrainer:
         self.trainer = self.setup_trainer()
         self.optimizer_class = optimizer_class
         self.lightning_module = self.setup_lightning_module(potential_seed)
-        self.learning_rate = self.training_parameter.lr
-        self.lr_scheduler = self.training_parameter.lr_scheduler
 
     def read_dataset_statistics(
         self,
@@ -910,6 +935,7 @@ class PotentialTrainer:
             dataset_statistic=self.dataset_statistic,
             training_parameter=self.training_parameter,
             optimizer_class=self.optimizer_class,
+            nr_of_training_batches=len(self.datamodule.train_dataloader()),
             potential_seed=potential_seed,
         )
 

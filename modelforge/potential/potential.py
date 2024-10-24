@@ -202,7 +202,6 @@ class PostProcessing(torch.nn.Module):
 class Potential(torch.nn.Module):
     def __init__(
         self,
-        name: str,
         core_network,
         neighborlist,
         postprocessing,
@@ -215,9 +214,6 @@ class Potential(torch.nn.Module):
 
         Parameters
         ----------
-        name: str
-            The name of the potential model. This is used to identify the model
-            e.g. from a checkpoint file.
         core_network : torch.nn.Module
             The core neural network used for potential energy calculation.
         neighborlist : torch.nn.Module
@@ -449,6 +445,7 @@ def setup_potential(
     from modelforge.potential.utils import remove_units_from_dataset_statistics
     from modelforge.utils.misc import seed_random_number
 
+    log.debug(f"potential_seed {potential_seed}")
     if potential_seed is not None:
         log.info(f"Setting random seed to: {potential_seed}")
         seed_random_number(potential_seed)
@@ -507,18 +504,20 @@ def setup_potential(
                 f"Unsupported neighborlist strategy: {neighborlist_strategy}"
             )
 
-    model = Potential(
-        str(potential_parameter.potential_name),
+    potential = Potential(
         core_network,
         neighborlist,
         postprocessing,
         jit=jit,
         jit_neighborlist=False if use_training_mode_neighborlist else True,
     )
-    return model
+    potential.eval()
+    return potential
 
 
 from openff.units import unit
+
+from modelforge.train.training import PotentialTrainer
 
 
 class NeuralNetworkPotentialFactory:
@@ -526,9 +525,7 @@ class NeuralNetworkPotentialFactory:
     @staticmethod
     def generate_potential(
         *,
-        use: Literal["training", "inference"],
         potential_parameter: T_NNP_Parameters,
-        runtime_parameter: Optional[RuntimeParameters] = None,
         training_parameter: Optional[TrainingParameters] = None,
         dataset_parameter: Optional[DatasetParameters] = None,
         dataset_statistic: Dict[str, Dict[str, float]] = {
@@ -538,7 +535,6 @@ class NeuralNetworkPotentialFactory:
             }
         },
         potential_seed: Optional[int] = None,
-        use_default_dataset_statistic: bool = False,
         use_training_mode_neighborlist: bool = False,
         simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
         jit: bool = True,
@@ -546,18 +542,12 @@ class NeuralNetworkPotentialFactory:
         verlet_neighborlist_skin: Optional[float] = 0.1,
     ) -> Union[Potential, JAXModel, pl.LightningModule]:
         """
-        Create an instance of a neural network potential for training or
-        inference.
+        Create an instance of a neural network potential for inference.
 
         Parameters
         ----------
-        use : Literal["training", "inference"]
-            Whether the potential is for training or inference.
         potential_parameter : T_NNP_Parameters]
             Parameters specific to the neural network potential.
-        runtime_parameter : Optional[RuntimeParameters], optional
-            Parameters for configuring the runtime environment (default is
-            None).
         training_parameter : Optional[TrainingParameters], optional
             Parameters for configuring training (default is None).
         dataset_parameter : Optional[DatasetParameters], optional
@@ -566,8 +556,6 @@ class NeuralNetworkPotentialFactory:
             Dataset statistics for normalization (default is provided).
         potential_seed : Optional[int], optional
             Seed for random number generation (default is None).
-        use_default_dataset_statistic : bool, optional
-            Whether to use default dataset statistics (default is False).
         use_training_mode_neighborlist : bool, optional
             Whether to use neighborlist during training mode (default is False).
         simulation_environment : Literal["PyTorch", "JAX"], optional
@@ -581,68 +569,91 @@ class NeuralNetworkPotentialFactory:
             Skin for the Verlet neighborlist (default is 0.1, units nanometers).
         Returns
         -------
-        Union[Potential, JAXModel, pl.LightningModule]
+        Union[Potential, JAXModel]
             An instantiated neural network potential for training or inference.
         """
-
-        from modelforge.train.training import PotentialTrainer
 
         log.debug(f"{training_parameter=}")
         log.debug(f"{potential_parameter=}")
         log.debug(f"{dataset_parameter=}")
 
-        # obtain model for training
-        if use == "training":
-            potential = PotentialTrainer(
-                potential_parameter=potential_parameter,
-                training_parameter=training_parameter,
-                dataset_parameter=dataset_parameter,
-                runtime_parameter=runtime_parameter,
-                potential_seed=potential_seed,
-                dataset_statistic=dataset_statistic,
-                use_default_dataset_statistic=use_default_dataset_statistic,
-            )
-            return potential
         # obtain model for inference
-        elif use == "inference":
-            potential = setup_potential(
-                potential_parameter=potential_parameter,
-                dataset_statistic=dataset_statistic,
-                use_training_mode_neighborlist=use_training_mode_neighborlist,
-                potential_seed=potential_seed,
-                jit=jit,
-                neighborlist_strategy=inference_neighborlist_strategy,
-                verlet_neighborlist_skin=verlet_neighborlist_skin,
-            )
-            # Disable gradients for model parameters
-            for param in potential.parameters():
-                param.requires_grad = False
-            # Set model to eval
-            potential.eval()
+        potential = setup_potential(
+            potential_parameter=potential_parameter,
+            dataset_statistic=dataset_statistic,
+            use_training_mode_neighborlist=use_training_mode_neighborlist,
+            potential_seed=potential_seed,
+            jit=jit,
+            neighborlist_strategy=inference_neighborlist_strategy,
+            verlet_neighborlist_skin=verlet_neighborlist_skin,
+        )
+        # Disable gradients for model parameters
+        for param in potential.parameters():
+            param.requires_grad = False
+        # Set model to eval
+        potential.eval()
 
-            if simulation_environment == "JAX":
-                # register nnp_input as pytree
-                from modelforge.utils.io import import_
+        if simulation_environment == "JAX":
+            # register nnp_input as pytree
+            from modelforge.utils.io import import_
 
-                jax = import_("jax")
-                from modelforge.jax import nnpinput_flatten, nnpinput_unflatten
+            jax = import_("jax")
+            from modelforge.jax import nnpinput_flatten, nnpinput_unflatten
 
-                # registering NNPInput multiple times will result in a
-                # ValueError
-                try:
-                    jax.tree_util.register_pytree_node(
-                        NNPInput,
-                        nnpinput_flatten,
-                        nnpinput_unflatten,
-                    )
-                except ValueError:
-                    log.debug("NNPInput already registered as pytree")
-                    pass
-                return PyTorch2JAXConverter().convert_to_jax_model(potential)
-            else:
-                return potential
+            # registering NNPInput multiple times will result in a
+            # ValueError
+            try:
+                jax.tree_util.register_pytree_node(
+                    NNPInput,
+                    nnpinput_flatten,
+                    nnpinput_unflatten,
+                )
+            except ValueError:
+                log.debug("NNPInput already registered as pytree")
+                pass
+            return PyTorch2JAXConverter().convert_to_jax_model(potential)
         else:
-            raise NotImplementedError(f"Unsupported 'use' value: {use}")
+            return potential
+
+    @staticmethod
+    def generate_trainer(
+        *,
+        potential_parameter: T_NNP_Parameters,
+        runtime_parameter: Optional[RuntimeParameters] = None,
+        training_parameter: Optional[TrainingParameters] = None,
+        dataset_parameter: Optional[DatasetParameters] = None,
+        dataset_statistic: Dict[str, Dict[str, float]] = {
+            "training_dataset_statistics": {
+                "per_atom_energy_mean": unit.Quantity(0.0, unit.kilojoule_per_mole),
+                "per_atom_energy_stddev": unit.Quantity(1.0, unit.kilojoule_per_mole),
+            }
+        },
+        potential_seed: Optional[int] = None,
+        use_default_dataset_statistic: bool = False,
+    ) -> PotentialTrainer:
+        """
+        Create a
+
+        """
+        from modelforge.utils.misc import seed_random_number
+
+        if potential_seed is not None:
+            log.info(f"Setting random seed to: {potential_seed}")
+            seed_random_number(potential_seed)
+
+        log.debug(f"{training_parameter=}")
+        log.debug(f"{dataset_parameter=}")
+
+        trainer = PotentialTrainer(
+            potential_parameter=potential_parameter,
+            training_parameter=training_parameter,
+            dataset_parameter=dataset_parameter,
+            runtime_parameter=runtime_parameter,
+            potential_seed=potential_seed,
+            dataset_statistic=dataset_statistic,
+            use_default_dataset_statistic=use_default_dataset_statistic,
+        )
+        return trainer
 
 
 class PyTorch2JAXConverter:
@@ -752,7 +763,9 @@ class PyTorch2JAXConverter:
         return apply, model_params, model_buffer
 
 
-def load_inference_model_from_checkpoint(checkpoint_path: str) -> Potential:
+def load_inference_model_from_checkpoint(
+    checkpoint_path: str,
+) -> Union[Potential, JAXModel]:
     """
     Creates an inference model from a checkpoint file.
     It loads the checkpoint file, extracts the hyperparameters, and creates the model in inference mode.
@@ -763,7 +776,6 @@ def load_inference_model_from_checkpoint(checkpoint_path: str) -> Potential:
         The path to the checkpoint file.
     """
     import torch
-    from modelforge.potential import NeuralNetworkPotentialFactory
 
     # Load the checkpoint
     checkpoint = torch.load(checkpoint_path, map_location=torch.device("cpu"))
@@ -775,15 +787,14 @@ def load_inference_model_from_checkpoint(checkpoint_path: str) -> Potential:
     potential_seed = hyperparams.get("potential_seed", None)
 
     # Create the model in inference mode
-    model = NeuralNetworkPotentialFactory.generate_potential(
-        use="inference",
+    potential = NeuralNetworkPotentialFactory.generate_potential(
         potential_parameter=potential_parameter,
         dataset_statistic=dataset_statistic,
         potential_seed=potential_seed,
     )
 
     # Load the state dict into the model
-    model.load_state_dict(checkpoint["state_dict"])
+    potential.load_state_dict(checkpoint["state_dict"])
 
     # Return the model
-    return model
+    return potential

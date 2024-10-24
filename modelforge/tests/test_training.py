@@ -75,8 +75,7 @@ def get_trainer(config):
     dataset_parameter = config["dataset"]
     runtime_parameter = config["runtime"]
 
-    return NeuralNetworkPotentialFactory.generate_potential(
-        use="training",
+    return NeuralNetworkPotentialFactory.generate_trainer(
         potential_parameter=potential_parameter,
         training_parameter=training_parameter,
         dataset_parameter=dataset_parameter,

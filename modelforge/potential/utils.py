@@ -353,7 +353,7 @@ def scatter_softmax(
     dim: int,
     dim_size: int,
 ) -> torch.Tensor:
-    """
+    r"""
     Computes the softmax operation over values in the `src` tensor that share indices specified in the `index` tensor
     along a given axis `dim`.
 

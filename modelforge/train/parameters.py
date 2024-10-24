@@ -243,6 +243,7 @@ class CyclicLRConfig(SchedulerConfigBase):
             raise ValueError("OneCycleLR requires 'interval' to be set to 'step'.")
         return self
 
+
 SchedulerConfig = Annotated[
     Union[
         ReduceLROnPlateauConfig,

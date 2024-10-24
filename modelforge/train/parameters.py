@@ -267,7 +267,7 @@ class TrainingParameters(ParametersBase):
 
         @model_validator(mode="before")
         def set_target_weight_defaults(cls, values):
-            
+
             # if no target_weight is provided, set target_weight to be the same
             # as weight and mixing_steps to be 1.0
             if "target_weight" not in values:
@@ -278,7 +278,7 @@ class TrainingParameters(ParametersBase):
                     d[key] = 1.0
                 values["mixing_steps"] = d
                 return values
-            
+
             # if target weight is not provided for all properties, set the rest
             # to be the same as weight
             for key in values["weight"]:

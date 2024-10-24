@@ -477,7 +477,7 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize, prep_temp_dir):
     ), "Mismatch in shape for total charge predictions."
 
     # Now compute the loss
-    loss_dict = trainer.lightning_module.loss(predict_target=prediction, batch=batch)
+    loss_dict = trainer.lightning_module.loss(predict_target=prediction, batch=batch, 0)
 
     # Ensure that the loss contains the total_charge and dipole_moment terms
     assert "per_system_total_charge" in loss_dict, "Total charge loss not computed."

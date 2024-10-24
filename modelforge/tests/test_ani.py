@@ -92,7 +92,7 @@ def setup_two_methanes():
 
 
 @pytest.mark.xfail
-def test_ani():
+def test_ani(prep_temp_dir):
     import torch
     import torchani
 

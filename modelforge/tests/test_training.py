@@ -98,8 +98,7 @@ def add_force_to_loss_parameter(config):
     t_config.loss_parameter.loss_components.append("per_atom_force")
     t_config.loss_parameter.weight["per_atom_force"] = 0.001
     t_config.loss_parameter.target_weight["per_atom_force"] = 0.001
-    t_config.loss_parameter.mixing_steps['per_atom_force'] = 1
-    
+    t_config.loss_parameter.mixing_steps["per_atom_force"] = 1
 
 
 def add_dipole_moment_to_loss_parameter(config):
@@ -127,8 +126,8 @@ def add_dipole_moment_to_loss_parameter(config):
     t_config.loss_parameter.target_weight["per_system_dipole_moment"] = 0.01
     t_config.loss_parameter.target_weight["per_system_total_charge"] = 0.01
 
-    t_config.loss_parameter.mixing_steps['per_system_dipole_moment'] = 1
-    t_config.loss_parameter.mixing_steps['per_system_total_charge'] = 1
+    t_config.loss_parameter.mixing_steps["per_system_dipole_moment"] = 1
+    t_config.loss_parameter.mixing_steps["per_system_total_charge"] = 1
 
     # also add per_atom_charge to predicted properties
 
@@ -150,7 +149,6 @@ def replace_per_system_with_per_atom_loss(config):
 
     t_config.loss_parameter.mixing_steps.pop("per_system_energy")
     t_config.loss_parameter.mixing_steps["per_atom_energy"] = 1
-
 
     # NOTE: the loss is calculate per_atom, but the validation set error is
     # per_system. This is because otherwise it's difficult to compare.
@@ -477,7 +475,11 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize, prep_temp_dir):
     ), "Mismatch in shape for total charge predictions."
 
     # Now compute the loss
-    loss_dict = trainer.lightning_module.loss(predict_target=prediction, batch=batch, 0)
+    loss_dict = trainer.lightning_module.loss(
+        predict_target=prediction,
+        batch=batch,
+        epoch_idx=0,
+    )
 
     # Ensure that the loss contains the total_charge and dipole_moment terms
     assert "per_system_total_charge" in loss_dict, "Total charge loss not computed."

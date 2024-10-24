@@ -183,6 +183,7 @@ class BesselBasisLayer(nn.Module):
         d_cutoff = self.envelope(d_scaled)  # Shape: (nr_pairs, 1)
 
         # Compute Bessel basis
+        # NOTE: the result in basis below is alread multiplied with the envelope function
         basis = d_cutoff * torch.sin(
             self.frequencies * d_scaled
         )  # Shape: nr_pairs, num_radial)

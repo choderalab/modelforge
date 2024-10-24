@@ -214,9 +214,6 @@ class Potential(torch.nn.Module):
 
         Parameters
         ----------
-        name: str
-            The name of the potential model. This is used to identify the model
-            e.g. from a checkpoint file.
         core_network : torch.nn.Module
             The core neural network used for potential energy calculation.
         neighborlist : torch.nn.Module
@@ -441,7 +438,6 @@ def setup_potential(
     use_training_mode_neighborlist: bool = False,
     potential_seed: Optional[int] = None,
     jit: bool = True,
-    only_unique_pairs: bool = False,
     neighborlist_strategy: Optional[str] = None,
     verlet_neighborlist_skin: Optional[float] = 0.08,
 ) -> Potential:

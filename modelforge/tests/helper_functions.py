@@ -45,7 +45,6 @@ def setup_potential_for_test(
     jit: bool = False,
     potential_seed: Optional[int] = None,
     simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
-    only_unique_pairs: bool = False,
     local_cache_dir: Optional[str] = None,
 ):
     from modelforge.potential import NeuralNetworkPotentialFactory
@@ -80,7 +79,6 @@ def setup_potential_for_test(
             simulation_environment=simulation_environment,
             use_training_mode_neighborlist=use_training_mode_neighborlist,
             jit=jit,
-            only_unique_pairs=only_unique_pairs,
         )
 
     return potential

@@ -537,7 +537,6 @@ class NeuralNetworkPotentialFactory:
         potential_seed: Optional[int] = None,
         use_training_mode_neighborlist: bool = False,
         simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
-        only_unique_pairs: bool = False,
         jit: bool = True,
         inference_neighborlist_strategy: str = "verlet",
         verlet_neighborlist_skin: Optional[float] = 0.1,
@@ -562,8 +561,6 @@ class NeuralNetworkPotentialFactory:
         simulation_environment : Literal["PyTorch", "JAX"], optional
             Specify whether to use PyTorch or JAX as the simulation environment
             (default is "PyTorch").
-        only_unique_pairs : bool, optional
-            Whether to use only unique pairs of atoms (default is False).
         jit : bool, optional
             Whether to use JIT compilation (default is True).
         inference_neighborlist_strategy : Optional[str], optional
@@ -587,7 +584,6 @@ class NeuralNetworkPotentialFactory:
             use_training_mode_neighborlist=use_training_mode_neighborlist,
             potential_seed=potential_seed,
             jit=jit,
-            only_unique_pairs=only_unique_pairs,
             neighborlist_strategy=inference_neighborlist_strategy,
             verlet_neighborlist_skin=verlet_neighborlist_skin,
         )

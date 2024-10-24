@@ -172,6 +172,7 @@ def use_different_LRScheduler(
     """
     Modifies the training configuration to use a different learning rate scheduler.
     """
+
     if which_one == "ReduceLROnPlateau":
         lr_scheduler_config = ReduceLROnPlateauConfig(
             scheduler_name="ReduceLROnPlateau",
@@ -227,6 +228,7 @@ def use_different_LRScheduler(
             three_phase=False,
             last_epoch=-1,
         )
+    elif which_one == "CyclicLR":
         lr_scheduler_config = CyclicLRConfig(
             scheduler_name="CyclicLR",
             frequency=1,

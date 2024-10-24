@@ -472,7 +472,7 @@ def test_inference_neighborlist_building():
     nlist = NeighborlistForInference(
         cutoff=5.0, displacement_function=displacement_function, only_unique_pairs=False
     )
-    nlist.set_strategy("brute_nsq")
+    nlist._set_strategy("brute_nsq")
     pairs, d_ij, r_ij = nlist(data)
 
     assert pairs.shape[1] == 12
@@ -482,7 +482,7 @@ def test_inference_neighborlist_building():
         displacement_function=displacement_function,
         only_unique_pairs=False,
     )
-    nlist_verlet.set_strategy("verlet_nsq", skin=0.5)
+    nlist_verlet._set_strategy("verlet_nsq", skin=0.5)
 
     pairs_v, d_ij_v, r_ij_v = nlist_verlet(data)
     assert pairs_v.shape[1] == pairs.shape[1]
@@ -494,7 +494,7 @@ def test_inference_neighborlist_building():
         cutoff=5.0, displacement_function=displacement_function, only_unique_pairs=True
     )
 
-    nlist.set_strategy("brute_nsq")
+    nlist._set_strategy("brute_nsq")
     pairs, d_ij, r_ij = nlist(data)
 
     assert pairs.shape[1] == 6
@@ -504,7 +504,7 @@ def test_inference_neighborlist_building():
         displacement_function=displacement_function,
         only_unique_pairs=True,
     )
-    nlist_verlet.set_strategy("verlet_nsq", skin=0.5)
+    nlist_verlet._set_strategy("verlet_nsq", skin=0.5)
     pairs_v, d_ij_v, r_ij_v = nlist_verlet(data)
     assert pairs_v.shape[1] == pairs.shape[1]
     assert torch.all(pairs_v == pairs)
@@ -514,7 +514,7 @@ def test_inference_neighborlist_building():
     nlist = NeighborlistForInference(
         cutoff=3.5, displacement_function=displacement_function, only_unique_pairs=False
     )
-    nlist.set_strategy("brute_nsq")
+    nlist._set_strategy("brute_nsq")
     pairs, d_ij, r_ij = nlist(data)
 
     assert pairs.shape[1] == 10
@@ -559,7 +559,7 @@ def test_inference_neighborlist_building():
         only_unique_pairs=False,
     )
 
-    nlist_verlet.set_strategy("verlet_nsq", skin=0.5)
+    nlist_verlet._set_strategy("verlet_nsq", skin=0.5)
     pairs_v, d_ij_v, r_ij_v = nlist_verlet(data)
     assert pairs_v.shape[1] == pairs.shape[1]
     assert torch.all(pairs_v == pairs)
@@ -571,7 +571,7 @@ def test_inference_neighborlist_building():
     nlist = NeighborlistForInference(
         cutoff=5.0, displacement_function=displacement_function, only_unique_pairs=False
     )
-    nlist.set_strategy("brute_nsq")
+    nlist._set_strategy("brute_nsq")
     data.is_periodic = False
 
     pairs, d_ij, r_ij = nlist(data)
@@ -584,7 +584,7 @@ def test_inference_neighborlist_building():
         displacement_function=displacement_function,
         only_unique_pairs=False,
     )
-    nlist_verlet.set_strategy("verlet_nsq", skin=0.5)
+    nlist_verlet._set_strategy("verlet_nsq", skin=0.5)
 
     pairs_v, d_ij_v, r_ij_v = nlist_verlet(data)
     assert pairs_v.shape[1] == pairs.shape[1]
@@ -633,19 +633,21 @@ def test_verlet_inference():
         displacement_function=displacement_function,
         only_unique_pairs=True,
     )
-    nlist_verlet.set_strategy("verlet_nsq", skin=0.5)
+    nlist_verlet._set_strategy("verlet_nsq", skin=0.5)
+
     nlist_brute = NeighborlistForInference(
         cutoff=1.5,
         displacement_function=displacement_function,
         only_unique_pairs=True,
     )
-    nlist_brute.set_strategy("brute_nsq")
+    nlist_brute._set_strategy("brute_nsq")
 
     print("first check")
     pairs, d_ij, r_ij = nlist_brute(data)
 
     pairs_v, d_ij_v, r_ij_v = nlist_verlet(data)
 
+    print(pairs)
     assert nlist_verlet.builds == 1
     assert pairs.shape[1] == 2
     assert torch.all(pairs_v == pairs)

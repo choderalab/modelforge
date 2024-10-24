@@ -373,6 +373,9 @@ class NeighborlistForInference(torch.nn.Module):
 
         self.register_buffer("cutoff", torch.tensor(cutoff))
         self.register_buffer("only_unique_pairs", torch.tensor(only_unique_pairs))
+
+        self.strategy = "brute_nsq"
+
         # set a default value; we can update this when we set the strategy
         self.skin = 0.1
 
@@ -393,7 +396,7 @@ class NeighborlistForInference(torch.nn.Module):
         self.builds = 0
         self.box_vectors = torch.zeros([3, 3])
 
-        self.forward = self._forward_brute
+        log.info("NeighborlistForInference initialized")
 
     def _check_verlet_nlist(
         self, positions: torch.Tensor, box_vectors: torch.Tensor, is_periodic
@@ -476,9 +479,10 @@ class NeighborlistForInference(torch.nn.Module):
 
         return pairs_full, d_ij_full, r_ij_full
 
-    def set_strategy(self, strategy: str, skin: float = 0.1):
+    def _set_strategy(self, strategy: str, skin: float = 0.1):
         """
         Set the strategy for rebuilding the neighbor list.
+
 
         Parameters
         ----------
@@ -491,12 +495,16 @@ class NeighborlistForInference(torch.nn.Module):
         self.half_skin = self.skin * 0.5
         self.cutoff_plus_skin = self.cutoff + self.skin
 
-        if strategy == "verlet_nsq":
-            self.forward = self._forward_verlet
-        elif strategy == "brute_nsq":
-            self.forward = self._forward_brute
+        self.strategy = strategy
+
+    def forward(self, data: NNPInput):
+        if self.strategy == "verlet_nsq":
+            return self._forward_verlet(data)
+        elif self.strategy == "brute_nsq":
+            return self._forward_brute(data)
+
         else:
-            raise ValueError(f"Unknown strategy {strategy}")
+            raise ValueError(f"Unknown strategy {self.strategy}")
 
     def _forward_brute(self, data: NNPInput):
         """
@@ -530,20 +538,20 @@ class NeighborlistForInference(torch.nn.Module):
             self.indices = torch.arange(n, device=atomic_subsystem_indices.device)
 
             # Create a meshgrid of indices
-            self.i_final_pairs, self.j_final_pairs = torch.meshgrid(
+            self.i_pairs, self.j_pairs = torch.meshgrid(
                 self.indices, self.indices, indexing="ij"
             )
             # We will only consider unique pairs; for non-unique pairs we can just appropriately copy
             # the data as it will be faster than extra computations.
-            mask = self.i_final_pairs < self.j_final_pairs
+            mask = self.i_pairs < self.j_pairs
 
-            self.i_final_pairs = self.i_final_pairs[mask]
-            self.j_final_pairs = self.j_final_pairs[mask]
+            self.i_pairs = self.i_pairs[mask]
+            self.j_pairs = self.j_pairs[mask]
 
         # calculate r_ij and d_ij
         r_ij, d_ij = self.displacement_function(
-            positions[self.i_final_pairs],
-            positions[self.j_final_pairs],
+            positions[self.i_pairs],
+            positions[self.j_pairs],
             data.box_vectors,
             data.is_periodic,
         )
@@ -559,8 +567,8 @@ class NeighborlistForInference(torch.nn.Module):
                 2, total_pairs, dtype=torch.int64, device=positions.device
             )
 
-            pairs[0] = self.i_final_pairs[in_cutoff]
-            pairs[1] = self.j_final_pairs[in_cutoff]
+            pairs[0] = self.i_pairs[in_cutoff]
+            pairs[1] = self.j_pairs[in_cutoff]
 
             return PairlistData(
                 pair_indices=pairs,
@@ -570,8 +578,8 @@ class NeighborlistForInference(torch.nn.Module):
 
         else:
             pairs_full, d_ij_full, r_ij_full = self._copy_to_nonunique(
-                self.i_final_pairs[in_cutoff],
-                self.j_final_pairs[in_cutoff],
+                self.i_pairs[in_cutoff],
+                self.j_pairs[in_cutoff],
                 d_ij[in_cutoff],
                 r_ij[in_cutoff],
                 total_pairs,
@@ -708,9 +716,10 @@ class NeighborListForTraining(torch.nn.Module):
 
         super().__init__()
 
-        self.only_unique_pairs = only_unique_pairs
+        # self.only_unique_pairs = only_unique_pairs
         self.pairlist = Pairlist(only_unique_pairs)
         self.register_buffer("cutoff", torch.tensor(cutoff))
+        self.register_buffer("only_unique_pairs", torch.tensor(only_unique_pairs))
 
     def calculate_r_ij(
         self, pair_indices: torch.Tensor, positions: torch.Tensor

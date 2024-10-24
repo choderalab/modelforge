@@ -8,6 +8,7 @@ import lightning as pl
 import torch
 from loguru import logger as log
 from openff.units import unit
+from torch.backends.opt_einsum import strategy
 from torch.nn import Module
 from modelforge.potential.neighbors import PairlistData
 
@@ -307,6 +308,24 @@ class Potential(torch.nn.Module):
         del processed_output["r_ij"]
         return processed_output
 
+    def set_neighborlist_strategy(self, strategy: str, skin: 0.1):
+        """
+        Set the neighborlist strategy and skin for the neighborlist module.
+        Note this cannot be called from a JIT-compiled model.
+
+        Parameters
+        ----------
+        strategy : str
+            The neighborlist strategy to use.
+        skin : Optional[float], optional
+            The skin for the Verlet neighborlist (default is None).
+        """
+        self.neighborlist.strategy = strategy
+        self.neighborlist.skin = skin
+        self.neighborlist.skin = skin
+        self.neighborlist.half_skin = skin * 0.5
+        self.neighborlist.cutoff_plus_skin = self.neighborlist.cutoff + skin
+
     def forward(self, input_data: NNPInput) -> Dict[str, torch.Tensor]:
         """
         Forward pass for the potential model, computing energy and forces.
@@ -485,27 +504,17 @@ def setup_potential(
 
         displacement_function = OrthogonalDisplacementFunction()
 
-        if neighborlist_strategy == "verlet":
-            from modelforge.potential.neighbors import NeighborlistVerletNsq
+        from modelforge.potential.neighbors import NeighborlistForInference
 
-            neighborlist = NeighborlistVerletNsq(
-                cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
-                displacement_function=displacement_function,
-                only_unique_pairs=only_unique_pairs,
-                skin=verlet_neighborlist_skin,
-            )
-        elif neighborlist_strategy == "brute":
-            from modelforge.potential.neighbors import NeighborlistBruteNsq
-
-            neighborlist = NeighborlistBruteNsq(
-                cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
-                displacement_function=displacement_function,
-                only_unique_pairs=only_unique_pairs,
-            )
-        else:
-            raise ValueError(
-                f"Unsupported neighborlist strategy: {neighborlist_strategy}"
-            )
+        neighborlist = NeighborlistForInference(
+            cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
+            displacement_function=displacement_function,
+            only_unique_pairs=only_unique_pairs,
+        )
+        # we can set the strategy here before passing this to the Potential
+        # this can still be modified later using Potential.set_neighborlist_strategy before it has bit JITTED
+        # after that, we can access variables directly at init level in the TorchForce wrapper
+        neighborlist._set_strategy(neighborlist_strategy, skin=verlet_neighborlist_skin)
 
     model = Potential(
         str(potential_parameter.potential_name),
@@ -542,7 +551,7 @@ class NeuralNetworkPotentialFactory:
         use_training_mode_neighborlist: bool = False,
         simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
         jit: bool = True,
-        inference_neighborlist_strategy: str = "verlet",
+        inference_neighborlist_strategy: str = "verlet_nsq",
         verlet_neighborlist_skin: Optional[float] = 0.1,
     ) -> Union[Potential, JAXModel, pl.LightningModule]:
         """
@@ -576,7 +585,7 @@ class NeuralNetworkPotentialFactory:
         jit : bool, optional
             Whether to use JIT compilation (default is True).
         inference_neighborlist_strategy : Optional[str], optional
-            Neighborlist strategy for inference (default is "verlet"). other option is "brute".
+            Neighborlist strategy for inference (default is "verlet_nsq"). other option is "brute_nsq".
         verlet_neighborlist_skin : Optional[float], optional
             Skin for the Verlet neighborlist (default is 0.1, units nanometers).
         Returns

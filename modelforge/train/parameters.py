@@ -238,10 +238,10 @@ class CyclicLRConfig(SchedulerConfigBase):
     def validate_epochs(self):
         if self.epochs_up is None:
             raise ValueError("CyclicLR requires 'epochs_up' to be set.")
-        return self
 
         if self.interval != "step":
             raise ValueError("OneCycleLR requires 'interval' to be set to 'step'.")
+        return self
 
 SchedulerConfig = Annotated[
     Union[

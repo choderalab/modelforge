@@ -352,7 +352,7 @@ class Loss(nn.Module):
             else:
                 raise NotImplementedError(f"Loss type {prop} not implemented.")
 
-            self.register_buffer(prop, torch.tensor(self.weights_scheduling[prop]))
+            self.register_buffer(prop, self.weights_scheduling[prop])
 
     def forward(
         self,

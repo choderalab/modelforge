@@ -642,6 +642,12 @@ class NeuralNetworkPotentialFactory:
         Create a
 
         """
+        from modelforge.utils.misc import seed_random_number
+
+        if potential_seed is not None:
+            log.info(f"Setting random seed to: {potential_seed}")
+            seed_random_number(potential_seed)
+
         log.debug(f"{training_parameter=}")
         log.debug(f"{dataset_parameter=}")
 

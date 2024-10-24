@@ -146,36 +146,79 @@ def replace_per_system_with_per_atom_loss(config):
 from typing import Literal
 
 
+from typing import Literal
+from modelforge.train.parameters import (
+    TrainingParameters,
+    ReduceLROnPlateauConfig,
+    CosineAnnealingLRConfig,
+    CosineAnnealingWarmRestartsConfig,
+)
+
+
 def use_different_LRScheduler(
-    config,
+    training_config: TrainingParameters,
     which_one: Literal[
         "CosineAnnealingLR",
         "ReduceLROnPlateau",
         "CosineAnnealingWarmRestarts",
     ],
-):
+) -> TrainingParameters:
+    """
+    Modifies the training configuration to use a different learning rate scheduler.
 
+    Args:
+        training_config (TrainingParameters): The existing training configuration.
+        which_one (str): The name of the scheduler to use.
+
+    Returns:
+        TrainingParameters: The modified training configuration.
+    """
     if which_one == "ReduceLROnPlateau":
-        return config
+        lr_scheduler_config = ReduceLROnPlateauConfig(
+            scheduler_name="ReduceLROnPlateau",
+            frequency=1,
+            interval="epoch",
+            monitor=training_config.monitor,
+            mode="min",
+            factor=0.1,
+            patience=10,
+            threshold=0.1,
+            threshold_mode="abs",
+            cooldown=5,
+            min_lr=1e-8,
+            eps=1e-8,
+        )
     elif which_one == "CosineAnnealingLR":
-        t_config = config["training"]["lr_scheduler"]
-        t_config["scheduler_name"] = which_one
-        t_config["frequency"] = 1
-        t_config["interval"] = "epoch"
-        t_config["T_max"] = 50
-        t_config["eta_min"] = 0.0
-        t_config["last_epoch"] = -1
-        return config
+        lr_scheduler_config = CosineAnnealingLRConfig(
+            scheduler_name="CosineAnnealingLR",
+            frequency=1,
+            interval="epoch",
+            monitor=training_config.monitor,
+            T_max=50,
+            eta_min=0.0,
+            last_epoch=-1,
+        )
     elif which_one == "CosineAnnealingWarmRestarts":
-        t_config = config["training"]["lr_scheduler"]
-        t_config["scheduler_name"] = which_one
-        t_config["frequency"] = 1
-        t_config["interval"] = "epoch"
-        t_config["T_0"] = 10
-        t_config["T_mult"] = 2
-        t_config["eta_min"] = 0.0
-        t_config["last_epoch"] = -1
-        return config
+        lr_scheduler_config = CosineAnnealingWarmRestartsConfig(
+            scheduler_name="CosineAnnealingWarmRestarts",
+            frequency=1,
+            interval="epoch",
+            monitor=training_config.monitor,
+            T_0=10,
+            T_mult=2,
+            eta_min=0.0,
+            last_epoch=-1,
+        )
+    else:
+        raise ValueError(f"Unsupported scheduler: {which_one}")
+
+    # Update the lr_scheduler in the training configuration
+    training_config.lr_scheduler = lr_scheduler_config
+    return training_config
+
+
+import pytest
+from modelforge.train.parameters import TrainingParameters
 
 
 @pytest.mark.parametrize("potential_name", ["ANI2x"])
@@ -195,14 +238,20 @@ def test_learning_rate_scheduler(
     prep_temp_dir,
 ):
     """
-    Test that we can train, save and load checkpoints.
+    Test that we can train, save, and load checkpoints with different learning rate schedulers.
     """
-
+    # Load the configuration into Pydantic models
     config = load_configs_into_pydantic_models(
         potential_name, dataset_name, str(prep_temp_dir)
     )
-    config = use_different_LRScheduler(config, lr_scheduler)
-    # train potential
+
+    # Get the training configuration
+    training_config = config["training"]
+    # Modify the training configuration to use the selected scheduler
+    training_config = use_different_LRScheduler(training_config, lr_scheduler)
+
+    config["training"] = training_config
+    # Proceed with training
     get_trainer(config).train_potential().save_checkpoint("test.chp")  # save checkpoint
 
 

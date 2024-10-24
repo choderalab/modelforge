@@ -550,7 +550,11 @@ class TrainingAdapter(pL.LightningModule):
             batch, self.potential, self.training
         )
 
-        loss_dict = self.loss(predict_target, batch)  # Contains per-sample losses
+        loss_dict = self.loss(
+            predict_target,
+            batch,
+            self.current_epoch,
+        )  # Contains per-sample losses
 
         # Update loss metrics with per-sample losses
         batch_size = batch.batch_size()
@@ -621,6 +625,10 @@ class TrainingAdapter(pL.LightningModule):
         self._log_learning_rate()
         self._log_histograms()
 
+        # log the weights of the different loss components
+        for key, weight in self.loss.weights_scheduling.items():
+            self.log(f"loss/{key}/weight", weight[self.current_epoch])
+
     def _log_learning_rate(self):
         """Logs the current learning rate."""
         sch = self.lr_schedulers()
@@ -665,6 +673,11 @@ class TrainingAdapter(pL.LightningModule):
 
     def configure_optimizers(self):
         """Configures the optimizers and learning rate schedulers."""
+        from modelforge.train.parameters import (
+            ReduceLROnPlateauConfig,
+            CosineAnnealingLRConfig,
+            CosineAnnealingWarmRestartsConfig,
+        )
 
         optimizer = self.optimizer_class(
             self.potential.parameters(),
@@ -672,32 +685,49 @@ class TrainingAdapter(pL.LightningModule):
             weight_decay=1e-2,
         )
 
-        lr_scheduler = self.lr_scheduler.model_dump()
-        interval = lr_scheduler.pop("interval")
-        frequency = lr_scheduler.pop("frequency")
-        monitor = lr_scheduler.pop("monitor")
+        lr_scheduler_config = self.lr_scheduler
 
-        lr_scheduler_class = lr_scheduler.pop("scheduler_class")
-        if lr_scheduler_class == "ReduceLROnPlateau":
-            lr_scheduler = ReduceLROnPlateau(
-                optimizer,
-                **lr_scheduler,
+        if lr_scheduler_config is None:
+            return {"optimizer": optimizer}
+
+        interval = lr_scheduler_config.interval
+        frequency = lr_scheduler_config.frequency
+        monitor = (
+            lr_scheduler_config.monitor or self.monitor
+        )  # Use default monitor if not specified
+
+        # Determine the scheduler class and parameters
+        if isinstance(lr_scheduler_config, ReduceLROnPlateauConfig):
+            scheduler_class = torch.optim.lr_scheduler.ReduceLROnPlateau
+            scheduler_params = lr_scheduler_config.model_dump(
+                exclude={"scheduler_name", "frequency", "interval", "monitor"}
             )
-        elif lr_scheduler_class == "CosineAnnealingLR":
-            pass
-        elif lr_scheduler_class == "CosineAnnealingWarmRestarts":
-            pass
+        elif isinstance(lr_scheduler_config, CosineAnnealingLRConfig):
+            scheduler_class = torch.optim.lr_scheduler.CosineAnnealingLR
+            scheduler_params = lr_scheduler_config.model_dump(
+                exclude={"scheduler_name", "frequency", "interval", "monitor"}
+            )
+        elif isinstance(lr_scheduler_config, CosineAnnealingWarmRestartsConfig):
+            scheduler_class = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts
+            scheduler_params = lr_scheduler_config.model_dump(
+                exclude={"scheduler_name", "frequency", "interval", "monitor"}
+            )
         else:
             raise NotImplementedError(
-                f"Unsupported learning rate scheduler: {lr_scheduler_class}"
+                f"Unsupported learning rate scheduler: {lr_scheduler_config.scheduler_name}"
             )
 
+        lr_scheduler_instance = scheduler_class(optimizer, **scheduler_params)
+
         scheduler = {
-            "scheduler": lr_scheduler,
+            "scheduler": lr_scheduler_instance,
             "monitor": monitor,  # Name of the metric to monitor
             "interval": interval,
             "frequency": frequency,
         }
+
+        return {"optimizer": optimizer, "lr_scheduler": scheduler}
+
         return {"optimizer": optimizer, "lr_scheduler": scheduler}
 
 

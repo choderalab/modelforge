@@ -65,6 +65,8 @@ class SchedulerName(CaseInsensitiveEnum):
     ReduceLROnPlateau = "ReduceLROnPlateau"
     CosineAnnealingLR = "CosineAnnealingLR"
     CosineAnnealingWarmRestarts = "CosineAnnealingWarmRestarts"
+    OneCycleLR = "OneCycleLR"
+    CyclicLR = "CyclicLR"
 
 
 class SplittingStrategyName(CaseInsensitiveEnum):
@@ -166,12 +168,74 @@ class CosineAnnealingWarmRestartsConfig(SchedulerConfigBase):
     last_epoch: int = -1
 
 
-# Define the discriminated union using Annotated and Field(discriminator=...)
+class CyclicLRMode(CaseInsensitiveEnum):
+    """
+    Enum class for the CyclicLR modes
+    """
+
+    triangular = "triangular"
+    triangular2 = "triangular2"
+    exp_range = "exp_range"
+
+
+class ScaleMode(CaseInsensitiveEnum):
+    """
+    Enum class for the scale modes
+    """
+
+    cycle = "cycle"
+    iterations = "iterations"
+
+
+class OneCycleLRConfig(SchedulerConfigBase):
+    """
+    Configuration for OneCycleLR scheduler
+    """
+
+    scheduler_name: Literal[SchedulerName.OneCycleLR] = SchedulerName.OneCycleLR
+    max_lr: Union[float, List[float]]
+    total_steps: Optional[int] = None
+    epochs: Optional[int] = None  # Not required, will compute dynamically
+    steps_per_epoch: Optional[int] = None  # Not required, will compute dynamically
+    pct_start: float = 0.3
+    anneal_strategy: AnnealingStrategy = AnnealingStrategy.cos
+    cycle_momentum: bool = True
+    base_momentum: Union[float, List[float]] = 0.85
+    max_momentum: Union[float, List[float]] = 0.95
+    div_factor: float = 25.0
+    final_div_factor: float = 1e4
+    three_phase: bool = False
+    last_epoch: int = -1
+
+
+class CyclicLRConfig(SchedulerConfigBase):
+    """
+    Configuration for CyclicLR scheduler
+    """
+
+    scheduler_name: Literal[SchedulerName.CyclicLR] = SchedulerName.CyclicLR
+    base_lr: Union[float, List[float]]
+    max_lr: Union[float, List[float]]
+    step_size_up: Optional[int] = (
+        None  # Not required, will compute dynamically if needed
+    )
+    step_size_down: Optional[int] = None
+    mode: CyclicLRMode = CyclicLRMode.triangular
+    gamma: float = 1.0
+    scale_mode: ScaleMode = ScaleMode.cycle
+    cycle_momentum: bool = True
+    base_momentum: Union[float, List[float]] = 0.8
+    max_momentum: Union[float, List[float]] = 0.9
+    last_epoch: int = -1
+
+
 SchedulerConfig = Annotated[
     Union[
         ReduceLROnPlateauConfig,
         CosineAnnealingLRConfig,
         CosineAnnealingWarmRestartsConfig,
+        OneCycleLRConfig,
+        CyclicLRConfig,
     ],
     Field(discriminator="scheduler_name"),
 ]

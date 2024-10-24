@@ -154,6 +154,8 @@ from modelforge.train.parameters import (
     CosineAnnealingWarmRestartsConfig,
 )
 
+from typing import Literal
+
 
 def use_different_LRScheduler(
     training_config: TrainingParameters,
@@ -161,17 +163,12 @@ def use_different_LRScheduler(
         "CosineAnnealingLR",
         "ReduceLROnPlateau",
         "CosineAnnealingWarmRestarts",
+        "OneCycleLR",
+        "CyclicLR",
     ],
 ) -> TrainingParameters:
     """
     Modifies the training configuration to use a different learning rate scheduler.
-
-    Args:
-        training_config (TrainingParameters): The existing training configuration.
-        which_one (str): The name of the scheduler to use.
-
-    Returns:
-        TrainingParameters: The modified training configuration.
     """
     if which_one == "ReduceLROnPlateau":
         lr_scheduler_config = ReduceLROnPlateauConfig(
@@ -194,7 +191,7 @@ def use_different_LRScheduler(
             frequency=1,
             interval="epoch",
             monitor=training_config.monitor,
-            T_max=50,
+            T_max=training_config.number_of_epochs,
             eta_min=0.0,
             last_epoch=-1,
         )
@@ -207,6 +204,41 @@ def use_different_LRScheduler(
             T_0=10,
             T_mult=2,
             eta_min=0.0,
+            last_epoch=-1,
+        )
+    elif which_one == "OneCycleLR":
+        lr_scheduler_config = OneCycleLRConfig(
+            scheduler_name="OneCycleLR",
+            frequency=1,
+            interval="step",
+            monitor=None,
+            max_lr=training_config.lr,
+            # total_steps will be computed in configure_optimizers
+            pct_start=0.3,
+            anneal_strategy="cos",
+            cycle_momentum=True,
+            base_momentum=0.85,
+            max_momentum=0.95,
+            div_factor=25.0,
+            final_div_factor=1e4,
+            three_phase=False,
+            last_epoch=-1,
+        )
+    elif which_one == "CyclicLR":
+        lr_scheduler_config = CyclicLRConfig(
+            scheduler_name="CyclicLR",
+            frequency=1,
+            interval="step",
+            monitor=None,
+            base_lr=training_config.lr / 10,
+            max_lr=training_config.lr,
+            # step_size_up will be computed in configure_optimizers
+            mode="triangular",
+            gamma=1.0,
+            scale_mode="cycle",
+            cycle_momentum=True,
+            base_momentum=0.8,
+            max_momentum=0.9,
             last_epoch=-1,
         )
     else:
@@ -229,6 +261,8 @@ from modelforge.train.parameters import TrainingParameters
         "ReduceLROnPlateau",
         "CosineAnnealingLR",
         "CosineAnnealingWarmRestarts",
+        "OneCycleLR",
+        "CyclicLR",
     ],
 )
 def test_learning_rate_scheduler(

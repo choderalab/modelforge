@@ -677,6 +677,8 @@ class TrainingAdapter(pL.LightningModule):
             ReduceLROnPlateauConfig,
             CosineAnnealingLRConfig,
             CosineAnnealingWarmRestartsConfig,
+            OneCycleLRConfig,
+            CyclicLRConfig,
         )
 
         optimizer = self.optimizer_class(
@@ -699,23 +701,47 @@ class TrainingAdapter(pL.LightningModule):
         # Determine the scheduler class and parameters
         if isinstance(lr_scheduler_config, ReduceLROnPlateauConfig):
             scheduler_class = torch.optim.lr_scheduler.ReduceLROnPlateau
-            scheduler_params = lr_scheduler_config.model_dump(
-                exclude={"scheduler_name", "frequency", "interval", "monitor"}
-            )
         elif isinstance(lr_scheduler_config, CosineAnnealingLRConfig):
             scheduler_class = torch.optim.lr_scheduler.CosineAnnealingLR
-            scheduler_params = lr_scheduler_config.model_dump(
-                exclude={"scheduler_name", "frequency", "interval", "monitor"}
-            )
         elif isinstance(lr_scheduler_config, CosineAnnealingWarmRestartsConfig):
             scheduler_class = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts
-            scheduler_params = lr_scheduler_config.model_dump(
-                exclude={"scheduler_name", "frequency", "interval", "monitor"}
-            )
+        elif isinstance(lr_scheduler_config, OneCycleLRConfig):
+            scheduler_class = torch.optim.lr_scheduler.OneCycleLR
+        elif isinstance(lr_scheduler_config, CyclicLRConfig):
+            scheduler_class = torch.optim.lr_scheduler.CyclicLR
         else:
             raise NotImplementedError(
                 f"Unsupported learning rate scheduler: {lr_scheduler_config.scheduler_name}"
             )
+
+        # Exclude keys not needed by the scheduler constructor
+        scheduler_params = lr_scheduler_config.model_dump(
+            exclude={"scheduler_name", "frequency", "interval", "monitor"}
+        )
+
+        # Handle special cases
+        if isinstance(lr_scheduler_config, OneCycleLRConfig):
+            # Calculate total_steps if not provided
+            if scheduler_params.get("total_steps") is None:
+                if hasattr(self.trainer, "estimated_stepping_batches"):
+                    total_steps = self.trainer.estimated_stepping_batches
+                else:
+                    # Fallback or raise an error
+                    raise RuntimeError("Unable to determine total_steps for OneCycleLR")
+            # Remove 'epochs' and 'steps_per_epoch' if not used
+            scheduler_params.pop("epochs", None)
+            scheduler_params.pop("steps_per_epoch", None)
+
+        elif isinstance(lr_scheduler_config, CyclicLRConfig):
+            # Calculate step_size_up if not provided
+            if scheduler_params.get("step_size_up") is None:
+                if hasattr(self.trainer, "estimated_stepping_batches"):
+                    step_size_up = self.trainer.estimated_stepping_batches // 2
+                else:
+                    # Fallback or raise an error
+                    raise RuntimeError("Unable to determine step_size_up for CyclicLR")
+                scheduler_params["step_size_up"] = step_size_up
+            # step_size_down can be set similarly if needed
 
         lr_scheduler_instance = scheduler_class(optimizer, **scheduler_params)
 
@@ -725,8 +751,6 @@ class TrainingAdapter(pL.LightningModule):
             "interval": interval,
             "frequency": frequency,
         }
-
-        return {"optimizer": optimizer, "lr_scheduler": scheduler}
 
         return {"optimizer": optimizer, "lr_scheduler": scheduler}
 

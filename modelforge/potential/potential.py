@@ -449,6 +449,7 @@ def setup_potential(
     from modelforge.potential.utils import remove_units_from_dataset_statistics
     from modelforge.utils.misc import seed_random_number
 
+    log.debug(f"potential_seed {potential_seed}")
     if potential_seed is not None:
         log.info(f"Setting random seed to: {potential_seed}")
         seed_random_number(potential_seed)

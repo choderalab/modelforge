@@ -11,7 +11,6 @@ from typing import (
     Type,
     Union,
     Literal,
-    ClassVar,
     Annotated,
 )
 
@@ -269,11 +268,19 @@ class TrainingParameters(ParametersBase):
         @model_validator(mode="before")
         def set_target_weight_defaults(cls, values):
             if "target_weight" not in values:
+                # set target_weight to be the same as weight
                 values["target_weight"] = values["weight"]
                 d = {}
                 for key in values["target_weight"]:
                     d[key] = 1.0
                 values["mixing_steps"] = d
+            
+            
+            for key in values["weight"]:
+                # if only a subset of the loss components are provided in target_weight, set the rest to be the same as weight
+                if key not in values["target_weight"]:
+                    values["target_weight"][key] = values["weight"][key]
+                    values["mixing_steps"][key] = 1.0
             return values
 
         @model_validator(mode="after")

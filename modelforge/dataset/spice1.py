@@ -58,20 +58,33 @@ class SPICE1Dataset(HDF5Dataset):
         dipole_moment="scf_dipole",
     )
 
+    # note for simplicifty, commenting out those properties that cannot be used in the current implementation
     _available_properties = [
         "geometry",
         "atomic_numbers",
         "dft_total_energy",
         "dft_total_force",
-        "mbis_charges",
-        "mbis_multipoles",
-        "mbis_octopoles",
+        # "mbis_charges",
+        # "mbis_multipoles",
+        # "mbis_octopoles",
         "formation_energy",
         "scf_dipole",
-        "scf_quadrupole",
+        # "scf_quadrupole",
         "total_charge",
         "reference_energy",
     ]  # All properties within the datafile, aside from SMILES/inchi.
+
+    # Mapping of available properties to the associated PropertyNames
+    _available_properties_association = {
+        "geometry": "positions",
+        "atomic_numbers": "atomic_numbers",
+        "dft_total_energy": "E",
+        "dft_total_force": "F",
+        "formation_energy": "E",
+        "scf_dipole": "dipole_moment",
+        "total_charge": "total_charge",
+        "reference_energy": "E",
+    }
 
     def __init__(
         self,

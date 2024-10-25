@@ -691,7 +691,7 @@ class TrainingAdapter(pL.LightningModule):
         optimizer = self.optimizer_class(
             self.potential.parameters(),
             lr=self.learning_rate,
-            weight_decay=1e-2,
+            weight_decay=1e-3,
         )
 
         lr_scheduler_config = self.lr_scheduler

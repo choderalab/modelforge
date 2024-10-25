@@ -642,12 +642,10 @@ def test_verlet_inference():
     )
     nlist_brute._set_strategy("brute_nsq")
 
-    print("first check")
     pairs, d_ij, r_ij = nlist_brute(data)
 
     pairs_v, d_ij_v, r_ij_v = nlist_verlet(data)
 
-    print(pairs)
     assert nlist_verlet.builds == 1
     assert pairs.shape[1] == 2
     assert torch.all(pairs_v == pairs)

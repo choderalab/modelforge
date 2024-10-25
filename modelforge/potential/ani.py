@@ -845,7 +845,7 @@ class ANI2xCore(torch.nn.Module):
         # update the outputs with the split predictions
         outputs.update(
             {
-                label: tensor.squeeze(1)
+                label: tensor
                 for label, tensor in zip(self.predicted_properties, split_tensors)
             }
         )

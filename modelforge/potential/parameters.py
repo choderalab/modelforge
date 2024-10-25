@@ -183,6 +183,7 @@ class AimNet2Parameters(ParametersBase):
         )
 
     potential_name: str = "AimNet2"
+    only_unique_pairs: bool = False
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
     potential_seed: Optional[int] = None
@@ -210,6 +211,7 @@ class ANI2xParameters(ParametersBase):
         )(_convert_str_or_unit_to_unit_length)
 
     potential_name: str = "ANI2x"
+    only_unique_pairs: bool = True
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
     potential_seed: Optional[int] = None
@@ -232,6 +234,7 @@ class SchNetParameters(ParametersBase):
         )
 
     potential_name: str = "SchNet"
+    only_unique_pairs: bool = False
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
     potential_seed: int = -1
@@ -277,6 +280,7 @@ class TensorNetParameters(ParametersBase):
         )(_convert_str_or_unit_to_unit_length)
 
     potential_name: str = "TensorNet"
+    only_unique_pairs: bool = False
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
     potential_seed: Optional[int] = None
@@ -300,6 +304,7 @@ class PaiNNParameters(ParametersBase):
         )
 
     potential_name: str = "PaiNN"
+    only_unique_pairs: bool = False
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
     potential_seed: Optional[int] = None
@@ -322,6 +327,7 @@ class PhysNetParameters(ParametersBase):
         )
 
     potential_name: str = "PhysNet"
+    only_unique_pairs: bool = False
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
     potential_seed: Optional[int] = None
@@ -344,6 +350,7 @@ class SAKEParameters(ParametersBase):
         )
 
     potential_name: str = "SAKE"
+    only_unique_pairs: bool = False
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
     potential_seed: Optional[int] = None

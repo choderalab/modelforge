@@ -288,7 +288,7 @@ def generate_uniform_quaternion(u=None):
 def rotation_matrix_from_quaternion(quaternion):
     """Compute a 3x3 rotation matrix from a given quaternion (4-vector).
 
-    Adapted from the numpy implementation in openmm-tools
+    Adapted from the numpy implementation in modelforgeopenmm-tools
 
     https://github.com/choderalab/openmmtools/blob/main/openmmtools/mcmc.py
 

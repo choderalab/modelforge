@@ -45,7 +45,6 @@ def setup_potential_for_test(
     jit: bool = False,
     potential_seed: Optional[int] = None,
     simulation_environment="PyTorch",
-    only_unique_pairs: bool = False,
     local_cache_dir: Optional[str] = None,
 ):
     from modelforge.potential import NeuralNetworkPotentialFactory
@@ -72,7 +71,6 @@ def setup_potential_for_test(
         use_training_mode_neighborlist=use_training_mode_neighborlist,
         use_default_dataset_statistic=use_default_dataset_statistic,
         jit=jit,
-        only_unique_pairs=only_unique_pairs,
     )
 
     if use == "training":

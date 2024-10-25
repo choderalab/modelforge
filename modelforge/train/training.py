@@ -474,6 +474,20 @@ class TrainingAdapter(pL.LightningModule):
             targets = predict_target[f"{prop}_true"].detach()
             metric_collection.update(preds, targets)
 
+    def on_validation_epoch_start(self):
+        """Reset validation metrics at the start of the validation epoch."""
+        self._reset_metrics(self.val_metrics)
+
+    def on_test_epoch_start(self):
+        """Reset test metrics at the start of the test epoch."""
+        self._reset_metrics(self.test_metrics)
+
+    def _reset_metrics(self, metrics: ModuleDict):
+        """Utility function to reset all metrics in a ModuleDict."""
+        for metric_collection in metrics.values():
+            for metric in metric_collection.values():
+                metric.reset()
+
     def training_step(
         self,
         batch: BatchData,
@@ -616,7 +630,9 @@ class TrainingAdapter(pL.LightningModule):
         """Configures the optimizers and learning rate schedulers."""
 
         optimizer = self.optimizer_class(
-            self.potential.parameters(), lr=self.learning_rate
+            self.potential.parameters(),
+            lr=self.learning_rate,
+            weight_decay=1e-2,
         )
 
         lr_scheduler = self.lr_scheduler.model_dump()
@@ -658,7 +674,6 @@ class PotentialTrainer:
         optimizer_class: Type[Optimizer] = torch.optim.AdamW,
         potential_seed: Optional[int] = None,
         verbose: bool = False,
-        log_norm: bool = False,
     ):
         """
         Initializes the TrainingAdapter with the specified model and training configuration.
@@ -683,8 +698,6 @@ class PotentialTrainer:
             Seed to initialize the potential training adapter, default is None.
         verbose : bool, optional
             If True, enables verbose logging, by default False.
-        log_norm : bool, optional
-            If True, logs the norm of the gradients, by default False.
         """
 
         super().__init__()
@@ -694,7 +707,6 @@ class PotentialTrainer:
         self.training_parameter = training_parameter
         self.runtime_parameter = runtime_parameter
         self.verbose = verbose
-        self.log_norm = log_norm
 
         self.datamodule = self.setup_datamodule()
         self.dataset_statistic = (
@@ -903,7 +915,7 @@ class PotentialTrainer:
             def on_before_optimizer_step(self, trainer, pl_module, optimizer):
                 pl_module.log("grad_norm/model", gradient_norm(pl_module))
 
-        if self.log_norm:
+        if self.training_parameter.log_norm:
             callbacks.append(GradNormCallback())
 
         return callbacks

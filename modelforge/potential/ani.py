@@ -12,13 +12,12 @@ import torch
 from loguru import logger as log
 from torch import nn
 
-from modelforge.utils.prop import SpeciesAEV
+from modelforge.utils.prop import SpeciesAEV, NNPInput
 
-from modelforge.dataset.dataset import NNPInput
 from modelforge.potential.neighbors import PairlistData
 
 
-def triu_index(num_species: int) -> torch.Tensor:
+def triu_index(number_of_atoms: int) -> torch.Tensor:
     """
     Generate a tensor representing the upper triangular indices for species
     pairs. This is used for computing angular symmetry features, where pairwise
@@ -34,9 +33,9 @@ def triu_index(num_species: int) -> torch.Tensor:
     torch.Tensor
         A tensor containing the pair indices.
     """
-    species1, species2 = torch.triu_indices(num_species, num_species).unbind(0)
+    species1, species2 = torch.triu_indices(number_of_atoms, number_of_atoms).unbind(0)
     pair_index = torch.arange(species1.shape[0], dtype=torch.long)
-    ret = torch.zeros(num_species, num_species, dtype=torch.long)
+    ret = torch.zeros(number_of_atoms, number_of_atoms, dtype=torch.long)
     ret[species1, species2] = pair_index
     ret[species2, species1] = pair_index
 
@@ -419,16 +418,12 @@ class ANIRepresentation(nn.Module):
             .nonzero()
             .flatten()
         )
-        r_ij = pairlist_output.r_ij
-        atom_index12 = atom_index12.index_select(1, even_closer_indices)
-        species12 = species12.index_select(1, even_closer_indices)
-        r_ij_small = r_ij.index_select(0, even_closer_indices)
 
         return {
             "radial_aev": radial_aev,
-            "atom_index12": atom_index12,
-            "species12": species12,
-            "r_ij": r_ij_small,
+            "atom_index12": atom_index12.index_select(1, even_closer_indices),
+            "species12": species12.index_select(1, even_closer_indices),
+            "r_ij": pairlist_output.r_ij.index_select(0, even_closer_indices),
         }
 
     def _preprocess_angular_aev(self, data: Dict[str, torch.Tensor]):
@@ -661,13 +656,18 @@ class ANIInteraction(nn.Module):
 
         for i, model in enumerate(self.atomic_networks):
             # create a mask to select the atoms of the current species (i)
-            mask = torch.eq(species, i)
+            mask = species == i
             per_element_index = mask.nonzero().flatten()
             # if the species is present in the batch, run it through the network
             if per_element_index.shape[0] > 0:
                 input_ = aev.index_select(0, per_element_index)
                 per_element_predction = model(input_)
-                per_atom_property[per_element_index, :] = per_element_predction
+                # Accumulate predictions in per_atom_property
+                per_atom_property.index_add_(
+                    0,
+                    per_element_index,
+                    per_element_predction,
+                )
 
         return per_atom_property
 
@@ -695,8 +695,8 @@ class ANI2xCore(torch.nn.Module):
         """
         The main core module for the ANI2x architecture.
 
-        ANI2x computes atomic properties (like energy) based on Atomic Environment Vectors (AEVs),
-        with support for multiple atomic species.
+        ANI2x computes atomic properties (like energy) based on Atomic
+        Environment Vectors (AEVs), with support for multiple atomic species.
 
         Parameters
         ----------
